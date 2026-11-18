@@ -1,6 +1,6 @@
 #pragma once
 #include "modules/rts/view/RtsPortrait.h"
-#include "engine/render/PostFx.h"
+#include "engine/render/Prisma.h"
 #include "engine/fx/ParticleSystem.h"
 #include "engine/render/TextureCache.h"
 #include "engine/platform/Platform.h"
@@ -64,7 +64,7 @@ public:
 private:
     bool init(gfx::Device& dev) {
         dev_=&dev;textures_.init(dev);if(!portrait_.init(dev)||!post_.init(dev)||!particles_.init(&dev)) {error=dev.lastError();shutdown();return false;}
-        post_.setQuality(render::PostFxQuality::High);
+        post_.setQuality(render::PrismaQuality::High);
         gfx::TextureDesc td;td.width=td.height=256;td.renderTarget=true;color_=dev.createTexture(td);td.format=gfx::PixelFormat::Depth;depth_=dev.createTexture(td);
         const float vertices[]={-1,-1,3,-1,-1,3};gfx::BufferDesc bd;bd.data=vertices;bd.size=sizeof vertices;vb_=dev.createBuffer(bd);
         gfx::ShaderDesc sd;sd.textureSlots=1;
@@ -78,7 +78,7 @@ fragment float4 fs_main(O o [[stage_in]],constant float4& p [[buffer(1)]],textur
         shader_=dev.createShader(sd);gfx::PipelineDesc pd;pd.shader=shader_;pd.attrs[0]={0,gfx::VertexFormat::Float2,0};pd.attrCount=1;pd.stride=8;pd.indexType=gfx::IndexType::None;pd.depthTest=pd.depthWrite=false;pd.cull=gfx::CullMode::None;pipe_=dev.createPipeline(pd);
         if(!pipe_.valid()){error=dev.lastError();shutdown();return false;}return true;
     }
-    gfx::Device* dev_=nullptr;game::Portrait portrait_;render::PostFx post_;fx::ParticleSystem particles_;
+    gfx::Device* dev_=nullptr;game::Portrait portrait_;render::Prisma post_;fx::ParticleSystem particles_;
     gfx::TextureHandle color_,depth_;gfx::ShaderHandle shader_;gfx::PipelineHandle pipe_;gfx::BufferHandle vb_;std::string key_,base_;render::TextureCache textures_;
 };
 }

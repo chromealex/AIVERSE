@@ -99,6 +99,12 @@ foreach(i RANGE ${_aiverse_last})
         endif()
     endforeach()
 endforeach()
+
+# Official InputFlow links share the existing header-only input library.
+# Old AIVERSE::lib_input remains valid for earlier native projects.
+add_library(AIVERSE::InputFlow ALIAS aiverse_lib_input)
+add_library(AIVERSE::lib_inputflow ALIAS aiverse_lib_input)
+
 function(aiverse_native_use_libraries target)
     if(NOT TARGET ${target} OR NOT TARGET aiverse_game OR NOT ARGN)
         message(FATAL_ERROR "aiverse_native_use_libraries expects a native target and package IDs")

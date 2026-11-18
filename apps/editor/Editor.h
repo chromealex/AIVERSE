@@ -29,7 +29,7 @@
 #include "engine/gfx/Gfx.h"
 #include "engine/platform/Platform.h"
 #include "engine/render/ImGuiLayer.h"
-#include "engine/render/PostFx.h"
+#include "engine/render/Prisma.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/sim/Simulation.h"
 #include "modules/rts/RtsAI.h"
@@ -103,7 +103,8 @@ public:
     const game::Rules& rules() const { return ws_.project.rules; }
     gfx::Device& device() { return *dev_; }
     render::Renderer3D& renderer() { return r3d_; }
-    render::PostFx& postFx() { return postFx_; }   // post effects of Scene / Game views (PostFxWindow configures it)
+    render::Prisma& prisma() { return prisma_; } // canonical PRISMA editor API
+    render::Prisma& postFx() { return prisma(); } // legacy alias; existing tools depend on it
     bool postFxInScene = true;                     // false: only the Game view is post-processed
     game::RtsView& view() { return view_; }
     bool lazyEditorAssetsEnabled() const { return lazyEditorAssets_; }
@@ -272,6 +273,10 @@ public:
 
     // windows
     EditorWindow* window(const std::string& id);
+    // Windows may query dock-tab visibility from update() to cancel pending
+    // key captures when another tab becomes active. Uses the same check as
+    // hosted-client input routing.
+    bool isWindowInFront(EditorWindow* w) const;
     const std::vector<std::unique_ptr<EditorWindow>>& windows() const { return windows_; }
     void resetLayout() { resetLayout_ = true; }
     void launchOnDevice(const std::string& device, bool landscape);
@@ -296,7 +301,6 @@ public:
 private:
     void drawMenuBar();
     void drawWindowItems(const std::string& group);
-    bool isWindowInFront(EditorWindow* w) const;
     void drawTopBarControls();   // breadcrumb, play controls, MCP pill (inside the main menu bar)
     void drawPlayControls();
     void drawDockspace();
@@ -339,7 +343,10 @@ private:
     int fpsRuntimeRulesRevision_ = -1; // same signed revision domain as rulesRevision_
     std::string fpsRuntimeProjectDir_;
 
-    render::PostFx postFx_;
+    render::Prisma prisma_;
+    render::PrismaVolumeStack prismaVolumes_; // editor camera profiles, presentation-only
+    std::string prismaVolumesSignature_;
+    void refreshPrismaVolumes();
     game::RtsView view_;
     bool lazyEditorAssets_ = true;
     std::vector<double> editorTypeLastUsed_;

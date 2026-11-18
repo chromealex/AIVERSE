@@ -1,4 +1,5 @@
 #include "engine/platform/WindowSettings.h"
+#include "engine/render/PrismaVolumeData.h"
 #include "modules/rts/RtsInitialVars.h"
 #include "engine/data/JsonCompose.h"
 // Generic RTS game client. Everything game-specific comes from the project's data (game.json,
@@ -32,6 +33,7 @@
 #include "StartPlayers.h"
 #include "modules/rts/view/EncounterDecals.h"   // boss encounters: ground marks
 #include "engine/platform/ContentReader.h"
+#include "engine/platform/EnhancedInputConfig.h"
 #include "RegionSettings.h"
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsTiles.h"
@@ -77,6 +79,19 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         } catch (const std::exception& e) {
             error_ = e.what();
         }
+        // Project-owned Enhanced Input asset is optional. Bad data retains the legacy default shortcut map.
+        std::string actionAsset;
+        if (platform::readContentFile("input/actions.json", actionAsset)) {
+            try {
+                platform::enhanced_config::Asset authored;
+                std::string inputError;
+                if (!platform::enhanced_config::readAsset(Json::parse(actionAsset), authored, &inputError) ||
+                    !platform::enhanced_config::installAsset(inputShortcuts_.system(), authored, &inputError))
+                    std::fprintf(stderr, "RTS Input Actions: %s\n", inputError.c_str());
+            } catch (const std::exception& ex) {
+                std::fprintf(stderr, "RTS Input Actions: %s\n", ex.what());
+            }
+        }
         if (!platform::hostedView()) platform::setTitle(gameName_);   // hosted: the editor keeps its title
         loadNetSettings();
         break;
@@ -98,10 +113,10 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         r3d_.setMaterialQuality(Renderer3D::defaultMaterialQualityFor(dev, platform::isTouchDevice()));
         r3d_.setBakedQuality(Renderer3D::defaultBakedQualityFor(dev, platform::isTouchDevice()));
         r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
-        postFx_.init(dev);
-        postFxBase_ = render::PostFx::defaultQualityFor(dev, platform::isTouchDevice());
-        postFx_.setQuality(postFxBase_);
-        postFx_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
+        prisma_.init(dev);
+        prismaBase_ = render::Prisma::defaultQualityFor(dev, platform::isTouchDevice());
+        prisma_.setQuality(prismaBase_);
+        prisma_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
             std::string bytes;
             return platform::readContentFile(path, bytes) && render::decodeImage(bytes, w, h, rgba);
         });
@@ -234,7 +249,7 @@ void GameClient::shutdown() {
     audio_.shutdown();
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
-    postFx_.shutdown();
+    prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);
     baked_.release();
     r3d_.shutdown();
@@ -244,9 +259,13 @@ void GameClient::shutdown() {
     overlay_.shutdown();
 }
 
-void GameClient::configurePostFx(const Json& map) {
-    postFx_.configure(manifest_["postfx"], map["postfx"]);
-    postFx_.setQuality(postFxBase_);
+void GameClient::configurePrisma(const Json& map) {
+    prisma_.configure(manifest_["postfx"], map["postfx"]);
+    std::vector<std::string> prismaWarnings;
+    prismaVolumes_ = render::parsePrismaVolumes(manifest_["prismaVolumes"], map["prismaVolumes"], &prismaWarnings);
+    for (const auto& issue : prismaWarnings)
+        std::fprintf(stderr, "[prisma] %s\n", issue.c_str());
+    prisma_.setQuality(prismaBase_);
 }
 
 void GameClient::startMatch(size_t idx, const Json& initialVars) {
@@ -295,7 +314,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         if (viewScripts_.load(*sim_, rules, map, uint8_t(spectator_ ? 0 : human_))) viewScripts_.attach(*sim_);
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
         if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
-        configurePostFx(map);
+        configurePrisma(map);
         configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
@@ -490,11 +509,17 @@ Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
 
 // ------------------------------------------------------------------ input
 
-void GameClient::event(const Event& e) {
+void GameClient::event(const Event& incoming) {
+    // UI/platform routing sees the physical device; only world-level gameplay
+    // receives the logical button assigned to semantic Select/Command Actions.
+    Event mapped=incoming;
+    const Event& e=mapped;
     if (mapLoading_) { if (e.type == EventType::KeyDown && e.key == Key::Escape) toMenu(); return; }
     if (!padInjecting_ && (e.type == EventType::MouseMove || e.type == EventType::MouseDown || e.type == EventType::TouchBegin))
         gamepad_.mouseUsed(e.x, e.y);   // a real pointer hides the pad cursor (ClientGamepad.cpp)
     bool uiWants = ui_.handleEvent(e);
+    if (e.type == EventType::FocusLost)
+        std::fill_n(keys_,int(platform::Key::Count),false);
     if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;mapTapPending_=false;}
     if (e.type == EventType::KeyDown && e.key == Key::F8 && !e.repeat) ui_.toggleDebugger();
     // a press that started on the UI keeps the pointer until release (dragging out of a panel
@@ -502,9 +527,28 @@ void GameClient::event(const Event& e) {
     if (e.type == EventType::MouseDown || e.type == EventType::TouchBegin) uiOwnsPointer_ = uiWants;
     if (e.type == EventType::MouseMove || e.type == EventType::TouchMove) uiWants = uiWants && !boxing_ && !sendDrag_ && !panning_;
     if (e.type == EventType::MouseUp || e.type == EventType::TouchEnd || e.type == EventType::TouchCancel) uiWants = uiOwnsPointer_;
+    inputShortcuts_.setTopDownEnabled(screen_==Screen::Playing && topDownActive());
+    inputShortcuts_.setPlanetEnabled(screen_==Screen::Playing && planet());
+    inputShortcuts_.setPossessionEnabled(screen_==Screen::Playing && possessedUnit().valid());
+    const auto inputActions=inputShortcuts_.onEvent(e,screen_==Screen::Playing && !uiWants && !howtoOpen_ && sim_);
+    if(!uiWants && screen_==Screen::Playing && !topDownActive() &&
+       !regionSwipe_.enabled && !planet() && !possessedUnit().valid() &&
+       (e.type==EventType::MouseDown||e.type==EventType::MouseUp)) {
+        mapped.button=inputShortcuts_.logicalMouseButton(incoming.button);
+        if(mapped.button<0)return; // unassigned physical button cannot select/order
+    }
     if (!uiWants) overlay_.handleEvent(e);
     mapDragEvent(e, uiWants);   // rules "mapClick": drag from a map-drag HUD element onto the map (ClientScriptCmd.cpp)
-    if (e.type == EventType::KeyDown || e.type == EventType::KeyUp) keys_[int(e.key)] = e.type == EventType::KeyDown;
+    if (e.type == EventType::KeyDown || e.type == EventType::KeyUp) {
+        const int code=int(e.key);
+        if (code>=0 && code<int(platform::Key::Count)) {
+            const bool allowed=screen_==Screen::Playing && !uiWants &&
+                               !ui_.textInputFocused() && !howtoOpen_;
+            // Legacy camera/top-down fallbacks are presentation-only: a key
+            // captured by a text field or modal must never stay latched here.
+            keys_[code]=e.type==EventType::KeyDown && allowed;
+        }
+    }
     if (e.type == EventType::MouseMove || e.type == EventType::MouseDown) { mouseX_ = e.x; mouseY_ = e.y; }
     // A view script with ui.on("back", fn) owns Esc / Android Back (which arrives as Escape) during a match: the engine's
     // pause / resume / tool cancel are skipped; a true return cancels the pointer interaction in progress (docs/scripting.md)
@@ -557,9 +601,9 @@ void GameClient::event(const Event& e) {
     if (screen_ == Screen::Menu && !engineMenu_ && e.type == EventType::KeyDown && e.key == Key::Escape && !e.repeat) { luaEmit("back", Json()); return; }
     if (screen_ == Screen::Paused && e.type == EventType::KeyDown && e.key == Key::Escape && !uiWants) { setScreen(Screen::Playing); return; }
     if (screen_ != Screen::Playing || !sim_) return;
-    if (planet() && planetCameraEvent(e, uiWants)) return;   // orbit camera (ClientPlanet.cpp)
+    if (planet() && planetCameraEvent(e, uiWants, inputActions)) return;   // orbit camera (ClientPlanet.cpp)
     if (regionEvent(e, uiWants)) return;
-    if (topDownEvent(e, uiWants)) return;   // top-down heroes: sticks, buttons, WASD + mouse aim (ClientTopDown.cpp)
+    if (topDownEvent(e, uiWants, inputActions)) return;   // top-down heroes: sticks, buttons, WASD + mouse aim (ClientTopDown.cpp)
     World& w = sim_->world();
     switch (e.type) {
     case EventType::MouseDown:
@@ -681,10 +725,15 @@ void GameClient::event(const Event& e) {
         }
         panning_ = false;
         break;
-    case EventType::MouseWheel:
+    case EventType::MouseWheel: {
         if (uiWants) return;
-        cam_.distance = std::clamp(cam_.distance * std::pow(0.88f, e.wheelY), cam_.minDistance, cam_.maxDistance);
+        // Mouse wheel drives semantic CameraZoom (potentially rebound/scaled per project).
+        const auto* zoom=inputShortcuts_.system().state("CameraZoom");
+        if(zoom && zoom->value.x!=0.0f)
+            cam_.distance=std::clamp(cam_.distance*std::pow(0.88f,zoom->value.x),
+                                     cam_.minDistance,cam_.maxDistance);
         break;
+    }
     case EventType::TouchBegin:
         if (uiWants && touches_.empty()) return;
         touches_[e.touchId] = {e.x, e.y};
@@ -713,20 +762,37 @@ void GameClient::event(const Event& e) {
                 if (t.valid() && w.has<Garrison>(t) && w.get<Owner>(t).player == human_ &&
                     std::find(selection_.begin(), selection_.end(), t) == selection_.end()) selection_.push_back(t);
             } else if (touchMoved_) {
-                float3 a, b;
-                if (groundAt(downX_, downY_, a) && groundAt(e.x, e.y, b)) cam_.target += a - b;
-                downX_ = e.x; downY_ = e.y;
+                float3 a,b;
+                const auto* drag=inputShortcuts_.system().state("CameraTouchDrag");
+                // Use normalized semantic gesture deltas, with legacy fallback
+                // for projects that define their own complete input asset.
+                const float dx=drag?drag->value.x:e.x-downX_;
+                const float dy=drag?drag->value.y:e.y-downY_;
+                if(groundAt(e.x-dx,e.y-dy,a)&&groundAt(e.x,e.y,b))
+                    cam_.target+=a-b;
+                downX_=e.x;downY_=e.y;
             }
         } else if (touches_.size() == 2) {
             auto it = touches_.begin(); auto a = it->second; auto b = (++it)->second;
-            float d = std::hypot(a.first - b.first, a.second - b.second);
-            if (pinchDist_ > 1 && d > 1) cam_.distance = std::clamp(cam_.distance * pinchDist_ / d, cam_.minDistance, cam_.maxDistance);
-            pinchDist_ = d;
-            float cx = (a.first + b.first) * 0.5f, cy = (a.second + b.second) * 0.5f;
-            float3 p0, p1;
-            if (groundAt(downX_, downY_, p0) && groundAt(cx, cy, p1)) cam_.target += p0 - p1;
-            downX_ = cx; downY_ = cy;
-            touchMoved_ = true;
+            const float rawDistance=std::hypot(a.first-b.first,a.second-b.second);
+            const auto* pinch=inputShortcuts_.system().state("CameraPinch");
+            const float appliedDelta=pinch?pinch->value.x:rawDistance-pinchDist_;
+            // Keep the previous reference distance, not the authored scaling,
+            // so CameraPinch modifiers can tune sensitivity without jumps.
+            if(pinchDist_>1 && rawDistance>1)
+                cam_.distance=std::clamp(cam_.distance*pinchDist_/
+                        std::max(1.0f,pinchDist_+appliedDelta),
+                        cam_.minDistance,cam_.maxDistance);
+            pinchDist_=rawDistance;
+            const float cx=(a.first+b.first)*0.5f,cy=(a.second+b.second)*0.5f;
+            const auto* pan=inputShortcuts_.system().state("CameraTouchPan");
+            const float px=pan?pan->value.x:cx-downX_;
+            const float py=pan?pan->value.y:cy-downY_;
+            float3 p0,p1;
+            if(groundAt(cx-px,cy-py,p0)&&groundAt(cx,cy,p1))
+                cam_.target+=p0-p1;
+            downX_=cx;downY_=cy;
+            touchMoved_=true;
         }
         break;
     }
@@ -776,19 +842,36 @@ void GameClient::event(const Event& e) {
             else if (selectionHasGarrison() && gi <= 4) sendPercent_ = gi * 25; // garrison games: 1-4 = 25..100%
             else if (!groups_[size_t(gi)].empty()) selection_ = groups_[size_t(gi)];
         }
-        if (!ctrl && scriptCommandKey(e.key)) break;   // rules "commands" hotkeys first
-        if (!ctrl && !selection_.empty()) {
-            if (e.key == Key::A) mode_ = Mode::AttackMove;
-            if (e.key == Key::P) mode_ = Mode::Patrol;
-            if (mod().fieldOps() && (e.key == Key::R || e.key == Key::E) && selectionBuilds()) mode_ = e.key == Key::R ? Mode::Repair : Mode::Reclaim;   // field operations
-            if (e.key == Key::S) { Command c; c.type = kCmdStop; c.units = selection_; issue(c); }
-            if (e.key == Key::H) { Command c; c.type = kCmdHold; c.units = selection_; issue(c); }
+        if(!ctrl && scriptCommandKey(e.key)) {
+            inputShortcuts_.suppressKey(e.key);
+            break; // authored script hotkeys still take precedence
         }
-        if (e.key == Key::Space) fitCamera();
+        applyRtsActions(inputActions,!ctrl);
         break;
     }
     default: break;
     }
+}
+
+// Semantic RTS Actions can fire on a physical event OR after a timed
+// Hold/Pulse interval. Both paths must send the same validated Commands.
+void GameClient::applyRtsActions(const std::vector<std::string>& actions,bool allowOrders) {
+    if(actions.empty() || !sim_ || screen_!=Screen::Playing ||
+       topDownActive() || possessedUnit().valid())return;
+    const auto fired=[&](const char* name){
+        return std::find(actions.begin(),actions.end(),name)!=actions.end();
+    };
+    if(allowOrders && !selection_.empty()) {
+        if(fired("AttackMove"))mode_=Mode::AttackMove;
+        if(fired("Patrol"))mode_=Mode::Patrol;
+        if(mod().fieldOps() && selectionBuilds()) {
+            if(fired("Repair"))mode_=Mode::Repair;
+            if(fired("Reclaim"))mode_=Mode::Reclaim;
+        }
+        if(fired("Stop")){Command c;c.type=kCmdStop;c.units=selection_;issue(c);}
+        if(fired("Hold")){Command c;c.type=kCmdHold;c.units=selection_;issue(c);}
+    }
+    if(fired("FocusCamera"))fitCamera();
 }
 
 void GameClient::processEvents() {
@@ -891,6 +974,21 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     double worldMs = 0;
     time_ += dt;
     updateGamepad(float(dt));   // pad input as mouse / key events + camera pan (ClientGamepad.cpp)
+    inputShortcuts_.setTopDownEnabled(screen_==Screen::Playing && topDownActive());
+    inputShortcuts_.setPlanetEnabled(screen_==Screen::Playing && planet());
+    inputShortcuts_.setPossessionEnabled(screen_==Screen::Playing && possessedUnit().valid());
+    const bool keyboardAllowed=sim_ && screen_==Screen::Playing &&
+                                !howtoOpen_ && !ui_.textInputFocused();
+    if(!keyboardAllowed) {
+        inputShortcuts_.reset();
+        // No key-up is guaranteed when a modal or text field takes focus.
+        // Keep the legacy fallback mirror in sync with InputFlow cancellation.
+        std::fill_n(keys_,int(platform::Key::Count),false);
+    } else {
+        const auto timed=inputShortcuts_.advance(float(dt));
+        if(topDownActive())topDownTimedActions(timed);
+        else if(!regionSwipe_.enabled && !planet())applyRtsActions(timed);
+    }
     float alpha = 0;
     bool netAdvanced = false;
     updateNet(dt, netAdvanced);   // online: the network session drives the sim, even behind the pause menu
@@ -904,17 +1002,21 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         float speed = cam_.distance * 0.9f * float(dt);
         float fx = std::sin(cam_.yaw), fz = std::cos(cam_.yaw);
         float3 fwd{-fx, 0, -fz}, right{fz, 0, -fx};
-        auto key = [&](Key k) { return keys_[int(k)]; };
+        const auto* arrow=inputShortcuts_.system().state("CameraPan");
+        const auto* idle=inputShortcuts_.system().state("IdleCameraPan");
+        const float arrowX=arrow?arrow->value.x:0.0f,arrowY=arrow?arrow->value.y:0.0f;
+        const float idleX=idle?idle->value.x:0.0f,idleY=idle?idle->value.y:0.0f;
         float W = platform::windowWidth(), H = platform::windowHeight();
         // edge scrolling only while the cursor is inside the window (macOS reports moves outside it too)
         bool edges = !regionSwipe_.enabled && !platform::isTouchDevice() && std::string(platform::name()) != "web" && mouseX_ >= 0 && mouseY_ >= 0 && mouseX_ <= W && mouseY_ <= H;
         bool noSel = selection_.empty();
         if (!ui_.textInputFocused() && !possessedUnit().valid() && !topDownActive()) {
-            if (key(Key::Up) || (noSel && key(Key::W)) || (edges && mouseY_ < 3)) cam_.target += fwd * speed;
-            if (key(Key::Down) || (noSel && key(Key::S)) || (edges && mouseY_ > H - 3)) cam_.target += fwd * -speed;
-            if (key(Key::Right) || (noSel && key(Key::D)) || (edges && mouseX_ > W - 3)) cam_.target += right * speed;
-            if (key(Key::Left) || (noSel && key(Key::A)) || (edges && mouseX_ < 3)) cam_.target += right * -speed;
-            cam_.target += right * (speed * padPanX_) + fwd * (-speed * padPanY_);   // gamepad right stick / d-pad
+            const float panY=arrowY+(noSel?idleY:0.0f)+
+                float(edges && mouseY_<3)-float(edges && mouseY_>H-3)-padPanY_;
+            const float panX=arrowX+(noSel?idleX:0.0f)+
+                float(edges && mouseX_>W-3)-float(edges && mouseX_<3)+padPanX_;
+            cam_.target += fwd*(speed*std::clamp(panY,-1.0f,1.0f));
+            cam_.target += right*(speed*std::clamp(panX,-1.0f,1.0f));
         }
         auto& g = mod().state(*sim_).grid;
         if (planet()) planetCameraKeys(dt);
@@ -941,8 +1043,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
             shadowQuality_ = boundShadowQuality_ = quality_.shadows();
             // post effects follow: one tier down per governor step, but keep the cheap look (low)
-            if (postFxBase_ != render::PostFxQuality::Off)
-                postFx_.setQuality(render::PostFxQuality(std::max(1, int(postFxBase_) - quality_.stepsDown())));
+            if (prismaBase_ != render::PrismaQuality::Off)
+                prisma_.setQuality(render::PrismaQuality(std::max(1, int(prismaBase_) - quality_.stepsDown())));
         }
 
         steerPossessed();
@@ -1056,10 +1158,12 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         const float fogBase = r3d_.lighting.fogDensity;   // a narrow top-down lens: fog as a default lens framing it sees
         if (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over)
             if (topDownActive()) r3d_.lighting.fogDensity = fogBase * topDown_.fogScale();
-        r3d_.render(pass, &postFx_);
+        prisma_.applyCameraVolumes(prismaVolumes_, cam_.eye());
+        r3d_.render(pass, &prisma_);
         fx_.render(r3d_.lighting);
         r3d_.lighting.fogDensity = fogBase;
-        r3d_.resolvePostFx();   // post effects (if any) under the HUD
+        r3d_.resolvePrisma();   // post effects (if any) under the HUD
+        prisma_.clearCameraVolumes();
         view_.drawOverlays(cam_, scene_, platform::windowWidth(), platform::windowHeight());
         view_.drawCanvas(canvas_);
         topDownDraw();

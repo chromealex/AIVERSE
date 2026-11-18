@@ -316,7 +316,7 @@ void Renderer3D::bindTraceTextures() {
     bindSceneTextures(4, 5);
 }
 
-void Renderer3D::resolvePostFx() {
+void Renderer3D::resolvePrisma() {
     if (!post_) return;
     PostProcess* post = post_;
     post_ = nullptr;

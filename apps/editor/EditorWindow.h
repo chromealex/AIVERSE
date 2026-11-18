@@ -27,6 +27,8 @@ public:
     virtual int order() const { return 100; }                // tab order inside a dock area (lower = first, the first is shown)
     virtual ImGuiWindowFlags flags() const { return 0; }
     virtual bool zeroPadding() const { return false; } // viewports want edge-to-edge content
+    // A focused key-binding capture temporarily suppresses editor-global F5/undo shortcuts.
+    virtual bool captureGlobalShortcuts() const { return false; }
     virtual void draw(Editor& ed) = 0;               // inside ImGui::Begin/End of the window
     virtual void update(Editor&, double /*dt*/) {}   // every frame, even when closed or hidden
     bool open = true;

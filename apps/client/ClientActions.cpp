@@ -266,25 +266,34 @@ void GameClient::steerPossessed() {
     if (!ui_.textInputFocused()) {
         const float sx = std::sin(cam_.yaw), cz = std::cos(cam_.yaw);
         const float fwdX = -sx, fwdZ = -cz, rightX = cz, rightZ = -sx;
-        auto key = [&](Key k) { return keys_[int(k)]; };
-        if (key(Key::W) || key(Key::Up)) { dx += fwdX; dz += fwdZ; }
-        if (key(Key::S) || key(Key::Down)) { dx -= fwdX; dz -= fwdZ; }
-        if (key(Key::D) || key(Key::Right)) { dx += rightX; dz += rightZ; }
-        if (key(Key::A) || key(Key::Left)) { dx -= rightX; dz -= rightZ; }
+        if(const auto* move=inputShortcuts_.system().state("PossessedMove")){
+            dx+=fwdX*move->value.y+rightX*move->value.x;
+            dz+=fwdZ*move->value.y+rightZ*move->value.x;
+        }else{
+            // Old custom input assets may not define a possession context.
+            auto key=[&](Key k){return keys_[int(k)];};
+            if(key(Key::W)||key(Key::Up)){dx+=fwdX;dz+=fwdZ;}
+            if(key(Key::S)||key(Key::Down)){dx-=fwdX;dz-=fwdZ;}
+            if(key(Key::D)||key(Key::Right)){dx+=rightX;dz+=rightZ;}
+            if(key(Key::A)||key(Key::Left)){dx-=rightX;dz-=rightZ;}
+        }
     }
     float3 g;
-    if (walkHeld_ && dx == 0 && dz == 0 && groundAt(mouseX_, mouseY_, g)) {
+    const auto* walking=inputShortcuts_.system().state("PossessedWalk");
+    const bool wantsWalk=walking?walking->active:walkHeld_;
+    if (wantsWalk && dx == 0 && dz == 0 && groundAt(mouseX_, mouseY_, g)) {
         dx = g.x - px; dz = g.z - pz;
         if (std::hypot(dx, dz) < 0.3f) dx = dz = 0;
     }
     const float len = std::hypot(dx, dz);
     if (len > 0) { dx /= len; dz /= len; }
     Entity target = kNullEntity;
-    if (fireHeld_ && hover_.valid() && w.alive(hover_) && w.has<Owner>(hover_)) {
+    const auto* firing=inputShortcuts_.system().state("PossessedFire");
+    const bool fire=firing?firing->active:fireHeld_;
+    if (fire && hover_.valid() && w.alive(hover_) && w.has<Owner>(hover_)) {
         const uint8_t o = w.get<Owner>(hover_).player;
         if (o != human_ && o != 0) target = hover_;
     }
-    const bool fire = fireHeld_;
     const bool changed = std::abs(dx - steerX_) > 0.05f || std::abs(dz - steerZ_) > 0.05f || fire != steerFire_ || target != steerTarget_;
     const bool idle = len == 0 && !fire;
     if (!changed && (idle || sim_->tick() < lastSteerTick_ + 4)) return;

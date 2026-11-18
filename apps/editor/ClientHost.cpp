@@ -30,7 +30,7 @@ void ClientHost::start(gfx::Device& dev, const std::string& projectDir, const st
     view_.width = 360; view_.height = 640; view_.fbWidth = 360; view_.fbHeight = 640;   // until the first frame
     client_ = std::make_unique<client::GameClient>();
     step_ = 0;
-    captured_ = finger_ = false;
+    captured_ = finger_ = focused_ = false;
 }
 
 void ClientHost::stop() {
@@ -41,7 +41,7 @@ void ClientHost::stop() {
         client_.reset();
     }
     step_ = 0;
-    captured_ = finger_ = false;
+    captured_ = finger_ = focused_ = false;
 }
 
 float ClientHost::progress() const {
@@ -70,6 +70,28 @@ void ClientHost::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle d
     }
     if (resized) { Event e; e.type = EventType::Resized; client_->event(e); }
     client_->frame(*dev_, dt);
+}
+
+void ClientHost::place(float x,float y,float k,bool focused) {
+    x_=x; y_=y; k_=k>0?k:1;
+    const bool previous=focused_;
+    focused_=focused;
+    if(previous==focused_ || !client_ || step_<kSteps) return;
+    // Moving from Game to Inspector is not an OS focus event: release hosted input.
+    if(!focused_) captured_=finger_=false;
+    Event focus;
+    focus.type=focused_?EventType::FocusGained:EventType::FocusLost;
+    Scope scope(*this);
+    client_->event(focus);
+}
+
+void ClientHost::suspendInput() {
+    const bool held=focused_||captured_;
+    focused_=captured_=finger_=false;
+    if(!held || !client_ || step_<kSteps)return;
+    Event e;e.type=EventType::FocusLost;
+    Scope scope(*this);
+    client_->event(e);
 }
 
 void ClientHost::event(const Event& in) {

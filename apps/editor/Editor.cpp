@@ -5,6 +5,7 @@
 #include "core/SimTools.h"
 #include "core/RouteOps.h"
 #include "engine/fx/FxModelMesh.h"
+#include "engine/render/PrismaVolumeData.h"
 #include "imgui.h"
 #include "imgui_internal.h" // DockBuilder
 
@@ -41,6 +42,17 @@ FileReader projectReader(const std::string& dir) {
     };
 }
 } // namespace
+
+void Editor::refreshPrismaVolumes() {
+    const Json& game = ws_.project.manifest["prismaVolumes"];
+    const Json& map = doc().data.extra["prismaVolumes"];
+    const std::string signature = game.dump(-1) + "|" + map.dump(-1);
+    if (signature == prismaVolumesSignature_) return;
+    prismaVolumesSignature_ = signature;
+    std::vector<std::string> issues;
+    prismaVolumes_ = render::parsePrismaVolumes(game, map, &issues);
+    for (const auto& issue : issues) ws_.log("prisma", issue, true);
+}
 
 // ============================ viewport ============================
 
@@ -100,8 +112,8 @@ void Editor::init(gfx::Device& dev) {
     io.IniFilename = iniPath.c_str();
     resetLayout_ = !fs::exists(iniPath, fec);
     r3d_.init(dev);
-    postFx_.init(dev);
-    postFx_.setQuality(render::PostFx::defaultQualityFor(dev, false));
+    prisma_.init(dev);
+    prisma_.setQuality(render::Prisma::defaultQualityFor(dev, false));
     r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, false));
     r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, false));
     for (auto& f : WindowRegistry::factories()) {
@@ -168,7 +180,7 @@ void Editor::shutdown() {
     windows_.clear(); // windows release their viewports in their destructors via update()? keep simple: textures die with the device
     if (studioLogo_.valid()) { dev_->destroyTexture(studioLogo_); studioLogo_ = {}; }
     view_.shutdown(*dev_);
-    postFx_.shutdown();
+    prisma_.shutdown();
     if(fpsPreviewMesh_.vb.valid())dev_->destroyBuffer(fpsPreviewMesh_.vb);
     if(fpsPreviewMesh_.ib.valid())dev_->destroyBuffer(fpsPreviewMesh_.ib);
     r3d_.shutdown();
@@ -868,11 +880,14 @@ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) 
     if (planets) pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
     // Accurate diagnostic colours must not pass through post-processing.
     const auto beforeRender = std::chrono::steady_clock::now();
-    r3d_.render(pass, r3d_.studioDebugMode() ? nullptr : (postFxInScene ? &postFx_ : nullptr));
+    refreshPrismaVolumes();
+    prisma_.applyCameraVolumes(prismaVolumes_, useCam.eye());
+    r3d_.render(pass, r3d_.studioDebugMode() ? nullptr : (postFxInScene ? &prisma_ : nullptr));
     const auto afterRender = std::chrono::steady_clock::now();
     r3d_.setSceneSelectionOutline(false);
     if (!ws_.project.isFps() && !r3d_.studioDebugMode()) gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
-    r3d_.resolvePostFx();
+    r3d_.resolvePrisma();
+    prisma_.clearCameraVolumes();
     dev_->endPass();
     if (!ws_.project.isFps()) view_.drawOverlays(useCam, scene_, vp.pointsW, vp.pointsH, vp.originX, vp.originY, ImGui::GetWindowDrawList());
     if (traceSceneStages) {
@@ -932,9 +947,12 @@ void Editor::renderGame(Viewport& vp, const RTSCamera& cam) {
     pass.colorTarget = vp.color;
     pass.depthTarget = vp.depth;
     pass.clearColor[0] = 0.55f; pass.clearColor[1] = 0.66f; pass.clearColor[2] = 0.78f;
-    r3d_.render(pass, &postFx_);
+    refreshPrismaVolumes();
+    prisma_.applyCameraVolumes(prismaVolumes_, cam.eye());
+    r3d_.render(pass, &prisma_);
     gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
-    r3d_.resolvePostFx();
+    r3d_.resolvePrisma();
+    prisma_.clearCameraVolumes();
     dev_->endPass();
     view_.drawOverlays(cam, sc, vp.pointsW, vp.pointsH, vp.originX, vp.originY, ImGui::GetWindowDrawList());
 }
@@ -1106,7 +1124,14 @@ void Editor::samplePlayStats() {
 
 void Editor::event(const platform::Event& e) {
     ui_.handleEvent(e);
-    clientHost_.event(e);   // the hosted game client: pointer inside its screen, keys while the Game window has focus
+    if(clientHost_.active()){
+        // The selected dock tab may change without GameWindow::drawClient running.
+        // Never forward events into a hidden hosted game (especially text/rebind keys).
+        EditorWindow* game=window("game");
+        const bool eligible=game && game->open && isWindowInFront(game);
+        if(!eligible)clientHost_.suspendInput();
+        if(eligible || e.type==platform::EventType::FocusLost)clientHost_.event(e);
+    }
     if (e.type == platform::EventType::QuitRequested) quit_ = true;
     if (e.type == platform::EventType::OpenFile) requestOpenProject(e.path);   // double-clicked .aiverse (macOS)
 }
@@ -1115,6 +1140,8 @@ void Editor::handleShortcuts() {
     ImGuiIO& io = ImGui::GetIO();
     const bool mod = io.KeyCtrl || io.KeySuper;
     if (showPicker_ || io.WantTextInput) return;
+    for (const auto& window : windows_)
+        if (window->open && window->captureGlobalShortcuts()) return;
     if (mod && ImGui::IsKeyPressed(ImGuiKey_S, false) && !doc().path.empty()) saveMap(doc().path);
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Z, false) && !playing()) { if (io.KeyShift) doc().redo(); else doc().undo(); selection = {}; }
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Y, false) && !playing()) { doc().redo(); selection = {}; }

@@ -1,0 +1,51 @@
+name: AIVerse InputFlow targeted checks
+
+on:
+  push:
+    branches: [feature/aiv990_enhanced_input]
+    paths:
+      - "apps/client/**"
+      - "apps/editor/**"
+      - "apps/fps/**"
+      - "engine/platform/EnhancedInput*"
+      - "engine/platform/InputFlow.h"
+      - "libraries/include/aiverselib/gameplay/EnhancedInput.h"
+      - "libraries/include/aiverselib/gameplay/InputFlow.h"
+      - "tests/libraries/enhanced_*"
+      - "tests/libraries/CMakeLists.txt"
+      - ".github/workflows/enhanced-input.yml"
+  pull_request:
+    paths:
+      - "apps/client/**"
+      - "apps/editor/**"
+      - "apps/fps/**"
+      - "engine/platform/EnhancedInput*"
+      - "engine/platform/InputFlow.h"
+      - "libraries/include/aiverselib/gameplay/EnhancedInput.h"
+      - "libraries/include/aiverselib/gameplay/InputFlow.h"
+      - "tests/libraries/enhanced_*"
+      - "tests/libraries/CMakeLists.txt"
+      - ".github/workflows/enhanced-input.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  input-core:
+    name: InputFlow (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - name: Configure standalone C++20 library targets
+        run: cmake -S tests/libraries -B build/enhanced-input-ci -DCMAKE_BUILD_TYPE=Debug
+      - name: Build core, adapter, JSON and RTS regression targets
+        run: cmake --build build/enhanced-input-ci --config Debug --parallel 2 --target aiverse_enhanced_input_tests aiverse_enhanced_input_adapter_tests aiverse_enhanced_input_config_tests aiverse_enhanced_rts_input_tests
+      - name: Run targeted CTest checks
+        run: ctest --test-dir build/enhanced-input-ci -C Debug --output-on-failure -R "^library_enhanced_(input|rts_input)"

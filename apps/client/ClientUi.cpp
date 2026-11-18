@@ -185,7 +185,10 @@ void GameClient::shutdownUi() {
 void GameClient::setScreen(Screen s) {
     const bool changed = screen_ != s;
     screen_ = s;
-    if (s != Screen::Playing) { boxing_ = panning_ = sendDrag_ = false; mode_ = Mode::Normal; }
+    if (s != Screen::Playing) {
+        inputShortcuts_.reset(); // release camera and gameplay actions on pause/menu
+        boxing_ = panning_ = sendDrag_ = false; mode_ = Mode::Normal;
+    }
     if (!changed) return;
     if (s == Screen::Over && sim_) {   // UI scripts: rewards, progress (game.on("matchEnd", fn))
         const int res = sim_->result();

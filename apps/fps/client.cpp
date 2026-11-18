@@ -6,6 +6,7 @@
 #include "engine/net/Udp.h"
 #include "engine/net/WebSocket.h"
 #include "engine/platform/Platform.h"
+#include "engine/platform/InputFlow.h"
 #include "engine/world/ChunkScene.h"
 #include "engine/world/WorldScene.h"
 #include "engine/platform/ContentReader.h"
@@ -17,12 +18,14 @@
 #include "engine/audio/Audio.h"
 #include "engine/platform/EngineDir.h"
 #include <fstream>
+#include <filesystem>
+#include <iterator>
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
-#include <set>
 
 using namespace aiverse;
+namespace ein = aiverse::lib::gameplay::inputflow;
 namespace {
 render::float3 visual(Vec3 v){return {float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};}
 struct App {
@@ -37,9 +40,16 @@ struct App {
     render::GeometryScene staticGeometry;
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
     i18n::Localization lang;
-    std::set<platform::Key> keys;
+    ein::InputFlow actions;
+    platform::InputFlowAdapter inputAdapter{actions};
+    platform::inputflow_config::UserProfiles userProfiles;
+    ein::InputFlow projectActions;
+    bool settingsOpen=false;
+    std::string rebindContext, settingsError;
+    std::uint64_t rebindMapping=0;
+    ein::RebindPolicy rebindPolicy=ein::RebindPolicy::Swap;
     fps::Input input;
-    bool fireHeld=false,fireQueued=false,aimHeld=false,prone=false;uint32_t buySelection=0;
+    bool fireHeld=false,fireQueued=false,jumpQueued=false,aimHeld=false,prone=false;uint32_t buySelection=0;
     audio::AudioEngine audio;double stepSound=0,viewTime=0;uint32_t lastReload=0;
     std::map<uint8_t,std::pair<uint32_t,uint32_t>> heardShots;
     uint32_t shownShots=0,shownHits=0,shownLife=0;
@@ -47,7 +57,113 @@ struct App {
     double accumulated=0;bool listen=false;
     fps::view::Look look;
     net::authority::Snapshot previousSnapshot,received;uint32_t lastSnapshotTick=0;double snapshotAge=0;
+
+    // Data-driven semantic mapping: games may replace this context with their own JSON assets.
+    // These defaults reproduce the reference FPS controls; the network command layout is unchanged.
+    void configureInput() {
+        std::string error;
+        if(!platform::inputflow_config::installAsset(actions,platform::inputflow_presets::fpsReference(),&error))
+            throw std::runtime_error("FPS InputFlow preset: "+error);
+    }
+
+    void loadInputConfig() {
+        namespace cfg=platform::inputflow_config;
+        std::string text,error;
+        // A project asset is a complete mapping scheme. Never store authored
+        // keys inside the OS user profile.
+        if(platform::readContentFile(projectRoot+"/input/actions.json",text)){
+            try{
+                cfg::Asset asset;
+                if(!cfg::readAsset(Json::parse(text),asset,&error) ||
+                   !cfg::installAsset(actions,asset,&error))
+                    std::fprintf(stderr,"InputFlow asset ignored: %s\n",error.c_str());
+            }catch(const std::exception& ex){
+                std::fprintf(stderr,"InputFlow asset ignored: %s\n",ex.what());
+            }
+        }
+        projectActions=actions; // reloading player settings must preserve project defaults
+        userProfiles.setScope(platform::userDataDir(),projectRoot);
+        if(!userProfiles.load(0,actions,&error))
+            std::fprintf(stderr,"InputFlow profile ignored: %s\n",error.c_str());
+    }
+    // One transactional path for both single-player FPS and future couch co-op.
+    bool rebindInput(const std::string& context,std::uint64_t id,ein::Control control,
+                     ein::RebindPolicy policy) {
+        return userProfiles.rebind(0,actions,context,id,control,policy,&settingsError);
+    }
+    // Presentation-only in-game rebinding. Authored actions.json is never changed by players.
+    void drawInputSettings() {
+        if(!settingsOpen)return;
+        ImGui::SetNextWindowSize({600,570},ImGuiCond_FirstUseEver);
+        if(!ImGui::Begin("InputFlow Settings (F10)",&settingsOpen)){
+            ImGui::End();return;
+        }
+        ImGui::TextWrapped("Click Rebind, then press a keyboard key or mouse/gamepad button. "
+                           "Overrides are saved per player and project; Escape cancels capture.");
+        if(ImGui::Button("Resume (click viewport to capture mouse)")){
+            settingsOpen=false;rebindMapping=0;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Restore project defaults")){
+            if(userProfiles.reset(0,actions,projectActions,&settingsError)){
+                settingsError.clear();
+                rebindMapping=0;
+                platform::syncUserData();
+            }
+        }
+        int policy=int(rebindPolicy);
+        if(ImGui::Combo("Binding conflicts",&policy,
+                        "Allow duplicate\0Reject duplicate\0Swap keys\0\0"))
+            rebindPolicy=ein::RebindPolicy(policy);
+        if(!settingsError.empty())ImGui::TextWrapped("Input: %s",settingsError.c_str());
+        const auto conflicts=actions.conflicts();
+        if(!conflicts.empty() && ImGui::CollapsingHeader("Detected conflicts")) {
+            for(const auto& c:conflicts) {
+                ImGui::TextWrapped("%s:%s / %s:%s %s",c.higherContext.c_str(),
+                    c.higherAction.c_str(),c.lowerContext.c_str(),
+                    c.lowerAction.c_str(),c.shadowed?"(shadowed)":"(shared)");
+            }
+        }
+        ImGui::Separator();
+        if(ImGui::BeginChild("##bindings")) {
+            for(const auto& name:actions.registeredContexts()) {
+                const auto* context=actions.context(name);
+                if(!context)continue;
+                const std::string header=name+(actions.isContextActive(name)?" (active)":" (inactive)");
+                if(!ImGui::CollapsingHeader(header.c_str(),ImGuiTreeNodeFlags_DefaultOpen))continue;
+                for(const auto& mapping:context->mappings) {
+                    ImGui::PushID(name.c_str());
+                    ImGui::PushID(int(mapping.id)); // stable mapping id for runtime profile
+                    const auto binding=platform::inputflow_config::detail::writeControl(mapping.control).dump(0);
+                    ImGui::Text("%s  %s",mapping.action.c_str(),binding.c_str());
+                    ImGui::SameLine();
+                    if(ImGui::SmallButton("Rebind")){
+                        rebindContext=name;rebindMapping=mapping.id;settingsError.clear();
+                    }
+                    if(rebindMapping==mapping.id&&rebindContext==name) {
+                        ImGui::TextDisabled("Waiting for key / mouse / gamepad...");
+                    }
+                    for(const auto& sibling:context->mappings)
+                        if(sibling.id!=mapping.id&&sibling.control==mapping.control)
+                            ImGui::TextDisabled("Conflict: another action uses this control.");
+                    ImGui::PopID();
+                    ImGui::PopID();
+                }
+            }
+        }
+        ImGui::EndChild();
+        ImGui::End();
+        if(!settingsOpen)rebindMapping=0;
+    }
+    bool finishRebind(ein::Control control){
+        if(!rebindMapping)return false;
+        const bool ok=rebindInput(rebindContext,rebindMapping,control,rebindPolicy);
+        rebindMapping=0;rebindContext.clear();
+        return ok;
+    }
     void init(gfx::Device& device) {
+        configureInput();
+        loadInputConfig();
         renderer.init(device);renderer.setShadowQuality(render::ShadowQuality::Low);
         if (const auto file=map.getStr("geometryScene"); !file.empty()) {
             auto reader=[&](const std::string& path,std::string& text){return platform::readContentFile(projectRoot+"/"+path,text);};
@@ -68,36 +184,45 @@ struct App {
         if(platform::readContentFile(projectRoot+"/audio.json",bank)||platform::readContentFile("engine/assets/fps_audio.json",bank))if(!audio.loadBank(Json::parse(bank),[](const auto& file,auto& out){return platform::readContentFile(file,out);},&error))std::fprintf(stderr,"FPS audio: %s\n",error.c_str());
     }
     void event(const platform::Event& e) {
-        using E=platform::EventType;using K=platform::Key;
-        if(e.type==E::FocusLost){platform::setPointerLock(false);keys.clear();input.buttons=0;fireHeld=fireQueued=aimHeld=false;input.action=fps::Action::None;}
-        if(e.type==E::KeyDown) {
-            if(e.key==K::Escape){platform::setPointerLock(false);keys.clear();input.buttons=0;fireHeld=fireQueued=aimHeld=false;input.action=fps::Action::None;return;}
-            if(platform::pointerLocked()){
-                if(e.key>=K::Num1&&e.key<=K::Num4&&!e.repeat){buySelection=uint32_t(e.key)-uint32_t(K::Num1);input.buttons=(input.buttons&~uint32_t(fps::WeaponMask))|fps::selectWeapon(buySelection);}
-                if(!e.repeat){
-                    using A=fps::Action;
-                    if(e.key==K::G)input.action=A::Frag;
-                    if(e.key==K::X)input.action=A::Smoke;
-                    if(e.key==K::C)input.action=A::Flash;
-                    if(e.key==K::H)input.action=A::Heal;
-                    if(e.key==K::E)input.action=A::Interact;
-                    if(e.key==K::Q)input.action=A::Drop;
-                    if(e.key==K::P)input.action=A::Plant;
-                    if(e.key==K::F)input.action=A::Vault;
-                    if(e.key==K::B){input.action=A::Buy;input.argument=buySelection;input.buttons=(input.buttons&~uint32_t(fps::WeaponMask))|fps::selectWeapon(buySelection);}
-                    if(e.key>=K::F1&&e.key<=K::F3){input.action=A::Attach;input.argument=6+uint32_t(e.key)-uint32_t(K::F1);}
-                    if(e.key==K::V)prone=!prone;
-                }
-                keys.insert(e.key);if(e.key==K::Space&&!e.repeat)input.buttons|=fps::Jump;}
+        using E=platform::EventType; using K=platform::Key;
+        gui.handleEvent(e);
+        if(e.type==E::KeyDown&&e.key==K::F10&&!e.repeat){
+            settingsOpen=!settingsOpen;
+            rebindMapping=0;
+            platform::setPointerLock(false);
+            inputAdapter.focusLost();
+            fireHeld=fireQueued=jumpQueued=aimHeld=false;input.buttons=0;
+            return;
         }
-        if(e.type==E::KeyUp)keys.erase(e.key);
-        if(e.type==E::MouseDown&&e.button==0){if(!platform::pointerLocked())platform::setPointerLock(true);if(platform::pointerLocked()){fireHeld=true;fireQueued=true;}}
-        if(e.type==E::MouseUp&&e.button==0)fireHeld=false;
-        if(e.type==E::MouseDown&&e.button==1&&platform::pointerLocked())aimHeld=true;
-        if(e.type==E::MouseUp&&e.button==1)aimHeld=false;
-        if(e.type==E::MouseMove&&platform::pointerLocked()) {
-            look.motion(e.deltaX,e.deltaY,aimHeld?0.00015f:0.0004f);
+        if(settingsOpen) {
+            if(rebindMapping && e.type==E::KeyDown && !e.repeat) {
+                if(e.key==K::Escape){rebindMapping=0;rebindContext.clear();}
+                else if(e.key!=K::Unknown)
+                    finishRebind({ein::Device::Keyboard,int(e.key)});
+            }else if(rebindMapping && e.type==E::MouseDown && e.button>=0 && e.button<=4){
+                finishRebind({ein::Device::MouseButton,e.button});
+            }else if(e.type==E::KeyDown && e.key==K::Escape) {
+                settingsOpen=false;rebindMapping=0;rebindContext.clear();
+            }
+            if(e.type!=E::FocusLost)return;
         }
+        if(e.type==E::FocusLost){
+            platform::setPointerLock(false);inputAdapter.focusLost();
+            input.buttons=0;input.action=fps::Action::None;
+            fireHeld=fireQueued=jumpQueued=aimHeld=false;
+            return;
+        }
+        if(e.type==E::KeyDown&&e.key==K::Escape){
+            platform::setPointerLock(false);inputAdapter.focusLost();
+            input.buttons=0;input.action=fps::Action::None;
+            fireHeld=fireQueued=jumpQueued=aimHeld=false;
+            return;
+        }
+        if(e.type==E::MouseDown&&e.button==0&&!platform::pointerLocked())
+            platform::setPointerLock(true);
+        // Gameplay context is only fed while the viewport owns the pointer lock.
+        if(platform::pointerLocked()||e.type==E::KeyUp||e.type==E::MouseUp)
+            inputAdapter.onEvent(e);
     }
     void frame(gfx::Device& device,double dt) {
         const auto now=net::nowMs();
@@ -108,29 +233,93 @@ struct App {
         }
 #endif
         client->updateStreaming();client->poll(now);if(server)server->poll(now);
+        const bool playing=platform::pointerLocked() && !settingsOpen;
+        if(settingsOpen) {
+            platform::pollGamepads();
+            if(rebindMapping){
+                for(int pad=0;pad<platform::kMaxGamepads && rebindMapping;++pad){
+                    const auto& state=platform::gamepad(pad);
+                    if(!state.connected)continue;
+                    for(int button=0;button<int(platform::PadButton::Count);++button){
+                        if(state.pressed(platform::PadButton(button))){
+                            finishRebind({ein::Device::GamepadButton,button,pad});break;
+                        }
+                    }
+                    for(int axis=0;axis<int(platform::PadAxis::Count)&&rebindMapping;++axis)
+                        if(std::abs(state.axis(platform::PadAxis(axis)))>0.8f)
+                            finishRebind({ein::Device::GamepadAxis,axis,pad});
+                }
+            }
+        }
+        if(playing){
+            inputAdapter.pollGamepads();
+            const auto events=actions.update(float(std::min(dt,0.25)));
+            for(const auto& e:events){
+                if(e.phase!=ein::Phase::Triggered)continue;
+                const auto& name=e.action;
+                if(name=="Jump")jumpQueued=true;
+                else if(name=="Fire")fireQueued=true;
+                else if(name=="Prone")prone=!prone;
+                else if(name=="Frag")input.action=fps::Action::Frag;
+                else if(name=="Smoke")input.action=fps::Action::Smoke;
+                else if(name=="Flash")input.action=fps::Action::Flash;
+                else if(name=="Heal")input.action=fps::Action::Heal;
+                else if(name=="Interact")input.action=fps::Action::Interact;
+                else if(name=="Drop")input.action=fps::Action::Drop;
+                else if(name=="Plant")input.action=fps::Action::Plant;
+                else if(name=="Vault")input.action=fps::Action::Vault;
+                else if(name=="Buy"){
+                    input.action=fps::Action::Buy;input.argument=buySelection;
+                    input.buttons=(input.buttons&~uint32_t(fps::WeaponMask))|fps::selectWeapon(buySelection);
+                }else if(name=="Weapon1"||name=="Weapon2"||name=="Weapon3"||name=="Weapon4"){
+                    buySelection=uint32_t(name.back()-'1');
+                    input.buttons=(input.buttons&~uint32_t(fps::WeaponMask))|fps::selectWeapon(buySelection);
+                }else if(name=="Attach1"||name=="Attach2"||name=="Attach3"){
+                    input.action=fps::Action::Attach;input.argument=6+uint32_t(name.back()-'1');
+                }
+            }
+            auto held=[&](const char* name){const auto* state=actions.state(name);return state&&state->active;};
+            fireHeld=held("Fire");aimHeld=held("Aim");
+            if(const auto* mouse=actions.state("Look");mouse&&mouse->active)
+                look.motion(mouse->value.x,mouse->value.y,aimHeld?0.00015f:0.0004f);
+            if(const auto* stick=actions.state("LookStick");stick&&stick->active){
+                const float pxPerSecond=1400.0f;
+                const float scaled=float(std::min(dt,0.25))*pxPerSecond;
+                look.motion(stick->value.x*scaled,stick->value.y*scaled,aimHeld?0.00015f:0.0004f);
+            }
+        }else{
+            inputAdapter.focusLost();
+            input.buttons=0;input.action=fps::Action::None;
+            fireHeld=fireQueued=jumpQueued=aimHeld=false;
+        }
+        auto held=[&](const char* name){const auto* state=actions.state(name);return state&&state->active;};
         accumulated+=std::min(dt,0.25);int budget=8;
-        while(accumulated>=1.0/config.tickRate&&budget--) {
-            using K=platform::Key;
-            input.forward=(keys.contains(K::W)?1000:0)-(keys.contains(K::S)?1000:0);
-            input.right=(keys.contains(K::D)?1000:0)-(keys.contains(K::A)?1000:0);
-            input.buttons&=uint32_t(fps::Jump|fps::WeaponMask);
+        while(accumulated>=1.0/config.tickRate&&budget--){
+            const auto* move=actions.state("Move");
+            input.forward=move?int32_t(std::clamp(move->value.y,-1.0f,1.0f)*1000):0;
+            input.right=move?int32_t(std::clamp(move->value.x,-1.0f,1.0f)*1000):0;
+            input.buttons&=uint32_t(fps::WeaponMask);
+            if(jumpQueued)input.buttons|=fps::Jump;
             if(aimHeld)input.buttons|=fps::Aim;
             if(prone)input.buttons|=fps::Prone;
             if(fireHeld||fireQueued)input.buttons|=fps::Fire;
-            if(keys.contains(K::LeftCtrl))input.buttons|=fps::Crouch;
-            if(keys.contains(K::LeftShift))input.buttons|=fps::Sprint;
-            if(keys.contains(K::R))input.buttons|=fps::Reload;
+            if(held("Crouch"))input.buttons|=fps::Crouch;
+            if(held("Sprint"))input.buttons|=fps::Sprint;
+            if(held("Reload"))input.buttons|=fps::Reload;
             if(config.melee.enabled){
-                if(keys.contains(K::Z))input.buttons|=fps::Melee;
-                if(keys.contains(K::LeftAlt))input.buttons|=fps::Block;
-                if(keys.contains(K::T))input.buttons|=fps::LockOn;
+                if(held("Melee"))input.buttons|=fps::Melee;
+                if(held("Block"))input.buttons|=fps::Block;
+                if(held("LockOn"))input.buttons|=fps::LockOn;
             }
             input.yaw=Fixed::fromRaw(int64_t(look.yaw*65536));input.pitch=Fixed::fromRaw(int64_t(look.pitch*65536));
-            if(client->submit(input)){fireQueued=false;input.action=fps::Action::None;input.buttons&=~uint32_t(fps::Jump|fps::WeaponMask);}
+            if(client->submit(input)){
+                fireQueued=jumpQueued=false;
+                input.action=fps::Action::None;
+                input.buttons&=~uint32_t(fps::Jump|fps::WeaponMask);
+            }
             if(server){server->poll(now);if(!server->step()){accumulated=0;break;}client->poll(now);}
             accumulated-=1.0/config.tickRate;
         }
-        if(!platform::pointerLocked()){keys.clear();input.buttons=0;fireHeld=fireQueued=aimHeld=false;input.action=fps::Action::None;}
         device.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());gui.newFrame(dt);
         auto actor=client->predicted();viewTime+=dt;
         if(actor.reloadUntil&&!lastReload)audio.play("reload");
@@ -225,10 +414,11 @@ struct App {
             if(actor.health<=0)ImGui::TextUnformatted(lang.tr("fps.dead").c_str());
             if(actor.activeAction!=fps::Action::None){auto remaining=std::max(0,int(actor.actionUntil)-int(client->snapshot().tick));ImGui::TextUnformatted(lang.tr("fps.action",i18n::Args().num("seconds",(remaining+int(config.tickRate)-1)/int(config.tickRate))).c_str());}
             ImGui::PushTextWrapPos(580);ImGui::TextUnformatted(lang.tr("fps.systems.controls").c_str());ImGui::PopTextWrapPos();
-            if(keys.contains(platform::Key::Tab))for(auto item:actor.bag)ImGui::TextUnformatted(lang.tr("fps.item",i18n::Args().str("name",lang.tr("fps.item."+std::to_string(item.type))).num("count",item.count)).c_str());
+            if(held("ShowInventory"))for(auto item:actor.bag)ImGui::TextUnformatted(lang.tr("fps.item",i18n::Args().str("name",lang.tr("fps.item."+std::to_string(item.type))).num("count",item.count)).c_str());
             if(config.mode=="bomb")ImGui::TextUnformatted(lang.tr("fps.round",i18n::Args().num("round",client->snapshot().round).num("a",client->snapshot().match.scoreA).num("b",client->snapshot().match.scoreB).num("bomb",client->snapshot().match.planted?std::max(0,int(client->snapshot().match.bombExplodes)-int(client->snapshot().tick))/int(config.tickRate):0)).c_str());
         }
         ImGui::End();
+        drawInputSettings();
         auto* draw=ImGui::GetForegroundDrawList();float x=platform::windowWidth()/2,y=platform::windowHeight()/2;
         draw->AddLine({x-5,y},{x+5,y},IM_COL32_WHITE,1.5f);draw->AddLine({x,y-5},{x,y+5},IM_COL32_WHITE,1.5f);
         if(hitFlash>0) {

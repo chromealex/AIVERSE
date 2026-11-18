@@ -106,8 +106,8 @@ struct NodePose;
 class BakedLighting;   // baked lightmaps + light probes of a map (BakedLighting.h, agent-lightbake)
 enum class BakedQuality { Off, Low, High };
 
-// Post-processing hook (engine/render/PostFx.h implements it). With an active hook, render() draws
-// the scene into the hook's offscreen target instead of `screenPass`; resolvePostFx() then runs the
+// Post-processing hook (engine/render/Prisma.h; PostFx.h is legacy-compatible). With an active hook, render() draws
+// the scene into the hook's offscreen target instead of `screenPass`; resolvePrisma() then runs the
 // effect chain into `screenPass` and leaves that pass open (UI and overlays drawn after it are not
 // post-processed). Without a hook, or with no active effect, nothing changes and it costs nothing.
 struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0;
@@ -274,7 +274,8 @@ public:
     void render(const gfx::PassDesc& screenPass, PostProcess* post = nullptr); // shadow pass + opens the main pass and draws everything
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
-    void resolvePostFx();
+    void resolvePrisma(); // canonical image processing resolve; leaves UI pass open
+    void resolvePostFx() { resolvePrisma(); } // legacy API
     // Extra renderers (sprites, tiles) that draw with their own pipelines inside the main pass: run
     // after opaque and translucent meshes, before overlays (fog of war stays on top).
     // Cleared by beginScene.
@@ -485,7 +486,7 @@ private:
     uint32_t debugMainDrawId_ = 0;
     static float4 drawCallDebugColor(uint32_t drawId);
     int sceneW_ = 0, sceneH_ = 0;
-    PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePostFx()
+    PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePrisma()
     gfx::PassDesc postOut_;
 
     // trace tier

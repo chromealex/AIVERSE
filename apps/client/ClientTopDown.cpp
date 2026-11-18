@@ -24,6 +24,7 @@ void GameClient::topDownConfigure() {
     tdMouseHeld_ = tdFireHeld_ = false;
     tdHooked_ = nullptr;
     tdInput_ = {};
+    tdAbilityKeysHeld_.clear();
     const TopDown* td = sim_ ? mod().topDown() : nullptr;
     if (!td || !td->active()) { topDown_ = {}; tdPredict_.reset(); return; }
     topDown_.configure(manifest_, td->rules(), mod().rules(), mapCamera_);   // game.json topDown.camera + the map's "camera"
@@ -39,6 +40,30 @@ void GameClient::topDownConfigure() {
         } else if (!pj.isNull()) pc.enabled = pj.boolean(true);
         tdPredict_.configure(pc);
     }
+    // Project-authored TopDownAbilities contexts always take precedence.
+    // Otherwise synthesize Actions from game.json's game-specific ability
+    // keys. Abilities still belong to the top-down module, not input core.
+    auto& inputSystem=inputShortcuts_.system();
+    // Regenerate engine-created bindings every time the hero/map is
+    // configured; a previous level may have a different set of abilities.
+    // Authored contexts are never overwritten by this runtime synthesis.
+    if(tdAutoAbilityContext_ || !inputSystem.context("RTS.TopDownAbilities")){
+        namespace ei=lib::gameplay::enhanced;
+        ei::MappingContext abilityBindings{"RTS.TopDownAbilities"};
+        for(std::size_t i=0;i<topDown_.config().buttons.size();++i) {
+            const auto& button=topDown_.config().buttons[i];
+            const std::string name="TopDownAbility"+std::to_string(i);
+            inputSystem.defineAction({name,ei::ValueType::Boolean});
+            if(button.key>0 && button.key<int(Key::Count))
+                abilityBindings.bind(name,{ei::Device::Keyboard,button.key},{},
+                                     {ei::Trigger::pressed()},false);
+        }
+        std::uint64_t next=1;
+        for(auto& mapping:abilityBindings.mappings)mapping.id=next++;
+        if(inputSystem.registerContext(std::move(abilityBindings)))
+            tdAutoAbilityContext_=true;
+    }
+    tdAbilityKeysHeld_.assign(topDown_.config().buttons.size(),false);
     if (!topDownActive()) return;
     Entity h = td->heroOf(*sim_, human_);
     auto& g = mod().state(*sim_).grid;
@@ -48,12 +73,18 @@ void GameClient::topDownConfigure() {
     }
 }
 
-bool GameClient::topDownEvent(const Event& e, bool uiWants) {
+bool GameClient::topDownEvent(const Event& e, bool uiWants,
+                              const std::vector<std::string>& actions) {
     if (!topDownActive()) return false;
     const float W = platform::windowWidth(), H = platform::windowHeight();
+    const auto triggered=[&](const std::string& name){
+        return std::find(actions.begin(),actions.end(),name)!=actions.end();
+    };
+    const bool semantic=inputShortcuts_.system().context("RTS.TopDown")!=nullptr;
     switch (e.type) {
     case EventType::FocusLost:   // held buttons cancel; the escape preview stops (Drone Fall: losing focus stops it)
         topDown_.cancelAll(); topDown_.escape().cancel(); tdMouseHeld_ = tdFireHeld_ = false;
+        std::fill(tdAbilityKeysHeld_.begin(),tdAbilityKeysHeld_.end(),false);
         return false;
     case EventType::TouchBegin:
         if (uiWants) return false;
@@ -64,45 +95,92 @@ bool GameClient::topDownEvent(const Event& e, bool uiWants) {
     case EventType::MouseDown:
         if (uiWants) return false;
         if (topDownTouchUi() && topDown_.pointerDown(-100 - e.button, e.x, e.y, W, H, true)) return true;   // desktop clicks on drawn sticks
-        if (e.button == 0) tdMouseHeld_ = true;
-        if (e.button == 1) tdFireHeld_ = true;
+        if (!semantic && e.button == 0) tdMouseHeld_ = true;
+        if (!semantic && e.button == 1) tdFireHeld_ = true;
         return e.button != 2;   // middle button still pans
     case EventType::MouseMove:
         topDown_.pointerMove(-100, e.x, e.y);
         return false;
     case EventType::MouseUp:
         if (topDown_.pointerUp(-100 - e.button, e.x, e.y)) return true;
-        if (e.button == 0) tdMouseHeld_ = false;
-        if (e.button == 1) tdFireHeld_ = false;
+        if (!semantic && e.button == 0) tdMouseHeld_ = false;
+        if (!semantic && e.button == 1) tdFireHeld_ = false;
         return e.button != 2;
     case EventType::KeyDown:
         if (uiWants || e.repeat || ui_.textInputFocused()) return false;
         if (e.key == Key::Escape) return false;   // pause menu
-        for (size_t i = 0; i < topDown_.config().buttons.size(); ++i)
-            if (topDown_.config().buttons[i].key != 0 && int(e.key) == topDown_.config().buttons[i].key) { topDown_.buttonDown(int(i)); return true; }
+        for(std::size_t i=0;i<topDown_.config().buttons.size();++i) {
+            const auto name="TopDownAbility"+std::to_string(i);
+            if(triggered(name)) {
+                topDown_.buttonDown(int(i));
+                tdAbilityKeysHeld_[i]=true;
+                return true;
+            }
+        }
         if (commerceKey(e.key)) return true;   // deals at a door (rules "commerce"): E, then 1..9
         if (mod().arsenal() && mod().arsenal()->active()) {   // weapons (rules "arsenal"): Z / X cycle, 1..9 pick a slot
             int64_t pick = 0;
-            if (e.key == Key::X || e.key == Key::Tab) pick = kWeaponNext;
-            else if (e.key == Key::Z) pick = kWeaponPrev;
-            else if (int(e.key) >= int(Key::Num1) && int(e.key) <= int(Key::Num9)) pick = kWeaponSlot + (int(e.key) - int(Key::Num1));
+            if (semantic) {
+                if (triggered("TopDownWeaponNext"))pick=kWeaponNext;
+                else if (triggered("TopDownWeaponPrev"))pick=kWeaponPrev;
+                else for(int slot=1;slot<=9;++slot)
+                    if(triggered("TopDownWeapon"+std::to_string(slot))) {
+                        pick=kWeaponSlot+slot-1;break;
+                    }
+            } else {
+                if(e.key==Key::X||e.key==Key::Tab)pick=kWeaponNext;
+                else if(e.key==Key::Z)pick=kWeaponPrev;
+                else if(int(e.key)>=int(Key::Num1)&&int(e.key)<=int(Key::Num9))
+                    pick=kWeaponSlot+(int(e.key)-int(Key::Num1));
+            }
             if (pick != 0) { Command c; c.type = kCmdTopDownWeapon; c.param = pick; issue(c); return true; }
         }
-        if (e.key == Key::F || e.key == Key::Enter) {   // get into the nearest vehicle / out of the car (rules "driving")
+        if ((semantic && triggered("TopDownEnter")) ||
+            (!semantic && (e.key == Key::F || e.key == Key::Enter))) {   // get into the nearest vehicle / out of the car (rules "driving")
             if (mod().driving() && mod().driving()->active()) { Command c; c.type = kCmdTopDownEnter; issue(c); }
             return true;
         }
         return true;   // WASD etc. steer the hero, not RTS hotkeys
     case EventType::KeyUp:
-        for (size_t i = 0; i < topDown_.config().buttons.size(); ++i)
-            if (topDown_.config().buttons[i].key != 0 && int(e.key) == topDown_.config().buttons[i].key) topDown_.buttonUp(int(i));
+        for(std::size_t i=0;i<tdAbilityKeysHeld_.size();++i) {
+            if(!tdAbilityKeysHeld_[i])continue;
+            const auto* state=inputShortcuts_.system().state(
+                "TopDownAbility"+std::to_string(i));
+            if(!state || !state->active) {
+                topDown_.buttonUp(int(i));
+                tdAbilityKeysHeld_[i]=false;
+            }
+        }
         return !uiWants;
     default: return false;
     }
 }
 
+// Time-triggered ability mappings use exactly the same module button state as
+// a physical keyboard press, without needing synthetic OS events.
+void GameClient::topDownTimedActions(const std::vector<std::string>& actions) {
+    if(!topDownActive() || ui_.textInputFocused())return;
+    for(std::size_t i=0;i<tdAbilityKeysHeld_.size();++i) {
+        const auto name="TopDownAbility"+std::to_string(i);
+        if(std::find(actions.begin(),actions.end(),name)!=actions.end() &&
+           !tdAbilityKeysHeld_[i]) {
+            topDown_.buttonDown(int(i));
+            tdAbilityKeysHeld_[i]=true;
+        }
+    }
+}
+
 void GameClient::topDownFrame(double dt) {
     if (!topDownActive()) return;
+    for(std::size_t i=0;i<tdAbilityKeysHeld_.size();++i) {
+        if(!tdAbilityKeysHeld_[i])continue;
+        const auto* state=inputShortcuts_.system().state(
+            "TopDownAbility"+std::to_string(i));
+        if(!state || !state->active) {
+            topDown_.buttonUp(int(i));
+            tdAbilityKeysHeld_[i]=false;
+        }
+    }
     TopDown* td = mod().topDown();
     World& w = sim_->world();
     const Entity hero = td->heroOf(*sim_, human_);
@@ -119,15 +197,27 @@ void GameClient::topDownFrame(double dt) {
             in.targets.push_back({t.e.packed(), float((t.pos.x - hp.x).toDouble()), float((t.pos.z - hp.z).toDouble())});
     }
     if (!ui_.textInputFocused()) {
-        auto key = [&](Key k) { return keys_[int(k)]; };
-        in.up = key(Key::W) || key(Key::Up);
-        in.down = key(Key::S) || key(Key::Down);
-        in.left = key(Key::A) || key(Key::Left);
-        in.right = key(Key::D) || key(Key::Right);
-        in.fireKey = key(Key::Space) || tdFireHeld_;
+        inputShortcuts_.setTopDownEnabled(true);
+        const auto& input=inputShortcuts_.system();
+        if(const auto* move=input.state("TopDownMove")) {
+            in.up=move->value.y>0.01f;
+            in.down=move->value.y< -0.01f;
+            in.right=move->value.x>0.01f;
+            in.left=move->value.x< -0.01f;
+        } else {
+            auto key=[&](Key key){return keys_[int(key)];};
+            in.up=key(Key::W)||key(Key::Up);
+            in.down=key(Key::S)||key(Key::Down);
+            in.left=key(Key::A)||key(Key::Left);
+            in.right=key(Key::D)||key(Key::Right);
+        }
+        if(const auto* fire=input.state("TopDownFire"))in.fireKey=fire->active;
+        else in.fireKey=keys_[int(Key::Space)]||tdFireHeld_;
     }
     float3 g;
-    const bool wantMouse = topDown_.config().mouseAim == TopDownControlConfig::MouseAim::Always || tdMouseHeld_;
+    const auto* aim=inputShortcuts_.system().state("TopDownAim");
+    const bool wantMouse=topDown_.config().mouseAim==TopDownControlConfig::MouseAim::Always ||
+                         (aim?aim->active:tdMouseHeld_);
     if (wantMouse && hero.valid() && !ui_.pointerOverUi() && groundAt(mouseX_, mouseY_, g)) {
         const Vec3 p = w.get<Transform>(hero).pos;
         const float dx = g.x - float(p.x.toDouble()), dz = g.z - float(p.z.toDouble());

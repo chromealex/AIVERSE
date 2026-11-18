@@ -4,6 +4,12 @@
 
 > **Current scope (2026-11-18):** Graph v1 frontend, reusable CPU particle backend, graph-asset variants/hot reload and optional read-only ECS presentation adapter have been **committed**. A basic graph-v1 node-canvas editor and in-memory CPU preview are **committed but unverified**; a limited Metal GPU particle prototype is **committed but unverified**; full GPU/CPU integration, Niagara dataflow and automatic RTS/FPS production integration are **not finished**. Tests were added but have **not yet been run** in the authoring environment. Refer to `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md` for exact SHA and verification status.
 
+## Integration boundary with PRISMA
+
+**SpectraFX is NOT the post-processing engine.** It owns emitters, particle simulation, FX graphs (VFX `fx/graphs/*.vfx.json`), ECS FX sources and transient visual events. **PRISMA** in `engine/render/Prisma.{h,cpp}` owns HDR composite/tone mapping, bloom, depth of field, motion blur, temporal AA, screen-space lighting and post-process camera volumes. FX sprites/meshes write scene HDR before PRISMA; the full-screen `postfx` Shader Graph domain belongs to PRISMA. The common Shader Graph compiler/RHI is shared infrastructure, not a second VFX or postprocess implementation.
+
+Never add full-screen frame effects to `engine/fx`, and never add emitters/particle lifecycle to PRISMA. PRISMA's persisted `postfx` block and `postfx_*` MCP commands stay stable for existing projects. See `AGENTS.md` ownership table and `docs/prisma.md`. No automatic live binding is implied.
+
 ## Architecture
 
 ```text

@@ -1,4 +1,6 @@
-# Linear HDR scene rendering
+# PRISMA — Linear HDR scene rendering
+
+The HDR resolve/tone mapping and temporal/screen-space image operations belong exclusively to **PRISMA** (`engine/render/Prisma.cpp`, `PrismaScreenLighting.cpp`). SpectraFX only emits HDR scene VFX before this resolve. Public new C++ includes: `Prisma.h` and `PrismaScreenLighting.h`; old `PostFx.h`/`ScreenLighting.h` remain forwarding compatibility headers. Serialized `postfx.hdr` and old MCP operation identifiers are preserved.
 
 `postfx.hdr` in game.json or the map selects `auto` (default), `on`, or `off`.
 `AIVERSE_HDR=auto|on|off` overrides it for comparisons. This is an HDR **rendering pipeline**
@@ -39,8 +41,8 @@ instead of applying ACES. Creative colour grading and display LUTs follow that
 transfer. FXAA runs after the HDR resolve; in LDR its original order is unchanged.
 UI drawn after `resolvePostFx()` remains outside scene exposure and bloom.
 
-HDR still needs a resolve when the effects list is empty. Callers use the existing
-`Renderer3D::render(pass, &postFx)` / `resolvePostFx()` pair. A renderer invoked
+HDR still needs a resolve when the effects list is empty. Callers use the canonical
+`Renderer3D::render(pass, &prisma)` / `resolvePrisma()` pair; legacy `resolvePostFx()` is an alias. A renderer invoked
 without a PostProcess hook remains LDR (including independent portrait previews).
 
 RHI pipelines lazily cache a separate shader/Metal PSO for RGBA16F attachments, so

@@ -14,6 +14,10 @@
 #include "modules/rts/view/ScriptHud.h"
 #include "apps/client/RegionSettings.h"
 #include "engine/i18n/Localization.h"
+#include "engine/platform/InputFlow.h"
+#include <filesystem>
+#include <set>
+#include <string_view>
 #include "modules/rts/RtsScript.h"
 
 namespace aiverse::editor {
@@ -115,6 +119,9 @@ public:
         if (int ability = gameHud_.takePointAbility(); ability >= 0) {
             scriptPointAbility_ = ability; scriptDragStart_ = ImGui::GetIO().MousePos; region_.cancel();
         }
+        refreshCameraActions(ed); // bindings before scripts and direct world clicks
+        updateCameraActions(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+                            !ImGui::GetIO().WantTextInput,ImGui::GetIO().DeltaTime);
         const bool cardClick = scriptCard(ed, sx + sw, sy + sh);
         if (!cardClick) input(ed);
         if (boxing_) dl->AddRect(boxA_, ImGui::GetIO().MousePos, IM_COL32(120, 255, 120, 220));
@@ -125,6 +132,191 @@ public:
     }
 
 private:
+    using InputCore=lib::gameplay::inputflow::InputFlow;
+    using InputDevice=lib::gameplay::inputflow::Device;
+    InputCore cameraActions_;
+    std::string cameraProject_;
+    std::filesystem::file_time_type cameraAssetTime_{};
+    bool cameraAssetExists_=false;
+    double cameraReloadSeconds_=1;
+
+    static ImGuiKey inputKey(platform::Key key) {
+        using K=platform::Key;
+        if(key>=K::A && key<=K::Z)return ImGuiKey(int(ImGuiKey_A)+int(key)-int(K::A));
+        if(key>=K::Num0 && key<=K::Num9)return ImGuiKey(int(ImGuiKey_0)+int(key)-int(K::Num0));
+        if(key>=K::F1 && key<=K::F12)return ImGuiKey(int(ImGuiKey_F1)+int(key)-int(K::F1));
+        switch(key) {
+        case K::Space:return ImGuiKey_Space;
+        case K::Escape:return ImGuiKey_Escape;
+        case K::Enter:return ImGuiKey_Enter;
+        case K::Tab:return ImGuiKey_Tab;
+        case K::Backspace:return ImGuiKey_Backspace;
+        case K::Delete:return ImGuiKey_Delete;
+        case K::Insert:return ImGuiKey_Insert;
+        case K::Left:return ImGuiKey_LeftArrow;
+        case K::Right:return ImGuiKey_RightArrow;
+        case K::Up:return ImGuiKey_UpArrow;
+        case K::Down:return ImGuiKey_DownArrow;
+        case K::Home:return ImGuiKey_Home;
+        case K::End:return ImGuiKey_End;
+        case K::PageUp:return ImGuiKey_PageUp;
+        case K::PageDown:return ImGuiKey_PageDown;
+        case K::LeftShift:return ImGuiKey_LeftShift;
+        case K::RightShift:return ImGuiKey_RightShift;
+        case K::LeftCtrl:return ImGuiKey_LeftCtrl;
+        case K::RightCtrl:return ImGuiKey_RightCtrl;
+        case K::LeftAlt:return ImGuiKey_LeftAlt;
+        case K::RightAlt:return ImGuiKey_RightAlt;
+        case K::LeftSuper:return ImGuiKey_LeftSuper;
+        case K::RightSuper:return ImGuiKey_RightSuper;
+        case K::Minus:return ImGuiKey_Minus;
+        case K::Equal:return ImGuiKey_Equal;
+        case K::LeftBracket:return ImGuiKey_LeftBracket;
+        case K::RightBracket:return ImGuiKey_RightBracket;
+        case K::Semicolon:return ImGuiKey_Semicolon;
+        case K::Apostrophe:return ImGuiKey_Apostrophe;
+        case K::Comma:return ImGuiKey_Comma;
+        case K::Period:return ImGuiKey_Period;
+        case K::Slash:return ImGuiKey_Slash;
+        case K::Backslash:return ImGuiKey_Backslash;
+        case K::GraveAccent:return ImGuiKey_GraveAccent;
+        default:return ImGuiKey_None;
+        }
+    }
+
+    void refreshCameraActions(Editor& ed) {
+        const auto dir=ed.ws().project.dir;
+        cameraReloadSeconds_+=std::max(0.0,dt_);
+        if(cameraProject_==dir && cameraReloadSeconds_<0.5)return;
+        cameraReloadSeconds_=0;
+        const auto assetPath=std::filesystem::path(dir)/"input"/"actions.json";
+        std::error_code ec;
+        const auto lastWrite=std::filesystem::last_write_time(assetPath,ec);
+        const bool exists=!ec;
+        if(cameraProject_==dir && exists==cameraAssetExists_ &&
+           (!exists || lastWrite==cameraAssetTime_))return;
+        cameraProject_=dir;
+        cameraAssetExists_=exists;
+        cameraAssetTime_=exists?lastWrite:std::filesystem::file_time_type{};
+        auto asset=platform::inputflow_presets::rtsReference();
+        if(exists) {
+            try {
+                platform::inputflow_config::Asset authored;
+                std::string err;
+                if(platform::inputflow_config::readAsset(Json::parseFile(assetPath.string()),authored,&err))
+                    asset=std::move(authored);
+                else ed.ws().log("input","Game camera mapping: "+err,true);
+            } catch(const std::exception& e) {
+                ed.ws().log("input",std::string("Game camera mapping: ")+e.what(),true);
+            }
+        }
+        std::string error;
+        if(!platform::inputflow_config::installAsset(cameraActions_,asset,&error))
+            ed.ws().log("input","Game camera action install failed: "+error,true);
+    }
+
+    ImGuiMouseButton boundButton(std::string_view action,ImGuiMouseButton fallback) const {
+        const auto* context=cameraActions_.context("RTS.Pointer");
+        if(!context||!cameraActions_.isContextActive("RTS.Pointer"))return fallback;
+        for(const auto& mapping:context->mappings)
+            if(mapping.action==action &&
+               mapping.control.device==InputDevice::MouseButton &&
+               mapping.control.deviceIndex==0 &&
+               mapping.control.code>=0 &&
+               mapping.control.code<int(ImGuiMouseButton_COUNT))
+                return ImGuiMouseButton(mapping.control.code);
+        return ImGuiMouseButton_COUNT; // an intentionally unbound mouse action
+    }
+    bool actionMouseTriggered(std::string_view action) const {
+        for(const auto& event:cameraActions_.events())
+            if(event.action==action &&
+               event.phase==lib::gameplay::inputflow::Phase::Triggered)return true;
+        return false;
+    }
+    bool actionRequiresTrigger(std::string_view action) const {
+        using K=lib::gameplay::inputflow::TriggerKind;
+        const auto eventTrigger=[](const auto& triggers) {
+            return std::any_of(triggers.begin(),triggers.end(),[](const auto& trigger) {
+                return trigger.kind!=K::Down && trigger.kind!=K::Chord &&
+                       trigger.kind!=K::NotChord;
+            });
+        };
+        if(const auto* definition=cameraActions_.actionDefinition(std::string(action)))
+            if(eventTrigger(definition->triggers))return true;
+        if(const auto* context=cameraActions_.context("RTS.Pointer"))
+            for(const auto& mapping:context->mappings)
+                if(mapping.action==action && mapping.control.device==InputDevice::MouseButton &&
+                   eventTrigger(mapping.triggers))return true;
+        return false;
+    }
+    bool actionMouseClicked(std::string_view action,ImGuiMouseButton fallback) const {
+        const auto bound=boundButton(action,fallback);
+        if(bound==ImGuiMouseButton_COUNT)return false;
+        if(!cameraActions_.context("RTS.Pointer") ||
+           !cameraActions_.isContextActive("RTS.Pointer"))
+            return ImGui::IsMouseClicked(bound); // legacy project fallback
+        const auto* state=cameraActions_.state(std::string(action));
+        if(!state)return false;
+        // Pressed/Tap/Hold/DoubleTap/Pulse act on semantic Triggered rather
+        // than the raw physical mouse edge; Down-level actions click once.
+        if(actionRequiresTrigger(action))return actionMouseTriggered(action);
+        return ImGui::IsMouseClicked(bound) && state->active;
+    }
+    bool actionMouseReleased(std::string_view action,ImGuiMouseButton fallback) const {
+        const auto bound=boundButton(action,fallback);
+        return bound!=ImGuiMouseButton_COUNT && ImGui::IsMouseReleased(bound);
+    }
+    bool actionMouseDown(std::string_view action,ImGuiMouseButton fallback) const {
+        const auto bound=boundButton(action,fallback);
+        if(bound==ImGuiMouseButton_COUNT || !ImGui::IsMouseDown(bound))return false;
+        if(!cameraActions_.context("RTS.Pointer") ||
+           !cameraActions_.isContextActive("RTS.Pointer"))return true;
+        const auto* state=cameraActions_.state(std::string(action));
+        return state && state->active;
+    }
+    float cameraWheel() const {
+        if(!cameraActions_.context("RTS.Pointer") ||
+           !cameraActions_.isContextActive("RTS.Pointer"))
+            return ImGui::GetIO().MouseWheel;
+        const auto* zoom=cameraActions_.state("CameraZoom");
+        return zoom?zoom->value.x:0.0f;
+    }
+
+    void updateCameraActions(bool focused,float dt) {
+        if(!focused){cameraActions_.cancelAll();return;}
+        // Sample the same physical device controls through the InputFlow
+        // Mapping Contexts before script cards and world tools consume them.
+        std::set<lib::gameplay::inputflow::Control> sampled;
+        const auto& io=ImGui::GetIO();
+        for(const auto& name:cameraActions_.activeContexts()) {
+            const auto* context=cameraActions_.context(name);
+            if(!context)continue;
+            for(const auto& mapping:context->mappings) {
+                if(!sampled.insert(mapping.control).second)continue;
+                const auto device=mapping.control.device;
+                const int code=mapping.control.code;
+                if(mapping.control.deviceIndex!=0)continue;
+                if(device==InputDevice::Keyboard) {
+                    if(code<=0 || code>=int(platform::Key::Count))continue;
+                    const auto key=inputKey(platform::Key(code));
+                    cameraActions_.setControl(mapping.control,
+                        key!=ImGuiKey_None && ImGui::IsKeyDown(key)?1.0f:0.0f);
+                } else if(device==InputDevice::MouseButton) {
+                    if(code>=0 && code<int(ImGuiMouseButton_COUNT))
+                        cameraActions_.setControl(mapping.control,
+                            ImGui::IsMouseDown(ImGuiMouseButton(code))?1.0f:0.0f);
+                } else if(vp_.hovered && device==InputDevice::MouseWheel) {
+                    if(code==0 && io.MouseWheelH!=0)cameraActions_.addDelta(mapping.control,io.MouseWheelH);
+                    if(code==1 && io.MouseWheel!=0)cameraActions_.addDelta(mapping.control,io.MouseWheel);
+                } else if(vp_.hovered && device==InputDevice::MouseAxis) {
+                    if(code==0 && io.MouseDelta.x!=0)cameraActions_.addDelta(mapping.control,io.MouseDelta.x);
+                    if(code==1 && io.MouseDelta.y!=0)cameraActions_.addDelta(mapping.control,io.MouseDelta.y);
+                }
+            }
+        }
+        cameraActions_.update(dt);
+    }
+
     std::string filter_;
     double dt_ = 0;
 
@@ -300,19 +492,26 @@ private:
         if (gameHud_.blocked()) { boxing_ = false; return; }
         ImGuiIO& io = ImGui::GetIO();
         RTSCamera& cam = ed.gameCam;
-        if (vp_.hovered && io.MouseWheel != 0) cam.distance = std::clamp(cam.distance * std::pow(0.88f, io.MouseWheel), cam.minDistance, cam.maxDistance);
-        if (vp_.hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        const float wheel=cameraWheel();
+        if (vp_.hovered && wheel != 0) cam.distance = std::clamp(cam.distance * std::pow(0.88f, wheel), cam.minDistance, cam.maxDistance);
+        if (vp_.hovered &&
+            boundButton("Select",ImGuiMouseButton_Left)!=ImGuiMouseButton_Middle &&
+            boundButton("Command",ImGuiMouseButton_Right)!=ImGuiMouseButton_Middle &&
+            ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
             float x0, z0, x1, z1;
             if (ed.groundAt(vp_, cam, io.MousePos.x - io.MouseDelta.x, io.MousePos.y - io.MouseDelta.y, x0, z0) && ed.groundAt(vp_, cam, io.MousePos.x, io.MousePos.y, x1, z1))
                 cam.target += float3{x0 - x1, 0, z0 - z1};
         }
-        if (ImGui::IsWindowFocused() && !io.WantTextInput) {
-            float speed = cam.distance * io.DeltaTime;
-            float3 fwd{-std::sin(cam.yaw), 0, -std::cos(cam.yaw)}, right{std::cos(cam.yaw), 0, -std::sin(cam.yaw)};
-            if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) cam.target += fwd * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) cam.target += fwd * -speed;
-            if (ImGui::IsKeyDown(ImGuiKey_D) || ImGui::IsKeyDown(ImGuiKey_RightArrow)) cam.target += right * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_A) || ImGui::IsKeyDown(ImGuiKey_LeftArrow)) cam.target += right * -speed;
+        const bool cameraFocused=ImGui::IsWindowFocused() && !io.WantTextInput;
+        if(cameraFocused) {
+            const auto* arrow=cameraActions_.state("CameraPan");
+            const auto* idle=cameraActions_.state("IdleCameraPan");
+            const float x=std::clamp((arrow?arrow->value.x:0.0f)+(idle?idle->value.x:0.0f),-1.0f,1.0f);
+            const float y=std::clamp((arrow?arrow->value.y:0.0f)+(idle?idle->value.y:0.0f),-1.0f,1.0f);
+            const float speed=cam.distance*io.DeltaTime;
+            const float3 fwd{-std::sin(cam.yaw),0,-std::cos(cam.yaw)};
+            const float3 right{std::cos(cam.yaw),0,-std::sin(cam.yaw)};
+            cam.target+=fwd*(speed*y)+right*(speed*x);
         }
         if (ed.humanSlot() <= 0) return;
         World& w = ed.sim()->world();
@@ -331,9 +530,9 @@ private:
         };
         // a structure chosen on the command card: the next ground click places it (as the client's Place mode)
         if (const int place = gameHud_.placeType(); place >= 0) {
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { gameHud_.clearPlace(); return; }
+            if (actionMouseClicked("Command",ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { gameHud_.clearPlace(); return; }
             float x, z;
-            if (vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ed.groundAt(vp_, cam, io.MousePos.x, io.MousePos.y, x, z)) {
+            if (vp_.hovered && actionMouseClicked("Select",ImGuiMouseButton_Left) && ed.groundAt(vp_, cam, io.MousePos.x, io.MousePos.y, x, z)) {
                 Command c;
                 c.type = game::kCmdBuild;
                 c.param = place;
@@ -350,8 +549,8 @@ private:
             }
             return;
         }
-        if (vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { boxing_ = true; boxA_ = io.MousePos; }
-        if (boxing_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        if (vp_.hovered && actionMouseClicked("Select",ImGuiMouseButton_Left)) { boxing_ = true; boxA_ = io.MousePos; }
+        if (boxing_ && actionMouseReleased("Select",ImGuiMouseButton_Left)) {
             boxing_ = false;
             ImVec2 b = io.MousePos;
             if (!io.KeyShift) ed.gameSelection.clear();
@@ -369,7 +568,7 @@ private:
                 });
             }
         }
-        if (vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ed.gameSelection.empty()) {
+        if (vp_.hovered && actionMouseClicked("Command",ImGuiMouseButton_Right) && !ed.gameSelection.empty()) {
             float x, z;
             if (ed.groundAt(vp_, cam, io.MousePos.x, io.MousePos.y, x, z)) {
                 Command c;
@@ -403,32 +602,32 @@ private:
         region_.fit(cam,vp_.pointsW,vp_.pointsH,ed.sim()->tick()<regionTick_);regionTick_=ed.sim()->tick();
         auto point=[&]{float x=-1,z=-1;ed.groundAt(vp_,cam,io.MousePos.x,io.MousePos.y,x,z);return float3{x,.2f,z};};
         if(vp_.hovered&&!region_.dragging)region_.cursor=point();
-        if(vp_.hovered&&!gameHud_.blocked()&&(ImGui::IsMouseClicked(ImGuiMouseButton_Right)||ImGui::IsMouseClicked(ImGuiMouseButton_Middle))){regionPanning_=true;regionPanPoint_=io.MousePos;region_.cancel();}
+        if(vp_.hovered&&!gameHud_.blocked()&&(actionMouseClicked("Command",ImGuiMouseButton_Right)||ImGui::IsMouseClicked(ImGuiMouseButton_Middle))){regionPanning_=true;regionPanPoint_=io.MousePos;region_.cancel();}
         if(regionPanning_){
             float3 a,b;
             if(cam.screenToGround(regionPanPoint_.x-vp_.originX,regionPanPoint_.y-vp_.originY,vp_.pointsW,vp_.pointsH,a)&&cam.screenToGround(io.MousePos.x-vp_.originX,io.MousePos.y-vp_.originY,vp_.pointsW,vp_.pointsH,b))cam.target+=a-b;
             regionPanPoint_=io.MousePos;
-            if(!ImGui::IsMouseDown(ImGuiMouseButton_Right)&&!ImGui::IsMouseDown(ImGuiMouseButton_Middle))regionPanning_=false;
+            if(!actionMouseDown("Command",ImGuiMouseButton_Right)&&!ImGui::IsMouseDown(ImGuiMouseButton_Middle))regionPanning_=false;
         }
         bool buttons=gameHud_.blocked();
-        if(vp_.hovered&&!buttons&&io.MouseWheel!=0){auto before=point();cam.distance=std::clamp(cam.distance*std::exp(-.14f*io.MouseWheel),cam.minDistance,cam.maxDistance);auto after=point();if(before.x>=0&&after.x>=0)cam.target+=before-after;}
+        if(const float wheel=cameraWheel();vp_.hovered&&!buttons&&wheel!=0){auto before=point();cam.distance=std::clamp(cam.distance*std::exp(-.14f*wheel),cam.minDistance,cam.maxDistance);auto after=point();if(before.x>=0&&after.x>=0)cam.target+=before-after;}
         const bool targetWorld=!gameHud_.pointerOverUi()&&!ed.playPaused&&io.MousePos.x>=vp_.originX&&io.MousePos.y>=vp_.originY&&io.MousePos.x<vp_.originX+vp_.pointsW&&io.MousePos.y<vp_.originY+vp_.pointsH&&ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        if(entityPointer_ && (ed.playPaused || !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))){entityActions_.cancel();entityPointer_=false;buttons=true;}
+        if(entityPointer_ && (ed.playPaused || !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::IsKeyPressed(ImGuiKey_Escape) || actionMouseClicked("Command",ImGuiMouseButton_Right))){entityActions_.cancel();entityPointer_=false;buttons=true;}
         if(entityPointer_){
             buttons=true;
             if(const auto* source=entityActions_.source()){auto p=point();ed.scriptTargeting={source->abilityId,p.x,p.z,true,targetWorld};ed.scriptTargeting.caster=source->entity.packed();}
-            if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+            if(actionMouseReleased("Select",ImGuiMouseButton_Left)){
                 auto cmd=entityActions_.release(point(),targetWorld,std::hypot(io.MousePos.x-entityStart_.x,io.MousePos.y-entityStart_.y)>=6);
                 if(cmd)ed.issueCommand(*cmd);
                 entityPointer_=false;
             }
-        } else if(targetWorld && !buttons && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        } else if(targetWorld && !buttons && actionMouseClicked("Select",ImGuiMouseButton_Left) &&
             entityActions_.press(cam,vp_.pointsW,vp_.pointsH,io.MousePos.x-vp_.originX,io.MousePos.y-vp_.originY)){
             entityPointer_=true;entityStart_=io.MousePos;region_.cancel();buttons=true;
         }
         if(scriptPointAbility_>=0){
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Right)||ImGui::IsKeyPressed(ImGuiKey_Escape))scriptPointAbility_=-1;
-            else if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+            if(actionMouseClicked("Command",ImGuiMouseButton_Right)||ImGui::IsKeyPressed(ImGuiKey_Escape))scriptPointAbility_=-1;
+            else if(actionMouseReleased("Select",ImGuiMouseButton_Left)){
                 auto p=point();
                 if(targetWorld&&std::hypot(io.MousePos.x-scriptDragStart_.x,io.MousePos.y-scriptDragStart_.y)>=6){
                 Command c;c.type=game::kCmdPlayerAbility;c.param=scriptPointAbility_;
@@ -442,9 +641,9 @@ private:
             }
         }
         if(ed.humanSlot()>0){
-            if(vp_.hovered&&!buttons&&ImGui::IsMouseClicked(ImGuiMouseButton_Left)){boxA_=io.MousePos;region_.begin(point());}
-            if(region_.dragging&&ImGui::IsMouseDown(ImGuiMouseButton_Left))region_.move(point());
-            if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+            if(vp_.hovered&&!buttons&&actionMouseClicked("Select",ImGuiMouseButton_Left)){boxA_=io.MousePos;region_.begin(point());}
+            if(region_.dragging&&actionMouseDown("Select",ImGuiMouseButton_Left))region_.move(point());
+            if(actionMouseReleased("Select",ImGuiMouseButton_Left)){
                 auto p=point();if(vp_.hovered&&!buttons&&region_.region(p.x,p.z)<0&&std::hypot(io.MousePos.x-boxA_.x,io.MousePos.y-boxA_.y)<6){if(ed.time()-emptyClick_<.3)region_.fit(cam,vp_.pointsW,vp_.pointsH,true);emptyClick_=ed.time();}
                 if(!buttons&&std::hypot(io.MousePos.x-boxA_.x,io.MousePos.y-boxA_.y)<6)region_.cancelFlow(*ed.sim(),*ed.simModule(),p,[&](Command c){ed.issueCommand(c);});
                 if(buttons)region_.cancel();else{region_.cursor=p;region_.release(ed.time(),[&](Command c){ed.issueCommand(c);});}
@@ -517,7 +716,7 @@ private:
         auto start = [&](int i) { if (cs[size_t(i)].pick >= 0) pending_ = i; else send(i, kNullEntity, Vec3{}, false); };
         bool used = false;
         ImGuiIO& io = ImGui::GetIO();
-        if (pending_ >= 0 && size_t(pending_) < cs.size() && vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (pending_ >= 0 && size_t(pending_) < cs.size() && vp_.hovered && actionMouseClicked("Select",ImGuiMouseButton_Left)) {
             float x, z;
             Vec3 pt{};
             const bool have = ed.groundAt(vp_, ed.gameCam, io.MousePos.x, io.MousePos.y, x, z);
@@ -532,9 +731,9 @@ private:
             if (!io.KeyShift) pending_ = -1;
             used = true;
         }
-        if (pending_ >= 0 && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape))) { pending_ = -1; used = true; }
+        if (pending_ >= 0 && (actionMouseClicked("Command",ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape))) { pending_ = -1; used = true; }
         // rules "mapClick": a plain left click on the map sends the game's tap command
-        if (const int tap = game::mapClickCommand(cs); !used && pending_ < 0 && tap >= 0 && vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (const int tap = game::mapClickCommand(cs); !used && pending_ < 0 && tap >= 0 && vp_.hovered && actionMouseClicked("Select",ImGuiMouseButton_Left)) {
             float x, z;
             if (ed.groundAt(vp_, ed.gameCam, io.MousePos.x, io.MousePos.y, x, z)) {
                 if (se->commandCooldown(*sim, me, tap).raw <= 0)

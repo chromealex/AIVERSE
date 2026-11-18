@@ -9,6 +9,10 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 **Exact stage history:** `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md`.  
 **Engineering rules:** `AGENTS.md`.
 
+## Mandatory scope boundary
+
+This skill is ONLY for world-space VFX emitters, particles, ribbon/mesh FX, effect graphs and ECS event presentation. For post-process bloom, tone mapping/HDR resolve, LUT/color grading, depth-of-field, motion blur, screen-space AO/GI/SSR, TAA/upscaling, post-process volumes, or the `postfx` Shader Graph domain, use **PRISMA** (`engine/render/Prisma.h`, `docs/prisma.md`). SpectraFX contributes linear HDR scene particles before PRISMA resolves the image; PRISMA never owns particle simulation. See the mandatory ownership section in `AGENTS.md`. Existing `postfx_*` MCP/JSON names are legacy external interfaces, **not** SpectraFX operations.
+
 ## Fast path (current supported capabilities)
 
 1. Create `fx/graphs/<name>.vfx.json` with `version:1`, `nodes`, `links`, `outputs`, and optional `parameters`. Supported chain: `Spawn → Initialize → Update* → SpriteOutput|MeshOutput|RibbonOutput`. Node `properties` reuse `engine/fx/FxEffect.h` emitter fields. Example: `docs/spectrafx.md`.

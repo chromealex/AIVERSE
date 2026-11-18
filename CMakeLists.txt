@@ -514,14 +514,18 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/Renderer3DReflect.cpp
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
-# post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
-list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp engine/render/ScreenLighting.cpp)
+# PRISMA post-processing: runtime / independent GPU-free policy and catalog
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/Prisma.cpp engine/render/PrismaScreenLighting.cpp)
 # baked lighting on the GPU (agent-lightbake): lightmaps / probes in the model shaders
 list(APPEND AIVERSE_RUNTIME_SRC engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)
 add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
 target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
 
-add_library(aiverse_postfx_data STATIC engine/render/PostFxData.cpp)
+# Canonical post-processing implementation: PRISMA.
+# Keep existing aiverse_postfx_data target alive for older native targets.
+add_library(aiverse_postfx_data STATIC engine/render/PrismaData.cpp engine/render/PrismaVolumeData.cpp)
+add_library(aiverse_prisma_data ALIAS aiverse_postfx_data)
+add_library(AIVERSE::prisma_data ALIAS aiverse_postfx_data)
 target_link_libraries(aiverse_postfx_data PUBLIC aiverse_engine aiverse_shader_graph)
 
 if(AIVERSE_PLATFORM STREQUAL "macos")
@@ -754,7 +758,7 @@ endfunction()
 if(AIVERSE_BUILD_CLIENT)
     if(AIVERSE_PLATFORM STREQUAL "android")
         add_library(main SHARED apps/client/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
-        target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n)
+        target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n AIVERSE::InputFlow)
         target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_game_audio)
         # Keep ANativeActivity_onCreate from the glue library.
         set_target_properties(main PROPERTIES LINK_FLAGS "-u ANativeActivity_onCreate")
@@ -762,7 +766,7 @@ if(AIVERSE_BUILD_CLIENT)
         set(AIVERSE_CLIENT_TARGET main)
     else()
         add_executable(aiverse_client apps/client/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
-        target_link_libraries(aiverse_client PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n)
+        target_link_libraries(aiverse_client PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n AIVERSE::InputFlow)
         target_link_libraries(aiverse_client PRIVATE aiverse_runtime aiverse_game_view aiverse_game_audio)
         aiverse_package_app(aiverse_client)
         set(AIVERSE_CLIENT_TARGET aiverse_client)
@@ -833,7 +837,7 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_game)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_i18n)   # editor messages (editorText)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PrismaOps.cpp)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightBakeOps.cpp)   # lightbake_* ops (agent-lightbake)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_bake)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
@@ -855,7 +859,7 @@ if(AIVERSE_BUILD_EDITOR)
     add_executable(aiverse_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
                    ${AIVERSE_EDITOR_WINDOWS} $<TARGET_OBJECTS:aiverse_runtime>)
     target_link_libraries(aiverse_editor PRIVATE aiverse_runtime aiverse_game_view aiverse_editor_core)
-    target_link_libraries(aiverse_editor PRIVATE aiverse_game_fx)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_game_fx AIVERSE::InputFlow)
     target_compile_definitions(aiverse_editor PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     if(WIN32)
         target_sources(aiverse_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
@@ -1030,7 +1034,7 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game_view)   # fog of war look parsing (view, no GPU)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
-        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp engine/render/GeometryScene.cpp)
+        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/Prisma.cpp engine/render/GeometryScene.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)   # agent-lightbake
     target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
@@ -1778,6 +1782,16 @@ if(TARGET aiverse_world AND (AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS))
     if(AIVERSE_BUILD_TESTS)
         add_test(NAME progression_headless COMMAND aiverse_progression --root ${PROJECT_SOURCE_DIR} --verify)
     endif()
+endif()
+
+# GPU-free PRISMA graph planner tests; included by default in the unified CTest runner.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_prisma_graph_tests tests/render/prisma_graph.cpp)
+    target_include_directories(aiverse_prisma_graph_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME prisma_graph COMMAND aiverse_prisma_graph_tests)
+    add_executable(aiverse_prisma_volume_tests tests/render/prisma_volume.cpp)
+    target_link_libraries(aiverse_prisma_volume_tests PRIVATE aiverse_postfx_data)
+    add_test(NAME prisma_volume COMMAND aiverse_prisma_volume_tests)
 endif()
 
 if(AIVERSE_BUILD_TESTS)

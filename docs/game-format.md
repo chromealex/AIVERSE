@@ -14,6 +14,10 @@ JSON allows `//` comments. **Numbers are plain decimals** (`1.5`, never `1e3`): 
 fixed-point and deterministic. Seconds are game seconds, distances are map cells. Every block below
 is optional — the blocks present on a type decide what it can do.
 
+## PRISMA scene/camera post-processing
+
+`game.json.postfx` retains the original global HDR/bloom/color-grade settings. Optional `game.json.prismaVolumes` and map `prismaVolumes` add position-dependent camera looks (no gameplay/ECS simulation mutation). Each block holds `{"volumes":[{"id":"area","shape":"sphere","center":[0,0,0],"radius":8,"blendDistance":3,"priority":4,"weight":1,"profile":{"effects":[{"type":"colorGrade","saturation":0.6}]}}]}`. The map may override a game volume by identical `id`, or set `"replace":true` to discard game volumes. Supported shapes are global, sphere, and axis-aligned box (center + halfExtents). The profile uses the existing `postfx` effect schema. Only explicit profile `hdr`/`enabled` overrides global HDR or chain enable state. Engine/runtime C++ owners: `engine/render/PrismaVolumeData.{h,cpp}` and `PrismaVolumes.h`; see `docs/prisma.md` for full semantics and quality caveats. The `postfx_*` MCP operations remain compatible.
+
 ## game.json
 
 ```json
