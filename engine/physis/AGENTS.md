@@ -1268,3 +1268,13 @@ Draft. Handoff:
 - Do not `#include` TerraWeave, NEREID, Box3D or genre headers inside PHYSIS core to implement the bridge; add it to game/world integration once both owners' changes are available.
 - Stage 85 adds source regression scenarios in existing `physis_fracture_outbox` CTest; native compiler/CTest/CI not executed by the connector agent. No claims of green validation.
 - Handoffs: `docs/agent-handoffs/physis-stage83-fracture-rearm-2026-11-19.md`, `physis-stage84-fracture-dispatch-2026-11-19.md`, `physis-stage85-fracture-regression-2026-11-19.md`.
+
+
+## Stage 87 — host-owned PHYSIS -> TerraWeave / Box3D fall bridge
+
+- New optional authoritative host ledger and ECS component binding live in `engine/world/PhysisNatureFallHost.h`, **not** inside `engine/physis`. Host resource `world.physis_nature_fall` v1 is opt-in during `GameModule::setup`; existing game save manifests remain unchanged unless explicitly enabled.
+- `engine/world/PhysisTerraWeaveFallBridge.h` is the actual typed adapter; it includes canonical TerraWeave root state and Box3D FallenPlantPhysics (no duplicate solver). The separate active TerraWeave branch is **not** merged/copied; this header is only compiled by the conditional cross-system CTest once both branches coexist in a single integration checkout.
+- Scheduling contract: PHYSIS force + contact -> nature stress -> fracture outbox; TerraWeave authoritative terrain/root updates -> `dispatchPhysisTerraWeaveFalls` at trusted host barrier; native World snapshots/saves include fall ledger; Box3D reconciler after TerraWeave scene binding -> physics step. Float Box3D is derived; mid-fall pose checkpoint/replay is still a separate host responsibility.
+- Host ledger records exact generation-safe PHYSIS event identity + stable TerraWeave `speciesId/plantKey`; replay returns DurablyCommitted only for equal immutable payload; repairs rearm PHYSIS, retire the host record after authoritative repair, then let the derived physics reconcile remove the body. Real grasses remain patch/cluster work, never per-blade Box3D.
+- Stage87 CTest `physis_nature_fall_host` covers persisted host logic on PHYSIS-only; optional `physis_terraweave_fall_bridge` needs both Terra headers and enabled Box3D. **Tests not yet run on this new code**; previous 28/28 PASS belongs to prior branch.
+- Read handoff `docs/agent-handoffs/physis-stage87-terraweave-fall-host-2026-11-19.md` before continuing; do not merge another agent's active branch into this isolated worktree automatically.

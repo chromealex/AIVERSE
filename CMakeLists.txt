@@ -2298,6 +2298,34 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_physis_fracture_outbox_test PRIVATE aiverse_engine)
     add_test(NAME physis_fracture_outbox COMMAND aiverse_physis_fracture_outbox_test)
     set_tests_properties(physis_fracture_outbox PROPERTIES LABELS "PHYSIS;ECS;PERSISTENCE")
+    # Stage 87: host-owned root binding and fall ledger persist independently
+    # of the TerraWeave branch. The REAL Box3D bridge is optional until Terra
+    # headers have been integrated by the respective owning agent.
+    add_executable(aiverse_physis_nature_fall_host_test
+        tests/physis_nature_fall_host_test.cpp)
+    target_link_libraries(aiverse_physis_nature_fall_host_test PRIVATE aiverse_engine)
+    add_test(NAME physis_nature_fall_host COMMAND aiverse_physis_nature_fall_host_test)
+    set_tests_properties(physis_nature_fall_host PROPERTIES
+        LABELS "PHYSIS;ECS;PERSISTENCE")
+endif()
+
+# Stage 87 real cross-system test is deliberately opt-in only once the
+# separate TerraWeave branch has been integrated into the SAME checkout.
+# PHYSIS-only branches must neither copy TerraWeave's source nor build a stub
+# claiming to test the actual Box3D falling plant implementation.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_ENABLE_PHYSICS AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/engine/world/TerraWeaveRootEvents.h" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/engine/world/TerraWeaveFallenPhysics.h" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/engine/world/TerraWeaveEcsAuthority.h" AND
+   TARGET aiverse_physics)
+    add_executable(aiverse_physis_terraweave_fall_bridge_test
+        tests/physis_terraweave_fall_bridge_test.cpp)
+    target_link_libraries(aiverse_physis_terraweave_fall_bridge_test PRIVATE
+        aiverse_engine aiverse_physics)
+    add_test(NAME physis_terraweave_fall_bridge
+        COMMAND aiverse_physis_terraweave_fall_bridge_test)
+    set_tests_properties(physis_terraweave_fall_bridge PROPERTIES
+        LABELS "PHYSIS;TERRAWEAVE;PHYSICS;ECS")
 endif()
 
 # PHYSIS Stage 8: deterministic spatial wind and seeded gust volumes.
