@@ -549,6 +549,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     ProfileTimer timer(profiling_?&profile_.submitMs:nullptr);
     const Model* m = d.model;
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
+    if(modelPacketTap_)modelPacketTap_(d);
     recordPersistentModel(d);
     if (capture_ && (d.flags & kDrawStatic)) {   // light baker: the static scene, every node in world space
         const auto& pose = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;

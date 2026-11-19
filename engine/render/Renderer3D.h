@@ -212,6 +212,20 @@ struct ModelRenderStats {
     uint64_t mdiStateBreaks = 0;
 };
 
+// Immutable draw parameters for simple geometry emitted by any scene host.
+// Mesh GPU handles remain borrowed; the host owns their GPU retirement.
+struct CameraGeometryCommand {
+    enum class Kind : uint8_t { Mesh, Line, Triangle };
+    Kind kind=Kind::Mesh;
+    const Mesh* mesh=nullptr;
+    mat4 world{};
+    float4 tint{1,1,1,1};
+    uint32_t flags=0;
+    float specular=.25f,emissive=0.f;
+    float3 a{},b{},c{};
+    uint32_t rgba=0xffffffffu;
+};
+
 class Renderer3D {
 public:
     void setGpuDeviceLease(RenderDeviceLifetime::Lease lease) {
@@ -459,6 +473,16 @@ public:
     // Light baker capture: every drawModel with kDrawStatic is reported (world matrix per node) until reset.
     using ModelCapture = std::function<void(const ModelDraw& d, const std::vector<mat4>& nodeWorld)>;
     void setModelCapture(ModelCapture fn) { capture_ = std::move(fn); }
+    // Synchronous tap for finalized models, animations and attachments.
+    // Copy borrowed pointers before drawModel returns; not light-baker capture.
+    using ModelPacketTap = std::function<void(const ModelDraw&)>;
+    void setModelPacketTap(ModelPacketTap tap) { modelPacketTap_=std::move(tap); }
+    // Optional synchronous capture of mesh/line/triangle commands.
+    // No callbacks retained by the renderer across frames; client removes it.
+    using GeometryPacketTap=std::function<void(const CameraGeometryCommand&)>;
+    void setGeometryPacketTap(GeometryPacketTap tap) {
+        geometryPacketTap_=std::move(tap);
+    }
     // Inside a custom lit draw (terrain): bind the terrain lightmap for AIVERSE_*_BAKED_TERRAIN (BakedShaders.h):
     // uniform block `uniformSlot`, RGBM page at `lightmapSlot`, shadow mask at `maskSlot` (placeholders when none).
     void bindBakedTerrain(int uniformSlot, int lightmapSlot, int maskSlot);
@@ -744,6 +768,8 @@ private:
     BakedQuality bakedQuality_ = BakedQuality::High;
     uint32_t bakedLightmapped_ = 0, bakedProbed_ = 0, bakedCountLm_ = 0, bakedCountPr_ = 0;
     ModelCapture capture_;
+    ModelPacketTap modelPacketTap_;
+    GeometryPacketTap geometryPacketTap_;
     void bakedItem(ModelItem& it, const ModelDraw& d, int node);
     void bindBakedGI(const ModelItem& it);
 };

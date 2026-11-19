@@ -327,6 +327,11 @@ void Renderer3D::computeShadowMatrix(const RTSCamera& cam, float aspect) {
 
 void Renderer3D::drawMesh(const Mesh& m, const mat4& model, float4 color, uint32_t flags, float specular, float emissive) {
     items_.push_back({&m, model, color, flags, specular, emissive});
+    // Specialized water/selection draw variants carry extra state that a
+    // plain mesh packet cannot replay; skip those until their own packets exist.
+    if(geometryPacketTap_ && !(flags&kDrawWaterSurface))
+        geometryPacketTap_({CameraGeometryCommand::Kind::Mesh,&m,model,
+                            color,flags,specular,emissive});
 }
 void Renderer3D::drawNereidRippleMesh(const Mesh& mesh,const mat4& model,
         float4 color,float specular,float refraction,
@@ -354,8 +359,24 @@ void Renderer3D::drawSelectionMesh(const Mesh& mesh, const mat4& model,
 }
 
 
-void Renderer3D::line(float3 a, float3 b, uint32_t c) { lines_.push_back({a, c}); lines_.push_back({b, c}); }
-void Renderer3D::triangle(float3 a, float3 b, float3 c, uint32_t col) { tris_.push_back({a, col}); tris_.push_back({b, col}); tris_.push_back({c, col}); }
+void Renderer3D::line(float3 a, float3 b, uint32_t c) {
+    lines_.push_back({a,c});lines_.push_back({b,c});
+    if(geometryPacketTap_) {
+        CameraGeometryCommand packet;
+        packet.kind=CameraGeometryCommand::Kind::Line;
+        packet.a=a;packet.b=b;packet.rgba=c;
+        geometryPacketTap_(packet);
+    }
+}
+void Renderer3D::triangle(float3 a, float3 b, float3 c, uint32_t col) {
+    tris_.push_back({a,col});tris_.push_back({b,col});tris_.push_back({c,col});
+    if(geometryPacketTap_) {
+        CameraGeometryCommand packet;
+        packet.kind=CameraGeometryCommand::Kind::Triangle;
+        packet.a=a;packet.b=b;packet.c=c;packet.rgba=col;
+        geometryPacketTap_(packet);
+    }
+}
 
 void Renderer3D::quadXZ(float3 a, float3 b, float w, uint32_t c, float y) {
     float3 d = b - a; d.y = 0;

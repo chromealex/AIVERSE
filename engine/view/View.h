@@ -170,7 +170,9 @@ public:
                     "View animation requires a stable nonzero object ID");
         stats_={};
         retargetStats_={};
-        if(++frameStamp_==0) { frameStamp_=1; lodState_.clear(); }
+        if(++frameStamp_==0) {
+            frameStamp_=1; lodState_.clear();cameraLodState_.clear();
+        }
         std::vector<lib::animation::AnimationSourceFrame> sources;
         sources.reserve(objects.size());
         for(const auto& obj:objects) {
@@ -214,6 +216,7 @@ public:
             if(it->second.seen!=frameStamp_)it=lodState_.erase(it);
             else ++it;
         }
+        pruneCameraLodState(frameStamp_-1);
         for(const auto& obj:objects) {
             if(!obj.graph || !animationSourceModel(obj))continue;
             const Entity e=bridge_.find(obj.id);
@@ -243,11 +246,14 @@ public:
     void beginPreparedFrame() {
         retargetStats_={};
         const uint64_t previous=frameStamp_;
-        if(++frameStamp_==0) {frameStamp_=1;lodState_.clear();return;}
+        if(++frameStamp_==0) {
+            frameStamp_=1;lodState_.clear();cameraLodState_.clear();return;
+        }
         for(auto it=lodState_.begin();it!=lodState_.end();) {
             if(it->second.seen<previous)it=lodState_.erase(it);
             else ++it;
         }
+        pruneCameraLodState(previous);
     }
 
     // A mixed packet stream can be the single source of animation inputs
@@ -275,11 +281,53 @@ public:
         if(draw.model)renderer.drawModel(draw);
     }
 
+    // This is independently testable without GPU or Renderer3D. It is the
+    // only write to per-camera LOD hysteresis during a model submission.
+    // Camera scope zero is the legacy single-camera state map.
+    size_t selectCameraLodLevel(const Object& obj,float distance,
+                                uint64_t cameraScope=0) const {
+        if(obj.lods.empty())return 0;
+        size_t prior=0;
+        LodSelection* saved=nullptr;
+        const auto* rig=animationSourceModel(obj);
+        if(obj.id!=0) {
+            auto& state=cameraScope
+                ? cameraLodState_[cameraScope][obj.id]
+                : lodState_[obj.id];
+            const bool revised=state.generation!=obj.generation ||
+                state.sourcePublication!=obj.animationModelGeneration ||
+                state.sourceModel!=rig ||
+                state.baseModel!=obj.draw.model ||
+                state.hysteresis!=obj.lodHysteresis ||
+                !matchesLodRevisions(state.revisions,obj.lods);
+            if(revised) {
+                state.level=0;
+                captureLodRevisions(state.revisions,obj.lods);
+            }
+            state.generation=obj.generation;
+            state.sourcePublication=obj.animationModelGeneration;
+            state.sourceModel=rig;
+            state.baseModel=obj.draw.model;
+            state.hysteresis=obj.lodHysteresis;
+            saved=&state;
+            prior=state.level;
+        }
+        const size_t level=selectModelLodLevel(obj.lods,distance,prior,
+                                              saved?obj.lodHysteresis:0.f);
+        if(saved) {
+            saved->level=level;
+            saved->seen=frameStamp_;
+        }
+        return level;
+    }
+
     // Call only AFTER update(), before borrowed ModelDraw storage expires.
     // The renderer does not interpret source identity, movement or genre.
     // One draw packet from any host. This is the same renderer pipeline
     // used for streamed, procedural, static and animated objects.
-    void submitOne(render::Renderer3D& renderer,const Object& obj) const {
+    // Camera scope 0 retains legacy behavior; nonzero camera keys isolate LOD hysteresis.
+    void submitOne(render::Renderer3D& renderer,const Object& obj,
+                   uint64_t cameraScope=0) const {
         if(!obj.visible)return;
         const render::Model* rig=animationSourceModel(obj);
         const lib::animation::AnimationPoseComponent* animatedPose=nullptr;
@@ -321,37 +369,8 @@ public:
         if(draw.model && !obj.lods.empty()) {
             const render::float3 origin=draw.world.transformPoint({0,0,0});
             const float distance=render::length(renderer.cameraPos()-origin);
-            size_t prior=0;
-            LodSelection* saved=nullptr;
-            if(obj.id!=0) {
-                auto& state=lodState_[obj.id];
-                const bool revised=state.generation!=obj.generation ||
-                    state.sourcePublication!=obj.animationModelGeneration ||
-                    state.sourceModel!=rig ||
-                    state.baseModel!=obj.draw.model ||
-                    state.hysteresis!=obj.lodHysteresis ||
-                    !matchesLodRevisions(state.revisions,obj.lods);
-                if(revised) {
-                    state.level=0;
-                    // Complete, collision-free comparison of every authored
-                    // level, including UNSELECTED LODs and retarget plans.
-                    // Updated only on configuration change, not per draw.
-                    captureLodRevisions(state.revisions,obj.lods);
-                }
-                state.generation=obj.generation;
-                state.sourcePublication=obj.animationModelGeneration;
-                state.sourceModel=rig;
-                state.baseModel=obj.draw.model;
-                state.hysteresis=obj.lodHysteresis;
-                saved=&state;
-                prior=state.level;
-            }
-            const size_t level=selectModelLodLevel(obj.lods,distance,prior,
-                                                   saved?obj.lodHysteresis:0.f);
-            if(saved) {
-                saved->level=level;
-                saved->seen=frameStamp_;
-            }
+            const size_t level=selectCameraLodLevel(
+                obj,distance,cameraScope);
             // Missing streamed distant LODs retain the nearest available
             // representation. The base graph still advances every frame.
             size_t visual=level;
@@ -508,8 +527,12 @@ public:
         }
     }
     void submit(render::Renderer3D& renderer,
-                std::span<const Object> objects) const {
-        for(const auto& obj:objects)submitOne(renderer,obj);
+                std::span<const Object> objects,
+                uint64_t cameraScope=0) const {
+        for(const auto& obj:objects)submitOne(renderer,obj,cameraScope);
+    }
+    void forgetCameraScope(uint64_t cameraScope) {
+        if(cameraScope)cameraLodState_.erase(cameraScope);
     }
     // Ordinary mesh/collision visualization, terrain tiles, gizmo backing
     // meshes and other plain draw packets use the SAME generic View API.
@@ -610,7 +633,13 @@ public:
     // are evicted; other graph players keep their clocks and pose state.
     size_t forgetSources(std::span<const uint64_t> ids) {
         const size_t removed=bridge_.forget(presentation_,ids);
-        for(const auto id:ids)lodState_.erase(id);
+        for(const auto id:ids) {
+            lodState_.erase(id);
+            for(auto& [scope,states]:cameraLodState_) {
+                (void)scope;
+                states.erase(id);
+            }
+        }
         return removed;
     }
     // Opt-in source reimport, while the old CPU Model and compiled Graph
@@ -620,7 +649,13 @@ public:
         const size_t removed=bridge_.forgetForReimport(presentation_,ids);
         // The next published source starts with a fresh visual-LOD state,
         // independently of optional named animation-clock continuity.
-        for(const auto id:ids)lodState_.erase(id);
+        for(const auto id:ids) {
+            lodState_.erase(id);
+            for(auto& [scope,states]:cameraLodState_) {
+                (void)scope;
+                states.erase(id);
+            }
+        }
         return removed;
     }
     const World& presentation() const noexcept{return presentation_;}
@@ -632,6 +667,7 @@ public:
             throw std::logic_error("View cannot clear during nested model submission");
         bridge_.clear(presentation_);
         lodState_.clear();
+        cameraLodState_.clear();
         stats_={};
         retargetStats_={};
         // Never preserve transient model-space poses across a View owner
@@ -719,6 +755,19 @@ private:
     mutable bool retargetScratchBusy_=false;
     uint64_t frameStamp_=0;
     mutable std::unordered_map<uint64_t,LodSelection> lodState_;
+    mutable std::unordered_map<uint64_t,
+        std::unordered_map<uint64_t,LodSelection>> cameraLodState_;
+    void pruneCameraLodState(uint64_t lastFrame) {
+        for(auto scope=cameraLodState_.begin();scope!=cameraLodState_.end();) {
+            auto& entries=scope->second;
+            for(auto it=entries.begin();it!=entries.end();) {
+                if(it->second.seen<lastFrame)it=entries.erase(it);
+                else ++it;
+            }
+            if(entries.empty())scope=cameraLodState_.erase(scope);
+            else ++scope;
+        }
+    }
     std::vector<Object> packetObjects_;
 };
 } // namespace aiverse::view

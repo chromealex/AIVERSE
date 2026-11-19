@@ -232,6 +232,8 @@ public:
     using BufferReadFn=std::function<void(std::vector<uint8_t>)>;
     virtual bool readBufferAsync(BufferHandle,size_t,BufferReadFn) { return false; }
     virtual bool gpuHealthy() const { return true; }
+    // Shutdown-only GPU barrier. Unsupported devices return false.
+    virtual bool waitIdle() { return false; }
     virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
     // Zero if backend does not expose a completed-slot-safe frame serial.
     virtual uint64_t frameSerial() const { return 0; }
@@ -277,6 +279,10 @@ public:
     // The callback may run one or two frames later; it always runs on the main thread.
     using CaptureFn = std::function<void(int w, int h, std::vector<uint8_t> rgba)>;
     virtual void captureNextFrame(CaptureFn fn) { if (fn) fn(0, 0, {}); }
+    // Optional offscreen RGBA8 readback inside a frame but outside a pass.
+    virtual bool captureTexture(TextureHandle source,CaptureFn callback) {
+        (void)source;(void)callback;return false;
+    }
     int framebufferWidth() const { return fbW_; }
     int framebufferHeight() const { return fbH_; }
 

@@ -171,6 +171,19 @@ public:
         }
     }
     const std::string& lastError() const override { return error_; }
+    bool waitIdle() override {
+        if(enc_ || compute_ || !queue_) return false;
+        // A fresh command buffer waits for every previously submitted command
+        // on this single queue. Never wait on cmd_ before endFrame commits it.
+        id<MTLCommandBuffer> barrier=[queue_ commandBuffer];
+        [barrier commit];
+        [barrier waitUntilCompleted];
+        if(barrier.status!=MTLCommandBufferStatusCompleted)return false;
+        deliverBufferReads();
+        deliverCapture();
+        deliverTextureCaptures();
+        return true;
+    }
 
     // ---------- buffers ----------
     BufferHandle createBuffer(const BufferDesc& d) override {
@@ -770,10 +783,56 @@ public:
     int captureDelay_ = 0;
     struct Captured { int w = 0, h = 0; std::vector<uint8_t> px; std::atomic<bool> ready{false}; CaptureFn fn; };
     std::shared_ptr<Captured> captured_;
+    std::vector<std::shared_ptr<Captured>> capturedTextures_;
     void captureNextFrame(CaptureFn fn) override {
         capture_ = std::move(fn);
         layer_.framebufferOnly = NO; // drawables acquired from now on can be blitted
         captureDelay_ = drawable_ && !drawable_.texture.framebufferOnly ? 0 : 1;
+    }
+    bool captureTexture(TextureHandle source,CaptureFn fn) override {
+        auto* resource=textures_.get(source.id);
+        if(!fn||!cmd_||enc_||!resource||!resource->tex)return false;
+        id<MTLTexture> tex=resource->tex;
+        const bool bgra=tex.pixelFormat==MTLPixelFormatBGRA8Unorm ||
+                        tex.pixelFormat==MTLPixelFormatBGRA8Unorm_sRGB;
+        const bool rgba=tex.pixelFormat==MTLPixelFormatRGBA8Unorm ||
+                        tex.pixelFormat==MTLPixelFormatRGBA8Unorm_sRGB;
+        if(!bgra&&!rgba)return false; // HDR requires explicit tonemap first
+        const NSUInteger width=tex.width,height=tex.height,row=width*4;
+        if(width==0||height==0||width>8192||height>8192)return false;
+        id<MTLBuffer> buffer=[device_ newBufferWithLength:row*height
+            options:MTLResourceStorageModeShared];
+        if(!buffer)return false;
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        [blit copyFromTexture:tex sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)
+             sourceSize:MTLSizeMake(width,height,1) toBuffer:buffer destinationOffset:0
+             destinationBytesPerRow:row destinationBytesPerImage:row*height];
+        [blit endEncoding];
+        auto request=std::make_shared<Captured>();
+        request->w=int(width);request->h=int(height);request->fn=std::move(fn);
+        capturedTextures_.push_back(request);
+        [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> finished) {
+            if(finished.status==MTLCommandBufferStatusCompleted) {
+                const auto* bytes=static_cast<const uint8_t*>(buffer.contents);
+                request->px.resize(size_t(row*height));
+                for(size_t i=0;i<size_t(width*height);++i){
+                    request->px[i*4]=bytes[i*4+(bgra?2:0)];
+                    request->px[i*4+1]=bytes[i*4+1];
+                    request->px[i*4+2]=bytes[i*4+(bgra?0:2)];
+                    request->px[i*4+3]=bytes[i*4+3];
+                }
+            }else{request->w=0;request->h=0;}
+            request->ready=true;
+        }];
+        return true;
+    }
+    void deliverTextureCaptures() {
+        for(size_t i=0;i<capturedTextures_.size();) {
+            auto capture=capturedTextures_[i];
+            if(!capture->ready){++i;continue;}
+            capturedTextures_.erase(capturedTextures_.begin()+std::ptrdiff_t(i));
+            if(capture->fn)capture->fn(capture->w,capture->h,std::move(capture->px));
+        }
     }
     void deliverCapture() {
         if (captured_ && captured_->ready) {
@@ -809,6 +868,7 @@ public:
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
         deliverBufferReads();
         deliverCapture(); // the previous frame's GPU work is done here
+        deliverTextureCaptures();
         ++frame_;
         // The semaphore guarantees this slot is no longer in flight.
         // Reuse its ICB and uniform allocations, but never reuse one twice

@@ -54,6 +54,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "RtsTerrainRender.h"
 #include "EntityFx.h"
 
+namespace aiverse::render { class CameraModelSnapshot; }
 namespace aiverse::view {
 class View;
 struct ModelPoseRetarget;
@@ -378,6 +379,11 @@ public:
     void setTerrainDetail(const terrain::DetailSurface* d, const std::vector<uint8_t>* splat) { terrain_.setDetail(d, splat); }
     const TerrainRenderer& terrainRenderer() const { return terrain_; }
     void draw(render::Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid);
+    // Optional LENS one-frame capture of pre-LOD MotionWeave model packets.
+    // Owner must disable this before resources can be reimported or destroyed.
+    void setCameraPreparedCapture(render::CameraModelSnapshot* target) noexcept {
+        cameraPreparedCapture_=target;
+    }
     // spline roads (map "roadNetwork", docs/roads.md): set with the map (setTerrainDetail(map) does it too)
     void setRoadMap(const Json& map);
     RtsRoadView& roads() { return *roads_; }
@@ -763,6 +769,7 @@ private:
     LegacyLodFallbackStats legacyLodFallbackStats_;
     size_t genericRetargetScratchBudgetBytes_=512u*1024u;
     std::unique_ptr<::aiverse::view::View> genericView_;
+    render::CameraModelSnapshot* cameraPreparedCapture_=nullptr;
     bool genericViewEnabled_=true; // opt-in per-object safety predicate
     render::Mesh projectile_;
     TerrainRenderer terrain_;    // chunked terrain + water (RtsTerrainRender.cpp)

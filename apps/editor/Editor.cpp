@@ -230,6 +230,7 @@ void Editor::shutdown() {
     sim_.reset();
     gameFx_.shutdown();
     fxTextures_.shutdown();
+    for(auto& window:windows_)window->shutdownAfterGpuIdle(*this);
     windows_.clear(); // window destructors may retire Model pointers into the shared queue
     if(!previewModelRetirement_.completeForShutdown(*dev_))
         throw std::runtime_error(

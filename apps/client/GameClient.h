@@ -30,6 +30,8 @@
 #include "engine/render/BakedLighting.h"
 #include "engine/render/QualityGovernor.h"
 #include "engine/render/Renderer3D.h"
+#include "engine/render/CameraClientAdapter.h"
+#include "engine/render/CameraModelSnapshot.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/services/Store.h"
 #include "engine/sim/Simulation.h"
@@ -127,6 +129,19 @@ public:
     Simulation* simulation() { return sim_.get(); }
     bool inMatch() const { return !mapLoading_ && sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
     const std::string& errorText() const { return error_; }
+    // Non-owning, frame-scoped LENS RT handles for native UI/material consumers.
+    gfx::TextureHandle lensColorTarget(uint64_t key) const {
+        return lensCamerasActive_?lensCameras_.colorTarget(key):gfx::TextureHandle{};
+    }
+    gfx::TextureHandle lensDepthTarget(uint64_t key) const {
+        return lensCamerasActive_?lensCameras_.depthTarget(key):gfx::TextureHandle{};
+    }
+    bool lensTargetInfo(uint64_t key,int& w,int& h,bool& hdr) const {
+        return lensCamerasActive_&&lensCameras_.targetInfo(key,w,h,hdr);
+    }
+    bool bindLensColorTarget(int slot,uint64_t key) const {
+        return lensCamerasActive_&&dev_&&lensCameras_.bindColorTarget(*dev_,slot,key);
+    }
 
 private:
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
@@ -335,6 +350,10 @@ private:
     Minimap minimap_;
 
     Renderer3D r3d_;
+    render::CameraClientAdapter lensCameras_;
+    render::CameraModelSnapshot lensModelSnapshot_;
+    uint64_t lensPresentationFrame_=0;
+    bool lensCamerasActive_=false;
     // streamed static world (map "streamedWorld": {"async": true, ...}, docs/large-worlds.md): chunks around the camera
     std::unique_ptr<world::WorldScene> worldScene_;
     int worldRadius_ = 2;

@@ -138,6 +138,10 @@ public:
 
     const DeviceInfo& info() const override { return info_; }
     const std::string& lastError() const override { return error_; }
+    bool waitIdle() override {
+        glFinish();
+        return glGetError()==GL_NO_ERROR;
+    }
 
     // ---------- buffers ----------
     BufferHandle createBuffer(const BufferDesc& d) override {
@@ -452,6 +456,42 @@ public:
         fn(fbW_, fbH_, std::move(px));
     }
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
+    bool captureTexture(TextureHandle source,CaptureFn fn) override {
+        // Explicit debug/export path: GL requires a synchronous glReadPixels.
+        // Do not invoke it during ordinary frame rendering or from a worker.
+        auto* tex=textures_.get(source.id);
+        if(!fn || !tex || (tex->fmt!=PixelFormat::RGBA8 &&
+                           tex->fmt!=PixelFormat::RGBA8_sRGB) ||
+           tex->w<=0 || tex->h<=0)return false;
+        GLint oldFbo=0,oldPack=4;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING,&oldFbo);
+        glGetIntegerv(GL_PACK_ALIGNMENT,&oldPack);
+        const GLuint fbo=framebufferFor(source.id,0);
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){
+            glBindFramebuffer(GL_FRAMEBUFFER,GLuint(oldFbo));return false;
+        }
+        glPixelStorei(GL_PACK_ALIGNMENT,1);
+        const int w=tex->w,h=tex->h;
+        std::vector<uint8_t> pixels(size_t(w)*size_t(h)*4);
+        glReadPixels(0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+        const GLenum error=glGetError();
+        glPixelStorei(GL_PACK_ALIGNMENT,oldPack);
+        glBindFramebuffer(GL_FRAMEBUFFER,GLuint(oldFbo));
+        if(error!=GL_NO_ERROR)return false;
+        const size_t stride=size_t(w)*4;
+        std::vector<uint8_t> scratch(stride);
+        for(int y=0;y<h/2;++y) {
+            auto* a=pixels.data()+size_t(y)*stride;
+            auto* b=pixels.data()+size_t(h-1-y)*stride;
+            std::copy(a,a+stride,scratch.data());
+            std::copy(b,b+stride,a);
+            std::copy(scratch.data(),scratch.data()+stride,b);
+        }
+        fn(w,h,std::move(pixels));
+        return true;
+    }
+
 
     void beginPass(const PassDesc& d) override {
         const auto* color = textures_.get(d.colorTarget.id);
