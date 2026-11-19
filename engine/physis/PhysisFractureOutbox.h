@@ -6,6 +6,7 @@
 #include "PhysisNatureStress.h"
 #include <algorithm>
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
 
 namespace aiverse::physis {
@@ -59,6 +60,10 @@ inline void advanceNatureFractureOutbox(World& world) {
         // Pending must not disappear if delivery is delayed by several ticks;
         // acknowledged entities never republish the same fracture.
         if (outbox.delivery != NatureFractureDelivery::Empty) continue;
+        // Keep the prior event identity as a tombstone after explicit repair.
+        // A second fracture in the SAME climate tick must not reuse its key.
+        if (outbox.eventKey != 0 && state->tick <= outbox.climateTick)
+            continue;
         const auto* stress =
             read.tryGetConst<NatureStressOutputComponent>(entity);
         if (!stress || !stress->valid || !stress->fractured ||
@@ -122,6 +127,40 @@ inline bool acknowledgeNatureFracture(
         prior->climateTick != climateTick) return false;
     world.get<NatureFractureOutboxComponent>(entity).delivery =
         NatureFractureDelivery::Acknowledged;
+    return true;
+}
+
+// Call only after a trusted host has durably repaired/replanted the object,
+// reconciled its external physical/vegetation state, and cleared the PHYSIS
+// stress latch (fractured=false, newlyFractured=false, damage=0).
+// This is an explicit lifecycle transition, never an automatic weather pass.
+// The acknowledged event key/tick remain as a persistent tombstone to prevent
+// duplicate emission if repair and a new fracture happen in the same tick.
+// A new fracture in a LATER tick gets a new identity, and old acknowledgements
+// can never acknowledge it.
+inline bool rearmNatureFractureAfterRepair(World& world, Entity entity,
+                                          std::uint64_t acknowledgedKey,
+                                          std::uint64_t acknowledgedTick) {
+    if (!world.alive(entity)) return false;
+    const auto* climate = static_cast<const World&>(world).resourceConst<State>();
+    const auto* outbox = static_cast<const World&>(world)
+        .tryGetConst<NatureFractureOutboxComponent>(entity);
+    const auto* stress = static_cast<const World&>(world)
+        .tryGetConst<NatureStressOutputComponent>(entity);
+    if (!climate || !outbox || !stress ||
+        outbox->delivery != NatureFractureDelivery::Acknowledged ||
+        outbox->eventKey == 0 ||
+        outbox->eventKey != acknowledgedKey ||
+        outbox->climateTick != acknowledgedTick ||
+        climate->tick <= outbox->climateTick ||
+        stress->fractured || stress->newlyFractured ||
+        stress->accumulatedDamage != Fixed{})
+        return false;
+    auto& writable = world.get<NatureFractureOutboxComponent>(entity);
+    writable.delivery = NatureFractureDelivery::Empty;
+    writable.aerodynamicForceN = Vec3{};
+    writable.bendingMomentNm = Fixed{};
+    writable.accumulatedDamage = Fixed{};
     return true;
 }
 

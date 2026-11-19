@@ -9,6 +9,7 @@
 #include "PhysisNatureSampling.h"
 #include "PhysisNatureStress.h"
 #include "PhysisFractureOutbox.h"
+#include "PhysisFractureDelivery.h"
 #include "../sim/Simulation.h"
 
 namespace aiverse::physis {

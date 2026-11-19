@@ -1258,3 +1258,13 @@ Prior Stage81 user macOS 2/2 nature tests PASS confirmed;
 Stage82 native compile/CTest **NOT RUN**. PR #25 remains
 Draft. Handoff:
 `docs/agent-handoffs/physis-stage82-fracture-outbox-2026-11-19.md`.
+
+
+## Stages 83–85 — fracture repair and durable host dispatch (2026-11-19)
+
+- Stage 82's persisted `NatureFractureOutboxComponent` v1 remains the only PHYSIS source of pending fractures. It does NOT own falling tree rigid bodies.
+- Stage 83: `rearmNatureFractureAfterRepair` only after an acknowledged event, a later climate tick and explicit gameplay repair of `NatureStressOutputComponent`. Preserve prior tick/key tombstone and never emit a second event with an identical identity.
+- Stage 84: `PhysisFractureDelivery.h::dispatchNatureFractures` is an authoritative host-barrier helper, NOT an installed tick system. `DurablyCommitted` means the host has persisted and deduplicated the external reaction; `Retry` leaves Pending. Host must reconcile physical objects with ECS rollback, handle deleted entities externally and respect callback budget.
+- Do not `#include` TerraWeave, NEREID, Box3D or genre headers inside PHYSIS core to implement the bridge; add it to game/world integration once both owners' changes are available.
+- Stage 85 adds source regression scenarios in existing `physis_fracture_outbox` CTest; native compiler/CTest/CI not executed by the connector agent. No claims of green validation.
+- Handoffs: `docs/agent-handoffs/physis-stage83-fracture-rearm-2026-11-19.md`, `physis-stage84-fracture-dispatch-2026-11-19.md`, `physis-stage85-fracture-regression-2026-11-19.md`.

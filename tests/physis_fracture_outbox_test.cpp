@@ -1,5 +1,6 @@
 // PHYSIS Stage 82: persistent host fracture outbox and deterministic delivery.
 #include "engine/physis/PhysisIntegration.h"
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -187,8 +188,176 @@ static std::uint64_t nativePersistenceAndRollback(bool cow) {
     return sim->checksum();
 }
 
+
+static void explicitRepairRearmsOnlyLaterFractures() {
+    World world;
+    pn::Settings settings;
+    settings.width = settings.height = 1;
+    pn::initialize(world, settings);
+    auto* climate = world.resource<pn::State>();
+    climate->tick = 21;
+    const Entity plant = world.create();
+    world.add<pn::NatureFractureOutboxComponent>(
+        plant, pn::NatureFractureOutboxComponent{});
+    pn::NatureStressOutputComponent stress;
+    stress.valid = true;
+    stress.fractured = true;
+    stress.newlyFractured = true;
+    stress.sampledClimateTick = 21;
+    stress.accumulatedDamage = 1_fx;
+    world.add<pn::NatureStressOutputComponent>(plant, stress);
+    pn::advanceNatureFractureOutbox(world);
+    const auto first = pn::pendingNatureFractures(world);
+    require(first.size() == 1, "first fracture missing before repair");
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "pending fracture must not be rearmed");
+    require(pn::acknowledgeNatureFracture(
+                world, plant, first[0].eventKey, 21),
+            "initial fracture acknowledgement failed");
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "damaged/fractured stress was accepted as repaired");
+
+    auto& repaired = world.get<pn::NatureStressOutputComponent>(plant);
+    repaired.fractured = false;
+    repaired.newlyFractured = false;
+    repaired.accumulatedDamage = Fixed{};
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "same-tick repair reused the original event identity");
+    ++climate->tick;
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey ^ 1u, 21),
+            "wrong repair key accepted");
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 20),
+            "wrong repair tick accepted");
+    const World afterRepairBeforeRearm = world;
+    require(pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "authoritative repaired object could not rearm");
+    require(!pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "duplicate repair rearm was accepted");
+    pn::advanceNatureFractureOutbox(world);
+    require(pn::pendingNatureFractures(world).empty(),
+            "rearm emitted an old fracture without a fresh stress sample");
+
+    auto& nextStress = world.get<pn::NatureStressOutputComponent>(plant);
+    nextStress.valid = true;
+    nextStress.fractured = true;
+    nextStress.newlyFractured = true;
+    nextStress.accumulatedDamage = 1_fx;
+    nextStress.sampledClimateTick = climate->tick;
+    pn::advanceNatureFractureOutbox(world);
+    const auto second = pn::pendingNatureFractures(world);
+    require(second.size() == 1 && second[0].climateTick == 22 &&
+            second[0].eventKey != first[0].eventKey,
+            "second fracture reused original event identity");
+    require(!pn::acknowledgeNatureFracture(
+                world, plant, first[0].eventKey, 21),
+            "stale first-cycle acknowledgement consumed second fracture");
+    require(pn::acknowledgeNatureFracture(
+                world, plant, second[0].eventKey, 22),
+            "second-cycle acknowledgement was rejected");
+
+    world = afterRepairBeforeRearm;
+    require(pn::rearmNatureFractureAfterRepair(
+                world, plant, first[0].eventKey, 21),
+            "rollback failed to restore rearm eligibility");
+}
+
+static void durableDeliveryBudgetRetryAndReplay() {
+    World world;
+    pn::Settings settings;
+    settings.width = settings.height = 1;
+    pn::initialize(world, settings);
+    world.resource<pn::State>()->tick = 7;
+    const Entity a = world.create();
+    const Entity b = world.create();
+    const Entity c = world.create();
+    for (Entity entity : std::vector<Entity>{c, b, a}) {
+        world.add<pn::NatureFractureOutboxComponent>(
+            entity, pn::NatureFractureOutboxComponent{});
+        pn::NatureStressOutputComponent stress;
+        stress.valid = true;
+        stress.fractured = true;
+        stress.newlyFractured = true;
+        stress.sampledClimateTick = 7;
+        stress.accumulatedDamage = 1_fx;
+        world.add<pn::NatureStressOutputComponent>(entity, stress);
+    }
+    pn::advanceNatureFractureOutbox(world);
+    const World beforeDelivery = world;
+    const auto first = pn::dispatchNatureFractures(
+        world, [&](const pn::NatureFractureEvent& event) {
+            return event.entity == a ? pn::NatureFractureDisposition::Retry
+                                     : pn::NatureFractureDisposition::DurablyCommitted;
+        }, 2);
+    require(first.pendingAtStart == 3 && first.visited == 2 &&
+            first.retry == 1 && first.committed == 1 &&
+            first.pendingAtEnd == 2,
+            "delivery budget/retry counts incorrect");
+    require(pn::pendingNatureFractures(world).size() == 2,
+            "retry event unexpectedly acknowledged");
+
+    try {
+        pn::dispatchNatureFractures(world,
+            [](const pn::NatureFractureEvent&) {
+                return pn::NatureFractureDisposition::Retry;
+            }, 0);
+        require(false, "zero delivery budget accepted");
+    } catch (const std::invalid_argument&) {}
+    try {
+        pn::dispatchNatureFractures(world,
+            [](const pn::NatureFractureEvent&) {
+                return pn::NatureFractureDisposition::Retry;
+            }, 4097);
+        require(false, "oversize delivery budget accepted");
+    } catch (const std::invalid_argument&) {}
+    bool sinkThrew = false;
+    try {
+        pn::dispatchNatureFractures(world,
+            [](const pn::NatureFractureEvent&) -> pn::NatureFractureDisposition {
+                throw std::runtime_error("temporary durable sink failure");
+            }, 1);
+    } catch (const std::runtime_error&) {
+        sinkThrew = true;
+    }
+    require(sinkThrew, "sink exception unexpectedly swallowed");
+    require(pn::pendingNatureFractures(world).size() == 2,
+            "failed delivery callback lost a pending event");
+
+    // Simulate the host's *own* deduplicating durable event journal, kept
+    // independently from the ECS snapshot. Journal storage is only mocked:
+    // the test does NOT prove actual filesystem durability or Box3D rollback.
+    std::vector<std::uint64_t> journal;
+    std::size_t physicalEffects = 0;
+    auto durable = [&](const pn::NatureFractureEvent& event) {
+        if (std::find(journal.begin(), journal.end(), event.eventKey) ==
+                journal.end()) {
+            journal.push_back(event.eventKey);
+            ++physicalEffects;
+        }
+        return pn::NatureFractureDisposition::DurablyCommitted;
+    };
+    const auto delivered = pn::dispatchNatureFractures(world, durable);
+    require(delivered.committed == 2 && delivered.pendingAtEnd == 0 &&
+            physicalEffects == 2, "remaining pending fractures not committed");
+    world = beforeDelivery;
+    const auto replay = pn::dispatchNatureFractures(world, durable);
+    require(replay.committed == 3 && replay.pendingAtEnd == 0 &&
+            physicalEffects == 3,
+            "rollback delivery duplicated prior host effects");
+    require(pn::pendingNatureFractures(world).empty(),
+            "rollback replay failed to acknowledge existing durable entries");
+}
+
 int main() {
     stableOrderAndAcknowledgement();
+    explicitRepairRearmsOnlyLaterFractures();
+    durableDeliveryBudgetRetryAndReplay();
     const auto native = nativePersistenceAndRollback(false);
     require(nativePersistenceAndRollback(true) == native,
             "COW mode changed fracture outbox replay identity");
