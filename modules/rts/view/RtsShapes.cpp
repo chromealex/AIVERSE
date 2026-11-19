@@ -126,7 +126,10 @@ void RtsView::buildShapes(gfx::Device& dev) {
         }
         auto model = modelFromParts("shape:" + shape, mp);
         uploadModel(dev, *model);
-        models_["shape:" + shape] = std::move(model);
+        resources_.replace(dev,"shape:" + shape,std::move(model),
+            [this](const render::Model* previous) {
+                animationCache_.erase(previous);
+            });
     }
     MeshBuilder pb; pb.color(rgba(255, 240, 200)).sphere({0, 0, 0}, 0.08f, 4, 6);
     projectile_ = pb.upload(dev);

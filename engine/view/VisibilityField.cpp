@@ -1,10 +1,10 @@
-#include "RtsFog.h"
+#include "engine/view/VisibilityField.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>
 
-namespace aiverse::game {
+namespace aiverse::view {
 
 using namespace render;
 
@@ -118,7 +118,7 @@ void readColor(const Json& c, float (&out)[3]) {
         out[i] = float(v > 1.0 ? v / 255.0 : v);       // [8, 10, 14] or [0.03, 0.04, 0.05]
     }
 }
-void apply(FogLook& L, const Json& j) {
+void apply(VisibilityLook& L, const Json& j) {
     if (!j.isObject()) return;
     if (j.has("show")) L.show = j.getBool("show", true);
     if (j.has("mode") && (j.getStr("mode") == "none" || j.getStr("mode") == "off")) L.show = false;
@@ -127,7 +127,7 @@ void apply(FogLook& L, const Json& j) {
     if (j.has("explored")) L.explored = std::clamp(float(j["explored"].toDouble()), 0.0f, 1.0f);
     if (j.has("style")) {
         std::string s = j.getStr("style");
-        L.style = s == "cells" ? FogLook::Cells : s == "grid" ? FogLook::Grid : s == "pattern" ? FogLook::Pattern : FogLook::Smooth;
+        L.style = s == "cells" ? VisibilityLook::Cells : s == "grid" ? VisibilityLook::Grid : s == "pattern" ? VisibilityLook::Pattern : VisibilityLook::Smooth;
     }
     if (j.has("softness")) L.softness = std::clamp(int(j["softness"].integer()), 0, 6);
     if (j.has("fade")) L.fade = std::clamp(float(j["fade"].toDouble()), 0.0f, 5.0f);
@@ -169,14 +169,14 @@ void boxBlur(std::vector<uint8_t>& img, std::vector<uint16_t>& tmp, int w, int h
 }
 } // namespace
 
-FogLook parseFogLook(const Json& rulesFog, const Json& gameFog) {
-    FogLook L;
-    apply(L, rulesFog);
-    apply(L, gameFog);
+VisibilityLook parseVisibilityLook(const Json& baseConfig, const Json& overrides) {
+    VisibilityLook L;
+    apply(L, baseConfig);
+    apply(L, overrides);
     return L;
 }
 
-bool FogOfWar::init(gfx::Device& dev) {
+bool VisibilityField::init(gfx::Device& dev) {
     dev_ = &dev;
     gfx::ShaderDesc sd;
     sd.glslVertex = kFogVS; sd.glslFragment = kFogFS; sd.msl = kFogMSL;
@@ -197,7 +197,7 @@ bool FogOfWar::init(gfx::Device& dev) {
     return pipe_.valid();
 }
 
-void FogOfWar::shutdown() {
+void VisibilityField::shutdown() {
     if (!dev_) return;
     for (auto* b : {&vb_, &ib_}) if (b->valid()) { dev_->destroyBuffer(*b); *b = {}; }
     if (tex_.valid()) { dev_->destroyTexture(tex_); tex_ = {}; }
@@ -208,7 +208,7 @@ void FogOfWar::shutdown() {
     w_ = h_ = 0;
 }
 
-void FogOfWar::build(gfx::Device& dev, int w, int h, const std::function<float(float, float)>& height) {
+void VisibilityField::build(gfx::Device& dev, int w, int h, const std::function<float(float, float)>& height) {
     if (!dev_ || w <= 0 || h <= 0) return;
     for (auto* b : {&vb_, &ib_}) if (b->valid()) { dev.destroyBuffer(*b); *b = {}; }
     // draped sheet: one vertex per cell corner at the highest neighbouring cell centre, so plateaus
@@ -254,7 +254,7 @@ void FogOfWar::build(gfx::Device& dev, int w, int h, const std::function<float(f
     }
 }
 
-bool FogOfWar::update(const std::vector<uint8_t>& vision, int w, int h, double time) {
+bool VisibilityField::update(std::span<const uint8_t> vision,int w,int h,double time) {
     if (w != w_ || h != h_ || vision.size() != target_.size()) return false;
     const float dt = lastTime_ < 0 ? 1e6f : float(std::max(0.0, time - lastTime_));
     lastTime_ = time;
@@ -279,7 +279,7 @@ bool FogOfWar::update(const std::vector<uint8_t>& vision, int w, int h, double t
     }
     if (!changed) return false;
     field_ = cur_;
-    if (look_.style == FogLook::Smooth || look_.style == FogLook::Pattern) {
+    if (look_.style == VisibilityLook::Smooth || look_.style == VisibilityLook::Pattern) {
         if (blur_) blur_(field_, look_.softness);
         else boxBlur(field_, tmp_, w_, h_, look_.softness);
     }
@@ -288,16 +288,16 @@ bool FogOfWar::update(const std::vector<uint8_t>& vision, int w, int h, double t
     return true;
 }
 
-void FogOfWar::upload() {
+void VisibilityField::upload() {
     if (dev_ && tex_.valid()) dev_->updateTexture(tex_, 0, 0, w_, h_, field_.data(), w_);
 }
 
-void FogOfWar::draw(Renderer3D& r, double time, bool lowTier) {
+void VisibilityField::draw(Renderer3D& r, double time, bool lowTier) {
     if (!dev_ || !pipe_.valid() || !vb_.valid() || !tex_.valid() || !look_.show) return;
     Uniforms u{};
     std::memcpy(u.viewProj, r.viewProj().m, sizeof u.viewProj);
     u.color[0] = look_.color[0]; u.color[1] = look_.color[1]; u.color[2] = look_.color[2]; u.color[3] = look_.unexplored;
-    const int style = lowTier && look_.style == FogLook::Smooth ? FogLook::Cells : look_.style;
+    const int style = lowTier && look_.style == VisibilityLook::Smooth ? VisibilityLook::Cells : look_.style;
     u.p0[0] = look_.explored; u.p0[1] = float(w_); u.p0[2] = float(h_); u.p0[3] = float(style);
     u.grid[0] = look_.gridColor[0]; u.grid[1] = look_.gridColor[1]; u.grid[2] = look_.gridColor[2]; u.grid[3] = look_.gridAlpha;
     u.p1[0] = lowTier ? 0.0f : look_.noise; u.p1[1] = float(std::fmod(time, 10000.0)); u.p1[2] = look_.gridEverywhere ? 1.0f : 0.0f;

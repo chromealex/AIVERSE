@@ -4,6 +4,7 @@
 // entity. Presentation only; reads the scene, never the simulation.
 #include "RtsView.h"
 #include "engine/render/AnimationLod.h"
+#include "engine/view/View.h"
 #include "../RtsModule.h"
 
 #include <algorithm>
@@ -295,8 +296,37 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
             if(found->second.graph)program=found->second.graph;
         }
     }
+    // Defer the ownership handoff until the generic pose has actually
+    // passed validation below. Otherwise an invalid View pose switches to
+    // legacy animation without restarting its stale clocks in this frame.
+    const bool wasGenericViewPose=st.wasGenericViewPose;
     if(st.graph.graph()!=program.get()){st.graph.reset(program);st.poseValid=false;updatePose=true;}
-    if (program) {
+    if(st.genericViewPose && genericView_) {
+        const Entity presentation=genericView_->presentationEntity(st.genericViewId);
+        const auto* evaluated=genericView_->presentation().tryGetConst<
+            ::aiverse::lib::animation::AnimationPoseComponent>(presentation);
+        if(evaluated && evaluated->valid && evaluated->local.size()==m.nodes.size()) {
+            st.pose=evaluated->local;
+            st.world=evaluated->matrices;
+            st.poseValid=true;
+        } else {
+            // An invalid or pending pose falls back to legacy Graph updates.
+            st.genericViewPose=false;
+        }
+    }
+    if(!st.genericViewPose && wasGenericViewPose) {
+        // Reactivating the legacy renderer is a fresh animation owner.
+        // Reset both clocks: the graph instance and the imported clip
+        // Animator must not resume pre-MotionWeave playback time.
+        st.graph.reset(program);
+        A.setModel(nullptr);
+        A.setModel(&m);
+        st.baseKind=-1;
+        st.poseValid=false;
+        updatePose=true;
+    }
+    st.wasGenericViewPose=st.genericViewPose;
+    if (program && !st.genericViewPose) {
         // Rebuild defaults each frame so removing a Lua override restores automatic inputs.
         auto& p = st.graph.parameters();
         p = program->defaults();
@@ -323,7 +353,9 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         st.graph.update(dt);
         if (updatePose || st.pose.empty()) st.graph.evaluate(st.pose);
         if(control){control->state=st.graph.state();control->contacts=st.graph.contactReport();control->locomotion=st.graph.locomotionReport();if(!st.graph.healthy())control->error=st.graph.error();}
-    } else if (!m.clips.empty()) {
+    } else if (!st.genericViewPose && !m.clips.empty()) {
+        // MotionWeave already advanced this frame and supplied local/world
+        // poses. Never tick the legacy Animator for the same source.
         auto pick = [&](int kind) { const auto& v = ch.clips[kind].clips; return v[size_t(mix64(uint64_t(st.distance * 7) + uint64_t(kind)) % v.size())]; };
         auto play = [&](int kind, bool restart) {
             const ClipSpec& cs = ch.clips[kind];
@@ -407,7 +439,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         A.update(dt);
         emitClipEvents(st, ch, o);
         if (ch.needsPose && updatePose) A.evaluate(st.pose);
-    } else if (ch.needsPose && (updatePose || st.pose.empty())) {
+    } else if (!st.genericViewPose && ch.needsPose && (updatePose || st.pose.empty())) {
         bindPose(m, st.pose);
     }
 
@@ -456,7 +488,8 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         // stride override for pose correction rather than searching again.
         const float stride = kingstonStride;
         if(moving&&stride<1.f)for(const auto&leg:ch.legs)for(int node:{leg.hip,leg.knee})st.pose[node].r=slerp(m.nodes[node].r,st.pose[node].r,stride);
-        worldMatrices(m, st.pose, st.world);
+        if(!st.genericViewPose)
+            worldMatrices(m, st.pose, st.world);
         // foot IK: plant two-bone legs on the terrain under each foot (ramps, cliffs, slopes)
         if (grid && grid->w > 0 && !ch.legs.empty() && (!moving || locomotionSpeed >= 0.f) && !st.graph.hasContacts()) {
             auto support=animationEnvironment(o,st,ch,*grid);

@@ -102,6 +102,19 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
             if(n.clip<0) bad("node '"+n.id+"': unknown clip '"+v.getStr("clip")+"'");
             n.speed=number(v["speed"],1); n.loop=v.getBool("loop",true);
             if(n.speed<0) bad("negative clip speed");
+            if(v.has("notifies")) {
+                if(!v["notifies"].isArray() || v["notifies"].size()>256)
+                    bad("clip notifies must be an array of up to 256 keys");
+                for(const auto& key:v["notifies"].items()) {
+                    const float time=number(key["time"],-1.f);
+                    const std::string name=key.getStr("name");
+                    const float duration=m.clips[size_t(n.clip)].duration;
+                    if(!key.isObject() || name.empty() || name.size()>128 ||
+                       time<0 || time>duration || (n.loop && time>=duration))
+                        bad("invalid clip notify time/name");
+                    n.notifies.push_back({time,name});
+                }
+            }
         } else if(kind=="blend"||kind=="additive") {
             n.kind=kind=="blend"?Kind::Blend:Kind::Additive;
             n.a=ref(ids,v.getStr("a"),"earlier input node"); n.b=ref(ids,v.getStr("b"),"earlier input node");
@@ -208,11 +221,11 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
 }
 void AnimationGraphInstance::reset(std::shared_ptr<const AnimationGraph> g) {
     graph_=std::move(g); parameters_={}; healthy_=true; error_.clear(); state_=0; time_=fadeTime_=fadeDuration_=0;
-    source_.clear();last_.clear();bind_.clear();poses_.clear();nativeState_.clear();world_.clear();clocks_.clear();
+    source_.clear();last_.clear();bind_.clear();poses_.clear();nativeState_.clear();world_.clear();clocks_.clear();unwrappedClocks_.clear();clipStarted_.clear();notifies_.clear();
     children_.clear();motions_.clear();controllers_.clear();traitState_.clear();rigs_.clear();
     if(!graph_) return;
     parameters_=graph_->defaults(); state_=graph_->initial(); bindPose(*graph_->model(),bind_);
-    poses_.resize(graph_->nodes().size(),bind_); nativeState_.resize(poses_.size()); clocks_.resize(poses_.size()); last_=bind_;
+    poses_.resize(graph_->nodes().size(),bind_); nativeState_.resize(poses_.size()); clocks_.resize(poses_.size()); unwrappedClocks_.resize(poses_.size()); clipStarted_.assign(poses_.size(),1); last_=bind_;
     for(size_t i=0;i<poses_.size();++i) if(graph_->nodes()[i].operation)
         nativeState_[i].resize(graph_->nodes()[i].operation->stateFloats);
     resetNodes();
@@ -257,7 +270,32 @@ const std::string& AnimationGraphInstance::state() const {
     static const std::string empty;
     return graph_?graph_->states()[size_t(state_)].id:empty;
 }
+std::optional<float> AnimationGraphInstance::clipTime(const std::string& node) const {
+    if(!graph_)return std::nullopt;
+    for(size_t i=0;i<graph_->nodes().size();++i)
+        if(graph_->nodes()[i].id==node &&
+           graph_->nodes()[i].kind==AnimationGraph::Kind::Clip)
+            return float(clocks_[i]);
+    return std::nullopt;
+}
+bool AnimationGraphInstance::seekClipNode(const std::string& node,float seconds) {
+    if(!graph_ || !std::isfinite(seconds) || seconds<0.f)return false;
+    for(size_t i=0;i<graph_->nodes().size();++i) {
+        const auto& n=graph_->nodes()[i];
+        if(n.id!=node || n.kind!=AnimationGraph::Kind::Clip)continue;
+        const float duration=graph_->model()->clips[size_t(n.clip)].duration;
+        if(duration<=0.f)return false;
+        const double time=n.loop?std::fmod(double(seconds),double(duration)):
+            std::min(double(seconds),double(duration));
+        unwrappedClocks_[i]=time;
+        clocks_[i]=time;
+        clipStarted_[i]=0; // never generate phantom time-zero notifies
+        return true;
+    }
+    return false;
+}
 void AnimationGraphInstance::update(float dt) {
+    notifies_.clear();
     if(!graph_||!std::isfinite(dt)||dt<0) return;
     dt=std::min(dt,1.f); // bound work and clocks after a suspended host resumes
     time_=std::min(time_+dt,1000000.f); fadeTime_+=dt;
@@ -269,7 +307,13 @@ void AnimationGraphInstance::update(float dt) {
         for(size_t t=n.traits.size();t-->0;){auto& st=traitState_[i][t];const auto& op=n.traits[t].implementation;
             if(st.enabled&&op&&op->preUpdate&&!op->preUpdate(n.traits[t].config,parameters_,dt,st.data))traitFailure(i,t);
         }
-        if(children_[i]){bindChild(i);children_[i]->update(dt);if(!children_[i]->healthy()){healthy_=false;error_=children_[i]->error();}}
+        if(children_[i]){
+            bindChild(i);children_[i]->update(dt);
+            for(const auto& notify:children_[i]->notifies())
+                notifies_.push_back({n.id+"/"+notify.node,notify.name,
+                                     notify.framePhase,notify.cycle});
+            if(!children_[i]->healthy()){healthy_=false;error_=children_[i]->error();}
+        }
         if(motions_[i])motions_[i]->update(dt,parameters_);
         if(controllers_[i])controllers_[i]->update(dt,parameters_);
         if(n.operation&&n.operation->update) n.operation->update(n.config,parameters_,dt,nativeState_[i]);
@@ -278,13 +322,55 @@ void AnimationGraphInstance::update(float dt) {
         }
         if(n.kind!=AnimationGraph::Kind::Clip) continue;
         const float duration=graph_->model()->clips[size_t(n.clip)].duration;
-        clocks_[i]+=double(dt)*std::clamp(value(parameters_,n.parameter,n.speed),0.f,1000000.f);
-        clocks_[i]=duration>0?(n.loop?std::fmod(clocks_[i],duration):std::min(clocks_[i],double(duration))):0;
+        const double prev=unwrappedClocks_[i];
+        const double advance=double(dt)*std::clamp(value(parameters_,n.parameter,n.speed),0.f,1000000.f);
+        const double next=prev+advance;
+        if(duration>0.f && !n.notifies.empty()) {
+            constexpr size_t kNotifyLimit=1024;
+            for(const auto& key:n.notifies) {
+                if(notifies_.size()>=kNotifyLimit)break;
+                const double before=prev-(clipStarted_[i]?1.e-9:0.);
+                const double until=n.loop?next:std::min(next,double(duration));
+                const auto emit=[&](double at,int64_t cycle) {
+                    if(notifies_.size()>=kNotifyLimit)return;
+                    const float phase=advance>0?float(std::clamp(
+                        (at-prev)/advance,0.,1.)):0.f;
+                    notifies_.push_back({n.id,key.name,phase,cycle});
+                };
+                if(n.loop) {
+                    const int64_t first=std::max<int64_t>(0,
+                        int64_t(std::floor((before-double(key.time))/duration))+1);
+                    const int64_t last=int64_t(std::floor(
+                        (until-double(key.time))/duration));
+                    for(int64_t cycle=first;cycle<=last &&
+                        notifies_.size()<kNotifyLimit;++cycle) {
+                        const double at=double(key.time)+double(cycle)*duration;
+                        if(at>before && at<=until)emit(at,cycle);
+                    }
+                } else if(key.time>before && key.time<=until) {
+                    emit(key.time,0);
+                }
+            }
+            if(notifies_.size()>=kNotifyLimit) {
+                healthy_=false;error_="animation notify budget exceeded";
+            }
+        }
+        clipStarted_[i]=0;
+        unwrappedClocks_[i]=n.loop?next:std::min(next,double(duration));
+        clocks_[i]=duration>0? (n.loop?
+            std::fmod(unwrappedClocks_[i],double(duration)):
+            unwrappedClocks_[i]):0;
     }
+    std::stable_sort(notifies_.begin(),notifies_.end(),
+        [](const AnimationGraphNotify& a,const AnimationGraphNotify& b) {
+            return a.framePhase<b.framePhase;
+        });
     for(const auto& t:graph_->states()[size_t(state_)].transitions) {
         if(time_<t.after || !std::all_of(t.conditions.begin(),t.conditions.end(),[&](const auto& c){return matches(c,parameters_);})) continue;
         evaluate(last_); source_=last_; state_=t.to; time_=0; fadeTime_=0; fadeDuration_=t.fade;
         std::fill(clocks_.begin(),clocks_.end(),0);
+        std::fill(unwrappedClocks_.begin(),unwrappedClocks_.end(),0);
+        std::fill(clipStarted_.begin(),clipStarted_.end(),1);
         for(auto& storage:nativeState_) std::fill(storage.begin(),storage.end(),0);
         resetNodes();
         break;

@@ -441,8 +441,30 @@ void ensureTangents(Model& m) {
 }
 } // namespace
 
+void ModelTextureCache::invalidateSource(const std::string& path) {
+    const auto key=std::filesystem::path(path).lexically_normal().generic_string();
+    if(key.empty())return;
+    {
+        // CPU workers may still hold shared pixel leases; removing an LRU
+        // entry does not invalidate those leases.
+        std::lock_guard lock(mutex_);
+        const auto it=decoded_.find(key);
+        if(it!=decoded_.end()) {
+            bytes_-=it->second.bytes;
+            decoded_.erase(it);
+        }
+    }
+    // Called only on render thread, like upload(). Existing GPU leases are
+    // never mutated or destroyed at this point.
+    ++sourceRevisions_[key];
+}
+
 void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
-    const auto key = image.textureKey + (image.repeat ? "#repeat" : "#clamp") + (image.nearest ? "#nearest" : "#linear");
+    const auto revision=sourceRevisions_.find(image.textureKey);
+    const uint64_t epoch=revision==sourceRevisions_.end()?0:revision->second;
+    const auto key = image.textureKey + (image.repeat ? "#repeat" : "#clamp") +
+                     (image.nearest ? "#nearest" : "#linear") +
+                     "#revision" + std::to_string(epoch);
     auto it = gpu_.find(key);
     if (it == gpu_.end()) {
         Image owner = image; owner.textureCache.reset(); owner.borrowedTexture = false;
@@ -471,6 +493,7 @@ void ModelTextureCache::trim(gfx::Device& dev) {
 void ModelTextureCache::shutdown(gfx::Device& dev) {
     for (auto& [key, image] : gpu_) if (image.tex.valid()) dev.destroyTexture(image.tex);
     gpu_.clear();
+    sourceRevisions_.clear();
     std::lock_guard lock(mutex_); decoded_.clear(); bytes_ = 0;
 }
 

@@ -23,6 +23,7 @@
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/view/RtsCamera.h"
 #include "modules/rts/view/RtsOverlayData.h"
+#include "modules/rts/view/RtsSelectionPresentation.h"
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -129,7 +130,7 @@ void Editor::init(gfx::Device& dev) {
     // Escape hatch for diagnosing assets that rely on legacy eager loading.
     const char* eagerAssets = std::getenv("AIVERSE_EDITOR_EAGER_MODELS");
     lazyEditorAssets_ = !(eagerAssets && std::strcmp(eagerAssets, "1") == 0);
-    editorTypeLastUsed_.assign(rules().types.size(), -1.0e30);
+    modelDemand_.resize(rules().types.size());
     view_.setDeferredLoading(lazyEditorAssets_);
     view_.setDeferAppearanceVariants(false); // editing always exposes every variant
     view_.setContentBase(ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
@@ -246,8 +247,9 @@ void Editor::reloadRules() {
     editSceneCacheValid_ = false;
     editSceneCache_.clear();
     view_.shutdown(*dev_);
-    editorTypeLastUsed_.assign(rules().types.size(), -1.0e30);
-    lastEditorTrim_ = time_;
+    modelDemand_.resize(rules().types.size());
+    modelDemand_.markSweep(time_);
+    visualAssets_.reset();
     view_.setDeferredLoading(lazyEditorAssets_);
     view_.setDeferAppearanceVariants(false); // editing always exposes every variant
     view_.setContentBase(ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
@@ -261,14 +263,173 @@ void Editor::reloadRules() {
     reloadFx();
 }
 
+// Presentation-only asset refresh. The old view joins its model-preparation
+// worker and releases GPU resources before new model/graph pointers are exposed.
+// Unlike reloadRules(), do not reparse rules, restart FX or reset editor demand
+// history. The caller defers this transaction until after play mode.
+void Editor::reloadVisualAssets() {
+    if (!dev_ || playing() || clientPlaying()) return;
+    editSceneCacheValid_ = false;
+    editSceneCache_.clear();
+    view_.shutdown(*dev_);
+    modelDemand_.invalidate(); // discard requests for the old resource generation
+    view_.setDeferredLoading(lazyEditorAssets_);
+    view_.setDeferAppearanceVariants(false);
+    view_.setContentBase(ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
+    view_.init(*dev_, rules(), projectReader(ws_.project.dir));
+    for (const auto& warning : view_.warnings())
+        ws_.log("view", warning, true);
+    // Preview entities and the height queries must rebind after resources
+    // change; this is not a rules-document or gameplay state revision.
+    gridRevision_ = ~0ull;
+    ++rulesRevision_;
+    reclaimEditorAssets(true); // requeue authored/selected types, not the full catalog
+}
+
+size_t Editor::reloadVisualModelSources(
+        const std::vector<std::string>& paths) {
+    if(!dev_ || playing() || clientPlaying() || paths.empty())return 0;
+    // The caller runs at the editor frame boundary, after the previous
+    // render submission. TypeLook/animation sources are detached by RtsView
+    // before the independent resource owner destroys GPU allocations.
+    const size_t invalidated=view_.reloadModelSources(paths);
+    if(invalidated) {
+        editSceneCacheValid_=false;
+        editSceneCache_.clear();
+        // Scene-dependent previews rebind to the newly loaded model
+        // geometry. Do not reparse rules, restart FX or rebuild terrain.
+        ++rulesRevision_;
+    }
+    return invalidated;
+}
+
+// Model conversion remains a host/tooling concern, not part of the
+// genre-neutral resource index. Cache one attempted timestamp in the
+// VisualAssetDependencyService to avoid repeated external processes.
+bool Editor::convertVisualModelSource(const std::string& src) {
+    std::error_code ec;
+    fs::path tool=fs::path(ws_.buildTool).parent_path() /
+#if defined(_WIN32)
+        "modelconv.exe";
+#else
+        "modelconv";
+#endif
+    if(!fs::exists(tool,ec)) {
+        ws_.log("view","нужна конвертация "+src+
+                       ", но modelconv не найден рядом с aiversebuild");
+        return false;
+    }
+    // modelconv runs via a legacy shell pipe for diagnostics; never allow
+    // author-controlled model paths to break out of quoted arguments.
+    const auto unsafeShellPath=[](const std::string& value) {
+#if defined(_WIN32)
+        // Windows file separators are legal; cmd.exe expands %variables%
+        // and may expand !delayed! values even inside double quotes.
+        return value.find_first_of("\"%!^\r\n")!=std::string::npos;
+#else
+        return value.find_first_of("\"$\\\r\n")!=std::string::npos ||
+               value.find(char(96))!=std::string::npos; // backtick
+#endif
+    };
+    if(unsafeShellPath(src) || unsafeShellPath(tool.string())) {
+        ws_.log("view","отклонён небезопасный путь модели: "+src,true);
+        return false;
+    }
+    const std::string cmd="\"" + tool.string() + "\" \"" + src + "\" 2>&1";
+#if defined(_WIN32)
+    FILE* pipe=_popen(cmd.c_str(),"r");
+#else
+    FILE* pipe=popen(cmd.c_str(),"r");
+#endif
+    if(!pipe)return false;
+    std::string output;
+    char buffer[256];
+    while(std::fgets(buffer,sizeof buffer,pipe))output+=buffer;
+#if defined(_WIN32)
+    const int rc=_pclose(pipe);
+#else
+    const int rc=pclose(pipe);
+#endif
+    ws_.log("view",(rc==0?"сконвертирована модель ":"не удалось сконвертировать ")+
+                   src+(rc==0?std::string{}:": "+output));
+    return rc==0;
+}
+
+void Editor::pollVisualAssets(double dt) {
+    if(!dev_ || ws_.project.dir.empty() || ws_.project.isFps()) {
+        visualAssets_.reset();
+        return;
+    }
+    if(!visualAssets_.due(ws_.project.dir,dt))return;
+    visualAssets_.scan(ws_.project.dir,rules().types,view_.materialLibrary(),
+        view_.modelResources(),
+        [this](const std::string& src){return convertVisualModelSource(src);},
+        [this](const std::string& message){ws_.log("view",message);});
+    // Changes are retained throughout editor/client play. GPU mutations
+    // happen only here, before the first rendering pass of a new frame.
+    if(!visualAssets_.pending() || playing() || clientPlaying())return;
+    const auto impact=visualAssets_.impact();
+    // Source mutations to a model and a graph/material in the same scan
+    // cannot safely share the appearance-only transaction. Keep the
+    // existing full-view barrier for mixed or unclassified GPU sources.
+    if(((impact.graph || impact.materialLibrary) &&
+        (impact.model || impact.texture)) ||
+       (impact.texture && impact.models.empty())) {
+        reloadVisualAssets();
+        ws_.log("view","полное обновление смешанных ресурсов: "+
+                 std::to_string(visualAssets_.changedSources().size())+
+                 " источников");
+    } else if(impact.graph || impact.materialLibrary) {
+        size_t refreshed=0;
+        if(view_.reloadAppearanceTypes(impact.types,impact.materialLibrary,
+                                       &refreshed)) {
+            if(refreshed) {
+                editSceneCacheValid_=false;
+                editSceneCache_.clear();
+                ++rulesRevision_;
+            }
+            ws_.log("view","обновлено визуальных типов (без выгрузки моделей): "+
+                     std::to_string(refreshed));
+        } else {
+            // A bad AnimationGraph JSON or malformed material library keeps
+            // the previous working look and active animations in place.
+            ws_.log("view","обновление графа/материалов отклонено; "
+                           "старая версия сохранена",true);
+        }
+    } else if(!impact.empty()) {
+        if(impact.texture) {
+            auto cache=view_.textureCache();
+            for(const auto& source:visualAssets_.changedSources()) {
+                const auto* entry=visualAssets_.index().lookup(source);
+                if(entry && entry->has(
+                    game::view_adapter::ModelSourceKind::Texture))
+                    cache->invalidateSource(source);
+            }
+        }
+        std::vector<std::string> models(
+            impact.models.begin(),impact.models.end());
+        const auto invalidated=reloadVisualModelSources(models);
+        ws_.log("view","обновлено ключей моделей: "+
+                 std::to_string(invalidated)+
+                 "; исходников: "+
+                 std::to_string(visualAssets_.changedSources().size()));
+    }
+    visualAssets_.acknowledge();
+}
+
 void Editor::retainEditorType(uint16_t type) {
     if (type >= rules().types.size()) return;
-    if (editorTypeLastUsed_.size() != rules().types.size())
-        editorTypeLastUsed_.assign(rules().types.size(), -1.0e30);
-    editorTypeLastUsed_[type] = time_;
+    if (modelDemand_.size() != rules().types.size())
+        modelDemand_.resize(rules().types.size());
+    modelDemand_.touch(type,time_,game::view_adapter::ModelDemandPriority::Interactive);
     // The Model/Materials windows and model_info must work when the type has
     // no instances on the map. The RtsView loader caches this call per type.
-    if (lazyEditorAssets_) view_.loadType(type);
+    // Eager mode already has resident types; still consume the demand
+    // queue to avoid retaining stale requests across editor frames.
+    modelDemand_.drain(modelDemand_.pendingCount(),
+        [&](size_t requested) {
+            if(lazyEditorAssets_)view_.loadType(uint16_t(requested));
+        });
 }
 
 void Editor::reclaimEditorAssets(bool force) {
@@ -276,10 +437,10 @@ void Editor::reclaimEditorAssets(bool force) {
         ws_.project.isFps()) return;
     constexpr double kSweepInterval = 5.0;
     constexpr double kUnusedGrace = 15.0;
-    if (!force && time_ - lastEditorTrim_ < kSweepInterval) return;
-    lastEditorTrim_ = time_;
+    if (!modelDemand_.shouldSweep(time_,kSweepInterval,force)) return;
+    modelDemand_.markSweep(time_);
     const size_t typeCount = rules().types.size();
-    if (editorTypeLastUsed_.size() != typeCount) return;
+    if (modelDemand_.size() != typeCount) return;
     std::vector<bool> keep(typeCount, false);
     // Keep the entire map's authored types, including currently hidden
     // objects: switching an edit layer must never cause a load/unload loop.
@@ -290,7 +451,7 @@ void Editor::reclaimEditorAssets(bool force) {
     // Editor thumbnails, model inspector, dynamic world preview, and ghost
     // placements get a grace period. On-demand loading marks those types.
     for (size_t i = 0; i < typeCount; ++i)
-        if (time_ - editorTypeLastUsed_[i] < kUnusedGrace) keep[i] = true;
+        if (modelDemand_.recentlyUsed(i,time_,kUnusedGrace)) keep[i] = true;
     if (selection.kind == Selection::Type)
         for (size_t i = 0; i < typeCount; ++i)
             if (rules().types[i].id == selection.key) keep[i] = true;
@@ -298,6 +459,14 @@ void Editor::reclaimEditorAssets(bool force) {
         keep[size_t(placeType)] = true;
     if (overlayPreviewType >= 0 && size_t(overlayPreviewType) < typeCount)
         keep[size_t(overlayPreviewType)] = true;
+    // Queue map/editor assets that were retained but are not yet resident.
+    // They load opportunistically after the active viewport's immediate
+    // interactive demand. Never enqueue the entire authored type catalog.
+    for(size_t i=0;i<typeCount;++i) {
+        if(keep[i] && !view_.typeLoaded(uint16_t(i)))
+            modelDemand_.touch(i,time_,
+                game::view_adapter::ModelDemandPriority::Background);
+    }
     // This only releases models no longer referenced by any kept TypeLook.
     // GPU work from their last use is older than the grace interval.
     view_.trimTypes(keep);
@@ -434,7 +603,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
             if (!planetLocal(d.entities[i].at, eb, el) || eb != body) continue;
             if (objectHidden(d.entities[i].owner, d.entities[i].type) || objectLocked(d.entities[i].owner, d.entities[i].type)) continue;
             const int t = rules().findType(d.entities[i].type);
-            const float r = t >= 0 ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(t)) + 0.2f : 0.6f;
+            const float r = t >= 0 ? game::view_adapter::selectionRadius(rules(),uint16_t(t)) + 0.2f : 0.6f;
             const float dd = length(el - local);
             if (dd < r && dd < bestD) { best = int(i); bestD = dd; }
         }
@@ -456,7 +625,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
             const auto& allTypes = rules().types;
             const bool structure = ti >= 0 && allTypes[size_t(ti)].structure;
             const float radius = ti >= 0
-                ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(ti))
+                ? game::view_adapter::selectionRadius(rules(),uint16_t(ti))
                 : 0.6f;
             const float halfX = structure
                 ? std::max(.5f, float(allTypes[size_t(ti)].footprintW) * .5f)
@@ -492,7 +661,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
         const auto& e = d.entities[i];
         if (objectHidden(e.owner, e.type) || objectLocked(e.owner, e.type)) continue;
         const int t = rules().findType(e.type);
-        const float radius = t >= 0 ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(t)) + 0.2f : 0.6f;
+        const float radius = t >= 0 ? game::view_adapter::selectionRadius(rules(),uint16_t(t)) + 0.2f : 0.6f;
         const float groundY = const_cast<game::RtsView&>(view_).heightAt(editGrid(), e.x, e.z);
         float2 at, edge, top;
         if (!cam.worldToScreen({e.x, groundY, e.z}, vp.pointsW, vp.pointsH, at)) continue;
@@ -520,7 +689,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
         const auto& e = d.entities[i];
         if (objectHidden(e.owner, e.type) || objectLocked(e.owner, e.type)) continue;
         const int t = rules().findType(e.type);
-        const float r = t >= 0 ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(t)) + 0.2f : 0.6f;
+        const float r = t >= 0 ? game::view_adapter::selectionRadius(rules(),uint16_t(t)) + 0.2f : 0.6f;
         const float dd = std::hypot(x - e.x, z - e.z);
         if (dd < r && dd < bestD) { best = int(i); bestD = dd; }
     }
@@ -916,8 +1085,8 @@ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) 
         if (lazyEditorAssets_) {
             // Preserve generated preview types without loading the entire catalog.
             for (const auto& o : scene_.objects)
-                if (!o.isProjectile && o.type < editorTypeLastUsed_.size() &&
-                    editorTypeLastUsed_[o.type] != time_) retainEditorType(o.type);
+                if (!o.isProjectile && o.type < modelDemand_.size() &&
+                    modelDemand_.lastUsed(o.type) != time_) retainEditorType(o.type);
         }
     }
     const auto afterBuild = std::chrono::steady_clock::now();
@@ -1281,6 +1450,19 @@ void Editor::frame(gfx::Device& dev, double dt) {
     time_ += dt;
     pollAgentLink();
     applyChanges();
+    // Poll changed presentation assets before any new frame submissions.
+    // This runs even when every editor property/model window is closed.
+    pollVisualAssets(dt);
+    // Background asset residency is paced on the editor thread. A single
+    // slow upload can overrun the advisory time budget, so also cap count.
+    // Interactive Inspector and viewport requests still load immediately.
+    if(lazyEditorAssets_ && !playing() && !clientPlaying() &&
+       !ws_.project.isFps()) {
+        modelDemand_.drainBudget(1.0,2,[&](size_t type){
+            if(type<rules().types.size() && !view_.typeLoaded(uint16_t(type)))
+                view_.loadType(uint16_t(type));
+        });
+    }
     // Sweep only after a substantial no-use interval, before new viewport
     // submission. Never unload while the editor's play simulation is active.
     reclaimEditorAssets();

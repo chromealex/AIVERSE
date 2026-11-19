@@ -125,6 +125,7 @@ public:
     void destroyPipeline(PipelineHandle h) override;
     bool copyColor(TextureHandle from, TextureHandle to) override;
     bool gpuHealthy() const override { return healthy_; }
+    bool waitForResourceIdle() override;
 
     void beginFrame(int framebufferWidth, int framebufferHeight) override;
     void endFrame() override;

@@ -64,6 +64,9 @@ World::World(const Json& scene,int workers):scene_(scene),workers_(workers){
             o.body=b3CreateBody(world_,&bd);check(b3Body_IsValid(o.body),"body creation failed");
             auto sd=b3DefaultShapeDef();sd.density=number(j,"density",1000,0.01f,100000);sd.baseMaterial.friction=number(j,"friction",0.5f,0,2);sd.baseMaterial.restitution=number(j,"restitution",0,0,1);
             sd.isSensor=j.getBool("sensor",false);sd.enableSensorEvents=true;sd.enableContactEvents=true;
+            const auto collisionGroup=j.getInt("collisionGroup",0);
+            check(collisionGroup>=-32767&&collisionGroup<=32767,"collisionGroup out of range");
+            sd.filter.groupIndex=int(collisionGroup);
             b3ShapeId shape{};
             if(o.shape=="box") {o.size=vec(j["size"],{1,1,1},1000);check(o.size.x>=0.02f&&o.size.y>=0.02f&&o.size.z>=0.02f,"box size must be positive");auto hull=b3MakeBoxHull(o.size.x/2,o.size.y/2,o.size.z/2);shape=b3CreateHullShape(o.body,&sd,&hull.base);}
             else if(o.shape=="sphere"){float r=number(j,"radius",0.5f,0.01f,100);o.size={r,0,0};b3Sphere sphere{{0,0,0},r};shape=b3CreateSphereShape(o.body,&sd,&sphere);}
@@ -75,7 +78,24 @@ World::World(const Json& scene,int workers):scene_(scene),workers_(workers){
         for(size_t i=0;i<joints.size();++i){auto& j=joints[i];auto* a=find(j.getStr("a"));auto* b=find(j.getStr("b"));check(a&&b&&a!=b,"invalid joint bodies");
             auto kind=j.getStr("kind","distance");auto aa=vec(j["anchorA"],{0,0,0}),ab=vec(j["anchorB"],{0,0,0});
             if(kind=="distance"){auto d=b3DefaultDistanceJointDef();d.base.bodyIdA=a->body;d.base.bodyIdB=b->body;d.base.localFrameA.p=aa;d.base.localFrameB.p=ab;d.length=number(j,"length",1,0.01f,1000);b3CreateDistanceJoint(world_,&d);}
-            else if(kind=="hinge"){auto d=b3DefaultRevoluteJointDef();d.base.bodyIdA=a->body;d.base.bodyIdB=b->body;d.base.localFrameA.p=aa;d.base.localFrameB.p=ab;b3CreateRevoluteJoint(world_,&d);}
+            else if(kind=="hinge"){
+                auto d=b3DefaultRevoluteJointDef();
+                d.base.bodyIdA=a->body;d.base.bodyIdB=b->body;
+                d.base.localFrameA.p=aa;d.base.localFrameB.p=ab;
+                const auto hinge=b3CreateRevoluteJoint(world_,&d);
+                check(b3Joint_IsValid(hinge),"invalid hinge joint");
+                const auto& limits=j["limits"];
+                if(!limits.isNull()){
+                    check(limits.isArray()&&limits.size()==2,"hinge limits need [min,max]");
+                    const float low=float(limits[0].fx().toDouble());
+                    const float high=float(limits[1].fx().toDouble());
+                    check(std::isfinite(low)&&std::isfinite(high)&&
+                          low>=-3.14f&&high<=3.14f&&low<high,
+                          "hinge limits out of range");
+                    b3RevoluteJoint_SetLimits(hinge,low,high);
+                    b3RevoluteJoint_EnableLimit(hinge,true);
+                }
+            }
             else check(false,"unsupported joint "+kind);
         }
     }catch(...){release();throw;}

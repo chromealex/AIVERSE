@@ -2,6 +2,9 @@
 // baked or posed skinning, dissolve, selection outline, attachments on sockets, effect anchors;
 // projectiles leaving muzzles; building ghosts and previews for portraits / editor.
 #include "RtsView.h"
+#include "RtsPreviewRenderProvider.h"
+#include "RtsPreviewResourceProvider.h"
+#include "engine/view/View.h"
 
 #include <algorithm>
 #include <cmath>
@@ -214,7 +217,22 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     if (d.tint.w <= 0.0f && !(d.flags & kDrawKeepShadow)) return;   // fully transparent (view.entity_fx opacity 0): nothing to draw, no anchors
     // immobile, finished, plain placement: scenery the light baker captures / lightmaps (agent-lightbake)
     if ((t.structure || t.speed <= Fixed{}) && !L.air && !st.dead && o.build >= 1 && !hasFx && !tintOverride && !placement) d.flags |= kDrawStatic;
-    r.drawModel(d);
+    if(st.genericViewPose && genericView_ && !tintOverride && !placement &&
+       show==&ch) {
+        // This is an adapter: the RTS module builds its authored draw packet,
+        // while the engine View owns generic model+pose submission.
+        // Never submit twice or mutate an already-updated pose here.
+        ::aiverse::view::Object packet;
+        packet.id=st.genericViewId;
+        packet.draw=d;
+        packet.graph=ch.graph;
+        genericView_->submitOne(r,packet);
+    } else {
+        // All other model classes (stages, LODs, baked skinning and
+        // procedurally posed objects) submit through the SAME generic
+        // View path, without running a second AnimationGraph.
+        ::aiverse::View::submitModel(r,d);
+    }
 
     // ---- attachments on sockets (weapons, cargo, banners)
     // No attachment or effect can consume the state mask on plain models.
@@ -235,7 +253,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
             ad.nodeWorld = nullptr; ad.pose = nullptr; ad.baked = nullptr; ad.variant = -1; ad.nodeMaterial = nullptr;
             const mat4 socket = at.node >= 0 && size_t(at.node) < st.world.size() ? st.world[size_t(at.node)] : mat4{};
             ad.world = st.drawn * socket * at.local;
-            r.drawModel(ad);
+            ::aiverse::View::submitModel(r,ad);
         }
         // ---- effect anchors
         if (!tintOverride)
@@ -264,9 +282,11 @@ void RtsView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
         float3 side = cross(b - a, camPos_ - tip);
         if (length(side) < 1e-5f) side = {0, 1, 0};
         side = normalize(side) * .035f;
-        r.triangle(back - side, tip - side, tip + side, rgba(255, 180, 65, 180));
-        r.triangle(back - side, tip + side, back + side, rgba(255, 180, 65, 180));
-        r.line(back, tip, rgba(255, 249, 205, 255));
+        ::aiverse::View::submitTriangle(r,{
+            back-side,tip-side,tip+side,rgba(255,180,65,180)});
+        ::aiverse::View::submitTriangle(r,{
+            back-side,tip+side,back+side,rgba(255,180,65,180)});
+        ::aiverse::View::submitLine(r,{back,tip,rgba(255,249,205,255)});
         shot.age += dt;
         if (shot.age >= duration) shot.age = 1;
     }
@@ -301,48 +321,108 @@ void RtsView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, 
         const TypeLook& SL = looks_[o.shooterType];
         size = o.shotWeapon >= 0 && size_t(o.shotWeapon) < SL.projectileScale.size() ? SL.projectileScale[size_t(o.shotWeapon)] : SL.projectileScaleDefault;
     }
-    if (size > 0) r.drawMesh(projectile_, mat4::translate(o.pos + ps.launch) * mat4::scale({size, size, size}), {1, 0.95f, 0.8f, 1}, kDrawUnlit);
+    if(size>0) {
+        ::aiverse::view::MeshObject packet;
+        packet.mesh=&projectile_;
+        packet.world=mat4::translate(o.pos+ps.launch)*
+                     mat4::scale({size,size,size});
+        packet.color={1,0.95f,0.8f,1};
+        packet.flags=kDrawUnlit;
+        ::aiverse::View::submitMesh(r,packet);
+    }
+}
+
+bool RtsView::resolveStatic(uint16_t type,uint8_t owner,
+                            view_adapter::StaticPreviewModel& output) {
+    if(!rules_ || type>=looks_.size() || type>=rules_->types.size())
+        return false;
+    loadType(type);
+    return view_adapter::resolveStaticPreviewModel(
+        looks_[type],rules_->types[type],playerColor(owner),output);
 }
 
 void RtsView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, const MapGrid& grid, double time) {
-    if (type >= looks_.size()) return;
-    loadType(type);
-    static EntityAnim ghost;
-    ghost.type = type;
-    ghost.choice = 0;
-    ghost.objXf = mat4{};
-    ghost.world.clear();
-    ghost.yaw = 0;
-    SceneObject o;
-    o.type = type;
-    o.owner = 1;
-    o.pos = pos;
-    const float pulse = 0.4f + 0.08f * float(std::sin(time * 5.0));
-    const float4 tint = ok ? float4{0.45f, 1.0f, 0.55f, pulse} : float4{1.0f, 0.35f, 0.3f, pulse};
-    if (planets_.active()) { // planets: on the sphere, oriented to the local up
-        mat4 place;
-        if (planetPlacement(o, place)) drawObject(r, ghost, o, 0, 1, &tint, &place);
-        return;
+    // Flat-ground, rigid ghost with a single resolved model: the host
+    // supplies model assets and placement height, while View owns model
+    // submission. Complex animation/planet/attachments retain legacy.
+    if(!planets_.active() && type<looks_.size()) {
+        loadType(type);
+        const auto& look=looks_[type];
+        view_adapter::StaticPreviewModel spec;
+        if(view_adapter::resolveStaticPreviewModel(
+               look,rules_->types[type],playerColor(1),spec)) {
+            const auto description=
+                view_adapter::makeGhostPresentation(type,pos,ok,time);
+            ::aiverse::view::Object packet;
+            if(view_adapter::buildStaticGhostPacket(
+                   spec,description.position,
+                   heightAt(grid,pos.x,pos.z),
+                   description.tint,packet)) {
+                view_adapter::submitStaticPreview(r,packet);
+                return;
+            }
+        }
     }
-    drawObject(r, ghost, o, heightAt(grid, pos.x, pos.z), 1, &tint);
+    view_adapter::RtsPreviewRenderProvider::submitGhost(type,pos,ok,time,
+        [&](uint16_t requested) {
+            if(requested>=looks_.size())return false;
+            loadType(requested);
+            return true;
+        },
+        [&](const view_adapter::GhostPresentation& description) {
+            // The temporary state is owned by this host; the provider
+            // knows nothing about ECS, model residency or planet placement.
+            auto& ghost=ghostAnim_;
+            ghost.type=description.type;
+            ghost.choice=0;
+            ghost.objXf=mat4{};
+            ghost.world.clear();
+            ghost.yaw=0;
+            SceneObject o;
+            o.type=description.type;
+            o.owner=description.owner;
+            o.pos=description.position;
+            const float4 tint=description.tint;
+            if(planets_.active()) {
+                mat4 place;
+                if(planetPlacement(o,place))
+                    drawObject(r,ghost,o,0,1,&tint,&place);
+            } else {
+                drawObject(r,ghost,o,heightAt(grid,o.pos.x,o.pos.z),1,&tint);
+            }
+        });
 }
 
 void RtsView::drawPreview(Renderer3D& r, uint16_t type, uint8_t owner, double time, float yaw) {
-    if (type >= looks_.size()) return;
-    loadType(type);
-    const uint64_t key = (1ull << 62) | (uint64_t(owner) << 16) | type;
-    SceneObject o;
-    o.type = type;
-    o.owner = owner;
-    o.facing = {std::cos(yaw), 0, -std::sin(yaw)};
-    EntityAnim& st = stateFor(key, o);
-    const float dt = st.lastSeenTime < 0 ? 0.0f : float(std::clamp(time - st.lastSeenTime, 0.0, 0.1));
-    st.lastSeenTime = time;
-    const bool lodWas = animLod_;
-    animLod_ = false;
-    animate(st, o, dt, nullptr);
-    animLod_ = lodWas;
-    drawObject(r, st, o, 0, 1);
+    // Truly static single-variant previews can render through View without
+    // allocating EntityAnim, a GraphInstance or advancing the old Animator.
+    // All specialized resources and animations retain the legacy fallback.
+    if(view_adapter::submitResolvedPreview(*this,r,type,owner,yaw))
+        return;
+    EntityAnim* current=nullptr;
+    SceneObject object;
+    view_adapter::RtsPreviewRenderProvider::submitModelPreview(
+        type,owner,time,yaw,
+        [&](uint16_t requested) {
+            if(requested>=looks_.size())return false;
+            loadType(requested);
+            return true;
+        },
+        [&](const view_adapter::ModelPreviewPresentation& description) {
+            object.type=description.type;
+            object.owner=description.owner;
+            object.facing=description.facing;
+            current=&stateFor(description.sourceKey,object);
+            return current->lastSeenTime;
+        },
+        [&](const view_adapter::ModelPreviewPresentation&,float dt) {
+            current->lastSeenTime=time;
+            const bool lodWas=animLod_;
+            animLod_=false;
+            animate(*current,object,dt,nullptr);
+            animLod_=lodWas;
+            drawObject(r,*current,object,0,1);
+        });
 }
 
 } // namespace aiverse::game

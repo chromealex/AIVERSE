@@ -94,13 +94,13 @@ void Portrait::renderMaterial(RtsView& view, const Json& material, int shape, do
     cam.pitch = 0.42f;
     cam.yaw = 0.6f;
     cam.fovY = 0.6f;
-    r3d_.beginScene(cam, size_, size_);
+    sceneView_.beginScene(r3d_,cam, size_, size_);
     ModelDraw d;
     d.model = &m;
     d.world = mat4::rotateY(float(time) * 0.4f);
     d.materials = &mats_;
     d.team = {0.8f, 0.1f, 0.08f};
-    r3d_.drawModel(d);
+    ::aiverse::View::submitModel(r3d_,d);
     gfx::PassDesc pass;
     pass.colorTarget = color_;
     pass.depthTarget = depth_;
@@ -116,7 +116,10 @@ void Portrait::renderPose(const Model& model,const Pose& pose,float yaw) {
     auto e=model.boundsMax-model.boundsMin;cam.distance=std::max({e.x,e.y,e.z,.3f})*2.1f;
     cam.minDistance=.01f;cam.pitch=.15f;cam.yaw=yaw;cam.fovY=.6f;
     r3d_.lighting.skyColor={.8f,.85f,.9f};r3d_.lighting.groundColor={.5f,.5f,.5f};
-    r3d_.beginScene(cam,size_,size_);ModelDraw d;d.model=&model;d.nodeWorld=&world;d.pose=&pose;d.team={.1f,.4f,.9f};r3d_.drawModel(d);
+    sceneView_.beginScene(r3d_,cam,size_,size_);
+    ModelDraw d;d.model=&model;d.nodeWorld=&world;
+    d.pose=&pose;d.team={.1f,.4f,.9f};
+    ::aiverse::View::submitModel(r3d_,d);
     gfx::PassDesc pass;pass.colorTarget=color_;pass.depthTarget=depth_;
     pass.clearColor[0]=.12f;pass.clearColor[1]=.14f;pass.clearColor[2]=.18f;pass.clearColor[3]=1;
     r3d_.render(pass);dev_->endPass();
@@ -150,8 +153,14 @@ void Portrait::render(RtsView& view, uint16_t type, uint8_t owner, double time, 
     cam.pitch = 0.32f;
     cam.yaw = 0.5f;
     cam.fovY = 0.6f;
-    r3d_.beginScene(cam, size_, size_);
-    view.drawPreview(r3d_, type, owner, time, yaw < 0 ? float(time) * 0.6f : yaw);
+    sceneView_.beginScene(r3d_,cam, size_, size_);
+    const float previewYaw=yaw<0 ? float(time)*.6f : yaw;
+    // The portrait owns its View renderer and consumes host-supplied
+    // model resources directly. Animated/complex assets still use the
+    // compatibility renderer, without duplicating animation evaluation.
+    if(!view_adapter::submitResolvedPreview(
+           view,r3d_,type,owner,previewYaw))
+        view.drawPreview(r3d_,type,owner,time,previewYaw);
     gfx::PassDesc pass;
     pass.colorTarget = color_;
     pass.depthTarget = depth_;

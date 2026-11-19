@@ -178,8 +178,9 @@ inline mat4 mat4::inverse() const {
     return r;
 }
 
-// RTS camera orbiting a ground target point.
-struct RTSCamera {
+// Generic target-orbit camera: usable for strategy, FPS spectator, orbit,
+// editor and scene previews. The old RTSCamera name stays as an alias.
+struct Camera3D {
     float3 target{0, 0, 0};
     float distance = 30.0f;
     float pitch = 0.95f;   // radians from horizontal
@@ -243,5 +244,7 @@ struct RTSCamera {
         return true;
     }
 };
+// Existing project compatibility: no duplicate camera type or conversion.
+using RTSCamera = Camera3D;
 
 } // namespace aiverse::render

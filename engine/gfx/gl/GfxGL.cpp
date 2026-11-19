@@ -370,6 +370,13 @@ public:
         return out;
     }
 #endif
+    bool waitForResourceIdle() override {
+        // Portable GL/ES3 path: glFinish waits for commands submitted
+        // from this context before model buffers/textures are recycled.
+        // The host must call between render passes on the context thread.
+        glFinish();
+        return glGetError()==GL_NO_ERROR;
+    }
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         uboOffset_ = 0;

@@ -1,4 +1,10 @@
-# Программируемые анимации AIVERSE
+# AIVERSE MotionWeave — программируемые анимации
+
+**MotionWeave** — новое общее имя модульной системы анимации.
+Старые классы `AnimationGraph` и `Animator`, JSON-форматы и namespace
+`aiverse::lib::animation` остаются без изменений для совместимости.
+Публичная точка входа: `<aiverselib/motionweave/MotionWeave.h>`,
+`AIVERSE::MotionWeave`. [Архитектура](motionweave.md).
 
 `engine/render/AnimationGraph.h` предоставляет граф поз и машину состояний поверх
 существующих glTF/FBX/процедурных моделей, семплера клипов и двухкостного IK.
@@ -9,7 +15,7 @@
 
 ## Подключение к игре
 
-Добавьте объект `animationGraph` в `view` типа, рядом с `model` и `animations`.
+Добавьте объект `animationGraph` в `view` типа, рядом с `model` и `animations`. Также `view.animationGraph` может быть строкой — относительным путём к внешнему JSON-графу (Stage 97): `"animationGraph": "animation/hero.json"`. Файл читается тем же project `FileReader`, проверяется `render::parseAnimationAsset` и компилируется с текущей моделью. Внешний файл позволяет редактировать граф независимо от `rules.json`. Начиная со Stage 98 редактор подготавливает новую версию `TypeLook` и скомпилированных графов, а затем заменяет только затронутые визуальные типы, сохраняя резидентные GPU-модели и часы анимаций остальных типов. При ошибке перекомпиляции предыдущие рабочие графы не заменяются. Несколько одновременных изменений (модель вместе с графом/текстурой) используют полную перезагрузку визуальных ресурсов как fallback. Проверка сборкой и реальным рендерингом ещё не выполнена.
 Пример определения: `examples/animation/locomotion.json`. Имена клипов и костей
 в нём иллюстративные: замените их именами из своей модели. Это не готовый персонаж.
 Граф автоматически включает CPU palette skinning, включая при `skinning: "baked"`.
@@ -103,11 +109,19 @@ Lua может также создавать графы и реализовыв�
 
 Это собственная система AIVERSE, ориентированная на принципы AnimGraph. В неё не входят
 визуальный редактор Blueprint, совместимость с Unreal Control Rig VM,
-ретаргетинг, montage slots/notifies, root-motion authority или motion warping.
-Существующий terrain foot IK и procedural modifiers применяются после графа;
-при их одновременном использовании учитывайте порядок и не дублируйте коррекцию ног.
-Граф не генерирует старые clip events: звуки/VFX запускайте из подтверждённых событий
-игры. Модельные mesh LOD и construction stages используют существующий mapping костей.
+полная автоматическая интеграция Humanoid/Avatar, Unreal Control Rig VM
+или root-motion motor в RTS/FPS. Новый самостоятельный модуль
+`aiverselib/animation` предоставляет семантический Humanoid Retargeter,
+Montage, extract-only Motion Warping, фиксированный ECS Root Motion motor
+с явной регистрацией и Ragdoll/Box3D bridge. Эти модули подключаются
+проектом, а не включаются автоматически для каждого жанра.
+`kind:"clip"` теперь поддерживает массив
+`"notifies":[{"time":0.35,"name":"step"}]`; экземпляр графа
+возвращает `notifies()` после update, но не дублирует legacy clip events
+`RtsView`. Эти события предназначены для звука/VFX, не для авторитетного
+урона или hit detection. Старые `RtsView` terrain foot IK/procedural
+модификаторы применяются после графа и должны учитывать порядок IK.
+LOD и construction stage используют старый mapping костей.
 
 Проверки: `aiverse_animation_tests` (CPU pose, blending, transitions, IK, validation),
 основной `aiverse_tests` и сборка клиента. Визуальная проверка должна использовать

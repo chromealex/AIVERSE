@@ -5,6 +5,7 @@
 #pragma once
 #include <memory>
 #include "RtsView.h"
+#include "engine/view/View.h"
 
 namespace aiverse::game {
 
@@ -25,6 +26,9 @@ public:
 private:
     gfx::Device* dev_ = nullptr;
     render::Renderer3D r3d_;
+    // Portraits use the SAME engine-level View frame and model paths
+    // as the main viewport; the off-screen render targets remain owned here.
+    ::aiverse::View sceneView_;
     gfx::TextureHandle color_, depth_;
     std::unique_ptr<render::Model> shapes_[2];   // UV sphere, box (proper UVs and tangents)
     std::vector<render::Material> mats_;

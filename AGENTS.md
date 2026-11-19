@@ -498,6 +498,69 @@ re-reading the entire chat or trusting unverifiable status claims.
 
 **Active Metal batching/performance work (2026-11-17):** Before changing the renderer, Scene viewport, GPU pooling, RTS scene building, or macOS frame loop, read [docs/metal-batching-agent-handoff.md](docs/metal-batching-agent-handoff.md), especially its latest continuation section. It records actual Apple Silicon 2×2/4×4 road-merge tests, CPU profile gains, draw-call visualisation limitations, required flags, the Metal ICB crash gate, and the pending incremental scene-cache work. Distinguish direct/indirect GPU submissions from scene objects and per-material primitives. Keep unsafe experimental ICB disabled by default.
 
+**MANDATORY: MotionWeave never depends on game genres or modules.**
+The core animation subsystem is NOT allowed to include, depend on or
+interpret FPS, RTS, RPG, networking, AI, weapon, economy or game-action
+types. Generic sources supply immutable model/graph, stable IDs with
+generations, named float/vector parameters and optional animation events.
+Any genre host transforms its own state OUTSIDE the animation library.
+Core provides reusable ECS components, graph sampling, montage,
+retargeting, IK, root-motion policy, scheduling, pose/skin output.
+Never fork an algorithm per genre or put genre-specific events in
+`engine/render`, `libraries/include/aiverselib/animation` or
+`libraries/include/aiverselib/motionweave`. Use
+`<aiverselib/animation/MotionWeaveSourceBridge.h>`.
+Document each implementation stage in a separate handoff commit.
+
+**AIVERSE MotionWeave — canonical modular animation system.**
+For new projects use `<aiverselib/motionweave/MotionWeave.h>`,
+`aiverse::motionweave`, `motionweave::MotionWeave::update` and
+`AIVERSE::MotionWeave`. Legacy `aiverse::lib::animation`,
+`AIVERSE::animation_ecs`, `AnimationGraph`, existing JSON asset IDs and
+editor window IDs remain source/asset compatible. See `docs/motionweave.md`.
+
+**Active animation PR #22 (`feature/universal-ecs-animation-pipeline`):**
+read `docs/agent-handoffs/animation-universal.md` (the latest numbered stage and all
+earlier constraints) before editing `engine/render/Animation*`, reusable animation
+libraries, editor authoring, or FPS/RTS integration. Keep float-backed animation
+in a separate presentation World; never contaminate simulation checksums.
+
+**Required animation handoff for EVERY stage, including partial/failing work:**
+commit implementation first, then append a *separate* chronological stage entry to
+`docs/agent-handoffs/animation-universal.md` and commit that handoff **before
+starting the next stage**. Record (1) branch and exact implementation commit SHA;
+(2) changed paths and architecture/algorithm; (3) public C++/ECS/JSON API and
+compatibility; (4) commands actually run with results, or **NOT RUN** and reason;
+(5) risks, known bugs and work still missing; (6) explicit next file/function/task
+with enough detail for another agent to continue independently. Do not replace or
+rewrite prior stage entries, and read the latest head before appending. The user
+has explicitly deferred animation tests, so preserve test sources and mark runs
+**NOT RUN**, never green or passed, until they are actually executed.
+
+## AIVERSE View — canonical scene for EVERY genre (2026-11-18)
+
+The canonical engine View is `aiverse::View` from
+`engine/view/View.h` and CMake `AIVERSE::View`. Never include
+RTS/FPS/game/editor modules in `engine/view`. The dependency
+direction is always host adapter -> View -> Renderer/MotionWeave.
+
+`game::RtsView` is **legacy compatibility only** for historical
+terrain, fog, roads, unit state and specialized effects; don't
+add new general render/animation logic there. Move reusable
+algorithms and scene packets into View, keeping game rules
+and decision-making inside their owning adapters.
+
+Generic scene packets are `view::Object` (model/material/
+transform/optional Graph), `view::MeshObject` (mesh/transform/
+color/flags), and common presentation ECS records. Existing
+host adapters may migrate incrementally but must NOT evaluate
+or draw a source twice.
+
+Read `docs/view.md` and `skills/gameplay/aiverse-view/SKILL.md`.
+Every bounded implementation must be followed by its own
+committed agent handoff. User deferred actual tests: mark
+NOT RUN until executed.
+
 ## Genre-independent ECS mechanics contract (2026-11-18)
 
 **Full feature-by-feature migration inventory:** `docs/ecs-all-features-migration-plan.md`

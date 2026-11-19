@@ -3,7 +3,7 @@ namespace aiverse::editor {
 class AnimationGraphWindow : public EditorWindow {
 public:
     const char* id() const override{return "animation_graph";}
-    const char* title() const override{return "Граф анимации";}
+    const char* title() const override{return "MotionWeave — Граф анимации";}
     const char* group() const override{return "look";}
     const char* dockArea() const override{return "center";}
     bool openByDefault() const override{return false;}

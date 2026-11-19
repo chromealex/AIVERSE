@@ -410,6 +410,22 @@ void VulkanDevice::ensureBackBuffer(int w, int h) {
     initImageLayout(backDepth_, cb, true);
 }
 
+bool VulkanDevice::waitForResourceIdle() {
+    // Frame serial counts submissions, NOT GPU completion. Only a
+    // successful device-wide wait establishes the retirement fence.
+    // Caller must be outside passes and before any current-frame packet
+    // can borrow a model scheduled for destruction.
+    if(!device_ || inPass_ || !healthy_)return false;
+    const VkResult result=vkDeviceWaitIdle(device_);
+    if(result!=VK_SUCCESS) {
+        if(result==VK_ERROR_DEVICE_LOST)healthy_=false;
+        return false;
+    }
+    completed_=std::max(completed_,serial_-1);
+    collectGarbage();
+    return true;
+}
+
 void VulkanDevice::prepareSlot() {
     FrameSlot& s = slots_[size_t(slot_)];
     if (vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX) == VK_ERROR_DEVICE_LOST) healthy_ = false;

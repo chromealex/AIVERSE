@@ -228,6 +228,13 @@ public:
     virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
     // Zero if backend does not expose a completed-slot-safe frame serial.
     virtual uint64_t frameSerial() const { return 0; }
+    // Explicit retirement barrier for old model/texture GPU allocations.
+    // Call on the device owner thread BEFORE recording any draw/transfer
+    // referring to retired resources in the CURRENT frame, outside passes.
+    // Blocks until all previously SUBMITTED GPU commands have completed.
+    // A false result MUST prevent hot-reload destruction; frameSerial()
+    // alone does not prove completion. May stall; never call per draw.
+    virtual bool waitForResourceIdle() { return false; }
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;

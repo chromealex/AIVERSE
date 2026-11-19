@@ -1,5 +1,9 @@
 // Planet renderer (see RtsPlanetRender.h).
 #include "RtsPlanetRender.h"
+#include "engine/view/Frustum.h"
+#include "engine/view/Horizon.h"
+#include "engine/view/GridGeometry.h"
+#include "engine/view/TriangleFacing.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -250,16 +254,15 @@ void PlanetRenderer::buildChunk(gfx::Device& dev, const PlanetBody& pb, Body& b,
             v.push_back(pv);
         }
     auto vi = [&](int i, int j) { return uint32_t(j * nx + i); };
-    // outward winding: face basis u x v = -n (docs table), so (a, b, d) of the flat terrain becomes CCW from outside
-    for (int j = 0; j + 1 < ny; ++j)
-        for (int i = 0; i + 1 < nx; ++i) {
-            const uint32_t a = vi(i, j), bq = vi(i + 1, j), cq = vi(i, j + 1), d = vi(i + 1, j + 1);
-            idx.insert(idx.end(), {a, d, bq, a, cq, d});
-        }
+    // The same grid diagonal as the planar heightfield. The per-face
+    // outward-facing correction immediately below remains unchanged.
+    ::aiverse::view::appendQuadGridIndices(idx,nx,ny);
     // fix winding once from the first triangle against the outward direction
     if (idx.size() >= 3) {
         const float3 p0 = v[idx[0]].pos, p1 = v[idx[1]].pos, p2 = v[idx[2]].pos;
-        if (dot(cross(p1 - p0, p2 - p0), c.dir) < 0) for (size_t k = 0; k + 2 < idx.size(); k += 3) std::swap(idx[k + 1], idx[k + 2]);
+        if (::aiverse::view::orientTriangleTo(p0,p1,p2,c.dir).flip)
+            for(size_t k=0;k+2<idx.size();k+=3)
+                std::swap(idx[k+1],idx[k+2]);
     }
     // skirts: every chunk edge drops a strip towards the centre (cracks between LODs and across seams)
     const float depth = 0.4f + 0.35f * float(step) / float(K);   // step in cells
@@ -631,20 +634,9 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
     r.lighting.sunDir = sunDirFocus;
     r.lighting.fogDensity = 0;   // distance fog would grey out the planet from orbit; the shader has its own haze
     if (star >= 0) r.lighting.sunColor = lerp(r.lighting.sunColor, world_.bodies[size_t(star)].color, 0.35f);
-    // frustum planes (view world)
-    const mat4& vp = r.viewProj();
-    float4 planes[4];
-    for (int i = 0; i < 4; ++i) {
-        const int row = i / 2;
-        const float sg = (i % 2) ? -1.0f : 1.0f;
-        planes[i] = {vp.at(3, 0) + sg * vp.at(row, 0), vp.at(3, 1) + sg * vp.at(row, 1), vp.at(3, 2) + sg * vp.at(row, 2), vp.at(3, 3) + sg * vp.at(row, 3)};
-        const float l = std::sqrt(planes[i].x * planes[i].x + planes[i].y * planes[i].y + planes[i].z * planes[i].z);
-        planes[i] = {planes[i].x / l, planes[i].y / l, planes[i].z / l, planes[i].w / l};
-    }
-    auto sphereVisible = [&](float3 c, float rad) {
-        for (auto& p : planes) if (p.x * c.x + p.y * c.y + p.z * c.z + p.w < -rad) return false;
-        return true;
-    };
+    // Shared side-plane frustum normalized for body/chunk sphere radii.
+    const auto frustum=::aiverse::view::SideFrustum::fromViewProjection(
+        r.viewProj(),true);
     const mat4 rot = [&] { mat4 m = fr.matrix(); m.at(0, 3) = m.at(1, 3) = m.at(2, 3) = 0; return m; }();
     const float pxScale = float(std::max(r.sceneHeight(), 1)) / (2.0f * std::tan(r.camera().fovY * 0.5f));
 
@@ -661,7 +653,7 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
         const float3 C = centers[bi];
         const float camD = length(eye - C);
         const float projR = pb.radius / std::max(camD, 1.0f) * pxScale;   // body radius in pixels
-        if (!sphereVisible(C, pb.radius * 1.2f + 2)) continue;
+        if (!frustum.visibleSphere(C, pb.radius * 1.2f + 2)) continue;
         if (pb.star()) { spheres.push_back({C, pb.radius, {pb.color.x * 1.6f, pb.color.y * 1.6f, pb.color.z * 1.5f, 1}, true}); continue; }
         Body& b = bodies_[bi];
         if (!b.surf || projR < 3.0f) { // a few pixels: a plain sphere is enough
@@ -672,8 +664,9 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
         bodyDraws->push_back({int(bi), C, pb.radius + pb.seaLevel, b.fog});
         // eye in body-local coordinates (rotation of the frame)
         const float3 eyeL = fr.dirToWorld(eye - C);
-        const float eyeR = length(eyeL);
         const float occR = pb.radius + std::min(b.surf->minHeight(), 0.0f) - 1.0f;
+        const auto horizon=::aiverse::view::SphericalHorizon::fromLocalCamera(
+            eyeL,occR);
         // CDLOD selection: leaf range lodRange, doubling per level
         std::vector<std::pair<int, int>> stack;   // chunk, parent-drawn flag
         for (int f = 0; f < 6; ++f) stack.push_back({f, 0});
@@ -681,16 +674,13 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
             const int ci = stack.back().first;
             stack.pop_back();
             Chunk& c = b.chunks[size_t(ci)];
-            // horizon: hidden when the whole angular cap of the chunk lies beyond the horizon of the
-            // occluder (the lowest ground of the body): angle(eye, chunk) - cap > acos(R0/eye) + acos(R0/maxR)
-            if (eyeR > occR) {
-                const float3 eyeDir = eyeL * (1.0f / eyeR);
-                const float aE = std::acos(std::clamp(dot(eyeDir, c.dir), -1.0f, 1.0f)), aC = std::acos(std::clamp(c.cosAngle, -1.0f, 1.0f));
-                const float aH = std::acos(occR / eyeR) + std::acos(std::clamp(occR / std::max(c.maxR, occR), -1.0f, 1.0f));
-                if (aE - aC > aH) { ++stats_.culledHorizon; continue; }
+            // Generic View geometry bounds now own spherical horizon math;
+            // the planet module still owns its own local frame and LOD tree.
+            if(horizon.hidden(c.dir,c.cosAngle,c.maxR)) {
+                ++stats_.culledHorizon;continue;
             }
             const float3 cv = C + rot.transformDir(c.center);
-            if (!sphereVisible(cv, c.boundR)) { ++stats_.culledFrustum; continue; }
+            if (!frustum.visibleSphere(cv, c.boundR)) { ++stats_.culledFrustum; continue; }
             const float d = std::max(length(cv - eye) - c.boundR, 0.0f);
             // detail grids: leaves are 16 samples (16 / k cells); 1.5 / k keeps triangles ~1.5x smaller on screen
             const float range = options.lodRange * float(1 << c.level) * (b.surf->detailScale() ? 1.5f / float(b.surf->detailScale()) : 1.0f);
@@ -859,7 +849,7 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
             if (!pb.atmosphere || pb.star()) continue;
             const float R = pb.radius * (1.0f + pb.atmoHeight) + std::max(0.0f, bodies_[bi].surf ? bodies_[bi].surf->maxHeight() * 0.5f : 0.0f);
             const float3 C = centers[bi];
-            if (!sphereVisible(C, R)) continue;
+            if (!frustum.visibleSphere(C, R)) continue;
             AU0 a{};
             const mat4 m = mat4::translate(C) * mat4::scale({R * 1.02f, R * 1.02f, R * 1.02f});
             std::memcpy(a.model, m.m, sizeof a.model);

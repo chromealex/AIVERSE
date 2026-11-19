@@ -11,7 +11,17 @@
 #include "engine/world/WorldScene.h"
 #include "engine/platform/ContentReader.h"
 #include "engine/render/Renderer3D.h"
+#include "libraries/include/aiverselib/motionweave/MotionWeave.h"
+#include "libraries/include/aiverselib/animation/AnimationCrowdSystems.h"
+#include "libraries/include/aiverselib/animation/AnimationBudgetPolicy.h"
+#include "libraries/include/aiverselib/animation/AnimationBackendPolicy.h"
+#include "libraries/include/aiverselib/animation/AnimationEventDispatch.h"
+#include "libraries/include/aiverselib/animation/AnimationHotReload.h"
+#include "libraries/include/aiverselib/animation/AnimationAssetLoader.h"
+#include "modules/fps/view/FpsAnimationEvents.h"
+#include "libraries/include/aiverselib/animation/AnimationPhaseTransfer.h"
 #include "engine/render/GeometryScene.h"
+#include "engine/view/View.h"
 #include "engine/render/ImGuiLayer.h"
 #include "engine/i18n/Localization.h"
 #include "imgui.h"
@@ -20,6 +30,9 @@
 #include <fstream>
 #include <filesystem>
 #include <iterator>
+#include <algorithm>
+#include <map>
+#include <memory>
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -39,6 +52,37 @@ struct App {
     platform::ContentReader contentReader;
     render::GeometryScene staticGeometry;
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
+    // Universal engine View receives generic renderer packets from FPS.
+    // Server/net/player semantics remain entirely in this host adapter.
+    ::aiverse::View genericSceneView;
+    void drawSceneMesh(const render::mat4& world,render::float4 color,
+                       uint32_t flags=0) {
+        ::aiverse::view::MeshObject packet;
+        packet.mesh=&cube;
+        packet.world=world;
+        packet.color=color;
+        packet.flags=flags;
+        genericSceneView.submitMesh(renderer,packet);
+    }
+    // Client-only visual ECS: never add float poses to the authoritative FPS Simulation.
+    World characterPresentation;
+    std::unique_ptr<render::Model> characterModel;
+    std::shared_ptr<const render::AnimationGraph> characterGraph;
+    std::map<uint8_t,Entity> characterEntities;
+    std::map<uint8_t,uint32_t> characterLives;
+    std::map<uint8_t,fps::view::ReplicatedAnimationActions> characterActions;
+    std::map<std::string,std::shared_ptr<const motionweave::MontageDefinition>> characterMontages;
+    float characterScale=1.f,characterHeightOffset=0.f;
+    bool characterBakedCrowd=false,characterBakeAvailable=false;
+    bool characterAnimationStatsEnabled=false;
+    motionweave::AnimationBackendPreference backendPreference=
+        motionweave::AnimationBackendPreference::Auto;
+    motionweave::AnimationBackendOptions backendOptions{};
+    std::unique_ptr<motionweave::MotionWeaveScheduler> characterScheduler;
+    motionweave::MotionWeaveScheduleStats lastAnimationStats{};
+    motionweave::AnimationHotReloadRegistry animationReload;
+    std::filesystem::path characterGraphFile;
+    unsigned animationReloadFrame=0;
     i18n::Localization lang;
     ein::InputFlow actions;
     platform::InputFlowAdapter inputAdapter{actions};
@@ -172,6 +216,7 @@ struct App {
         }
         gui.init(device,"engine/assets/fonts/ui.ttf",17);
         render::MeshBuilder builder;builder.color(render::rgba(255,255,255)).box({0,0.5f,0},{1,1,1});cube=builder.upload(device);
+        loadAnimatedCharacter(device);
         lang.load([](const auto& path,auto& out){return platform::readContentFile(path,out);},"en",{"engine/assets/lang"});
         Simulation sim({1,config.tickRate,0},std::make_unique<fps::Module>());sim.setup(rules,map);
         geometry=static_cast<fps::Module&>(sim.module()).collision();
@@ -182,6 +227,351 @@ struct App {
         if(const char* wav=std::getenv("AIVERSE_AUDIO_CAPTURE"))ac.capturePath=wav;
         audio.init(ac);std::string bank,error;
         if(platform::readContentFile(projectRoot+"/audio.json",bank)||platform::readContentFile("engine/assets/fps_audio.json",bank))if(!audio.loadBank(Json::parse(bank),[](const auto& file,auto& out){return platform::readContentFile(file,out);},&error))std::fprintf(stderr,"FPS audio: %s\n",error.c_str());
+    }
+
+    // Opt-in model for FPS remote players. Existing box fallback remains when
+    // fps.visual.model is unset or the asset fails to load.
+    void loadAnimatedCharacter(gfx::Device& device) {
+        const auto& view=rules["fps"]["visual"];
+        const std::string file=view.getStr("model");
+        if (file.empty()) return;
+        // Own partially uploaded assets until the graph and optional bake
+        // have compiled successfully; otherwise release their GPU buffers.
+        std::unique_ptr<render::Model> pendingModel;
+        try {
+            std::vector<std::string> warnings;
+            auto reader=[](const std::string& path,std::string& text) {
+                return platform::readContentFile(path,text);
+            };
+            pendingModel=render::loadModel(projectRoot+"/"+file,reader,&warnings);
+            auto& model=pendingModel;
+            if (!model || !render::uploadModel(device,*model))
+                throw std::runtime_error("model upload failed");
+            Json def=view["animationGraph"];
+            if (!def.isObject()) {
+                // Generate a useful idle/walk graph from imported clip names.
+                // Projects can supply their own full graph with parameters.
+                Json nodes=Json::array();
+                Json bind=Json::object();
+                bind.set("id",Json::string("bind"));
+                bind.set("kind",Json::string("bind"));
+                nodes.push(bind);
+                std::string output="bind";
+                const int idle=model->findClip("Idle")>=0?model->findClip("Idle"):model->findClip("Stand");
+                const int move=model->findClip("Run")>=0?model->findClip("Run"):model->findClip("Walk");
+                auto addClip=[&](const char* id,int index){
+                    Json node=Json::object();
+                    node.set("id",Json::string(id));
+                    node.set("kind",Json::string("clip"));
+                    node.set("clip",Json::string(model->clips[size_t(index)].name));
+                    nodes.push(node);
+                };
+                if (idle>=0) {addClip("idle",idle);output="idle";}
+                if (move>=0) {
+                    addClip("move",move);
+                    if (output=="bind")output="move";
+                    else {
+                        Json blend=Json::object();
+                        blend.set("id",Json::string("locomotion"));
+                        blend.set("kind",Json::string("blend"));
+                        blend.set("a",Json::string("idle"));
+                        blend.set("b",Json::string("move"));
+                        blend.set("parameter",Json::string("moving"));
+                        nodes.push(blend);
+                        output="locomotion";
+                    }
+                }
+                def=Json::object();
+                def.set("nodes",nodes);
+                def.set("output",Json::string(output));
+                def.set("parameters",Json::parse(R"({"moving":0,"speed":0})"));
+            }
+            auto compiled=render::AnimationGraph::compile(*model,def);
+            // Optional project-local hot-reloadable graph asset; file revisions
+            // never affect authoritative FPS simulation or networking.
+            const auto graphFile=view.getStr("graphFile");
+            if(!graphFile.empty()) {
+                const auto local=std::filesystem::path(graphFile).lexically_normal();
+                if(local.is_absolute() || local.empty() ||
+                   *local.begin()==".." ||
+                   graphFile.find("..")!=std::string::npos)
+                    throw std::invalid_argument("animation graphFile escapes project");
+                characterGraphFile=std::filesystem::path(projectRoot)/local;
+                if(!animationReload.pollFile("fpsCharacter",*model,
+                                             characterGraphFile))
+                    if(!animationReload.lookup("fpsCharacter") ||
+                       !animationReload.lookup("fpsCharacter")->graph)
+                        throw std::runtime_error("FPS animation graphFile failed to compile");
+                compiled=animationReload.lookup("fpsCharacter")->graph;
+            }
+            // Authoring uses Workspace animations/montage/*.json. Opt-in
+            // cosmetic montages never drive hit, reload or damage authority.
+            const auto& montagePaths=view["montages"];
+            if(!montagePaths.isNull() && !montagePaths.isObject())
+                throw std::invalid_argument("fps.visual.montages must be an object");
+            for(const char* action:{"shot","reload","death"}) {
+                const std::string file=montagePaths.getStr(action);
+                if(file.empty())continue;
+                try {
+                    const auto relative=std::filesystem::path(file).lexically_normal();
+                    if(relative.empty() || relative.is_absolute() ||
+                       *relative.begin()==".." || file.find("..")!=std::string::npos)
+                        throw std::invalid_argument("montage path escapes project");
+                    std::string text;
+                    if(!platform::readContentFile(
+                        (std::filesystem::path(projectRoot)/relative).string(),text))
+                        throw std::runtime_error("montage file unavailable");
+                    characterMontages[action]=motionweave::compileMontageAsset(
+                        *model,Json::parse(text));
+                }catch(const std::exception& e){
+                    std::fprintf(stderr,"FPS MotionWeave montage %s: %s\n",action,e.what());
+                }
+            }
+            // Complex imported controllers always use palette/graph evaluation.
+            // Simple clip crowds can use the existing instanced GPU baked skinning.
+            // MotionWeave chooses CPU Graph for complex rig/IK/controllers and
+            // GPU-baked sampling for sufficiently populated simple crowds.
+            // "bakedCrowd":true remains a backwards-compatible forced GPU hint.
+            const auto preference=view.getStr("animationMode",
+                view.getBool("bakedCrowd",false)?"gpu":"auto");
+            backendPreference=motionweave::parseAnimationBackend(preference);
+            backendOptions.gpuEnterActors=size_t(std::clamp<int64_t>(
+                view.getInt("gpuEnterActors",24),1,1000));
+            backendOptions.gpuExitActors=size_t(std::clamp<int64_t>(
+                view.getInt("gpuExitActors",12),0,999));
+            characterAnimationStatsEnabled=view.getBool("animationStats",false);
+            const bool custom=view["animationGraph"].isObject() ||
+                !characterGraphFile.empty();
+            const bool hasSimpleClips=model->findClip("Idle")>=0 ||
+                model->findClip("Stand")>=0 || model->findClip("Walk")>=0 ||
+                model->findClip("Run")>=0;
+            backendOptions.requiresCustomGraph=custom || !characterMontages.empty();
+            characterBakeAvailable=
+                backendPreference!=motionweave::AnimationBackendPreference::CpuGraph &&
+                !backendOptions.requiresCustomGraph && hasSimpleClips && model->skinned() &&
+                render::bakeAnimations(device,*model);
+            backendOptions.gpuAvailable=characterBakeAvailable;
+            characterBakedCrowd=characterBakeAvailable &&
+                backendPreference==motionweave::AnimationBackendPreference::GpuBaked;
+            const double scale=view["scale"].toDouble(1.0);
+            if (std::isfinite(scale) && scale>0.001 && scale<100)
+                characterScale=float(scale);
+            const double offset=view["heightOffset"].toDouble(0.0);
+            if (std::isfinite(offset) && std::abs(offset)<100)
+                characterHeightOffset=float(offset);
+            characterGraph=compiled;
+            characterModel=std::move(model);
+            for (const auto& warning:warnings)
+                std::fprintf(stderr,"FPS animation import: %s\n",warning.c_str());
+        } catch (const std::exception& e) {
+            std::fprintf(stderr,"FPS animation disabled (box fallback): %s\n",e.what());
+            if(pendingModel)render::releaseModel(device,*pendingModel);
+            if(characterModel)render::releaseModel(device,*characterModel);
+            characterGraph.reset();
+            characterModel.reset();
+            characterBakeAvailable=false;
+            characterBakedCrowd=false;
+            characterGraphFile.clear();
+            characterMontages.clear();
+        }
+    }
+    bool showRemoteDeathMontage(const fps::Actor& remote) const {
+        if(characterBakedCrowd || remote.health>0 || !characterModel)return false;
+        const auto death=characterMontages.find("death");
+        const auto actor=characterEntities.find(remote.slot);
+        if(death==characterMontages.end() || actor==characterEntities.end())return false;
+        const auto* slots=characterPresentation.tryGetConst<
+            motionweave::AnimationMontageSlotsComponent>(actor->second);
+        if(!slots)return false;
+        for(const auto& player:slots->players)
+            if(player.active() && player.slot()==death->second->slot)return true;
+        return false;
+    }
+    void updateCharacterAnimations(double dt,const fps::Actor& local) {
+        if (!characterModel || !characterGraph) return;
+        const auto& actors=client->snapshot().actors;
+        size_t remoteCount=0;
+        for(const auto& remote:actors)
+            if(remote.slot!=local.slot && remote.health>0)++remoteCount;
+        backendOptions.visibleActors=remoteCount;
+        const auto oldBackend=characterBakedCrowd?
+            motionweave::AnimationBackend::GpuBaked:
+            motionweave::AnimationBackend::CpuGraph;
+        const auto nextBackend=motionweave::selectAnimationBackend(
+            backendPreference,oldBackend,backendOptions);
+        std::map<uint8_t,float> phaseHandoff;
+        if((nextBackend==motionweave::AnimationBackend::GpuBaked)!=
+            characterBakedCrowd) {
+            // Transfer clip phase before recreating presentation components.
+            // More complex controller/montage graphs never enter GPU mode.
+            for(const auto& remote:actors) {
+                const auto found=characterEntities.find(remote.slot);
+                if(found==characterEntities.end())continue;
+                std::optional<float> phase;
+                if(characterBakedCrowd) {
+                    const auto* crowd=characterPresentation.tryGetConst<
+                        motionweave::AnimationCrowdComponent>(found->second);
+                    if(crowd)
+                        phase=motionweave::captureBakedClipPhase(
+                            crowd->animator,*characterModel);
+                } else {
+                    const auto* player=characterPresentation.tryGetConst<
+                        motionweave::AnimationPlayerComponent>(found->second);
+                    if(player && player->instance)
+                        phase=motionweave::captureGraphClipPhase(
+                            *player->instance,*characterModel,
+                            render::length(visual(remote.velocity))>.1f);
+                }
+                if(phase)phaseHandoff.emplace(remote.slot,*phase);
+            }
+            characterBakedCrowd=
+                nextBackend==motionweave::AnimationBackend::GpuBaked;
+            characterPresentation=World{};
+            characterEntities.clear();
+            characterLives.clear();
+            // Keep characterActions: confirmed snapshot event history must
+            // not reset merely because a rendering backend changed.
+        }
+        if(!characterGraphFile.empty() && ++animationReloadFrame%30u==0u) {
+            if(animationReload.pollFile("fpsCharacter",*characterModel,
+                                        characterGraphFile)) {
+                characterGraph=animationReload.lookup("fpsCharacter")->graph;
+                animationReload.apply(characterPresentation);
+            }
+        }
+        std::set<uint8_t> presentSlots;
+        for (const auto& remote:actors) {
+            if (remote.slot==local.slot) continue;
+            presentSlots.insert(remote.slot);
+            Entity e;
+            const auto found=characterEntities.find(remote.slot);
+            if (found==characterEntities.end()) {
+                e=characterPresentation.create();
+                characterEntities.emplace(remote.slot,e);
+                if(characterBakedCrowd) {
+                    auto& crowd=characterPresentation.add<motionweave::AnimationCrowdComponent>(e);
+                    crowd.model=characterModel.get();
+                    if(const auto phase=phaseHandoff.find(remote.slot);
+                       phase!=phaseHandoff.end())
+                        crowd.initialNormalizedPhase=phase->second;
+                    crowd.idle=characterModel->findClip("Idle");
+                    if(crowd.idle<0)crowd.idle=characterModel->findClip("Stand");
+                    crowd.walk=characterModel->findClip("Walk");
+                    crowd.run=characterModel->findClip("Run");
+                    if(crowd.walk<0)crowd.walk=crowd.run;
+                    crowd.death=characterModel->findClip("Death");
+                    characterPresentation.add<motionweave::AnimationCrowdSampleComponent>(e);
+                } else {
+                    auto& asset=characterPresentation.add<motionweave::AnimationAssetComponent>(e);
+                    asset.model=characterModel.get();
+                    asset.graph=characterGraph;
+                    if(!characterGraphFile.empty())
+                        characterPresentation.add<motionweave::AnimationGraphKeyComponent>(
+                            e,motionweave::AnimationGraphKeyComponent{"fpsCharacter"});
+                    characterPresentation.add<motionweave::AnimationPlayerComponent>(e);
+                    characterPresentation.add<motionweave::AnimationPoseComponent>(e);
+                    if(const auto phase=phaseHandoff.find(remote.slot);
+                       phase!=phaseHandoff.end())
+                        characterPresentation.add<motionweave::AnimationPhaseSeedComponent>(
+                            e,motionweave::AnimationPhaseSeedComponent{phase->second});
+                    characterPresentation.add<motionweave::AnimationInputsComponent>(e);
+                    characterPresentation.add<motionweave::AnimationGraphNotifiesComponent>(e);
+                    if(!characterMontages.empty())
+                        characterPresentation.add<motionweave::AnimationMontageSlotsComponent>(e);
+                    characterPresentation.add<motionweave::AnimationBudgetComponent>(e);
+                    characterPresentation.add<motionweave::AnimationSignificanceComponent>(e);
+                }
+            } else e=found->second;
+            const auto knownLife=characterLives.find(remote.slot);
+            const bool respawn=knownLife==characterLives.end() ||
+                knownLife->second!=remote.life;
+            characterLives[remote.slot]=remote.life;
+            // These are confirmed server snapshot counters. Repeated and
+            // out-of-order snapshots cannot restart cosmetic montages.
+            auto triggers=characterActions[remote.slot].observe({
+                client->snapshot().tick,remote.life,remote.shots,
+                remote.reloadUntil,remote.health});
+            const auto speed=render::length(visual(remote.velocity));
+            if(characterBakedCrowd) {
+                auto& crowd=characterPresentation.get<motionweave::AnimationCrowdComponent>(e);
+                if(respawn){crowd.animator.setModel(nullptr);crowd.playing=-2;}
+                crowd.speed=speed;
+                crowd.dead=remote.health<=0;
+            } else {
+                auto& player=characterPresentation.get<motionweave::AnimationPlayerComponent>(e);
+                if(respawn)player.restart=true;
+                if(auto* slots=characterPresentation.tryGet<motionweave::AnimationMontageSlotsComponent>(e)) {
+                    if(respawn)slots->players.clear();
+                    for(const auto& [enabled,action] : std::initializer_list<std::pair<bool,const char*>>{
+                        {triggers.death,"death"},{triggers.reload,"reload"},{triggers.fire,"shot"}}) {
+                        if(!enabled)continue;
+                        const auto asset=characterMontages.find(action);
+                        if(asset!=characterMontages.end())
+                            motionweave::playAnimationSlot(*slots,asset->second);
+                    }
+                }
+                auto& inputs=characterPresentation.get<motionweave::AnimationInputsComponent>(e).overrides;
+                inputs.values.clear();
+                inputs.set("speed",speed);
+                inputs.set("moving",speed>.1f?1.f:0.f);
+                inputs.set("dead",remote.health<=0?1.f:0.f);
+                inputs.set("grounded",remote.grounded?1.f:0.f);
+                inputs.set("reloading",remote.reloadUntil?1.f:0.f);
+                auto& significance=characterPresentation.get<motionweave::AnimationSignificanceComponent>(e);
+                const float distance=render::length(visual(remote.pos-local.pos));
+                significance.pixels=720.f*1.8f/std::max(1.f,distance);
+                significance.importance=remote.team==local.team?1.25f:1.f;
+                significance.visible=remote.health>0 || showRemoteDeathMontage(remote);
+            }
+        }
+        // Drop view entities no longer present in the replicated actor set.
+        // Reused actor slots then get a fresh visual player and montage clock.
+        for(auto it=characterEntities.begin();it!=characterEntities.end();) {
+            if(!presentSlots.contains(it->first)) {
+                characterPresentation.destroy(it->second);
+                characterLives.erase(it->first);
+                characterActions.erase(it->first);
+                it=characterEntities.erase(it);
+            } else ++it;
+        }
+        if(characterBakedCrowd)
+            motionweave::stepAnimationCrowd(characterPresentation,
+                float(std::clamp(dt,0.,.25)));
+        else {
+            motionweave::AnimationBudgetPolicy budget;
+            budget.fullRateSlots=32;budget.mediumRateSlots=96;
+            motionweave::assignAnimationBudgets(characterPresentation,budget);
+            // Persistent workers are created lazily when a sufficiently
+            // populated palette/graph scene actually needs CPU animation.
+            if(characterEntities.size()>=16 && !characterScheduler)
+                characterScheduler=std::make_unique<motionweave::MotionWeaveScheduler>();
+            if(characterScheduler)
+                lastAnimationStats=motionweave::MotionWeave::update(
+                    characterPresentation,float(std::clamp(dt,0.,.25)),
+                    *characterScheduler);
+            else {
+                motionweave::MotionWeave::update(characterPresentation,
+                    float(std::clamp(dt,0.,.25)));
+                lastAnimationStats={};
+            }
+            motionweave::dispatchAnimationCues(characterPresentation,
+                [&](const motionweave::AnimationCue& cue) {
+                    if(cue.name!="step" && cue.name!="footstep" && cue.name!="land")
+                        return; // weapon hits/reloads remain server-authoritative
+                    for(const auto& [slot,entity]:characterEntities)
+                        if(entity==cue.entity) {
+                            for(const auto& remote:client->snapshot().actors)
+                                if(remote.slot==slot && remote.health>0) {
+                                    audio::PlayParams params;params.positional=true;
+                                    params.x=float(remote.pos.x.toDouble());
+                                    params.y=float(remote.pos.y.toDouble());
+                                    params.z=float(remote.pos.z.toDouble());
+                                    audio.play("step",params);
+                                }
+                            break;
+                        }
+                });
+        }
     }
     void event(const platform::Event& e) {
         using E=platform::EventType; using K=platform::Key;
@@ -322,6 +712,7 @@ struct App {
         }
         device.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());gui.newFrame(dt);
         auto actor=client->predicted();viewTime+=dt;
+        updateCharacterAnimations(dt,actor);
         if(actor.reloadUntil&&!lastReload)audio.play("reload");
         lastReload=actor.reloadUntil;
         stepSound+=dt;
@@ -355,7 +746,8 @@ struct App {
         if(aimHeld)cam.fovY=(weapon.range>=700_fx||(actor.attachments[actor.weaponIndex]&1))?0.28f:0.65f;
         audio::ListenerPose listener;auto globalEye=visual(eye);listener.pos[0]=globalEye.x;listener.pos[1]=globalEye.y;listener.pos[2]=globalEye.z;auto forward=render::normalize(cam.target-cam.eye());listener.forward[0]=forward.x;listener.forward[1]=forward.y;listener.forward[2]=forward.z;audio.setListener(listener);
         if(streamedScene)streamedScene->update(device,{&actor.pos,1});
-        renderer.beginScene(cam,device.framebufferWidth(),device.framebufferHeight());
+        genericSceneView.beginScene(renderer,cam,
+            device.framebufferWidth(),device.framebufferHeight());
         if(streamedScene)streamedScene->draw(renderer,origin,32);
         staticGeometry.draw(renderer);
         chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot+"/"+file,data);});
@@ -363,7 +755,7 @@ struct App {
             (void)cell;
             auto base=Vec3{(b.min.x+b.max.x)/2,b.min.y,(b.min.z+b.max.z)/2};
             auto transform=render::mat4::translate(visual(world::relativeTo(base,origin,32)))*render::mat4::scale(visual(b.max-b.min));
-            renderer.drawMesh(cube,transform,{0.4f,0.46f,0.5f,1});
+            drawSceneMesh(transform,{0.4f,0.46f,0.5f,1});
         }
         Vec3 extent{600_fx,600_fx,600_fx};
         for(auto id:geometry.query({actor.pos-extent,actor.pos+extent})) {
@@ -372,17 +764,93 @@ struct App {
             // Draw relative to the observer before converting coordinates to floating point.
             auto base=Vec3{(b.min.x+b.max.x)/2,b.min.y,(b.min.z+b.max.z)/2};
             auto transform=render::mat4::translate(visual(world::relativeTo(base,origin,32)))*render::mat4::scale(visual(b.max-b.min));
-            renderer.drawMesh(cube,transform,id==1?render::float4{0.18f,0.23f,0.22f,1}:render::float4{0.4f,0.46f,0.5f,1});
+            drawSceneMesh(transform,id==1?render::float4{0.18f,0.23f,0.22f,1}:render::float4{0.4f,0.46f,0.5f,1});
         }
-        for(const auto& remote:client->snapshot().actors)if(remote.slot!=actor.slot&&remote.health>0) {
+        // Stage remote character draws in one ordered View stream. Their
+        // poses are authored by characterPresentation above; the generic
+        // View must never evaluate those graphs a second time.
+        ::aiverse::view::ScenePacketBatch remotePackets;
+        remotePackets.reserve(client->snapshot().actors.size());
+        for(const auto& remote:client->snapshot().actors)
+            if(remote.slot!=actor.slot &&
+               (remote.health>0 || showRemoteDeathMontage(remote))) {
             auto position=visual(world::relativeTo(remote.pos,origin,32));
             for(const auto& old:previousSnapshot.actors)if(old.slot==remote.slot&&old.life==remote.life&&old.health>0) {
                 auto before=visual(world::relativeTo(old.pos,origin,32));position=before+(position-before)*interpolation;break;
             }
-            auto transform=render::mat4::translate(position)*render::mat4::scale({0.6f,float(fps::stanceHeight(remote,config.motor).toDouble()),0.6f});
-            renderer.drawMesh(cube,transform,remote.team==actor.team?render::float4{0.1f,0.5f,0.9f,1}:render::float4{0.9f,0.2f,0.1f,1});
+            bool animated=false;
+            if(characterModel) {
+                const auto found=characterEntities.find(remote.slot);
+                if(found!=characterEntities.end()) {
+                    render::ModelDraw draw;
+                    draw.model=characterModel.get();
+                    draw.persistentId=uint64_t(remote.slot);
+                    const float yaw=float(remote.yaw.toDouble()*6.283185307179586);
+                    draw.world=render::mat4::translate(position+render::float3{0,characterHeightOffset,0})
+                        *render::mat4::rotateY(yaw)
+                        *render::mat4::scale({characterScale,characterScale,characterScale});
+                    draw.team=remote.team==actor.team?render::float3{.1f,.5f,.9f}:render::float3{.9f,.2f,.1f};
+                    const auto submitCharacter=[&](const render::ModelDraw& packetDraw) {
+                        ::aiverse::view::Object packet;
+                        packet.id=remote.slot;
+                        packet.generation=remote.life;
+                        packet.draw=packetDraw;
+                        // Precomputed pose/baked sample: no graph attached,
+                        // so View only forwards the already-evaluated result.
+                        remotePackets.add(std::move(packet));
+                    };
+                    if(characterBakedCrowd) {
+                        const auto* sample=characterPresentation.tryGetConst<
+                            motionweave::AnimationCrowdSampleComponent>(found->second);
+                        if(sample && sample->valid) {
+                            draw.baked=&sample->sample;
+                            submitCharacter(draw);
+                            animated=true;
+                        }
+                    } else {
+                        const auto* posed=characterPresentation.tryGetConst<
+                            motionweave::AnimationPoseComponent>(found->second);
+                        if(posed && posed->valid) {
+                            draw.nodeWorld=&posed->matrices;
+                            draw.pose=&posed->local;
+                            submitCharacter(draw);
+                            animated=true;
+                        }
+                    }
+                }
+            }
+            if(!animated) {
+                auto transform=render::mat4::translate(position)*render::mat4::scale({0.6f,float(fps::stanceHeight(remote,config.motor).toDouble()),0.6f});
+                ::aiverse::view::MeshObject fallback;
+                fallback.mesh=&cube;
+                fallback.world=transform;
+                fallback.color=remote.team==actor.team
+                    ?render::float4{0.1f,0.5f,0.9f,1}
+                    :render::float4{0.9f,0.2f,0.1f,1};
+                remotePackets.add(std::move(fallback));
+            }
         }
-        auto box=[&](Vec3 pos,render::float3 size,render::float4 color){renderer.drawMesh(cube,render::mat4::translate(visual(world::relativeTo(pos,origin,32)))*render::mat4::scale(size),color);};
+        // Precomputed model/mesh packets are intentionally NOT passed to
+        // View::update: the client has already advanced MotionWeave once
+        // and copying them into another presentation World would double
+        // animate or reset montage/phase state.
+        genericSceneView.submitPackets(renderer,remotePackets);
+        // Generic ordered View packet stream: the host creates ordinary
+        // geometry draws without exposing gameplay meaning to the renderer.
+        ::aiverse::view::ScenePacketBatch worldPackets;
+        worldPackets.reserve(
+            client->snapshot().loot.size()+client->snapshot().vehicles.size()+
+            client->snapshot().projectiles.size()+
+            client->snapshot().royale.crates.size()+1);
+        auto box=[&](Vec3 pos,render::float3 size,render::float4 color){
+            ::aiverse::view::MeshObject item;
+            item.mesh=&cube;
+            item.world=render::mat4::translate(
+                visual(world::relativeTo(pos,origin,32)))*
+                render::mat4::scale(size);
+            item.color=color;
+            worldPackets.add(item);
+        };
         for(const auto& loot:client->snapshot().loot)box(loot.pos,{0.35f,0.35f,0.35f},{0.9f,0.75f,0.15f,1});
         for(const auto& v:client->snapshot().vehicles)if(v.health>0)box(v.pos,{2,1.4f,4},{0.2f,0.5f,0.25f,1});
         for(const auto& projectile:client->snapshot().projectiles){
@@ -390,8 +858,13 @@ struct App {
             else box(projectile.pos,{0.15f,0.15f,0.15f},projectile.kind?render::float4{0.2f,0.3f,0.15f,1}:render::float4{1,0.8f,0.2f,1});
         }
         if(client->snapshot().match.planted)box(client->snapshot().match.bombPos,{0.4f,0.3f,0.3f},{1,0.2f,0.1f,1});
+        genericSceneView.submitPackets(renderer,worldPackets);
+        worldPackets.clear();
+        // Preserve the original intermediate zone wall ordering. Its host
+        // primitive adapter can migrate later without moving this pass.
         fps::view::drawZoneWall(renderer,cube,client->snapshot().royale,actor.pos,origin,visual);
         for(const auto& c:client->snapshot().royale.crates)box(c,{1.2f,1.2f,1.2f},{0.95f,0.6f,0.1f,1});
+        genericSceneView.submitPackets(renderer,worldPackets);
         gfx::PassDesc pass;pass.clearColor[0]=0.2f;pass.clearColor[1]=0.28f;pass.clearColor[2]=0.36f;renderer.render(pass);
         ImGui::SetNextWindowPos({16,16});ImGui::SetNextWindowBgAlpha(0.65f);
         ImGui::Begin("##fps",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoInputs);
@@ -408,6 +881,19 @@ struct App {
         ImGui::PushTextWrapPos(580);ImGui::TextUnformatted(lang.tr(client->ready()?"fps.controls":"fps.connecting").c_str());ImGui::PopTextWrapPos();
         if(!client->connected())ImGui::TextUnformatted(lang.tr("fps.disconnected").c_str());
         if(client->snapshot().winner)ImGui::TextUnformatted(lang.tr("fps.finished").c_str());
+        if(characterModel && characterAnimationStatsEnabled) {
+            ImGui::Text("MotionWeave: %s (%zu visible)",
+                characterBakedCrowd?"GPU baked":"CPU graph",
+                backendOptions.visibleActors);
+            if(!characterBakedCrowd) {
+                ImGui::Text("Workers %zu | Safe %zu | Callback %zu | Jobs %zu",
+                    lastAnimationStats.workerThreads,lastAnimationStats.parallelEntities,
+                    lastAnimationStats.serialEntities,lastAnimationStats.batches);
+                ImGui::Text("Pose %.3fms | Callback %.3fms | Est. work %zu",
+                    lastAnimationStats.workerPhaseMs,lastAnimationStats.serialPhaseMs,
+                    lastAnimationStats.estimatedSafeCost);
+            }
+        }
         if(config.systems.enabled){
             auto stats=lang.tr("fps.systems.status",i18n::Args().num("armor",actor.armor).num("money",actor.money));ImGui::TextUnformatted(stats.c_str());
             if(actor.downed)ImGui::TextUnformatted(lang.tr("fps.downed").c_str());
@@ -442,7 +928,7 @@ struct App {
         fps::view::drawRoyaleHud(lang,client->snapshot(),actor,config);
         gui.render();device.endPass();device.endFrame();
     }
-    void shutdown(gfx::Device& device){if(streamedScene)streamedScene->shutdown(device);server.reset();client.reset();staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
+    void shutdown(gfx::Device& device){characterScheduler.reset();characterEntities.clear();characterLives.clear();characterActions.clear();characterMontages.clear();characterGraph.reset();if(characterModel){render::releaseModel(device,*characterModel);characterModel.reset();}if(streamedScene)streamedScene->shutdown(device);server.reset();client.reset();staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
 };
 }
 int aiverseMain(int argc,char** argv) {

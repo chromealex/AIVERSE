@@ -1,5 +1,8 @@
 #include "engine/render/ModelTextureCache.h"
-// Presentation for the generic RTS module, shared by the game client and the editor.
+// LEGACY compatibility adapter for historical RTS/editor scene presentation.
+// Generic game-agnostic View is now <engine/view/View.h> / aiverse::View.
+// Keep genre-specific authoring/overlays here temporarily; do NOT add new
+// common rendering, animation, culling or batching systems to this class.
 // Objects are drawn from their type's "view" block in rules.json, e.g.
 //   "view": { "shape": "soldier", "scale": 1.0, "color": [0.8, 0.7, 0.5] }
 //   "view": { "model": "models/knight.glb", "height": 1.1, "team": ["Cloth"],
@@ -18,6 +21,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <set>
 #ifndef __EMSCRIPTEN__
 #include <future>
 #endif
@@ -39,9 +43,13 @@ namespace kingston { struct CabinResidentDraw; }
 #include "RtsPlanetGroundFx.h"
 #include "RtsPlanetRender.h"
 #include "RtsOverlays.h"
+#include "RtsModelResourceProvider.h"
+#include "RtsModelResourceCache.h"
+#include "RtsModelPreparationService.h"
 #include "RtsTerrainRender.h"
 #include "EntityFx.h"
 
+namespace aiverse::view { class View; }
 namespace aiverse::game {
 
 struct Lane;
@@ -141,7 +149,7 @@ struct ViewEffect {
 class RtsRoadView;
 class RtsShoreView;
 
-class RtsView {
+class RtsView : public view_adapter::ModelResourceProvider {
     friend class ::kingston::TowHost;
     friend class ::kingston::BulletFxHost;
     friend struct ::kingston::CabinResidentDraw;
@@ -164,24 +172,40 @@ public:
     // Excludes the terrain, special renderers, FX, dedicated buffers and
     // textures not owned by ModelTextureCache.
     AssetResidencyStats assetResidencyStats() const {
+        const auto cached=resources_.stats();
         AssetResidencyStats stats;
-        for (bool loaded : loadedTypes_) if (loaded) ++stats.loadedTypes;
-        stats.cachedModels = models_.size(); // includes built-in shape fallbacks
-        if (textureCache_) {
-            stats.gpuTextures = textureCache_->gpuCount();
-            stats.decodedCpuBytes = textureCache_->decodedBytes();
-        }
+        for(bool loaded:loadedTypes_)if(loaded)++stats.loadedTypes;
+        stats.cachedModels=cached.models;
+        stats.gpuTextures=cached.textures;
+        stats.decodedCpuBytes=cached.decodedCpuBytes;
         return stats;
     }
     bool typeLoaded(uint16_t type) const { return type < loadedTypes_.size() && loadedTypes_[type]; }
     void loadType(uint16_t type);
     void trimTypes(const std::vector<bool>& keep, bool compact = false);
+    // Render-thread hot reload for changed model SOURCE files. Detach only
+    // affected looks/graph players before evicting their cached GPU models.
+    // Call between submitted frames, never during presentation worker dispatch.
+    // Returns the number of cache keys invalidated (including failed loads).
+    size_t reloadModelSources(const std::vector<std::string>& sources);
+    // Rebuild appearances for affected authored types without evicting or
+    // re-uploading their Model resources. Graph and material changes are
+    // staged first; on compile/parse failure existing animations stay alive.
+    // Returns true for an accepted transaction (including zero resident types).
+    bool reloadAppearanceTypes(const std::set<size_t>& types,
+                               bool reloadMaterialLibrary=false,
+                               size_t* refreshed=nullptr);
     bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
     bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
     void requestDetail(uint16_t type, bool detailed);
     bool warmPipelines(render::Renderer3D& renderer, uint16_t type);
     void setStreamingTypes(bool enabled) { streamingTypes_ = enabled; }
-    std::shared_ptr<render::ModelTextureCache> textureCache() const { return textureCache_; }
+    std::shared_ptr<render::ModelTextureCache> textureCache() const { return resources_.textures(); }
+    // Transitional native-host access to the independent resource owner.
+    // Borrowed Model* and materials must not outlive trim/shutdown/hot reload.
+    const view_adapter::RtsModelResourceCache& modelResources() const noexcept {
+        return resources_;
+    }
     // An independent, worker-safe reader enables CPU decoding off the render thread.
     void setAsyncReader(render::FileReader reader) { asyncReader_ = std::move(reader); }
     bool prepareType(uint16_t type, bool allVariants = false);
@@ -190,12 +214,19 @@ public:
     size_t modelChoiceCount(uint16_t type) const { return type < looks_.size() ? looks_[type].models.size() : 0; }
     float typePreparationProgress() const {
 #ifndef __EMSCRIPTEN__
-        return preparePaths_.empty() ? 0.0f : float(prepareCursor_) / float(preparePaths_.size());
+        return resources_.preparation().progress();
 #else
         return 0.0f;
 #endif
     }
-    const std::string& preparingResource() const { return preparingResource_; }
+    const std::string& preparingResource() const {
+#ifndef __EMSCRIPTEN__
+        return resources_.preparation().resource();
+#else
+        static const std::string empty;
+        return empty;
+#endif
+    }
     std::string typeResource(uint16_t type) const;
     void shutdown(gfx::Device& dev);
     // Terrain from the grid (chunked: only chunks whose cells changed are rebuilt); call again after
@@ -229,6 +260,9 @@ public:
     void drawGhost(render::Renderer3D& r, uint16_t type, render::float3 pos, bool ok, const MapGrid& grid, double time);
     // One object at the origin playing its idle clip (portraits, editor previews).
     void drawPreview(render::Renderer3D& r, uint16_t type, uint8_t owner, double time, float yaw = 0.6f);
+    // Borrowed model/resource interface for independent View consumers.
+    bool resolveStatic(uint16_t type,uint8_t owner,
+                       view_adapter::StaticPreviewModel& output) override;
     static render::float4 playerColor(int player);
     float selectionRadius(uint16_t type) const;
     float heightAt(const MapGrid& grid, float x, float z) const;
@@ -251,6 +285,11 @@ public:
     void setAnimationEnvironment(std::function<void(Entity,render::AnimationEnvironment&)> query) { animationEnvironmentQuery_=std::move(query); }
     void setAnimationTraits(render::AnimationTraits traits) { animationTraits_=std::move(traits); }
     void setAnimationLod(bool on) { animLod_ = on; }
+    // Temporary compatibility: the new aiverse::View takes ownership of
+    // simple Graph poses, while legacy specialized authoring stays in this
+    // game adapter. Once all specialized presentation is extracted, this
+    // wrapper can be renamed/removed without changing the generic View.
+    void setGenericViewEnabled(bool on) { genericViewEnabled_=on; }
     // Model files referenced by the view blocks (editor hot reload watches them).
     std::vector<std::string> modelFiles() const;
 
@@ -411,6 +450,8 @@ private:
         int choice = 0;
         render::Animator anim;
         render::AnimationGraphInstance graph;
+        bool genericViewPose=false,wasGenericViewPose=false;
+        uint64_t genericViewId=0;
         render::Pose pose;
         std::vector<render::mat4> world;
         std::vector<render::ProcRuntime> rt;
@@ -507,10 +548,10 @@ private:
 
     const Rules* rules_ = nullptr;
     render::FileReader read_;
-    std::shared_ptr<render::ModelTextureCache> textureCache_ = std::make_shared<render::ModelTextureCache>();
+    view_adapter::RtsModelResourceCache resources_;
     Json materialLib_ = Json::object();   // materials.json "materials"
     gfx::Device* dev_ = nullptr;
-    std::map<std::string, std::unique_ptr<render::Model>> models_;  // by path; shapes as "shape:<name>"
+
     render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
     // Immutable per-type reveal policy; avoid string prefix checks on every draw.
@@ -525,19 +566,15 @@ private:
     bool deferredLoading_ = false, streamingTypes_ = false;
     bool deferAppearanceVariants_ = true; // client default; editor disables
     render::FileReader asyncReader_;
-    std::string preparingResource_;
-#ifndef __EMSCRIPTEN__
-    struct PreparedModel { std::unique_ptr<render::Model> model; std::vector<std::string> warnings; };
-    std::future<PreparedModel> preparing_;
-    std::vector<std::pair<std::string, std::string>> preparePaths_;
-    size_t prepareCursor_ = 0;
-    int prepareType_ = -1;
-    bool prepareAllVariants_ = false;
-#endif
+    // Model resources (including async worker lifetime) are owned by
+    // resources_; RtsView only supplies appearance rules and GPU publication.
     std::vector<std::string> warnings_;
     // Only entities first seen while variants stream need a stable choice override.
     std::unordered_map<uint64_t, std::pair<uint16_t, int>> streamingChoices_;
     std::unordered_map<uint64_t, EntityAnim> anims_;   // presentation only: iteration order never matters
+    EntityAnim ghostAnim_; // transient placement preview state; never shared across Views
+    std::unique_ptr<::aiverse::view::View> genericView_;
+    bool genericViewEnabled_=true; // opt-in per-object safety predicate
     render::Mesh projectile_;
     TerrainRenderer terrain_;    // chunked terrain + water (RtsTerrainRender.cpp)
     bool hasTerrain_ = false;

@@ -1,5 +1,7 @@
 // Chunked terrain renderer (see RtsTerrainRender.h).
 #include "RtsTerrainRender.h"
+#include "engine/view/Frustum.h"
+#include "engine/view/GridGeometry.h"
 #include "../../../engine/data/JsonCompose.h"
 #include <algorithm>
 #include <chrono>
@@ -491,13 +493,10 @@ void TerrainRenderer::buildHeightChunk(gfx::Device& dev, const MapGrid& g, Chunk
                 if (k == 0) { bmin = min3(bmin, p); bmax = max3(bmax, p); }
                 v.push_back({p, normalAt(X, Y), colorAt(X, Y), {morphAt(X, Y), 0}});
             }
+        // Shared quad diagonal/winding; terrain LOD skirts are still
+        // authored by this host immediately after these indices.
+        ::aiverse::view::appendQuadGridIndices(idx,nx,ny);
         auto vi = [&](int i, int j) { return uint32_t(j * nx + i); };
-        for (int j = 0; j + 1 < ny; ++j)
-            for (int i = 0; i + 1 < nx; ++i) {
-                // diagonal (0,0)-(1,1), counter-clockwise seen from above (+y): a, d, b and a, c, d
-                uint32_t a = vi(i, j), b = vi(i + 1, j), cc = vi(i, j + 1), d = vi(i + 1, j + 1);
-                idx.insert(idx.end(), {a, d, b, a, cc, d});
-            }
         // skirts: hide cracks between chunks on different LOD levels
         if (lodLevels_ > 1) {
             const float depth = 0.3f + 0.25f * float(s);
@@ -809,28 +808,15 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         else updateVision(dev, *vision);
         fogFieldChanged_ = false;
     }
-    // frustum: left/right/bottom/top planes of the view-projection (independent of the clip depth range)
-    const mat4& vp = r.viewProj();
-    float4 planes[4];
-    for (int i = 0; i < 4; ++i) {
-        int row = i / 2;
-        float s = (i % 2) ? -1.0f : 1.0f;
-        planes[i] = {vp.at(3, 0) + s * vp.at(row, 0), vp.at(3, 1) + s * vp.at(row, 1), vp.at(3, 2) + s * vp.at(row, 2), vp.at(3, 3) + s * vp.at(row, 3)};
-    }
-    auto visible = [&](float3 mn, float3 mx) {
-        for (auto& p : planes) {
-            float3 q{p.x >= 0 ? mx.x : mn.x, p.y >= 0 ? mx.y : mn.y, p.z >= 0 ? mx.z : mn.z};
-            if (p.x * q.x + p.y * q.y + p.z * q.z + p.w < 0) return false;
-        }
-        return true;
-    };
+    // Shared, unnormalized four side-plane AABB test (clip-depth independent).
+    const auto frustum=::aiverse::view::SideFrustum::fromViewProjection(r.viewProj());
     const float3 eye = r.camera().eye();
     struct Item { const Lod* lod; float morphStart, morphEnd; };
     auto items = std::make_shared<std::vector<Item>>();
     stats_.drawn = 0;
     stats_.triangles = apron_.indexCount / 3;
     for (auto& c : chunks_) {
-        if (!c.valid || c.lods.empty() || !visible(c.bmin, c.bmax)) continue;
+        if (!c.valid || c.lods.empty() || !frustum.visibleAABB(c.bmin,c.bmax)) continue;
         int k = 0;
         float start = 1e9f, end = 2e9f;
         if (lodLevels_ > 1) {

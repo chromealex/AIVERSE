@@ -12,6 +12,10 @@ public:
     void upload(gfx::Device& dev, Image& image);
     void shutdown(gfx::Device& dev);
     void trim(gfx::Device& dev);
+    // Render-thread source revision. Discards only its CPU decode; a new
+    // upload receives a versioned GPU cache key while existing image leases
+    // keep old textures alive until every borrower releases them.
+    void invalidateSource(const std::string& path);
     size_t decodedCount() const { return decodedCount_.load(); }
     size_t gpuCount() const { return gpu_.size(); } // render thread only
     // Actual decoded pixel cache allocation (not source file size / GPU textures).
@@ -21,6 +25,8 @@ private:
     mutable std::mutex mutex_;
     std::map<std::string, Decoded> decoded_;
     std::map<std::string, Image> gpu_;
+    // Render thread only: upload() and invalidateSource() use this map.
+    std::map<std::string, uint64_t> sourceRevisions_;
     size_t bytes_ = 0;
     std::atomic<size_t> decodedCount_{0};
     uint64_t clock_ = 0;

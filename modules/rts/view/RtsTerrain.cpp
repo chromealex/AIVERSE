@@ -3,6 +3,7 @@
 #include "../RtsModule.h"
 #include "RtsTerrainSurface.h"
 #include "RtsView.h"
+#include "engine/view/Surface.h"
 #include "RtsRoadView.h"
 #include <algorithm>
 #include <cstdio>
@@ -20,8 +21,15 @@ float RtsView::heightAt(const MapGrid& g, float x, float z) const {
 }
 
 float RtsView::groundAt(const MapGrid& g, float x, float z) const {
-    const float h = heightAt(g, x, z);
-    return roads_ && roads_->hasSurface() ? roads_->surfaceAt(x, z, h) : h;
+    // Genre-owned height policies projected into one generic,
+    // allocation-free surface composition helper. All GPU and sim
+    // entities still use the same ground placement as before.
+    return ::aiverse::view::composeSurfaceHeight(x,z,
+        [this,&g](float px,float pz){return heightAt(g,px,pz);},
+        [this](float px,float pz,float terrain) {
+            return roads_ && roads_->hasSurface()
+                ? roads_->surfaceAt(px,pz,terrain):terrain;
+        });
 }
 
 void RtsView::setTerrainDetail(const Json& map) {

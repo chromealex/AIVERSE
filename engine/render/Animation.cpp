@@ -357,6 +357,19 @@ void Animator::advance(Track& t, float dt) const {
     else t.time = std::clamp(t.time, 0.0f, dur);
 }
 
+bool Animator::seek(int layer,float seconds) {
+    if(!valid(layer) || !model_ || !std::isfinite(seconds))return false;
+    Layer& L=layers_[layer];
+    if(L.cur.clip<0 || L.cur.clip>=int(model_->clips.size()))return false;
+    const float duration=model_->clips[size_t(L.cur.clip)].duration;
+    if(duration<=0)return false;
+    L.cur.time=L.cur.loop?
+        std::fmod(std::max(seconds,0.f),duration):
+        std::clamp(seconds,0.f,duration);
+    L.prev=Track{};L.fade=1.f;
+    return true;
+}
+
 void Animator::setBlend(int layer, int clip2, float weight) {
     if (!valid(layer) || !model_) return;
     Track& t = layers_[layer].cur;

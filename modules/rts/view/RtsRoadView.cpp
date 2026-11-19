@@ -1,5 +1,6 @@
 #include "RtsRoadView.h"
 #include "RtsRoadKit.h"
+#include "engine/view/TriangleFacing.h"
 #include "../../../engine/platform/Platform.h"
 #include <algorithm>
 #include <climits>
@@ -218,10 +219,12 @@ private:
     }
     // triangle with a flat normal turned toward `hint` (up for surfaces, outwards for faces)
     void tri(int mat, float3 a, float3 b, float3 c, float2 ua, float2 ub, float2 uc, float3 hint) {
-        float3 nrm = cross(b - a, c - a);
-        if (dot(nrm, nrm) < 1e-14f) return;
-        if (dot(nrm, hint) < 0) { std::swap(b, c); std::swap(ub, uc); nrm = -nrm; }
-        nrm = normalize(nrm);
+        // Shared View triangle winding/normal policy. Road material
+        // eligibility, UVs, surface ownership remain in this host.
+        const auto facing=::aiverse::view::orientTriangleTo(a,b,c,hint);
+        if(!facing.valid)return;
+        if(facing.flip) {std::swap(b,c);std::swap(ub,uc);}
+        const float3 nrm=facing.normal;
         if (!bare_ && nrm.y > 0.3f && standable(mat)) { surf.push_back(a); surf.push_back(b); surf.push_back(c); }
         Acc& A = acc(a);
         A.need(mat);

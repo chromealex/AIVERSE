@@ -83,6 +83,18 @@ public:
 
     const DeviceInfo& info() const override { return info_; }
     uint64_t frameSerial() const override { return frame_; }
+    bool waitForResourceIdle() override {
+        // A separate command buffer on the same ordered queue completes
+        // only AFTER all previously committed frames and uploads. It does
+        // not flush currently recording draw commands; the host invokes
+        // this before recording resource uses in its current frame.
+        if(enc_ || compute_ || gpuIcbEncoder_ || !queue_)return false;
+        id<MTLCommandBuffer> barrier=[queue_ commandBuffer];
+        if(!barrier)return false;
+        [barrier commit];
+        [barrier waitUntilCompleted];
+        return barrier.status==MTLCommandBufferStatusCompleted;
+    }
     bool supports(PixelFormat f) const override {
         bool apple = false, bc = false;
 #if TARGET_OS_IPHONE
