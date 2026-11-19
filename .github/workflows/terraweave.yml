@@ -1,0 +1,75 @@
+name: TerraWeave isolated checks
+
+on:
+  push:
+    branches:
+      - feature/terraweave
+    paths:
+      - 'engine/world/TerraWeave*.h'
+      - 'engine/render/TerraWeave*.h'
+      - 'tests/terraweave*.cpp'
+      - 'apps/editor/core/TerraWeave*.h'
+      - 'apps/editor/windows/TerrainWindow.cpp'
+      - 'apps/editor/TerraWeave*.h'
+      - 'apps/editor/Editor.h'
+      - 'apps/editor/Editor.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/terraweave.yml'
+  pull_request:
+    paths:
+      - 'engine/world/TerraWeave*.h'
+      - 'engine/render/TerraWeave*.h'
+      - 'tests/terraweave*.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/terraweave.yml'
+  workflow_dispatch:
+
+# Only the newest commit for a branch/PR needs an isolated CPU build.
+# Preserve separate groups for refs, so unrelated PRs never cancel each other.
+concurrency:
+  # The same head branch can emit both push and pull_request events.
+  # Normalize them to one group so just one latest build survives.
+  group: terraweave-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  terraweave:
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    runs-on: ubuntu-latest
+    env:
+      CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
+      CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated TerraWeave targets
+        run: |
+          cmake -S . -B build/terraweave-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_FBX=OFF
+      - name: Build TerraWeave tests
+        run: |
+          cmake --build build/terraweave-ci --parallel 2 --target \
+            aiverse_gpu_timing_router_test \
+            aiverse_terraweave_test \
+            aiverse_terraweave_arbor_test \
+            aiverse_terraweave_flora_test \
+            aiverse_terraweave_model_test \
+            aiverse_terraweave_heightmap_test \
+            aiverse_terraweave_ops_test \
+            aiverse_terraweave_preview_test \
+            aiverse_terraweave_forest_scene_test \
+            aiverse_terraweave_horizon_test
+      - name: Run TerraWeave CTest suite
+        run: |
+          ctest --test-dir build/terraweave-ci \
+            --output-on-failure \
+            -R '^(gpu_timing_router|terraweave(_arbor|_flora|_model|_heightmap|_ops|_preview|_forest_scene|_horizon)?)

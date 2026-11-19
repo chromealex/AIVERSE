@@ -30,5 +30,20 @@ jobs:
         run: cmake --build build/studio-ci --target aiverse_editor --parallel 2
       - name: Build tests
         run: cmake --build build/studio-ci --target aiverse_tests --parallel 2
+      - name: Build PHYSIS editor authoring and Scene geometry tests
+        run: |
+          cmake --build build/studio-ci --target \
+            aiverse_physis_authoring_test \
+            aiverse_physis_field_authoring_test \
+            aiverse_physis_field_assets_test \
+            aiverse_physis_field_runtime_test \
+            aiverse_physis_live_edit_test \
+            aiverse_physis_remote_edit_test \
+            aiverse_physis_admin_journal_test \
+            aiverse_physis_project_config_test \
+            aiverse_physis_scene_geometry_test --parallel 2
+      - name: Run PHYSIS editor tests
+        run: ctest --test-dir build/studio-ci --output-on-failure -R '^physis_(authoring|scene_geometry|project_config)
+
       - name: Run tests
         run: ctest --test-dir build/studio-ci --output-on-failure

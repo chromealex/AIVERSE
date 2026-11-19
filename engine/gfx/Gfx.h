@@ -26,6 +26,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "engine/gfx/GpuTimingRouter.h"
 
 namespace aiverse::gfx {
 
@@ -228,6 +229,11 @@ struct Rect { int x = 0, y = 0, w = 0, h = 0; };
 class Device {
 public:
     virtual ~Device() = default;
+    // One shared timing collection owner per graphics Device. Components
+    // subscribe instead of independently draining takeGpuTimings().
+    // All router calls remain on this Device's render owner thread.
+    GpuTimingRouter& gpuTimingRouter() {return gpuTimingRouter_;}
+    const GpuTimingRouter& gpuTimingRouter() const {return gpuTimingRouter_;}
     virtual const DeviceInfo& info() const = 0;
 
     // Resources
@@ -392,6 +398,8 @@ public:
 
 protected:
     int fbW_ = 0, fbH_ = 0;
+private:
+    GpuTimingRouter gpuTimingRouter_{};
 };
 
 // Backend factories. `nativeSurface` is backend specific:

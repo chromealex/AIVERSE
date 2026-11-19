@@ -36,6 +36,92 @@ public:
         }
         if (ed.planetMap()) ui::callout(ui::Tone::Accent, "Карта с планетами: кисти работают на теле под курсором в «Сцене» (переходят через рёбра граней).");
 
+        // TerraWeave is opt-in and uses the same Workspace operation as MCP.
+        // It never rewrites an existing authored heightfield without consent.
+        if (!ed.planetMap() && !ws.project.isFps()) {
+            ui::section(ICON_TERRAIN, "TerraWeave · процедурный мир");
+            ui::hint("Предпросмотр показывает диапазон высот (9×9 точек). Все режимы генерации доступны через Undo.");
+            const Json& savedRecipe=d.extra["terraweave"];
+            const bool canPreserve=savedRecipe.isObject() &&
+                savedRecipe.getInt("widthCells",-1)==d.w &&
+                savedRecipe.getInt("heightCells",-1)==d.h &&
+                savedRecipe["baseFingerprint"].isString();
+            if(!canPreserve)twPreserve_=false;
+            if(savedRecipe.isObject() && ui::wideButton(ICON_DOWNLOAD, "Параметры из карты", 0, 2)) {
+                // Load the EXACT integer centimetre values, not rounded
+                // metres. Otherwise a regen could silently change a seed.
+                const int64_t loadedSeed=savedRecipe.getInt("seed",1);
+                if(loadedSeed<0 || loadedSeed>INT32_MAX) {
+                    message_="Seed сохранённой карты не помещается в поле редактора; используйте MCP";
+                } else {
+                    twSeed_=int(loadedSeed);
+                    twBaseCm_=int(savedRecipe.getInt("baseHeightCm",0));
+                    twReliefCm_=int(savedRecipe.getInt("reliefCm",6000));
+                    twPeriodCm_=int(savedRecipe.getInt("basePeriodCm",6400));
+                    twOctaves_=int(savedRecipe.getInt("octaves",5));
+                    twOriginXcm_=int(savedRecipe.getInt("originXcm",0));
+                    twOriginZcm_=int(savedRecipe.getInt("originZcm",0));
+                    twCellSizeCm_=int(savedRecipe.getInt("cellSizeCm",100));
+                }
+            }
+            if (ui::beginProps("##terraweave")) {
+                ui::prop("Seed");
+                ImGui::InputInt("##twseed", &twSeed_);
+                ui::prop("Средняя высота (см)");
+                ImGui::InputInt("##twbase", &twBaseCm_);
+                ui::prop("Перепад высот (см)");
+                ImGui::InputInt("##twrelief", &twReliefCm_);
+                ui::prop("Масштаб шума (см)");
+                ImGui::InputInt("##twperiod", &twPeriodCm_);
+                ui::prop("Октавы");
+                ImGui::SliderInt("##twoctaves", &twOctaves_, 1, 12);
+                ui::prop("Начало X (см)");
+                ImGui::InputInt("##tworiginx", &twOriginXcm_);
+                ui::prop("Начало Z (см)");
+                ImGui::InputInt("##tworiginz", &twOriginZcm_);
+                ui::prop("Размер ячейки (см)");
+                ImGui::InputInt("##twcellsize", &twCellSizeCm_);
+                ui::endProps();
+            }
+            twSeed_ = std::max(0, twSeed_);
+            twBaseCm_ = std::clamp(twBaseCm_, -200000, 200000);
+            twReliefCm_ = std::clamp(twReliefCm_, 0, 200000);
+            twPeriodCm_ = std::clamp(twPeriodCm_, 100, 1000000);
+            twCellSizeCm_ = std::clamp(twCellSizeCm_, 1, 10000);
+            twOriginXcm_ = std::clamp(twOriginXcm_, -1000000000, 1000000000);
+            twOriginZcm_ = std::clamp(twOriginZcm_, -1000000000, 1000000000);
+            if(ui::checkbox("Заменить старый рельеф целиком", &twOverwrite_) && twOverwrite_)
+                twPreserve_=false;
+            ImGui::BeginDisabled(!canPreserve);
+            if(ui::checkbox("Сохранить ручные изменения при регенерации", &twPreserve_) && twPreserve_)
+                twOverwrite_=false;
+            ImGui::EndDisabled();
+            if(!canPreserve && savedRecipe.isObject())
+                ui::hint("Старая карта без контрольной суммы или изменён размер: сначала явная генерация создаст безопасный рецепт.");
+            if(twPreserve_)
+                ui::hint("Ручные правки высот и детального слоя будут перенесены поверх нового рельефа. Материалы сохраняются.");
+            if (ui::wideButton(ICON_IMAGE, "Предпросмотр", 0, 2)) {
+                Json result = ws.call("terraweave_preview", terraweaveParams());
+                report(ed, result);
+            }
+            if (ui::wideButton(ICON_BRUSH, "Сгенерировать", 1, 2)) {
+                Json result = ws.call("terraweave_generate", terraweaveParams());
+                report(ed, result);
+            }
+            ui::help("Сохранить правки: разница между текущими высотами и прежней процедурной основой переносится на новую. При полной замене детальный слой удаляется. Все изменения можно отменить через Undo.");
+            ImGui::BeginDisabled(!d.extra["terraweave"].isObject());
+            bool forest = ed.terraWeaveForestPreviewEnabled();
+            if (ui::checkbox("Показывать процедурный лес в «Сцене»", &forest))
+                ed.setTerraWeaveForestPreviewEnabled(forest);
+            ImGui::EndDisabled();
+            if (forest)
+                ui::hint(("TerraWeave · растений в кадре: " +
+                          std::to_string(ed.terraWeaveForestPreviewCount()) +
+                          " (редактор, без изменений игрового мира)").c_str());
+            else if (!d.extra["terraweave"].isObject())
+                ui::hint("Для показа леса сначала сгенерируйте terrain TerraWeave.");
+        }
+
         bool active = ed.tool == Tool::Count && owner_;
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
         if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
@@ -183,6 +269,20 @@ private:
         planetSculpt(ed.doc(), id, op, dir, radius_, st, seed_);
     }
 
+    Json terraweaveParams() const {
+        Json p = Json::object();
+        p.set("seed", Json::number(int64_t(twSeed_)));
+        p.set("baseHeightCm", Json::number(int64_t(twBaseCm_)));
+        p.set("reliefCm", Json::number(int64_t(twReliefCm_)));
+        p.set("basePeriodCm", Json::number(int64_t(twPeriodCm_)));
+        p.set("octaves", Json::number(int64_t(twOctaves_)));
+        p.set("originXcm", Json::number(int64_t(twOriginXcm_)));
+        p.set("originZcm", Json::number(int64_t(twOriginZcm_)));
+        p.set("cellSizeCm", Json::number(int64_t(twCellSizeCm_)));
+        p.set("overwrite", Json::fromBool(twOverwrite_));
+        p.set("preserveEdits", Json::fromBool(twPreserve_));
+        return p;
+    }
     void setActive(Editor& ed, bool on) {
         owner_ = on;
         ed.tool = on ? Tool::Count : Tool::Select;
@@ -190,6 +290,9 @@ private:
     }
     void report(Editor& ed, const Json& r) { message_ = r.has("error") ? "Ошибка: " + r.getStr("error") : r.getStr("summary"); ed.status = message_; }
 
+    int twSeed_ = 1, twBaseCm_ = 0, twReliefCm_ = 6000, twPeriodCm_ = 6400, twOctaves_ = 5;
+    int twOriginXcm_ = 0, twOriginZcm_ = 0, twCellSizeCm_ = 100;
+    bool twOverwrite_ = false, twPreserve_ = false;
     int mode_ = 0, layer_ = 0, stamp_ = 0;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
     bool detail_ = true, pngDetail_ = false, stamped_ = false;

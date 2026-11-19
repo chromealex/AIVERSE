@@ -103,6 +103,7 @@ int aiverseMain(int argc,char** argv){try{
     report.set("eye",vector(cam.eye()));report.set("target",vector(cam.target));report.set("fovY",number(cam.fovY));
     const int warmup=argc>9?std::stoi(argv[9]):60,samples=argc>10?std::stoi(argv[10]):120;
     if(warmup<30||warmup>10000||samples<120||samples>10000)throw std::runtime_error("invalid sampling budget");int frame=0,phase=0;std::string reportPath=output;Json rows=Json::array();std::map<uint64_t,double> gpu;auto previous=Clock::now();bool captured=false;
+    gfx::GpuTimingRouter::Subscriber timingSubscriber=0;
     platform::AppConfig cfg;cfg.title="AIVERSE Bistro geometry benchmark";cfg.width=1280;cfg.height=720;platform::AppCallbacks cb;
     cb.init=[&](gfx::Device& dev){device=&dev;renderer.init(dev);renderer.setProfiling(true);renderer.setShadowQuality(ShadowQuality::Medium);renderer.lighting.fogDensity=0;uploadModel(dev,*source);
         for(auto& p:parts){p.view.vb=source->vb;p.view.ib=source->ib;for(auto& im:source->images){Image shared;shared.tex=im.tex;p.view.images.push_back(std::move(shared));}if(p.proxy)uploadModel(dev,*p.proxy);}
@@ -133,8 +134,14 @@ int aiverseMain(int argc,char** argv){try{
     cb.frame=[&](gfx::Device& dev,double){
         if(frame==0&&batch){camera=(phase/2)%3;enabled=((phase%2)^((phase/6)%2))!=0;cam.target=centre;cam.distance=span*(camera==2?1.8f:.85f);cam.yaw=camera==1?2.3f:.5f;cam.pitch=camera==2?.65f:.3f;if(camera==1){cam.distance=span*1.3f;cam.pitch=.75f;}
             reportPath=output+"-run"+std::to_string(phase/6+1)+"-cam"+std::to_string(camera)+(enabled?"-on.json":"-off.json");report.set("proxyEnabled",Json::fromBool(enabled));report.set("camera",number(camera));report.set("eye",vector(cam.eye()));report.set("target",vector(cam.target));}
-        report.set("width",number(dev.framebufferWidth()));report.set("height",number(dev.framebufferHeight()));auto now=Clock::now();double wall=ms(previous,now);previous=now;for(auto t:dev.takeGpuTimings())if(t.valid)gpu[t.tag]=t.milliseconds;
-        bool measured=frame>=warmup&&frame<warmup+samples;if(measured&&!dev.timeGpuFrame(uint64_t(frame)))throw std::runtime_error("GPU timing unavailable");
+        report.set("width",number(dev.framebufferWidth()));report.set("height",number(dev.framebufferHeight()));auto now=Clock::now();double wall=ms(previous,now);previous=now;auto& timing=dev.gpuTimingRouter();timing.poll(dev);
+        for(auto t:timing.take(timingSubscriber))
+            if(t.valid)gpu[t.tag]=t.milliseconds;
+        bool measured=frame>=warmup&&frame<warmup+samples;if(measured){
+            if(!timingSubscriber)timingSubscriber=timing.subscribe();
+            if(!timingSubscriber || !timing.request(dev,timingSubscriber,uint64_t(frame)))
+                throw std::runtime_error("GPU timing unavailable");
+        }
         dev.setBindingCacheEnabled(enabled&&(profile=="bindings"||useStatic));
         auto begin=Clock::now();renderer.beginScene(cam,dev.framebufferWidth(),dev.framebufferHeight());uint64_t triangles=0;size_t selected=0;
         if(stack){scene.setRuntimeOptions(enabled&&useHlod,enabled,enabled&&useSurfaces,enabled&&(profile=="cache"||useStatic));renderer.setModelLodEnabled(enabled&&useLod);renderer.setInstanceLimit(enabled&&(profile=="instances"||useStatic)?0:32);scene.draw(renderer);}

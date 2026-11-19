@@ -34,6 +34,14 @@ struct PlaceServerStats {
     uint64_t joined = 0, resumed = 0, replaced = 0, expired = 0, contested = 0;   // reconnect window (PlaceServer::attach)
     double tickMsSum = 0, tickMsWorst = 0;
     uint64_t ticksTimedFrom = 0;
+    // Optional observability: wall-time phase sums for the SAME server tick,
+    // not a second simulation clock or a modified client/network workload.
+    // Useful in a real server/load harness; disabled by default.
+    struct TickPhases {
+        double pollMs = 0, playersMs = 0, physicsMs = 0;
+        double syncMs = 0, broadcastMs = 0;
+        uint64_t samples = 0;
+    } phases;
     double tickMsAvg() const { return ticks > ticksTimedFrom ? tickMsSum / double(ticks - ticksTimedFrom) : 0; }
 };
 
@@ -62,7 +70,14 @@ public:
     const Schema& schema() const { return schema_; }
     const PlaceConfig& config() const { return config_; }
     const PlaceServerStats& stats() const { return stats_; }
-    void resetTickTiming() { stats_.tickMsSum = 0; stats_.tickMsWorst = 0; stats_.ticksTimedFrom = stats_.ticks; }
+    // Timing scopes are opt-in and are independent of gameplay/replication.
+    // Enabling them adds only a handful of steady_clock samples per tick.
+    void setTickPhaseProfiling(bool enabled) { tickPhaseProfiling_ = enabled; }
+    void resetTickTiming() {
+        stats_.tickMsSum = 0; stats_.tickMsWorst = 0;
+        stats_.ticksTimedFrom = stats_.ticks;
+        stats_.phases = {};
+    }
     // Replicated dynamic / kinematic bodies (scene + spawned), by replica id.
     std::vector<replica::ObjectId> bodies() const;
     physics::BodyHandle bodyHandle(replica::ObjectId id) const;
@@ -130,5 +145,6 @@ private:
     uint64_t tick_ = 0;
     uint32_t colorSeed_ = 1;
     PlaceServerStats stats_;
+    bool tickPhaseProfiling_ = false;
 };
 }

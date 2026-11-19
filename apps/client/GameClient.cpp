@@ -246,6 +246,7 @@ void GameClient::shutdown() {
     fx_.shutdown();
     sound_.detach();
     audio_.shutdown();
+    horizonFrameTiming_.detach(*dev_);
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
     postFx_.shutdown();
@@ -295,6 +296,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         cityPrepare(rules, map);   // AIVERSE_CITY: a seat in a city on a server (ClientCity.cpp)
         sim_->setup(rules, map);
         cityAttach();
+        horizonFrameTiming_.detach(*dev_);
         if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
         // static scenery streamed around the camera instead of being loaded whole. The key is "streamedWorld" here:
         // in these maps "world" is the planet system (FPS maps keep the same block under "world")
@@ -962,7 +964,8 @@ void GameClient::runViewScripts(float dt) {
 
 void GameClient::frame(gfx::Device& dev, double dt) {
     const auto frameStarted = std::chrono::steady_clock::now();
-    if (mapLoading_) { frameMapLoading(dev, dt); return; }
+    if (mapLoading_) { horizonFrameTiming_.discard(); frameMapLoading(dev, dt); return; }
+    if (!worldScene_ || !sim_ || planet()) horizonFrameTiming_.discard();
     if (mapJustLoaded_) { dt = 0; mapJustLoaded_ = false; }
     if (sim_ && screen_ == Screen::Playing) updateBackgroundLoading();
     const double backgroundMs = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frameStarted).count();
@@ -1099,6 +1102,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
         }
         if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
+            horizonFrameTiming_.begin(dev,worldScene_.get());
             const Vec3 focus{Fixed::fromInt(int64_t(cam_.target.x)), Fixed{}, Fixed::fromInt(int64_t(cam_.target.z))};
             const auto worldStarted=std::chrono::steady_clock::now();
             worldScene_->update(dev, {&focus, 1}, worldRadius_);
@@ -1168,6 +1172,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     ui_.render();
     dev.endPass();
+    // CPU includes full client callback work (not clamped simulation dt);
+    // GPU completion is matched later through the tagged gfx query.
+    horizonFrameTiming_.finish(worldScene_.get(),frameStarted);
     if (std::getenv("AIVERSE_STREAM_TRACE") && sim_ && !mapLoading_) {
         static auto previous = frameStarted;
         const double interval = std::chrono::duration<double,std::milli>(frameStarted-previous).count(); previous=frameStarted;

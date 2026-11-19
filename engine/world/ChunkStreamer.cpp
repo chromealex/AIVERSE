@@ -8,6 +8,12 @@ bool ChunkStreamer::add(Cell cell,size_t bytes) {
     if(!bytes || catalog_.size()>=100000)return false;
     return catalog_.emplace(cell,Entry{bytes}).second;
 }
+bool ChunkStreamer::remove(Cell cell) {
+    // A procedural catalog may evict a key while a generation job is
+    // pending. The caller owns payload retirement and cancellation.
+    resident_.erase(cell);
+    return catalog_.erase(cell) != 0;
+}
 void ChunkStreamer::failed(Cell cell) {
     resident_.erase(cell);
     auto it=catalog_.find(cell);if(it==catalog_.end())return;

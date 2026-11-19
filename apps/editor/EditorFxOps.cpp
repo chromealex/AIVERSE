@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include "Editor.h"
 #include "core/FxOps.h"
+#include "engine/fx/SpectraFX.h"
 
 namespace aiverse::editor {
 
@@ -129,6 +130,61 @@ void Editor::registerFxPreviewOps() {
             return r;
         },
         true});
+
+    // SpectraFX graph-v1 preview: compile and play entirely in editor memory.
+    // Unlike fx_graph_bake this writes no temporary fx/*.json files.
+    ws_.registerOp({"fx_graph_preview",
+        "Compile SpectraFX graph v1 in memory and preview it in the Scene/Game view. "
+        "Accepts graph JSON, optional exposed-parameter overrides and x/y/z (absolute world position). "
+        "The current preview is replaced; old fx/*.json files remain untouched.",
+        Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"overrides":{"type":"object"},
+            "x":{"type":"number"},"y":{"type":"number"},"z":{"type":"number"},
+            "advance":{"type":"number"},"loop":{"type":"boolean"},"freeze":{"type":"boolean"}},"required":["graph"]})"),
+        [this](const Json& p)->Json {
+            if(ws_.project.dir.empty())throw std::runtime_error("open a game project first");
+            fx::EffectDef compiled;
+            std::vector<std::string> errors;
+            const Json overrides=p.has("overrides")?p["overrides"]:Json::object();
+            if(!spectra::compileGraph(p["graph"],overrides,compiled,errors)) {
+                std::string why="SpectraFX graph compile failed:";
+                for(const auto& e:errors)why+="\n"+e;
+                throw std::runtime_error(why);
+            }
+            render::RTSCamera& cam=playing()?gameCam:sceneCam;
+            const fx::float3 pos{
+                p.has("x")?float(p["x"].toDouble()):cam.target.x,
+                p.has("y")?float(p["y"].toDouble()):cam.target.y,
+                p.has("z")?float(p["z"].toDouble()):cam.target.z
+            };
+            cam.target={pos.x,pos.y,pos.z};
+            if(!playing())sceneFlying_=false;
+            Viewport* vp=playing()?gameViewport:sceneViewport;
+            const int width=vp&&vp->w>0?vp->w:1280;
+            const int height=vp&&vp->h>0?vp->h:720;
+            gameFx_.setView(cam,cam.proj(float(width)/float(height),
+                dev_&&dev_->info().clipDepthZeroToOne)*cam.view(),width,height);
+
+            gameFx_.kill(fxPreview_.h);
+            const std::string runtimeName="__spectrafx_editor_preview";
+            const int id=gameFx_.define(runtimeName,compiled);
+            if(id<0)throw std::runtime_error("SpectraFX preview definition rejected");
+            const fx::FxHandle handle=gameFx_.play(id,pos);
+            if(!handle.valid())throw std::runtime_error("SpectraFX preview could not start (culling or particle quality)");
+            const float advance=std::clamp(float(p["advance"].toDouble(0.12)),0.f,10.f);
+            for(int i=0;i<int(advance*60.f);++i)gameFx_.update(1.f/60.f);
+            fxFrozen_=p.getBool("freeze");
+            fxPreview_={runtimeName,pos,1.f,{1,1,1,1},p.getBool("loop"),handle,
+                time_+(compiled.looping()?0.5:std::min(8.0,double(compiled.lifetime())+0.5)),false,0.f};
+            fxTime_=time_;
+            Json response=Json::object();
+            response.set("ok",Json::fromBool(true));
+            response.set("name",Json::string(p.getStr("name","SpectraFX graph")));
+            response.set("emitters",Json::number(int64_t(compiled.emitters.size())));
+            response.set("particles",Json::number(int64_t(gameFx_.stats().particles)));
+            response.set("view",Json::string(playing()?"game":"scene"));
+            response.set("next",Json::string(playing()?"view_screenshot {\"window\":\"game\"}":"view_screenshot {\"window\":\"scene\"}"));
+            return response;
+        },true});
 }
 
 } // namespace aiverse::editor

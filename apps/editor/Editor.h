@@ -19,6 +19,7 @@
 #include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "EditorWindow.h"
+#include "TerraWeaveForestPreview.h"
 #include "core/FileAssoc.h"
 #include "core/Net.h"
 #include "core/Workspace.h"
@@ -104,7 +105,13 @@ public:
     gfx::Device& device() { return *dev_; }
     render::Renderer3D& renderer() { return r3d_; }
     render::PostFx& postFx() { return postFx_; }   // post effects of Scene / Game views (PostFxWindow configures it)
-    bool postFxInScene = true;                     // false: only the Game view is post-processed
+    bool postFxInScene = true;
+    bool terraWeaveForestPreviewEnabled() const { return terraWeaveForestPreview_.enabled(); }
+    void setTerraWeaveForestPreviewEnabled(bool enabled) {
+        if (!enabled && dev_) terraWeaveForestPreview_.release(*dev_);
+        terraWeaveForestPreview_.setEnabled(enabled);
+    }
+    size_t terraWeaveForestPreviewCount() const { return terraWeaveForestPreview_.visibleInstances(); }                     // false: only the Game view is post-processed
     game::RtsView& view() { return view_; }
     bool lazyEditorAssetsEnabled() const { return lazyEditorAssets_; }
     // Pin a type that an editor panel or preview uses (also loads it lazily).
@@ -335,6 +342,7 @@ private:
     render::ImGuiLayer ui_;
     ClientHost clientHost_;   // after ui_: shut down first (its ImGui context, RmlUi)
     render::Renderer3D r3d_;
+    TerraWeaveForestPreview terraWeaveForestPreview_;
     render::Mesh fpsPreviewMesh_;
     std::vector<SceneRenderable> fpsSceneObjects_;
     Json fpsRuntimeCache_;

@@ -4171,3 +4171,31 @@ Inspected exact definitions: `worldInteger` and `worldVector` are implemented (n
 **Integration source inspection:** `main` at `9ee6ff6fbf390bd45363bc92c838f492dfe92eee` was an ancestor of NEREID branch (407 commits ahead, zero behind at inspection). The branch diff is **113 files** and contains not only NEREID but shared ECS test infrastructure and initial SpectraFX graph/presentation sources. Pre-existing PR #23 targeted `feature/universal-entity-inspector-fps`, where it is marked conflicting/draft, so integration into `main` requires retargeting or a distinct main PR, not merging into the old feature base. **Do not silently merge the independent full SpectraFX/PHYSIS/TerraWeave branches.**
 
 **Actual evidence:** user terminal output of 119 green tests, repository branch comparisons, PR metadata; no new engine runtime changes, native build, GPU captures or performance tests by this agent. **Remaining acceptance:** verify Metal and GLSL water visuals/performance including multi-height reflection, underwater optics, ocean origin rebasing, foam/rapid/cascade/confluence seams on target devices; finish or close parent PR bookkeeping after main integration.
+
+
+## Stage 52 — NEREID shoreline erosion + TerraWeave soil bridge (source phase, 2026-11-19)
+
+Merge \`a56ff765311a8f464a2e180d5dd23e7eacdcb5dd\` brought all NEREID
+changes from \`main\` into \`feature/terraweave\` (no rewrite of main).
+New soil mechanics on feature include \`NereidErosion.h\` with fixed/integer
+flow/wave/wetness/soil resistance/sediment calculation; persistent
+\`NereidShorelineSystems.h\` bank-cell ECS input/output and opt-in
+\`NereidNativeWater.h\` stage after water contact sampling. Changes are
+handoff to \`TerraWeaveEarthworks.h\` (sparse dirty heightfield), roots,
+tree/shrub failure events and aggregated grass coverage. Source commits:
+\`c085a48d\`, \`2968f177\`, \`78b5ab9b\`, \`6709cb9a\`, \`88ec8c01\`,
+\`0a20fa96\`. Full design, API and ownership boundaries in
+\`docs/nereid/TERRAIN_EROSION.md\`.
+
+**Must not double-simulate:** ECS \`WaterBankSoilComponent\` is updated by
+\`addNereidBankErosionSystem\`. At the ECS read barrier, the terrain host
+uses \`applyEcsBankErosion\` (not \`erodeShore\` again). Separate native
+Earthworks \`erodeTerrainVertex\` is for hosts that do not install the ECS
+shoreline stage. Both paths reject source soil/terrain mismatch.
+Falling trees require an external authoritative physics body and
+save/replication; the new code emits a stable event rather than mutating
+game state on the renderer thread. Grass is patch-aggregated, not per blade.
+
+**QA:** source committed; no fresh CMake/CTest/performance/Metal test after
+this stage. Earlier NEREID full test PASS applies only to preceding main
+head. Keep source integrated but feature PR Draft until validation.

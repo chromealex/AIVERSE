@@ -1,0 +1,44 @@
+name: PHYSIS TerraWeave one-pass native acceptance
+
+# The validated original and current-main staging branches: one full build/test after
+# all feature code, merge composition and per-stage documentation are ready.
+on:
+  push:
+    branches:
+      - integration/physis-terraweave-complete-20261119
+      - integration/physis-terraweave-onto-main-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  combined-native:
+    name: All desktop CTests (PHYSIS + TerraWeave + Box3D)
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Verify build toolchain
+        run: |
+          cmake --version
+          clang++ --version
+          git log -1 --oneline
+
+      - name: One full native Debug build and ONE unfiltered CTest run
+        env:
+          AIVERSE_TEST_JOBS: '4'
+        run: bash tools/physis-terraweave-final-validation.sh
+
+      - name: Attach full configure/build/CTest/JUnit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physis-terraweave-onepass-native-logs
+          path: |
+            build/physis-terraweave-onepass/onepass-reports/
+          if-no-files-found: warn
+          retention-days: 14

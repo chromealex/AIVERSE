@@ -22,6 +22,9 @@ public:
     AsyncChunkStream(const AsyncChunkStream&)=delete;
     AsyncChunkStream& operator=(const AsyncChunkStream&)=delete;
     bool add(Cell,size_t reservation);
+    // Dynamic procedural catalog: cancel in-flight work (reservation remains
+    // until completion), retire published payload, erase from selector.
+    bool remove(Cell,const Streamer::Unload&);
     Status update(std::span<const StreamObserver>,std::span<const Cell> pins,size_t requests,size_t publications,
                   const Publish&,const Streamer::Unload&,size_t publicationBytes=SIZE_MAX);
     bool ready(Cell)const;

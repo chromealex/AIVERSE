@@ -22,8 +22,9 @@ inline void addAdaptiveWaterSamplingSystem(Simulation& sim,std::string name,
                                             AdaptiveWaterSamplingConfig config={}) {
     sim.addSystem(std::move(name),[config](Simulation& current) {
         World& world=current.world();
-        auto* contacts=world.prepareExistingWrite<WaterContactComponent>();
-        if(!contacts)return;
+        if(!world.countExisting<WaterContactComponent>())return;
+        // Detach shared ECS pool before writing, preserving COW rollback.
+        auto* contacts=&world.pool<WaterContactComponent>();
         const World& read=world;
         const bool indexed=chooseIndexedWaterSampling(
             read.countExisting<WaterBodyComponent>(),contacts->size(),config);

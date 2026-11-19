@@ -1,0 +1,96 @@
+name: PHYSIS nature + Box3D integration checks
+
+on:
+  push:
+    branches:
+      - feature/physis-nature-simulation
+    paths:
+      - 'engine/physis/**'
+      # Handoff-only changes must not cancel queued native builds.
+      - '!engine/physis/AGENTS.md'
+      - 'engine/physics/PhysisBox3D.h'
+      - 'tests/physis_*.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/physis.yml'
+  pull_request:
+    paths:
+      - 'engine/physis/**'
+      # Handoff-only changes must not cancel queued native builds.
+      - '!engine/physis/AGENTS.md'
+      - 'engine/physics/PhysisBox3D.h'
+      - 'tests/physis_*.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/physis.yml'
+  workflow_dispatch:
+
+# Many source/doc pushes during PHYSIS development used to create hundreds
+# of queued jobs. Only the newest run for a given workflow/ref is actionable.
+concurrency:
+  group: physis-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physis-native:
+    name: PHYSIS CPU and optional Box3D (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure focused native tests
+        shell: bash
+        run: |
+          cmake -S . -B build/physis-ci -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_ENABLE_PHYSICS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_PHYSICS_DEMO=OFF
+      - name: Build every PHYSIS test target
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build/physis-ci --parallel 4 --target \
+            aiverse_physis_core_test \
+            aiverse_physis_climate_test \
+            aiverse_physis_environment_test \
+            aiverse_physis_disasters_test \
+            aiverse_physis_integration_test \
+            aiverse_physis_wind_test \
+            aiverse_physis_gravity_test \
+            aiverse_physis_storm_test \
+            aiverse_physis_forces_test \
+            aiverse_physis_presentation_test \
+            aiverse_physis_diagnostics_test \
+            aiverse_physis_spatial_index_test \
+            aiverse_physis_editor_view_test \
+            aiverse_physis_scene_geometry_test \
+            aiverse_physis_project_config_test \
+            aiverse_physis_field_assets_test \
+            aiverse_physis_field_runtime_test \
+            aiverse_physis_live_edit_test \
+            aiverse_physis_remote_edit_test \
+            aiverse_physis_admin_journal_test \
+            aiverse_physis_journal_posix_io_test \
+            aiverse_physis_journal_locked_io_test \
+            aiverse_physis_journal_crash_recovery_test \
+            aiverse_physis_box3d_test 2>&1 | tee build/physis-ci/physis-build.log
+      - name: CTest PHYSIS (includes real Box3D Scene)
+        shell: bash
+        run: ctest --test-dir build/physis-ci --output-on-failure -R '^physis_'
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physis-test-logs-${{ matrix.os }}
+          path: |
+            build/physis-ci/physis-build.log
+            build/physis-ci/Testing/
+            build/physis-ci/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore

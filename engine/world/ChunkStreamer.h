@@ -22,6 +22,9 @@ class ChunkStreamer {
 public:
     explicit ChunkStreamer(StreamLimits limits={}):limits_(limits) {}
     bool add(Cell cell,size_t reservedBytes);
+    // Remove a no-longer-addressable procedural cell. Caller retires published
+    // resources before erasing; static catalogs never need this operation.
+    bool remove(Cell cell);
     void failed(Cell cell);
     StreamStatus update(std::span<const StreamObserver> observers,std::span<const Cell> pinned,
                         size_t loadBudget,const Streamer::Load& load,const Streamer::Unload& unload);

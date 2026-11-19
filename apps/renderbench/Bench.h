@@ -71,6 +71,7 @@ struct Bench {
     int width=1280,height=720,view=0,frame=0,drain=0,sequenceCaptures=0;
     bool sequencePending=false, ownsFrame=true;
     uint64_t tag=0;
+    gfx::GpuTimingRouter::Subscriber timingSubscriber=0;
     bool done=false,failed=false,gpuSupported=true,captureRequested=false,captured=false;
     std::string error;
     Clock::time_point lastProgress=Clock::now(), previewStart;
@@ -305,9 +306,14 @@ struct Bench {
     }
     void fail(std::string s) {failed=true;done=true;error=std::move(s);std::fprintf(stderr,"benchmark: %s\n",error.c_str());}
     void poll(gfx::Device& d) {
-        for(auto t:d.takeGpuTimings())if(auto it=tags.find(t.tag);it!=tags.end()) {
-            rows.at(it->second).set("gpuMs",t.valid?Json::number(t.milliseconds,6):Json());tags.erase(it);lastProgress=Clock::now();
-        }
+        auto& timing=d.gpuTimingRouter();
+        timing.poll(d);
+        for(auto t:timing.take(timingSubscriber))
+            if(auto it=tags.find(t.tag);it!=tags.end()) {
+                rows.at(it->second).set("gpuMs",
+                    t.valid?Json::number(t.milliseconds,6):Json());
+                tags.erase(it);lastProgress=Clock::now();
+            }
     }
     void draw(gfx::Device& d) {
         if(done)return;
@@ -318,7 +324,14 @@ struct Bench {
         const int ci=std::min(view,int(cameras.size())-1);
         const auto start=Clock::now();if(ownsFrame)d.beginFrame(width,height);const auto encodeStart=Clock::now();
         const uint64_t thisTag=++tag;
-        bool timed=false;if(measuring){timed=d.timeGpuFrame(thisTag);gpuSupported&=timed;}
+        bool timed=false;
+        if(measuring){
+            auto& timing=d.gpuTimingRouter();
+            if(!timingSubscriber)timingSubscriber=timing.subscribe();
+            timed=timingSubscriber &&
+                  timing.request(d,timingSubscriber,thisTag);
+            gpuSupported&=timed;
+        }
         if(frame==0&&view<int(cameras.size())){screen.reset();additions.selectLights(cameras[size_t(ci)].eye());}
         if(options.previewSeconds>0&&frame==options.warmup&&view<int(cameras.size()))previewStart=Clock::now();
         const double previewTime=previewStart==Clock::time_point{}?0.0:std::clamp(ms(previewStart,Clock::now())/1000.0,0.0,double(options.previewSeconds));
@@ -418,7 +431,13 @@ struct Bench {
     void shutdown(gfx::Device& d) {
         if(!options.captureSequence.empty()&&(sequenceCaptures!=16||sequencePending))fail("incomplete validation sequence; increase samples");
         if(!options.captureSequence.empty())d.setScreenReadable(false);
-        poll(d);report.set("gpuTimingSupported",Json::fromBool(gpuSupported));report.set("complete",Json::fromBool(done&&!failed));
+        poll(d);
+        if(timingSubscriber) {
+            d.gpuTimingRouter().unsubscribe(timingSubscriber);
+            timingSubscriber=0;
+        }
+        report.set("gpuTimingSupported",Json::fromBool(gpuSupported));
+        report.set("complete",Json::fromBool(done&&!failed));
         report.set("error",Json::string(error));report.set("frames",rows);
         std::ofstream f(options.output);f<<report.dump()<<"\n";if(!f)fail("cannot write report");
         if(model)releaseModel(d,*model);

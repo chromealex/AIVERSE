@@ -82,6 +82,9 @@ std::optional<net::Key> serverKey(const Args& a) {
     return k;
 }
 
+// Only graphical Place client builds consume ticket decoding.
+// AIVERSE_BUILD_CLIENT=OFF intentionally omits this code and its warning.
+#ifdef AIVERSE_PLACE_CLIENT
 std::optional<net::ClientTicket> clientTicket(const Args& a) {
     std::string text = a.get("--ticket", "");
     std::string file = a.get("--ticket-file", "");
@@ -91,6 +94,7 @@ std::optional<net::ClientTicket> clientTicket(const Args& a) {
     if (!t) throw std::runtime_error("malformed ticket (aiverse_place ticket prints one)");
     return t;
 }
+#endif
 
 bool flag(const Args& a, const char* name) { return std::find(a.v.begin(), a.v.end(), name) != a.v.end(); }
 

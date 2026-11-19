@@ -4,6 +4,8 @@
 #include "../Editor.h"
 #include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
+#include "../PhysisAuthoring.h"
+#include "../PhysisFieldEditor.h"
 #include "../DetailsPanel.h"
 
 namespace aiverse::editor {
@@ -403,6 +405,10 @@ private:
             if (ui::checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
             ui::endProps();
         }
+        physisSettings(ed);
+        // Field picked in the Scene or PHYSIS tab uses the SAME MapProps
+        // Inspector with one validated MapDoc Undo transaction per Apply.
+        drawPhysisFieldProperties(ed);
         ui::section(ICON_STARTS, "Победа (поверх правил)");
         Json v;
         if (jsonEditor("map:victory", d.extra["victory"], v, 60)) {
@@ -426,8 +432,126 @@ private:
             ui::callout(ui::Tone::Ok, issues_.empty() ? "Ошибок и предупреждений нет" : "Ошибок нет");
     }
 
+    // PHYSIS configuration is map-authored JSON, never a direct live ECS write.
+    // MapDoc::beginEdit snapshots the entire document; one Apply = one Undo.
+    void physisSettings(Editor& ed) {
+        using namespace physis_authoring;
+        const Json& current = read(ed.doc());
+        ui::section(ICON_GLOBE, "PHYSIS · Природные явления");
+        if (!current.isObject()) {
+            ui::hint("PHYSIS в карте не настроена. Создайте настройки для универсального C++ GameModule.");
+            if (ImGui::Button("Создать PHYSIS##physisCreate")) {
+                if (!apply(ed.doc(), defaultConfig(), &physisError_))
+                    ed.status = physisError_;
+                else physisError_.clear();
+            }
+        } else {
+            ImGui::TextDisabled("Климат · ветер · ураганы · гравитация · природные события");
+            ImGui::Text("ECS: %s | Штормы: %s | Катастрофы: %s",
+                        current.getBool("enabled", true) ? "включено" : "выкл",
+                        current.getBool("enableStorms") ? "вкл" : "выкл",
+                        current.getBool("enableDisasters") ? "вкл" : "выкл");
+            if (ImGui::Button("Настроить PHYSIS##physisEdit")) {
+                physisDraft_ = current;
+                physisRawText_ = current.dump(2);
+                physisRawChanged_ = false;
+                physisError_.clear();
+                ImGui::OpenPopup("PHYSIS · параметры###physisSettingsModal");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Удалить PHYSIS##physisRemove")) {
+                if (!apply(ed.doc(), Json{}, &physisError_))
+                    ed.status = physisError_;
+                else physisError_.clear();
+            }
+            ui::help("Изменение JSON карты использует Undo/Redo. Запущенная симуляция не изменяется автоматически.");
+        }
+        if (ImGui::BeginPopupModal("PHYSIS · параметры###physisSettingsModal", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+            // Structured editor writes a draft only. No partial MapDoc mutations.
+            if (ImGui::BeginTabBar("##physisTabs")) {
+                if (ImGui::BeginTabItem("Параметры")) {
+                    bool enabled = physisDraft_.getBool("enabled", true);
+                    if (ImGui::Checkbox("Включена в проекте", &enabled))
+                        physisDraft_.set("enabled", Json::fromBool(enabled));
+                    auto grid = physisDraft_["grid"];
+                    if (!grid.isObject()) grid = Json::object();
+                    const auto integerField = [&](const char* label, const char* key) {
+                        int value = int(grid.getInt(key));
+                        if (ImGui::InputInt(label, &value))
+                            grid.set(key, Json::number(int64_t(value)));
+                    };
+                    integerField("Начало X (ячейки)", "originX");
+                    integerField("Начало Z (ячейки)", "originZ");
+                    integerField("Ширина сетки", "width");
+                    integerField("Высота сетки", "height");
+                    integerField("Размер ячейки, м", "cellSizeMeters");
+                    integerField("Seed", "seed");
+                    physisDraft_.set("grid", grid);
+                    auto climate = physisDraft_["climate"];
+                    if (!climate.isObject()) climate = Json::object();
+                    float temp = float(climate["baseTemperature"].toDouble(15.0));
+                    float humidity = float(climate["baseHumidity"].toDouble(0.5));
+                    if (ImGui::InputFloat("Базовая температура, °C", &temp))
+                        climate.set("baseTemperature", Json::number(double(temp), 3));
+                    if (ImGui::InputFloat("Базовая влажность 0..1", &humidity))
+                        climate.set("baseHumidity", Json::number(double(humidity), 3));
+                    physisDraft_.set("climate", climate);
+                    const char* keys[] = {"enableWindZones", "enableGravityFields",
+                                          "enableStorms", "enableDisasters", "enableForces"};
+                    const char* labels[] = {"Ветровые зоны", "Гравитационные поля",
+                                            "Ураганы и смерчи", "Природные катастрофы",
+                                            "Расчёт сил для объектов"};
+                    for (int i = 0; i < 5; ++i) {
+                        bool enabledFlag = physisDraft_.getBool(keys[i]);
+                        if (ImGui::Checkbox(labels[i], &enabledFlag))
+                            physisDraft_.set(keys[i], Json::fromBool(enabledFlag));
+                    }
+                    bool external = physisDraft_.getStr("floodMode", "LocalShallow") ==
+                                    "ExternalAuthority";
+                    if (ImGui::Checkbox("Вода управляется NEREID / внешней системой", &external))
+                        physisDraft_.set("floodMode",
+                            Json::string(external ? "ExternalAuthority" : "LocalShallow"));
+                    ImGui::TextDisabled("NEREID владеет водоёмами, PHYSIS — погодой.");
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Расширенный JSON")) {
+                    if (!physisRawChanged_) physisRawText_ = physisDraft_.dump(2);
+                    if (ui::inputMultiline("##physisRaw", physisRawText_,
+                                           ImVec2(570, 270))) physisRawChanged_ = true;
+                    ImGui::TextDisabled("Секции storm/wind/gravity и неизвестные ключи сохраняются.");
+                    if (ImGui::Button("Сбросить JSON к параметрам"))
+                        { physisRawText_ = physisDraft_.dump(2); physisRawChanged_ = false; }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+            if (!physisError_.empty())
+                ui::toneText(ui::Tone::Error, "%s", physisError_.c_str());
+            if (ImGui::Button("Применить##physisSave")) {
+                try {
+                    const Json config = physisRawChanged_ ?
+                        Json::parse(physisRawText_) : physisDraft_;
+                    if (apply(ed.doc(), config, &physisError_)) {
+                        physisError_.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                } catch (const std::exception& error) {
+                    physisError_ = std::string("JSON: ") + error.what();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Отмена##physisCancel"))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+    }
+
     DetailsPanel details_;
     std::string text_, textFor_, message_;
+    Json physisDraft_;
+    std::string physisRawText_, physisError_;
+    bool physisRawChanged_ = false;
     Selection lastSel_;
     float radiusEdit_ = 0, massEdit_ = 0;
     bool bodyActive_ = false, checked_ = false;

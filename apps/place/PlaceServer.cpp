@@ -419,11 +419,18 @@ void PlaceServer::syncBodies() {
             scene_->setAngularVelocity(r.handle, {0, 0, 0});
             pos = r.start;
         }
-        server_.set(r.id, Schema::kBodyPos, vec3(pos.x, pos.y, pos.z));
-        server_.set(r.id, Schema::kBodyRot, quatValue(scene_->rotation(r.handle)));
-        server_.set(r.id, Schema::kBodySleeping, integer(!awake));
-        b3Vec3 v = awake ? scene_->linearVelocity(r.handle) : b3Vec3{0, 0, 0};
-        server_.set(r.id, Schema::kBodyVelocity, vec3(v.x, v.y, v.z));
+        const b3Quat q = scene_->rotation(r.handle);
+        const b3Vec3 v = awake ? scene_->linearVelocity(r.handle)
+                               : b3Vec3{0, 0, 0};
+        // Four fields share one replica object/layout lookup. Values keep
+        // the original field order and per-field quantization/reliable policy.
+        const replica::FieldUpdate fields[] = {
+            {Schema::kBodyPos, vec3(pos.x, pos.y, pos.z)},
+            {Schema::kBodyRot, quatValue(q)},
+            {Schema::kBodySleeping, integer(!awake)},
+            {Schema::kBodyVelocity, vec3(v.x, v.y, v.z)},
+        };
+        server_.setFields(r.id, fields);
         r.awake = awake;
     }
     for (BodyHandle h : fallen) {
@@ -436,24 +443,43 @@ void PlaceServer::syncBodies() {
 void PlaceServer::syncCharacters() {
     for (auto& [id, p] : away_) {
         const auto& st = p.state;
-        server_.set(p.object, Schema::kCharPos, vec3(st.position.x, st.position.y, st.position.z));
-        server_.set(p.object, Schema::kCharVelocity, vec3(st.velocity.x, st.velocity.y, st.velocity.z));
-        server_.set(p.object, Schema::kCharGrounded, integer(st.grounded));
+        const replica::FieldUpdate fields[] = {
+            {Schema::kCharPos, vec3(st.position.x, st.position.y, st.position.z)},
+            {Schema::kCharVelocity, vec3(st.velocity.x, st.velocity.y, st.velocity.z)},
+            {Schema::kCharGrounded, integer(st.grounded)},
+        };
+        server_.setFields(p.object, fields);
     }
     for (auto& [slot, p] : players_) {
         const auto& st = p.state;
-        server_.set(p.object, Schema::kCharPos, vec3(st.position.x, st.position.y, st.position.z));
-        server_.set(p.object, Schema::kCharYaw, yawValue(st.yaw));
-        server_.set(p.object, Schema::kCharVelocity, vec3(st.velocity.x, st.velocity.y, st.velocity.z));
-        server_.set(p.object, Schema::kCharGrounded, integer(st.grounded));
-        server_.set(p.object, Schema::kCharInput, integer(int64_t(p.applied & 0xFFFFu)));
-        server_.setViewers(slot, {{st.position.x, st.position.y, st.position.z}});
+        const replica::FieldUpdate fields[] = {
+            {Schema::kCharPos, vec3(st.position.x, st.position.y, st.position.z)},
+            {Schema::kCharYaw, yawValue(st.yaw)},
+            {Schema::kCharVelocity, vec3(st.velocity.x, st.velocity.y, st.velocity.z)},
+            {Schema::kCharGrounded, integer(st.grounded)},
+            {Schema::kCharInput, integer(int64_t(p.applied & 0xFFFFu))},
+        };
+        server_.setFields(p.object, fields);
+        server_.setViewer(slot, {st.position.x, st.position.y, st.position.z});
     }
 }
 
 void PlaceServer::update(uint64_t nowMs) {
-    auto t0 = std::chrono::steady_clock::now();
+    using TickClock = std::chrono::steady_clock;
+    const auto t0 = TickClock::now();
+    auto sampleStart = t0;
+    const bool samplePhases = tickPhaseProfiling_;
+    // No allocations, network I/O or logging during measurement; all
+    // values are diagnostic-only sums over the same real server ticks.
+    auto phase = [&](double& totalMs) {
+        if (!samplePhases) return;
+        const auto t = TickClock::now();
+        totalMs += std::chrono::duration<double,std::milli>(
+            t - sampleStart).count();
+        sampleStart = t;
+    };
     server_.poll(nowMs);                 // input frames (onInput, queued per player), messages
+    phase(stats_.phases.pollMs);
     for (auto it = kicking_.begin(); it != kicking_.end();) {
         if (tick_ < it->second) { ++it; continue; }
         uint8_t slot = it->first;
@@ -483,7 +509,9 @@ void PlaceServer::update(uint64_t nowMs) {
     for (const auto& m : movers_) {
         scene_->moveKinematic(m.handle, moverPosition(m.start, m.offset, m.period, tick_ + 1, dt), m.rot);
     }
+    phase(stats_.phases.playersMs);
     scene_->step();
+    phase(stats_.phases.physicsMs);
     ++tick_;
     syncBodies();
     syncCharacters();
@@ -492,9 +520,13 @@ void PlaceServer::update(uint64_t nowMs) {
         server_.set(game_, Schema::kGamePlayers, integer(int64_t(players_.size())));
         server_.set(game_, Schema::kGameBodies, integer(int64_t(reps_.size())));
     }
+    phase(stats_.phases.syncMs);
     server_.tick();
     server_.broadcast(nowMs);
-    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    phase(stats_.phases.broadcastMs);
+    const double ms = std::chrono::duration<double, std::milli>(
+        TickClock::now() - t0).count();
+    if (samplePhases) ++stats_.phases.samples;
     ++stats_.ticks;
     stats_.tickMsSum += ms;
     stats_.tickMsWorst = std::max(stats_.tickMsWorst, ms);

@@ -50,6 +50,21 @@ struct AsyncChunkStream::Impl {
 AsyncChunkStream::AsyncChunkStream(StreamLimits limits,size_t bytes,size_t jobs,Prepare prepare):impl_(std::make_unique<Impl>(limits,bytes,jobs,std::move(prepare))){}
 AsyncChunkStream::~AsyncChunkStream()=default;
 bool AsyncChunkStream::add(Cell cell,size_t bytes){if(bytes>impl_->stagingLimit)return false;if(!impl_->selector.add(cell,bytes))return false;impl_->costs[cell]=bytes;return true;}
+bool AsyncChunkStream::remove(Cell cell,const Streamer::Unload& unload){
+    auto& s=*impl_;
+    auto known=s.costs.find(cell);
+    if(known==s.costs.end())return false;
+    if(auto it=s.active.find(cell);it!=s.active.end()){
+        it->second->canceled=true;
+        s.active.erase(it);
+        // Staging reservations of canceled jobs remain owned by the worker
+        // until its result is drained during a future update().
+    }
+    if(s.published.erase(cell))unload(cell);
+    s.selector.remove(cell);
+    s.costs.erase(known);
+    return true;
+}
 bool AsyncChunkStream::ready(Cell cell)const{return impl_->published.contains(cell);}
 const AsyncChunkStream::Status& AsyncChunkStream::status()const{return impl_->status;}
 AsyncChunkStream::Status AsyncChunkStream::update(std::span<const StreamObserver> observers,std::span<const Cell> pins,size_t requests,size_t publications,const Publish& publish,const Streamer::Unload& unload,size_t publicationBytes) {

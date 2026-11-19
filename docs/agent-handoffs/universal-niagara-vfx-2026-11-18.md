@@ -260,6 +260,148 @@ python3 tools/skills/catalog.py check
 4. Validate genre-neutral actual host usage for FPS and RTS (not only header-level fixtures), entity attachment, effect IDs, rollback and visuals, then migration/parity.
 5. Continue appending handoff entries **in this same file**, separately committed after each implementation stage; preserve all other agents' changes to this active branch.
 
+## Stage 7 — SpectraFX MCP graph authoring and CPU preview bake (COMMITTED, TESTS NOT RUN)
+
+**Date:** 2026-11-18. **Branch:** `feature/universal-entity-inspector-fps`.  
+**Goal:** make SpectraFX graph-v1 frontend available through both editor Workspace and headless MCP without genre-specific simulation dependencies.
+
+### Implementation and documentation commits
+
+| SHA | File | Change |
+|---|---|---|
+| `cceac6c08471785a19b3556f474ad276616c23f3` | `apps/editor/core/SpectraGraphOps.cpp` | Six universal `fx_graph_*` operations |
+| `b71ad7b6dd00c4b44b09312b430c272089011968` | `apps/editor/core/FxOps.cpp` | Register graph operations with existing FX tools |
+| `13ffbf60776c71681603bde2381c9b1ddc40b3f5` | `tests/vfx_graph_ops_test.cpp` | Workspace graph CRUD, validation, bake, safety regression |
+| `a8609363e7eed3ee7d53b64af4d2884a8d350f65` | `CMakeLists.txt` | Build and CTest target `aiverse_vfx_ops_tests` / `vfx_graph_ops` |
+| `510bd7e11fbf6c8269334f94c7abc3cd04245f35` | `docs/spectrafx.md` | Document MCP graph API |
+| `4d7856a46d4e47130d7cb56718bb3227bffeeb4b` | `skills/visuals/aiverse-spectrafx/SKILL.md` | Agent graph-edit workflow |
+
+### API, architecture and compatibility
+
+Registered in `registerFxOps` through `registerSpectraGraphOps`: `fx_graph_list`, `fx_graph_get`, `fx_graph_validate`, `fx_graph_set`, `fx_graph_delete`, `fx_graph_bake`. Graph validation uses `aiverse::spectra::compileGraph` and is CPU-only. Graphs live in `fx/graphs/<name>.vfx.json` and are limited to 1 MiB. `fx_graph_set` rejects invalid compilation without overwriting the source; valid changes call `Workspace::note(Change::Fx)`. `fx_graph_bake {name,effect,overrides?,overwrite?}` materializes a separate `fx/<effect>.json` compatible with existing `fx_preview` and legacy clients; old effect files are not overwritten unless `overwrite:true`. Bake is a snapshot: editing source graphs does not automatically refresh baked effects.
+
+Game simulation, deterministic ECS authority, rollback state and old `RtsFx` are untouched. There is no node-canvas editor and no GPU simulation in this stage.
+
+### Verification status — NOT RUN
+
+GitHub connector files and commits were created. No local AIVERSE checkout, build, CTest result or screenshot was available in this stage. **No test is claimed passing.** New `vfx_graph_ops` test was added but has not executed.
+
+Commands for the next agent:
+
+```bash
+cmake -S . -B build/vfx-test -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON
+cmake --build build/vfx-test --target aiverse_vfx_graph_tests aiverse_vfx_ecs_tests aiverse_vfx_assets_tests aiverse_vfx_ops_tests -j4
+ctest --test-dir build/vfx-test --output-on-failure -L SpectraFX
+python3 tools/skills/catalog.py check
+```
+
+Review the new `SpectraGraphOps.cpp` and `vfx_graph_ops_test.cpp` for actual build/runtime errors before production usage. This must be done independently of GitHub source presence.
+
+**Next bounded stage:** editor node-canvas for the exact graph-v1 schema (select/add/move/link/delete nodes, exposed parameters, compile diagnostics, preview through `fx_graph_bake`/existing CPU renderer); then standalone GPU RHI capability and compute-stage design. After each implementation stage append a **separate handoff commit** to this same file, listing SHAs, tests actually executed and the next action.
+
+## Stage 8 — visual SpectraFX node canvas and in-memory preview (COMMITTED, TESTS NOT RUN)
+
+**Date:** 2026-11-18. **Branch:** `feature/universal-entity-inspector-fps`.  
+**Scope:** Basic authoring/preview of the existing graph-v1 format for **all genres**; no additional gameplay authority, no forked FPS/RTS renderer and no GPU compute claims.
+
+### Implementation commits / paths
+
+| SHA | Path | Change |
+|---|---|---|
+| `87e2c5647d1502514807664c1785e8858c51ce16` | `engine/fx/VfxGraph.h` | Optional `nodes[].position:[x,y]` authoring metadata, validated and ignored by CPU compiler |
+| `458d2794a09fda86f8d39494ee393b82fcca6638` | `apps/editor/windows/SpectraGraphWindow.cpp` | Optional ImGui SpectraFX window: load/new/save, graph canvas, panning, add/drag/link/delete, inspector JSON, parameters, undo/redo, compile messages |
+| `a58becfbde9d1bdd03c04d30aa10a16f2515617e` | `apps/editor/EditorFxOps.cpp` | GUI-only `fx_graph_preview`: compile graph in memory into `gameFx_` and play in Scene/Game |
+| `5f08de8ed7c931e4bff460973fe71362eb88ad51` | `apps/editor/EditorFxOps.cpp` | Correct escaped JSON screenshot hint and newlines |
+| `95357caa81f68bd6cd4709a783e97dc82daf0d20` | `apps/editor/windows/SpectraGraphWindow.cpp` | Include `FxOps.h` for canonical graph asset file-name validation |
+| `868c077aa9288f9de77d624944525308d48f3bb9` | `tests/vfx_graph_compiler_test.cpp` | Authoring metadata accepts valid positions, rejects malformed/out-of-range positions, has no effect on CPU emitter output |
+| `3aa17d390fae819458cc3f89127f25804e3b2877` | `engine/fx/VfxGraphAssets.h` | Include `ParticleSystem.h` explicitly so SpectraFX public headers are self-contained |
+| `ed968dda74724abbad926709944dd6a6a278db24` | `docs/spectrafx.md` | Basic canvas, graph preview, saved node metadata, limitations |
+| `08fda8e982eb494a089e02d8a49336b04453a397` | `skills/visuals/aiverse-spectrafx/SKILL.md` | Agent GUI workflow and preview tool |
+| `2acb0cd9d22b30c6136d8dfafa7a71a2615fc0a5` | `docs/particles.md` | Update capability/limitation status |
+| `b191861b09eca4050f41c820276be4ee977cbf3f` | `AGENTS.md` | Official universal VFX canvas/preview integration rules |
+| `594e4793fbe079bdc2340f2be7aa992eca8fc48e` | `engine/fx/SpectraFX.h` | Update public header capability comment |
+
+### API, authoring data and compatibility
+
+- The optional editor window is registered as `id()=="spectrafx_graph"`, title **SpectraFX**, window group `look`. Existing CMake `file(GLOB ... apps/editor/windows/*.cpp)` picks it up without a CMake registration edit.
+- Graph nodes retain existing `{id,type,properties}` and may optionally add `"position":[x,y]` in **the same** `fx/graphs/<name>.vfx.json`. Compiler validates two numeric coordinates, absolute bound <=100000 and then ignores them when constructing `EffectDef`. Older graph sources remain compatible, with computed initial visual layout. This is source-file-only metadata and does **not** affect simulation save formats, ECS checksums or rollback.
+- Basic canvas: click a node header to select; left-drag to move; middle-drag pans; click the output pin and then another node's input to connect (single parent / cycle guard); add existing v1 node types through combo; edit the selected node's `properties` as JSON; edit root `parameters` JSON in a modal; undo/redo the full document.
+- Save invokes `Workspace::call("fx_graph_set",...)` (strict validation, `Change::Fx`). Invalid/incomplete graph edits can be drafted but not saved as valid assets. Existing `fx/*.json` unaffected.
+- New GUI-only `fx_graph_preview {graph, name?, overrides?, x?,y?,z?, advance?,loop?,freeze?}` compiles the **unsaved** graph and calls `ParticleSystem::define("__spectrafx_editor_preview",...)` then `play` with the Scene/Game camera. Unlike `fx_graph_bake`, this command writes no FX files; `view_screenshot` remains the visual verification tool.
+- Currently the property inspector edits raw per-node JSON rather than typed Niagara-style individual module pin values. The graph is an ordered module-overlay IR, not an arbitrary runnable dataflow graph.
+- `SpectraGraphAssets` now explicitly includes `ParticleSystem.h` for correct standalone header inclusion; no public symbol changed.
+
+### Verification record — NOT RUN
+
+GitHub file creation and per-file commits succeeded. **No CMake build, CTest execution, editor launch, screenshot, Metal/Android validation or runtime FPS/RTS parity test was performed.** This environment has no local AIVERSE checkout, and source review is **not** proof of successful compilation.
+
+The next local agent MUST execute:
+
+```bash
+cmake -S . -B build/vfx-test -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON
+cmake --build build/vfx-test --target aiverse_editor aiverse_vfx_graph_tests aiverse_vfx_ecs_tests aiverse_vfx_assets_tests aiverse_vfx_ops_tests -j4
+ctest --test-dir build/vfx-test --output-on-failure -L SpectraFX
+python3 tools/skills/catalog.py check
+```
+
+Then launch AIVERSE Editor, open **Графика → SpectraFX**, verify create/save/load, node drag/link/relink/cycle prevention, undo/redo, JSON property edits, legacy file preservation, preview and `view_screenshot`. Also test opening an older graph without `position` and re-saving it.
+
+### Risks and exact next stage
+
+1. **Build/UX unverified:** Inspect `SpectraGraphWindow.cpp` and `EditorFxOps.cpp` for compiler/platform errors and ImGui interactions; fix after a real build. Test the editor only when its existing unrelated branch gates are green.
+2. **Graph behavior:** Raw property JSON and graph-v1 single-parent paths are an initial authoring UI only. Empty/disconnected output graphs fail validation by design; add a typed parameter/module inspector and UX for incomplete graph drafts, plus limits on high-density canvas interactions.
+3. **Preview lifecycle:** The ephemeral effect uses a reserved runtime name inside the editor's existing CPU particle system. Reloading the particle registry from another window invalidates this preview; add a dedicated visual preview resource or reload-aware integration, and validate multi-window interactions.
+4. **Engine GPU work still absent:** Design explicit RHI compute capability checks and GPU particle buffers (spawn/update/compact, emitters, alive counters, sorting, events), CPU fallback for GLES3/WebGL2 and per-device benchmarks; do not silently enable GPU path before parity tests.
+5. **Next bounded implementation:** First run/repair native builds and vfx tests, then extend SpectraFX v1 module editor and production genre-neutral rendering adapters. Record the next implementation SHA/test outcomes in a separate handoff commit **before** beginning another stage.
+
+## Stage 9 — typed SpectraFX module inspector and source preservation (COMMITTED, TESTS NOT RUN)
+
+**Date:** 2026-11-18. **Branch:** `feature/universal-entity-inspector-fps`.  
+**Goal:** replace blind raw-JSON edits for common graph-v1 fields with shared, validated field metadata, without losing unrecognized/complex emitter properties or binding logic to one game genre.
+
+### Exact committed changes
+
+| Commit SHA | File | Change |
+|---|---|---|
+| `fef79683d36a7bf1d707bf2023f1700eccb7359a` | `engine/fx/SpectraModuleSchema.h` | New pure C++ authoring field specifications and safe typed field validation/update/remove |
+| `ecce17c209acd851f9051ad0fe9ae940900e3869` | `apps/editor/windows/SpectraGraphWindow.cpp` | Generic typed UI controls in SpectraFX graph-v1 inspector with advanced JSON fallback |
+| `c8baa6bf043984dbcd4ef4d2a54a1dedc0b025e6` | `tests/vfx_graph_compiler_test.cpp` | Added schema/validation/no-mutation/unknown-property retention/CPU-compile checks |
+| `de2d28d41348c9d5865d0c080223955dbad7ff06` | `engine/fx/SpectraFX.h` | Exposes schema through official public native C++ header |
+| `d2d5f69bd192fe537e5f77292cd34b080ea1596c` | `docs/spectrafx.md` | Typed authoring contract, supported common field list and limitations |
+| `c97c5272b8fbf4d8414c3f0410f7c29d7eadbc8d` | `skills/visuals/aiverse-spectrafx/SKILL.md` | Agent workflow for typed fields and complex module fallback |
+
+### Architecture, APIs, serialization
+
+The header `engine/fx/SpectraModuleSchema.h` defines `aiverse::spectra::FieldKind`, `FieldSpec`, `fieldsForNode(type)`, `fieldForNode(type,key)`, `validateTypedField(spec,value,error)`, `applyTypedField(node,key,value,error)`, `removeTypedField(node,key,error)`. The canonical include `engine/fx/SpectraFX.h` exports these declarations. This metadata is pure authoring logic and is **not** a replacement for the existing strict emitter loader `fx::parseEffect`.
+
+Typed fields cover common `Spawn`, `Initialize`, `Update`, `SpriteOutput`, `MeshOutput` and `RibbonOutput` properties. Widgets support bounded number/integer, boolean, nonempty string, validated enum choice and finite 3D vectors. An edit is performed on a copied node and committed only if its own field validation succeeds. Updating or removing a typed field leaves unknown and unrelated JSON properties untouched. The GUI shows complex existing values (curves/ranges) as JSON-only rather than converting them to scalar values. Selected node's raw JSON inspector stays available for all advanced/unsupported data.
+
+The graph format is unchanged (version 1, `nodes[].properties`, `nodes[].position`), so legacy `fx/*.json`, graph assets, old C++ aliases and simulation save files remain compatible. Nothing writes renderer handles to deterministic ECS state, and no GPU compute code was added. Runtime authoring, CPU effect, ECS event and client modules were not modified.
+
+### Tests actually executed
+
+**NOT RUN:** There is no local AIVERSE checkout in this environment and external GitHub access from the container was unavailable (DNS failure). GitHub connector writes and reads succeeded, but do not establish compiler or runtime correctness. `tests/vfx_graph_compiler_test.cpp` was extended; neither CMake/CTest nor GUI interaction was run. No CI status was verified. Therefore **do not mark stage 9 production-ready**.
+
+Local QA commands for the next agent:
+
+```bash
+git switch feature/universal-entity-inspector-fps
+git pull --ff-only origin feature/universal-entity-inspector-fps
+cmake -S . -B build/vfx-test -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON
+cmake --build build/vfx-test --target aiverse_editor aiverse_vfx_graph_tests aiverse_vfx_ecs_tests aiverse_vfx_assets_tests aiverse_vfx_ops_tests -j4
+ctest --test-dir build/vfx-test --output-on-failure -L SpectraFX
+python3 tools/skills/catalog.py check
+```
+
+Manual editor QA: open **Графика → SpectraFX**; test each typed control, non-destructive curve/gradient handling, undo/redo for sliders and text fields, JSON inspector synchronization, project switching, save/reload, bad enum handling and Scene preview. Check native includes and CMake public target `AIVERSE::spectrafx` compile on macOS.
+
+### Risks, known limitations and exact next stage
+
+1. GUI code has not been compiled or interacted with on a real ImGui renderer. In particular, validate active-widget undo grouping, String text editing, default field additions and multi-window preview lifecycle. Fix actual build/UI failures before calling this complete.
+2. The schema covers only frequent scalar/vector fields, not a full Niagara module library. Nested `noise`, `collision`, `trail`, `light`, `subEmitters`, curves, gradients and complex shader data still require the existing JSON/particle tools.
+3. The typed schema is intentionally a convenience layer; `parseEffect` is the final authority when saving an entire graph. Typed edits can leave an incomplete graph until connected.
+4. No GPU backend or GPU execution is present. The next independent stage should **first verify and repair stage 7–9 builds/tests**, then design and implement RHI compute capabilities, GPU simulation buffers and a CPU/GPU execution selector with GLES3/WebGL fallback. Do not merge genre-specific VFX engines, alter deterministic ECS ownership, or make unverified performance/parity claims.
+5. After the next bounded code stage, append another **separate handoff commit** to this file with implementation SHA, actual test results, risks and precise continuation steps. Preserve all concurrent agents' work.
 
 ## Stage 45.4 — SpectraFX upstream header compile fix selected for water integration
 

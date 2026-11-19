@@ -1,0 +1,63 @@
+name: PHYSIS journal standalone security checks
+
+on:
+  push:
+    branches:
+      - feature/physis-nature-simulation
+    paths:
+      - 'engine/physis/PhysisJournalProcessLock.h'
+      - 'engine/physis/PhysisJournalPosixIO.h'
+      - 'tests/physis_journal_posix_io_test.cpp'
+      - 'tests/physis_journal_locked_io_test.cpp'
+      - 'tests/physis_journal_crash_recovery_test.cpp'
+      - 'tests/physis_journal_standalone/**'
+      - '.github/workflows/physis-journal.yml'
+  pull_request:
+    paths:
+      - 'engine/physis/PhysisJournalProcessLock.h'
+      - 'engine/physis/PhysisJournalPosixIO.h'
+      - 'tests/physis_journal_posix_io_test.cpp'
+      - 'tests/physis_journal_locked_io_test.cpp'
+      - 'tests/physis_journal_crash_recovery_test.cpp'
+      - 'tests/physis_journal_standalone/**'
+      - '.github/workflows/physis-journal.yml'
+  workflow_dispatch:
+
+# Keep the focused checks independent from the broad full-engine workflow:
+# a new or cancelled physis-native run must never cancel this job.
+concurrency:
+  group: physis-journal-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physis-journal-standalone:
+    name: PHYSIS journal standalone (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure independent PHYSIS journal tests
+        shell: bash
+        run: cmake -S tests/physis_journal_standalone -B build/physis-journal-standalone -DCMAKE_BUILD_TYPE=Debug
+      - name: Build independent PHYSIS journal tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build/physis-journal-standalone --parallel 2 2>&1 | tee build/physis-journal-standalone/build.log
+      - name: CTest independent PHYSIS journal
+        shell: bash
+        run: ctest --test-dir build/physis-journal-standalone --output-on-failure
+      - name: Upload independent test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physis-journal-standalone-${{ matrix.os }}
+          path: |
+            build/physis-journal-standalone/build.log
+            build/physis-journal-standalone/Testing/
+          if-no-files-found: ignore
+

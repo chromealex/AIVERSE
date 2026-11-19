@@ -167,6 +167,7 @@ void Editor::shutdown() {
     fxTextures_.shutdown();
     windows_.clear(); // windows release their viewports in their destructors via update()? keep simple: textures die with the device
     if (studioLogo_.valid()) { dev_->destroyTexture(studioLogo_); studioLogo_ = {}; }
+    terraWeaveForestPreview_.release(*dev_);
     view_.shutdown(*dev_);
     postFx_.shutdown();
     if(fpsPreviewMesh_.vb.valid())dev_->destroyBuffer(fpsPreviewMesh_.vb);
@@ -204,6 +205,8 @@ void Editor::openGame(const std::string& idOrDir) {
         return;
     }
     ws_.changes.clear();
+    if (dev_) terraWeaveForestPreview_.release(*dev_);
+    terraWeaveForestPreview_.setEnabled(false);
     reloadRules();
     selection = {};
     showPicker_ = false;
@@ -298,6 +301,8 @@ void Editor::reclaimEditorAssets(bool force) {
 }
 
 void Editor::newMap(int w, int h) {
+    if (dev_) terraWeaveForestPreview_.release(*dev_);
+    terraWeaveForestPreview_.setEnabled(false);
     doc().reset(w, h);
     selection = {};
     syncGrid();
@@ -310,6 +315,8 @@ void Editor::openMap(const std::string& file) {
     std::error_code ec;
     std::string norm = fs::weakly_canonical(fs::path(file), ec).string();
     if (doc().load(ec ? file : norm, &err)) {
+        if (dev_) terraWeaveForestPreview_.release(*dev_);
+        terraWeaveForestPreview_.setEnabled(false);
         status = "Открыто: " + ws_.relative(doc().path);
         selection = {};
         syncGrid();
@@ -843,6 +850,11 @@ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) 
     if (!ws_.project.isFps()) fieldPreview_.fill(ws_.project.rules, ws_.map, scene_);   // grid fields: the map's initial values
     const auto afterFields = std::chrono::steady_clock::now();
     const bool planets = !ws_.project.isFps() && view_.planetMode();
+    // A map undo may have removed the TerraWeave recipe since last frame.
+    // Release stale preview buffers even when the Terrain panel is closed.
+    if (terraWeaveForestPreview_.enabled() &&
+        !doc().data.extra["terraweave"].isObject())
+        setTerraWeaveForestPreviewEnabled(false);
     // planet maps: the orbit camera of the view (Scene window input drives it)
     const RTSCamera& useCam = planets ? view_.updatePlanetCamera(0, float(ImGui::GetIO().DeltaTime), vp.h) : cam;
     r3d_.beginScene(useCam, vp.w, vp.h);
@@ -863,6 +875,31 @@ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) 
     if (const auto& oc = view_.overlays().context(); !ws_.project.isFps() && overlayPreviewType >= 0 && oc.placeType >= 0)   // overlay preview ghost
         view_.drawGhost(r3d_, uint16_t(oc.placeType), oc.placeAt, oc.placeOk, grid_, time_);
     if (editOverlays && !planets && !ws_.project.isFps()) drawEditOverlays3D();
+    // Editor-only TerraWeave forest overlay. Explicit opt-in from TerrainWindow:
+    // shares the standard Renderer3D model/instancing path, no gameplay state.
+    if (!planets && !ws_.project.isFps() && terraWeaveForestPreview_.enabled()) {
+        try {
+            const auto cameraPosition = r3d_.cameraPos();
+            const double xCm = double(cameraPosition.x) * 100.0;
+            const double zCm = double(cameraPosition.z) * 100.0;
+            if (!std::isfinite(xCm) || !std::isfinite(zCm) ||
+                std::abs(xCm) > double(terraweave::kWorldLimitCm) ||
+                std::abs(zCm) > double(terraweave::kWorldLimitCm))
+                throw std::out_of_range("TerraWeave forest camera outside world extent");
+            terraWeaveForestPreview_.draw(*dev_, r3d_, doc(),
+                int64_t(std::llround(xCm)), int64_t(std::llround(zCm)),
+                [this](int64_t x, int64_t z) -> int32_t {
+                    // The display surface (including manual sculpt) takes priority.
+                    const float height = view_.heightAt(grid_, float(x) * 0.01f, float(z) * 0.01f);
+                    if (!std::isfinite(height) || std::abs(height) > 1000000.0f)
+                        throw std::out_of_range("TerraWeave preview invalid map height");
+                    return int32_t(std::llround(double(height) * 100.0));
+                });
+        } catch (const std::exception& e) {
+            status = std::string("TerraWeave forest: ") + e.what();
+            terraWeaveForestPreview_.setEnabled(false);
+        }
+    }
     if (!planets && !ws_.project.isFps()) tickFx(cam, vp.w, vp.h, nullptr);   // agent previews (fx_preview) in the Scene view
     gfx::PassDesc pass;
     pass.colorTarget = vp.color;

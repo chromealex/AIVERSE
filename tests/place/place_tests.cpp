@@ -1,5 +1,6 @@
 // Physics sandbox place over replica (docs/replica.md "First milestone"): 16 clients on SimNet "4g",
 // convergence, prediction, late join, pushes, spawn rate limits, server tick time, hostile input.
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -67,11 +68,51 @@ struct Loop {
 };
 
 float dist(b3Vec3 a, b3Vec3 b) { return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z)); }
+
+// A load test runs many thousands of *virtual* 60 Hz ticks. Print an
+// inexpensive checkpoint every five virtual seconds, not per frame.
+// fflush makes these updates immediately visible to a directly invoked
+// executable and to verbose CTest; no simulation/physics load is reduced.
+using PlaceClock = std::chrono::steady_clock;
+void placeProgress(const char* phase, const SimPlace& sim, double finish,
+                   PlaceClock::time_point started) {
+    const auto& stats = sim.server.stats();
+    const double wall = std::chrono::duration<double>(
+        PlaceClock::now() - started).count();
+    std::printf("  [place progress] %-23s virtual %5.1f/%5.1f s | wall %6.1f s | "
+                "server avg %6.3f ms worst %6.3f ms | clients %zu | bodies %zu\n",
+                phase, sim.seconds(), finish, wall, stats.tickMsAvg(),
+                stats.tickMsWorst, sim.clients.size(), sim.server.bodies().size());
+    const auto& p = stats.phases;
+    if (p.samples) {
+        const double d = double(p.samples);
+        std::printf("  [place phases] poll %.3f + players %.3f + Box3D %.3f + "
+                    "sync %.3f + broadcast %.3f ms/tick (%llu samples)\n",
+                    p.pollMs/d, p.playersMs/d, p.physicsMs/d,
+                    p.syncMs/d, p.broadcastMs/d,
+                    (unsigned long long)p.samples);
+    }
+    std::fflush(stdout);
+}
+
+void runPlaceProgress(SimPlace& sim, double seconds, const char* phase) {
+    const double finish = sim.seconds() + seconds;
+    const int frames = int(seconds * 60 + 0.5); // same rounding as SimPlace::run
+    const auto started = PlaceClock::now();
+    for (int i = 0; i < frames; ++i) {
+        sim.frame();
+        if ((i + 1) % 300 == 0 || i + 1 == frames)
+            placeProgress(phase, sim, finish, started);
+    }
+}
 }
 
 TEST(sixteen_clients_over_4g_converge_predict_and_late_join) {
     Json scene = exampleScene();
     SimPlace sim(scene, 11);
+    // Measure the server phases without altering simulation, clients or the
+    // strict <5ms budget. No profiling or output in the hot per-frame loop.
+    sim.server.setTickPhaseProfiling(true);
     // 15 wandering / pushing / spawning bots and one steady walker patrolling open static ground.
     for (int i = 0; i < 15; ++i) sim.add("4g", std::make_unique<Bot>(uint32_t(100 + i)));
     auto probeBot = std::make_unique<Bot>(7, std::vector<b3Vec3>{{37, 0, 27}, {43, 0, 27}, {43, 0, 33}, {37, 0, 33}});
@@ -85,6 +126,7 @@ TEST(sixteen_clients_over_4g_converge_predict_and_late_join) {
     uint64_t probeCorrectionsAtArrival = 0;
     float probeMaxAfterArrival = 0;
     bool probeArrived = false;
+    const auto loadStarted = PlaceClock::now();
     while (sim.seconds() < 30) {
         if (!late && sim.seconds() >= 20) { late = sim.clients.size(); sim.add("4g", std::make_unique<Bot>(999)); }
         sim.frame();
@@ -92,10 +134,13 @@ TEST(sixteen_clients_over_4g_converge_predict_and_late_join) {
         auto p = probe.predicted().position;
         if (!probeArrived && p.x > 36 && p.z > 26 && p.z < 34) { probeArrived = true; probeCorrectionsAtArrival = probe.stats().corrections; }
         if (probeArrived) probeMaxAfterArrival = std::max(probeMaxAfterArrival, probe.stats().lastCorrection);
+        const auto frame = uint64_t(std::llround(sim.seconds() * 60.0));
+        if (frame && frame % 300 == 0)
+            placeProgress("16 clients / 4g / +late", sim, 30, loadStarted);
     }
     double tickAvg = sim.server.stats().tickMsAvg(), tickWorst = sim.server.stats().tickMsWorst;
     sim.botsActive = false;
-    sim.run(6);
+    runPlaceProgress(sim, 6, "quiet convergence");
     bool ready = true;
     float worst = 0, meanAwake = 0;
     size_t missing = 0, extra = 0, awake = 0;
@@ -142,6 +187,7 @@ TEST(sixteen_clients_over_4g_converge_predict_and_late_join) {
 TEST(example_scene_settles_without_players) {
     Json scene = exampleScene();
     PlaceServer server(scene);
+    server.setTickPhaseProfiling(true);
     std::map<physics::BodyHandle, b3Vec3> start;
     for (auto id : server.bodies()) start[server.bodyHandle(id)] = server.scene().position(server.bodyHandle(id));
     uint64_t now = 1000;
@@ -154,6 +200,14 @@ TEST(example_scene_settles_without_players) {
         awake += server.scene().awake(h);
     }
     std::printf("    %zu dynamic bodies: %zu moved > 0.3 m, %zu awake after 10 s, tick avg %.3f ms\n", bodies, moved, awake, server.stats().tickMsAvg());
+    const auto& phases = server.stats().phases;
+    CHECK(phases.samples == 600);
+    CHECK(phases.pollMs >= 0 && phases.playersMs >= 0 &&
+          phases.physicsMs >= 0 && phases.syncMs >= 0 &&
+          phases.broadcastMs >= 0);
+    const double phaseSum = phases.pollMs + phases.playersMs +
+        phases.physicsMs + phases.syncMs + phases.broadcastMs;
+    CHECK(phaseSum <= server.stats().tickMsSum + 1.0);
     CHECK(bodies == 500);
     CHECK(moved <= 10);
     CHECK(awake <= 25);
@@ -295,6 +349,7 @@ Json riderScene() {
 TEST(prediction_near_dynamic_obstacles) {
     auto pushers = [&](bool simulate, Share& walker, Share& bots, float& visible99, float& visibleMax) {
         SimPlace sim(exampleScene(), 21);
+        sim.server.setTickPhaseProfiling(true);
         for (int i = 0; i < 15; ++i) sim.add("4g", std::make_unique<Bot>(uint32_t(300 + i)));
         sim.add("4g", std::make_unique<Bot>(7, std::vector<b3Vec3>{{37, 0, 27}, {43, 0, 27}, {43, 0, 33}, {37, 0, 33}}));
         for (auto& e : sim.clients) e.client->simulateBodies = e.client->stepOthers = simulate;
@@ -302,6 +357,7 @@ TEST(prediction_near_dynamic_obstacles) {
         std::vector<float> visible;
         std::vector<b3Vec3> lastOffset(15);
         std::vector<uint64_t> lastReconciles(15);
+        const auto started = PlaceClock::now();
         for (int f = 0; f < 30 * 60; ++f) {
             sim.frame();
             for (size_t i = 0; i < 15; ++i) {
@@ -314,6 +370,9 @@ TEST(prediction_near_dynamic_obstacles) {
                 lastOffset[i] = off;
                 lastReconciles[i] = c.stats().reconciles;
             }
+            if ((f + 1) % 300 == 0)
+                placeProgress(simulate ? "predicted dynamic bodies" :
+                                          "kinematic stand-ins", sim, 30, started);
         }
         for (size_t i = 0; i < 15; ++i) bots.add(sim.clients[i].client->stats());
         walker.add(sim.clients.back().client->stats());
@@ -363,7 +422,8 @@ TEST(prediction_near_dynamic_obstacles) {
             if (phase == 2) in.move.jump = t % 50 == 0;
             return in;
         };
-        sim.run(40);
+        runPlaceProgress(sim, 40, simulate ? "moving platform / sim" :
+                                                    "moving platform / stand-ins");
         CHECK(aboard);
         // The client's prediction world has the platform where the server has it (exactly, from the tick).
         auto* cp = c.staticScene();
@@ -436,12 +496,24 @@ TEST(scene_config_errors_are_readable) {
 int main(int argc, char** argv) {
     g_scenePath = argc > 1 ? argv[1] : "examples/place/scene.json";
     std::string only = argc > 2 ? argv[2] : "";
+    size_t selected = 0;
+    for (auto& entry : registry())
+        if (only.empty() || only == entry.first) ++selected;
+    size_t ordinal = 0;
     for (auto& [name, fn] : registry()) {
         if (!only.empty() && only != name) continue;
-        std::printf("%s\n", name);
+        ++ordinal;
+        const auto started = PlaceClock::now();
+        std::printf("[place %zu/%zu] START %s\n", ordinal, selected, name);
+        std::fflush(stdout);
         int before = g_failed;
         fn();
-        std::printf("  %s\n", g_failed == before ? "ok" : "FAILED");
+        const double wall = std::chrono::duration<double>(
+            PlaceClock::now() - started).count();
+        std::printf("[place %zu/%zu] %s %s | wall %.1f s\n",
+                    ordinal, selected, g_failed == before ? "PASS" : "FAIL",
+                    name, wall);
+        std::fflush(stdout);
     }
     std::printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;

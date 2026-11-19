@@ -849,24 +849,31 @@ void Server::destroy(ObjectId id) {
 
 bool Server::exists(ObjectId id) const { return impl_->obj(id) != nullptr; }
 
-void Server::set(ObjectId id, int field, const Value& v) {
-    auto& I = *impl_;
-    auto* o = I.obj(id);
-    if (!o) return;
-    const auto& L = I.layout.classes[o->cls];
+// Exactly the legacy Server::set semantics, with the object and class
+// layout already resolved by the caller. This is also used by batched
+// Place body/character updates: one ID lookup instead of 4-5 per tick.
+static void setResolvedField(Server::Impl& I, Server::Impl::Obj& o,
+                             const ClassLayout& L, ObjectId id,
+                             int field, const Value& v) {
     if (field < 0 || size_t(field) >= L.fields.size()) return;
     const FieldLayout& f = L.fields[size_t(field)];
-    Value& cur = o->values[size_t(field)];
+    Value& cur = o.values[size_t(field)];
     if (f.snapshot) {
         uint64_t q[4] = {0, 0, 0, 0};
         quantize(f, v, q);
-        uint64_t* cq = &o->q[size_t(f.slot)];
+        uint64_t* cq = &o.q[size_t(f.slot)];
         bool changed = false;
-        for (int a = 0; a < f.comps; ++a) if (cq[a] != q[a]) { cq[a] = q[a]; changed = true; }
-        if (changed) { I.vers[id] = I.epoch; o->fver(L)[f.snap] = I.epoch; I.logChange(id); }
-        if (changed && field == I.schema.cls(o->cls).positionField) {
-            Value n; dequantize(f, &o->q[size_t(f.slot)], n);
-            o->pos = {n.f[0], n.f[1], n.f[2]};
+        for (int a = 0; a < f.comps; ++a)
+            if (cq[a] != q[a]) { cq[a] = q[a]; changed = true; }
+        if (changed) {
+            I.vers[id] = I.epoch;
+            o.fver(L)[f.snap] = I.epoch;
+            I.logChange(id);
+        }
+        if (changed && field == I.schema.cls(o.cls).positionField) {
+            Value n;
+            dequantize(f, &o.q[size_t(f.slot)], n);
+            o.pos = {n.f[0], n.f[1], n.f[2]};
         }
         cur = v;
         return;
@@ -874,8 +881,25 @@ void Server::set(ObjectId id, int field, const Value& v) {
     Value n = normalize(f, v);
     if (normalize(f, cur) == n) { cur = v; return; }
     cur = (f.kind == FieldKind::String || f.kind == FieldKind::Bytes) ? n : v;
-    if (!o->relDirty) I.relDirty.push_back(id);
-    o->relDirty |= uint64_t(1) << field;
+    if (!o.relDirty) I.relDirty.push_back(id);
+    o.relDirty |= uint64_t(1) << field;
+}
+
+void Server::set(ObjectId id, int field, const Value& v) {
+    auto& I = *impl_;
+    auto* o = I.obj(id);
+    if (!o) return;
+    setResolvedField(I, *o, I.layout.classes[o->cls], id, field, v);
+}
+
+void Server::setFields(ObjectId id, std::span<const FieldUpdate> updates) {
+    if (updates.empty()) return;
+    auto& I = *impl_;
+    auto* o = I.obj(id);
+    if (!o) return;
+    const ClassLayout& layout = I.layout.classes[o->cls];
+    for (const FieldUpdate& update : updates)
+        setResolvedField(I, *o, layout, id, update.field, update.value);
 }
 
 const Value& Server::get(ObjectId id, int field) const {
@@ -954,6 +978,15 @@ void Server::setViewers(uint8_t slot, const std::vector<std::array<float, 3>>& p
     p->viewers.clear();
     for (auto& v : points)
         if (std::isfinite(v[0]) && std::isfinite(v[1]) && std::isfinite(v[2]) && p->viewers.size() < 16) p->viewers.push_back(v);
+}
+
+void Server::setViewer(uint8_t slot, std::array<float, 3> point) {
+    auto& p = impl_->peers[slot];
+    if (!p) return;
+    p->viewers.clear();
+    if (std::isfinite(point[0]) && std::isfinite(point[1]) &&
+        std::isfinite(point[2]))
+        p->viewers.push_back(point);
 }
 
 uint32_t Server::rttMs(uint8_t slot) const {

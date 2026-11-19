@@ -16,6 +16,8 @@
 #include "../core/PlanetOps.h"
 #include "../EditorUtil.h"
 #include "../EditorWorldEdit.h"
+#include "../PhysisSceneOverlay.h"
+#include "../PhysisFieldEditor.h"
 #include "engine/render/GlobalGeometryPool.h"
 #include "engine/render/GpuIcbPolicy.h"
 #include "modules/rts/view/RtsRoadView.h"
@@ -138,7 +140,16 @@ public:
                     (uint64_t(benchmarkGeneration_) << 40) |
                     (uint64_t(benchmarkMode_) << 38) |
                     (++benchmarkGpuSequence_ & ((uint64_t(1) << 38) - 1));
-                ed.device().timeGpuFrame(tag);
+                auto& timingRouter=ed.device().gpuTimingRouter();
+                if(benchmarkTimingDevice_!=&ed.device()) {
+                    benchmarkTimingDevice_=&ed.device();
+                    benchmarkTimingSubscriber_=0;
+                }
+                if(!benchmarkTimingSubscriber_)
+                    benchmarkTimingSubscriber_=timingRouter.subscribe();
+                if(benchmarkTimingSubscriber_)
+                    timingRouter.request(ed.device(),
+                        benchmarkTimingSubscriber_,tag);
                 benchmarkSamples_[benchmarkMode_].push_back(cpuMs);
                 benchmarkDrawSum_[benchmarkMode_] += renderer.drawCalls();
                 benchmarkIndirectSum_[benchmarkMode_] += renderer.modelStats().multiDrawSubmissions;
@@ -180,7 +191,14 @@ public:
         if (benchmarkActive_ || benchmarkDone_) {
             // Metal timings include the full editor MTLCommandBuffer, not just
             // renderScene. Never label them as isolated Scene GPU durations.
-            for (const auto& timing : ed.device().takeGpuTimings()) {
+            auto& timingRouter=ed.device().gpuTimingRouter();
+            if(benchmarkTimingDevice_!=&ed.device()) {
+                benchmarkTimingDevice_=&ed.device();
+                benchmarkTimingSubscriber_=0;
+            }
+            timingRouter.poll(ed.device());
+            for (const auto& timing :
+                 timingRouter.take(benchmarkTimingSubscriber_)) {
                 if (!timing.valid || !std::isfinite(timing.milliseconds) ||
                     timing.milliseconds <= 0.0 ||
                     (timing.tag & 0xFFFF000000000000ull) != 0xA17E000000000000ull ||
@@ -219,6 +237,9 @@ public:
                 for (double& value : totals) value = 0.0;
             }
         }
+        // PHYSIS authored markers capture only explicit marker clicks/drags.
+        // Ordinary FPS/RTS/other selection paths remain untouched otherwise.
+        const bool physisMarkerInput = processPhysisFieldGizmo(ed, vp_, ed.sceneCam);
         if(ed.ws().project.isFps()) {
             ImGuiIO& io = ImGui::GetIO();
             const bool navigation = vp_.hovered || (ImGui::IsWindowFocused() && !io.WantTextInput);
@@ -250,7 +271,8 @@ public:
             // FPS previously rendered the shared selection HUD without ever
             // updating the selection. Pick using the same scene model as RTS.
             // During play the inspector stays read-only.
-            if (vp_.hovered && !io.WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+            if (!physisMarkerInput && vp_.hovered && !io.WantTextInput &&
+                !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
                 const Selection hovered = ed.pickObject(vp_, ed.sceneCam, io.MousePos.x, io.MousePos.y);
                 ed.setHover(hovered);
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -310,7 +332,7 @@ public:
                     fpsDragLastY_ = io.MousePos.y;
                 }
             }
-            if (fpsDragActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+            if (!physisMarkerInput && fpsDragActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
                 (io.MousePos.x != fpsDragLastX_ || io.MousePos.y != fpsDragLastY_)) {
                 if (ed.transformTool != TransformTool::Move && fpsGizmoAxis_ >= 0) {
                     DocumentEntityRef ref;
@@ -397,7 +419,14 @@ public:
                 fpsDragActive_ = false;
                 fpsGizmoAxis_ = -1;
             }
-        } else {if (ImGui::IsWindowFocused() || vp_.hovered || looking_ || panning_) input(ed);}
+        } else {if (!physisMarkerInput &&
+            (ImGui::IsWindowFocused() || vp_.hovered || looking_ || panning_)) input(ed);}
+        // Optional PHYSIS diagnostics project into the actual camera using
+        // read-only ECS data. The shared selection HUD remains above the overlay.
+        drawPhysisSceneOverlay(ed, vp_, ed.sceneCam);
+        // Authored markers are separate from live simulation: visible even
+        // without PHYSIS installed in the current GameModule.
+        drawPhysisFieldMarkers(ed, vp_, ed.sceneCam);
         // The selection overlay is genre-independent (including FPS).
         hud(ed);
         StudioLuaExtensions::get().drawScene(ed, vp_);
@@ -1875,6 +1904,8 @@ private:
     std::vector<double> benchmarkGpuSamples_[3];
     uint8_t benchmarkGeneration_ = 0;
     uint64_t benchmarkGpuSequence_ = 0;
+    gfx::GpuTimingRouter::Subscriber benchmarkTimingSubscriber_ = 0;
+    gfx::Device* benchmarkTimingDevice_ = nullptr; // reset owner across device recreation
     uint64_t benchmarkDrawSum_[3] = {};
     uint64_t benchmarkIndirectSum_[3] = {};
     uint64_t benchmarkCommandSum_[3] = {};

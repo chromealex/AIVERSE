@@ -9,6 +9,7 @@
 #include "engine/platform/InputFlow.h"
 #include "engine/world/ChunkScene.h"
 #include "engine/world/WorldScene.h"
+#include "engine/world/TerraWeaveHorizonFrameTimingBridge.h"
 #include "engine/platform/ContentReader.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/GeometryScene.h"
@@ -20,6 +21,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iterator>
+#include <chrono>
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -36,6 +38,7 @@ struct App {
     net::UdpListener udp;net::WsListener ws;
 #endif
     world::SpatialWorld geometry;world::ChunkScene chunks;std::unique_ptr<world::WorldScene> streamedScene;std::string projectRoot;
+    terraweave::HorizonFrameTimingBridge horizonFrameTiming; // optional, native stream QoS
     platform::ContentReader contentReader;
     render::GeometryScene staticGeometry;
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
@@ -225,6 +228,7 @@ struct App {
             inputAdapter.onEvent(e);
     }
     void frame(gfx::Device& device,double dt) {
+        const auto frameStarted=terraweave::HorizonFrameTimingBridge::Clock::now();
         const auto now=net::nowMs();
 #ifndef __EMSCRIPTEN__
         if(listen) {
@@ -320,7 +324,11 @@ struct App {
             if(server){server->poll(now);if(!server->step()){accumulated=0;break;}client->poll(now);}
             accumulated-=1.0/config.tickRate;
         }
-        device.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());gui.newFrame(dt);
+        device.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());
+        // GPU query belongs to this FPS frame's command buffer. Unsupported
+        // backends transparently use measured CPU callback time only.
+        horizonFrameTiming.begin(device,streamedScene.get());
+        gui.newFrame(dt);
         auto actor=client->predicted();viewTime+=dt;
         if(actor.reloadUntil&&!lastReload)audio.play("reload");
         lastReload=actor.reloadUntil;
@@ -441,8 +449,9 @@ struct App {
         if(actor.blindUntil>client->snapshot().tick){auto remain=actor.blindUntil-client->snapshot().tick;auto alpha=int(std::min(1.0,double(remain)/std::max(1u,config.systems.flashTicks))*255);draw->AddRectFilled({0,0},{w,h},IM_COL32(255,255,255,alpha));}
         fps::view::drawRoyaleHud(lang,client->snapshot(),actor,config);
         gui.render();device.endPass();device.endFrame();
+        horizonFrameTiming.finish(streamedScene.get(),frameStarted);
     }
-    void shutdown(gfx::Device& device){if(streamedScene)streamedScene->shutdown(device);server.reset();client.reset();staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
+    void shutdown(gfx::Device& device){horizonFrameTiming.detach(device);if(streamedScene)streamedScene->shutdown(device);server.reset();client.reset();staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
 };
 }
 int aiverseMain(int argc,char** argv) {

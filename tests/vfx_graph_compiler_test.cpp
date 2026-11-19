@@ -1,5 +1,6 @@
 // Niagara-style graph compiler v1: standalone, genre-independent CPU smoke.
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraModuleSchema.h"
 #include "engine/fx/ParticleSystem.h"
 #include <iostream>
 #include <stdexcept>
@@ -52,6 +53,67 @@ int main() {
     std::vector<fx::FxParticleInfo> particles;
     ps.snapshot(particles);
     check(!particles.empty(), "compiled effect should emit particles");
+
+    // The editor's typed module inspector and native C++ consumers share
+    // exactly the same field schema and value validation.
+    check(!spectra::fieldsForNode("Spawn").empty(),"Spawn fields missing");
+    check(!spectra::fieldsForNode("Initialize").empty(),"Initialize fields missing");
+    check(!spectra::fieldsForNode("Update").empty(),"Update fields missing");
+    check(!spectra::fieldsForNode("SpriteOutput").empty(),"Output fields missing");
+    check(spectra::fieldsForNode("Unknown").empty(),"unknown node has fields");
+    Json typedNode=Json::parse(R"({"id":"spawn","type":"Spawn","properties":{"burst":4,"opaqueExtra":{"keep":true}}})");
+    std::string fieldError;
+    check(spectra::applyTypedField(typedNode,"burst",Json::number(int64_t(32)),fieldError),"typed burst edit");
+    check(typedNode["properties"].getInt("burst")==32,"edited burst lost");
+    check(typedNode["properties"]["opaqueExtra"].getBool("keep"),"unknown module was discarded");
+    Json before=typedNode;
+    check(!spectra::applyTypedField(typedNode,"burst",Json::number(int64_t(-1)),fieldError),
+          "negative burst should be invalid");
+    check(typedNode==before,"invalid typed edit mutated node");
+    check(!spectra::applyTypedField(typedNode,"burst",Json::string("32"),fieldError),
+          "wrong integer type accepted");
+    check(!spectra::applyTypedField(typedNode,"rate",Json::number(4000.0),fieldError),
+          "out-of-range emission rate accepted");
+    check(spectra::removeTypedField(typedNode,"burst",fieldError),"remove typed field failed");
+    check(!typedNode["properties"].has("burst") && typedNode["properties"].has("opaqueExtra"),
+          "removing field dropped unrelated properties");
+
+    Json initNode=Json::parse(R"({"id":"init","type":"Initialize","properties":{}})");
+    check(spectra::applyTypedField(initNode,"direction",Json::parse("[0,1,0]"),fieldError),
+          "typed direction rejected");
+    check(!spectra::applyTypedField(initNode,"direction",Json::parse("[0,1]"),fieldError),
+          "short direction vector accepted");
+    check(spectra::applyTypedField(initNode,"shape",Json::string("cone"),fieldError),
+          "valid shape rejected");
+    check(!spectra::applyTypedField(initNode,"shape",Json::string("unknown"),fieldError),
+          "unknown spawn shape accepted");
+    Json outputNode=Json::parse(R"({"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:smoke"}})");
+    check(spectra::applyTypedField(outputNode,"blend",Json::string("additive"),fieldError),
+          "valid blend rejected");
+    check(!spectra::applyTypedField(outputNode,"blend",Json::string("invalid"),fieldError),
+          "invalid blend accepted");
+    Json typedGraph=base;
+    typedGraph.find("nodes")->at(0).set("properties",typedNode["properties"]);
+    // This branch also has explicit burst from another output; ensure schema
+    // manipulations do not affect unrelated graph nodes during compilation.
+    typedGraph.find("nodes")->at(0).set("properties",Json::parse(R"({"burst":32})"));
+    check(spectra::compileGraph(typedGraph,effect,errors) && effect.emitters[0].burst==32,
+          "typed module edit failed to compile into the CPU renderer");
+
+    // Editor visual node coordinates must survive serialization but not alter compilation.
+    Json placed=base;
+    placed.find("nodes")->at(0).set("position",Json::parse("[125.5,-72]"));
+    check(spectra::compileGraph(placed,effect,errors),"valid visual node coordinates rejected");
+    check(effect.emitters.size()==2 && effect.emitters[0].burst==6,
+          "node layout metadata changed compiled effect");
+    Json wrongPosition=placed;
+    wrongPosition.find("nodes")->at(0).set("position",Json::parse("[1]"));
+    check(!spectra::compileGraph(wrongPosition,effect,errors),
+          "invalid node layout metadata accepted");
+    wrongPosition=placed;
+    wrongPosition.find("nodes")->at(0).set("position",Json::parse("[1000001,0]"));
+    check(!spectra::compileGraph(wrongPosition,effect,errors),
+          "unbounded canvas coordinates accepted");
 
     const Json override = Json::parse(R"JSON({"size":2})JSON");
     check(spectra::compileGraph(base,override,effect,errors), "override compile");

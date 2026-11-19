@@ -11,9 +11,10 @@ native C++ API. See [SpectraFX architecture and API](spectrafx.md), skill
 `skills/visuals/aiverse-spectrafx/SKILL.md` and its mandatory
 `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md` continuation log.
 
-**Current limits:** no GPU particle simulation, no full Niagara-equivalent
-dataflow and no visual graph editor; graph integration into RTS/FPS production
-clients is still pending. Added tests are not yet verified as passing.
+**Current limits:** GPU particle simulation and full Niagara-like programmable
+dataflow are not implemented. A basic editor graph-v1 canvas exists (untested GUI),
+with in-memory CPU preview; production RTS/FPS graph integration is still pending.
+New tests and GUI interaction have not yet been verified as passing.
 
 
 Presentation-only particle effects: CPU simulation (`engine/fx/ParticleSystem`), drawn through the

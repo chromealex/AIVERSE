@@ -5,6 +5,7 @@
 #pragma once
 
 #include "FxEffect.h"
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
@@ -134,9 +135,17 @@ inline bool compileSpectraGraph(const Json& graph, const Json& overrides, Effect
             return vfxgraph_detail::fail(errors, "duplicate node id '" + id + "'");
         if (!n["properties"].isNull() && !n["properties"].isObject())
             return vfxgraph_detail::fail(errors, "properties of '" + id + "' must be an object");
+        // Authoring-only metadata: ignored by the compiler and particle backend.
+        // Coordinates travel with graph files so graph layout survives editor restarts.
+        if (n.has("position")) {
+            const Json& pos = n["position"];
+            if (!pos.isArray() || pos.size() != 2 || !pos[size_t(0)].isNumber() || !pos[size_t(1)].isNumber() ||
+                std::abs(pos[size_t(0)].toDouble()) > 100000.0 || std::abs(pos[size_t(1)].toDouble()) > 100000.0)
+                return vfxgraph_detail::fail(errors, "position of '" + id + "' must be two bounded numeric coordinates");
+        }
         for (const auto& [key, value] : n.members()) {
             (void)value;
-            if (key != "id" && key != "type" && key != "properties")
+            if (key != "id" && key != "type" && key != "properties" && key != "position")
                 return vfxgraph_detail::fail(errors, "unknown node key '" + key + "'");
         }
     }

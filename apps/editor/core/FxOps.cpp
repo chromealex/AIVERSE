@@ -18,6 +18,9 @@ namespace fs = std::filesystem;
 
 namespace aiverse::editor {
 
+// SpectraFX graph authoring is in a separate translation unit.
+void registerSpectraGraphOps(Workspace& ws);
+
 namespace {
 
 Json str(const std::string& s) { return Json::string(s); }
@@ -565,6 +568,7 @@ void registerFxOps(Workspace& ws) {
         r.set("summary", str(remove ? "Привязка снята: " + where : where + " → " + (none ? std::string("нет эффекта") : eff)));
         return r;
     });
+    registerSpectraGraphOps(ws);
 }
 
 } // namespace aiverse::editor

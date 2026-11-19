@@ -113,7 +113,8 @@ GeometryPoolAdmission geometryPoolAdmission(gfx::Device& dev, const Model& model
         return {GeometryPoolAdmissionReason::EmptyGeometry};
     using PoolPolicy = Model::Batching::GeometryPoolPolicy;
     const PoolPolicy policy = model.batching.geometryPoolPolicy;
-    if (policy == PoolPolicy::Dedicated)
+    // A per-model opt-out also applies when global rigid LOD pooling is on.
+    if (!model.batching.allowGeometryPool || policy == PoolPolicy::Dedicated)
         return {GeometryPoolAdmissionReason::DedicatedAsset};
     const bool allowRigidLods = policy == PoolPolicy::AllowRigidLods ||
         (policy == PoolPolicy::Inherit && rigidLodPoolAllowed());

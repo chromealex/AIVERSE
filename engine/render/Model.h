@@ -203,6 +203,9 @@ struct Model {
         // Generate missing LOD meshes during CPU preparation. Explicit
         // authored LOD chains always win; generated LODs never merge nodes.
         bool autoLod = true;
+        // Dynamic CPU-authored model vertices may be patched via Device::updateBuffer.
+        // Such models must own their GPU VB instead of sharing an immutable pool page.
+        bool allowGeometryPool = true;
         float maxExtent = 20.0f;
         std::vector<std::string> preserveNodes; // preserve node and its descendants by exact name
         // CPU-side instance counts, not GPU draw calls (shadows and instancing differ).

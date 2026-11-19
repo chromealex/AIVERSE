@@ -34,6 +34,7 @@
 #include "engine/sim/Simulation.h"
 #include "engine/ui/UiLayer.h"
 #include "engine/world/WorldScene.h"
+#include "engine/world/TerraWeaveHorizonFrameTimingBridge.h"
 #include "modules/rts/RtsAI.h"
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsModule.h"
@@ -329,6 +330,9 @@ private:
     Renderer3D r3d_;
     // streamed static world (map "streamedWorld": {"async": true, ...}, docs/large-worlds.md): chunks around the camera
     std::unique_ptr<world::WorldScene> worldScene_;
+    // Stage41: ordered nonblocking CPU/GPU samples only when the streamed
+    // world's Horizon adaptive presentation quality is explicitly enabled.
+    terraweave::HorizonFrameTimingBridge horizonFrameTiming_;
     int worldRadius_ = 2;
     render::PostFx postFx_;               // post-processing: game.json / map "postfx" (engine/render/PostFx.h)
     render::PostFxQuality postFxBase_ = render::PostFxQuality::Medium;   // tier before the governor stepped down

@@ -4,6 +4,26 @@ Read this file completely before changing anything. It is short on purpose. `REA
 short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
 `docs/overview.md` the detailed overview; this file is the engineering contract.
 
+## AIVERSE SpectraFX (universal VFX, in progress)
+
+**Required handoff:** [docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md](docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md).  
+**Official AI skill:** [skills/visuals/aiverse-spectrafx/SKILL.md](skills/visuals/aiverse-spectrafx/SKILL.md).  
+**System documentation:** [docs/spectrafx.md](docs/spectrafx.md).  
+The previous `aiverse-niagara-vfx` skill is a legacy discovery alias.
+
+The public SpectraFX headers are `engine/fx/SpectraFX.h` and `libraries/include/aiverselib/genre/SpectraFX.h`; native targets link `AIVERSE::spectrafx`. New cross-genre opt-in VFX layers are `engine/fx/VfxGraph.h` (graph -> existing CPU effect compiler),
+`engine/fx/VfxGraphAssets.h` (versioned assets, parameter variants and hot reload) and
+`libraries/include/aiverselib/genre/EcsVfxPresentation.h` (read-only ECS renderer bridge,
+tick-event bindings). Never put renderer handles, float particles or graphics timing into
+authoritative gameplay ECS, never duplicate an FPS-only/RTS-only VFX engine, and do not remove
+legacy `RtsFx` before production parity tests. The basic graph-v1 ImGui canvas is in
+`apps/editor/windows/SpectraGraphWindow.cpp`, graph CRUD in
+`apps/editor/core/SpectraGraphOps.cpp` and the editor-only in-memory preview
+in `apps/editor/EditorFxOps.cpp`. **GPU VFX, full Niagara graph dataflow and automatic
+native-client integration are not complete.** Current test targets are committed but not
+verified as passing. Every new VFX stage MUST append a separate handoff commit after code and
+tests and record exact SHA, verification status and next work.
+
 ## Mandatory per-stage handoff protocol (2026-11-18, user instruction)
 
 **Every completed stage MUST leave a durable handoff for the next agent, without exception.**
@@ -1938,3 +1958,871 @@ rendering or test gates; new diagnostic binary remains
 unbuilt and exact GPU ICB counts are not yet recorded.
 Leave PR #34 Draft pending Vulkan, recycling, full CI
 and controlled A/B/A timing measurements.
+
+## PHYSIS — genre-independent environmental ECS (2026-11-18)
+
+- **Canonical source:** `engine/physis/{Physis,PhysisClimate,PhysisEnvironment,PhysisDisasters,PhysisWind,PhysisGravity,PhysisStorm,PhysisForces,PhysisPresentation,PhysisIntegration}.h`. Native games include these headers and install PHYSIS into generic `aiverse::Simulation` through `physis::install`; do **not** reimplement weather/hazards in FPS, RTS, RPG, any genre, or in renderer-specific code.
+- **Mandatory independence:** PHYSIS must have no dependency on any game-genre module or a render backend; use `World` ECS components/resources and `Fixed` arithmetic, fixed committed ticks, deterministic seeds and COW/rollback.
+- **Presentation:** consuming Terra, Water, Foliage, VFX, Physics, Audio, editor and native gameplay may query read-only `EnvironmentalResponse` / `PresentationCell`; PHYSIS must work headless. Do not store visual handles in authoritative ECS.
+- **System ordering:** one of `advance`, `advanceClimate`, `advanceEnvironment` or `advanceEnvironmentWithDisasters` per authoritative tick; do not advance all of them. `physis::install` registers a single system. Preserve world persistence schemas when changing components.
+- **Docs/hand-off on EVERY stage:** `docs/agent-handoffs/physis-{core,climate,environment,disasters,integration}-2026-11-18.md` and `engine/physis/AGENTS.md`. Every follow-on implementation stage must commit code, then a separate handoff with exact branch/SHA, public API, changed files, actual test results, limits and specific next action.
+- **Tests:** baseline CTests `physis_core`, `physis_climate`, `physis_environment`, `physis_disasters`, `physis_integration`, plus `physis_wind`, `physis_gravity`, `physis_storm`, `physis_forces`, `physis_presentation`, and opt-in `physis_box3d` (`AIVERSE_ENABLE_PHYSICS=ON`); run `./run-tests.sh --filter '^physis_'` as required by the unified test-runner policy above. These targets have been written and registered but **NOT RUN** in the connector-only development session; do not claim validation or merge before tests and review.
+- **Remaining work:** PHYSIS-owned climate/wind/gravity/storm/force fields and host-facing presentation APIs and host-owned opt-in Terra/NEREID/VFX/Foliage/Physics/editor adapters (other agents own canonical water and terrain), spatial indexing, sparse hazards, streaming/LOD, deterministic partitions, network deltas, platform validation and physical-unit calibration. Follow the cross-agent ownership matrix below and `docs/physis-nereid-terraweave-integration.md`; do not duplicate Water or Terra systems.
+
+## Cross-agent ownership: PHYSIS / NEREID / TerraWeave (2026-11-18)
+
+**MANDATORY before weather, terrain, water, foliage, shoreline, hydrology or biome work:** read [`docs/physis-nereid-terraweave-integration.md`](docs/physis-nereid-terraweave-integration.md). Never implement the same capability in two systems. All three engine subsystems and their opt-in adapters are **genre independent**.
+
+| Owner (agent / active feature branch) | Exclusive implementation scope | Shared consumption boundary |
+|---|---|---|
+| **PHYSIS agent** / `feature/physis-nature-simulation`, draft PR #25 | Atmospheric/climate ECS, rain/snow/wind, surface wetness/snowpack/ice, fire and quake events. `engine/physis/` | Publish read-only `physis::EnvironmentalResponse` / `PresentationCell`; no water body/river/ocean/shoreline solver or terrain meshes. |
+| **Water agent (NEREID)** / `feature/nereid-water-core`, draft PR #23 | Generic ECS water bodies, water-surface and flow sampling, river/lake/ocean geometry, buoyancy, optional water mesh and water legacy adapters. `libraries/include/aiverselib/water/`, `docs/nereid/` | Export NEREID `WaterSample` / `WaterContactComponent` and stable water-body geometry for any terrain/render host; do not own PHYSIS climate or Terra terrain. |
+| **Terra agent (TerraWeave)** / `feature/terraweave` | Heightfields, biome/soil and terrain geometry, foliage/scatter, scene/terrain adapters, ground/shore presentation. `engine/world/TerraWeave*.h` | Opt-in adapters consume NEREID water and PHYSIS environment; do not duplicate a mutable water solver or weather simulation in Terra core. |
+| **Integration agent** / explicitly assigned at merge time | Coordinates, units, tick order, persistence, optional adapters, editor/host integration and cross-system tests | Independent composition target, **not** dependencies from PHYSIS/NEREID/Terra foundational headers into one another. |
+| **Render/VFX agent** / separately assigned | Particles, precipitation visuals, wet/snow material layers, foliage deformation, water material effects | Presentation-only snapshots; never write authoritative PHYSIS/NEREID/Terra ECS state from GPU/render frames. |
+
+**Source of truth:** Terra owns terrain height/biome baseline; PHYSIS owns dynamic atmospheric/weather/surface conditions; NEREID owns persistent water bodies, levels, flow and contacts. PHYSIS has an **experimental standalone `HazardCell::waterDepth` flood model**; for NEREID-managed worlds set `physis::InstallOptions::floodMode = physis::FloodMode::ExternalAuthority` to skip/clear PHYSIS local water while retaining fire and quake. The switch and tests have been authored but are **NOT RUN**; no NEREID integration or cross-module validation has been performed. NEREID water becomes authoritative when enabled. Keep legacy `waterNetwork`/baked maps unchanged until explicit migration and regression testing.
+
+**Future Terra bridge:** read NEREID water masks/surface and PHYSIS wetness/snow/ice/wind to build Terra shoreline, vegetation exclusions and ground overlays. Terra uses signed centimetres, PHYSIS/NEREID `Fixed` metres, X/Z ground and Y vertical: checked deterministic conversion and negative-coordinate floor division are mandatory. PHYSIS `rain` is normalized intensity, **not metres of water**; only the Water owner defines a calibrated precipitation-to-water-volume policy. No mutual include dependencies, double authority, hidden state or genre switch.
+
+**Cross-agent handoff after EVERY stage:** commit own changes only on own branch; document implementation SHA, API, changed files, actual PASS/FAIL/NOT RUN results, integration risks, and next step in a stage handoff. Cross-branch integration waits for a dedicated PR, native builds, tests (`physis_*`, `ecs_nereid_*`, `terraweave*`, legacy water/terrain), rollback, save parity and conflict review. Neither separate PR is automatically merged by this guidance.
+
+## PHYSIS diagnostics / visualization boundary (2026-11-18)
+
+- PHYSIS Stage 14 adds a read-only, bounded CPU diagnostic raster in `engine/physis/PhysisDiagnostics.h`, with `sampleDiagnosticRaster`, `DiagnosticLayer` and 16-bit `diagnosticNormalized`. This is reusable by any editor/game/server but is not an implemented Scene overlay or VFX. The API must not write ECS state, inspect render handles or mutate Box3D/Water/Terra.
+- World state remains owned by PHYSIS fixed-point ECS; diagnostics sample only committed `World` state, with invalid/out-of-grid cells explicitly marked. `LocalFloodMeters` is PHYSIS's standalone flood, never canonical NEREID water.
+- The added `physis_diagnostics` CTest is registered for `./run-tests.sh` and focused `.github/workflows/physis.yml`; it is **NOT RUN** until actual CI/native results are inspected. Handoff `docs/agent-handoffs/physis-diagnostics-2026-11-18.md`.
+
+## PHYSIS Stage 15–16 — diagnostic fast path and snapshot broadphase (2026-11-18)
+
+- `engine/physis/PhysisDiagnostics.h` reads scalar weather/surface/hazard layers **directly** from authoritative ECS cells. Only wind/gravity vector layers need a 3D field query. Old `sampleDiagnosticRaster` signatures and raw-output semantics remain.
+- `engine/physis/PhysisSpatialIndex.h` is an **opt-in transient COW-snapshot index**, not persistent ECS state: X/Z buckets prune WindZone, WindShelter, GravityField and StormEvent candidates while keeping exact old Fixed evaluation policies, ECS visit order and priority tie-breaks. `sampleDiagnosticRasterIndexed` is available to editor/host consumers.
+- Rebuild the derived index after committed simulation ticks, storm movement, mutations, load or rollback when current values are required. Never store it in `World` resources, serialize it, make rendering authoritative, or depend on Box3D/FPS/RTS/Water/Terra in PHYSIS core.
+- Stage tests `physis_diagnostics` (14-layer old-vs-fast and indexed parity) and `physis_spatial_index` (negative positions, field parity, snapshot mutation, bounded global fallback) are registered for the unified CTest and focused Linux/macOS workflow. **NOT RUN**; no benchmark throughput or native success claim. Handoffs: `docs/agent-handoffs/physis-diagnostic-fastpath-2026-11-18.md`, `docs/agent-handoffs/physis-spatial-index-2026-11-18.md`.
+
+## PHYSIS Stage 17 — editor diagnostics and separate preview World (2026-11-18)
+
+- The PHYSIS agent owns `engine/physis/PhysisDebugPalette.h` (CPU-only colour conversion, not authoritative) and `apps/editor/windows/PhysisWindow.cpp` (new optional docked GUI, auto-registered by `AIVERSE_EDITOR_WINDOW`). This **does not** replace or refactor shared Inspector/Scene/Hierarchy from editor-unification PR #7. The window opens from the World menu and is hidden by default.
+- The PHYSIS window may **read** the current `Editor::sim()->world()` if its `physis::State` exists, but must never step or modify that World or Box3D. When there is no PHYSIS live simulator, an explicit action creates an **isolated demo World** and any step buttons apply only to it.
+- 2D heatmaps use `DiagnosticRaster`, `FieldSpatialIndex`, and `DebugPalette`. Wind/Storm/Gravity circles are visualization only, not colliders or physical objects. Do not duplicate NEREID water or Terra terrain. Avoid introducing FPS/RTS-specific debug paths.
+- Tests `physis_editor_view` plus prior PHYSIS regression targets are registered with unified CTest and focused CI, but **NOT RUN**. Also build `aiverse_editor` and manually inspect Russian labels, cell picking, project/source switching and UI layout before claiming editor usability. Stage handoff: `docs/agent-handoffs/physis-editor-debug-view-2026-11-18.md`.
+
+## PHYSIS Stage 18 / current main merge — 2026-11-18
+
+- **Canonical feature branch** `feature/physis-nature-simulation` merged `main` commit `9ee6ff6fbf390bd45363bc92c838f492dfe92eee` via two-parent merge `810feba70f01cdc35003ac80ea8486f39dc16049`, preserving input work and PHYSIS/SpectraFX/VFX. `docs/agent-handoffs/physis-main-merge-2026-11-18.md` records the exact trees/conflict resolution. Native merged build/CTest have NOT RUN.
+- **Scene debug overlay:** `apps/editor/PhysisSceneOverlay.h` draws opt-in transparent PHYSIS field tiles and Wind/Storm/Gravity rings in the *real* Scene viewport; `engine/physis/PhysisSceneGeometry.h` is pure Fixed-point CPU geometry, independent of editor/Box3D/genres. The Scene projection is presentation-only and never edits authoritative World.
+- **Inspector authoring:** `apps/editor/PhysisAuthoring.h` validates map-level `"physis"` JSON and uses one `MapDoc::beginEdit()` per Apply for Undo/Redo. `apps/editor/windows/InspectorWindow.cpp` shows PHYSIS parameters under `Selection::MapProps` plus extended JSON; supports both generic map and FPS document layouts. Invalid edits must have no side effects.
+- **Runtime opt-in:** `engine/physis/PhysisProjectConfig.h` parses map config into `InstallOptions`; any generic native `GameModule::setup` may call `physis::installFromMap(sim,map)`. Do not auto-attach to RTS/FPS genre modules or mutate live ECS when authoring. Authored per-volume arrays are stored but not auto-spawned until a separate stable-ID adapter exists.
+- **Verification gates:** `physis_scene_geometry` and `physis_project_config` build under base tests, `physis_authoring` builds when `aiverse_editor_core` is enabled, Studio workflow compiles/executes the editor integration tests. Actual CMake/CTest, editor screenshots and live UI tests: **NOT RUN**. Handoff: `docs/agent-handoffs/physis-editor-scene-inspector-2026-11-18.md`. Preserve PHYSIS/NEREID/TerraWeave ownership, main branch input changes, and editor-unification PR #7 work.
+
+## PHYSIS Stage 19 — authored nature fields, universal ECS spawn and editor gizmos (2026-11-18)
+
+- **Genre-independent source of truth:** `engine/physis/PhysisFieldAssets.h` validates map-level `windZones`, `storms`, `gravityFields` with stable unique authored IDs and creates ordinary `WindZone`, `StormEvent`, `GravityField` components in sorted ID order. `engine/physis/PhysisProjectConfig.h::installFromMap` runs all validation before world initialization; explicit native `GameModule::setup` remains required. Never duplicate these calculations in FPS/RTS/RPG modules.
+- **Editor owner:** `apps/editor/PhysisFieldEditor.h` + `PhysisAuthoring.h` list, create, edit, remove fields and provide opt-in W/S/G Scene markers. Click/drag is handled before normal selection ONLY when marker editing is enabled and the pointer hits a marker. No fake runtime ECS selection, live World edits or Box3D force changes. Selected authored field properties are shared with the universal MapProps Inspector.
+- **Undo/redo rule:** field addition/deletion/property Apply uses `MapDoc::beginEdit` once. Scene drag starts a single snapshot on the first effective movement and calls `MapDoc::touched` on subsequent moves. All authoring, including FPS map JSON, must use the same strict parser and the same MapDoc history. Do not mutate game save ECS directly; there is no live hot-reload in this stage.
+- **IDs/saves:** Stable ASCII `id` (1..64 chars) is a map authoring key, sorted at spawn; it is not itself a new persistent ECS schema. Nonempty field collections require matching `enableWindZones`, `enableStorms`, `enableGravityFields` flags. Use unchanged map + registered schema manifest for replay/load; no runtime field-ID lookup or multi-user edit merge claimed.
+- **Water/Terra:** NEREID Water agent retains authoritative water; `FloodMode::ExternalAuthority` prevents duplicate PHYSIS shallow-water authority. TerraWeave agent owns foliage/landscape. Box3D adapter remains optional physics consumer.
+- **Tests:** `physis_field_assets`, `physis_field_authoring` (when editor_core built), expanded `physis_project_config` native save fixture, CMake + Linux/macOS/Studio CI updates. **CMake, native C++, CTest and graphical drag testing NOT RUN**; don't claim success without logs. Next handoff `docs/agent-handoffs/physis-field-assets-gizmos-2026-11-18.md`.
+
+
+### PHYSIS Stage 21 — group editing without runtime writes
+- PHYSIS Scene W/S/G markers now support Ctrl/Shift multi-selection,
+  group move, safe duplicate and atomic group deletion. Continue building
+  genre-independent ECS components/systems; avoid genre-only variants.
+- The shared authoring helpers moveFields/duplicateFields/removeFields use
+  native field validation for one MapDoc Undo transaction per batch/drag,
+  for both regular and FPS-verbatim JSON maps. Move a whole group by the
+  same delta; never snap members individually or mutate live ECS World.
+- Keep Scene/ImGui in apps/editor/PhysisFieldEditor.h. NEREID owns water,
+  TerraWeave terrain/foliage, Box3D dynamics. No new saved ECS schema.
+- See docs/agent-handoffs/physis-editor-group-authoring-2026-11-18.md.
+  Source test cases added but C++ compilation/CTest/macOS GUI QA NOT RUN.
+  PR #25 must stay draft until verified.
+
+
+- PHYSIS Stage 21 extension: physis_authoring::transformFields performs one
+  editor-only group rotation around global Y and uniform spatial scale
+  about the active selected marker. It scales radii/storm extents but NOT
+  wind velocity or force strengths. No new runtime authority or schema.
+  See the Stage 21 handoff; GUI/CTest verification still pending.
+
+
+### PHYSIS Stage 22 — advanced Scene field gizmos
+
+- PHYSIS mouse controls in apps/editor/PhysisFieldEditor.h now include
+  optional box selection, 5 pivot choices, world-axis X/Y/Z handles,
+  Yaw-Y and Uniform Scale rings, and prior radius editor. Pure
+  apps/editor/PhysisGizmoGeometry.h is ImGui/genre independent.
+- Pivots are transient editor state. Group movement snaps the pivot and
+  preserves relative offsets; ring drag calculates from original JSON
+  via transformFields with baseline/firstEdit and a single Undo.
+  Every result gets full native parser validation before MapDoc write.
+- Never edit live ECS/Box3D/NEREID/TerraWeave state from scene authoring.
+  Yaw changes field positions, not orientation or wind velocity. The
+  current field types do not support unconstrained 3D quaternion rotation.
+- Independent engine/physis/PhysisFieldChangePlan.h may exist from
+  another agent; this is a planning helper only, not ECS hot reload.
+- Stage handoff docs/agent-handoffs/physis-editor-marquee-3d-gizmos-2026-11-18.md.
+  C++ fixtures authored but native compile/CTest/macOS visual QA NOT RUN;
+  keep PHYSIS PR #25 in draft.
+
+
+### PHYSIS Stage 23 — opt-in reconciler and command authority
+
+- The new engine/physis/PhysisFieldRuntime.h provides generic,
+  genre-neutral stable authored ID -> Entity mapping and an opt-in
+  Simulation command-boundary reconciler based on FieldChangePlan.
+  installEditableFromMap intentionally changes persistent schema
+  (physis.field_runtime v1, Wind/Storm/Gravity pools); keep old
+  installFromMap and existing save manifests untouched by default.
+- Apply complete typed field edits through a host-selected
+  GameModule::applyCommand type after server authorization and revision
+  checking; never write live ECS from Scene. Stable IDs and fingerprints
+  live in rollback-owned World resource; same-kind Update preserves Entity,
+  retype Remove+Add, stale batches reject and no-op batches consume revision.
+- Simulation Command wire supports <=4096 args, so PHYSIS caps snapshots
+  at 32760 bytes. It does not provide automatic network permissions,
+  atomic multi-packet chunking, Inspector-to-GameModule dispatch or
+  GUI edit acknowledgement. Live climate/grid/flood policy migration
+  remains unsupported.
+- A new physis_field_runtime CTest target is registered in CMake and
+  PHYSIS/Studio CI. Test SOURCE has been written but native C++/CTest/CI
+  PASS and actual network/editor integration have not been verified.
+- Stage handoff: docs/agent-handoffs/physis-field-runtime-reconciliation-2026-11-18.md.
+  Keep PR #25 as DRAFT until genuine native validation.
+
+
+### PHYSIS Stage 24 — opt-in editor submission and network authority
+
+- apps/editor/PhysisLiveEdit.h holds the generic local capability and
+  status tracker, apps/editor/windows/PhysisWindow.cpp the UI.
+  GameModule must opt in, select its own command type and authorize
+  LOCAL editor mutations explicitly. No PHYSIS World writes from Scene.
+- Queued is not Applied. Read runtime revision plus authored field
+  fingerprints, invalidate on superseding changes/rollback and visibly
+  reject stale revisions or missing dispatch.
+- engine/physis/PhysisFieldRuntime.h exposes server-side
+  admitAuthorizedFieldEdit with a principal generated from the
+  authenticated connection and a host ACL callback. Never promote
+  untrusted player=0 commands into authority. Existing player input
+  relay is not a PHYSIS admin endpoint.
+- Network CommandSink stays unavailable for local editor submit; a
+  remote host needs its own privileged transport, routing and ACK/NACK.
+  No automatic FPS/RTS integration, climate/water/physics hot edits or
+  default persistence schema changes.
+- New physis_live_edit CTest + CI entries are authored but native
+  compile/CTest/macOS UI/real network runs NOT VERIFIED.
+  Handoff docs/agent-handoffs/physis-editor-live-edit-2026-11-18.md.
+
+
+### PHYSIS Stage 25 — remote editor protocol, dedupe and reconnect
+
+- Reuse net::Conn and versioned PHYSIS envelopes for remote editing;
+  do not inject editing into normal player InputFrame or allow
+  arbitrary client-issued player=0/system commands.
+- ServerGateway takes a verified principal from an authenticated
+  server connection and a host ACL; only server-owned commands
+  execute at Simulation boundaries. Deduplicate exact requests
+  by principal/instance/request ID, reject altered ID reuse,
+  serialize admissions and distinguish Queued from Applied.
+- Applied requires the right ECS revision and exact fingerprints,
+  not a sent packet. RemoteClient preserves ID and bytes on retry,
+  queries before resending after reconnect and rechecks old
+  Applied receipts for rollback. Server dedupe cache is volatile,
+  NOT an exactly-once journal across server process restarts.
+- apps/editor/PhysisRemoteEdit.h accepts only a trusted attached
+  net::Conn. No default anonymous PHYSIS admin listener or
+  FPS/RTS auto-authority. A host must wire real auth, transport
+  and durable journal separately.
+- Another agent's RuntimeFieldRegistry / installTrackedFromMap is
+  independent from the Stage 23 FieldRuntimeState pipeline.
+  Keep one authority, do not install both. No NEREID/Terra/Box3D
+  ownership changes.
+- CTest physis_remote_edit and PHYSIS/Studio workflow targets
+  added but native compile/CTest/real security QA NOT RUN.
+  Handoff docs/agent-handoffs/physis-remote-edit-reliable-2026-11-19.md.
+
+
+### PHYSIS Stage 26 — journal recovery and privileged local endpoint
+
+- Canonical PHYSIS editor/runtime authority is Stage 23/24
+  FieldRuntimeState + installEditableFromMap + GameModule::applyCommand
+  dispatching applyFieldEditCommand. Do NOT install the parallel
+  RuntimeFieldRegistry/FieldCommandHost simultaneously.
+- engine/physis/PhysisRemoteJournal.h stores the admin request/receipt
+  cache as bounded checksummed write-ahead snapshots. Persist INTENT
+  before command enqueue and status after tick, fail closed if disk
+  writes fail. On startup restore Simulation checkpoint first,
+  validate/load journal second, open privileged listener third.
+- engine/physis/PhysisAdminAuth.h provides challenge/proof with keyed
+  BLAKE2b and secure OS random. PhysisAdminEndpoint.h binds a
+  WsListener to loopback only, requires game-owned reserved command
+  type, authenticated principal and ACL. Never trust client IDs
+  or player=0 as an authority credential.
+- Native net::connectWebSocket does not support WSS/TLS. External
+  admin requires a real encrypted tunnel/transport, never public
+  plaintext ws://. No automatic privileged listener is added to
+  FPS/RTS modules or ordinary net match input.
+- Sidecar file journal + separate World checkpoint is NOT one
+  crash-atomic transaction; Unknown/Conflict after ambiguous
+  restart is a correct result, not a false Applied. Further
+  atomic checkpoint work required before exactly-once guarantees.
+- Test target physis_admin_journal registered and fixture written;
+  native build/CTest/macOS editor/actual remote TLS and security QA
+  NOT RUN. Stage handoff
+  docs/agent-handoffs/physis-admin-durable-journal-2026-11-19.md.
+
+
+### PHYSIS Stage 26 hardening — queued receipt after process crash
+
+- ServerGateway::restoreJournal must convert every persisted Queued
+  receipt to Unknown: a server restart loses its old in-memory
+  Simulation.pending commands. First restore matching World,
+  then observe() to reconcile to Applied / Conflict from actual
+  revision and field fingerprints. For unresolved intent permit
+  only the identical original authenticated Submit under ACL
+  and expectedRevision. Never fake a successful old receipt.
+- New native source tests in physis_admin_journal cover crash
+  before scheduled tick and crash after World commit but before
+  receipt flush; BUILD/CTEST NOT RUN.
+- FileJournal sidecar and Simulation save are NOT one atomic store.
+  Keep exact limits/ownership and separate PHYSIS, NEREID,
+  TerraWeave and Box3D. Handoff:
+  docs/agent-handoffs/physis-stage26-queued-recovery-2026-11-19.md.
+
+
+### PHYSIS Stage 26 queued receipt crash recovery
+- The existing admin journal and authenticated loopback endpoint were already implemented in PHYSIS; do not duplicate them. `ServerGateway::restoreJournal` must treat persisted `Queued` as `Unknown` on process restart because the Simulation pending command may have vanished.
+- Reconcile Unknown against the restored World; confirm Applied only for matching revision and typed-field fingerprints. Safe requeue requires the exact original authenticated request and still-current expected revision. Do not claim cross-file exactly-once durability.
+- New source tests cover crashes before ECS commit and after ECS commit but before journal Applied flush. Native tests NOT RUN.
+- Stage handoff: `docs/agent-handoffs/physis-stage26-queued-recovery-2026-11-19.md`.
+
+## PHYSIS synchronized with canonical NEREID Water in main (2026-11-19)
+
+The two-parent merge `7c617d7fbc1a7ff7529e84a8e7e281f5f3298f0b` imported `main` at `d71c6d47e532b25fb816a8bb1f96c41e5275a165` INTO
+`feature/physis-nature-simulation`; **never merge PHYSIS into main
+without separate review**. The merge preserved the genre-independent
+PHYSIS ECS and imported canonical NEREID Water (components, surface,
+buoyancy, currents, confluence, scene, renderer bridges and tests).
+NEREID owns authoritative water bodies/flows/buoyancy; PHYSIS owns
+weather, wind, gravity, storms, wetness/snow/ice and hazards. For a
+native host using NEREID water authority, explicitly opt PHYSIS into
+`FloodMode::ExternalAuthority` to avoid double shallow-flood simulation.
+`engine/world/NereidPhysisWindBridge.h` is presentation-only; it never
+makes PHYSIS and NEREID share mutable authoritative state.
+Follow `docs/physis-nereid-terraweave-integration.md` and
+`docs/agent-handoffs/physis-stage72-main-nereid-merge-2026-11-19.md`.
+Previous PHYSIS/Box3D, Editor authoring and NEREID standalone test
+results do NOT establish a PASS for the new combined merge: run a
+new native cross-module compile/CTest and preserve the result.
+
+## PHYSIS + NEREID post-merge native test checkpoint (2026-11-19)
+
+User ran the PHYSIS branch's focused post-`main` merge CTest
+(`^(physis_|ecs_nereid_|vfx_)`) and reported **40/40 PASS,
+0 failures, 10.25s**. This verifies those native test targets after
+the two-parent merge `7c617d7f`; it is **not** all-repo CTest or
+runtime visual validation. The system authority contract is unchanged:
+PHYSIS owns environment/weather; NEREID owns water bodies/flow
+and buoyancy; TerraWeave owns terrain/foliage. No duplicate local
+PHYSIS shallow flood with canonical NEREID: choose
+`FloodMode::ExternalAuthority`. The existing PHYSIS-to-NEREID
+wind adapter changes visuals only, not ECS water authority.
+See `docs/agent-handoffs/physis-stage73-postmerge-40-green-2026-11-19.md`.
+
+## PHYSIS full repository test follow-up: skill audit and Place performance (2026-11-19)
+
+After the native post-main-merge focused suite passed 40/40,
+the user's full 150-test macOS CTest had **148/150 PASS**.
+`skill_audit` failed on one PHYSIS documentation reference
+(`tests/physis_remote_edit_test.cpp::revisionProbeStopsOnUnhealthyJournal`
+was treated as a nonexistent file), while `place` had **51/52
+internal checks PASS** but missed a strict performance check:
+server tick average **8.204 ms**, required **<5.0 ms**.
+All Place convergence/correctness assertions reported in the log
+passed; the measured sample had 523 physics bodies, 16 clients/4g
+and a late joiner.
+
+Source commit `a61923df653994a9a94c1916f4077db7fb7e9848`:
+- In `skills/world/aiverse-physis/SKILL.md` separate the valid
+  file path from the function name so `tools/skills/audit.py`
+  no longer treats the combined `file.cpp::function` as a path.
+- In `CMakeLists.txt`, make `place` CTest `RUN_SERIAL TRUE`.
+  This schedules the wall-clock performance test exclusively,
+  eliminating competition with parallel CTests as a confound.
+  The **original <5.0ms** performance condition and full scenario
+  are unchanged; no Place simulation/physics runtime was modified.
+
+**Verification:** CMake 3.31 isolated fixture confirmed
+`RUN_SERIAL=True` in `ctest --show-only=json-v1`.
+GitHub source readback confirmed the updated skill reference.
+**NOT RUN after these changes:** the actual macOS `skill_audit`,
+`place`, complete 150-test suite. This is a scheduling mitigation,
+not proof that Place meets 5ms on the user's machine. If it still
+fails alone, capture Release/Debug build mode, CPU/Rosetta status
+and isolated tick timing before changing performance budgets.
+Handoff: `docs/agent-handoffs/physis-stage74-full-ctest-skill-place-2026-11-19.md`.
+
+## Stage 75 — universal terminal build monitor + isolated Place triage (2026-11-19)
+
+- New `tools/aiverse-progress.py` (code commit
+  `d83716dcd835df40c7861828a92064e961a63bc6`): standard
+  library Python 3.8+ CMake/CTest wrapper, animated ANSI terminal
+  dashboard, CTest active names and elapsed duration, bounded recent
+  output/warning counts, plain CI fallback with 15s heartbeat, preserved
+  unabridged per-stage logs and `summary.json`, real exit codes.
+- **Actually tested on a local isolated Linux CMake fixture**, not
+  AIVERSE: configure/build/smoke CTest 2/2 PASS, deliberate no-tests
+  and failing-test exit 8, 16s silent test printed `[alive]`
+  heartbeat at 15s. `py_compile` PASS; GitHub blob SHA matches
+  the exact locally tested file. macOS ANSI UI remains unverified.
+- **User's Stage74 re-run**: `skill_audit` PASS (0.42s),
+  `place` FAIL after 309.14s, tick avg **8.110ms** (threshold
+  `<5.0ms`), worst 19.245ms; all other 51 Place internal
+  checks passed. This is an isolated CTest run after
+  `RUN_SERIAL TRUE`, so contention with other CTests is no
+  longer an adequate explanation. Do NOT relax the threshold.
+- Next: test `place` in a separate optimized Release build with
+  the monitor and examine `CMAKE_BUILD_TYPE`, actual Mac architecture/
+  Rosetta and then phase profile PlaceServer if needed.
+- This stage changes tooling/docs only; no engine PHYSIS/NEREID,
+  physics, network, ECS or genre API changes. PR #25 remains Draft.
+- Guides: `docs/aiverse-build-monitor.md`,
+  `docs/agent-handoffs/physis-stage75-progress-monitor-place-2026-11-19.md`.
+
+## Universal AIVERSE Build Monitor warnings/errors (2026-11-19)
+
+Tool `tools/aiverse-progress.py` now keeps a **pinned colored**
+Warnings/Errors panel in interactive Terminal, a diagnostic count
+for each configure/build/CTest stage and a complete timestamped
+`diagnostics.log` plus `summary.json`. The display retains
+recent compiler errors even if later warning lines arrive.
+Warn/error counts are matching *output lines*, not distinct compiler
+diagnostics. Warnings do not automatically cause build failure.
+Python regression CTest `tool_aiverse_progress` is registered
+when `AIVERSE_BUILD_TESTS` and Python interpreter are available.
+Source commit `47a320624a118d3f5dd23a7e9d4c81d58e095676`.
+Only the monitor/test CMake and docs changed, not engine runtime.
+Local standalone Python unittest 3/3, standalone CMake CTest 1/1
+and CMake warning/success-log integration passed. Actual
+AIVERSE macOS Terminal UI is **NOT RUN**. Guide:
+`docs/aiverse-build-monitor.md`; handoff:
+`docs/agent-handoffs/physis-stage76-build-monitor-diagnostics-2026-11-19.md`.
+
+## PHYSIS Stage 78 — optional per-entity Nature Contacts (2026-11-19)
+
+New `engine/physis/PhysisNatureSampling.h` adds reusable
+`NatureProbeComponent` (3D Fixed position/enabled),
+`NatureContactComponent` (wind, gravity, atmospheric and surface
+fields, fire/quake, validation and two tick stamps), and
+`advanceNatureContacts(World&,uint32_t)`.
+`InstallOptions::enableNatureContacts` defaults to **false**;
+the optional components are persisted only when enabled and
+`physis.nature_contacts` runs AFTER the climate system. No
+historical save manifest or genre-dependent code is changed by default.
+
+Separate `engine/world/PhysisNereidNatureBridge.h` combines
+the published PHYSIS/NEREID read-only contacts on one ECS entity,
+checking enabled state, matching tick stamps and probe positions
+to avoid stale data. It neither advances water nor writes
+NEREID bodies. Host must register both samplers; choose
+`FloodMode::ExternalAuthority` if NEREID owns water.
+
+**Code commits:** `354e0689fffcfc4ec9853307fc3a06ba32c86212`,
+`a286022cb733c524f30b795501c957ee1ae3f9ec`.
+**Verification:** source and test registered in CMake; combined native
+`physis_nereid_contacts` test is WRITTEN, **NOT RUN** on macOS
+or other full AIVERSE checkout. The earlier 40/40 focused
+PHYSIS/NEREID/SpectraFX PASS predates these commits and must NOT
+be cited as testing Nature Contacts. Review possible compile or
+runtime errors in the new test rather than claiming readiness.
+
+Handoff: `docs/agent-handoffs/physis-stage78-ecs-nature-contacts-2026-11-19.md`.
+
+## PHYSIS Stage 79 — generic wind/fire/quake structural stress (2026-11-19)
+
+PHYSIS now publishes opt-in, deterministic environmental structural
+stress **without** duplicating the existing wind force solver. Use
+`engine/physis/PhysisNatureStress.h`:
+`NatureStressReceiverComponent` for resistance, lever arm, fatigue,
+recovery, fire/quake sensitivity, and
+`NatureStressOutputComponent` for aerodynamic force, bending moment,
+normalized load, accumulated damage and the latched fracture transition.
+`InstallOptions::enableNatureStress=true` requires both
+`enableForces=true` and `enableNatureContacts=true`. Systems run
+climate -> forces -> nature contacts -> nature stress. Source:
+`21c016ede31107f48c50ecc5247cfc0cf98ae56a`.
+
+PHYSIS calculates generic **damage potential** only. It never
+creates Box3D bodies, uproots trees, rewrites TerraWeave vegetation,
+transforms meshes or runs a duplicate water authority. The host
+reacts to `newlyFractured` once per (entity, climate tick); the
+host must implement its own idempotent transition to fallen
+vegetation/rigid bodies. For large grass fields use ECS **cluster**
+proxies rather than a component per blade. A dedicated CTest
+`physis_nature_stress` and the earlier
+`physis_nereid_contacts` test are authored but **NOT RUN** natively.
+No new feature may be declared validated until actual macOS CTest.
+See `docs/agent-handoffs/physis-stage79-nature-stress-2026-11-19.md`.
+
+### PHYSIS Stage 80 — native macOS recovery after const World fix (2026-11-19)
+
+- Initial user-native AppleClang compile FAILED in `tests/physis_nereid_nature_contacts_test.cpp:103–104` with two `no matching member function for call to 'get'` errors. Test bound `const auto& world=sim->world()`, while `World::get<T>(Entity)` in `engine/core/ECS.h` is non-const.
+- Implementation commit `4d9c1adb94f88c7aefef58e3320afda9297e0b48`: replace two reads with `world.tryGetConst<T>(entity)`, check both pointers, copy their component values. Existing mutable test setup continues using `get<T>`. No runtime ECS, PHYSIS, NEREID, Box3D, save schema or renderer changes.
+- **Post-fix user-reported macOS native monitor: `AIVERSE: PASS`, 00:00:20, 0 warnings, 0 errors**. Report: `build/physis-nereid-validation/aiverse-reports/20261119-181448-67558`. The pasted output contains no CTest per-test lines: exact number of tests completed must be retrieved from this report's `ctest.log`/`summary.json`.
+- Prior combined PHYSIS/NEREID/SpectraFX 40/40 was on older source. Full current-branch repository-wide tests, interactive editor, Box3D/TerraWeave fracture handoff and CI are not verified. PR #25 stays Draft.
+- Standalone handoff: `docs/agent-handoffs/physis-stage80-const-world-native-2026-11-19.md`.
+
+### Stage 81 — Stage78/79 confirmed native macOS CTest 2/2 PASS (2026-11-19)
+
+The user supplied the complete AIVERSE Build Monitor JSON and native
+`ctest.log` from `build/physis-nereid-validation`,
+report `20261119-181448-67558`, on source commit
+`4d9c1adb94f88c7aefef58e3320afda9297e0b48`:
+`configure` exit=0, `build` exit=0, `ctest` exit=0,
+**completed=2, failures=0**, aggregate exit=0, 0 warnings,
+0 diagnostic errors, 20.71 seconds for the full command.
+Native CTest:
+- `physis_nereid_contacts` (#123) PASS 0.85s.
+- `physis_nature_stress` (#124) PASS 1.01s.
+- 100% PASS 2/2, 0 failed; CTest wall time 1.02s.
+This supersedes Stage80's note that the named test results were
+not yet available. **It does not establish full AIVERSE suite or
+TerraWeave/Box3D physical falling integration.**
+No code change; documentation checkpoint only.
+Handoff: `docs/agent-handoffs/physis-stage81-nature-tests-green-2026-11-19.md`.
+
+### PHYSIS Stage 82 — persistent fracture event handoff (2026-11-19)
+
+Implementation commit `2b0190cb93e4335e7e458fa03d75239ef65c8424`.
+Added `engine/physis/PhysisFractureOutbox.h` defining
+`NatureFractureOutboxComponent` with Empty/Pending/Acknowledged
+states, a generation-safe Entity/tick event key and persistent
+Archive serialization. `advanceNatureFractureOutbox(World&)`
+publishes a current-tick newlyFractured stress event once;
+`pendingNatureFractures(const World&)` returns sorted pending
+messages, retained over later ticks/save, and
+`acknowledgeNatureFracture(World&,Entity,key,tick)` rejects
+wrong/duplicate acknowledgments.
+
+`InstallOptions::enableFractureOutbox=false` by default.
+If enabled, it requires nature stress (already requiring forces
+and nature contacts), registers `physis.fracture_outbox` v1
+persistence and adds system `physis.fracture_outbox` after
+`physis.nature_stress`. Default game save manifests unchanged.
+`tests/physis_fracture_outbox_test.cpp` registered as CTest
+`physis_fracture_outbox` (PHYSIS/ECS/PERSISTENCE labels):
+tests ordering, deterministic keys, pending/ack, native
+save/load, rollback and COW.
+
+TerraWeave `feature/terraweave` already owns
+`PlantFallEvent`, `AnchoredPlantId` and
+`FallenPlantPhysics::spawn` for Box3D. PHYSIS does not
+import or duplicate TerraWeave: a game host must map Entity
+to plant ID, perform/replicate physical consequences and
+then acknowledge. External Box3D float state is not atomic
+with ECS ack; host must deduplicate/resynchronize on rollback.
+NEREID still owns water. Grass uses per-cluster probes.
+
+Prior Stage81 user macOS 2/2 nature tests PASS confirmed;
+Stage82 native compile/CTest **NOT RUN**. PR #25 remains
+Draft. Handoff:
+`docs/agent-handoffs/physis-stage82-fracture-outbox-2026-11-19.md`.
+
+
+## TerraWeave procedural terrain/foliage (2026-11-18)
+
+Universal world generation lives in `engine/world/TerraWeave.h` (namespace
+`aiverse::terraweave`), independent of RTS/FPS and usable by native C++
+project modules. Read `docs/terrain/TERRAWEAVE.md` and the
+`skills/world/aiverse-terraweave/SKILL.md` before implementation.
+
+- Preserve existing RTS terrain rendering, simulation and editor contracts.
+  TerraWeave is an optional generic generator, **not** a new parallel terrain
+  renderer. Explicitly convert its integer centimetres to old map units.
+- Genre-independent components and systems: chunk/vegetation patch entities
+  for cosmetic foliage; entities per individual tree only when gameplay needs
+  them. Never allocate one ECS entity per grass blade.
+- All authoritative generation must be deterministic, independent of chunk
+  partition, job timing and input species order. Use stable seeds, integer or
+  Fixed math and explicit generator-version migration for saved worlds.
+- Generate chunks in pure jobs; ECS changes in deterministic commit order.
+  Rendering uploads use the RHI. Shader changes need GLSL+MSL and quality tiers.
+- **After every development stage update
+  `docs/terrain/AGENT_HANDOFF.md`** with exact commits, API/files, tests
+  actually run, limitations and the next step. No tests may be marked passing
+  without recorded execution.
+
+
+### TerraWeave agent ownership for current implementation phases (2026-11-18)
+
+- **Feature/architecture agent** owns TerraWeave runtime functions, native
+  APIs, opt-in WorldScene/editor integrations, and a handoff document after
+  EVERY implementation stage. Do not make the engine depend on FPS or RTS.
+- **Separate validation agent** owns build/CTest, the unified test runner,
+  Metal/GL/Vulkan screenshot checks, race/sanitizer checks, FPS/RTS
+  regressions and performance benchmarks for this feature. The feature
+  agent should NOT duplicate that test work while the user requests
+  functions first. This task split never permits claims that unexecuted
+  tests passed. Record all tests as NOT RUN until the testing agent
+  provides actual build/report evidence.
+- New `HorizonSurfaceSources`, bounded memory cache, camera hysteresis,
+  Horizon quality presets and `TWH8` prebaked atlas archive interfaces
+  are documented in `docs/terrain/TERRAWEAVE.md`. Keep their generator
+  versions/fingerprints consistent whenever the bake format changes.
+  Don't introduce file-system writes or game-authority mutations
+  into rendering/presentation code.
+
+### TerraWeave Horizon terrain borders and offline atlas migration (2026-11-18)
+
+- Horizon far-terrain grid world coordinates **must** use the globally
+  aligned signed rational lattice in `engine/world/TerraWeaveHorizon.h`,
+  not camera-local interpolation. Border normals use ghost-neighbor
+  samples and match on overlapping regions if the height source matches.
+- `terrainSkirtDepthCm` only adds outer downward geometry to existing
+  terrain primitive/material 0; no additional backend, model or ECS.
+- `TerraWeaveHorizonArchive.h` currently uses **TWH3** and invalidates
+  TWH1/TWH2 assets. Re-run `aiverse_horizon_bake` for static game packs.
+  Preserve current archive version/fingerprint semantics when extending
+  Horizon geometry; never silently read old incompatible assets.
+- After each functionality stage, append to
+  `docs/terrain/AGENT_HANDOFF.md`. Another agent runs ALL
+  compiler/CTest/platform-GPU validations; label them NOT RUN here.
+
+### TerraWeave Horizon near/far terrain ownership (2026-11-18)
+
+- The current Horizon archive is **TWH4**, not TWH3.
+  It stores an optional authored near-ground ownership map,
+  inner seam lip and stable skyline settings; all previous
+  TWH1–TWH3 binaries must be regenerated. Maintain archive
+  version/fingerprint whenever changing geometry layout.
+- Do not remove far terrain merely because it lies
+  within a near-camera radius if `WorldScene` exposes
+  actual authored terrain coverage. Use immutable
+  `HorizonSurfaceSources::ownsNearTerrainRect` and
+  conservative `AuthoredWorldHeightSnapshot::coversRect`;
+  absent near tiles must keep far ground visible.
+- Inner near/far seam lips are strictly bounded to
+  512 segments, share the original GPU Model/material 0,
+  and do not create gameplay ECS data.
+- Horizon outer grid snaps to a **nearest global lattice
+  anchor** in coarse steps to stabilize mountain silhouette;
+  forest radius must not extend beyond guaranteed far
+  terrain coverage. Separate agent owns all build/CTest/
+  Metal/GL/Vulkan screenshots and benchmarks.
+
+### TerraWeave exact near-ground clipping / archive TWH5 (Stage 18)
+
+- **Current archive:** `TerraWeaveHorizonArchive.h` is
+  **TWH5**. Any preceding TWH1–TWH4 reference is
+  historical; old binaries must be regenerated.
+- Distant terrain overlapping a partial authored
+  near-tile rectangle should be subtracted on the CPU
+  using `planHorizonNearGroundClipping`, preserving
+  original far-ground triangle plane and winding.
+  No new RHI backend, material or draw per near tile.
+- The immutable source snapshot supplies both
+  `ownsNearTerrainRect` and `collectNearTerrainRects`.
+  Input rectangles and output mesh triangles are
+  strictly bounded; on cap overflow fall back to
+  the conservative full coarse quad cutout rather
+  than unbounded memory.
+- `maxNearClipTriangles`: Minimal=0, Mobile=512,
+  Balanced=2048, High=4096, configurable up to 8192.
+  Accurate X/Z clipping is NOT proof of seamless
+  vertical near/distant terrain heights.
+- Update `docs/terrain/AGENT_HANDOFF.md` on each
+  source stage with files/commits/actual tests.
+  Testing is owned by a separate agent; do not
+  claim compilation, screenshots or passing CTest
+  without that agent's logs.
+
+### TerraWeave Horizon TWH6 near-surface seam data (Stage 19)
+
+- Current archive is **TWH6**; old TWH1–TWH5 blobs are historical
+  and must be regenerated. The version/fingerprint changes when the
+  baked seam sample layout changes.
+- Authored-world near/far stitching must capture near-terrain heights
+  from the **same immutable snapshot** as resident rectangle coverage.
+  Run `populateHorizonNearSeamSamples` after `bakeHorizon`
+  in both CPU worker and offline batch, BEFORE archiving/caching.
+- Seam sampling uses signed world-centimetre coordinates with
+  Q16 precision, no more than 4096 unique points, and an
+  all-or-none fallback when required heights are missing.
+  The source `nearGroundHeightAtCm` returns nullopt when
+  near terrain is not resident. The graphics/RHI layer must
+  not query live ECS/collision heights during submission.
+- `makeHorizonModel` welds the boundary vertex Y into the
+  existing material-0 triangles without adding a new model
+  or draw call. Real GPU seam quality is still unverified;
+  the separate testing agent owns CMake/CTest/driver captures.
+
+### TerraWeave Horizon slope-safe near seam and TWH7 (Stage 20)
+
+- **Current archive TWH7:** `TerraWeaveHorizonArchive.h`
+  includes bounded near-weld slope/normal settings and the
+  weld-fallback flag. TWH1–TWH6 are historical and must
+  be rebaked with `aiverse_horizon_bake` or regenerated.
+- `maxNearWeldSlopePermille=2500` (0=off) preflights
+  all new welded clip triangle gradients. An unsafe weld
+  is fully disabled for its region; precise X/Z clipping
+  remains and `nearWeldSlopeFallback` is explicit.
+  Do not misrepresent a missing weld as seam-free geometry.
+- `nearSeamNormalBlendPercent=65` repairs shared clipped
+  vertex normals with area-weighted geometric face normals
+  during existing CPU Model construction. No changes
+  to collision, near terrain ownership, GPU topology,
+  materials or backend APIs are permitted for this stage.
+- `HorizonRuntimeStats` exposes smoothed normal count and
+  slope safety fallback through the GPU LRU. User assigns
+  compilation, CTest, GPU screenshots and benchmarks
+  to another dedicated testing agent; always report
+  `NOT RUN` unless actual evidence is provided.
+
+### TerraWeave TWH8 exact fractional near-normal seam contract
+
+- **Current Horizon archive is TWH8**. Historical TWH1–TWH7
+  blobs must be regenerated; exact Q16 near seam heights,
+  signed near-surface gradient components and normal-valid
+  flags are versioned and fingerprinted through the
+  Horizon archive.
+- `AuthoredWorldHeightSnapshot::sampleQ16` is an optional
+  fractional-centimetre source contract used only by the
+  CPU seam baker. `WorldScene` supplies
+  `nearGroundHeightAtQ16Cm` from the SAME immutable
+  near-ground snapshot as near tile ownership.
+- On the near/far seam, use authored near-surface normals
+  when available, otherwise the existing area-weighted
+  far triangle normals. The `maxNearWeldSlopePermille`
+  all-or-none seam welding guard remains active.
+- `horizonCanReuseModelGeometry` must reject changes
+  in Q16 seam positions, near height, slopes, normal
+  validity and normal blend settings for **atlas-only**
+  GPU patching; never leave stale vertex normals.
+- `HorizonRuntimeStats::matchedAuthoredNearNormals`
+  measures actual near-surface normal matches, not GPU
+  performance. Separate testing agent performs all
+  CMake/CTest/Metal/Vulkan/GL/benchmark validation.
+
+### TerraWeave Stage36 host quality policy for Horizon GPU wind
+
+Native projects may use `engine/world/TerraWeaveWindUploadPolicy.h`:
+`HorizonWindUploadPolicy{maxBytesPerUpdate=2MiB,maxSparseRanges=8,
+fullFallbackPercent=70}`. `WorldScene::setVegetationHorizonWindUploadPolicy`
+forwards to Horizon's `setWindUploadPolicy`; validate strictly before
+publication. Zero byte budget defers changed colour transfers; a too-low
+budget may indefinitely defer dense fallback while the safe macro
+shader remains. Combined active+outgoing GPU upload limit is per update,
+not per model. The **2 MiB per-model CPU shadow remains fixed**; no
+new GPU resources or TWH8 format changes. See
+`docs/terrain/TERRAWEAVE.md` Stage36 and
+`docs/terrain/AGENT_HANDOFF.md`. User prioritizes features before QA;
+do not claim native/Metal/GL/Vulkan verification.
+
+### TerraWeave Stage37 — safe inactive wind CPU shadow budget
+
+Use `engine/world/TerraWeaveWindShadowCachePolicy.h` and public
+`WorldScene::setVegetationHorizonWindShadowCachePolicy` for a
+0..16MiB budget on **inactive GPU cache wind overlay capacity**.
+It is separate from Stage36 `HorizonWindUploadPolicy` and does not
+cap active/outgoing wind overlays. When cached shadow capacity
+exceeds the policy, `HorizonGpuRegionCache` evicts the entire oldest
+shadow-bearing **GPU model plus CPU overlay** via the RHI owning
+thread; never detach the CPU shadow from a live GPU model whose
+RGB bytes may already hold exact PHYSIS data. Re-entry rebuilds
+via the existing Horizon worker/CPU bake/asset archive and uploads
+a coherent new model/shadow, not a fabricated GPU readback.
+`gpuCachedWindShadowBytes` and `gpuWindShadowBudgetEvictions` in
+`HorizonRuntimeStats` expose current dormant capacity and specific
+evictions. Update `docs/terrain/AGENT_HANDOFF.md` each stage;
+CMake/CTest/Metal/Vulkan/GL **NOT RUN** under feature-first request.
+
+### TerraWeave Stage38 — lossless GPU-cache CPU shadow packing
+
+`HorizonWindShadowCachePolicy::compressCachedShadows` is opt-in and
+defaults to false. Inactive Horizon GPU LRU entries may losslessly
+compress their full `ModelVertex` wind CPU shadow with
+`TerraWeaveHorizonWindCompression.h`. Never detach or compress live
+active/outgoing shadows; never infer the GPU's exact PHYSIS RGB from
+a procedural generator. On cache `take`, fully unpack and validate
+the CPU shadow BEFORE the model becomes active or Stage35 sparse RHI
+writes resume. A corrupt compressed stream retires the matching GPU
+model and falls back to ordinary re-stream; failed allocation still
+propagates. Count both raw and packed storage capacity toward Stage37
+inactive CPU budget; do not claim a memory benefit unless measured.
+Source/PHYSIS/TWH8 semantics, signed coordinates, shader graphs and
+all genre-independent ECS ownership remain unchanged. QA is NOT RUN
+under the user's feature-first order; update Stage38 handoff on branch.
+
+### TerraWeave Stage39 — runtime Horizon presentation quality profiles
+
+AIVERSE already has `HorizonSettings` geometry quality
+`Minimal|Mobile|Balanced|High`. Stage39 adds an **independent**
+`HorizonPresentationPolicy` from
+`engine/world/TerraWeaveHorizonPresentationQuality.h` with
+`BatterySaver|Mobile|Balanced|Desktop` presets. Compose existing
+exact/procedural wind shader controls, Stage36 sparse GPU transfer
+budget and Stage37/38 inactive wind CPU shadow/cache compression;
+do not create parallel renderers, terrain bakes or PHYSIS solvers.
+The *optional* manifest `terraweaveHorizon.presentationQuality`
+(`battery-saver|mobile|balanced|desktop`) must not alter the
+preexisting geometry `quality` key or TWH8 cache fingerprints.
+No new field = Stage38 defaults. Native game code may set the whole
+policy on `WorldScene` or `TerraWeaveHorizonScene` and override
+individual components later. Validate all fields before mutation
+and use scene-owner threading. Report effective settings (not
+assumed named presets) and do not claim measured speed/battery
+improvement; CMake/CTest/GPU QA remains **NOT RUN** until the
+separate testing stage. Record the actual code SHAs and continuation
+in the per-stage `docs/terrain/AGENT_HANDOFF.md`.
+
+### TerraWeave Stage40 — host-fed adaptive Horizon runtime quality
+
+`engine/world/TerraWeaveHorizonAdaptiveQuality.h` defines an
+opt-in, strictly bounded controller over Stage39
+BatterySaver/Mobile/Balanced/Desktop **presentation** policies.
+The user requires reusable genre-independent runtime mechanics:
+do not modify Horizon terrain/forest geometry, TWH8 archives, GPU
+buffer types, PHYSIS source ownership or ECS simulation to adapt.
+A native host must feed actual CPU and/or completed GPU frame times
+in **microseconds** with monotonically increasing frame IDs via
+`WorldScene::submitVegetationHorizonFrameTiming`. Zero denotes
+unavailable measurements, not a fabricated 0ms frame.
+`gfx::Device::gpuFrameMs()` may be zero/delayed; always respect
+the actual backend timing availability and sample ordering.
+The backend-free policy requires sustained threshold violations
+(30 downgrade frames / 240 upgrade frames by default), 240-frame
+cooldown, and one-level bounded transitions; gaps and invalid
+samples cannot drive switches. Manual Stage39 policy/preset changes
+must disable adaptation, environmental/PHYSIS inputs do not.
+`terraweaveHorizon.adaptiveQuality.enabled` explicitly opts in
+at startup but does not instrument the host's frame.
+Keep source-only unverified stages marked **NOT RUN**, document
+exact code commits/risks/next step in
+`docs/terrain/AGENT_HANDOFF.md`, keep PR #24 Draft until
+a separate tester compiles and profiles real platforms.
+
+### TerraWeave Stage41 — native client frame timing ownership
+
+AIVERSE already exposes asynchronous tagged `gfx::Device::timeGpuFrame`
+and `takeGpuTimings`. Stage41's
+`engine/world/TerraWeaveHorizonFrameTimingBridge.h` connects real
+measured CPU callback durations plus asynchronous tagged GPU samples
+to Stage40's optional adaptive `WorldScene` controller. The bridge
+is included in both `apps/client/GameClient` (platform begins/ends
+the RTS frame) and `apps/fps/client.cpp` (FPS explicitly begins/ends
+its device frame). Do not add duplicate `beginFrame/endFrame` calls,
+use simulation `dt` as measured CPU/GPU time, or treat
+`Device::gpuFrameMs()` from an old completed frame as a sample for
+the current one. Tagged GPU completions are matched to original
+frame IDs; unsupported/late results use bounded CPU-only fallback.
+The `takeGpuTimings` API destructively drains **all** ready GPU tags,
+so a future app using multiple timing subsystems needs one shared
+device timing collector; do not silently race two consumers.
+No frame query when `adaptiveQuality.enabled` is false; no
+simulation, PHYSIS, terrain geometry, TWH8 or shader change.
+Build/tests/native Metal/GL/Vulkan timings **NOT RUN** until the
+separate agent performs QA. Continue updating the Stage41 handoff
+in `docs/terrain/AGENT_HANDOFF.md`.
+
+### AIVERSE Stage42 — one GPU timing collector per graphics Device
+
+The shared RHI now owns `gfx::Device::gpuTimingRouter()`
+(`engine/gfx/GpuTimingRouter.h`). Every new GPU timing client
+(TerraWeave, Prisma, SpectraFX/VFX, editor/tools/benchmarks)
+MUST use `subscribe`, `request`, `poll`, `take(subscriber)`,
+`cancel` and `unsubscribe`, rather than directly draining
+`Device::takeGpuTimings()` in parallel. The backend API still
+exists but its completed-result drain is destructive across ALL
+tags; the router alone should poll it for shared devices. Router
+messages restore the original caller's tag and are isolated in
+bounded per-subscriber queues; rejected requests retain each
+caller's CPU-only/unsupported fallback. Owner-thread only;
+never wait for GPU fences, invent timestamps, or claim separate
+per-feature GPU costs from a shared Metal command buffer.
+Existing native Stage41 RTS/FPS, editor batching benchmark,
+RenderBench, GeometryBench and instancing preview were moved
+to the generic router. Full API/limits:
+`docs/render/GPU_TIMING_ROUTER.md`. No changes to PHYSIS,
+geometry, archive TWH8, gameplay ECS or network authority.
+Source committed; native CMake/CTest/Metal/GL/Vulkan validation
+**NOT RUN** under feature-first instruction. Append exact
+per-stage handoff `docs/terrain/AGENT_HANDOFF.md`.
+
+## TerraWeave + NEREID shared ecology ownership (2026-11-19, Stages 53–56)
+
+- User assigned further water/shoreline erosion development to the **TerraWeave integration agent**. NEREID remains the single owner of ECS water bodies, flow, waves/currents and water contact. TerraWeave owns changed terrain, dig/fill, soil materials, root/plant support/falling and grass aggregate coverage; no independent second water physics.
+- Shared deterministic ECS workflow: register `registerNativeWaterPipeline(...enableBankErosion=true)`, `registerTerraWeaveBankVertexPersistence` and `registerTerraWeaveAuthorityResource`, then add `addTerraWeaveAuthoritativeBankSystem` **after** NEREID's water bank system. Never calculate `erodeShore` a second time from ECS results, and never have standalone `NereidEarthworksBridge::step` mutate the same bank vertices. The canonical rollback/save state is `TerraWeaveAuthorityResource` schema v2; graphics/RHI, NavMesh and Box3D are derived and rebuilt at the owner-thread barrier.
+- `TerraWeavePersistence.h` is an optional snapshot codec, `TerraWeaveReplication.h` is compact tick/revision-guarded per-change transport-neutral data, and `TerraWeaveEcsAuthority.h` is the actual Simulation World resource writer. Read **all** handoffs `docs/terrain/stage-53-persistence-ecs-handoff.md` through `stage-56-native-example-handoff.md` and `examples/world/terraweave_native/README.md` before touching these APIs.
+- After an ECS tick/rollback: use `NativeTerraWeaveWorldBinding` + `publishNativeTerraWeaveFrame` to publish pinned physics terrain, rebuild existing `nav::Mesh`, near/far forest and bounded grass GPU models. Trigger falling tree/capsule Box3D only from committed server events; replicate server poses, never claim cross-platform float Box3D lockstep. Fallen-tree visibility is separate from harvested tree removal; grass does not have one entity per blade.
+- **Status:** Source committed but Stage 44+ ecology/erosion/native additions have NOT passed new builds/tests or visual QA. The older 9/9 TerraWeave CPU and 1/1 GPU timing router tests do not prove new features. Draft PR #24 should not be merged to main until separate native QA, collision/NavMesh, NEREID replay, Box3D, GPU/Metal and full regression tests are green. No volumetric caves/overhangs yet; heightfield digging is not voxel excavation. Preserve per-stage handoff documents, tested/not-tested status, exact commits and next actions.
+
+
+## TerraWeave Stage57–59 shoreline auto-discovery and sediment ownership (2026-11-19)
+
+- `engine/world/TerraWeaveShorelineRaster.h`: discover bounded wet/dry bank and optional interior wet-bed grid cells using REAL `lib::nereid::WaterQueryIndex` over canonical water ECS bodies with polygons/river splines; classify soil via authored callback/optional biome helper, wave splash, slope, root reinforcement. `refreshAutoShorelineBanks` creates/persists auto-tagged ECS bank entities only at a structural barrier. It MUST NOT overwrite manually authored bank ECS entities, must retain suspended sediment when water retreats and must reject stale Earthworks ground heights. Register `terraweave.auto_bank` persistence during setup.
+- `libraries/include/aiverselib/water/NereidSedimentTransport.h` performs **mass-conserving**, bounded, integer-only transport of suspended sediment across neighbouring same-water-body cells, or across an EXPLICIT NEREID-confluence/cascade directed inlet→outlet link. Micro-cm carry persists so low Fixed currents eventually move small amounts. Sediment transport itself never edits terrain height; it is fed into existing NEREID `erodeShore` deposition/erosion on following ticks.
+- `engine/world/TerraWeaveSedimentEcs.h`: register `nereid.bank_sediment_transport` ECS persistence once; order native systems: NEREID sample → local bank erosion → sediment transport → TerraWeave canonical ECS Earthworks commit. The ECS transport stage validates confluence mouth geometry and cascade linkage, uses existing `WaterContactComponent.sample.flow`, and does not create another water solver or rerun erosion.
+- `examples/world/terraweave_native/{Integration.h,README.md}` demonstrates optional registration, bounded autoregistration, submerged bed carriers and soil material callbacks. **Do not** scan the full coast every graphics frame; rescan at map start or topology edits on an ECS structural barrier. Grass still uses aggregate patches, not per-blade entities.
+- **COW rollback correctness:** `World::prepareExistingWrite<T>()` alone does not detach shared pool ownership. Use `World::pool<T>()` before direct writable ECS component access; the pool then detaches individual pages. Fixed related NEREID sampling/erosion and auto-bank/sediment ECS authorship in these stages. Preserve this contract in further code.
+- Read `docs/terrain/stage-57-auto-shoreline-handoff.md`, `stage-58-sediment-transport-handoff.md`, `stage-59-riverbed-delta-handoff.md`. New Stage57–59 code is **NOT compiled or tested yet**; old TerraWeave CPU 9/9 and GPU timing router 1/1 successes predate this work. Keep PR #24 Draft. Remaining: native ECS/gameplay/Metal QA, automatic rescan scheduling, downstream sediment mixing at wider mouths, physical river rerouting/landslides, and water-volume feedback.
+
+
+## TerraWeave Stage60–61 — collapse of undercut soil (2026-11-19)
+
+- `engine/world/TerraWeaveSlopeFailure.h`: `SlopeSoil` carries NEREID/PHYSIS-sampled wetness, soil type and root strength. `planSlopeFailures(earth,triggerVertices,slopeSoil,settings)` is an integer-only deterministic bounded heightfield relaxation: unstable higher neighbours transfer equal-area centimetre mass downhill, rock is immobile, bedrock/buffer limits are enforced, each of at most 4096 disjoint pairs participates once per tick. `applySlopeFailures` commits the plan through one Earthworks sparse transaction for generic native games.
+- `engine/world/TerraWeaveEcsBankBridge.h` additionally accepts opt-in slope failure planning after NEREID computes bank erosion. **Merge water erosion AND soil slides into a single final Earthworks revision**, then recompute root support/fall and sparse grass damage ONCE from the final ground. ECS bank soil corrections are recorded for adjusted bank grid vertices, retaining NEREID suspended sediment/carries. Never call `erodeShore` twice.
+- `engine/world/TerraWeaveEcsAuthority.h`: opt-in `addTerraWeaveAuthoritativeBankSystem(...,enableSlopeFailures,settings)` writes the canonical ECS resource once and updates only extra bank soil heights after prevalidating/detaching COW pool pages. `excavateAuthoritativeEcs(...,enableSlopeFailures=true)` supports digging-induced collapses and also synchronizes affected NEREID bank soil heights. Both return sparse slope, tree fall and grass damage records usable by native gameplay/Box3D.
+- `examples/world/terraweave_native/{Integration.h,README.md}` opts in to bank slope failure; graphics/physics/navmesh publication stays with the existing `TerrainMutationCoordinator` native owner-thread barriers. Read `docs/terrain/stage-60-wet-slope-failure-handoff.md` and `stage-61-nereid-slopes-ecs-handoff.md`.
+- **Quality status:** Source committed; NO native compile/CTest, Box3D fall, Metal screenshot, geotechnical rate calibration or ECS replay run for Stage60–61. Earlier green 9/9 CPU and 1/1 GPU router tests predate these features. Keep PR #24 Draft. This is a heightfield slump, NOT a volumetric cave/overhang or 3D fluid simulation.
+
+
+## TerraWeave Stage62 — physical landslide debris and NEREID current blockage (2026-11-19)
+
+- User delegated continued water/terrain ecology to TerraWeave integration agent. **NEREID alone** owns the ECS `WaterBodyComponent`, water geometry, current/vortex/confluence/cascade resolution, bank erosion and local sediment transport. TerraWeave owns terrain slide events, Box3D debris proxy generation, tree fall mechanics and native ECS/current-obstacle publication. Never implement a second water solver or alter `WaterBodyComponent.flow` in a terrain worker.
+- New `libraries/include/aiverselib/water/NereidFlowObstacles.h`: opt-in persistent `WaterFlowObstructionComponent` and deterministic fixed-point `deflectNereidFlow` kernel. Reference `sampleWater` and `WaterQueryIndex::sample` apply it *after* ordinary NEREID currents and mouth policies. Source key sorting must be consistent in both query paths; cap active overlapping obstacles to 256. Native config `NativeWaterPipelineConfig::enableFlowObstructions` enables schema persistence, off by default in unrelated games.
+- `engine/world/TerraWeaveSlopeDebrisPhysics.h`: optional bounded server-owned Box3D dynamic fragment proxies from `SlopeFailurePlan` (max default 64 new/tick, 256 living), with stable event IDs, lifetime pruning, and rendering via borrowed soil prototypes. Earthworks ALREADY transferred mass; debris bodies are visual/collision proxies, NOT a second mass ledger. Keep Box3D behind an opt-in native link and replicate server poses, do not assume float lockstep on clients.
+- `engine/world/TerraWeaveFlowObstructionEcs.h` is the **Box3D-free** native ECS writer for generated auto obstacles (distinct from manually authored ones). Tag `AutoFlowObstructionComponent` marks generated records and is separately persisted. Run `publishNereidFlowObstructions` ONLY at the ECS structural-write barrier AFTER the server Box3D step and BEFORE the next NEREID sample. Preserve World COW isolation.
+- `engine/world/TerraWeaveNereidObstacleBridge.h` (requires Box3D) reads `FallenPlantPhysics` and `SlopeDebrisPhysics`, quantizes poses to Fixed and resolves the owning NEREID water body with existing `sampleWater`. `synchronizeNereidPhysicalObstacles` writes generated ECS obstacles and maps to the immutable WorldScene flow snapshot. Native game MUST supply ECS body Entity → `NereidSceneSurface.id` mapping, not assume Entity.index equals scene ID.
+- `WorldScene::setNereidFlowObstructions` affects optional whitewater shader current and ripple drift via the *same* `deflectNereidFlow` kernel. Visual water does not create or mutate gameplay water bodies, water height/volume, or solve fluid pressure. Existing manually authored scene/NEREID waters remain independent.
+- Example: `examples/world/terraweave_native/Integration.h` registers fixed ECS water/soil/obstruction components without Box3D; `PhysicsIntegration.h` is the opt-in owner-thread post-ECS Box3D and after-physics water-feedback adapter; `README.md` describes exact update order.
+- Full handoff: `docs/terrain/stage-62-debris-water-feedback-handoff.md`. **QA:** Source committed; no new Clang/CMake/CTest, Box3D scene, ECS replay, Metal screenshots or performance verification yet. PR #24 MUST stay Draft. Deeper hydraulic rerouting/pressure/river volume feedback, precise per-branch collisions, compact water-obstruction network transport and native FPS/RTS opt-in remain future work.
+
+
+## TerraWeave / NEREID Stage63 — finite-volume flood routing (2026-11-19)
+
+- NEREID is still the ONLY owner of water. NEW `libraries/include/aiverselib/water/NereidFloodRouting.h` is an **optional NEREID extension** (native `NativeWaterPipelineConfig::enableFloodRouting`, off by default for unrelated projects) for local, bounded equal-area water-column routing. `WaterFloodResource` is named persistent ECS resource `nereid.flood`, storing 16k max sorted signed grid cells, column water depth/volume, originating WaterBody Entity, TerraWeave ground height, flow and soil/wetness/tick revisions. `stepNereidFlood` transfers ONLY stored finite reservoir volume along hydraulic-head gradients between neighbouring cells, with conservative before/after mass equality and NEREID `WaterFlowObstructionComponent` permeability. Water can pile up behind a fallen tree, move sideways, flood a formerly dry cell and recede on later ticks. Do NOT invent water from rain/flow outside the finite reservoir.
+- `NereidWaterSystems.h` and `NereidQueryIndex.h` apply `applyNereidFloodSample` after existing water-body/flow/obstacle resolution; a flooded cell outside the original polygon/spline footprint becomes a real WaterSample for downstream NEREID interaction/erosion. If the authored water surface is already higher, that existing surface wins.
+- `engine/world/TerraWeaveNereidFloodBridge.h` seeds an explicit finite grid ONCE from existing WaterBody + canonical Earthworks; calling `initializeNereidFloodGrid` on an already active reservoir is prohibited (would create/remove volume). Ground synchronization updates grid-bottom elevations after TerraWeave digging/bank erosion/slump, without changing any water-volume column. `addTerraWeaveFloodGroundSyncSystem` must be registered after the TerraWeave soil ECS commit for the NEXT water tick.
+- `WaterFloodResource::wetnessRevision` tracks new wet/dry cells separately from sub-cell volume changes. `engine/world/TerraWeaveFloodShorelineSystem.h` provides persistent `AutomaticShorelineRevision` and opt-in last-stage ECS auto-bank refresh when groundwater/flood topology or soil revision changes; newly generated bank cells participate in NEREID sampling NEXT tick. Explicit `requestAutomaticShorelineRefresh` is required for water-body geometry edits not reflected by soil/wetness revision.
+- `engine/world/NereidFloodVisualScene.h` and `WorldScene::setNereidFloodCells` upload/draw a maximum 4096 flooded surface quads via ONE existing RHI model and transparent/unlit fallback material (native driver publishes up to 2048 active cells). Only extra water beyond/above base NEREID surface renders an overlay. It does NOT yet share the full NEREID refraction/foam shaders or exactly blend with authored curved coastlines.
+- Native example: `examples/world/terraweave_native/{Integration.h,README.md}`. Registration order: NEREID flood routing BEFORE NEREID water sampling/erosion; TerraWeave bank soil/roots/grass commit; flood ground sync; OPTIONAL auto-rasterized shoreline LAST. All owner/thread and COW barriers preserved. Read `docs/terrain/stage-63a-nereid-flood-volume-handoff.md` and `stage-63b-flood-visual-native-handoff.md`.
+- **Crucial limit:** volume conservation is within the finite, explicitly seeded equal-area flood window only; legacy static WaterBodyComponent levels and infinite ocean/river reservoir amounts are not hydraulically coupled. No rainfall/pumps/open-boundary inflow, sediment-dependent pressure solve, full shallow-water momentum or actual Navier–Stokes. Do not claim such features, global mass conservation including authored base water, or working Metal without tests.
+- **QA status:** Stage63 source committed to `feature/terraweave` but not CMake/Clang compiled, CTest run, ECS replay verified, Box3D flood-simulated or Metal screenshot validated. Keep PR #24 Draft; previous TerraWeave 9/9 and GPU router 1/1 are older revision evidence only. Next: native smoke compilation, tests for 1000-tick volume conservation/overtopping/reference-indexed sample parity and GPU scene validation, followed by perf.
+
+
+### TerraWeave/NEREID Stage63c finite river boundary flow (2026-11-19)
+
+- Closed `NereidFloodRouting.h` grid alone has no infinite inflow: a flat initial river surface cannot automatically build upstream head. NEW `WaterFloodPort` (Inflow/Outflow, at most 64) and `WaterFloodResource::externalVolumeCm` explicitly model a finite, already-counted outside reservoir. Port water transfers are bounded by user-defined cm-per-tick rates and local cell capacity. Water conservation is checked over **on-grid volume PLUS externalVolumeCm**, preventing fake water creation when a blocked channel backs up or a low bank overtops.
+- Configure only before the first flood tick, after seeding the grid and WaterBody entities, via `terraweave::configureNereidFloodBoundaryPorts` or native example `configureFloodRiverPorts`. `NereidFloodRouting.h` persists these ports/reserve in schema `nereid.flood`, validates inlet generation-safe WaterBody ID and port locations. A finite reserve can run dry; outlets return water to the SAME counted reserve. Do NOT call configuration again after the ECS flood tick or silently reseed/migrate the grid.
+- Exact result metrics `WaterFloodTick::suppliedCm/drainedCm` and old/new water column totals, `wetnessRevision` from FINAL wet/dry changes, and `WaterFloodResource::groundRevision` for TerraWeave soil sync. Scene overlay only represents water beyond/above existing static water surfaces; full NEREID refraction/foam not yet integrated.
+- See `docs/terrain/stage-63c-finite-river-ports-handoff.md`, `stage-63a-nereid-flood-volume-handoff.md`, `stage-63b-flood-visual-native-handoff.md`, and `examples/world/terraweave_native/README.md`.
+- **Feature-only commits, NOT compiled/tested.** Do not call this globally volume-conserving (static ocean/river bodies are outside the ledger), a pressure/momentum solver, or production-ready flood rendering. PR #24 stays Draft.
+
+
+## TerraWeave Stage64 — grass ecology and recovering riverbank surface protection (2026-11-19)
+
+- Native ecosystem code: `engine/world/TerraWeaveShoreRecovery.h` (pure integer recovery policy, versioned `ShoreRecoveryResource`, one small persistent `ShoreRecoveryPatchState` per aggregated `GrassPatch`, seeded regrowth after drying, prolonged flooding damage, nutrient/moisture/light/age response and spatial `ShoreRecoveryCoverIndex`). NO ECS entity per blade and NO separate vegetation renderer, water or soil mass solver.
+- `engine/world/TerraWeaveShoreRecoveryEcs.h`: `addTerraWeaveShoreEcologySystem` runs after NEREID flooding/shore erosion/sediment and after TerraWeave bank/slump and auto-shoreline refresh. Builds ONE NEREID WaterQueryIndex at ecology cadence (default 600 ECS ticks) and takes 5 terrain/water samples per grass patch, publishing canonical `TerraWeaveAuthorityResource.grass` changes and separately persistent `terraweave.shore_recovery` with its seed, wet/dry and soil-cover states. Owner-thread staging World copies keep rollback state coherent; beware non-COW deep-copy cost on huge Worlds. Tree/shrub fall state is untouched; never automatically revive harvested/fallen trees.
+- NEREID now accepts OPTIONAL `ShoreErosionForcing::surfaceShieldPermille` and ECS persisted `WaterBankSurfaceCoverComponent` (`nereid.bank_surface_cover`) to reduce exposed soil shearing independently of true tree/shrub root binding. Grass has NO physical tree roots; ecology's aggregated soil/litter protection is a separate factor. Generated `AutoShorelineBankComponent` cells receive updated shield from the 64m bucket `ShoreRecoveryCoverIndex`; manually authored bank cover is game-owned.
+- Native example `examples/world/terraweave_native/Integration.h` enables the fixed-period ecology resource/systems by default for this example only and allows disabling/configuring `ShoreRecoverySettings`; existing FPS/RTS/other genre clients remain opt-in. Read `docs/terrain/stage-64-shore-ecology-recovery-handoff.md` for exact committed source steps, API contract, remaining functions and no-test disclosure.
+- Stage64 covers grass recovery/surface crust only; detailed multi-species forest competition, adaptive seed distribution, persistent rooted-plant active aging/lighting and full ecological succession remain Stage65+. NO new native compiler/CTest/NEREID simulation/GPU/Box3D/Metal QA yet; prior TerraWeave 9/9 and GPU router 1/1 are older branch. Keep PR #24 Draft.
+
+
+## TerraWeave Stage65 — rooted forest ecology, canopy light and native saplings (2026-11-19)
+
+- `engine/world/TerraWeaveForestEcology.h`: per-species **opt-in** budgeted deterministic rooted tree/shrub life cycle over existing `RootAnchor`+`PlantEnvironment` records. `ForestEcologySpecies` configures maturity, age-based death, shade/drought/flood sensitivity, crown spread and seed interval/dispersal; `ForestEcologySettings` caps at default 256 expensive plant decisions every 32 simulation ticks, 65,536 interactable rooted plants total and 8 recruits per step. A persisted cursor and `lastEvaluatedTick` prevent processing every tree each frame. `ForestEcologyCanopyIndex` indexes crowns in 32m buckets and approximates relative-height shade, not photometric GI. Seed positions/IDs use stable integer hashes, exact canonical Earthworks ground and bounded free-space tests; mortality and recruitment never depend on camera.
+- `engine/world/TerraWeaveForestEcologyEcs.h` registers persistent `terraweave.forest_ecology` schema v1 (shade/flood/drought stress, mortality, recruitment, processing cursor). An opt-in ECS system reads **existing NEREID WaterQueryIndex** root-zone water/flood samples, optionally PHYSIS sunlight/soil policy, and stages ecology history plus canonical `TerraWeaveAuthorityResource.rooted` mutations together for rollback safety. Post-tick event callback is enqueuing only: never run Box3D or Renderer3D inside ECS.
+- `TerraWeaveForestScene::setDeadTrees` is an independent death visibility channel, separate from `setFallenTrees` (water uprooting/Box3D) and `setRemovedTrees` (harvesting). `setRecruitedPlants` uses existing Arbor shared prototypes and Flora near/LOD batching for sparse new saplings, no per-seedling GPU prototype. `TerraWeaveNativeWorldBinding::reconcile` reconstructs their presentation from the new persistent ecology resource after save/rollback. Tree-only changes DO NOT invalidate terrain/collision/NavMesh or unrelated grass GPU batches.
+- Native usage: `examples/world/terraweave_native/{Integration.h,README.md}` accepts trailing `rootedForestSpecies`, `rootedForestSettings` and `onForestEcology`. Empty policies leave old games unchanged. For harvested trees, gameplay MUST remove or suppress the canonical rooted entry too: presentation-only `removed_` does not stop a plant from reproducing. Natural death currently hides the Arbor instance but does NOT perform Box3D deadwood fall or game-resource/collider cleanup. Background decorative millions remain procedural, not individually simulated.
+- Read `docs/terrain/stage-65-rooted-forest-ecology-handoff.md` for exact files, commits, API, ownership/perf limits and next steps. **No Stage65 native compiler/CTest/ECS/Metal/Box3D/perf tests have been run**; earlier green tests apply to older commits only. PR #24 remains Draft; prioritize a compile and full native QA after feature implementation.

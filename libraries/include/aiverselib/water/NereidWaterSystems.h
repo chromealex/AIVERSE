@@ -2,6 +2,8 @@
 #pragma once
 #include <aiverselib/water/NereidCascadeFlow.h>
 #include <aiverselib/water/NereidConfluenceFlow.h>
+#include <aiverselib/water/NereidFlowObstacles.h>
+#include <aiverselib/water/NereidFloodRouting.h>
 #include "engine/sim/CommonComponents.h"
 #include "engine/sim/Simulation.h"
 #include <string>
@@ -47,7 +49,9 @@ inline WaterSample sampleWater(const World& world,Vec3 position) {
     // runs last so drops take local precedence without changing body flow.
     applyWaterConfluenceFlow(world,position,sample);
     applyWaterCascadeFlow(world,position,sample);
-    return sample;
+    applyNereidFlowObstructions(world,position,sample);
+    return applyNereidFloodSample(
+        world,world.resourceConst<WaterFloodResource>(),position,sample);
 }
 
 // Optional adapter to the existing shared world Transform, after locomotion/
@@ -55,8 +59,9 @@ inline WaterSample sampleWater(const World& world,Vec3 position) {
 inline void addWaterProbeFromTransformSystem(Simulation& sim,std::string name) {
     sim.addSystem(std::move(name),[](Simulation& current) {
         World& world=current.world();
-        auto* probes=world.prepareExistingWrite<WaterProbeComponent>();
-        if(!probes)return;
+        if(!world.countExisting<WaterProbeComponent>())return;
+        // Detach the shared COW pool before publishing probe positions.
+        auto* probes=&world.pool<WaterProbeComponent>();
         const World& read=world;
         for(size_t i=0;i<probes->size();++i) {
             const Entity e=probes->entityAt(i);
@@ -72,8 +77,9 @@ inline void addWaterProbeFromTransformSystem(Simulation& sim,std::string name) {
 inline void addWaterSamplingSystem(Simulation& sim,std::string name) {
     sim.addSystem(std::move(name),[](Simulation& current) {
         World& world=current.world();
-        auto* contacts=world.prepareExistingWrite<WaterContactComponent>();
-        if(!contacts)return;
+        if(!world.countExisting<WaterContactComponent>())return;
+        // Detach the shared COW pool before modifying contact samples.
+        auto* contacts=&world.pool<WaterContactComponent>();
         const World& read=world;
         for(size_t i=0;i<contacts->size();++i) {
             const Entity e=contacts->entityAt(i);

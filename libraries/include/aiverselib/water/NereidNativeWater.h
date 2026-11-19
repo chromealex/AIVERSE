@@ -6,6 +6,7 @@
 #include <aiverselib/water/NereidInteractions.h>
 #include <aiverselib/water/NereidCascades.h>
 #include <aiverselib/water/NereidConfluences.h>
+#include <aiverselib/water/NereidShorelineSystems.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +21,12 @@ struct NativeWaterPipelineConfig {
     bool enableConfluences=false;
     bool enableCurrentField=false;
     bool enableVortices=false;
+    bool enableBankErosion=false;
+    bool enableFlowObstructions=false;
+    bool enableFloodRouting=false;
+    uint32_t floodTickMs=16;
+    WaterFloodSettings floodSettings{};
+    uint32_t bankErosionTickMs=16;
     bool probeFromTransform=true;
     AdaptiveWaterSamplingConfig adaptive{};
 };
@@ -36,9 +43,22 @@ inline void registerNativeWaterPipeline(Simulation& sim,
     if(config.enableConfluences)registerNereidConfluencePersistence(sim);
     if(config.enableCurrentField)registerNereidCurrentPersistence(sim);
     if(config.enableVortices)registerNereidVortexPersistence(sim);
+    if(config.enableBankErosion)registerNereidBankErosionPersistence(sim);
+    if(config.enableFlowObstructions)
+        registerNereidFlowObstructionPersistence(sim);
+    if(config.enableFloodRouting)
+        registerNereidFloodPersistence(sim);
     if(config.probeFromTransform)
         addWaterProbeFromTransformSystem(sim,prefix+".probe");
+    // Flood volume routing precedes water probes, bank erosion and
+    // sediment advection; no second water body system is registered.
+    if(config.enableFloodRouting)
+        addNereidFloodRoutingSystem(sim,prefix+".flood",
+                                   config.floodTickMs,config.floodSettings);
     addAdaptiveWaterSamplingSystem(sim,prefix+".sample",config.adaptive);
+    if(config.enableBankErosion)
+        addNereidBankErosionSystem(sim,prefix+".bank_erosion",
+                                  config.bankErosionTickMs);
     if(config.enableBuoyancy)
         addWaterBuoyancySystem(sim,prefix+".buoyancy");
     if(config.enableInteractions)

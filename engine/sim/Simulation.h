@@ -167,6 +167,7 @@ public:
     const World& world() const { return world_; }
     Random& rng() { return rng_; }
     GameModule& module() { return *module_; }
+    const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
     Fixed dt() const { return dt_; }
     uint32_t tickRate() const { return tickRate_; }
