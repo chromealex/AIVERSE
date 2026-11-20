@@ -12,6 +12,7 @@
 #include <chrono>
 #include <iterator>
 #include <memory>
+#include <limits>
 #include <mutex>
 #include <map>
 #include <cstring>
@@ -1658,17 +1659,38 @@ kernel void cs_main(device const DrawArgs* generated [[buffer(0)]],
             modelIcbDescriptor_.maxVertexBufferBindCount = 9;
             modelIcbDescriptor_.maxFragmentBufferBindCount = 9;
         }
+        // Stage141, diagnostic-only ICB playback control: both 0 and 128
+        // deliberately allocate and reset the SAME extra 128 empty commands.
+        // Only the executed ICB range differs between control/experiment.
+        // When unset, all allocation/reset/execute behavior is unchanged.
+        // Empty commands are never encoded; reset clears stale pooled slots.
+        struct EmptyTailExperiment {
+            bool active = false;
+            uint32_t executedTail = 0;
+        };
+        static const EmptyTailExperiment emptyTail = [] {
+            const char* flag = std::getenv("AIVERSE_METAL_CPU_MDI_EMPTY_TAIL");
+            if (!flag) return EmptyTailExperiment{};
+            if (std::strcmp(flag, "0") == 0) return EmptyTailExperiment{true, 0};
+            if (std::strcmp(flag, "128") == 0) return EmptyTailExperiment{true, 128};
+            return EmptyTailExperiment{}; // invalid controls never enable padding
+        }();
+        const uint32_t resetTail = emptyTail.active ? 128u : 0u;
+        if (drawCount > std::numeric_limits<uint32_t>::max() - resetTail) return false;
+        const uint32_t allocatedCount = drawCount + resetTail;
+        const uint32_t executeCount = drawCount + emptyTail.executedTail;
         MTLIndirectCommandBufferDescriptor* descriptor = modelIcbDescriptor_;
-        if (!resources.icb || resources.icbCapacity < drawCount) {
+        if (!resources.icb || resources.icbCapacity < allocatedCount) {
             resources.icb = [device_ newIndirectCommandBufferWithDescriptor:descriptor
-                maxCommandCount:drawCount options:MTLResourceStorageModeShared];
+                maxCommandCount:allocatedCount options:MTLResourceStorageModeShared];
             if (!resources.icb) return false;
-            resources.icbCapacity = drawCount;
+            resources.icbCapacity = allocatedCount;
         }
         id<MTLIndirectCommandBuffer> icb = resources.icb;
-        // Only commands used by this submission need resetting. Larger pooled
-        // capacity is untouched and cannot execute (execute range is drawCount).
-        [icb resetWithRange:NSMakeRange(0, drawCount)];
+        // Both Stage141 modes reset all padded slots; only the range passed
+        // to executeCommandsInBuffer differs. In the default path the range
+        // is exactly the original drawCount, with no extra allocation.
+        [icb resetWithRange:NSMakeRange(0, allocatedCount)];
         const auto afterIcbReset = std::chrono::steady_clock::now();
 
         // Uniform buffers are private to this submission. Preserve their lifetime
@@ -1797,7 +1819,18 @@ kernel void cs_main(device const DrawArgs* generated [[buffer(0)]],
         // subsequent direct fallback draws behave identically.
         if (inheritCpuIcbPipeline)
             [enc_ setRenderPipelineState:indirectPipeline];
-        [enc_ executeCommandsInBuffer:icb withRange:NSMakeRange(0, drawCount)];
+        [enc_ executeCommandsInBuffer:icb withRange:NSMakeRange(0, executeCount)];
+        if (emptyTail.active) {
+            static bool reported = false;
+            if (!reported) {
+                reported = true;
+                std::fprintf(stderr,
+                    "[metal-icb-empty-tail] mode=%s valid=%u reset=%u execute=%u\n",
+                    emptyTail.executedTail ? "on" : "off",
+                    unsigned(drawCount), unsigned(allocatedCount),
+                    unsigned(executeCount));
+            }
+        }
         if (inheritCpuIcbPipeline)
             [enc_ setRenderPipelineState:p->state];
         // Diagnostic only. Sample the four existing CPU ICB stage boundaries
