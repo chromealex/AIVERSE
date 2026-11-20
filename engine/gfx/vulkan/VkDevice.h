@@ -92,6 +92,7 @@ struct VPipeline {
 };
 
 struct VCompute {
+    uint32_t sampledTextureSlots=0;
     VkShaderModule shader = VK_NULL_HANDLE;
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
@@ -171,6 +172,7 @@ public:
     bool beginCompute(ComputeHandle h) override;
     void setComputeBuffer(int slot, BufferHandle b) override;
     void setComputeTexture(int slot, TextureHandle t) override;
+    void setComputeSampledTexture(int slot, TextureHandle t) override;
     void setComputeUniforms(const void* data, size_t size) override;
     void dispatch(uint32_t logicalX, uint32_t logicalY=1) override;
     void endCompute() override;
@@ -271,6 +273,7 @@ private:
     uint32_t activeCompute_ = 0;
     std::array<BufferHandle,4> computeBuffers_{};
     TextureHandle computeTexture_{};
+    std::array<TextureHandle,5> computeSampledTextures_{};
     std::array<uint8_t,128> computeUniforms_{};
     size_t computeUniformSize_ = 0;
     bool computeImageWriting_ = false;

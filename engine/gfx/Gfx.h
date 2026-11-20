@@ -177,7 +177,14 @@ struct ShaderDesc {
     bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
 };
 
-struct ComputeDesc { const char* msl=nullptr; const char* glsl=nullptr; const char* label=nullptr; };
+struct ComputeDesc {
+    const char* msl=nullptr;
+    const char* glsl=nullptr;
+    const char* label=nullptr;
+    // Optional Vulkan compute sampled images at descriptor bindings 5...
+    // Zero keeps the existing four-storage-buffer/one-image GI ABI intact.
+    int sampledTextureSlots=0;
+};
 
 struct VertexAttr {
     uint32_t location = 0;
@@ -292,6 +299,9 @@ public:
     virtual bool beginCompute(ComputeHandle) { return false; }
     virtual void setComputeBuffer(int,BufferHandle) {}
     virtual void setComputeTexture(int,TextureHandle) {}
+    // Separate sampled input from the write-only storage-image output.
+    // Slots 0..4 map to Vulkan bindings 5..9; unsupported backends ignore.
+    virtual void setComputeSampledTexture(int,TextureHandle) {}
     virtual void setComputeUniforms(const void*,size_t) {}
     // 64 threads per X group; dispatch provides total logical threads. Bounds-check in shader.
     virtual void dispatch(uint32_t,uint32_t=1) {}

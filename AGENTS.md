@@ -1,6 +1,21 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 14 — Vulkan sampled compute inputs (2026-11-20)
+
+Active experimental branch: `feature/gi-lumaweave-vulkan-frame-stage14-20261120`.
+Before changing Vulkan compute descriptor pools or screen-space direct-light
+integration, read
+`docs/agent-handoffs/gi-lumaweave-stage14-vulkan-sampled-compute-2026-11-20.md`.
+Four storage inputs + one RGBA16F output remain the GI-compatible default.
+A compute pipeline may opt into 1..5 additional sampled textures at bindings
+5..9, with strict device limit checks, fail-closed unbound sampler validation
+and frame-fence descriptor lifetime. Existing GLES/Metal behavior unchanged.
+Source and GPU test code are committed but NOT RUN; actual validation,
+per-view frame material/depth matching and HDR composition are required
+before production enablement. Do not override newer renderer work or
+merge these experimental branches into main before native acceptance.
+
 ## GI + LumaWeave Stage 13 — Vulkan direct GPU owner (2026-11-20)
 
 Work branch `feature/gi-lumaweave-vulkan-direct-owner-stage13-20261120`. Read

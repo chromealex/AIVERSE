@@ -13,7 +13,16 @@
 namespace aiverse::gfx::vk {
 
 ComputeHandle VulkanDevice::createCompute(const ComputeDesc& d) {
-    if (!supportsCompute() || !d.glsl) return {};
+    if (!supportsCompute() || !d.glsl || d.sampledTextureSlots<0 ||
+        d.sampledTextureSlots>5)return {};
+    if(d.sampledTextureSlots>0) {
+        const auto& lim=gpuProps_.limits;
+        const auto requested=uint32_t(d.sampledTextureSlots);
+        if(lim.maxPerStageDescriptorSamplers<requested ||
+           lim.maxPerStageDescriptorSampledImages<requested ||
+           lim.maxDescriptorSetSamplers<requested ||
+           lim.maxDescriptorSetSampledImages<requested)return {};
+    }
     std::vector<uint32_t> words;
     std::string compileError;
     if (!compileComputeProgram(d.glsl,words,compileError)) {
@@ -21,6 +30,7 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& d) {
         return {};
     }
     VCompute c;
+    c.sampledTextureSlots=uint32_t(d.sampledTextureSlots);
     c.shader=createModule(words);
     if (!c.shader) { error_="Vulkan GI compute: shader module failed"; return {}; }
     const auto fail=[&]() -> ComputeHandle {
@@ -32,16 +42,17 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& d) {
         return {};
     };
 
-    VkDescriptorSetLayoutBinding bindings[5]{};
-    for(uint32_t slot=0;slot<5;++slot) {
+    std::array<VkDescriptorSetLayoutBinding,10> bindings{};
+    for(uint32_t slot=0;slot<5+c.sampledTextureSlots;++slot) {
         bindings[slot].binding=slot;
-        bindings[slot].descriptorType=slot==4 ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-                                              : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[slot].descriptorType=slot==4 ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE :
+                                      slot>=5 ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
+                                                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[slot].descriptorCount=1;
         bindings[slot].stageFlags=VK_SHADER_STAGE_COMPUTE_BIT;
     }
     auto sl=vkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    sl.bindingCount=5;
+    sl.bindingCount=5+c.sampledTextureSlots;
     sl.pBindings=bindings;
     if(vkCreateDescriptorSetLayout(device_,&sl,nullptr,&c.setLayout)!=VK_SUCCESS)
         return fail();
@@ -93,6 +104,7 @@ bool VulkanDevice::beginCompute(ComputeHandle h) {
     activeCompute_=h.id;
     computeBuffers_.fill({});
     computeTexture_={};
+    computeSampledTextures_.fill({});
     computeUniformSize_=0;
     computeImageWriting_=false;
     computeDispatchSucceeded_=false;
@@ -123,6 +135,13 @@ void VulkanDevice::setComputeTexture(int slot, TextureHandle h) {
         ? h : TextureHandle{};
 }
 
+void VulkanDevice::setComputeSampledTexture(int slot, TextureHandle h) {
+    if(!activeCompute_ || slot<0 || slot>=int(computeSampledTextures_.size()))return;
+    const VTexture* t=textures_.get(h.id);
+    computeSampledTextures_[size_t(slot)]=(t && t->view && t->sampler) ?
+        h : TextureHandle{};
+}
+
 void VulkanDevice::setComputeUniforms(const void* data,size_t size) {
     if(!activeCompute_ || !data || size==0 || size>computeUniforms_.size() ||
        size>gpuProps_.limits.maxPushConstantsSize){
@@ -150,13 +169,28 @@ void VulkanDevice::dispatch(uint32_t logicalX,uint32_t logicalY) {
         buffers[i].range=VkDeviceSize(b->size);
         if(!buffers[i].buffer)return;
     }
+    std::array<VkDescriptorImageInfo,6> images{};
+    images[0].imageView=texture->view;
+    images[0].imageLayout=VK_IMAGE_LAYOUT_GENERAL;
+    for(uint32_t i=0;i<c->sampledTextureSlots;++i) {
+        const auto h=computeSampledTextures_[i];
+        if(!h.valid() || h.id==computeTexture_.id)return;
+        const VTexture* sampled=textures_.get(h.id);
+        if(!sampled || !sampled->view || !sampled->sampler)return;
+        images[1+i].imageView=sampled->view;
+        images[1+i].sampler=sampled->sampler;
+        images[1+i].imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
     FrameSlot& s=slots_[size_t(slot_)];
     if(s.computePool>=s.computePools.size()) {
-        VkDescriptorPoolSize sizes[2]={{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,4},
-                                      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,1}};
+        // One reusable pool per dispatch. All are allocated for the maximum
+        // optional sampler count, so pools can safely serve ANY compute ABI.
+        VkDescriptorPoolSize sizes[3]={{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,4},
+                                      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,1},
+                                      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,5}};
         auto pi=vkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         pi.maxSets=1;
-        pi.poolSizeCount=2;
+        pi.poolSizeCount=3;
         pi.pPoolSizes=sizes;
         VkDescriptorPool pool=VK_NULL_HANDLE;
         if(vkCreateDescriptorPool(device_,&pi,nullptr,&pool)!=VK_SUCCESS) {
@@ -175,20 +209,19 @@ void VulkanDevice::dispatch(uint32_t logicalX,uint32_t logicalY) {
         error_="Vulkan GI compute descriptor allocation failed";
         return;
     }
-    VkDescriptorImageInfo image{};
-    image.imageView=texture->view;
-    image.imageLayout=VK_IMAGE_LAYOUT_GENERAL;
-    std::array<VkWriteDescriptorSet,5> writes{};
-    for(uint32_t i=0;i<5;++i) {
+    std::array<VkWriteDescriptorSet,10> writes{};
+    for(uint32_t i=0;i<5+c->sampledTextureSlots;++i) {
         writes[i].sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet=set;
         writes[i].dstBinding=i;
         writes[i].descriptorCount=1;
-        writes[i].descriptorType=i==4?VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        if(i==4)writes[i].pImageInfo=&image;
+        writes[i].descriptorType=i==4?VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                                  i>=5?VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        if(i>=4)writes[i].pImageInfo=&images[i-4];
         else writes[i].pBufferInfo=&buffers[i];
     }
-    vkUpdateDescriptorSets(device_,uint32_t(writes.size()),writes.data(),0,nullptr);
+    vkUpdateDescriptorSets(device_,5+c->sampledTextureSlots,writes.data(),0,nullptr);
     const VkCommandBuffer command=s.main;
     if(!computeImageWriting_) {
         barrierImage(command,texture->image,false,
@@ -225,6 +258,7 @@ void VulkanDevice::endCompute() {
     activeCompute_=0;
     computeTexture_={};
     computeBuffers_.fill({});
+    computeSampledTextures_.fill({});
     computeUniformSize_=0;
 }
 

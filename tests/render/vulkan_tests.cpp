@@ -4,6 +4,7 @@
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -352,6 +353,78 @@ int main() {
         if(out.valid())d.destroyTexture(out);
         for(auto b:{lightBuffer,receiverBuffer,triBuffer,nodeBuffer})
             if(b.valid())d.destroyBuffer(b);
+    }
+    // Stage14: real Vulkan sampled-texture compute descriptor fixture.
+    // A fragment-rendered material/depth target later feeds this same ABI.
+    if(d.supportsCompute()) {
+        const char* sampledCs=R"(
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer B0 {float a[];};
+layout(set=0,binding=1,std430) readonly buffer B1 {float b[];};
+layout(set=0,binding=2,std430) readonly buffer B2 {float c[];};
+layout(set=0,binding=3,std430) readonly buffer B3 {float d[];};
+layout(rgba16f,set=0,binding=4) writeonly uniform image2D outputImage;
+layout(set=0,binding=5) uniform sampler2D sampled0;
+layout(set=0,binding=6) uniform sampler2D sampled1;
+layout(set=0,binding=7) uniform sampler2D sampled2;
+layout(set=0,binding=8) uniform sampler2D sampled3;
+layout(set=0,binding=9) uniform sampler2D sampled4;
+layout(push_constant) uniform P {uvec4 counts;uvec4 control;vec4 x;vec4 y;vec4 z;} p;
+void main() {
+    if(gl_GlobalInvocationID.x>=p.counts.x)return;
+    vec4 value=(texelFetch(sampled0,ivec2(0),0)+
+                texelFetch(sampled1,ivec2(0),0)+
+                texelFetch(sampled2,ivec2(0),0)+
+                texelFetch(sampled3,ivec2(0),0)+
+                texelFetch(sampled4,ivec2(0),0))*.2;
+    imageStore(outputImage,ivec2(0),value);
+}
+)";
+        const float dummy=0.0f;
+        BufferDesc b; b.type=BufferType::Storage;
+        b.size=sizeof(dummy);b.data=&dummy;
+        std::array<BufferHandle,4> buffers{};
+        for(auto& h:buffers)h=d.createBuffer(b);
+        const uint8_t rgba[4]={64,128,192,255};
+        TextureDesc inputDesc;inputDesc.width=1;inputDesc.height=1;
+        inputDesc.format=PixelFormat::RGBA8;inputDesc.filter=Filter::Nearest;
+        inputDesc.data=rgba;
+        const auto input=d.createTexture(inputDesc);
+        TextureDesc outputDesc;outputDesc.width=1;outputDesc.height=1;
+        outputDesc.format=PixelFormat::RGBA16F;outputDesc.storage=true;
+        outputDesc.filter=Filter::Nearest;
+        const auto output=d.createTexture(outputDesc);
+        ComputeDesc cd;cd.glsl=sampledCs;cd.sampledTextureSlots=5;
+        const auto kernel=d.createCompute(cd);
+        CHECK(kernel.valid() && input.valid() && output.valid());
+        if(kernel.valid() && input.valid() && output.valid()) {
+            Image image=frame(d,[&] {
+                std::array<uint32_t,20> push{};
+                push[0]=1u;
+                CHECK(d.beginCompute(kernel));
+                for(int i=0;i<4;++i)d.setComputeBuffer(i,buffers[size_t(i)]);
+                d.setComputeTexture(0,output);
+                d.setComputeUniforms(push.data(),sizeof(push));
+                d.dispatch(1);
+                CHECK(!d.computeDispatchSucceeded()); // missing all sampled inputs
+                for(int i=0;i<5;++i)d.setComputeSampledTexture(i,input);
+                d.dispatch(1);
+                CHECK(d.computeDispatchSucceeded());
+                d.endCompute();
+                d.beginPass(screen);
+                d.setPipeline(pTex);d.setTexture(0,output);
+                d.setVertexBuffer(vbFull);d.draw(6);
+                d.endPass();
+            });
+            CHECK(image.w==W && image.h==H);
+            if(image.w==W && image.h==H)
+                CHECK(near(image.at(W/2,H/2),64,128,192));
+        }
+        if(kernel.valid())d.destroyCompute(kernel);
+        if(input.valid())d.destroyTexture(input);
+        if(output.valid())d.destroyTexture(output);
+        for(auto h:buffers)if(h.valid())d.destroyBuffer(h);
     }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);
