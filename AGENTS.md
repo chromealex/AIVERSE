@@ -1,5 +1,21 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
+
+## GI + LumaWeave Stage 10 — portable geometry revision safety (2026-11-20)
+
+Current isolated branch: `feature/gi-lumaweave-portable-geometry-revision-stage10-20261120`.
+Read `docs/agent-handoffs/gi-lumaweave-stage10-portable-geometry-revision-2026-11-20.md`.
+Vulkan/GLES CPU L1 GI cannot bind an atlas without published ray geometry;
+callers should pass `LumaNativeViewInput::expectedCpuGiGeometryRevision` from the
+authoritative immutable world read barrier. A stale or absent accepted
+generation reports `giGeometryMismatch` and defers INDIRECT binding; the
+selected DIRECT raster path continues unaffected. `GiDynamicRuntime` rejects
+out-of-order nonzero full/regional BVH revisions; do not mutate shared geometry
+in place or invent revisions. All source tests for this stage are NOT RUN.
+Keep unverified features opt-in; do not merge to main without real native
+Metal/Vulkan/GLES shader/device acceptance.
+
+
 Read this file completely before changing anything. It is short on purpose. `README.md` is the
 short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
 `docs/overview.md` the detailed overview; this file is the engineering contract.

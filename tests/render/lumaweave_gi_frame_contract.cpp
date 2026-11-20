@@ -24,6 +24,10 @@ static_assert(std::is_same_v<decltype(LumaNativeViewInput{}.indirectCpuGi),
                               GiDynamicRuntime*>);
 static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.cpuGiFrame),
                               GiRuntimeStats>);
+static_assert(std::is_same_v<decltype(LumaNativeViewInput{}.expectedCpuGiGeometryRevision),
+                              uint64_t>);
+static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.giGeometryMismatch),
+                              bool>);
 static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.backendCapabilities),
                               LumaLightingBackendCaps>);
 static_assert(LumaWeaveBackendPolicy::cpuProbeLimit(gfx::Backend::GLES3)==2);

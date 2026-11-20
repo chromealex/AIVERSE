@@ -48,6 +48,10 @@ public:
         nx_=ny_=nz_=0;
     }
     bool ready() const { return atlas_.texture().valid(); }
+    // The host can compare the accepted immutable BVH generation against its
+    // current world snapshot before presenting Vulkan/GLES CPU-probe GI.
+    uint64_t geometryRevision() const { return geometryRevision_; }
+    bool hasTraceGeometry() const { return bool(geometry_); }
 
     GiDynamicProbeReference& reference() { return reference_; }
     const GiDynamicProbeReference& reference() const { return reference_; }
@@ -62,6 +66,11 @@ public:
     void setTraceGeometry(GiTraceGeometryView geometry, uint64_t revision) {
         ensureReady();
         if (geometry_==geometry && geometryRevision_==revision) return;
+        // Reject out-of-order and zero scene revisions even when the incoming
+        // pointer is different. The atlas must never accept an old obstacle
+        // snapshot after a newer world has been published.
+        if (!revision || revision<=geometryRevision_)
+            throw std::invalid_argument("stale dynamic GI geometry revision");
         // On validation failure the previous valid view remains active.
         reference_.setTraceGeometry(geometry,revision);
         geometry_=geometry;
@@ -84,6 +93,8 @@ public:
                                   GiBounds changed, float influenceRadius = 0) {
         ensureReady();
         if (geometry_ == geometry && geometryRevision_ == revision) return 0;
+        if (!revision || revision<=geometryRevision_)
+            throw std::invalid_argument("stale dynamic GI regional geometry revision");
         std::vector<uint32_t> cleared;
         const size_t affected = reference_.setTraceGeometryRegion(
             geometry, revision, changed, influenceRadius, &cleared);

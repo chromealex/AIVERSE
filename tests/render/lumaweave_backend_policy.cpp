@@ -33,6 +33,13 @@ int main() {
                             ==caps.defaultCpuProbeBudget);
         AIVERSE_TEST_CHECK(LumaWeaveBackendPolicy::cpuBudget(backend,1)==1);
     }
+    // Portable CPU GI is only presentable with an accepted trace BVH.
+    AIVERSE_TEST_CHECK(!LumaWeaveBackendPolicy::portableGiGeometryCurrent(false,4));
+    AIVERSE_TEST_CHECK(!LumaWeaveBackendPolicy::portableGiGeometryCurrent(true,0));
+    AIVERSE_TEST_CHECK(LumaWeaveBackendPolicy::portableGiGeometryCurrent(true,4));
+    AIVERSE_TEST_CHECK(LumaWeaveBackendPolicy::portableGiGeometryCurrent(true,4,4));
+    AIVERSE_TEST_CHECK(!LumaWeaveBackendPolicy::portableGiGeometryCurrent(true,4,5));
+    AIVERSE_TEST_CHECK(!LumaWeaveBackendPolicy::portableGiGeometryCurrent(true,5,4));
     device.info_.backend=gfx::Backend::GLES3;
     device.computeEnabled=false;
     const auto mobile=LumaWeaveBackendPolicy::inspect(device);

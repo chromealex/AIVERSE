@@ -35,6 +35,18 @@ struct LumaWeaveBackendPolicy {
                 device.supports(gfx::PixelFormat::RGBA32F),
                 cpuProbeLimit(backend)};
     }
+    // A CPU GI atlas is presentationally valid only after the host published
+    // an immutable trace BVH. With an expected scene generation supplied,
+    // reject an older atlas rather than show bounce through changed walls.
+    // expectedRevision=0 keeps existing hosts source-compatible, but callers
+    // managing dynamic geometry should always pass their current generation.
+    static constexpr bool portableGiGeometryCurrent(bool hasGeometry,
+                                                    uint64_t acceptedRevision,
+                                                    uint64_t expectedRevision=0) {
+        return hasGeometry && acceptedRevision!=0 &&
+               (!expectedRevision || acceptedRevision==expectedRevision);
+    }
+
     // Zero means no jobs. Upper bound of 256 prevents accidental unlimited CPU
     // tracing when the app passes a huge budget; use a targeted host profiler
     // before opting into a higher per-backend setting in the future.

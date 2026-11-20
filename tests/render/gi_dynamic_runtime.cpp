@@ -18,6 +18,21 @@ int main() {
     wall.albedos={{1,1,1}};
     wall.build();
     runtime.setGeometry(&wall,1);
+    AIVERSE_TEST_CHECK(runtime.hasTraceGeometry() && runtime.geometryRevision()==1);
+    runtime.setGeometry(&wall,1); // identical snapshot is idempotent
+    bool staleRejected=false;
+    try {runtime.setGeometry(nullptr,1);} // old generation cannot clear a wall
+    catch(const std::invalid_argument&) {staleRejected=true;}
+    AIVERSE_TEST_CHECK(staleRejected);
+    staleRejected=false;
+    try {runtime.setGeometry(&wall,0);} // older generation is invalid
+    catch(const std::invalid_argument&) {staleRejected=true;}
+    AIVERSE_TEST_CHECK(staleRejected);
+    staleRejected=false;
+    try {runtime.setGeometryRegion(&wall,0,{{-1,-1,-1},{1,1,1}});}
+    catch(const std::invalid_argument&) {staleRejected=true;}
+    AIVERSE_TEST_CHECK(staleRejected);
+    AIVERSE_TEST_CHECK(runtime.geometryRevision()==1 && runtime.hasTraceGeometry());
     runtime.setLights({GiMovingLight{42,{0,0,0},{1,0,0},4,20}});
 
     auto first=runtime.update(2,{0,0,0});
@@ -43,6 +58,7 @@ int main() {
 
     // Geometry revision resets stale light transport on CPU and GPU even with zero trace budget.
     runtime.setGeometry(nullptr,2);
+    AIVERSE_TEST_CHECK(!runtime.hasTraceGeometry() && runtime.geometryRevision()==2);
     auto cleared=runtime.update(0,{0,0,0});
     AIVERSE_TEST_CHECK(cleared.trace.primaryRays==0);
     AIVERSE_TEST_CHECK(cleared.upload.probes==18);
@@ -52,6 +68,7 @@ int main() {
         AIVERSE_TEST_CHECK(value.x==0 && value.y==0 && value.z==0 && value.w==0);
 
     runtime.setGeometry(&wall,3);
+    AIVERSE_TEST_CHECK(runtime.hasTraceGeometry() && runtime.geometryRevision()==3);
     while(runtime.reference().scheduler().pending()) {
         const auto step=runtime.update(4,{0,0,0});
         AIVERSE_TEST_CHECK(step.trace.published>=1 && step.trace.published<=4);

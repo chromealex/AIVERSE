@@ -33,6 +33,10 @@ struct LumaNativeViewInput {
     // Initialize it explicitly with RGBA32F support and publish immutable
     // GiTraceGeometryView externally. This is bounded, not full-world RT.
     GiDynamicRuntime* indirectCpuGi=nullptr;
+    // Opt-in fail-closed world revision check for portable CPU-probe GI.
+    // Pass the CURRENT immutable trace scene generation on Vulkan/GLES.
+    // Zero retains older host behavior, but still rejects absent geometry.
+    uint64_t expectedCpuGiGeometryRevision=0;
     size_t giProbeBudget=64;
     // Explicit opt-in: export only GI-eligible point lights (max 16) from
     // LumaWeave. False preserves externally authored GI lights unchanged.
@@ -61,6 +65,7 @@ struct LumaNativeViewResult {
     LumaGiSyncStatus giSourceSync{};    // meaningful if sync was requested
     bool giRequested=false;
     bool giBound=false;
+    bool giGeometryMismatch=false;     // missing or stale portable trace BVH
     bool giDeferred=false;             // no stale bounced light on failed sync
     bool submittedFrame=false;
 };
@@ -147,9 +152,19 @@ public:
         result.giRequested=input.indirectGi || input.indirectCpuGi;
         const bool gpuGi=device_.info().backend==gfx::Backend::Metal &&
                          input.indirectGi && input.indirectGi->ready();
-        const bool cpuGi=!gpuGi && input.indirectCpuGi &&
-                         result.backendCapabilities.portableCpuProbeAtlas &&
-                         input.indirectCpuGi->ready();
+        const bool portableGiReady=input.indirectCpuGi &&
+            result.backendCapabilities.portableCpuProbeAtlas &&
+            input.indirectCpuGi->ready();
+        const bool portableGeometryCurrent=portableGiReady &&
+            LumaWeaveBackendPolicy::portableGiGeometryCurrent(
+                input.indirectCpuGi->hasTraceGeometry(),
+                input.indirectCpuGi->geometryRevision(),
+                input.expectedCpuGiGeometryRevision);
+        const bool cpuGi=!gpuGi && portableGeometryCurrent;
+        // A stale/world-mismatched CPU atlas must NEVER be bound on this
+        // viewport. Direct Metal/raster light selection remains unaffected.
+        result.giGeometryMismatch=!gpuGi && portableGiReady &&
+                                  !portableGeometryCurrent;
         if(gpuGi) {
             auto& gi=*input.indirectGi;
             result.indirectRoute=LumaIndirectRoute::MetalCascades;
