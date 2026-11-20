@@ -150,6 +150,91 @@ int main() {
     AIVERSE_TEST_CHECK(direct.poll());
     AIVERSE_TEST_CHECK(direct.completedOutput().valid());
     AIVERSE_TEST_CHECK(direct.completedReceiverCount()==64);
+
+    // Stage17: the first denoised frame has only spatial samples, despite
+    // a matching view key: no previous Vulkan fence has published history.
+    AIVERSE_TEST_CHECK(direct.denoiseAvailable());
+    LumaWeaveVulkanDirect::DenoiseRequest history{};
+    history.viewKey=77;history.viewEpoch=3;
+    history.currentVP=mat4{};history.eye={0,2,-5};
+    device.current=13;
+    device.beginFrame(64,64);
+    auto filtered=direct.dispatchScreen(surfaces,view,8,8,1,3,&history);
+    AIVERSE_TEST_CHECK(filtered.encoded && filtered.frameSerial==13);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().encoded);
+    AIVERSE_TEST_CHECK(!direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(!direct.historyValid());
+    AIVERSE_TEST_CHECK(!direct.shutdown()); // three output images are in flight
+    device.endFrame();
+    AIVERSE_TEST_CHECK(!direct.poll());
+    device.completed=13;
+    AIVERSE_TEST_CHECK(direct.poll() && direct.historyValid());
+
+    // Identical world+view and unchanged source/BVH after a REAL fence:
+    // admit a reprojected history sample; no new light map is invented.
+    device.current=14;
+    device.beginFrame(64,64);
+    filtered=direct.dispatchScreen(surfaces,view,8,8,1,4,&history);
+    AIVERSE_TEST_CHECK(filtered.encoded);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().encoded);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().reason==
+                       LumaVulkanHistoryReason::Accepted);
+    device.endFrame();
+    device.completed=14;
+    AIVERSE_TEST_CHECK(direct.poll() && direct.historyValid());
+
+    // A camera teleport / cut cannot inherit a bright previous viewport.
+    history.eye.x+=5.0f;
+    device.current=15;
+    device.beginFrame(64,64);
+    filtered=direct.dispatchScreen(surfaces,view,8,8,1,5,&history);
+    AIVERSE_TEST_CHECK(filtered.encoded &&
+                       direct.denoiseStatus().encoded);
+    AIVERSE_TEST_CHECK(!direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().reason==
+                       LumaVulkanHistoryReason::CameraCut);
+    device.endFrame();
+    device.completed=15;
+    AIVERSE_TEST_CHECK(direct.poll() && direct.historyValid());
+
+    // Old history must be invalidated immediately when the light registry
+    // and immutable BVH generation change, independently of camera motion.
+    auto edited=sources.lights();
+    edited[0].color={0,0,1};
+    (void)sources.publish(std::move(edited));
+    AIVERSE_TEST_CHECK(direct.setSources(sources));
+    AIVERSE_TEST_CHECK(!direct.historyValid());
+    AIVERSE_TEST_CHECK(direct.setGeometry(good,3));
+    AIVERSE_TEST_CHECK(!direct.historyValid());
+
+    // A changed render resolution starts spatial-only, with new history
+    // textures; no recycled 8x8 image is sampled as a 16x16 image.
+    history.eye.x=0;
+    view.resolution.x=16;view.resolution.y=16;
+    device.current=16;
+    device.beginFrame(64,64);
+    filtered=direct.dispatchScreen(surfaces,view,16,16,1,6,&history);
+    AIVERSE_TEST_CHECK(filtered.encoded &&
+                       direct.denoiseStatus().encoded);
+    AIVERSE_TEST_CHECK(!direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(!direct.shutdown());
+    device.endFrame();
+    device.completed=16;
+    AIVERSE_TEST_CHECK(direct.poll() && direct.historyValid());
+
+    // A history reset DURING an in-flight compute must not be undone by
+    // a later successful callback for that old command buffer.
+    device.current=17;
+    device.beginFrame(64,64);
+    const auto pending=direct.dispatchScreen(surfaces,view,16,16,1,7,&history);
+    AIVERSE_TEST_CHECK(pending.encoded &&
+                       direct.denoiseStatus().historyUsed);
+    direct.invalidateHistory();
+    device.endFrame();
+    device.completed=17;
+    AIVERSE_TEST_CHECK(direct.poll());
+    AIVERSE_TEST_CHECK(!direct.historyValid());
     for(auto t:inputs)device.destroyTexture(t);
 
     AIVERSE_TEST_CHECK(direct.shutdown());

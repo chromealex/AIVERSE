@@ -4,6 +4,7 @@
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 #include "engine/render/LumaWeaveVulkanScreenShader.h"
+#include "engine/render/LumaWeaveVulkanDenoiseShader.h"
 
 #include <array>
 #include <cstdio>
@@ -539,6 +540,118 @@ void main() {
             if(handle.valid())d.destroyTexture(handle);
         for(auto handle:{lightBuf,viewBuf,triBuf,nodeBuf})
             if(handle.valid())d.destroyBuffer(handle);
+    }
+    // Stage17 Vulkan hardware/lavapipe regression for the true same-frame
+    // spatial pass and a reprojected older *completed* PBR direct history.
+    if(d.supportsCompute()) {
+        const uint16_t redDepth[4]={0x3c00,0,0,0x3800};  // red 1, depth .5
+        const uint16_t greenDepth[4]={0,0x3c00,0,0x3800};
+        const uint16_t normalZ[4]={0,0,0x3c00,0x3800};
+        TextureDesc tx;
+        tx.width=tx.height=1;tx.format=PixelFormat::RGBA16F;
+        tx.filter=Filter::Nearest;
+        tx.data=redDepth;
+        const auto raw=d.createTexture(tx);
+        tx.data=greenDepth;
+        const auto previous=d.createTexture(tx);
+        tx.data=normalZ;
+        const auto normal=d.createTexture(tx);
+        tx.data=nullptr;tx.storage=true;
+        const auto filtered=d.createTexture(tx);
+        TextureDesc zd;
+        zd.width=W;zd.height=H;zd.format=PixelFormat::Depth;
+        zd.renderTarget=true;zd.filter=Filter::Nearest;
+        const auto currentDepth=d.createTexture(zd);
+        const auto receiverDepth=d.createTexture(zd);
+        struct FilterView {
+            float current[16],previous[16],eye[4],resolution[4];
+            float settings[4],flags[4];
+        };
+        static_assert(sizeof(FilterView)==192);
+        FilterView view{};
+        for(int i:{0,5,10,15}) {
+            view.current[i]=1.0f;view.previous[i]=1.0f;
+        }
+        view.resolution[0]=view.resolution[1]=1.0f;
+        view.resolution[2]=float(W);view.resolution[3]=float(H);
+        view.settings[0]=.012f;view.settings[1]=.88f;
+        view.settings[2]=.90f;view.settings[3]=8.0f;
+        view.flags[1]=.012f;
+        BufferDesc data;
+        data.type=BufferType::Storage;
+        data.usage=Usage::Dynamic;
+        data.size=sizeof(view);data.data=&view;
+        const auto viewBuffer=d.createBuffer(data);
+        data.usage=Usage::Immutable;data.size=4;
+        const uint32_t zero=0;data.data=&zero;
+        const auto dummy=d.createBuffer(data);
+        ComputeDesc compute;
+        compute.glsl=aiverse::render::luma_vk::kDenoiseCompute;
+        compute.sampledTextureSlots=5;
+        const auto filter=d.createCompute(compute);
+        CHECK(filter.valid() && raw.valid() && previous.valid() &&
+              normal.valid() && filtered.valid() &&
+              currentDepth.valid() && receiverDepth.valid());
+        if(filter.valid() && raw.valid() && previous.valid() &&
+           normal.valid() && filtered.valid() && currentDepth.valid() &&
+           receiverDepth.valid() && viewBuffer.valid() && dummy.valid()) {
+            auto resolvePixel=[&](bool historyEnabled) -> Image {
+                view.flags[0]=historyEnabled?1.0f:0.0f;
+                d.updateBuffer(viewBuffer,&view,sizeof(view));
+                return frame(d,[&] {
+                    for(auto target:{currentDepth,receiverDepth}) {
+                        PassDesc depthPass;
+                        depthPass.depthTarget=target;
+                        depthPass.clearColorEnabled=false;
+                        d.beginPass(depthPass);
+                        d.setPipeline(pCaster);
+                        d.setVertexBuffer(vbFull);
+                        uniforms(1,1,1,1);
+                        d.draw(6);
+                        d.endPass();
+                    }
+                    std::array<uint32_t,20> pc{};
+                    pc[1]=1;pc[5]=1;
+                    CHECK(d.beginCompute(filter));
+                    d.setComputeBuffer(0,dummy);
+                    d.setComputeBuffer(1,viewBuffer);
+                    d.setComputeBuffer(2,dummy);
+                    d.setComputeBuffer(3,dummy);
+                    d.setComputeTexture(0,filtered);
+                    d.setComputeSampledTexture(0,raw);
+                    d.setComputeSampledTexture(1,previous);
+                    d.setComputeSampledTexture(2,currentDepth);
+                    d.setComputeSampledTexture(3,normal);
+                    d.setComputeSampledTexture(4,receiverDepth);
+                    d.setComputeUniforms(pc.data(),sizeof(pc));
+                    d.dispatch(1);
+                    CHECK(d.computeDispatchSucceeded());
+                    d.endCompute();
+                    d.beginPass(screen);
+                    d.setPipeline(pTex);
+                    d.setTexture(0,filtered);
+                    d.setVertexBuffer(vbFull);
+                    d.draw(6);
+                    d.endPass();
+                });
+            };
+            const Image spatial=resolvePixel(false);
+            CHECK(spatial.w==W && spatial.h==H);
+            if(spatial.w==W && spatial.h==H)
+                CHECK(near(spatial.at(W/2,H/2),255,0,0));
+            const Image temporal=resolvePixel(true);
+            CHECK(temporal.w==W && temporal.h==H);
+            if(temporal.w==W && temporal.h==H) {
+                // Green history is accepted only with a matching depth and
+                // clamped to the local red pixel's current color envelope.
+                const auto* pixel=temporal.at(W/2,H/2);
+                CHECK(pixel[0]<250 && pixel[1]>20 && pixel[2]<5);
+            }
+        }
+        if(filter.valid())d.destroyCompute(filter);
+        for(auto tex:{raw,previous,normal,filtered,currentDepth,receiverDepth})
+            if(tex.valid())d.destroyTexture(tex);
+        for(auto buf:{viewBuffer,dummy})if(buf.valid())d.destroyBuffer(buf);
     }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);

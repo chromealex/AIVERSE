@@ -18,6 +18,10 @@ static_assert(std::is_same_v<decltype(LumaNativeViewInput{}.enableVulkanDirect),
 static_assert(std::is_same_v<decltype(LumaNativeViewInput{}.vulkanReceiverCoverageConfirmed),bool>);
 static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.vulkanSubmission),
                              LumaWeaveVulkanDirect::Submission>);
+static_assert(std::is_same_v<decltype(LumaNativeViewInput{}.vulkanHistoryKey),
+                             uint64_t>);
+static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.vulkanTemporalHistoryUsed),
+                             bool>);
 
 struct ShaderFake final:FakeDevice {
     uint64_t current=21,completed=0;
@@ -85,6 +89,7 @@ int main() {
         LumaWeaveVulkanPostProcess post(downstream,legacy,gpu);
         AIVERSE_TEST_CHECK(post.initialize(device));
         post.setEnabled(true);
+        post.setHistoryIdentity(501,3);
         post.setQuality(LumaWeaveQuality::Balanced);
         device.beginFrame(64,64);
         const auto scene=post.scenePass({},64,64);
@@ -105,6 +110,9 @@ int main() {
         post.resolve(device,{},frame);
         const auto& stats=post.stats();
         AIVERSE_TEST_CHECK(stats.eligible && stats.composited);
+        AIVERSE_TEST_CHECK(stats.denoiseEncoded && !stats.temporalHistoryUsed);
+        AIVERSE_TEST_CHECK(gpu.denoiseStatus().encoded);
+        AIVERSE_TEST_CHECK(!gpu.historyValid()); // fence not completed yet
         AIVERSE_TEST_CHECK(stats.materialAvailable &&
                            stats.surfaceAvailable);
         AIVERSE_TEST_CHECK(stats.submission.encoded &&
@@ -116,10 +124,16 @@ int main() {
                            device.sampled[3]==surface.depthTarget);
         AIVERSE_TEST_CHECK(device.draws==1 && downstream.resolved);
         AIVERSE_TEST_CHECK(!post.shutdown()); // images still GPU-borrowed
+        // A temporary raster frame while GPU serial 21 is in flight must
+        // not prevent the eventual physical fence from publishing a valid
+        // history candidate for the same stable camera/world identity.
+        post.setEnabled(false,true);
         device.endFrame();
         AIVERSE_TEST_CHECK(!gpu.poll());
         device.completed=21;
-        AIVERSE_TEST_CHECK(gpu.poll());
+        AIVERSE_TEST_CHECK(gpu.poll() && gpu.historyValid());
+        post.setEnabled(false); // actual route disable drops old history
+        AIVERSE_TEST_CHECK(!gpu.historyValid());
         AIVERSE_TEST_CHECK(post.shutdown());
         AIVERSE_TEST_CHECK(!post.ready());
     }

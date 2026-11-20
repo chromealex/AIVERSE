@@ -1,6 +1,29 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 17 — Vulkan temporal/spatial direct denoise (2026-11-20)
+
+Branch: `feature/gi-lumaweave-vulkan-denoise-stage17-20261120`. Read the separate handoff
+`docs/agent-handoffs/gi-lumaweave-stage17-vulkan-temporal-spatial-2026-11-20.md`
+before modifying any Vulkan lighting history, RHI compute or renderer pass.
+Vulkan direct now has an optional 3x3 normal/depth-aware spatial bilateral
+filter and reprojected history using two filtered RGBA16F texture slots.
+Reuse is allowed ONLY after actual `completedFrameSerial()`, matching the
+stable nonzero camera+world `vulkanHistoryKey`, view cut epoch, source and
+immutable BVH revision, image resolution, and bounded camera movement/
+matrix changes. Reproject using the renderer's original GL-convention
+view-projection and `depth*2-1`; verify historical depth and clamp historical
+color to current spatial neighborhood to prevent disocclusion ghosts.
+`vulkanHistoryKey=0` remains spatial-only. An explicit route change,
+camera cut, world/source/BVH edit, resolution change or failed postprocess
+invalidates history immediately, including *pending* GPU work; a later
+successful fence must never resurrect it. A transient GPU-busy raster frame
+may preserve the pending candidate ONLY for the same view key, epoch,
+source revision and BVH revision. This experimental feature is OFF by default
+unless Vulkan Direct is explicitly enabled. GLES remains raster+CPU GI.
+Tests/source fixtures are committed but **NOT NATIVE RUN**; no GPU/FPS claims,
+and no merge into main before full cross-backend native acceptance.
+
 ## GI + LumaWeave Stage 16 — native Vulkan HDR direct route (2026-11-20)
 
 Branch: `feature/gi-lumaweave-vulkan-hdr-stage16-20261120`. Read

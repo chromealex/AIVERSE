@@ -3,6 +3,7 @@
 // real shadow correctness or GPU performance.
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 #include "engine/render/LumaWeaveVulkanScreenShader.h"
+#include "engine/render/LumaWeaveVulkanDenoiseShader.h"
 #include "engine/render/LumaWeaveGpuPacket.h"
 #include "engine/render/GiGpuBvh.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
@@ -59,6 +60,27 @@ int main() {
         "Luma Vulkan screen PBR GLSL->SPIR-V failure: %s\n",error.c_str());
     AIVERSE_TEST_CHECK(compiled);
     AIVERSE_TEST_CHECK(binary.size()>=8 && binary.front()==0x07230203u);
+
+    // Stage17 uses the same GPU descriptor ABI and creates one additional
+    // bounded 3x3 spatial / history-reprojected direct-light resolve.
+    const std::string denoise=aiverse::render::luma_vk::kDenoiseCompute;
+    for(const char* token:{"binding=0","binding=1","binding=2",
+                           "binding=3","binding=4","binding=5",
+                           "binding=6","binding=7","binding=8",
+                           "binding=9","previousVP","inverseCurrentVP",
+                           "history valid","filteredOutput","surfaceDepth",
+                           "previousHistory"}) {
+        AIVERSE_TEST_CHECK(denoise.find(token)!=std::string::npos);
+    }
+    binary.clear();error.clear();
+    const bool filterCompiled=aiverse::gfx::vk::compileComputeProgram(
+        denoise,binary,error);
+    if(!filterCompiled)std::fprintf(stderr,
+        "Luma Vulkan temporal/spatial GLSL->SPIR-V failure: %s\n",
+        error.c_str());
+    AIVERSE_TEST_CHECK(filterCompiled);
+    AIVERSE_TEST_CHECK(binary.size()>=8 &&
+                       binary.front()==0x07230203u);
 
     // The compiler must fail closed on an invalid compute module.
     AIVERSE_TEST_CHECK(!aiverse::gfx::vk::compileComputeProgram(

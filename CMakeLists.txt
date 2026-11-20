@@ -988,6 +988,15 @@ if(AIVERSE_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_post_contract
         COMMAND aiverse_lumaweave_vulkan_post_contract_test)
+
+    # Deterministic CPU validation of Vulkan temporal history admission.
+    # No GPU or Vulkan SDK is required for this CTest.
+    add_executable(aiverse_lumaweave_vulkan_history_policy_test
+        tests/render/lumaweave_vulkan_history_policy.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_history_policy_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_history_policy
+        COMMAND aiverse_lumaweave_vulkan_history_policy_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

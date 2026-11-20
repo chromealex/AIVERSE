@@ -1,13 +1,15 @@
 // Explicit, opt-in Vulkan DIRECT point/spot GPU owner. It does not modify
 // Renderer3D/LightSystem, write ECS state or compose bounced GI/baked lighting.
-// Provides a bounded per-receiver reference first; screen-space/GGX/denoise
-// require a separate material-aware native presentation integration.
+// Provides a bounded explicit-receiver path and opt-in PBR screen-space
+// direct with spatial/temporal denoising through VulkanPostProcess.
 // Requires the four-SSBO/one RGBA16F Vulkan compute RHI and a real fence serial.
 // NEVER treat dispatch/endFrame as GPU completion.
 #pragma once
 #include "LumaWeaveGpuPacket.h"
 #include "LumaWeaveVulkanDirectShader.h"
 #include "LumaWeaveVulkanScreenShader.h"
+#include "LumaWeaveVulkanDenoiseShader.h"
+#include "LumaWeaveVulkanHistoryPolicy.h"
 #include "GiGpuBvhValidator.h"
 #include "../gfx/Gfx.h"
 #include <algorithm>
@@ -52,6 +54,22 @@ public:
         float4 options{0.008f,0,0,0};
     };
     static_assert(sizeof(ScreenView)==112 && sizeof(mat4)==64);
+    struct DenoiseView {
+        mat4 inverseCurrentVP{};
+        mat4 previousVP{};
+        float4 eye{},dimensions{},settings{},flags{};
+    };
+    static_assert(sizeof(DenoiseView)==192);
+    struct DenoiseRequest {
+        uint64_t viewKey=0,viewEpoch=0;
+        mat4 currentVP{}; // engine GL-convention VP, before Vulkan Z remap
+        float3 eye{};
+        LumaVulkanDenoiseSettings settings{};
+    };
+    struct DenoiseStatus {
+        bool requested=false,encoded=false,historyUsed=false;
+        LumaVulkanHistoryReason reason=LumaVulkanHistoryReason::Disabled;
+    };
     struct Submission {
         bool encoded=false;
         uint64_t frameSerial=0,sourceRevision=0,geometryRevision=0;
@@ -85,6 +103,8 @@ public:
         // original explicit-receiver Vulkan compute owner.
         screenShader_=dev.createCompute({nullptr,luma_vk::kScreenDirectCompute,
             "LumaWeave Vulkan screen PBR direct",5});
+        denoiseShader_=dev.createCompute({nullptr,luma_vk::kDenoiseCompute,
+            "LumaWeave Vulkan spatial/temporal PBR direct",5});
         receiverBuffer_=allocate(kMaxReceivers*sizeof(LumaGpuReceiver),nullptr,
                                  gfx::Usage::Dynamic);
         lightBuffer_=allocate(sizeof(LumaGpuLight),nullptr);
@@ -108,12 +128,18 @@ public:
                 if(handle.valid())dev_->destroyBuffer(handle);
             if(output_.valid())dev_->destroyTexture(output_);
             if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
+            for(auto texture:filtered_)if(texture.valid())dev_->destroyTexture(texture);
+            if(denoiseShader_.valid())dev_->destroyCompute(denoiseShader_);
             if(screenShader_.valid())dev_->destroyCompute(screenShader_);
             if(shader_.valid())dev_->destroyCompute(shader_);
         }
         dev_=nullptr;shader_={};output_={};
-        screenShader_={};screenOutput_={};activeOutput_={};
+        screenShader_={};denoiseShader_={};screenOutput_={};activeOutput_={};
+        filtered_.fill({});filteredWidth_=filteredHeight_=0;
         screenWidth_=screenHeight_=0;
+        pendingFrame_=0;pendingFilterSlot_=-1;historySlot_=-1;
+        historyValid_=false;historyGeneration_=1;pendingHistoryGeneration_=0;
+        historyStamp_={};pendingHistoryStamp_={};denoiseStatus_={};
         receiverBuffer_={};lightBuffer_={};triangleBuffer_={};nodeBuffer_={};
         sourcesReady_=geometryReady_=outputValid_=false;
         sourceRevision_=geometryRevision_=geometryHash_=0;
@@ -124,6 +150,13 @@ public:
 
     bool ready() const {return dev_ && shader_.valid() && output_.valid();}
     bool screenAvailable() const {return ready() && screenShader_.valid();}
+    bool denoiseAvailable() const {return screenAvailable() && denoiseShader_.valid();}
+    const DenoiseStatus& denoiseStatus() const{return denoiseStatus_;}
+    bool historyValid() const{return historyValid_;}
+    void invalidateHistory() {
+        historyValid_=false;
+        ++historyGeneration_;
+    }
     uint32_t screenWidth() const {return screenWidth_;}
     uint32_t screenHeight() const {return screenHeight_;}
     bool busy() const {return pendingFrame_!=0;}
@@ -189,6 +222,7 @@ public:
         sourceRevision_=registry.revision();
         sourcesReady_=true;
         outputValid_=false;
+        invalidateHistory(); // light energy changed; previous bounce/reflection stale
         return true;
     }
 
@@ -220,6 +254,7 @@ public:
         geometryHash_=contentHash;
         geometryReady_=true;
         outputValid_=false;
+        invalidateHistory();
         return true;
     }
 
@@ -264,6 +299,8 @@ public:
         if(!accepted)return out;
         pendingFrame_=frame;
         activeOutput_=output_;
+        pendingFilterSlot_=-1;
+        invalidateHistory(); // explicit receiver path never supplies screen history
         outputValid_=false;
         pendingReceivers_=uint32_t(receivers.size());
         out={true,frame,sourceRevision_,geometryRevision_,
@@ -278,8 +315,11 @@ public:
     // after the Renderer3D opaque material/normal and main HDR passes.
     Submission dispatchScreen(ScreenInputs inputs,const ScreenView& view,
                               uint32_t width,uint32_t height,
-                              uint32_t samples,uint32_t seed) {
+                              uint32_t samples,uint32_t seed,
+                              const DenoiseRequest* denoise=nullptr) {
         Submission out;
+        denoiseStatus_={};
+        denoiseStatus_.requested=denoise && denoise->settings.enabled;
         if(!screenAvailable() || !inputs.complete() || !sourcesReady_ ||
            !geometryReady_ || busy() || !dev_->gpuHealthy() ||
            !dev_->canUpdateSharedBuffers() || !width || !height ||
@@ -308,6 +348,7 @@ public:
             if(!next.valid())return out;
             if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
             screenOutput_=next;screenWidth_=width;screenHeight_=height;
+            invalidateHistory(); // a different render resolution has new history
         }
         if(!dev_->updateSharedBufferChecked(receiverBuffer_,&view,sizeof(view)))
             return out;
@@ -332,8 +373,18 @@ public:
         const bool accepted=dev_->computeDispatchSucceeded();
         dev_->endCompute(); // GENERAL -> SHADER_READ_ONLY for HDR fragment
         if(!accepted)return out;
+        // One accepted raw submission. Optionally follow it with spatial
+        // resolve and a completed-history reprojection in the SAME queue.
+        // Failure to encode the filter falls back to current raw direct,
+        // never to stale previous-frame pixels.
+        gfx::TextureHandle filtered{};
+        pendingFilterSlot_=-1;
+        if(denoise && denoise->settings.enabled && denoiseAvailable()) {
+            filtered=encodeDenoise(inputs,view,width,height,frame,*denoise);
+        }
+        if(!filtered.valid())invalidateHistory();
         pendingFrame_=frame;
-        activeOutput_=screenOutput_;
+        activeOutput_=filtered.valid()?filtered:screenOutput_;
         outputValid_=false;
         pendingReceivers_=uint32_t(pixels);
         out={true,frame,sourceRevision_,geometryRevision_,
@@ -349,12 +400,123 @@ public:
            dev_->completedFrameSerial()<pendingFrame_)return false;
         pendingFrame_=0;
         outputValid_=true;
+        if(pendingFilterSlot_>=0 &&
+           pendingHistoryGeneration_==historyGeneration_ &&
+           pendingHistoryStamp_.viewKey!=0 &&
+           pendingHistoryStamp_.sourceRevision!=0 &&
+           pendingHistoryStamp_.geometryRevision!=0 &&
+           dev_->gpuHealthy()) {
+            historySlot_=pendingFilterSlot_;
+            historyStamp_=pendingHistoryStamp_;
+            historyValid_=true; // only after actual completedFrameSerial
+        } else historyValid_=false;
+        pendingFilterSlot_=-1;
         completedReceivers_=pendingReceivers_;
         pendingReceivers_=0;
         return true;
     }
 
 private:
+    gfx::TextureHandle encodeDenoise(
+        const ScreenInputs& inputs,const ScreenView& view,
+        uint32_t width,uint32_t height,uint64_t frame,
+        const DenoiseRequest& request) {
+        if(!denoiseAvailable() || !LumaVulkanDenoiseSettings::valid(request.settings))
+            return {};
+        // Fail closed when a host forgets to give this frame a coherent
+        // camera matrix; temporal history must never be trusted blindly.
+        for(float value:request.currentVP.m)
+            if(!std::isfinite(value))return {};
+        if(!finite(request.eye))return {};
+        LumaVulkanHistoryStamp current;
+        current.viewKey=request.viewKey;
+        current.viewEpoch=request.viewEpoch;
+        current.sourceRevision=sourceRevision_;
+        current.geometryRevision=geometryRevision_;
+        current.width=width;
+        current.height=height;
+        current.viewProjection=request.currentVP;
+        current.eye=request.eye;
+
+        if(!filtered_[0].valid() || !filtered_[1].valid() ||
+           filteredWidth_!=width || filteredHeight_!=height) {
+            gfx::TextureDesc desc;
+            desc.width=int(width);desc.height=int(height);
+            desc.format=gfx::PixelFormat::RGBA16F;
+            desc.filter=gfx::Filter::Nearest;desc.storage=true;
+            desc.label="LumaWeave Vulkan temporal/spatial direct history";
+            std::array<gfx::TextureHandle,2> replacements{};
+            for(auto& h:replacements) {
+                h=dev_->createTexture(desc);
+                if(!h.valid()) {
+                    for(auto allocated:replacements)
+                        if(allocated.valid())dev_->destroyTexture(allocated);
+                    return {};
+                }
+            }
+            for(auto h:filtered_)
+                if(h.valid())dev_->destroyTexture(h);
+            filtered_=replacements;
+            filteredWidth_=width;filteredHeight_=height;
+            historySlot_=-1;
+            invalidateHistory();
+        }
+        const auto reason=LumaVulkanHistoryPolicy::compare(
+            historyStamp_,current,request.settings,
+            historyValid_ && historySlot_>=0);
+        const bool usePrevious=reason==LumaVulkanHistoryReason::Accepted &&
+            historySlot_>=0 && filtered_[size_t(historySlot_)].valid();
+        denoiseStatus_.reason=reason;
+        const int next=historySlot_>=0 ? 1-historySlot_ : 0;
+
+        DenoiseView uniforms;
+        uniforms.inverseCurrentVP=view.inverseViewProjection;
+        uniforms.previousVP=usePrevious?historyStamp_.viewProjection:
+                                           request.currentVP;
+        uniforms.eye={request.eye.x,request.eye.y,request.eye.z,0};
+        uniforms.dimensions={float(width),float(height),
+                             view.resolution.z,view.resolution.w};
+        uniforms.settings={request.settings.spatialDepthTolerance,
+                           request.settings.normalAgreement,
+                           request.settings.historyWeight,
+                           request.settings.historyClamp};
+        uniforms.flags={usePrevious?1.f:0.f,
+                        request.settings.reprojectionDepthTolerance,0,0};
+        // The receiver dynamic SSBO has an independent snapshot per GPU
+        // version. The preceding raw compute still sees its old ScreenView.
+        if(!dev_->updateSharedBufferChecked(receiverBuffer_,&uniforms,
+                                             sizeof(uniforms)))return {};
+        if(!dev_->beginCompute(denoiseShader_))return {};
+        const bool coherentFrame=dev_->frameSerial()==frame && frame!=0;
+        if(!coherentFrame){dev_->endCompute();return {};}
+        dev_->setComputeBuffer(0,lightBuffer_);
+        dev_->setComputeBuffer(1,receiverBuffer_);
+        dev_->setComputeBuffer(2,triangleBuffer_);
+        dev_->setComputeBuffer(3,nodeBuffer_);
+        dev_->setComputeTexture(0,filtered_[size_t(next)]);
+        dev_->setComputeSampledTexture(0,screenOutput_);
+        dev_->setComputeSampledTexture(1,usePrevious?
+            filtered_[size_t(historySlot_)]:screenOutput_);
+        dev_->setComputeSampledTexture(2,inputs.sceneDepth);
+        dev_->setComputeSampledTexture(3,inputs.surface);
+        dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
+        Params params{};
+        params.counts={0,width*height,0,0};
+        params.control={0,width,0,0};
+        dev_->setComputeUniforms(&params,sizeof(params));
+        dev_->dispatch(width*height,1);
+        const bool accepted=dev_->computeDispatchSucceeded();
+        dev_->endCompute();
+        if(!accepted)return {};
+
+        pendingFilterSlot_=next;
+        pendingHistoryStamp_=current;
+        pendingHistoryGeneration_=historyGeneration_;
+        denoiseStatus_.encoded=true;
+        denoiseStatus_.historyUsed=usePrevious;
+        return filtered_[size_t(next)];
+    }
+
     static uint64_t geometryFingerprint(const GiGpuBvh& bvh) {
         uint64_t h=1469598103934665603ull;
         const auto hashBytes=[&](const void* data,size_t size) {
@@ -387,9 +549,16 @@ private:
     }
 
     gfx::Device* dev_=nullptr;
-    gfx::ComputeHandle shader_{},screenShader_{};
+    gfx::ComputeHandle shader_{},screenShader_{},denoiseShader_{};
     gfx::TextureHandle output_{},screenOutput_{},activeOutput_{};
+    std::array<gfx::TextureHandle,2> filtered_{};
     uint32_t screenWidth_=0,screenHeight_=0;
+    uint32_t filteredWidth_=0,filteredHeight_=0;
+    int historySlot_=-1,pendingFilterSlot_=-1;
+    bool historyValid_=false;
+    uint64_t historyGeneration_=1,pendingHistoryGeneration_=0;
+    LumaVulkanHistoryStamp historyStamp_{},pendingHistoryStamp_{};
+    DenoiseStatus denoiseStatus_{};
     gfx::BufferHandle receiverBuffer_{},lightBuffer_{},triangleBuffer_{},nodeBuffer_{};
     uint32_t sourceCount_=0,nodeCount_=0,triangleCount_=0;
     uint32_t pendingReceivers_=0,completedReceivers_=0;

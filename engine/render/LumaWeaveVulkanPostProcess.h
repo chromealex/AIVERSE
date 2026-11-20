@@ -11,6 +11,7 @@
 #include "LumaWeaveQuality.h"
 #include "Renderer3D.h"
 #include <cstdint>
+#include <stdexcept>
 
 namespace aiverse::render {
 class LumaWeaveVulkanPostProcess final : public PostProcess {
@@ -19,6 +20,8 @@ public:
         bool eligible=false,composited=false,legacyConflict=false;
         bool materialAvailable=false,surfaceAvailable=false;
         bool gpuBusy=false,missingDepth=false;
+        bool denoiseEncoded=false,temporalHistoryUsed=false;
+        LumaVulkanHistoryReason historyReason=LumaVulkanHistoryReason::Disabled;
         LumaWeaveDecision quality{};
         LumaWeaveVulkanDirect::Submission submission{};
     };
@@ -89,6 +92,7 @@ public:
         composeWidth_=composeHeight_=0;
         readyMaterial_=readySurface_=eligible_=enabled_=false;
         scene_={};stats_={};last_={};
+        viewKey_=viewEpoch_=0;
         return true;
     }
 
@@ -99,7 +103,31 @@ public:
     bool temporalShadowResolve() const override {
         return downstream_.temporalShadowResolve();
     }
-    void setEnabled(bool value) {enabled_=value;}
+    void setEnabled(bool value,bool preservePendingHistory=false) {
+        // Usually a route switch to raster must invalidate history. The
+        // two-frames-in-flight Vulkan RHI can temporarily require raster
+        // while the immediately preceding GPU submission is still pending.
+        // That is a *continuation*, not a world/view change, only when the
+        // driver checked the same source, geometry, view identity and epoch.
+        // On a real cut/route disable the second argument must remain false.
+        if(!value && !preservePendingHistory &&
+           (enabled_ || owner_.busy() || owner_.historyValid()))
+            owner_.invalidateHistory();
+        enabled_=value;
+    }
+    uint64_t historyKey() const{return viewKey_;}
+    uint64_t historyEpoch() const{return viewEpoch_;}
+    void setHistoryIdentity(uint64_t viewKey,uint64_t viewEpoch) {
+        viewKey_=viewKey;viewEpoch_=viewEpoch;
+    }
+    void setDenoiseSettings(LumaVulkanDenoiseSettings settings) {
+        if(!LumaVulkanDenoiseSettings::valid(settings))
+            throw std::invalid_argument("invalid Vulkan LumaWeave denoise settings");
+        denoiseSettings_=settings;
+    }
+    const LumaVulkanDenoiseSettings& denoiseSettings() const {
+        return denoiseSettings_;
+    }
     bool enabled() const {return enabled_;}
     void setQuality(LumaWeaveQuality quality) {quality_=quality;}
     LumaWeaveQuality quality() const{return quality_;}
@@ -186,9 +214,17 @@ public:
                 const LumaWeaveVulkanDirect::ScreenInputs inputs{
                     scene_.depthTarget,materialTarget_,materialDepth_,
                     surfaceTarget_,surfaceDepth_};
+                LumaWeaveVulkanDirect::DenoiseRequest temporal{};
+                temporal.viewKey=viewKey_;temporal.viewEpoch=viewEpoch_;
+                temporal.currentVP=frame.viewProj;
+                temporal.eye=frame.cameraPos;
+                temporal.settings=denoiseSettings_;
                 stats_.submission=owner_.dispatchScreen(
                     inputs,view,stats_.quality.width,stats_.quality.height,
-                    stats_.quality.samples,++seed_);
+                    stats_.quality.samples,++seed_,&temporal);
+                stats_.denoiseEncoded=owner_.denoiseStatus().encoded;
+                stats_.temporalHistoryUsed=owner_.denoiseStatus().historyUsed;
+                stats_.historyReason=owner_.denoiseStatus().reason;
                 if(stats_.submission.encoded) {
                     auto texture=owner_.encodedOutput(stats_.submission.frameSerial);
                     stats_.composited=texture.valid() && additiveCompose(dev,texture);
@@ -280,6 +316,8 @@ private:
     uint32_t seed_=0;
     bool enabled_=false,eligible_=false,readyMaterial_=false,readySurface_=false;
     LumaWeaveQuality quality_=LumaWeaveQuality::Balanced;
+    LumaVulkanDenoiseSettings denoiseSettings_{};
+    uint64_t viewKey_=0,viewEpoch_=0;
     FrameStats stats_{},last_{};
 };
 } // namespace aiverse::render
