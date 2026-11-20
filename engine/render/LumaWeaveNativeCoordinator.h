@@ -27,7 +27,8 @@ struct LumaFxSystemSnapshot {
 enum class LumaDirectRoute : uint8_t {
     Disabled=0,
     MetalGpu=1,
-    MobileRasterFallback=2
+    MobileRasterFallback=2,
+    VulkanGpu=3 // opt-in, selected by native driver only after publication
 };
 
 struct LumaNativeFrameStats {

@@ -3,6 +3,7 @@
 #include "engine/gfx/vulkan/Vulkan.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
+#include "engine/render/LumaWeaveVulkanScreenShader.h"
 
 #include <array>
 #include <cstdio>
@@ -425,6 +426,119 @@ void main() {
         if(input.valid())d.destroyTexture(input);
         if(output.valid())d.destroyTexture(output);
         for(auto h:buffers)if(h.valid())d.destroyBuffer(h);
+    }
+    // Stage16: real Vulkan PBR screen-space direct compute from independent
+    // material/normal/depth passes. Verifies the actual depth-to-world mapping
+    // and BVH wall shadow as *GPU pixels*, not a MockDevice approximation.
+    if(d.supportsCompute()) {
+        struct PackedLight {float position[4],color[4],direction[4],settings[4];
+                            uint32_t identity[4];};
+        struct PackedTri {float a[4],b[4],c[4],albedo[4];};
+        struct PackedNode {float lo[4],hi[4];uint32_t meta[4];};
+        struct ScreenUniforms {float inv[16],eye[4],resolution[4],options[4];};
+        static_assert(sizeof(PackedLight)==80 && sizeof(PackedTri)==64 &&
+                      sizeof(PackedNode)==48 && sizeof(ScreenUniforms)==112);
+        PackedLight light{{0,0,2,4},{1,0,0,100},{0,-1,0,-2},
+                          {1,1,1,0},{31,0,0,0}};
+        PackedTri tri{{-2,-2,1,0},{2,-2,1,0},{0,2,1,0},{1,1,1,0}};
+        PackedNode node{{-2,-2,1,0},{2,2,1,0},{0,0,0,1}};
+        ScreenUniforms view{};
+        view.inv[0]=view.inv[5]=view.inv[10]=view.inv[15]=1;
+        view.eye[2]=5;
+        view.resolution[0]=view.resolution[1]=1;
+        view.resolution[2]=W;view.resolution[3]=H;
+        view.options[0]=0.008f;
+        auto storage=[&](const void* bytes,size_t n){
+            BufferDesc desc;desc.type=BufferType::Storage;
+            desc.usage=Usage::Immutable;desc.size=n;desc.data=bytes;
+            return d.createBuffer(desc);
+        };
+        const BufferHandle lightBuf=storage(&light,sizeof(light));
+        const BufferHandle viewBuf=storage(&view,sizeof(view));
+        const BufferHandle triBuf=storage(&tri,sizeof(tri));
+        const BufferHandle nodeBuf=storage(&node,sizeof(node));
+        TextureDesc depthDesc;depthDesc.width=W;depthDesc.height=H;
+        depthDesc.format=PixelFormat::Depth;depthDesc.renderTarget=true;
+        depthDesc.filter=Filter::Nearest;
+        const auto sceneZ=d.createTexture(depthDesc);
+        const auto materialZ=d.createTexture(depthDesc);
+        const auto surfaceZ=d.createTexture(depthDesc);
+        TextureDesc colorDesc=depthDesc;colorDesc.format=PixelFormat::RGBA16F;
+        const auto material=d.createTexture(colorDesc);
+        const auto surface=d.createTexture(colorDesc);
+        TextureDesc outDesc;outDesc.width=outDesc.height=1;
+        outDesc.format=PixelFormat::RGBA16F;
+        outDesc.storage=true;outDesc.filter=Filter::Nearest;
+        const auto out=d.createTexture(outDesc);
+        ComputeDesc cd;cd.glsl=aiverse::render::luma_vk::kScreenDirectCompute;
+        cd.sampledTextureSlots=5;
+        const auto kernel=d.createCompute(cd);
+        CHECK(kernel.valid() && sceneZ.valid() && material.valid() &&
+              surface.valid() && out.valid());
+        if(kernel.valid() && sceneZ.valid() && materialZ.valid() &&
+           surfaceZ.valid() && material.valid() && surface.valid() &&
+           lightBuf.valid() && viewBuf.valid() &&
+           triBuf.valid() && nodeBuf.valid() && out.valid()) {
+            auto drawScreen=[&](uint32_t n)->Image {
+                return frame(d,[&]{
+                    PassDesc zPass;zPass.depthTarget=sceneZ;
+                    zPass.clearColorEnabled=false;
+                    d.beginPass(zPass);
+                    d.setPipeline(pCaster);d.setVertexBuffer(vbFull);
+                    uniforms(1,1,1,1);d.draw(6);d.endPass();
+
+                    PassDesc materialPass;
+                    materialPass.colorTarget=material;
+                    materialPass.depthTarget=materialZ;
+                    d.beginPass(materialPass);
+                    d.setPipeline(pDepth);d.setVertexBuffer(vbFull);
+                    uniforms(1,0,0,0);d.draw(6);d.endPass();
+
+                    PassDesc normalPass;
+                    normalPass.colorTarget=surface;
+                    normalPass.depthTarget=surfaceZ;
+                    d.beginPass(normalPass);
+                    d.setPipeline(pDepth);d.setVertexBuffer(vbFull);
+                    uniforms(0,0,1,.5f);d.draw(6);d.endPass();
+
+                    std::array<uint32_t,20> params{};
+                    params[0]=1;params[1]=1;params[2]=n;params[3]=1;
+                    params[4]=19;params[5]=1;params[6]=1;
+                    CHECK(d.beginCompute(kernel));
+                    d.setComputeBuffer(0,lightBuf);
+                    d.setComputeBuffer(1,viewBuf);
+                    d.setComputeBuffer(2,triBuf);
+                    d.setComputeBuffer(3,nodeBuf);
+                    d.setComputeTexture(0,out);
+                    d.setComputeSampledTexture(0,sceneZ);
+                    d.setComputeSampledTexture(1,material);
+                    d.setComputeSampledTexture(2,materialZ);
+                    d.setComputeSampledTexture(3,surface);
+                    d.setComputeSampledTexture(4,surfaceZ);
+                    d.setComputeUniforms(params.data(),sizeof(params));
+                    d.dispatch(1);
+                    CHECK(d.computeDispatchSucceeded());
+                    d.endCompute();
+                    d.beginPass(screen);
+                    d.setPipeline(pTex);d.setTexture(0,out);
+                    d.setVertexBuffer(vbFull);d.draw(6);
+                    d.endPass();
+                });
+            };
+            const auto lit=drawScreen(0);
+            CHECK(lit.w==W && lit.h==H);
+            if(lit.w==W && lit.h==H)
+                CHECK(near(lit.at(W/2,H/2),255,0,0));
+            const auto blocked=drawScreen(1);
+            CHECK(blocked.w==W && blocked.h==H);
+            if(blocked.w==W && blocked.h==H)
+                CHECK(near(blocked.at(W/2,H/2),0,0,0));
+        }
+        if(kernel.valid())d.destroyCompute(kernel);
+        for(auto handle:{sceneZ,materialZ,surfaceZ,material,surface,out})
+            if(handle.valid())d.destroyTexture(handle);
+        for(auto handle:{lightBuf,viewBuf,triBuf,nodeBuf})
+            if(handle.valid())d.destroyBuffer(handle);
     }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);

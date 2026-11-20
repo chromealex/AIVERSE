@@ -60,7 +60,7 @@ One-shot native acceptance can now be invoked from the integration branch with `
 
 ## Vulkan and GLES3 / WebGL2 compatibility (experimental)
 
-The current engine RHI does **not** expose Vulkan compute shaders through `gfx::Device`; GLES3/WebGL2 do not expose this compute ABI either. Do not initialize `LumaWeaveScreenMetal` on these backends or label their raster lighting as 4096 shadow-traced direct lights. LumaWeave's explicit `MobileRasterFallback` selects up to the existing `LightSystem::kMaxLights` (1024) source map contributors, with deterministic importance and `LumaNativeFrameStats.mobile.dropped` / `sourceLoss` diagnostics. A light registry may contain up to 4096, but omitted sources remain **reported**, not invisibly shaded.
+Historical note (Stage 9): the earlier integration branch did **not** expose Vulkan compute through `gfx::Device`. Experimental Stages 12–16 on `feature/gi-lumaweave-vulkan-hdr-stage16-20261120` now add an opt-in Vulkan compute RHI, GGX shader and postprocess path; **native compilation/GPU validation are still NOT RUN**. GLES3/WebGL2 still do not expose this compute ABI. Do not initialize `LumaWeaveScreenMetal` on these backends or label their raster lighting as 4096 shadow-traced direct lights. LumaWeave's explicit `MobileRasterFallback` selects up to the existing `LightSystem::kMaxLights` (1024) source map contributors, with deterministic importance and `LumaNativeFrameStats.mobile.dropped` / `sourceLoss` diagnostics. A light registry may contain up to 4096, but omitted sources remain **reported**, not invisibly shaded.
 
 For optional portable dynamic indirect GI, instantiate `GiDynamicRuntime` (RGBA32F CPU-updated L1 probe atlas), publish an immutable scene BVH through `setTraceGeometry`, then pass `LumaNativeViewInput.indirectCpuGi=&runtime`. This runs the actual `GiDynamicProbeReference` ray tracer on CPU and samples directional L1 coefficients through the standard `DYNAMIC_GI` GLSL model shader on Vulkan/GL/GLES3; it is not the Metal toroidal GPU cascade path. CPU work is deliberately bounded per frame by `LumaWeaveBackendPolicy` (GLES3 2 probes, Vulkan 16, GL33/Metal CPU 8), with actual cap exposed in `LumaNativeViewResult.cpuGiProbeBudgetAdmitted` and any reduction in `cpuGiBudgetClamped`. L1 static source/geometry coverage and HDR Medium+ material eligibility are still host-controlled.
 
@@ -71,3 +71,32 @@ Available one-shot acceptance entrypoints **after source freeze**, not executed 
 - Linux with Vulkan ICD (lavapipe accepted), EGL GLES3 and Xvfb: `bash tools/lumaweave_portable_acceptance.sh --run` (Debug+Release CTest, Vulkan GI GLSL-to-SPIR-V, GL/GLES3 and Vulkan screenshots)
 
 Neither general scene script auto-activates LumaWeave's native driver; dedicated native GI+direct visual captures, GLES3 actual shader-driver acceptance, Android/WebGL2 targets and real GPU frame times are still required. Avoid claiming supported Vulkan *compute* / hardware ray tracing or complete platform parity without implementing and testing those backends.
+
+## Experimental Vulkan screen Direct + HDR composition (Stages 11–16, 2026-11-20)
+
+Active isolated integration path: `feature/gi-lumaweave-vulkan-hdr-stage16-20261120`.
+Detailed per-stage handoffs under `docs/agent-handoffs/gi-lumaweave-stage11-*` through `gi-lumaweave-stage16-*`.
+
+Vulkan now has **source-level** optional compute RHI supporting four immutable/read-only SSBOs, one RGBA16F sampled+storage output, 80-byte push constants, and five independently sampled textures. The original source/geometry BVH owner uses strict Stage62 one-ULP bounds preflight, transactional source publication and actual completed-frame serial checks. A Vulkan screen kernel reconstructs world positions from real postprocess depth, uses current-view model/custom material RGB+metallic and world normal+roughness plus two independent receiver depth buffers, importance-samples all declared light sources with the SAME BVH shadow query, and outputs already-PBR-reflected GGX+diffuse DIRECT light. Its GLSL shader and HDR upsampler are distinct from the old GLES CPU probe path. It does NOT render indirect/baked radiance.
+
+`LumaNativeViewInput.enableVulkanDirect` is OFF by default and requires `vulkanReceiverCoverageConfirmed=true` from the host. That flag means the entire intended opaque visible surface set (not just ordinary ModelDraw) has current-view material, normal and depth receiver callbacks. An immutable BVH and nonzero generation must be provided and the down-stream PostProcess must be active/linear HDR; a pending Vulkan GPU fence, incompatible device, rejected workload or publication failure selects the existing raster direct fallback. Do not enable the route for custom terrain, water, sprites or FX unless corresponding receiver passes are authored and coverage is verified.
+
+Native usage (after the owner/editor has installed GPU backend and completed its presentation source barrier):
+```cpp
+LumaNativeViewInput view;
+view.camera = camera;
+view.width = width;
+view.height = height;
+view.sceneGeometry = &immutableBvh;
+view.geometryRevision = sceneRevision;  // must be monotonic, nonzero
+view.authored = authoredDirectLights;
+view.enableVulkanDirect = true;
+view.vulkanReceiverCoverageConfirmed = allOpaqueReceiversMatched;
+view.quality = LumaWeaveQuality::Balanced;
+auto result = driver.frame(view, outputPass, [&](Renderer3D& renderer) {
+    // drawModel, custom opaque terrain, AND matching material/surface callbacks.
+});
+```
+The driver still does NOT own `Device::beginFrame/endFrame`. It records `LumaDirectRoute::VulkanGpu` only after publishing correct source/BVH packets. The Vulkan PostProcess requests material/surface capture passes, runs compute after the main HDR pass, makes the written image shader-readable, then performs depth-matched *additive* HDR composition before downstream tonemap. Its output is material-reflected, so the compositor must NOT multiply base color again. On post-resolution refusal it reports `vulkanFrameComposited=false` rather than silently declaring success.
+
+**Verification:** the Vulkan `vulkan_backend` test source now contains point/spot/BVH shadow, sampled input, and screen-material GGX pixel checks; the CPU FakeDevice CTest sources cover publication, quality budgets, fence ownership, receiver pass/compose lifecycle and runtime API fields. These are newly AUTHORED TESTS, **NOT EXECUTED** on this source branch: no native CMake, real GLSL/SPIR-V compiler results, Vulkan validation layers, Metal/GLES device parity, GPU FPS or full AIVERSE suite. Do not merge to main, claim hardware shadow parity, or enable by default until the user's requested final consolidated acceptance is run.

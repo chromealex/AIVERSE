@@ -979,6 +979,15 @@ if(AIVERSE_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_direct_owner
         COMMAND aiverse_lumaweave_vulkan_direct_owner_test)
+
+    # Renderer3D/PostProcess direct scene capture, HDR composition and
+    # fence-lifetime source regression (not real Vulkan pixel validation).
+    add_executable(aiverse_lumaweave_vulkan_post_contract_test
+        tests/render/lumaweave_vulkan_post_contract.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_post_contract_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_post_contract
+        COMMAND aiverse_lumaweave_vulkan_post_contract_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

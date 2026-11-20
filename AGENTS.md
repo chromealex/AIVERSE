@@ -1,6 +1,29 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 16 — native Vulkan HDR direct route (2026-11-20)
+
+Branch: `feature/gi-lumaweave-vulkan-hdr-stage16-20261120`. Read
+`docs/agent-handoffs/gi-lumaweave-stage16-vulkan-native-hdr-2026-11-20.md`.
+`LumaWeaveNativeDriver` now has OFF-by-default Vulkan Direct, requiring
+both `enableVulkanDirect` and
+`vulkanReceiverCoverageConfirmed`, active linear HDR, successful source
+and Stage62-validated BVH publication, a healthy Vulkan compute RHI,
+and a bounded full-source quality decision. Renderer3D's existing material
+and world-normal/roughness receiver passes are used; custom opaque
+renderers MUST implement matching receiver callbacks before host
+coverage confirmation. The Vulkan PostProcess encodes shadowed GGX
+compute after the actual scene pass, then depth-matched additive HDR
+composition BEFORE downstream tonemap. Never multiply a second base
+albedo, use borrowed material from an unrelated viewport, or combine
+the selected Vulkan direct route with the legacy point source map.
+CPU L1 GI and baked indirect remain separate. A pending GPU frame
+or rejected source/budget uses safe raster fallback, never old GPU
+lighting. All source/fake/GPU pixel tests have been AUTHORED, **NOT RUN**.
+The GLSL Vulkan path has no temporal denoise acceptance. Keep draft,
+do not force-merge with main or claim production until native
+Metal/Vulkan/GLES GPU tests and a single consolidated acceptance run.
+
 ## GI + LumaWeave Stage 15 — Vulkan material-aware screen direct (2026-11-20)
 
 Branch `feature/gi-lumaweave-vulkan-screen-stage15-20261120`; read

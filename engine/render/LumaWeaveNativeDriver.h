@@ -9,6 +9,7 @@
 #include "GiGpuCascadeRuntime.h"
 #include "GiDynamicRuntime.h"
 #include "LumaWeaveBackendPolicy.h"
+#include "LumaWeaveVulkanPostProcess.h"
 #include <cstdint>
 #include <span>
 #include <utility>
@@ -46,6 +47,11 @@ struct LumaNativeViewInput {
     std::span<const LumaEffectLight> effectLights{};
     std::span<const LumaAreaEmitter> areaLights{};
     bool allowMobileFallback=true;
+    // Opt-in Vulkan GPU Direct with real Renderer3D material/surface captures.
+    // Host must certify that all required opaque custom renderers supply
+    // matching receiver passes, otherwise keep the raster LightSystem path.
+    bool enableVulkanDirect=false;
+    bool vulkanReceiverCoverageConfirmed=false;
 };
 
 enum class LumaIndirectRoute : uint8_t {
@@ -68,6 +74,10 @@ struct LumaNativeViewResult {
     bool giGeometryMismatch=false;     // missing or stale portable trace BVH
     bool giDeferred=false;             // no stale bounced light on failed sync
     bool submittedFrame=false;
+    bool vulkanDirectRequested=false,vulkanDirectSelected=false;
+    bool vulkanFrameComposited=false,vulkanPreviousFrameCompleted=false;
+    bool vulkanMaterialMissing=false,vulkanSurfaceMissing=false;
+    LumaWeaveVulkanDirect::Submission vulkanSubmission{};
 };
 
 class LumaWeaveNativeDriver {
@@ -76,16 +86,27 @@ public:
                          PostProcess& existing)
         :device_(device),renderer_(renderer),existing_(existing),
          post_(existing,renderer.lights),
-         coordinator_(post_,existing,renderer.lights) {}
+         coordinator_(post_,existing,renderer.lights),
+         vulkanPost_(existing,renderer.lights,vulkanDirect_) {}
     LumaWeaveNativeDriver(const LumaWeaveNativeDriver&)=delete;
     LumaWeaveNativeDriver& operator=(const LumaWeaveNativeDriver&)=delete;
 
     bool initialize(){
-        // On weak/mobile backends this fails cleanly and the existing
-        // LightSystem/lighting path remains fully available.
+        if(device_.info().backend==gfx::Backend::Vulkan) {
+            // Optional producer failure does not disable the existing raster
+            // direct + CPU GI fallback on a Vulkan GPU with weak features.
+            if(vulkanDirect_.initialize(device_)) {
+                if(!vulkanPost_.initialize(device_))
+                    (void)vulkanDirect_.shutdown();
+            }
+            return true;
+        }
+        // On weak/mobile backends failure leaves old LightSystem available.
         return post_.initialize(device_);
     }
     bool shutdown(){
+        if(!vulkanPost_.shutdown())return false;
+        if(!vulkanDirect_.shutdown())return false;
         if(!post_.shutdown())return false;
         resetGiSourceSync();
         lastGiRuntime_=nullptr;
@@ -94,6 +115,8 @@ public:
         return true;
     }
     LumaWeavePostProcess& gpuPost(){return post_;}
+    LumaWeaveVulkanDirect& vulkanDirect(){return vulkanDirect_;}
+    LumaWeaveVulkanPostProcess& vulkanPost(){return vulkanPost_;}
     LumaWeaveNativeCoordinator& coordinator(){return coordinator_;}
     // Explicitly call when an external host replaces/reinitializes the same
     // GiGpuCascadeRuntime object at the SAME address.
@@ -119,6 +142,8 @@ public:
         LumaNativeViewResult result;
         result.backendCapabilities=LumaWeaveBackendPolicy::inspect(device_);
         result.priorGpuCompletion=post_.pollGpu(); // callbacks from prior beginFrame
+        result.vulkanDirectRequested=input.enableVulkanDirect;
+        result.vulkanPreviousFrameCompleted=vulkanDirect_.poll();
         // The GI adapter caches the accepted registry revision. A new GI
         // runtime may have zero lights despite an identical source revision;
         // republish on runtime identity change or when sync is re-enabled.
@@ -141,10 +166,56 @@ public:
             Renderer3D& renderer;
             ~ScopedGiOverlay(){renderer.clearDynamicGiOverlay();}
         } scopedGi{renderer_};
+        // Opt-in only: custom opaque material + normal receivers must match
+        // the actual frontmost scene. Never assume terrain/FX are ModelDraw.
+        bool vulkanChosen=false;
+        if(input.enableVulkanDirect &&
+           device_.info().backend==gfx::Backend::Vulkan)
+            renderer_.lights.setLinearScene(existing_.linearScene());
+        LumaScreenSettings vulkanLimits;
+        vulkanLimits.maxPixels=LumaWeaveVulkanDirect::kMaxScreenPixels;
+        vulkanLimits.maxSamples=LumaWeaveVulkanDirect::kMaxSamples;
+        vulkanLimits.maxCandidateEvaluations=
+            LumaWeaveVulkanDirect::kMaxScreenCandidateChecks;
+        const auto decision=LumaWeaveQualityPolicy::choose(
+            input.quality,input.width,input.height,
+            coordinator_.registry().lights().size(),vulkanLimits);
+        const bool tryVulkan=input.enableVulkanDirect &&
+            input.vulkanReceiverCoverageConfirmed &&
+            device_.info().backend==gfx::Backend::Vulkan &&
+            input.sceneGeometry && input.geometryRevision &&
+            !coordinator_.registry().lights().empty() &&
+            vulkanPost_.ready() && vulkanDirect_.screenAvailable() &&
+            !vulkanDirect_.busy() && existing_.active() &&
+            existing_.linearScene() && decision.admitted &&
+            renderer_.lights.count()==0 &&
+            !renderer_.lights.staticPointLightsActive();
         result.sources=coordinator_.prepareFrame(
             input.sceneGeometry,input.geometryRevision,input.camera.target,
             input.visibleLightRadius,input.width,input.height,input.quality,
-            input.allowMobileFallback);
+            input.allowMobileFallback && !tryVulkan);
+        if(tryVulkan) {
+            const bool sources=vulkanDirect_.setSources(coordinator_.registry());
+            const bool geometry=sources && vulkanDirect_.setGeometry(
+                *input.sceneGeometry,input.geometryRevision);
+            if(sources && geometry) {
+                vulkanPost_.setQuality(input.quality);
+                vulkanPost_.setEnabled(true);
+                vulkanChosen=true;
+                result.sources.route=LumaDirectRoute::VulkanGpu;
+                result.sources.gpuExclusive=true;
+                result.sources.backendUnavailable=false;
+            } else if(input.allowMobileFallback) {
+                // GPU publication may be deferred: never sample stale
+                // lighting, and use exactly ONE legacy raster direct route.
+                result.sources=coordinator_.prepareFrame(
+                    input.sceneGeometry,input.geometryRevision,input.camera.target,
+                    input.visibleLightRadius,input.width,input.height,input.quality,
+                    true);
+            }
+        }
+        if(!vulkanChosen)vulkanPost_.setEnabled(false);
+        result.vulkanDirectSelected=vulkanChosen;
         // Prefer Metal GPU cascades when actually supported, otherwise use
         // the explicitly initialized CPU-traced L1 probe overlay. Vulkan and
         // GLES3 do not implement the gfx::Device compute ABI today; their
@@ -210,8 +281,22 @@ public:
             result.giDeferred=true;
         }
         std::forward<SubmitScene>(submitScene)(renderer_);
-        renderer_.render(output,&coordinator_.activePost());
+        PostProcess* selected=vulkanChosen ?
+            static_cast<PostProcess*>(&vulkanPost_) :
+            &coordinator_.activePost();
+        renderer_.render(output,selected);
         renderer_.resolvePostFx();
+        if(vulkanChosen) {
+            const auto& vk=vulkanPost_.stats();
+            result.vulkanSubmission=vk.submission;
+            result.vulkanFrameComposited=vk.composited;
+            result.vulkanMaterialMissing=!vk.materialAvailable;
+            result.vulkanSurfaceMissing=!vk.surfaceAvailable;
+            if(!vk.composited) {
+                result.sources.route=LumaDirectRoute::Disabled;
+                result.sources.gpuExclusive=false;
+            }
+        }
         result.submittedFrame=true;
         return result;
     }
@@ -222,6 +307,8 @@ private:
     PostProcess& existing_;
     LumaWeavePostProcess post_;
     LumaWeaveNativeCoordinator coordinator_;
+    LumaWeaveVulkanDirect vulkanDirect_;
+    LumaWeaveVulkanPostProcess vulkanPost_;
     GiGpuCascadeRuntime* lastGiRuntime_=nullptr; // borrowed, identity only
     GiDynamicRuntime* lastCpuGiRuntime_=nullptr; // borrowed, identity only
     uint64_t cpuGiSourceRevision_=0;
