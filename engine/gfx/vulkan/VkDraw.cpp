@@ -513,20 +513,43 @@ bool VulkanDevice::drawIndexedIndirect(BufferHandle commands, size_t offset,
 }
 
 bool VulkanDevice::copyColor(TextureHandle from, TextureHandle to) {
-    if (!recording_ || inPass_) return false;
+    if (!recording_ || inPass_ || (from.valid() && from.id==to.id)) return false;
     VTexture* dst = textures_.get(to.id);
-    if (!dst || dst->format != PixelFormat::RGBA8 || dst->levels != 1) return false;
+    // RGBA8 preserves the established conversion/blit path. Motion vectors
+    // require a format-exact RGBA16F copy: blitting or 8-bit conversion
+    // would lose signed current-minus-previous UV and B-valid semantics.
+    if (!dst || dst->levels!=1 ||
+        (dst->format!=PixelFormat::RGBA8 && dst->format!=PixelFormat::RGBA16F))
+        return false;
     VTexture* src = from.valid() ? textures_.get(from.id) : &back_;
-    if (!src || src->depth || src->width != dst->width || src->height != dst->height) return false;
+    if (!src || src->depth || src->levels!=1 ||
+        src->width!=dst->width || src->height!=dst->height ||
+        (dst->format==PixelFormat::RGBA16F && src->format!=dst->format))
+        return false;
     VkCommandBuffer cb = slots_[size_t(slot_)].main;
-    barrierImage(cb, src->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    barrierImage(cb, dst->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    VkImageBlit b{};   // a blit converts formats (sRGB / float sources), as glBlitFramebuffer
-    b.srcSubresource = b.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    b.srcOffsets[1] = b.dstOffsets[1] = {src->width, src->height, 1};
-    vkCmdBlitImage(cb, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_NEAREST);
-    barrierImage(cb, dst->image, false, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    barrierImage(cb, src->image, false, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    barrierImage(cb, src->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    barrierImage(cb, dst->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    if(dst->format==PixelFormat::RGBA16F) {
+        VkImageCopy c{};
+        c.srcSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};
+        c.dstSubresource=c.srcSubresource;
+        c.extent={uint32_t(src->width),uint32_t(src->height),1};
+        vkCmdCopyImage(cb,src->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dst->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&c);
+    } else {
+        VkImageBlit b{}; // existing RGBA8 blit/conversion path, unchanged
+        b.srcSubresource=b.dstSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};
+        b.srcOffsets[1]=b.dstOffsets[1]={src->width,src->height,1};
+        vkCmdBlitImage(cb,src->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dst->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1,&b,VK_FILTER_NEAREST);
+    }
+    barrierImage(cb,dst->image,false,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    barrierImage(cb,src->image,false,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     return true;
 }
 

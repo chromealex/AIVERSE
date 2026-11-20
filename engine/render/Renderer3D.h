@@ -11,10 +11,12 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 #include "../gfx/Gfx.h"
 #include "Lights.h"
 #include "Math3D.h"
+#include "PrismaMotionTextureInput.h"
 #include "Model.h"
 #include "ModelStaticEligibility.h"
 #include "CpuMdiAdaptivePolicy.h"
@@ -142,6 +144,23 @@ public:
     virtual gfx::PassDesc surfaceReceiverPass(int,int) { return {}; }
     virtual void surfaceReceiverPublished(gfx::TextureHandle,int,int) {}
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
+    // These match the current MAIN Renderer3D PRISMA object motion bridge.
+    // Older backends stay inert; the producer renders AFTER scene depth
+    // exists but BEFORE resolve(), so no camera-only fake velocity is used.
+    virtual bool wantsObjectMotionVectors() const { return false; }
+    virtual gfx::TextureHandle objectMotionSceneDepth() const { return {}; }
+    virtual uint64_t objectMotionEpoch(uint64_t) const { return 0; }
+    virtual bool objectMotionContext(uint64_t& viewId,mat4& previousViewProj) const {
+        (void)viewId;(void)previousViewProj;return false;
+    }
+    virtual void acceptObjectMotionVectors(gfx::TextureHandle) {}
+    virtual void acceptObjectMotionVectors(MotionTextureInput input) {
+        acceptObjectMotionVectors(input.texture);
+    }
+    virtual void acceptMotionReactiveMask(gfx::TextureHandle) {}
+    virtual void acceptMotionReactiveMask(MotionTextureInput input) {
+        acceptMotionReactiveMask(input.texture);
+    }
 };
 
 // Baked skinning sample (Animator::baseSample()): clip A blends to clip B by `mix`; clip -1 = bind pose.
@@ -453,6 +472,19 @@ public:
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
     void resolvePostFx();
+    // Compatibility seam for the separate PRISMA/Renderer3D motion producer.
+    // The current MAIN renderer has its native rigid/skinned/animated object
+    // pass and uses PostProcess hooks directly. This older renderer branch
+    // can install that existing producer (or a native equivalent) ONCE,
+    // without manually passing velocity on every LumaWeave frame.
+    // Callback runs OUTSIDE the HDR scene pass, immediately BEFORE resolve.
+    // It must publish real MotionTextureInput with accurate metadata; never
+    // fabricate motion. Do not install simultaneously with MAIN's built-in
+    // renderObjectMotionVectors after conflict-aware reconciliation.
+    using ObjectMotionProducer=std::function<void(Renderer3D&,PostProcess&)>;
+    void setObjectMotionProducer(ObjectMotionProducer fn) {
+        objectMotionProducer_=std::move(fn);
+    }
     // Extra renderers (sprites, tiles) that draw with their own pipelines inside the main pass: run
     // after opaque and translucent meshes, before overlays (fog of war stays on top).
     // Cleared by beginScene.
@@ -928,6 +960,7 @@ private:
     std::vector<ColorVertex> lines_, tris_;
     std::vector<CustomDraw> custom_, customOpaque_, customShadow_;
     std::vector<CustomDraw> customMaterialReceiver_, customSurfaceReceiver_;
+    ObjectMotionProducer objectMotionProducer_; // optional PRISMA producer bridge
     RTSCamera cam_;
     mat4 viewProj_, lightViewProj_;
     float3 camPos_;

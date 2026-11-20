@@ -25,7 +25,8 @@ static_assert(std::is_same_v<decltype(LumaNativeViewResult{}.vulkanTemporalHisto
 
 struct ShaderFake final:FakeDevice {
     uint64_t current=21,completed=0;
-    int shaders=0,draws=0,passes=0;
+    int shaders=0,draws=0,passes=0,motionCopies=0;
+    gfx::TextureHandle lastMotionCopy{};
     std::array<gfx::TextureHandle,4> sampled{};
     ShaderFake(){info_.backend=gfx::Backend::Vulkan;computeEnabled=true;}
     bool supports(gfx::PixelFormat format) const override {
@@ -42,6 +43,19 @@ struct ShaderFake final:FakeDevice {
     }
     void draw(uint32_t,uint32_t)override{++draws;}
     void beginPass(const gfx::PassDesc&)override{++passes;}
+    bool copyColor(gfx::TextureHandle source,gfx::TextureHandle output)override{
+        const auto input=textures.find(source.id);
+        const auto destination=textures.find(output.id);
+        if(input==textures.end() || destination==textures.end() ||
+           source.id==output.id ||
+           input->second.format!=gfx::PixelFormat::RGBA16F ||
+           destination->second.format!=gfx::PixelFormat::RGBA16F ||
+           input->second.w!=destination->second.w ||
+           input->second.h!=destination->second.h)return false;
+        destination->second.data=input->second.data;
+        ++motionCopies;lastMotionCopy=output;
+        return true;
+    }
     uint64_t frameSerial()const override{return current;}
     uint64_t completedFrameSerial()const override{return completed;}
 };
@@ -154,6 +168,11 @@ int main() {
         post.resolve(device,{},frame);
         AIVERSE_TEST_CHECK(post.stats().composited);
         AIVERSE_TEST_CHECK(post.stats().motionInputBound);
+        AIVERSE_TEST_CHECK(post.stats().motionSnapshotCopied);
+        AIVERSE_TEST_CHECK(!post.stats().motionAutoCaptured);
+        AIVERSE_TEST_CHECK(device.motionCopies==1);
+        AIVERSE_TEST_CHECK(device.lastMotionCopy.valid() &&
+                           device.lastMotionCopy.id!=velocity.id);
         AIVERSE_TEST_CHECK(post.stats().previousNormalCaptured);
         AIVERSE_TEST_CHECK(post.stats().temporalHistoryUsed);
         device.endFrame();
@@ -173,6 +192,8 @@ int main() {
         post.resolve(device,{},frame);
         AIVERSE_TEST_CHECK(post.stats().composited);
         AIVERSE_TEST_CHECK(!post.stats().motionInputBound);
+        AIVERSE_TEST_CHECK(!post.stats().motionSnapshotCopied);
+        AIVERSE_TEST_CHECK(device.motionCopies==1);
         device.endFrame();
         device.completed=23;
         AIVERSE_TEST_CHECK(gpu.poll());

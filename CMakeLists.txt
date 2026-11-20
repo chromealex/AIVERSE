@@ -1015,6 +1015,16 @@ if(AIVERSE_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_motion_policy
         COMMAND aiverse_lumaweave_vulkan_motion_policy_test)
+
+    # PostProcess bridge to the existing PRISMA Renderer3D motion producer:
+    # per-view camera history, signed RGBA16F velocity snapshot/fence and
+    # rejection on cuts or untyped/stale motion inputs. FakeDevice only.
+    add_executable(aiverse_lumaweave_vulkan_auto_motion_bridge_test
+        tests/render/lumaweave_vulkan_auto_motion_bridge.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_auto_motion_bridge_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_auto_motion_bridge
+        COMMAND aiverse_lumaweave_vulkan_auto_motion_bridge_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

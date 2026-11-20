@@ -273,3 +273,81 @@ into the LumaWeave native frame route, then a real moving character
 ghosting capture and the user's consolidated Debug/Release multi-backend
 acceptance after feature freeze. Do not merge or enable by default before
 hardware/renderer validation.
+
+## Stage 20 — automatic PRISMA Renderer3D object motion bridge (2026-11-20)
+
+Experimental branch: `feature/gi-lumaweave-prisma-motion-bridge-stage20-20261120`. Exact source/test/handoff:
+`docs/agent-handoffs/gi-lumaweave-stage20-prisma-auto-motion-2026-11-20.md`.
+
+LumaWeave's Vulkan PostProcess now implements the same `PostProcess`
+object-velocity request, camera history/epoch, scene-depth input and typed
+RGBA16F delivery API as the **real rigid/skinned/deformed object-motion
+producer already in MAIN's PRISMA/Renderer3D**. It can receive the produced
+velocity **automatically after the 3D HDR scene depth pass and before
+temporal compute resolve**. No manual per-frame `vulkanObjectMotion` is
+needed once this bridge is reconciled with MAIN's actual renderer producer.
+
+The separate Stage19/Stage20 branch is based on an older Renderer3D that
+does NOT contain MAIN's full object-motion raster pipeline. To avoid
+overwriting parallel animation/batching/material work, Stage20 adds a
+single opt-in `Renderer3D::setObjectMotionProducer` compatibility seam
+that invokes an installed **genuine** producer between the existing HDR
+scene and postprocess. In this isolated branch a host must install its
+real producer once, or use Stage19's explicit manual velocity input.
+Once the MAIN renderer's built-in producer is integrated
+**conflict-aware**, it calls these same hooks automatically and the
+temporary adapter is unnecessary. The MAIN producer is **NOT copied/
+merged in this stage**; do not report full automatic rigid/skinned velocity
+generation as implemented inside this isolated branch.
+
+### Native usage with integrated MAIN motion producer
+
+```cpp
+view.enableVulkanDirect = true;
+view.vulkanReceiverCoverageConfirmed = actualOpaqueReceiversCovered;
+view.vulkanHistoryKey = stableCameraAndWorldId; // nonzero unique key
+view.vulkanHistoryEpoch = cameraCutEpoch;
+view.vulkanDynamicGeometryVisible = visibleMovingRigidOrSkinnedModels;
+// Leave view.vulkanObjectMotion empty: real Renderer3D motion pass
+// automatically publishes MotionTextureInput when available.
+```
+
+The producer requests `objectMotionSceneDepth()` and uses per-view
+`objectMotionContext()` previous camera VP and
+`objectMotionEpoch()`. A first frame, hard camera cut or route disable
+seeds a new camera/pose history and does not silently use a stale older
+frame. The old `PostProcess` typed motion callback delivers a borrowed
+current-frame RGB16F texture carrying RG signed current-minus-previous
+UV and B-valid object coverage.
+
+**Vulkan GPU ownership detail:** Stage20 adds a format-exact
+`VulkanDevice::copyColor(RGBA16F → RGBA16F)` using `vkCmdCopyImage`,
+rather than converting signed object velocity through RGBA8. The
+LumaWeave receiver ring now owns a **sixth per-frame RGBA16F motion
+snapshot** in addition to its previous five HDR/material/normal/depth
+attachments. The copied image is sampled by the Stage19 denoiser
+instead of the borrowed PRISMA render target. Snapshot and previous
+velocity source are protected by real Vulkan queue ordering and
+completed-frame fences; a failed snapshot, missing typed metadata,
+wrong view/cut/frame, or unsupported output is rejected and the
+pixel uses current spatial lighting. The four-receiver-ring
+conservative VRAM admission is updated to **36 bytes/pixel/slot**
+(three RGBA16F + three depth images), still capped at **512 MiB**.
+
+Native result now separately reports `vulkanAutoMotionCaptured`,
+`vulkanMotionSnapshotCopied`, and the existing
+`vulkanMotionInputBound` / `vulkanNormalHistoryCaptured` flags.
+The manual Stage19 API remains supported, but its source must be
+snapshotted with the SAME current Vulkan frame serial, world/camera key
+and cut epoch. No renderer producer may claim B-valid for arbitrary
+alpha-cutouts/translucent effects without real coverage; a separate
+reactive-mask integration remains a further stage.
+
+**Evidence:** GitHub commits for source changes, a new FakeDevice
+automatic PostProcess/camera-history/signed-copy regression, updates to
+the prior stale-manual-input test, and a Vulkan GPU-executable RGBA16F
+signed-velocity copy pixel test are in the branch. **NOT RUN: native
+C++ compile, CMake/CTest, real GLSL/SPIR-V, Vulkan GPU/validation
+layers, Metal/GLES/WebGL2 parity, performance/FPS and the full
+consolidated AIVERSE tests.** PR is DRAFT and is not merged into
+main. Full native PRISMA producer reconciliation is still required.

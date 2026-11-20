@@ -552,6 +552,12 @@ void Renderer3D::resolvePostFx() {
     PostProcess* post = post_;
     post_ = nullptr;
     dev_->endPass();
+    // Same ordering as the newer MAIN PRISMA renderer: genuine object
+    // velocity is drawn and published only AFTER scene depth exists, but
+    // BEFORE LumaWeave's sampled compute and HDR post resolve. This is
+    // optional and inert for ordinary PostProcess and non-motion scenes.
+    if (objectMotionProducer_ && post->wantsObjectMotionVectors())
+        objectMotionProducer_(*this,*post);
     PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight(),
                 quality_ != ShadowQuality::Off ? shadowMap_ : gfx::TextureHandle{}, lightViewProj_};
     post->resolve(*dev_, postOut_, f);

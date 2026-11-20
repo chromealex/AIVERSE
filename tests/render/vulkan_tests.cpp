@@ -798,6 +798,59 @@ void main() {
             CHECK(false); // compute was advertised but screen kernel failed
         }
     }
+    // Stage20: signed RGBA16F object velocity must be copied EXACTLY to
+    // a per-frame Vulkan texture, never converted through legacy RGBA8.
+    // The display shader maps signed UV motion [-1,1] into [0,1] only
+    // for this pixel capture; the actual sampled texture remains FP16.
+    if(d.supports(PixelFormat::RGBA16F)) {
+        constexpr uint16_t motionHalf[4]={0xb800u,0x3800u,0x3c00u,0u};
+        TextureDesc desc;desc.width=1;desc.height=1;
+        desc.format=PixelFormat::RGBA16F;
+        desc.filter=Filter::Nearest;desc.data=motionHalf;
+        const auto sourceMotion=d.createTexture(desc);
+        desc.data=nullptr;
+        const auto savedMotion=d.createTexture(desc);
+        const char* viewMotionFs=R"(
+in vec2 v_uv;
+uniform sampler2D tex0;
+out vec4 o_color;
+void main() {
+    vec4 m=texture(tex0,v_uv);
+    o_color=vec4(m.r*.5+.5,m.g*.5+.5,m.b,1.0);
+}
+)";
+        ShaderDesc motionShaderDesc;
+        motionShaderDesc.glslVertex=kVs;
+        motionShaderDesc.glslFragment=viewMotionFs;
+        motionShaderDesc.uniformSlots=1;
+        motionShaderDesc.textureSlots=1;
+        const auto motionShader=d.createShader(motionShaderDesc);
+        const auto motionPipe=motionShader.valid() ?
+            pipeline(d,motionShader):PipelineHandle{};
+        CHECK(sourceMotion.valid() && savedMotion.valid() &&
+              motionShader.valid() && motionPipe.valid());
+        if(sourceMotion.valid() && savedMotion.valid() &&
+           motionPipe.valid()) {
+            const Image copied=frame(d,[&] {
+                CHECK(!d.copyColor(sourceMotion,sourceMotion));
+                CHECK(d.copyColor(sourceMotion,savedMotion));
+                d.beginPass(screen);
+                d.setPipeline(motionPipe);
+                d.setVertexBuffer(vbFull);
+                uniforms(0,0,0,1);
+                d.setTexture(0,savedMotion);
+                d.draw(6);
+                d.endPass();
+            });
+            CHECK(copied.w==W && copied.h==H);
+            if(copied.w==W && copied.h==H)
+                CHECK(near(copied.at(W/2,H/2),64,191,255));
+        }
+        if(motionPipe.valid())d.destroyPipeline(motionPipe);
+        if(motionShader.valid())d.destroyShader(motionShader);
+        if(sourceMotion.valid())d.destroyTexture(sourceMotion);
+        if(savedMotion.valid())d.destroyTexture(savedMotion);
+    }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);
     d.destroyShader(color); d.destroyShader(tex); d.destroyShader(shadow);

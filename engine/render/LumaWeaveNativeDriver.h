@@ -93,6 +93,7 @@ struct LumaNativeViewResult {
     bool vulkanMaterialMissing=false,vulkanSurfaceMissing=false;
     bool vulkanDenoiseEncoded=false,vulkanTemporalHistoryUsed=false;
     bool vulkanMotionInputBound=false,vulkanNormalHistoryCaptured=false;
+    bool vulkanAutoMotionCaptured=false,vulkanMotionSnapshotCopied=false;
     LumaVulkanHistoryReason vulkanHistoryReason=LumaVulkanHistoryReason::Disabled;
     LumaWeaveVulkanDirect::Submission vulkanSubmission{};
 };
@@ -336,6 +337,8 @@ public:
             result.vulkanTemporalHistoryUsed=vk.temporalHistoryUsed;
             result.vulkanMotionInputBound=vk.motionInputBound;
             result.vulkanNormalHistoryCaptured=vk.previousNormalCaptured;
+            result.vulkanAutoMotionCaptured=vk.motionAutoCaptured;
+            result.vulkanMotionSnapshotCopied=vk.motionSnapshotCopied;
             result.vulkanHistoryReason=vk.historyReason;
             result.vulkanMaterialMissing=!vk.materialAvailable;
             result.vulkanSurfaceMissing=!vk.surfaceAvailable;

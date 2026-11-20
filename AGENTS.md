@@ -1,6 +1,50 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 20 — PRISMA object motion auto bridge (2026-11-20)
+
+Current experimental branch:
+`feature/gi-lumaweave-prisma-motion-bridge-stage20-20261120`.
+Read the REQUIRED handoff:
+`docs/agent-handoffs/gi-lumaweave-stage20-prisma-auto-motion-2026-11-20.md`.
+
+The Vulkan LumaWeave `PostProcess` now implements the typed object
+motion hooks used by MAIN's already existing PRISMA/Renderer3D rigid,
+instanced, skinned, morphed and baked-animation motion producer:
+`wantsObjectMotionVectors`, scene-depth and previous-camera context,
+view cut epoch and `acceptObjectMotionVectors(MotionTextureInput)`.
+The isolated older Renderer3D feature branch has a one-time optional
+`setObjectMotionProducer` callback invoked after scene HDR but before
+post resolve; **it does not yet contain MAIN's full production motion
+renderer**. Do NOT claim that the older branch automatically generates
+animation motion: conflict-aware reconcile with main's genuine producer
+without replacing its newer renderer/camera/animation/batching/texture
+features. Once main's native producer is integrated, avoid running it
+AND the temporary callback twice.
+
+The typed RGBA16F signed motion image (RG=current-minus-previous UV,
+B-valid object motion) is now copied format-exact via Vulkan
+`vkCmdCopyImage` to an independently owned sixth receiver texture
+PER GPU frame; existing RGBA8 `copyColor` path stays intact. The four
+receiver slots now count 36 bytes/pixel/slot with unchanged 512 MiB
+preflight cap. The copied velocity is never sampled across frames
+without matching GPU frame serial, world+camera key, cut epoch and
+declared RGBA16F dimensions. The borrowed source remains owned by its
+producer until that recorded GPU copy completes; LumaWeave owns the
+separate frame-fenced snapshot. A copy/metadata/fence refusal MUST
+clear the borrowed handle and use current spatial-only lighting for
+dynamic pixels; never launder stale manual input into current motion.
+A real route disable resets the previous camera context; transient
+same-world busy frames are separate.
+
+Stage20 FakeDevice object-motion PostProcess API/FP16 copying and real
+Vulkan signed-velocity copy/pixel CTest sources are authored but
+**NOT RUN**; no native CMake, CTest, Vulkan validation/GPU, Metal,
+GLES3/WebGL2 or FPS/memory claims are supported. Keep Draft PR until
+exact current MAIN PRISMA motion integration, main-branch conflict
+reconciliation and actual consolidated Debug/Release + GPU acceptance.
+Document every subsequent stage with separate handoff/source SHAs.
+
 ## GI + LumaWeave Stage 19 — real moving-object UV + prior normal history (2026-11-20)
 
 Branch: `feature/gi-lumaweave-vulkan-motion-stage19-20261120`. Mandatory handoff:
