@@ -1,6 +1,23 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 13 — Vulkan direct GPU owner (2026-11-20)
+
+Work branch `feature/gi-lumaweave-vulkan-direct-owner-stage13-20261120`. Read
+`docs/agent-handoffs/gi-lumaweave-stage13-vulkan-direct-owner-2026-11-20.md`.
+The new explicit `LumaWeaveVulkanDirect` uses the Stage11 Vulkan point/
+spot BVH shader, Stage12 Vulkan compute RHI, and strict Stage62 BVH
+preflight. Transactions preserve old valid GPU sources on failure,
+full-registry work is bounded (never silently truncates energy),
+and output cannot be presented across frames before
+`completedFrameSerial()` confirms a real GPU fence. The FakeDevice
+host regression has been authored but NOT EXECUTED. The owner is NOT
+yet connected to native scene material/depth capture or HDR PBR
+composition and is NEVER enabled by default; GLES keeps legacy
+raster direct + CPU L1 GI. Keep GPU/direct vs baked/bounced indirect
+ownership separate. Complete feature integration, run actual
+Metal/Vulkan/GLES GPU parity, and retain a separate handoff per stage.
+
 ## GI + LumaWeave Stage 12 — Vulkan compute RHI (2026-11-20)
 
 Work on `feature/gi-lumaweave-vulkan-compute-rhi-stage12-20261120`. Read
