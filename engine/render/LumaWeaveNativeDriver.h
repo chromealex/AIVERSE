@@ -66,6 +66,10 @@ struct LumaNativeViewInput {
     // When skinned, deformed or moving rigid objects are visible, request
     // motion per pixel; missing velocity forbids temporal (spatial still OK).
     bool vulkanDynamicGeometryVisible=false;
+    // Declare visible alpha-mask, dissolve, LOD-fade, translucent or FX
+    // silhouettes that MAIN PRISMA covers with its RGBA8 reactive pass.
+    // Missing mask disables temporal history on those pixels/view.
+    bool vulkanReactiveGeometryVisible=false;
 };
 
 enum class LumaIndirectRoute : uint8_t {
@@ -94,6 +98,8 @@ struct LumaNativeViewResult {
     bool vulkanDenoiseEncoded=false,vulkanTemporalHistoryUsed=false;
     bool vulkanMotionInputBound=false,vulkanNormalHistoryCaptured=false;
     bool vulkanAutoMotionCaptured=false,vulkanMotionSnapshotCopied=false;
+    bool vulkanReactiveAutoCaptured=false,vulkanReactiveSnapshotCopied=false;
+    bool vulkanReactiveMaskBound=false;
     LumaVulkanHistoryReason vulkanHistoryReason=LumaVulkanHistoryReason::Disabled;
     LumaWeaveVulkanDirect::Submission vulkanSubmission{};
 };
@@ -227,6 +233,8 @@ public:
                     input.vulkanMotionFrameSerial,
                     input.vulkanMotionViewKey,input.vulkanMotionViewEpoch,
                     input.vulkanDynamicGeometryVisible);
+                vulkanPost_.setReactiveGeometryPresent(
+                    input.vulkanReactiveGeometryVisible);
                 vulkanPost_.setEnabled(true);
                 vulkanChosen=true;
                 result.sources.route=LumaDirectRoute::VulkanGpu;
@@ -339,6 +347,9 @@ public:
             result.vulkanNormalHistoryCaptured=vk.previousNormalCaptured;
             result.vulkanAutoMotionCaptured=vk.motionAutoCaptured;
             result.vulkanMotionSnapshotCopied=vk.motionSnapshotCopied;
+            result.vulkanReactiveAutoCaptured=vk.reactiveAutoCaptured;
+            result.vulkanReactiveSnapshotCopied=vk.reactiveSnapshotCopied;
+            result.vulkanReactiveMaskBound=vk.reactiveMaskBound;
             result.vulkanHistoryReason=vk.historyReason;
             result.vulkanMaterialMissing=!vk.materialAvailable;
             result.vulkanSurfaceMissing=!vk.surfaceAvailable;

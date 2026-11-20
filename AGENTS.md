@@ -1,6 +1,44 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 21 — Vulkan PRISMA reactive masks (2026-11-20)
+
+Branch: `feature/gi-lumaweave-reactive-motion-stage21-20261120`.
+REQUIRED handoff:
+`docs/agent-handoffs/gi-lumaweave-stage21-vulkan-prisma-reactive-2026-11-20.md`.
+
+Vulkan LumaWeave Direct remains OFF by default and requires genuine
+Renderer3D opaque receiver coverage, immutable source/BVH snapshots, current
+camera+world ID/epoch, real GPU frame fences, and exclusive DIRECT
+routing. Stage21 now consumes MAIN PRISMA's **typed current-frame RGBA8
+reactive coverage** via `PostProcess::acceptMotionReactiveMask`. Set
+`LumaNativeViewInput::vulkanReactiveGeometryVisible` for visible alpha-
+cutout, dissolve, translucent water/FX, reactive animated meshes or LOD
+fades. This triggers the renderer motion/reactive producer even when
+`vulkanDynamicGeometryVisible` is false. The mask is copied into a
+SEVENTH independently owned full-resolution receiver resource per
+in-flight GPU frame (40 bytes/pixel/slot; same 512 MiB admission cap),
+not borrowed from a temporary PRISMA target across views. The history
+shader adds Vulkan optional sampled binding12 (8th input) and rejects
+old temporal radiance at real current reactive coverage R>threshold,
+or all temporal reuse when reactive geometry is declared and the mask
+cannot be authenticated/copied for this exact frame/view/epoch/format.
+This does NOT invent motion or remove sun/baked/bounced GI. PRISMA's MAIN
+native producer is still NOT merged into this divergent feature branch:
+conflict-aware integration is mandatory to claim end-to-end automatic
+rigid/skinned/reactive generation. Never replace newer MAIN Renderer3D
+or duplicate its reactive producer.
+
+Two concrete prior source bugs were fixed in this stage: undefined
+`motionBound`/`usePrevious` names in RAW screen dispatch were removed
+(they belong in the denoiser), and Vulkan descriptor `pBindings` now
+uses `std::array::data()`. All C++ FakeDevice, GLSL/SPIR-V and real Vulkan
+pixel fixtures were AUTHORED, **NOT NATIVE EXECUTED**; no compilation,
+CTests, GPU visual checks, 4096-light performance or Metal/GLES parity
+has passed based on this stage. Keep PR draft and main unchanged until
+a conflict-aware source merge and ONE final native full acceptance run.
+Document each further step in its own agent handoff with actual tests.
+
 ## GI + LumaWeave Stage 20 — PRISMA object motion auto bridge (2026-11-20)
 
 Current experimental branch:

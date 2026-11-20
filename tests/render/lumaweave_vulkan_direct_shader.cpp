@@ -62,8 +62,10 @@ int main() {
     AIVERSE_TEST_CHECK(compiled);
     AIVERSE_TEST_CHECK(binary.size()>=8 && binary.front()==0x07230203u);
 
-    // Stage19 extends the denoiser to seven sampled textures at bindings
-    // 5..11: current real motion and prior normal/depth history are never
+    // Stage21 extends the denoiser to EIGHT sampled textures at bindings
+    // 5..12: current PRISMA RGBA8 reactive coverage rejects temporal
+    // history at dissolves, alpha cutouts and LOD fades.
+    // Stage19 added real motion and previous normal/depth history, never
     // substituted by the current frame's normal when history is valid.
     // Stage17 uses the same GPU descriptor ABI and creates one additional
     // bounded 3x3 spatial / history-reprojected direct-light resolve.
@@ -72,8 +74,9 @@ int main() {
                            "binding=3","binding=4","binding=5",
                            "binding=6","binding=7","binding=8",
                            "binding=9","binding=10","binding=11",
-                           "previousVP","inverseCurrentVP","motionValid",
-                           "objectMotion","previousNormals",
+                           "binding=12","previousVP","inverseCurrentVP",
+                           "motionValid","objectMotion","previousNormals",
+                           "reactiveMask","reactiveSettings",
                            "filteredOutput","surfaceDepth",
                            "previousHistory"}) {
         AIVERSE_TEST_CHECK(denoise.find(token)!=std::string::npos);

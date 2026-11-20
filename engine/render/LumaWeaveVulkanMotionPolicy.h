@@ -7,6 +7,23 @@
 
 namespace aiverse::render {
 struct LumaVulkanMotionPolicy {
+    // PRISMA's reactive coverage is an RGBA8 current-frame texture:
+    // R=coverage (including alpha-cutout/dissolve/translucent pixels).
+    // Do not accept an untyped or previous-view mask as current temporal
+    // disocclusion evidence. Alpha-cutout pixels lacking truthful coverage
+    // must stay spatial-only when the host declares reactive geometry.
+    static bool reactiveCurrent(MotionTextureInput input,
+                                int width,int height,
+                                uint64_t inputFrame,uint64_t deviceFrame,
+                                uint64_t inputView,uint64_t expectedView,
+                                uint64_t inputEpoch,uint64_t expectedEpoch) {
+        return input.hasMetadata &&
+               input.validFor(width,height,gfx::PixelFormat::RGBA8) &&
+               width>0 && height>0 &&
+               inputFrame && deviceFrame && inputFrame==deviceFrame &&
+               inputView && expectedView && inputView==expectedView &&
+               inputEpoch==expectedEpoch;
+    }
     static bool current(MotionTextureInput input,int width,int height,
                         uint64_t inputFrame,uint64_t deviceFrame,
                         uint64_t inputView,uint64_t expectedView,

@@ -37,5 +37,31 @@ int main() {
     wrong=MotionTextureInput::declared(
         {},1920,1080,gfx::PixelFormat::RGBA16F);
     AIVERSE_TEST_CHECK(!match(wrong,1920,1080,71,71,5,5,3,3));
+
+    const auto reactive=MotionTextureInput::declared(
+        gfx::TextureHandle{22},1920,1080,gfx::PixelFormat::RGBA8);
+    const auto valid=[&](MotionTextureInput image,
+                        uint64_t inputFrame,uint64_t deviceFrame,
+                        uint64_t view,uint64_t currentView,
+                        uint64_t epoch,uint64_t currentEpoch) {
+        return LumaVulkanMotionPolicy::reactiveCurrent(
+            image,1920,1080,inputFrame,deviceFrame,view,currentView,
+            epoch,currentEpoch);
+    };
+    AIVERSE_TEST_CHECK(valid(reactive,71,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(reactive,70,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(reactive,0,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(reactive,71,71,4,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(reactive,71,71,5,5,2,3));
+    AIVERSE_TEST_CHECK(!valid(
+        MotionTextureInput::declared({22},1920,1080,
+                                     gfx::PixelFormat::RGBA16F),
+        71,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(MotionTextureInput::legacy({22}),
+                              71,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!valid(MotionTextureInput::declared(
+        {},1920,1080,gfx::PixelFormat::RGBA8),71,71,5,5,3,3));
+    AIVERSE_TEST_CHECK(!LumaVulkanMotionPolicy::reactiveCurrent(
+        reactive,1280,1080,71,71,5,5,3,3));
     return 0;
 }

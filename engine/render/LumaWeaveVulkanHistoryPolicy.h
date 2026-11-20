@@ -27,6 +27,7 @@ struct LumaVulkanDenoiseSettings {
     float normalAgreement=.88f;
     float reprojectionDepthTolerance=.012f;
     float historyClamp=1.5f;       // RGB clamp around current-frame spatial range
+    float reactiveThreshold=.10f;  // current PRISMA RGBA8 R coverage > this rejects temporal
     float cameraCutDistance=2.f;
     float cameraMatrixCut=.40f;    // maximum absolute element delta
     static bool valid(const LumaVulkanDenoiseSettings& s) {
@@ -42,6 +43,8 @@ struct LumaVulkanDenoiseSettings {
                s.reprojectionDepthTolerance<=.05f &&
                finite(s.historyClamp) && s.historyClamp>=0 &&
                s.historyClamp<=8.f &&
+               finite(s.reactiveThreshold) && s.reactiveThreshold>=0 &&
+               s.reactiveThreshold<=1.f &&
                finite(s.cameraCutDistance) && s.cameraCutDistance>=0 &&
                s.cameraCutDistance<=1000.f &&
                finite(s.cameraMatrixCut) && s.cameraMatrixCut>=0 &&

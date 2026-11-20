@@ -13,8 +13,8 @@ using namespace aiverse;
 using namespace aiverse::render;
 struct Device final : FakeDevice {
     uint64_t serial=70,completed=0;
-    unsigned copies=0;
-    gfx::TextureHandle lastCopy{};
+    unsigned copies=0,reactiveCopies=0;
+    gfx::TextureHandle lastCopy{},lastReactiveCopy{};
     Device(){info_.backend=gfx::Backend::Vulkan;computeEnabled=true;}
     bool supports(gfx::PixelFormat f)const override{
         return f==gfx::PixelFormat::RGBA16F || FakeDevice::supports(f);
@@ -30,12 +30,17 @@ struct Device final : FakeDevice {
         const auto src=textures.find(from.id);
         const auto dst=textures.find(to.id);
         if(src==textures.end() || dst==textures.end() || from.id==to.id ||
-           src->second.format!=gfx::PixelFormat::RGBA16F ||
-           dst->second.format!=gfx::PixelFormat::RGBA16F ||
+           src->second.format!=dst->second.format ||
+           (dst->second.format!=gfx::PixelFormat::RGBA16F &&
+            dst->second.format!=gfx::PixelFormat::RGBA8) ||
            src->second.w!=dst->second.w ||
            src->second.h!=dst->second.h)return false;
         dst->second.data=src->second.data;
-        lastCopy=to;++copies;
+        if(dst->second.format==gfx::PixelFormat::RGBA8) {
+            lastReactiveCopy=to;++reactiveCopies;
+        } else {
+            lastCopy=to;++copies;
+        }
         return true;
     }
 };
@@ -93,6 +98,7 @@ int main() {
         post.setEnabled(true);
         post.setHistoryIdentity(700,3);
         post.setObjectMotionVectors({},0,700,3,true);
+        post.setReactiveGeometryPresent(true);
 
         gfx::TextureDesc td;
         td.width=td.height=64;
@@ -100,6 +106,9 @@ int main() {
         td.renderTarget=true;
         const auto velocity=dev.createTexture(td);
         const auto secondVelocity=dev.createTexture(td);
+        td.format=gfx::PixelFormat::RGBA8;
+        const auto reactive=dev.createTexture(td);
+        dev.textures.at(reactive.id).data[0]={.9f,0,0,1};
         dev.textures.at(velocity.id).data[0]={-.25f,.1f,1.f,0};
         dev.textures.at(secondVelocity.id).data[0]={.5f,-.2f,1.f,0};
 
@@ -131,11 +140,20 @@ int main() {
                            firstSnapshot.id!=velocity.id);
         const auto saved=dev.textures.at(firstSnapshot.id).data[0];
         AIVERSE_TEST_CHECK(saved.x==-.25f && saved.y==.1f && saved.z==1);
+        producerContract.acceptMotionReactiveMask(
+            MotionTextureInput::declared(reactive,64,64,
+                                         gfx::PixelFormat::RGBA8));
+        AIVERSE_TEST_CHECK(dev.reactiveCopies==1 &&
+                           dev.lastReactiveCopy.id!=reactive.id);
+        AIVERSE_TEST_CHECK(dev.textures.at(dev.lastReactiveCopy.id).data[0].x==.9f);
         post.resolve(dev,{},frame);
         AIVERSE_TEST_CHECK(post.stats().composited);
         AIVERSE_TEST_CHECK(post.stats().motionInputBound);
         AIVERSE_TEST_CHECK(post.stats().motionAutoCaptured);
         AIVERSE_TEST_CHECK(post.stats().motionSnapshotCopied);
+        AIVERSE_TEST_CHECK(post.stats().reactiveAutoCaptured);
+        AIVERSE_TEST_CHECK(post.stats().reactiveSnapshotCopied);
+        AIVERSE_TEST_CHECK(post.stats().reactiveMaskBound);
         dev.endFrame();
         AIVERSE_TEST_CHECK(!post.shutdown()); // snapshot is GPU-borrowed
         dev.completed=70;
@@ -144,6 +162,7 @@ int main() {
         // Second view: PRISMA producer gets exact previous view matrix
         // and its new velocity snapshot cannot clobber frame 70.
         dev.serial=71;post.setObjectMotionVectors({},0,700,3,true);
+        post.setReactiveGeometryPresent(true);
         dev.beginFrame(64,64);
         (void)post.scenePass({},64,64);
         publishReceivers(post);
@@ -155,13 +174,19 @@ int main() {
         producerContract.acceptObjectMotionVectors(
             MotionTextureInput::declared(secondVelocity,64,64,
                                          gfx::PixelFormat::RGBA16F));
-        AIVERSE_TEST_CHECK(dev.copies==2 &&
-                           firstSnapshot.id!=dev.lastCopy.id);
+        // The preceding GPU frame is now completed, so recycling its
+        // private snapshot handle is safe; only its CONTENT must update.
+        AIVERSE_TEST_CHECK(dev.copies==2 && dev.lastCopy.valid());
         AIVERSE_TEST_CHECK(
             dev.textures.at(dev.lastCopy.id).data[0].x==.5f);
+        producerContract.acceptMotionReactiveMask(
+            MotionTextureInput::declared(reactive,64,64,
+                                         gfx::PixelFormat::RGBA8));
+        AIVERSE_TEST_CHECK(dev.reactiveCopies==2);
         post.resolve(dev,{},frame);
         AIVERSE_TEST_CHECK(post.stats().composited);
         AIVERSE_TEST_CHECK(post.stats().temporalHistoryUsed);
+        AIVERSE_TEST_CHECK(post.stats().reactiveMaskBound);
         dev.endFrame();
         dev.completed=71;
         AIVERSE_TEST_CHECK(owner.poll());
@@ -171,6 +196,7 @@ int main() {
         dev.serial=72;
         post.setHistoryIdentity(700,4);
         post.setObjectMotionVectors({},0,700,4,true);
+        post.setReactiveGeometryPresent(true);
         dev.beginFrame(64,64);
         (void)post.scenePass({},64,64);
         publishReceivers(post);
@@ -179,11 +205,14 @@ int main() {
             viewId,oldCamera));
         // A metadata-less legacy handle is NOT an admissible source.
         producerContract.acceptObjectMotionVectors(velocity);
-        AIVERSE_TEST_CHECK(dev.copies==2);
+        producerContract.acceptMotionReactiveMask(reactive); // untyped -> reject
+        AIVERSE_TEST_CHECK(dev.copies==2 && dev.reactiveCopies==2);
         post.resolve(dev,{},frame);
         AIVERSE_TEST_CHECK(post.stats().composited &&
                            !post.stats().motionSnapshotCopied);
         AIVERSE_TEST_CHECK(!post.stats().motionInputBound);
+        AIVERSE_TEST_CHECK(!post.stats().reactiveMaskBound);
+        AIVERSE_TEST_CHECK(!post.stats().reactiveSnapshotCopied);
         dev.endFrame();
         dev.completed=72;
         AIVERSE_TEST_CHECK(owner.poll());
@@ -191,6 +220,7 @@ int main() {
         AIVERSE_TEST_CHECK(post.shutdown());
         dev.destroyTexture(velocity);
         dev.destroyTexture(secondVelocity);
+        dev.destroyTexture(reactive);
     }
     AIVERSE_TEST_CHECK(owner.shutdown());
     AIVERSE_TEST_CHECK(dev.buffers.empty() && dev.textures.empty());

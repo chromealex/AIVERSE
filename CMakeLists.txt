@@ -1025,6 +1025,15 @@ if(AIVERSE_BUILD_TESTS)
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_auto_motion_bridge
         COMMAND aiverse_lumaweave_vulkan_auto_motion_bridge_test)
+
+    # Real PRISMA RGBA8 reactive-only pixels: typed current view delivery,
+    # independent fence-owned copy, missing mask -> spatial-only fallback.
+    add_executable(aiverse_lumaweave_vulkan_reactive_contract_test
+        tests/render/lumaweave_vulkan_reactive_contract.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_reactive_contract_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_reactive_contract
+        COMMAND aiverse_lumaweave_vulkan_reactive_contract_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

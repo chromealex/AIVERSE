@@ -273,7 +273,7 @@ private:
     uint32_t activeCompute_ = 0;
     std::array<BufferHandle,4> computeBuffers_{};
     TextureHandle computeTexture_{};
-    std::array<TextureHandle,7> computeSampledTextures_{};
+    std::array<TextureHandle,8> computeSampledTextures_{};
     std::array<uint8_t,128> computeUniforms_{};
     size_t computeUniformSize_ = 0;
     bool computeImageWriting_ = false;

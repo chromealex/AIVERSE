@@ -351,3 +351,71 @@ C++ compile, CMake/CTest, real GLSL/SPIR-V, Vulkan GPU/validation
 layers, Metal/GLES/WebGL2 parity, performance/FPS and the full
 consolidated AIVERSE tests.** PR is DRAFT and is not merged into
 main. Full native PRISMA producer reconciliation is still required.
+
+## Stage 21 — Vulkan PRISMA reactive coverage and temporal-ghost rejection (2026-11-20)
+
+Source-only experimental branch: `feature/gi-lumaweave-reactive-motion-stage21-20261120`.
+Technical next-agent document:
+`docs/agent-handoffs/gi-lumaweave-stage21-vulkan-prisma-reactive-2026-11-20.md`.
+
+The MAIN PRISMA/Renderer3D pipeline already has a real **RGBA8
+reactive-mask** draw pass for cutout foliage, dissolving actors,
+LOD-fade silhouettes, transparent water and moving/animated reactive
+meshes. Stage21 extends the opt-in Vulkan LumaWeave PostProcess to
+automatically accept its existing typed
+`acceptMotionReactiveMask(MotionTextureInput::declared(mask,w,h,RGBA8))`
+callback when the producer is available. Stage20's older feature
+renderer still does **not contain the full current MAIN PRISMA motion
+producer**; do a conflict-aware integration before claiming automatic
+reactive GPU draws in that isolated branch.
+
+Native Vulkan frame example, after genuine opaque receivers and MAIN
+motion/reactive renderer are integrated:
+
+```cpp
+view.enableVulkanDirect=true; // OFF by default
+view.vulkanReceiverCoverageConfirmed=allOpaqueReceiversMatched;
+view.vulkanHistoryKey=stableCameraWorldId; // nonzero for temporal history
+view.vulkanHistoryEpoch=hardCameraCutOrWorldReloadEpoch;
+view.vulkanDynamicGeometryVisible=visibleMovingOrSkinnedActors;
+view.vulkanReactiveGeometryVisible=visibleAlphaCutoutDissolveLodOrWater;
+view.vulkanDenoise.reactiveThreshold=.10f;
+```
+
+A real current-frame typed RGBA8 mask is copied to a separately
+GPU-fence-owned LumaWeave receiver image (the 7th full-res texture per
+slot, with 4 slots). Existing frame-specific material/depth/normal and
+signed RGBA16F object motion images are unchanged. Conservative memory
+admission is now **40 bytes per full-res pixel per slot**, at most
+512 MiB total before choosing legacy raster direct, never dropping
+sources silently.
+
+The Vulkan denoiser accepts **eight optional sampled images** (set0
+bindings 5..12) and a 208-byte std430 view uniform, with the original
+4 SSBO + 1 RGBA16F storage image + 80-byte push block intact. Its
+binding12 is the *actual current RGBA8 reactive coverage*. If R exceeds
+the configurable threshold, only current spatially filtered PBR/GGX
+Direct RGB is used — no old history can bleed across the silhouette.
+If the host flags reactive geometry and the current mask is missing,
+has untyped metadata, wrong format/viewport, or was not copied in the
+correct frame, the shader rejects temporal reuse across that frame.
+Static, nonreactive views remain compatible. Metal and GLES compute
+are NOT added by this change.
+
+Stage21 also fixes two existing source problems inherited from the
+prior experimental chain: undefined temporal locals in the RAW
+Vulkan Direct shader dispatch and a descriptor-layout `std::array`
+passed as a pointer without `.data()`. These are code fixes only;
+no native compiler result exists yet.
+
+The `lumaweave_vulkan_motion_policy`,
+`lumaweave_vulkan_auto_motion_bridge`, and new
+`lumaweave_vulkan_reactive_contract` FakeDevice/C++ tests are
+source-authored, as are GLSL→SPIR-V and physical Vulkan pixel
+regressions for covered vs uncovered silhouettes and required-mask
+absence. **NOT RUN:** native CMake/CTest, actual GLSL/SPIR-V compiler,
+Vulkan validation/real GPU, Metal/GLES3/WebGL2, FPS/VRAM or full
+AIVERSE acceptance. This branch is draft and not merged into main.
+The next integration step is to use MAIN's already implemented
+rigid/skinned/reactive draw machinery without overwriting other
+renderer, animation, batching or texture development.

@@ -28,6 +28,8 @@ public:
         bool denoiseEncoded=false,temporalHistoryUsed=false;
         bool motionInputBound=false,previousNormalCaptured=false;
         bool motionAutoCaptured=false,motionSnapshotCopied=false;
+        bool reactiveAutoCaptured=false,reactiveSnapshotCopied=false;
+        bool reactiveMaskBound=false;
         LumaVulkanHistoryReason historyReason=LumaVulkanHistoryReason::Disabled;
         LumaWeaveDecision quality{};
         LumaWeaveVulkanDirect::Submission submission{};
@@ -91,7 +93,8 @@ public:
                 if(slot.retireSerial>completed)return false;
             for(const auto& slot:receiverSlots_)
                 for(auto t:{slot.material,slot.materialDepth,slot.surface,
-                            slot.surfaceDepth,slot.composeDepth,slot.motion})
+                            slot.surfaceDepth,slot.composeDepth,slot.motion,
+                            slot.reactive})
                     if(t.valid())dev_->destroyTexture(t);
             if(vertex_.valid())dev_->destroyBuffer(vertex_);
             if(pipeline_.valid())dev_->destroyPipeline(pipeline_);
@@ -108,8 +111,11 @@ public:
         scene_={};stats_={};last_={};
         viewKey_=viewEpoch_=0;
         objectMotion_={};motionFrameSerial_=motionViewKey_=motionViewEpoch_=0;
-        dynamicGeometryVisible_=false;
+        reactiveMask_={};
+        reactiveFrameSerial_=reactiveViewKey_=reactiveViewEpoch_=0;
+        dynamicGeometryVisible_=reactiveGeometryVisible_=false;
         autoMotionCaptured_=motionSnapshotCopied_=false;
+        autoReactiveCaptured_=reactiveSnapshotCopied_=false;
         cameraMotion_.clear();
         return true;
     }
@@ -146,8 +152,9 @@ public:
     // invokes these hooks after opaque scene depth, before HDR resolve.
     // Nothing here guesses skinned motion from camera transforms.
     bool wantsObjectMotionVectors() const override {
-        return eligible_ && dynamicGeometryVisible_ && viewKey_!=0 &&
-               scene_.depthTarget.valid() && !motionSnapshotCopied_;
+        return eligible_ && (dynamicGeometryVisible_ ||
+                             reactiveGeometryVisible_) &&
+               viewKey_!=0 && scene_.depthTarget.valid();
     }
     gfx::TextureHandle objectMotionSceneDepth() const override {
         return wantsObjectMotionVectors()?scene_.depthTarget:
@@ -174,6 +181,17 @@ public:
     }
     void acceptObjectMotionVectors(gfx::TextureHandle) override {
         // Legacy handles lack width/format and cannot safely be sampled.
+    }
+    void acceptMotionReactiveMask(MotionTextureInput input) override {
+        // MAIN PRISMA producer supplies one current-view RGBA8 silhouette
+        // coverage image independently of whether velocity was seeded.
+        (void)snapshotReactiveMask(input);
+    }
+    void acceptMotionReactiveMask(gfx::TextureHandle) override {
+        // No metadata => cannot verify exact view/format/dimensions.
+    }
+    void setReactiveGeometryPresent(bool visible) {
+        reactiveGeometryVisible_=visible;
     }
 
     // MotionTextureInput is the same borrowed metadata contract used by
@@ -208,8 +226,8 @@ public:
     // Conservative preflight, queried by the native driver BEFORE excluding
     // legacy raster direct sources for this view. No GPU mutation.
     static constexpr uint64_t kMaxReceiverRingBytes=512ull*1024ull*1024ull;
-    static constexpr uint64_t kBytesPerReceiverPixel=36u;
-    // Three RGBA16F (material,normal,velocity) + three depth images/frame.
+    static constexpr uint64_t kBytesPerReceiverPixel=40u;
+    // Three RGBA16F + three depth + one RGBA8 reactive image per frame.
     // Reject a 4K multi-view memory explosion BEFORE excluding raster lights.
     bool canAcquireFrame(uint32_t viewW=0,uint32_t viewH=0) const {
         if(!ready() || !owner_.canSubmitScreen() ||
@@ -228,6 +246,7 @@ public:
         width_=w;height_=h;
         readyMaterial_=readySurface_=false;
         autoMotionCaptured_=motionSnapshotCopied_=false;
+        autoReactiveCaptured_=reactiveSnapshotCopied_=false;
         stats_={};
         const bool usable=w>0 && h>0 && w<=16384 && h<=16384 &&
             scene_.colorTarget.valid() && scene_.depthTarget.valid();
@@ -292,6 +311,15 @@ public:
         // already supplied a real velocity pass, do not replace it.
         if(!motionSnapshotCopied_ && objectMotion_.texture.valid())
             (void)snapshotObjectMotion(objectMotion_,false);
+        if(!reactiveSnapshotCopied_) {
+            // No old or untyped borrowed reactive texture can enter a later
+            // view's temporal resolve. The shader's requireMask flag will
+            // conservatively disable temporal if reactive geometry is known.
+            reactiveMask_={};
+            reactiveFrameSerial_=reactiveViewKey_=reactiveViewEpoch_=0;
+        }
+        stats_.reactiveAutoCaptured=autoReactiveCaptured_;
+        stats_.reactiveSnapshotCopied=reactiveSnapshotCopied_;
         if(!motionSnapshotCopied_) {
             // Failed/unsupported snapshot copy must NEVER fall through to
             // sampling an unfenced borrowed motion image. Spatial-only
@@ -344,6 +372,17 @@ public:
                 // means CURRENT spatial lighting only. Camera-only motion
                 // is not sufficient for skinned/deforming surfaces.
                 temporal.requireValidMotion=dynamicGeometryVisible_;
+                const bool reactiveCurrent=LumaVulkanMotionPolicy::reactiveCurrent(
+                    reactiveMask_,width_,height_,reactiveFrameSerial_,
+                    dev.frameSerial(),reactiveViewKey_,viewKey_,
+                    reactiveViewEpoch_,viewEpoch_);
+                temporal.reactiveMask=reactiveCurrent?
+                    reactiveMask_.texture:gfx::TextureHandle{};
+                temporal.reactiveFrameSerial=reactiveCurrent?
+                    reactiveFrameSerial_:0;
+                temporal.reactiveViewKey=reactiveCurrent?reactiveViewKey_:0;
+                temporal.reactiveViewEpoch=reactiveCurrent?reactiveViewEpoch_:0;
+                temporal.requireReactiveMask=reactiveGeometryVisible_;
                 stats_.submission=owner_.dispatchScreen(
                     inputs,view,stats_.quality.width,stats_.quality.height,
                     stats_.quality.samples,++seed_,&temporal);
@@ -351,6 +390,7 @@ public:
                 stats_.temporalHistoryUsed=owner_.denoiseStatus().historyUsed;
                 stats_.historyReason=owner_.denoiseStatus().reason;
                 stats_.motionInputBound=owner_.denoiseStatus().motionBound;
+                stats_.reactiveMaskBound=owner_.denoiseStatus().reactiveMaskBound;
                 stats_.previousNormalCaptured=
                     owner_.denoiseStatus().normalCaptured;
                 if(stats_.submission.encoded) {
@@ -377,10 +417,34 @@ public:
         // on another view/scene, even if its handle ID happens to match.
         objectMotion_={};motionFrameSerial_=0;motionViewKey_=0;
         motionViewEpoch_=0;dynamicGeometryVisible_=false;
+        reactiveMask_={};reactiveFrameSerial_=0;
+        reactiveViewKey_=reactiveViewEpoch_=0;reactiveGeometryVisible_=false;
         autoMotionCaptured_=motionSnapshotCopied_=false;
+        autoReactiveCaptured_=reactiveSnapshotCopied_=false;
     }
 
 private:
+    bool snapshotReactiveMask(MotionTextureInput input) {
+        if(!dev_ || !eligible_ || activeReceiverSlot_<0 || !viewKey_ ||
+           !input.hasMetadata || reactiveSnapshotCopied_ ||
+           !input.validFor(width_,height_,gfx::PixelFormat::RGBA8) ||
+           !dev_->frameSerial())return false;
+        auto& slot=receiverSlots_[size_t(activeReceiverSlot_)];
+        if(!slot.reactive.valid() || slot.reactive.id==input.texture.id)
+            return false;
+        // MAIN PRISMA rendered the RGBA8 reactive mask in this recording
+        // frame. Format-exact GPU transfer to a per-view, fence-owned image:
+        // never keep the producer's borrowed temporary render target.
+        if(!dev_->copyColor(input.texture,slot.reactive))return false;
+        reactiveMask_=MotionTextureInput::declared(
+            slot.reactive,width_,height_,gfx::PixelFormat::RGBA8);
+        reactiveFrameSerial_=dev_->frameSerial();
+        reactiveViewKey_=viewKey_;
+        reactiveViewEpoch_=viewEpoch_;
+        autoReactiveCaptured_=reactiveSnapshotCopied_=true;
+        return true;
+    }
+
     bool snapshotObjectMotion(MotionTextureInput input,bool automaticallyProduced) {
         if(!dev_ || !eligible_ || activeReceiverSlot_<0 ||
            !viewKey_ || !input.hasMetadata ||
@@ -410,7 +474,8 @@ private:
 
     struct ReceiverSlot {
         gfx::TextureHandle material{},materialDepth{};
-        gfx::TextureHandle surface{},surfaceDepth{},composeDepth{},motion{};
+        gfx::TextureHandle surface{},surfaceDepth{},composeDepth{},motion{},
+                           reactive{};
         int width=0,height=0;
         uint64_t retireSerial=0; // ALL five images held until real frame fence
     };
@@ -432,7 +497,7 @@ private:
             if(slot.width==w && slot.height==h && slot.material.valid() &&
                slot.materialDepth.valid() && slot.surface.valid() &&
                slot.surfaceDepth.valid() && slot.composeDepth.valid() &&
-           slot.motion.valid()) {
+           slot.motion.valid() && slot.reactive.valid()) {
                 chosen=int(i);break;
             }
         }
@@ -441,16 +506,18 @@ private:
         if(slot.width!=w || slot.height!=h || !slot.material.valid() ||
            !slot.materialDepth.valid() || !slot.surface.valid() ||
            !slot.surfaceDepth.valid() || !slot.composeDepth.valid() ||
-           !slot.motion.valid()) {
+           !slot.motion.valid() || !slot.reactive.valid()) {
             gfx::TextureDesc desc;
             desc.width=w;desc.height=h;
             desc.format=gfx::PixelFormat::RGBA16F;
             desc.filter=gfx::Filter::Nearest;desc.renderTarget=true;
             desc.label="LumaWeave Vulkan per-frame opaque receiver";
-            std::array<gfx::TextureHandle,6> replacement{};
+            std::array<gfx::TextureHandle,7> replacement{};
             for(size_t i=0;i<replacement.size();++i) {
                 desc.format=(i==0 || i==2 || i==5) ?
-                    gfx::PixelFormat::RGBA16F:gfx::PixelFormat::Depth;
+                    gfx::PixelFormat::RGBA16F :
+                    i==6 ? gfx::PixelFormat::RGBA8 :
+                           gfx::PixelFormat::Depth;
                 replacement[i]=dev_->createTexture(desc);
                 if(!replacement[i].valid()) {
                     for(auto t:replacement)
@@ -459,7 +526,8 @@ private:
                 }
             }
             for(auto t:{slot.material,slot.materialDepth,slot.surface,
-                        slot.surfaceDepth,slot.composeDepth,slot.motion})
+                        slot.surfaceDepth,slot.composeDepth,slot.motion,
+                        slot.reactive})
                 if(t.valid())dev_->destroyTexture(t);
             slot.material=replacement[0];
             slot.materialDepth=replacement[1];
@@ -467,6 +535,7 @@ private:
             slot.surfaceDepth=replacement[3];
             slot.composeDepth=replacement[4];
             slot.motion=replacement[5];
+            slot.reactive=replacement[6];
             slot.width=w;slot.height=h;
         }
         slot.retireSerial=frame;
@@ -539,8 +608,11 @@ private:
     uint64_t viewKey_=0,viewEpoch_=0;
     MotionTextureInput objectMotion_{};
     uint64_t motionFrameSerial_=0,motionViewKey_=0,motionViewEpoch_=0;
-    bool dynamicGeometryVisible_=false;
+    bool dynamicGeometryVisible_=false,reactiveGeometryVisible_=false;
     bool autoMotionCaptured_=false,motionSnapshotCopied_=false;
+    bool autoReactiveCaptured_=false,reactiveSnapshotCopied_=false;
+    MotionTextureInput reactiveMask_{};
+    uint64_t reactiveFrameSerial_=0,reactiveViewKey_=0,reactiveViewEpoch_=0;
     struct CameraMotion {
         mat4 previousVP{};
         uint64_t epoch=0;

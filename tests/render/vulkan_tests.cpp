@@ -553,6 +553,8 @@ void main() {
         const uint16_t staleNormalDepth[4]={0,0,0x3c00,0x3400};
         const uint16_t validVelocity[4]={0,0,0x3c00,0}; // RG=0, B=1
         const uint16_t invalidVelocity[4]={0,0,0,0};
+        const uint8_t stableReactive[4]={0,0,0,255};
+        const uint8_t coveredReactive[4]={255,0,0,255};
         TextureDesc tx;
         tx.width=tx.height=1;tx.format=PixelFormat::RGBA16F;
         tx.filter=Filter::Nearest;
@@ -572,6 +574,14 @@ void main() {
         const auto missingMotion=d.createTexture(tx);
         tx.data=nullptr;tx.storage=true;
         const auto filtered=d.createTexture(tx);
+        TextureDesc reactiveDesc;
+        reactiveDesc.width=reactiveDesc.height=1;
+        reactiveDesc.format=PixelFormat::RGBA8;
+        reactiveDesc.filter=Filter::Nearest;
+        reactiveDesc.data=stableReactive;
+        const auto calmReactive=d.createTexture(reactiveDesc);
+        reactiveDesc.data=coveredReactive;
+        const auto activeReactive=d.createTexture(reactiveDesc);
         TextureDesc zd;
         zd.width=W;zd.height=H;zd.format=PixelFormat::Depth;
         zd.renderTarget=true;zd.filter=Filter::Nearest;
@@ -579,9 +589,9 @@ void main() {
         const auto receiverDepth=d.createTexture(zd);
         struct FilterView {
             float current[16],previous[16],eye[4],resolution[4];
-            float settings[4],flags[4];
+            float settings[4],flags[4],reactiveSettings[4];
         };
-        static_assert(sizeof(FilterView)==192);
+        static_assert(sizeof(FilterView)==208);
         FilterView view{};
         for(int i:{0,5,10,15}) {
             view.current[i]=1.0f;view.previous[i]=1.0f;
@@ -601,23 +611,30 @@ void main() {
         const auto dummy=d.createBuffer(data);
         ComputeDesc compute;
         compute.glsl=aiverse::render::luma_vk::kDenoiseCompute;
-        compute.sampledTextureSlots=7;
+        compute.sampledTextureSlots=8;
         const auto filter=d.createCompute(compute);
         CHECK(filter.valid() && raw.valid() && previous.valid() &&
               normal.valid() && previousOpposite.valid() &&
               previousWrongDepth.valid() && motion.valid() &&
               missingMotion.valid() && filtered.valid() &&
+              calmReactive.valid() && activeReactive.valid() &&
               currentDepth.valid() && receiverDepth.valid());
         if(filter.valid() && raw.valid() && previous.valid() &&
            normal.valid() && previousOpposite.valid() &&
            previousWrongDepth.valid() && motion.valid() &&
            missingMotion.valid() && filtered.valid() &&
+           calmReactive.valid() && activeReactive.valid() &&
            currentDepth.valid() && receiverDepth.valid() &&
            viewBuffer.valid() && dummy.valid()) {
             auto resolvePixel=[&](bool historyEnabled,bool velocityValid,
                                   bool oppositeNormal,bool wrongDepth,
-                                  bool requireVelocity) -> Image {
+                                  bool requireVelocity,
+                                  bool reactiveActive,bool maskPresent,
+                                  bool requireMask) -> Image {
                 view.flags[0]=historyEnabled?1.0f:0.0f;
+                view.reactiveSettings[0]=maskPresent?1.0f:0.0f;
+                view.reactiveSettings[1]=.10f;
+                view.reactiveSettings[2]=requireMask?1.0f:0.0f;
                 view.flags[2]=1.0f; // a genuine motion texture is bound
                 view.flags[3]=requireVelocity?1.0f:0.0f;
                 d.updateBuffer(viewBuffer,&view,sizeof(view));
@@ -651,6 +668,8 @@ void main() {
                     d.setComputeSampledTexture(6,oppositeNormal?
                         previousOpposite:wrongDepth?
                         previousWrongDepth:normal);
+                    d.setComputeSampledTexture(7,reactiveActive?
+                        activeReactive:calmReactive);
                     d.setComputeUniforms(pc.data(),sizeof(pc));
                     d.dispatch(1);
                     CHECK(d.computeDispatchSucceeded());
@@ -663,11 +682,13 @@ void main() {
                     d.endPass();
                 });
             };
-            const Image spatial=resolvePixel(false,false,false,false,true);
+            const Image spatial=resolvePixel(
+                false,false,false,false,true,false,true,false);
             CHECK(spatial.w==W && spatial.h==H);
             if(spatial.w==W && spatial.h==H)
                 CHECK(near(spatial.at(W/2,H/2),255,0,0));
-            const Image temporal=resolvePixel(true,true,false,false,true);
+            const Image temporal=resolvePixel(
+                true,true,false,false,true,false,true,false);
             CHECK(temporal.w==W && temporal.h==H);
             if(temporal.w==W && temporal.h==H) {
                 // Green history is accepted only with a matching depth and
@@ -675,15 +696,30 @@ void main() {
                 const auto* pixel=temporal.at(W/2,H/2);
                 CHECK(pixel[0]<250 && pixel[1]>20 && pixel[2]<5);
             }
-            const Image missing=resolvePixel(true,false,false,false,true);
+            const Image missing=resolvePixel(
+                true,false,false,false,true,false,true,false);
             if(missing.w==W && missing.h==H)
                 CHECK(near(missing.at(W/2,H/2),255,0,0));
-            const Image rotated=resolvePixel(true,true,true,false,true);
+            const Image rotated=resolvePixel(
+                true,true,true,false,true,false,true,false);
             if(rotated.w==W && rotated.h==H)
                 CHECK(near(rotated.at(W/2,H/2),255,0,0));
-            const Image wrong=resolvePixel(true,true,false,true,true);
+            const Image wrong=resolvePixel(
+                true,true,false,true,true,false,true,false);
             if(wrong.w==W && wrong.h==H)
                 CHECK(near(wrong.at(W/2,H/2),255,0,0));
+            // Alpha-cutout/dissolve reactive coverage rejects even a
+            // geometrically correct old normal and valid motion vector.
+            const Image reactive=resolvePixel(
+                true,true,false,false,true,true,true,true);
+            if(reactive.w==W && reactive.h==H)
+                CHECK(near(reactive.at(W/2,H/2),255,0,0));
+            // If the renderer declared reactive geometry but omitted the
+            // coverage pass, never reuse previous temporal radiance.
+            const Image absent=resolvePixel(
+                true,true,false,false,true,false,false,true);
+            if(absent.w==W && absent.h==H)
+                CHECK(near(absent.at(W/2,H/2),255,0,0));
         }
         // Capture actual current-frame surface normal and its scene depth
         // through the second GPU compute stage. This historical normal is
@@ -734,7 +770,7 @@ void main() {
         if(filter.valid())d.destroyCompute(filter);
         for(auto tex:{raw,previous,normal,previousOpposite,
                       previousWrongDepth,motion,missingMotion,filtered,
-                      currentDepth,receiverDepth})
+                      calmReactive,activeReactive,currentDepth,receiverDepth})
             if(tex.valid())d.destroyTexture(tex);
         for(auto buf:{viewBuffer,dummy})if(buf.valid())d.destroyBuffer(buf);
     }

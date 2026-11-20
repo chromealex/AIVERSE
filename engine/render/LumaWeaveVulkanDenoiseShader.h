@@ -11,7 +11,7 @@ inline constexpr const char* kDenoiseCompute=R"GLSL(
 #version 450
 layout(local_size_x=64,local_size_y=1,local_size_z=1) in;
 // Fixed GI-compatible compute RHI ABI: four SSBOs, one storage image,
-// seven sampled textures and exactly 80 bytes of push constants.
+// eight sampled textures and exactly 80 bytes of push constants.
 layout(set=0,binding=0,std430) readonly buffer LightDummy {float lightData[];};
 layout(set=0,binding=1,std430) readonly buffer FilterData {
     mat4 inverseCurrentVP;    // original GL convention (-1..1 Z)
@@ -20,6 +20,7 @@ layout(set=0,binding=1,std430) readonly buffer FilterData {
     vec4 dimensions;          // low width/height, scene width/height
     vec4 settings;            // spatial depth, normal dot, history weight, clamp
     vec4 flags;               // historyValid, reprojDepthTolerance, motionBound, requireValidMotion
+    vec4 reactiveSettings;    // maskBound, rejectThreshold, requireMask, reserved
 } view;
 layout(set=0,binding=2,std430) readonly buffer TriangleDummy {float triangleData[];};
 layout(set=0,binding=3,std430) readonly buffer NodeDummy {float nodeData[];};
@@ -31,6 +32,7 @@ layout(set=0,binding=8) uniform sampler2D surfaceNormal;
 layout(set=0,binding=9) uniform sampler2D surfaceDepth;
 layout(set=0,binding=10) uniform sampler2D objectMotion;
 layout(set=0,binding=11) uniform sampler2D previousNormals;
+layout(set=0,binding=12) uniform sampler2D reactiveMask;
 layout(push_constant) uniform Params {
     uvec4 counts;uvec4 control;vec4 spare0;vec4 spare1;vec4 spare2;
 } params;
@@ -100,7 +102,19 @@ void main() {
     // identify genuinely moving objects, including skinning/deformation.
     // If per-pixel motion is unknown in a dynamic scene, keep the CURRENT
     // spatial result rather than borrowing history via camera-only motion.
-    if(view.flags.x>.5) {
+    // Main PRISMA/Renderer3D emits current-frame reactive coverage for
+    // dissolving/alpha-masked/translucent/LOD silhouettes. Reject temporal
+    // pixels on *actual reactive coverage*, never smear the old backdrop.
+    // If the host declares reactive geometry but failed to publish a mask,
+    // drop temporal reuse for this frame rather than guessing coverage.
+    bool reactiveEligible=view.reactiveSettings.z<.5 ||
+                          view.reactiveSettings.x>.5;
+    if(view.reactiveSettings.x>.5) {
+        float coverage=textureLod(reactiveMask,uv,0.0).r;
+        reactiveEligible=!isnan(coverage) && !isinf(coverage) &&
+                          coverage<=view.reactiveSettings.y;
+    }
+    if(view.flags.x>.5 && reactiveEligible) {
         vec2 oldUv=vec2(-1);
         float expectedDepth=-1.0;
         bool motionValid=false;

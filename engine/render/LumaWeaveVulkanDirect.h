@@ -63,9 +63,9 @@ public:
     struct DenoiseView {
         mat4 inverseCurrentVP{};
         mat4 previousVP{};
-        float4 eye{},dimensions{},settings{},flags{};
+        float4 eye{},dimensions{},settings{},flags{},reactiveSettings{};
     };
-    static_assert(sizeof(DenoiseView)==192);
+    static_assert(sizeof(DenoiseView)==208);
     struct DenoiseRequest {
         uint64_t viewKey=0,viewEpoch=0;
         mat4 currentVP{}; // engine GL-convention VP, before Vulkan Z remap
@@ -75,11 +75,15 @@ public:
         uint64_t motionFrameSerial=0;         // must equal current GPU frame
         uint64_t motionViewKey=0,motionViewEpoch=0;
         bool requireValidMotion=false;       // animated surfaces fail spatial-only
-
+        // Borrowed current-frame PRISMA RGBA8 reactive mask is copied into
+        // a per-frame GPU receiver slot by LumaWeaveVulkanPostProcess.
+        gfx::TextureHandle reactiveMask{};
+        uint64_t reactiveFrameSerial=0,reactiveViewKey=0,reactiveViewEpoch=0;
+        bool requireReactiveMask=false;      // alpha-cutout/translucent/LOD present
     };
     struct DenoiseStatus {
         bool requested=false,encoded=false,historyUsed=false;
-        bool motionBound=false,normalCaptured=false;
+        bool motionBound=false,normalCaptured=false,reactiveMaskBound=false;
         LumaVulkanHistoryReason reason=LumaVulkanHistoryReason::Disabled;
     };
     struct ScreenSlot {
@@ -124,7 +128,7 @@ public:
         screenShader_=dev.createCompute({nullptr,luma_vk::kScreenDirectCompute,
             "LumaWeave Vulkan screen PBR direct",5});
         denoiseShader_=dev.createCompute({nullptr,luma_vk::kDenoiseCompute,
-            "LumaWeave Vulkan spatial/temporal PBR direct",7});
+            "LumaWeave Vulkan spatial/temporal PBR direct",8});
         normalHistoryShader_=dev.createCompute({
             nullptr,luma_vk::kNormalHistoryCompute,
             "LumaWeave Vulkan current normal/depth history",3});
@@ -426,12 +430,9 @@ public:
         dev_->setComputeSampledTexture(2,inputs.materialDepth);
         dev_->setComputeSampledTexture(3,inputs.surface);
         dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
-        // Dummy bindings are sampled only when their flags are true. No
-        // fabricated zero velocity can be mistaken for a valid object vector.
-        dev_->setComputeSampledTexture(5,motionBound?
-            request.motionVectors:slot.raw);
-        dev_->setComputeSampledTexture(6,usePrevious?
-            screenSlots_[size_t(historySlot_)].normal:slot.raw);
+        // The screen shader declares EXACTLY FIVE sampled textures.
+        // Motion and history belong exclusively in encodeDenoise(), not
+        // this raw-light dispatch. Do not bind undefined denoise locals.
         Params params{};
         params.counts={sourceCount_,uint32_t(pixels),nodeCount_,samples};
         params.control={seed,width,triangleCount_,0};
@@ -603,6 +604,14 @@ private:
                         request.settings.reprojectionDepthTolerance,
                         motionBound?1.f:0.f,
                         request.requireValidMotion?1.f:0.f};
+        const bool reactiveBound=request.reactiveMask.valid() &&
+            request.reactiveFrameSerial==frame && request.viewKey!=0 &&
+            request.reactiveViewKey==request.viewKey &&
+            request.reactiveViewEpoch==request.viewEpoch;
+        uniforms.reactiveSettings={
+            reactiveBound?1.f:0.f,request.settings.reactiveThreshold,
+            request.requireReactiveMask?1.f:0.f,0.f
+        };
         // Vulkan dynamic-SSBO versioning keeps the earlier raw compute's
         // ScreenView unmodified, even when three frames overlap.
         if(!dev_->updateSharedBufferChecked(receiverBuffer_,&uniforms,
@@ -622,6 +631,15 @@ private:
         dev_->setComputeSampledTexture(2,inputs.sceneDepth);
         dev_->setComputeSampledTexture(3,inputs.surface);
         dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
+        // All eight optional descriptors MUST have valid handles even
+        // when a shader branch does not sample motion/reactive data.
+        // These dummies cannot be interpreted as valid source metadata.
+        dev_->setComputeSampledTexture(5,motionBound?
+            request.motionVectors:slot.raw);
+        dev_->setComputeSampledTexture(6,usePrevious?
+            screenSlots_[size_t(historySlot_)].normal:slot.raw);
+        dev_->setComputeSampledTexture(7,reactiveBound?
+            request.reactiveMask:slot.raw);
         Params params{};
         params.counts={0,width*height,0,0};
         params.control={0,width,0,0};
@@ -649,6 +667,7 @@ private:
         denoiseStatus_.encoded=true;
         denoiseStatus_.historyUsed=usePrevious;
         denoiseStatus_.motionBound=motionBound;
+        denoiseStatus_.reactiveMaskBound=reactiveBound;
         denoiseStatus_.normalCaptured=captured;
         if(!captured)invalidateHistory();
         return slot.filtered;
