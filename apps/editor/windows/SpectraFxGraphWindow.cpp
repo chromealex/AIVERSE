@@ -238,7 +238,8 @@ private:
         if(previewId_>=0 && !preview_.playing(previewHandle_))
             previewHandle_=preview_.play(previewId_,{0,0.5f,0});
         const float dpi=ImGui::GetIO().DisplayFramebufferScale.x;
-        previewViewport_.ensure(*device_,int(width*dpi),int(height*dpi));
+        previewViewport_.ensure(*device_,int(width*dpi),int(height*dpi),
+                                ed.viewportRetirement(),"SpectraFX Graph Preview");
         auto& renderer=ed.renderer();
         renderer.beginScene(previewCamera_,previewViewport_.w,previewViewport_.h);
         const uint32_t grid=render::rgba(85,90,100,255);

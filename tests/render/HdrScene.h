@@ -2,11 +2,13 @@
 #pragma once
 #include "engine/render/Prisma.h"
 #include "engine/render/PrismaScreenLighting.h"
-#include "engine/world/PhysisSkyBridge.h"
 #include "HdrShaders.h"
+#include "engine/world/PhysisSkyBridge.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <mutex>
 #include <fstream>
 
 namespace aiverse::test {
@@ -27,6 +29,21 @@ struct HdrScene {
     bool verify = false;
     std::unique_ptr<Model> probeBg, probeFg;
     bool captured = false, failed = false, temporalVerify = false;
+    bool prismaMultiViewVerify = false; // opt-in Stage 97 real-GPU camera lifetime probe
+    bool prismaStressVerify = false; // Stage 98 repeated camera churn + actual fence drain
+    bool prismaGhostVerify = false; // Stage 98 moving actor after camera cut, GPU pixel readback
+    struct GhostRedSample {
+        int width=0, count=0;
+        double sumX=0;
+        std::vector<int> columns;
+        bool ready=false;
+    };
+    std::mutex ghostSampleMutex_;
+    GhostRedSample ghostBefore_,ghostAfter_;
+    int ghostFrameWait_=0;
+    int prismaStressCycle = 0, prismaStressTicks = 0, prismaStressWait = 0;
+    uint64_t prismaStressSubmittedFence = 0;
+    uint64_t prismaStressMaxLiveBytes = 0;
     float temporalMinX=1e9f,temporalMaxX=-1e9f,temporalMinY=1e9f,temporalMaxY=-1e9f;
     std::string path;
     gfx::PassDesc output;
@@ -35,7 +52,33 @@ struct HdrScene {
         std::printf("GPU: %s; RGBA16F=%d\n", d.info().name.c_str(), d.supports(gfx::PixelFormat::RGBA16F));
         if (!renderer.init(d) || !post.init(d)) { failed = true; return; }
         temporalVerify=std::getenv("AIVERSE_TAA_VERIFY")!=nullptr;
+        prismaMultiViewVerify=std::getenv("AIVERSE_PRISMA_MULTIVIEW_VERIFY")!=nullptr;
+        prismaStressVerify=std::getenv("AIVERSE_PRISMA_STRESS_VERIFY")!=nullptr;
+        prismaGhostVerify=std::getenv("AIVERSE_PRISMA_GHOST_VERIFY")!=nullptr;
         advanced = temporalVerify || std::getenv("AIVERSE_SCREEN_LIGHTING") != nullptr;
+        const int prismaModes=int(prismaMultiViewVerify)+int(prismaStressVerify)+
+                              int(prismaGhostVerify);
+        if (prismaModes>1 || (prismaModes && (temporalVerify ||
+            std::getenv("AIVERSE_HDR_VERIFY") ||
+            std::getenv("AIVERSE_SCREEN_LIGHTING")))) {
+            std::fprintf(stderr, "PRISMA multiview: conflicting GPU fixture mode\n");
+            failed = true;
+            return;
+        }
+        if (prismaMultiViewVerify || prismaStressVerify || prismaGhostVerify) {
+            // A test must explicitly turn on canonical temporal; the legacy
+            // ScreenLighting TAA would test a different history owner.
+            const auto enabled=[](const char* key) {
+                const char* value=std::getenv(key);
+                return value && std::strcmp(value,"1")==0;
+            };
+            if (!enabled("AIVERSE_PRISMA_TEMPORAL") ||
+                !enabled("AIVERSE_PRISMA_JITTER")) {
+                std::fprintf(stderr, "PRISMA multiview: TEMPORAL and JITTER must be 1\n");
+                failed=true;
+                return;
+            }
+        }
         if (advanced && !screen.init(d,post)) { failed=true; return; }
         screen.setEnabled(advanced);renderer.setModelReflectionsEnabled(advanced);
         renderer.setShadowQuality(ShadowQuality::High);
@@ -68,6 +111,10 @@ struct HdrScene {
         spheres=modelFromParts("hdr material chart",parts); uploadModel(d,*spheres);
         post.configure(Json::parse(R"({"hdr":"auto","effects":[{"type":"bloom","threshold":0.9,"intensity":0.35},{"type":"fxaa"},{"type":"colorGrade","exposure":-1}]})"),Json());
         post.setQuality(Prisma::defaultQualityFor(d,false));
+        if (prismaMultiViewVerify || prismaStressVerify || prismaGhostVerify) {
+            post.setSettings(parsePrisma(Json::parse(R"({"hdr":"on","effects":[{"type":"temporalResolve","historyWeight":0.86,"jitterPixels":0.5,"minQuality":"high"}]})"),Json()));
+            post.setQuality(PrismaQuality::High);
+        }
         verify = std::getenv("AIVERSE_HDR_VERIFY") != nullptr;
         if (verify || temporalVerify) {
             if (!checkHdrShaders(d)) { failed=true; return; }
@@ -148,6 +195,9 @@ struct HdrScene {
     }
     void draw(gfx::Device& d, int w, int h) {
         if (failed) return;
+        if (prismaMultiViewVerify) { drawPrismaMultiView(d,w,h); return; }
+        if (prismaStressVerify) { drawPrismaStress(d,w,h); return; }
+        if (prismaGhostVerify) { drawPrismaGhostPixels(d,w,h); return; }
         if (temporalVerify) { drawTemporal(d,w,h); return; }
         if (verify) { drawProbe(d,w,h); return; }
         if(const char* fogCase=std::getenv("AIVERSE_LOCAL_FOG_TEST"); fogCase&&frame==3&&std::string(fogCase)=="move") {
@@ -189,6 +239,354 @@ struct HdrScene {
             std::fprintf(stderr,"renderer: %s; post: %s\n",renderer.modelError().c_str(),post.lastError().c_str()); failed=true;
         }
     }
+    // Stage 97: exercise real Renderer3D + canonical PRISMA GPU passes for two
+    // stable camera IDs, equal-sized shared cache, cut, resize, and GPU-fenced
+    // retirement. Checks describe encoded passes and CPU-visible RHI metadata;
+    // they are NOT a per-pixel moving-object/ghosting or fence-completion proof.
+    void drawPrismaMultiView(gfx::Device& d,int w,int h) {
+        constexpr uint64_t a=1001,b=2002;
+        const int step=frame;
+        // The offscreen GL runner owns its frames. On macOS Metal the
+        // Platform host owns beginFrame/endFrame for the callback.
+        if (ownsFrame) d.beginFrame(w,h);
+        auto fail=[this](const char* msg) {
+            std::fprintf(stderr,"PRISMA multiview FAIL step=%d: %s\n",frame,msg);
+            failed=true;
+        };
+        auto ownsHistory=[this](uint64_t id,int width,int height) {
+            const auto memory=post.memoryStats();
+            for(const auto& view:memory.views)
+                if(view.viewId==id)
+                    return view.width==width && view.height==height &&
+                        view.ownedTemporalTextures==2;
+            return false;
+        };
+        auto encoded=[this](uint64_t id,int width,int height,uint64_t sequence) {
+            const auto* report=post.effectReport(id);
+            if(!report || report->viewId!=id || report->sequence!=sequence ||
+               report->width!=width || report->height!=height ||
+               !report->sceneReady || !report->hdr)
+                return false;
+            for(const auto& effect:report->effects)
+                if(effect.type==PrismaType::TemporalResolve)
+                    return effect.requested && effect.pipelinePrepared &&
+                        effect.encoded;
+            return false;
+        };
+        const uint64_t epochA=post.objectMotionEpoch(a);
+        const uint64_t epochB=post.objectMotionEpoch(b);
+        if(step==3) {
+            // Both renderer deformation and PRISMA camera history see the cut.
+            post.resetMotionHistory(a);
+            renderer.resetObjectMotionHistory(a);
+            if(post.objectMotionEpoch(a)<=epochA ||
+               post.objectMotionEpoch(b)!=epochB)
+                fail("cut did not invalidate only camera A");
+        }
+        auto renderView=[&](uint64_t id,int width,int height,float x) {
+            if(failed)return;
+            post.setViewId(id);
+            const auto size=post.renderSizeForOutput(width,height);
+            if(size.first!=width || size.second!=height) {
+                fail("unexpected temporal render-size fallback");return;
+            }
+            auto cam=camera;
+            cam.yaw+=x;
+            auto renderCam=post.jitteredCamera(cam,size.first,size.second);
+            renderer.beginScene(renderCam,size.first,size.second);
+            renderer.drawMesh(cube,mat4::translate({x,0,0}),
+                              {0.7f,0.32f,0.16f,1},kDrawUnlit);
+            auto pass=output;
+            pass.clearColor[0]=pass.clearColor[1]=pass.clearColor[2]=0;
+            renderer.render(pass,&post);
+            renderer.resolvePrisma();
+            d.endPass(); // resolve leaves the presentation pass open
+            if(!post.stats().temporalResolved ||
+               !post.lastError().empty() || !renderer.modelError().empty()) {
+                std::fprintf(stderr,"PRISMA multiview render error: %s; model: %s\n",
+                             post.lastError().c_str(),renderer.modelError().c_str());
+                fail("real temporal GPU pass not encoded");
+            }
+        };
+        if(step<=4) {
+            renderView(a,640,480,0.f);
+            renderView(b,step>=4?512:640,step>=4?384:480,0.1f);
+            if(!failed && (!encoded(a,640,480,static_cast<uint64_t>(step+1)) ||
+                !encoded(b,step>=4?512:640,step>=4?384:480,
+                         static_cast<uint64_t>(step+1))))
+                fail("per-view temporal effect reports not isolated");
+            if(!failed && (!ownsHistory(a,640,480) ||
+                !ownsHistory(b,step>=4?512:640,step>=4?384:480)))
+                fail("private camera temporal history missing/incorrect dimensions");
+            const auto retire=post.retirementStats();
+            if(!failed && (retire.temporalViews!=2 || retire.activeSizes<(step>=4?2u:1u)))
+                fail("two camera histories or size caches not tracked");
+            if(step==3 && !failed && post.objectMotionEpoch(b)!=epochB)
+                fail("camera A cut changed B's object-motion epoch");
+            if(step==4 && !failed)
+                std::printf("PRISMA multiview: resize B 640x480 -> 512x384; "
+                            "fenced=%zu quarantined=%zu\n",
+                            retire.fencedTextures,retire.unfencedTextures);
+        } else if(step==5) {
+            renderView(a,640,480,0.f);
+            const size_t retired=post.retireUnregisteredViews({a});
+            const size_t sizes=post.retireUnreferencedSizeCaches();
+            const auto stats=post.retirementStats();
+            if(retired<1 || sizes<1 || stats.temporalViews!=1 ||
+               post.effectReport(b)!=nullptr || !ownsHistory(a,640,480))
+                fail("closing B affected A or failed to retire its unique size");
+            std::printf("PRISMA multiview: retire B=%zu sizes=%zu; "
+                        "fenced=%zu quarantined=%zu (not GPU-completed proof)\n",
+                        retired,sizes,stats.fencedTextures,stats.unfencedTextures);
+        } else if(step==6) {
+            post.retireUnregisteredViews({});
+            post.retireUnreferencedSizeCaches();
+            post.collectGpuRetirements(); // query real completed fence, nonblocking
+            const auto stats=post.retirementStats();
+            if(stats.temporalViews!=0 || stats.activeSizes!=0 ||
+               post.effectReport(a)!=nullptr || !post.memoryStats().views.empty())
+                fail("all cameras closed but active history/cache remained");
+            if(!failed) {
+                std::printf("PRISMA multiview: PASS cameras=2 cut=1 resize=1 "
+                            "lifecycle=2 fenced=%zu quarantined=%zu "
+                            "completedFence=%llu\n",
+                            stats.fencedTextures,stats.unfencedTextures,
+                            static_cast<unsigned long long>(stats.lastGpuCompletedFence));
+                captured=true;
+            }
+        } else {
+            fail("unexpected frame beyond test completion");
+        }
+        if (ownsFrame) d.endFrame();
+        ++frame;
+    }
+
+    // Stage 98: two independent 24-frame camera churn cycles, each followed
+    // by real backend GPU completion and ZERO pending resources. No CPU frame
+    // number is used as proof of GPU completion; this is still a metadata/
+    // allocation test, not a physical VRAM residency query.
+    void drawPrismaStress(gfx::Device& d,int w,int h) {
+        constexpr uint64_t a=31001, b=32002;
+        if(ownsFrame) d.beginFrame(w,h);
+        const auto fail=[this](const char* msg) {
+            std::fprintf(stderr,"PRISMA stress FAIL cycle=%d tick=%d: %s\n",
+                         prismaStressCycle,prismaStressTicks,msg);
+            failed=true;
+        };
+        if(prismaStressTicks<24 && !prismaStressSubmittedFence) {
+            auto drawView=[&](uint64_t id,int width,int height,float offset) {
+                post.setViewId(id);
+                const auto dims=post.renderSizeForOutput(width,height);
+                if(dims.first!=width || dims.second!=height) {
+                    fail("temporal render dimensions unavailable");return;
+                }
+                auto cam=camera;
+                cam.yaw+=offset;
+                renderer.beginScene(post.jitteredCamera(cam,width,height),width,height);
+                renderer.drawMesh(cube,mat4::translate({offset,0,0}),
+                                  {0.7f,0.24f,0.12f,1},kDrawUnlit);
+                gfx::PassDesc out=output;
+                out.clearColor[0]=out.clearColor[1]=out.clearColor[2]=0;
+                renderer.render(out,&post);
+                renderer.resolvePrisma();
+                d.endPass();
+                if(!post.stats().temporalResolved || !post.lastError().empty())
+                    fail("GPU temporal pass not encoded");
+            };
+            if(prismaStressTicks%5==0) {
+                post.resetMotionHistory(a);
+                renderer.resetObjectMotionHistory(a);
+            }
+            if(prismaStressTicks%7==0) {
+                post.resetMotionHistory(b);
+                renderer.resetObjectMotionHistory(b);
+            }
+            drawView(a,640,480,0.f);
+            constexpr int widths[4]={512,640,384,768};
+            constexpr int heights[4]={384,480,288,512};
+            const int choice=prismaStressTicks%4;
+            if(!failed) drawView(b,widths[choice],heights[choice],0.1f);
+            const auto retired=post.retireUnreferencedSizeCaches();
+            post.collectGpuRetirements();
+            renderer.collectCompletedObjectMotion(d.gpuCompletedFence());
+            const auto mem=post.memoryStats();
+            prismaStressMaxLiveBytes=std::max(prismaStressMaxLiveBytes,
+                                             mem.liveKnownBytes);
+            const auto active=post.retirementStats();
+            if(!failed && (active.temporalViews!=2 || active.activeSizes>3))
+                fail("unbounded active camera or shared size-cache count");
+            if(!failed && prismaStressTicks==23) {
+                const auto views=post.retireUnregisteredViews({});
+                renderer.retireUnregisteredObjectMotionViews({});
+                post.retireUnreferencedSizeCaches();
+                prismaStressSubmittedFence=d.gpuSubmissionFence();
+                if(!prismaStressSubmittedFence || views!=2)
+                    fail("no GPU submission fence or missing registered views");
+                std::printf("PRISMA stress: cycle=%d retirementFence=%llu "
+                            "maxKnownLive=%llu pending=%zu\n",prismaStressCycle,
+                            static_cast<unsigned long long>(prismaStressSubmittedFence),
+                            static_cast<unsigned long long>(prismaStressMaxLiveBytes),
+                            post.retirementStats().fencedTextures);
+            }
+            ++prismaStressTicks;
+        } else {
+            // Empty submissions allow the previous GPU work to complete. The
+            // backend token must advance through the LAST retired frame.
+            post.collectGpuRetirements();
+            renderer.collectCompletedObjectMotion(d.gpuCompletedFence());
+            const auto stats=post.retirementStats();
+            const auto motion=renderer.motionRetirementStats();
+            const auto memory=post.memoryStats();
+            const bool completed=prismaStressSubmittedFence!=0 &&
+                d.gpuCompletedFence()>=prismaStressSubmittedFence;
+            const bool drained=completed && stats.retiredSizes==0 &&
+                stats.fencedTextures==0 && stats.unfencedTextures==0 &&
+                stats.graphRetiredTextures==0 && stats.knownPendingBytes==0 &&
+                stats.activeSizes==0 && stats.temporalViews==0 &&
+                motion.fencedTextures==0 && motion.unfencedTextures==0 &&
+                motion.liveViews==0 &&
+                memory.views.empty() && memory.liveKnownBytes==0;
+            if(drained) {
+                std::printf("PRISMA stress: drained cycle=%d completedFence=%llu "
+                            "liveBytes=%llu pendingBytes=%llu\n",prismaStressCycle,
+                            static_cast<unsigned long long>(d.gpuCompletedFence()),
+                            static_cast<unsigned long long>(memory.liveKnownBytes),
+                            static_cast<unsigned long long>(stats.knownPendingBytes));
+                ++prismaStressCycle;
+                prismaStressTicks=0;
+                prismaStressWait=0;
+                prismaStressSubmittedFence=0;
+                prismaStressMaxLiveBytes=0;
+                if(prismaStressCycle==2) {
+                    std::printf("PRISMA stress: PASS cycles=2 gpuFenceDrained=2 "
+                                "liveKnownBytes=0 pendingKnownBytes=0\n");
+                    captured=true;
+                }
+            } else if(++prismaStressWait>120) {
+                std::fprintf(stderr,
+                    "PRISMA stress pending: completed=%llu needed=%llu "
+                    "fenced=%zu unfenced=%zu size=%zu motion=%zu "
+                    "knownPending=%llu live=%llu\n",
+                    static_cast<unsigned long long>(d.gpuCompletedFence()),
+                    static_cast<unsigned long long>(prismaStressSubmittedFence),
+                    stats.fencedTextures,stats.unfencedTextures,
+                    stats.retiredSizes,motion.fencedTextures,
+                    static_cast<unsigned long long>(stats.knownPendingBytes),
+                    static_cast<unsigned long long>(memory.liveKnownBytes));
+                fail("retired textures not reclaimed after confirmed GPU fence");
+            }
+        }
+        if(ownsFrame) d.endFrame();
+        ++frame;
+    }
+
+    // Stage 98: a visible unlit cube moves from one side of the camera to
+    // the other across an explicit camera cut. Read actual backend output
+    // pixels before and after the cut; residual red coverage in the old
+    // location must be bounded. This is a cut/ghost test, NOT certification
+    // for every motion-vector, transparency or disocclusion scenario.
+    void drawPrismaGhostPixels(gfx::Device& d,int w,int h) {
+        constexpr uint64_t cameraId=41001;
+        if(ownsFrame) d.beginFrame(w,h);
+        const int tick=frame;
+        if(tick<=5) {
+            if(tick==3) {
+                post.resetMotionHistory(cameraId);
+                renderer.resetObjectMotionHistory(cameraId);
+            }
+            post.setViewId(cameraId);
+            const auto dims=post.renderSizeForOutput(w,h);
+            if(dims.first!=w || dims.second!=h) {
+                std::fprintf(stderr,"PRISMA ghost FAIL: render dimensions unavailable\n");
+                failed=true;
+            } else {
+                auto cam=camera;
+                cam.yaw=0.f;cam.pitch=0.2f;cam.distance=12.f;
+                cam.target={0,0.5f,0};
+                renderer.beginScene(post.jitteredCamera(cam,w,h),w,h);
+                const float x=tick<3?-2.f:2.f;
+                renderer.drawMesh(cube,mat4::translate({x,0,0}),
+                                  {1.f,0.015f,0.01f,1.f},kDrawUnlit);
+                gfx::PassDesc out=output;
+                out.clearColor[0]=0.015f;
+                out.clearColor[1]=0.025f;
+                out.clearColor[2]=0.045f;
+                renderer.render(out,&post);
+                renderer.resolvePrisma();
+                if(!post.stats().temporalResolved || !post.lastError().empty()) {
+                    std::fprintf(stderr,"PRISMA ghost FAIL: temporal GPU pass missing: %s\n",
+                                 post.lastError().c_str());
+                    failed=true;
+                }
+                if(tick==2 || tick==5) {
+                    const bool before=tick==2;
+                    auto receive=[this,before](int cw,int ch,std::vector<uint8_t> pixels) {
+                        GhostRedSample sample;
+                        sample.width=cw;
+                        if(cw>0 && ch>0 &&
+                           pixels.size()==size_t(cw)*size_t(ch)*4) {
+                            sample.columns.assign(size_t(cw),0);
+                            for(int y=ch/4;y<3*ch/4;++y)
+                                for(int x=cw/8;x<7*cw/8;++x) {
+                                    const size_t i=(size_t(y)*size_t(cw)+size_t(x))*4;
+                                    const int red=pixels[i];
+                                    const int green=pixels[i+1];
+                                    const int blue=pixels[i+2];
+                                    if(red>95 && red>green+45 && red>blue+45) {
+                                        ++sample.count;
+                                        sample.sumX+=double(x);
+                                        ++sample.columns[size_t(x)];
+                                    }
+                                }
+                        }
+                        sample.ready=true;
+                        std::lock_guard<std::mutex> lock(ghostSampleMutex_);
+                        if(before) ghostBefore_=std::move(sample);
+                        else ghostAfter_=std::move(sample);
+                    };
+                    if(readOutput) readOutput(receive);
+                    else d.captureNextFrame(receive);
+                }
+                d.endPass();
+            }
+        } else {
+            // The CPU must not assume that an asynchronous Metal capture
+            // callback has completed immediately after endFrame.
+            GhostRedSample oldSample,newSample;
+            {
+                std::lock_guard<std::mutex> lock(ghostSampleMutex_);
+                if(ghostBefore_.ready && ghostAfter_.ready) {
+                    oldSample=ghostBefore_;newSample=ghostAfter_;
+                }
+            }
+            if(oldSample.ready && newSample.ready) {
+                const double oldX=oldSample.count>0 ?
+                    oldSample.sumX/double(oldSample.count) : 0.0;
+                const double newX=newSample.count>0 ?
+                    newSample.sumX/double(newSample.count) : 0.0;
+                int residual=0;
+                const int radius=oldSample.width/22;
+                for(int x=0;x<newSample.width;++x)
+                    if(std::abs(double(x)-oldX)<double(radius))
+                        residual+=newSample.columns[size_t(x)];
+                const bool ok=oldSample.width==newSample.width &&
+                    oldSample.count>30 && newSample.count>30 &&
+                    std::abs(newX-oldX)>double(oldSample.width)*0.05 &&
+                    residual<std::max(16,oldSample.count/10);
+                std::printf("PRISMA ghost: oldPixels=%d newPixels=%d "
+                            "centroidDelta=%.2f residualOld=%d %s\n",
+                            oldSample.count,newSample.count,
+                            std::abs(newX-oldX),residual,ok?"PASS":"FAIL");
+                captured=ok;failed=!ok;
+            } else if(++ghostFrameWait_>120) {
+                std::fprintf(stderr,"PRISMA ghost FAIL: GPU capture callbacks missing\n");
+                failed=true;
+            }
+        }
+        if(ownsFrame) d.endFrame();
+        ++frame;
+    }
+
     void drawTemporal(gfx::Device& d,int w,int h) {
         PrismaSettings settings;settings.hdr=HdrMode::On;post.setSettings(settings);post.setQuality(PrismaQuality::High);
         screen.setDiffuseBounceEnabled(false);renderer.lighting.tonemap=false;

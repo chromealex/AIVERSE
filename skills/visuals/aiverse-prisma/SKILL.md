@@ -5,7 +5,7 @@ description: PRISMA — universal AIVERSE post-processing, HDR, tone mapping, bl
 
 # PRISMA — AIVERSE universal image post-processing
 
-**Read first:** `AGENTS.md` (mandatory PRISMA vs SpectraFX ownership matrix), `docs/prisma.md`, `docs/postfx.md`, `docs/hdr.md`, the latest `docs/handoffs/prisma-stage-66.md`.
+**Read first:** `AGENTS.md` (mandatory PRISMA vs SpectraFX ownership matrix), `docs/prisma.md`, `docs/postfx.md`, `docs/hdr.md`, `docs/handoffs/prisma-stage-98-latest-main-reconciled-all-in-one-20261120.md` (latest-main integrated one-pass gate), `docs/handoffs/prisma-stage-98-unified-all-backend-acceptance-20261120.md` (current combined full validation plan), `docs/handoffs/prisma-stage-97-full-native-metal-gl33-acceptance-pass-20261120.md` (latest complete hardware acceptance), `docs/handoffs/prisma-stage-97-spectrafx-preview-viewport-owner-fix-20261120.md` (latest actual Editor compile blocker), `docs/handoffs/prisma-stage-97-gl33-multiview-hardware-pass-20261120.md` (latest confirmed GL33+Metal smoke), `docs/handoffs/prisma-stage-97-metal-multiview-hardware-pass-20261120.md` (latest user-run Metal GPU evidence), `docs/handoffs/prisma-stage-97-metal-device-scope-build-fix.md` (latest real Mac compiler fix), `docs/handoffs/prisma-stage-97-multiview-gpu-lifecycle.md` (GPU validation extension), `docs/handoffs/prisma-stage-96-main-acceptance-runner.md` (runner baseline), and `docs/handoffs/prisma-stage-74-metal-high-detail-validation.md` (older verified native Metal baseline).
 
 ## Choose the right owner
 
@@ -1350,4 +1350,188 @@ No merge to main/base without explicit user permission.
 
 Run `./run-tests.sh --quick` plus targeted HDR policy/GPU pixel tests once a native checkout is available; on macOS build `aiverse_hdr_policy`, `aiverse_hdr_scene`, `aiverse_hdr_gl`, editor/client and check the Metal path. Report actual commands and PASS/FAIL/NOT RUN, never infer success from source files or queued CI.
 
-After **each** bounded code stage, commit `docs/handoffs/prisma-stage-66.md` on the same branch: exact SHA, architecture and API, all changed paths, actual tests/results, limitations, and the next actionable step. Keep PRISMA handoffs separate from `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md` maintained by SpectraFX.
+After **each** bounded code stage, commit a NEW `docs/handoffs/prisma-stage-<number>-<topic>.md` handoff on the same branch with exact SHA, architecture/API, all changed paths, real executed tests/results, limitations and next step. Current latest is `docs/handoffs/prisma-stage-98-latest-main-reconciled-all-in-one-20261120.md`; do not overwrite an older handoff. Keep PRISMA handoffs separate from `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md` maintained by SpectraFX.
+
+## Stage 96 — integrated main native acceptance
+
+PR #67 already merged PRISMA, MotionWeave and the universal View into `main`.
+The old `feature/prisma-postfx` is an ancestor of `main`: never repeat
+that merge. To verify a current, exact checkout, run
+`bash tools/prisma/acceptance.sh [build-dir]`. It records HEAD and dirty
+worktree metadata, configures/builds Release once, runs one full CTest, and
+on macOS independently checks real Metal 54+ HDR GPU probes, a native Metal
+TAA stationary sample and GL33 HDR probes. Separate normal-scene runs
+capture P6 PPM images; `AIVERSE_HDR_VERIFY` alone does not write one.
+The script does not establish Vulkan/GLES/WebGL GPU runtime parity, multi-view
+GPU-fence stress, or hardware image-quality superiority. Read the Stage 96
+handoff for exact environment flags, evidence and remaining work.
+The latest combined `main` has NOT yet been certified by this new runner;
+previous Apple M3 Ultra evidence (115/115 CTest, Metal/GL HDR probes) was
+for older source revisions. Never transfer old PASS to a new SHA.
+
+## Stage 97 — real backend multi-view integration regression
+
+`tests/render/HdrScene.h` now exposes an **opt-in** actual-backend
+`AIVERSE_PRISMA_MULTIVIEW_VERIFY=1` mode. It requires
+`AIVERSE_PRISMA_TEMPORAL=1` and `AIVERSE_PRISMA_JITTER=1` and MUST NOT
+be combined with the older HDR probe or ScreenLighting TAA modes.
+The fixture uses canonical `Prisma::resolve` and real Renderer3D with
+two stable camera IDs, confirms separate two-texture temporal histories,
+motion epoch isolation after an A-only cut, B-only 640×480→512×384 resize,
+and view/size-cache retirement behind backend GPU fences. These tests
+assert **GPU passes encoded and RHI metadata**; they do not read moving
+object pixels or claim pending GPU textures physically freed.
+
+The Stage96 `tools/prisma/acceptance.sh` now runs the separate
+`metal_multiview` and `gl33_multiview` gates after the single full
+CTest; `AIVERSE_PRISMA_CTEST_TIMEOUT` defaults to 1800 seconds per test
+to avoid rejecting legitimate large 900+ second cases. Observe
+the exact device marker, `PRISMA multiview: PASS cameras=2` line,
+and process exit code on native hardware. **This Stage97 code has not
+yet been C++-compiled or run on the user's Mac**; do not mark it green.
+Read `docs/handoffs/prisma-stage-97-multiview-gpu-lifecycle.md` before
+any further edits, plus the Stage96 baseline.
+
+## Stage97 follow-up — MetalDevice scope and frame ownership
+
+Real Apple Mac Studio Stage97 Release build FAILED in
+`engine/gfx/metal/GfxMetal.mm`: `completedFrameSerial()` was missing
+its closing `}`, causing a cascade of abstract-class and missing-member
+errors for `MetalDevice`. The feature-branch fix inserts exactly
+one brace before `gpuSubmissionFence()`, with GPU fence semantics unchanged.
+Additionally, Stage97's `HdrScene::drawPrismaMultiView` uses
+`beginFrame/endFrame` only in the offscreen GL runner where
+`ownsFrame=true`; the real Metal platform runner owns those calls.
+These changes are SOURCE-VERIFIED ONLY, NOT NATIVELY COMPILED OR TESTED
+by the assistant. Refer to
+`docs/handoffs/prisma-stage-97-metal-device-scope-build-fix.md`.
+Do not reinterpret the user's preceding failed build as a PASS; rebuild
+the focused two HDR targets and then run native Metal/GL multiview.
+
+## Stage97 Apple M3 Ultra — user-confirmed real Metal multiview
+
+The user executed the Stage97 `aiverse_hdr_scene` real Metal fixture
+and posted `GPU: Metal Apple M3 Ultra; RGBA16F=1`,
+`PRISMA multiview: PASS cameras=2 cut=1 resize=1 lifecycle=2`,
+`pipelineFailures=0` for 22 pipelines, and reported `fenced=6`,
+`quarantined=0`, `completedFence=6`. The marked multiview smoke
+thus passed on that Mac Studio checkout. This does NOT prove all six
+pending retirements were destroyed, nor does it certify no VRAM leaks,
+per-pixel ghosting/quality, GL33, Vulkan/GLES, the full CTest suite,
+or exact tested Git SHA (not included in user log). The very next
+stage is focused GL33 multiview on that same Mac worktree, capture
+explicit process exit and Git SHA, followed by consolidated acceptance.
+See `docs/handoffs/prisma-stage-97-metal-multiview-hardware-pass-20261120.md` for the exact commands and evidence.
+
+## Stage97 GL33 hardware confirmation and acceptance gate
+
+The user supplied exact GL33 tested Git HEAD
+`cab4143f42f84d48ec04166b5247e0b2f995bd11`, device
+`GPU: GL33 Apple M3 Ultra / 4.1 Metal - 89.4; RGBA16F=1`,
+`PRISMA multiview: PASS cameras=2 cut=1 resize=1 lifecycle=2`, and
+explicit `GL33 exit=0`. This confirms the **Stage97 GL33 multiview
+fixture PASS at the named source HEAD**, on top of the previously
+user-reported native Metal fixture PASS marker. GL33's driver string
+mentions 'Metal' but is NOT native Metal rendering. GL33 reported
+`fenced=26 quarantined=0 completedFence=4`; never interpret the 26
+pending retirement handles as already physically released.
+The new complete Stage96/97 acceptance runner is still **NOT RUN**.
+Next: on the same Mac worktree run `bash -n tools/prisma/acceptance.sh`
+and then `bash tools/prisma/acceptance.sh build/prisma-stage97`, capture
+exact exit and summary. See
+`docs/handoffs/prisma-stage-97-gl33-multiview-hardware-pass-20261120.md`.
+
+## Stage97 consolidated acceptance — SpectraFX Editor previews compile fix
+
+Actual Mac Studio Stage97 one-shot Release acceptance reached 97%, then
+**FAILED** building `aiverse_editor`. Two old SpectraFX window calls
+omitted the now-mandatory `ViewportGpuRetirement&` fourth argument in
+`Viewport::ensure()`. Fixed only
+`apps/editor/windows/SpectraFxGpuAssetsWindow.cpp` and
+`apps/editor/windows/SpectraFxGraphWindow.cpp` to pass
+`ed.viewportRetirement()` and descriptive debug names. This uses the
+existing Editor-owned GPU-fence-aware viewport retirement queue, which
+survives window destruction. Never introduce a temporary/window-owned
+queue or bypass GPU fences. Previous `SpectraGraphWindow.cpp` unused
+warnings are not the compiler failure. The earlier actual full acceptance
+was exit=1 and skipped CTest; **post-fix native compilation is NOT YET
+CONFIRMED**. On the latest clean Mac worktree first rebuild just
+`aiverse_editor` and then rerun the complete acceptance runner. Read
+`docs/handoffs/prisma-stage-97-spectrafx-preview-viewport-owner-fix-20261120.md`
+for exact errors, commits, tests, constraints and next step.
+
+## Stage97 final native acceptance — Apple M3 Ultra full PASS
+
+The user supplied the final output of
+`bash tools/prisma/acceptance.sh build/prisma-stage97` on exact tested
+HEAD `9da0dcdbbbb5179f890a2ad740e7cb27eeb1ab8d` (Darwin).
+`configure`, `build`, `registration`, `ctest_full`, Metal HDR
+54 probes, Metal P6 capture, Metal stationary TAA, Metal multiview,
+GL33 HDR 54 probes, GL33 P6 capture and GL33 multiview all report PASS.
+The script says **Failed=0, Skipped=0, exit=0**; 263 CTest cases
+registered and the full CTest invocation passed. Do NOT invent an
+individually verified CTest PASS count from an unseen raw ctest log.
+The previous two SpectraFX Editor `Viewport::ensure` signature failures
+were eliminated in this successfully built source. P6 capture existence
+and format are confirmed by runner, NOT qualitative visual comparison.
+Vulkan/GLES/WebGL runtime, actual full GPU-fence resource draining,
+long churn/VRAM plateau and moving-object ghosting pixel parity remain
+UNVERIFIED. Full details and concrete next Stage98 action:
+`docs/handoffs/prisma-stage-97-full-native-metal-gl33-acceptance-pass-20261120.md`.
+
+## Stage98 — all supported PRISMA checks in ONE owner command
+
+User explicitly wants no incremental compile/test requests. After all Stage98
+features are authored, use only the unified
+`bash tools/prisma/acceptance.sh build/prisma-stage97` invocation.
+It still configures/builds every native target and runs one full CTest,
+then performs existing real Metal/GL33 HDR GPU probes, separate screenshots,
+Metal stationary TAA, dual-view cut/resize tests PLUS new `metal_stress`,
+`gl33_stress` (two 24-frame camera churn cycles, genuine backend-completed
+GPU fence and empty known retirement queue) and `metal_ghost`,
+`gl33_ghost` (real output pixel samples from a red actor after camera cut).
+These new GPU code paths are **NOT NATIVE-COMPILED OR TESTED** by this assistant.
+If multiple failures appear, collect ALL from one run, do not request
+a different build after each source edit unless final repairs are complete.
+Do not equate zero known pending bytes with physical VRAM use.
+Vulkan is not built by default on macOS and GLES/WebGL need different
+devices/runners; report those as backend SKIP, not PASS.
+Exact source handoff: `docs/handoffs/prisma-stage-98-unified-all-backend-acceptance-20261120.md`.
+
+## Stage98 latest-main merge before ONE final build
+
+Before the new expensive native run, the PRISMA Stage98 feature branch was
+merged non-forced, with true two-parent merge
+`097bdf846f8531c743f70b29afd100358ad5367c`, incorporating main
+`5aba82c35db0a8d998fb2b951914db11f3cfae0d`. The merged
+`tests/render/HdrScene.h` preserves new Physical Sky/PHYSIS, Local Fog
+and the old Stage97 + new Stage98 multiview/stress/moving-pixel modes.
+The canonical `Prisma.{h,cpp}` and CMake now include latest-main sky/fog
+work, not older feature copies. GitHub main comparison immediately after
+source merge: ahead=35, behind=0, no removed paths. This merged source
+is **not yet native-compiled/CTest/GPU-tested**; Stage97's earlier PASS
+on `9da0dcdbbbb5179f890a2ad740e7cb27eeb1ab8d` applies to its
+older code only. Do NOT request individual backend/test runs.
+After ensuring an idle clean worktree, execute the single
+`bash tools/prisma/acceptance.sh build/prisma-stage97` script for the
+entire updated engine and all available Mac GPU fixtures. Keep
+Vulkan/GLES/WebGL unsupported-platform statuses separate. Exact
+handoff: `docs/handoffs/prisma-stage-98-latest-main-reconciled-all-in-one-20261120.md`.
+
+## Stage98 one-shot sky/fog GPU matrix from current MAIN
+
+The single `tools/prisma/acceptance.sh` native command also runs all 11
+`AIVERSE_PHYSICAL_SKY_TEST` and all 11 `AIVERSE_LOCAL_FOG_TEST`
+variants on **both native Metal and GL33** (44 GPU subprocesses):
+`clouds|clear|medium|ortho|night|no-rays|sunset|inside|above|physis-dry|physis-storm`
+and
+`off|sphere|reveal|move|obb|obb-reveal|behind|inside|medium|ortho|combined`.
+Every case is a real framebuffer fixture with its own backend marker,
+subprocess exit code, fresh nonempty P6 capture and diagnostic log.
+Fail a missing capture; never reuse an old PPM or call visual quality
+certified solely because a P6 exists. This is in addition to the
+Stage97 and Stage98 temporal/fence/ghost tests and one full CTest.
+Mac Vulkan/GLES/WebGL remain explicitly unavailable, not passed.
+New Stage98 matrix code is NOT yet compiled/verified on Mac.
+Latest handoff is
+`docs/handoffs/prisma-stage-98-latest-main-reconciled-all-in-one-20261120.md`.
