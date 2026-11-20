@@ -2,6 +2,7 @@
 // buffer versioning inside a frame, textures, shadow compare, GLSL translation. Skips without a driver.
 #include "engine/gfx/vulkan/Vulkan.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
+#include "engine/render/LumaWeaveVulkanDirectShader.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -263,6 +264,94 @@ int main() {
             frame(d, [&] { PassDesc p; p.colorTarget = hdr; d.beginPass(p); d.setPipeline(pColor); d.setVertexBuffer(vbFull); uniforms(1, 1, 1, 1); d.draw(6); d.endPass(); });
             d.destroyTexture(hdr);
         }
+    }
+    // Real Vulkan RHI compute->fragment regression (lavapipe or physical GPU).
+    // A direct red point light must illuminate the receiver; the SAME ray
+    // behind a single y=0.5 BVH triangle must be fully shadowed.
+    // This checks actual descriptor layout, buffer transfer visibility,
+    // storage-image layout transitions, and GPU ray-pixel output.
+    if(d.supportsCompute()) {
+        struct LightPacket {
+            float pos[4],col[4],dir[4],settings[4];
+            uint32_t identity[4];
+        };
+        struct ReceiverPacket {float position[4],normal[4];};
+        struct TriPacket {float a[4],b[4],c[4],color[4];};
+        struct NodePacket {float lo[4],hi[4];uint32_t meta[4];};
+        struct alignas(16) Params {
+            uint32_t counts[4],control[4];
+            float reserved0[4],reserved1[4],reserved2[4];
+        };
+        static_assert(sizeof(LightPacket)==80 && sizeof(ReceiverPacket)==32);
+        static_assert(sizeof(TriPacket)==64 && sizeof(NodePacket)==48 &&
+                      sizeof(Params)==80);
+        const LightPacket l{{0,1,0,3},{1,0,0,100},{0,-1,0,-2},
+                            {1,1,1,0},{0xabc,0,0,0}};
+        const ReceiverPacket r{{0,0,0,1},{0,1,0,0}};
+        // Horizontal occluder spanning the central receiver-to-light ray.
+        const TriPacket triangle{{-2,.5f,-2,0},{2,.5f,-2,0},
+                                 {0,.5f,2,0},{1,1,1,0}};
+        const NodePacket node{{-2,.5f,-2,0},{2,.5f,2,0},{0,0,0,1}};
+        auto storage=[&](const void* bytes,size_t count) {
+            BufferDesc desc;desc.type=BufferType::Storage;
+            desc.usage=Usage::Immutable;desc.data=bytes;desc.size=count;
+            return d.createBuffer(desc);
+        };
+        const auto lightBuffer=storage(&l,sizeof(l));
+        const auto receiverBuffer=storage(&r,sizeof(r));
+        const auto triBuffer=storage(&triangle,sizeof(triangle));
+        const auto nodeBuffer=storage(&node,sizeof(node));
+        TextureDesc outDesc;
+        outDesc.width=1;outDesc.height=1;
+        outDesc.format=PixelFormat::RGBA16F;
+        outDesc.filter=Filter::Nearest;outDesc.storage=true;
+        const auto out=d.createTexture(outDesc);
+        const auto kernel=d.createCompute({
+            nullptr,aiverse::render::luma_vk::kReceiverDirectCompute,
+            "LumaWeave Vulkan direct pixel/occlusion fixture"});
+        CHECK(lightBuffer.valid() && receiverBuffer.valid() &&
+              triBuffer.valid() && nodeBuffer.valid() && out.valid() &&
+              kernel.valid());
+        if(out.valid() && kernel.valid() && lightBuffer.valid() &&
+           receiverBuffer.valid() && triBuffer.valid() && nodeBuffer.valid()) {
+            auto directFrame=[&](uint32_t nodes)->Image {
+                return frame(d,[&]{
+                    Params params{};
+                    params.counts[0]=1;params.counts[1]=1;
+                    params.counts[2]=nodes;params.counts[3]=1;
+                    params.control[0]=27;params.control[1]=1;
+                    params.control[2]=1;
+                    CHECK(d.beginCompute(kernel));
+                    d.setComputeBuffer(0,lightBuffer);
+                    d.setComputeBuffer(1,receiverBuffer);
+                    d.setComputeBuffer(2,triBuffer);
+                    d.setComputeBuffer(3,nodeBuffer);
+                    d.setComputeTexture(0,out);
+                    d.setComputeUniforms(&params,sizeof(params));
+                    d.dispatch(1,1);
+                    CHECK(d.computeDispatchSucceeded());
+                    d.endCompute();
+                    d.beginPass(screen);
+                    d.setPipeline(pTex);
+                    d.setTexture(0,out);
+                    d.setVertexBuffer(vbFull);
+                    d.draw(6);
+                    d.endPass();
+                });
+            };
+            const Image lit=directFrame(0);
+            CHECK(lit.w==W && lit.h==H);
+            if(lit.w==W && lit.h==H)
+                CHECK(near(lit.at(W/2,H/2),255,0,0));
+            const Image blocked=directFrame(1);
+            CHECK(blocked.w==W && blocked.h==H);
+            if(blocked.w==W && blocked.h==H)
+                CHECK(near(blocked.at(W/2,H/2),0,0,0));
+        }
+        if(kernel.valid())d.destroyCompute(kernel);
+        if(out.valid())d.destroyTexture(out);
+        for(auto b:{lightBuffer,receiverBuffer,triBuffer,nodeBuffer})
+            if(b.valid())d.destroyBuffer(b);
     }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);

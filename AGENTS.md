@@ -1,6 +1,22 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 12 — Vulkan compute RHI (2026-11-20)
+
+Work on `feature/gi-lumaweave-vulkan-compute-rhi-stage12-20261120`. Read
+`docs/agent-handoffs/gi-lumaweave-stage12-vulkan-compute-rhi-2026-11-20.md`.
+Vulkan compute now has a source-level 4-storage-buffer / 1 RGBA16F
+storage image / 80-byte push constant RHI port adapted onto the
+newer Vulkan renderer; a red-light / occluding-wall real-device test
+has been authored but **NOT EXECUTED**. It is **NOT yet integrated**
+with native LumaWeave frame ownership and must not be default enabled.
+Preserve all VkResources/VkDevice staging, fence, MDI and texture changes.
+Hardware validation of compute-to-pixel descriptor layout, staging
+visibility, layout barriers, GPU occlusion and per-frame lifetime is
+mandatory. GLES3/WebGL2 remains legacy raster + CPU L1 GI fallback.
+Port GI BVH Stage62 validator before using arbitrary authored geometry.
+Keep each code stage's separate handoff, actual test state and next step.
+
 ## GI + LumaWeave Stage 11 — Vulkan direct compute shader ABI (2026-11-20)
 
 Read `docs/agent-handoffs/gi-lumaweave-stage11-vulkan-direct-compute-shader-2026-11-20.md`.
