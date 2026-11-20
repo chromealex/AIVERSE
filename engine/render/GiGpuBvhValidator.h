@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace aiverse::render {
@@ -54,9 +55,14 @@ inline GiGpuBvhValidation giValidateGpuBvh(const GiGpuBvh& bvh) {
                 return axis==0?v.x:axis==1?v.y:v.z;
             };
             const float a=get(parentLo),b=get(parentHi);
-            const float scale=std::max(1.f,std::max(std::abs(a),std::abs(b)));
-            const float tolerance=1e-5f*scale;
-            if(get(childLo)<a-tolerance || get(childHi)>b+tolerance)
+            // The old 1e-5 * ABSOLUTE world position tolerance grows to
+            // thousands of metres in a large world and can admit escaped
+            // triangles, causing false BVH ray pruning and light leaks.
+            // Parent/child boxes share the same float32 ABI; allow only one
+            // representable float step of rounding at each endpoint.
+            const float lo=std::nextafter(a,-std::numeric_limits<float>::infinity());
+            const float hi=std::nextafter(b, std::numeric_limits<float>::infinity());
+            if(get(childLo)<lo || get(childHi)>hi)
                 return false;
         }
         return true;

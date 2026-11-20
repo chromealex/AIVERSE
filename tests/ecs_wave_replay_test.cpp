@@ -2,7 +2,7 @@
 // c++ -std=c++20 -O2 -pthread -I. tests/ecs_wave_replay_test.cpp -o /tmp/aiverse-ecs-replay
 // /tmp/aiverse-ecs-replay
 #include "engine/experiments/EcsGuardedWorld.h"
-#include <cassert>
+#include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -84,9 +84,9 @@ int main() {
     const auto originalChecksum=fingerprint(original);
     auto snapshot=original;
     const uint64_t sequential=replay(snapshot,0);
-    assert(fingerprint(original)==originalChecksum);
-    assert(sequential==replay(original,3));
-    assert(sequential==replay(original,7));
-    assert(sequential==replay(snapshot,3));
+    AIVERSE_TEST_CHECK(fingerprint(original)==originalChecksum);
+    AIVERSE_TEST_CHECK(sequential==replay(original,3));
+    AIVERSE_TEST_CHECK(sequential==replay(original,7));
+    AIVERSE_TEST_CHECK(sequential==replay(snapshot,3));
     std::cout<<"PASS deterministic world snapshot replay across 0/3/7 workers\n";
 }

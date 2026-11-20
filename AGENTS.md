@@ -1702,3 +1702,19 @@ Never suppress the warnings or assume a CI PASS: the fixes are committed
 on the isolated GI branch but the new build/CTest has NOT yet completed.
 No production ECS behavior changed. Preserve parallel ECS agent changes
 when integrating with current main.
+
+## GI Stages 62–63 — isolated hardening and real Release CI blocker (2026-11-20)
+
+Feature branch: `feature/gi-bvh-precision-stage62-20261120` (DRAFT PR #57).
+Read `docs/agent-handoffs/gi-stage62-large-world-bvh-containment-2026-11-20.md`
+and `docs/agent-handoffs/gi-stage63-linux-release-ecs-wave-replay-2026-11-20.md`.
+Stage62 changed the shared Metal/Vulkan GPU BVH upload validator to allow
+only one float32 ULP of AABB rounding, not 1e-5 times absolute world position:
+the prior tolerance could silently accept large-world light-leaking geometry.
+Stage63 investigated **real** Linux ARM64 Release CI failure
+run 44695330522 / job 136150631963, GCC `-O3 -DNDEBUG -Werror`:
+`tests/ecs_wave_replay_test.cpp` had Debug-only asserts, producing unused
+variables. Four checks now use `AIVERSE_TEST_CHECK` in all builds.
+These are source commits with handoffs; **fixed-head compilation and GPU tests
+have NOT RUN**. Do not confuse the old CI failure with a current test PASS,
+merge blindly into `main`, or change ECS runtime production ownership.

@@ -68,6 +68,26 @@ int main() {
     corrupt.triangles[0].albedo.x=-1;
     AIVERSE_TEST_CHECK(!giValidateGpuBvh(corrupt).valid);
 
+    // A large-world float32 coordinate must NOT enlarge the allowed BVH
+    // escape proportionally to the absolute world origin. The old
+    // 1e-5 * max(abs(parent.lo), abs(parent.hi)) margin accepted this
+    // triangle 112 world units beyond its leaf, despite the shader
+    // pruning against the much narrower advertised AABB.
+    GiGpuBvh distant;
+    distant.triangles.push_back({
+        {100000128.f,0.f,0.f,0.f},
+        {100000128.f,1.f,0.f,0.f},
+        {100000128.f,0.f,1.f,0.f},
+        {.4f,.3f,.2f,0.f}});
+    distant.nodes.push_back({
+        {100000000.f,0.f,0.f,0.f},
+        {100000016.f,1.f,1.f,0.f},
+        {0,0,0,1}});
+    AIVERSE_TEST_CHECK(!giValidateGpuBvh(distant).valid);
+    // Exactly matching the actual triangle bounds remains valid.
+    distant.nodes[0].hi.x=100000128.f;
+    AIVERSE_TEST_CHECK(giValidateGpuBvh(distant).valid);
+
     // A chain 65 levels deep would overflow the shared Metal/Vulkan shader
     // BVH traversal stack of 64 entries; reject it before GPU upload.
     GiGpuBvh deep;
