@@ -5,6 +5,7 @@
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 #include "engine/render/LumaWeaveVulkanScreenShader.h"
 #include "engine/render/LumaWeaveVulkanDenoiseShader.h"
+#include "engine/render/LumaWeaveVulkanNormalHistoryShader.h"
 #include "engine/render/LumaWeaveVulkanDirect.h"
 
 #include <array>
@@ -548,6 +549,10 @@ void main() {
         const uint16_t redDepth[4]={0x3c00,0,0,0x3800};  // red 1, depth .5
         const uint16_t greenDepth[4]={0,0x3c00,0,0x3800};
         const uint16_t normalZ[4]={0,0,0x3c00,0x3800};
+        const uint16_t invertedNormal[4]={0,0,0xbc00,0x3800};
+        const uint16_t staleNormalDepth[4]={0,0,0x3c00,0x3400};
+        const uint16_t validVelocity[4]={0,0,0x3c00,0}; // RG=0, B=1
+        const uint16_t invalidVelocity[4]={0,0,0,0};
         TextureDesc tx;
         tx.width=tx.height=1;tx.format=PixelFormat::RGBA16F;
         tx.filter=Filter::Nearest;
@@ -557,6 +562,14 @@ void main() {
         const auto previous=d.createTexture(tx);
         tx.data=normalZ;
         const auto normal=d.createTexture(tx);
+        tx.data=invertedNormal;
+        const auto previousOpposite=d.createTexture(tx);
+        tx.data=staleNormalDepth;
+        const auto previousWrongDepth=d.createTexture(tx);
+        tx.data=validVelocity;
+        const auto motion=d.createTexture(tx);
+        tx.data=invalidVelocity;
+        const auto missingMotion=d.createTexture(tx);
         tx.data=nullptr;tx.storage=true;
         const auto filtered=d.createTexture(tx);
         TextureDesc zd;
@@ -588,16 +601,25 @@ void main() {
         const auto dummy=d.createBuffer(data);
         ComputeDesc compute;
         compute.glsl=aiverse::render::luma_vk::kDenoiseCompute;
-        compute.sampledTextureSlots=5;
+        compute.sampledTextureSlots=7;
         const auto filter=d.createCompute(compute);
         CHECK(filter.valid() && raw.valid() && previous.valid() &&
-              normal.valid() && filtered.valid() &&
+              normal.valid() && previousOpposite.valid() &&
+              previousWrongDepth.valid() && motion.valid() &&
+              missingMotion.valid() && filtered.valid() &&
               currentDepth.valid() && receiverDepth.valid());
         if(filter.valid() && raw.valid() && previous.valid() &&
-           normal.valid() && filtered.valid() && currentDepth.valid() &&
-           receiverDepth.valid() && viewBuffer.valid() && dummy.valid()) {
-            auto resolvePixel=[&](bool historyEnabled) -> Image {
+           normal.valid() && previousOpposite.valid() &&
+           previousWrongDepth.valid() && motion.valid() &&
+           missingMotion.valid() && filtered.valid() &&
+           currentDepth.valid() && receiverDepth.valid() &&
+           viewBuffer.valid() && dummy.valid()) {
+            auto resolvePixel=[&](bool historyEnabled,bool velocityValid,
+                                  bool oppositeNormal,bool wrongDepth,
+                                  bool requireVelocity) -> Image {
                 view.flags[0]=historyEnabled?1.0f:0.0f;
+                view.flags[2]=1.0f; // a genuine motion texture is bound
+                view.flags[3]=requireVelocity?1.0f:0.0f;
                 d.updateBuffer(viewBuffer,&view,sizeof(view));
                 return frame(d,[&] {
                     for(auto target:{currentDepth,receiverDepth}) {
@@ -624,6 +646,11 @@ void main() {
                     d.setComputeSampledTexture(2,currentDepth);
                     d.setComputeSampledTexture(3,normal);
                     d.setComputeSampledTexture(4,receiverDepth);
+                    d.setComputeSampledTexture(5,velocityValid?motion:
+                                              missingMotion);
+                    d.setComputeSampledTexture(6,oppositeNormal?
+                        previousOpposite:wrongDepth?
+                        previousWrongDepth:normal);
                     d.setComputeUniforms(pc.data(),sizeof(pc));
                     d.dispatch(1);
                     CHECK(d.computeDispatchSucceeded());
@@ -636,11 +663,11 @@ void main() {
                     d.endPass();
                 });
             };
-            const Image spatial=resolvePixel(false);
+            const Image spatial=resolvePixel(false,false,false,false,true);
             CHECK(spatial.w==W && spatial.h==H);
             if(spatial.w==W && spatial.h==H)
                 CHECK(near(spatial.at(W/2,H/2),255,0,0));
-            const Image temporal=resolvePixel(true);
+            const Image temporal=resolvePixel(true,true,false,false,true);
             CHECK(temporal.w==W && temporal.h==H);
             if(temporal.w==W && temporal.h==H) {
                 // Green history is accepted only with a matching depth and
@@ -648,9 +675,66 @@ void main() {
                 const auto* pixel=temporal.at(W/2,H/2);
                 CHECK(pixel[0]<250 && pixel[1]>20 && pixel[2]<5);
             }
+            const Image missing=resolvePixel(true,false,false,false,true);
+            if(missing.w==W && missing.h==H)
+                CHECK(near(missing.at(W/2,H/2),255,0,0));
+            const Image rotated=resolvePixel(true,true,true,false,true);
+            if(rotated.w==W && rotated.h==H)
+                CHECK(near(rotated.at(W/2,H/2),255,0,0));
+            const Image wrong=resolvePixel(true,true,false,true,true);
+            if(wrong.w==W && wrong.h==H)
+                CHECK(near(wrong.at(W/2,H/2),255,0,0));
         }
+        // Capture actual current-frame surface normal and its scene depth
+        // through the second GPU compute stage. This historical normal is
+        // owned by the same frame slot as the filtered direct image.
+        TextureDesc snapshotDesc=tx;
+        snapshotDesc.data=nullptr;snapshotDesc.storage=true;
+        const auto capturedNormal=d.createTexture(snapshotDesc);
+        ComputeDesc normalDesc;
+        normalDesc.glsl=aiverse::render::luma_vk::kNormalHistoryCompute;
+        normalDesc.sampledTextureSlots=3;
+        const auto normalKernel=d.createCompute(normalDesc);
+        CHECK(normalKernel.valid() && capturedNormal.valid());
+        if(normalKernel.valid() && capturedNormal.valid() &&
+           normal.valid() && currentDepth.valid() && receiverDepth.valid() &&
+           dummy.valid()) {
+            const Image pixels=frame(d,[&] {
+                for(auto target:{currentDepth,receiverDepth}) {
+                    PassDesc pass;pass.depthTarget=target;
+                    pass.clearColorEnabled=false;
+                    d.beginPass(pass);
+                    d.setPipeline(pCaster);d.setVertexBuffer(vbFull);
+                    uniforms(1,1,1,1);d.draw(6);d.endPass();
+                }
+                std::array<uint32_t,20> pc{};
+                pc[1]=1;pc[5]=1;
+                CHECK(d.beginCompute(normalKernel));
+                for(int i=0;i<4;++i)d.setComputeBuffer(i,dummy);
+                d.setComputeTexture(0,capturedNormal);
+                d.setComputeSampledTexture(0,currentDepth);
+                d.setComputeSampledTexture(1,normal);
+                d.setComputeSampledTexture(2,receiverDepth);
+                d.setComputeUniforms(pc.data(),sizeof(pc));
+                d.dispatch(1);
+                CHECK(d.computeDispatchSucceeded());
+                d.endCompute();
+                d.beginPass(screen);
+                d.setPipeline(pTex);
+                d.setTexture(0,capturedNormal);
+                d.setVertexBuffer(vbFull);d.draw(6);
+                d.endPass();
+            });
+            CHECK(pixels.w==W && pixels.h==H);
+            if(pixels.w==W && pixels.h==H)
+                CHECK(near(pixels.at(W/2,H/2),0,0,255));
+        }
+        if(normalKernel.valid())d.destroyCompute(normalKernel);
+        if(capturedNormal.valid())d.destroyTexture(capturedNormal);
         if(filter.valid())d.destroyCompute(filter);
-        for(auto tex:{raw,previous,normal,filtered,currentDepth,receiverDepth})
+        for(auto tex:{raw,previous,normal,previousOpposite,
+                      previousWrongDepth,motion,missingMotion,filtered,
+                      currentDepth,receiverDepth})
             if(tex.valid())d.destroyTexture(tex);
         for(auto buf:{viewBuffer,dummy})if(buf.valid())d.destroyBuffer(buf);
     }

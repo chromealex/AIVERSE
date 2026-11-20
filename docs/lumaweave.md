@@ -203,3 +203,73 @@ for fully arbitrary skeletal motion. The full-resolution receiver
 memory footprint is significant; real VRAM and GPU performance must be
 measured during consolidated platform acceptance. No automatic enablement
 or merge into `main` is authorized by this experimental stage.
+
+## Stage 19 — object motion vectors + previous normals for Vulkan temporal GI/direct separation
+
+Isolated source branch: `feature/gi-lumaweave-vulkan-motion-stage19-20261120`. Read
+`docs/agent-handoffs/gi-lumaweave-stage19-vulkan-motion-normal-history-2026-11-20.md`.
+This is LumaWeave DIRECT temporal filtering; bounced GI and baked/sun
+lighting retain separate ownership.
+
+**What changed in source:** the Vulkan denoiser now supports seven sampled
+textures, including a real object-motion field and a separate previous-frame
+signed world-normal + depth capture. Motion uses the same `MotionTextureInput`
+metadata contract and per-pixel encoding as the MAIN branch's PRISMA
+Renderer3D object motion pipeline: RG = normalized CURRENT-minus-PREVIOUS UV
+displacement, B > 0.5 only where object motion is valid. Previous
+filtered direct radiance/depth and previous normal/depth MUST come from
+the SAME actually completed GPU history slot. The denoiser uses
+`oldUv = currentUv - motion.RG` for valid moving objects, validates
+old normal and depth against the current receiver and rejects mismatches.
+For static camera-only motion it retains the Stage17 camera reprojection.
+
+For a native host that has already rendered a real per-view RGBA16F motion
+texture (for example, via the MAIN PRISMA renderer after conflict-aware
+integration), opt in:
+
+```cpp
+view.enableVulkanDirect = true;
+view.vulkanReceiverCoverageConfirmed = true;
+view.vulkanHistoryKey = cameraAndWorldKey;  // nonzero unique stable identity
+view.vulkanHistoryEpoch = cameraCutEpoch;   // increase on cuts/teleports
+view.vulkanDynamicGeometryVisible = visibleSkinnedOrMovingMeshes;
+view.vulkanObjectMotion = MotionTextureInput::declared(
+    currentFrameMotion, view.width, view.height,
+    gfx::PixelFormat::RGBA16F);
+view.vulkanMotionFrameSerial = device.frameSerial();
+view.vulkanMotionViewKey = view.vulkanHistoryKey;
+view.vulkanMotionViewEpoch = view.vulkanHistoryEpoch;
+```
+
+The borrowed image must be produced for the EXACT current GPU frame and
+viewport and kept alive until that frame's completed Vulkan fence. The
+post-process does not create or own arbitrary motion vectors. The isolated
+Stage19 feature branch **does not yet include the MAIN renderer's automatic
+rigid/skinned motion producer**; it exposes an integration contract for
+genuine images from an existing native producer. It never invents motion
+from a character transform or camera matrix. Set
+`vulkanDynamicGeometryVisible=true` for visible animated surfaces: a
+pixel lacking B-valid object motion then uses CURRENT spatial lighting
+ONLY, not potentially ghosted camera-only temporal history.
+
+`LumaNativeViewResult.vulkanMotionInputBound` and
+`vulkanNormalHistoryCaptured` report whether per-view motion was
+accepted and whether that current filtered frame captured its GPU normal
+history. When a Vulkan GPU offers fewer than seven compute sampled-image
+descriptors, the denoise kernel may be unavailable, but ordinary raw
+Vulkan Direct and GLES raster + CPU GI fallback are unaffected.
+
+Source tests were authored for motion frame/view/epoch/format mismatch,
+the GLSL→SPIR-V seven-sampler denoiser + normal snapshot sources,
+FakeDevice motion-lifetime and multi-frame normal history, and an actual
+Vulkan GPU executable for valid/invalid motion, opposing previous
+normal, mismatched old depth and normal-history pixels.
+
+**Verification: NOT RUN.** No native compilation, CTest, Vulkan/SPIR-V
+hardware, GLES, Metal, WebGL2 or FPS/memory result has been observed
+for this Stage19 branch. The next step is a conflict-aware integration
+of the already available MAIN PRISMA rigid/skinned/deformed motion producer
+into the LumaWeave native frame route, then a real moving character
+ghosting capture and the user's consolidated Debug/Release multi-backend
+acceptance after feature freeze. Do not merge or enable by default before
+hardware/renderer validation.

@@ -97,6 +97,7 @@ static void checkOwnerRing() {
         AIVERSE_TEST_CHECK(submitted.encoded &&
                            submitted.frameSerial==device.frame);
         AIVERSE_TEST_CHECK(owner.denoiseStatus().encoded);
+        AIVERSE_TEST_CHECK(owner.denoiseStatus().normalCaptured);
         AIVERSE_TEST_CHECK(!owner.denoiseStatus().historyUsed);
         out[size_t(i)]=owner.encodedOutput(device.frame);
         AIVERSE_TEST_CHECK(out[size_t(i)].valid());
@@ -127,6 +128,9 @@ static void checkOwnerRing() {
     device.frame=44;device.beginFrame(64,64);
     const auto fourth=owner.dispatchScreen(input,view,8,8,1,4,&history);
     AIVERSE_TEST_CHECK(fourth.encoded && owner.denoiseStatus().historyUsed);
+    // The previous frame's NORMAL/DEPTH history travels with the same
+    // fenced RGB history slot, not an overwritten current-view normal.
+    AIVERSE_TEST_CHECK(owner.denoiseStatus().normalCaptured);
     AIVERSE_TEST_CHECK(owner.screenFramesInFlight()==3);
     device.endFrame();
 

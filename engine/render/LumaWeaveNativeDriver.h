@@ -56,6 +56,16 @@ struct LumaNativeViewInput {
     // a NONZERO unique camera+world key. Bump the epoch on teleport/cut.
     uint64_t vulkanHistoryKey=0,vulkanHistoryEpoch=0;
     LumaVulkanDenoiseSettings vulkanDenoise{};
+    // Optional real current-frame object motion produced by PRISMA's
+    // Renderer3D bridge or another native motion-vector producer.
+    // RGB16F: RG=current-minus-previous UV, B>0.5 is valid. Metadata,
+    // frame serial and stable view identity MUST match this scene.
+    MotionTextureInput vulkanObjectMotion{};
+    uint64_t vulkanMotionFrameSerial=0;
+    uint64_t vulkanMotionViewKey=0,vulkanMotionViewEpoch=0;
+    // When skinned, deformed or moving rigid objects are visible, request
+    // motion per pixel; missing velocity forbids temporal (spatial still OK).
+    bool vulkanDynamicGeometryVisible=false;
 };
 
 enum class LumaIndirectRoute : uint8_t {
@@ -82,6 +92,7 @@ struct LumaNativeViewResult {
     bool vulkanFrameComposited=false,vulkanPreviousFrameCompleted=false;
     bool vulkanMaterialMissing=false,vulkanSurfaceMissing=false;
     bool vulkanDenoiseEncoded=false,vulkanTemporalHistoryUsed=false;
+    bool vulkanMotionInputBound=false,vulkanNormalHistoryCaptured=false;
     LumaVulkanHistoryReason vulkanHistoryReason=LumaVulkanHistoryReason::Disabled;
     LumaWeaveVulkanDirect::Submission vulkanSubmission{};
 };
@@ -210,6 +221,11 @@ public:
                 vulkanPost_.setDenoiseSettings(input.vulkanDenoise);
                 vulkanPost_.setHistoryIdentity(input.vulkanHistoryKey,
                                                input.vulkanHistoryEpoch);
+                vulkanPost_.setObjectMotionVectors(
+                    input.vulkanObjectMotion,
+                    input.vulkanMotionFrameSerial,
+                    input.vulkanMotionViewKey,input.vulkanMotionViewEpoch,
+                    input.vulkanDynamicGeometryVisible);
                 vulkanPost_.setEnabled(true);
                 vulkanChosen=true;
                 result.sources.route=LumaDirectRoute::VulkanGpu;
@@ -318,6 +334,8 @@ public:
             result.vulkanFrameComposited=vk.composited;
             result.vulkanDenoiseEncoded=vk.denoiseEncoded;
             result.vulkanTemporalHistoryUsed=vk.temporalHistoryUsed;
+            result.vulkanMotionInputBound=vk.motionInputBound;
+            result.vulkanNormalHistoryCaptured=vk.previousNormalCaptured;
             result.vulkanHistoryReason=vk.historyReason;
             result.vulkanMaterialMissing=!vk.materialAvailable;
             result.vulkanSurfaceMissing=!vk.surfaceAvailable;

@@ -1006,6 +1006,15 @@ if(AIVERSE_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_multiframe
         COMMAND aiverse_lumaweave_vulkan_multiframe_test)
+
+    # Strict PRISMA motion input bridge: view/frame/epoch/format validation,
+    # no GPU/device required. Complements the Vulkan motion pixel fixture.
+    add_executable(aiverse_lumaweave_vulkan_motion_policy_test
+        tests/render/lumaweave_vulkan_motion_policy.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_motion_policy_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_motion_policy
+        COMMAND aiverse_lumaweave_vulkan_motion_policy_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

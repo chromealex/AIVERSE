@@ -183,7 +183,7 @@ struct ComputeDesc {
     const char* label=nullptr;
     // Optional Vulkan compute sampled images at descriptor bindings 5...
     // Zero keeps the existing four-storage-buffer/one-image GI ABI intact.
-    int sampledTextureSlots=0;
+    int sampledTextureSlots=0; // Vulkan: 0..7; bindings 5..11, gated by device limits
 };
 
 struct VertexAttr {
@@ -300,7 +300,7 @@ public:
     virtual void setComputeBuffer(int,BufferHandle) {}
     virtual void setComputeTexture(int,TextureHandle) {}
     // Separate sampled input from the write-only storage-image output.
-    // Slots 0..4 map to Vulkan bindings 5..9; unsupported backends ignore.
+    // Slots 0..6 map to Vulkan bindings 5..11; unsupported backends ignore.
     virtual void setComputeSampledTexture(int,TextureHandle) {}
     virtual void setComputeUniforms(const void*,size_t) {}
     // 64 threads per X group; dispatch provides total logical threads. Bounds-check in shader.

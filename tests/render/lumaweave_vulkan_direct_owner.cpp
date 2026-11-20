@@ -162,7 +162,9 @@ int main() {
     auto filtered=direct.dispatchScreen(surfaces,view,8,8,1,3,&history);
     AIVERSE_TEST_CHECK(filtered.encoded && filtered.frameSerial==13);
     AIVERSE_TEST_CHECK(direct.denoiseStatus().encoded);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().normalCaptured);
     AIVERSE_TEST_CHECK(!direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(!direct.denoiseStatus().motionBound);
     AIVERSE_TEST_CHECK(!direct.historyValid());
     AIVERSE_TEST_CHECK(!direct.shutdown()); // three output images are in flight
     device.endFrame();
@@ -173,11 +175,17 @@ int main() {
     // Identical world+view and unchanged source/BVH after a REAL fence:
     // admit a reprojected history sample; no new light map is invented.
     device.current=14;
+    history.motionVectors=inputs[0]; // FakeDevice's current borrowed RGBA16F
+    history.motionFrameSerial=14;
+    history.motionViewKey=77;history.motionViewEpoch=3;
+    history.requireValidMotion=true;
     device.beginFrame(64,64);
     filtered=direct.dispatchScreen(surfaces,view,8,8,1,4,&history);
     AIVERSE_TEST_CHECK(filtered.encoded);
     AIVERSE_TEST_CHECK(direct.denoiseStatus().encoded);
     AIVERSE_TEST_CHECK(direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().motionBound);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().normalCaptured);
     AIVERSE_TEST_CHECK(direct.denoiseStatus().reason==
                        LumaVulkanHistoryReason::Accepted);
     device.endFrame();
@@ -186,12 +194,15 @@ int main() {
 
     // A camera teleport / cut cannot inherit a bright previous viewport.
     history.eye.x+=5.0f;
+    history.motionFrameSerial=14; // stale source frame is rejected
     device.current=15;
     device.beginFrame(64,64);
     filtered=direct.dispatchScreen(surfaces,view,8,8,1,5,&history);
     AIVERSE_TEST_CHECK(filtered.encoded &&
                        direct.denoiseStatus().encoded);
     AIVERSE_TEST_CHECK(!direct.denoiseStatus().historyUsed);
+    AIVERSE_TEST_CHECK(!direct.denoiseStatus().motionBound);
+    AIVERSE_TEST_CHECK(direct.denoiseStatus().normalCaptured);
     AIVERSE_TEST_CHECK(direct.denoiseStatus().reason==
                        LumaVulkanHistoryReason::CameraCut);
     device.endFrame();

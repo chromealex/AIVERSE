@@ -1,6 +1,41 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 19 — real moving-object UV + prior normal history (2026-11-20)
+
+Branch: `feature/gi-lumaweave-vulkan-motion-stage19-20261120`. Mandatory handoff:
+`docs/agent-handoffs/gi-lumaweave-stage19-vulkan-motion-normal-history-2026-11-20.md`.
+Stage19 provides a **strict borrowed REAL object motion bridge** matching
+PRISMA's MAIN Renderer3D `MotionTextureInput` contract; RG contains
+CURRENT-minus-PREVIOUS normalized UV velocity, B>.5 marks valid object
+pixels, and an explicit RGBA16F width/height, device frame serial,
+view/world identity and cut epoch MUST all match this exact viewport.
+Never make up skinned velocity from only a camera matrix. Host retains
+borrowed motion until Vulkan frame fence; renderer cannot silently reuse
+an old texture ID on another frame/view/world. `vulkanDynamicGeometryVisible`
+makes missing per-pixel motion fail back to CURRENT spatial Direct only,
+not old history. Motion pass generation for rigid/skinned/instanced meshes
+already exists on MAIN's PRISMA renderer; this isolated branch imports only
+its metadata ABI. Integrate the actual PRISMA producer by a non-destructive
+merge/adaptation, not by overwriting newer renderer/animation/batching code.
+
+A third RGBA16F per Vulkan screen output slot holds the ACTUAL prior-frame
+world normal + scene depth. It is captured via a separate Vulkan compute
+after the bilateral/temporal filter; only a filter with successfully
+captured normal history can promote RGB+depth to reusable history AFTER a
+REAL completed GPU frame fence. Stage19's denoiser uses seven sampled
+Vulkan bindings 5..11: RAW direct, previous filtered RGB/depth, scene
+depth, current surface normal, surface depth, real object velocity,
+previous-frame normal/depth. Invalid velocity, depth, old normal,
+camera cut, view/world/source/BVH or receiver coverage must not ghost or
+borrow another surface. Keep source/normal history co-owned/fenced by
+the same Stage18 slot, protected from every in-flight GPU reader.
+GLES/Metal/sun/baked/bounced GI remain unchanged and Vulkan Direct is
+still opt-in. Source tests exist but NATIVE CMAKE/CTEST, GLSL/SPIR-V,
+Vulkan pixels, Metal/GLES validation and GPU timings are **NOT RUN**.
+Do not claim parity/production readiness or merge into main until
+conflict-aware integration and the final consolidated on-device acceptance.
+
 ## GI + LumaWeave Stage 18 — fence-safe Vulkan multi-frame Direct (2026-11-20)
 
 Active experimental branch: `feature/gi-lumaweave-vulkan-multiframe-stage18-20261120`. Read

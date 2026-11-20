@@ -4,6 +4,7 @@
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 #include "engine/render/LumaWeaveVulkanScreenShader.h"
 #include "engine/render/LumaWeaveVulkanDenoiseShader.h"
+#include "engine/render/LumaWeaveVulkanNormalHistoryShader.h"
 #include "engine/render/LumaWeaveGpuPacket.h"
 #include "engine/render/GiGpuBvh.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
@@ -61,14 +62,19 @@ int main() {
     AIVERSE_TEST_CHECK(compiled);
     AIVERSE_TEST_CHECK(binary.size()>=8 && binary.front()==0x07230203u);
 
+    // Stage19 extends the denoiser to seven sampled textures at bindings
+    // 5..11: current real motion and prior normal/depth history are never
+    // substituted by the current frame's normal when history is valid.
     // Stage17 uses the same GPU descriptor ABI and creates one additional
     // bounded 3x3 spatial / history-reprojected direct-light resolve.
     const std::string denoise=aiverse::render::luma_vk::kDenoiseCompute;
     for(const char* token:{"binding=0","binding=1","binding=2",
                            "binding=3","binding=4","binding=5",
                            "binding=6","binding=7","binding=8",
-                           "binding=9","previousVP","inverseCurrentVP",
-                           "history valid","filteredOutput","surfaceDepth",
+                           "binding=9","binding=10","binding=11",
+                           "previousVP","inverseCurrentVP","motionValid",
+                           "objectMotion","previousNormals",
+                           "filteredOutput","surfaceDepth",
                            "previousHistory"}) {
         AIVERSE_TEST_CHECK(denoise.find(token)!=std::string::npos);
     }
@@ -79,6 +85,23 @@ int main() {
         "Luma Vulkan temporal/spatial GLSL->SPIR-V failure: %s\n",
         error.c_str());
     AIVERSE_TEST_CHECK(filterCompiled);
+    AIVERSE_TEST_CHECK(binary.size()>=8 &&
+                       binary.front()==0x07230203u);
+
+    const std::string normalHistory=luma_vk::kNormalHistoryCompute;
+    for(const char* token:{"binding=0","binding=1","binding=2",
+                           "binding=3","binding=4","binding=5",
+                           "binding=6","binding=7","surfaceNormals",
+                           "surfaceDepth","outputNormals"}) {
+        AIVERSE_TEST_CHECK(normalHistory.find(token)!=std::string::npos);
+    }
+    binary.clear();error.clear();
+    const bool captured=aiverse::gfx::vk::compileComputeProgram(
+        normalHistory,binary,error);
+    if(!captured)std::fprintf(stderr,
+        "Luma Vulkan normal/depth history GLSL->SPIR-V failure: %s\n",
+        error.c_str());
+    AIVERSE_TEST_CHECK(captured);
     AIVERSE_TEST_CHECK(binary.size()>=8 &&
                        binary.front()==0x07230203u);
 

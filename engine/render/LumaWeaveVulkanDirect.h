@@ -9,6 +9,7 @@
 #include "LumaWeaveVulkanDirectShader.h"
 #include "LumaWeaveVulkanScreenShader.h"
 #include "LumaWeaveVulkanDenoiseShader.h"
+#include "LumaWeaveVulkanNormalHistoryShader.h"
 #include "LumaWeaveVulkanHistoryPolicy.h"
 #include "GiGpuBvhValidator.h"
 #include "../gfx/Gfx.h"
@@ -70,13 +71,19 @@ public:
         mat4 currentVP{}; // engine GL-convention VP, before Vulkan Z remap
         float3 eye{};
         LumaVulkanDenoiseSettings settings{};
+        gfx::TextureHandle motionVectors{}; // real current-frame PRISMA RGBA16F
+        uint64_t motionFrameSerial=0;         // must equal current GPU frame
+        uint64_t motionViewKey=0,motionViewEpoch=0;
+        bool requireValidMotion=false;       // animated surfaces fail spatial-only
+
     };
     struct DenoiseStatus {
         bool requested=false,encoded=false,historyUsed=false;
+        bool motionBound=false,normalCaptured=false;
         LumaVulkanHistoryReason reason=LumaVulkanHistoryReason::Disabled;
     };
     struct ScreenSlot {
-        gfx::TextureHandle raw{},filtered{};
+        gfx::TextureHandle raw{},filtered{},normal{};
         uint32_t width=0,height=0,receivers=0;
         uint64_t submitted=0,readerUntil=0,historyGeneration=0;
         uint64_t submissionOrdinal=0;
@@ -117,7 +124,10 @@ public:
         screenShader_=dev.createCompute({nullptr,luma_vk::kScreenDirectCompute,
             "LumaWeave Vulkan screen PBR direct",5});
         denoiseShader_=dev.createCompute({nullptr,luma_vk::kDenoiseCompute,
-            "LumaWeave Vulkan spatial/temporal PBR direct",5});
+            "LumaWeave Vulkan spatial/temporal PBR direct",7});
+        normalHistoryShader_=dev.createCompute({
+            nullptr,luma_vk::kNormalHistoryCompute,
+            "LumaWeave Vulkan current normal/depth history",3});
         receiverBuffer_=allocate(kMaxReceivers*sizeof(LumaGpuReceiver),nullptr,
                                  gfx::Usage::Dynamic);
         lightBuffer_=allocate(sizeof(LumaGpuLight),nullptr);
@@ -141,14 +151,16 @@ public:
                 if(handle.valid())dev_->destroyBuffer(handle);
             if(output_.valid())dev_->destroyTexture(output_);
             for(const auto& slot:screenSlots_)
-                for(auto t:{slot.raw,slot.filtered})
+                for(auto t:{slot.raw,slot.filtered,slot.normal})
                     if(t.valid())dev_->destroyTexture(t);
+            if(normalHistoryShader_.valid())dev_->destroyCompute(normalHistoryShader_);
             if(denoiseShader_.valid())dev_->destroyCompute(denoiseShader_);
             if(screenShader_.valid())dev_->destroyCompute(screenShader_);
             if(shader_.valid())dev_->destroyCompute(shader_);
         }
         dev_=nullptr;shader_={};output_={};
-        screenShader_={};denoiseShader_={};activeOutput_={};
+        screenShader_={};denoiseShader_={};normalHistoryShader_={};
+        activeOutput_={};
         screenSlots_={};
         screenWidth_=screenHeight_=0;
         pendingFrame_=0;historySlot_=-1;activeScreenSlot_=-1;
@@ -165,7 +177,10 @@ public:
 
     bool ready() const {return dev_ && shader_.valid() && output_.valid();}
     bool screenAvailable() const {return ready() && screenShader_.valid();}
-    bool denoiseAvailable() const {return screenAvailable() && denoiseShader_.valid();}
+    bool denoiseAvailable() const {
+        return screenAvailable() && denoiseShader_.valid() &&
+               normalHistoryShader_.valid();
+    }
     const DenoiseStatus& denoiseStatus() const{return denoiseStatus_;}
     bool historyValid() const{return historyValid_;}
     void invalidateHistory() {
@@ -411,6 +426,12 @@ public:
         dev_->setComputeSampledTexture(2,inputs.materialDepth);
         dev_->setComputeSampledTexture(3,inputs.surface);
         dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
+        // Dummy bindings are sampled only when their flags are true. No
+        // fabricated zero velocity can be mistaken for a valid object vector.
+        dev_->setComputeSampledTexture(5,motionBound?
+            request.motionVectors:slot.raw);
+        dev_->setComputeSampledTexture(6,usePrevious?
+            screenSlots_[size_t(historySlot_)].normal:slot.raw);
         Params params{};
         params.counts={sourceCount_,uint32_t(pixels),nodeCount_,samples};
         params.control={seed,width,triangleCount_,0};
@@ -505,7 +526,7 @@ private:
         auto& slot=screenSlots_[size_t(index)];
         if(slot.submitted || slot.readerUntil>dev_->completedFrameSerial() ||
            index==historySlot_)return false;
-        if(slot.raw.valid() && slot.filtered.valid() &&
+        if(slot.raw.valid() && slot.filtered.valid() && slot.normal.valid() &&
            slot.width==width && slot.height==height)return true;
         gfx::TextureDesc desc;
         desc.width=int(width);desc.height=int(height);
@@ -516,11 +537,17 @@ private:
         if(!raw.valid())return false;
         auto filtered=dev_->createTexture(desc);
         if(!filtered.valid()){dev_->destroyTexture(raw);return false;}
+        auto normal=dev_->createTexture(desc);
+        if(!normal.valid()){
+            dev_->destroyTexture(filtered);dev_->destroyTexture(raw);
+            return false;
+        }
         // Both allocations succeeded; the old slot is fence-free and has
         // no outstanding history reader, so replacement is safe.
         if(slot.raw.valid())dev_->destroyTexture(slot.raw);
         if(slot.filtered.valid())dev_->destroyTexture(slot.filtered);
-        slot.raw=raw;slot.filtered=filtered;
+        if(slot.normal.valid())dev_->destroyTexture(slot.normal);
+        slot.raw=raw;slot.filtered=filtered;slot.normal=normal;
         slot.width=width;slot.height=height;
         slot.hasFilter=false;slot.stamp={};
         return true;
@@ -551,7 +578,8 @@ private:
             historyValid_ && historySlot_>=0);
         const bool usePrevious=reason==LumaVulkanHistoryReason::Accepted &&
             historySlot_>=0 &&
-            screenSlots_[size_t(historySlot_)].filtered.valid();
+            screenSlots_[size_t(historySlot_)].filtered.valid() &&
+            screenSlots_[size_t(historySlot_)].normal.valid();
         denoiseStatus_.reason=reason;
         auto& slot=screenSlots_[size_t(slotIndex)];
 
@@ -566,8 +594,15 @@ private:
                            request.settings.normalAgreement,
                            request.settings.historyWeight,
                            request.settings.historyClamp};
+        const bool motionBound=request.motionVectors.valid() &&
+            request.motionFrameSerial==frame &&
+            request.viewKey!=0 &&
+            request.motionViewKey==request.viewKey &&
+            request.motionViewEpoch==request.viewEpoch;
         uniforms.flags={usePrevious?1.f:0.f,
-                        request.settings.reprojectionDepthTolerance,0,0};
+                        request.settings.reprojectionDepthTolerance,
+                        motionBound?1.f:0.f,
+                        request.requireValidMotion?1.f:0.f};
         // Vulkan dynamic-SSBO versioning keeps the earlier raw compute's
         // ScreenView unmodified, even when three frames overlap.
         if(!dev_->updateSharedBufferChecked(receiverBuffer_,&uniforms,
@@ -603,12 +638,48 @@ private:
             auto& prior=screenSlots_[size_t(historySlot_)];
             prior.readerUntil=std::max(prior.readerUntil,frame);
         }
-        slot.hasFilter=true;
+        // The filtered HDR image is displayable immediately; temporal reuse
+        // in later frames is only allowed if its independent normal+depth
+        // snapshot was ALSO captured in this exact GPU submission.
+        const bool captured=captureNormalHistory(inputs,frame,slotIndex,
+                                                 width,height);
+        slot.hasFilter=captured;
         slot.stamp=current;
         slot.historyGeneration=historyGeneration_;
         denoiseStatus_.encoded=true;
         denoiseStatus_.historyUsed=usePrevious;
+        denoiseStatus_.motionBound=motionBound;
+        denoiseStatus_.normalCaptured=captured;
+        if(!captured)invalidateHistory();
         return slot.filtered;
+    }
+
+    // Snapshot current REAL world normals and scene depth to the same
+    // output slot as this frame's filtered light. A filter without normal
+    // snapshot can still be presented, but can never become temporal history.
+    bool captureNormalHistory(const ScreenInputs& input,uint64_t frame,
+                              int slotIndex,uint32_t width,uint32_t height) {
+        if(!normalHistoryShader_.valid() || !dev_ ||
+           slotIndex<0 || slotIndex>=int(screenSlots_.size()))return false;
+        auto& slot=screenSlots_[size_t(slotIndex)];
+        if(!slot.normal.valid() || dev_->frameSerial()!=frame || !frame ||
+           !dev_->beginCompute(normalHistoryShader_))return false;
+        dev_->setComputeBuffer(0,lightBuffer_);
+        dev_->setComputeBuffer(1,receiverBuffer_);
+        dev_->setComputeBuffer(2,triangleBuffer_);
+        dev_->setComputeBuffer(3,nodeBuffer_);
+        dev_->setComputeTexture(0,slot.normal);
+        dev_->setComputeSampledTexture(0,input.sceneDepth);
+        dev_->setComputeSampledTexture(1,input.surface);
+        dev_->setComputeSampledTexture(2,input.surfaceDepth);
+        Params params{};
+        params.counts={0,width*height,0,0};
+        params.control={0,width,0,0};
+        dev_->setComputeUniforms(&params,sizeof(params));
+        dev_->dispatch(width*height,1);
+        const bool accepted=dev_->computeDispatchSucceeded();
+        dev_->endCompute();
+        return accepted;
     }
 
     static uint64_t geometryFingerprint(const GiGpuBvh& bvh) {
@@ -643,7 +714,8 @@ private:
     }
 
     gfx::Device* dev_=nullptr;
-    gfx::ComputeHandle shader_{},screenShader_{},denoiseShader_{};
+    gfx::ComputeHandle shader_{},screenShader_{},denoiseShader_{},
+                       normalHistoryShader_{};
     gfx::TextureHandle output_{},activeOutput_{};
     std::array<ScreenSlot,kScreenSlotCount> screenSlots_{};
     uint32_t screenWidth_=0,screenHeight_=0;

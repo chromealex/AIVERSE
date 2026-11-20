@@ -10,6 +10,8 @@
 #include "LumaWeaveVulkanHdrShader.h"
 #include "LumaWeaveQuality.h"
 #include "Renderer3D.h"
+#include "PrismaMotionTextureInput.h"
+#include "LumaWeaveVulkanMotionPolicy.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -23,6 +25,7 @@ public:
         bool materialAvailable=false,surfaceAvailable=false;
         bool gpuBusy=false,missingDepth=false;
         bool denoiseEncoded=false,temporalHistoryUsed=false;
+        bool motionInputBound=false,previousNormalCaptured=false;
         LumaVulkanHistoryReason historyReason=LumaVulkanHistoryReason::Disabled;
         LumaWeaveDecision quality{};
         LumaWeaveVulkanDirect::Submission submission{};
@@ -102,6 +105,8 @@ public:
         readyMaterial_=readySurface_=eligible_=enabled_=false;
         scene_={};stats_={};last_={};
         viewKey_=viewEpoch_=0;
+        objectMotion_={};motionFrameSerial_=motionViewKey_=motionViewEpoch_=0;
+        dynamicGeometryVisible_=false;
         return true;
     }
 
@@ -126,6 +131,20 @@ public:
     }
     uint64_t historyKey() const{return viewKey_;}
     uint64_t historyEpoch() const{return viewEpoch_;}
+    // MotionTextureInput is the same borrowed metadata contract used by
+    // PRISMA/Renderer3D on main: signed RG=current-minus-previous UV and
+    // B>0.5=actual moving-object validity. Never infer skinning motion
+    // from a camera matrix or invent a velocity texture here.
+    // The host must retain this borrowed GPU image until its Vulkan
+    // frame fence completes, not just until this PostProcess resolves.
+    void setObjectMotionVectors(MotionTextureInput input,
+                                uint64_t frameSerial,
+                                uint64_t viewKey,uint64_t viewEpoch,
+                                bool dynamicGeometryVisible) {
+        objectMotion_=input;motionFrameSerial_=frameSerial;
+        motionViewKey_=viewKey;motionViewEpoch_=viewEpoch;
+        dynamicGeometryVisible_=dynamicGeometryVisible;
+    }
     void setHistoryIdentity(uint64_t viewKey,uint64_t viewEpoch) {
         viewKey_=viewKey;viewEpoch_=viewEpoch;
     }
@@ -252,12 +271,29 @@ public:
                 temporal.currentVP=frame.viewProj;
                 temporal.eye=frame.cameraPos;
                 temporal.settings=denoiseSettings_;
+                const bool sameViewMotion=LumaVulkanMotionPolicy::current(
+                    objectMotion_,width_,height_,motionFrameSerial_,
+                    dev.frameSerial(),motionViewKey_,viewKey_,
+                    motionViewEpoch_,viewEpoch_);
+                temporal.motionVectors=sameViewMotion?
+                    objectMotion_.texture:gfx::TextureHandle{};
+                temporal.motionFrameSerial=sameViewMotion?
+                    motionFrameSerial_:0;
+                temporal.motionViewKey=sameViewMotion?motionViewKey_:0;
+                temporal.motionViewEpoch=sameViewMotion?motionViewEpoch_:0;
+                // If animated geometry is visible, no valid velocity
+                // means CURRENT spatial lighting only. Camera-only motion
+                // is not sufficient for skinned/deforming surfaces.
+                temporal.requireValidMotion=dynamicGeometryVisible_;
                 stats_.submission=owner_.dispatchScreen(
                     inputs,view,stats_.quality.width,stats_.quality.height,
                     stats_.quality.samples,++seed_,&temporal);
                 stats_.denoiseEncoded=owner_.denoiseStatus().encoded;
                 stats_.temporalHistoryUsed=owner_.denoiseStatus().historyUsed;
                 stats_.historyReason=owner_.denoiseStatus().reason;
+                stats_.motionInputBound=owner_.denoiseStatus().motionBound;
+                stats_.previousNormalCaptured=
+                    owner_.denoiseStatus().normalCaptured;
                 if(stats_.submission.encoded) {
                     auto texture=owner_.encodedOutput(stats_.submission.frameSerial);
                     stats_.composited=texture.valid() && additiveCompose(dev,texture);
@@ -269,6 +305,10 @@ public:
         // Preserve the ordinary tone map, exposure, bloom and downstream UI.
         downstream_.resolve(dev,out,frame);
         readyMaterial_=readySurface_=eligible_=false;
+        // The wrapper must not accidentally reuse a borrowed motion texture
+        // on another view/scene, even if its handle ID happens to match.
+        objectMotion_={};motionFrameSerial_=0;motionViewKey_=0;
+        motionViewEpoch_=0;dynamicGeometryVisible_=false;
     }
 
 private:
@@ -398,6 +438,9 @@ private:
     LumaWeaveQuality quality_=LumaWeaveQuality::Balanced;
     LumaVulkanDenoiseSettings denoiseSettings_{};
     uint64_t viewKey_=0,viewEpoch_=0;
+    MotionTextureInput objectMotion_{};
+    uint64_t motionFrameSerial_=0,motionViewKey_=0,motionViewEpoch_=0;
+    bool dynamicGeometryVisible_=false;
     FrameStats stats_{},last_{};
 };
 } // namespace aiverse::render

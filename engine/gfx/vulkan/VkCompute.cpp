@@ -14,7 +14,7 @@ namespace aiverse::gfx::vk {
 
 ComputeHandle VulkanDevice::createCompute(const ComputeDesc& d) {
     if (!supportsCompute() || !d.glsl || d.sampledTextureSlots<0 ||
-        d.sampledTextureSlots>5)return {};
+        d.sampledTextureSlots>7)return {};
     if(d.sampledTextureSlots>0) {
         const auto& lim=gpuProps_.limits;
         const auto requested=uint32_t(d.sampledTextureSlots);
@@ -42,7 +42,7 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& d) {
         return {};
     };
 
-    std::array<VkDescriptorSetLayoutBinding,10> bindings{};
+    std::array<VkDescriptorSetLayoutBinding,12> bindings{};
     for(uint32_t slot=0;slot<5+c.sampledTextureSlots;++slot) {
         bindings[slot].binding=slot;
         bindings[slot].descriptorType=slot==4 ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE :
@@ -169,7 +169,7 @@ void VulkanDevice::dispatch(uint32_t logicalX,uint32_t logicalY) {
         buffers[i].range=VkDeviceSize(b->size);
         if(!buffers[i].buffer)return;
     }
-    std::array<VkDescriptorImageInfo,6> images{};
+    std::array<VkDescriptorImageInfo,8> images{};
     images[0].imageView=texture->view;
     images[0].imageLayout=VK_IMAGE_LAYOUT_GENERAL;
     for(uint32_t i=0;i<c->sampledTextureSlots;++i) {
@@ -187,7 +187,7 @@ void VulkanDevice::dispatch(uint32_t logicalX,uint32_t logicalY) {
         // optional sampler count, so pools can safely serve ANY compute ABI.
         VkDescriptorPoolSize sizes[3]={{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,4},
                                       {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,1},
-                                      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,5}};
+                                      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,7}};
         auto pi=vkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         pi.maxSets=1;
         pi.poolSizeCount=3;
@@ -209,7 +209,7 @@ void VulkanDevice::dispatch(uint32_t logicalX,uint32_t logicalY) {
         error_="Vulkan GI compute descriptor allocation failed";
         return;
     }
-    std::array<VkWriteDescriptorSet,10> writes{};
+    std::array<VkWriteDescriptorSet,12> writes{};
     for(uint32_t i=0;i<5+c->sampledTextureSlots;++i) {
         writes[i].sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet=set;

@@ -132,6 +132,51 @@ int main() {
         AIVERSE_TEST_CHECK(!gpu.poll());
         device.completed=21;
         AIVERSE_TEST_CHECK(gpu.poll() && gpu.historyValid());
+
+        // Stage19: a real motion texture with matching metadata, serial,
+        // camera-world identity and cut epoch is passed to the GPU denoiser.
+        gfx::TextureDesc velocityDesc;
+        velocityDesc.width=velocityDesc.height=64;
+        velocityDesc.format=gfx::PixelFormat::RGBA16F;
+        velocityDesc.filter=gfx::Filter::Nearest;
+        const auto velocity=device.createTexture(velocityDesc);
+        const auto supplied=MotionTextureInput::declared(
+            velocity,64,64,gfx::PixelFormat::RGBA16F);
+        post.setEnabled(true);
+        device.current=22;
+        post.setObjectMotionVectors(supplied,22,501,3,true);
+        device.beginFrame(64,64);
+        (void)post.scenePass({},64,64);
+        auto secondMaterial=post.materialReceiverPass(64,64);
+        post.materialReceiverPublished(secondMaterial.colorTarget,64,64);
+        auto secondSurface=post.surfaceReceiverPass(64,64);
+        post.surfaceReceiverPublished(secondSurface.colorTarget,64,64);
+        post.resolve(device,{},frame);
+        AIVERSE_TEST_CHECK(post.stats().composited);
+        AIVERSE_TEST_CHECK(post.stats().motionInputBound);
+        AIVERSE_TEST_CHECK(post.stats().previousNormalCaptured);
+        AIVERSE_TEST_CHECK(post.stats().temporalHistoryUsed);
+        device.endFrame();
+        device.completed=22;
+        AIVERSE_TEST_CHECK(gpu.poll() && gpu.historyValid());
+
+        // Reusing last frame's velocity is not allowed even if the texture
+        // handle and world ID still happen to match.
+        device.current=23;
+        post.setObjectMotionVectors(supplied,22,501,3,true);
+        device.beginFrame(64,64);
+        (void)post.scenePass({},64,64);
+        secondMaterial=post.materialReceiverPass(64,64);
+        post.materialReceiverPublished(secondMaterial.colorTarget,64,64);
+        secondSurface=post.surfaceReceiverPass(64,64);
+        post.surfaceReceiverPublished(secondSurface.colorTarget,64,64);
+        post.resolve(device,{},frame);
+        AIVERSE_TEST_CHECK(post.stats().composited);
+        AIVERSE_TEST_CHECK(!post.stats().motionInputBound);
+        device.endFrame();
+        device.completed=23;
+        AIVERSE_TEST_CHECK(gpu.poll());
+        device.destroyTexture(velocity);
         post.setEnabled(false); // actual route disable drops old history
         AIVERSE_TEST_CHECK(!gpu.historyValid());
         AIVERSE_TEST_CHECK(post.shutdown());
