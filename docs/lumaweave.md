@@ -144,3 +144,62 @@ Vulkan pixel checks, GLES3/WebGL2/Android or Metal parity, GPU time or FPS
 is verified on the Stage17 source. The source, tests and handoff exist but
 are **NOT RUN**; do not merge or enable by default before the consolidated
 native multi-backend acceptance requested by the owner.
+
+## Stage 18 — Vulkan multi-frame Direct + HDR receiver lifetime (2026-11-20)
+
+Experimental branch: `feature/gi-lumaweave-vulkan-multiframe-stage18-20261120`.
+Detailed continuation for AI agents:
+`docs/agent-handoffs/gi-lumaweave-stage18-vulkan-multiframe-2026-11-20.md`.
+
+Previously the Vulkan Direct owner allowed only one uncompleted screen
+submission, forcing every second frame back to the raster path on a busy GPU.
+Stage18's source now supports up to **three outstanding screen frames**
+with four independent low-resolution raw+filtered image slots. One slot can
+hold the last physically completed denoising history while other GPU
+submissions are pending. Each slot tracks its own submitting frame serial,
+output texture, historical stamp and the LAST newer frame serial that still
+samples it as previous history. A historical texture is not made writable
+merely because a newer frame became the current history. Retirement and
+new-history promotion use actual `completedFrameSerial()`, ordered by
+serial then within-frame submission order; neither `dispatch` nor
+`endFrame` is treated as a completion fence.
+
+Vulkan `LumaWeavePostProcess` also maintains **four independently retired
+full-resolution receiver sets** for material/metallic, normal/roughness and
+their two depth images, plus a separate HDR composite depth attachment.
+These are not replaced or reused until their owning GPU frame has signaled
+its real fence. The maximum potential receiver-ring footprint is limited
+to **512 MiB** (two RGBA16F and three depth images per slot, four slots);
+views exceeding this budget choose the existing raster direct fallback
+before any legacy point lights are suppressed. This is a conservative
+memory safety admission, not a measured GPU memory footprint.
+
+`LumaWeaveNativeDriver` may choose Vulkan Direct even if 1–2 older frames
+are still in flight, as long as the full source registry and strict BVH
+revision are unchanged, the GPU has a free output slot, the material
+receiver ring can admit the view, and the original opt-in/opaque coverage,
+HDR, and quality requirements hold. Frame slots full, new source geometry
+while busy, memory cap refusal, or a missing resource retain the safe
+raster path without silently reducing registered lights. The
+`vulkanHistoryKey` / epoch and temporal disocclusion rules from Stage17
+remain mandatory for any historical reprojection.
+
+Testing is **SOURCE ONLY, NOT RUN** at this stage. The new platform-neutral
+`lumaweave_vulkan_multiframe` CTest exercises 3 pending submissions,
+fourth-frame refusal, history-read retirement, same-revision no-op,
+source/BVH update rejection, four independent HDR receiver sets, controlled
+reuse after a fake completed serial, and shutdown waiting for all fences.
+The existing `vulkan_backend` test now contains an additional device-
+executable three-frame concurrent compute/shadow/denoise submission
+fixture. Neither is evidence of real GPU correctness until built and
+executed on Vulkan (lavapipe plus validation layers/physical hardware);
+Metal/GLES/WebGL2 and the full Debug/Release suite remain unverified.
+
+Limitations: the renderer-level Vulkan device currently has a
+two-frame-in-flight swapchain/command ring, so physical overlap may be
+only two active GPU frames even though the Direct owner allows three.
+Temporal history still lacks previous-frame motion vectors and normals
+for fully arbitrary skeletal motion. The full-resolution receiver
+memory footprint is significant; real VRAM and GPU performance must be
+measured during consolidated platform acceptance. No automatic enablement
+or merge into `main` is authorized by this experimental stage.

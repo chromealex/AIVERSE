@@ -192,7 +192,8 @@ public:
             input.sceneGeometry && input.geometryRevision &&
             !coordinator_.registry().lights().empty() &&
             vulkanPost_.ready() && vulkanDirect_.screenAvailable() &&
-            !vulkanDirect_.busy() && existing_.active() &&
+            vulkanPost_.canAcquireFrame(input.width,input.height) &&
+            existing_.active() &&
             existing_.linearScene() && decision.admitted &&
             renderer_.lights.count()==0 &&
             !renderer_.lights.staticPointLightsActive();
@@ -224,10 +225,11 @@ public:
             }
         }
         if(!vulkanChosen) {
-            // The Vulkan backend may have two frames in flight. It is safe
-            // to use raster direct for THIS frame while the previous GPU
-            // dispatch completes without invalidating that previous history
-            // ONLY when the native view/world/source/BVH identities match.
+            // The Vulkan Direct owner can admit up to three independent
+            // screen submissions, with a fourth GPU history slot. If all
+            // output or receiver slots are in flight, this one frame uses
+            // raster direct without invalidating matching history. A true
+            // world/camera/source/BVH route change still resets history.
             // A real route disable, camera cut or source/scene change resets it.
             const bool samePendingView=input.enableVulkanDirect &&
                 input.vulkanReceiverCoverageConfirmed &&

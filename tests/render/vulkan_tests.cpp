@@ -5,6 +5,7 @@
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
 #include "engine/render/LumaWeaveVulkanScreenShader.h"
 #include "engine/render/LumaWeaveVulkanDenoiseShader.h"
+#include "engine/render/LumaWeaveVulkanDirect.h"
 
 #include <array>
 #include <cstdio>
@@ -652,6 +653,66 @@ void main() {
         for(auto tex:{raw,previous,normal,filtered,currentDepth,receiverDepth})
             if(tex.valid())d.destroyTexture(tex);
         for(auto buf:{viewBuffer,dummy})if(buf.valid())d.destroyBuffer(buf);
+    }
+    // Stage18 real-device RHI lifetime fixture: multiple low-resolution
+    // Vulkan LumaWeave GGX+spatial dispatches are simultaneously encoded
+    // into different textures, without a CPU wait or raster fallback.
+    // Existing pixel captures in this test cover color/occlusion separately.
+    if(d.supportsCompute()) {
+        aiverse::render::LumaWeaveVulkanDirect direct;
+        CHECK(direct.initialize(d));
+        if(direct.screenAvailable()) {
+            aiverse::render::LumaWeaveRegistry registry;
+            aiverse::render::LumaLight light;
+            light.key=123;light.position={0,2,0};light.radius=4;
+            (void)registry.publish({light});
+            aiverse::render::GiGpuBvh empty;
+            CHECK(direct.setSources(registry));
+            CHECK(direct.setGeometry(empty,1));
+            TextureDesc inputDesc;
+            inputDesc.width=W;inputDesc.height=H;
+            inputDesc.format=PixelFormat::RGBA16F;
+            inputDesc.filter=Filter::Nearest;
+            std::array<TextureHandle,5> sampled{};
+            for(auto& t:sampled)t=d.createTexture(inputDesc);
+            const aiverse::render::LumaWeaveVulkanDirect::ScreenInputs input{
+                sampled[0],sampled[1],sampled[2],sampled[3],sampled[4]};
+            aiverse::render::LumaWeaveVulkanDirect::ScreenView view{};
+            view.eye={0,2,-5,0};
+            view.resolution={8,8,W,H};view.options={.008f,0,0,0};
+            aiverse::render::LumaWeaveVulkanDirect::DenoiseRequest history{};
+            history.viewKey=8081;history.viewEpoch=1;
+            history.eye={0,2,-5};
+            std::array<TextureHandle,3> encoded{};
+            for(int i=0;i<3;++i) {
+                d.beginFrame(W,H);
+                (void)direct.poll();
+                const auto sub=direct.dispatchScreen(input,view,8,8,1,
+                                                      uint32_t(900+i),&history);
+                CHECK(sub.encoded && sub.frameSerial!=0);
+                if(sub.encoded) {
+                    encoded[size_t(i)]=direct.encodedOutput(sub.frameSerial);
+                    CHECK(encoded[size_t(i)].valid());
+                }
+                d.endFrame();
+            }
+            CHECK(encoded[0].valid() && encoded[1].valid() &&
+                  encoded[2].valid());
+            CHECK(encoded[0]!=encoded[1] &&
+                  encoded[0]!=encoded[2] &&
+                  encoded[1]!=encoded[2]);
+            // Drive the queue so every submitted frame's real VkFence has
+            // signalled before we destroy the source/receiver/history images.
+            for(int i=0;i<6;++i){
+                d.beginFrame(W,H);d.endFrame();
+                (void)direct.poll();
+            }
+            CHECK(!direct.busy() && direct.screenFramesInFlight()==0);
+            CHECK(direct.shutdown());
+            for(auto tex:sampled)if(tex.valid())d.destroyTexture(tex);
+        } else {
+            CHECK(false); // compute was advertised but screen kernel failed
+        }
     }
     CHECK(d.gpuHealthy());
     d.destroyPipeline(pColor); d.destroyPipeline(pDepth); d.destroyPipeline(pTex); d.destroyPipeline(pShadow); d.destroyPipeline(pCaster); d.destroyPipeline(pAlpha);

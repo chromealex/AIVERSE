@@ -997,6 +997,15 @@ if(AIVERSE_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME lumaweave_vulkan_history_policy
         COMMAND aiverse_lumaweave_vulkan_history_policy_test)
+
+    # RHI-fence-safe three overlapping Vulkan screen dispatches plus separate
+    # per-frame HDR opaque receiver resources. FakeDevice contract only.
+    add_executable(aiverse_lumaweave_vulkan_multiframe_test
+        tests/render/lumaweave_vulkan_multiframe.cpp)
+    target_include_directories(aiverse_lumaweave_vulkan_multiframe_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME lumaweave_vulkan_multiframe
+        COMMAND aiverse_lumaweave_vulkan_multiframe_test)
     add_executable(aiverse_lumaweave_screen_history_epoch_test
         tests/render/lumaweave_screen_history_epoch.cpp)
     target_include_directories(aiverse_lumaweave_screen_history_epoch_test PRIVATE

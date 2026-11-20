@@ -30,6 +30,11 @@ public:
     static constexpr uint64_t kMaxCandidateChecks=524288;
     static constexpr uint32_t kMaxScreenPixels=16384;
     static constexpr uint64_t kMaxScreenCandidateChecks=24000000;
+    // Four image slots allow three pending GPU screens plus one completed
+    // history. Slots also track *reader* fences: a retired history image
+    // can still be sampled by already-encoded newer frames.
+    static constexpr size_t kScreenSlotCount=4;
+    static constexpr size_t kMaxPendingScreens=3;
 
     struct alignas(16) Params {
         std::array<uint32_t,4> counts{};  // lights,receivers,nodes,samples
@@ -69,6 +74,14 @@ public:
     struct DenoiseStatus {
         bool requested=false,encoded=false,historyUsed=false;
         LumaVulkanHistoryReason reason=LumaVulkanHistoryReason::Disabled;
+    };
+    struct ScreenSlot {
+        gfx::TextureHandle raw{},filtered{};
+        uint32_t width=0,height=0,receivers=0;
+        uint64_t submitted=0,readerUntil=0,historyGeneration=0;
+        uint64_t submissionOrdinal=0;
+        LumaVulkanHistoryStamp stamp{};
+        bool hasFilter=false;
     };
     struct Submission {
         bool encoded=false;
@@ -122,24 +135,26 @@ public:
     // False means no handles have been destroyed; host must call poll()
     // after a later beginFrame and retry.
     bool shutdown() {
-        if(pendingFrame_)return false;
+        if(busy())return false;
         if(dev_) {
             for(auto handle:{receiverBuffer_,lightBuffer_,triangleBuffer_,nodeBuffer_})
                 if(handle.valid())dev_->destroyBuffer(handle);
             if(output_.valid())dev_->destroyTexture(output_);
-            if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
-            for(auto texture:filtered_)if(texture.valid())dev_->destroyTexture(texture);
+            for(const auto& slot:screenSlots_)
+                for(auto t:{slot.raw,slot.filtered})
+                    if(t.valid())dev_->destroyTexture(t);
             if(denoiseShader_.valid())dev_->destroyCompute(denoiseShader_);
             if(screenShader_.valid())dev_->destroyCompute(screenShader_);
             if(shader_.valid())dev_->destroyCompute(shader_);
         }
         dev_=nullptr;shader_={};output_={};
-        screenShader_={};denoiseShader_={};screenOutput_={};activeOutput_={};
-        filtered_.fill({});filteredWidth_=filteredHeight_=0;
+        screenShader_={};denoiseShader_={};activeOutput_={};
+        screenSlots_={};
         screenWidth_=screenHeight_=0;
-        pendingFrame_=0;pendingFilterSlot_=-1;historySlot_=-1;
-        historyValid_=false;historyGeneration_=1;pendingHistoryGeneration_=0;
-        historyStamp_={};pendingHistoryStamp_={};denoiseStatus_={};
+        pendingFrame_=0;historySlot_=-1;activeScreenSlot_=-1;
+        lastEncodedFrame_=0;submissionOrdinal_=0;
+        historyValid_=false;historyGeneration_=1;
+        historyStamp_={};denoiseStatus_={};
         receiverBuffer_={};lightBuffer_={};triangleBuffer_={};nodeBuffer_={};
         sourcesReady_=geometryReady_=outputValid_=false;
         sourceRevision_=geometryRevision_=geometryHash_=0;
@@ -155,12 +170,40 @@ public:
     bool historyValid() const{return historyValid_;}
     void invalidateHistory() {
         historyValid_=false;
+        historySlot_=-1; // may still have GPU readers; readerUntil protects it
         ++historyGeneration_;
     }
     uint32_t screenWidth() const {return screenWidth_;}
     uint32_t screenHeight() const {return screenHeight_;}
-    bool busy() const {return pendingFrame_!=0;}
-    uint64_t pendingFrameSerial() const {return pendingFrame_;}
+    bool busy() const {
+        if(pendingFrame_)return true;
+        for(const auto& slot:screenSlots_)if(slot.submitted)return true;
+        return false;
+    }
+    size_t screenFramesInFlight() const {
+        size_t count=0;
+        for(const auto& slot:screenSlots_)if(slot.submitted)++count;
+        return count;
+    }
+    uint64_t pendingFrameSerial() const {
+        uint64_t oldest=pendingFrame_;
+        for(const auto& slot:screenSlots_)
+            if(slot.submitted && (!oldest || slot.submitted<oldest))
+                oldest=slot.submitted;
+        return oldest;
+    }
+    bool canSubmitScreen() const {
+        if(!screenAvailable() || pendingFrame_ ||
+           screenFramesInFlight()>=kMaxPendingScreens || !dev_->gpuHealthy())
+            return false;
+        const uint64_t completed=dev_->completedFrameSerial();
+        for(size_t i=0;i<screenSlots_.size();++i) {
+            const auto& slot=screenSlots_[i];
+            if(!slot.submitted && slot.readerUntil<=completed &&
+               int(i)!=historySlot_)return true;
+        }
+        return false;
+    }
     uint64_t sourceRevision() const {return sourceRevision_;}
     uint64_t geometryRevision() const {return geometryRevision_;}
     size_t sourceCount() const {return sourceCount_;}
@@ -175,13 +218,17 @@ public:
     // Same-command-buffer consumer may sample the image AFTER dispatch()
     // and VkCompute::endCompute() inserted its shader-read barrier.
     gfx::TextureHandle encodedOutput(uint64_t exactFrameSerial) const {
-        return ready() && busy() && dev_->gpuHealthy() &&
-               pendingFrame_==exactFrameSerial && dev_->frameSerial()==exactFrameSerial ?
+        if(!ready() || !dev_->gpuHealthy() ||
+           lastEncodedFrame_!=exactFrameSerial ||
+           dev_->frameSerial()!=exactFrameSerial)return {};
+        if(pendingFrame_==exactFrameSerial)return activeOutput_;
+        return activeScreenSlot_>=0 &&
+               screenSlots_[size_t(activeScreenSlot_)].submitted==exactFrameSerial ?
                activeOutput_:gfx::TextureHandle{};
     }
 
     bool setSources(const LumaWeaveRegistry& registry) {
-        if(!ready() || busy() || !dev_->canUpdateSharedBuffers())return false;
+        if(!ready() || !dev_->canUpdateSharedBuffers())return false;
         if(sourcesReady_ && sourceRevision_==registry.revision()) {
             // Two different worlds may each have revision 1. Equal revision
             // alone must NOT silently retain another world's light energy.
@@ -190,7 +237,8 @@ public:
                    std::equal(current.begin(),current.end(),
                               acceptedLights_.begin(),lumaSameLight);
         }
-        if(sourcesReady_ && registry.revision()<=sourceRevision_)return false;
+        if(busy() || (sourcesReady_ && registry.revision()<=sourceRevision_))
+            return false;
         if(registry.lights().size()>LumaWeaveRegistry::kMaxSources)return false;
         std::vector<LumaGpuLight> packed;
         packed.reserve(registry.lights().size());
@@ -227,12 +275,12 @@ public:
     }
 
     bool setGeometry(const GiGpuBvh& bvh,uint64_t revision) {
-        if(!ready() || busy() || !dev_->canUpdateSharedBuffers() ||
+        if(!ready() || !dev_->canUpdateSharedBuffers() ||
            !revision)return false;
         const uint64_t contentHash=geometryFingerprint(bvh);
         if(geometryReady_ && revision==geometryRevision_)
-            return contentHash==geometryHash_;
-        if(geometryReady_ && revision<geometryRevision_)return false;
+            return contentHash==geometryHash_; // read-only even if GPU busy
+        if(busy() || (geometryReady_ && revision<geometryRevision_))return false;
         // Require strict root-reachable geometry containment and bounded
         // traversal BEFORE any storage-buffer writes; Stage62 float-ULP fix.
         if(!giValidateGpuBvh(bvh).valid)return false;
@@ -299,7 +347,8 @@ public:
         if(!accepted)return out;
         pendingFrame_=frame;
         activeOutput_=output_;
-        pendingFilterSlot_=-1;
+        lastEncodedFrame_=frame;
+        activeScreenSlot_=-1;
         invalidateHistory(); // explicit receiver path never supplies screen history
         outputValid_=false;
         pendingReceivers_=uint32_t(receivers.size());
@@ -321,7 +370,7 @@ public:
         denoiseStatus_={};
         denoiseStatus_.requested=denoise && denoise->settings.enabled;
         if(!screenAvailable() || !inputs.complete() || !sourcesReady_ ||
-           !geometryReady_ || busy() || !dev_->gpuHealthy() ||
+           !geometryReady_ || !canSubmitScreen() || !dev_->gpuHealthy() ||
            !dev_->canUpdateSharedBuffers() || !width || !height ||
            width>4096 || height>4096 || samples<1 || samples>kMaxSamples)
             return out;
@@ -337,19 +386,16 @@ public:
            !std::isfinite(view.options.x) || view.options.x<=0 ||
            view.options.x>0.02f)
             return out;
-        if(screenWidth_!=width || screenHeight_!=height ||
-           !screenOutput_.valid()) {
-            gfx::TextureDesc td;
-            td.width=int(width);td.height=int(height);
-            td.format=gfx::PixelFormat::RGBA16F;
-            td.filter=gfx::Filter::Nearest;td.storage=true;
-            td.label="LumaWeave Vulkan screen-space BRDF direct";
-            const auto next=dev_->createTexture(td);
-            if(!next.valid())return out;
-            if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
-            screenOutput_=next;screenWidth_=width;screenHeight_=height;
-            invalidateHistory(); // a different render resolution has new history
+        const int slotIndex=freeScreenSlot();
+        if(slotIndex<0)return out;
+        if(screenWidth_!=width || screenHeight_!=height) {
+            // Old in-flight resources at another resolution remain live.
+            // Their eventual completion cannot promote old-sized history.
+            invalidateHistory();
+            screenWidth_=width;screenHeight_=height;
         }
+        if(!ensureScreenTextures(slotIndex,width,height))return out;
+        auto& slot=screenSlots_[size_t(slotIndex)];
         if(!dev_->updateSharedBufferChecked(receiverBuffer_,&view,sizeof(view)))
             return out;
         if(!dev_->beginCompute(screenShader_))return out;
@@ -359,7 +405,7 @@ public:
         dev_->setComputeBuffer(1,receiverBuffer_); // ScreenView, not receiver points
         dev_->setComputeBuffer(2,triangleBuffer_);
         dev_->setComputeBuffer(3,nodeBuffer_);
-        dev_->setComputeTexture(0,screenOutput_);
+        dev_->setComputeTexture(0,slot.raw);
         dev_->setComputeSampledTexture(0,inputs.sceneDepth);
         dev_->setComputeSampledTexture(1,inputs.material);
         dev_->setComputeSampledTexture(2,inputs.materialDepth);
@@ -378,53 +424,115 @@ public:
         // Failure to encode the filter falls back to current raw direct,
         // never to stale previous-frame pixels.
         gfx::TextureHandle filtered{};
-        pendingFilterSlot_=-1;
-        if(denoise && denoise->settings.enabled && denoiseAvailable()) {
-            filtered=encodeDenoise(inputs,view,width,height,frame,*denoise);
-        }
+        if(denoise && denoise->settings.enabled && denoiseAvailable())
+            filtered=encodeDenoise(inputs,view,width,height,frame,*denoise,
+                                   slotIndex);
         if(!filtered.valid())invalidateHistory();
-        pendingFrame_=frame;
-        activeOutput_=filtered.valid()?filtered:screenOutput_;
+        slot.submitted=frame;
+        slot.receivers=uint32_t(pixels);
+        slot.submissionOrdinal=++submissionOrdinal_;
+        activeOutput_=filtered.valid()?filtered:slot.raw;
+        activeScreenSlot_=slotIndex;
+        lastEncodedFrame_=frame;
         outputValid_=false;
-        pendingReceivers_=uint32_t(pixels);
         out={true,frame,sourceRevision_,geometryRevision_,
              uint32_t(pixels),samples,pixels*samples,checks};
         return out;
     }
 
-    // Observe the device's REAL successful frame fence. No timeout, no
-    // synthetic completion and no CPU readback of lighting needed.
+    // Poll all completed submissions in submission order. A completed
+    // Vulkan fence proves the preceding RAW and FILTER commands retired,
+    // not merely that dispatch/endFrame was called. This can retire several
+    // frame slots at once, including when the RHI's wait skipped ahead.
     bool poll() {
-        if(!pendingFrame_ || !dev_ || !dev_->gpuHealthy() ||
-           !dev_->completedFrameSerial() ||
-           dev_->completedFrameSerial()<pendingFrame_)return false;
-        pendingFrame_=0;
-        outputValid_=true;
-        if(pendingFilterSlot_>=0 &&
-           pendingHistoryGeneration_==historyGeneration_ &&
-           pendingHistoryStamp_.viewKey!=0 &&
-           pendingHistoryStamp_.sourceRevision!=0 &&
-           pendingHistoryStamp_.geometryRevision!=0 &&
-           dev_->gpuHealthy()) {
-            historySlot_=pendingFilterSlot_;
-            historyStamp_=pendingHistoryStamp_;
-            historyValid_=true; // only after actual completedFrameSerial
-        } else historyValid_=false;
-        pendingFilterSlot_=-1;
-        completedReceivers_=pendingReceivers_;
-        pendingReceivers_=0;
-        return true;
+        if(!dev_ || !dev_->gpuHealthy())return false;
+        const uint64_t completed=dev_->completedFrameSerial();
+        if(!completed)return false;
+        bool any=false;
+        if(pendingFrame_ && pendingFrame_<=completed) {
+            pendingFrame_=0;
+            completedReceivers_=pendingReceivers_;
+            pendingReceivers_=0;
+            outputValid_=true;
+            any=true;
+        }
+        for(;;) {
+            int oldest=-1;
+            for(size_t i=0;i<screenSlots_.size();++i) {
+                const auto& slot=screenSlots_[i];
+                if(!slot.submitted || slot.submitted>completed)continue;
+                if(oldest<0 ||
+                   slot.submitted<screenSlots_[size_t(oldest)].submitted ||
+                   (slot.submitted==screenSlots_[size_t(oldest)].submitted &&
+                    slot.submissionOrdinal<
+                        screenSlots_[size_t(oldest)].submissionOrdinal))
+                    oldest=int(i);
+            }
+            if(oldest<0)break;
+            auto& slot=screenSlots_[size_t(oldest)];
+            if(slot.hasFilter &&
+               slot.historyGeneration==historyGeneration_ &&
+               slot.stamp.viewKey && slot.stamp.sourceRevision &&
+               slot.stamp.geometryRevision) {
+                historySlot_=oldest;
+                historyStamp_=slot.stamp;
+                historyValid_=true;
+            }
+            completedReceivers_=slot.receivers;
+            slot.submitted=0;
+            outputValid_=true;
+            any=true;
+        }
+        return any;
     }
 
 private:
+    int freeScreenSlot() const {
+        if(!dev_ || !dev_->gpuHealthy())return -1;
+        const uint64_t completed=dev_->completedFrameSerial();
+        for(size_t i=0;i<screenSlots_.size();++i) {
+            const auto& slot=screenSlots_[i];
+            // A stale former history may still be read by the GPU, even
+            // after a newer history was promoted by another frame.
+            if(!slot.submitted && slot.readerUntil<=completed &&
+               int(i)!=historySlot_)return int(i);
+        }
+        return -1;
+    }
+
+    bool ensureScreenTextures(int index,uint32_t width,uint32_t height) {
+        if(index<0 || index>=int(screenSlots_.size()) || !dev_)return false;
+        auto& slot=screenSlots_[size_t(index)];
+        if(slot.submitted || slot.readerUntil>dev_->completedFrameSerial() ||
+           index==historySlot_)return false;
+        if(slot.raw.valid() && slot.filtered.valid() &&
+           slot.width==width && slot.height==height)return true;
+        gfx::TextureDesc desc;
+        desc.width=int(width);desc.height=int(height);
+        desc.format=gfx::PixelFormat::RGBA16F;
+        desc.filter=gfx::Filter::Nearest;desc.storage=true;
+        desc.label="LumaWeave Vulkan frame-ring direct+filtered output";
+        auto raw=dev_->createTexture(desc);
+        if(!raw.valid())return false;
+        auto filtered=dev_->createTexture(desc);
+        if(!filtered.valid()){dev_->destroyTexture(raw);return false;}
+        // Both allocations succeeded; the old slot is fence-free and has
+        // no outstanding history reader, so replacement is safe.
+        if(slot.raw.valid())dev_->destroyTexture(slot.raw);
+        if(slot.filtered.valid())dev_->destroyTexture(slot.filtered);
+        slot.raw=raw;slot.filtered=filtered;
+        slot.width=width;slot.height=height;
+        slot.hasFilter=false;slot.stamp={};
+        return true;
+    }
+
     gfx::TextureHandle encodeDenoise(
         const ScreenInputs& inputs,const ScreenView& view,
         uint32_t width,uint32_t height,uint64_t frame,
-        const DenoiseRequest& request) {
-        if(!denoiseAvailable() || !LumaVulkanDenoiseSettings::valid(request.settings))
-            return {};
-        // Fail closed when a host forgets to give this frame a coherent
-        // camera matrix; temporal history must never be trusted blindly.
+        const DenoiseRequest& request,int slotIndex) {
+        if(!denoiseAvailable() ||
+           !LumaVulkanDenoiseSettings::valid(request.settings) ||
+           slotIndex<0 || slotIndex>=int(screenSlots_.size()))return {};
         for(float value:request.currentVP.m)
             if(!std::isfinite(value))return {};
         if(!finite(request.eye))return {};
@@ -438,36 +546,14 @@ private:
         current.viewProjection=request.currentVP;
         current.eye=request.eye;
 
-        if(!filtered_[0].valid() || !filtered_[1].valid() ||
-           filteredWidth_!=width || filteredHeight_!=height) {
-            gfx::TextureDesc desc;
-            desc.width=int(width);desc.height=int(height);
-            desc.format=gfx::PixelFormat::RGBA16F;
-            desc.filter=gfx::Filter::Nearest;desc.storage=true;
-            desc.label="LumaWeave Vulkan temporal/spatial direct history";
-            std::array<gfx::TextureHandle,2> replacements{};
-            for(auto& h:replacements) {
-                h=dev_->createTexture(desc);
-                if(!h.valid()) {
-                    for(auto allocated:replacements)
-                        if(allocated.valid())dev_->destroyTexture(allocated);
-                    return {};
-                }
-            }
-            for(auto h:filtered_)
-                if(h.valid())dev_->destroyTexture(h);
-            filtered_=replacements;
-            filteredWidth_=width;filteredHeight_=height;
-            historySlot_=-1;
-            invalidateHistory();
-        }
         const auto reason=LumaVulkanHistoryPolicy::compare(
             historyStamp_,current,request.settings,
             historyValid_ && historySlot_>=0);
         const bool usePrevious=reason==LumaVulkanHistoryReason::Accepted &&
-            historySlot_>=0 && filtered_[size_t(historySlot_)].valid();
+            historySlot_>=0 &&
+            screenSlots_[size_t(historySlot_)].filtered.valid();
         denoiseStatus_.reason=reason;
-        const int next=historySlot_>=0 ? 1-historySlot_ : 0;
+        auto& slot=screenSlots_[size_t(slotIndex)];
 
         DenoiseView uniforms;
         uniforms.inverseCurrentVP=view.inverseViewProjection;
@@ -482,21 +568,22 @@ private:
                            request.settings.historyClamp};
         uniforms.flags={usePrevious?1.f:0.f,
                         request.settings.reprojectionDepthTolerance,0,0};
-        // The receiver dynamic SSBO has an independent snapshot per GPU
-        // version. The preceding raw compute still sees its old ScreenView.
+        // Vulkan dynamic-SSBO versioning keeps the earlier raw compute's
+        // ScreenView unmodified, even when three frames overlap.
         if(!dev_->updateSharedBufferChecked(receiverBuffer_,&uniforms,
                                              sizeof(uniforms)))return {};
         if(!dev_->beginCompute(denoiseShader_))return {};
-        const bool coherentFrame=dev_->frameSerial()==frame && frame!=0;
-        if(!coherentFrame){dev_->endCompute();return {};}
+        if(dev_->frameSerial()!=frame || !frame) {
+            dev_->endCompute();return {};
+        }
         dev_->setComputeBuffer(0,lightBuffer_);
         dev_->setComputeBuffer(1,receiverBuffer_);
         dev_->setComputeBuffer(2,triangleBuffer_);
         dev_->setComputeBuffer(3,nodeBuffer_);
-        dev_->setComputeTexture(0,filtered_[size_t(next)]);
-        dev_->setComputeSampledTexture(0,screenOutput_);
+        dev_->setComputeTexture(0,slot.filtered);
+        dev_->setComputeSampledTexture(0,slot.raw);
         dev_->setComputeSampledTexture(1,usePrevious?
-            filtered_[size_t(historySlot_)]:screenOutput_);
+            screenSlots_[size_t(historySlot_)].filtered:slot.raw);
         dev_->setComputeSampledTexture(2,inputs.sceneDepth);
         dev_->setComputeSampledTexture(3,inputs.surface);
         dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
@@ -509,12 +596,19 @@ private:
         dev_->endCompute();
         if(!accepted)return {};
 
-        pendingFilterSlot_=next;
-        pendingHistoryStamp_=current;
-        pendingHistoryGeneration_=historyGeneration_;
+        if(usePrevious) {
+            // Keep the historical texture alive until the LAST dispatch
+            // reading it has completed, not merely until it stopped being
+            // the newest published history.
+            auto& prior=screenSlots_[size_t(historySlot_)];
+            prior.readerUntil=std::max(prior.readerUntil,frame);
+        }
+        slot.hasFilter=true;
+        slot.stamp=current;
+        slot.historyGeneration=historyGeneration_;
         denoiseStatus_.encoded=true;
         denoiseStatus_.historyUsed=usePrevious;
-        return filtered_[size_t(next)];
+        return slot.filtered;
     }
 
     static uint64_t geometryFingerprint(const GiGpuBvh& bvh) {
@@ -550,14 +644,14 @@ private:
 
     gfx::Device* dev_=nullptr;
     gfx::ComputeHandle shader_{},screenShader_{},denoiseShader_{};
-    gfx::TextureHandle output_{},screenOutput_{},activeOutput_{};
-    std::array<gfx::TextureHandle,2> filtered_{};
+    gfx::TextureHandle output_{},activeOutput_{};
+    std::array<ScreenSlot,kScreenSlotCount> screenSlots_{};
     uint32_t screenWidth_=0,screenHeight_=0;
-    uint32_t filteredWidth_=0,filteredHeight_=0;
-    int historySlot_=-1,pendingFilterSlot_=-1;
+    int historySlot_=-1,activeScreenSlot_=-1;
+    uint64_t lastEncodedFrame_=0,submissionOrdinal_=0;
     bool historyValid_=false;
-    uint64_t historyGeneration_=1,pendingHistoryGeneration_=0;
-    LumaVulkanHistoryStamp historyStamp_{},pendingHistoryStamp_{};
+    uint64_t historyGeneration_=1;
+    LumaVulkanHistoryStamp historyStamp_{};
     DenoiseStatus denoiseStatus_{};
     gfx::BufferHandle receiverBuffer_{},lightBuffer_{},triangleBuffer_{},nodeBuffer_{};
     uint32_t sourceCount_=0,nodeCount_=0,triangleCount_=0;

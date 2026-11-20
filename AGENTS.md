@@ -1,6 +1,35 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 18 — fence-safe Vulkan multi-frame Direct (2026-11-20)
+
+Active experimental branch: `feature/gi-lumaweave-vulkan-multiframe-stage18-20261120`. Read
+`docs/agent-handoffs/gi-lumaweave-stage18-vulkan-multiframe-2026-11-20.md`
+BEFORE modifying Vulkan GPU output lifetime, previous-history sampling, or
+Renderer3D material/depth capture. The Direct owner allows at most THREE
+outstanding screen submissions using FOUR separate raw/filtered RGBA16F
+image slots; one completed history may be referenced by later GPU commands.
+Each slot tracks both its own producing fence and the LAST pending GPU frame
+that reads it as historical input. Never recycle an old history texture only
+because a newer fence completed; the old image's reader-fence serial must
+ALSO have completed. Promote histories only on genuine Vulkan
+`completedFrameSerial()`, oldest serial first; an invalidated generation
+must not be resurrected by a late completion. A different source/BVH packet
+still cannot replace GPU buffers while any frame is in flight; unchanged
+full-registry/source and validated BVH snapshots may be re-used read-only.
+
+HDR material, world-normal and depth passes are ALSO per-frame borrowed
+GPU resources: FOUR independent full-resolution receiver sets with a
+conservative 512 MiB total admission cap. Never update/destroy these
+attachments before their frame's VkFence; refuse GPU Direct and use
+exclusive legacy raster direct when screen/output/receiver slots or budget
+are exhausted. The Vulkan Direct route remains OFF by default, requires
+opaque coverage certification and real linear HDR postprocessing, and
+does NOT change GLES3/WebGL2, Metal or bounced GI ownership. Stage18 C++
+FakeDevice and hardware-executable Vulkan multi-frame fixtures were AUTHORED
+but **NOT RUN**. Do not claim GPU PASS/FPS or merge experimental Vulkan
+branches into `main` before reconciled native acceptance.
+
 ## GI + LumaWeave Stage 17 — Vulkan temporal/spatial direct denoise (2026-11-20)
 
 Branch: `feature/gi-lumaweave-vulkan-denoise-stage17-20261120`. Read the separate handoff
