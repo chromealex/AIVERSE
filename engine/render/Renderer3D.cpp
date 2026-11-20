@@ -521,6 +521,8 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     reflectionPlaneValid_ = false;
     reflectionPlaneY_ = 0.f;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
+    customMaterialReceiver_.clear();customSurfaceReceiver_.clear();
+    lumaMaterialCapture_=lumaSurfaceCapture_=false;
     motionReactiveDraws_.clear(); // per-scene extensions register after beginScene
     modelItems_.clear(); jointData_.clear(); morphData_.clear(); modelStats_ = {};
     maintainIndirectLayoutCaches(); // prune unused layouts even in empty scenes
@@ -2060,6 +2062,47 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     hdrFrame_ = post_ && post_->linearScene();
     lights.setLinearScene(hdrFrame_);
     renderReflection();
+    struct LumaReceiverScope {
+        bool& capture;bool& auxiliary;bool oldAuxiliary;
+        LumaReceiverScope(bool& c,bool& a):capture(c),auxiliary(a),oldAuxiliary(a){
+            capture=true;auxiliary=true; // disable unrelated GPU ICB/MDI
+        }
+        ~LumaReceiverScope(){capture=false;auxiliary=oldAuxiliary;}
+    };
+    // PBR side-channel captures are opt-in PostProcess only. They sample the
+    // SAME current/animated ModelItems and palette/batched material state.
+    // Each receiver has independent depth; never reuse HDR depth as a
+    // writable attachment (it will be sampled by Vulkan compute later).
+    if(post_ && hdrFrame_ && post_->wantsMaterialReceiverPass()) {
+        auto receiver=post_->materialReceiverPass(sw,sh);
+        if(receiver.colorTarget.valid() && receiver.depthTarget.valid()) {
+            dev_->beginPass(receiver);
+            dev_->setViewport({0,0,sw,sh});
+            {
+                LumaReceiverScope captureScope(lumaMaterialCapture_,auxiliaryModelPass_);
+                uploadFrameUniforms(false);
+                renderModels(1);
+                for(auto& fn:customMaterialReceiver_)fn(*dev_);
+            }
+            dev_->endPass();
+            post_->materialReceiverPublished(receiver.colorTarget,sw,sh);
+        }
+    }
+    if(post_ && hdrFrame_ && post_->wantsSurfaceReceiverPass()) {
+        auto surface=post_->surfaceReceiverPass(sw,sh);
+        if(surface.colorTarget.valid() && surface.depthTarget.valid()) {
+            dev_->beginPass(surface);
+            dev_->setViewport({0,0,sw,sh});
+            {
+                LumaReceiverScope captureScope(lumaSurfaceCapture_,auxiliaryModelPass_);
+                uploadFrameUniforms(false);
+                renderModels(1);
+                for(auto& fn:customSurfaceReceiver_)fn(*dev_);
+            }
+            dev_->endPass();
+            post_->surfaceReceiverPublished(surface.colorTarget,sw,sh);
+        }
+    }
     // Exclude shadow, probe and reflection passes from the visible-colour ID range.
     debugMainDrawId_ = 0;
     // trace tier + water: the opaque scene goes into colour + depth textures first (SSR reads them),

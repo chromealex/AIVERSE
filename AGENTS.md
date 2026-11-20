@@ -4,6 +4,44 @@ Read this file completely before changing anything. It is short on purpose. `REA
 short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
 `docs/overview.md` the detailed overview; this file is the engineering contract.
 
+## Stage 22 — LumaWeave + current MAIN PRISMA (2026-11-20)
+
+**Current isolated integration:** `integration/luma-prisma-stage22-main-20261120`.
+**Required handoff:** `docs/agent-handoffs/gi-lumaweave-stage22-main-prisma-integration-2026-11-20.md`.
+
+This branch starts from MAIN and grafts only NEW Gi/LumaWeave files; it does NOT
+replace current MAIN's Renderer3D, Renderer3DModels, ModelShaders, VkResources,
+camera, animation, MDI/ICB or editor logic. MAIN's real built-in PRISMA
+rigid/instanced/skinned/morph/baked object motion and reactive mask producer is
+preserved. The LumaWeave Vulkan PostProcess implements the same typed
+`PostProcess::acceptObjectMotionVectors` and `acceptMotionReactiveMask`
+callbacks, and the current MAIN `resolvePrisma()` runs the real motion pass
+after the HDR scene but before LumaWeave temporal compute. New optional PBR
+material (linear RGB/metallic) and surface (world N/roughness) receiver passes
+use independent depth, a scoped auxiliary-model render mode, and dedicated
+shader variants to prevent duplicate direct/GI/baked energy.
+
+Vulkan Direct remains OFF by default and requires source/BVH validation,
+current scene material/normal receiver coverage, GPU resource/fence safety,
+quality admission and explicit view identity. Vulkan compute RHI is an
+opt-in 4-SSBO + RGBA16F image + 0..8 sampled textures/80B push contract.
+GPU Direct and PRISMA motion/reactive history are integrated as SOURCE
+ONLY. **Do not claim successful native C++ compilation, SPIR-V validation,
+Vulkan pixels, Metal/GLES parity or GPU performance; ALL NOT RUN.**
+The legacy cross-branch CPU/Metal bounced-GI atlas binding to the new MAIN
+renderer is NOT yet reconciled: `setDynamicGiOverlay` and cascades return
+false rather than falsely reporting an indirect GI binding, while MAIN's
+baked/probe GI remains unchanged. The separate indirect-GI shader/resource
+contract must be implemented and tested before enabling these routes.
+
+Other agents continue modifying MAIN. Before proposing a merge, re-check
+current main and preserve the newest renderer, PRISMA, GPU retirement and
+other agents' changes, then perform the owner's one consolidated
+Debug/Release CMake/full CTest + Metal/Vulkan/GLES hardware acceptance.
+Do not force-merge, rewrite the work of parallel agents or mark unrun
+tests PASS. Every subsequent stage needs its own committed handoff with
+exact source SHA, executed test results or NOT RUN, limitations and next step.
+
 ## Rendering ownership contract — PRISMA vs SpectraFX (MANDATORY)
 
 **Never implement the same screen effect in both systems.** PRISMA and SpectraFX are distinct genre-independent engines:

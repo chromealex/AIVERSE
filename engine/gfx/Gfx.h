@@ -193,7 +193,14 @@ struct ShaderDesc {
     bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
 };
 
-struct ComputeDesc { const char* msl=nullptr; const char* glsl=nullptr; const char* label=nullptr; };
+struct ComputeDesc {
+    const char* msl=nullptr;
+    const char* glsl=nullptr;
+    const char* label=nullptr;
+    // Optional Vulkan compute sampled textures; zero keeps old 4-SSBO
+    // Gi API ABI. Non-Vulkan backends can ignore this extension.
+    int sampledTextureSlots=0; // 0..8 (Vulkan bindings 5..12)
+};
 
 struct VertexAttr {
     uint32_t location = 0;
@@ -348,10 +355,12 @@ public:
     virtual bool beginCompute(ComputeHandle) { return false; }
     virtual void setComputeBuffer(int,BufferHandle) {}
     virtual void setComputeTexture(int,TextureHandle) {}
+    virtual void setComputeSampledTexture(int,TextureHandle) {}
     virtual void setComputeUniforms(const void*,size_t) {}
     // 64 threads per X group; dispatch provides total logical threads. Bounds-check in shader.
     virtual void dispatch(uint32_t,uint32_t=1) {}
     virtual void endCompute() {}
+    virtual bool computeDispatchSucceeded() const {return true;}
     // Debug/readback only, between frames. Never used in normal simulation/rendering.
     virtual bool readBuffer(BufferHandle,void*,size_t) { return false; }
     // Small asynchronous status readback, inside a frame and outside encoders. Callback on

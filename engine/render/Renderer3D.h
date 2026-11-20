@@ -36,6 +36,11 @@
 
 namespace aiverse::render {
 
+// Stage22 fails closed for GI overlays pending shader integration with
+// current MAIN. Forward declarations avoid including a second GPU owner.
+class GiDynamicProbeTexture;
+class GiClipmapValidityTexture;
+
 struct Mesh {
     gfx::BufferHandle vb, ib;
     uint32_t indexCount = 0;
@@ -140,6 +145,14 @@ public:
     // Shadow sample scrambling must never be enabled without a temporal resolve pass.
     virtual bool temporalShadowResolve() const { return false; }
     virtual gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) = 0;
+    // LumaWeave-only PBR material/surface receiver side passes, each with
+    // independent depth. Default paths pay zero GPU cost and remain unchanged.
+    virtual bool wantsMaterialReceiverPass() const {return false;}
+    virtual gfx::PassDesc materialReceiverPass(int,int) {return {};}
+    virtual void materialReceiverPublished(gfx::TextureHandle,int,int) {}
+    virtual bool wantsSurfaceReceiverPass() const {return false;}
+    virtual gfx::PassDesc surfaceReceiverPass(int,int) {return {};}
+    virtual void surfaceReceiverPublished(gfx::TextureHandle,int,int) {}
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
     // Optional read-only presentation bridge for object motion vectors.
     virtual bool wantsObjectMotionVectors() const { return false; }
@@ -644,6 +657,15 @@ public:
     // Opaque custom renderers (terrain): run first in the main pass, before meshes and models, so
     // translucent meshes (water) blend over them. Same lifetime rules as drawCustom.
     void drawCustomOpaque(CustomDraw fn) { customOpaque_.push_back(std::move(fn)); }
+    // Optional material and signed world-normal/roughness receivers for
+    // the same opaque custom terrain meshes. User must draw exact depth and
+    // matching frontmost geometry, or Vulkan LumaWeave must stay disabled.
+    void drawCustomMaterialReceiver(CustomDraw fn) {
+        if(fn)customMaterialReceiver_.push_back(std::move(fn));
+    }
+    void drawCustomSurfaceReceiver(CustomDraw fn) {
+        if(fn)customSurfaceReceiver_.push_back(std::move(fn));
+    }
     // Extra shadow casters (sprites): run inside the sun shadow pass (only when shadows are on) with
     // the target bound; draw depth with lightViewProj(). Same lifetime rules as drawCustom.
     void drawCustomShadow(CustomDraw fn) { customShadow_.push_back(std::move(fn)); }
@@ -960,6 +982,26 @@ public:
     // set's mode (indirect / shadowmask / subtractive). Null = realtime only. The set must outlive its use.
     void setBakedLighting(const BakedLighting* b) { baked_ = b; }
     const BakedLighting* bakedLighting() const { return baked_; }
+    // Stage22 preserves MAIN's existing GI shader and baked/indirect source
+    // ownership: no fake L1 probe binding may report success. The older
+    // LumaWeave Metal/CPU GI clipmap atlas route is NOT yet integrated with
+    // this newer shader/MDI backend. Return false explicitly until its
+    // shader/resource/texture contract has been ported and verified.
+    bool setDynamicGiOverlay(const GiDynamicProbeTexture*,float3,float,
+                             int,int,int,int=0,int=0,int=0,
+                             const GiClipmapValidityTexture* =nullptr) {
+        return false;
+    }
+    bool setDynamicGiCascadeOverlay(const GiDynamicProbeTexture*,float3,float,
+                                    int,int,int,int=0,int=0,int=0) {
+        return false;
+    }
+    bool setDynamicGiThirdCascadeOverlay(const GiDynamicProbeTexture*,float3,float,
+                                         int,int,int,int=0,int=0,int=0) {
+        return false;
+    }
+    void clearDynamicGiOverlay() {} // no atlas was attached
+    bool dynamicGiOverlayActive() const {return false;}
     void setBakedQuality(BakedQuality q);
     BakedQuality bakedQuality() const { return bakedQuality_; }
     static BakedQuality defaultBakedQualityFor(const gfx::Device& dev, bool mobile);
@@ -1092,6 +1134,7 @@ private:
     std::vector<DrawItem> items_;
     std::vector<ColorVertex> lines_, tris_;
     std::vector<CustomDraw> custom_, customOpaque_, customShadow_;
+    std::vector<CustomDraw> customMaterialReceiver_,customSurfaceReceiver_;
     Camera3D cam_;
     mat4 viewProj_, lightViewProj_;
     float3 camPos_;
@@ -1113,6 +1156,7 @@ private:
     float reflectionPlaneY_ = 0.f;
     bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
     bool hdrFrame_ = false;
+    bool lumaMaterialCapture_=false,lumaSurfaceCapture_=false;
     HeightField heightField_;
     struct SceneTarget { int w = 0, h = 0; bool hdr = false; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)

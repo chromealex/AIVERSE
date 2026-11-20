@@ -22,5 +22,7 @@ struct SpirvProgram {
 };
 // Compiles and links both stages (varyings get matching locations by name). Thread-safe.
 bool compileProgram(const std::string& vertexBody, const std::string& fragmentBody, bool linearTarget, SpirvProgram& out);
+// GLSL 450 compute pipeline compiler. No GPU device or command execution.
+bool compileComputeProgram(const std::string& glsl,std::vector<uint32_t>& out,std::string& error);
 
 } // namespace aiverse::gfx::vk

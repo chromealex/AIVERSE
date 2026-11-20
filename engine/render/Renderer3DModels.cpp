@@ -31,7 +31,8 @@ constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
 constexpr uint32_t kKeyDrawCallView = 32768;
-constexpr uint32_t kKeyMaterialInstancePalette = 1u << 27; // editor draw-call diagnostic shader permutation
+constexpr uint32_t kKeyMaterialInstancePalette = 1u << 27;
+constexpr uint32_t kKeyLumaMaterial=1u<<28,kKeyLumaSurface=1u<<30; // editor draw-call diagnostic shader permutation
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
                    kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192, kKeyMaterialPalette = 16384;   // GI keys: agent-lightbake
 struct ProfileTimer {
@@ -319,11 +320,16 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags)));
     const bool twoSided = !outline && it.mat->doubleSided;
     const bool giPhase = phase == 1 || phase == 2;
-    const bool lightmap = giPhase && it.gi == 1, probes = giPhase && it.gi == 2;
+    const bool surfaceCapture=lumaSurfaceCapture_ && phase==1;
+    const bool materialCapture=(lumaMaterialCapture_||surfaceCapture) && phase==1;
+    const bool lightmap = giPhase && !materialCapture && it.gi == 1;
+    const bool probes = giPhase && !materialCapture && it.gi == 2;
     const uint32_t gpuInstanceShaderBit = gpuInstances ? (1u << 26) : 0u;
-    const uint32_t studioShaderBits = (geometryMainView_ && (phase == 1 || phase == 2) && studioDebugMode_ >= 2)
+    const uint32_t studioShaderBits = (!materialCapture && geometryMainView_ && (phase == 1 || phase == 2) && studioDebugMode_ >= 2)
                                     ? uint32_t(studioDebugMode_) << 17 : 0u;
     const uint32_t shaderKey = gpuInstanceShaderBit | studioShaderBits |
+                               (materialCapture?kKeyLumaMaterial:0u) |
+                               (surfaceCapture?kKeyLumaSurface:0u) |
                                (instancePalette ? kKeyMaterialInstancePalette : 0u) | (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
@@ -370,6 +376,8 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (outline) defs += "#define OUTLINE 1\n";
         if (shaderKey & kKeyDrawCallView) defs += "#define DRAW_CALL_VIEW 1\n";
         if (studioShaderBits) defs += "#define STUDIO_DEBUG_VIEW " + std::to_string(studioShaderBits >> 17) + "\n";
+        if(materialCapture && !surfaceCapture)defs+="#define LUMAWEAVE_MATERIAL 1\n";
+        if(surfaceCapture)defs+="#define LUMAWEAVE_SURFACE 1\n";
         if (lightmap) defs += "#define LIGHTMAP 1\n";
         if (probes) defs += "#define PROBES 1\n";
         if (lightmap || probes) defs += "#define AIVERSE_GIQ " + std::to_string(bakedQuality_ == BakedQuality::Low ? 1 : 2) + "\n";
@@ -495,7 +503,9 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         } else if (depthAfter) {
             pd.colorWrite = false;
         }
-        pd.label = shadow ? "model shadow" : outline ? "model outline" : depthAfter ? "model depth" : "model";
+        pd.label = shadow ? "model shadow" : surfaceCapture ? "LumaWeave normal/roughness" :
+                   materialCapture ? "LumaWeave material/metallic" :
+                   outline ? "model outline" : depthAfter ? "model depth" : "model";
         if (warmingPipelines_) {
             auto job=dev_->createPipelineAsync(pd);
             if (!job(ph)) { pendingModelPipes_.push_back({pkey,std::move(job)}); warmingPending_=true; return {}; }

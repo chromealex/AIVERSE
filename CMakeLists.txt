@@ -1073,6 +1073,28 @@ else()
     list(APPEND AIVERSE_RUNTIME_SRC engine/platform/linux/PlatformLinux.cpp engine/gfx/gl/GfxGL.cpp)
 endif()
 
+# Stage22 opt-in LumaWeave GPU Direct/PRISMA bridge safety contracts.
+# All tests are authored sources, not evidence of runtime GPU acceptance.
+if(AIVERSE_BUILD_TESTS)
+    foreach(test_name IN ITEMS
+            lumaweave_vulkan_history_policy
+            lumaweave_vulkan_motion_policy
+            lumaweave_vulkan_direct_owner
+            lumaweave_vulkan_multiframe
+            lumaweave_vulkan_post_contract
+            lumaweave_vulkan_auto_motion_bridge
+            lumaweave_vulkan_reactive_contract
+            lumaweave_backend_policy
+            lumaweave_gi_frame_contract
+            lumaweave_native_compile
+            lumaweave_stage22_main_prisma_contract)
+        add_executable(aiverse_${test_name}_test tests/render/${test_name}.cpp)
+        target_include_directories(aiverse_${test_name}_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR})
+        add_test(NAME ${test_name} COMMAND aiverse_${test_name}_test)
+    endforeach()
+endif()
+
 # Vulkan RHI backend next to GL (Windows, Linux, Android): opt-in at run time (AIVERSE_GFX=vulkan, --gfx vulkan,
 # game.json "graphics"), GL stays the default and the fallback. The loader is opened at run time; shaders are
 # the engine's GLSL compiled to SPIR-V with the vendored glslang (third_party/glslang). docs/vulkan.md
@@ -1084,7 +1106,8 @@ option(AIVERSE_VULKAN "Build the Vulkan RHI backend (Windows, Linux, Android)" $
 if(AIVERSE_VULKAN)
     add_subdirectory(third_party/glslang)
     add_library(aiverse_gfx_vulkan STATIC engine/gfx/vulkan/VkApi.cpp engine/gfx/vulkan/VkShaderCompiler.cpp engine/gfx/vulkan/VkSurface.cpp
-        engine/gfx/vulkan/GfxVulkan.cpp engine/gfx/vulkan/VkResources.cpp engine/gfx/vulkan/VkDraw.cpp)
+        engine/gfx/vulkan/GfxVulkan.cpp engine/gfx/vulkan/VkResources.cpp engine/gfx/vulkan/VkDraw.cpp
+        engine/gfx/vulkan/VkCompute.cpp)
     target_include_directories(aiverse_gfx_vulkan PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/third_party/vulkan/include)
     target_compile_definitions(aiverse_gfx_vulkan PUBLIC AIVERSE_WITH_VULKAN=1)
     target_link_libraries(aiverse_gfx_vulkan PRIVATE aiverse_glslang PUBLIC ${CMAKE_DL_LIBS})
@@ -1092,6 +1115,22 @@ if(AIVERSE_VULKAN)
         add_executable(aiverse_vulkan_tests tests/render/vulkan_tests.cpp)
         target_link_libraries(aiverse_vulkan_tests PRIVATE aiverse_gfx_vulkan)
         add_test(NAME vulkan_backend COMMAND aiverse_vulkan_tests)
+        add_executable(aiverse_lumaweave_vulkan_direct_shader_test
+            tests/render/lumaweave_vulkan_direct_shader.cpp)
+        target_include_directories(aiverse_lumaweave_vulkan_direct_shader_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(aiverse_lumaweave_vulkan_direct_shader_test PRIVATE
+            aiverse_gfx_vulkan)
+        add_test(NAME lumaweave_vulkan_direct_shader
+            COMMAND aiverse_lumaweave_vulkan_direct_shader_test)
+        add_executable(aiverse_gi_vulkan_glsl_contract_test
+            tests/render/gi_vulkan_glsl_contract.cpp)
+        target_include_directories(aiverse_gi_vulkan_glsl_contract_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(aiverse_gi_vulkan_glsl_contract_test PRIVATE
+            aiverse_gfx_vulkan)
+        add_test(NAME gi_vulkan_glsl_contract
+            COMMAND aiverse_gi_vulkan_glsl_contract_test)
     endif()
 endif()
 
