@@ -1707,6 +1707,42 @@ kernel void cs_main(device const DrawArgs* generated [[buffer(0)]],
         const MTLPrimitiveType icbPrimitive =
             p->desc.primitive == Primitive::Lines
                 ? MTLPrimitiveTypeLine : MTLPrimitiveTypeTriangle;
+        // Stage139: reversible, process-level ICB experiment. A pipeline
+        // without fs_main has no fragment stage, so a fragment uniform binding
+        // cannot be consumed. Keep EVERY vertex binding and residency
+        // declaration, regardless of this option: inherited buffers previously
+        // triggered AGX faults. Missing shader metadata fails closed.
+        struct DepthFragmentUniformExperiment {
+            bool audit = false;
+            bool skip = false;
+        };
+        static const DepthFragmentUniformExperiment depthFragmentUniforms = [] {
+            const char* flag =
+                std::getenv("AIVERSE_METAL_CPU_MDI_SKIP_DEPTH_FRAGMENT_UNIFORMS");
+            const bool audit = flag && (std::strcmp(flag, "0") == 0 ||
+                                        std::strcmp(flag, "1") == 0);
+            return DepthFragmentUniformExperiment{
+                audit, audit && std::strcmp(flag, "1") == 0};
+        }();
+        const MTShader* icbShader = depthFragmentUniforms.audit
+            ? shaders_.get(p->desc.shader.id) : nullptr;
+        const bool eligibleDepthNoFragment =
+            depthFragmentUniforms.audit && p->desc.depthOnly && !pbr &&
+            icbShader && icbShader->fs == nil;
+        const bool skipDepthFragmentUniforms =
+            eligibleDepthNoFragment && depthFragmentUniforms.skip;
+        if (eligibleDepthNoFragment) {
+            // One line per process (rather than per frame/command) confirms
+            // that an experiment actually reached a fragmentless depth pass.
+            static bool reported = false;
+            if (!reported) {
+                reported = true;
+                std::fprintf(stderr,
+                    "[metal-icb-depth-uniforms] mode=%s eligible=1 slots=%d\n",
+                    skipDepthFragmentUniforms ? "on" : "off",
+                    uniformBindingCount);
+            }
+        }
         const auto& modelUniforms = indirectUniformSnapshots_[0];
         constexpr size_t kModelInstanceBytes = 36u * sizeof(float);
         const size_t instanceCapacity = modelUniforms.size() / kModelInstanceBytes;
@@ -1733,7 +1769,10 @@ kernel void cs_main(device const DrawArgs* generated [[buffer(0)]],
             for (int k = 0; k < uniformBindingCount; ++k) {
                 const auto& binding = uniformBindings[k];
                 [command setVertexBuffer:binding.buffer offset:0 atIndex:binding.index];
-                [command setFragmentBuffer:binding.buffer offset:0 atIndex:binding.index];
+                // No fragment function means no consumer of fragment uniforms.
+                // All other shaders preserve the original explicit bindings.
+                if (!skipDepthFragmentUniforms)
+                    [command setFragmentBuffer:binding.buffer offset:0 atIndex:binding.index];
             }
             [command drawIndexedPrimitives:icbPrimitive indexCount:args.indexCount
                 indexType:icbIndexType
