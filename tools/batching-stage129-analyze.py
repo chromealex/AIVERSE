@@ -42,10 +42,10 @@ def read_summary(root, subdivisions):
 
 def analyze(root, write=True):
     by_subdivision = {subdivisions: read_summary(root, subdivisions)
-                      for subdivisions in (1, 8)}
+                      for subdivisions in (1, 4)}
     summaries = []
     scaling = []
-    for subdivisions in (1, 8):
+    for subdivisions in (1, 4):
         for inherit in ("off", "on"):
             record = by_subdivision[subdivisions][inherit]
             summaries.append(dict(
@@ -63,7 +63,7 @@ def analyze(root, write=True):
                 cpu_mdi_ms=record["cpu_mdi_ms"]))
     for inherit in ("off", "on"):
         low = by_subdivision[1][inherit]
-        high = by_subdivision[8][inherit]
+        high = by_subdivision[4][inherit]
         scaling.append(dict(
             inherited_pipeline=inherit,
             direct_gpu_delta_ms=high["gpu_direct_ms"] - low["gpu_direct_ms"],
@@ -104,7 +104,7 @@ def self_test():
         root = Path(temp)
         for subdivisions, samples in (
             (1, ((.570, .820), (.569, .780))),
-            (8, ((.800, 1.150), (.790, 1.090))),
+            (4, ((.800, 1.150), (.790, 1.090))),
         ):
             directory = root / f"mesh{subdivisions}"
             directory.mkdir()

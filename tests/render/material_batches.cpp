@@ -499,6 +499,11 @@ int aiverseMain(int argc, char** argv) {
         }
         renderer.setDiagnosticModelPassMask(modelPassMask);
         renderer.setDiagnosticCpuMdiGroupCap(diagnosticMdiGroupCap);
+        if (stress) std::printf(
+            "stress diagnostic geometry pooled=%d vertex_bytes=%u index_bytes=%u\n",
+            int(bool(model->geometryPoolPage)),
+            unsigned(model->gpuPoolVertexBytes),
+            unsigned(model->gpuPoolIndexBytes));
         if (stress) std::printf("stress diagnostic CPU MDI group cap=%u\n",
                                 unsigned(diagnosticMdiGroupCap));
         if (stress) std::printf("stress diagnostic model pass=%s mask=%u\n",
