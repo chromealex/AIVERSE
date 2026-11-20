@@ -573,6 +573,17 @@ if(AIVERSE_VULKAN)
             aiverse_gfx_vulkan)
         add_test(NAME gi_vulkan_glsl_contract
             COMMAND aiverse_gi_vulkan_glsl_contract_test)
+
+        # Source-level Vulkan compute ABI/SPIR-V gate for the experimental
+        # LumaWeave direct shadow ray kernel. NOT GPU runtime validation.
+        add_executable(aiverse_lumaweave_vulkan_direct_shader_test
+            tests/render/lumaweave_vulkan_direct_shader.cpp)
+        target_include_directories(aiverse_lumaweave_vulkan_direct_shader_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(aiverse_lumaweave_vulkan_direct_shader_test PRIVATE
+            aiverse_gfx_vulkan)
+        add_test(NAME lumaweave_vulkan_direct_shader
+            COMMAND aiverse_lumaweave_vulkan_direct_shader_test)
     endif()
 endif()
 

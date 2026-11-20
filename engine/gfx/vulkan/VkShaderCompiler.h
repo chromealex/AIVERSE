@@ -22,5 +22,9 @@ struct SpirvProgram {
 };
 // Compiles and links both stages (varyings get matching locations by name). Thread-safe.
 bool compileProgram(const std::string& vertexBody, const std::string& fragmentBody, bool linearTarget, SpirvProgram& out);
+// Shader-only Vulkan compute validation (no device or dispatch required).
+// Input is a complete GLSL 450 compute module with explicit descriptor bindings.
+bool compileComputeProgram(const std::string& glsl, std::vector<uint32_t>& out,
+                           std::string& error);
 
 } // namespace aiverse::gfx::vk

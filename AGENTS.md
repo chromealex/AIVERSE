@@ -1,6 +1,21 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 11 — Vulkan direct compute shader ABI (2026-11-20)
+
+Read `docs/agent-handoffs/gi-lumaweave-stage11-vulkan-direct-compute-shader-2026-11-20.md`.
+Branch `feature/gi-lumaweave-vulkan-direct-stage11-20261120` contains SOURCE-ONLY GLSL 450 shadowed direct
+point/spot compute plus a Vulkan glslang SPIR-V compiler/test contract. The
+integration Vulkan RHI still lacks compute dispatch, so the feature has
+**NOT** been run or enabled in any Vulkan scene. Never mistake SPIR-V
+compilation for pipeline, GPU shadow, memory barrier, latency or parity tests.
+Do not overwrite concurrent Vulkan renderer/batching/texture work while
+backporting the 4-SSBO/1 RGBA16F/80-byte GI compute ABI from the separate
+portable GI branch. Keep LumaWeave DIRECT, bounced GI, baked and legacy
+LightSystem contribution ownership mutually exclusive in each route. No
+work is permitted to claim Metal/GLES/Vulkan production parity until real
+device validation. Keep per-stage implementation and separate handoff commits.
+
 ## GI + LumaWeave Stage 10 — portable geometry revision safety (2026-11-20)
 
 Current isolated branch: `feature/gi-lumaweave-portable-geometry-revision-stage10-20261120`.
