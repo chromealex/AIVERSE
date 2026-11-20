@@ -165,7 +165,8 @@ static bool unitChecks() {
 // Deterministic 16-primitive fixture with one shader/material and independent
 // node transforms. MDI and the fallback must render byte-identical images.
 static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = false,
-                                                       size_t primitives = 16) {
+                                                       size_t primitives = 16,
+                                                       uint32_t meshSubdivisions = 1) {
     using namespace render;
     auto m = std::make_unique<Model>();
     m->path = "indirect-fixture";
@@ -183,19 +184,42 @@ static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = fal
     }
     for (size_t i = 0; i < primitives; ++i) {
         const uint32_t start = uint32_t(m->vertices.size());
-        for (float3 pos : {float3{-.3f, 0, 0}, float3{.3f, 0, 0}, float3{0, .75f, 0}}) {
-            ModelVertex v;
-            v.pos = pos;
-            v.nrm = {0, 0, 1};
-            m->vertices.push_back(v);
-        }
-        m->indices.insert(m->indices.end(), {start, start + 1, start + 2});
+        const uint32_t firstIndex = uint32_t(m->indices.size());
+        // Test-only regular triangle tessellation: changes vertex/triangle
+        // work while keeping model nodes, material and MDI command counts fixed.
+        // Direct and MDI consume the exact same geometry for raster parity.
+        const float3 a{-.3f, 0, 0}, b{.3f, 0, 0}, c{0, .75f, 0};
+        auto point = [&](uint32_t u, uint32_t v) {
+            const float fu = float(u) / float(meshSubdivisions);
+            const float fv = float(v) / float(meshSubdivisions);
+            return float3{
+                a.x + (b.x - a.x) * fu + (c.x - a.x) * fv,
+                a.y + (b.y - a.y) * fu + (c.y - a.y) * fv,
+                a.z + (b.z - a.z) * fu + (c.z - a.z) * fv};
+        };
+        auto triangle = [&](float3 x, float3 y, float3 z) {
+            const uint32_t firstVertex = uint32_t(m->vertices.size());
+            for (const float3 pos : {x, y, z}) {
+                ModelVertex vertex;
+                vertex.pos = pos;
+                vertex.nrm = {0, 0, 1};
+                m->vertices.push_back(vertex);
+            }
+            m->indices.insert(m->indices.end(),
+                              {firstVertex, firstVertex + 1, firstVertex + 2});
+        };
+        for (uint32_t u = 0; u < meshSubdivisions; ++u)
+            for (uint32_t v = 0; v < meshSubdivisions - u; ++v) {
+                triangle(point(u, v), point(u + 1, v), point(u, v + 1));
+                if (u + v + 1 < meshSubdivisions)
+                    triangle(point(u + 1, v), point(u + 1, v + 1), point(u, v + 1));
+            }
         Primitive p;
         p.material = variedMaterials ? int(i % 3) : 0;
-        p.firstIndex = uint32_t(m->indices.size() - 3);
-        p.indexCount = 3;
+        p.firstIndex = firstIndex;
+        p.indexCount = uint32_t(m->indices.size()) - firstIndex;
         p.firstVertex = start;
-        p.vertexCount = 3;
+        p.vertexCount = uint32_t(m->vertices.size()) - start;
         MeshDef mesh;
         mesh.name = "primitive_" + std::to_string(i);
         mesh.primitives.push_back(p);
@@ -219,7 +243,31 @@ static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = fal
 
 int aiverseMain(int argc, char** argv) {
     if (!unitChecks()) return 1;
-    if (argc == 2 && std::string(argv[1]) == "--unit") return 0;
+    if (argc == 2 && std::string(argv[1]) == "--unit") {
+        // CPU-only topology sanity: N subdivisions must generate N*N triangles
+        // per primitive without changing the number of meshes or model nodes.
+        for (uint32_t subdivisions : {1u, 2u, 4u, 8u}) {
+            auto fixture = indirectFixture(false, 16, subdivisions);
+            const uint32_t verticesPerPrimitive = 3u * subdivisions * subdivisions;
+            if (fixture->meshes.size() != 16 || fixture->nodes.size() != 16 ||
+                fixture->vertices.size() != size_t(16u * verticesPerPrimitive) ||
+                fixture->indices.size() != size_t(16u * verticesPerPrimitive)) {
+                std::fprintf(stderr, "mesh subdivision CPU topology FAILED N=%u\n",
+                             unsigned(subdivisions));
+                return 1;
+            }
+            for (const auto& mesh : fixture->meshes)
+                if (mesh.primitives.size() != 1 ||
+                    mesh.primitives[0].indexCount != verticesPerPrimitive ||
+                    mesh.primitives[0].vertexCount != verticesPerPrimitive) {
+                    std::fprintf(stderr, "mesh subdivision primitive FAILED N=%u\n",
+                                 unsigned(subdivisions));
+                    return 1;
+                }
+        }
+        std::printf("mesh subdivision CPU checks=passed\n");
+        return 0;
+    }
     if (argc != 3) { std::fprintf(stderr, "usage: material_batches MODEL OUTPUT_PREFIX\n"); return 2; }
     auto read = [](const std::string& path, std::string& bytes) {
         std::ifstream f(path, std::ios::binary); if (!f) return false;
@@ -285,12 +333,33 @@ int aiverseMain(int argc, char** argv) {
         }
         stressItems = size_t(parsed);
     }
+    // Diagnostic only: do not change the default model fixture or renderer.
+    // Each original primitive remains one draw, with N*N triangles instead
+    // of one; cap total triangles to avoid accidental huge stress allocations.
+    uint32_t meshSubdivisions = 1;
+    if (stress && std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS")) {
+        const char* raw = std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS");
+        char* end = nullptr;
+        const unsigned long n = std::strtoul(raw, &end, 10);
+        if (end == raw || *end != '\0' ||
+            (n != 1 && n != 2 && n != 4 && n != 8)) {
+            std::fprintf(stderr,
+                "AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS must be 1, 2, 4 or 8\n");
+            return 2;
+        }
+        meshSubdivisions = uint32_t(n);
+    }
+    if (stress && uint64_t(stressItems) * meshSubdivisions * meshSubdivisions > 1000000ull) {
+        std::fprintf(stderr, "Stress fixture exceeds 1000000 triangles\n");
+        return 2;
+    }
     // Cold-vs-warm packet screenshot parity uses the same self-contained
     // varied-material 16-rigid-part fixture as the indirect palette test.
     auto model = scenario == "indirect" || scenario == "indirect_palette" ||
                  scenario == "static_packets" || scenario == "auto_stress"
         ? indirectFixture(scenario != "indirect" && !stress,
-                          stress ? stressItems : 16) : render::loadModel(argv[1],read);
+                          stress ? stressItems : 16,
+                          meshSubdivisions) : render::loadModel(argv[1],read);
     const std::string prefix = argv[2];
     const bool reflection=std::getenv("AIVERSE_SHADOW_TEST_REFLECTION")!=nullptr;
     render::Renderer3D renderer; render::Mesh floor; gfx::Device* device = nullptr;
@@ -383,6 +452,11 @@ int aiverseMain(int argc, char** argv) {
     if (stress) {
         std::printf("stress requested_items=%zu authored_unique_primitives=%zu "
                     "submitted_model_draws=1\n", stressItems, model->meshes.size());
+        std::printf("stress diagnostic mesh subdivisions=%u "
+                    "triangles_per_primitive=%u vertices_per_primitive=%u\n",
+                    unsigned(meshSubdivisions),
+                    unsigned(meshSubdivisions * meshSubdivisions),
+                    unsigned(3 * meshSubdivisions * meshSubdivisions));
     }
     // Benchmark only: independent runs for CPU MDI and GPU ICB. The latter
     // may legitimately retain CPU MDI for a different render pass.
