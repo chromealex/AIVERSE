@@ -735,6 +735,10 @@ public:
             device_.argumentBuffersSupport < MTLArgumentBuffersTier2) return;
         const auto& src = shader->source;
         if (src.find("#define AIVERSE_MODEL_SSR 1") == std::string::npos ||
+            // Dynamic-GI U7 far cascade uses fragment buffer8; the
+            // experimental ICB PBR argument buffer also uses buffer8.
+            // Preserve bounce by using the conventional model pipeline.
+            src.find("#define DYNAMIC_GI 1") != std::string::npos ||
             src.find("#define LIGHTMAP 1") != std::string::npos ||
             src.find("#define PROBES 1") != std::string::npos ||
             src.find("#define SKINNED 1") != std::string::npos ||

@@ -1,6 +1,6 @@
 // Stage 101 deferred: backpressure never bypasses GPU completion.
 #include "engine/render/AsyncResourceRetirementQueue.h"
-#include <cassert>
+#include "../AlwaysCheck.h"
 #include <memory>
 #include <set>
 #include <vector>
@@ -20,45 +20,45 @@ int main() {
 
     queue.enqueue(std::make_unique<int>(10));
     queue.enqueue(std::make_unique<int>(20));
-    assert(queue.saturated(2));
-    assert(queue.stats().highWatermark==2);
-    assert(!queue.collect(issue,done,close,wait,release));
-    assert(queue.stats().pendingBatches==1);
-    assert(queue.stats().unsubmittedResources==0);
+    AIVERSE_TEST_CHECK(queue.saturated(2));
+    AIVERSE_TEST_CHECK(queue.stats().highWatermark==2);
+    AIVERSE_TEST_CHECK(!queue.collect(issue,done,close,wait,release));
+    AIVERSE_TEST_CHECK(queue.stats().pendingBatches==1);
+    AIVERSE_TEST_CHECK(queue.stats().unsubmittedResources==0);
     for(int i=0;i<4;++i)
-        assert(!queue.collect(issue,done,close,wait,release));
-    assert(queue.stats().pendingPolls>=4);
-    assert(destroyed.empty()); // pressure is not permission to free
+        AIVERSE_TEST_CHECK(!queue.collect(issue,done,close,wait,release));
+    AIVERSE_TEST_CHECK(queue.stats().pendingPolls>=4);
+    AIVERSE_TEST_CHECK(destroyed.empty()); // pressure is not permission to free
 
     queue.enqueue(std::make_unique<int>(30));
-    assert(queue.stats().highWatermark==3);
-    assert(!queue.collect(issue,done,close,wait,release));
-    assert(queue.stats().pendingBatches==2);
-    assert(queue.stats().pendingResources==3);
+    AIVERSE_TEST_CHECK(queue.stats().highWatermark==3);
+    AIVERSE_TEST_CHECK(!queue.collect(issue,done,close,wait,release));
+    AIVERSE_TEST_CHECK(queue.stats().pendingBatches==2);
+    AIVERSE_TEST_CHECK(queue.stats().pendingResources==3);
     completed.insert(1);
-    assert(!queue.collect(issue,done,close,wait,release));
-    assert((destroyed==std::vector<int>{10,20}));
-    assert(queue.stats().completedResources==2);
-    assert(queue.stats().pendingResources==1);
-    assert(!queue.saturated(2));
+    AIVERSE_TEST_CHECK(!queue.collect(issue,done,close,wait,release));
+    AIVERSE_TEST_CHECK((destroyed==std::vector<int>{10,20}));
+    AIVERSE_TEST_CHECK(queue.stats().completedResources==2);
+    AIVERSE_TEST_CHECK(queue.stats().pendingResources==1);
+    AIVERSE_TEST_CHECK(!queue.saturated(2));
 
     completed.insert(2);
-    assert(queue.collect(issue,done,close,wait,release));
-    assert((destroyed==std::vector<int>{10,20,30}));
-    assert(queue.stats().completedResources==3);
-    assert(queue.stats().pendingBatches==0);
-    assert(queue.stats().highWatermark==3);
+    AIVERSE_TEST_CHECK(queue.collect(issue,done,close,wait,release));
+    AIVERSE_TEST_CHECK((destroyed==std::vector<int>{10,20,30}));
+    AIVERSE_TEST_CHECK(queue.stats().completedResources==3);
+    AIVERSE_TEST_CHECK(queue.stats().pendingBatches==0);
+    AIVERSE_TEST_CHECK(queue.stats().highWatermark==3);
 
     // No token available and no full idle fence: resources are retained.
     queue.enqueue(std::make_unique<int>(40));
     auto noToken=[]()->uint64_t{return 0;};
-    assert(!queue.collect(noToken,done,close,wait,release));
-    assert(queue.stats().tokenFailures==1);
-    assert(queue.stats().idleFallbackFailures==1);
-    assert(queue.stats().pendingResources==1);
-    assert(destroyed.size()==3);
+    AIVERSE_TEST_CHECK(!queue.collect(noToken,done,close,wait,release));
+    AIVERSE_TEST_CHECK(queue.stats().tokenFailures==1);
+    AIVERSE_TEST_CHECK(queue.stats().idleFallbackFailures==1);
+    AIVERSE_TEST_CHECK(queue.stats().pendingResources==1);
+    AIVERSE_TEST_CHECK(destroyed.size()==3);
     waitOk=true;
-    assert(queue.collect(noToken,done,close,wait,release));
-    assert(queue.empty());
-    assert(destroyed.back()==40);
+    AIVERSE_TEST_CHECK(queue.collect(noToken,done,close,wait,release));
+    AIVERSE_TEST_CHECK(queue.empty());
+    AIVERSE_TEST_CHECK(destroyed.back()==40);
 }

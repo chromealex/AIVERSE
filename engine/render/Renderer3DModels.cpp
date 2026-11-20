@@ -10,6 +10,9 @@
 #include "GpuIcbPolicy.h"
 #include "StaticModelCachePolicy.h"
 #include "StaticCrossModelBatchPolicy.h"
+#include "GiDynamicProbeTexture.h"
+#include "GiClipmapValidityTexture.h"
+#include "GiRendererOverlayPolicy.h"
 
 #include <algorithm>
 #include <array>
@@ -32,7 +35,11 @@ static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform b
 
 constexpr uint32_t kKeyDrawCallView = 32768;
 constexpr uint32_t kKeyMaterialInstancePalette = 1u << 27;
-constexpr uint32_t kKeyLumaMaterial=1u<<28,kKeyLumaSurface=1u<<30; // editor draw-call diagnostic shader permutation
+constexpr uint32_t kKeyLumaMaterial=1u<<28,kKeyLumaSurface=1u<<30;
+constexpr uint32_t kKeyDynamicGI=1u<<23;
+constexpr uint32_t kKeyDynamicGIValidity=1u<<24;
+constexpr uint32_t kKeyDynamicGICascades=1u<<25;
+constexpr uint32_t kKeyDynamicGITriple=1u<<31;
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
                    kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192, kKeyMaterialPalette = 16384;   // GI keys: agent-lightbake
 struct ProfileTimer {
@@ -299,6 +306,84 @@ void StaticModelCache::prepare(const Model& source,const mat4& transform) {
     min={1e30f,1e30f,1e30f};max={-1e30f,-1e30f,-1e30f};
     for(int i=0;i<8;++i){auto p=world.transformPoint({c.x+(i&1?e.x:-e.x),c.y+(i&2?e.y:-e.y),c.z+(i&4?e.z:-e.z)});min=min3(min,p);max=max3(max,p);}
 }
+bool Renderer3D::setDynamicGiOverlay(const GiDynamicProbeTexture* overlay, float3 origin,
+                                     float spacing, int nx, int ny, int nz,
+                                     int ringX, int ringY, int ringZ,
+                                     const GiClipmapValidityTexture* validity) {
+    if (!overlay) { clearDynamicGiOverlay(); return true; }
+    if(!dev_ || !GiRendererOverlayPolicy::acceptBase(
+           *dev_,*overlay,origin,spacing,nx,ny,nz,ringX,ringY,ringZ,
+           validity,matQuality_!=MaterialQuality::Low)) {
+        clearDynamicGiOverlay(); // no stale source from previous world
+        return false;
+    }
+    dynamicGiOverlay_ = overlay; // caller owns it; exact same device required
+    dynamicGiValidity_ = validity;
+    dynamicGiFarOverlay_ = nullptr;
+    dynamicGiThirdOverlay_ = nullptr;
+    dynamicGiOrigin_ = {origin.x, origin.y, origin.z, 1.0f / spacing};
+    dynamicGiSize_ = {float(nx), float(ny), float(nz), 0.0f};
+    dynamicGiRing_ = {float(ringX), float(ringY), float(ringZ), 0.0f};
+    return true;
+}
+
+bool Renderer3D::setDynamicGiCascadeOverlay(const GiDynamicProbeTexture* far,
+                                            float3 origin,float spacing,
+                                            int nx,int ny,int nz,
+                                            int ringX,int ringY,int ringZ) {
+    if(!far) { dynamicGiFarOverlay_=nullptr; dynamicGiThirdOverlay_=nullptr; return true; }
+    if(!dev_ || !dynamicGiOverlay_ || !dynamicGiValidity_ ||
+       !GiRendererOverlayPolicy::acceptMetalCascade(
+           *dev_,*far,origin,spacing,nx,ny,nz,ringX,ringY,ringZ)) {
+        dynamicGiFarOverlay_=dynamicGiThirdOverlay_=nullptr;
+        return false;
+    }
+    dynamicGiFarOrigin_={origin.x,origin.y,origin.z,1.f/spacing};
+    dynamicGiFarSize_={float(nx),float(ny),float(nz),0.f};
+    dynamicGiFarRing_={float(ringX),float(ringY),float(ringZ),0.f};
+    dynamicGiFarOverlay_=far;
+    dynamicGiThirdOverlay_=nullptr;
+    return true;
+}
+
+bool Renderer3D::setDynamicGiThirdCascadeOverlay(const GiDynamicProbeTexture* third,
+                                                  float3 origin,float spacing,
+                                                  int nx,int ny,int nz,
+                                                  int ringX,int ringY,int ringZ) {
+    if(!third) {dynamicGiThirdOverlay_=nullptr;return true;}
+    if(!dev_ || !dynamicGiOverlay_ || !dynamicGiValidity_ ||
+       !dynamicGiFarOverlay_ ||
+       !GiRendererOverlayPolicy::acceptMetalCascade(
+           *dev_,*third,origin,spacing,nx,ny,nz,ringX,ringY,ringZ)) {
+        dynamicGiThirdOverlay_=nullptr;
+        return false;
+    }
+    dynamicGiThirdOrigin_={origin.x,origin.y,origin.z,1.f/spacing};
+    dynamicGiThirdSize_={float(nx),float(ny),float(nz),0.f};
+    dynamicGiThirdRing_={float(ringX),float(ringY),float(ringZ),0.f};
+    dynamicGiThirdOverlay_=third;
+    return true;
+}
+
+bool Renderer3D::dynamicGiEligible(const ModelItem& it, int phase,
+                                  bool /*gpuInstances*/, bool /*instancePalette*/) const {
+    // U6 and tex13..16 are view-shared (not per-instance) and the model
+    // shader evaluates GI from each instance's world position/normal.
+    // Standard and CPU MDI instancing remain eligible. Stage23 suppresses
+    // experimental Metal PBR ICB for GI view to avoid a buffer8 conflict
+    // with U7 far cascade; never draw a batch without bounced light.
+    if ((phase != 1 && phase != 2) || !dynamicGiOverlay_ ||
+        !dynamicGiOverlay_->texture().valid() ||
+        !hdrFrame_ || matQuality_ == MaterialQuality::Low ||
+        it.mat->shading == ShadingModel::Unlit)
+        return false;
+    const auto& program = it.mat->shaderGraph;
+    // Shader Graph textures start at slot 13, which the opt-in GI overlay uses.
+    // A graph with no textures remains eligible; never steal texture slot 13.
+    return !program || int(matQuality_) < program->minQuality ||
+           program->textures.empty();
+}
+
 void Renderer3D::setMaterialQuality(MaterialQuality q) {
     if(q==matQuality_)return;
     if(dev_)retireModelPrograms();
@@ -324,12 +409,21 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const bool materialCapture=(lumaMaterialCapture_||surfaceCapture) && phase==1;
     const bool lightmap = giPhase && !materialCapture && it.gi == 1;
     const bool probes = giPhase && !materialCapture && it.gi == 2;
+    const bool dynamicGi=dynamicGiEligible(it,phase,gpuInstances,instancePalette);
+    const bool dynamicGiValidity=dynamicGi && dynamicGiValidity_;
+    const bool dynamicGiCascades=dynamicGiValidity && dynamicGiFarOverlay_;
+    const bool dynamicGiTriple=dynamicGiCascades && dynamicGiThirdOverlay_ &&
+        dev_->info().backend==gfx::Backend::Metal;
     const uint32_t gpuInstanceShaderBit = gpuInstances ? (1u << 26) : 0u;
     const uint32_t studioShaderBits = (!materialCapture && geometryMainView_ && (phase == 1 || phase == 2) && studioDebugMode_ >= 2)
                                     ? uint32_t(studioDebugMode_) << 17 : 0u;
     const uint32_t shaderKey = gpuInstanceShaderBit | studioShaderBits |
                                (materialCapture?kKeyLumaMaterial:0u) |
                                (surfaceCapture?kKeyLumaSurface:0u) |
+                               (dynamicGi?kKeyDynamicGI:0u) |
+                               (dynamicGiValidity?kKeyDynamicGIValidity:0u) |
+                               (dynamicGiCascades?kKeyDynamicGICascades:0u) |
+                               (dynamicGiTriple?kKeyDynamicGITriple:0u) |
                                (instancePalette ? kKeyMaterialInstancePalette : 0u) | (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
@@ -378,6 +472,10 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (studioShaderBits) defs += "#define STUDIO_DEBUG_VIEW " + std::to_string(studioShaderBits >> 17) + "\n";
         if(materialCapture && !surfaceCapture)defs+="#define LUMAWEAVE_MATERIAL 1\n";
         if(surfaceCapture)defs+="#define LUMAWEAVE_SURFACE 1\n";
+        if(dynamicGi)defs+="#define DYNAMIC_GI 1\n";
+        if(dynamicGiValidity)defs+="#define DYNAMIC_GI_VALIDITY 1\n";
+        if(dynamicGiCascades)defs+="#define DYNAMIC_GI_CASCADES 1\n";
+        if(dynamicGiTriple)defs+="#define DYNAMIC_GI_TRIPLE 1\n";
         if (lightmap) defs += "#define LIGHTMAP 1\n";
         if (probes) defs += "#define PROBES 1\n";
         if (lightmap || probes) defs += "#define AIVERSE_GIQ " + std::to_string(bakedQuality_ == BakedQuality::Low ? 1 : 2) + "\n";
@@ -453,7 +551,15 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
         // tex11/tex12: SSR scene colour/depth; graph textures follow at kGraphTextureSlot.
-        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? kGraphTextureSlot+int(graph->textures.size()) : shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
+        sd.uniformSlots=shadow?5:dynamicGiTriple?9:dynamicGiCascades?8:
+                        dynamicGi?7:6;
+        sd.textureSlots=graph && !graph->textures.empty()
+            ? kGraphTextureSlot+int(graph->textures.size()) : shadow?9:
+              dynamicGiTriple?17:dynamicGiCascades?16:
+              dynamicGiValidity?15:dynamicGi?14:13;
+        sd.label=shadow?"model shadow":
+                 materialCapture?"LumaWeave material receiver":
+                 surfaceCapture?"LumaWeave surface receiver":"model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         if (warmingPipelines_) e.job=dev_->createShaderAsync(sd);
         else e.shader = dev_->createShader(sd);
@@ -1487,6 +1593,41 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
         dev_->setTexture(8, it.model->morphTex.valid() ? it.model->morphTex : white_);
     }
     if (it.gi && (phase == 1 || phase == 2)) bindBakedGI(it);
+    if(dynamicGiEligible(it,phase,gpuInstances,instancePalette)) {
+        // Dynamic L1 is EXTRA bounced indirect radiance only; current baked
+        // atlas/probe uniform U4 and direct lighting are not replaced.
+        const float giData[12]={
+            dynamicGiOrigin_.x,dynamicGiOrigin_.y,dynamicGiOrigin_.z,dynamicGiOrigin_.w,
+            dynamicGiSize_.x,dynamicGiSize_.y,dynamicGiSize_.z,dynamicGiSize_.w,
+            dynamicGiRing_.x,dynamicGiRing_.y,dynamicGiRing_.z,dynamicGiRing_.w
+        };
+        dev_->setUniforms(6,giData,sizeof giData);
+        dev_->setTexture(13,dynamicGiOverlay_->texture());
+        if(dynamicGiValidity_)
+            dev_->setTexture(14,dynamicGiValidity_->texture());
+        if(dynamicGiFarOverlay_) {
+            const float far[12]={
+                dynamicGiFarOrigin_.x,dynamicGiFarOrigin_.y,dynamicGiFarOrigin_.z,dynamicGiFarOrigin_.w,
+                dynamicGiFarSize_.x,dynamicGiFarSize_.y,dynamicGiFarSize_.z,dynamicGiFarSize_.w,
+                dynamicGiFarRing_.x,dynamicGiFarRing_.y,dynamicGiFarRing_.z,dynamicGiFarRing_.w
+            };
+            dev_->setUniforms(7,far,sizeof far);
+            dev_->setTexture(15,dynamicGiFarOverlay_->texture());
+        }
+        if(dynamicGiThirdOverlay_ &&
+           dev_->info().backend==gfx::Backend::Metal) {
+            const float distant[12]={
+                dynamicGiThirdOrigin_.x,dynamicGiThirdOrigin_.y,
+                dynamicGiThirdOrigin_.z,dynamicGiThirdOrigin_.w,
+                dynamicGiThirdSize_.x,dynamicGiThirdSize_.y,
+                dynamicGiThirdSize_.z,dynamicGiThirdSize_.w,
+                dynamicGiThirdRing_.x,dynamicGiThirdRing_.y,
+                dynamicGiThirdRing_.z,dynamicGiThirdRing_.w
+            };
+            dev_->setUniforms(8,distant,sizeof distant);
+            dev_->setTexture(16,dynamicGiThirdOverlay_->texture());
+        }
+    }
     if (instancePalette) {
         float palette[kMaxMaterialPalette * 8] = {};
         for (size_t i = 0; i < instanceMaterialSlotCount; ++i) {
@@ -1876,6 +2017,11 @@ void Renderer3D::prepareGpuModelDraws() {
     gpuPreflightGroups_ = gpuBatchCacheHits_ = gpuBatchCacheMisses_ = 0;
     gpuModelSlots_.clear();
     gpuModelRecords_.clear();
+    // Avoid experimental Metal GPU-authored ICB while an L1 atlas is bound.
+    // Its fragment argument buffer occupies Metal buffer8, also used by
+    // U7 far cascade. Ordinary instancing/CPU MDI preserve GI correctly.
+    // This is a per-view opt-in quality decision, never a global toggle.
+    if(dynamicGiOverlay_)return;
 
     // Feedback from the previous completed pass, sampled before counters reset.
     // This is CPU submission feedback, not measured GPU busy-time.
@@ -2788,7 +2934,7 @@ void Renderer3D::renderModels(int phase) {
         }
     }
     if (phase == 1 && geometryMainView_ && !auxiliaryModelPass_ &&
-        !drawCallDebug_ && gpuModelCommandsReady_) {
+        !dynamicGiOverlay_ && !drawCallDebug_ && gpuModelCommandsReady_) {
         for (auto& group : gpuEncodedBatches_) {
             if (group.items.size() < 2) continue;
             // Force all inherited parent state to be bound from this group.
@@ -2840,7 +2986,8 @@ void Renderer3D::renderModels(int phase) {
         }();
         if (!adaptiveGpuIcbFallback &&
             phase == 1 && modelMultiDrawEnabled_ && geometryMainView_ &&
-            !auxiliaryModelPass_ && gpuModelCommandsReady_ && !drawCallDebug_ &&
+            !auxiliaryModelPass_ && !dynamicGiOverlay_ &&
+            gpuModelCommandsReady_ && !drawCallDebug_ &&
             modelIndex < gpuModelSlots_.size() &&
             gpuModelSlots_[modelIndex] != UINT32_MAX &&
             (modelItems_[modelIndex].flags & kDrawStatic) &&

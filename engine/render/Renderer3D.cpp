@@ -521,6 +521,9 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     reflectionPlaneValid_ = false;
     reflectionPlaneY_ = 0.f;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
+    // Borrowed indirect GI atlas belongs to ONE view. No camera/world may
+    // inherit last frame's pointer if its owner was retired/replaced.
+    clearDynamicGiOverlay();
     customMaterialReceiver_.clear();customSurfaceReceiver_.clear();
     lumaMaterialCapture_=lumaSurfaceCapture_=false;
     motionReactiveDraws_.clear(); // per-scene extensions register after beginScene

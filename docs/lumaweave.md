@@ -456,3 +456,58 @@ Metal or Vulkan real GPU captures, GLES3/WebGL2/Android checks,
 performance/memory measurements or full consolidated acceptance. Keep
 the integration PR as DRAFT and do not merge into MAIN until those checks
 are actually executed on a final conflict-reconciled commit.
+
+## Stage 23 — CPU L1 and Metal GI clipmaps on MAIN renderer (2026-11-20)
+
+Source branch: `feature/gi-lumaweave-main-clipmap-stage23-20261120`,
+based on Stage22 MAIN/PRISMA integration. Detailed agent continuation:
+`docs/agent-handoffs/gi-lumaweave-stage23-main-clipmap-2026-11-20.md`.
+
+The Stage22 fail-closed Renderer3D indirect atlas placeholders now have
+real opt-in renderer binding implementations and material shader variants.
+Portable CPU-traced L1 probes are sampled through **RGBA32F tex13 + U6**
+on GLES3/GL33/Vulkan when the backend exposes the format and the material
+tier is not Low. Metal GPU-probe cascades can additionally use a fine
+RGBA16F atlas, R8 validity mask at tex14, a fully completed far
+RGBA16F atlas + U7/tex15, and a Metal-only third distant atlas +
+U8/tex16. All texture/grid/ring metadata are validated through
+`GiRendererOverlayPolicy` on the renderer's current gfx::Device and
+each view borrows rather than owns the atlas. The runtime owns GPU
+ticket/fence publication; shaders never sample an incomplete fine slot
+unless its R8 mask marks it valid.
+
+Only supported PBR models without conflicting Shader Graph images in
+slots 13+ can add the optional bounced L1 layer. Unlit and Low material
+quality deliberately exclude it. MAIN's models retain native PRISMA
+rigid/skinned/morph/instancing/MDI, original baked/probe GI and direct
+sun/point lighting. The shader suppresses the old dynamic grid's
+indirect approximation **only when dynamic L1 is selected**, preserving
+direct lighting. Metal GI views use conventional/CPU MDI rather than
+the experimental GPU ICB-PBR path because it shares buffer8 with the
+U7 far GI uniform; ordinary non-GI views retain the GPU path.
+
+`Renderer3D::beginScene` clears borrowed GI pointers to prevent
+cross-camera/world reuse; `LumaWeaveNativeDriver` rebinds after this
+view boundary and uses scoped clear on return. Invalid atlas/volume/
+format/count/quality/device inputs fail without reusing previous-world
+radiance. No automatic GI is enabled when these APIs are not called.
+GLES3/WebGL2 has **CPU-traced GI**, not Metal/Vulkan compute GI. The
+Vulkan Direct path (point/spot BRDF, BVH, temporal/reactive mask) is
+independently opt-in as in Stages 11–22.
+
+Two new test sources are registered: platform-neutral
+`gi_main_renderer_contract` for actual CPU/GLES3/GL33/Vulkan
+format/binding policy and Metal-only cascade contract, and Vulkan
+`gi_main_renderer_spirv` for baseline, single L1, masked L1,
+cascaded and baked-probe+DGI model shader permutations.
+The CMake template-instantiation target from Stage22 is now compile-
+only `OBJECT`, because its source does not define `main`.
+
+**Verification: NOT RUN.** These are source edits and authored tests;
+no native C++ compile, CTest, Metal MSL, Vulkan SPIR-V/GPU,
+GLES3/WebGL2 device, GI pixel capture, GPU timings/VRAM or full
+Debug+Release suite is confirmed. This is a Draft feature branch,
+not a production GI acceptance or main merge. The next stage must
+reconcile any intervening MAIN commits, then run the owner's one
+consolidated Debug/Release + Metal/Vulkan/GLES GPU test pass and
+repair reported compiler/pixel failures with a separate handoff.

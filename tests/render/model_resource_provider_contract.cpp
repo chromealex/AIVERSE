@@ -2,7 +2,7 @@
 #include "engine/render/ModelResourceCache.h"
 #include "modules/rts/view/RtsModelResourceCache.h"
 #include "modules/rts/view/RtsModelPreparationService.h"
-#include <cassert>
+#include "../AlwaysCheck.h"
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -16,22 +16,22 @@ int main() {
         game::view_adapter::RtsModelPreparationService,
         render::ModelPreparationService>);
     render::ModelResourceCache owner;
-    assert(owner.generation()==0);
+    AIVERSE_TEST_CHECK(owner.generation()==0);
     auto failed=owner.insertIfAbsent("models/missing.glb",nullptr);
-    assert(failed==nullptr && owner.contains("models/missing.glb"));
-    assert(owner.generation()==1);
+    AIVERSE_TEST_CHECK(failed==nullptr && owner.contains("models/missing.glb"));
+    AIVERSE_TEST_CHECK(owner.generation()==1);
     auto geometry=std::make_unique<render::Model>();
     geometry->path="models/hero.glb";
     render::Model* hero=owner.insertIfAbsent("models/hero.glb#geometry",
                                              std::move(geometry));
-    assert(hero!=nullptr && owner.generation()==2);
-    assert(owner.find("models/hero.glb#geometry")==hero);
+    AIVERSE_TEST_CHECK(hero!=nullptr && owner.generation()==2);
+    AIVERSE_TEST_CHECK(owner.find("models/hero.glb#geometry")==hero);
     const auto affected=owner.affectedBySource("models/hero.glb");
-    assert(affected.size()==1 && affected[0].model==hero);
-    assert(owner.affectedBySource("models/missing.glb").size()==1);
-    assert(render::ModelResourceCache::sourceForKey(
+    AIVERSE_TEST_CHECK(affected.size()==1 && affected[0].model==hero);
+    AIVERSE_TEST_CHECK(owner.affectedBySource("models/missing.glb").size()==1);
+    AIVERSE_TEST_CHECK(render::ModelResourceCache::sourceForKey(
         "models/./hero.glb#geometry")=="models/hero.glb");
     const auto names=owner.modelFiles();
-    assert(names.size()==2);
-    assert(owner.pendingRetirements()==0);
+    AIVERSE_TEST_CHECK(names.size()==2);
+    AIVERSE_TEST_CHECK(owner.pendingRetirements()==0);
 }

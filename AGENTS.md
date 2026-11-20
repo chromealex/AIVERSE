@@ -4,6 +4,41 @@ Read this file completely before changing anything. It is short on purpose. `REA
 short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
 `docs/overview.md` the detailed overview; this file is the engineering contract.
 
+## Stage 23 — MAIN Renderer3D CPU/GLES/Vulkan L1 and Metal GI clipmaps (2026-11-20)
+
+Working child: `feature/gi-lumaweave-main-clipmap-stage23-20261120`, based on Stage22 MAIN PRISMA integration PR #80.
+**Mandatory agent handoff:** `docs/agent-handoffs/gi-lumaweave-stage23-main-clipmap-2026-11-20.md`.
+Stage22's fail-closed no-op `setDynamicGiOverlay` APIs were replaced by
+real per-view strict atlas acceptance and shader permutation/binding paths
+in the current MAIN renderer WITHOUT overwriting its batching, skinning,
+shader graph, camera or PRISMA motion/reactive implementation. Portable
+GLES3/GL33/Vulkan fallback is CPU-traced RGBA32F L1 at U6/tex13;
+Metal has completion-masked RGBA16F fine atlas + optional complete far
+U7/tex15 and distant U8/tex16 (Metal-only) cascades, per-probe R8 validity
+tex14 and fade. The new `GiRendererOverlayPolicy` strictly checks same
+device, atlas format/probe count, finite world/grid data, toroidal offsets,
+R8 validity and quality. Do not keep a stale pointer between worlds/views;
+`beginScene` and invalid imports clear borrowed bindings, and the
+NativeDriver has scoped unbind. Shader graphs that own tex13+, Unlit
+and Low-quality models intentionally skip extra L1 until a compatible
+resource/quality path exists — do not claim all geometry is lit.
+
+L1 is **BOUNCED INDIRECT ONLY**, not Direct or sun/baked. The opt-in
+GLSL/MSL shader disables legacy grid-indirect to avoid a duplicate GI
+source while preserving direct light. Metal's GPU ICB-PBR uses buffer8,
+which conflicts with the far GI U7 uniform. Opt-in GI views therefore
+use ordinary/CPU-MDI model submission, NOT GPU-authored ICB; ordinary
+non-GI views still use ICB. Never render a GPU ICB batch missing its GI.
+
+Stage23 also fixes an inherited Stage22 CMake error: template-instantiation
+`lumaweave_native_compile.cpp` has no main and must be OBJECT-only.
+Stage23 contract + GLSL→SPIR-V source tests are authored/registered but
+**NOT RUN**. No native CMake/Clang/GCC, Vulkan pixel or validation,
+Metal MSL/GPU cascade, GLES/WebGL2 hardware, full CTest or FPS claims
+can be made until the owner's final consolidated multi-backend acceptance.
+Keep Stage23 Draft, do not merge directly into current MAIN without a
+fresh compare/merge preserving parallel agents' latest changes.
+
 ## Stage 22 — LumaWeave + current MAIN PRISMA (2026-11-20)
 
 **Current isolated integration:** `integration/luma-prisma-stage22-main-20261120`.
