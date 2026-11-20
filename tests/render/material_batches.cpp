@@ -166,7 +166,8 @@ static bool unitChecks() {
 // node transforms. MDI and the fallback must render byte-identical images.
 static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = false,
                                                        size_t primitives = 16,
-                                                       uint32_t meshSubdivisions = 1) {
+                                                       uint32_t meshSubdivisions = 1,
+                                                       float triangleScale = 1.0f) {
     using namespace render;
     auto m = std::make_unique<Model>();
     m->path = "indirect-fixture";
@@ -192,10 +193,15 @@ static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = fal
         auto point = [&](uint32_t u, uint32_t v) {
             const float fu = float(u) / float(meshSubdivisions);
             const float fv = float(v) / float(meshSubdivisions);
-            return float3{
-                a.x + (b.x - a.x) * fu + (c.x - a.x) * fv,
-                a.y + (b.y - a.y) * fu + (c.y - a.y) * fv,
-                a.z + (b.z - a.z) * fu + (c.z - a.z) * fv};
+            const float x = a.x + (b.x - a.x) * fu + (c.x - a.x) * fv;
+            const float y = a.y + (b.y - a.y) * fu + (c.y - a.y) * fv;
+            const float z = a.z + (b.z - a.z) * fu + (c.z - a.z) * fv;
+            // Test-only coverage sweep, centered on the original triangle
+            // centroid. Same draw topology and vertex count at both scales.
+            // N=4 subdivision work stays exactly the same for Direct and MDI.
+            return float3{x * triangleScale,
+                          .25f + (y - .25f) * triangleScale,
+                          z * triangleScale};
         };
         auto triangle = [&](float3 x, float3 y, float3 z) {
             const uint32_t firstVertex = uint32_t(m->vertices.size());
@@ -266,6 +272,33 @@ int aiverseMain(int argc, char** argv) {
                 }
         }
         std::printf("mesh subdivision CPU checks=passed\n");
+        // The raster-coverage knob must preserve primitive/vertex/index counts
+        // and node transforms, while increasing each primitive's projected
+        // bounds. Test both settings without invoking a graphics device.
+        const auto compact = indirectFixture(false, 16, 4, 1.0f);
+        const auto expanded = indirectFixture(false, 16, 4, 4.0f);
+        if (compact->indices.size() != expanded->indices.size() ||
+            compact->vertices.size() != expanded->vertices.size() ||
+            compact->meshes.size() != expanded->meshes.size() ||
+            compact->nodes.size() != expanded->nodes.size()) return 1;
+        for (size_t i = 0; i < compact->meshes.size(); ++i) {
+            const auto& a = compact->meshes[i].primitives[0];
+            const auto& b = expanded->meshes[i].primitives[0];
+            const float widthA = a.boundsMax.x - a.boundsMin.x;
+            const float widthB = b.boundsMax.x - b.boundsMin.x;
+            const float heightA = a.boundsMax.y - a.boundsMin.y;
+            const float heightB = b.boundsMax.y - b.boundsMin.y;
+            if (a.indexCount != b.indexCount || a.vertexCount != b.vertexCount ||
+                std::fabs(widthB - 4.0f * widthA) > 1e-4f ||
+                std::fabs(heightB - 4.0f * heightA) > 1e-4f ||
+                compact->nodes[i].t.x != expanded->nodes[i].t.x ||
+                compact->nodes[i].t.y != expanded->nodes[i].t.y ||
+                compact->nodes[i].t.z != expanded->nodes[i].t.z) {
+                std::fprintf(stderr, "triangle coverage topology FAILED mesh=%zu\n", i);
+                return 1;
+            }
+        }
+        std::printf("triangle coverage CPU checks=passed\n");
         return 0;
     }
     if (argc != 3) { std::fprintf(stderr, "usage: material_batches MODEL OUTPUT_PREFIX\n"); return 2; }
@@ -353,13 +386,25 @@ int aiverseMain(int argc, char** argv) {
         std::fprintf(stderr, "Stress fixture exceeds 1000000 triangles\n");
         return 2;
     }
+    // Strict test-only knob: alter projected triangle area without changing
+    // authored meshes, vertex count, materials or MDI command count.
+    float triangleScale = 1.0f;
+    if (stress && std::getenv("AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE")) {
+        const std::string value = std::getenv("AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE");
+        if (value != "1" && value != "4") {
+            std::fprintf(stderr,
+                "AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE must be 1 or 4\n");
+            return 2;
+        }
+        if (value == "4") triangleScale = 4.0f;
+    }
     // Cold-vs-warm packet screenshot parity uses the same self-contained
     // varied-material 16-rigid-part fixture as the indirect palette test.
     auto model = scenario == "indirect" || scenario == "indirect_palette" ||
                  scenario == "static_packets" || scenario == "auto_stress"
         ? indirectFixture(scenario != "indirect" && !stress,
                           stress ? stressItems : 16,
-                          meshSubdivisions) : render::loadModel(argv[1],read);
+                          meshSubdivisions, triangleScale) : render::loadModel(argv[1],read);
     const std::string prefix = argv[2];
     const bool reflection=std::getenv("AIVERSE_SHADOW_TEST_REFLECTION")!=nullptr;
     render::Renderer3D renderer; render::Mesh floor; gfx::Device* device = nullptr;
@@ -457,6 +502,7 @@ int aiverseMain(int argc, char** argv) {
                     unsigned(meshSubdivisions),
                     unsigned(meshSubdivisions * meshSubdivisions),
                     unsigned(3 * meshSubdivisions * meshSubdivisions));
+        std::printf("stress diagnostic triangle_scale=%.0f\n", double(triangleScale));
     }
     // Benchmark only: independent runs for CPU MDI and GPU ICB. The latter
     // may legitimately retain CPU MDI for a different render pass.
