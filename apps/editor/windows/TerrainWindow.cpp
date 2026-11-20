@@ -122,6 +122,38 @@ public:
                 ui::hint("Для показа леса сначала сгенерируйте terrain TerraWeave.");
         }
 
+        if (!ed.planetMap()) {
+            ui::section(ICON_TERRAIN, "TerraWeave · открытый мир / Sparse");
+            if(ui::checkbox("Кисть с автоматическим созданием чанков", &sparse_) &&
+               sparse_)setActive(ed,true);
+            ui::hint("Можно нажимать за пределами старой карты. Созданные чанки и высоты сохраняются в map.terraweaveSparse, доступны агентам и Undo.");
+            if(sparse_) {
+                static const char* sparseActions[] = {
+                    "Создать чанк", "Поднять грунт", "Опустить грунт"};
+                ImGui::Combo("Операция##sparse", &sparseAction_,
+                             sparseActions,3);
+                ImGui::SliderInt("Размер чанка (м)##sparse",
+                                 &sparseChunkMetres_,16,1024);
+                ui::hint("Плоский чанк: ровно 1 квад. Рельефные чанки: LOD от расстояния до камеры (33/17/9/5).");
+                const Json& state=ed.doc().data.extra["terraweaveSparse"];
+                const size_t count=state["chunks"].size();
+                ui::hint(("Сохранённых sparse-чанков: " +
+                          std::to_string(count)).c_str());
+                if(ui::wideButton(ICON_TERRAIN,
+                        "Создать чанк в центре камеры",0,1)){
+                    Json p=Json::object();
+                    p.set("xCm",Json::number(int64_t(
+                        std::llround(double(ed.sceneCam.target.x)*100.0))));
+                    p.set("zCm",Json::number(int64_t(
+                        std::llround(double(ed.sceneCam.target.z)*100.0))));
+                    p.set("mode",Json::string("create"));
+                    p.set("chunkMetres",Json::number(
+                        int64_t(sparseChunkMetres_)));
+                    report(ed,ed.ws().call("terraweave_sparse_paint",p));
+                }
+            }
+        }
+
         bool active = ed.tool == Tool::Count && owner_;
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
         if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
@@ -211,6 +243,41 @@ public:
         if (ed.planetMap()) { planetStroke(ed, vp, io); return; }
         float x, z;
         if (!ed.groundAt(vp, ed.sceneCam, io.MousePos.x, io.MousePos.y, x, z)) return;
+        if(sparse_) {
+            // Camera ray/plane projection is world-wide; unlike MapDoc
+            // fixed corners, this tool never clamps to the old RTS map size.
+            if(!std::isfinite(x) || !std::isfinite(z))return;
+            const double now=ed.time();
+            if(painting_ &&
+               std::hypot(x-lastX_,z-lastZ_)<radius_*0.25f &&
+               now-lastT_<0.033)return;
+            const bool inv=io.KeyShift;
+            const int action=sparseAction_==0?0:
+                (sparseAction_==1?(inv?2:1):(inv?1:2));
+            Json p=Json::object();
+            p.set("xCm",Json::number(int64_t(
+                std::llround(double(x)*100.0))));
+            p.set("zCm",Json::number(int64_t(
+                std::llround(double(z)*100.0))));
+            p.set("mode",Json::string(action==0?"create":
+                                      action==1?"raise":"lower"));
+            p.set("chunkMetres",Json::number(
+                int64_t(sparseChunkMetres_)));
+            p.set("radiusCm",Json::number(int64_t(
+                std::clamp(std::llround(double(radius_)*100.0),
+                           1ll,50000ll))));
+            p.set("depthCm",Json::number(int64_t(
+                std::clamp(std::llround(double(strength_)*25.0),
+                           1ll,20000ll))));
+            p.set("withinStroke",Json::fromBool(painting_));
+            const Json result=ed.ws().call("terraweave_sparse_paint",p);
+            report(ed,result);
+            if(!result.has("error")) {
+                painting_=true;
+                lastX_=x;lastZ_=z;lastT_=now;
+            }
+            return;
+        }
         if (pick_) { target_ = ed.view().heightAt(ed.editGrid(), x, z); pick_ = false; return; }
         // dabs every ~1/4 radius along the stroke, at most ~30 per second
         const double now = ed.time();
@@ -294,6 +361,9 @@ private:
     int twOriginXcm_ = 0, twOriginZcm_ = 0, twCellSizeCm_ = 100;
     bool twOverwrite_ = false, twPreserve_ = false;
     int mode_ = 0, layer_ = 0, stamp_ = 0;
+    // Shared Workspace sparse authoring API, independent of RTS/FPS map sizes.
+    bool sparse_=false;
+    int sparseAction_=0,sparseChunkMetres_=256;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
     bool detail_ = true, pngDetail_ = false, stamped_ = false;
     std::string file_ = "maps/heightmap.png", message_;

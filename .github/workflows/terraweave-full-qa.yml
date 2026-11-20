@@ -1,0 +1,82 @@
+name: TerraWeave full native QA
+
+on:
+  push:
+    branches: [feature/terraweave]
+    paths:
+      - '.github/workflows/terraweave-full-qa.yml'
+  workflow_dispatch:
+
+# Separate from the lightweight TerraWeave GCC/Clang workflow; a full
+# native CTest cannot cancel the pending focused compile matrix.
+concurrency:
+  group: terraweave-full-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-all:
+    name: Full native CMake + CTest (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, compiler: gcc }
+          - { os: macos-15, compiler: appleclang }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux toolchain and native headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build clang \
+            libx11-dev libegl-dev libgles-dev libvulkan-dev
+      - name: Configure all native registered tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S . -B build/terraweave-full-native -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_HEADLESS=ON \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_ENABLE_PHYSICS=ON \
+            -DAIVERSE_BUILD_PHYSICS_DEMO=OFF \
+            -DAIVERSE_FBX=OFF \
+            2>&1 | tee terraweave-full-configure.log
+      - name: Build all enabled native targets once
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build/terraweave-full-native --parallel 4 \
+            2>&1 | tee terraweave-full-build.log
+      - name: Record build-success test inventory
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build/terraweave-full-native -N \
+            2>&1 | tee terraweave-test-inventory.log
+      - name: Run entire registered native CTest suite
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build/terraweave-full-native \
+            --output-on-failure --parallel 2 \
+            2>&1 | tee terraweave-full-ctest.log
+      - name: Preserve native QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraweave-native-qa-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            terraweave-full-*.log
+            terraweave-test-inventory.log
+            build/terraweave-full-native/Testing/Temporary/LastTest.log
+            build/terraweave-full-native/CMakeFiles/CMakeConfigureLog.yaml

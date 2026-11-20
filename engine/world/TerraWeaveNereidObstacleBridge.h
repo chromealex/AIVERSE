@@ -32,7 +32,7 @@ struct FlowObstructionCapturePolicy {
 inline void validateFlowObstructionCapture(
         const FlowObstructionCapturePolicy& c){
     if(c.maxFallenTrees>128 || c.maxSlopeDebris>128 ||
-       !c.maxFallenTrees && !c.maxSlopeDebris ||
+       (!c.maxFallenTrees && !c.maxSlopeDebris) ||
        c.treePermeabilityPermille>1000 ||
        c.debrisPermeabilityPermille>1000 ||
        c.deflectionPermille>1000)

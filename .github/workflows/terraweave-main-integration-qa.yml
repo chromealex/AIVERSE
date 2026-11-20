@@ -1,0 +1,94 @@
+name: TerraWeave merged-main native acceptance
+on:
+  push:
+    branches:
+      - integration/terraweave-main-20261120
+      - integration/terraweave-physis-stage70-20261120
+    paths:
+      - '.github/workflows/terraweave-main-integration-qa.yml'
+      - 'CMakeLists.txt'
+      - 'engine/**'
+      - 'apps/**'
+      - 'tests/**'
+      - 'libraries/**'
+      - 'modules/**'
+  workflow_dispatch:
+
+# A dedicated staging build; never changes or cancels main/feature checks.
+concurrency:
+  group: terraweave-main-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-native-merged:
+    name: Merged full native build + CTest (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux editor Vulkan/GLES build prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build clang \
+            libx11-dev libegl-dev libgles-dev libvulkan-dev \
+            libgl1-mesa-dev mesa-vulkan-drivers
+      - name: Record actual integration source commit and toolchain
+        shell: bash
+        run: |
+          git rev-parse HEAD | tee integration-sha.txt
+          cmake --version
+          c++ --version
+      - name: Configure merged editor, physics, Vulkan/GLES/Metal and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/terraweave-main-qa \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=ON \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_HEADLESS=ON \
+            -DAIVERSE_BUILD_TOOLS=ON \
+            -DAIVERSE_ENABLE_PHYSICS=ON \
+            -DAIVERSE_BUILD_PHYSICS_DEMO=OFF \
+            -DAIVERSE_PLACE_FAST_DEBUG=ON \
+            -DAIVERSE_FBX=OFF \
+            2>&1 | tee integration-configure.log
+      - name: Build all native targets before any CTest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/terraweave-main-qa --parallel 4 \
+            2>&1 | tee integration-build.log
+      - name: Record CTest inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/terraweave-main-qa -N \
+            2>&1 | tee integration-inventory.log
+      - name: Run ALL registered CTests (Place RUN_SERIAL)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/terraweave-main-qa \
+            --output-on-failure --parallel 2 \
+            2>&1 | tee integration-ctest.log
+      - name: Preserve build, failure and test provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraweave-main-integration-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            integration-*.log
+            integration-sha.txt
+            build/terraweave-main-qa/Testing/Temporary/LastTest.log
+            build/terraweave-main-qa/CMakeFiles/CMakeConfigureLog.yaml

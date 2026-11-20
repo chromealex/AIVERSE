@@ -3,6 +3,8 @@
 // is enabled. It is not run on the PHYSIS-only branch.
 #include "engine/physis/PhysisIntegration.h"
 #include "engine/world/PhysisTerraWeaveFallBridge.h"
+#include "engine/world/TerraWeaveNereidMicroNutrients.h"
+#include "engine/world/TerraWeavePhysisNutrientBridge.h"
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -181,6 +183,141 @@ static void nativeWindCausesRealTreeFall(bool cow) {
     require(replay.delivery.committed==1 && replay.physics.spawned==1 &&
             bodies.count()==1 && sim->checksum()==hash,
             "real wind -> Terra -> Box3D COW replay diverged");
+}
+
+// Stage70 native four-metre nutrient composition. This uses the REAL
+// PHYSIS climate state, native NEREID body/flow query and TerraWeave
+// immutable terrain + authoritative World resource. The companion tests
+// above cover authentic wind -> fallen root -> Box3D and Simulation saves.
+static void nativeNereidFourMetreNutrientReplay(bool cow) {
+    namespace nw=aiverse::lib::nereid;
+    World ecs;
+    if(cow)ecs.enableCowSnapshots(true);
+    pn::Settings physis;
+    physis.width=physis.height=1;
+    physis.baseTemperature=20_fx;
+    physis.baseHumidity=1_fx;
+    pn::initialize(ecs,physis);
+    for(int tick=0;tick<256;++tick)
+        pn::advanceEnvironment(ecs);
+    require(ecs.resourceConst<pn::State>()->tick==256,
+            "PHYSIS native weather did not reach completed nutrient tick");
+    // Authored wet-weather snapshot at the PHYSIS barrier: the adapter
+    // must sample these real PHYSIS ECS components, not invented rainfall.
+    const Entity atmosphere=pn::cellAt(ecs,0,0);
+    ecs.get<pn::Atmosphere>(atmosphere).rain=Fixed::fromRatio(3,4);
+    ecs.get<pn::Surface>(atmosphere).wetness=1_fx;
+
+    tw::TerraWeaveEcsAuthorityConfig land;
+    land.immutableRecipeId="stage70-live-nereid-physis";
+    land.soilGridCm=100;
+    land.generator.reliefCm=0; // deterministic flat ground at y=0
+    ecs.setResource<tw::TerraWeaveAuthorityResource>(
+        tw::initialTerraWeaveResource(land));
+
+    // Two separate NEREID bodies occupy ONE 32m nutrient soil cell.
+    // Body B is an inner high-priority river, not a duplicate pool.
+    nw::WaterBodyComponent broad;
+    broad.kind=nw::WaterKind::River;
+    broad.center={16_fx,0_fx,16_fx};
+    broad.surfaceY=5_fx;
+    broad.bottomY=-2_fx;
+    broad.halfExtents={16_fx,16_fx};
+    broad.flow={1_fx,0_fx,0_fx};
+    const Entity a=ecs.create();
+    ecs.add<nw::WaterBodyComponent>(a,broad);
+    auto narrow=broad;
+    narrow.center={14_fx,0_fx,14_fx};
+    narrow.halfExtents={4_fx,4_fx};
+    narrow.flow={};
+    narrow.priority=10;
+    const Entity b=ecs.create();
+    ecs.add<nw::WaterBodyComponent>(b,narrow);
+    const uint64_t keyA=a.packed()+1ull,keyB=b.packed()+1ull;
+    const auto ground=tw::materializeEcsTerrain(
+        *ecs.resourceConst<tw::TerraWeaveAuthorityResource>(),land);
+    const nw::WaterQueryIndex index(ecs);
+    const auto wet=tw::makeNereidMicroWaterSampler(ground,index);
+    require(wet(0,0,0).submerged && wet(0,0,0).bodyKey==keyA &&
+            wet(3,3,0).submerged && wet(3,3,0).bodyKey==keyB,
+            "4m NEREID bodies within same 32m soil region were merged");
+    require(!wet(3,3,keyA).submerged && !wet(0,0,keyB).submerged,
+            "4m NEREID body identity leaked across streams");
+
+    tw::ForestDeadwoodResource ledger;
+    ledger.totalInitialUnits=400;
+    ledger.soil.push_back({0,0,200});
+    ledger.microWater.push_back({keyA,0,0,100});
+    ledger.microWater.push_back({keyB,3,3,100});
+    tw::validateForestDeadwoodResource(ledger);
+    ecs.setResource<tw::ForestDeadwoodResource>(ledger);
+    const auto climate=tw::makeTerraWeavePhysisNutrientWeather(ecs);
+    const auto actualWeather=climate(1600,1600);
+    require(actualWeather.rainfallPermille==750 &&
+            actualWeather.soilMoisturePermille==1000,
+            "TerraWeave did not read authoritative PHYSIS weather");
+    const World snapshot=ecs;
+    tw::ForestMicroSettings policy;
+    policy.maxLeachPerSoil=64;
+    policy.maxTransportPerWater=16;
+    const auto step=[&](World& w) {
+        return tw::advanceForestMicroNutrientsEcs(
+            w,land,256,policy,tw::makeTerraWeavePhysisNutrientWeather(w));
+    };
+    const auto first=step(ecs);
+    // The World is replaced on rollback; keep a VALUE copy, not a
+    // reference that becomes dangling after ecs=snapshot.
+    const auto done=*ecs.resourceConst<tw::ForestDeadwoodResource>();
+    require(first.due && first.soilProcessed==1 &&
+            first.waterProcessed==2 && first.leached==48 &&
+            first.advected==16,
+            "PHYSIS rain or NEREID current failed real Stage70 nutrient tick");
+    require(done.totalInitialUnits==400 && done.totalLeachedUnits==48 &&
+            tw::deadwoodLedgerBalanced(done) &&
+            done.lastNutrientTick==256 && done.nutrientInitialized,
+            "4m NEREID nutrient ledger lost mass or checkpoint time");
+    bool foundB=false;
+    for(const auto& cell:done.microWater)
+        if(cell.bodyKey==keyB && cell.x==3 && cell.z==3)
+            foundB=cell.dissolvedUnits>=100;
+    require(foundB,"separate NEREID body reservoir lost its saved identity");
+
+    std::string archive;
+    auto toWrite=done;
+    Archive writer(&archive);
+    tw::io(writer,toWrite);
+    require(writer.ok(),"4m ledger archive writer failed");
+    tw::ForestDeadwoodResource decoded;
+    Archive reader(archive);
+    tw::io(reader,decoded);
+    require(reader.ok() && reader.remaining()==0 &&
+            decoded.microWater==done.microWater &&
+            decoded.totalInitialUnits==400 &&
+            decoded.totalLeachedUnits==done.totalLeachedUnits &&
+            decoded.microWaterCursor==done.microWaterCursor,
+            "4m NEREID PHYSIS ledger save/readback mismatch");
+    // World snapshot rollback contains NEREID entity generations, PHYSIS
+    // completed climate, Earthworks source and original 4m nutrient ledger.
+    ecs=snapshot;
+    const auto& undone=*ecs.resourceConst<tw::ForestDeadwoodResource>();
+    require(undone.microWater.size()==2 &&
+            undone.totalLeachedUnits==0 &&
+            ecs.resourceConst<pn::State>()->tick==256,
+            "joint PHYSIS/NEREID/TerraWeave World rollback diverged");
+    const auto again=step(ecs);
+    const auto& replay=*ecs.resourceConst<tw::ForestDeadwoodResource>();
+    require(again.leached==first.leached &&
+            again.advected==first.advected &&
+            replay.microWater==done.microWater &&
+            replay.soil.size()==done.soil.size() &&
+            (replay.soil.empty() ||
+             (replay.soil[0].x==done.soil[0].x &&
+              replay.soil[0].z==done.soil[0].z &&
+              replay.soil[0].availableUnits==done.soil[0].availableUnits)) &&
+            replay.totalLeachedUnits==done.totalLeachedUnits &&
+            replay.microWaterCursor==done.microWaterCursor &&
+            tw::deadwoodLedgerBalanced(replay),
+            "4m PHYSIS/NEREID replay diverged after authoritative rollback");
 }
 
 int main() {
@@ -364,6 +501,8 @@ int main() {
     require(!host::makeNatureFallRecord(second[0],grass,47),
             "cosmetic grass incorrectly acquired a rooted rigid-body event");
 
+    nativeNereidFourMetreNutrientReplay(false);
+    nativeNereidFourMetreNutrientReplay(true);
     nativeWindCausesRealTreeFall(false);
     nativeWindCausesRealTreeFall(true);
     const auto native = nativeCombinedPersistenceAndRollback(false);

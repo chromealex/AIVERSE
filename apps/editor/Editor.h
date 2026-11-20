@@ -21,6 +21,7 @@
 #include "modules/rts/view/RtsViewScript.h"
 #include "EditorWindow.h"
 #include "TerraWeaveForestPreview.h"
+#include "TerraWeaveSparsePreview.h"
 #include "core/FileAssoc.h"
 #include "core/Net.h"
 #include "core/Workspace.h"
@@ -399,6 +400,7 @@ private:
     ClientHost clientHost_;   // after ui_: shut down first (its ImGui context, RmlUi)
     render::Renderer3D r3d_;
     TerraWeaveForestPreview terraWeaveForestPreview_;
+    TerraWeaveSparsePreview terraWeaveSparsePreview_;
     render::NativePresentationRetirement previewModelRetirement_;
     render::Mesh fpsPreviewMesh_;
     std::vector<SceneRenderable> fpsSceneObjects_;

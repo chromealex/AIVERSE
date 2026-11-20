@@ -860,6 +860,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     const Model* m = d.model;
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
     recordPersistentModel(d);
+    // Partial primitive draws and per-instance vertex parameters cannot
+    // replay an immutable whole-model static packet/cache.
+    const bool specialDraw = d.primitiveMaterialFilter >= 0 || d.useVertexParameters;
     if (capture_ && (d.flags & kDrawStatic) && d.primitiveMaterialFilter < 0) {   // light baker: the static scene, every node in world space
         const auto& pose = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
         std::vector<mat4> nodeWorld(pose.size());
@@ -887,9 +890,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         d.persistentId && (d.flags & kDrawStatic))
         eligibility = cachedStaticModelEligibility(*m);
     const StaticModelCache* cache = d.staticCache;
-    if (cache && !staticModelCacheGeometryCompatible(*cache, d, activeDisplacement))
+    if (cache && (specialDraw || !staticModelCacheGeometryCompatible(*cache, d, activeDisplacement)))
         cache = nullptr;
-    if (!cache && staticModelCacheEnabled_) {
+    if (!cache && !specialDraw && staticModelCacheEnabled_) {
         if (staticModelCacheDrawCandidate(d, activeDisplacement, eligibility)) {
             auto& entry = staticModelCaches_[d.persistentId];
             const bool unchanged =
@@ -917,13 +920,13 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     float3 c = (m->boundsMin + m->boundsMax) * 0.5f,
            e = (m->boundsMax - m->boundsMin) * 0.75f + float3{0.1f, 0.1f, 0.1f};
     const bool displaced = cache ? cache->displaced : activeDisplacement;
-    // Bounded vertex graphs retain ordinary node frustum tests and LOD.
-    // Unknown vertexOffset graphs remain conservatively uncullable.
-    const float offset=(displaced && std::isfinite(d.maxVertexOffsetMetres) &&
-                        d.maxVertexOffsetMetres>0.0f &&
-                        d.maxVertexOffsetMetres<=10.0f) ?
-                        d.maxVertexOffsetMetres : 0.0f;
-    const bool unboundedDisplacement=displaced && offset==0.0f;
+    // Bounded vertex-offset envelopes may be culled/LOD tested; unknown
+    // offsets retain the previous conservative uncullable behavior.
+    const float offset = (displaced && std::isfinite(d.maxVertexOffsetMetres) &&
+                          d.maxVertexOffsetMetres > 0.0f &&
+                          d.maxVertexOffsetMetres <= 10.0f) ?
+                          d.maxVertexOffsetMetres : 0.0f;
+    const bool unboundedDisplacement = displaced && offset == 0.0f;
     const float3 margin{offset,offset,offset};
     const bool inView = unboundedDisplacement || (cache?modelBoxVisible(viewProj_,cache->min,cache->max):modelBoxVisible(viewProj_ * d.world, c - e - margin, c + e + margin));
     const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 &&
@@ -945,7 +948,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         const char* flag = std::getenv("AIVERSE_GPU_ICB_LOD");
         return flag && std::strcmp(flag, "1") == 0;
     }();
-    const bool packetEligible = staticRenderPacketsEnabled_ && !gpuPacketLod &&
+    const bool packetEligible = staticRenderPacketsEnabled_ && !gpuPacketLod && !specialDraw &&
         staticRenderPacketDrawCandidate(d, activeDisplacement, bakedActive(),
                                         lodDiagnosticsEnabled_, eligibility);
     const size_t packetStart = modelItems_.size();

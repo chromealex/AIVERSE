@@ -103,6 +103,7 @@ public:
     uint64_t completedFrameSerial() const override {
         return gpuHealthy_->load(std::memory_order_acquire)
             ? completedFrame_->load(std::memory_order_acquire) : 0;
+    }
     uint64_t gpuSubmissionFence() const override {
         return cmd_ && gpuHealthy_->load(std::memory_order_acquire) ? frame_ : 0;
     }

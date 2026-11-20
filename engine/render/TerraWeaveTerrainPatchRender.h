@@ -7,6 +7,8 @@
 #include "engine/render/Model.h"
 #include "engine/render/Renderer3D.h"
 #include <algorithm>
+#include <array>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -69,27 +71,53 @@ inline std::unique_ptr<render::Model> makeEarthworksTerrainModel(
     const int64_t cellX=int64_t(patch.cell.x)*patch.cellSizeMetres;
     const int64_t cellZ=int64_t(patch.cell.z)*patch.cellSizeMetres;
     const Vec3 chunkOrigin{Fixed::fromInt(cellX),{},Fixed::fromInt(cellZ)};
-    model->vertices.reserve(patch.collision.size()*3u);
-    model->indices.reserve(patch.collision.size()*3u);
     const float uvX=float(cellX)*uvScale,uvZ=float(cellZ)*uvScale;
-    for(const auto& tri:patch.collision) {
-        const auto a=tri.a-chunkOrigin,b=tri.b-chunkOrigin,
-                   c=tri.c-chunkOrigin;
-        const render::float3 v[3]={
-            {float(a.x.toDouble()),float(a.y.toDouble()),float(a.z.toDouble())},
-            {float(b.x.toDouble()),float(b.y.toDouble()),float(b.z.toDouble())},
-            {float(c.x.toDouble()),float(c.y.toDouble()),float(c.z.toDouble())}
-        };
-        const auto normal=render::normalize(
-            render::cross(v[1]-v[0],v[2]-v[0]));
-        for(const auto& p:v) {
-            render::ModelVertex vertex;
-            vertex.pos=p;
-            vertex.nrm=normal;
-            vertex.uv={uvX+p.x*uvScale,uvZ+p.z*uvScale};
-            model->indices.push_back(
-                static_cast<uint32_t>(model->vertices.size()));
-            model->vertices.push_back(vertex);
+    // A flat tile must ALWAYS be a single indexed quad, regardless of
+    // camera distance, previous LOD or neighboring tile resolution.
+    // Four vertices and two triangles, not six duplicated vertices
+    // or an unnecessarily subdivided heightfield.
+    const bool flatQuad=patch.resolution==2 &&
+        patch.heightsCm.size()==4 &&
+        std::all_of(patch.heightsCm.begin(),patch.heightsCm.end(),
+                    [&](int32_t h){return h==patch.heightsCm.front();});
+    if(flatQuad) {
+        const float side=float(patch.cellSizeMetres);
+        const float y=float(patch.heightsCm.front())*0.01f;
+        const std::array<render::float3,4> corners{{
+            {0.0f,y,0.0f},{side,y,0.0f},
+            {side,y,side},{0.0f,y,side}
+        }};
+        model->vertices.reserve(4);
+        for(const auto& p:corners) {
+            render::ModelVertex v;
+            v.pos=p;
+            v.nrm={0,1,0};
+            v.uv={uvX+p.x*uvScale,uvZ+p.z*uvScale};
+            model->vertices.push_back(v);
+        }
+        model->indices={0,2,1,0,3,2};
+    } else {
+        model->vertices.reserve(patch.collision.size()*3u);
+        model->indices.reserve(patch.collision.size()*3u);
+        for(const auto& tri:patch.collision) {
+            const auto a=tri.a-chunkOrigin,b=tri.b-chunkOrigin,
+                       c=tri.c-chunkOrigin;
+            const render::float3 v[3]={
+                {float(a.x.toDouble()),float(a.y.toDouble()),float(a.z.toDouble())},
+                {float(b.x.toDouble()),float(b.y.toDouble()),float(b.z.toDouble())},
+                {float(c.x.toDouble()),float(c.y.toDouble()),float(c.z.toDouble())}
+            };
+            const auto normal=render::normalize(
+                render::cross(v[1]-v[0],v[2]-v[0]));
+            for(const auto& p:v) {
+                render::ModelVertex vertex;
+                vertex.pos=p;
+                vertex.nrm=normal;
+                vertex.uv={uvX+p.x*uvScale,uvZ+p.z*uvScale};
+                model->indices.push_back(
+                    static_cast<uint32_t>(model->vertices.size()));
+                model->vertices.push_back(vertex);
+            }
         }
     }
     render::Primitive prim;
@@ -126,6 +154,10 @@ class TerrainPatchResident {
 public:
     bool resident() const {return bool(model_);}
     uint64_t revision() const {return revision_;}
+    uint32_t visualResolution() const {return visualResolution_;}
+    const std::array<uint32_t,4>& neighborResolution() const {
+        return neighborResolution_;
+    }
     world::Cell cell() const {return cell_;}
     const std::vector<TerrainPatchDirtyRegion>& pendingDirty() const {
         return dirty_;
@@ -143,11 +175,27 @@ public:
                  TerrainCollisionPublisher& collisions,
                  const TerrainPatch& patch,uint32_t firstColliderId,
                  const render::Model* materialSource=nullptr,
-                 float uvScale=0.05f) {
+                 float uvScale=0.05f,
+                 const TerrainPatch* adaptiveVisual=nullptr,
+                 std::array<uint32_t,4> neighbors={}) {
         if(model_ && !(patch.cell==cell_))
             throw std::invalid_argument("TerraWeave resident owns a different tile");
+        if(patch.presentationOnly)
+            throw std::invalid_argument("TerraWeave collision patch must be authoritative");
+        if(adaptiveVisual &&
+           (!adaptiveVisual->presentationOnly ||
+            adaptiveVisual->cell!=patch.cell ||
+            adaptiveVisual->sourceRevision!=patch.sourceRevision ||
+            adaptiveVisual->cellSizeMetres!=patch.cellSizeMetres))
+            throw std::invalid_argument("TerraWeave LOD/collision ownership mismatch");
+        // Adaptive geometry can replace model allocations referenced by an
+        // earlier GPU frame. Require a REAL completion barrier before
+        // proceeding. Never infer GPU completion from a CPU frame count.
+        if(model_ && adaptiveVisual && !device.waitForResourceIdle())
+            return false;
+        const TerrainPatch& visual=adaptiveVisual?*adaptiveVisual:patch;
         auto candidate=makeEarthworksTerrainModel(
-            patch,materialSource,uvScale);
+            visual,materialSource,uvScale);
         render::prepareModelUpload(*candidate);
         if(!render::uploadModel(device,*candidate) ||
            !candidate->vb.valid() || !candidate->ib.valid()) {
@@ -178,7 +226,38 @@ public:
         model_=std::move(candidate);
         cell_=patch.cell;
         cellSizeMetres_=patch.cellSizeMetres;
+        visualResolution_=visual.resolution;
+        neighborResolution_=adaptiveVisual?neighbors:std::array<uint32_t,4>{};
         revision_=patch.sourceRevision;
+        return true;
+    }
+
+    // Camera LOD is presentation-only. If the authoritative soil revision
+    // did not change, switch just the GPU geometry without rebuilding
+    // collision triangles, navmesh or dirty ECS events.
+    bool replaceVisual(gfx::Device& device,const TerrainPatch& visual,
+                       std::array<uint32_t,4> neighbors={},
+                       const render::Model* materialSource=nullptr,
+                       float uvScale=0.05f) {
+        if(!model_ || !visual.presentationOnly ||
+           visual.cell!=cell_ || visual.sourceRevision!=revision_ ||
+           visual.cellSizeMetres!=cellSizeMetres_)
+            throw std::invalid_argument("TerraWeave visual LOD state mismatch");
+        if(visual.resolution==visualResolution_ &&
+           neighbors==neighborResolution_)return true;
+        // This must be called at a graphics owner PRE-RENDER boundary.
+        if(!device.waitForResourceIdle())return false;
+        auto candidate=makeEarthworksTerrainModel(visual,materialSource,uvScale);
+        render::prepareModelUpload(*candidate);
+        if(!render::uploadModel(device,*candidate) ||
+           !candidate->vb.valid() || !candidate->ib.valid()) {
+            render::releaseModel(device,*candidate);
+            return false;
+        }
+        render::releaseModel(device,*model_);
+        model_=std::move(candidate);
+        visualResolution_=visual.resolution;
+        neighborResolution_=neighbors;
         return true;
     }
 
@@ -208,6 +287,8 @@ public:
         model_.reset();
         revision_=0;
         cellSizeMetres_=0;
+        visualResolution_=0;
+        neighborResolution_={};
         dirty_.clear();
     }
 private:
@@ -215,6 +296,8 @@ private:
     world::Cell cell_{};
     int32_t cellSizeMetres_=0;
     uint64_t revision_=0;
+    uint32_t visualResolution_=0;
+    std::array<uint32_t,4> neighborResolution_{};
     std::vector<TerrainPatchDirtyRegion> dirty_;
 };
 

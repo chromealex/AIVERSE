@@ -1,0 +1,61 @@
+name: TerraWeave real Vulkan GLES3 forest acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/terraweave-physis-stage70-20261120
+    paths:
+      - '.github/workflows/terraweave-linux-gpu.yml'
+      - 'tests/terraweave_linux_forest_backends.cpp'
+      - 'tools/terraweave-linux-gpu-acceptance.sh'
+      - 'CMakeLists.txt'
+
+# Independent of the 271-test/Metal acceptance; a later push cancels only
+# an older run of this same backend gate, never another team's workflow.
+concurrency:
+  group: terraweave-linux-gpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  forest-vulkan-gles3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install real Mesa Vulkan and EGL/GLES3 software drivers
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            build-essential cmake ninja-build \
+            libx11-dev libegl-dev libgles-dev libvulkan-dev \
+            mesa-vulkan-drivers libgl1-mesa-dev \
+            xvfb xauth
+
+      - name: Capture exact source and driver environment
+        run: |
+          git rev-parse HEAD | tee terraweave-linux-sha.txt
+          cmake --version
+          c++ --version
+          ls -l /usr/share/vulkan/icd.d || true
+
+      - name: Build and run real Vulkan and GLES3 forest acceptance
+        env:
+          AIVERSE_TERRA_LINUX_JOBS: "4"
+        run: |
+          AIVERSE_TERRA_LINUX_REQUIRED_SHA="$(git rev-parse HEAD)" \
+            bash tools/terraweave-linux-gpu-acceptance.sh
+
+      - name: Preserve exact real backend evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraweave-real-vulkan-gles3
+          if-no-files-found: warn
+          path: |
+            terraweave-linux-sha.txt
+            build/terraweave-linux-gpu/acceptance/
+            build/terraweave-linux-gpu/CMakeFiles/CMakeConfigureLog.yaml

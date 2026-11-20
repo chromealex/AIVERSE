@@ -4647,6 +4647,9 @@ TEST(ktx2_rejects_bad_files) {
 }
 
 // ---------------- models (models agent): FBX loader ----------------
+// FBX decoding requires the optional ufbx runtime. With AIVERSE_FBX=OFF,
+// verify its explicit diagnostic instead of invoking a disabled importer.
+#if !defined(AIVERSE_NO_FBX)
 TEST(models_fbx_skinned_cube) {
     using namespace modeltest;
     std::vector<std::string> warn;
@@ -4713,6 +4716,22 @@ TEST(models_fbx_readable_errors) {
     catch (const std::exception& e) { threw = std::string(e.what()).find(".fbx") != std::string::npos; }
     CHECK(threw);
 }
+#else
+TEST(models_fbx_disabled_gives_actionable_error) {
+    using namespace modeltest;
+    const std::string path=std::string(AIVERSE_SOURCE_DIR)+"/tests/data/models/cube.fbx";
+    bool rejected=false;
+    try { (void)loadModel(path,diskReader(),nullptr); }
+    catch(const std::exception& e) {
+        const std::string reason=e.what();
+        rejected=reason.find(path)!=std::string::npos &&
+                 reason.find("AIVERSE_FBX=OFF")!=std::string::npos &&
+                 reason.find("convert to .glb")!=std::string::npos;
+    }
+    CHECK(rejected);
+}
+#endif
+
 
 
 // ---------------- models (models agent): IK, additive, blend space, morph targets, baking ----------------

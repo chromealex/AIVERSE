@@ -470,7 +470,9 @@ private:
         // Resolve the actual RT dimensions/projection before any GPU sorting
         // so camera-specific matrices and the CPU particle view agree.
         const float dpi=ImGui::GetIO().DisplayFramebufferScale.x;
-        previewViewport_.ensure(*previewDevice_,int(width*dpi),int(height*dpi));
+        previewViewport_.setGpuDeviceLease(ed.gpuDeviceLease());
+        previewViewport_.ensure(*previewDevice_,int(width*dpi),int(height*dpi),
+                                ed.viewportRetirement(),"SpectraFX GPU Assets");
         if(!previewViewport_.color.valid() ||
            !previewViewport_.depth.valid() ||
            previewViewport_.w<=0 || previewViewport_.h<=0) {

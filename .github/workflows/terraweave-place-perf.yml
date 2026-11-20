@@ -1,0 +1,87 @@
+name: TerraWeave Place replica performance parity
+on:
+  push:
+    branches: [feature/terraweave]
+    paths:
+      - 'apps/place/**'
+      - 'engine/net/replica/**'
+      - 'tests/place/**'
+      - 'tests/replica/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/terraweave-place-perf.yml'
+  workflow_dispatch:
+
+# Independent from the existing TerraWeave smoke and full CTest jobs.
+concurrency:
+  group: terraweave-place-perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-place-performance:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, cc: gcc, cxx: g++ }
+          - { os: macos-15, cc: clang, cxx: clang++ }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux native headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev
+      - name: Configure optimized Debug without NDEBUG
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/place-perf -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_ENABLE_PHYSICS=ON \
+            -DAIVERSE_BUILD_PHYSICS_DEMO=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_FBX=OFF \
+            -DAIVERSE_PLACE_FAST_DEBUG=ON \
+            2>&1 | tee place-perf-configure.log
+      - name: Build Place and replica parity tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/place-perf --parallel 4 --target \
+            aiverse_place_tests aiverse_replica_tests \
+            2>&1 | tee place-perf-build.log
+      - name: Replica wire/value parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/place-perf -R '^aiverse_replica_tests$' \
+            --output-on-failure --parallel 1 \
+            2>&1 | tee place-perf-replica.log
+      - name: Strict 16 clients / 4G / 523 bodies / late join benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./build/place-perf/aiverse_place_tests \
+            examples/place/scene.json \
+            sixteen_clients_over_4g_converge_predict_and_late_join \
+            2>&1 | tee place-perf-place.log
+      - name: Save perf and source diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: place-perf-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            place-perf-*.log
+            build/place-perf/CMakeFiles/CMakeConfigureLog.yaml

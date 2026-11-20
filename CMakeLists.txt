@@ -1597,6 +1597,12 @@ if(AIVERSE_BUILD_TESTS)
         target_compile_definitions(aiverse_tests PRIVATE AIVERSE_TESTS_EDITOR_CORE=1)
     endif()
     target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # aiverse_models compiles out FBX privately when AIVERSE_FBX=OFF.
+    # Expose the same selection to its test runner, so a disabled loader
+    # checks its rejection path instead of trying to parse cube.fbx.
+    if(NOT AIVERSE_FBX)
+        target_compile_definitions(aiverse_tests PRIVATE AIVERSE_NO_FBX=1)
+    endif()
     add_test(NAME aiverse_tests COMMAND aiverse_tests)
     if(TARGET aiverse_editor_core)
         add_executable(aiverse_editor_scene_adapter_tests tests/editor/scene_entity_adapter_tests.cpp)
@@ -2967,6 +2973,46 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
         SKIP_RETURN_CODE 77)
 endif()
 
+# Real TerraWeave forest render acceptance on production Apple Metal RHI.
+# Unlike CPU Arbor/Flora tests, this exercises Renderer3D with actual uploaded
+# BranchLOD and alpha-masked eight-view impostor models and GPU readback.
+# A missing Metal device is a failure; never silently green via CTest SKIP.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
+    add_executable(aiverse_terraweave_metal_forest_test
+        tests/terraweave_metal_forest.mm $<TARGET_OBJECTS:aiverse_runtime>)
+    target_include_directories(aiverse_terraweave_metal_forest_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_terraweave_metal_forest_test PRIVATE "-fobjc-arc")
+    target_link_libraries(aiverse_terraweave_metal_forest_test PRIVATE
+        aiverse_runtime aiverse_models aiverse_world aiverse_zstd_dec
+        aiverse_render2d)
+    add_test(NAME terraweave_metal_forest
+        COMMAND aiverse_terraweave_metal_forest_test)
+    set_tests_properties(terraweave_metal_forest PROPERTIES
+        LABELS "TERRAWEAVE;MetalGPU;RHI;Renderer3D")
+endif()
+
+# Linux forest parity gate: exercise the REAL Vulkan offscreen and GLES3
+# EGL-pbuffer RHI, not just Vulkan shader translation or CMake compilation.
+# These use the same production Renderer3D and ArborForestAdapter as Metal.
+# Each test refuses unavailable backend/driver instead of reporting SKIPPED.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "linux" AND AIVERSE_VULKAN)
+    add_executable(aiverse_terraweave_linux_forest_backends
+        tests/terraweave_linux_forest_backends.cpp
+        $<TARGET_OBJECTS:aiverse_runtime>)
+    target_include_directories(aiverse_terraweave_linux_forest_backends
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(aiverse_terraweave_linux_forest_backends PRIVATE
+        aiverse_runtime aiverse_models aiverse_world aiverse_zstd_dec
+        aiverse_render2d EGL GLESv2)
+    add_test(NAME terraweave_vulkan_forest
+        COMMAND aiverse_terraweave_linux_forest_backends vulkan)
+    add_test(NAME terraweave_gles3_forest
+        COMMAND aiverse_terraweave_linux_forest_backends gles3)
+    set_tests_properties(terraweave_vulkan_forest terraweave_gles3_forest
+        PROPERTIES LABELS "TERRAWEAVE;Renderer3D;RHI;LinuxGPU")
+endif()
+
 # Versioned VFX graph assets, CPU fallback, exposed parameters and live reload.
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_vfx_assets_tests tests/vfx_graph_assets_test.cpp)
@@ -3266,10 +3312,87 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     target_include_directories(aiverse_gpu_timing_router_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_options(aiverse_gpu_timing_router_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
     add_test(NAME gpu_timing_router COMMAND aiverse_gpu_timing_router_test)
+    # Sparse editor terrain is genre independent: click-to-create, shared
+    # height borders, camera-dependent visual LOD and flat 4-vertex quad.
+    # Colliders remain based on the normal fixed-resolution TerrainPatch.
+    if(TARGET aiverse_editor_core)
+        add_executable(aiverse_terraweave_sparse_editor_test
+            tests/terraweave_sparse_editor_test.cpp)
+        target_link_libraries(aiverse_terraweave_sparse_editor_test PRIVATE
+            aiverse_editor_core)
+        add_test(NAME terraweave_sparse_editor
+            COMMAND aiverse_terraweave_sparse_editor_test)
+        set_tests_properties(terraweave_sparse_editor PROPERTIES
+            LABELS "TERRAWEAVE;EDITOR")
+    endif()
+    add_executable(aiverse_terraweave_sparse_authoring_lod_test
+        tests/terraweave_sparse_authoring_lod_test.cpp)
+    target_link_libraries(aiverse_terraweave_sparse_authoring_lod_test PRIVATE
+        aiverse_engine aiverse_models aiverse_world aiverse_zstd_dec Threads::Threads)
+    target_compile_options(aiverse_terraweave_sparse_authoring_lod_test PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME terraweave_sparse_authoring_lod
+        COMMAND aiverse_terraweave_sparse_authoring_lod_test)
+    set_tests_properties(terraweave_sparse_authoring_lod PROPERTIES
+        LABELS "TERRAWEAVE;EDITOR;Renderer3D")
+
     add_executable(aiverse_terraweave_test tests/terraweave_test.cpp)
     target_link_libraries(aiverse_terraweave_test PRIVATE aiverse_engine Threads::Threads)
     target_compile_options(aiverse_terraweave_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
     add_test(NAME terraweave COMMAND aiverse_terraweave_test)
+    # Stage70 sparse 4m per-NEREID-body nutrient and v2 archive migration.
+    # Source fixtures authored; first real C++ compile/CTest owned by QA.
+    add_executable(aiverse_terraweave_micro_nutrient_test
+        tests/terraweave_micro_nutrient_test.cpp)
+    target_link_libraries(aiverse_terraweave_micro_nutrient_test PRIVATE
+        aiverse_engine Threads::Threads)
+    target_compile_options(aiverse_terraweave_micro_nutrient_test PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME terraweave_micro_nutrient
+        COMMAND aiverse_terraweave_micro_nutrient_test)
+    # Stage70 targeted sustained nutrient conservation / v3 replay. Distinct
+    # from the full real PHYSIS+NEREID+Box3D ECS bridge integration test.
+    add_executable(aiverse_terraweave_stage70_sustained_test
+        tests/terraweave_stage70_sustained_test.cpp)
+    target_link_libraries(aiverse_terraweave_stage70_sustained_test PRIVATE
+        aiverse_engine Threads::Threads)
+    target_compile_options(aiverse_terraweave_stage70_sustained_test PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME terraweave_stage70_sustained
+        COMMAND aiverse_terraweave_stage70_sustained_test)
+    set_tests_properties(terraweave_stage70_sustained PROPERTIES
+        LABELS "TERRAWEAVE;PERSISTENCE")
+    # Native headers must compile together: ECS, NEREID, 4m nutrient
+    # adapters and optional PHYSIS weather without that feature branch.
+    add_executable(aiverse_terraweave_native_micro_compile_test
+        tests/terraweave_native_micro_compile_test.cpp)
+    target_include_directories(aiverse_terraweave_native_micro_compile_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}/libraries/include)
+    target_link_libraries(aiverse_terraweave_native_micro_compile_test PRIVATE
+        aiverse_models aiverse_world aiverse_zstd_dec)
+    target_compile_options(aiverse_terraweave_native_micro_compile_test PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME terraweave_native_micro_compile
+        COMMAND aiverse_terraweave_native_micro_compile_test)
+    # The physics adapter is optional: Box3D include paths are provided
+    # transitively ONLY by the public AIVERSE::physics target, not by
+    # aiverse_world or aiverse_models. Test it separately when enabled.
+    if(TARGET aiverse_physics)
+        add_executable(aiverse_terraweave_native_micro_physics_compile_test
+            tests/terraweave_native_micro_compile_test.cpp)
+        target_include_directories(aiverse_terraweave_native_micro_physics_compile_test
+            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/libraries/include)
+        target_compile_definitions(aiverse_terraweave_native_micro_physics_compile_test
+            PRIVATE AIVERSE_TERRAWEAVE_SMOKE_WITH_PHYSICS=1)
+        target_link_libraries(aiverse_terraweave_native_micro_physics_compile_test
+            PRIVATE aiverse_models aiverse_world aiverse_zstd_dec AIVERSE::physics)
+        target_compile_options(aiverse_terraweave_native_micro_physics_compile_test
+            PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+        add_test(NAME terraweave_native_micro_physics_compile
+            COMMAND aiverse_terraweave_native_micro_physics_compile_test)
+    endif()
     add_executable(aiverse_terraweave_arbor_test tests/terraweave_arbor_test.cpp)
     target_link_libraries(aiverse_terraweave_arbor_test PRIVATE aiverse_engine Threads::Threads)
     target_compile_options(aiverse_terraweave_arbor_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)

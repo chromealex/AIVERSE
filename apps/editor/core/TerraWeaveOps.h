@@ -4,6 +4,7 @@
 #include "apps/editor/core/TerraWeaveMapAdapter.h"
 #include "apps/editor/core/Workspace.h"
 #include "apps/editor/core/TerraWeaveEarthworksOps.h"
+#include "apps/editor/core/TerraWeaveSparseOps.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -118,6 +119,7 @@ inline Json preview(const terraweave::TerrainSettings& t,
 
 inline void registerTerraWeaveOps(Workspace& ws) {
     registerTerraWeaveEarthworksOps(ws);
+    registerTerraWeaveSparseOps(ws);
     const char* schema = R"({
       "properties": {
         "seed":{"type":"integer","minimum":0},

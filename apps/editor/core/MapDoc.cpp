@@ -272,7 +272,16 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
 
 Json MapDoc::toJson() const {
     const auto& d = data;
-    if(!d.fps.isNull())return d.fps;
+    if(!d.fps.isNull()){
+        // The FPS document otherwise bypasses MapData::extra entirely.
+        // Sparse TerraWeave is genre-neutral and must round-trip in FPS
+        // files just as it does in flat RTS maps. Do not silently copy
+        // unrelated legacy grid fields into the FPS document.
+        Json result=d.fps;
+        if(d.extra.has("terraweaveSparse"))
+            result.set("terraweaveSparse",d.extra["terraweaveSparse"]);
+        return result;
+    }
     Json j = Json::object();
     j.set("name", Json::string(d.name));
     Json size = Json::array();

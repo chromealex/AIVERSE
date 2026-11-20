@@ -3,6 +3,7 @@
 // topology. No duplicate water solver, implicit ECS scheduler or backend RHI.
 #pragma once
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
+#include "engine/world/TerraWeaveSparseTerrainAuthoring.h"
 #include "engine/render/TerraWeaveGrassRender.h"
 #include "engine/world/TerraWeaveNereidErosionBridge.h"
 #include "engine/world/TerraWeaveNavMeshBridge.h"
@@ -157,7 +158,8 @@ public:
                           size_t maxUploads,
                           const ColliderIdForCell& ids,
                           const MaterialForCell& materials={},
-                          float uvScale=0.05f) {
+                          float uvScale=0.05f,
+                          std::span<const SparseTerrainView> adaptive={}) {
         const uint64_t trisPerTile=
             uint64_t(resolution_-1u)*(resolution_-1u)*2u;
         if(!ids || maxUploads<1 || maxUploads>8 ||
@@ -169,6 +171,24 @@ public:
             if(tile.y!=0)
                 throw std::invalid_argument("TerraWeave tiles are X/Z columns");
             needed.insert(tile);
+        }
+        std::map<world::Cell,SparseTerrainView> visualPlan;
+        for(const auto& tile:adaptive) {
+            if(!needed.contains(tile.cell) ||
+               tile.resolution<2 || tile.resolution>129 ||
+               !visualPlan.emplace(tile.cell,tile).second)
+                throw std::invalid_argument("TerraWeave invalid adaptive terrain plan");
+        }
+        if(!adaptive.empty() && visualPlan.size()!=needed.size())
+            throw std::invalid_argument("TerraWeave incomplete adaptive terrain plan");
+        // A camera move can require re-meshing with no soil mutation.
+        // Do not publish the same stale LOD when neighbor edge ratios changed.
+        for(const auto& [tile,desired]:visualPlan){
+            const auto resident=residents_.find(tile);
+            if(resident!=residents_.end() &&
+               (resident->second.visualResolution()!=desired.resolution ||
+                resident->second.neighborResolution()!=desired.neighborResolution))
+                pending_.insert_or_assign(tile,earth_.revision());
         }
         // Preserve old simulation-pinned collision until ALL newly needed
         // tiles have been published. This is load-first/unload-last, unlike
@@ -188,18 +208,37 @@ public:
             if(published>=maxUploads)break;
             const auto it=pending_.find(tile);
             if(it==pending_.end())continue;
-            // No GPU or collision resources are modified if CPU baking
-            // fails; the dirty request remains queued for a safe retry.
-            const TerrainPatch patch=bakeEarthworksTerrainPatch(
-                earth_,tile,cellSizeMetres_,resolution_);
+            // The physics mesh always uses the original fixed resolution.
+            // Pure camera-distance LOD updates upload ONLY a visual model.
+            // All residents share the same authoritative Earthworks source.
             auto [slot,created]=residents_.try_emplace(tile);
             try {
                 const render::Model* material=
                     materials?materials(tile):nullptr;
-                if(!slot->second.publish(device,spatial,colliders_,
-                                         patch,ids(tile),material,uvScale)){
-                    if(created)residents_.erase(slot);
-                    break; // GPU budget exhausted; retry a later frame
+                const auto spec=visualPlan.find(tile);
+                std::optional<TerrainPatch> visual;
+                if(spec!=visualPlan.end())
+                    visual.emplace(bakeSparseTerrainVisual(
+                        earth_,spec->second,cellSizeMetres_));
+                const bool visualOnly=visual &&
+                    slot->second.resident() &&
+                    slot->second.revision()==earth_.revision();
+                if(visualOnly){
+                    if(!slot->second.replaceVisual(
+                            device,*visual,spec->second.neighborResolution,
+                            material,uvScale))
+                        break; // keep prior GPU model safely resident
+                }else{
+                    const TerrainPatch patch=bakeEarthworksTerrainPatch(
+                        earth_,tile,cellSizeMetres_,resolution_);
+                    if(!slot->second.publish(
+                            device,spatial,colliders_,patch,ids(tile),
+                            material,uvScale,visual?&*visual:nullptr,
+                            visual?spec->second.neighborResolution:
+                                   std::array<uint32_t,4>{})){
+                        if(created)residents_.erase(slot);
+                        break; // GPU budget exhausted; retry a later frame
+                    }
                 }
             }catch(...){
                 if(created)residents_.erase(slot);

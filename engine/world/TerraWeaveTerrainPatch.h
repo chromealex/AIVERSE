@@ -24,6 +24,10 @@ struct TerrainPatch {
     // One world-space collision triangle per matching visible triangle.
     // The winding/diagonal matches readChunkCollision: (a,c,b), (a,d,c).
     std::vector<world::Triangle> collision;
+    // Trailing to preserve positional initializers from older terrain tests.
+    // Adaptive LOD is GPU presentation only; never publish its morphed
+    // edge geometry to the authoritative collision owner.
+    bool presentationOnly=false;
     // Mesh vertices are local to the chunk; the owner can build the RHI
     // Model using the SAME heights and triangle ordering.
     size_t triangleCount() const {return collision.size();}
@@ -116,6 +120,9 @@ public:
         if(!firstId || !count || count>65534u ||
            uint64_t(firstId)+count-1>UINT32_MAX)
             throw std::invalid_argument("TerraWeave terrain collider ID range");
+        if(patch.presentationOnly)
+            throw std::invalid_argument(
+                "TerraWeave visual LOD cannot replace authoritative collision");
         if(patch.resolution<2 || patch.resolution>129 ||
            count!=size_t(patch.resolution-1u)*
                   size_t(patch.resolution-1u)*2u)

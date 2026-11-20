@@ -271,6 +271,7 @@ void Editor::shutdown() {
         throw std::runtime_error("Editor preview Models: GPU retirement barrier failed");
     if (studioLogo_.valid()) { dev_->destroyTexture(studioLogo_); studioLogo_ = {}; }
     terraWeaveForestPreview_.release(*dev_);
+    terraWeaveSparsePreview_.releaseAfterGpuIdle(*dev_);
     view_.shutdown(*dev_);
     view_.setModelRetirementDiagnosticObserver({});
     view_.setImageRetirementDiagnosticObserver({});
@@ -316,6 +317,10 @@ void Editor::openGame(const std::string& idOrDir) {
     }
     ws_.changes.clear();
     if (dev_) terraWeaveForestPreview_.release(*dev_);
+    terraWeaveSparsePreview_.release(
+        [this](std::unique_ptr<render::Model>& model){
+            retirePreviewModel(model);
+        });
     terraWeaveForestPreview_.setEnabled(false);
     reloadRules();
     selection = {};
@@ -1220,6 +1225,27 @@ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) 
         } catch (const std::exception& e) {
             status = std::string("TerraWeave forest: ") + e.what();
             terraWeaveForestPreview_.setEnabled(false);
+        }
+    }
+    // Real editor sparse terrain. Camera-distance visual LOD is independent
+    // from authoritative Earthworks/physics. Preview models are retired
+    // through Editor's completed-GPU fence owner, never destroyed mid-frame.
+    if(editOverlays && !planets) {
+        try {
+            const auto eye=r3d_.cameraPos();
+            const double x=double(eye.x)*100.0,z=double(eye.z)*100.0;
+            if(!std::isfinite(x)||!std::isfinite(z) ||
+               std::abs(x)>=double(terraweave::kWorldLimitCm) ||
+               std::abs(z)>=double(terraweave::kWorldLimitCm))
+                throw std::out_of_range("TerraWeave sparse preview camera extent");
+            terraWeaveSparsePreview_.draw(
+                *dev_,r3d_,doc(),int64_t(std::llround(x)),
+                int64_t(std::llround(z)),
+                [this](std::unique_ptr<render::Model>& model){
+                    retirePreviewModel(model);
+                });
+        }catch(const std::exception& e){
+            status=std::string("TerraWeave sparse terrain: ")+e.what();
         }
     }
     if (!planets && !ws_.project.isFps()) tickFx(cam,renderW,renderH,nullptr);   // agent previews (fx_preview) in the Scene view
