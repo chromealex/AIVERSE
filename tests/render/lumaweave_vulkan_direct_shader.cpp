@@ -2,6 +2,7 @@
 // Shader compilation DOES NOT establish runtime Vulkan RHI, GPU pixel parity,
 // real shadow correctness or GPU performance.
 #include "engine/render/LumaWeaveVulkanDirectShader.h"
+#include "engine/render/LumaWeaveVulkanScreenShader.h"
 #include "engine/render/LumaWeaveGpuPacket.h"
 #include "engine/render/GiGpuBvh.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
@@ -38,6 +39,26 @@ int main() {
     AIVERSE_TEST_CHECK(ok);
     AIVERSE_TEST_CHECK(binary.size()>=8);
     AIVERSE_TEST_CHECK(binary.front()==0x07230203u); // SPIR-V magic
+
+    // The PBR fullscreen shader reuses the identical shared GPU BVH tracer
+    // but receives actual opaque Renderer3D material/depth/normal textures.
+    const std::string screen=aiverse::render::luma_vk::kScreenDirectCompute;
+    for(const char* token:{"binding=0","binding=1","binding=2",
+                           "binding=3","binding=4","binding=5",
+                           "binding=6","binding=7","binding=8",
+                           "binding=9","inverseViewProjection",
+                           "pbrDirect","depth*2.0-1.0",
+                           "shadowed(","sceneDepthTexture",
+                           "materialDepthTexture","surfaceDepthTexture"}) {
+        AIVERSE_TEST_CHECK(screen.find(token)!=std::string::npos);
+    }
+    binary.clear();error.clear();
+    const bool compiled=aiverse::gfx::vk::compileComputeProgram(
+        screen,binary,error);
+    if(!compiled)std::fprintf(stderr,
+        "Luma Vulkan screen PBR GLSL->SPIR-V failure: %s\n",error.c_str());
+    AIVERSE_TEST_CHECK(compiled);
+    AIVERSE_TEST_CHECK(binary.size()>=8 && binary.front()==0x07230203u);
 
     // The compiler must fail closed on an invalid compute module.
     AIVERSE_TEST_CHECK(!aiverse::gfx::vk::compileComputeProgram(

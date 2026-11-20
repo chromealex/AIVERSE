@@ -1,6 +1,22 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 
+## GI + LumaWeave Stage 15 — Vulkan material-aware screen direct (2026-11-20)
+
+Branch `feature/gi-lumaweave-vulkan-screen-stage15-20261120`; read
+`docs/agent-handoffs/gi-lumaweave-stage15-vulkan-screen-ggx-2026-11-20.md`.
+Shared Vulkan shader ray/BVH query is now used by both the original
+explicit-receiver kernel and the new low-resolution screen kernel, fed
+only from current real HDR scene depth, material/depth and world-normal/
+roughness/depth receiver captures. Vulkan [0,1] depth is remapped back
+to the engine's GL-convention view-projection before unprojection.
+Output is already PBR GGX+diffuse reflected DIRECT RGB; NEVER multiply
+albedo a second time or add legacy direct. GPU candidate admission
+fails closed, no source truncation. Code and tests are committed but
+**NOT RUN**; PostProcess/Renderer3D HDR integration and true Vulkan
+device pixel/validation acceptance remain. Continue with separate
+bounded handoffs and preserve GLES/mobile fallback.
+
 ## GI + LumaWeave Stage 14 — Vulkan sampled compute inputs (2026-11-20)
 
 Active experimental branch: `feature/gi-lumaweave-vulkan-frame-stage14-20261120`.

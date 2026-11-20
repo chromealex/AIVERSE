@@ -117,6 +117,41 @@ int main() {
     AIVERSE_TEST_CHECK(!direct.dispatch(invalid,1,1).encoded);
     device.endFrame();
 
+    // Stage15 real-GBuffer compute ABI: all five existing per-scene input
+    // textures are required; GPU source/geometry/normal data are not faked.
+    AIVERSE_TEST_CHECK(direct.screenAvailable());
+    gfx::TextureDesc sampled;
+    sampled.width=64;sampled.height=64;sampled.format=gfx::PixelFormat::RGBA16F;
+    sampled.filter=gfx::Filter::Nearest;
+    std::array<gfx::TextureHandle,5> inputs{};
+    for(auto& handle:inputs)handle=device.createTexture(sampled);
+    LumaWeaveVulkanDirect::ScreenInputs surfaces{
+        inputs[0],inputs[1],inputs[2],inputs[3],inputs[4]};
+    LumaWeaveVulkanDirect::ScreenView view{};
+    view.eye={0,2,-5,0};
+    view.resolution={8,8,64,64};
+    view.options={.008f,0,0,0};
+    AIVERSE_TEST_CHECK(!direct.dispatchScreen({},view,8,8,1,12).encoded);
+    view.resolution.x=64;view.resolution.y=64;
+    // 4096 sources * 9 samples * 4096 pixels is over the 24M cap.
+    AIVERSE_TEST_CHECK(!direct.dispatchScreen(surfaces,view,64,64,8,12).encoded);
+    view.resolution.x=8;view.resolution.y=8;
+    device.current=12;
+    device.beginFrame(64,64);
+    const auto screen=direct.dispatchScreen(surfaces,view,8,8,1,12);
+    AIVERSE_TEST_CHECK(screen.encoded && screen.frameSerial==12);
+    AIVERSE_TEST_CHECK(screen.candidateChecks==uint64_t(64)*2*4096);
+    AIVERSE_TEST_CHECK(direct.screenWidth()==8 && direct.screenHeight()==8);
+    AIVERSE_TEST_CHECK(direct.encodedOutput(12).valid());
+    AIVERSE_TEST_CHECK(!direct.completedOutput().valid());
+    device.endFrame();
+    AIVERSE_TEST_CHECK(!direct.poll());
+    device.completed=12;
+    AIVERSE_TEST_CHECK(direct.poll());
+    AIVERSE_TEST_CHECK(direct.completedOutput().valid());
+    AIVERSE_TEST_CHECK(direct.completedReceiverCount()==64);
+    for(auto t:inputs)device.destroyTexture(t);
+
     AIVERSE_TEST_CHECK(direct.shutdown());
     AIVERSE_TEST_CHECK(device.buffers.empty() && device.textures.empty());
     AIVERSE_TEST_CHECK(!direct.ready());

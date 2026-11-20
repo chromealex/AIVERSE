@@ -7,6 +7,7 @@
 #pragma once
 #include "LumaWeaveGpuPacket.h"
 #include "LumaWeaveVulkanDirectShader.h"
+#include "LumaWeaveVulkanScreenShader.h"
 #include "GiGpuBvhValidator.h"
 #include "../gfx/Gfx.h"
 #include <algorithm>
@@ -25,6 +26,8 @@ public:
     static constexpr uint32_t kMaxReceivers=256;
     static constexpr uint32_t kMaxSamples=8;
     static constexpr uint64_t kMaxCandidateChecks=524288;
+    static constexpr uint32_t kMaxScreenPixels=16384;
+    static constexpr uint64_t kMaxScreenCandidateChecks=24000000;
 
     struct alignas(16) Params {
         std::array<uint32_t,4> counts{};  // lights,receivers,nodes,samples
@@ -33,6 +36,22 @@ public:
     };
     static_assert(sizeof(Params)==80);
 
+    struct ScreenInputs {
+        gfx::TextureHandle sceneDepth{},material{},materialDepth{},
+                           surface{},surfaceDepth{};
+        bool complete() const {
+            return sceneDepth.valid() && material.valid() &&
+                   materialDepth.valid() && surface.valid() &&
+                   surfaceDepth.valid();
+        }
+    };
+    struct ScreenView {
+        mat4 inverseViewProjection{};
+        float4 eye{};
+        float4 resolution{}; // low width/height, real width/height
+        float4 options{0.008f,0,0,0};
+    };
+    static_assert(sizeof(ScreenView)==112 && sizeof(mat4)==64);
     struct Submission {
         bool encoded=false;
         uint64_t frameSerial=0,sourceRevision=0,geometryRevision=0;
@@ -62,6 +81,10 @@ public:
         auto target=dev.createTexture(desc);
         if(!target.valid()){dev.destroyCompute(shader);return false;}
         dev_=&dev;shader_=shader;output_=target;
+        // The screen variant is optional: renderer may still use the
+        // original explicit-receiver Vulkan compute owner.
+        screenShader_=dev.createCompute({nullptr,luma_vk::kScreenDirectCompute,
+            "LumaWeave Vulkan screen PBR direct",5});
         receiverBuffer_=allocate(kMaxReceivers*sizeof(LumaGpuReceiver),nullptr,
                                  gfx::Usage::Dynamic);
         lightBuffer_=allocate(sizeof(LumaGpuLight),nullptr);
@@ -84,9 +107,13 @@ public:
             for(auto handle:{receiverBuffer_,lightBuffer_,triangleBuffer_,nodeBuffer_})
                 if(handle.valid())dev_->destroyBuffer(handle);
             if(output_.valid())dev_->destroyTexture(output_);
+            if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
+            if(screenShader_.valid())dev_->destroyCompute(screenShader_);
             if(shader_.valid())dev_->destroyCompute(shader_);
         }
         dev_=nullptr;shader_={};output_={};
+        screenShader_={};screenOutput_={};activeOutput_={};
+        screenWidth_=screenHeight_=0;
         receiverBuffer_={};lightBuffer_={};triangleBuffer_={};nodeBuffer_={};
         sourcesReady_=geometryReady_=outputValid_=false;
         sourceRevision_=geometryRevision_=geometryHash_=0;
@@ -96,6 +123,9 @@ public:
     }
 
     bool ready() const {return dev_ && shader_.valid() && output_.valid();}
+    bool screenAvailable() const {return ready() && screenShader_.valid();}
+    uint32_t screenWidth() const {return screenWidth_;}
+    uint32_t screenHeight() const {return screenHeight_;}
     bool busy() const {return pendingFrame_!=0;}
     uint64_t pendingFrameSerial() const {return pendingFrame_;}
     uint64_t sourceRevision() const {return sourceRevision_;}
@@ -107,14 +137,14 @@ public:
     // Only a physically completed VkFence grants cross-frame sampling.
     gfx::TextureHandle completedOutput() const {
         return ready() && outputValid_ && !busy() && dev_->gpuHealthy() ?
-            output_:gfx::TextureHandle{};
+            activeOutput_:gfx::TextureHandle{};
     }
     // Same-command-buffer consumer may sample the image AFTER dispatch()
     // and VkCompute::endCompute() inserted its shader-read barrier.
     gfx::TextureHandle encodedOutput(uint64_t exactFrameSerial) const {
         return ready() && busy() && dev_->gpuHealthy() &&
                pendingFrame_==exactFrameSerial && dev_->frameSerial()==exactFrameSerial ?
-               output_:gfx::TextureHandle{};
+               activeOutput_:gfx::TextureHandle{};
     }
 
     bool setSources(const LumaWeaveRegistry& registry) {
@@ -233,11 +263,81 @@ public:
         dev_->endCompute();
         if(!accepted)return out;
         pendingFrame_=frame;
+        activeOutput_=output_;
         outputValid_=false;
         pendingReceivers_=uint32_t(receivers.size());
         out={true,frame,sourceRevision_,geometryRevision_,
              uint32_t(receivers.size()),samples,
              uint64_t(receivers.size())*samples,cost};
+        return out;
+    }
+
+    // Real scene material/depth/normal textures, no CPU reconstruction or
+    // fabricated BRDF. Bounded full-registry importance sampling with shared
+    // BVH shadow rays. Works entirely in the current Vulkan command buffer,
+    // after the Renderer3D opaque material/normal and main HDR passes.
+    Submission dispatchScreen(ScreenInputs inputs,const ScreenView& view,
+                              uint32_t width,uint32_t height,
+                              uint32_t samples,uint32_t seed) {
+        Submission out;
+        if(!screenAvailable() || !inputs.complete() || !sourcesReady_ ||
+           !geometryReady_ || busy() || !dev_->gpuHealthy() ||
+           !dev_->canUpdateSharedBuffers() || !width || !height ||
+           width>4096 || height>4096 || samples<1 || samples>kMaxSamples)
+            return out;
+        const uint64_t pixels=uint64_t(width)*height;
+        const uint64_t checks=pixels*(uint64_t(samples)+1u)*sourceCount_;
+        if(pixels>kMaxScreenPixels || checks>kMaxScreenCandidateChecks)
+            return out;
+        if(view.resolution.x!=float(width) || view.resolution.y!=float(height) ||
+           !(view.resolution.z>=view.resolution.x) ||
+           !(view.resolution.w>=view.resolution.y) ||
+           !std::isfinite(view.resolution.z) || !std::isfinite(view.resolution.w) ||
+           !finite({view.eye.x,view.eye.y,view.eye.z}) ||
+           !std::isfinite(view.options.x) || view.options.x<=0 ||
+           view.options.x>0.02f)
+            return out;
+        if(screenWidth_!=width || screenHeight_!=height ||
+           !screenOutput_.valid()) {
+            gfx::TextureDesc td;
+            td.width=int(width);td.height=int(height);
+            td.format=gfx::PixelFormat::RGBA16F;
+            td.filter=gfx::Filter::Nearest;td.storage=true;
+            td.label="LumaWeave Vulkan screen-space BRDF direct";
+            const auto next=dev_->createTexture(td);
+            if(!next.valid())return out;
+            if(screenOutput_.valid())dev_->destroyTexture(screenOutput_);
+            screenOutput_=next;screenWidth_=width;screenHeight_=height;
+        }
+        if(!dev_->updateSharedBufferChecked(receiverBuffer_,&view,sizeof(view)))
+            return out;
+        if(!dev_->beginCompute(screenShader_))return out;
+        const uint64_t frame=dev_->frameSerial();
+        if(!frame){dev_->endCompute();return out;}
+        dev_->setComputeBuffer(0,lightBuffer_);
+        dev_->setComputeBuffer(1,receiverBuffer_); // ScreenView, not receiver points
+        dev_->setComputeBuffer(2,triangleBuffer_);
+        dev_->setComputeBuffer(3,nodeBuffer_);
+        dev_->setComputeTexture(0,screenOutput_);
+        dev_->setComputeSampledTexture(0,inputs.sceneDepth);
+        dev_->setComputeSampledTexture(1,inputs.material);
+        dev_->setComputeSampledTexture(2,inputs.materialDepth);
+        dev_->setComputeSampledTexture(3,inputs.surface);
+        dev_->setComputeSampledTexture(4,inputs.surfaceDepth);
+        Params params{};
+        params.counts={sourceCount_,uint32_t(pixels),nodeCount_,samples};
+        params.control={seed,width,triangleCount_,0};
+        dev_->setComputeUniforms(&params,sizeof(params));
+        dev_->dispatch(uint32_t(pixels),1);
+        const bool accepted=dev_->computeDispatchSucceeded();
+        dev_->endCompute(); // GENERAL -> SHADER_READ_ONLY for HDR fragment
+        if(!accepted)return out;
+        pendingFrame_=frame;
+        activeOutput_=screenOutput_;
+        outputValid_=false;
+        pendingReceivers_=uint32_t(pixels);
+        out={true,frame,sourceRevision_,geometryRevision_,
+             uint32_t(pixels),samples,pixels*samples,checks};
         return out;
     }
 
@@ -287,8 +387,9 @@ private:
     }
 
     gfx::Device* dev_=nullptr;
-    gfx::ComputeHandle shader_{};
-    gfx::TextureHandle output_{};
+    gfx::ComputeHandle shader_{},screenShader_{};
+    gfx::TextureHandle output_{},screenOutput_{},activeOutput_{};
+    uint32_t screenWidth_=0,screenHeight_=0;
     gfx::BufferHandle receiverBuffer_{},lightBuffer_{},triangleBuffer_{},nodeBuffer_{};
     uint32_t sourceCount_=0,nodeCount_=0,triangleCount_=0;
     uint32_t pendingReceivers_=0,completedReceivers_=0;
