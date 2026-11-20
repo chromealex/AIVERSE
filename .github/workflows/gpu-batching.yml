@@ -62,9 +62,10 @@ jobs:
       - name: Stage129 fixture topology and offline analyzer checks
         run: |
           bash -n tools/batching-stage129-trials.sh
-          python3 -m py_compile tools/batching-stage127-analyze.py tools/batching-stage129-analyze.py tools/batching-stage132-analyze.py
+          python3 -m py_compile tools/batching-stage127-analyze.py tools/batching-stage129-analyze.py tools/batching-stage132-analyze.py tools/batching-stage133-verify.py
           python3 tools/batching-stage129-analyze.py --self-test
           python3 tools/batching-stage132-analyze.py --self-test
+          python3 tools/batching-stage133-verify.py --self-test
           build/metal-cpu-mdi/aiverse_material_batches --unit
       - name: Verify Direct vs CPU MDI raster output
         env:
