@@ -2,6 +2,7 @@
 // buffer versioning inside a frame, textures, shadow compare, GLSL translation. Skips without a driver.
 #include "engine/gfx/vulkan/Vulkan.h"
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
+#include "engine/render/GiGpuVulkanShaders.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +62,33 @@ out vec4 o_color;
 void main() { float lit = texture(tex1, vec3(v_uv, u_color.x)); o_color = vec4(lit, lit, lit, 1.0); }
 )";
 
+// A tiny *real* compute -> storage RGBA16F -> fragment sampler path.
+// Unlike source-only shader-string tests this is exercised on any Vulkan
+// offscreen driver whose graphics queue reports compute+storage availability.
+// Its resource descriptor shape matches GiGpuSmallScene: four SSBOs, one
+// storage atlas, 80-byte push constants, 64 logical threads.
+const char* kGiStorageCompute = R"GLSL(
+#version 450
+layout(local_size_x=64,local_size_y=1,local_size_z=1) in;
+layout(set=0,binding=0,std430) readonly buffer Triangles { vec4 tris[]; };
+layout(set=0,binding=1,std430) readonly buffer Lamps { vec4 lamps[]; };
+layout(set=0,binding=2,std430) readonly buffer Jobs { vec4 jobs[]; };
+layout(set=0,binding=3,std430) readonly buffer Nodes { vec4 nodes[]; };
+layout(set=0,binding=4,rgba16f) uniform writeonly image2D giAtlas;
+layout(push_constant) uniform GIParams {
+    uvec4 counts;
+    vec4 misc;
+    vec4 sun;
+    vec4 sky;
+    vec4 color;
+} parameters;
+void main() {
+    uint index=gl_GlobalInvocationID.x;
+    if(index>=64u)return;
+    imageStore(giAtlas,ivec2(int(index%8u),int(index/8u)),parameters.color);
+}
+)GLSL";
+
 struct Vtx { float x, y, z, u, v; };
 BufferDesc bufferDesc(Usage usage, size_t size, const void* data) { BufferDesc b; b.usage = usage; b.size = size; b.data = data; return b; }
 std::vector<Vtx> quad(float x0, float y0, float x1, float y1, float z) {
@@ -97,6 +125,14 @@ void translation() {
     aiverse::gfx::vk::SpirvProgram p;
     CHECK(aiverse::gfx::vk::compileProgram(kVs, kColorFs, false, p) && !p.vertex.empty() && !p.fragment.empty());
     CHECK(!aiverse::gfx::vk::compileProgram(kVs, "void main() { undefined_call(); }", false, p) && !p.error.empty());
+    // Compile the REAL Vulkan GI BVH kernel even without a Vulkan driver.
+    // This is glslang SPIR-V compilation, not a source-text substring check.
+    std::vector<uint32_t> computeSpirv;
+    std::string computeError;
+    const bool computeOk=aiverse::gfx::vk::compileComputeProgram(
+        aiverse::render::gi_gpu::kVulkanSmallScene,computeSpirv,computeError);
+    if(!computeOk)std::printf("Vulkan GI SPIR-V: %s\\n",computeError.c_str());
+    CHECK(computeOk && !computeSpirv.empty());
 }
 } // namespace
 
@@ -234,6 +270,80 @@ int main() {
         CHECK(near(img.at(W - 4, H / 2), 100, 0, 0));
         d.destroyTexture(t); d.destroyTexture(tr);
     }
+    {   // Actual Vulkan compute to sampleable RGBA16F GI atlas, not just GLSL source.
+        if (d.supportsCompute()) {
+            TextureDesc td;
+            td.width=8;td.height=8;td.format=PixelFormat::RGBA16F;
+            td.storage=true;td.filter=Filter::Nearest;
+            const TextureHandle atlas=d.createTexture(td);
+            const TextureHandle secondAtlas=d.createTexture(td);
+            CHECK(atlas.valid() && secondAtlas.valid());
+            const ComputeHandle compute=d.createCompute({nullptr,kGiStorageCompute,
+                                                          "offscreen GI storage parity"});
+            CHECK(compute.valid());
+            const uint32_t storageData[4]={0,0,0,0};
+            BufferHandle storage[4]{};
+            for(auto& h:storage) {
+                BufferDesc bd;
+                bd.type=BufferType::Storage;
+                bd.usage=Usage::Immutable;
+                bd.size=sizeof(storageData);
+                bd.data=storageData;
+                h=d.createBuffer(bd);
+                CHECK(h.valid());
+            }
+            if(atlas.valid() && secondAtlas.valid() && compute.valid() &&
+               storage[0].valid() && storage[1].valid() &&
+               storage[2].valid() && storage[3].valid()) {
+                struct Parameters {
+                    uint32_t counts[4]{};
+                    float misc[4]{},sun[4]{},sky[4]{};
+                    float color[4]{.25f,.5f,.75f,1.0f};
+                } params;
+                static_assert(sizeof(Parameters)==80);
+                Image img=frame(d,[&] {
+                    const bool begun=d.beginCompute(compute);
+                    CHECK(begun);
+                    if(begun) {
+                        for(int i=0;i<4;++i)d.setComputeBuffer(i,storage[i]);
+                        d.setComputeTexture(0,atlas);
+                        params.color[0]=.9f;params.color[1]=.1f;params.color[2]=.1f;
+                        d.setComputeUniforms(&params,sizeof(params));
+                        d.dispatch(64);  // first write
+                        CHECK(d.computeDispatchSucceeded());
+                        params.color[0]=.25f;params.color[1]=.5f;params.color[2]=.75f;
+                        d.setComputeUniforms(&params,sizeof(params));
+                        d.dispatch(64);  // same image: compute write->write barrier
+                        CHECK(d.computeDispatchSucceeded());
+                        d.setComputeTexture(0,secondAtlas); // close old GENERAL layout
+                        params.color[0]=.75f;params.color[1]=.25f;params.color[2]=.5f;
+                        d.setComputeUniforms(&params,sizeof(params));
+                        d.dispatch(64);
+                        CHECK(d.computeDispatchSucceeded());
+                        d.endCompute();
+                    }
+                    d.beginPass(screen);
+                    d.setPipeline(pTex);d.setVertexBuffer(vbFull);
+                    d.setViewport({0,0,W/2,H});
+                    d.setTexture(0,atlas);
+                    d.draw(6);
+                    d.setViewport({W/2,0,W/2,H});
+                    d.setTexture(0,secondAtlas);
+                    d.draw(6);
+                    d.endPass();
+                });
+                CHECK(img.w==W && img.h==H);
+                if(img.w==W && img.h==H) {
+                    CHECK(near(img.at(8,H/2),64,128,191));
+                    CHECK(near(img.at(W-8,H/2),191,64,128));
+                }
+            }
+            for(auto h:storage)if(h.valid())d.destroyBuffer(h);
+            if(compute.valid())d.destroyCompute(compute);
+            if(atlas.valid())d.destroyTexture(atlas);
+            if(secondAtlas.valid())d.destroyTexture(secondAtlas);
+        }
+    }
     {   // shadow map: depth-only pass, compare sampler (LEQUAL), GL depth values
         TextureDesc sd2; sd2.width = W; sd2.height = H; sd2.format = PixelFormat::Depth; sd2.renderTarget = true; sd2.compare = true;
         const TextureHandle sm = d.createTexture(sd2);
@@ -258,10 +368,15 @@ int main() {
         });
         CHECK(near(img.at(W / 2, H / 2), 128, 0, 127));
         if (d.supports(PixelFormat::RGBA16F)) {
+            // General format support is sampled-texture support. A Vulkan
+            // device can support sampled+storage RGBA16F for compute GI without
+            // COLOR_ATTACHMENT support; rendering to FP16 is a separate cap.
             TextureDesc hd; hd.width = W; hd.height = H; hd.format = PixelFormat::RGBA16F; hd.renderTarget = true;
             const TextureHandle hdr = d.createTexture(hd);
-            frame(d, [&] { PassDesc p; p.colorTarget = hdr; d.beginPass(p); d.setPipeline(pColor); d.setVertexBuffer(vbFull); uniforms(1, 1, 1, 1); d.draw(6); d.endPass(); });
-            d.destroyTexture(hdr);
+            if (hdr.valid()) {
+                frame(d, [&] { PassDesc p; p.colorTarget = hdr; d.beginPass(p); d.setPipeline(pColor); d.setVertexBuffer(vbFull); uniforms(1, 1, 1, 1); d.draw(6); d.endPass(); });
+                d.destroyTexture(hdr);
+            } else std::printf("Vulkan: sampled RGBA16F supported, FP16 color attachment unavailable\\n");
         }
     }
     CHECK(d.gpuHealthy());

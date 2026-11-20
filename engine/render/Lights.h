@@ -50,6 +50,10 @@ struct PointLight {
     float beam = 0;              // spot: strength of the visible light shaft (display space, additive)
     uint32_t key = 0;            // stable id across frames (0 = none): keeps a per-pixel slot (hysteresis)
     float rank = -1;             // importance for the per-pixel slots (>= 0: instead of intensity, e.g. without flicker)
+    // Opt-in indirect contribution of THIS realtime source to dynamic GI.
+    // Zero prevents inadvertently rebaking static/baked lamps twice.
+    // The direct lightmap and material shader are completely unaffected.
+    float indirectMultiplier = 0;
 
     void makeSpot(float3 direction, float coneAngleDeg, float softness = 0.6f) {
         dir = normalize(direction);
@@ -112,6 +116,10 @@ public:
     void add(const PointLight& l);
     void add(float3 pos, float radius, float3 color, float intensity = 1) { add(PointLight{pos, radius, color, intensity}); }
     size_t count() const { return lights_.size(); }
+    // Read-only per-frame source snapshot for explicit indirect GI publication.
+    // Valid after all add() calls and before the next begin(); do not retain
+    // references or mutate this list from asynchronous/GPU/ECS workers.
+    const std::vector<PointLight>& submittedLights() const { return lights_; }
     const LightStats& stats() const { return stats_; }
     void noteReflectionTime(float ms) { stats_.reflMs = ms; }
 

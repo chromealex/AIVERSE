@@ -1,6 +1,6 @@
 // Exercise checked parallel jobs while full COW snapshots share all pools.
 #include "engine/experiments/EcsGuardedWorld.h"
-#include <cassert>
+#include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
 using namespace aiverse;
@@ -44,19 +44,19 @@ static uint64_t exercise(unsigned workers) {
                 auto* velocity=view.read<Velocity>(e);
                 if(velocity)p.x+=velocity->v;
                 auto* audit=view.write<Audit>(e);
-                assert(audit);
+                AIVERSE_TEST_CHECK(audit);
                 ++audit->changes;
-                assert(view.readResource<Resource>()->value==20);
+                AIVERSE_TEST_CHECK(view.readResource<Resource>()->value==20);
             });
     }
-    assert(hash(before)==original);
+    AIVERSE_TEST_CHECK(hash(before)==original);
     const auto final=hash(world);
     world.copyFrom(before);
-    assert(hash(world)==original);
+    AIVERSE_TEST_CHECK(hash(world)==original);
     return final;
 }
 int main(){
     const auto expected=exercise(0);
-    for(unsigned workers:{1u,3u,7u})assert(exercise(workers)==expected);
+    for(unsigned workers:{1u,3u,7u})AIVERSE_TEST_CHECK(exercise(workers)==expected);
     std::cout<<"PASS COW shared-pool snapshots with guarded parallel read/write and rollback\n";
 }

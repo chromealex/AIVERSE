@@ -1,7 +1,7 @@
 // c++ -std=c++20 -O2 -pthread -I. tests/ecs_guarded_parallel_test.cpp -o /tmp/aiverse-ecs-guarded-parallel
 // /tmp/aiverse-ecs-guarded-parallel
 #include "engine/experiments/EcsGuardedWorld.h"
-#include <cassert>
+#include "tests/AlwaysCheck.h"
 #include <atomic>
 #include <cstdint>
 #include <iostream>
@@ -59,14 +59,14 @@ static void testForeignWriteRejection() {
                 (void)view.write<Position>(other);
             });
     }catch(const AccessViolation&) {caught=true;}
-    assert(caught);
+    AIVERSE_TEST_CHECK(caught);
     // No writer failure should leave PersistentWorkers unusable.
     {
         AccessScope scope(access);
         view.eachAdaptiveWrite<Position>(workers,ExecutionMode::Parallel,{},
             [](Entity,Position& position){position.x+=1;});
     }
-    assert(world.get<Position>(a).x==1 && world.get<Position>(b).x==1);
+    AIVERSE_TEST_CHECK(world.get<Position>(a).x==1 && world.get<Position>(b).x==1);
 }
 static void testNoSharedMutationWithinJobs() {
     World world;
@@ -93,16 +93,16 @@ static void testNoSharedMutationWithinJobs() {
                 } catch(const AccessViolation&){++rejected;}
             });
     }
-    assert(rejected==64*4);
-    assert(world.countExisting<Position>()==64);
+    AIVERSE_TEST_CHECK(rejected==64*4);
+    AIVERSE_TEST_CHECK(world.countExisting<Position>()==64);
 }
 
 int main() {
     for(unsigned density:{1u,25u,100u}) {
         const auto expected=run(0,density);
-        assert(run(1,density)==expected);
-        assert(run(3,density)==expected);
-        assert(run(7,density)==expected);
+        AIVERSE_TEST_CHECK(run(1,density)==expected);
+        AIVERSE_TEST_CHECK(run(3,density)==expected);
+        AIVERSE_TEST_CHECK(run(7,density)==expected);
     }
     testForeignWriteRejection();
     testNoSharedMutationWithinJobs();

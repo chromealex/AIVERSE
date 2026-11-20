@@ -5,6 +5,7 @@
 #include "GiUpdateScheduler.h"
 #include "StaticDiffuseField.h"
 #include "GiTraceGeometry.h"
+#include "GiEnvironmentLight.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -21,6 +22,11 @@ struct GiMovingLight {
     float3 color{1, 1, 1}; // linear RGB, never packed sRGB
     float radius = 4;
     float intensity = 1;
+    // Optional spot cone. cosOuter <= -1.5 denotes omnidirectional point light.
+    // Direction runs FROM the emitter toward illuminated surfaces, normalized.
+    float3 direction{0,-1,0};
+    float cosInner=-2, cosOuter=-2;
+    bool spot() const { return cosOuter > -1.5f; }
 };
 
 struct GiDynamicCoefficient {
@@ -52,6 +58,7 @@ public:
         sampleCount_ = samples;
         traceDistance_ = traceDistance;
         lights_.clear();
+        environment_ = {};
         geometry_ = {};
         geometryRevision_ = 0;
     }
@@ -60,6 +67,32 @@ public:
     const GiUpdateScheduler& scheduler() const { return scheduler_; }
     const std::vector<GiDynamicCoefficient>& coefficients() const { return coeffs_; }
     const GiDynamicCoefficient& coefficient(uint32_t index) const { return coeffs_.at(index); }
+
+    // Clear transport invalidated by world changes before shader sampling.
+    // The caller first invalidates the corresponding scheduler tickets and
+    // uploads these zero coefficients before rendering (including budget=0).
+    void clearCoefficients(const std::vector<uint32_t>& ids) {
+        for (uint32_t id:ids) coeffs_.at(id) = {};
+    }
+    void clearAllCoefficients() {
+        std::fill(coeffs_.begin(), coeffs_.end(), GiDynamicCoefficient{});
+    }
+
+    const GiEnvironmentLight& environment() const { return environment_; }
+    // Changes to distant sunlight or sky affect all probes, not only the
+    // volume of one point/spot lamp. Dirty revisions retire in-flight tickets.
+    // A caller must flush cleared coefficients to the GPU before sampling.
+    bool setEnvironment(GiEnvironmentLight next,
+                        std::vector<uint32_t>* cleared = nullptr) {
+        if (!next.valid()) throw std::invalid_argument("invalid dynamic GI environment");
+        if (next==environment_) return false;
+        environment_=next;
+        clearAllCoefficients();
+        scheduler_.invalidateAll(GiDirtyReason::Environment);
+        if (cleared)
+            for (uint32_t i=0;i<coeffs_.size();++i) cleared->push_back(i);
+        return true;
+    }
 
     // A null BVH makes dynamic bounce zero, not "unchanged/stale".
     void setGeometry(const StaticShadowGeometry* geometry, uint64_t revision) {
@@ -117,7 +150,8 @@ public:
     // Must be called after ECS light-change barrier with a stable key per source.
     // Only changed/new/removed light volumes are invalidated, expanded by traceDistance
     // to account for light -> surface -> probe transport rather than direct light alone.
-    void setLights(std::vector<GiMovingLight> current) {
+    void setLights(std::vector<GiMovingLight> current,
+                   std::vector<uint32_t>* cleared = nullptr) {
         if (current.size() > 64) throw std::invalid_argument("too many dynamic GI lights");
         const auto valid = [](const GiMovingLight& l) {
             const auto finite3 = [](float3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
@@ -125,7 +159,12 @@ public:
                    l.color.x >= 0 && l.color.y >= 0 && l.color.z >= 0 &&
                    l.color.x <= 10000 && l.color.y <= 10000 && l.color.z <= 10000 &&
                    std::isfinite(l.radius) && l.radius > 0 && l.radius <= 1000 &&
-                   std::isfinite(l.intensity) && l.intensity >= 0 && l.intensity <= 10000;
+                   std::isfinite(l.intensity) && l.intensity >= 0 && l.intensity <= 10000 &&
+                   std::isfinite(l.cosOuter) && std::isfinite(l.cosInner) &&
+                   (!l.spot() || (finite3(l.direction) &&
+                       std::abs(dot(l.direction,l.direction)-1.0f)<.002f &&
+                       l.cosOuter>=-1.0f && l.cosOuter<1.0f &&
+                       l.cosInner>=l.cosOuter && l.cosInner<=1.0f));
         };
         for (const auto& light : current)
             if (!valid(light)) throw std::invalid_argument("invalid dynamic GI light");
@@ -139,7 +178,10 @@ public:
             return a.position.x != b.position.x || a.position.y != b.position.y ||
                    a.position.z != b.position.z || a.color.x != b.color.x ||
                    a.color.y != b.color.y || a.color.z != b.color.z ||
-                   a.radius != b.radius || a.intensity != b.intensity;
+                   a.radius != b.radius || a.intensity != b.intensity ||
+                   a.direction.x != b.direction.x || a.direction.y != b.direction.y ||
+                   a.direction.z != b.direction.z ||
+                   a.cosInner != b.cosInner || a.cosOuter != b.cosOuter;
         };
         const auto find = [](const std::vector<GiMovingLight>& src, uint64_t key) -> const GiMovingLight* {
             const auto it = std::lower_bound(src.begin(), src.end(), key,
@@ -148,11 +190,11 @@ public:
         };
         for (const auto& old : lights_) {
             const auto* newer = find(current, old.key);
-            if (!newer || changed(old, *newer)) invalidateLight(old);
+            if (!newer || changed(old, *newer)) invalidateLight(old, cleared);
         }
         for (const auto& next : current) {
             const auto* old = find(lights_, next.key);
-            if (!old || changed(*old, next)) invalidateLight(next);
+            if (!old || changed(*old, next)) invalidateLight(next, cleared);
         }
         lights_ = std::move(current);
     }
@@ -177,10 +219,19 @@ public:
     }
 
 private:
-    void invalidateLight(const GiMovingLight& light) {
+    // Invalidation also retires old coefficients immediately: a removed or moving
+    // light must not keep illuminating Vulkan/GLES/Metal while the next frame's
+    // bounded tracing budget catches up. The host uploads these cleared IDs.
+    void invalidateLight(const GiMovingLight& light, std::vector<uint32_t>* cleared) {
         const float r = light.radius + traceDistance_;
         const float3 ext{r,r,r};
-        scheduler_.invalidate({light.position-ext, light.position+ext}, GiDirtyReason::Lighting);
+        std::vector<uint32_t> affected;
+        scheduler_.invalidate({light.position-ext, light.position+ext},
+                              GiDirtyReason::Lighting, 0, &affected);
+        for (uint32_t id : affected) {
+            coeffs_[id] = {};
+            if (cleared) cleared->push_back(id);
+        }
     }
     static float3 direction(int i, int count) {
         const float y = 1 - 2 * (float(i)+.5f)/float(count);
@@ -190,7 +241,7 @@ private:
     }
     GiDynamicCoefficient compute(float3 p, Stats& stats) const {
         GiDynamicCoefficient result;
-        if (lights_.empty()) return result;
+        if (lights_.empty() && !environment_.enabled()) return result;
         auto add = [&](float3 rgb, float3 dir) {
             const float colors[3] = {rgb.x,rgb.y,rgb.z};
             const float components[3] = {dir.x,dir.y,dir.z};
@@ -220,14 +271,52 @@ private:
                 const float3 towardLight = delta*(1/d);
                 const float ndl = std::max(0.0f, dot(normal,towardLight));
                 if (ndl == 0) continue;
+                float cone=1.0f;
+                if (light.spot()) {
+                    // The surface sees the light along -towardLight.
+                    const float angle=dot(light.direction,-towardLight);
+                    const float width=std::max(light.cosInner-light.cosOuter,1e-5f);
+                    cone=std::clamp((angle-light.cosOuter)/width,0.0f,1.0f);
+                    if (cone<=0) continue;
+                }
                 // Static BVH is only a reference. Dynamic blockers require a new snapshot.
                 ++stats.visibilityRays;
                 if (geometry_.distance(surface, towardLight, d) < d - .03f) continue;
                 float falloff = 1.0f - d2/(light.radius*light.radius);
                 falloff *= falloff;
-                const float strength = light.intensity * ndl * falloff / (1.0f + d2);
+                const float strength = light.intensity * ndl * cone * falloff / (1.0f + d2);
                 outgoing += float3{light.color.x*albedo.x,light.color.y*albedo.y,
                                    light.color.z*albedo.z} * strength;
+            }
+            // Sun/sky terms illuminate the hit SURFACE, not the camera/probe
+            // directly. We project only that surface's indirect re-emission.
+            if (environment_.sunIntensity>0) {
+                const float ndl=std::max(0.0f,dot(normal,environment_.sunDirection));
+                if (ndl>0) {
+                    ++stats.visibilityRays;
+                    if (geometry_.distance(surface,environment_.sunDirection,traceDistance_) >=
+                        traceDistance_-.03f) {
+                        outgoing += float3{environment_.sunColor.x*albedo.x,
+                                           environment_.sunColor.y*albedo.y,
+                                           environment_.sunColor.z*albedo.z} *
+                                    (environment_.sunIntensity*ndl);
+                    }
+                }
+            }
+            if (environment_.skyIntensity>0) {
+                const float skyCos=std::max(0.0f,normal.y);
+                if (skyCos>0) {
+                    // Explicit bounded +Y overhead visibility. Occluded by roof
+                    // and any other published opaque geometry.
+                    ++stats.visibilityRays;
+                    if (geometry_.distance(surface,{0,1,0},traceDistance_) >=
+                        traceDistance_-.03f) {
+                        outgoing += float3{environment_.skyColor.x*albedo.x,
+                                           environment_.skyColor.y*albedo.y,
+                                           environment_.skyColor.z*albedo.z} *
+                                    (environment_.skyIntensity*skyCos);
+                    }
+                }
             }
             // The same first-order directional convention used by the baked L1 probes.
             // No direct-light term is inserted; the bounced radiance is a separate delta.
@@ -239,6 +328,7 @@ private:
     GiUpdateScheduler scheduler_;
     std::vector<GiDynamicCoefficient> coeffs_;
     std::vector<GiMovingLight> lights_;
+    GiEnvironmentLight environment_{};
     GiTraceGeometryView geometry_{};
     uint64_t geometryRevision_ = 0;
     int sampleCount_ = 32;

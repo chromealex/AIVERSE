@@ -199,4 +199,38 @@ bool compileProgram(const std::string& vertexBody, const std::string& fragmentBo
     return out.error.empty();
 }
 
+
+bool compileComputeProgram(const std::string& glsl, std::vector<uint32_t>& out,
+                           std::string& error) {
+    out.clear();
+    error.clear();
+    if (glsl.empty()) { error = "empty Vulkan compute shader"; return false; }
+    std::lock_guard<std::mutex> lock(g_mutex);
+    std::call_once(g_init, [] { glslang::InitializeProcess(); });
+    const EShMessages messages = EShMessages(EShMsgSpvRules | EShMsgVulkanRules);
+    glslang::TShader shader(EShLangCompute);
+    const char* source = glsl.c_str();
+    shader.setStrings(&source, 1);
+    shader.setEnvInput(glslang::EShSourceGlsl, EShLangCompute,
+                       glslang::EShClientVulkan, 100);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
+    if (!shader.parse(GetDefaultResources(), 450, false, messages)) {
+        error = std::string("compute shader: ") + shader.getInfoLog();
+        return false;
+    }
+    glslang::TProgram program;
+    program.addShader(&shader);
+    if (!program.link(messages)) {
+        error = std::string("compute link: ") + program.getInfoLog();
+        return false;
+    }
+    glslang::SpvOptions options;
+    options.disableOptimizer = true;
+    options.validate = false;
+    glslang::GlslangToSpv(*program.getIntermediate(EShLangCompute), out, &options);
+    if (out.empty()) { error = "empty SPIR-V compute result"; return false; }
+    return true;
+}
+
 } // namespace aiverse::gfx::vk

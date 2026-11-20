@@ -12,6 +12,7 @@
 #include <vector>
 #include "../gfx/Gfx.h"
 #include "Lights.h"
+#include "GiCustomShaderPolicy.h"
 #include "Math3D.h"
 #include "Model.h"
 #include "PersistentGpuSceneUpload.h"
@@ -393,8 +394,8 @@ public:
     const BakedLighting* bakedLighting() const { return baked_; }
     // Opt-in dynamic-only indirect probe overlay. Same gfx::Device as this renderer.
     // No lightmap/cache change; the caller must keep texture alive while bound.
-    // Existing shader-graph texture slots 13+ take priority, so models using graph
-    // textures currently fall back to their existing GI path.
+    // Shader Graph model textures are allocated after the GI slots when the
+    // backend supports all bindings; otherwise they retain graph-only shading.
     bool setDynamicGiOverlay(const GiDynamicProbeTexture* texture, float3 origin,
                              float spacing, int nx, int ny, int nz,
                              int ringX = 0, int ringY = 0, int ringZ = 0,
@@ -418,6 +419,19 @@ public:
         dynamicGiThirdOverlay_ = nullptr;
     }
     bool dynamicGiOverlayActive() const { return dynamicGiOverlay_ != nullptr; }
+    // Explicit custom lit shader binding (terrain, foliage, third-party
+    // materials). Call after the custom shader pipeline is set and before its
+    // draw. The shader must declare exactly the requested DYNAMIC_GI macros
+    // and U6/tex13, optional validity U6/tex14, far U7/tex15 and Metal-only
+    // third U8/tex16. Off on missing/mismatched sources or RHI limits.
+    // This does NOT compile a shader or add GI to an arbitrary fragment body.
+    // Query BEFORE compiling/selecting a custom shader variant. Custom
+    // texture layouts can reserve tex0..20 for terrain, then request GI at 21.
+    // If this reports Off, compile/draw the no-GI shader permutation.
+    GiCustomShaderMode availableDynamicGiForCustomShader(
+        GiCustomShaderMode requested,int firstTextureSlot=13) const;
+    GiCustomShaderMode bindDynamicGiForCustomShader(
+        GiCustomShaderMode requested,int firstTextureSlot=13);
     void setBakedQuality(BakedQuality q);
     BakedQuality bakedQuality() const { return bakedQuality_; }
     static BakedQuality defaultBakedQualityFor(const gfx::Device& dev, bool mobile);

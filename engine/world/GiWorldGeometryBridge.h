@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace aiverse::world {
@@ -152,6 +153,26 @@ public:
         target.replaceChunk(stableChunkId(chunk.key.x,chunk.key.z,
                                            GiGeometrySource::TerraWeaveProcedural),
                             std::move(triangles),{albedo});
+        return count;
+    }
+
+    // World-space *collision/occlusion* triangles from a resident tree/grass
+    // cluster, fallen log or vegetation HLOD proxy. The authoritative foliage
+    // system generates these triangles; this bridge NEVER re-meshes vegetation
+    // or changes its ECS/physics ownership. Stable per-chunk IDs share neither
+    // WorldCollision nor TerraWeave terrain namespaces.
+    static size_t replaceVegetationProxy(
+        render::GiGeometryScene& target,int64_t chunkX,int64_t chunkZ,
+        std::vector<render::StaticShadowGeometry::Triangle> worldTriangles,
+        std::vector<render::float3> albedos={{.22f,.36f,.18f}}) {
+        if(worldTriangles.size()>65536)
+            throw std::length_error("GI vegetation proxy triangle budget exceeded");
+        const size_t count=worldTriangles.size();
+        target.replaceChunk(
+            stableChunkId(chunkX,chunkZ,GiGeometrySource::VegetationProxy),
+            std::move(worldTriangles),std::move(albedos));
+        // An empty source removes the old occluder and invalidates its OLD
+        // bounds through GiGeometryScene; callers still need to publish().
         return count;
     }
 

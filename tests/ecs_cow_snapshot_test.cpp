@@ -1,6 +1,6 @@
 // c++ -std=c++20 -O2 -pthread -I. tests/ecs_cow_snapshot_test.cpp -o /tmp/ecs-cow-test
 #include "engine/core/ECS.h"
-#include <cassert>
+#include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -10,10 +10,10 @@ struct Health {int64_t hp=100;};
 struct Resource {int64_t gold=1;};
 struct Named {std::string name;};
 static void check(World& w,Entity e,int64_t x,int64_t hp,int64_t gold) {
-    assert(w.alive(e));
-    assert(w.get<Position>(e).x==x);
-    assert(w.get<Health>(e).hp==hp);
-    assert(w.resource<Resource>()->gold==gold);
+    AIVERSE_TEST_CHECK(w.alive(e));
+    AIVERSE_TEST_CHECK(w.get<Position>(e).x==x);
+    AIVERSE_TEST_CHECK(w.get<Health>(e).hp==hp);
+    AIVERSE_TEST_CHECK(w.resource<Resource>()->gold==gold);
 }
 int main() {
     World w;
@@ -23,11 +23,11 @@ int main() {
     w.add<Health>(a,Health{100});w.add<Health>(b,Health{200});
     w.setResource<Resource>(Resource{7});
     World s1=w;
-    assert(w.sharedPoolCount()==2);
-    assert(w.sharedResourceCount()==1);
+    AIVERSE_TEST_CHECK(w.sharedPoolCount()==2);
+    AIVERSE_TEST_CHECK(w.sharedResourceCount()==1);
     w.get<Position>(a).x=30;
-    assert(w.sharedPoolCount()==1);
-    assert(s1.sharedPoolCount()==1);
+    AIVERSE_TEST_CHECK(w.sharedPoolCount()==1);
+    AIVERSE_TEST_CHECK(s1.sharedPoolCount()==1);
     w.get<Health>(b).hp=300;
     w.resource<Resource>()->gold=8;
     check(s1,a,10,100,7);
@@ -36,14 +36,14 @@ int main() {
     w.each<Position>([](Entity,Position& p){p.x+=1;});
     w.destroy(a);
     Entity recycled=w.create();
-    assert(recycled.index==a.index && recycled.gen==a.gen+1);
+    AIVERSE_TEST_CHECK(recycled.index==a.index && recycled.gen==a.gen+1);
     w.add<Position>(recycled,Position{400});
     w.add<Health>(recycled,Health{500});
-    assert(s1.alive(a)&&s2.alive(a));
+    AIVERSE_TEST_CHECK(s1.alive(a)&&s2.alive(a));
     check(s2,a,30,100,8);
-    assert(!w.alive(a));
-    assert(s1.get<Position>(b).x==20);
-    assert(s2.get<Health>(b).hp==300);
+    AIVERSE_TEST_CHECK(!w.alive(a));
+    AIVERSE_TEST_CHECK(s1.get<Position>(b).x==20);
+    AIVERSE_TEST_CHECK(s2.get<Health>(b).hp==300);
     w.copyFrom(s1);
     check(w,a,10,100,7);
     w.get<Position>(a).x=42;
@@ -52,8 +52,8 @@ int main() {
     w.enableCowSnapshots(false);
     World legacy=w;
     w.get<Position>(a).x=77;
-    assert(legacy.get<Position>(a).x==42);
-    assert(!w.cowSnapshotsEnabled());
+    AIVERSE_TEST_CHECK(legacy.get<Position>(a).x==42);
+    AIVERSE_TEST_CHECK(!w.cowSnapshotsEnabled());
     // Page-level COW: one modified component detaches only its page.
     {
         World large;
@@ -66,26 +66,26 @@ int main() {
         World checkpoint=large;
         Entity e10{10,0},e511{511,0},e300{300,0};
         large.get<Position>(e10).x=999;
-        assert(large.sharedCowPageCount()>=3);
-        assert(static_cast<const World&>(checkpoint).tryGetConst<Position>(e10)->x==10);
+        AIVERSE_TEST_CHECK(large.sharedCowPageCount()>=3);
+        AIVERSE_TEST_CHECK(static_cast<const World&>(checkpoint).tryGetConst<Position>(e10)->x==10);
         large.get<Position>(e511).x=888;
-        assert(static_cast<const World&>(checkpoint).tryGetConst<Position>(e511)->x==511);
+        AIVERSE_TEST_CHECK(static_cast<const World&>(checkpoint).tryGetConst<Position>(e511)->x==511);
         large.destroy(e300);
-        assert(!large.alive(e300) && checkpoint.alive(e300));
+        AIVERSE_TEST_CHECK(!large.alive(e300) && checkpoint.alive(e300));
         Entity reused=large.create();
-        assert(reused.index==e300.index && reused.gen==e300.gen+1);
+        AIVERSE_TEST_CHECK(reused.index==e300.index && reused.gen==e300.gen+1);
         large.add<Position>(reused,Position{123456});
         large.add<Named>(reused,Named{"new"});
-        assert(static_cast<const World&>(checkpoint).tryGetConst<Position>(e300)->x==300);
-        assert(static_cast<const World&>(checkpoint).tryGetConst<Named>(e300)->name=="300");
-        assert(large.get<Named>(reused).name=="new");
+        AIVERSE_TEST_CHECK(static_cast<const World&>(checkpoint).tryGetConst<Position>(e300)->x==300);
+        AIVERSE_TEST_CHECK(static_cast<const World&>(checkpoint).tryGetConst<Named>(e300)->name=="300");
+        AIVERSE_TEST_CHECK(large.get<Named>(reused).name=="new");
         large.copyFrom(checkpoint);
-        assert(large.alive(e300));
-        assert(large.get<Position>(e10).x==10);
-        assert(large.get<Named>(e300).name=="300");
+        AIVERSE_TEST_CHECK(large.alive(e300));
+        AIVERSE_TEST_CHECK(large.get<Position>(e10).x==10);
+        AIVERSE_TEST_CHECK(large.get<Named>(e300).name=="300");
         large.enableCowSnapshots(false);
-        assert(!large.cowSnapshotsEnabled());
-        assert(large.get<Position>(e511).x==511);
+        AIVERSE_TEST_CHECK(!large.cowSnapshotsEnabled());
+        AIVERSE_TEST_CHECK(large.get<Position>(e511).x==511);
     }
     std::cout<<"PASS COW world snapshots, resource detachment, generations, rollback, legacy fallback\n";
 }

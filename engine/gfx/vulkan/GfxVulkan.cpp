@@ -159,6 +159,23 @@ bool VulkanDevice::pickDevice(std::string& error) {
     vkGetDeviceQueue(device_, queueFamily_, 0, &queue_);
 
     const auto& lim = gpuProps_.limits;
+    uint32_t familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu_, &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueProps(familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu_, &familyCount, queueProps.data());
+    VkFormatProperties giFormat{};
+    vkGetPhysicalDeviceFormatProperties(gpu_, VK_FORMAT_R16G16B16A16_SFLOAT, &giFormat);
+    const auto giFeatures = giFormat.optimalTilingFeatures;
+    computeAvailable_ = queueFamily_ < familyCount &&
+        (queueProps[queueFamily_].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
+        (giFeatures & (VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) ==
+            (VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+        lim.maxComputeWorkGroupInvocations >= 64 && lim.maxComputeWorkGroupSize[0] >= 64 &&
+        lim.maxPerStageDescriptorStorageBuffers >= 4 &&
+        lim.maxPerStageDescriptorStorageImages >= 1 &&
+        lim.maxDescriptorSetStorageBuffers >= 4 &&
+        lim.maxDescriptorSetStorageImages >= 1 &&
+        lim.maxPushConstantsSize >= 80;
     textureSlots_ = int(std::min<uint32_t>({uint32_t(kMaxTextureSlots), lim.maxPerStageDescriptorSamplers, lim.maxPerStageDescriptorSampledImages,
                                             lim.maxDescriptorSetSamplers / 2u}));
     auto fail = [&](const char* why) { vkDestroyDevice(device_, nullptr); device_ = VK_NULL_HANDLE; error = why; return false; };
@@ -279,12 +296,19 @@ void VulkanDevice::destroyDeviceObjects() {
     killTex(dummy_); killTex(dummyDepth_); killTex(back_); killTex(backDepth_);
     shaders_.each([&](VShader& s) { for (VkShaderModule m : {s.vert, s.frag, s.hdrVert, s.hdrFrag}) if (m) vkDestroyShaderModule(device_, m, nullptr); });
     pipelines_.each([&](VPipeline& p) { for (auto& v : p.variants) vkDestroyPipeline(device_, v.pipeline, nullptr); });
+    computes_.each([&](VCompute& c) {
+        if (c.pipeline) vkDestroyPipeline(device_, c.pipeline, nullptr);
+        if (c.layout) vkDestroyPipelineLayout(device_, c.layout, nullptr);
+        if (c.setLayout) vkDestroyDescriptorSetLayout(device_, c.setLayout, nullptr);
+        if (c.shader) vkDestroyShaderModule(device_, c.shader, nullptr);
+    });
     for (auto& s : samplers_) vkDestroySampler(device_, s.sampler, nullptr);
     for (auto& f : framebuffers_) vkDestroyFramebuffer(device_, f.fb, nullptr);
     for (auto& r : renderPasses_) vkDestroyRenderPass(device_, r.pass, nullptr);
     for (auto& c : staging_) { vkDestroyBuffer(device_, c.buffer, nullptr); memory_.release(c.alloc); }
     for (auto& s : slots_) {
         for (auto p : s.descriptorPools) vkDestroyDescriptorPool(device_, p, nullptr);
+        for (auto p : s.computePools) vkDestroyDescriptorPool(device_, p, nullptr);
         vkDestroyBuffer(device_, s.uniforms, nullptr); memory_.release(s.uniformAlloc);
         vkDestroyFence(device_, s.fence, nullptr);
         vkDestroySemaphore(device_, s.acquired, nullptr);
@@ -417,7 +441,9 @@ void VulkanDevice::prepareSlot() {
     collectGarbage();
     vkResetCommandPool(device_, s.pool, 0);
     for (auto p : s.descriptorPools) vkResetDescriptorPool(device_, p, 0);
+    for (auto p : s.computePools) vkResetDescriptorPool(device_, p, 0);
     s.descriptorPool = 0;
+    s.computePool = 0;
     s.uniformOffset = 0;
     s.preRecording = false;
     for (auto& c : staging_) if (c.serial <= completed_) c.used = 0;
@@ -451,6 +477,8 @@ void VulkanDevice::beginFrame(int w, int h) {
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(s.main, &bi);
     recording_ = true;
+    activeCompute_ = 0;
+    computeImageWriting_ = false;
     uniformOffsets_.fill(0);
     descriptorsDirty_ = true;
     ensureBackBuffer(std::max(1, w), std::max(1, h));
@@ -488,6 +516,7 @@ void VulkanDevice::present() {
 void VulkanDevice::endFrame() {
     if (!recording_) return;
     if (inPass_) endPass();
+    if (activeCompute_) endCompute();
     FrameSlot& s = slots_[size_t(slot_)];
     if (swapAcquired_) present();
     VkBuffer readback = VK_NULL_HANDLE;

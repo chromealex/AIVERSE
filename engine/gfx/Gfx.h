@@ -185,6 +185,10 @@ public:
     virtual const std::string& lastError() const = 0;
     // Formats the GPU samples natively (block-compressed ones vary by GPU and API).
     virtual bool supports(PixelFormat f) const { return f == PixelFormat::RGBA8 || f == PixelFormat::R8 || f == PixelFormat::Depth || f == PixelFormat::RGBA32F; }
+    // Fragment-stage sampled texture bindings available to material permutations.
+    // GLES3 minimum is 16; querying the device avoids out-of-range dynamic GI
+    // variants on constrained Vulkan/GL contexts. Metal has more texture slots.
+    virtual int maxFragmentTextureSlots() const { return 16; }
     // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`: an RGBA8
     // render target of the same size. Only between passes. False when the backend can't (the screen is not
     // readable: see setScreenReadable, sizes differ); the caller then takes another path.
@@ -211,6 +215,9 @@ public:
     // 64 threads per X group; dispatch provides total logical threads. Bounds-check in shader.
     virtual void dispatch(uint32_t,uint32_t=1) {}
     virtual void endCompute() {}
+    // A void dispatch can reject invalid descriptors/resources. Do not accept
+    // GI probe tickets on a backend when no GPU command was actually encoded.
+    virtual bool computeDispatchSucceeded() const { return true; }
     // Debug/readback only, between frames. Never used in normal simulation/rendering.
     virtual bool readBuffer(BufferHandle,void*,size_t) { return false; }
     // Small asynchronous status readback, inside a frame and outside encoders. Callback on
@@ -221,6 +228,10 @@ public:
     virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
     // Zero if backend does not expose a completed-slot-safe frame serial.
     virtual uint64_t frameSerial() const { return 0; }
+    // The greatest submitted frame serial whose GPU fence has completed.
+    // Returns zero when unsupported. Distinct from endFrame submission:
+    // consumers must not publish async compute results before completion.
+    virtual uint64_t completedFrameSerial() const { return 0; }
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;

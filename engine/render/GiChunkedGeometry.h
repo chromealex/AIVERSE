@@ -52,6 +52,19 @@ public:
             visitor(chunk.id, chunk.bounds, chunk.geometry);
     }
 
+    // Immutable resident subset, reusing the exact cached per-chunk BVH
+    // pointers. No triangle regeneration, no source mutation, stable IDs.
+    template<class Predicate>
+    GiChunkedGeometrySnapshot filteredChunks(Predicate&& admit) const {
+        GiChunkedGeometrySnapshot result;
+        result.chunks_.reserve(chunks_.size());
+        for (const Chunk& chunk:chunks_)
+            if (admit(chunk.id,chunk.bounds,chunk.triangles))
+                result.chunks_.push_back(chunk);
+        result.rebuild();
+        return result;
+    }
+
     // Offline/scene-change-only extraction for small GPU reference scenes.
     // Stable chunk-ID order; per-chunk geometry retains original surface/material IDs.
     // Production GPU BVH/clipmap path must NOT flatten large worlds per frame.

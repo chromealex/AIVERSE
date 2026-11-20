@@ -23,4 +23,10 @@ struct SpirvProgram {
 // Compiles and links both stages (varyings get matching locations by name). Thread-safe.
 bool compileProgram(const std::string& vertexBody, const std::string& fragmentBody, bool linearTarget, SpirvProgram& out);
 
+// Vulkan 1.1 compute shader: complete #version 450 source with explicit set/bindings.
+// Unlike graphics shaders, this accepts native storage-buffer/image declarations.
+// Returns a real SPIR-V module; error contains a parse/link message on failure.
+bool compileComputeProgram(const std::string& glsl, std::vector<uint32_t>& out,
+                           std::string& error);
+
 } // namespace aiverse::gfx::vk

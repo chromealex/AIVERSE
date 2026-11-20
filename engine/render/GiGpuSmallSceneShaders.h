@@ -19,6 +19,8 @@ struct Node {
 struct Lamp {
     float4 posRadius;
     float4 colorIntensity;
+    float4 spotDirectionOuter;
+    float4 spotInner;
 };
 struct Job {
     uint index;
@@ -32,6 +34,9 @@ struct Params {
     float traceDistance;
     uint nodes;
     float pad1, pad2;
+    float4 sunDirectionIntensity;
+    float4 sunColorSkyIntensity;
+    float4 skyColor;
 };
 struct Hit {
     float distance;
@@ -137,8 +142,33 @@ kernel void cs_main(uint thread [[thread_position_in_grid]],
             if(ndl==0.0f)continue;
             if(traceBvh(surface,L,d,tris,nodes,p.nodes).distance<d-.03f)continue;
             float falloff=1.0f-d2/(radius*radius);
-            float energy=light.colorIntensity.w*ndl*falloff*falloff/(1.0f+d2);
+            float cone=1.0f;
+            if(light.spotDirectionOuter.w>-1.5f) {
+                const float angle=dot(light.spotDirectionOuter.xyz,-L);
+                cone=clamp((angle-light.spotDirectionOuter.w)/
+                           max(light.spotInner.x-light.spotDirectionOuter.w,1e-5f),0.0f,1.0f);
+                if(cone<=0.0f)continue;
+            }
+            float energy=light.colorIntensity.w*ndl*cone*falloff*falloff/(1.0f+d2);
             outgoing+=light.colorIntensity.xyz*first.albedo*energy;
+        }
+        // Environment is incident on the HIT SURFACE, never direct light
+        // added to the receiver; explicit zero default avoids baked overlap.
+        if(p.sunDirectionIntensity.w>0.0f) {
+            float nds=max(0.0f,dot(n,p.sunDirectionIntensity.xyz));
+            if(nds>0.0f &&
+               traceBvh(surface,p.sunDirectionIntensity.xyz,p.traceDistance,
+                        tris,nodes,p.nodes).distance>=p.traceDistance-.03f)
+                outgoing+=p.sunColorSkyIntensity.xyz*first.albedo*
+                          (p.sunDirectionIntensity.w*nds);
+        }
+        if(p.sunColorSkyIntensity.w>0.0f) {
+            float skyCos=max(0.0f,n.y);
+            if(skyCos>0.0f &&
+               traceBvh(surface,float3(0.0f,1.0f,0.0f),p.traceDistance,
+                        tris,nodes,p.nodes).distance>=p.traceDistance-.03f)
+                outgoing+=p.skyColor.xyz*first.albedo*
+                          (p.sunColorSkyIntensity.w*skyCos);
         }
         float3 v=outgoing/float(p.samples);
         coefficient+=v;

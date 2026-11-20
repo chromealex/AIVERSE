@@ -601,3 +601,404 @@ Regression source tests (NOT RUN): gi_world_geometry_bridge verifies collision-f
 ACTUAL verification: inspected GitHub source at the exact branches named above, committed the adapter and test, and registered CTest. NOT RUN: C++ compilation, CTest, full ./run-tests.sh, real TerraWeave branch linkage, Metal/GL shader compilation, device output/parity/perf. Do not report tests PASS.
 
 Next stage: once TerraWeave branch lands or can be safely rebased, instantiate the adapter with actual TerraWeave::TerrainPatch / TerrainChunk in a native test and wire explicit TerrainPatchResident::takeDirty + successful collision publish to GiGeometryScene and GiGpuCascadeRuntime. Ensure old colliders and original terrain visuals are not double counted, include fallen-tree/vegetation proxy revisions and stable geometry owner lifetime. Before any merge to main, compile/build all registered GI tests, run CTest and ./run-tests.sh --quick and actual Apple Metal GPU diagnostics. Write results and exact tested SHA into the next per-stage handoff.
+
+
+## Stages 27–28 — portable light and world invalidation (2026-11-19, SOURCE COMMITTED; NOT RUN)
+
+Continuation is on `feature/gi-lighting-portable-backends-20261119`, forked from this GI branch. Read the
+**separate, complete handoffs**:
+- `docs/agent-handoffs/gi-stage27-portable-light-invalidation-2026-11-19.md`
+- `docs/agent-handoffs/gi-stage28-world-dirty-clearing-2026-11-19.md`
+
+These stages prevent stale CPU probe radiance from remaining in the RHI texture after moving/removed lights, bounded world invalidations, and saturated terrain/vegetation events. They do not implement native Vulkan compute or prove Android GLES hardware compatibility. New regression sources are authored but **not run**. The upstream GI branch was 159 commits ahead and 467 behind `main` at inspection; do not describe this as integrated or merge-ready.
+
+## Stage 29 — 2026-11-19 — stale GI binding fail-closed and Vulkan/GLES RHI inspection (SOURCE; NOT RUN)
+
+Stage 29 on the portable branch records source commit `01a9ca9b976c9f4d7d10b226d3df0f47d4c6fe47`, the previous-frame borrowed texture unbinding fix, and a source-only audit of Vulkan RGBA32F sampled image and GL ES3 GL_RGBA32F update paths. Full per-stage details, limits, native test status, and exact next action are in `docs/agent-handoffs/gi-stage29-bind-safety-and-rhi-audit-2026-11-19.md`. **Vulkan native compute is absent; do not present CPU/RHI fallback as GPU compute parity. Not compiled or GPU-tested.**
+
+
+## Stage 30 — 2026-11-19 — Vulkan GI compute RHI and fence-safe publication (SOURCE; NOT RUN)
+
+Stage 30 on the portable branch is documented in
+`docs/agent-handoffs/gi-stage30-vulkan-compute-rhi-2026-11-19.md`.
+Added Vulkan compute shader/SPIR-V source, Vulkan backend storage buffers and
+RGBA16F storage image, VkFence-completed serial tracking, GI queue integration,
+CMake and FakeDevice tests. Vulkan execution is **NOT VERIFIED**; native
+build/CTest, actual GLSL compile, Vulkan validation layers, hardware pix/counter
+tests and Android/GLES3 are NOT RUN. The direct Metal GI path and CPU-only GLES3
+fallback remain separate. Do not merge into main without validation and
+reconciliation with ongoing parallel renderer work.
+
+
+## Stage 31 — 2026-11-19 — fragment texture-slot admission (SOURCE; NOT RUN)
+
+Full next-agent handoff:
+`docs/agent-handoffs/gi-stage31-fragment-texture-budget-2026-11-19.md`.
+Added backend queried GI fragment slot caps and enforced 14/15/16/17
+resource-binding budgets in Renderer3D; GLES3 dual path fits 16,
+Metal triple requires 17, Vulkan below-cap devices reject unsafe variants.
+Authored `gi_texture_budget` regression and CTest registration.
+Native build, GPU shader/driver, Android and Metal validation: NOT RUN.
+
+
+## Stage 32 — 2026-11-19 — adaptive GLES3/Vulkan CPU GI fallback (SOURCE; NOT RUN)
+
+Read full stage doc `docs/agent-handoffs/gi-stage32-gles-cpu-fallback-budget-2026-11-19.md`.
+Added `GiCpuTraceBudget` and `GiDynamicRuntime::updateAdaptive()` for
+bounded cost-based probe updates, preserving the explicit budget API and
+RHI texture upload. Added `gi_cpu_trace_budget` CTest source and runtime
+FakeDevice coverage. Does not require GLES compute or automatically enable
+dynamic GI in any game. No native build, CTest or mobile GPU/CPU tests run.
+
+
+## Stage 33 — 2026-11-19 — Vulkan initial BVH upload barrier fix (SOURCE; NOT RUN)
+
+Source and full handoff:
+`docs/agent-handoffs/gi-stage33-vulkan-upload-synchronization-2026-11-19.md`.
+Added transfer-write to compute-read memory dependencies for initial immutable
+BVH buffers as well as updates, conditioned on queue compute capability.
+Updated Vulkan API docs and comments. Build/CTest/validation/device execution
+are NOT RUN; preserve feature opt-in and conflict-aware integration.
+
+
+## Stages 34–36 — 2026-11-20 — GLES LDR, unified transport owner and point/spot GI (SOURCE; NOT RUN)
+
+Source-only continuations on `feature/gi-lighting-portable-backends-20261119`:
+- `docs/agent-handoffs/gi-stage34-gles-ldr-cpu-gi-2026-11-20.md`
+- `docs/agent-handoffs/gi-stage35-unified-transport-owner-2026-11-20.md`
+- `docs/agent-handoffs/gi-stage36-point-spot-indirect-2026-11-20.md`
+
+34 enables the sampled RGBA32F CPU GI fallback in ordinary LDR/GL ES3 PBR
+scenes (no HDR render-target extension requirement). 35 provides a
+genre-neutral transport controller choosing Metal/Vulkan compute or
+GLES3/Vulkan CPU with stable immutable geometry ownership. 36 adds
+explicit opt-in point/spot bounce from the common direct lighting sources;
+the GPU Lamp SSBO layout is now 64 bytes in Metal and Vulkan, with CPU/GPUs
+using the same cone fade. New CTest source files and CMake entries exist.
+**NATIVE BUILD, SPIR-V/MSL, GLES3, METAL/VULKAN HARDWARE, FULL CTEST AND
+PERFORMANCE: NOT RUN.** Do not promote to main or mark feature complete.
+
+
+## Stage 37 — 2026-11-20 — unified CPU/GPU world dirty events (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage37-world-change-gpu-cpu-2026-11-20.md`.
+`GiLightingController` now forwards external presentation world dirties to
+both GLES CPU transport and Metal/Vulkan single-volume compute, with
+revision-safe stale ticket rejection and explicit geometry-snapshot boundary.
+`gi_gpu_dynamic_runtime` and `gi_lighting_controller` test sources updated.
+No real C++ build, shader compilation, CTest or GPU parity run.
+
+
+## Stage 38 — 2026-11-20 — direct PointLight/spotlight snapshot to GI (SOURCE; NOT RUN)
+
+Full handoff: `docs/agent-handoffs/gi-stage38-renderer-light-snapshot-2026-11-20.md`.
+`LightSystem::submittedLights()` exposes a const view of the light sources
+submitted this scene; `GiLightingController::syncRendererLights` copies
+selected opt-in point/spot lights using stable namespaced keys, without any
+special FPS/RTS ECS dependency or changing direct lighting. The source
+fixture in `gi_lighting_controller` was expanded. C++/CTest/GPU execution
+not run. Main merge not performed.
+
+
+## Stage 39 — 2026-11-20 — explicit sun and overhead sky bounce (SOURCE; NOT RUN)
+
+Read `docs/agent-handoffs/gi-stage39-sun-sky-first-bounce-2026-11-20.md`.
+New `GiEnvironmentLight` source and renderer bridge, CPU/GPU visibility-aware
+one-bounce sun+sky, Metal/Vulkan compute ABI 80B (Vulkan push constant cap),
+fence-safe volume invalidation and CTest source registrations.
+Zero source intensities preserve default baked/direct/ambient GI.
+Sky uses one +Y visibility ray; large-world physically correct sky remains
+unimplemented. No native compiler, CTest, shader compiler, real Metal/Vulkan
+GPU or GLES hardware run. Do NOT merge into main yet.
+
+
+## Stage 40 — 2026-11-20 — world/terrain/foliage GI publication coordinator (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage40-world-terrain-foliage-publication-2026-11-20.md`.
+New `GiWorldPresentationSync` makes immutable geometry and dirty event
+publication transactional across CPU/GLES3 and Metal/Vulkan GPU fences.
+On refused GPU snapshot it retains old current geometry, old/new dirty
+regions and all unflushed changes for retry. CPU/GPU FakeDevice test sources
+registered with CTest. No compiler, CTest, shader validation, device test
+or real TerraWeave producer linkage executed. Automatic ECS subscription and
+terrain/foliage receiving shader GI remain unfinished.
+
+
+## Stage 41 — 2026-11-20 — dynamic GI with textured Shader Graph (SOURCE; NOT RUN)
+
+Read `docs/agent-handoffs/gi-stage41-shader-graph-dynamic-gi-2026-11-20.md`.
+Added `GiShaderGraphTextureSlots` and capability-gated model shader
+permutation so GI atlas/validity/cascades occupy reserved tex13..16 before
+Shader Graph textures, with fallback to graph-only shading when GPU/GLES
+resource caps are insufficient. Model draw path rebinds graph textures
+after pipeline variant changes. GI texture budget source tests extended;
+native C++, CTest, MSL/GLSL/SPIR-V shader runs and device pixels NOT RUN.
+
+
+## Stage 42 — 2026-11-20 — custom terrain / foliage GI resource binding (SOURCE; NOT RUN)
+
+Read `docs/agent-handoffs/gi-stage42-custom-terrain-foliage-bindings-2026-11-20.md`.
+Added `GiCustomShaderMode` and a portable Renderer3D hook to bind
+dynamic-only GI atlases into opt-in custom PBR shaders without stealing
+texture slots; exact Single/Validity/Dual/Metal Triple modes and GPU caps
+are enforced. Reuses the existing GiDynamicShaders/GiCascadeShaders ABI.
+This is not yet automatic GI receiving by all terrain/foliage shaders.
+Compiler, CTest, GPU pixel tests and full acceptance NOT RUN.
+
+
+## Stage 43 — 2026-11-20 — relocatable custom GI binding ABI (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage43-custom-gi-remappable-atlas-2026-11-20.md`.
+Added generic texture-range admission, preflight queries, GLSL/MSL custom
+GI helper sources with two-pass identifier remapping, configurable
+Renderer3D GI binding slots, and `gi_custom_shader_remap` CTest source.
+Allows terrain/foliage/custom material layouts owning tex13..20 to
+request GI at tex21+ on capable Metal/Vulkan devices. Strict GLES3
+texture limitations keep fallback. Native build, CTest, shaders and GPU
+pixels NOT RUN. Continue Stage 44 real receiver integration.
+
+
+## Stage 44 — 2026-11-20 — actual terrain PBR GI receiver (SOURCE; NOT RUN)
+
+Full handoff: `docs/agent-handoffs/gi-stage44-terrain-receiver-2026-11-20.md`.
+The existing genre-specific terrain consumer now uses the genre-neutral
+remappable GI shader API: separate GLSL/MSL GI at tex21 plus U6, retained
+fallback and cached shader permutations; custom deferred pass checks GI
+availability before selecting shader. Terrain original tex0..20 remain
+intact; low-tier and GLES strict16 use existing shaders. Shutdown frees
+all 12 terrain pipeline/shader variants. Added `gi_terrain_receiver`
+source contract CTest. **No native build, compiler, CTest, driver GPU test
+or real TerraWeave runtime integration performed.**
+
+
+## Stage 45 — 2026-11-20 — vegetation/HLOD proxy geometry source (SOURCE; NOT RUN)
+
+Read `docs/agent-handoffs/gi-stage45-vegetation-proxy-geometry-2026-11-20.md`.
+Adds stable collision-snapshot adapter in the existing genre-neutral
+`GiWorldGeometryBridge` for world-space vegetation occluders and foliage
+unload, using the pre-existing separate source namespace. No ECS write,
+second terrain/foliage mesh generator or new renderer dependency.
+Extends `gi_world_geometry_bridge` source fixture with proxy insert,
+trace and removal preserving the terrain sources. Native C++/CTest and
+Metal/Vulkan/GLES GPU execution NOT RUN. Full TerraWeave receiver
+integration depends on reconciling active divergent branches.
+
+
+## Stage 46 — 2026-11-20 — GI for TerraWeave's generic PBR ModelDraw batches (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage46-terraweave-model-batch-2026-11-20.md`.
+Current main TerraWeave terrain/grass do not have separate receiving shaders;
+they already submit generic `Renderer3D::drawModel`. This stage removes
+the unnecessary block on CPU MDI/material instance palettes while keeping
+unverified GPU-authored instance buffers excluded. New genre-neutral
+`GiModelBatchPolicy` and source CTest `gi_model_batch_policy`.
+No actual native compilation/CTest, PBR pixel parity or branch reconciliation
+performed. Keep all other GI acceptance gates and GPU fence safety.
+
+
+## Stage 47 — 2026-11-20 — 16-slot GLES3 terrain CPU GI path (SOURCE; NOT RUN)
+
+Full handoff: `docs/agent-handoffs/gi-stage47-gles16-terrain-gi-2026-11-20.md`.
+The generic engine GI selector can now be consumed by a strict16-slot
+compact terrain material. Low-tier GLSL omits rich splat/cliff samplers;
+baked terrain maps occupy tex4/5, traced height tex6, optional CPU-probed
+RGBA32F GI tex7, with legacy vision fog tex15 preserved. Existing richer
+Metal/Vulkan terrain GI continues to use tex21; unavailable probes fall
+back to unmodified terrain. Source fixture `gi_terrain_compact` registered
+with CTest. No real native compiler/shader/GPU test or full acceptance run.
+
+
+## Stage 48 — 2026-11-20 — bounded large-world GPU resident BVH (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage48-gpu-resident-volume-2026-11-20.md`.
+The selected Metal/Vulkan source scene now contains only provably
+probe-reachable collision chunks from the immutable full source, reusing
+shared per-chunk BVH pointers. Far world triangles can exceed the 8192
+GPU limit without blocking a local atlas; potentially relevant near
+overflow is explicitly rejected, NEVER silently clipped. A declared
+maximum GPU moving-light radius preserves this reach guarantee.
+New `gi_gpu_residency_planner` regression source and CTest registration.
+Native build, GPU shading/validation, CTest and large-world performance:
+NOT RUN. Further GPU paging/clipmap and current-main integration remain.
+
+
+## Stage 49 — 2026-11-20 — no stale bounce on deferred GPU geometry (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage49-deferred-geometry-no-stale-gi-2026-11-20.md`.
+Fixed a serious source-level safety gap: Vulkan/Metal may have a completed
+old GI atlas when a newer authoritative WorldScene/terrain/foliage geometry
+revision is refused while compute is busy or local triangles exceed budget.
+`GiLightingController` now explicitly blocks rendering that obsolete
+atlas via `presentationBlocked`, `StepStats::canPresent` and fail-closed
+`bind` until the new immutable geometry is actually accepted. Added
+regressions to world-presentation and GPU-residency test sources.
+No native compilation/CTest or actual device shader/image testing run.
+
+
+## Stages 50–51 — 2026-11-20 — fail-closed source updates and Vulkan compute acceptance (SOURCE; NOT RUN)
+
+Detailed handoffs:
+`docs/agent-handoffs/gi-stage50-source-publication-gates-2026-11-20.md`
+and `docs/agent-handoffs/gi-stage51-vulkan-format-compute-validation-2026-11-20.md`.
+
+Stage50 accepts truly unchanged stable-key lights while GPU is busy,
+but rejects stale GI presentation after invalid or unaccepted newer
+point/spot/sun/sky source revisions. Stage51 fixes Vulkan's RGBA16F
+sampled+storage format admission (no mandatory color-attachment bit
+unless requested as a render target) and adds real glslang shader compile
+and Vulkan offscreen compute-storage→fragment readback test sources.
+**No native CMake, CTest, GLSL compiler, GPU validation or performance
+tests have run in this work session.** Do not claim GPU parity or merge
+draft PR #47 to main without actual runner evidence.
+
+
+## Stage 52 — 2026-11-20 — terminal GPU-device-loss ticket abort (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage52-gpu-device-loss-recovery-2026-11-20.md`.
+The healthy Vulkan/Metal GI queue still needs genuine completed GPU
+fences to accept jobs; if the GPU becomes UNHEALTHY, in-flight tickets
+are aborted as failures and kept dirty, even without an eventual VkFence
+or Metal async callback. Safe sampling and new submissions are disabled
+on a lost device. Stage52 extends `gi_gpu_ticket_queue` source regression.
+This does NOT assert driver resource teardown safety or successful RHI
+recreation. Native CTest, Vulkan/Metal device-loss and full acceptance
+are NOT RUN.
+
+
+## Stage 53 — 2026-11-20 — optional full-world CPU GI after local GPU budget overflow (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage53-optional-near-overflow-cpu-fallback-2026-11-20.md`.
+Added explicit `cpuFallbackOnLocalGpuOverflow` source option in the
+genre-neutral transport controller. With all GPU jobs fence-complete and
+healthy RHI, a near-scene triangle admission failure may migrate the
+FULL immutable collision source, current point/spotlights and sun/sky
+into the existing adaptive CPU reference; never silently clip relevant
+GPU occluders. One-way until reinitialize, default OFF to avoid surprise
+CPU cost. `gi_gpu_residency_planner` regression source extended.
+Native CMake/CTest and GPU/CPU performance NOT RUN.
+
+
+## Stage 54 — 2026-11-20 — active per-chunk GPU BVH cache and grow-only GPU streams (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage54-persistent-bvh-streams-2026-11-20.md`.
+Normal GPU geometry publication now calls the existing per-chunk
+`GiGpuChunkBvhCache::refresh/pack`; immutable CPU chunk BLAS allocations
+are reused, and `GiGpuSmallScene` keeps existing Metal/Vulkan storage
+handles across chunk count changes until capacity must grow. A new
+`GiGpuSparsePatch` plans bounded changed-range uploads with whole-upload
+fallback on fragmentation; no semantic clipping. Added CTest source
+`gi_gpu_sparse_patch` and expanded chunk cache tests.
+This remains flat GPU BVH packet streaming, not independent GPU
+BLAS pages; 8192 local triangle cap and optional CPU fallback remain.
+Native compiler, CTest, GPU memory/performance, device visuals NOT RUN.
+
+
+## Stage 55 — 2026-11-20 — borrowed Renderer3D lifetime guard for dynamic GI (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage55-renderer-atlas-borrow-safety-2026-11-20.md`.
+New `GiBorrowedPresentation` and `GiLightingController` lifetime checks
+prevent explicit shutdown or optional GPU→CPU fallback while renderer(s)
+hold raw borrowed atlas references. Successful bind registers, failed
+bind/explicit unbind releases; readers are tracked by renderer identity.
+Source regression `gi_borrowed_presentation` registered with CTest.
+Clients must still unbind before destructor and real render-fence retire.
+Native compiler/CTest and GPU/device tests NOT RUN.
+
+
+## Stage 56 — 2026-11-20 — stable logical GPU BLAS pages and transactional TLAS (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage56-stable-paged-blas-tlas-2026-11-20.md`.
+The normal Metal/Vulkan GI runtime now uses `GiGpuPagedBvhArena` in
+addition to the immutable per-chunk CPU BLAS cache. Stable per-chunk
+absolute node/triangle offsets survive other chunk edits, the TLAS
+root stays at node0 in a reserved prefix, source page planning does not
+modify committed GPU state until upload accepted, and all reclaimed
+page spans require the existing real-completion GI ticket fence.
+Old shader and storage-buffer ABI remain; this is suballocated
+logical GPU pages, not separate driver `VkBuffer`/`MTLBuffer` objects.
+Added CPU ray parity, relocation, reuse and reject test source and CMake
+registration. NO native C++ compiler, CTest or real Metal/Vulkan/GLES
+GPU tests have run, and page compaction on address fragmentation remains.
+
+
+## Stage 57 — 2026-11-20 — transactional GPU page defragmentation (SOURCE; NOT RUN)
+
+Read `docs/agent-handoffs/gi-stage57-page-defragmentation-2026-11-20.md`.
+After stable logical per-chunk GPU BLAS pages (Stage56), high-water address
+exhaustion may be caused by fragmentation. Stage57 retries by constructing
+an entirely NEW compacted candidate with every live BLAS absolute reference
+and root TLAS rewritten. It does not alter the accepted map until queued
+upload success + commit; near-scene over-budget failures still do not truncate
+relevant occlusion. Added deterministic small-capacity source test and CTest
+registration. This is still two suballocated GPU SSBO streams, NOT separate
+physical device memory pages. No real C++ build/CTest/Metal/Vulkan/GLES
+execution or performance validation performed.
+
+
+## Stage 58 — 2026-11-20 — GPU stable light identity and monotonic BVH publication (SOURCE; NOT RUN)
+
+See `docs/agent-handoffs/gi-stage58-stable-light-identity-and-revisions-2026-11-20.md`.
+Fixed the Stage50 fast-path equality to include stable emitter IDs, so
+a destroyed/recreated same-position ECS lamp is not falsely an identical
+GPU source. The lower-level GPU runtime now rejects stale/duplicate
+full/regional immutable geometry revisions before changing TLAS/BLAS
+pages. New regression cases in `gi_gpu_dynamic_runtime` are source-only:
+no native compiler, CTest, Metal/Vulkan/GLES device or full acceptance
+run has been performed. Keep draft PR #47 until verified.
+
+
+## Stage 59 — 2026-11-20 — fail-closed GPU BVH packet validation (SOURCE; NOT RUN)
+
+Full agent handoff:
+`docs/agent-handoffs/gi-stage59-gpu-bvh-packet-validation-2026-11-20.md`.
+Added `GiGpuBvhValidator.h` with root-reachable TLAS/BLAS bounds,
+pointer/cycle, stack-depth, leaf range and triangle/material validation
+before any Metal/Vulkan storage upload. Reserved/unreachable paged
+slots remain permitted; malformed parent/leaf AABBs are rejected to
+avoid false ray pruning/light leaks. Low-level packet publisher
+rejects stale and duplicate source revisions. New CPU/FakeDevice
+regression and CTest registration; **native C++/CTest/GPU tests NOT RUN**.
+
+
+## Stage 60 — 2026-11-20 — sequential Vulkan storage-image compute barriers (SOURCE; NOT RUN)
+
+Full handoff `docs/agent-handoffs/gi-stage60-vulkan-consecutive-compute-barriers-2026-11-20.md`.
+Fixed Vulkan compute image layout/memory hazards for multiple dispatches:
+same storage atlas now has compute shader write→read/write dependency;
+switching the image restores the old target to sampled layout before
+writing a new target. Expanded `vulkan_backend` real-GPU-executable
+two-atlas/three-dispatch offscreen pixel fixture. No native CMake,
+glslang, CTest, Vulkan driver/validation, Metal or GLES GPU execution
+in this session. Preserve all earlier GI fence/borrow safety.
+
+
+## Stage 61 — 2026-11-20 — actual Release CI build failure and ECS assert repair (SOURCE FIX PENDING RETEST)
+
+Full handoff:
+`docs/agent-handoffs/gi-stage61-release-ci-ecs-assert-fix-2026-11-20.md`.
+**Observed** Linux ARM64 GCC CI build failure in run 44693379411,
+job 136144283268, previous GI branch head
+`d71411613d47fd26304edb6b0559515543806c1c`.
+GCC -O3 -DNDEBUG -Werror turned ECS COW/guarded test checks written
+as standard `assert()` into unused-variable/parameter compilation errors.
+The four failing test files now use 59 `AIVERSE_TEST_CHECK` calls which
+actually execute in Release, preserving checks and side effects. These
+commits are NOT YET BUILD/CTEST VERIFIED; old CI explicitly FAILED during
+Build, so tests/Vulkan were SKIPPED. No claim of GI GPU parity or full
+acceptance. Continue real CI log-driven remediation and separate handoffs.
+
+
+## Stage 62 — 2026-11-20 — Release CI wave-replay assertion repair (SOURCE FIX; RETEST PENDING)
+
+Detailed handoff: `docs/agent-handoffs/gi-stage62-release-wave-replay-ci-2026-11-20.md`.
+Actual CI run `44695330522` Linux arm64 GCC job `136150631963`
+on SHA `3e364b79f681feb4d159af5135b54b4b9326d609`
+**FAILED during Release Build**: `tests/ecs_wave_replay_test.cpp`
+`originalChecksum` and `sequential` used only by erased `assert`
+under `-DNDEBUG -Werror`. Commit
+`01cafe0c522a74d6a14971eb7279277cd9f12b1d` replaced
+four assertions with existing always-on `AIVERSE_TEST_CHECK`.
+**No native compile or CTest was run after the patch**; all GI/Vulkan
+GPU acceptance is still pending. Next: inspect new CI logs,
+unblock remaining Release compilation issues, run actual GI/Vulkan/Metal/GLES
+validation on exact SHA, then controlled current-main reconciliation.

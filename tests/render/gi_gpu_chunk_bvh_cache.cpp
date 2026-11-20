@@ -79,6 +79,38 @@ int main() {
     AIVERSE_TEST_CHECK(gpu.triangleCount()==118);
     AIVERSE_TEST_CHECK(gpu.nodeCount()==packet.nodes.size());
     AIVERSE_TEST_CHECK(!fake.buffers.empty());
+    const uint32_t afterColdUpload=fake.next;
+    // Adding one chunk while staying inside a grow-only storage capacity
+    // must preserve GPU buffer handles. Per-chunk cached BVHs are shared;
+    // only TLAS/BLAS spans with differing bytes are updated.
+    const auto priorUpload=gpu.lastGeometryUpload();
+    AIVERSE_TEST_CHECK(priorUpload.bytes>0);
+    auto packetAgain=cache.pack();
+    AIVERSE_TEST_CHECK(gpu.setPackedGeometry(packetAgain,4));
+    AIVERSE_TEST_CHECK(fake.next==afterColdUpload);
+    AIVERSE_TEST_CHECK(gpu.lastGeometryUpload().bytes==0);
+    AIVERSE_TEST_CHECK(gpu.lastGeometryUpload().regions==0);
+
+    // Re-admit the original chunk after removal (118->120 triangles),
+    // still within the 128-element resident capacity. The older backend
+    // reallocated on ANY changed triangle count; the new one must not.
+    cache.refresh(first);
+    packetAgain=cache.pack();
+    AIVERSE_TEST_CHECK(packetAgain.triangles.size()==120);
+    AIVERSE_TEST_CHECK(gpu.setPackedGeometry(packetAgain,5));
+    AIVERSE_TEST_CHECK(gpu.triangleCount()==120);
+    AIVERSE_TEST_CHECK(fake.next==afterColdUpload);
+    AIVERSE_TEST_CHECK(!fake.buffers.empty());
+    AIVERSE_TEST_CHECK(gpu.lastGeometryUpload().bytes<=
+        packetAgain.triangles.size()*sizeof(GiGpuBvhTri)+
+        packetAgain.nodes.size()*sizeof(GiGpuBvhNode));
+
+    // One changed chunk reuses all unchanged CPU per-chunk BLAS sources,
+    // and all GPU allocation handles while the resident capacities fit.
+    cache.refresh(second);
+    packetAgain=cache.pack();
+    AIVERSE_TEST_CHECK(gpu.setPackedGeometry(packetAgain,6));
+    AIVERSE_TEST_CHECK(fake.next==afterColdUpload);
     gpu.shutdown();
     AIVERSE_TEST_CHECK(fake.buffers.empty() && fake.textures.empty());
 }

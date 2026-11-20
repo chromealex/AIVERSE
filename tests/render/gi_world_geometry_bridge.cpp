@@ -112,6 +112,31 @@ int main() {
     AIVERSE_TEST_CHECK(result.published && gpu.snapshot->chunkCount()==3);
     AIVERSE_TEST_CHECK(std::abs(gpu.snapshot->distance({-9.5f,2,4.5f},{0,-1,0},5)-1.f)<.01f);
 
+    // A resident foliage collider is published in its own stable namespace:
+    // no second tree mesh is generated and no authored terrain is overwritten.
+    const std::vector<StaticShadowGeometry::Triangle> canopy={
+        {{-32,9,48},{-30,9,48},{-30,9,50},0},
+        {{-32,9,48},{-30,9,50},{-32,9,50},0}
+    };
+    AIVERSE_TEST_CHECK(GiWorldGeometryBridge::replaceVegetationProxy(
+        scene,cell.x,cell.z,canopy)==2);
+    result=scene.publishGpu(gpu);
+    AIVERSE_TEST_CHECK(result.published && gpu.snapshot->chunkCount()==4);
+    const auto proxyId=GiWorldGeometryBridge::stableChunkId(
+        cell.x,cell.z,GiGeometrySource::VegetationProxy);
+    AIVERSE_TEST_CHECK(gpu.snapshot->findChunk(proxyId)!=nullptr);
+    AIVERSE_TEST_CHECK(std::abs(gpu.snapshot->distance(
+        {-31,10,49},{0,-1,0},8)-1.f)<.01f);
+    // Removing/LOD-unloading the foliage proxy invalidates its previous
+    // bounds, but must preserve the world and TerraWeave colliders.
+    AIVERSE_TEST_CHECK(GiWorldGeometryBridge::replaceVegetationProxy(
+        scene,cell.x,cell.z,{})==0);
+    result=scene.publishGpu(gpu);
+    AIVERSE_TEST_CHECK(result.published && gpu.snapshot->chunkCount()==3);
+    AIVERSE_TEST_CHECK(gpu.snapshot->findChunk(proxyId)==nullptr);
+    AIVERSE_TEST_CHECK(gpu.snapshot->distance(
+        {-31,10,49},{0,-1,0},8)>1.01f);
+
     // Earthworks / erosion dirty region adapts cm to world m, but the caller
     // still needs to replace the authoritative triangle snapshot before draw.
     GiWorldDirtyAccumulator changes;

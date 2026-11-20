@@ -1,10 +1,14 @@
-// Opt-in Metal GI runtime: GPU BVH + scheduler + completion-fenced publication.
-// The CPU GiDynamicRuntime remains the independent fallback on non-Metal devices.
+// Opt-in Metal/Vulkan GI runtime: GPU BVH + completion-fenced publication.
+// GiDynamicRuntime is the bounded CPU fallback for GLES3/WebGL2 or Vulkan without
+// suitable compute/storage-image support.
 // This owner does not use/modify authoritative ECS state or legacy lightmaps.
 // Caller drives updateFrame AFTER beginFrame, BEFORE render passes, polls every
 // frame, and uses bind() rather than exposing incomplete atlas textures.
 #pragma once
 #include "GiGpuTicketQueue.h"
+#include "GiGpuChunkBvhCache.h"
+#include "GiGpuPagedBvhArena.h"
+#include "GiWorldDirtyAccumulator.h"
 #include "Renderer3D.h"
 #include <algorithm>
 #include <cmath>
@@ -61,6 +65,9 @@ public:
         gpu_.shutdown();
         scheduler_=GiUpdateScheduler{};
         scene_.reset();
+        chunkCache_=GiGpuChunkBvhCache{};
+        pages_.clear();
+        lastPageStats_={};
         lights_.clear();
         device_=nullptr;
         dims_[0]=dims_[1]=dims_[2]=0;
@@ -70,14 +77,23 @@ public:
     bool busy() const {return queue_.pending()!=0;}
     size_t pendingProbes() const {return scheduler_.pending();}
     const GiGpuSmallScene& backend() const {return gpu_;}
+    const GiGpuChunkBvhCache& chunkCache() const {return chunkCache_;}
+    const GiGpuPagedBvhArena& gpuPages() const {return pages_;}
+    GiGpuPagedBvhArena::Stats lastGpuPageStats() const {
+        return lastPageStats_;
+    }
     const GiUpdateScheduler& scheduler() const {return scheduler_;}
+    // Read-only accepted source snapshot for safe one-way GPU->CPU transport
+    // failover. Call only after outstanding GPU tickets are fence-acknowledged.
+    const std::vector<GiMovingLight>& lights() const {return lights_;}
 
     // Published geometry is owned for the whole duration of GPU jobs.
     // Do not publish a new revision until all previous frame fences have arrived.
     bool setGeometry(std::shared_ptr<const GiChunkedGeometrySnapshot> scene,
                      uint64_t revision) {
-        if(!ready() || !scene || revision==0 || busy())return false;
-        if(!queue_.setGeometry(gpu_,*scene,revision))return false;
+        if(!ready() || !scene || revision==0 ||
+           revision<=gpu_.geometryRevision() || busy())return false;
+        if(!publishPackedGeometry(*scene,revision))return false;
         scene_=std::move(scene);
         scheduler_.invalidateAll(GiDirtyReason::Geometry);
         return true;
@@ -85,10 +101,11 @@ public:
 
     bool setGeometryRegion(std::shared_ptr<const GiChunkedGeometrySnapshot> scene,
                            uint64_t revision,GiBounds changed,float extraRadius=0) {
-        if(!ready() || !scene_ || !scene || revision==0 || busy() ||
+        if(!ready() || !scene_ || !scene || revision==0 ||
+           revision<=gpu_.geometryRevision() || busy() ||
            !valid(changed) || !std::isfinite(extraRadius) || extraRadius<0)
             return false;
-        if(!queue_.setGeometry(gpu_,*scene,revision))return false;
+        if(!publishPackedGeometry(*scene,revision))return false;
         scene_=std::move(scene);
         float radius=maxTraceDistance_+extraRadius;
         for(const auto& light:lights_)
@@ -99,16 +116,31 @@ public:
 
     // Stable IDs are required: changed and removed source influence is invalidated.
     bool setLights(std::vector<GiMovingLight> next) {
-        if(!ready() || busy())return false;
+        if(!ready())return false;
         std::sort(next.begin(),next.end(),
                   [](const GiMovingLight& a,const GiMovingLight& b){return a.key<b.key;});
-        if(!queue_.setLights(gpu_,next))return false;
         auto same=[](const GiMovingLight& a,const GiMovingLight& b) {
-            return a.position.x==b.position.x && a.position.y==b.position.y &&
+            // Source identity is part of the GI revision contract. A newly
+            // created ECS emitter can reuse identical transform/energy but
+            // MUST NOT silently inherit the previous stable-key light entry.
+            return a.key==b.key &&
+                   a.position.x==b.position.x && a.position.y==b.position.y &&
                    a.position.z==b.position.z && a.radius==b.radius &&
                    a.color.x==b.color.x && a.color.y==b.color.y &&
-                   a.color.z==b.color.z && a.intensity==b.intensity;
+                   a.color.z==b.color.z && a.intensity==b.intensity &&
+                   a.direction.x==b.direction.x &&
+                   a.direction.y==b.direction.y &&
+                   a.direction.z==b.direction.z &&
+                   a.cosInner==b.cosInner && a.cosOuter==b.cosOuter;
         };
+        // Games may publish the same immutable direct light snapshot every
+        // frame, including while a prior GPU job is still in flight. An
+        // unchanged snapshot is already uploaded and must not be refused.
+        // Changed sources still wait for the prior GPU job's real fence.
+        if(next.size()==lights_.size() &&
+           std::equal(next.begin(),next.end(),lights_.begin(),same))
+            return true;
+        if(busy() || !queue_.setLights(gpu_,next))return false;
         auto find=[](const std::vector<GiMovingLight>& list,uint64_t key) {
             return std::lower_bound(list.begin(),list.end(),key,
                    [](const GiMovingLight& l,uint64_t value){return l.key<value;});
@@ -125,6 +157,37 @@ public:
         }
         lights_=std::move(next);
         return true;
+    }
+
+    // Sun/sky revisions may arrive while the previous GPU frame is still in
+    // flight: no resource upload occurs here. The old encoded uniforms finish,
+    // but tickets are invalidated and never accepted after their old fence.
+    bool setEnvironment(GiEnvironmentLight value) {
+        if (!ready() || !value.valid()) return false;
+        if (value==gpu_.environment()) return true;
+        if (!gpu_.setEnvironment(value)) return false;
+        scheduler_.invalidateAll(GiDirtyReason::Environment);
+        return true;
+    }
+
+    const GiEnvironmentLight& environment() const {
+        return gpu_.environment();
+    }
+
+    // Presentation-only dirty events may arrive while a GPU dispatch is still
+    // working. The scheduler increments source revisions so its stale results
+    // can NEVER be acknowledged on a later Vulkan VkFence/Metal callback.
+    // Geometry/material edits must also publish rebuilt immutable GPU BVH.
+    size_t invalidate(GiBounds bounds,GiDirtyReason reason,
+                      float influenceRadius=0) {
+        if(!ready()) return 0;
+        return scheduler_.invalidate(bounds,reason,influenceRadius);
+    }
+
+    GiWorldDirtyAccumulator::Stats applyWorldChanges(
+            GiWorldDirtyAccumulator& changes) {
+        if(!ready())return {};
+        return changes.flush(scheduler_);
     }
 
     // Unlike the CPU path, this does not block until GPU work is complete.
@@ -158,6 +221,29 @@ public:
     }
 
 private:
+    bool publishPackedGeometry(const GiChunkedGeometrySnapshot& snapshot,
+                               uint64_t revision) {
+        // Cache immutable per-chunk BLAS by source geometry identity, then
+        // pack a bounded TLAS/BLAS descriptor for the existing Metal/Vulkan
+        // GPU kernel. The compute queue's genuine completion fence is checked
+        // by both setGeometry callers before any GPU storage upload.
+        if(!ready() || busy())return false;
+        try {
+            chunkCache_.refresh(snapshot);
+            // Prepare new absolute chunk-page addresses and a small TLAS
+            // transactionally. The old layout stays active on upload failure.
+            auto candidate=pages_.plan(snapshot,chunkCache_);
+            if(!candidate.accepted ||
+               !queue_.setPackedGeometry(gpu_,candidate.packet,revision))
+                return false;
+            lastPageStats_=candidate.stats;
+            pages_.commit(std::move(candidate));
+            return true;
+        }catch(const std::exception&) {
+            return false; // scheduler/controller retain the old revision
+        }
+    }
+
     static bool valid(GiBounds b) {
         const auto finite=[](float3 v) {
             return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
@@ -174,6 +260,9 @@ private:
     gfx::Device* device_=nullptr;
     GiGpuSmallScene gpu_;
     GiGpuTicketQueue queue_;
+    GiGpuChunkBvhCache chunkCache_;
+    GiGpuPagedBvhArena pages_;
+    GiGpuPagedBvhArena::Stats lastPageStats_{};
     GiUpdateScheduler scheduler_;
     std::shared_ptr<const GiChunkedGeometrySnapshot> scene_;
     std::vector<GiMovingLight> lights_;

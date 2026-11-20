@@ -10,6 +10,8 @@
 #include <memory>
 #include "../../../engine/platform/Platform.h"
 #include "RtsTerrainShaders.h"
+#include "RtsTerrainShaderBudget.h"
+#include "../../../engine/render/GiCustomShaderSource.h"
 #include "RtsTerrainSurface.h"
 
 namespace aiverse::game {
@@ -169,7 +171,7 @@ void TerrainRenderer::shutdown(gfx::Device& dev) {
     cellTex_ = dynTex_ = splatTex_ = visionTex_ = white_ = flatN_ = gray_ = {};
     heightField_ = {};
     heightDirty_ = true;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 12; ++i) {
         if (pipes_[i].valid()) dev.destroyPipeline(pipes_[i]);
         if (shaders_[i].valid()) dev.destroyShader(shaders_[i]);
         pipes_[i] = {}; shaders_[i] = {}; shaderFailed_[i] = false;
@@ -766,17 +768,52 @@ int TerrainRenderer::tierFor(const Renderer3D& r) const {
     return std::min(tier(r.materialQuality()), deviceTier);
 }
 
-gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
+gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant, bool dynamicGi) {
     const int dbase = variant >= 3 ? 3 : 0;
-    for (int tier = variant - dbase; tier >= 0; --tier) {
-        const int slot = dbase + tier;
+    const bool compact=terrainNeedsCompactSamplers(dev.maxFragmentTextureSlots());
+    if(compact && !terrainCompactSupported(dev.maxFragmentTextureSlots()))
+        return {}; // even the minimal terrain fragments need 16 texture units
+    // On compact terrain the freed tex7 is available for CPU-probed GI,
+    // even with only the GLES3 minimum 16 texture units.
+    for (int tier = variant - dbase; tier >= (dynamicGi && !compact ? 1 : 0); --tier) {
+        if(compact && tier>0)continue; // resource-limited shader is low tier only
+        const int slot = (dynamicGi ? 6 : 0) + dbase + tier;
         if (pipes_[slot].valid()) return pipes_[slot];
         if (shaderFailed_[slot]) continue;
-        const std::string def = "#define TERRAIN_TIER " + std::to_string(tier) + "\n#define TERRAIN_DETAIL " + std::to_string(dbase ? 1 : 0) + "\n";
-        const std::string vs = def + shaders::kTerrainVS, fs = def + shaders::kTerrainFS, msl = def + shaders::kTerrainMSL;
+        const std::string def = "#define TERRAIN_TIER " + std::to_string(tier) +
+                                "\n#define TERRAIN_DETAIL " +
+                                std::to_string(compact ? 0 : (dbase ? 1 : 0)) + "\n";
+        const std::string vs = def + shaders::kTerrainVS;
+        std::string fs = def;
+        std::string msl = def + shaders::kTerrainMSL;
+        if (dynamicGi) {
+            // Rich terrain uses tex0..20 and places GI at tex21. Compact low
+            // terrain remaps trace/baked sources to tex6/4/5 and frees tex7,
+            // so GLES3 can sample its CPU GI atlas with only 16 units.
+            const int giSlot=compact ? 7 : 21;
+            fs += render::giCustomGlslFunctions(
+                render::GiCustomShaderMode::Single,giSlot);
+            const std::string prelude=render::giCustomMslFunctions(
+                render::GiCustomShaderMode::Single);
+            const std::string namespaceMarker="using namespace metal;\n";
+            const size_t pos=msl.find(namespaceMarker);
+            const size_t lastTexture=msl.find("texture2d<float> tex20 [[texture(20)]]");
+            const size_t endArgs=lastTexture==std::string::npos ?
+                std::string::npos : msl.find(") {",lastTexture);
+            if (pos==std::string::npos || endArgs==std::string::npos) {
+                shaderFailed_[slot]=true;
+                continue;
+            }
+            msl.insert(endArgs,render::giCustomMslFragmentArguments(
+                render::GiCustomShaderMode::Single,21));
+            msl.insert(pos+namespaceMarker.size(),prelude);
+        }
+        fs += compact ? terrainCompactLowFragment() : shaders::kTerrainFS;
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = 4; sd.textureSlots = 21; sd.label = "terrain";   // tex18: height field (traced shadows); U3 + tex19/20: baked lightmap
+        sd.uniformSlots = dynamicGi ? 7 : 4;
+        sd.textureSlots = compact ? 16 : dynamicGi ? 22 : 21;
+        sd.label = dynamicGi ? "terrain GI" : "terrain";   // tex18: height field (traced shadows); U3 + tex19/20: baked lightmap
         shaders_[slot] = dev.createShader(sd);
         if (!shaders_[slot].valid()) {
             std::fprintf(stderr, "[terrain] tier %d%s shader: %s\n", tier, dbase ? " detail" : "", dev.lastError().c_str());
@@ -791,7 +828,7 @@ gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
         p.attrs[3] = {3, gfx::VertexFormat::Float2, 28};
         p.attrCount = 4; p.stride = sizeof(TV);
         p.indexType = gfx::IndexType::UInt32;
-        p.label = "terrain";
+        p.label = dynamicGi ? "terrain GI" : "terrain";
         pipes_[slot] = dev.createPipeline(p);
         if (pipes_[slot].valid()) return pipes_[slot];
         shaderFailed_[slot] = true;
@@ -860,9 +897,22 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
             }
     }
     stats_.geometryBytes = geoBytes_;
-    const int tier = tierFor(r);
-    gfx::PipelineHandle pipe = pipeline(dev, tier + (detailOn_ ? 3 : 0));
-    if (!pipe.valid()) return;
+    const bool compact=terrainNeedsCompactSamplers(dev.maxFragmentTextureSlots());
+    const int tier = compact ? 0 : tierFor(r);
+    const int variant=tier+(detailOn_ ? 3 : 0);
+    const gfx::PipelineHandle fallbackPipe=pipeline(dev,variant,false);
+    if (!fallbackPipe.valid()) return;
+    // Rich PBR terrain uses its disjoint GI atlas at tex21. Compact terrain
+    // uses tex7 after freeing the low-tier material slots: this is the
+    // GLES3/WebGL2 CPU GI route, not compute or a fake HDR target.
+    const int giSlot=compact ? 7 : 21;
+    const bool giSlotAvailable=dev.maxFragmentTextureSlots() >=
+                              (compact ? 16 : 22);
+    // The atlas may be bound after draw() queues the callback. Check actual
+    // availability inside the deferred render pass instead.
+    const gfx::PipelineHandle giPipe=
+        giSlotAvailable && (compact || tier>=1)
+        ? pipeline(dev,variant,true) : gfx::PipelineHandle{};
     TU0 u{};
     u.lod[2] = float(mapW_); u.lod[3] = float(mapH_);
     u.mode[0] = 0.05f;
@@ -905,20 +955,44 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         if (heightDirty_) updateHeightField(dev, g);
         r.setHeightField(heightField_);
     } else r.setHeightField({});
-    r.drawCustomOpaque([this, &r, items, u, pipe, apron](gfx::Device& d) {
-        d.setPipeline(pipe);
+    r.drawCustomOpaque([this, &r, items, u, fallbackPipe, giPipe, apron, compact, giSlot](gfx::Device& d) {
+        const bool giAvailable=giPipe.valid() &&
+            r.availableDynamicGiForCustomShader(
+                render::GiCustomShaderMode::Single,giSlot)==render::GiCustomShaderMode::Single;
+        d.setPipeline(giAvailable ? giPipe : fallbackPipe);
         r.bindLitFrame();
-        r.bindTrace(18);
-        r.bindBakedTerrain(3, 19, 20);   // agent-lightbake
-        d.setTexture(2, cellTex_); d.setTexture(3, dynTex_); d.setTexture(4, splatTex_);
-        for (int i = 0; i < 4; ++i) {
-            d.setTexture(5 + i, layerTex_[i].valid() ? layerTex_[i].tex : white_);
-            d.setTexture(9 + i, layerNrm_[i].valid() ? layerNrm_[i].tex : flatN_);
+        r.bindTrace(compact ? 6 : 18);
+        r.bindBakedTerrain(3,compact ? 4 : 19,compact ? 5 : 20);
+        if(giAvailable && r.bindDynamicGiForCustomShader(
+                render::GiCustomShaderMode::Single,giSlot)!=render::GiCustomShaderMode::Single) {
+            // Unexpected GI resource retirement between preflight and bind:
+            // use the precompiled ordinary terrain pipeline, never sample
+            // an unbound tex21 in a GI shader variant.
+            d.setPipeline(fallbackPipe);
+            r.bindLitFrame();
+            r.bindTrace(compact ? 6 : 18);
+            r.bindBakedTerrain(3,compact ? 4 : 19,compact ? 5 : 20);
         }
-        d.setTexture(13, cliffTex_.valid() ? cliffTex_.tex : gray_);
-        d.setTexture(14, cliffNrm_.valid() ? cliffNrm_.tex : flatN_);
-        d.setTexture(15, visionTex_);
-        if (detailOn_) { d.setTexture(16, detailNrmTex_); d.setTexture(17, detailSplatTex_); }
+        d.setTexture(2,cellTex_);
+        d.setTexture(3,dynTex_);
+        if(!compact) {
+            // The rich terrain pass owns slots 4..14 and 16..17.
+            // Compact low tier reserves slots 4/5 for baked GI and 6 for
+            // traced height; overwriting them with layer textures would
+            // silently break the resulting lighting.
+            d.setTexture(4,splatTex_);
+            for(int i=0;i<4;++i) {
+                d.setTexture(5+i,layerTex_[i].valid()?layerTex_[i].tex:white_);
+                d.setTexture(9+i,layerNrm_[i].valid()?layerNrm_[i].tex:flatN_);
+            }
+            d.setTexture(13,cliffTex_.valid()?cliffTex_.tex:gray_);
+            d.setTexture(14,cliffNrm_.valid()?cliffNrm_.tex:flatN_);
+            if(detailOn_) {
+                d.setTexture(16,detailNrmTex_);
+                d.setTexture(17,detailSplatTex_);
+            }
+        }
+        d.setTexture(15,visionTex_);
         TU0 uu = u;
         auto drawLod = [&](const Lod& l, float s, float e) {
             uu.lod[0] = s; uu.lod[1] = e;

@@ -80,6 +80,9 @@ public:
         GLint align = 256;
         glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
         uboAlign_ = align > 0 ? size_t(align) : 256;
+        GLint maxTextureUnits=0;
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS,&maxTextureUnits);
+        fragmentTextureSlots_=std::max(0,int(maxTextureUnits));
 #if defined(__EMSCRIPTEN__) || defined(__APPLE__)
         glGenBuffers(kMaxUniformSlots, slotUbos_);
 #else
@@ -131,6 +134,7 @@ public:
     }
 
     const DeviceInfo& info() const override { return info_; }
+    int maxFragmentTextureSlots() const override { return fragmentTextureSlots_; }
     const std::string& lastError() const override { return error_; }
 
     // ---------- buffers ----------
@@ -600,6 +604,7 @@ public:
 private:
     bool hdr_ = false;
     bool hdrPass_ = false;
+    int fragmentTextureSlots_ = 16;
     DeviceInfo info_;
     std::string error_;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;

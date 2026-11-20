@@ -126,7 +126,7 @@ private:
     // 16-bit height map of the drawn surface for traced terrain shadows (Renderer3D::setHeightField);
     // rebuilt (throttled) after geometry changes, only while the trace tier is active
     void updateHeightField(gfx::Device& dev, const MapGrid& g);
-    gfx::PipelineHandle pipeline(gfx::Device& dev, int variant);   // tier + 3 * detail
+    gfx::PipelineHandle pipeline(gfx::Device& dev, int variant, bool dynamicGi=false);   // tier + 3 * detail + 6 * GI
     int tierFor(const render::Renderer3D& r) const;
     int tierFor0() const;                       // device / env tier without a renderer (detail sample count)
 
@@ -136,9 +136,9 @@ private:
     render::FileReader read_;
     TerrainLook look_;
     render::TextureCache textures_;
-    gfx::ShaderHandle shaders_[6];              // [detail * 3 + tier]
-    gfx::PipelineHandle pipes_[6];
-    bool shaderFailed_[6] = {};
+    gfx::ShaderHandle shaders_[12];             // [GI * 6 + detail * 3 + tier]
+    gfx::PipelineHandle pipes_[12];
+    bool shaderFailed_[12] = {};
     // per-cell textures
     gfx::TextureHandle cellTex_, dynTex_, splatTex_, visionTex_, white_, flatN_, gray_;
     std::vector<uint8_t> cellPx_, dynPx_, splatPx_, visionPx_;

@@ -1,4 +1,4 @@
-// Experimental bounded Metal compute GI for small, immutable triangle scenes.
+// Bounded Metal / Vulkan compute GI for small, immutable triangle scenes.
 // Independent opt-in backend; NEVER auto-enables in GiDynamicRuntime.
 // Caller must invoke dispatch inside beginFrame/endFrame and OUTSIDE render passes.
 // GPU BVH traversal writes the RGBA16F dynamic-only atlas. No GPU readback or CPU coefficients.
@@ -6,7 +6,10 @@
 // claiming scheduler tickets complete; this prototype does NOT acknowledge them.
 #pragma once
 #include "GiGpuSmallSceneShaders.h"
+#include "GiGpuVulkanShaders.h"
 #include "GiGpuBvh.h"
+#include "GiGpuBvhValidator.h"
+#include "GiGpuSparsePatch.h"
 #include "GiDynamicProbeTexture.h"
 #include <algorithm>
 #include <array>
@@ -15,6 +18,7 @@
 #include <cstdint>
 #include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace aiverse::render {
@@ -38,16 +42,20 @@ public:
     GeometryUploadStats lastGeometryUpload() const { return geometryUpload_; }
     using GpuTri = GiGpuBvhTri;
     using GpuNode = GiGpuBvhNode;
-    struct GpuLamp { float4 posRadius{}, colorIntensity{}; };
+    // Spot parameters are explicit so MSL and std430 SPIR-V see identical 64 B.
+    struct GpuLamp { float4 posRadius{}, colorIntensity{}, spotDirectionOuter{}, spotInner{}; };
     struct GpuJob { uint32_t index = 0; float x = 0, y = 0, z = 0; };
     struct Uniforms {
         uint32_t triangles = 0, lights = 0, jobs = 0, samples = 0;
         float traceDistance = 0;
         uint32_t nodes = 0;
         float pad1 = 0, pad2 = 0;
+        float4 sunDirectionIntensity{}; // xyz surface->sun, w intensity
+        float4 sunColorSkyIntensity{};  // rgb sun radiance, w sky intensity
+        float4 skyColor{};              // rgb sky radiance, w unused
     };
-    static_assert(sizeof(GpuTri) == 64 && sizeof(GpuNode) == 48 && sizeof(GpuLamp) == 32 &&
-                  sizeof(GpuJob) == 16 && sizeof(Uniforms) == 32);
+    static_assert(sizeof(GpuTri) == 64 && sizeof(GpuNode) == 48 && sizeof(GpuLamp) == 64 &&
+                  sizeof(GpuJob) == 16 && sizeof(Uniforms) == 80);
 
     ~GiGpuSmallScene() { shutdown(); }
     GiGpuSmallScene() = default;
@@ -56,13 +64,16 @@ public:
 
     bool initialize(gfx::Device& device, size_t probeCount) {
         shutdown();
-        // This shader is MSL only. Other RHI backends always take the CPU fallback.
-        if (device.info().backend != gfx::Backend::Metal || !device.supportsCompute() ||
-            !device.supports(gfx::PixelFormat::RGBA16F))
+        // GLES3/WebGL2 have no compute guarantee; they use GiDynamicRuntime's
+        // bounded CPU tracer and standard RGBA32F texture update path.
+        const auto backend=device.info().backend;
+        if ((backend!=gfx::Backend::Metal && backend!=gfx::Backend::Vulkan) ||
+            !device.supportsCompute() || !device.supports(gfx::PixelFormat::RGBA16F))
             return false;
         if (!atlas_.initialize(device,probeCount,true)) return false;
         const auto compute = device.createCompute(
-            {gi_gpu::kMetalSmallScene,nullptr,"GI bounded triangle transport"});
+            {gi_gpu::kMetalSmallScene,gi_gpu::kVulkanSmallScene,
+             "GI bounded triangle transport"});
         if (!compute.valid()) { atlas_.release(); return false; }
         dev_ = &device;
         compute_ = compute;
@@ -77,6 +88,7 @@ public:
             shutdown();
             return false;
         }
+        triCapacity_=nodeCapacity_=1; // one dummy element for empty scene
         return true;
     }
 
@@ -99,9 +111,11 @@ public:
         nodeCount_=0;
         lightCount_=0;
         geometryRevision_=0;
+        environment_={};
         lastTriangles_.clear();
         lastNodes_.clear();
         geometryUpload_={};
+        triCapacity_=nodeCapacity_=0;
     }
 
     bool ready() const { return dev_ && compute_.valid() && atlas_.texture().valid(); }
@@ -110,13 +124,22 @@ public:
     size_t triangleCount() const { return triangleCount_; }
     size_t nodeCount() const { return nodeCount_; }
     size_t lightCount() const { return lightCount_; }
+    const GiEnvironmentLight& environment() const { return environment_; }
+    // CPU state only: the next dispatch snapshots the parameters as uniforms.
+    // An in-flight GPU job keeps its old encoded values; the owning scheduler
+    // invalidates its tickets independently on a changed environment.
+    bool setEnvironment(GiEnvironmentLight value) {
+        if (!ready() || !value.valid()) return false;
+        environment_=value;
+        return true;
+    }
 
     // Publish only when a new scene geometry revision becomes visible.
     // This prototype CPU-builds a packed BVH for each bounded scene revision.
     // Large worlds still need incremental GPU chunk uploads, not full flattening.
     bool setGeometry(const GiChunkedGeometrySnapshot& snapshot, uint64_t revision) {
         if (!ready()) return false;
-        if (revision == geometryRevision_) return true;
+        if (revision==0 || revision<=geometryRevision_) return false;
         if (snapshot.triangleCount()>kMaxTriangles || !dev_->canUpdateSharedBuffers())
             return false;
         return setPackedGeometry(GiGpuBvh::build(snapshot), revision);
@@ -126,54 +149,75 @@ public:
     // TLAS+BLAS packet. Must only run after the previous GPU fence completed.
     bool setPackedGeometry(const GiGpuBvh& bvh, uint64_t revision) {
         if (!ready() || !dev_->canUpdateSharedBuffers() ||
+            revision==0 || revision<=geometryRevision_ ||
             bvh.triangles.size()>kMaxTriangles || bvh.nodes.size()>2*kMaxTriangles+4096)
             return false;
-        if (revision==geometryRevision_) return true;
+        // The CPU paged allocator may contain unreachable holes and a TLAS
+        // reserved prefix. Validate only root-reachable BVH references, but
+        // do so BEFORE any sparse GPU writes, allocations or state changes.
+        // An invalid packet must never be published to MSL/SPIR-V compute.
+        if (!giValidateGpuBvh(bvh).valid) return false;
         GeometryUploadStats stats;
-        // Stable chunk size/layout: blit only changed 64-byte triangle and
-        // 48-byte node ranges. RHI Metal storage updates are queue-ordered;
-        // caller MUST have waited on GiGpuTicketQueue's completion fence.
-        if (geometryRevision_!=0 &&
-            bvh.triangles.size()==lastTriangles_.size() &&
-            bvh.nodes.size()==lastNodes_.size()) {
-            const auto apply=[&]<class T>(const std::vector<T>& previous,
-                                          const std::vector<T>& current,
-                                          gfx::BufferHandle handle) {
-                size_t begin=0;
-                while(begin<current.size()) {
-                    if(std::memcmp(&previous[begin],&current[begin],sizeof(T))==0) {
-                        ++begin;
-                        continue;
-                    }
-                    size_t end=begin+1;
-                    while(end<current.size() &&
-                          std::memcmp(&previous[end],&current[end],sizeof(T))!=0)
-                        ++end;
-                    const size_t bytes=(end-begin)*sizeof(T);
-                    dev_->updateBuffer(handle,current.data()+begin,bytes,
-                                       begin*sizeof(T));
-                    stats.bytes+=bytes;
-                    ++stats.regions;
-                    begin=end;
-                }
-            };
-            apply(lastTriangles_,bvh.triangles,triBuffer_);
-            apply(lastNodes_,bvh.nodes,nodeBuffer_);
-        } else {
-            const auto triangles = allocate(std::max<size_t>(1,bvh.triangles.size())*sizeof(GpuTri),
-                                            bvh.triangles.empty()?nullptr:bvh.triangles.data());
-            if (!triangles.valid()) return false;
-            const auto nodes = allocate(std::max<size_t>(1,bvh.nodes.size())*sizeof(GpuNode),
-                                        bvh.nodes.empty()?nullptr:bvh.nodes.data());
-            if (!nodes.valid()) { dev_->destroyBuffer(triangles); return false; }
-            dev_->destroyBuffer(triBuffer_);
-            dev_->destroyBuffer(nodeBuffer_);
-            triBuffer_=triangles;
-            nodeBuffer_=nodes;
-            stats.full=true;
-            stats.bytes=bvh.triangles.size()*sizeof(GpuTri)+bvh.nodes.size()*sizeof(GpuNode);
-            stats.regions=2;
+        // Keep storage-buffer handles resident across changing chunk counts
+        // whenever the existing capacity suffices. Allocate new buffers
+        // only on exponential growth, NOT on shrink/append of a few triangles.
+        // All updates must be issued after the prior GPU ticket fence is ACKed.
+        const size_t triCount=bvh.triangles.size();
+        const size_t nodeCount=bvh.nodes.size();
+        const size_t nextTriCapacity=giGpuGrowCapacity(
+            triCapacity_,triCount,kMaxTriangles);
+        const size_t nextNodeCapacity=giGpuGrowCapacity(
+            nodeCapacity_,nodeCount,2*kMaxTriangles+4096);
+        const bool growTri=nextTriCapacity>triCapacity_;
+        const bool growNode=nextNodeCapacity>nodeCapacity_;
+        gfx::BufferHandle newTri{},newNode{};
+        if(growTri) {
+            newTri=allocate(nextTriCapacity*sizeof(GpuTri),nullptr);
+            if(!newTri.valid())return false;
         }
+        if(growNode) {
+            newNode=allocate(nextNodeCapacity*sizeof(GpuNode),nullptr);
+            if(!newNode.valid()) {
+                if(newTri.valid())dev_->destroyBuffer(newTri);
+                return false;
+            }
+        }
+        const auto triPlan=giGpuPlanSparsePatch(
+            lastTriangles_,bvh.triangles,growTri);
+        const auto nodePlan=giGpuPlanSparsePatch(
+            lastNodes_,bvh.nodes,growNode);
+        const auto upload=[&](const auto& data,const GiGpuPatchPlan& plan,
+                              gfx::BufferHandle target) {
+            using Element=typename std::decay_t<decltype(data)>::value_type;
+            for(const auto& range:plan.ranges) {
+                dev_->updateBuffer(target,data.data()+range.first,
+                                   range.count*sizeof(Element),
+                                   range.first*sizeof(Element));
+                stats.bytes+=range.count*sizeof(Element);
+                ++stats.regions;
+            }
+        };
+        upload(bvh.triangles,triPlan,growTri?newTri:triBuffer_);
+        upload(bvh.nodes,nodePlan,growNode?newNode:nodeBuffer_);
+        if(!dev_->gpuHealthy()) {
+            if(newTri.valid())dev_->destroyBuffer(newTri);
+            if(newNode.valid())dev_->destroyBuffer(newNode);
+            return false;
+        }
+        // Only after all allocations and uploads are encoded, switch the
+        // submission's buffer handles. Defer actual backend resource free
+        // through the RHI; pending submissions were fenced by the caller.
+        if(growTri) {
+            dev_->destroyBuffer(triBuffer_);
+            triBuffer_=newTri;
+            triCapacity_=nextTriCapacity;
+        }
+        if(growNode) {
+            dev_->destroyBuffer(nodeBuffer_);
+            nodeBuffer_=newNode;
+            nodeCapacity_=nextNodeCapacity;
+        }
+        stats.full=growTri || growNode || triPlan.full || nodePlan.full;
         lastTriangles_=bvh.triangles;
         lastNodes_=bvh.nodes;
         triangleCount_=bvh.triangles.size();
@@ -196,10 +240,17 @@ public:
             if ((haveLast && l.key==last) || !finite(l.position) || !finite(l.color) ||
                 l.color.x<0 || l.color.y<0 || l.color.z<0 ||
                 !std::isfinite(l.radius) || l.radius<=0 ||
-                !std::isfinite(l.intensity) || l.intensity<0)
+                !std::isfinite(l.intensity) || l.intensity<0 ||
+                !std::isfinite(l.cosOuter) || !std::isfinite(l.cosInner) ||
+                (l.spot() && (!finite(l.direction) ||
+                    std::abs(dot(l.direction,l.direction)-1.0f)>.002f ||
+                    l.cosOuter < -1.0f || l.cosOuter>=1.0f ||
+                    l.cosInner < l.cosOuter || l.cosInner>1.0f)))
                 return false;
             packed.push_back({{l.position.x,l.position.y,l.position.z,l.radius},
-                              {l.color.x,l.color.y,l.color.z,l.intensity}});
+                              {l.color.x,l.color.y,l.color.z,l.intensity},
+                              {l.direction.x,l.direction.y,l.direction.z,l.cosOuter},
+                              {l.cosInner,0,0,0}});
             haveLast=true;
             last=l.key;
         }
@@ -245,9 +296,20 @@ public:
         params.jobs=uint32_t(packed.size());
         params.samples=samples;
         params.traceDistance=traceDistance;
+        params.sunDirectionIntensity={environment_.sunDirection.x,
+                                     environment_.sunDirection.y,
+                                     environment_.sunDirection.z,
+                                     environment_.sunIntensity};
+        params.sunColorSkyIntensity={environment_.sunColor.x,
+                                     environment_.sunColor.y,
+                                     environment_.sunColor.z,
+                                     environment_.skyIntensity};
+        params.skyColor={environment_.skyColor.x,environment_.skyColor.y,
+                         environment_.skyColor.z,0};
         dev_->setComputeUniforms(&params,sizeof(params));
         dev_->dispatch(params.jobs);
         dev_->endCompute();
+        if (!dev_->computeDispatchSucceeded()) return result;
         result.submitted=true;
         result.probes=params.jobs;
         result.samples=params.samples;
@@ -282,7 +344,9 @@ private:
     std::vector<GpuTri> lastTriangles_;
     std::vector<GpuNode> lastNodes_;
     GeometryUploadStats geometryUpload_{};
+    size_t triCapacity_=0,nodeCapacity_=0;
     uint64_t geometryRevision_=0;
+    GiEnvironmentLight environment_{};
 };
 
 } // namespace aiverse::render

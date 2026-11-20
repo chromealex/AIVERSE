@@ -104,3 +104,36 @@ read as UNORM).
 
 - compute (`supportsCompute()` is false, as on GL), GPU timings (`timeGpuFrame`), async readbacks;
 - pipeline and SPIR-V disk caches, finer barriers, descriptor sets reused across draws.
+
+## Experimental compute RHI and dynamic GI (2026-11-19, SOURCE ONLY)
+
+This branch adds a dedicated Vulkan compute path for opt-in indirect GI. See
+`docs/agent-handoffs/gi-stage30-vulkan-compute-rhi-2026-11-19.md` for exact
+source commits and the required native validation. Vulkan's selected graphics
+queue must also expose compute; RGBA16F needs optimal-tiled sampled **and
+storage-image** format features, at least 4 storage-buffer descriptors,
+one storage image, 32 bytes of push constants and a 64-thread workgroup.
+Devices without those capabilities continue with the independent CPU dynamic
+probe path (`GiDynamicRuntime::updateAdaptive`), never with a fake GPU result.
+
+`gfx::ComputeDesc::glsl` is compiled to SPIR-V by glslang; `VkCompute.cpp`
+encodes four storage buffers and one RGBA16F storage image via a dedicated
+compute pipeline layout. The RHI transitions the atlas from shader-read to
+general for compute writes and back to shader-read for lighting. Uploads of
+immutable GI BVH buffers use transfer-to-compute barriers. Descriptor pools are
+reused only after the in-flight frame's Vulkan fence has completed.
+`gfx::Device::completedFrameSerial` is a completed-GPU-fence signal, NOT a
+CPU command buffer submission timestamp; the GI ticket queue never accepts
+Vulkan work before this signal confirms the matching frame.
+
+For material shading, dynamic GI consumes tex13 (single), tex14 (R8 fine
+validity), and tex15 (dual cascade). The 17th texture binding tex16 for a
+third cascade remains Metal-only. The renderer checks the actual Vulkan
+`textureSlots_` capacity. Shader-graph textures colliding with GI slots remain
+excluded. GLSL/Metal GI transport are still separately opt-in.
+
+**NOT VERIFIED:** Vulkan C++ compilation, SPIR-V parser/link, Vulkan validation
+layers, pixel readback/real GPU fences or mobile GPU performance; GLES3 device
+tests also remain outstanding. Do not ship or merge based on this source
+documentation alone. The feature branch is significantly diverged from main,
+and conflict-aware integration must preserve other agents' render changes.

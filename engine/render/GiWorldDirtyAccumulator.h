@@ -49,7 +49,10 @@ public:
     bool saturated() const { return fullBits_!=0; }
     void clear() { regions_.clear();fullBits_=0;eventCount_=0; }
 
-    Stats flush(GiUpdateScheduler& scheduler) {
+    // Optionally report every marked physical probe ID so a GPU owner can
+    // clear stale indirect immediately, before its budgeted relighting pass.
+    Stats flush(GiUpdateScheduler& scheduler,
+                std::vector<uint32_t>* affectedIndices = nullptr) {
         Stats stats;
         stats.events=eventCount_;
         stats.fullVolume=fullBits_!=0;
@@ -59,6 +62,9 @@ public:
                 if(fullBits_ & giDirtyBit(reason)) scheduler.invalidateAll(reason);
             stats.regions=1;
             stats.probeMarks=scheduler.size();
+            if (affectedIndices)
+                for (uint32_t i=0;i<scheduler.size();++i)
+                    affectedIndices->push_back(i);
         } else {
             std::sort(regions_.begin(),regions_.end(),
                       [](const Region& a,const Region& b) {
@@ -74,7 +80,7 @@ public:
                 for(auto reason:{GiDirtyReason::Lighting,GiDirtyReason::Geometry,
                                  GiDirtyReason::Material,GiDirtyReason::Environment})
                     if(r.bits & giDirtyBit(reason))
-                        stats.probeMarks+=scheduler.invalidate(r.bounds,reason);
+                        stats.probeMarks+=scheduler.invalidate(r.bounds,reason,0,affectedIndices);
             }
         }
         clear();
