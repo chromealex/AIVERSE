@@ -56,6 +56,24 @@ def verify(root, dimensions=(960, 640), write=True):
     require(re.fullmatch(r"[0-9a-f]{40}", provenance.get("git_head", "")) is not None,
             "invalid or missing git_head")
     require(provenance.get("result") != "FAILED", "capture explicitly FAILED")
+    # Stage134 launcher is optional for legacy Stage129 captures. When present,
+    # validate the provenance stored *inside* the actual capture, not a nearby
+    # mutable build path. Exact SHA binding prevents accidental mixed archives.
+    native = provenance.get("native_provenance")
+    if native is not None:
+        require(native == "native-provenance.txt", "invalid native provenance filename")
+        native_path = root / native
+        require(native_path.is_file(), "missing archived native provenance")
+        native_lines = native_path.read_text().splitlines()
+        native_fields = dict(line.split("=", 1) for line in native_lines if "=" in line)
+        require(native_fields.get("stage") == "134",
+                "invalid native launcher stage")
+        require(native_fields.get("repo_head") == provenance["git_head"],
+                "binary provenance does not match capture git_head")
+        require(re.fullmatch(r"[a-f0-9]{64}", native_fields.get("binary_sha256", "")) is not None,
+                "missing/invalid compiled binary SHA-256")
+        for key in ("macos", "mac_model", "clang"):
+            require(bool(native_fields.get(key)), f"native provenance missing {key}")
     for report in REPORTS:
         require((root / report).is_file() and (root / report).stat().st_size > 10,
                 f"missing completed report: {report}")
@@ -160,6 +178,22 @@ def self_test():
                         for suffix in ("-before.ppm", "-after.ppm") + (("-mdi-after.ppm",) if mode == "mdi" else ()):
                             Path(str(stem) + suffix).write_bytes(ppm)
         assert len(verify(root, dimensions=(1, 1), write=False)) == 16
+        # Stage134 capture provenance must match the exact source revision.
+        manifest = root / "manifest.txt"
+        manifest.write_text(manifest.read_text() + "native_provenance=native-provenance.txt\n")
+        native_path = root / "native-provenance.txt"
+        native_path.write_text("stage=134\nrepo_head=" + "a"*40 +
+                               "\nmacos=15.0\nmac_model=TestMac\nclang=TestClang\n" +
+                               "binary_sha256=" + "b"*64 + "\n")
+        assert len(verify(root, dimensions=(1, 1), write=False)) == 16
+        native_path.write_text(native_path.read_text().replace("a"*40, "c"*40))
+        try:
+            verify(root, dimensions=(1, 1), write=False)
+        except ValueError as exc:
+            assert "does not match" in str(exc), str(exc)
+        else:
+            raise AssertionError("mismatched native HEAD accepted")
+        native_path.write_text(native_path.read_text().replace("c"*40, "a"*40))
         corrupt = root / "mesh4" / "2048-on-mdi2-mdi-after.ppm"
         corrupt.write_bytes(b"P6\n1 1\n255\n\x01\x02\x04")
         try:

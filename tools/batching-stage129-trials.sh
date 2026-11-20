@@ -32,6 +32,19 @@ mkdir "$OUT"
  echo "gpu=whole_completed_Metal_command_buffer_timestamps"
  echo "note=geometry_tessellation_and_pipeline_inheritance_explicit_ICB_buffers"
 } > "$OUT/manifest.txt"
+# Optional native launcher evidence: preserve the executable checksum and host.
+if [[ -n "${AIVERSE_BATCH_NATIVE_PROVENANCE_FILE:-}" ]]; then
+  source_file="$AIVERSE_BATCH_NATIVE_PROVENANCE_FILE"
+  [[ -s "$source_file" ]] || { echo "Missing native provenance" >&2; exit 2; }
+  grep -Fqx "repo_head=$(git rev-parse HEAD)" "$source_file" || {
+    echo "Native provenance HEAD mismatch" >&2; exit 2;
+  }
+  grep -Eq '^binary_sha256=[0-9a-f]{64}$' "$source_file" || {
+    echo "Native provenance binary hash missing" >&2; exit 2;
+  }
+  cp "$source_file" "$OUT/native-provenance.txt"
+  echo "native_provenance=native-provenance.txt" >> "$OUT/manifest.txt"
+fi
 CURRENT_LOG=""
 on_error() {
  code=$?

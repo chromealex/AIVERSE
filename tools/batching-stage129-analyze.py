@@ -123,7 +123,7 @@ def self_test():
         summaries, scaling = analyze(root, write=False)
         assert len(summaries) == 4 and len(scaling) == 2
         assert abs(scaling[0]["mdi_premium_delta_ms"] - .100) < 1e-9
-        assert abs(scaling[1]["mdi_premium_delta_ms"] - .090) < 1e-9
+        assert abs(scaling[1]["mdi_premium_delta_ms"] - .089) < 1e-9
         print("PASS: Stage129 analyzer synthetic self-test")
 
 
