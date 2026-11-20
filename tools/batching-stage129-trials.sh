@@ -115,6 +115,7 @@ for subdivisions in 1 4; do
   python3 tools/batching-stage127-analyze.py "$OUT/mesh$subdivisions"
 done
 python3 tools/batching-stage129-analyze.py "$OUT"
+python3 tools/batching-stage132-analyze.py "$OUT"
 echo "result=PASS" >> "$OUT/manifest.txt"
 echo "utc_end=$(date -u +%Y%m%dT%H%M%SZ)" >> "$OUT/manifest.txt"
 tar -czf "$OUT.tar.gz" -C "$BASE" "$(basename "$OUT")"
