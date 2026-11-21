@@ -392,6 +392,62 @@ not create a distinct `render::Model` for each tree. Tree silhouette
 geometry still uses the existing opaque leaf material if no project
 alpha-cutout texture is assigned.
 
+## Merged whole-tree LOD (draw-call merging)
+
+`makeArborTreeLodModel(profile, seed, TreeLodSettings)` builds the same
+branch geometry as BranchLOD, but merges every branch of a detail tier
+into ONE mesh: one node, three `MeshDef`s (Full -> Reduced -> Minimal via
+`MeshDef::lods`), each with exactly two primitives (bark, foliage). All
+trees of one species share these primitives, so `Renderer3D` instancing
+draws a whole species tier with one draw per material (per instance-limit
+chunk) instead of one draw per branch node. `vertexOwners` keep the
+structural branch per vertex, so GPU hierarchical wind masks
+(docs/wind-masks.md) still bend each branch.
+
+The tier comes from Terra's own `FloraView` distance ranges:
+`ArborForestAdapter` sets `ModelDraw::lodLevel` (High=Full, Medium=Reduced,
+Low=Minimal; Impostor stays the atlas card). `ModelDraw::lodLevel` is a
+general renderer feature: a host-chosen level of every node's LOD chain,
+skipping projected-size selection. The renderer's projected-size metric is
+conservative (nearest box corner, divided by w*(w-size)) and kept whole 20 m
+trees at Full inside the near range.
+
+`ArborForestAdapter::setTreeGeometry(ArborTreeGeometry, TreeLodSettings)`
+(before the first `addPrototype`): `PerBranch` = classic BranchLOD (needed
+for CPU per-branch wind poses), `Merged`, or `Auto` (default): `Merged`
+when `enableHierarchicalWind()` is on, else `PerBranch`.
+`ForestSceneSettings::treeGeometry` / manifest
+`world.terraweaveForest.treeGeometry: "auto" | "merged" | "perBranch"`.
+
+Renderer fixes found on the way (`Renderer3DModels.cpp`):
+- LOD selection no longer adds the vertex-offset (wind) culling margin to
+  the projected size. With wind on, a 2 m branch plus a multi-metre margin
+  pinned every node at LOD0, so BranchLOD never switched.
+- Rigged trees in calm air declare a 1 cm `maxVertexOffsetMetres`. Zero
+  means "unbounded displacement" and turned off culling and LOD.
+
+Measured in the editor (Mac Release, 192x192 TerraWeave map, 5 botanical
+species, wind 12 m/s, `tools/editor/terra_forest_perf.py`, 4 cameras):
+
+| | scene draw calls | camera triangles | GPU frame |
+|---|---:|---:|---:|
+| PerBranch (with the LOD fix) | 6006-6496 | 366k-504k | 2.4-3.3 ms |
+| Merged + FloraView tiers | 110-177 | 348k-473k | 1.2-2.4 ms |
+
+PerBranch before the LOD fix: ~3400 draws, every node at LOD0.
+
+## Far impostors baked from the near tree
+
+`bakeArborImpostorFromModel(atlas, nearModel)` re-bakes the azimuth atlas
+by CPU rasterization of the near tree itself (every node's base mesh, with
+the material base-colour textures and alpha cutout), 2x2 supersampled, simple
+wrap lighting, colour bled into transparent texels against mip halos. Bark
+and foliage keep separate pages (winter bark-only still works). The card is
+resized to the mesh's real extent. `ArborForestAdapter` does this by default
+right after the prototype decorator (textures) and before GPU upload;
+`setImpostorFromNearModel(false)` keeps the legacy skeleton disk/line
+silhouette. Deterministic: the same model gives the same bytes.
+
 ## Whole-tree final billboard (Stage 2h)
 
 `engine/render/TerraWeaveArborBillboard.h` provides
@@ -3113,3 +3169,70 @@ physics/colliders/replication are not yet connected; nor are Earthworks
 edits applied automatically to live streamed world colliders and navmesh.
 These are separate features, not a passing QA statement. Source changes
 only; no compile/CTest/GPU run on this feature revision. Keep PR Draft.
+
+## Native alpine source: optional ridged massifs
+
+`TerraWeaveAlpine.h` accepts an appended `AlpinePeak::morphology` field.
+`LegacyCone` remains the default: existing six-field initializers and old
+landscape recipes retain their exact old source. `RidgedMassif` combines a
+zero-slope elliptical support, seeded domain warp and five ridged octaves with
+feedback. Samples use signed integer centimetres and Q16 arithmetic. It is a
+stateless generation profile, not a hydraulic erosion or rock-physics solver.
+Peak support, shear, height and valley protection retain their existing bounds.
+
+The native `aiverse_terraweave_landscape` exporter accepts each peak's
+`"morphology":"ridged_massif"`, `"cragged_massif"` or `"legacy"`. Unknown names reject.
+`CraggedMassif` retains the same bounded support while moving modest relief to
+one-third-radius scales with .42 octave amplitude rolloff and a higher broad
+carrier. Existing legacy/ridged samples stay exact; it is cosmetic relief, not
+physical hydraulic erosion.
+[The alpine valley recipe](../../examples/terraweave/alpine-valley.json) places
+its broad mountain range behind the forest area, with 128 terrain tiles and an
+explicit NEREID river. Export to a new directory on the external build drive:
+
+```sh
+aiverse_terraweave_landscape --recipe examples/terraweave/alpine-valley.json \
+  --out NEW_PACK --materials engine/assets/materials/terrain/textures
+python3 tests/terrain/check_landscape_export.py NEW_PACK
+```
+
+The export audit compares actual neighbouring glTF edge heights/normals and
+checks render vertices against the shared integer planting-height grid.
+Rebake material masks and vegetation from the new `ground.json`; retain planted
+root depth when moving existing trees/rocks to the new surface. A static export
+is not the live erosion/fall host. The example's full visual acceptance and
+renderer budget remain separate from source/seam correctness.
+
+## Immutable terrain patch LOD
+
+`engine/render/TerraWeaveTerrainLod.h` provides
+`appendTerrainPatchLods(model, patch, targetErrorPixels=1.5f)` for a CPU model
+before upload. The native landscape exporter calls it after world-space normal
+smoothing and tangent generation. The live mutable `makeEarthworksTerrainModel`
+path retains its original full-resolution surface and collision by default.
+
+Input must be the complete original patch triangulation on a power-of-two grid
+(8..128 cells), with matching heights and consistent shared normals/UVs/colors.
+Skins, animation, morphs, baked-lightmap UVs, uploaded buffers and existing LODs reject. Invalid
+source input preserves model values. LOD0 vertices/attributes/indices stay exact;
+three appended alternatives use strides 2, 4 and 8. Each retains all original
+outer edge segments, so neighbouring tiers join without skirts or edge cracks.
+For a 129-sample tile the four triangle counts are 32768/8952/2680/1080.
+Only used vertices are appended for each tier; this adds CPU/GPU asset storage.
+
+Each tier measures maximum vertical deviation against the original piecewise
+linear surface, including coarse edges crossing fine-grid X, Z and diagonal
+edges. Its maximum pixel threshold targets the requested error through the
+shared renderer's conservative projected-size metric, with descending caps
+512/256/128. This is a presentation budget, not a collision simplification or a
+universal guarantee for vertex-displaced geometry. The existing renderer owns
+camera/shadow selection and opaque spatial crossfade. Both meshes render inside
+a crossfade band; waiting more frames does not remove that spatial overlap.
+
+Exports retain the existing glTF `rtsLods` representation and independent shadow
+LOD policy; catalog tile entries append `lods` (stride/triangles/errorMetres/
+maxPixels). Old readers can ignore these fields. Check `terraweave_model`, the
+shared-height export audit, actual per-frame submitted triangles and near/far
+pixel comparisons. Metal fixture verification does not establish mobile/Vulkan
+parity or an FPS gain. CPU visual picking/deformed object parity remains a
+separate editor acceptance task.

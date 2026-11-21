@@ -18,11 +18,16 @@
 // Low retains the classic vertex colours (docs/terrain-textures.md).
 #pragma once
 #include "RtsFog.h"
+#include "engine/render/PreparationAllocationBudget.h"
 #include <cstdint>
+#include <memory>
+#include <memory>
 #include <string>
 #include <vector>
 #include "../../../engine/render/Renderer3D.h"
 #include "../../../engine/render/TextureCache.h"
+#include "../../../engine/render/NativePresentationRetirement.h"
+#include "../../../engine/render/RenderDeviceLifetime.h"
 #include "../RtsData.h"
 #include "../RtsMap.h"
 #include "RtsTerrainDetail.h"
@@ -54,6 +59,10 @@ struct TerrainLook {
     double detailBudgetMB = 96;                 // detail LOD meshes kept on the GPU (LRU beyond)
     render::float3 rockColor{0.45f, 0.41f, 0.36f}; // steep slopes without a cliff texture
     bool hasRockColor = false;
+    // Opt-in dielectric PBR. Packed assets use albedo.a=AO, normal.a=roughness.
+    bool pbr = false, packedPbr = false;
+    float pbrRoughness = 0.85f;
+    bool render = true; // explicit authored/external ground disables only this legacy visual surface
     bool materials() const { return !layers.empty(); }
 };
 
@@ -65,16 +74,94 @@ std::vector<uint8_t> parseMaterialRows(const Json& rows, int w, int h);
 
 class TerrainRenderer {
 public:
+    void setGpuDeviceLease(render::RenderDeviceLifetime::Lease lease) {gpuDeviceLease_=std::move(lease);}
     void init(gfx::Device& dev, const Rules& rules, const render::FileReader& read, const std::string& contentBase);
+    // Explicit safe teardown when the caller has not yet established RHI
+    // completion. A failed barrier preserves the published GPU owner.
+    bool shutdownAfterGpuIdle(gfx::Device& dev);
     void shutdown(gfx::Device& dev);
+    bool ownsGpuResources() const noexcept {return dev_!=nullptr;}
+    // Poll only at the host pre-render retirement boundary, never in a draw.
+    bool collectRetiredMeshBuffers(gfx::Device& dev) {
+        checkGpuDevice(dev);
+        return retiredMeshes_.collect(dev);
+    }
+    size_t pendingMeshGpuRetirements() const noexcept {
+        return retiredMeshes_.pending();
+    }
     // Optional per-cell material layer painted on the map (0..3, 255 = by cell kind). Next build().
-    void setMaterialLayer(std::vector<uint8_t> layer) { materialLayer_ = std::move(layer); }
+    void setMaterialLayer(std::vector<uint8_t> layer) {
+        if (materialLayer_ != layer) {
+            materialLayer_ = std::move(layer);
+            materialLayerChanged_ = true;
+            ++publicationRevision_;
+        }
+    }
     // (Re)builds the chunks whose inputs changed. Returns true when any geometry changed.
     bool build(gfx::Device& dev, const MapGrid& g, bool flatDig);
+    // Published source heights are copied before any fallible GPU upload.
+    // Editor MapGrid may mutate in place while the old terrain is displayed.
+    // surfaceAt/heightAt must use this immutable published CPU snapshot until
+    // the next successful Terrain owner commit.
+
+    // External Stage 47B candidate for full-map/topology replacement.
+    // Only private CPU data and new GPU handles are built during prepare.
+    // All live terrain ownership remains unchanged until commitMap, which
+    // is no-throw and can participate in a multi-owner publication cohort.
+    // Shared admission cap across all outstanding topology candidates. Includes
+    // geometry, RGBA8 mip payload and camera COW fields; excludes published/
+    // retired resources, shader driver storage and physical allocation overhead.
+    void setTopologyPreparationBudgetBytes(size_t bytes) {topologyBudget_.setLimit(bytes);}
+    size_t topologyPreparationBytes() const noexcept {return topologyBudget_.used();}
+    class PreparedMap;
+    std::shared_ptr<PreparedMap> prepareMap(
+        gfx::Device& dev,const MapGrid& grid,bool flatDig);
+    bool commitMap(std::shared_ptr<PreparedMap> candidate) noexcept;
+    // Read-only height query against a private staged map. A Road/Shore
+    // transaction uses this exact ground before any owner publishes.
+    float preparedSurfaceAt(const std::shared_ptr<PreparedMap>& candidate,
+                            const MapGrid& grid,float x,float z) const;
+    bool mapMatches(int w,int h) const noexcept {
+        return built_ && mapW_==w && mapH_==h;
+    }
+    uint64_t stateRevision() const noexcept {return publicationRevision_;}
+    bool canPrepareMap() const noexcept {
+        return dev_ && built_ && texturesLoaded_;
+    }
+    // LENS Stage 47B.2: copy-on-write terrain dynamic + vision RHI
+    // textures. Prepare mutates no published bytes/handles; a late owner
+    // preparation failure discards all new textures. Returned handles are
+    // private to a PreparedFrame until the shared owner cohort commits.
+    class PreparedFrame;
+    std::shared_ptr<PreparedFrame> prepareFrame(
+        const MapGrid& grid,const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility=nullptr);
+    // Also stage missing Detail LOD buffers of the active primary camera.
+    std::shared_ptr<PreparedFrame> prepareFrameVisible(
+        const render::Renderer3D& renderer,const MapGrid& grid,
+        const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility=nullptr);
+    void drawCandidate(const std::shared_ptr<PreparedFrame>&,render::Renderer3D&,
+        const MapGrid&,const std::vector<uint8_t>*);
+    void drawMapCandidate(const std::shared_ptr<PreparedMap>&,render::Renderer3D&,
+        const MapGrid&,const std::vector<uint8_t>*);
+    void commitFrame(std::shared_ptr<PreparedFrame> candidate) noexcept;
+    // Prepare camera resources against unpublished topology. The map owns
+    // this frame until commitMap publishes both, or rollback discards both.
+    void prepareMapVisible(const std::shared_ptr<PreparedMap>& candidate,
+        const render::Renderer3D& renderer,const MapGrid& grid,
+        const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility=nullptr);
     // Queues the terrain (opaque, main pass) and water. vision: fog of war per cell (heightfield maps
     // darken in the shader; levels maps keep the classic fog sheet drawn by RtsView).
     void draw(render::Renderer3D& r, const MapGrid& g, const std::vector<uint8_t>* vision, bool flatDig);
+    // Secondary LENS view: cull prepared terrain LODs per camera without
+    // advancing terrain simulation, uploading textures or rebuilding buffers.
+    // Must follow draw() on the same presentation frame.
+    void drawPrepared(render::Renderer3D& r,const MapGrid& g,
+                      const std::vector<uint8_t>* vision);
     void drawWater(render::Renderer3D& r);
+    void setMapSurfaceEnabled(bool enabled){mapSurfaceEnabled_=enabled;}
     bool built() const { return built_; }
     bool shaderFog() const { return heightfield_; }
     // Explicit detail heightmap of the map (terrain.detail file, editor detail layer); null = none
@@ -91,6 +178,41 @@ public:
 
     struct Stats { int chunks = 0, drawn = 0, lodMax = 0, detailK = 0; uint64_t triangles = 0; double buildMs = 0; int rebuilt = 0; size_t geometryBytes = 0; };
     const Stats& stats() const { return stats_; }
+    // Terrain owns chunk LOD buffers, water/apron geometry, map/vision,
+    // detail/height-field textures and its local terrain material cache.
+    // Called on the graphics owner thread, never GPU readback.
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        render::GpuOwnedMemoryCounter counter(*dev_);
+        for (const auto& chunk : chunks_)
+            for (const auto& lod : chunk.lods) {
+                counter.buffer(lod.vb);
+                counter.buffer(lod.ib);
+            }
+        counter.buffer(apron_.vb);
+        counter.buffer(apron_.ib);
+        counter.buffer(water_.vb);
+        counter.buffer(water_.ib);
+        for (auto texture : {cellTex_,dynTex_,splatTex_,visionTex_,
+                white_,flatN_,gray_,heightField_.tex,
+                detailNrmTex_,detailSplatTex_,layerNormalAtlas_})
+            counter.texture(texture);
+        // TextureCache owns layers/cliffs. TextureRef aliases are borrowed.
+        const auto cache = textures_.ownedGpuMemoryStats();
+        auto stats=counter.stats();
+        stats.textureKnownBytes =
+            render::GpuOwnedMemoryCounter::saturatingAdd(
+                stats.textureKnownBytes,cache.textureKnownBytes);
+        stats.bufferKnownBytes =
+            render::GpuOwnedMemoryCounter::saturatingAdd(
+                stats.bufferKnownBytes,cache.bufferKnownBytes);
+        stats.textures+=cache.textures;
+        stats.buffers+=cache.buffers;
+        stats.unknownTextures+=cache.unknownTextures;
+        stats.unknownBuffers+=cache.unknownBuffers;
+        stats.multiVersionBuffers+=cache.multiVersionBuffers;
+        return stats;
+    }
 
 private:
     struct TV { render::float3 pos, nrm; uint32_t rgba; float morph[2]; };
@@ -103,6 +225,8 @@ private:
         bool valid = false;
         std::vector<uint32_t> lastUse;               // detail mode: frame each LOD was last drawn (LRU)
     };
+    void commitMapVisible(PreparedMap& candidate) noexcept;
+    bool buildInternal(gfx::Device& dev,const MapGrid& g,bool flatDig);
     void parseLook(const Json& t);
     void loadTextures(gfx::Device& dev);
     uint64_t chunkHash(const MapGrid& g, const Chunk& c, bool flatDig) const;
@@ -110,7 +234,12 @@ private:
     void buildHeightChunk(gfx::Device& dev, const MapGrid& g, Chunk& c);
     // detail mode (RtsTerrainDetailMesh.cpp)
     bool buildDetail(gfx::Device& dev, const MapGrid& g, bool flatDig, bool all);
-    void buildDetailLod(gfx::Device& dev, const MapGrid& g, Chunk& c, int lod);
+    // Same-map detail edits: stage only affected coarse chunk LODs, preserve
+    // unchanged published meshes, and publish CPU/GPU images atomically.
+    bool tryBuildDetailIncremental(gfx::Device& dev,const MapGrid& g,bool flatDig);
+
+    void buildDetailLod(gfx::Device& dev,const MapGrid& g,Chunk& c,
+                        int lod,size_t* stagedBytes=nullptr);
     void updateDetailTextures(gfx::Device& dev, int i0, int j0, int i1, int j1);
     uint64_t detailHash(const Chunk& c) const;
     size_t detailSampleCap() const;
@@ -126,19 +255,33 @@ private:
     // 16-bit height map of the drawn surface for traced terrain shadows (Renderer3D::setHeightField);
     // rebuilt (throttled) after geometry changes, only while the trace tier is active
     void updateHeightField(gfx::Device& dev, const MapGrid& g);
-    gfx::PipelineHandle pipeline(gfx::Device& dev, int variant);   // tier + 3 * detail
+    gfx::PipelineHandle pipeline(gfx::Device& dev, int variant, bool dynamicGi=false, bool compactGi=false); // GI slots 6..11, GLES low slot12
     int tierFor(const render::Renderer3D& r) const;
+    void drawInternal(render::Renderer3D& r,const MapGrid& g,
+                      const std::vector<uint8_t>* vision,bool preparedOnly);
     int tierFor0() const;                       // device / env tier without a renderer (detail sample count)
 
+    void checkGpuDevice(const gfx::Device& dev) const {
+        if(gpuDeviceLease_.device() && !gpuDeviceLease_.validFor(dev))
+            throw std::logic_error("TerrainRenderer GPU device generation expired");
+    }
+    render::RenderDeviceLifetime::Lease gpuDeviceLease_;
+    render::PreparationAllocationBudget topologyBudget_{128u*1024u*1024u};
+    std::shared_ptr<render::PreparationAllocationBudget::Lease> preparationAllocation_;
+    void reservePreparationBytes(size_t count,size_t stride=1) {
+        if(preparationAllocation_)preparationAllocation_->reserve(count,stride);
+    }
+    gfx::TextureHandle createTerrainTexture(gfx::Device&,const gfx::TextureDesc&);
     gfx::Device* dev_ = nullptr;
+    render::NativePresentationRetirement retiredMeshes_;
     const Rules* rules_ = nullptr;
     std::string base_;
     render::FileReader read_;
     TerrainLook look_;
     render::TextureCache textures_;
-    gfx::ShaderHandle shaders_[6];              // [detail * 3 + tier]
-    gfx::PipelineHandle pipes_[6];
-    bool shaderFailed_[6] = {};
+    gfx::ShaderHandle shaders_[13]; // 0..5 legacy, 6..11 Metal/Vulkan GI, 12 GLES compact
+    gfx::PipelineHandle pipes_[13];
+    bool shaderFailed_[13] = {};
     // per-cell textures
     gfx::TextureHandle cellTex_, dynTex_, splatTex_, visionTex_, white_, flatN_, gray_;
     std::vector<uint8_t> cellPx_, dynPx_, splatPx_, visionPx_;
@@ -147,10 +290,21 @@ private:
     bool fogFieldChanged_ = true;
     int texW_ = 0, texH_ = 0, dynRow_ = 0;
     bool visionInit_ = false;
+    // This primary frame's shader inputs were published by OwnerPrepareCommit.
+    // Prevent drawInternal from updating already-submitted GPU textures in place.
+    bool frameFieldsPrepared_ = false;
     std::vector<uint8_t> materialLayer_;
+    bool materialLayerChanged_ = false; // detail splat depends on painted cell layers
     render::TextureRef layerTex_[4], layerNrm_[4], cliffTex_, cliffNrm_;
+    // GL33: four repeatable layer normals packed into one atlas sampler.
+    gfx::TextureHandle layerNormalAtlas_;
+    int layerNormalAtlasSize_ = 0;
     bool texturesLoaded_ = false;
 
+    // Only the arrays required by terrain::heightAt are copied (no
+    // gameplay state/pathfinding/network data). Shared pointer swap is
+    // no-throw during commitMap() and never depends on mutable map bytes.
+    std::unique_ptr<MapGrid> publishedSurfaceGrid_;
     std::vector<Chunk> chunks_;
     int cw_ = 0, ch_ = 0, mapW_ = 0, mapH_ = 0, lodLevels_ = 1;
     bool heightfield_ = false, built_ = false;
@@ -159,9 +313,11 @@ private:
     Lod apron_;
     render::Mesh water_;
     bool waterSheet_ = false, hasWater_ = false;
+    bool mapSurfaceEnabled_=true;
     uint64_t waterHash_ = 0;
     render::HeightField heightField_;
     bool heightDirty_ = true;
+    uint64_t publicationRevision_ = 1; // invalidates externally staged candidates
     int heightW_ = 0, heightH_ = 0;
     double heightBuiltAt_ = -1e9;               // seconds (steady clock), throttle while sculpting
     Stats stats_;

@@ -10,7 +10,7 @@ constexpr float kPi = 3.14159265358979f;
 
 float3 lerp3(float3 a, float3 b, float t) { return a + (b - a) * t; }
 
-constexpr int kMaxComps = 64;
+constexpr int kMaxComps = kMaxMorphTargets; // no silent clip-channel truncation
 int channelComps(const AnimChannel& c) {
     return c.path == AnimChannel::Rotation ? 4 : c.path == AnimChannel::Weights ? std::min<int>(c.comps, kMaxComps) : 3;
 }
@@ -323,6 +323,10 @@ void Animator::play(int layer, int clip, const Play& p) {
     else { L.prev = Track{}; L.fade = 1; }
     if (p.fade <= 0) L.fade = 1;
     L.cur = Track{clip, 0, p.speed, p.loop};
+    if(clip>=0 && std::isfinite(p.startTime)) {
+        const float duration=model_->clips[size_t(clip)].duration;
+        if(duration>0)L.cur.time=p.loop?std::fmod(std::max(0.f,p.startTime),duration):std::clamp(p.startTime,0.f,duration);
+    }
 }
 
 void Animator::stop(int layer, float fade) {
@@ -355,6 +359,19 @@ void Animator::advance(Track& t, float dt) const {
     if (dur <= 0) { t.time = 0; return; }
     if (t.loop) { t.time = std::fmod(t.time, dur); if (t.time < 0) t.time += dur; }
     else t.time = std::clamp(t.time, 0.0f, dur);
+}
+
+bool Animator::seek(int layer,float seconds) {
+    if(!valid(layer) || !model_ || !std::isfinite(seconds))return false;
+    Layer& L=layers_[layer];
+    if(L.cur.clip<0 || L.cur.clip>=int(model_->clips.size()))return false;
+    const float duration=model_->clips[size_t(L.cur.clip)].duration;
+    if(duration<=0)return false;
+    L.cur.time=L.cur.loop?
+        std::fmod(std::max(seconds,0.f),duration):
+        std::clamp(seconds,0.f,duration);
+    L.prev=Track{};L.fade=1.f;
+    return true;
 }
 
 void Animator::setBlend(int layer, int clip2, float weight) {

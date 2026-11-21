@@ -24,14 +24,14 @@ namespace aiverse::render::shaders {
     "  vec4 u_skyColor; vec4 u_groundColor; vec4 u_fog; vec4 u_camPos; vec4 u_shadow; vec4 u_quality;\n" \
     "  vec4 u_trace0; vec4 u_trace1; vec4 u_trace2; vec4 u_trace3; };\n"
 #define AIVERSE_GLSL_BLOCKS \
-    "layout(std140) uniform U0 { mat4 u_model; vec4 u_color; vec4 u_params; vec4 u_waterRipples[16]; vec4 u_waterWakeShapes[16]; vec4 u_waterWind; vec4 u_waterHydraulics; vec4 u_waterRapidColor; };\n" AIVERSE_GLSL_FRAME
+    "layout(std140) uniform U0 { mat4 u_model; vec4 u_color; vec4 u_params; vec4 u_waterRipples[16]; vec4 u_waterWakeShapes[16]; vec4 u_waterWind; vec4 u_waterHydraulics; vec4 u_waterRapidColor; vec4 u_waterFlowRect; };\n" AIVERSE_GLSL_FRAME
 
 #define AIVERSE_MSL_FRAME \
     "struct U1 { float4x4 viewProj; float4x4 lightViewProj; float4x4 invViewProj; float4 sunDir; float4 sunColor;\n" \
     "  float4 skyColor; float4 groundColor; float4 fog; float4 camPos; float4 shadow; float4 quality;\n" \
     "  float4 trace0; float4 trace1; float4 trace2; float4 trace3; };\n"
 #define AIVERSE_MSL_BLOCKS \
-    "struct U0 { float4x4 model; float4 color; float4 params; float4 waterRipples[16]; float4 waterWakeShapes[16]; float4 waterWind; float4 waterHydraulics; float4 waterRapidColor; };\n" AIVERSE_MSL_FRAME
+    "struct U0 { float4x4 model; float4 color; float4 params; float4 waterRipples[16]; float4 waterWakeShapes[16]; float4 waterWind; float4 waterHydraulics; float4 waterRapidColor; float4 waterFlowRect; };\n" AIVERSE_MSL_FRAME
 
 // Traced terrain shadows (Renderer3D "trace" tier, needs U1 and the height field in slot TEX):
 // the sun ray is marched over a 16-bit height map of the whole map (R high byte, G low byte; built by
@@ -254,11 +254,52 @@ namespace aiverse::render::shaders {
     "    vec2(-0.025, 0.919), vec2(-0.389, -0.144), vec2(0.733, -0.627), vec2(0.282, 0.512),\n" \
     "    vec2(-0.900, 0.160), vec2(0.880, 0.250), vec2(-0.480, -0.860), vec2(0.490, 0.860),\n" \
     "    vec2(-0.080, -0.980), vec2(0.970, -0.360), vec2(-0.960, -0.360), vec2(0.410, -0.730));\n" \
-    "float shadowAt(vec3 wpos, vec3 n) {\n" \
+    "// Importance-sampled radial tent: CDF(r) = 2*r*r - r*r*r*r.\n" \
+    "// Equal contributions avoid the large central weights of a sparse weighted disk.\n" \
+    "const vec2 kStableDisk[128] = vec2[128](\n" \
+    "    vec2(0.04421579, 0.00000000), vec2(-0.05652615, 0.05178259), vec2(0.00866079, -0.09868521), vec2(0.07138893, 0.09311421),\n" \
+    "    vec2(-0.13113854, -0.02319656), vec2(0.12435092, -0.07910188), vec2(-0.04163508, 0.15488041), vec2(-0.07948352, -0.15304068),\n" \
+    "    vec2(0.17262428, 0.06304211), vec2(-0.17977209, 0.07420731), vec2(0.08675201, -0.18538401), vec2(0.06417452, 0.20459848),\n" \
+    "    vec2(-0.19362615, -0.11221031), vec2(0.22738593, -0.04999016), vec2(-0.13891793, 0.19759646), vec2(-0.03212767, -0.24792703),\n" \
+    "    vec2(0.19744529, 0.16640710), vec2(-0.26598819, 0.01099945), vec2(0.19423021, -0.19328500), vec2(-0.01300907, 0.28133303),\n" \
+    "    vec2(-0.18521937, -0.22195471), vec2(0.29373554, 0.03952170), vec2(-0.24916135, 0.17335998), vec2(0.06816230, -0.30298825),\n" \
+    "    vec2(0.15783562, 0.27544420), vec2(-0.30890787, -0.09855004), vec2(0.30041176, -0.13879785), vec2(-0.13029751, 0.31133925),\n" \
+    "    vec2(-0.11642414, -0.32368877), vec2(0.31015843, 0.16301058), vec2(-0.34491835, 0.09091937), vec2(0.19628927, -0.30527491),\n" \
+    "    vec2(0.06251629, 0.36376439), vec2(-0.29663340, -0.22972958), vec2(0.37991403, -0.03147510), vec2(-0.26292571, 0.28421499),\n" \
+    "    vec2(0.00191758, -0.39308014), vec2(0.26803797, 0.29547274), vec2(-0.40300366, -0.03735029), vec2(0.32696954, -0.24815822),\n" \
+    "    vec2(-0.07448873, 0.40945591), vec2(-0.22466921, -0.35702184), vec2(0.41224071, 0.11297809), vec2(-0.38524547, 0.19770161),\n" \
+    "    vec2(0.15244573, -0.41119618), vec2(0.16742263, 0.41126953), vec2(-0.40619649, -0.19250410), vec2(0.43473964, -0.13403488),\n" \
+    "    vec2(-0.23275384, 0.39715316), vec2(-0.09777499, -0.45532109), vec2(0.38401622, 0.27278713), vec2(-0.47270189, 0.05891193),\n" \
+    "    vec2(0.31219111, -0.36677493), vec2(0.01774490, 0.48659572), vec2(-0.34545833, -0.35055144), vec2(0.49674464, 0.02539889),\n" \
+    "    vec2(-0.38745589, 0.32013535), vec2(0.07016688, -0.50292169), vec2(0.29091459, 0.42249801), vec2(-0.50493321, -0.11618395),\n" \
+    "    vec2(0.45528077, -0.25794388), vec2(-0.16305549, 0.50262088), vec2(-0.22140934, -0.48542014), vec2(0.49586355, 0.21037063),\n" \
+    "    vec2(-0.51254863, 0.18153421), vec2(0.25770567, -0.48457873), vec2(0.13857736, 0.53631873), vec2(-0.46872378, -0.30462768),\n" \
+    "    vec2(0.55640617, -0.09283140), vec2(-0.35069810, 0.44829675), vec2(-0.04462059, -0.57251303), vec2(0.42333693, 0.39547658),\n" \
+    "    vec2(-0.58437071, -0.00570165), vec2(0.43852474, -0.39392499), vec2(-0.05775540, 0.59174258), vec2(-0.36018279, -0.47940998),\n" \
+    "    vec2(0.59442644, 0.11113724), vec2(-0.51770935, 0.32227287), vec2(0.16542339, -0.59225666), vec2(0.28039750, 0.55301323),\n" \
+    "    vec2(-0.58510609, -0.22017315), vec2(0.58492904, -0.23479746), vec2(-0.27493246, 0.57288755), vec2(-0.18575039, -0.61308480),\n" \
+    "    vec2(0.55555504, 0.32923761), vec2(-0.63713251, 0.13356885), vec2(0.38261911, -0.53310460), vec2(0.07859802, 0.65675136),\n" \
+    "    vec2(-0.50557475, -0.43460559), vec2(0.67165075, -0.02121308), vec2(-0.48472787, 0.47304652), vec2(0.03818375, -0.68157301),\n" \
+    "    vec2(0.43564318, 0.53252292), vec2(-0.68629587, -0.09916644), vec2(0.57753795, -0.39352937), vec2(-0.16128873, 0.68563462),\n" \
+    "    vec2(-0.34690998, -0.61933440), vec2(0.67944389, 0.22408792), vec2(-0.65749190, 0.29602837), vec2(0.28708911, -0.66761904),\n" \
+    "    vec2(0.24116424, 0.69161218), vec2(-0.65009720, -0.34980961), vec2(0.72132289, -0.18263082), vec2(-0.41176380, 0.62685770),\n" \
+    "    vec2(-0.12077147, -0.74628134), vec2(0.59792208, 0.47246845), vec2(-0.76617822, 0.05595554), vec2(0.53144862, -0.56335344),\n" \
+    "    vec2(-0.01142688, 0.78074135), vec2(-0.52325497, -0.58824449), vec2(0.78973959, 0.08097152), vec2(-0.64241960, 0.47776761),\n" \
+    "    vec2(0.15226862, -0.79298739), vec2(0.42706634, 0.69357159), vec2(-0.79035036, -0.22491505), vec2(0.74134729, -0.37135454),\n" \
+    "    vec2(-0.29853255, 0.78175370), vec2(-0.31085520, -0.78546678), vec2(0.76719649, 0.37279801), vec2(-0.82576636, 0.24579628),\n" \
+    "    vec2(0.44750035, -0.74678107), vec2(0.17638381, 0.86228870), vec2(-0.72078458, -0.52266675), vec2(0.89551311, -0.10274371),\n" \
+    "    vec2(-0.59891828, 0.68988219), vec2(-0.02475624, -0.92716389), vec2(0.65623978, 0.67904063), vec2(-0.96645424, -0.05887443));\n" \
+    "float shadowAtSurface(vec3 wpos, vec3 n, float diffusion) {\n" \
     "    if (u_quality.y < 0.5) return 1.0;\n" \
     "    vec3 L = normalize(u_sunDir.xyz);\n" \
     "    float k = 1.0 - clamp(dot(n, L), 0.0, 1.0);          // grazing surfaces need the most offset\n" \
-    "    vec4 lp = u_lightViewProj * vec4(wpos + n * u_quality.w * (0.35 + k), 1.0);\n" \
+    "    // A deforming surface crosses many curved triangle planes inside a wide PCF disk.\n" \
+    "    // Bound its normal bias to four texel offsets; rigid planar receivers retain slope correction.\n" \
+    "    float offset = u_quality.w;\n" \
+    "#if defined(SKINNED) || defined(BAKED)\n" \
+    "    offset *= u_quality.y < 1.5 ? clamp(u_quality.z / max(u_shadow.w, 1e-7) * 0.15, 1.0, 4.0) : 1.0;\n" \
+    "#endif\n" \
+    "    vec4 lp = u_lightViewProj * vec4(wpos + n * offset * (0.35 + k), 1.0);\n" \
     "    vec3 p = lp.xyz / lp.w;\n" \
     "    vec2 uv = p.xy * 0.5 + 0.5;\n" \
     "    if (u_shadow.x > 0.5) uv.y = 1.0 - uv.y;\n" \
@@ -266,6 +307,9 @@ namespace aiverse::render::shaders {
     "    vec2 dx = dFdx(uv), dy = dFdy(uv);\n" \
     "    float zx = dFdx(d), zy = dFdy(d), det = dx.x * dy.y - dx.y * dy.x;\n" \
     "    vec2 gradient = abs(det) > 1e-10 ? vec2(dy.y * zx - dx.y * zy, dx.x * zy - dy.x * zx) / det : vec2(0.0);\n" \
+    "#if defined(SKINNED) || defined(BAKED)\n" \
+    "    if (u_quality.y < 1.5) gradient = vec2(0.0);\n" \
+    "#endif\n" \
     "    if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0 || d >= 1.0) return 1.0;\n" \
     "    float r = u_quality.z;\n" \
     "    if (u_quality.x < 2.0) return sunCompare(uv, d);\n" \
@@ -285,17 +329,35 @@ namespace aiverse::render::shaders {
     "            float delta = d + dot(gradient, o) - sunDepth(uv + o);\n" \
     "            if (delta > 0.000001) { gap += delta; blockers += 1.0; }\n" \
     "        }\n" \
-    "        if (blockers == 0.0) return 1.0;\n" \
+    "        if (blockers == 0.0 && diffusion <= 0.0) return 1.0;\n" \
     "        float depthPerWorld = length(vec3(u_lightViewProj[0].z, u_lightViewProj[1].z, u_lightViewProj[2].z)) * u_shadow.y;\n" \
     "        float uvPerWorld = 0.5 * length(vec3(u_lightViewProj[0].x, u_lightViewProj[1].x, u_lightViewProj[2].x));\n" \
-    "        float penumbra = (gap / blockers) / max(depthPerWorld, 1e-6) * 0.05 * uvPerWorld;\n" \
+    "        float penumbra = (gap / max(blockers, 1.0)) / max(depthPerWorld, 1e-6) * 0.05 * uvPerWorld;\n" \
     "        r = clamp(penumbra, min(r, u_shadow.w * 0.5), r);\n" \
     "    }\n" \
-    "    // per-pixel rotation (interleaved gradient noise) turns banding into fine grain; a kernel of a\n" \
-    "    // few texels can't band (each tap is a bilinear compare), where the grain would only show as stipple\n" \
+    "    // Per-pixel rotation requires temporal resolve; without it the noise remains visible as stipple.\n" \
+    "    // Without TAA use a denser tapered disk; small temporal kernels keep a fixed disk.\n" \
     "    // Temporal sampling rotates the PCSS disk between frames only when HDR TAA is active.\n" \
+    "    // Receiver-only spread approximates surface fibres; it never changes caster geometry.\n" \
+    "    if (diffusion > 0.0) {\n" \
+    "        float receiverRadius = clamp(diffusion, 0.0, 1.0) * 0.5 * length(vec3(u_lightViewProj[0].x, u_lightViewProj[1].x, u_lightViewProj[2].x));\n" \
+    "        r = sqrt(r * r + receiverRadius * receiverRadius);\n" \
+    "    }\n" \
+    "    // Sample the smooth radial density directly, with equal per-tap contributions.\n" \
+    "    // More samples and a broader taper reduce residual bands without pixel noise.\n" \
+    "    if (fract(u_quality.x) <= 0.25) {\n" \
+    "        int count = u_quality.x > 16.0 ? 128 : 64;\n" \
+    "        int stride = count == 128 ? 1 : 2;\n" \
+    "        float total = 0.0;\n" \
+    "        for (int i = 0; i < 128; ++i) {\n" \
+    "            if (i >= count) break;\n" \
+    "            vec2 o = kStableDisk[i * stride];\n" \
+    "            total += sunCompare(uv + o * r, d + dot(gradient, o * r));\n" \
+    "        }\n" \
+    "        return total / float(count);\n" \
+    "    }\n" \
     "    float temporal = fract(u_quality.x) > 0.25 ? floor(u_camPos.w * 60.0) * 0.61803398875 : 0.0;\n" \
-    "    float a = r < u_shadow.w * 3.2 ? 0.0 : 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + temporal);\n" \
+    "    float a = fract(u_quality.x) <= 0.25 || r < u_shadow.w * 3.2 ? 0.0 : 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + temporal);\n" \
     "    vec2 cs = vec2(cos(a), sin(a));\n" \
     "    int n_ = int(u_quality.x);\n" \
     "    float s = 0.0;\n" \
@@ -306,7 +368,8 @@ namespace aiverse::render::shaders {
     "        s += sunCompare(uv + o * r, d + dot(gradient, o * r));\n" \
     "    }\n" \
     "    return s / float(n_);\n" \
-    "}\n"
+    "}\n" \
+    "float shadowAt(vec3 wpos, vec3 n) { return shadowAtSurface(wpos, n, 0.0); }\n"
 
 #define AIVERSE_MSL_SHADOW \
     AIVERSE_MSL_SUN_FILTER \
@@ -317,11 +380,50 @@ namespace aiverse::render::shaders {
     "    float2(-0.025, 0.919), float2(-0.389, -0.144), float2(0.733, -0.627), float2(0.282, 0.512),\n" \
     "    float2(-0.900, 0.160), float2(0.880, 0.250), float2(-0.480, -0.860), float2(0.490, 0.860),\n" \
     "    float2(-0.080, -0.980), float2(0.970, -0.360), float2(-0.960, -0.360), float2(0.410, -0.730)};\n" \
-    "static float shadowAt(constant U1& f, float3 wpos, float3 n, float2 fragCoord, depth2d<float> sm, sampler ss) {\n" \
+    "// Importance-sampled radial tent: CDF(r) = 2*r*r - r*r*r*r.\n" \
+    "// Equal contributions avoid the large central weights of a sparse weighted disk.\n" \
+    "constant float2 kStableDisk[128] = {\n" \
+    "    float2(0.04421579, 0.00000000), float2(-0.05652615, 0.05178259), float2(0.00866079, -0.09868521), float2(0.07138893, 0.09311421),\n" \
+    "    float2(-0.13113854, -0.02319656), float2(0.12435092, -0.07910188), float2(-0.04163508, 0.15488041), float2(-0.07948352, -0.15304068),\n" \
+    "    float2(0.17262428, 0.06304211), float2(-0.17977209, 0.07420731), float2(0.08675201, -0.18538401), float2(0.06417452, 0.20459848),\n" \
+    "    float2(-0.19362615, -0.11221031), float2(0.22738593, -0.04999016), float2(-0.13891793, 0.19759646), float2(-0.03212767, -0.24792703),\n" \
+    "    float2(0.19744529, 0.16640710), float2(-0.26598819, 0.01099945), float2(0.19423021, -0.19328500), float2(-0.01300907, 0.28133303),\n" \
+    "    float2(-0.18521937, -0.22195471), float2(0.29373554, 0.03952170), float2(-0.24916135, 0.17335998), float2(0.06816230, -0.30298825),\n" \
+    "    float2(0.15783562, 0.27544420), float2(-0.30890787, -0.09855004), float2(0.30041176, -0.13879785), float2(-0.13029751, 0.31133925),\n" \
+    "    float2(-0.11642414, -0.32368877), float2(0.31015843, 0.16301058), float2(-0.34491835, 0.09091937), float2(0.19628927, -0.30527491),\n" \
+    "    float2(0.06251629, 0.36376439), float2(-0.29663340, -0.22972958), float2(0.37991403, -0.03147510), float2(-0.26292571, 0.28421499),\n" \
+    "    float2(0.00191758, -0.39308014), float2(0.26803797, 0.29547274), float2(-0.40300366, -0.03735029), float2(0.32696954, -0.24815822),\n" \
+    "    float2(-0.07448873, 0.40945591), float2(-0.22466921, -0.35702184), float2(0.41224071, 0.11297809), float2(-0.38524547, 0.19770161),\n" \
+    "    float2(0.15244573, -0.41119618), float2(0.16742263, 0.41126953), float2(-0.40619649, -0.19250410), float2(0.43473964, -0.13403488),\n" \
+    "    float2(-0.23275384, 0.39715316), float2(-0.09777499, -0.45532109), float2(0.38401622, 0.27278713), float2(-0.47270189, 0.05891193),\n" \
+    "    float2(0.31219111, -0.36677493), float2(0.01774490, 0.48659572), float2(-0.34545833, -0.35055144), float2(0.49674464, 0.02539889),\n" \
+    "    float2(-0.38745589, 0.32013535), float2(0.07016688, -0.50292169), float2(0.29091459, 0.42249801), float2(-0.50493321, -0.11618395),\n" \
+    "    float2(0.45528077, -0.25794388), float2(-0.16305549, 0.50262088), float2(-0.22140934, -0.48542014), float2(0.49586355, 0.21037063),\n" \
+    "    float2(-0.51254863, 0.18153421), float2(0.25770567, -0.48457873), float2(0.13857736, 0.53631873), float2(-0.46872378, -0.30462768),\n" \
+    "    float2(0.55640617, -0.09283140), float2(-0.35069810, 0.44829675), float2(-0.04462059, -0.57251303), float2(0.42333693, 0.39547658),\n" \
+    "    float2(-0.58437071, -0.00570165), float2(0.43852474, -0.39392499), float2(-0.05775540, 0.59174258), float2(-0.36018279, -0.47940998),\n" \
+    "    float2(0.59442644, 0.11113724), float2(-0.51770935, 0.32227287), float2(0.16542339, -0.59225666), float2(0.28039750, 0.55301323),\n" \
+    "    float2(-0.58510609, -0.22017315), float2(0.58492904, -0.23479746), float2(-0.27493246, 0.57288755), float2(-0.18575039, -0.61308480),\n" \
+    "    float2(0.55555504, 0.32923761), float2(-0.63713251, 0.13356885), float2(0.38261911, -0.53310460), float2(0.07859802, 0.65675136),\n" \
+    "    float2(-0.50557475, -0.43460559), float2(0.67165075, -0.02121308), float2(-0.48472787, 0.47304652), float2(0.03818375, -0.68157301),\n" \
+    "    float2(0.43564318, 0.53252292), float2(-0.68629587, -0.09916644), float2(0.57753795, -0.39352937), float2(-0.16128873, 0.68563462),\n" \
+    "    float2(-0.34690998, -0.61933440), float2(0.67944389, 0.22408792), float2(-0.65749190, 0.29602837), float2(0.28708911, -0.66761904),\n" \
+    "    float2(0.24116424, 0.69161218), float2(-0.65009720, -0.34980961), float2(0.72132289, -0.18263082), float2(-0.41176380, 0.62685770),\n" \
+    "    float2(-0.12077147, -0.74628134), float2(0.59792208, 0.47246845), float2(-0.76617822, 0.05595554), float2(0.53144862, -0.56335344),\n" \
+    "    float2(-0.01142688, 0.78074135), float2(-0.52325497, -0.58824449), float2(0.78973959, 0.08097152), float2(-0.64241960, 0.47776761),\n" \
+    "    float2(0.15226862, -0.79298739), float2(0.42706634, 0.69357159), float2(-0.79035036, -0.22491505), float2(0.74134729, -0.37135454),\n" \
+    "    float2(-0.29853255, 0.78175370), float2(-0.31085520, -0.78546678), float2(0.76719649, 0.37279801), float2(-0.82576636, 0.24579628),\n" \
+    "    float2(0.44750035, -0.74678107), float2(0.17638381, 0.86228870), float2(-0.72078458, -0.52266675), float2(0.89551311, -0.10274371),\n" \
+    "    float2(-0.59891828, 0.68988219), float2(-0.02475624, -0.92716389), float2(0.65623978, 0.67904063), float2(-0.96645424, -0.05887443)};\n" \
+    "static float shadowAtSurface(constant U1& f, float3 wpos, float3 n, float2 fragCoord, depth2d<float> sm, sampler ss, float diffusion) {\n" \
     "    if (f.quality.y < 0.5) return 1.0;\n" \
     "    float3 L = normalize(f.sunDir.xyz);\n" \
     "    float k = 1.0 - clamp(dot(n, L), 0.0, 1.0);\n" \
-    "    float4 lp = f.lightViewProj * float4(wpos + n * f.quality.w * (0.35 + k), 1.0);\n" \
+    "    float offset = f.quality.w;\n" \
+    "#if defined(SKINNED) || defined(BAKED)\n" \
+    "    offset *= f.quality.y < 1.5 ? clamp(f.quality.z / max(f.shadow.w, 1e-7) * 0.15, 1.0, 4.0) : 1.0;\n" \
+    "#endif\n" \
+    "    float4 lp = f.lightViewProj * float4(wpos + n * offset * (0.35 + k), 1.0);\n" \
     "    float3 p = lp.xyz / lp.w;\n" \
     "    float2 uv = p.xy * 0.5 + 0.5;\n" \
     "    if (f.shadow.x > 0.5) uv.y = 1.0 - uv.y;\n" \
@@ -329,6 +431,9 @@ namespace aiverse::render::shaders {
     "    float2 dx = dfdx(uv), dy = dfdy(uv);\n" \
     "    float zx = dfdx(d), zy = dfdy(d), det = dx.x * dy.y - dx.y * dy.x;\n" \
     "    float2 gradient = abs(det) > 1e-10 ? float2(dy.y * zx - dx.y * zy, dx.x * zy - dy.x * zx) / det : float2(0.0);\n" \
+    "#if defined(SKINNED) || defined(BAKED)\n" \
+    "    if (f.quality.y < 1.5) gradient = float2(0.0);\n" \
+    "#endif\n" \
     "    if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0 || d >= 1.0) return 1.0;\n" \
     "    float r = f.quality.z;\n" \
     "    if (f.quality.x < 2.0) return sunCompare(sm, uv, d);\n" \
@@ -348,14 +453,32 @@ namespace aiverse::render::shaders {
     "            float delta = d + dot(gradient, o) - sunDepth(sm, uv + o);\n" \
     "            if (delta > 0.000001) { gap += delta; blockers += 1.0; }\n" \
     "        }\n" \
-    "        if (blockers == 0.0) return 1.0;\n" \
+    "        if (blockers == 0.0 && diffusion <= 0.0) return 1.0;\n" \
     "        float depthPerWorld = length(float3(f.lightViewProj[0].z, f.lightViewProj[1].z, f.lightViewProj[2].z)) * f.shadow.y;\n" \
     "        float uvPerWorld = 0.5 * length(float3(f.lightViewProj[0].x, f.lightViewProj[1].x, f.lightViewProj[2].x));\n" \
-    "        float penumbra = (gap / blockers) / max(depthPerWorld, 1e-6) * 0.05 * uvPerWorld;\n" \
+    "        float penumbra = (gap / max(blockers, 1.0)) / max(depthPerWorld, 1e-6) * 0.05 * uvPerWorld;\n" \
     "        r = clamp(penumbra, min(r, f.shadow.w * 0.5), r);\n" \
     "    }\n" \
+    "    // Receiver-only spread approximates surface fibres; it never changes caster geometry.\n" \
+    "    if (diffusion > 0.0) {\n" \
+    "        float receiverRadius = clamp(diffusion, 0.0, 1.0) * 0.5 * length(float3(f.lightViewProj[0].x, f.lightViewProj[1].x, f.lightViewProj[2].x));\n" \
+    "        r = sqrt(r * r + receiverRadius * receiverRadius);\n" \
+    "    }\n" \
+    "    // Sample the smooth radial density directly, with equal per-tap contributions.\n" \
+    "    // More samples and a broader taper reduce residual bands without pixel noise.\n" \
+    "    if (fract(f.quality.x) <= 0.25) {\n" \
+    "        int count = f.quality.x > 16.0 ? 128 : 64;\n" \
+    "        int stride = count == 128 ? 1 : 2;\n" \
+    "        float total = 0.0;\n" \
+    "        for (int i = 0; i < 128; ++i) {\n" \
+    "            if (i >= count) break;\n" \
+    "            float2 o = kStableDisk[i * stride];\n" \
+    "            total += sunCompare(sm, uv + o * r, d + dot(gradient, o * r));\n" \
+    "        }\n" \
+    "        return total / float(count);\n" \
+    "    }\n" \
     "    float temporal = fract(f.quality.x) > 0.25 ? floor(f.camPos.w * 60.0) * 0.61803398875 : 0.0;\n" \
-    "    float a = r < f.shadow.w * 3.2 ? 0.0 : 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, float2(0.06711056, 0.00583715))) + temporal);\n" \
+    "    float a = fract(f.quality.x) <= 0.25 || r < f.shadow.w * 3.2 ? 0.0 : 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, float2(0.06711056, 0.00583715))) + temporal);\n" \
     "    float2 cs = float2(cos(a), sin(a));\n" \
     "    int cnt = int(f.quality.x);\n" \
     "    float s = 0.0;\n" \
@@ -366,7 +489,8 @@ namespace aiverse::render::shaders {
     "        s += sunCompare(sm, uv + o * r, d + dot(gradient, o * r));\n" \
     "    }\n" \
     "    return s / float(cnt);\n" \
-    "}\n"
+    "}\n" \
+    "float shadowAt(constant U1& f, float3 wpos, float3 n, float2 fragCoord, depth2d<float> sm, sampler ss) { return shadowAtSurface(f, wpos, n, fragCoord, sm, ss, 0.0); }\n"
 
 inline const char* kLitVS =
     AIVERSE_GLSL_BLOCKS
@@ -387,15 +511,57 @@ void main() {
 )";
 
 inline const char* kLitFS =
+    "#ifndef AIVERSE_NEREID_DIAGNOSTIC\n#define AIVERSE_NEREID_DIAGNOSTIC 0\n#endif\n"
     AIVERSE_GLSL_BLOCKS AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_WATER_REFLECT("tex2") AIVERSE_GLSL_TRACE_AT("tex3") AIVERSE_GLSL_SSR_AT("tex4", "tex5")
     R"(
 in vec3 v_nrm;
 in vec3 v_wpos;
 in vec4 v_col;
 out vec4 o_color;
+uniform sampler2D tex6;
 
 float shadowFactor(vec3 n) { return u_params.z < 0.5 ? 1.0 : min(shadowAt(v_wpos, n), terrainShadow(v_wpos)); }
 
+float nereidNoise(vec2 p) {
+    vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
+    float a=fract(sin(dot(i,vec2(127.1,311.7)))*43758.5453);
+    float b=fract(sin(dot(i+vec2(1,0),vec2(127.1,311.7)))*43758.5453);
+    float c=fract(sin(dot(i+vec2(0,1),vec2(127.1,311.7)))*43758.5453);
+    float d=fract(sin(dot(i+vec2(1,1),vec2(127.1,311.7)))*43758.5453);
+    return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+}
+vec2 nereidWaveGradient(vec2 p,float intrinsicTime,bool tagged) {
+    float phaseWarp=0.65*sin(p.x*0.37+sin(p.y*0.29))+0.4*sin(p.y*0.53-p.x*0.19);
+    const vec4 wv[6] = vec4[6](vec4(0.951,0.309,0.61,0.060),vec4(-0.454,0.891,0.97,0.045),vec4(0.588,-0.809,1.63,0.036),vec4(-0.978,-0.208,2.71,0.026),vec4(0.139,0.990,4.37,0.018),vec4(0.743,0.669,6.91,0.012));
+    vec2 g=vec2(0.0);
+    for(int i=0;i<6;++i) {
+        float ph=dot(p,wv[i].xy)*wv[i].z+intrinsicTime*sqrt(wv[i].z)*1.3+(tagged?phaseWarp:0.0);
+        g+=wv[i].xy*(wv[i].z*wv[i].w*cos(ph));
+    }
+    vec2 q=p*.9+vec2(intrinsicTime*.11,-intrinsicTime*.07);
+    if(tagged)q+=vec2(sin(p.y*.37+p.x*.17),cos(p.x*.43-p.y*.23))*1.7;
+    vec2 qi=floor(q),qf=fract(q),qu=qf*qf*(3.0-2.0*qf);
+    float h00=fract(sin(dot(qi,vec2(127.1,311.7)))*43758.5),h10=fract(sin(dot(qi+vec2(1,0),vec2(127.1,311.7)))*43758.5);
+    float h01=fract(sin(dot(qi+vec2(0,1),vec2(127.1,311.7)))*43758.5),h11=fract(sin(dot(qi+vec2(1,1),vec2(127.1,311.7)))*43758.5);
+    vec2 dn=vec2(mix(h10-h00,h11-h01,qu.y),mix(h01-h00,h11-h10,qu.x))*6.0*qf*(1.0-qf);
+    return g+dn*.09;
+}
+float nereidMacroPatch(vec2 p,float intrinsicTime) {
+    vec2 m=p*.021+vec2(intrinsicTime*.004,0.0);
+    return .5+.5*sin(m.x*2.3+sin(m.y*1.7)*2.1)*sin(m.y*1.9+sin(m.x*1.3)*1.7);
+}
+float nereidRapidField(vec2 transported,vec2 flow,float scale,float detail) {
+    vec2 dir=flow/max(length(flow),.001);
+    // Rotating absolute world position by a varying tangent makes phase grow
+    // with distance from the world origin, tearing foam into chevrons at bends.
+    // Keep noise world-anchored; direction only stretches a bounded local filter.
+    vec2 q=transported*scale*1.3;
+    float warp=nereidNoise(q*.23+vec2(13.7,-5.1));q+=vec2(warp*1.8,warp*.7);
+    float field=.5*(nereidNoise(q-dir*1.2)+nereidNoise(q+dir*1.2));
+    if(detail>.5)field=field*.65+.35*nereidNoise(vec2(q.x*1.73-q.y*.67,q.x*.67+q.y*1.73)+17.3);
+    if(detail>1.5)field=field*.8+.2*nereidNoise(vec2(q.x*3.11+q.y*1.27,-q.x*1.27+q.y*3.11)-9.2);
+    return field;
+}
 void main() {
     // Studio draw-call visualizer bypasses all PBR, shadows and texture shading.
     if (u_params.x > 9.5) {
@@ -409,48 +575,65 @@ void main() {
     // non-water draws preserve their tint without changing uniform layouts.
     vec4 albedo = vec4(v_col.rgb * (u_params.x < -0.5 ? vec3(1.0) : u_color.rgb),
                        v_col.a * u_color.a);
+#if AIVERSE_NEREID_DIAGNOSTIC == 2
+    if(u_params.x < -0.5){ vec3 diagnostic=vec3(u_color.r*0.25,u_color.g,u_color.b); o_color=vec4(diagnostic,1.0); return; }
+#endif
     vec3 base = rtsDecodeScene(albedo.rgb);                  // ~sRGB -> linear
+#if AIVERSE_NEREID_DIAGNOSTIC == 3
+    if(u_params.x < -0.5){ vec3 diagnostic=base; o_color=vec4(diagnostic,1.0); return; }
+#endif
     vec3 n = normalize(v_nrm);
+    bool localCurrent=u_params.x < -.5 && u_waterFlowRect.z>0.0 && u_waterFlowRect.w>0.0;
+    vec3 waterFlow=vec3(u_waterHydraulics.xy,u_waterHydraulics.z);
+    if(localCurrent) {
+        vec2 flowUV=(v_wpos.xz-u_waterFlowRect.xy)*u_waterFlowRect.zw;
+        waterFlow=texture(tex6,flowUV).xyz;
+    }
+#if AIVERSE_NEREID_DIAGNOSTIC == 6
+    if(u_params.x < -.5) { o_color=vec4(clamp(waterFlow.xy*.1+.5,0.0,1.0),clamp(length(waterFlow.xy)*.2,0.0,1.0),1.0); return; }
+#endif
+    // Two overlapping bounded advection phases hide their individual resets.
+    // Variable spatial currents never multiply an unbounded renderer clock.
+    bool boundedCurrent=localCurrent&&length(waterFlow.xy)>.001;
+    float phase=fract(u_camPos.w*.25);
+    float currentTime0=boundedCurrent?phase*4.0:u_camPos.w;
+    float currentTime1=boundedCurrent?fract(phase+.5)*4.0:currentTime0;
+    float currentBlend=boundedCurrent?abs(phase*2.0-1.0):0.0;
+
     // Open water (below the road film .045; rain pools keep their own look): six wave trains of different length
     // and heading (ratios that never line up) plus drifting value noise, fading out with distance so nothing
     // aliases into stripes; slow large patches of darker / lighter water.
     bool openWater = (u_params.x < -0.5 || (u_params.y >= 0.85 && v_wpos.y < 0.04)) && n.y > 0.9;
     if (openWater) {
-        float wt = (l_cloud.x + l_cloud.y) * 20.0;
+        float wt = u_params.x < -0.5 ? u_camPos.w : (l_cloud.x + l_cloud.y) * 20.0;
         // PHYSIS/weather owner supplies world-space wind through NEREID's
         // generic presentation API; legacy untagged water is unchanged.
         float windCoupling=u_params.x < -0.5 ? u_waterWind.w : 0.0;
         vec2 p = v_wpos.xz -
                  u_waterWind.xy * wt * (0.02 * windCoupling);
-        float fade = clamp(1.0 - length(u_camPos.xyz - v_wpos) / 160.0, 0.3, 1.0);
-        const vec4 wv[6] = vec4[6](vec4(0.951, 0.309, 0.61, 0.060), vec4(-0.454, 0.891, 0.97, 0.045), vec4(0.588, -0.809, 1.63, 0.036),
-                                   vec4(-0.978, -0.208, 2.71, 0.026), vec4(0.139, 0.990, 4.37, 0.018), vec4(0.743, 0.669, 6.91, 0.012));
-        vec2 g = vec2(0.0);
-        for (int i = 0; i < 6; ++i) {
-            float ph = dot(p, wv[i].xy) * wv[i].z + wt * sqrt(wv[i].z) * 1.3;
-            g += wv[i].xy * (wv[i].z * wv[i].w * cos(ph));
-        }
-        vec2 q = p * 0.9 + vec2(wt * 0.11, -wt * 0.07);
-        vec2 qi = floor(q), qf = fract(q), qu = qf * qf * (3.0 - 2.0 * qf);
-        float h00 = fract(sin(dot(qi, vec2(127.1, 311.7))) * 43758.5), h10 = fract(sin(dot(qi + vec2(1, 0), vec2(127.1, 311.7))) * 43758.5);
-        float h01 = fract(sin(dot(qi + vec2(0, 1), vec2(127.1, 311.7))) * 43758.5), h11 = fract(sin(dot(qi + vec2(1, 1), vec2(127.1, 311.7))) * 43758.5);
-        vec2 dn = vec2(mix(h10 - h00, h11 - h01, qu.y), mix(h01 - h00, h11 - h10, qu.x)) * 6.0 * qf * (1.0 - qf);
-        g += dn * 0.09;
+        vec2 p1=p;
+        if(u_params.x < -0.5){p-=waterFlow.xy*currentTime0;p1-=waterFlow.xy*currentTime1;}
+        // Moving NEREID detail is transported by the authored current. Independent
+        // wave phases would send highlights sideways even when flow is fixed.
+        float intrinsicTime=(u_params.x < -0.5 && length(waterFlow.xy)>0.001)?0.0:wt;
+        float fade=clamp(1.0-length(u_camPos.xyz-v_wpos)/160.0,.3,1.0);
+        vec2 g=nereidWaveGradient(p,intrinsicTime,u_params.x < -.5);
+        if(boundedCurrent)g=mix(g,nereidWaveGradient(p1,intrinsicTime,u_params.x < -.5),currentBlend);
         float windSpeed=length(u_waterWind.xy);
         float gust=(0.4+0.6*clamp(u_waterWind.z,0.0,1.0))*windCoupling;
         float windSlope=clamp(windSpeed*0.006,0.0,0.32)*gust;
         vec2 windDir=u_waterWind.xy/max(windSpeed,0.001);
         g+=windDir*windSlope;
         n = normalize(vec3(-g.x * fade, 1.0, -g.y * fade));
-        vec2 m = p * 0.021 + vec2(wt * 0.004, 0.0);
-        float patches = 0.5 + 0.5 * sin(m.x * 2.3 + sin(m.y * 1.7) * 2.1) * sin(m.y * 1.9 + sin(m.x * 1.3) * 1.7);
+        float patches=nereidMacroPatch(p,intrinsicTime);
+        if(boundedCurrent)patches=mix(patches,nereidMacroPatch(p1,intrinsicTime),currentBlend);
         base *= 0.84 + 0.22 * patches;
     }
     // NEREID: vertical/stepped cascades remain on the shared water
     // material path but never sample the horizontal planar reflection.
     // Fast downstream streaks perturb their ribbon normals and tint.
     if(u_params.x < -2.5) {
-        float waterfallTime=(l_cloud.x+l_cloud.y)*20.0;
+        float waterfallTime=u_camPos.w;
         float streak=sin(v_wpos.y*8.0+v_wpos.x*1.8 -
                          waterfallTime*3.6);
         float crossFlow=sin(v_wpos.z*12.0-v_wpos.y*3.2 -
@@ -461,48 +644,17 @@ void main() {
     }
     // NEREID opt-in whitewater: sample locally resolved X/Z river,
     // vortex and cascade-mouth currents from the presentation snapshot.
-    // No extra RHI resource; zero intensity preserves old water materials.
-    if(u_params.x < -0.5 && u_waterHydraulics.z > 0.001 && n.y > 0.5) {
-        vec2 flow=u_waterHydraulics.xy;
+    // Local flow comes from the immutable NEREID field; zero intensity disables whitewater.
+    if(u_params.x < -0.5 && waterFlow.z > 0.001 && n.y > 0.5) {
+        vec2 flow=waterFlow.xy;
         float speed=length(flow);
-        vec2 dir=flow/max(speed,0.001);
-        vec2 side=vec2(-dir.y,dir.x);
-        float scale=u_waterHydraulics.w;
-        float time=(l_cloud.x+l_cloud.y)*20.0;
-        float along=dot(v_wpos.xz,dir)*scale;
-        float across=dot(v_wpos.xz,side)*scale;
-        // waterRapidColor.a: Low=0, Medium=1 (legacy), High=2.
-        float quality=u_waterRapidColor.a;
-        float eddies=0.0;
-        float foam=0.0;
-        if(quality<0.5) {
-            // Low: single coherent foam streak, no normal perturbation.
-            float streak=sin(along*3.1-time*min(speed,20.0)*0.25);
-            foam=smoothstep(0.22,0.82,abs(streak))*u_waterHydraulics.z;
-        } else {
-            // Medium: preserve the exact Stage 39 response.
-            float breakup=sin(along*3.1-time*min(speed,20.0)*0.25+
-                             sin(across*4.2)*0.7);
-            eddies=sin(across*6.4+along*1.8-time*2.8);
-            foam=smoothstep(0.22,0.82,abs(breakup*eddies))*
-                 u_waterHydraulics.z;
-            if(quality>1.5) {
-                // High: secondary cross-flow filaments and micro-eddies.
-                float detail=sin(along*9.1+across*5.7-time*4.2)*
-                             sin(across*11.3-time*2.1);
-                foam=clamp(foam*(0.80+0.40*abs(detail)),0.0,1.0);
-                eddies+=detail*0.35;
-            }
-        }
-        base=mix(base,u_waterRapidColor.rgb,
-                 clamp(foam*0.78,0.0,0.78));
-        if(quality>=0.5)
-            n=normalize(n+vec3(side.x*eddies*foam*0.17,
-                               0.0,side.y*eddies*foam*0.17));
+        vec2 dir=flow/max(speed,0.001),side=vec2(-dir.y,dir.x);
+        float field=nereidRapidField(v_wpos.xz-flow*currentTime0,flow,u_waterHydraulics.w,u_waterRapidColor.a);
+        if(boundedCurrent)field=mix(field,nereidRapidField(v_wpos.xz-flow*currentTime1,flow,u_waterHydraulics.w,u_waterRapidColor.a),currentBlend);
+        float foam=smoothstep(0.48,0.78,field)*waterFlow.z;
+        base=mix(base,u_waterRapidColor.rgb,clamp(foam*0.78,0.0,0.78));
+        if(u_waterRapidColor.a>0.5)n=normalize(n+vec3(side.x*(field-0.5)*foam*0.17,0.0,side.y*(field-0.5)*foam*0.17));
     }
-    // NEREID: up to four bounded ripple impulses per visible body. The
-    // parameters are render-origin-relative, matching v_wpos. A zero
-    // amplitude disables a slot; no extra texture reads or geometry upload.
     if(u_params.x < -0.5) {
         vec2 grad = vec2(0.0);
         float rippleFoam = 0.0;
@@ -561,24 +713,78 @@ void main() {
     col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
     col = rtsToneScene(col, u_skyColor.w > 0.5); // ACES fit
     vec3 outc = waterReflect(rtsEncodeScene(col), v_wpos, n, V,
-                             u_params.x < -1.5 ? 0.0 : u_params.y);   // planar reflection (water, High)
+                             u_params.x < -1.5 ? 0.0 : u_params.y, u_params.x < -0.5);   // planar reflection (water, High)
     if (u_params.y >= 0.85 && (v_wpos.y >= 0.04 || u_params.x < -0.5) && u_trace2.w > 0.5) {                     // screen-space reflection (trace tier)
-        vec3 nn = normalize(n + vec3(sin(v_wpos.z * 3.0 + l_cloud.x * 11.0), 0.0, sin(v_wpos.x * 2.6 - l_cloud.y * 9.0)) * 0.02);
+        vec3 nn = u_params.x < -0.5 ? n : normalize(n + vec3(sin(v_wpos.z * 3.0 + l_cloud.x * 11.0), 0.0, sin(v_wpos.x * 2.6 - l_cloud.y * 9.0)) * 0.02);
         float hit;
         vec3 rc = ssrWater(v_wpos, nn, V, hit);
         float fres = (v_wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
         outc = mix(outc, mix(rtsEncodeScene(col), rc, fres), hit);
     }
+    float shoreCoverage=1.0;
+    float contactFoam=0.0;
+    bool opticsResolved=false;
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+    float diagnosticTransmission=-1.0;
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+    float diagnosticDepth=-100000.0;
+#endif
     // NEREID optics: sample the existing opaque colour/depth capture only.
     // u_color.rgb = absorption(m^-1), foam depth(m), depth tint strength.
     // Captured background depth must be below the water plane.
-    if (u_params.x < -0.5 && u_trace2.w > 0.5 &&
+    if (u_params.x < -0.5 && u_trace2.w > 0.0 &&
         (u_params.w > 0.001 || u_color.r > 0.001 ||
          u_color.g > 0.001 || u_color.b > 0.001)) {
         vec4 projected = u_viewProj * vec4(v_wpos, 1.0);
         if (projected.w > 0.0) {
             vec2 screen = projected.xy / projected.w * 0.5 + 0.5;
-            vec2 distorted = screen + n.xz * (0.009 * u_params.w);
+            // Contact coverage uses undistorted depth: refraction must not move
+            // the actual shoreline or expose the water mesh perimeter.
+            if(u_params.x > -2.5 && all(greaterThan(screen,vec2(0.001))) && all(lessThan(screen,vec2(0.999)))){
+                vec2 shoreUV=u_shadow.x>0.5?vec2(screen.x,1.0-screen.y):screen;
+                float shoreDepth=texture(tex5,shoreUV).r;
+                if(shoreDepth<0.9999){
+                    float depth=v_wpos.y-ssrUnproject(screen,shoreDepth).y;
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+                    diagnosticDepth=depth;
+#endif
+                    shoreCoverage=smoothstep(0.0,0.035,depth);
+                    if(u_color.g>0.001 && depth>0.0 && depth<1000.0){
+                        contactFoam=1.0-smoothstep(0.0,u_color.g,depth);
+                        // Bounded overlapping upstream depth probes create a tapered downstream
+                        // tail. No contact wake exists ahead of the obstacle/current.
+                        float speed=length(waterFlow.xy);
+                        vec2 currentDir=waterFlow.xy/max(speed,0.001);
+                        float wakeFoam=0.0;
+                        int tapCount=u_waterRapidColor.a>1.5?16:(u_waterRapidColor.a>0.5?8:4);
+                        if(speed>0.01)for(int tap=0;tap<16;++tap){
+                            if(tap>=tapCount)break;
+                            float tail=float(tap)/float(tapCount-1);
+                            float reach=0.2+1.4*tail;
+                            vec3 probe=v_wpos-vec3(currentDir.x,0.0,currentDir.y)*reach;
+                            probe.y+=dot(v_nrm.xz,currentDir)/max(abs(v_nrm.y),0.1)*reach;
+                            vec4 clip=u_viewProj*vec4(probe,1.0);
+                            if(clip.w<=0.0)continue;
+                            vec2 probeScreen=clip.xy/clip.w*0.5+0.5;
+                            if(any(lessThan(probeScreen,vec2(0.001)))||any(greaterThan(probeScreen,vec2(0.999))))continue;
+                            vec2 probeUV=u_shadow.x>0.5?vec2(probeScreen.x,1.0-probeScreen.y):probeScreen;
+                            float probeDepth=texture(tex5,probeUV).r;
+                            if(probeDepth>=0.9999)continue;
+                            vec3 hit=ssrUnproject(probeScreen,probeDepth);
+                            float height=hit.y-probe.y;
+                            float nearby=1.0-smoothstep(0.35,0.8,length(hit.xz-probe.xz));
+                            float obstacle=smoothstep(0.01,0.10,height)*(1.0-smoothstep(2.0,3.0,height))*nearby;
+                            float crossDistance=abs(dot(hit.xz-v_wpos.xz,vec2(-currentDir.y,currentDir.x)));
+                            float tailWidth=0.55*(1.0-reach*0.4);
+                            float taper=1.0-smoothstep(tailWidth*0.3,tailWidth,crossDistance);
+                            wakeFoam+=obstacle*taper*(0.70-0.50*tail);
+                        }
+                        contactFoam=max(contactFoam,clamp(wakeFoam*1.2/float(tapCount),0.0,0.6));
+                    }
+                }
+            }
+            vec2 distorted = screen + n.xz * (0.009 * u_params.w * clamp(albedo.a,0.0,1.0));
             if (all(greaterThan(distorted, vec2(0.005))) &&
                 all(lessThan(distorted, vec2(0.995)))) {
                 vec2 sampleUV = u_shadow.x > 0.5 ?
@@ -589,30 +795,62 @@ void main() {
                     float thickness = v_wpos.y - opaquePos.y;
                     if (thickness > 0.02 && thickness < 1000.0) {
                         vec3 background = texture(tex4, sampleUV).rgb;
-                        float transmission = exp(-thickness * u_color.r);
+                        // Light reaches the bed through the full column and returns along the
+                        // slanted view ray: the same optical path PRISMA uses under water.
+                        float opticalPath = thickness + length(v_wpos - opaquePos);
+                        float transmission = exp(-opticalPath * u_color.r * clamp(albedo.a,0.0,1.0));
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+                        diagnosticTransmission=transmission;
+#endif
                         vec3 absorbed = background * transmission +
                             rtsEncodeScene(base) * (1.0 - transmission) * u_color.b;
-                        float blendAmount = clamp(u_params.w * 0.85 +
-                            u_color.b * (1.0-transmission), 0.0, 0.85);
-                        outc = mix(outc, absorbed, blendAmount);
-                        // Depth-derived shore foam: shallow intersections only.
-                        // Vertex-tinted foam remains as the authored fallback.
-                        if (u_color.g > 0.001) {
-                            float shallow = clamp(1.0 - thickness / u_color.g, 0.0, 1.0);
-                            float foamWeight = shallow * shallow * (3.0 - 2.0 * shallow);
-                            outc = mix(outc, vec3(0.82, 0.91, 0.92),
-                                       clamp(foamWeight * 0.65, 0.0, 0.65));
-                        }
+                        // Absorbed colour already contains the refracted background.
+                        // Adding it again through ordinary alpha makes deep water look dry.
+                        float fresnel=(0.02+0.98*pow(1.0-max(dot(n,V),0.0),5.0))*
+                            clamp(u_params.y,0.0,1.0)*clamp(albedo.a,0.0,1.0);
+                        outc = mix(absorbed,outc,fresnel);
+                        opticsResolved=true;
                     }
                 }
             }
         }
     }
-    o_color = vec4(outc, albedo.a);
+    if(contactFoam>0.0){
+        vec2 foamPoint=v_wpos.xz-waterFlow.xy*currentTime0;
+        float breakup=0.65+0.35*sin(dot(foamPoint,vec2(2.7,4.1))+sin(dot(foamPoint,vec2(-3.3,1.9))));
+        if(boundedCurrent){
+            vec2 other=v_wpos.xz-waterFlow.xy*currentTime1;
+            float otherBreakup=0.65+0.35*sin(dot(other,vec2(2.7,4.1))+sin(dot(other,vec2(-3.3,1.9))));
+            breakup=mix(breakup,otherBreakup,currentBlend);
+        }
+        outc=mix(outc,vec3(0.82,0.91,0.92),clamp(contactFoam*breakup*0.72*clamp(albedo.a,0.0,1.0),0.0,0.72));
+    }
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+    if(u_params.x < -0.5){
+        vec3 diagnostic=diagnosticDepth < -99999.0 ? vec3(0,0,1) :
+            vec3(clamp(diagnosticDepth*0.25,0.0,1.0),diagnosticDepth<0.0?1.0:0.0,0);
+        o_color=vec4(diagnostic,1.0); return;
+    }
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+    if(u_params.x < -0.5){ vec3 diagnostic=diagnosticTransmission<0.0?vec3(0,0,1):vec3(diagnosticTransmission); o_color=vec4(diagnostic,1.0); return; }
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 5
+    if(u_params.x < -0.5){ vec3 diagnostic=vec3((opticsResolved?1.0:albedo.a)*shoreCoverage); o_color=vec4(diagnostic,1.0); return; }
+#endif
+    // NEREID optics replace the fogged surface colour with depth tint,
+    // refraction, reflection and foam: fog the final water colour once more
+    // so distant water fades into the haze like the terrain around it.
+    if (opticsResolved) {
+        float waterFog = 1.0 - exp(-dist * u_fog.w);
+        outc = mix(outc, rtsEncodeScene(rtsToneScene(rtsDecodeScene(u_fog.rgb), u_skyColor.w > 0.5)), waterFog);
+    }
+    o_color = vec4(outc, (opticsResolved?1.0:albedo.a)*shoreCoverage);
 }
 )";
 
 inline const char* kLitMSL =
+    "#ifndef AIVERSE_NEREID_DIAGNOSTIC\n#define AIVERSE_NEREID_DIAGNOSTIC 0\n#endif\n"
     "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_WATER_REFLECT AIVERSE_MSL_TRACE AIVERSE_MSL_SSR
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; };
@@ -630,13 +868,54 @@ static float shadowFactor(constant U0& u, constant U1& f, float3 wpos, float3 n,
                           texture2d<float> hf, sampler hs) {
     return u.params.z < 0.5 ? 1.0 : min(shadowAt(f, wpos, n, fragCoord, sm, ss), terrainShadow(f, hf, hs, wpos));
 }
+static float nereidNoise(float2 p) {
+    float2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
+    float a=fract(sin(dot(i,float2(127.1,311.7)))*43758.5453);
+    float b=fract(sin(dot(i+float2(1,0),float2(127.1,311.7)))*43758.5453);
+    float c=fract(sin(dot(i+float2(0,1),float2(127.1,311.7)))*43758.5453);
+    float d=fract(sin(dot(i+float2(1,1),float2(127.1,311.7)))*43758.5453);
+    return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+}
+float2 nereidWaveGradient(float2 p,float intrinsicTime,bool tagged) {
+    float phaseWarp=0.65*sin(p.x*0.37+sin(p.y*0.29))+0.4*sin(p.y*0.53-p.x*0.19);
+    const float4 wv[6] = {float4(0.951,0.309,0.61,0.060),float4(-0.454,0.891,0.97,0.045),float4(0.588,-0.809,1.63,0.036),float4(-0.978,-0.208,2.71,0.026),float4(0.139,0.990,4.37,0.018),float4(0.743,0.669,6.91,0.012)};
+    float2 g=float2(0.0);
+    for(int i=0;i<6;++i) {
+        float ph=dot(p,wv[i].xy)*wv[i].z+intrinsicTime*sqrt(wv[i].z)*1.3+(tagged?phaseWarp:0.0);
+        g+=wv[i].xy*(wv[i].z*wv[i].w*cos(ph));
+    }
+    float2 q=p*.9+float2(intrinsicTime*.11,-intrinsicTime*.07);
+    if(tagged)q+=float2(sin(p.y*.37+p.x*.17),cos(p.x*.43-p.y*.23))*1.7;
+    float2 qi=floor(q),qf=fract(q),qu=qf*qf*(3.0-2.0*qf);
+    float h00=fract(sin(dot(qi,float2(127.1,311.7)))*43758.5),h10=fract(sin(dot(qi+float2(1,0),float2(127.1,311.7)))*43758.5);
+    float h01=fract(sin(dot(qi+float2(0,1),float2(127.1,311.7)))*43758.5),h11=fract(sin(dot(qi+float2(1,1),float2(127.1,311.7)))*43758.5);
+    float2 dn=float2(mix(h10-h00,h11-h01,qu.y),mix(h01-h00,h11-h10,qu.x))*6.0*qf*(1.0-qf);
+    return g+dn*.09;
+}
+float nereidMacroPatch(float2 p,float intrinsicTime) {
+    float2 m=p*.021+float2(intrinsicTime*.004,0.0);
+    return .5+.5*sin(m.x*2.3+sin(m.y*1.7)*2.1)*sin(m.y*1.9+sin(m.x*1.3)*1.7);
+}
+float nereidRapidField(float2 transported,float2 flow,float scale,float detail) {
+    float2 dir=flow/max(length(flow),.001);
+    // Rotating absolute world position by a varying tangent makes phase grow
+    // with distance from the world origin, tearing foam into chevrons at bends.
+    // Keep noise world-anchored; direction only stretches a bounded local filter.
+    float2 q=transported*scale*1.3;
+    float warp=nereidNoise(q*.23+float2(13.7,-5.1));q+=float2(warp*1.8,warp*.7);
+    float field=.5*(nereidNoise(q-dir*1.2)+nereidNoise(q+dir*1.2));
+    if(detail>.5)field=field*.65+.35*nereidNoise(float2(q.x*1.73-q.y*.67,q.x*.67+q.y*1.73)+17.3);
+    if(detail>1.5)field=field*.8+.2*nereidNoise(float2(q.x*3.11+q.y*1.27,-q.x*1.27+q.y*3.11)-9.2);
+    return field;
+}
 fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], constant U1& f [[buffer(2)]],
                         depth2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]],
                         constant LightU& l [[buffer(3)]], texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]],
                         texture2d<float> tex2 [[texture(2)]], sampler s2 [[sampler(2)]],
                         texture2d<float> tex3 [[texture(3)]], sampler s3 [[sampler(3)]],
                         texture2d<float> tex4 [[texture(4)]], sampler s4 [[sampler(4)]],
-                        depth2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]]) {
+                        depth2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]],
+                        texture2d<float> tex6 [[texture(6)]], sampler s6 [[sampler(6)]]) {
     if (u.params.x > 9.5) {
         int mode = int(u.params.x - 10.0 + .5);
         if (mode == 2) return float4(normalize(in.nrm) * .5 + .5, 1.0);
@@ -646,43 +925,60 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     if (u.params.x > 1.5 && u.params.x < 9.5) return float4(rtsEncodeScene(u.color.rgb), 1.0);
     float4 albedo = float4(in.col.rgb * (u.params.x < -0.5 ? float3(1.0) : u.color.rgb),
                            in.col.a * u.color.a);
+#if AIVERSE_NEREID_DIAGNOSTIC == 2
+    if(u.params.x < -0.5){ float3 diagnostic=float3(u.color.r*0.25,u.color.g,u.color.b); return float4(diagnostic,1.0); }
+#endif
     float3 base = rtsDecodeScene(albedo.rgb);
+#if AIVERSE_NEREID_DIAGNOSTIC == 3
+    if(u.params.x < -0.5){ float3 diagnostic=base; return float4(diagnostic,1.0); }
+#endif
     float3 n = normalize(in.nrm);
+    bool localCurrent=u.params.x < -.5 && u.waterFlowRect.z>0.0 && u.waterFlowRect.w>0.0;
+    float3 waterFlow=float3(u.waterHydraulics.xy,u.waterHydraulics.z);
+    if(localCurrent) {
+        float2 flowUV=(in.wpos.xz-u.waterFlowRect.xy)*u.waterFlowRect.zw;
+        waterFlow=tex6.sample(s6,flowUV).xyz;
+    }
+#if AIVERSE_NEREID_DIAGNOSTIC == 6
+    if(u.params.x < -.5) { return float4(clamp(waterFlow.xy*.1+.5,0.0,1.0),clamp(length(waterFlow.xy)*.2,0.0,1.0),1.0);  }
+#endif
+    // Two overlapping bounded advection phases hide their individual resets.
+    // Variable spatial currents never multiply an unbounded renderer clock.
+    bool boundedCurrent=localCurrent&&length(waterFlow.xy)>.001;
+    float phase=fract(f.camPos.w*.25);
+    float currentTime0=boundedCurrent?phase*4.0:f.camPos.w;
+    float currentTime1=boundedCurrent?fract(phase+.5)*4.0:currentTime0;
+    float currentBlend=boundedCurrent?abs(phase*2.0-1.0):0.0;
+
     // Open water (below the road film .045; rain pools keep their own look): six wave trains of different length
     // and heading (ratios that never line up) plus drifting value noise, fading out with distance so nothing
     // aliases into stripes; slow large patches of darker / lighter water.
     bool openWater = (u.params.x < -0.5 || (u.params.y >= 0.85 && in.wpos.y < 0.04)) && n.y > 0.9;
     if (openWater) {
-        float wt = (l.cloud.x + l.cloud.y) * 20.0;
+        float wt = u.params.x < -0.5 ? f.camPos.w : (l.cloud.x + l.cloud.y) * 20.0;
         float windCoupling=u.params.x < -0.5 ? u.waterWind.w : 0.0;
         float2 p = in.wpos.xz -
                    u.waterWind.xy * wt * (0.02 * windCoupling);
-        float fade = clamp(1.0 - length(f.camPos.xyz - in.wpos) / 160.0, 0.3, 1.0);
-        const float4 wv[6] = {float4(0.951, 0.309, 0.61, 0.060), float4(-0.454, 0.891, 0.97, 0.045), float4(0.588, -0.809, 1.63, 0.036),
-                                   float4(-0.978, -0.208, 2.71, 0.026), float4(0.139, 0.990, 4.37, 0.018), float4(0.743, 0.669, 6.91, 0.012)};
-        float2 g = float2(0.0);
-        for (int i = 0; i < 6; ++i) {
-            float ph = dot(p, wv[i].xy) * wv[i].z + wt * sqrt(wv[i].z) * 1.3;
-            g += wv[i].xy * (wv[i].z * wv[i].w * cos(ph));
-        }
-        float2 q = p * 0.9 + float2(wt * 0.11, -wt * 0.07);
-        float2 qi = floor(q), qf = fract(q), qu = qf * qf * (3.0 - 2.0 * qf);
-        float h00 = fract(sin(dot(qi, float2(127.1, 311.7))) * 43758.5), h10 = fract(sin(dot(qi + float2(1, 0), float2(127.1, 311.7))) * 43758.5);
-        float h01 = fract(sin(dot(qi + float2(0, 1), float2(127.1, 311.7))) * 43758.5), h11 = fract(sin(dot(qi + float2(1, 1), float2(127.1, 311.7))) * 43758.5);
-        float2 dn = float2(mix(h10 - h00, h11 - h01, qu.y), mix(h01 - h00, h11 - h10, qu.x)) * 6.0 * qf * (1.0 - qf);
-        g += dn * 0.09;
+        float2 p1=p;
+        if(u.params.x < -0.5){p-=waterFlow.xy*currentTime0;p1-=waterFlow.xy*currentTime1;}
+        // Moving NEREID detail is transported by the authored current. Independent
+        // wave phases would send highlights sideways even when flow is fixed.
+        float intrinsicTime=(u.params.x < -0.5 && length(waterFlow.xy)>0.001)?0.0:wt;
+        float fade=clamp(1.0-length(f.camPos.xyz-in.wpos)/160.0,.3,1.0);
+        float2 g=nereidWaveGradient(p,intrinsicTime,u.params.x < -.5);
+        if(boundedCurrent)g=mix(g,nereidWaveGradient(p1,intrinsicTime,u.params.x < -.5),currentBlend);
         float windSpeed=length(u.waterWind.xy);
         float gust=(0.4+0.6*clamp(u.waterWind.z,0.0,1.0))*windCoupling;
         float windSlope=clamp(windSpeed*0.006,0.0,0.32)*gust;
         float2 windDir=u.waterWind.xy/max(windSpeed,0.001);
         g+=windDir*windSlope;
         n = normalize(float3(-g.x * fade, 1.0, -g.y * fade));
-        float2 m = p * 0.021 + float2(wt * 0.004, 0.0);
-        float patches = 0.5 + 0.5 * sin(m.x * 2.3 + sin(m.y * 1.7) * 2.1) * sin(m.y * 1.9 + sin(m.x * 1.3) * 1.7);
+        float patches=nereidMacroPatch(p,intrinsicTime);
+        if(boundedCurrent)patches=mix(patches,nereidMacroPatch(p1,intrinsicTime),currentBlend);
         base *= 0.84 + 0.22 * patches;
     }
     if(u.params.x < -2.5) {
-        float waterfallTime=(l.cloud.x+l.cloud.y)*20.0;
+        float waterfallTime=f.camPos.w;
         float streak=sin(in.wpos.y*8.0+in.wpos.x*1.8 -
                          waterfallTime*3.6);
         float crossFlow=sin(in.wpos.z*12.0-in.wpos.y*3.2 -
@@ -691,39 +987,15 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
                              crossFlow*0.12));
         base *= 0.87+0.13*streak*streak;
     }
-    if(u.params.x < -0.5 && u.waterHydraulics.z > 0.001 && n.y > 0.5) {
-        float2 flow=u.waterHydraulics.xy;
+    if(u.params.x < -0.5 && waterFlow.z > 0.001 && n.y > 0.5) {
+        float2 flow=waterFlow.xy;
         float speed=length(flow);
-        float2 dir=flow/max(speed,0.001);
-        float2 side=float2(-dir.y,dir.x);
-        float scale=u.waterHydraulics.w;
-        float time=(l.cloud.x+l.cloud.y)*20.0;
-        float along=dot(in.wpos.xz,dir)*scale;
-        float across=dot(in.wpos.xz,side)*scale;
-        float quality=u.waterRapidColor.a;
-        float eddies=0.0;
-        float foam=0.0;
-        if(quality<0.5) {
-            float streak=sin(along*3.1-time*min(speed,20.0)*0.25);
-            foam=smoothstep(0.22,0.82,abs(streak))*u.waterHydraulics.z;
-        } else {
-            float breakup=sin(along*3.1-time*min(speed,20.0)*0.25+
-                             sin(across*4.2)*0.7);
-            eddies=sin(across*6.4+along*1.8-time*2.8);
-            foam=smoothstep(0.22,0.82,abs(breakup*eddies))*
-                 u.waterHydraulics.z;
-            if(quality>1.5) {
-                float detail=sin(along*9.1+across*5.7-time*4.2)*
-                             sin(across*11.3-time*2.1);
-                foam=clamp(foam*(0.80+0.40*abs(detail)),0.0,1.0);
-                eddies+=detail*0.35;
-            }
-        }
-        base=mix(base,u.waterRapidColor.rgb,
-                 clamp(foam*0.78,0.0,0.78));
-        if(quality>=0.5)
-            n=normalize(n+float3(side.x*eddies*foam*0.17,
-                                 0.0,side.y*eddies*foam*0.17));
+        float2 dir=flow/max(speed,0.001),side=float2(-dir.y,dir.x);
+        float field=nereidRapidField(in.wpos.xz-flow*currentTime0,flow,u.waterHydraulics.w,u.waterRapidColor.a);
+        if(boundedCurrent)field=mix(field,nereidRapidField(in.wpos.xz-flow*currentTime1,flow,u.waterHydraulics.w,u.waterRapidColor.a),currentBlend);
+        float foam=smoothstep(0.48,0.78,field)*waterFlow.z;
+        base=mix(base,u.waterRapidColor.rgb,clamp(foam*0.78,0.0,0.78));
+        if(u.waterRapidColor.a>0.5)n=normalize(n+float3(side.x*(field-0.5)*foam*0.17,0.0,side.y*(field-0.5)*foam*0.17));
     }
     if(u.params.x < -0.5) {
         float2 grad=float2(0.0);
@@ -781,9 +1053,9 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
     col = rtsToneScene(col, f.skyColor.w > 0.5);
     float3 outc = waterReflect(l, tex2, s2, in.pos.xy, rtsEncodeScene(col),
-                               in.wpos, n, V, u.params.x < -1.5 ? 0.0 : u.params.y);
+                               in.wpos, n, V, u.params.x < -1.5 ? 0.0 : u.params.y, u.params.x < -0.5);
     if (u.params.y >= 0.85 && (in.wpos.y >= 0.04 || u.params.x < -0.5) && f.trace2.w > 0.5) {
-        float3 nn = normalize(n + float3(sin(in.wpos.z * 3.0 + l.cloud.x * 11.0), 0.0, sin(in.wpos.x * 2.6 - l.cloud.y * 9.0)) * 0.02);
+        float3 nn = u.params.x < -0.5 ? n : normalize(n + float3(sin(in.wpos.z * 3.0 + l.cloud.x * 11.0), 0.0, sin(in.wpos.x * 2.6 - l.cloud.y * 9.0)) * 0.02);
         float hit;
         float3 rc = ssrWater(f, tex4, s4, tex5, s5, in.wpos, nn, V, hit);
         float fres = (in.wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
@@ -791,13 +1063,65 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     }
     // NEREID optics: share captured opaque tex4/tex5 with SSR, no feedback.
     // u.color.rgb = absorption(m^-1), foam depth(m), depth tint strength.
-    if (u.params.x < -0.5 && f.trace2.w > 0.5 &&
+    float shoreCoverage=1.0;
+    float contactFoam=0.0;
+    bool opticsResolved=false;
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+    float diagnosticTransmission=-1.0;
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+    float diagnosticDepth=-100000.0;
+#endif
+    if (u.params.x < -0.5 && f.trace2.w > 0.0 &&
         (u.params.w > 0.001 || u.color.r > 0.001 ||
          u.color.g > 0.001 || u.color.b > 0.001)) {
         float4 projected = f.viewProj * float4(in.wpos, 1.0);
         if (projected.w > 0.0) {
             float2 screen = projected.xy / projected.w * 0.5 + 0.5;
-            float2 distorted = screen + n.xz * (0.009 * u.params.w);
+            if(u.params.x > -2.5 && all(screen>float2(0.001)) && all(screen<float2(0.999))){
+                float2 shoreUV=f.shadow.x>0.5?float2(screen.x,1.0-screen.y):screen;
+                float shoreDepth=tex5.sample(s5,shoreUV);
+                if(shoreDepth<0.9999){
+                    float depth=in.wpos.y-ssrUnproject(f,screen,shoreDepth).y;
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+                    diagnosticDepth=depth;
+#endif
+                    shoreCoverage=smoothstep(0.0,0.035,depth);
+                    if(u.color.g>0.001 && depth>0.0 && depth<1000.0){
+                        contactFoam=1.0-smoothstep(0.0,u.color.g,depth);
+                        // Bounded overlapping upstream depth probes create a tapered downstream
+                        // tail. No contact wake exists ahead of the obstacle/current.
+                        float speed=length(waterFlow.xy);
+                        float2 currentDir=waterFlow.xy/max(speed,0.001);
+                        float wakeFoam=0.0;
+                        int tapCount=u.waterRapidColor.a>1.5?16:(u.waterRapidColor.a>0.5?8:4);
+                        if(speed>0.01)for(int tap=0;tap<16;++tap){
+                            if(tap>=tapCount)break;
+                            float tail=float(tap)/float(tapCount-1);
+                            float reach=0.2+1.4*tail;
+                            float3 probe=in.wpos-float3(currentDir.x,0.0,currentDir.y)*reach;
+                            probe.y+=dot(in.nrm.xz,currentDir)/max(abs(in.nrm.y),0.1)*reach;
+                            float4 clip=f.viewProj*float4(probe,1.0);
+                            if(clip.w<=0.0)continue;
+                            float2 probeScreen=clip.xy/clip.w*0.5+0.5;
+                            if(any(probeScreen<float2(0.001))||any(probeScreen>float2(0.999)))continue;
+                            float2 probeUV=f.shadow.x>0.5?float2(probeScreen.x,1.0-probeScreen.y):probeScreen;
+                            float probeDepth=tex5.sample(s5,probeUV);
+                            if(probeDepth>=0.9999)continue;
+                            float3 hit=ssrUnproject(f,probeScreen,probeDepth);
+                            float height=hit.y-probe.y;
+                            float nearby=1.0-smoothstep(0.35,0.8,length(hit.xz-probe.xz));
+                            float obstacle=smoothstep(0.01,0.10,height)*(1.0-smoothstep(2.0,3.0,height))*nearby;
+                            float crossDistance=abs(dot(hit.xz-in.wpos.xz,float2(-currentDir.y,currentDir.x)));
+                            float tailWidth=0.55*(1.0-reach*0.4);
+                            float taper=1.0-smoothstep(tailWidth*0.3,tailWidth,crossDistance);
+                            wakeFoam+=obstacle*taper*(0.70-0.50*tail);
+                        }
+                        contactFoam=max(contactFoam,clamp(wakeFoam*1.2/float(tapCount),0.0,0.6));
+                    }
+                }
+            }
+            float2 distorted = screen + n.xz * (0.009 * u.params.w * clamp(albedo.a,0.0,1.0));
             if (all(distorted > float2(0.005)) &&
                 all(distorted < float2(0.995))) {
                 float2 sampleUV = f.shadow.x > 0.5 ?
@@ -808,24 +1132,56 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
                     float thickness = in.wpos.y - opaquePos.y;
                     if (thickness > 0.02 && thickness < 1000.0) {
                         float3 background = tex4.sample(s4, sampleUV).rgb;
-                        float transmission = exp(-thickness * u.color.r);
+                        // Light reaches the bed through the full column and returns along the
+                        // slanted view ray: the same optical path PRISMA uses under water.
+                        float opticalPath = thickness + length(in.wpos - opaquePos);
+                        float transmission = exp(-opticalPath * u.color.r * clamp(albedo.a,0.0,1.0));
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+                        diagnosticTransmission=transmission;
+#endif
                         float3 absorbed = background * transmission +
                             rtsEncodeScene(base) * (1.0 - transmission) * u.color.b;
-                        float blendAmount = clamp(u.params.w * 0.85 +
-                            u.color.b * (1.0-transmission), 0.0, 0.85);
-                        outc = mix(outc, absorbed, blendAmount);
-                        if (u.color.g > 0.001) {
-                            float shallow = clamp(1.0 - thickness / u.color.g, 0.0, 1.0);
-                            float foamWeight = shallow * shallow * (3.0 - 2.0 * shallow);
-                            outc = mix(outc, float3(0.82, 0.91, 0.92),
-                                       clamp(foamWeight * 0.65, 0.0, 0.65));
-                        }
+                        // Absorbed colour already contains the refracted background.
+                        // Adding it again through ordinary alpha makes deep water look dry.
+                        float fresnel=(0.02+0.98*pow(1.0-max(dot(n,V),0.0),5.0))*
+                            clamp(u.params.y,0.0,1.0)*clamp(albedo.a,0.0,1.0);
+                        outc = mix(absorbed,outc,fresnel);
+                        opticsResolved=true;
+
                     }
                 }
             }
         }
     }
-    return float4(outc, albedo.a);
+    if(contactFoam>0.0){
+        float2 foamPoint=in.wpos.xz-waterFlow.xy*currentTime0;
+        float breakup=0.65+0.35*sin(dot(foamPoint,float2(2.7,4.1))+sin(dot(foamPoint,float2(-3.3,1.9))));
+        if(boundedCurrent){
+            float2 other=in.wpos.xz-waterFlow.xy*currentTime1;
+            float otherBreakup=0.65+0.35*sin(dot(other,float2(2.7,4.1))+sin(dot(other,float2(-3.3,1.9))));
+            breakup=mix(breakup,otherBreakup,currentBlend);
+        }
+        outc=mix(outc,float3(0.82,0.91,0.92),clamp(contactFoam*breakup*0.72*clamp(albedo.a,0.0,1.0),0.0,0.72));
+    }
+#if AIVERSE_NEREID_DIAGNOSTIC == 1
+    if(u.params.x < -0.5){
+        float3 diagnostic=diagnosticDepth < -99999.0 ? float3(0,0,1) :
+            float3(clamp(diagnosticDepth*0.25,0.0,1.0),diagnosticDepth<0.0?1.0:0.0,0);
+        return float4(diagnostic,1.0);
+    }
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 4
+    if(u.params.x < -0.5){ float3 diagnostic=diagnosticTransmission<0.0?float3(0,0,1):float3(diagnosticTransmission); return float4(diagnostic,1.0); }
+#endif
+#if AIVERSE_NEREID_DIAGNOSTIC == 5
+    if(u.params.x < -0.5){ float3 diagnostic=float3((opticsResolved?1.0:albedo.a)*shoreCoverage); return float4(diagnostic,1.0); }
+#endif
+    // NEREID optics replace the fogged surface colour: fog the result too.
+    if (opticsResolved) {
+        float waterFog = 1.0 - exp(-dist * f.fog.w);
+        outc = mix(outc, rtsEncodeScene(rtsToneScene(rtsDecodeScene(f.fog.rgb), f.skyColor.w > 0.5)), waterFog);
+    }
+    return float4(outc, (opticsResolved?1.0:albedo.a)*shoreCoverage);
 }
 )";
 

@@ -3,6 +3,20 @@ name: aiverse-water
 description: Add or change AIVERSE spline water - straits, rivers, the open sea - with shore types (embankment, cliff, beach, natural), bridges from spline roads and the «Вода» window; the game supplies only models and textures.
 ---
 
+## Mandatory TerraWeave + NEREID ownership
+
+User instruction: construct game environments through TerraWeave + NEREID first.
+Terrain/biomes/trees/grass/rocks belong to TerraWeave; all new rivers/lakes/oceans
+belong to NEREID. Never substitute a custom height/noise generator or a static PBR
+water plane and describe it as the engine feature. Read
+`skills/workflow/aiverse-terra-first/SKILL.md` and
+`skills/gameplay/aiverse-nereid-water/SKILL.md`. Existing legacy maps retain their
+compatibility until an explicit tested migration. For missing host integration,
+add the adapter to the shared subsystem; record a real capability gap before any
+custom fallback. Do not fake waves, flow, foam or buoyancy in project scripts.
+Sky stays with PRISMA, climate with PHYSIS, VFX with SpectraFX; compose owners.
+
+
 # Spline water
 
 Use for any water body drawn as a spline: a strait or river (centre line with width per point) or an open sea

@@ -1,0 +1,42 @@
+.dock-root{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--studio-background)}
+.dock-global-toolbar{display:flex;gap:12px;align-items:center;flex:none;height:34px;padding:0 10px;border-bottom:1px solid var(--studio-border);background:#101928;color:var(--studio-muted);font-size:11px}
+.dock-panels-menu{position:relative;z-index:20}
+.dock-panels-menu summary{display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 9px;border:1px solid #34435b;border-radius:6px;list-style:none;color:#bbcde4}
+.dock-panels-menu summary::-webkit-details-marker{display:none}
+.dock-panel-chooser{position:absolute;left:0;top:calc(100% + 4px);width:220px;padding:8px;background:#182436;border:1px solid #3a526d;border-radius:8px;box-shadow:0 10px 35px #080e18c9}
+.dock-panel-chooser label{display:flex;align-items:center;gap:8px;padding:7px 9px;cursor:pointer;border-radius:5px}
+.dock-panel-chooser label:hover{background:#263852}
+.dock-panel-chooser input{accent-color:var(--studio-accent)}
+.dock-reset{border:0;background:transparent;color:#94a9c5;font-size:11px;padding:6px}
+.dock-reset:hover{color:white}
+.dock-hint{margin-left:auto;color:#687d9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock-workspace{display:grid;flex:1;min-height:0;min-width:0;overflow:hidden}
+.dock-slot{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:var(--studio-surface);border:1px solid #263348}
+.dock-slot.dock-left{grid-column:1;grid-row:1}
+.dock-slot.dock-center{grid-column:3;grid-row:1;background:var(--studio-canvas)}
+.dock-slot.dock-right{grid-column:5;grid-row:1}
+.dock-slot.dock-bottom{grid-column:1 / 6;grid-row:3}
+.dock-slot.dock-drop-hover{outline:2px solid var(--studio-accent);outline-offset:-3px}
+.dock-tabs{display:flex;align-items:stretch;flex:none;height:38px;min-width:0;background:var(--studio-surface-raised);border-bottom:1px solid var(--studio-border);overflow-x:auto;scrollbar-width:thin}
+.dock-grip{display:flex;align-items:center;color:#687991;padding:0 7px}
+.dock-tab{display:flex;align-items:center;flex:none;max-width:170px;border-right:1px solid #2e3a4e;color:#8093ac}
+.dock-tab-active{color:#e2ecf9;background:#213046;box-shadow:inset 0 -2px var(--studio-accent)}
+.dock-tab-label{border:0;color:inherit;background:transparent;font-size:11px;padding:0 8px;max-width:130px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;height:100%}
+.dock-close{display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:#687c96;padding:5px 6px;border-radius:4px}
+.dock-close:hover{color:white;background:#38516e}
+.dock-move{margin-left:auto;max-width:67px;min-width:58px;background:#1b2b41;border:0;border-left:1px solid #344258;color:#95aac8;font-size:10px;outline-offset:-2px;padding:0 3px}
+.dock-body{flex:1;min-height:0;min-width:0;overflow:hidden;display:flex;flex-direction:column}
+.dock-empty{display:grid;place-items:center;flex:1;min-height:35px;color:#6e829e;font-size:11px}
+.dock-resizer{background:#0b1220;touch-action:none}
+.dock-resizer:hover{background:#4b6d9d}
+.dock-resize-left{grid-column:2;grid-row:1;cursor:col-resize}
+.dock-resize-right{grid-column:4;grid-row:1;cursor:col-resize}
+.dock-resize-bottom{grid-column:1 / 6;grid-row:2;cursor:row-resize}
+.dock-body .viewport{flex:1;min-height:0}
+.dock-body .inspector-section{overflow:auto}
+.dock-body .log-list{height:100%;overflow:auto}
+.dock-body .tree-list{min-height:0}
+@media(max-width:1000px){.dock-hint{display:none}}
+
+.dock-resizer:focus-visible{outline:2px solid var(--studio-accent);outline-offset:-2px}
+.dock-tab-label:focus-visible,.dock-close:focus-visible,.dock-move:focus-visible{outline:2px solid var(--studio-accent);outline-offset:-2px}

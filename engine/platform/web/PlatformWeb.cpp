@@ -197,7 +197,7 @@ uint32_t g_testDeviceGeneration = 0;
 uint32_t g_testRenderedFrames = 0;
 uint32_t g_testContextLosses = 0;
 #endif
-EM_BOOL onWebGLContextLost(int, const EmscriptenWebGLContextEvent*, void*) {
+EM_BOOL onWebGLContextLost(int, const void*, void*) {
     // Returning true prevents browser default handling and permits restoration.
     // Invalidate all GPU handles; rendering resumes only after reinitialization.
     g_contextLost = true;
@@ -208,7 +208,7 @@ EM_BOOL onWebGLContextLost(int, const EmscriptenWebGLContextEvent*, void*) {
     emscripten_log(EM_LOG_WARN,"AIVERSE WebGL2 context lost; frames suspended");
     return EM_TRUE;
 }
-EM_BOOL onWebGLContextRestored(int, const EmscriptenWebGLContextEvent*, void*) {
+EM_BOOL onWebGLContextRestored(int, const void*, void*) {
     g_contextRestorePending = true;
     emscripten_log(EM_LOG_CONSOLE,"AIVERSE WebGL2 context restored; rebuilding GPU resources");
     return EM_TRUE;
@@ -371,6 +371,7 @@ void frame(void*) {
 #if defined(AIVERSE_WEBGL_CONTEXT_ACCEPTANCE)
     ++g_testRenderedFrames;
 #endif
+    if (S.cb.afterFrame) S.cb.afterFrame(*g_device);
 }
 } // namespace
 

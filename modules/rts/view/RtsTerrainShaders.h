@@ -27,11 +27,13 @@
 #pragma once
 #include "../../../engine/render/Shaders.h"
 #include "../../../engine/render/BakedShaders.h"
+#include "../../../engine/render/TerrainPbrShaders.h"
+#include "../../../engine/render/GiDynamicShaders.h"
 
 namespace aiverse::game::shaders {
 
 #define AIVERSE_TERRAIN_GLSL_U0 \
-    "layout(std140) uniform U0 { vec4 t_lod; vec4 t_mode; vec4 t_scale; vec4 t_cliff; vec4 t_fog; vec4 t_tint[4]; vec4 t_cliffTint; vec4 t_fogColor; vec4 t_fogGrid; vec4 t_detail; vec4 t_rock; vec4 t_blend; };\n"
+    "layout(std140) uniform U0 { vec4 t_lod; vec4 t_mode; vec4 t_scale; vec4 t_cliff; vec4 t_fog; vec4 t_tint[4]; vec4 t_cliffTint; vec4 t_fogColor; vec4 t_fogGrid; vec4 t_detail; vec4 t_rock; vec4 t_blend; vec4 t_pbr; };\n"
 
 inline const char* kTerrainVS =
     AIVERSE_TERRAIN_GLSL_U0 AIVERSE_GLSL_FRAME
@@ -84,12 +86,22 @@ void main() {
 inline const char* kTerrainFS =
     AIVERSE_TERRAIN_GLSL_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_TRACE_AT("tex18")
     AIVERSE_GLSL_BAKED_TERRAIN("U3", "tex19", "tex20")
+    // The built-in terrain owns tex13 (cliff albedo). Remap the shared L1
+    // GI sampler to tex21 only for this explicit Metal/Vulkan permutation.
+    "#if defined(DYNAMIC_GI_TERRAIN_COMPACT)\n"
+    AIVERSE_GLSL_DYNAMIC_GI_AT("tex8")
+    "#else\n"
+    AIVERSE_GLSL_DYNAMIC_GI_AT("tex21")
+    "#endif\n"
+    AIVERSE_GLSL_TERRAIN_PBR
     R"(
 uniform sampler2D tex4;
 uniform sampler2D tex5;
 uniform sampler2D tex6;
 uniform sampler2D tex7;
-uniform sampler2D tex8;
+#if !defined(DYNAMIC_GI_TERRAIN_COMPACT)
+uniform sampler2D tex8; // compact GI helper already declares tex8
+#endif
 uniform sampler2D tex9;
 uniform sampler2D tex10;
 uniform sampler2D tex11;
@@ -139,12 +151,27 @@ vec3 planarNormal(vec3 n, vec3 tn) {
     vec3 B = cross(T, n);
     return normalize(T * tn.x - B * tn.y + n * tn.z);
 }
+#if TERRAIN_GL_NORMAL_ATLAS
+// Atlas uses four repeatable padded 2D tiles. t_blend.w contains the
+// content-tile UV scale. Explicit gradients avoid derivatives of fract()
+// at wrap seams (which otherwise select a wrong high mip).
+vec4 terrainLayerSample(int layer, vec2 uv) {
+    float tileScale=t_blend.w;
+    float inset=(0.5-tileScale)*0.5;
+    vec2 quadrant=vec2(float(layer % 2),float(layer / 2))*0.5;
+    vec2 atlasUv=quadrant+vec2(inset)+fract(uv)*tileScale;
+    return textureGrad(tex9,atlasUv,
+        dFdx(uv)*tileScale,dFdy(uv)*tileScale);
+}
+vec3 terrainLayerNormal(int layer, vec2 uv) { return unpackN(terrainLayerSample(layer,uv)); }
+#endif
 #endif
 
 void main() {
     vec3 n = normalize(v_nrm);
     vec3 albedoS = v_col;
-    vec3 geoN = n;                                        // surface normal for slope tests
+    vec3 geoN = n;
+    float pbrAO=1.0, pbrRough=t_pbr.y;                                        // surface normal for slope tests
 #if TERRAIN_DETAIL
     // per-pixel normal of the detail surface (cheap: one fetch, every tier)
     // outside the map (apron, border walls) the clamped edge texels would stretch into streaks: fade to
@@ -205,11 +232,47 @@ void main() {
 #if TERRAIN_TIER >= 2
         if (t_mode.z > 0.5) {
             vec3 tn = vec3(0.0, 0.0, 0.001);
-            if (w.r > 0.002) tn += w.r * mix(vec3(0.0, 0.0, 1.0), unpackN(texture(tex9, p / t_scale.x)), t_tint[0].w);
-            if (w.g > 0.002) tn += w.g * mix(vec3(0.0, 0.0, 1.0), unpackN(texture(tex10, p / t_scale.y)), t_tint[1].w);
-            if (w.b > 0.002) tn += w.b * mix(vec3(0.0, 0.0, 1.0), unpackN(texture(tex11, p / t_scale.z)), t_tint[2].w);
-            if (w.a > 0.002) tn += w.a * mix(vec3(0.0, 0.0, 1.0), unpackN(texture(tex12, p / t_scale.w)), t_tint[3].w);
+            if (w.r > 0.002) tn += w.r * mix(vec3(0.0, 0.0, 1.0), (
+#if TERRAIN_GL_NORMAL_ATLAS
+                terrainLayerNormal(0, p / t_scale.x)
+#else
+                unpackN(texture(tex9, p / t_scale.x))
+#endif
+                ), t_tint[0].w);
+            if (w.g > 0.002) tn += w.g * mix(vec3(0.0, 0.0, 1.0), (
+#if TERRAIN_GL_NORMAL_ATLAS
+                terrainLayerNormal(1, p / t_scale.y)
+#else
+                unpackN(texture(tex10, p / t_scale.y))
+#endif
+                ), t_tint[1].w);
+            if (w.b > 0.002) tn += w.b * mix(vec3(0.0, 0.0, 1.0), (
+#if TERRAIN_GL_NORMAL_ATLAS
+                terrainLayerNormal(2, p / t_scale.z)
+#else
+                unpackN(texture(tex11, p / t_scale.z))
+#endif
+                ), t_tint[2].w);
+            if (w.a > 0.002) tn += w.a * mix(vec3(0.0, 0.0, 1.0), (
+#if TERRAIN_GL_NORMAL_ATLAS
+                terrainLayerNormal(3, p / t_scale.w)
+#else
+                unpackN(texture(tex12, p / t_scale.w))
+#endif
+                ), t_tint[3].w);
             n = planarNormal(n, normalize(tn));
+        }
+#endif
+
+#if TERRAIN_TIER >= 2
+        if(t_pbr.x>0.5 && t_pbr.w>0.5) {
+            pbrAO=dot(w,vec4(texture(tex5,p/t_scale.x).a,texture(tex6,p/t_scale.y).a,texture(tex7,p/t_scale.z).a,texture(tex8,p/t_scale.w).a));
+#if TERRAIN_GL_NORMAL_ATLAS
+            vec4 roughs=vec4(terrainLayerSample(0,p/t_scale.x).a,terrainLayerSample(1,p/t_scale.y).a,terrainLayerSample(2,p/t_scale.z).a,terrainLayerSample(3,p/t_scale.w).a);
+#else
+            vec4 roughs=vec4(texture(tex9,p/t_scale.x).a,texture(tex10,p/t_scale.y).a,texture(tex11,p/t_scale.z).a,texture(tex12,p/t_scale.w).a);
+#endif
+            pbrRough=dot(w,mix(vec4(t_pbr.y),roughs,vec4(t_tint[0].w,t_tint[1].w,t_tint[2].w,t_tint[3].w)));
         }
 #endif
         float slope = 1.0 - abs(geoN.y);
@@ -232,6 +295,13 @@ void main() {
             // one projection along the dominant axis
             vec2 uv = an.x > an.z ? (an.y > an.x ? q.xz : q.zy) : (an.y > an.z ? q.xz : q.xy);
             vec3 c = texture(tex13, uv).rgb;
+#endif
+#if TERRAIN_TIER >= 2
+            if(t_pbr.x>0.5 && t_pbr.w>0.5) {
+                float ca=texture(tex13,q.zy).a*bw.x+texture(tex13,q.xz).a*bw.y+texture(tex13,q.xy).a*bw.z;
+                float cr=t_cliffTint.w>0.5 ? texture(tex14,q.zy).a*bw.x+texture(tex14,q.xz).a*bw.y+texture(tex14,q.xy).a*bw.z : t_pbr.y;
+                pbrAO=mix(pbrAO,ca,cw);pbrRough=mix(pbrRough,cr,cw);
+            }
 #endif
             s = mix(s, c * t_cliffTint.rgb, cw);
         }
@@ -266,17 +336,31 @@ void main() {
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
+#if defined(DYNAMIC_GI_TERRAIN_COMPACT)
+    // Low-end mobile: no high-slot traced height texture. Preserve the
+    // standard sun shadow and clouds, never sample unbound tex18.
+    float sh = ndl > 0.0 ? shadowAt(v_wpos, n) : 1.0;
+#else
     float sh = ndl > 0.0 ? min(shadowAt(v_wpos, n), terrainShadow(v_wpos)) : 1.0;
+#endif
     sh *= cloudShade(v_wpos);
     vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
     vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+#if !defined(DYNAMIC_GI_TERRAIN_COMPACT)
     { vec3 bl; if (bakedTerrain(v_wpos, sun * ndl, sh, bl)) amb = bl; }   // baked lightmap (agent-lightbake)
+#endif
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * t_mode.x;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     vec3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
-    col += base * dynamicLight(v_wpos, n, V, t_mode.x);
+    if(t_pbr.x>0.5) {
+        col=terrainDielectricPbr(base,n,L,V,sun,amb,sh,pbrRough,pbrAO);
+        col+=base*0.96*dynamicLight(v_wpos,n,V,0.0);
+    } else col += base * dynamicLight(v_wpos, n, V, t_mode.x);
+#if defined(DYNAMIC_GI_TERRAIN)
+    col += base * dynamicGiAt(v_wpos,n);
+#endif
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
     col = rtsToneScene(col, u_skyColor.w > 0.5); // ACES fit
@@ -302,8 +386,8 @@ void main() {
 
 inline const char* kTerrainMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; };\n"
-    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_BAKED_TERRAIN
+    "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; float4 pbr; };\n"
+    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_BAKED_TERRAIN AIVERSE_MSL_TERRAIN_PBR AIVERSE_MSL_DYNAMIC_GI
     R"(
 
 #if TERRAIN_TIER >= 1
@@ -388,23 +472,27 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
                         texture2d<float> tex11 [[texture(11)]], sampler s11 [[sampler(11)]],
                         texture2d<float> tex12 [[texture(12)]], sampler s12 [[sampler(12)]],
                         texture2d<float> tex13 [[texture(13)]], sampler s13 [[sampler(13)]],
-                        texture2d<float> tex14 [[texture(14)]], sampler s14 [[sampler(14)]],
+                        texture2d<float> tex14 [[texture(14)]],
                         texture2d<float> tex15 [[texture(15)]], sampler s15 [[sampler(15)]]
 #if TERRAIN_DETAIL
                         , texture2d<float> tex16 [[texture(16)]], texture2d<float> tex17 [[texture(17)]]
 #endif
                         , texture2d<float> tex18 [[texture(18)]]
                         , constant BakedTerrainU& bt [[buffer(4)]], texture2d<float> tex19 [[texture(19)]], texture2d<float> tex20 [[texture(20)]]
+#if defined(DYNAMIC_GI_TERRAIN)
+                        , constant GiDynamicU& dgi [[buffer(7)]], texture2d<float> tex21 [[texture(21)]]
+#endif
                         ) {
 #if TERRAIN_DETAIL
     // Metal has sampler slots 0..15 per stage: the detail textures use constant samplers
     constexpr sampler s16(filter::linear, mip_filter::linear, address::clamp_to_edge);
-    constexpr sampler s17(filter::linear, mip_filter::linear, address::clamp_to_edge);
+    // Detail splat uses s16: same filtering, mip selection and addressing.
 #endif
     constexpr sampler s18(filter::linear, mip_filter::none, address::clamp_to_edge);   // height field (traced shadows)
     float3 n = normalize(in.nrm);
     float3 albedoS = in.col;
     float3 geoN = n;
+    float pbrAO=1.0, pbrRough=u.pbr.y;
 #if TERRAIN_DETAIL
     float2 outD = max(max(-in.wpos.xz, in.wpos.xz - u.lod.zw), float2(0.0));
     float outF = clamp(max(outD.x, outD.y) * 0.5, 0.0, 1.0);
@@ -425,7 +513,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
 #if TERRAIN_TIER >= 1
     if (u.mode.y > 0.5) {
 #if TERRAIN_DETAIL
-        float4 w = tex17.sample(s17, in.wpos.xz * u.detail.xy + u.detail.zw, bias(outB));
+        float4 w = tex17.sample(s16, in.wpos.xz * u.detail.xy + u.detail.zw, bias(outB));
 #else
         float4 w = tex4.sample(s4, in.wpos.xz / u.lod.zw);
 #endif
@@ -465,6 +553,14 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
             n = planarNormal(n, normalize(tn));
         }
 #endif
+
+#if TERRAIN_TIER >= 2
+        if(u.pbr.x>0.5 && u.pbr.w>0.5) {
+            pbrAO=dot(w,float4(tex5.sample(s5,p/u.scale.x).a,tex6.sample(s6,p/u.scale.y).a,tex7.sample(s7,p/u.scale.z).a,tex8.sample(s8,p/u.scale.w).a));
+            float4 roughs=float4(tex9.sample(s9,p/u.scale.x).a,tex10.sample(s10,p/u.scale.y).a,tex11.sample(s11,p/u.scale.z).a,tex12.sample(s12,p/u.scale.w).a);
+            pbrRough=dot(w,mix(float4(u.pbr.y),roughs,float4(u.tint[0].w,u.tint[1].w,u.tint[2].w,u.tint[3].w)));
+        }
+#endif
         float slope = 1.0 - abs(geoN.y);
         float cw = smoothstep(u.cliff.z, u.cliff.w, slope);
         if (cw > 0.002) {
@@ -476,13 +572,20 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
             float3 c = tex13.sample(s13, q.zy).rgb * bw.x + tex13.sample(s13, q.xz).rgb * bw.y + tex13.sample(s13, q.xy).rgb * bw.z;
             if (u.cliffTint.w > 0.5) {
                 float3 nn = geoN;
-                float3 tx = unpackN(tex14.sample(s14, q.zy)), ty = unpackN(tex14.sample(s14, q.xz)), tz = unpackN(tex14.sample(s14, q.xy));
+                float3 tx = unpackN(tex14.sample(s13, q.zy)), ty = unpackN(tex14.sample(s13, q.xz)), tz = unpackN(tex14.sample(s13, q.xy));
                 float3 wn = normalize(float3(0.0, tx.y, tx.x) * bw.x + float3(ty.x, 0.0, ty.y) * bw.y + float3(tz.x, tz.y, 0.0) * bw.z + nn);
                 n = normalize(mix(n, wn, cw));
             }
 #else
             float2 uv = an.x > an.z ? (an.y > an.x ? q.xz : q.zy) : (an.y > an.z ? q.xz : q.xy);
             float3 c = tex13.sample(s13, uv).rgb;
+#endif
+#if TERRAIN_TIER >= 2
+            if(u.pbr.x>0.5 && u.pbr.w>0.5) {
+                float ca=tex13.sample(s13,q.zy).a*bw.x+tex13.sample(s13,q.xz).a*bw.y+tex13.sample(s13,q.xy).a*bw.z;
+                float cr=u.cliffTint.w>0.5 ? tex14.sample(s13,q.zy).a*bw.x+tex14.sample(s13,q.xz).a*bw.y+tex14.sample(s13,q.xy).a*bw.z : u.pbr.y;
+                pbrAO=mix(pbrAO,ca,cw);pbrRough=mix(pbrRough,cr,cw);
+            }
 #endif
             s = mix(s, c * u.cliffTint.rgb, cw);
         }
@@ -530,7 +633,13 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u.mode.x;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     float3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
-    col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, u.mode.x);
+    if(u.pbr.x>0.5) {
+        col=terrainDielectricPbr(base,n,L,V,sun,amb,sh,pbrRough,pbrAO);
+        col+=base*0.96*dynamicLight(l,tex1,s1,in.wpos,n,V,0.0);
+    } else col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, u.mode.x);
+#if defined(DYNAMIC_GI_TERRAIN)
+    col += base * dynamicGiAt(tex21,dgi,in.wpos,n);
+#endif
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
     col = rtsToneScene(col, f.skyColor.w > 0.5);

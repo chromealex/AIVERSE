@@ -104,5 +104,31 @@ int main() {
         resources.resource<FragileResource>()->value=19;
         AIVERSE_TEST_CHECK(static_cast<const World&>(saved).resourceConst<FragileResource>()->value==7);
     }
+    // Review 2026-11-21: prepareExistingWrite<T>() hands out a pool whose
+    // dataAt() is written by worker lanes. It must detach a pool shared with
+    // a COW snapshot first, so writes never leak into the snapshot.
+    {
+        World live;
+        live.enableCowSnapshots(true);
+        std::vector<Entity> entities;
+        for(int i=0;i<600;++i) {
+            Entity e=live.create();
+            live.add<Stable>(e,Stable{i});
+            entities.push_back(e);
+        }
+        World snapshot(live);
+        auto* pool=live.prepareExistingWrite<Stable>();
+        AIVERSE_TEST_CHECK(pool!=nullptr && pool->size()==entities.size());
+        for(size_t i=0;i<pool->size();++i)pool->dataAt(i).value+=1000;
+        const World& frozen=snapshot;
+        for(size_t i=0;i<entities.size();++i) {
+            AIVERSE_TEST_CHECK(frozen.tryGetConst<Stable>(entities[i])->value==static_cast<int>(i));
+            AIVERSE_TEST_CHECK(live.get<Stable>(entities[i]).value==static_cast<int>(i)+1000);
+        }
+        live=snapshot;
+        for(size_t i=0;i<entities.size();++i)
+            AIVERSE_TEST_CHECK(live.get<Stable>(entities[i]).value==static_cast<int>(i));
+        AIVERSE_TEST_CHECK(live.prepareExistingWrite<Fragile>()==nullptr);
+    }
     std::cout<<"PASS COW page conversion, failed append recovery and shared snapshot isolation\n";
 }

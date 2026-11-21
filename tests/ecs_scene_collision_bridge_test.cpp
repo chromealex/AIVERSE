@@ -140,6 +140,31 @@ static void testRealSceneBridge() {
     AIVERSE_TEST_CHECK(collision.residentSceneResources()==1);
     AIVERSE_TEST_CHECK(ids.activeCount()==1);
 
+    // Review 2026-11-21: a second owner of the same bridge acquiring an
+    // already-resident key is reference counted; its release must not drop
+    // the stream still used by the first coordinator.
+    AIVERSE_TEST_CHECK(collision.leaseCount("collision/global")==1);
+    {
+        World other;
+        sc::SceneLoadCoordinator second(other,sceneReader,collision.adapter(),{});
+        const auto shared=second.request("scenes/global");
+        AIVERSE_TEST_CHECK(shared.valid());
+        const auto deadline=std::chrono::steady_clock::now()+
+                            std::chrono::seconds(5);
+        while(!second.ready(shared) &&
+              std::chrono::steady_clock::now()<deadline) {
+            second.poll();
+            std::this_thread::yield();
+        }
+        AIVERSE_TEST_CHECK(second.commit(shared));
+        AIVERSE_TEST_CHECK(collision.leaseCount("collision/global")==2);
+        AIVERSE_TEST_CHECK(collision.residentSceneResources()==1);
+        AIVERSE_TEST_CHECK(ids.activeCount()==1);
+    }
+    AIVERSE_TEST_CHECK(collision.leaseCount("collision/global")==1);
+    AIVERSE_TEST_CHECK(target.colliders().size()==1);
+    AIVERSE_TEST_CHECK(ids.activeCount()==1);
+
     // Replace only nonpersistent scenes. The collision source acquires
     // a distinct namespace even though geometry occupies the same region.
     auto cave=loader.request("scenes/cave",sc::LoadMode::Replace);

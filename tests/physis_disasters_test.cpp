@@ -150,12 +150,40 @@ void quakesAndTickGuard() {
     CHECK(hazardAt(world, 0, 0, center));
     CHECK(center.quake == Fixed{});
 }
+
+// Regression 2026-11-21: wind must push fire DOWNWIND (it used to favour the
+// upwind side because the sign was inverted and the target cell's wind used).
+void windDrivesFireDownwind() {
+    for (int sign : {1, -1}) {
+        Settings settings;
+        settings.width = 11; settings.height = 1; settings.seed = 5;
+        settings.baseTemperature = Fixed::fromInt(25);
+        settings.baseHumidity = Fixed{};
+        World world;
+        initialize(world, settings);
+        initializeDisasters(world);
+        CHECK(ignite(world, 5, 0));
+        const auto* state = world.resourceConst<State>();
+        for (int tick = 0; tick < 40; ++tick) {
+            advanceEnvironment(world);
+            for (Entity cell : state->cells)
+                world.get<Atmosphere>(cell).wind = {Fixed::fromInt(12 * sign), Fixed{}};
+            advanceDisasters(world);
+        }
+        HazardCell downwind{}, upwind{};
+        CHECK(hazardAt(world, 5 + 3 * sign, 0, downwind));
+        CHECK(hazardAt(world, 5 - 3 * sign, 0, upwind));
+        CHECK(downwind.fire > upwind.fire);
+        CHECK(downwind.fuel < upwind.fuel);
+    }
+}
 }
 int main() {
     fireAndDeterminism();
     floodConservesWaterWithoutRain();
     quakesAndTickGuard();
     externalAuthorityKeepsFireAndQuakeWithoutFlooding();
+    windDrivesFireDownwind();
     std::printf("PHYSIS disasters: %s\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;
 }

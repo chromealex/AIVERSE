@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
@@ -222,20 +223,35 @@ static void coordinatorLifecycle() {
         world.copyFrom(before);
         hierarchy.rebuild(world);
         hierarchy.update(world);
+        const auto houseReleasesBefore = released["textures/house"];
+        const auto sharedReleasesBefore = released["materials/shared"];
         loader.invalidateAfterRestore();
         AIVERSE_TEST_CHECK(loader.status(forest) == sc::SceneLoadStatus::Unknown);
         AIVERSE_TEST_CHECK(scenes.count() == 2);
-        AIVERSE_TEST_CHECK(loader.sharedResourceCount() == 0);
-        auto reload = loader.queueRestoredResidency();
-        AIVERSE_TEST_CHECK(reload.size() == 2);
-        AIVERSE_TEST_CHECK(loader.queueRestoredResidency().empty());
-        for(const auto& ticket : reload) {
-            awaitReady(loader,ticket);
-            AIVERSE_TEST_CHECK(loader.commit(ticket));
-        }
-        AIVERSE_TEST_CHECK(spawned == beforeRestoreSpawned);
+        // Rollback diff: global + desert are still Active in the restored
+        // World and keep their leases; only the forest lease is released.
         AIVERSE_TEST_CHECK(loader.residentSceneCount() == 2);
+        AIVERSE_TEST_CHECK(released["textures/house"] == houseReleasesBefore + 1);
+        AIVERSE_TEST_CHECK(released["materials/shared"] == sharedReleasesBefore);
         AIVERSE_TEST_CHECK(loader.resourceRefCount("materials/shared") == 2);
+        AIVERSE_TEST_CHECK(loader.queueRestoredResidency().empty());
+        AIVERSE_TEST_CHECK(spawned == beforeRestoreSpawned);
+
+        // Cold restore (all leases lost, e.g. a fresh coordinator after
+        // deserialize) still re-queues residency for every Active scene.
+        {
+            sc::SceneLoadCoordinator cold(world,reader,resources,spawn,&hierarchy);
+            auto reload = cold.queueRestoredResidency();
+            AIVERSE_TEST_CHECK(reload.size() == 2);
+            AIVERSE_TEST_CHECK(cold.queueRestoredResidency().empty());
+            for(const auto& ticket : reload) {
+                awaitReady(cold,ticket);
+                AIVERSE_TEST_CHECK(cold.commit(ticket));
+            }
+            AIVERSE_TEST_CHECK(spawned == beforeRestoreSpawned);
+            AIVERSE_TEST_CHECK(cold.residentSceneCount() == 2);
+            AIVERSE_TEST_CHECK(cold.resourceRefCount("materials/shared") == 2);
+        }
         AIVERSE_TEST_CHECK(loader.unload(desert.scene));
         AIVERSE_TEST_CHECK(loader.unload(global.scene));
         AIVERSE_TEST_CHECK(loader.residentSceneCount() == 0);
@@ -268,9 +284,120 @@ static void cancelledWorker() {
     AIVERSE_TEST_CHECK(sc::SceneRuntime(world).count() == 0);
 }
 
+// Review 2026-11-21: a rollback to a snapshot taken while a Replace load was
+// Loading must re-schedule a full job for the restored Loading record;
+// otherwise its pendingReplace blocks every later Replace forever.
+static void rollbackDuringLoad() {
+    World world;
+    world.enableCowSnapshots(true);
+    std::map<std::string,int> acquired, released;
+    sc::SceneResourceAdapter resources;
+    resources.acquire = [&](const std::string& key,std::string&) {
+        ++acquired[key]; return true;
+    };
+    resources.release = [&](const std::string& key) { ++released[key]; };
+    sc::SceneLoadCoordinator loader(
+        world,
+        [](const std::string& key,std::string& out,std::string& error) {
+            if(key == "scenes/global") out = kGlobal;
+            else if(key == "scenes/desert") out = kDesert;
+            else { error = "not found"; return false; }
+            return true;
+        },
+        resources,
+        [](World&,Entity,const sc::SceneObjectAsset&,std::string&) { return true; },
+        nullptr);
+    sc::SceneRuntime scenes(world);
+    const auto desert = loader.request("scenes/desert",sc::LoadMode::Replace);
+    AIVERSE_TEST_CHECK(desert.valid());
+    World loading = world; // Snapshot while the Replace is still Loading.
+    awaitReady(loader,desert);
+    AIVERSE_TEST_CHECK(loader.commit(desert));
+    AIVERSE_TEST_CHECK(scenes.record(desert.scene)->phase == sc::ScenePhase::Active);
+
+    world.copyFrom(loading);
+    loader.invalidateAfterRestore();
+    AIVERSE_TEST_CHECK(loader.residentSceneCount() == 0);
+    AIVERSE_TEST_CHECK(scenes.record(desert.scene)->phase == sc::ScenePhase::Loading);
+    AIVERSE_TEST_CHECK(scenes.stateView()->pendingReplace == desert.scene.value);
+    // A new Replace is blocked by the restored pendingReplace...
+    AIVERSE_TEST_CHECK(!loader.request("scenes/global",sc::LoadMode::Replace).valid());
+    // ...until the restored Loading record is committed through a new job.
+    auto restored = loader.queueRestoredResidency();
+    AIVERSE_TEST_CHECK(restored.size() == 1 && restored[0].scene == desert.scene);
+    AIVERSE_TEST_CHECK(loader.queueRestoredResidency().empty());
+    awaitReady(loader,restored[0]);
+    AIVERSE_TEST_CHECK(loader.commit(restored[0]));
+    AIVERSE_TEST_CHECK(scenes.record(desert.scene)->phase == sc::ScenePhase::Active);
+    AIVERSE_TEST_CHECK(scenes.stateView()->pendingReplace == 0);
+    AIVERSE_TEST_CHECK(loader.residentSceneCount() == 1);
+    const auto next = loader.request("scenes/global",sc::LoadMode::Replace);
+    AIVERSE_TEST_CHECK(next.valid());
+    awaitReady(loader,next);
+    AIVERSE_TEST_CHECK(loader.commit(next));
+    AIVERSE_TEST_CHECK(scenes.record(desert.scene) == nullptr);
+    AIVERSE_TEST_CHECK(loader.unload(next.scene));
+    for(const auto& [name,n] : acquired) AIVERSE_TEST_CHECK(released[name] == n);
+}
+
+// Review 2026-11-21: terminal job records (Committed/Unloaded) are bounded;
+// a committed job does not retain its manifest.
+static void terminalJobsArePruned() {
+    World world;
+    sc::SceneLoadCoordinator loader(
+        world,
+        [](const std::string&,std::string& out,std::string&) {
+            out = kGlobal; return true;
+        },
+        {[](const std::string&,std::string&) { return true; },
+         [](const std::string&) {}},
+        [](World&,Entity,const sc::SceneObjectAsset&,std::string&) { return true; },
+        nullptr);
+    sc::SceneTicket last{};
+    for(int i = 0; i < 200; ++i) {
+        const auto ticket = loader.request("scenes/global");
+        AIVERSE_TEST_CHECK(ticket.valid());
+        awaitReady(loader,ticket);
+        AIVERSE_TEST_CHECK(loader.commit(ticket));
+        AIVERSE_TEST_CHECK(loader.status(ticket) == sc::SceneLoadStatus::Committed);
+        AIVERSE_TEST_CHECK(loader.prepared(ticket) == nullptr);
+        AIVERSE_TEST_CHECK(loader.unload(ticket.scene));
+        last = ticket;
+    }
+    loader.poll();
+    AIVERSE_TEST_CHECK(loader.jobCount() <= sc::SceneLoadCoordinator::kMaxTerminalJobs);
+    AIVERSE_TEST_CHECK(loader.status(last) == sc::SceneLoadStatus::Unloaded);
+    AIVERSE_TEST_CHECK(loader.residentSceneCount() == 0);
+}
+
+// Review 2026-11-21: a throwing release callback (contract violation) must
+// not leave a stale refcount entry behind.
+static void throwingReleaseKeepsRefcountsConsistent() {
+    World world;
+    sc::SceneLoadCoordinator loader(
+        world,
+        [](const std::string&,std::string& out,std::string&) {
+            out = kGlobal; return true;
+        },
+        {[](const std::string&,std::string&) { return true; },
+         [](const std::string&) { throw std::runtime_error("release fixture"); }},
+        [](World&,Entity,const sc::SceneObjectAsset&,std::string&) { return true; },
+        nullptr);
+    const auto ticket = loader.request("scenes/global");
+    awaitReady(loader,ticket);
+    AIVERSE_TEST_CHECK(loader.commit(ticket));
+    AIVERSE_TEST_CHECK(loader.sharedResourceCount() > 0);
+    AIVERSE_TEST_CHECK(loader.unload(ticket.scene));
+    AIVERSE_TEST_CHECK(loader.sharedResourceCount() == 0);
+    AIVERSE_TEST_CHECK(loader.residentSceneCount() == 0);
+}
+
 int main() {
     checkAssets();
     coordinatorLifecycle();
     cancelledWorker();
+    rollbackDuringLoad();
+    terminalJobsArePruned();
+    throwingReleaseKeepsRefcountsConsistent();
     std::cout << "PASS scene manifest, async jobs, leases, replace, cancel, COW and residency restore\n";
 }

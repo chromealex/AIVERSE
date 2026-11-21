@@ -1,0 +1,24 @@
+{
+  "id": "com.aiverse.racing",
+  "name": "Oval Sprint",
+  "description": "Гонка на овале: сетка старта, отсчёт, три круга против трёх ботов, позиции, езда не в ту сторону и возврат на трассу.",
+  "module": "fps",
+  "genre": "racing",
+  "version": "0.1.0",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/start.json",
+      "title": "Oval"
+    }
+  ],
+  "network": {
+    "architecture": "authoritative",
+    "transport": "udp",
+    "port": 27100
+  },
+  "window": {
+    "width": 1280,
+    "height": 720
+  }
+}

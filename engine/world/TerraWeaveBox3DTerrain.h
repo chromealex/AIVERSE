@@ -66,6 +66,10 @@ inline physics::BodyDesc makeTerrainBox3DBody(
 // static collider is CREATED before the old one is removed. If creation
 // rejects an invalid/oversized mesh, the previous ground remains usable.
 // Call on the Box3D scene owner thread BETWEEN physics::Scene::step() calls.
+// Revisions are ordered per tile: a patch baked from an OLDER soil revision
+// than the resident body is rejected (returns false, scene untouched), so a
+// late/out-of-order bake cannot replace newer ground. After a rollback/load
+// that legitimately lowers the soil revision, call unload()/shutdown() first.
 class TerrainBox3DPublisher {
 public:
     size_t residentTiles()const{return bodies_.size();}
@@ -81,6 +85,10 @@ public:
                  uint32_t userData=0){
         if(bodies_.size()>=256u && !bodies_.contains(patch.cell))
             throw std::length_error("TerraWeave Box3D resident tile budget");
+        if(const auto current=bodies_.find(patch.cell);
+           current!=bodies_.end() &&
+           patch.sourceRevision<current->second.revision)
+            return false; // stale bake: keep the newer resident collider
         const auto description=makeTerrainBox3DBody(patch,userData);
         const auto created=scene.create(description);
         if(created==physics::kNoBody)return false;

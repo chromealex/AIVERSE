@@ -330,6 +330,22 @@ struct Construction { Fixed progress{}; Fixed paid{}; Entity builder = kNullEnti
 struct ResourceStock { int16_t res = -1; Fixed amount{}; bool infinite = false; };
 struct Extractor { uint16_t nodeType = 0; Fixed remaining{}; };
 struct Footprint { int x = 0, y = 0, w = 0, h = 0; };
+// Map entity components.Transform authored in Studio: absolute height, X/Z tilt
+// (degrees, Unity order Z, X, then the unit facing about Y) and per-axis scale.
+// Presentation of the placed object; pathing, footprint and colliders keep the
+// unit type's ground placement. Facing (Y) lives in Unit::facing. Persisted via
+// Simulation::registerPersistentComponent only on maps that use it.
+struct AuthoredPose {
+    bool hasY = false;
+    Fixed y{};
+    Fixed rotX{}, rotZ{};
+    Vec3 scale{Fixed::fromInt(1), Fixed::fromInt(1), Fixed::fromInt(1)};
+    // Hidden friend: found by ADL only, so it never hides aiverse::io for other types in this namespace.
+    friend void io(Archive& a, AuthoredPose& x) {
+        using aiverse::io;
+        io(a, x.hasY); io(a, x.y); io(a, x.rotX); io(a, x.rotZ); io(a, x.scale);
+    }
+};
 
 struct Garrison {
     int count = 0;

@@ -1,4 +1,6 @@
+#include "engine/ui/RaceHud.h"
 #include "engine/platform/WindowSettings.h"
+#include "engine/render/PrismaVolumeData.h"
 #include "modules/rts/RtsInitialVars.h"
 #include "engine/data/JsonCompose.h"
 // Generic RTS game client. Everything game-specific comes from the project's data (game.json,
@@ -27,6 +29,7 @@
 #include <vector>
 
 #include "engine/render/TextureCache.h"
+#include "engine/render/GlobalGeometryPool.h"
 #include "ClientSplash.h"
 #include "GameClient.h"
 #include "StartPlayers.h"
@@ -61,6 +64,15 @@ float GameClient::initWeight(int step) {
 void GameClient::initStep(gfx::Device& dev, int step) {
     switch (step) {
     case 0: {   // manifest, rules, language
+        // Never mint a second generation when hosted by the editor.
+        // An external lease must match this exact device and host thread.
+        if(gpuDeviceLease_.device()) {
+            if(!gpuDeviceLease_.validFor(dev))
+                throw std::logic_error("GameClient external GPU device lease expired");
+        } else {
+            ownedGpuLifetime_=std::make_unique<render::RenderDeviceLifetime>(dev);
+            gpuDeviceLease_=ownedGpuLifetime_->lease();
+        }
         dev_ = &dev;
         { // settings (language, online name) are saved here; platforms do not create it
             std::error_code ec;
@@ -107,21 +119,47 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         }
 #endif
         overlay_.init(dev, "fonts/ui.ttf", 17.0f);
+        r3d_.setGpuDeviceLease(gpuDeviceLease_);
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
+        view_.setAppearancePipelineValidator(
+            [this](const render::Model& model,
+                   const std::vector<render::Material>& materials) {
+                return r3d_.warmModelPipelinesChecked(model,&materials);
+            });
         r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, platform::isTouchDevice()));
         r3d_.setMaterialQuality(Renderer3D::defaultMaterialQualityFor(dev, platform::isTouchDevice()));
         r3d_.setBakedQuality(Renderer3D::defaultBakedQualityFor(dev, platform::isTouchDevice()));
         r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
-        postFx_.init(dev);
-        postFxBase_ = render::PostFx::defaultQualityFor(dev, platform::isTouchDevice());
-        postFx_.setQuality(postFxBase_);
-        postFx_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
+        prisma_.setGpuDeviceLease(gpuDeviceLease_);
+        prisma_.init(dev);
+        prismaBase_ = render::Prisma::defaultQualityFor(dev, platform::isTouchDevice());
+        prisma_.setQuality(prismaBase_);
+        prisma_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
             std::string bytes;
             return platform::readContentFile(path, bytes) && render::decodeImage(bytes, w, h, rgba);
         });
+        // Optional texture-only cameras. The existing GameClient always owns
+        // its main framebuffer and UI, so screen outputs are forbidden here.
+        if(manifest_["lens"].getBool("enabled",false)) {
+            std::string bytes,lensError;
+            if(platform::readContentFile("cameras.json",bytes) &&
+               lensCameras_.loadOffscreenAsset(bytes,&lensError) &&
+               lensCameras_.init(dev,r3d_)) {
+                lensCamerasActive_=true;
+            } else {
+                std::fprintf(stderr,"[lens] disabled: %s\n",
+                    lensError.empty()?"camera asset unavailable":lensError.c_str());
+            }
+        }
         break;
-    case 2: view_.init(dev, rules_); break;     // models, textures, atlases of every type
-    case 3: fx_.init(dev, rules_); break;
+    case 2:
+        view_.setGpuDeviceLease(gpuDeviceLease_);
+        view_.init(dev, rules_);
+        break;     // models, textures, atlases of every type
+    case 3:
+        fx_.setGpuDeviceLease(gpuDeviceLease_);
+        fx_.init(dev, rules_);
+        break;
     case 4: initAudio(); break;
     case 5: initUi(); break;
     default: break;
@@ -201,6 +239,7 @@ void GameClient::updateAudio(double dt) {
 }
 
 void GameClient::toMenu() {
+    hostPaused_ = hostStep_ = false;
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     sound_.detach();
     fx_.stopMatch();
@@ -241,6 +280,22 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
 }
 
 void GameClient::shutdown() {
+    // Preserve the MotionWeave device lease and shutdown contract.
+    // The additional camera resources must retire before Renderer3D dies.
+    // A failed GPU idle must not abort the rest of the shutdown (audio, net,
+    // UI, renderer): log it and leak the LENS targets instead of destroying
+    // textures the GPU may still use.
+    if(lensCamerasActive_) {
+        lensCamerasActive_=false;
+        try {
+            if(!dev_ || !dev_->waitForResourceIdle())
+                std::fprintf(stderr,"[lens] shutdown: GPU did not reach idle; LENS render targets leaked\n");
+            else
+                lensCameras_.shutdownAfterGpuIdle();
+        } catch(const std::exception& e) {
+            std::fprintf(stderr,"[lens] shutdown failed (%s); LENS render targets leaked\n",e.what());
+        }
+    }
     loadingSplash_.shutdown();
     net_.reset(); // detaches from the simulation before it goes away
     fx_.shutdown();
@@ -249,7 +304,7 @@ void GameClient::shutdown() {
     horizonFrameTiming_.detach(*dev_);
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
-    postFx_.shutdown();
+    prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);
     baked_.release();
     r3d_.shutdown();
@@ -257,15 +312,32 @@ void GameClient::shutdown() {
     shutdownUi();
     minimap_.release(*dev_);
     overlay_.shutdown();
+    // All owned render resources are gone while gfx::Device still exists.
+    // Editor-hosted clients only drop their borrowed lease; the editor owns
+    // the epoch and retires it after ALL of its own resource owners shutdown.
+    if(ownedGpuLifetime_)ownedGpuLifetime_->retire();
+    ownedGpuLifetime_.reset();
+    gpuDeviceLease_={};
+    dev_=nullptr;
 }
 
-void GameClient::configurePostFx(const Json& map) {
-    postFx_.configure(manifest_["postfx"], map["postfx"]);
-    postFx_.setQuality(postFxBase_);
+void GameClient::configurePrisma(const Json& map) {
+    prisma_.configure(manifest_["postfx"], map["postfx"]);
+    std::vector<std::string> prismaWarnings;
+    prismaVolumes_ = render::parsePrismaVolumes(manifest_["prismaVolumes"], map["prismaVolumes"], &prismaWarnings);
+    for (const auto& issue : prismaWarnings)
+        std::fprintf(stderr, "[prisma] %s\n", issue.c_str());
+    prisma_.setQuality(prismaBase_);
 }
 
 void GameClient::startMatch(size_t idx, const Json& initialVars) {
+    hostPaused_ = hostStep_ = false;
     if (idx >= maps_.size() || netMatch_) return;
+    // A new map/game is a camera cut. Retire the old view's private
+    // exposure + motion history without releasing shared render sizes.
+    prisma_.retireView(3ULL);
+    r3d_.retireObjectMotionView(3ULL,
+        dev_ ? dev_->gpuSubmissionFence() : 0);
     std::string text;
     if (!platform::readContentFile(maps_[idx].file, text)) { error_ = "map not found: " + maps_[idx].file; return; }
     Json map;
@@ -311,7 +383,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         if (viewScripts_.load(*sim_, rules, map, uint8_t(spectator_ ? 0 : human_))) viewScripts_.attach(*sim_);
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
         if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
-        configurePostFx(map);
+        configurePrisma(map);
         configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
@@ -953,7 +1025,7 @@ void GameClient::runViewScripts(float dt) {
     scriptUiFrame();
     for (auto& r : viewScripts_.takeRequests()) {
         if (r.kind == game::ViewRequest::Notice) notice(r.text);
-        else if (r.kind == game::ViewRequest::Effect) fx_.particles().play(r.text, {r.x, r.y, r.z});
+        else if (r.kind == game::ViewRequest::Effect) fx_.playEffect(r.text, r.x, r.y, r.z);
         else {
             audio::PlayParams pp;
             pp.positional = r.positioned; pp.x = r.x; pp.z = r.z;
@@ -962,9 +1034,68 @@ void GameClient::runViewScripts(float dt) {
     }
 }
 
+bool GameClient::hostCanControl() const {
+    return !mapLoading_ && sim_ && !netMatch_ && !city_ &&
+        (screen_ == Screen::Playing || screen_ == Screen::Paused);
+}
+bool GameClient::hostPaused() const {
+    return hostCanControl() && (hostPaused_ || screen_ == Screen::Paused || topDownPaused());
+}
+bool GameClient::hostCanStep() const {
+    return hostCanControl() && hostPaused_ && screen_ == Screen::Playing && !topDownPaused();
+}
+bool GameClient::setHostPaused(bool paused) {
+    if (!hostCanControl()) return false;
+    hostPaused_ = paused; hostStep_ = false;
+    if (!paused && screen_ == Screen::Paused) setScreen(Screen::Playing);
+    return true;
+}
+bool GameClient::requestHostStep() {
+    if (!hostCanStep()) return false;
+    hostStep_ = true;
+    return true;
+}
+
 void GameClient::frame(gfx::Device& dev, double dt) {
+    lensCameras_.collectRetiredTargets();
+    const bool hostFrozen = hostCanControl() && hostPaused_;
+    const bool singleStep = hostFrozen && hostCanStep() && hostStep_;
+    hostStep_ = false;
+    if (hostFrozen) dt = 0;
+    // Even on menus/loading screens there may be previous per-view motion
+    // textures awaiting the GPU completion fence from an old match.
+    prisma_.collectGpuRetirements();
+    r3d_.collectCompletedObjectMotion(dev.gpuCompletedFence());
+    // WorldScene unloads can retain a Model after its last resident cell
+    // leaves; only the real Device owner frame hook can enqueue a final GPU
+    // retirement token, never a streaming worker or View draw callback.
+    if(worldScene_ && worldScene_->pendingGpuRetirements()!=0)
+        (void)worldScene_->collectRetired(dev);
+    // Previous-frame model uploads can remain GPU-visible after their
+    // TypeLooks detach. Drain only before this frame's render submissions;
+    // if a backend refuses the idle barrier, retain them for the next frame.
+    if(view_.pendingModelRetirements()!=0 ||
+       view_.pendingRolledBackImages()!=0)
+        view_.collectRetiredModels();
+    if(view_.pendingPaintGpuRetirements()!=0)
+        view_.collectRetiredPaintGpuResources();
+    if(r3d_.pendingProgramRetirements()!=0)
+        r3d_.collectRetiredPrograms();
+    if(r3d_.pendingTargetRetirements()!=0)
+        r3d_.collectRetiredTargets();
+    if(r3d_.hasPendingModelPipelineJobs())
+        r3d_.pollPendingModelPipelineJobs();
     const auto frameStarted = std::chrono::steady_clock::now();
-    if (mapLoading_) { horizonFrameTiming_.discard(); frameMapLoading(dev, dt); return; }
+    if (mapLoading_) {
+        horizonFrameTiming_.discard();
+        // This frame does not render camera 3: retire stale motion/exposure
+        // history from the previous scene using the GPU submission token.
+        prisma_.retireUnregisteredViews({});
+        r3d_.retireUnregisteredObjectMotionViews({});
+        prisma_.retireUnreferencedSizeCaches();
+        frameMapLoading(dev, dt);
+        return;
+    }
     if (!worldScene_ || !sim_ || planet()) horizonFrameTiming_.discard();
     if (mapJustLoaded_) { dt = 0; mapJustLoaded_ = false; }
     if (sim_ && screen_ == Screen::Playing) updateBackgroundLoading();
@@ -1041,17 +1172,20 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
             shadowQuality_ = boundShadowQuality_ = quality_.shadows();
             // post effects follow: one tier down per governor step, but keep the cheap look (low)
-            if (postFxBase_ != render::PostFxQuality::Off)
-                postFx_.setQuality(render::PostFxQuality(std::max(1, int(postFxBase_) - quality_.stepsDown())));
+            if (prismaBase_ != render::PrismaQuality::Off)
+                prisma_.setQuality(render::PrismaQuality(std::max(1, int(prismaBase_) - quality_.stepsDown())));
         }
 
-        steerPossessed();
-        topDownFrame(dt);
+        if (!hostFrozen || singleStep) {
+            steerPossessed();
+            topDownFrame(singleStep ? 1.0 / sim_->tickRate() : dt);
+        }
         if (city_) alpha = cityFrame(dt);   // the city runs on a server: nothing is stepped here
-        else if (!netMatch_ && !topDownPaused()) {   // single player: the escape preview pauses the match
+        else if (!netMatch_ && !topDownPaused() && (!hostFrozen || singleStep)) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
             static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
-            if (simSpeed == 1.0) sim_->advance(dt);
+            if (singleStep) sim_->step();
+            else if (simSpeed == 1.0) sim_->advance(dt);
             else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time
             alpha = float(sim_->alpha());
             processEvents();
@@ -1077,7 +1211,14 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         if (screen_ == Screen::Playing) { topDownPresent(dt, alpha); topDownCamera(dt); }
     }
 
-    if (sim_ && ensureLocalAssets()) { frameMapLoading(dev, dt); return; }
+    if (sim_ && ensureLocalAssets()) {
+        // Asset-loading output has no active 3D presentation camera.
+        prisma_.retireUnregisteredViews({});
+        r3d_.retireUnregisteredObjectMotionViews({});
+        prisma_.retireUnreferencedSizeCaches();
+        frameMapLoading(dev, dt);
+        return;
+    }
 
     luaTick(dt);   // game.on("update", fn) in UI scripts
     updateAudio(dt);
@@ -1096,6 +1237,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     pass.colorTarget = hostColor_;
     pass.depthTarget = hostDepth_;
     pass.clearColor[0] = 0.55f; pass.clearColor[1] = 0.66f; pass.clearColor[2] = 0.78f;
+    render::LightSystem::PreparedFrame lensLightingSnapshot;
     if (sim_) {
         if (planet()) { // orbit camera -> view-world RTSCamera; space is black
             cam_ = view_.updatePlanetCamera(scene_.seconds, float(dt), fbH());
@@ -1108,15 +1250,36 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             worldScene_->update(dev, {&focus, 1}, worldRadius_);
             worldMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-worldStarted).count();
         }
-        // Apply the body-space gate before attempting any GPU work.
-        // GPU billboards are still flat-world-only; planet mode resets them.
+        prisma_.setViewId(3ULL);
+        prisma_.applyCameraVolumes(prismaVolumes_, cam_.eye());
+        // The running game has priority over auxiliary editor previews.
+        // Up to 256 MiB for two camera-owned output HDR histories.
+        prisma_.setViewQualityPolicy(3ULL,{224,256});
+        const auto viewAssets=view_.ownedPresentationGpuMemoryStats(dev);
+        const auto fxAssets=fx_.ownedGpuMemoryStats();
+        const auto streamed=worldScene_
+            ? worldScene_->ownedGpuMemoryStats(dev) : render::GpuOwnedMemoryStats{};
+        prisma_.setExternalPresentationAssetsGpuMemory(
+            render::GpuOwnedMemoryCounter::saturatingAdd(
+                render::GpuOwnedMemoryCounter::saturatingAdd(
+                    viewAssets.knownBytes(),fxAssets.knownBytes()),
+                streamed.knownBytes()));
+        const auto rendererMemory=r3d_.residentMemoryStats();
+        prisma_.setExternalRendererGpuMemory(
+            rendererMemory.liveTextureKnownBytes+
+            rendererMemory.liveBufferKnownBytes,
+            rendererMemory.pendingMotionKnownBytes);
+        prisma_.setExternalGeometryPoolGpuMemory(
+            render::geometryPoolStats(dev).allocatedBytes);
+        // Presentation-only Halton jitter: gameplay aiming, viewport picking,
+        // UI and input continue to use the original unjittered cam_.
+        const auto [renderW,renderH]=prisma_.renderSizeForOutput(fbW(),fbH());
+        const render::RTSCamera renderCam = prisma_.jitteredCamera(cam_,renderW,renderH);
+        // SpectraFX GPU simulation is encoded before the scene pass.
         fx_.setPlanetView(planet() ? &view_ : nullptr);
-        // Opt-in SpectraFX GPU evolution: must happen inside beginFrame,
-        // outside render passes and before the CPU/scene draw opens a pass.
-        // No authored fx/gpu/routes.json => existing VFX behavior unchanged.
         fx_.prepareGpuFrame(screen_ == Screen::Playing || screen_ == Screen::Over
                                 ? float(std::clamp(dt,0.0,0.1)) : 0.0f,cam_);
-        r3d_.beginScene(cam_, fbW(), fbH());
+        r3d_.beginScene(renderCam,renderW,renderH);
         if (worldScene_ && !planet()) worldScene_->draw(r3d_, world::Cell{0, 0, 0}, 1);
         auto& gs = mod().state(*sim_);
         {   // input state for the overlays (placement footprint / build grids, held keys, modes, cursor)
@@ -1141,9 +1304,22 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             oc.over = screen_ == Screen::Over;
             view_.setOverlayContext(oc);
         }
+        render::CameraModelSnapshot::CaptureGuard lensCaptureGuard;
+        // Automatically clear the borrowed RtsView capture pointer if
+        // any rendering/animation callback throws before the normal end.
+        struct PreparedCaptureReset {
+            game::RtsView* view=nullptr;
+            ~PreparedCaptureReset() {
+                if(view)view->setCameraPreparedCapture(nullptr);
+            }
+        } preparedCaptureReset{lensCamerasActive_?&view_:nullptr};
+        if(lensCamerasActive_) {
+            lensCaptureGuard.begin(lensModelSnapshot_,r3d_);
+            view_.setCameraPreparedCapture(&lensModelSnapshot_);
+        }
         view_.draw(r3d_, scene_, time_, spectator_ ? nullptr : &gs.vision[human_], gs.grid);
-        for (auto& fe : view_.fieldView().takeEffects()) fx_.particles().play(fe.name, {fe.pos.x, fe.pos.y + 0.2f, fe.pos.z});   // grid field particles
-        fx_.update(*sim_, scene_, cam_, r3d_.viewProj(), fbW(), fbH(),
+        for (auto& fe : view_.fieldView().takeEffects()) fx_.playEffect(fe.name, fe.pos.x, fe.pos.y + 0.2f, fe.pos.z);   // grid field particles
+        fx_.update(*sim_, scene_, cam_, r3d_.viewProj(),renderW,renderH,
                    screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
         fx_.addLights(r3d_.lights);   // particle lights ("light" module)
         runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
@@ -1161,19 +1337,37 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             }
         }
         drawToolPreview();
+        lensCaptureGuard.end();
+        if(preparedCaptureReset.view) {
+            preparedCaptureReset.view->setCameraPreparedCapture(nullptr);
+            preparedCaptureReset.view=nullptr;
+        }
         const float fogBase = r3d_.lighting.fogDensity;   // a narrow top-down lens: fog as a default lens framing it sees
         if (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over)
             if (topDownActive()) r3d_.lighting.fogDensity = fogBase * topDown_.fogScale();
-        r3d_.render(pass, &postFx_);
+        if(lensCamerasActive_) lensLightingSnapshot=r3d_.lights.capturePrepared();
+        r3d_.render(pass, &prisma_);
         fx_.render(r3d_.lighting);
         // GPU billboards share this scene depth/pass; no separate pass and no
         // duplicate CPU draw of GPU-owned hybrid emitter instances.
         fx_.renderGpu(r3d_.viewProj(),cam_);
+        // PRISMA: current-frame particle alpha/depth coverage for MotionBlur.
+        // Callback runs only when the HDR motion/reactive pass is active;
+        // it reuses particle geometry already submitted by fx_.render().
+        if (fx_.hasReactiveGeometry())
+            r3d_.addMotionReactiveDraw([this](gfx::Device& gpu,
+                    gfx::TextureHandle sceneDepth, int width, int height) {
+                fx_.renderReactive(gpu,sceneDepth,width,height);
+            });
         r3d_.lighting.fogDensity = fogBase;
-        r3d_.resolvePostFx();   // post effects (if any) under the HUD
+        r3d_.resolvePrisma();   // post effects (if any) under the HUD
+        prisma_.clearCameraVolumes();
         view_.drawOverlays(cam_, scene_, platform::windowWidth(), platform::windowHeight());
         view_.drawCanvas(canvas_);
         topDownDraw();
+        // races (rules "race" + map "race", docs/races.md): the same HUD as every other client
+        if (auto* drv = mod().driving(); drv && drv->racing(*sim_))
+            ui::drawRaceHud(loc_, drv->raceView(*sim_, human_), sim_->tick(), sim_->tickRate());
     } else {
         pass.clearColor[0] = 0.10f; pass.clearColor[1] = 0.12f; pass.clearColor[2] = 0.14f;
         dev.beginPass(pass);
@@ -1182,6 +1376,54 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     ui_.render();
     dev.endPass();
+    // A separate offscreen path after the already presented scene/UI pass.
+    // Never replay RtsView::draw: its animation, event and appearance updates
+    // are stateful, even with MotionWeave's universal View adapter.
+    if(lensCamerasActive_ && sim_ && !mapLoading_ && dev.gpuHealthy() &&
+       view_.visualFrameReadyFor(mod().state(*sim_).grid,time_)) {
+        // Use the actual multi-owner committed epoch, never an unrelated
+        // client counter. Failed primary updates cannot be replayed by RT.
+        const auto published=view_.publishedVisualFrame();
+        const render::CameraVisualFrameId visualId{
+            uint64_t(sim_->tick()),published.id,time_};
+        const auto result=lensCameras_.renderPrepared(
+            lensModelSnapshot_,visualId,float(dt),
+            [&](const render::CameraModelSnapshot& snapshot,
+                const render::EcsCameraView& camera,render::Renderer3D& renderer){
+                if(worldScene_ && !planet())
+                    worldScene_->draw(renderer,world::Cell{0,0,0},1);
+                // Separate per-camera terrain culling and view projection,
+                // but reuse the primary frame's already uploaded GPU state.
+                if(!planet()) {
+                    auto& gs=mod().state(*sim_);
+                    view_.drawPreparedTerrainFog(renderer,gs.grid,
+                        spectator_?nullptr:&gs.vision[human_],time_,published.id);
+                    view_.drawPreparedSprites(renderer,published.id);
+                }
+                // Renderer3D::beginScene reset the per-camera light list.
+                // Reuse primary-frame particle lights without collecting FX again.
+                renderer.lights.replayPrepared(lensLightingSnapshot);
+                // Re-submit final pose/material/attachment packets directly.
+                // RtsView::draw and MotionWeave::update are NOT repeated.
+                snapshot.submit(renderer,camera.entity.packed());
+            },{},[&](const render::EcsCameraView& camera,
+                     render::Renderer3D& renderer,int width,int height) {
+                // The already updated particle population is reprojected
+                // into each camera's still-open draw pass. No FX tick/event.
+                fx_.renderPrepared(camera.camera,renderer.viewProj(),
+                                   width,height,renderer.lighting);
+            });
+        if(std::getenv("AIVERSE_LENS_LOG") && !result.diagnostics.empty())
+            std::fprintf(stderr,"[lens] submitted=%zu skipped=%zu diagnostics=%zu\n",
+                result.submitted,result.skipped,result.diagnostics.size());
+    }
+    if (!sim_) {
+        // Menu-only output: no active camera view; avoid keeping the
+        // previous match's private histories and size caches indefinitely.
+        prisma_.retireUnregisteredViews({});
+        r3d_.retireUnregisteredObjectMotionViews({});
+        prisma_.retireUnreferencedSizeCaches();
+    }
     // CPU includes full client callback work (not clamped simulation dt);
     // GPU completion is matched later through the tagged gfx query.
     horizonFrameTiming_.finish(worldScene_.get(),frameStarted);

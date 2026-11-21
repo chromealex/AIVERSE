@@ -67,9 +67,11 @@ jobs:
             aiverse_terraweave_ops_test \
             aiverse_terraweave_preview_test \
             aiverse_terraweave_forest_scene_test \
-            aiverse_terraweave_horizon_test
+            aiverse_terraweave_horizon_test \
+            aiverse_terraweave_micro_nutrient_test \
+            aiverse_terraweave_native_micro_compile_test
       - name: Run TerraWeave CTest suite
         run: |
           ctest --test-dir build/terraweave-ci \
             --output-on-failure \
-            -R '^(gpu_timing_router|terraweave(_arbor|_flora|_model|_heightmap|_ops|_preview|_forest_scene|_horizon)?)
+            -R '^(skill_audit|gpu_timing_router|terraweave(_arbor|_flora|_model|_heightmap|_ops|_preview|_forest_scene|_horizon|_micro_nutrient|_native_micro_compile)?)$'

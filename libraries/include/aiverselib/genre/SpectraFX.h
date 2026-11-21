@@ -3,6 +3,14 @@
 #pragma once
 #include "engine/fx/SpectraFX.h"
 #include "EcsVfxPresentation.h"
+#include "SpectraCueEcsAdapter.h"
+#include "SpectraGpuCueEcsAdapter.h"
+#include "SpectraGpuAttachmentEcsAdapter.h"
+#include "SpectraEcsRenderPose.h"
+#include "SpectraGpuRecoveryHost.h"
+#include "SpectraGpuCaptureHost.h"
+#include "SpectraGpuCaptureMailbox.h"
+#include "engine/fx/SpectraDiagnosticReport.h"
 
 namespace aiverse::spectra {
 

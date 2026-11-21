@@ -9,6 +9,7 @@
 #include "engine/world/TerraWeaveForestDeadwood.h"
 #include <aiverselib/water/NereidQueryIndex.h>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -87,8 +88,18 @@ inline ForestEcologyEcsOutcome advanceForestEcologyEcs(
     }
     // No terrain/physics mutation. The same saved soil snapshot is used
     // to sample NEREID water and place any viable new native sapling.
-    auto ground=materializeEcsTerrain(*authority,cfg);
-    lib::nereid::WaterQueryIndex water(ecs);
+    // Materialized lazily: a step that evaluates no plant (empty or fully
+    // dead/fallen population) does not rebuild terrain or the water index.
+    std::optional<EarthworksLayer> groundCache;
+    std::optional<lib::nereid::WaterQueryIndex> waterCache;
+    const auto ground=[&]()->const EarthworksLayer&{
+        if(!groundCache)groundCache.emplace(materializeEcsTerrain(*authority,cfg));
+        return *groundCache;
+    };
+    const auto water=[&]()->const lib::nereid::WaterQueryIndex&{
+        if(!waterCache)waterCache.emplace(ecs);
+        return *waterCache;
+    };
     auto rooted=authority->rooted;
     // A native caller must explicitly restore a harvested ID before
     // registering new roots with that identity. Otherwise a hidden tree
@@ -108,14 +119,14 @@ inline ForestEcologyEcsOutcome advanceForestEcologyEcs(
     ForestEcologyResult result=advanceForestEcology(
         ecology,rooted,tick,species,
         [&ground](int64_t x,int64_t z)->std::optional<int32_t>{
-            const int64_t edge=kWorldLimitCm-ground.spacingCm();
+            const int64_t edge=kWorldLimitCm-ground().spacingCm();
             if(x<=-edge || x>=edge || z<=-edge || z>=edge)
                 return std::nullopt;
-            return ground.sampleHeightCm(x,z);
+            return ground().sampleHeightCm(x,z);
         },
         [&](const AnchoredPlant& plant){
             ForestEcologyClimate sampled=
-                nativeRootedPlantClimate(plant,ground,water,extra);
+                nativeRootedPlantClimate(plant,ground(),water(),extra);
             // Mineralised organic matter is a local fertility PROXY, not
             // a duplicate soil height/erosion material. It supplements
             // the authored or PHYSIS baseline without creating mass.

@@ -74,7 +74,7 @@ WorldScene::WorldScene(const Json& manifest,AssetReader reader,std::shared_ptr<r
         confluences_.setConfluences(confluence.sources);
     // Opt-in only. The existing WorldScene codepath is identical when the
     // manifest has no terraweaveForest block.
-    terraForest_=forestSceneFromManifest(manifest);
+    terraForest_=forestSceneFromManifest(manifest,reader);
     terraHorizon_=horizonSceneFromManifest(manifest,terraForest_.get(),reader);
     if(terraHorizon_) {
         // Honor optional manifest presentationQuality in the WorldScene
@@ -390,17 +390,78 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
     }
     return out;
 }
-// GPU resources of a chunk that leaves: its own models always, a shared model only when no other chunk (resident or
-// being prepared) holds it; the cache entry goes first, under the lock, so a worker cannot pick up a released model.
+// A cell eviction stops all new draws of its Models but may race with
+// already submitted GPU work AND async CPU workers borrowing shared Models.
+// Retain ONE manager-owned shared_ptr per unique Model until every other
+// resident/worker reference has gone. Direct releaseModel here was unsafe.
 void WorldScene::releaseChunk(gfx::Device& device,Prepared& chunk) {
-    for(size_t i=0;i<chunk.models.size();++i){
-        auto& model=chunk.models[i];
-        if(i<chunk.sharedKeys.size()&&!chunk.sharedKeys[i].empty()){
+    (void)device; // the GPU is touched only by collectRetired / shutdown
+    for(auto& model:chunk.models) {
+        if(!model)continue;
+        deferredModels_.try_emplace(model.get(),model);
+        model.reset();
+    }
+}
+
+// Run once at the owning Device frame boundary, before this frame's new
+// submissions. No texture/model GPU resources are destroyed before a
+// real completion token or verified full-idle fallback.
+bool WorldScene::collectRetired(gfx::Device& device) {
+    try {
+    for(auto it=deferredModels_.begin();it!=deferredModels_.end();) {
+        bool finalCpuOwner=false;
+        {
+            // A worker can lock the weak shared-model cache concurrently.
+            // Serialize final-owner check with its weak.lock(), and erase
+            // only the weak entry for THIS Model (a newer import may have
+            // already replaced the same source file's weak cache entry).
             std::lock_guard lock(cache_->mutex);
-            if(model.use_count()>1)continue;
-            cache_->models.erase(chunk.sharedKeys[i]);
+            if(it->second.use_count()==1) {
+                for(auto weak=cache_->models.begin();weak!=cache_->models.end();) {
+                    auto locked=weak->second.lock();
+                    if(!locked || locked.get()==it->first)
+                        weak=cache_->models.erase(weak);
+                    else ++weak;
+                }
+                // A late worker cannot acquire this candidate after erase.
+                finalCpuOwner=true;
+            }
         }
-        render::releaseModel(device,*model);
+        if(finalCpuOwner) {
+            retiredModels_.enqueueFrom(it->second);
+            it=deferredModels_.erase(it);
+        }else ++it;
+    }
+    if(retiredModels_.empty())return deferredModels_.empty();
+    return retiredModels_.collect(
+        [&]{return device.beginResourceRetirement();},
+        [&](uint64_t token){return device.resourceRetirementComplete(token);},
+        [&](uint64_t token){
+            if(device.resourceRetirementStatus(token)==
+               gfx::ResourceRetirementStatus::Complete)
+                device.endResourceRetirement(token);
+            else
+                device.abandonRetirementTokenAfterIdle(token);
+        },
+        [&]{
+            // Unsupported async-token backends should not stall for every
+            // streaming-cell eviction. A bounded-count pressure point or
+            // explicit shutdown authorizes one full-device idle fallback.
+            return retiredModels_.pending()>=128 &&
+                   device.waitForResourceIdle();
+        },
+        [&](std::shared_ptr<render::Model>& model) {
+            if(model)render::releaseModel(device,*model);
+            model.reset();
+        },
+        [&](uint64_t token) {
+            return device.resourceRetirementStatus(token)==
+                   gfx::ResourceRetirementStatus::Failed;
+        });
+    }catch(...) {
+        // Failed queue allocation or Device callback cannot authorize GPU
+        // destruction. Keep the remaining Models for a later owner frame.
+        return false;
     }
 }
 void WorldScene::update(gfx::Device& device,std::span<const Vec3> observers,int radius) {
@@ -655,21 +716,42 @@ void WorldScene::update(gfx::Device& device,std::span<const Vec3> observers,int 
             static_cast<int64_t>(std::llround(xCm)),
             static_cast<int64_t>(std::llround(zCm))});
     }
-    nereidWater_.update(device,observers.empty()?nullptr:&observers.front());
+    std::function<Vec3(uint64_t,Vec3,Vec3)> resolveFlow;
+    if(confluences_.count()||cascades_.count()||!nereidFlowObstructions_.empty())
+        resolveFlow=[this](uint64_t stableWaterId,Vec3 position,Vec3 ordinary) {
+            const Vec3 joined=confluences_.flowForWater(stableWaterId,position,ordinary,nereidWater_);
+            const Vec3 current=cascades_.flowAtConnection(stableWaterId,position,joined,nereidWater_);
+            return resolveNereidFlowObstructions(stableWaterId,position,current);
+        };
+    nereidWater_.update(device,observers.empty()?nullptr:&observers.front(),resolveFlow);
     floodVisual_.update(device);
     cascades_.update(device,&nereidWater_);
     if(textures_)textures_->trim(device);
 }
+render::GpuOwnedMemoryStats WorldScene::ownedGpuMemoryStats(
+        const gfx::Device& device) const {
+    render::GpuOwnedMemoryCounter counter(device);
+    // Models can be shared by several active chunks. Count the actual
+    // owned RHI handles once across all resident cells; borrowed cached
+    // images and global pooled pages remain with their external owners.
+    for (const auto& [cell, chunk] : resident_) {
+        (void)cell;
+        if (!chunk) continue;
+        for (const auto& model : chunk->models)
+            if (model) render::appendModelOwnedGpuMemory(*model,counter);
+    }
+    return counter.stats();
+}
+
 void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
-    nereidWater_.draw(renderer,origin,size,&ripples_,&windField_,
-        [this](uint64_t stableWaterId,Vec3 position,Vec3 ordinary) {
-            const Vec3 joined=confluences_.flowForWater(
-                stableWaterId,position,ordinary,nereidWater_);
-            const Vec3 current=cascades_.flowAtConnection(
-                stableWaterId,position,joined,nereidWater_);
-            return resolveNereidFlowObstructions(
-                stableWaterId,position,current);
-        });
+    std::function<Vec3(uint64_t,Vec3,Vec3)> resolveFlow;
+    if(confluences_.count()||cascades_.count()||!nereidFlowObstructions_.empty())
+        resolveFlow=[this](uint64_t stableWaterId,Vec3 position,Vec3 ordinary) {
+            const Vec3 joined=confluences_.flowForWater(stableWaterId,position,ordinary,nereidWater_);
+            const Vec3 current=cascades_.flowAtConnection(stableWaterId,position,joined,nereidWater_);
+            return resolveNereidFlowObstructions(stableWaterId,position,current);
+        };
+    nereidWater_.draw(renderer,origin,size,&ripples_,&windField_,resolveFlow);
     cascades_.draw(renderer,origin,size);
     const int64_t floodOriginCm=int64_t(size)*100;
     floodVisual_.draw(renderer,
@@ -709,14 +791,39 @@ void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
     }
 }
 void WorldScene::shutdown(gfx::Device& device) {
-    nereidFlowObstructions_.clear(); // no stale server physics snapshots after world unload
+    // Join streamed CPU preparation before releasing Model ownership.
+    stream_->shutdown([&](Cell cell){
+        auto it=resident_.find(cell);
+        if(it!=resident_.end()){
+            releaseChunk(device,*it->second);
+            resident_.erase(it);
+        }
+    });
+    if(terraForest_)terraForest_->shutdownAsync();
+    // Block until all previously submitted GPU uses of streamed, native
+    // and independently owned environment resources are complete.
+    if(!device.waitForResourceIdle())
+        throw std::runtime_error("WorldScene GPU shutdown barrier failed");
+    if(!retiredModels_.drain(
+            []{return true;},
+            [&](uint64_t token){device.abandonRetirementTokenAfterIdle(token);},
+            [&](std::shared_ptr<render::Model>& model){
+                if(model)render::releaseModel(device,*model);
+                model.reset();
+            }))
+        throw std::runtime_error("WorldScene GPU retirement drain failed");
+    for(auto& [key,model]:deferredModels_) {
+        (void)key;
+        if(model)render::releaseModel(device,*model);
+    }
+    deferredModels_.clear();
+    {std::lock_guard lock(cache_->mutex);cache_->models.clear();}
+    nereidFlowObstructions_.clear();
     floodVisual_.shutdown(device);
     nereidWater_.shutdown(device);
     cascades_.shutdown(device);
     ripples_.clear();
-    stream_->shutdown([&](Cell cell){auto it=resident_.find(cell);if(it!=resident_.end()){releaseChunk(device,*it->second);resident_.erase(it);}});
-    if(terraForest_)terraForest_->shutdownAsync(); // join workers before releasing captured resources
-    if(terraHorizon_)terraHorizon_->shutdown(device); // worker join + RHI release
+    if(terraHorizon_)terraHorizon_->shutdown(device);
     if(terraForest_&&terraForestReady_){
         terraForest_->releaseModels(device);
         terraForestReady_=false;

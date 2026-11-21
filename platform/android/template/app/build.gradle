@@ -17,7 +17,7 @@ android {
             cmake {
                 arguments '-DAIVERSE_CONTENT_DIR=' + file('src/main/assets/content').absolutePath,
                           '-DAIVERSE_BUILD_EDITOR=OFF', '-DAIVERSE_BUILD_TOOLS=OFF', '-DAIVERSE_BUILD_TESTS=OFF', '-DAIVERSE_BUILD_HEADLESS=OFF',
-                          '-DANDROID_STL=c++_static'
+                          '-DANDROID_STL=c++_static', '-DAIVERSE_BUILD_FPS_CLIENT=OFF'@ENGINE_MODULE_ARGS@
             }
         }
     }

@@ -28,6 +28,12 @@ inline std::vector<EditorSceneNode> enumerateDocumentSceneNodes(
         node.hasPosition = readDocumentTransform(map, ref, node.position);
         nodes.push_back(std::move(node));
     };
+    const auto& lights=(fpsProject?map.data.fps:map.data.extra)["lights"];
+    if(lights.isArray())for(size_t i=0;i<lights.size();++i) {
+        if(!lights[i].isObject())continue;
+        const auto name=lights[i].getStr("name");
+        add(DocumentEntityRef::light(i,fpsProject),"Lights",name.empty()?"Light #"+std::to_string(i+1):name);
+    }
     if (fpsProject) {
         const Json& fps = map.data.fps;
         const Json& colliders = fps["colliders"];

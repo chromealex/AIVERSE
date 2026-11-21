@@ -1,0 +1,3 @@
+# Stage95 — single NEREID optical composite
+
+Code f9d094e336afb9f93c02d733b18da98fc06e1de5, feature/aiv87_terrain_pbr. Shared GLSL/MSL optically resolved water alpha/colour and opt-in process diagnostics only; no DOM/style/bridge/project-write change. Native Studio, Editor and renderbench builds PASS; final renderer contractPASS and previous focused3/3PASS. Actual Metal3optical cases plus7false-colour diagnostic captures validate inputs/transparency; final default ES300/GL330 compilePASS after fixing undefined macro guard. Read docs/nereid/HANDOFF.md for exact logs, limitations and nativeScene evidence. Mac locked: Studio UI/pixel parity NOTRUN; no final beauty/main claim.

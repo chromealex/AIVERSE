@@ -369,3 +369,85 @@ The official CPU validation entrypoint is `bash tools/nereid/validate.sh --focus
 ## Stage 50 — evidence and reliable Release tests
 
 Mac Studio at `65346f91`: full Release build and 118/118 CTest PASS, focused NEREID suite 16/16 PASS and skill audit 0 errors/warnings. The build log nevertheless had 18 warnings/3 contextual notes from standard `assert()` disappearing with `NDEBUG` in six ECS test sources. In `8f426376ecb095017cefdd313cca5dd6c2d70186`, converted 44 assertions to always-on `AIVERSE_TEST_CHECK`; no runtime logic changed. The new commit requires a fresh full CPU regression because checks previously compiled out will now execute. GPU/Metal quality and FPS/RTS visuals remain unverified. See `docs/nereid/stage-50-release-assertion-correctness.md`.
+
+## Opt-in river grade and current authoring
+
+`WaterRiverGradeComponent` (`nereid.river_grade` schema1) is an optional integer
+plane grade anchored in X/Z. Existing WaterBody and geometry bytes are unchanged.
+Call `registerNereidRiverGradePersistence`, or set the appended native pipeline
+`enableRiverGrade=true` (default false, preserving old registration/checksums).
+Reference and indexed sampling, contact depths and the native presentation snapshot
+read the same component. Downhill velocity projects onto the nearest river tangent.
+Manual mode retains WaterBody.flow; automatic mode estimates terminal velocity
+from gravity × grade × responseSeconds, bounded by maxSpeed. This is a linear
+resistance approximation, not a discharge-conserving hydraulic solver. Current
+fields/vortices still add their existing local behavior.
+
+Manifest/editor `grade` contains `origin:[x,z]`, `slopeDegrees` (±20),
+`downhillHeadingDegrees` (0=+Z), `automaticCurrent`, `responseSeconds` (0..60),
+`maxSpeed` (0..100). Advanced `risePerMetre:[dY/dX,dY/dZ]` is also accepted;
+explicit degrees win. Missing grade preserves flat legacy geometry and flow.
+GPU residency keys include grade; mesh vertices and normals use the inclined
+plane, and Terra riverbed carving can consume the exact same grade. Horizontal
+planar reflection remains an approximation for tilted water. Confluence/cascade
+connectors still use their authored reference levels; complex graded joins need
+separate validation and must not be called production parity.
+
+Typed `editNereidFlow` validates a candidate before the editor commits Undo/save.
+Legacy editor agent ops: `nereid_water_state`, `nereid_flow_set`. HTML5 Studio
+controls are implemented on feature/studio-html5 with native bridge methods
+studio.nereidFlow / studio.nereidFlowSet; actual frontend/native QA is recorded in
+that branch's stage handoff. Changing water grade does not rebuild an already
+exported terrain: rebuild from the Terra recipe using alignRiverGrade=true.
+Water animation uses render seconds; its velocity/direction come from NEREID
+configuration, independently of clouds/wind and foam intensity.
+
+## Read-only footprint clearance for Terra authoring
+
+`NereidFootprintDistance.h` provides `waterFootprintDistance(body,geometry,point)`
+as an optional signed Fixed horizontal margin. Enabled invalid geometry fails
+closed; a disabled override uses the original body footprint. Infinite water
+uses a bounded negative sentinel. Tapered rivers use projected centreline margin,
+not an exact Euclidean distance to their variable-width boundary. This helper
+has no state, RNG, persistence/schema or contact-selection changes. Existing
+`coversWaterBody`, linear/indexed sampling, priorities and save checksums retain
+their original algorithms; do not replace membership tests with rounded distance.
+Terra authoring combines clearance with graded height for one sand/wetness/grass
+snapshot. It does not install a live hydraulic or erosion solver.
+
+## Camera-independent flow presentation snapshot (CPU stage)
+
+`engine/world/NereidFlowMap.h` builds a bounded data-only world-space grid from
+`gradedWaterBody` + `waterCurrentWithVortices`. It samples the local graded water
+surface, preserves manual flow and existing current/vortex controls, and never
+writes to ECS. The default grid is 2m, at most256 per axis and16384 texels; larger
+footprints increase spacing by powers of two. Finite source bounds and sampling
+have no camera/mesh-LOD inputs. Infinite water requires an explicit bounded patch;
+overlapping same-scale patches retain one world lattice. RG stores X/Z m/s, B
+local rapid intensity, A validity. This rectangle is presentation coverage, not
+replacement authoritative water membership.
+
+The shared NereidWaterScene prepares immutable linear RGBA16F versions before
+drawing. Lit-mesh texture6 and appended U0 waterFlowRect sample velocity at each
+fragment world X/Z. Waves use overlapping bounded four-second advection phases;
+rapid foam and contact-tail direction consume the same local current. Finite
+fields do not rebuild for observer/LOD changes. Infinite patches remain bounded
+and world-anchored. Manual flow and automatic grade remain canonical NEREID inputs.
+
+NereidFlowTextureCache bounds active plus pending resources to256 versions/32MiB.
+Exact half payload comparison avoids redundant uploads; signed half preserves
+negative velocities. CPU captured-frame leases pin replaced versions, then
+GpuResourceRetirement waits for GPU completion. Explicit shutdown revokes future
+replay before an idle drain, or quarantines handles if idle is unavailable.
+NereidFlowBinding is an appended optional renderer argument; existing calls fall
+back to per-draw hydraulics, now sampled at a stable source point rather than the
+observer. Rebuild native clients for the extended renderer/uniform ABI.
+
+WorldScene supplies its existing confluence/cascade/obstruction resolver when
+needed. A trusted nonzero resolver revision permits reuse; zero revalidates a
+bounded number of grids each update, exact-deduplicating GPU payloads. Dynamic
+many-body refresh latency and CPU cost need host-specific measurement. This is a
+presentation snapshot, not a new fluid solver. Metal/desktop GL bend fixtures
+verify camera/time-invariant velocity and actual animated shading; editor and
+other-platform coverage must be recorded separately in HANDOFF.md. No component,
+persistence/checksum, simulation-clock or river-grade save format changes.

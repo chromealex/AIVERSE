@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "description": "Reusable, typed, pure SpectraFX v2 effect math; no game genre dependencies",
+  "functions": {
+    "scale_speed": {
+      "parameters": {
+        "base": 1,
+        "gain": 1
+      },
+      "returns": "number",
+      "nodes": [
+        {
+          "id": "base",
+          "type": "Parameter",
+          "properties": {
+            "name": "base"
+          }
+        },
+        {
+          "id": "gain",
+          "type": "Parameter",
+          "properties": {
+            "name": "gain"
+          }
+        },
+        {
+          "id": "scaled",
+          "type": "Multiply",
+          "properties": {
+            "a": {
+              "$node": "base"
+            },
+            "b": {
+              "$node": "gain"
+            }
+          }
+        }
+      ],
+      "output": "scaled"
+    },
+    "age_fade": {
+      "parameters": {
+        "intensity": 1
+      },
+      "returns": "number",
+      "nodes": [
+        {
+          "id": "age",
+          "type": "AgeNormalized"
+        },
+        {
+          "id": "one",
+          "type": "Float",
+          "properties": {
+            "value": 1
+          }
+        },
+        {
+          "id": "fade",
+          "type": "Subtract",
+          "properties": {
+            "a": {
+              "$node": "one"
+            },
+            "b": {
+              "$node": "age"
+            }
+          }
+        },
+        {
+          "id": "intensity",
+          "type": "Parameter",
+          "properties": {
+            "name": "intensity"
+          }
+        },
+        {
+          "id": "out",
+          "type": "Multiply",
+          "properties": {
+            "a": {
+              "$node": "fade"
+            },
+            "b": {
+              "$node": "intensity"
+            }
+          }
+        }
+      ],
+      "output": "out"
+    }
+  }
+}

@@ -102,3 +102,59 @@ water through the operations or the window.
 ## Not yet
 
 Wall / parapet modules from the game's models repeated along the bank; waves; water bodies at different heights.
+
+
+## NEREID current and contact optics (2026-11-21)
+
+Native NEREID transports wave detail and whitewater in world metres with the
+resolved authored current: sample at `worldXZ - velocityXZ * presentationSeconds`.
+Automatic grade/spline current and manual editor velocity retain their existing
+Fixed owner; the renderer neither derives nor changes velocity from frame time.
+Planar/SSR reflection distortions use the resolved water normal, rather than the
+legacy cloud-offset sine pattern. Legacy water/sprites retain their old helper.
+Whitewater is stretched domain-warped noise (one/two/three layers by rapidDetail),
+not a periodic product of waves.
+
+Opaque scene colour/depth capture for refraction, absorption and contact foam is
+independent of traced-shadow quality. It reuses the existing capture/blit and
+never samples its current output target. Existing SSR ray marching remains gated
+by trace quality. Internal trace2.w=.25 means optics-only;1/2 permit the old
+water/model SSR paths. Disabled optics on a scene without other reflection needs
+do not request this capture. Capture targets have real memory/blit cost; this is
+a correctness fix, not a GPU speedup.
+
+Contact foam reads undistorted depth and composites after refraction.
+shoreFoamDepth controls its vertical shallow-water band; zero also disables the
+new screen-depth obstacle tail. The tail queries upstream with4/8/16 bounded
+depth probes (Low/Medium/High rapidDetail), combines overlaps and narrows/fades
+downstream. It is a screen-space approximation: offscreen/occluded objects cannot
+contribute, steep silhouettes and large-world precision still need visual QA.
+foamStrength remains mesh-band tint; rapidFoamStrength controls moving whitewater.
+
+Renderer3D::setPresentationTime(seconds) optionally fixes the shader clock before
+beginScene; negative resumes steady time and nonfinite input is rejected. It is
+read-only presentation, not a simulation clock or flow control. Renderbench
+--freeze-time now also controls that shader clock. Reports distinguish
+opaqueSceneCapture from ssr ray marching.
+
+
+### Single optical composite and inspection
+
+Resolved NEREID refraction already contains the captured background. Its colour
+now composites once with Fresnel-weighted surface lighting; framebuffer alpha
+uses contact coverage only. Applying ordinary opacity again added unattenuated
+riverbed a second time and made the river look dry. Authored opacity still
+controls optical density, Fresnel and refraction distortion inside this result.
+The existing valid range .001.. .98 is preserved. Unresolved depth and legacy
+untagged water retain ordinary alpha fallback. Foam fades with authored opacity;
+contact coverage reaches full water at3.5cm depth, independently of the chosen
+shoreFoamDepth band. This intentionally changes NEREID appearance; recheck old
+art presets, HDR/LDR, underwater transitions and TAA on target platforms.
+
+Set AIVERSE_NEREID_DIAGNOSTIC only for a separate inspection process: depth
+(red=positive depth/4m, green=negative, blue=unavailable), coefficients
+(absorption/4,shoreFoamDepth,depthTint), basecolor, transmission, coverage or flow. Flow encodes world X/Z as
+(v*.1+.5) in RG and horizontal speed*.2 in B.
+These opt-in shader variants draw opaque diagnostic colour for NEREID only;
+postprocessing may transform the display values. Unset the environment variable
+for normal rendering. They do not change scene/component/save state.

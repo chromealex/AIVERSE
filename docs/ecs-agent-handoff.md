@@ -636,3 +636,27 @@ Work on the current feature branch and existing PR #8. Do not merge to main with
 - Ported RTS opt-in preprocessing, headless COW flag, FPS comparative tests, and Scene Hierarchy/WorldInspect support, with intentional overlap resolution. See `docs/editor-unification-handoff.md` for exact commit list and audit.
 - The opt-in ECS mechanisms remain **unverified on the integrated branch**. Latest GitHub Actions for `e2c12d0d` were all queued (CI, Studio validation and ECS experiments). Do not enable FPS/RTS experimental parallelism by default or call a COW/rollback optimization production-safe without real builds, replay parity, sanitizer, and gameplay regression checks.
 - Two branches may still receive independent updates. Future cherry-picks should compare source blob histories and resolve overlapping FPS/editor changes manually; never overwrite the universal Editor's runtime entity provider or `syncActorEntities` with a stale FPS `FpsModule` copy.
+
+## Review-fix checkpoint: ECS core + scene residency (2026-11-21)
+
+Branch `feature/aiv20261121_fix_ecs_scene` (base main `973b32970`). Full
+record: `docs/agent-handoffs/review-fixes-ecs-scene-2026-11-21.md`.
+- `engine/core/ECS.h` **unchanged**. Review claim that
+  `World::prepareExistingWrite<T>()` writes through a pool shared with a COW
+  snapshot is NOT A BUG: the non-const `poolIfExists<T>()` already clones a
+  shared pool (`use_count()!=1`) and `Pool::prepareParallelWrite` detaches
+  pages. Regression block added to `tests/ecs_cow_exception_test.cpp`
+  (`abb8983`). Note: the comment in `engine/world/TerraWeaveShorelineRaster.h`
+  ("prepareExistingWrite ALONE does not detach pool ownership") is stale.
+- Scene residency/rollback (`SceneLoadCoordinator`, `SceneResourceBackend`):
+  rollback now diffs resident leases instead of releasing all; restored
+  Loading records get full jobs; Cancelled backend entries are resurrected
+  by `pin`; terminal jobs are pruned (`21d763a`, `238d57d`).
+- New generic persistence hook: `PersistentEcsRegistry::addLoadValidator` /
+  `Simulation::addPersistentLoadValidator` (setup-only, staged-World check,
+  no save-format/hash change); used by `registerSharedPersistence` (`7fbb192`).
+- Verification actually run: standalone g++ builds of the ECS/scene tests
+  listed in the handoff, all PASS (plus ASan/UBSan for the two scene tests).
+  Full CMake build, CTest, RTS/FPS headless matches: **NOT RUN** (builds only
+  on KINGSTON). Deterministic simulation code paths are unchanged except the
+  load-time validator, which only rejects invalid saves.

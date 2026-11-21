@@ -109,6 +109,12 @@ inline NereidCascadeManifest parseNereidCascadeManifest(const Json& root) {
             if(v.has("foamColor"))
                 nereid_manifest_detail::color(v["foamColor"],
                     source.style.foamR,source.style.foamG,source.style.foamB);
+            if(v.has("turbidity"))
+                source.style.turbidity=nereid_manifest_detail::scalar(
+                    v["turbidity"],"cascade.turbidity",0.f,1.f);
+            if(v.has("siltColor"))
+                nereid_manifest_detail::color(v["siltColor"],
+                    source.style.siltR,source.style.siltG,source.style.siltB);
             if(v.has("opacity"))
                 source.style.opacity=nereid_manifest_detail::scalar(
                     v["opacity"],"cascade.opacity",0.001f,0.98f);

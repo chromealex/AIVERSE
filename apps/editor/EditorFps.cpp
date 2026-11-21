@@ -248,7 +248,7 @@ void Editor::startFpsPlay(bool listen,const std::string& address) {
 // FPS contributes scene geometry to the shared editor renderer. The scene
 // lifecycle, post-processing, depth buffer and UI overlays are owned by
 // Editor::renderScene, not by a genre-specific render pass.
-void Editor::enqueueFpsSceneGeometry(const render::RTSCamera& camera) {
+void Editor::enqueueFpsSceneGeometry(const render::RTSCamera& camera, bool editOverlays) {
     using namespace render;
     if (!fpsPreviewMesh_.vb.valid()) {
         MeshBuilder mesh;
@@ -373,10 +373,10 @@ void Editor::enqueueFpsSceneGeometry(const render::RTSCamera& camera) {
             candidate.kind = Selection::FpsObject;
             candidate.ref = object.entity;
         }
-        object.selected = selection == candidate ||
+        object.selected = editOverlays && (selection == candidate ||
             std::find(selectionSet.begin(), selectionSet.end(), candidate) !=
-                selectionSet.end();
-        object.hovered = !object.selected && hover == candidate;
+                selectionSet.end());
+        object.hovered = editOverlays && !object.selected && hover == candidate;
     }
     submitSceneRenderables(r3d_, instances);
     // Draw transform axes from the selected renderable, if visible.

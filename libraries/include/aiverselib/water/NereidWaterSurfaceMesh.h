@@ -3,6 +3,7 @@
 // are PRESENTATION ONLY and must never feed deterministic ECS/physics.
 #pragma once
 #include <aiverselib/water/NereidGeometry.h>
+#include <aiverselib/water/NereidRiverGrade.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -33,6 +34,8 @@ struct WaterSurfaceMeshOptions {
     uint32_t maxVertices=65536;
     // Opt-in static tile ranges for large ocean/box surfaces. 1 = legacy.
     uint8_t rippleTileGrid=1; // N x N tiles, N<=8 (max 64 indexed draws)
+    WaterRiverGradeComponent grade{};
+    bool useGrade=false;
 };
 struct WaterSurfaceVertex {
     float x=0,y=0,z=0,u=0,v=0,shore=0;
@@ -47,6 +50,7 @@ struct WaterSurfaceMesh {
     std::vector<uint32_t> indices;
     bool infinite=false;
     std::vector<WaterTileRange> tiles; // optional non-overlapping index partitions
+    float normalX=0,normalZ=0;
     bool empty()const{return indices.empty();}
     size_t triangleCount()const{return indices.size()/3;}
 };
@@ -71,7 +75,29 @@ struct WaterSurfaceStyle {
     // Defaults reproduce Stage 38 hard-coded shader colour.
     float rapidFoamR=0.84f, rapidFoamG=0.93f, rapidFoamB=0.94f;
     WaterRapidDetail rapidDetail=WaterRapidDetail::Medium;
+    // Suspended silt, 0..1. One authored value drives both views: from above
+    // the bed fades sooner and the body turns milky; under water visibility
+    // shrinks and the haze takes the silt colour. 0 keeps legacy optics.
+    float turbidity=0.f;
+    float siltR=0.42f, siltG=0.43f, siltB=0.31f; // linear in-scatter colour
 };
+
+// Effective optics after turbidity; renderers and the underwater view read
+// this instead of the authored fields so above/below water always agree.
+inline WaterSurfaceStyle resolvedWaterOptics(WaterSurfaceStyle s) {
+    const float t=std::clamp(s.turbidity,0.f,1.f);
+    if(t<=0.f)return s;
+    const float milk=0.75f*t;
+    s.deepR+=(std::clamp(s.siltR,0.f,1.f)-s.deepR)*milk;
+    s.deepG+=(std::clamp(s.siltG,0.f,1.f)-s.deepG)*milk;
+    s.deepB+=(std::clamp(s.siltB,0.f,1.f)-s.deepB)*milk;
+    s.absorption=std::min(4.f,s.absorption+1.6f*t);   // extinction per metre (t=1: ~2 m visibility)
+    s.depthTint=s.depthTint+(1.f-s.depthTint)*t;        // in-scatter replaces bed
+    s.underwaterScattering=std::max(s.underwaterScattering,0.85f*t);
+    s.refractionStrength*=1.f-0.5f*t;                   // silt blurs the bed
+    s.turbidity=0.f;
+    return s;
+}
 
 namespace water_mesh_detail {
 struct P {double x=0,z=0;};
@@ -390,6 +416,11 @@ inline WaterSurfaceMesh buildWaterSurfaceMesh(
     // tinting an entire far-away water surface white.
     if(options.lod!=WaterSurfaceLod::Far)
         foam(mesh,boundary,options.foamWidth,options.originX,options.originZ);
+    if(options.useGrade){
+        if(!validWaterRiverGrade(options.grade))return {};
+        mesh.normalX=-float(options.grade.risePerMetre.x.toDouble());mesh.normalZ=-float(options.grade.risePerMetre.y.toDouble());
+        for(auto& v:mesh.vertices){const Vec3 position{Fixed::fromRaw(int64_t(std::llround((double(v.x)+options.originX)*Fixed::kOne))),{},Fixed::fromRaw(int64_t(std::llround((double(v.z)+options.originZ)*Fixed::kOne)))};v.y+=float(waterGradeOffset(options.grade,position).toDouble());}
+    }
     return mesh;
 }
 

@@ -8,7 +8,15 @@ void path(const std::string& s){if(s.empty()||s.front()=='/'||s.find(':')!=std::
 }
 void GeometryScene::validate(const Json& j){
     if(!j.isObject()||j.getInt("version")!=1||!j["instances"].isArray()||j["instances"].size()>4096)throw std::runtime_error("geometry scene: version 1 and up to 4096 instances required");
-    for(auto& [k,v]:j.members())if(k!="version"&&k!="instances"&&k!="hlod")throw std::runtime_error("geometry scene: unknown key '"+k+"'");
+    for(auto& [k,v]:j.members())if(k!="version"&&k!="instances"&&k!="hlod"&&k!="strata")throw std::runtime_error("geometry scene: unknown key '"+k+"'");
+    // Opt-in STRATA virtual geometry for this scene (presentation only).
+    const auto& st=j["strata"];
+    if(!st.isNull()){
+        if(!st.isObject())throw std::runtime_error("geometry scene: strata must be object");
+        for(auto& [k,v]:st.members())if(k!="enabled"&&k!="hysteresis")throw std::runtime_error("geometry scene: unknown strata key '"+k+"'");
+        if(st.has("enabled")&&st["enabled"].type()!=Json::Type::Bool)throw std::runtime_error("geometry scene: strata.enabled must be boolean");
+        number(st,"hysteresis",0,.45);
+    }
     const auto& h=j["hlod"];
     if(!h.isNull()){
         if(!h.isObject())throw std::runtime_error("geometry scene: hlod must be object");

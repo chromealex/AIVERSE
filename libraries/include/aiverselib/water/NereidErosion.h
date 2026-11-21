@@ -120,10 +120,20 @@ inline ShoreErosionResult erodeShore(const ShoreErosionCell& source,
     ShoreErosionResult out;
     out.cell=source;
     if(forcing.wetContactPermille==0)return out;
+    // Rock is the documented non-erodible boundary: it neither loses material
+    // to wave/slope shock nor accepts deposition (its critical speed is a
+    // sentinel, not a real threshold). Carries are left untouched.
+    if(source.soil==ShoreSoil::Rock)return out;
 
     const uint32_t speed=shoreFlowSpeedCmPerSec(forcing.flow);
     const uint32_t critical=shoreCriticalSpeedCmPerSec(source.soil);
     const uint32_t excess=speed>critical?speed-critical:0u;
+    // Rock is the explicit non-erodible boundary: wave splash and bank slope
+    // must not cut it either (they used to, a few cm per minute).
+    if(source.soil==ShoreSoil::Rock){
+        out.cell.erosionCarryMilliCm=0;
+        return out;
+    }
     // Roots protect the bank without changing water velocity. A steep bank
     // erodes more rapidly; wave splash can erode low-flow sand shores.
     const uint32_t shock=excess+

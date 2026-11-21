@@ -1,0 +1,77 @@
+.nested-workspace-root{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--studio-background)}
+.nested-toolbar{flex:none;height:35px;padding:0 12px;background:#121b2a;border-bottom:1px solid #2b3b52;display:flex;align-items:center;gap:12px;color:#8ca0ba;font-size:11px}
+.nested-toolbar>button{border:0;color:#b0c2d9;background:none;font-size:11px}.nested-toolbar>span{margin-left:auto}
+.nested-panels-list{position:relative;z-index:20}.nested-panels-list summary{cursor:pointer;padding:5px;border:1px solid #344962;border-radius:5px;list-style:none}
+.nested-panels-popover{position:absolute;left:0;top:100%;background:#1a2b40;border:1px solid #4c6687;border-radius:7px;width:180px;padding:8px;box-shadow:0 14px 36px #08101cc9}
+.nested-panels-popover label{display:flex;gap:8px;padding:6px;align-items:center}.nested-panels-popover input{accent-color:var(--studio-accent)}
+.nested-split{flex:1;display:flex;min-height:0;min-width:0;overflow:hidden}.nested-horizontal{flex-direction:row}.nested-vertical{flex-direction:column}
+.nested-child{min-width:0;min-height:0;display:flex;overflow:hidden}.nested-divider{flex:none;background:#0c1624;touch-action:none}.nested-divider:hover,.nested-divider:focus-visible{background:#648ac1;outline:2px solid #8bb5f6;outline-offset:-2px}
+.nested-horizontal>.nested-divider{width:6px;cursor:col-resize}.nested-vertical>.nested-divider{height:6px;cursor:row-resize}
+.nested-stack{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:#111b2a;border:1px solid #2a3a50;overflow:hidden}
+.nested-tabs{display:flex;min-height:38px;height:38px;align-items:stretch;flex:none;border-bottom:1px solid #34435a;background:#192536;overflow-x:auto}
+.nested-tab{display:flex;flex:none;max-width:180px;align-items:stretch;color:#93a9c7;border-right:1px solid #304159}
+.nested-active{color:#e5efff;background:#263c58;box-shadow:inset 0 -2px var(--studio-accent)}
+.nested-tab>button:first-child{border:0;background:none;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 9px;font-size:11px}
+.nested-tab-close{padding:0 7px;border:0;background:none;color:#8294ae;cursor:pointer}.nested-tab-close:hover{color:white;background:#394d6b}
+.nested-tab>button:focus-visible,.nested-panel-actions-button:focus-visible{outline:2px solid var(--studio-accent);outline-offset:-2px}
+.nested-stack-body{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.nested-stack-body>.viewport{flex:1;min-height:0}.nested-stack-body>.log-list{flex:1;overflow:auto;min-height:0}
+.nested-empty{display:grid;place-items:center;flex:1;color:#7589a3;font-size:11px}
+.nested-drop-zones{position:absolute;inset:0;z-index:10;pointer-events:none}.nested-drop-edge,.nested-drop-center{position:absolute;background:#3c6ea244;color:#d9ecff;font-size:11px;text-align:center;display:grid;place-items:center;border:1px dashed #7fb0ee;pointer-events:auto}
+.nested-drop-edge.hovered,.nested-drop-center.hovered{background:#7baaf286;outline:2px solid #c6e1ff}
+.nested-drop-left{left:0;top:24%;width:23%;height:52%}.nested-drop-right{right:0;top:24%;width:23%;height:52%}
+.nested-drop-top{left:24%;top:0;width:52%;height:23%}.nested-drop-bottom{left:24%;bottom:0;width:52%;height:23%}
+.nested-drop-center{left:29%;top:29%;width:42%;height:42%;border-radius:12px}
+@media(max-width:850px){.nested-toolbar>span{display:none}}
+/* HTML-over-Metal: do not paint an opaque parent behind the transparent scene. */
+html.native-composite .nested-stack:has(.viewport-native),
+html.native-composite .nested-stack:has(.viewport-native) .nested-stack-body{
+  background:transparent!important;
+}
+
+/* Technical location <select>s are replaced by a contextual action strip.
+   It stays above the native Metal viewport, so WebKit UI is never occluded. */
+.nested-panel-actions-button {
+  display:grid;place-items:center;flex:none;
+  width:27px;height:100%;padding:0 5px;border:0;
+  background:transparent;color:var(--au-text-muted);
+}
+.nested-panel-actions-button:hover,
+.nested-panel-actions-button[aria-expanded="true"] {
+  background:var(--au-hover);color:var(--au-text);
+}
+.nested-action-bar {
+  display:flex;flex:1;min-width:0;overflow-x:auto;
+  align-items:center;gap:6px;scrollbar-width:thin;
+}
+.nested-action-title{
+  font-size:11px;flex:none;color:var(--au-text);font-weight:700;
+  padding-inline:5px 9px;border-right:1px solid var(--au-line);
+}
+.nested-action-label {
+  flex:none;font-size:10px;color:var(--au-text-faint);
+  text-transform:uppercase;letter-spacing:.06em;
+  padding-inline:5px;
+}
+.nested-action-bar button {
+  flex:none;border:1px solid var(--au-line-strong);
+  background:var(--au-field);border-radius:var(--au-radius-sm);
+  min-height:25px;padding:3px 9px;color:var(--au-text-soft);
+  font-size:11px;font-weight:550;white-space:nowrap;
+}
+.nested-action-bar button:not(:disabled):hover{
+  background:var(--au-active);color:var(--au-text);
+}
+.nested-action-bar button:focus-visible{outline:2px solid var(--au-accent);outline-offset:-2px}
+.nested-action-bar button.nested-action-danger{color:var(--au-danger)}
+.nested-action-bar button.nested-action-done{
+  background:var(--au-active);color:var(--au-text)
+}
+
+/* One dock-area menu at the right end of the tab strip (Unity ⋮), not per tab. */
+.nested-tabs{display:flex;align-items:stretch}
+.nested-tabs-fill{flex:1;min-width:8px}
+.nested-stack-menu{flex:none;width:24px;display:grid;place-items:center;border:0;background:transparent;
+  color:var(--au-text-faint);cursor:pointer}
+.nested-stack-menu:hover{color:var(--au-text);background:var(--au-hover)}
+.nested-stack-menu:focus-visible{outline:2px solid var(--au-accent);outline-offset:-2px}

@@ -25,7 +25,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | tactics-grid | Square/hex grids, weighted reachable sets and paths, half/full cover with flank angle, line of fire and hit-chance previews, AP, initiative with speed modifiers and delay, overwatch reaction fire, per-team views, WeGo simultaneous resolution | turn-scheduler stays the fixed-order reaction queue. Units do not block fire; no elevation, destructible cover or campaign. |
 | cards-turns-bots | Card evaluator (real-rules simulation on a view-rebuilt state, bounded lookahead) and tactics turn planner (bounded deterministic destination/attack/overwatch scoring), both from the player's own view | Player-equivalent actions only; no RNG; stateless. |
 
-| vehicle-controllers | Wheeled arcade-sim (torque curve, auto/manual gears, per-wheel traction with slip/grip curves, handbrake, drift), tracked, hover and flight controllers; damage zones with performance penalties; driver/passenger/gunner seats with enter/exit validation and exit-point search; ordered checkpoints, laps, race positions, wrong-way and respawn; race bot (see [Vehicles](#vehicles-vehicle-controllers-010)) | Kinematic Fixed controllers over owner-reported contacts; the owner resolves collisions and teleports. No rigid-body/suspension simulation, Box3D authority, rendering or audio. |
+| vehicle-controllers | Wheeled arcade-sim (torque curve, auto/manual gears, per-wheel traction with slip/grip curves, handbrake, drift), tracked, hover and flight controllers; damage zones with performance penalties; driver/passenger/gunner seats with enter/exit validation and exit-point search; ordered checkpoints, laps, race positions, wrong-way and respawn; race bot; race session from grid to results (see [Vehicles](#vehicles-vehicle-controllers-020)) | Kinematic Fixed controllers over owner-reported contacts; the owner resolves collisions and teleports. No rigid-body/suspension simulation, Box3D authority, rendering or audio. |
 | sports-rules | Ball possession with possession lock, seeded tackle contests, passes/shots with leading and seeded accuracy error, interception at the closest approach, goals, out of bounds and generic restarts, periods with stoppage and golden goal, fouls/penalties, role formations, positioning bot (see [Sports](#sports-sports-rules-010)) | Rules and bot decisions only; player bodies and movement are the owner's. No ball height/spin, offside, referee UI or animation. |
 
 | settlement-production | Colonist needs/mood bands/breaks, hour-block schedules, work preferences 1..4 with deterministic job assignment (lib::claim + per-stockpile reservations), recipes/bills at powered workstations, hauling, build/gather orders, disaster alerts with response jobs and preemption, power/fluid graphs with priority shedding + hysteresis, colony planner bot (see [Settlement and production](#settlement-and-production-settlement-production-010)) | Owner supplies alerts, gather availability, mood modifiers and positions/navigation; buildings/rendering/pathfinding stay with their owners. Instant factory links: production-networks. |
@@ -54,7 +54,8 @@ block of eight here before using it.
 | 104..111 | settlement-production, survival-ecology |
 | 112..119 | puzzle-solvers |
 | 120..127 | battle-royale (own `royaleSave` / `royaleLoad`, genre/royale/Persistence.h) |
-| 128+ | free |
+| 128..135 | vehicle-controllers race sessions (128 `RaceSessionState`) |
+| 136+ | free |
 
 ## Native/host integration
 
@@ -1164,10 +1165,10 @@ example built by hand (tests also under ASan/UBSan), GenreConsumer/CardsTurnsCon
 function in a standalone driver. Not run: CMake/CTest registration, isolation, native module export, headless
 restore matches, clang/MSVC.
 
-## Vehicles (vehicle-controllers 0.1.0)
+## Vehicles (vehicle-controllers 0.2.0)
 
 Headers `genre/VehicleControllers.h` (controllers), `genre/VehicleDamage.h` (damage zones), `genre/VehicleSeats.h`
-(seats), `genre/RaceCourse.h` (checkpoints, laps, positions), `bots/RaceBot.h` (race bot), umbrella `genre/Vehicles.h`,
+(seats), `genre/RaceCourse.h` (checkpoints, laps, positions), `bots/RaceBot.h` (race bot), `genre/RaceSession.h` (grid to results), umbrella `genre/Vehicles.h`,
 `genre/VehicleData.h` (JSON), `genre/VehicleConfigured.h` (settings adapters), `genre/VehiclePersistence.h` (records,
 hashing). Target `AIVERSE::lib_vehicle_controllers` (depends on `match-rules`, `configuration`, `aiverse_engine`); native
 OBJECT modules call `aiverse_native_use_libraries(target vehicle-controllers)`. Skill: `skills/gameplay/aiverse-vehicle-controllers`.
@@ -1233,6 +1234,15 @@ the nearest slower opponent ahead inside `overtakeDistance` is passed on the sid
 within `followDistance` caps the speed. Difficulty: `skillMilli` scales pace; `rubberBandMilli` adds pace for the last
 place and removes it from the leader, on straights only (cornering never exceeds the authored grip). No randomness.
 
+**Race session.** `genre/RaceSession.h` runs one race from the grid to the results for any host. `makeRaceSession(course,
+config, racers{id, bot}, line, startTick)`; per tick `raceSessionInputs(config, line, state, tick, drivers)` before the
+vehicles step (Countdown, a finished racer and a finished race hold the brakes; computer racers get `stepRaceBot` with
+their place and every other racer as an opponent; players keep their own pedals), then `stepRaceSession(course, config,
+state, tick, samples, respawnRequests)` after the host's collisions (stepRace, respawns, phase). Phases: Countdown for
+`countdownTicks` (stuck / wrong-way counters start with the race) -> Running -> Finished when everybody finished,
+`finishGraceTicks` after the first finisher or `timeoutTicks` after the start; `raceSessionWinner` = place 1. Record kind
+128. Data for every project: rules / map `"race"` (`genre/RaceSessionData.h`: `readRaceRules`, `readRaceTrack`), see docs/races.md.
+
 **Configuration.** Optional generated `vehicles` section (configuration 0.3.5): seat speed limits, `raceLaps`,
 wrong-way/stuck/respawn rules and race-bot knobs (`bot*`). `vehicleSettingsErrors` rejects a respawn delay shorter
 than the wrong-way delay and stuck ticks without a stuck speed. Data: `readVehicleDefinitions`; errors such as
@@ -1240,7 +1250,7 @@ than the wrong-way delay and stuck ticks without a stuck speed. Data: `readVehic
 
 **State.** Record kinds 88..95 are reserved for vehicle-controllers and sports-rules: `VehicleState` 88,
 `VehicleDamageState` 89, `VehicleSeatState` 90, `RaceState` 91 (embeds the match-rules `RouteState`), `SportsState` 92,
-93 reserved, `bots::RaceBotState` 94, `bots::SportsBotState` 95. Canonical, validated on load. `vehicleHash` hashes
+93 reserved, `bots::RaceBotState` 94, `bots::SportsBotState` 95; `RaceSessionState` 128. Canonical, validated on load. `vehicleHash` hashes
 states and per-tick reports; bind `vehicleDefinitionHash`, `raceCourseHash` and `bots::raceLineHash`.
 
 ## Sports (sports-rules 0.1.0)

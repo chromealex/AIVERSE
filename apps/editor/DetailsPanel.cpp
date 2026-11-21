@@ -443,8 +443,11 @@ void DetailsPanel::mapFields(Editor& ed) {
         ui::prop("Название", "Отображаемое имя объекта в редакторе; не меняет идентификатор для скриптов");
         auto& authored = d.entities[size_t(idx[0])];
         std::string displayName = authored.extra.getStr("displayName", "");
-        if (ui::inputString("##displayName", displayName)) {
-            doc.beginEdit();
+        const bool nameChanged = ui::inputString("##displayName", displayName);
+        if (ImGui::IsItemActivated()) textEditSnapshot_ = false;
+        if (nameChanged) {
+            // one snapshot per edit session, not per keystroke
+            if (!textEditSnapshot_) { doc.beginEdit(); textEditSnapshot_ = true; }
             authored.extra.set("displayName", Json::string(displayName));
             doc.touched();
         }
@@ -452,7 +455,21 @@ void DetailsPanel::mapFields(Editor& ed) {
     ui::prop("Имя (id)", "Необязательно. Имя объекта для дорог, триггеров и скриптов");
     if (idx.size() == 1) {
         auto& id = d.entities[size_t(idx[0])].id;
-        if (ImGui::InputTextWithHint("##id", "необязательно", id.data(), id.capacity() + 1, ImGuiInputTextFlags_CallbackResize, ui::stringResize, &id)) doc.touched();
+        // Snapshot before the first change of the session: the edit reaches Undo.
+        // InputText writes into `id` itself, so snapshot from a copy taken before it.
+        std::string before = id;
+        const bool idChanged = ImGui::InputTextWithHint("##id", "необязательно", id.data(), id.capacity() + 1, ImGuiInputTextFlags_CallbackResize, ui::stringResize, &id);
+        if (ImGui::IsItemActivated()) textEditSnapshot_ = false;
+        if (idChanged) {
+            if (!textEditSnapshot_) {
+                std::string after = std::move(id);
+                id = std::move(before);
+                doc.beginEdit();
+                d.entities[size_t(idx[0])].id = std::move(after);
+                textEditSnapshot_ = true;
+            }
+            doc.touched();
+        }
     } else {
         ImGui::BeginDisabled();
         std::string dash = "—";

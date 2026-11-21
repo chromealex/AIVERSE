@@ -1,0 +1,3 @@
+# Stage96: native thin PBR material
+
+Code4f34cfb71, feature/aiv87_terrain_pbr. Shared renderer/material assets only; no new frontend UI/bridge methods. Native Material layout changed and nativeEditor/Studio rebuilt on KINGSTON, bothPASS. Incorrect plural test target after successful editor builds failed; corrected singular target and Terra model CTestPASS0.42s. Material-authoring GLB/equality tests3/3PASS0.69s, six GLSL variants and nine actualMetal sheet lighting casesPASS. Mouse/browser UI parity NOT RUN (lockedMac); no UI parity claim. Full evidence/current owned review-project-v11 and next steps in terrain handoff.

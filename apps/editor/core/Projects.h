@@ -31,7 +31,9 @@ void forgetProject(const std::string& dir);
 // Folder name for a project title: "Моя стратегия" -> "Моя стратегия" (keeps letters, digits, spaces, - _).
 std::string projectFolderName(const std::string& title);
 // Creates <parentDir>/<folder> from a template id ("empty" or a templates/ folder) with its
-// <Title>.aiverse (the template's own .aiverse is not copied). Returns the new project folder or ""
+// <Title>.aiverse (the template's own .aiverse is not copied). Also ensures
+// a lower-case content/ directory for project assets without modifying template
+// resources or the game's existing rules/maps. Returns the project folder or ""
 // with a readable error.
 std::string createProject(const std::string& engineDir, const std::string& templateId, const std::string& title,
                           const std::string& parentDir, const std::string& folder, std::string* error);

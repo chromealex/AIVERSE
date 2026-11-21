@@ -214,11 +214,23 @@ bool VulkanDevice::createBufferObject(size_t size, VkBufferUsageFlags usage, boo
 }
 
 VkBufferUsageFlags VulkanDevice::bufferUsage(BufferType t) const {
-    VkBufferUsageFlags u = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    // Vulkan diagnostic async readback copies from any buffer as TRANSFER_SRC.
+    // GPU-authored indirect commands must ALSO carry STORAGE usage to be
+    // writable by compute. Legacy CPU-authored indirect buffers still work.
+    VkBufferUsageFlags u = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     if (t == BufferType::Index) u |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    else u |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    if (t == BufferType::Storage) u |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    if (t == BufferType::Indirect) u |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    if (t == BufferType::Vertex) u |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    // GlobalGeometryPool uses ONE Storage page as vertex AND index input.
+    // Do not regress that existing pooled-geometry addressing contract.
+    // Storage also carries INDIRECT usage: compute-authored draw arguments
+    // may live in a Storage buffer (drawIndexedGpuIndirect, as on Metal).
+    if (t == BufferType::Storage) u |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                      VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    if (t == BufferType::Indirect) u |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     return u;
 }
 
@@ -742,7 +754,8 @@ TextureHandle VulkanDevice::createTexture(const TextureDesc& d) {
 bool VulkanDevice::readTextureAsync(TextureHandle h, TextureReadbackDesc request,
                                     TextureReadFn callback) {
     const VTexture* texture = textures_.get(h.id);
-    if (!recording_ || inPass_ || !callback || !texture || !texture->image ||
+    // A lost device never completes the copy: refuse instead of accepting.
+    if (!healthy_ || !recording_ || inPass_ || !callback || !texture || !texture->image ||
         texture->samples != 1 || texture->compressed || texture->depth ||
         request.mipLevel < 0 || request.mipLevel >= texture->levels ||
         request.arrayLayer < 0 ||
@@ -794,7 +807,8 @@ bool VulkanDevice::readTextureAsync(TextureHandle h, TextureReadbackDesc request
                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                  1, uint32_t(request.mipLevel), uint32_t(texture->layers));
     textureReads_.push_back({staging, allocation, bytes, width, height,
-                             texture->format, serial_, std::move(callback)});
+                             texture->format, serial_, std::move(callback),
+                             texture->renderTarget});
     return true;
 }
 
@@ -988,8 +1002,12 @@ SamplerHandle VulkanDevice::createSampler(const SamplerDesc& d) {
     ci.maxAnisotropy = std::max(1.0f, std::min(d.maxAnisotropy, gpuProps_.limits.maxSamplerAnisotropy));
     ci.compareEnable = d.compare ? VK_TRUE : VK_FALSE;
     ci.compareOp = vkCompare(d.comparison);
-    ci.minLod = d.minLod;
-    ci.maxLod = d.mipFilter == SamplerMipFilter::None ? 0.0f : d.maxLod;
+    // mipFilter None emulates a non-mipmapped GL/Metal filter: always the
+    // base level, i.e. minLod = maxLod = 0. Keeping a caller minLod > 0
+    // with maxLod = 0 violated maxLod >= minLod (invalid create info).
+    const bool noMips = d.mipFilter == SamplerMipFilter::None;
+    ci.minLod = noMips ? 0.0f : d.minLod;
+    ci.maxLod = noMips ? 0.0f : d.maxLod;
     ci.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     VkSampler native = VK_NULL_HANDLE;
     if (vkCreateSampler(device_, &ci, nullptr, &native) != VK_SUCCESS) {
@@ -1006,6 +1024,20 @@ void VulkanDevice::destroySampler(SamplerHandle handle) {
     customSamplers_.remove(handle.id);
     descriptorsDirty_ = true;
     deferDestroy([this, native] { vkDestroySampler(device_, native, nullptr); });
+}
+
+bool VulkanDevice::bufferInfo(BufferHandle h, BufferInfo& out) const {
+    const auto* b = buffers_.get(h.id);
+    if (!b) return false;
+    out = {b->size,uint32_t(b->versions.size())};
+    return true;
+}
+
+bool VulkanDevice::textureInfo(TextureHandle h, TextureInfo& out) const {
+    const auto* t = textures_.get(h.id);
+    if (!t) return false;
+    out = {t->width,t->height,t->format};
+    return true;
 }
 
 void VulkanDevice::destroyTexture(TextureHandle h) {

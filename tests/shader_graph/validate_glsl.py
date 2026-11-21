@@ -17,6 +17,14 @@ args = parser.parse_args()
 connection = socket.create_connection(('127.0.0.1', args.port), timeout=15)
 stream = connection.makefile('rb')
 
+# Agent link protocol 2 (docs/mcp-agent-link.md): authenticate with the editor's session token.
+import os
+_token_dir = Path(os.environ.get('AIVERSE_AGENT_LINK_DIR') or Path.home() / '.aiverse' / 'agent-link')
+connection.sendall((json.dumps({'id': 0, 'method': 'hello',
+    'token': (_token_dir / f'{args.port}.token').read_text().strip()}) + '\n').encode())
+if not json.loads(stream.readline())['result'].get('ok'):
+    raise RuntimeError('editor refused the agent-link token')
+
 def call(name, arguments=None):
     connection.sendall((json.dumps({'id': 1, 'method': 'call', 'params': {
         'name': name, 'arguments': arguments or {}}}) + '\n').encode())

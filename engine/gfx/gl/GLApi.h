@@ -104,7 +104,16 @@
   #define GL_QUERY_RESULT 0x8866
   #define GL_QUERY_RESULT_AVAILABLE 0x8867
   typedef unsigned long long GLuint64;
+  typedef struct __GLsync* GLsync;
+  #define GL_SYNC_GPU_COMMANDS_COMPLETE 0x9117
+  #define GL_ALREADY_SIGNALED 0x911A
+  #define GL_TIMEOUT_EXPIRED 0x911B
+  #define GL_CONDITION_SATISFIED 0x911C
+  #define GL_WAIT_FAILED 0x911D
   #define AIVERSE_GL_FUNCS(X) \
+    X(GLsync, glFenceSync, (GLenum condition, GLbitfield flags)) \
+    X(GLenum, glClientWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+    X(void, glDeleteSync, (GLsync sync)) \
     X(void, glGenQueries, (GLsizei n, GLuint* ids)) \
     X(void, glDeleteQueries, (GLsizei n, const GLuint* ids)) \
     X(void, glBeginQuery, (GLenum target, GLuint id)) \
@@ -185,6 +194,8 @@
   #include <OpenGL/gl3.h>
 #elif defined(__EMSCRIPTEN__)
   #include <GLES3/gl3.h>
+  // WebGL2 getBufferSubData (Emscripten library_webgl2.js); GLES3 headers omit it.
+  extern "C" void glGetBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, void* data);
 #else
   #include <GLES3/gl3.h>
 #endif

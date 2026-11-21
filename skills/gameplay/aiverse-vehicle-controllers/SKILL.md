@@ -22,7 +22,9 @@ Not a rigid-body simulator: no suspension geometry, tyre temperature or Box3D au
    its parameter object, `zones`, `seats`) and `tracks` (`checkpoints`, `grid`, racing `line`). Milli-units, rpm,
    ticks; errors `vehicles.vehicles[0].wheeled.gearsMilli[1]: ...`. Scalars: optional generated `vehicles` settings
    section (`vehicleRaceConfig`, `vehicleSeatLimits`, `vehicleRaceLaps`, `bots::raceBotConfig`, `vehicleSettingsErrors`).
-4. Per authoritative tick, ascending vehicle id: seats (`stepVehicleSeats` with the owner's `clear(point, actor)`
+4. Player controls -> pedals: always `genre/VehicleDrive.h` (`vehicleInputFromAxes` for keyboard / gamepad axes,
+   `vehicleInputFromStick` Tank / Steer for a top-down screen stick); never a host-specific mapping.
+   Per authoritative tick, ascending vehicle id: seats (`stepVehicleSeats` with the owner's `clear(point, actor)`
    exit query) -> driver input (player or `bots::stepRaceBot`, only for `vehicleDriver`) -> `stepVehicle(def, state,
    tick, dt, input, contacts, vehiclePerformance(damageDef, damage))` -> owner sweep/collisions -> `stepVehicleDamage`
    with id-ordered `VehicleDamageInput` (zone 0 = locate by `vehicleLocalPoint`) -> `stepRace` with every racer's
@@ -33,10 +35,16 @@ Not a rigid-body simulator: no suspension geometry, tyre temperature or Box3D au
 6. Race bot: `makeRaceLine(points)` once (closed loop), `stepRaceBot(config, line, state, tick, view)` per bot with
    its place and visible opponents -> `VehicleInput`. Knobs: corner accel / brake decel (braking points), lane
    offset/overtake distance, follow distance, `skillMilli`, `rubberBandMilli` (straight-line pace only).
-7. Persist kinds 88 VehicleState, 89 VehicleDamageState, 90 VehicleSeatState, 91 RaceState, 94 RaceBotState
+7. Whole race in any host: `makeRaceSession(course, config, racers{id, bot}, &line, startTick)` (`genre/RaceSession.h`),
+   then per tick `raceSessionInputs(config, &line, session, tick, drivers)` before the vehicles step (countdown and
+   finished racers hold the brakes, bots get `stepRaceBot`, players keep their pedals) and `stepRaceSession(course,
+   config, session, tick, samples, respawnRequests)` after the collisions (stepRace + phase Countdown -> Running ->
+   Finished; `finishGraceTicks`, `timeoutTicks`); `raceSessionWinner`. Projects use it through rules / map `"race"` (docs/races.md)
+   (`skills/genres/aiverse-racing`, `modules/fps/FpsRace.cpp`).
+8. Persist kinds 88 VehicleState, 89 VehicleDamageState, 90 VehicleSeatState, 91 RaceState, 94 RaceBotState, 128 RaceSessionState
    (`genre/VehiclePersistence.h`; 88..95 shared with sports-rules) in dedicated NativeState keys; fold
    `vehicleHash(state)` into the checksum and bind `vehicleDefinitionHash`, `raceCourseHash`, `bots::raceLineHash`.
-8. Examples: `examples/native/libraries/VehiclesSportsConsumer.cpp` and the executable 4-car race in
+9. Examples: `examples/native/libraries/VehiclesSportsConsumer.cpp` and the executable 4-car race in
    `examples/libraries/genre/vehicles-sports`. Run `catalog.py check`, `generate_gameplay.py --check`,
    `aiverse_library_vehicles_sports_tests` and the `library_vehicles_sports_example` CTest.
 

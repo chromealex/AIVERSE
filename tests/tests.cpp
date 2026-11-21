@@ -1,4 +1,11 @@
 #include <chrono>
+#include "engine/view/VisibilityField.h"
+#include "engine/render/NativeMeshBatch.h"
+#include "engine/render/FramePublicationEpoch.h"
+#include "engine/render/CameraModelSnapshot.h"
+#include "engine/render/CameraPostFxPool.h"
+#include "engine/render/CameraFrameRecorder.h"
+#include "engine/render/OwnerPrepareCommit.h"
 #include <cstdlib>
 // Dependency-free unit tests. Run: ctest  (or ./aiverse_tests)
 #include "../engine/data/JsonCompose.h"
@@ -10,6 +17,8 @@ extern "C" {
 }
 #include <filesystem>
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <vector>
@@ -2690,6 +2699,10 @@ public:
     aiverse::gfx::DeviceInfo info_;
     std::string err_;
     const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    // This recording backend executes all mock work synchronously. A device
+    // idle check is therefore successful unless a fault-injection subclass
+    // explicitly overrides it to simulate an unresponsive GPU.
+    bool waitForResourceIdle() override { return true; }
     aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {}; }
     void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
     void destroyBuffer(aiverse::gfx::BufferHandle) override {}
@@ -5518,6 +5531,8 @@ TEST(store_and_ads_through_mock_plugins) {
 #include "engine/platform/Platform.h"
 #include "modules/rts/view/RtsOverlayData.h"
 #include "modules/rts/view/RtsView.h"
+#include "modules/rts/view/RtsRoadView.h"
+#include "modules/rts/view/RtsShoreView.h"
 
 static game::Rules skirmishRules() { return game::loadRules(Json::parseFile(kSkirmish + "/rules.json")); }
 static std::string overlayError(const game::Rules& R, const char* json) {
@@ -5525,6 +5540,32 @@ static std::string overlayError(const game::Rules& R, const char* json) {
     return "";
 }
 static bool hasText(const std::string& s, const char* part) { return s.find(part) != std::string::npos; }
+
+TEST(overlay_prepared_reload_matches_direct_init) {
+    game::Rules R=skirmishRules();
+    const Json rules=Json::parse(R"([{"id":"selection","enabled":false},
+        {"id":"health_bars","style":{"thickness":0.1}}])");
+    const Json game=Json::parse(R"([{"id":"selection","enabled":true}])");
+    const game::OverlaySet prepared=game::loadOverlaySet(R,rules,game);
+    game::RtsOverlays oldPath,stagedPath;
+    oldPath.init(R,rules,game,"");
+    stagedPath.initPrepared(R,prepared,"");
+    CHECK(oldPath.set().defs.size()==stagedPath.set().defs.size());
+    CHECK(oldPath.set().warnings==stagedPath.set().warnings);
+    CHECK(oldPath.outlineSelected()==stagedPath.outlineSelected());
+    CHECK(oldPath.outlineHovered()==stagedPath.outlineHovered());
+    for(size_t i=0;i<oldPath.set().defs.size();++i) {
+        CHECK(oldPath.set().defs[i].id==stagedPath.set().defs[i].id);
+        CHECK(oldPath.set().defs[i].enabled==stagedPath.set().defs[i].enabled);
+    }
+    // The new path must not depend on the original JSON objects after
+    // preflight; it holds a complete CPU-side snapshot of overlay rules.
+    auto moved=game::loadOverlaySet(R,rules,game);
+    game::RtsOverlays movedPath;
+    movedPath.initPrepared(R,std::move(moved),"");
+    CHECK(movedPath.set().defs.size()==oldPath.set().defs.size());
+    CHECK(movedPath.outlineSelected()==oldPath.outlineSelected());
+}
 
 TEST(overlay_builtins_are_data) {
     game::Rules R = skirmishRules();
@@ -5685,8 +5726,17 @@ TEST(overlay_conditions_on_sim_state) {
     // events become popups: a hit on the own unit, filtered by the owner of the entity hit
     scene.events.push_back({uint16_t(game::kEvHit), 2, o.entity, en.entity, Fixed::fromInt(7).raw, sim->world().get<Transform>(o.entity).pos});
     scene.tick += 1;
+    {
+        auto candidate=ov.beginFramePreparation();
+        ov.prepare(scene, 1.1, &gs.vision[1], gs.grid, 30);
+        CHECK(ov.popupCount() == 1);
+    }
+    CHECK(ov.popupCount() == 0); // late-owner failure restored event cursor too
+    auto candidate=ov.beginFramePreparation();
     ov.prepare(scene, 1.1, &gs.vision[1], gs.grid, 30);
     CHECK(ov.popupCount() == 1);
+    ov.commitFramePreparation(candidate);
+    candidate.reset();
     ov.prepare(scene, 1.2, &gs.vision[1], gs.grid, 30);   // same tick: not spawned twice
     CHECK(ov.popupCount() == 1);
     ov.prepare(scene, 5.0, &gs.vision[1], gs.grid, 30);   // expired after its lifetime
@@ -12429,7 +12479,7 @@ bool readContentFile(const std::string&, std::string&) { return false; }
 } // namespace aiverse::platform
 namespace entityfxtest {
 // Records what the renderer submits: per draw the pipeline's blend / depth write and the per-instance block.
-class RecordingDevice final : public aiverse::gfx::Device {
+class RecordingDevice : public aiverse::gfx::Device {
 public:
     struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; bool colorWrite = true; };
     size_t uniformLimit=4096;
@@ -12448,6 +12498,9 @@ public:
     aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc& d) override { pipes.push_back(d); return {uint32_t(pipes.size())}; }
     void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
+    // Recording-only RHI; draw calls capture CPU state with no submitted GPU
+    // work. Explicitly confirm the idle barrier required by Renderer3D.
+    bool waitForResourceIdle() override { return true; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
     void beginPass(const aiverse::gfx::PassDesc&) override {}
@@ -12476,6 +12529,3206 @@ private:
     std::vector<float> u0_;
 };
 } // namespace entityfxtest
+
+namespace fogfaulttest {
+struct Device : entityfxtest::RecordingDevice {
+    size_t shaderAttempts=0,pipelineAttempts=0,bufferAttempts=0,textureAttempts=0,textureUpdates=0;
+    size_t failShader=0,failPipeline=0,failBuffer=0,failTexture=0,failTextureUpdate=0;
+    size_t destroyedShaders=0,destroyedPipelines=0,destroyedBuffers=0,destroyedTextures=0;
+    unsigned idleRequests=0;
+    bool idleAllowed=true;
+    gfx::ShaderHandle createShader(const gfx::ShaderDesc& desc) override {
+        if(++shaderAttempts==failShader)return {};
+        return entityfxtest::RecordingDevice::createShader(desc);
+    }
+    gfx::PipelineHandle createPipeline(const gfx::PipelineDesc& desc) override {
+        if(++pipelineAttempts==failPipeline)return {};
+        return entityfxtest::RecordingDevice::createPipeline(desc);
+    }
+    gfx::BufferHandle createBuffer(const gfx::BufferDesc& desc) override {
+        if(++bufferAttempts==failBuffer)return {};
+        return entityfxtest::RecordingDevice::createBuffer(desc);
+    }
+    gfx::TextureHandle createTexture(const gfx::TextureDesc& desc) override {
+        if(++textureAttempts==failTexture)return {};
+        return entityfxtest::RecordingDevice::createTexture(desc);
+    }
+    void updateTexture(gfx::TextureHandle tex,int x,int y,int w,int h,const void* pixels,int pitch) override {
+        if(++textureUpdates==failTextureUpdate)
+            throw std::runtime_error("injected texture update failure");
+        entityfxtest::RecordingDevice::updateTexture(tex,x,y,w,h,pixels,pitch);
+    }
+    void destroyShader(gfx::ShaderHandle h) override {
+        if(h.valid())++destroyedShaders;
+        entityfxtest::RecordingDevice::destroyShader(h);
+    }
+    void destroyPipeline(gfx::PipelineHandle h) override {
+        if(h.valid())++destroyedPipelines;
+        entityfxtest::RecordingDevice::destroyPipeline(h);
+    }
+    void destroyBuffer(gfx::BufferHandle h) override {
+        if(h.valid())++destroyedBuffers;
+        entityfxtest::RecordingDevice::destroyBuffer(h);
+    }
+    void destroyTexture(gfx::TextureHandle h) override {
+        if(h.valid())++destroyedTextures;
+        entityfxtest::RecordingDevice::destroyTexture(h);
+    }
+    bool waitForResourceIdle() override {++idleRequests;return idleAllowed;}
+};
+}
+
+TEST(rts_view_commits_visual_epoch_only_after_primary_and_invalidates_on_map_edit) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsView view;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;
+    grid.init(4,4);
+    for(auto& flags:grid.flags)flags=game::kCellGround;
+    game::RtsScene scene;
+    render::RTSCamera camera;
+    camera.target={2,0,2};
+    camera.distance=18;
+    camera.pitch=1.0f;
+    CHECK(!view.publishedVisualFrame().ready());
+    renderer.beginScene(camera,320,240);
+    view.draw(renderer,scene,1.25,nullptr,grid);
+    const auto first=view.publishedVisualFrame();
+    CHECK(first.ready() && first.id!=0);
+    CHECK(view.visualFrameReadyFor(grid,1.25));
+    CHECK(!view.visualFrameReadyFor(grid,1.26));
+    renderer.render(gfx::PassDesc{});
+    // Map mutation invalidates the previously prepared multi-camera snapshot.
+    view.setTerrainMaterial(Json(),grid.w,grid.h);
+    CHECK(!view.publishedVisualFrame().ready());
+    CHECK(!view.visualFrameReadyFor(grid,1.25));
+    renderer.beginScene(camera,320,240);
+    view.draw(renderer,scene,2.5,nullptr,grid);
+    CHECK(view.visualFrameReadyFor(grid,2.5));
+    CHECK(view.publishedVisualFrame().id>first.id);
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+    CHECK(!view.publishedVisualFrame().ready());
+}
+
+TEST(lens_late_overlay_failure_rolls_back_animation_frame_and_clears_packets) {
+    struct Device final : fogfaulttest::Device {
+        bool failOverlays=false;
+        gfx::BufferHandle createBuffer(const gfx::BufferDesc& d) override {
+            if(failOverlays && d.label && std::string(d.label)=="overlays")
+                throw std::runtime_error("injected late overlay allocation failure");
+            return fogfaulttest::Device::createBuffer(d);
+        }
+    } dev;
+    render::Renderer3D renderer;CHECK(renderer.init(dev));
+    game::RtsView view;game::Rules rules=skirmishRules();
+    CHECK(view.init(dev,rules,[](const std::string&,std::string&){return false;}));
+    view.overlays().init(rules,Json::parse(R"([{"id":"fault-ring","anchor":"selected","shape":{"type":"ring","radius":1},"style":{"onTop":true,"thickness":0.1}}])"),Json(),"");
+    game::MapGrid grid;grid.init(4,4);
+    grid.corner.assign(25,0);
+    std::vector<uint8_t> initialVisibility(16,2);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    render::RTSCamera camera;camera.target={2,0,2};camera.distance=18;camera.pitch=1;
+    render::CameraModelSnapshot snapshot;
+    view.setCameraPreparedCapture(&snapshot);
+    game::RtsScene scene;
+    renderer.beginScene(camera,320,240);
+    view.draw(renderer,scene,1,&initialVisibility,grid);
+    const auto first=view.publishedVisualFrame();CHECK(first.ready());
+    renderer.render(gfx::PassDesc{});
+    game::SceneObject object;object.entity={1,1};object.pos={2,0,2};
+    object.visible=true;object.selected=true;object.hp=1;object.build=1;
+    scene.objects.push_back(object);scene.tick=1;
+    renderer.beginScene(camera,320,240);
+    dev.failOverlays=true;bool failed=false;
+    {
+        render::CameraModelSnapshot::CaptureGuard capture(snapshot,renderer);
+        try {view.draw(renderer,scene,1.1,&initialVisibility,grid);}
+        catch(const std::runtime_error&){failed=true;}
+    }
+    CHECK(failed);
+    CHECK(!view.publishedVisualFrame().ready());
+    CHECK(snapshot.size()==0 && snapshot.geometryCount()==0 && snapshot.preparedCount()==0);
+    dev.failOverlays=false;
+    renderer.beginScene(camera,320,240);
+    view.draw(renderer,scene,1.1,&initialVisibility,grid);
+    CHECK(view.publishedVisualFrame().ready());
+    CHECK(view.publishedVisualFrame().sourceFrame==first.sourceFrame+1);
+    renderer.render(gfx::PassDesc{});
+    // A topology prewarm must also remain private through late Overlay failure.
+    game::MapGrid replacement;replacement.init(6,5);
+    for(auto& f:replacement.flags)f=game::kCellGround;
+    replacement.corner.assign(size_t(7*6),32);
+    std::vector<uint8_t> visibility(30,2);
+    renderer.beginScene(camera,320,240);
+    CHECK(view.prepareTerrainAtomicFrame(dev,replacement,renderer,scene,1.2,&visibility));
+    CHECK(view.surfacePresentationMapReady(grid));
+    dev.failOverlays=true;failed=false;
+    try {view.draw(renderer,scene,1.2,&visibility,replacement);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(view.surfacePresentationMapReady(grid));
+    CHECK(!view.surfacePresentationMapReady(replacement));
+    CHECK(std::fabs(view.heightAt(grid,2,2))<1e-4f);
+    dev.failOverlays=false;
+    renderer.beginScene(camera,320,240);
+    CHECK(view.prepareTerrainAtomicFrame(dev,replacement,renderer,scene,1.2,&visibility));
+    view.draw(renderer,scene,1.2,&visibility,replacement);
+    CHECK(view.surfacePresentationMapReady(replacement));
+    CHECK(std::fabs(view.heightAt(replacement,2,2)-2.f)<1e-4f);
+    CHECK(view.publishedVisualFrame().sourceFrame==first.sourceFrame+2);
+    renderer.render(gfx::PassDesc{});
+    view.setCameraPreparedCapture(nullptr);view.shutdown(dev);renderer.shutdown();
+}
+
+TEST(frame_publication_epoch_requires_every_owner_before_secondary_camera) {
+    using Epoch=render::FramePublicationEpoch;
+    Epoch epoch;
+    constexpr uint32_t required=Epoch::Terrain|Epoch::Ground|
+        Epoch::Fog|Epoch::Animation|Epoch::Sprites;
+    auto ticket=epoch.begin(required,17,64,32,12.5);
+    CHECK(epoch.active());
+    CHECK(!epoch.published().ready());
+    ticket.mark(Epoch::Terrain|Epoch::Ground);
+    CHECK(!epoch.readyFor(64,32,12.5));
+    ticket.mark(Epoch::Fog|Epoch::Animation|Epoch::Sprites);
+    CHECK(ticket.finish());
+    const auto published=epoch.published();
+    CHECK(!epoch.active() && published.ready());
+    CHECK(published.sourceFrame==17);
+    CHECK(published.completed==required && published.required==required);
+    CHECK(epoch.readyFor(64,32,12.5));
+    CHECK(!epoch.readyFor(65,32,12.5));
+    CHECK(!epoch.readyFor(64,32,12.6));
+}
+
+TEST(frame_publication_epoch_aborts_late_owner_failure_and_never_replays_previous) {
+    using Epoch=render::FramePublicationEpoch;
+    Epoch epoch;
+    constexpr uint32_t required=Epoch::Geometry|Epoch::Terrain|Epoch::Fog;
+    {
+        auto previous=epoch.begin(required,100,8,8,1.0);
+        previous.mark(required);
+        CHECK(previous.finish());
+    }
+    const uint64_t old=epoch.published().id;
+    CHECK(old!=0);
+    try {
+        auto candidate=epoch.begin(required,101,8,8,2.0);
+        candidate.mark(Epoch::Geometry|Epoch::Terrain);
+        CHECK(!epoch.published().ready());
+        throw std::runtime_error("late Fog upload failed");
+    } catch(const std::runtime_error&) {}
+    CHECK(!epoch.active());
+    CHECK(!epoch.published().ready());
+    CHECK(!epoch.readyFor(8,8,1.0));
+    CHECK(!epoch.readyFor(8,8,2.0));
+    {
+        auto recovered=epoch.begin(required,102,8,8,3.0);
+        recovered.mark(required);
+        CHECK(recovered.finish());
+    }
+    CHECK(epoch.published().ready());
+    CHECK(epoch.published().id>old);
+    CHECK(epoch.readyFor(8,8,3.0));
+    epoch.invalidate();
+    CHECK(!epoch.published().ready());
+}
+
+TEST(frame_publication_epoch_rejects_incomplete_and_nested_publications) {
+    using Epoch=render::FramePublicationEpoch;
+    Epoch epoch;
+    {
+        auto ticket=epoch.begin(Epoch::Terrain|Epoch::Shores,7,4,4,0.0);
+        ticket.mark(Epoch::Terrain);
+        bool nested=false;
+        try {(void)epoch.begin(Epoch::Fog,8,4,4,0.0);}
+        catch(const std::logic_error&){nested=true;}
+        CHECK(nested);
+        CHECK(!ticket.finish());
+        CHECK(!epoch.active() && !epoch.published().ready());
+    }
+    {
+        auto ticket=epoch.begin(Epoch::Terrain,9,4,4,0.0);
+        bool forbidden=false;
+        try {ticket.mark(Epoch::Ground);}
+        catch(const std::logic_error&){forbidden=true;}
+        CHECK(forbidden);
+        CHECK(!epoch.published().ready());
+    }
+    {
+        auto ticket=epoch.begin(Epoch::Geometry,10,4,4,0.0);
+        auto moved=std::move(ticket);
+        moved.mark(Epoch::Geometry);
+        CHECK(moved.finish());
+    }
+    CHECK(epoch.published().ready());
+}
+
+TEST(native_mesh_batch_second_upload_failure_preserves_all_published_handles) {
+    fogfaulttest::Device dev;
+    render::NativePresentationRetirement retirement;
+    render::MeshBuilder builder;
+    builder.quad({0,0,0},{1,0,0},{1,0,1},{0,0,1});
+    render::Mesh first=builder.upload(dev);
+    render::Mesh second=builder.upload(dev);
+    const auto firstId=first.vb.id, secondId=second.vb.id;
+    const auto destroyedBefore=dev.destroyedBuffers;
+    bool failed=false;
+    {
+        render::NativeMeshBatch batch(dev,retirement);
+        batch.stage(first,builder);
+        CHECK(first.vb.id==firstId && second.vb.id==secondId);
+        CHECK(batch.stagedMeshes()==1);
+        CHECK(batch.stagedBytes()>0);
+        // Late index allocation failure after a complete first replacement.
+        dev.failBuffer=dev.bufferAttempts+2;
+        try {batch.stage(second,builder);}
+        catch(const std::runtime_error&){failed=true;}
+        CHECK(failed);
+        CHECK(first.vb.id==firstId && second.vb.id==secondId);
+        CHECK(retirement.pending()==0);
+        dev.failBuffer=0;
+    }
+    // Private first pair + failed second VB, no published retirement.
+    CHECK(dev.destroyedBuffers==destroyedBefore+3);
+    CHECK(retirement.pending()==0);
+    dev.destroyBuffer(first.vb);dev.destroyBuffer(first.ib);
+    dev.destroyBuffer(second.vb);dev.destroyBuffer(second.ib);
+}
+
+TEST(native_mesh_batch_success_retires_old_buffers_only_on_publish) {
+    fogfaulttest::Device dev;
+    render::NativePresentationRetirement retirement;
+    render::MeshBuilder builder;
+    builder.quad({0,0,0},{1,0,0},{1,0,1},{0,0,1});
+    render::Mesh first=builder.upload(dev);
+    render::Mesh second=builder.upload(dev);
+    const auto oldFirst=first.vb.id, oldSecond=second.vb.id;
+    const auto destroyedBefore=dev.destroyedBuffers;
+    {
+        render::NativeMeshBatch batch(dev,retirement);
+        batch.stage(first,builder);
+        batch.stage(second,builder);
+        CHECK(batch.stagedMeshes()==2);
+        CHECK(retirement.pending()==0);
+        CHECK(first.vb.id==oldFirst && second.vb.id==oldSecond);
+        batch.publish();
+        CHECK(first.vb.id!=oldFirst && second.vb.id!=oldSecond);
+        CHECK(retirement.pending()==4);
+        CHECK(dev.destroyedBuffers==destroyedBefore);
+    }
+    CHECK(retirement.pending()==4);
+    CHECK(retirement.completeForShutdown(dev));
+    CHECK(retirement.pending()==0);
+    CHECK(dev.destroyedBuffers==destroyedBefore+4);
+    dev.destroyBuffer(first.vb);dev.destroyBuffer(first.ib);
+    dev.destroyBuffer(second.vb);dev.destroyBuffer(second.ib);
+}
+
+TEST(native_mesh_batch_same_target_replacement_is_coalesced) {
+    fogfaulttest::Device dev;
+    render::NativePresentationRetirement retirement;
+    render::MeshBuilder builder;
+    builder.quad({0,0,0},{1,0,0},{1,0,1},{0,0,1});
+    render::Mesh mesh=builder.upload(dev);
+    const auto original=mesh.vb.id;
+    const auto destroyedBefore=dev.destroyedBuffers;
+    {
+        render::NativeMeshBatch batch(dev,retirement);
+        batch.stage(mesh,builder);
+        batch.stage(mesh,builder);
+        CHECK(batch.stagedMeshes()==1);
+        CHECK(dev.destroyedBuffers==destroyedBefore+2);
+        CHECK(mesh.vb.id==original && retirement.pending()==0);
+        batch.publish();
+    }
+    CHECK(mesh.vb.id!=original && retirement.pending()==2);
+    CHECK(retirement.completeForShutdown(dev));
+    dev.destroyBuffer(mesh.vb);dev.destroyBuffer(mesh.ib);
+}
+
+TEST(lens_stage47_groundfx_late_owner_rejection_preserves_published_frame) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    rules.territory.enabled=false;
+    rules.diggables.clear();
+    rules.rooms.clear();
+    rules.roadNetwork.enabled=true;
+    rules.foundation.enabled=false;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::RtsGroundFx fx;
+    fx.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(65,4);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.flags[size_t(grid.index(1,1))]|=game::kCellRoad;
+    grid.flags[size_t(grid.index(40,1))]|=game::kCellRoad;
+    game::RtsScene scene;
+    render::RTSCamera cam;cam.target={32,0,2};
+    cam.distance=150;cam.pitch=1.1f;
+    renderer.beginScene(cam,1280,720);
+    fx.draw(renderer,scene,0.0,nullptr,grid,view);
+    renderer.render(gfx::PassDesc{});
+    CHECK(fx.pendingMeshGpuRetirements()==0);
+    grid.flags[size_t(grid.index(2,1))]|=game::kCellRoad;
+    grid.flags[size_t(grid.index(41,1))]|=game::kCellRoad;
+    const auto previousDeletes=dev.destroyedBuffers;
+    const auto previousRetire=fx.pendingMeshGpuRetirements();
+    renderer.beginScene(cam,1280,720);
+    struct GroundParticipant final: render::OwnerPrepareCommit::Participant {
+        game::RtsGroundFx& owner;
+        render::Renderer3D& renderer;
+        const game::RtsScene& scene;
+        const game::MapGrid& grid;
+        const game::RtsView& view;
+        std::shared_ptr<game::RtsGroundFx::PreparedFrame> pending;
+        GroundParticipant(game::RtsGroundFx& f,render::Renderer3D& r,
+                          const game::RtsScene& s,const game::MapGrid& g,
+                          const game::RtsView& v)
+            :owner(f),renderer(r),scene(s),grid(g),view(v){}
+        void prepare() override {
+            pending=owner.prepareFrame(renderer,scene,1.0,nullptr,grid,view);
+        }
+        void commit() noexcept override {owner.commitFrame(std::move(pending));}
+        void rollback() noexcept override {pending.reset();}
+    } ground(fx,renderer,scene,grid,view);
+    struct LateParticipant final: render::OwnerPrepareCommit::Participant {
+        bool fail=true;
+        void prepare() override {
+            if(fail)throw std::runtime_error("fog failed late");
+        }
+        void commit() noexcept override {}
+        void rollback() noexcept override {}
+    } late;
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(ground);tx.add(late);
+        try {tx.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+    }
+    CHECK(failed);
+    CHECK(fx.pendingMeshGpuRetirements()==previousRetire);
+    CHECK(dev.destroyedBuffers>=previousDeletes+4); // discarded private meshes
+    CHECK(!ground.pending);
+    late.fail=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(ground);tx.add(late);
+        tx.prepareAll();
+        CHECK(tx.publish());
+    }
+    CHECK(fx.pendingMeshGpuRetirements()>=previousRetire+4);
+    renderer.beginScene(cam,1280,720);
+    fx.drawPrepared(renderer,scene,1.1,nullptr,grid,view);
+    renderer.render(gfx::PassDesc{});
+    fx.shutdown(dev);
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage47_groundfx_resize_candidate_discard_keeps_old_gpu_meshes) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    rules.territory.enabled=false;
+    rules.diggables.clear();
+    rules.rooms.clear();
+    rules.roadNetwork.enabled=true;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsView view;CHECK(view.init(dev,rules,missing));
+    game::RtsGroundFx fx;fx.init(dev,rules,missing,"");
+    game::MapGrid old;old.init(65,4);
+    for(auto& flag:old.flags)flag=game::kCellGround;
+    old.flags[size_t(old.index(1,1))]|=game::kCellRoad;
+    game::RtsScene scene;
+    render::RTSCamera cam;cam.target={24,0,2};
+    cam.distance=150;cam.pitch=1.1f;
+    renderer.beginScene(cam,1280,720);
+    fx.draw(renderer,scene,0.0,nullptr,old,view);
+    renderer.render(gfx::PassDesc{});
+    game::MapGrid replacement;replacement.init(33,4);
+    for(auto& flag:replacement.flags)flag=game::kCellGround;
+    replacement.flags[size_t(replacement.index(3,1))]|=game::kCellRoad;
+    renderer.beginScene(cam,1280,720);
+    const auto pendingBefore=fx.pendingMeshGpuRetirements();
+    {
+        auto abandoned=fx.prepareFrame(renderer,scene,1.0,nullptr,replacement,view);
+        CHECK(abandoned!=nullptr);
+        CHECK(fx.pendingMeshGpuRetirements()==pendingBefore);
+    }
+    CHECK(fx.pendingMeshGpuRetirements()==pendingBefore);
+    auto next=fx.prepareFrame(renderer,scene,1.1,nullptr,replacement,view);
+    CHECK(next!=nullptr);
+    fx.commitFrame(std::move(next));
+    CHECK(fx.pendingMeshGpuRetirements()>=pendingBefore+2);
+    renderer.beginScene(cam,1280,720);
+    fx.drawPrepared(renderer,scene,1.1,nullptr,replacement,view);
+    renderer.render(gfx::PassDesc{});
+    fx.shutdown(dev);
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage47_groundfx_draw_prepared_never_allocates_material_textures) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    rules.territory.enabled=false;
+    rules.diggables.clear();
+    rules.rooms.clear();
+    rules.roadNetwork.enabled=true;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsView view;CHECK(view.init(dev,rules,missing));
+    game::RtsGroundFx fx;fx.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(6,5);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.flags[size_t(grid.index(2,2))]|=game::kCellRoad;
+    game::RtsScene scene;
+    render::RTSCamera cam;cam.target={3,0,2};
+    cam.distance=50;cam.pitch=1.0f;
+    renderer.beginScene(cam,800,600);
+    const auto afterKit=dev.textureAttempts;
+    auto staged=fx.prepareFrame(renderer,scene,1.0,nullptr,grid,view);
+    CHECK(staged!=nullptr);
+    CHECK(dev.textureAttempts==afterKit);
+    fx.commitFrame(std::move(staged));
+    fx.drawPrepared(renderer,scene,1.0,nullptr,grid,view);
+    CHECK(dev.textureAttempts==afterKit); // neither prepare nor draw can allocate textures
+    renderer.render(gfx::PassDesc{});
+    fx.shutdown(dev);view.shutdown(dev);renderer.shutdown();
+}
+
+TEST(groundfx_visible_road_chunks_commit_together_or_rollback_on_late_upload_failure) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    rules.territory.enabled=false;
+    rules.diggables.clear();
+    rules.rooms.clear();
+    rules.roadNetwork.enabled=true;
+    rules.foundation.enabled=false;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::RtsGroundFx fx;
+    fx.init(dev,rules,missing,"");
+    game::MapGrid grid;
+    grid.init(65,4);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.flags[size_t(grid.index(1,1))] |= game::kCellRoad;
+    grid.flags[size_t(grid.index(40,1))] |= game::kCellRoad;
+    game::RtsScene scene;
+    scene.viewer=0;
+    render::RTSCamera cam;
+    cam.target={32,0,2};
+    cam.distance=150;
+    cam.pitch=1.1f;
+    renderer.beginScene(cam,1280,720);
+    fx.draw(renderer,scene,0.0,nullptr,grid,view);
+    renderer.render(gfx::PassDesc{});
+    CHECK(fx.pendingMeshGpuRetirements()==0);
+
+    grid.flags[size_t(grid.index(2,1))] |= game::kCellRoad;
+    grid.flags[size_t(grid.index(41,1))] |= game::kCellRoad;
+    const auto destroyedBefore=dev.destroyedBuffers;
+    renderer.beginScene(cam,1280,720);
+    dev.failBuffer=dev.bufferAttempts+4; // second GPU mesh index, after first replacement pair
+    bool failed=false;
+    try {fx.draw(renderer,scene,1.0,nullptr,grid,view);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(fx.pendingMeshGpuRetirements()==0); // neither published road has been retired
+    CHECK(dev.destroyedBuffers==destroyedBefore+3);
+    dev.failBuffer=0;
+    renderer.beginScene(cam,1280,720);
+    fx.draw(renderer,scene,1.1,nullptr,grid,view);
+    CHECK(fx.pendingMeshGpuRetirements()>=4);
+    renderer.render(gfx::PassDesc{});
+    fx.shutdown(dev);
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(texture_cache_swap_transfers_gpu_owner_without_invalidating_handles) {
+    fogfaulttest::Device dev;
+    render::TextureCache first,second;
+    first.init(dev);
+    second.init(dev);
+    const std::vector<uint32_t> pixels(4,0xffffffffu);
+    const auto one=first.addGenerated("first-generated",2,2,pixels,false);
+    const auto two=second.addGenerated("second-generated",2,2,pixels,false);
+    CHECK(one.valid() && two.valid() && one.tex.id!=two.tex.id);
+    first.swap(second);
+    CHECK(first.addGenerated("second-generated",2,2,pixels,false).tex.id==two.tex.id);
+    CHECK(second.addGenerated("first-generated",2,2,pixels,false).tex.id==one.tex.id);
+    CHECK(dev.destroyedTextures==0);
+    first.shutdown();
+    second.shutdown();
+    CHECK(dev.destroyedTextures==2);
+}
+
+TEST(road_view_staged_rebuild_preserves_old_gpu_and_wheel_surface_on_failure) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsRoadView roads;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    roads.init(dev,Json(),missing);
+    CHECK(!roads.types().empty());
+    int asphalt=0;
+    for(size_t i=0;i<roads.types().size();++i)
+        if(roads.types()[i].surface==game::RoadSurface::Asphalt &&
+           roads.types()[i].drivable()) {asphalt=int(i);break;}
+    game::RoadNetwork network;
+    game::RoadNode a,b;
+    a.id=1;b.id=2;
+    a.p={Fixed::fromInt(4),Fixed::fromInt(6)};
+    b.p={Fixed::fromInt(92),Fixed::fromInt(6)};
+    network.nodes={a,b};
+    game::RoadEdge edge;
+    edge.id=1;edge.a=1;edge.b=2;
+    edge.typeIndex=asphalt;
+    edge.type=roads.types()[size_t(asphalt)].id;
+    network.edges.push_back(edge);
+    roads.setNetwork(network);
+    render::RTSCamera cam;
+    cam.target={48,0,6};
+    cam.distance=160;
+    cam.pitch=1.0f;
+    const auto height=[](float,float){return 0.0f;};
+    renderer.beginScene(cam,1200,800);
+    roads.draw(renderer,height);
+    CHECK(!roads.needsRebuild());
+    CHECK(roads.batchStats().uploadedChunks>0);
+    renderer.render(gfx::PassDesc{});
+    const size_t oldChunks=roads.batchStats().uploadedChunks;
+    const uint64_t oldGeneration=roads.surfaceGeneration();
+    const size_t oldRetirements=roads.pendingGpuRetirements();
+    const float oldSurface=roads.surfaceAt(48,6,0);
+
+    network.nodes[1].p.x=Fixed::fromInt(100);
+    roads.setNetwork(network);
+    dev.failBuffer=dev.bufferAttempts+2; // staged decal/mesh upload
+    bool failed=false;
+    const size_t destroyedBefore=dev.destroyedBuffers;
+    renderer.beginScene(cam,1200,800);
+    try {roads.draw(renderer,height);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(roads.needsRebuild());
+    CHECK(roads.batchStats().uploadedChunks==oldChunks);
+    CHECK(roads.surfaceGeneration()==oldGeneration);
+    CHECK(roads.pendingGpuRetirements()==oldRetirements);
+    CHECK(roads.surfaceAt(48,6,0)==oldSurface);
+    CHECK(dev.destroyedBuffers>destroyedBefore);
+    dev.failBuffer=0;
+
+    renderer.beginScene(cam,1200,800);
+    roads.draw(renderer,height);
+    CHECK(!roads.needsRebuild());
+    CHECK(roads.surfaceGeneration()==oldGeneration+1);
+    CHECK(roads.pendingGpuRetirements()>oldRetirements);
+    renderer.render(gfx::PassDesc{});
+    roads.shutdown(dev);
+    renderer.shutdown();
+    CHECK(roads.pendingGpuRetirements()==0);
+}
+
+TEST(road_view_weather_upload_failure_keeps_previous_generation) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsRoadView roads;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    roads.init(dev,Json(),missing);
+    CHECK(!roads.types().empty());
+    int asphalt=0;
+    for(size_t i=0;i<roads.types().size();++i)
+        if(roads.types()[i].surface==game::RoadSurface::Asphalt &&
+           roads.types()[i].drivable()) {asphalt=int(i);break;}
+    game::RoadNetwork network;
+    game::RoadNode a,b;
+    a.id=1;b.id=2;
+    a.p={Fixed::fromInt(4),Fixed::fromInt(6)};
+    b.p={Fixed::fromInt(55),Fixed::fromInt(6)};
+    network.nodes={a,b};
+    game::RoadEdge edge;
+    edge.id=1;edge.a=1;edge.b=2;
+    edge.typeIndex=asphalt;edge.type=roads.types()[size_t(asphalt)].id;
+    network.edges.push_back(edge);
+    roads.setNetwork(network);
+    render::RTSCamera cam;
+    cam.target={30,0,6};cam.distance=100;cam.pitch=1.0f;
+    const auto height=[](float,float){return 0.0f;};
+    renderer.beginScene(cam,800,600);
+    roads.draw(renderer,height);
+    renderer.render(gfx::PassDesc{});
+    const auto pending=roads.pendingGpuRetirements();
+    const auto generation=roads.surfaceGeneration();
+    roads.setWeather(0.75f,0.85f);
+    dev.failBuffer=dev.bufferAttempts+1;
+    bool failed=false;
+    renderer.beginScene(cam,800,600);
+    try {roads.draw(renderer,height);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed); // wet film is uploaded before modifying its live handle
+    CHECK(roads.pendingGpuRetirements()==pending);
+    CHECK(roads.surfaceGeneration()==generation);
+    dev.failBuffer=0;
+    renderer.beginScene(cam,800,600);
+    roads.draw(renderer,height);
+    CHECK(roads.surfaceGeneration()==generation);
+    renderer.render(gfx::PassDesc{});
+    roads.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(road_view_partial_gpu_kit_retains_ownership_until_idle_recovery) {
+    fogfaulttest::Device dev;
+    game::RtsRoadView roads;
+    // The first successful generated kit texture must remain owned when
+    // the following GPU texture allocation fails.
+    dev.failTexture=2;
+    bool failed=false;
+    try {roads.init(dev,Json(),{});}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(roads.ownsGpuResources());
+    CHECK(dev.destroyedTextures==0);
+    dev.idleAllowed=false;
+    bool idleRefused=false;
+    try {roads.shutdown(dev);}
+    catch(const std::runtime_error&){idleRefused=true;}
+    CHECK(idleRefused);
+    CHECK(roads.ownsGpuResources());
+    CHECK(dev.destroyedTextures==0);
+    dev.idleAllowed=true;
+    roads.shutdown(dev);
+    CHECK(!roads.ownsGpuResources());
+    CHECK(dev.destroyedTextures>=1);
+}
+
+TEST(shore_view_partial_gpu_kit_retains_ownership_until_idle_recovery) {
+    fogfaulttest::Device dev;
+    game::RtsShoreView shores;
+    dev.failTexture=2;
+    bool failed=false;
+    try {shores.init(dev,Json(),{});}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(shores.ownsGpuResources());
+    CHECK(dev.destroyedTextures==0);
+    dev.idleAllowed=false;
+    bool idleRefused=false;
+    try {shores.shutdown(dev);}
+    catch(const std::runtime_error&){idleRefused=true;}
+    CHECK(idleRefused);
+    CHECK(shores.ownsGpuResources());
+    CHECK(dev.destroyedTextures==0);
+    dev.idleAllowed=true;
+    shores.shutdown(dev);
+    CHECK(!shores.ownsGpuResources());
+    CHECK(dev.destroyedTextures>=1);
+}
+
+TEST(road_and_shore_staged_reload_preserves_cpu_runtime_settings) {
+    game::RtsRoadView roads,stagedRoads;
+    game::RtsShoreView shores,stagedShores;
+    roads.setWeather(0.7f,0.35f);
+    const Json map=Json::parse(R"({"roadNetwork":{"replaces":["city_road"]},
+        "waterNetwork":{}})");
+    roads.setMap(map);
+    shores.setMap(map);
+    // Manually supplied networks are not backed by a serialized netJson_.
+    // Their topology must survive a staged view copy as well.
+    game::RoadNetwork manual;
+    manual.nodes.emplace_back();
+    manual.edges.emplace_back();
+    roads.setNetwork(manual);
+    stagedRoads.inheritRuntimeStateForReload(roads);
+    stagedShores.inheritRuntimeStateForReload(shores);
+    CHECK(stagedRoads.wet()==roads.wet());
+    CHECK(stagedRoads.puddles()==roads.puddles());
+    CHECK(stagedRoads.network().edges.size()==1);
+    CHECK(stagedRoads.network().edges.size()==roads.network().edges.size());
+    CHECK(stagedShores.active()==shores.active());
+}
+
+TEST(overlays_gpu_init_is_atomic_and_retryable) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::RtsOverlays overlays;
+    overlays.init(rules,Json(),Json(),"");
+    dev.failShader=1;
+    bool failed=false;
+    try {overlays.initGpu(dev);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(!overlays.gpuReady());
+    CHECK(dev.destroyedShaders==0);
+
+    dev.failShader=0;
+    dev.failPipeline=dev.pipelineAttempts+3;
+    failed=false;
+    try {overlays.initGpu(dev);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(!overlays.gpuReady());
+    CHECK(dev.destroyedPipelines==2);
+    CHECK(dev.destroyedShaders==1);
+    dev.failPipeline=0;
+
+    dev.failTexture=dev.textureAttempts+1;
+    failed=false;
+    try {overlays.initGpu(dev);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(!overlays.gpuReady());
+    CHECK(dev.destroyedPipelines==6);
+    CHECK(dev.destroyedShaders==2);
+    dev.failTexture=0;
+
+    overlays.initGpu(dev);
+    CHECK(overlays.gpuReady());
+    const auto priorShadersDestroyed=dev.destroyedShaders;
+    const auto priorPipelinesDestroyed=dev.destroyedPipelines;
+    const auto priorTexturesDestroyed=dev.destroyedTextures;
+
+    dev.idleAllowed=false;
+    failed=false;
+    try {overlays.initGpu(dev);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(overlays.gpuReady()); // previous published pipelines still valid
+    CHECK(dev.destroyedShaders==priorShadersDestroyed+1);
+    CHECK(dev.destroyedPipelines==priorPipelinesDestroyed+4);
+    CHECK(dev.destroyedTextures==priorTexturesDestroyed+1);
+    CHECK(!overlays.shutdownAfterGpuIdle(dev));
+    CHECK(overlays.gpuReady());
+
+    fogfaulttest::Device foreign;
+    bool wrongDevice=false;
+    try {overlays.initGpu(foreign);}
+    catch(const std::logic_error&){wrongDevice=true;}
+    CHECK(wrongDevice);
+    CHECK(!foreign.shaderAttempts);
+    wrongDevice=false;
+    try {(void)overlays.shutdownAfterGpuIdle(foreign);}
+    catch(const std::logic_error&){wrongDevice=true;}
+    CHECK(wrongDevice);
+    CHECK(foreign.idleRequests==0);
+
+    dev.idleAllowed=true;
+    overlays.initGpu(dev);
+    CHECK(overlays.gpuReady());
+    CHECK(dev.destroyedShaders==priorShadersDestroyed+2);
+    CHECK(dev.destroyedPipelines==priorPipelinesDestroyed+8);
+    CHECK(dev.destroyedTextures==priorTexturesDestroyed+2);
+    CHECK(overlays.shutdownAfterGpuIdle(dev));
+    CHECK(!overlays.gpuReady());
+    CHECK(overlays.shutdownAfterGpuIdle(dev));
+}
+
+TEST(mesh_builder_upload_releases_unpublished_vertex_buffer_on_index_failure) {
+    fogfaulttest::Device dev;
+    render::MeshBuilder b;
+    b.quad({0,0,0},{1,0,0},{1,0,1},{0,0,1});
+    const auto before=dev.destroyedBuffers;
+    dev.failBuffer=dev.bufferAttempts+2;
+    bool failed=false;
+    try {(void)b.upload(dev);}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(dev.destroyedBuffers==before+1);
+    dev.failBuffer=0;
+    const auto mesh=b.upload(dev);
+    CHECK(mesh.vb.valid() && mesh.ib.valid());
+    CHECK(mesh.indexCount==6);
+    dev.destroyBuffer(mesh.vb);
+    dev.destroyBuffer(mesh.ib);
+}
+
+TEST(terrain_chunk_rebuild_preserves_old_gpu_mesh_on_index_failure) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::TerrainRenderer terrain;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;
+    grid.init(4,4);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.built());
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    const auto initialChunks=terrain.stats().chunks;
+    const auto destroyedBefore=dev.destroyedBuffers;
+
+    // Changes in static material/rock geometry trigger a chunk rebuild.
+    grid.flags[0] |= game::kCellRock;
+    dev.failBuffer=dev.bufferAttempts+2;
+    bool failed=false;
+    try {(void)terrain.build(dev,grid,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built());
+    CHECK(terrain.stats().chunks==initialChunks);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedBuffers==destroyedBefore+1);
+
+    dev.failBuffer=0;
+    CHECK(terrain.build(dev,grid,false)); // unchanged old hash must retry
+    CHECK(terrain.stats().rebuilt>=1);
+    CHECK(terrain.pendingMeshGpuRetirements()>=2);
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(lens_stage47b_terrain_external_map_candidate_rolls_back_late_owner_failure) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid old;
+    old.init(4,4);
+    for(auto& f:old.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,old,false));
+    CHECK(terrain.canPrepareMap());
+    CHECK(terrain.mapMatches(4,4));
+    const auto oldChunks=terrain.stats().chunks;
+    const auto oldRetired=terrain.pendingMeshGpuRetirements();
+    game::MapGrid replacement;
+    replacement.init(65,4);
+    for(auto& f:replacement.flags)f=game::kCellGround;
+    replacement.flags[0]=game::kCellWater;
+    struct TerrainParticipant final:render::OwnerPrepareCommit::Participant {
+        game::TerrainRenderer& terrain;
+        fogfaulttest::Device& dev;
+        const game::MapGrid& grid;
+        std::shared_ptr<game::TerrainRenderer::PreparedMap> pending;
+        TerrainParticipant(game::TerrainRenderer& t,fogfaulttest::Device& d,
+                           const game::MapGrid& g):terrain(t),dev(d),grid(g){}
+        void prepare() override {pending=terrain.prepareMap(dev,grid,false);}
+        void commit() noexcept override {(void)terrain.commitMap(std::move(pending));}
+        void rollback() noexcept override {pending.reset();}
+    } terrainPart(terrain,dev,replacement);
+    struct FailingParticipant final:render::OwnerPrepareCommit::Participant {
+        bool fail=true;
+        void prepare() override {
+            if(fail)throw std::runtime_error("late fog upload fault");
+        }
+        void commit() noexcept override {}
+        void rollback() noexcept override {}
+    } fogPart;
+    const auto oldDeletes=dev.destroyedBuffers;
+    bool refused=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainPart);tx.add(fogPart);
+        try{tx.prepareAll();}catch(const std::runtime_error&){refused=true;}
+    }
+    CHECK(refused);
+    CHECK(!terrainPart.pending);
+    CHECK(terrain.mapMatches(4,4));
+    CHECK(terrain.stats().chunks==oldChunks);
+    CHECK(terrain.pendingMeshGpuRetirements()==oldRetired);
+    CHECK(dev.destroyedBuffers>oldDeletes);
+    fogPart.fail=false;
+    dev.idleAllowed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainPart);tx.add(fogPart);
+        tx.prepareAll();
+        CHECK(terrain.mapMatches(4,4));
+        CHECK(tx.publish());
+    }
+    CHECK(terrain.mapMatches(65,4));
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()>=oldRetired+4);
+    dev.idleAllowed=true;
+    terrain.shutdown(dev);
+}
+
+TEST(lens_stage47b_terrain_external_detail_candidate_keeps_published_surface) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader smooth=[](const std::string& path,std::string& out) {
+        if(path!="game.json")return false;
+        out=R"({"terrain":{"style":"smooth","detailLook":{"scale":2}}})";
+        return true;
+    };
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,smooth,"");
+    game::MapGrid old;
+    old.init(4,4);
+    for(auto& f:old.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,old,false));
+    CHECK(terrain.detailActive());
+    const auto prior=terrain.surfaceAt(old,1.5f,1.5f);
+    const auto oldRetire=terrain.pendingMeshGpuRetirements();
+    game::MapGrid replacement;
+    replacement.init(8,4);
+    for(auto& f:replacement.flags)f=game::kCellGround;
+    replacement.level[size_t(replacement.index(2,2))]=2;
+    const auto deleted=dev.destroyedBuffers;
+    {
+        auto staged=terrain.prepareMap(dev,replacement,false);
+        CHECK(staged!=nullptr);
+        CHECK(terrain.mapMatches(4,4));
+        CHECK(terrain.detailActive());
+        CHECK(terrain.surfaceAt(old,1.5f,1.5f)==prior);
+        CHECK(terrain.pendingMeshGpuRetirements()==oldRetire);
+    }
+    CHECK(dev.destroyedBuffers>deleted);
+    auto staged=terrain.prepareMap(dev,replacement,false);
+    CHECK(staged!=nullptr);
+    CHECK(terrain.commitMap(staged));
+    CHECK(terrain.mapMatches(8,4));
+    CHECK(terrain.detailActive());
+    CHECK(terrain.detail()!=nullptr);
+    CHECK(!terrain.commitMap(std::move(staged)));
+    CHECK(terrain.pendingMeshGpuRetirements()>oldRetire);
+    terrain.shutdown(dev);
+}
+
+TEST(terrain_full_map_stages_all_chunks_apron_and_water_before_publish) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::TerrainRenderer terrain;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid previous;
+    previous.init(4,4);
+    for(auto& flag:previous.flags)flag=game::kCellGround;
+    CHECK(terrain.build(dev,previous,false));
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+
+    game::MapGrid replacement;
+    replacement.init(65,4); // three chunks; the second can fail late
+    for(auto& flag:replacement.flags)flag=game::kCellGround;
+    replacement.flags[0]=game::kCellWater; // sheet is uploaded after the apron
+    auto beforeDestroyed=dev.destroyedBuffers;
+    dev.failBuffer=dev.bufferAttempts+4; // second chunk index buffer
+    bool failed=false;
+    try {(void)terrain.build(dev,replacement,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built());
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedBuffers==beforeDestroyed+3); // staged first pair + partial second
+    dev.failBuffer=0;
+    CHECK(!terrain.build(dev,previous,false)); // original map/hash still active
+
+    beforeDestroyed=dev.destroyedBuffers;
+    dev.failBuffer=dev.bufferAttempts+10; // all 3 chunk pairs, apron pair, water IB
+    failed=false;
+    try {(void)terrain.build(dev,replacement,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built());
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedBuffers==beforeDestroyed+9);
+    dev.failBuffer=0;
+
+    CHECK(terrain.build(dev,replacement,false));
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()>=4); // old chunk and apron held until GPU completion
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(terrain_full_map_texture_allocation_and_upload_failure_preserve_old_frame) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::TerrainRenderer terrain;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid previous;
+    previous.init(4,4);
+    for(auto& flag:previous.flags)flag=game::kCellGround;
+    CHECK(terrain.build(dev,previous,false));
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    game::MapGrid next;
+    next.init(65,4); // three chunks + apron, eight private buffers
+    for(auto& flag:next.flags)flag=game::kCellGround;
+
+    size_t oldTextures=dev.destroyedTextures;
+    size_t oldBuffers=dev.destroyedBuffers;
+    dev.failTexture=dev.textureAttempts+3; // after allocating two staging textures
+    bool failed=false;
+    try {(void)terrain.build(dev,next,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built() && terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==oldTextures+2);
+    CHECK(dev.destroyedBuffers==oldBuffers+8);
+    dev.failTexture=0;
+    CHECK(!terrain.build(dev,previous,false)); // old map still owns its textures and hash
+
+    oldTextures=dev.destroyedTextures;
+    oldBuffers=dev.destroyedBuffers;
+    dev.failTextureUpdate=dev.textureUpdates+2; // staged cell upload succeeds, splat fails
+    failed=false;
+    try {(void)terrain.build(dev,next,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built() && terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==oldTextures+4);
+    CHECK(dev.destroyedBuffers==oldBuffers+8);
+    dev.failTextureUpdate=0;
+
+    CHECK(terrain.build(dev,next,false));
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()>=8); // old 4 textures + old chunk/apron buffers
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(terrain_detail_stage_rolls_back_late_lod_and_normal_splat_failures) {
+    fogfaulttest::Device dev;
+    game::TerrainRenderer terrain;
+    game::Rules rules=skirmishRules();
+    const render::FileReader smooth=[](const std::string& path,std::string& out) {
+        if(path!="game.json")return false;
+        out=R"({"terrain":{"style":"smooth","detailLook":{"scale":2}}})";
+        return true;
+    };
+    terrain.init(dev,rules,smooth,"");
+    game::MapGrid previous;
+    previous.init(4,4);
+    for(auto& flag:previous.flags)flag=game::kCellGround;
+    CHECK(terrain.build(dev,previous,false));
+    CHECK(terrain.built() && terrain.detailActive());
+    CHECK(terrain.detail()!=nullptr);
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    const float publishedHeight=terrain.surfaceAt(previous,1.5f,1.5f);
+
+    game::MapGrid next;
+    next.init(65,4); // 3 detail chunks, one coarse LOD per chunk
+    for(auto& flag:next.flags)flag=game::kCellGround;
+    auto oldTextureDeletes=dev.destroyedTextures;
+    dev.failTexture=dev.textureAttempts+6; // after 4 cell and 1 detail-normal textures
+    bool failed=false;
+    try {(void)terrain.build(dev,next,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.built() && terrain.detailActive());
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==oldTextureDeletes+5);
+    CHECK(std::fabs(terrain.surfaceAt(previous,1.5f,1.5f)-publishedHeight)<1e-5f);
+    dev.failTexture=0;
+    CHECK(!terrain.build(dev,previous,false)); // unchanged source remains published
+
+    oldTextureDeletes=dev.destroyedTextures;
+    dev.failTextureUpdate=dev.textureUpdates+4; // fail detail splat update
+    failed=false;
+    try {(void)terrain.build(dev,next,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==oldTextureDeletes+6);
+    dev.failTextureUpdate=0;
+
+    const auto oldBufferDeletes=dev.destroyedBuffers;
+    dev.failBuffer=dev.bufferAttempts+8; // apron 2; third coarse LOD index fails
+    failed=false;
+    try {(void)terrain.build(dev,next,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.stats().chunks==1);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+    CHECK(dev.destroyedBuffers==oldBufferDeletes+7);
+    dev.failBuffer=0;
+    CHECK(terrain.build(dev,next,false));
+    CHECK(terrain.detailActive() && terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()>=10);
+
+    // A same-size editor cell change is now staged too, not published chunk
+    // by chunk. The previous detail height must survive a late upload fault.
+    const float nextHeight=terrain.surfaceAt(next,0.5f,0.5f);
+    game::MapGrid edited=next;
+    edited.level[0]=1;
+    const auto pending=terrain.pendingMeshGpuRetirements();
+    dev.failTextureUpdate=dev.textureUpdates+4;
+    failed=false;
+    try {(void)terrain.build(dev,edited,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()==pending);
+    CHECK(std::fabs(terrain.surfaceAt(next,0.5f,0.5f)-nextHeight)<1e-5f);
+    dev.failTextureUpdate=0;
+    CHECK(terrain.build(dev,edited,false));
+    CHECK(terrain.detailActive());
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(terrain_detail_incremental_rebuild_only_uploads_dirty_chunk_and_rolls_back) {
+    fogfaulttest::Device dev;
+    game::TerrainRenderer terrain;
+    game::Rules rules=skirmishRules();
+    const render::FileReader smooth=[](const std::string& path,std::string& out) {
+        if(path!="game.json")return false;
+        out=R"({"terrain":{"style":"smooth","detailLook":{"scale":2}}})";
+        return true;
+    };
+    terrain.init(dev,rules,smooth,"");
+    game::MapGrid grid;
+    grid.init(65,4); // three 32-cell chunks
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.detailActive());
+    CHECK(terrain.stats().chunks==3);
+    const auto buffersBefore=dev.bufferAttempts;
+    const auto retiredBefore=terrain.pendingMeshGpuRetirements();
+    const float heightBefore=terrain.surfaceAt(grid,1.5f,1.5f);
+
+    grid.flags[1] |= game::kCellRock; // far from chunk 1/2 boundaries
+    const auto deletedBefore=dev.destroyedBuffers;
+    dev.failBuffer=dev.bufferAttempts+2; // fail the dirty coarse LOD index
+    bool failed=false;
+    try {(void)terrain.build(dev,grid,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.pendingMeshGpuRetirements()==retiredBefore);
+    CHECK(dev.destroyedBuffers==deletedBefore+1); // new unpublished VB
+    dev.failBuffer=0;
+
+    const auto successfulStart=dev.bufferAttempts;
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.stats().chunks==3);
+    CHECK(terrain.stats().rebuilt==1);
+    CHECK(dev.bufferAttempts==successfulStart+2); // one VB/IB, not 3 chunks
+    CHECK(terrain.pendingMeshGpuRetirements()>retiredBefore);
+    const auto afterEdit=dev.bufferAttempts;
+    CHECK(!terrain.build(dev,grid,false)); // no redundant coarse rebuild
+    CHECK(dev.bufferAttempts==afterEdit);
+    CHECK(std::isfinite(heightBefore));
+    CHECK(dev.bufferAttempts-buffersBefore<12); // two attempts (fault) + two successful
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(terrain_detail_incremental_explicit_splat_edit_keeps_all_chunk_buffers) {
+    fogfaulttest::Device dev;
+    game::TerrainRenderer terrain;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;
+    grid.init(65,4);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    game::terrain::DetailSurface surface;
+    surface.init(65,4,2);
+    std::vector<uint8_t> splat(surface.hgt.size()*4,0);
+    for(size_t i=0;i<surface.hgt.size();++i)splat[i*4]=255;
+    terrain.setDetail(&surface,&splat);
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.detailActive());
+    const auto beforeBuffer=dev.bufferAttempts;
+    const auto beforeRetired=terrain.pendingMeshGpuRetirements();
+    const auto h=terrain.surfaceAt(grid,1.5f,1.5f);
+    const size_t sample=size_t(3*surface.sw()+5);
+    splat[sample*4]=0;
+    splat[sample*4+1]=255;
+    terrain.setDetail(&surface,&splat);
+
+    dev.failTextureUpdate=dev.textureUpdates+4;
+    bool failed=false;
+    try {(void)terrain.build(dev,grid,false);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(terrain.pendingMeshGpuRetirements()==beforeRetired);
+    CHECK(dev.bufferAttempts==beforeBuffer);
+    dev.failTextureUpdate=0;
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.stats().rebuilt==0);
+    CHECK(dev.bufferAttempts==beforeBuffer); // splat only: preserve all LODs
+    CHECK(std::fabs(terrain.surfaceAt(grid,1.5f,1.5f)-h)<1e-5f);
+    CHECK(terrain.pendingMeshGpuRetirements()>beforeRetired);
+    terrain.shutdown(dev);
+    CHECK(terrain.pendingMeshGpuRetirements()==0);
+}
+
+TEST(terrain_gpu_kit_staging_recovers_from_allocation_and_idle_failure) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::TerrainRenderer terrain;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    dev.failTexture=2;
+    bool failed=false;
+    try {terrain.init(dev,rules,missing,"");}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(!terrain.ownsGpuResources());
+    CHECK(dev.destroyedTextures==1); // unpublished first fallback
+    dev.failTexture=0;
+    terrain.init(dev,rules,missing,"");
+    CHECK(terrain.ownsGpuResources());
+
+    const size_t previousDestroyed=dev.destroyedTextures;
+    dev.idleAllowed=false;
+    failed=false;
+    try {terrain.init(dev,rules,missing,"");}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(terrain.ownsGpuResources());
+    CHECK(dev.destroyedTextures==previousDestroyed+3); // only staging kit
+    CHECK(!terrain.shutdownAfterGpuIdle(dev));
+    CHECK(terrain.ownsGpuResources());
+
+    fogfaulttest::Device foreign;
+    bool wrongDevice=false;
+    try {terrain.init(foreign,rules,missing,"");}
+    catch(const std::logic_error&) {wrongDevice=true;}
+    CHECK(wrongDevice);
+    CHECK(!foreign.textureAttempts);
+
+    dev.idleAllowed=true;
+    terrain.init(dev,rules,missing,"");
+    CHECK(terrain.ownsGpuResources());
+    CHECK(terrain.shutdownAfterGpuIdle(dev));
+    CHECK(!terrain.ownsGpuResources());
+}
+
+TEST(groundfx_gpu_kit_staging_recovers_from_pipeline_texture_idle_failure) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    game::RtsGroundFx fx;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    dev.failPipeline=1;
+    bool failed=false;
+    try {fx.init(dev,rules,missing,"");}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(!fx.ownsGpuResources());
+    CHECK(dev.destroyedShaders==1);
+    dev.failPipeline=0;
+
+    dev.failTexture=dev.textureAttempts+1;
+    failed=false;
+    try {fx.init(dev,rules,missing,"");}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(!fx.ownsGpuResources());
+    dev.failTexture=0;
+
+    fx.init(dev,rules,missing,"");
+    CHECK(fx.ownsGpuResources());
+    const bool publishedTerritory=fx.territoryOn();
+    const size_t previousShaders=dev.destroyedShaders;
+    const size_t previousPipes=dev.destroyedPipelines;
+    const size_t previousTextures=dev.destroyedTextures;
+    dev.idleAllowed=false;
+    failed=false;
+    try {fx.init(dev,rules,missing,"");}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(fx.ownsGpuResources());  // old kit still published
+    CHECK(fx.territoryOn()==publishedTerritory);
+    CHECK(dev.destroyedShaders==previousShaders+1);
+    CHECK(dev.destroyedPipelines==previousPipes+1);
+    CHECK(dev.destroyedTextures==previousTextures+3); // white + 2 generated kit textures
+    CHECK(!fx.shutdownAfterGpuIdle(dev));
+    CHECK(fx.ownsGpuResources());
+    fogfaulttest::Device foreign;
+    bool wrongDevice=false;
+    try {fx.init(foreign,rules,missing,"");}
+    catch(const std::logic_error&) {wrongDevice=true;}
+    CHECK(wrongDevice);
+    CHECK(foreign.shaderAttempts==0);
+
+    dev.idleAllowed=true;
+    fx.init(dev,rules,missing,"");
+    CHECK(fx.ownsGpuResources());
+    CHECK(fx.shutdownAfterGpuIdle(dev));
+    CHECK(!fx.ownsGpuResources());
+}
+
+TEST(lens_road_prepared_weather_only_preserves_wheel_surface_generation) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsRoadView roads;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    roads.init(dev,Json(),missing);
+    game::RoadNetwork network;
+    game::RoadNode a,b;
+    a.id=1;b.id=2;
+    a.p={Fixed::fromInt(4),Fixed::fromInt(6)};
+    b.p={Fixed::fromInt(55),Fixed::fromInt(6)};
+    network.nodes={a,b};
+    game::RoadEdge edge;
+    edge.id=1;edge.a=1;edge.b=2;
+    int asphalt=0;
+    for(size_t i=0;i<roads.types().size();++i)
+        if(roads.types()[i].surface==game::RoadSurface::Asphalt &&
+           roads.types()[i].drivable()) {asphalt=int(i);break;}
+    edge.typeIndex=asphalt;edge.type=roads.types()[size_t(asphalt)].id;
+    network.edges={edge};
+    roads.setNetwork(network);
+    render::RTSCamera camera;
+    camera.target={30,0,6};camera.distance=110;camera.pitch=1.0f;
+    const std::function<float(float,float)> height=[](float,float){return 0.0f;};
+    renderer.beginScene(camera,800,600);
+    roads.draw(renderer,height);
+    renderer.render(gfx::PassDesc{});
+    const auto generation=roads.surfaceGeneration();
+    const auto oldHeight=roads.surfaceAt(30,6,0.0f);
+    const size_t oldChunks=roads.batchStats().uploadedChunks;
+    const size_t oldRetire=roads.pendingGpuRetirements();
+    roads.setWeather(0.75f,0.85f);
+    CHECK(roads.needsVisualPreparation());
+    {
+        auto candidate=roads.prepareRebuild(dev,height);
+        CHECK(candidate!=nullptr);
+        CHECK(roads.surfaceGeneration()==generation);
+        CHECK(roads.pendingGpuRetirements()==oldRetire);
+        // Discarding a prepared weather candidate must not retire old film.
+    }
+    CHECK(roads.needsVisualPreparation());
+    CHECK(roads.surfaceGeneration()==generation);
+    auto candidate=roads.prepareRebuild(dev,height);
+    CHECK(candidate!=nullptr);
+    roads.commitRebuild(candidate);
+    CHECK(!roads.needsVisualPreparation());
+    CHECK(roads.surfaceGeneration()==generation);
+    CHECK(roads.batchStats().uploadedChunks==oldChunks);
+    CHECK(roads.surfaceAt(30,6,0.0f)==oldHeight);
+    const auto publishedRetire=roads.pendingGpuRetirements();
+    roads.commitRebuild(std::move(candidate)); // no duplicate retirement
+    CHECK(roads.pendingGpuRetirements()==publishedRetire);
+    roads.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_road_shore_fog_cohort_late_fog_failure_preserves_all_published_owners) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsRoadView roads;
+    game::RtsShoreView shores;
+    view::VisibilityField fog;
+    roads.init(dev,Json(),missing);
+    shores.init(dev,Json(),missing);
+    CHECK(fog.init(dev));
+    const std::function<float(float,float)> height=[](float,float){return 0.0f;};
+    fog.build(dev,100,48,height);
+
+    game::RoadNetwork network;
+    game::RoadNode a,b;
+    a.id=1;b.id=2;
+    a.p={Fixed::fromInt(4),Fixed::fromInt(6)};
+    b.p={Fixed::fromInt(92),Fixed::fromInt(6)};
+    network.nodes={a,b};
+    game::RoadEdge e;
+    e.id=1;e.a=1;e.b=2;
+    int asphalt=0;
+    for(size_t i=0;i<roads.types().size();++i)
+        if(roads.types()[i].surface==game::RoadSurface::Asphalt &&
+           roads.types()[i].drivable()) {asphalt=int(i);break;}
+    e.typeIndex=asphalt;e.type=roads.types()[size_t(asphalt)].id;
+    network.edges={e};
+    roads.setNetwork(network);
+    const Json shoreMap=Json::parse(R"JSON({
+      "waterNetwork":{"bodies":[{"id":1,"kind":"sea","side":"south",
+        "shore":[[4,12],[92,12]],
+        "shores":[{"side":1,"from":0,"to":1000,"type":"embankment"}]}]}
+    })JSON");
+    shores.setMap(shoreMap);
+    render::RTSCamera camera;
+    camera.target={48,0,8};camera.distance=150;camera.pitch=1.0f;
+    renderer.beginScene(camera,1200,800);
+    roads.draw(renderer,height);
+    shores.draw(renderer,height,0.0f,100,48);
+    renderer.render(gfx::PassDesc{});
+    const std::vector<uint8_t> visible(size_t(100*48),2);
+    CHECK(fog.update(visible,100,48,1.0));
+    const auto oldFog=fog.texture().id;
+    const uint64_t oldRoadGeneration=roads.surfaceGeneration();
+    const auto oldRoadRetired=roads.pendingGpuRetirements();
+    const auto oldShoreRetired=shores.pendingGpuRetirements();
+    const auto oldFogRetired=fog.pendingGpuRetirements();
+    const auto oldWheelHeight=roads.surfaceAt(48,6,0);
+
+    network.nodes[1].p.x=Fixed::fromInt(98);
+    roads.setNetwork(network);
+    shores.invalidateGround();
+    const std::vector<uint8_t> changedVision(size_t(100*48),0);
+    struct RoadPart final: render::OwnerPrepareCommit::Participant {
+        game::RtsRoadView& road;gfx::Device& dev;
+        const std::function<float(float,float)>& ground;
+        std::shared_ptr<game::RtsRoadView::PreparedRebuild> pending;
+        RoadPart(game::RtsRoadView& r,gfx::Device& d,
+                 const std::function<float(float,float)>& h)
+            :road(r),dev(d),ground(h){}
+        void prepare() override {pending=road.prepareRebuild(dev,ground);}
+        void commit() noexcept override {road.commitRebuild(std::move(pending));}
+        void rollback() noexcept override {pending.reset();}
+    } roadPart(roads,dev,height);
+    struct ShorePart final: render::OwnerPrepareCommit::Participant {
+        game::RtsShoreView& shore;gfx::Device& dev;
+        const std::function<float(float,float)>& ground;
+        std::shared_ptr<game::RtsShoreView::PreparedRebuild> pending;
+        ShorePart(game::RtsShoreView& s,gfx::Device& d,
+                  const std::function<float(float,float)>& h)
+            :shore(s),dev(d),ground(h){}
+        void prepare() override {
+            pending=shore.prepareRebuild(dev,ground,0.0f,100,48);
+        }
+        void commit() noexcept override {shore.commitRebuild(std::move(pending));}
+        void rollback() noexcept override {pending.reset();}
+    } shorePart(shores,dev,height);
+    struct FogPart final: render::OwnerPrepareCommit::Participant {
+        view::VisibilityField& fog;fogfaulttest::Device& dev;
+        const std::vector<uint8_t>& vision;
+        std::unique_ptr<view::VisibilityField::PreparedUpdate> pending;
+        bool fail=false;
+        FogPart(view::VisibilityField& f,fogfaulttest::Device& d,
+                const std::vector<uint8_t>& v):fog(f),dev(d),vision(v){}
+        void prepare() override {
+            if(fail)dev.failTextureUpdate=dev.textureUpdates+1;
+            pending=fog.prepareUpdate(vision,100,48,2.0);
+            dev.failTextureUpdate=0;
+        }
+        void commit() noexcept override {
+            if(pending) {
+                try {(void)fog.commitPreparedUpdate(std::move(pending));}
+                catch(...) {std::terminate();}
+            }
+        }
+        void rollback() noexcept override {
+            dev.failTextureUpdate=0;
+            pending.reset();
+        }
+    } fogPart(fog,dev,changedVision);
+    fogPart.fail=true;
+    const auto beforeCleanup=dev.destroyedBuffers;
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(roadPart);
+        transaction.add(shorePart);
+        transaction.add(fogPart);
+        try {transaction.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+        CHECK(failed);
+        CHECK(!transaction.publish());
+    }
+    CHECK(dev.destroyedBuffers>beforeCleanup);
+    CHECK(roads.needsRebuild() && shores.needsVisualPreparation(0.0f,100,48));
+    CHECK(roads.surfaceGeneration()==oldRoadGeneration);
+    CHECK(roads.surfaceAt(48,6,0)==oldWheelHeight);
+    CHECK(roads.pendingGpuRetirements()==oldRoadRetired);
+    CHECK(shores.pendingGpuRetirements()==oldShoreRetired);
+    CHECK(fog.pendingGpuRetirements()==oldFogRetired);
+    CHECK(fog.texture().id==oldFog);
+    fogPart.fail=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(roadPart);
+        transaction.add(shorePart);
+        transaction.add(fogPart);
+        transaction.prepareAll();
+        CHECK(roads.surfaceGeneration()==oldRoadGeneration);
+        CHECK(fog.texture().id==oldFog);
+        CHECK(transaction.publish());
+    }
+    CHECK(roads.surfaceGeneration()==oldRoadGeneration+1);
+    CHECK(!roads.needsRebuild() && !shores.needsVisualPreparation(0.0f,100,48));
+    CHECK(roads.pendingGpuRetirements()>oldRoadRetired);
+    CHECK(shores.pendingGpuRetirements()>oldShoreRetired);
+    CHECK(fog.pendingGpuRetirements()>oldFogRetired);
+    CHECK(fog.texture().id!=oldFog);
+    roads.shutdown(dev);
+    shores.shutdown(dev);
+    CHECK(fog.shutdownAfterGpuIdle());
+    renderer.shutdown();
+}
+
+TEST(owner_prepare_commit_rolls_back_earlier_gpu_owners_on_late_prepare_failure) {
+    struct Participant final : render::OwnerPrepareCommit::Participant {
+        int& published;
+        int nextValue;
+        bool fail=false;
+        bool prepared=false;
+        int committed=0,rolledBack=0;
+        Participant(int& value,int next,bool error=false)
+            :published(value),nextValue(next),fail(error){}
+        void prepare() override {
+            prepared=true;
+            if(fail)throw std::runtime_error("late GPU owner failed");
+        }
+        void commit() noexcept override {
+            if(prepared) {published=nextValue; ++committed; prepared=false;}
+        }
+        void rollback() noexcept override {
+            if(prepared) {prepared=false; ++rolledBack;}
+        }
+    };
+    int geometry=10,visibility=20,shores=30;
+    Participant a(geometry,11),b(visibility,21),c(shores,31,true);
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(a);transaction.add(b);transaction.add(c);
+        CHECK(transaction.participantCount()==3);
+        try {transaction.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+        CHECK(failed);
+        CHECK(!transaction.publish());
+        CHECK(!transaction.published());
+    }
+    CHECK(geometry==10 && visibility==20 && shores==30);
+    CHECK(a.committed==0 && b.committed==0 && c.committed==0);
+    CHECK(a.rolledBack==1 && b.rolledBack==1 && c.rolledBack==1);
+    c.fail=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(a);transaction.add(b);transaction.add(c);
+        transaction.prepareAll();
+        CHECK(transaction.prepared());
+        CHECK(geometry==10 && visibility==20 && shores==30);
+        CHECK(transaction.publish());
+        CHECK(transaction.published());
+    }
+    CHECK(geometry==11 && visibility==21 && shores==31);
+    CHECK(a.committed==1 && b.committed==1 && c.committed==1);
+}
+
+TEST(lens_stage48b3b2_resized_map_prewarms_all_five_owners) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid oldMap;oldMap.init(6,5);
+    for(auto& flag:oldMap.flags)flag=game::kCellGround;
+    view.buildTerrain(dev,oldMap);
+    game::RtsScene scene;
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    std::vector<uint8_t> oldVisibility(
+        size_t(oldMap.w)*size_t(oldMap.h),2);
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&oldVisibility,oldMap);
+    renderer.render(gfx::PassDesc{});
+
+    game::MapGrid replacement;replacement.init(10,7);
+    for(auto& flag:replacement.flags)flag=game::kCellGround;
+    replacement.corner.assign(
+        size_t(replacement.w+1)*size_t(replacement.h+1),32);
+    std::vector<uint8_t> vision(
+        size_t(replacement.w)*size_t(replacement.h),2);
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareTerrainAtomicFrame(
+        dev,replacement,renderer,scene,2.0,&vision));
+    CHECK(!view.surfacePresentationMapReady(replacement));
+    CHECK(view.surfacePresentationMapReady(oldMap));
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&vision,replacement);
+    CHECK(view.surfacePresentationMapReady(replacement));
+    CHECK(std::fabs(view.heightAt(replacement,3.5f,2.5f)-
+                    2.0f)<1e-4f);
+    CHECK(view.visualFrameReadyFor(replacement,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3b2_unpublished_map_lease_consumes_with_primary) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)flag=game::kCellGround|game::kCellRoad;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    const std::vector<uint8_t> vision(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&vision,grid);
+    renderer.render(gfx::PassDesc{});
+
+    const float previousHeight=view.heightAt(grid,4.5f,3.5f);
+    const uint64_t previousRoad=view.roads().surfaceGeneration();
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),16);
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareTerrainAtomicFrame(
+        dev,grid,renderer,scene,2.0,&vision));
+    const auto staged=view.surfacePrewarmStats();
+    CHECK(staged.staged>=1);
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-
+                    previousHeight)<1e-5f);
+    CHECK(view.roads().surfaceGeneration()==previousRoad);
+    CHECK(!view.visualFrameReadyFor(grid,1.0));
+    CHECK(!view.visualFrameReadyFor(grid,2.0));
+    // Ordinary LENS prewarm must reuse the pending topology owner instead
+    // of preparing the old geometry for a second time.
+    CHECK(view.prepareMapFrame(renderer,scene,2.0,&vision,grid));
+    CHECK(view.surfacePrewarmStats().staged==staged.staged);
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&vision,grid);
+    const auto published=view.surfacePrewarmStats();
+    CHECK(published.consumed==staged.consumed+1);
+    CHECK(published.discarded==staged.discarded);
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-1.0f)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==previousRoad+1);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3b2_stale_map_lease_discards_and_rebuilds) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    const std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&visible,grid);
+    renderer.render(gfx::PassDesc{});
+    const uint64_t beforeRoad=view.roads().surfaceGeneration();
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),16);
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareTerrainAtomicFrame(
+        dev,grid,renderer,scene,2.0,&visible));
+    const auto before=view.surfacePrewarmStats();
+    grid.corner[0]=32;  // same pointer, stale topology candidate
+    renderer.beginScene(camera,640,480);
+    CHECK(!view.prepareMapFrame(renderer,scene,2.0,&visible,grid));
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    const auto after=view.surfacePrewarmStats();
+    CHECK(after.discarded==before.discarded+1);
+    CHECK(after.consumed==before.consumed);
+    CHECK(view.roads().surfaceGeneration()==beforeRoad+1);
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-1.0f)<1e-4f);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3b2_failed_prewarm_preserves_live_map) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    const float oldHeight=view.heightAt(grid,3.5f,3.5f);
+    const auto oldRoad=view.roads().surfaceGeneration();
+    const auto oldRetirement=view.pendingModelRetirements();
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),16);
+    game::RtsScene scene;
+    const std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    dev.failBuffer=dev.bufferAttempts+1;
+    bool failed=false;
+    try {(void)view.prepareTerrainAtomicFrame(
+        dev,grid,renderer,scene,2.0,&visible);}
+    catch(const std::runtime_error&){failed=true;}
+    dev.failBuffer=0;
+    CHECK(failed);
+    CHECK(std::fabs(view.heightAt(grid,3.5f,3.5f)-
+                    oldHeight)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoad);
+    CHECK(view.pendingModelRetirements()==oldRetirement);
+    CHECK(!view.visualFrameReadyFor(grid,2.0));
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareTerrainAtomicFrame(
+        dev,grid,renderer,scene,2.0,&visible));
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    CHECK(std::fabs(view.heightAt(grid,3.5f,3.5f)-1.0f)<1e-4f);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3b1_scene_groundfx_uses_unpublished_terrain_and_rolls_back) {
+    struct InspectingDevice final : fogfaulttest::Device {
+        bool inspecting=false,failGround=false,sawGround=false;
+        game::RtsScene* mutateScene=nullptr;
+        gfx::BufferHandle createBuffer(const gfx::BufferDesc& desc) override {
+            if(inspecting && desc.type==gfx::BufferType::Vertex &&
+               desc.data && desc.size>=3*sizeof(render::MeshVertex) &&
+               desc.size%sizeof(render::MeshVertex)==0) {
+                const auto* raw=static_cast<const uint8_t*>(desc.data);
+                for(size_t off=0;off<desc.size;off+=sizeof(render::MeshVertex)) {
+                    render::MeshVertex vertex{};
+                    std::memcpy(&vertex,raw+off,sizeof vertex);
+                    if(std::isfinite(vertex.pos.x) &&
+                       std::isfinite(vertex.pos.y) &&
+                       std::isfinite(vertex.pos.z) &&
+                       vertex.pos.x>0.0f && vertex.pos.x<8.0f &&
+                       vertex.pos.z>0.0f && vertex.pos.z<6.0f &&
+                       vertex.pos.y>1.9f && vertex.pos.y<2.3f) {
+                        sawGround=true;
+                        if(mutateScene) {
+                            mutateScene->viewer=uint8_t(mutateScene->viewer+1);
+                            mutateScene=nullptr;
+                        }
+                        if(failGround)return {};
+                        break;
+                    }
+                }
+            }
+            return fogfaulttest::Device::createBuffer(desc);
+        }
+    };
+    InspectingDevice dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)
+        flag=game::kCellGround|game::kCellRoad;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    const std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&visible,grid);
+    renderer.render(gfx::PassDesc{});
+    const float beforeHeight=view.heightAt(grid,4.5f,3.5f);
+    const auto oldRoads=view.roads().surfaceGeneration();
+    const auto oldRetirements=view.pendingModelRetirements();
+    CHECK(std::fabs(beforeHeight)<1e-4f);
+
+    // The live GPU Terrain still represents height zero. GroundFX can
+    // only generate vertices near Y=2 from the PRIVATE staged terrain.
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),32);
+    renderer.beginScene(camera,640,480);
+    dev.inspecting=true;
+    dev.failGround=true;
+    bool rejected=false;
+    try {
+        view.buildTerrainAtomicScene(dev,grid,renderer,scene,2.0,&visible);
+    }catch(const std::runtime_error&){rejected=true;}
+    dev.inspecting=false;
+    CHECK(dev.sawGround && rejected);
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-
+                    beforeHeight)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoads);
+    CHECK(view.pendingModelRetirements()==oldRetirements);
+
+    // Camera-visible scene input changed during private GPU staging:
+    // even a successful set of uploads is not publishable as one scene.
+    dev.sawGround=false;dev.failGround=false;dev.inspecting=true;
+    dev.mutateScene=&scene;
+    bool rejectedScene=false;
+    try {
+        view.buildTerrainAtomicScene(dev,grid,renderer,scene,2.0,&visible);
+    }catch(const std::runtime_error&){rejectedScene=true;}
+    dev.inspecting=false;
+    CHECK(dev.sawGround && rejectedScene);
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-
+                    beforeHeight)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoads);
+    CHECK(view.pendingModelRetirements()==oldRetirements);
+
+    // Retry on the updated, now-stable scene without a device-wide idle.
+    dev.sawGround=false;dev.failGround=false;dev.inspecting=true;
+    dev.idleAllowed=false;
+    view.buildTerrainAtomicScene(dev,grid,renderer,scene,2.0,&visible);
+    dev.inspecting=false;
+    CHECK(dev.sawGround);
+    CHECK(view.surfacePresentationMapReady(grid));
+    CHECK(std::fabs(view.heightAt(grid,4.5f,3.5f)-2.0f)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoads+1);
+    CHECK(!view.publishedVisualFrame().ready());
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    dev.idleAllowed=true;
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3b0_topology_discards_mid_prepare_editor_mutation) {
+    // Simulate a same-pointer editor brush edit from an RHI callback while
+    // the first unpublished Terrain buffer is being prepared.
+    struct MutatingDevice final : fogfaulttest::Device {
+        game::MapGrid* edit=nullptr;
+        size_t mutateAtBuffer=0;
+        bool mutated=false;
+        gfx::BufferHandle createBuffer(const gfx::BufferDesc& desc) override {
+            if(edit && !mutated && bufferAttempts+1==mutateAtBuffer) {
+                edit->corner[0]=32;
+                mutated=true;
+            }
+            return fogfaulttest::Device::createBuffer(desc);
+        }
+    };
+    MutatingDevice dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&) {
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    const float publishedHeight=view.heightAt(grid,2.5f,2.5f);
+    const uint64_t roadGeneration=view.roads().surfaceGeneration();
+    const size_t pendingBefore=view.pendingModelRetirements();
+    // An atomic candidate starts with an all-one-unit edited surface.
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),16);
+    dev.edit=&grid;
+    dev.mutateAtBuffer=dev.bufferAttempts+1;
+    bool rejected=false;
+    try {view.buildTerrainAtomic(dev,grid);}
+    catch(const std::runtime_error& e) {
+        rejected=std::string(e.what()).find(
+            "map source changed during topology preparation")!=
+                std::string::npos;
+    }
+    CHECK(dev.mutated);
+    CHECK(rejected);
+    CHECK(std::fabs(view.heightAt(grid,2.5f,2.5f)-
+                    publishedHeight)<1e-5f);
+    CHECK(view.roads().surfaceGeneration()==roadGeneration);
+    CHECK(view.pendingModelRetirements()==pendingBefore);
+    // Retry against the now-stable source: all owners can publish together.
+    dev.edit=nullptr;
+    view.buildTerrainAtomic(dev,grid);
+    CHECK(view.surfacePresentationMapReady(grid));
+    CHECK(std::fabs(view.heightAt(grid,2.5f,2.5f)-1.0f)<1e-5f);
+    CHECK(view.roads().surfaceGeneration()==roadGeneration+1);
+    view.shutdown(dev);
+}
+
+TEST(lens_stage48b3a1_unbuilt_terrain_uses_rules_level_height) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    rules.levelHeight=Fixed::fromInt(4);
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(3,3);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.level[size_t(grid.index(1,1))]=1;
+    // Before TerrainRenderer's first build there is no immutable mesh
+    // source snapshot. The public height query still follows Rules.
+    CHECK(std::fabs(view.heightAt(grid,1.5f,1.5f)-4.0f)<1e-4f);
+    view.shutdown(dev);
+}
+
+TEST(lens_stage48b3a_same_size_fog_sheet_keeps_explored_r8_history) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    const std::function<float(float,float)> flat=[](float,float){return 0.0f;};
+    const std::function<float(float,float)> sculpt=[](float,float){return 2.0f;};
+    fog.build(dev,8,6,flat);
+    const std::vector<uint8_t> seen(size_t(8*6),2);
+    CHECK(fog.update(seen,8,6,1.0));
+    const auto previousTexture=fog.texture().id;
+    const auto previousField=fog.field();
+    const auto previousRetired=fog.pendingGpuRetirements();
+    dev.failBuffer=dev.bufferAttempts+2; // private Fog Sheet index upload
+    bool failed=false;
+    try {(void)fog.prepareSheet(dev,8,6,sculpt);}
+    catch(const std::runtime_error&){failed=true;}
+    dev.failBuffer=0;
+    CHECK(failed);
+    CHECK(fog.texture().id==previousTexture);
+    CHECK(fog.field()==previousField);
+    CHECK(fog.pendingGpuRetirements()==previousRetired);
+    auto pending=fog.prepareSheet(dev,8,6,sculpt);
+    CHECK(pending!=nullptr);
+    dev.idleAllowed=false; // sheet commit must not require full GPU idle
+    CHECK(fog.commitPreparedSheet(std::move(pending)));
+    CHECK(fog.sheetMatches(8,6));
+    CHECK(fog.texture().id==previousTexture);
+    CHECK(fog.field()==previousField);
+    CHECK(fog.pendingGpuRetirements()==previousRetired+2);
+    dev.idleAllowed=true;
+    CHECK(fog.shutdownAfterGpuIdle());
+}
+
+TEST(lens_stage48b3a_opt_in_atomic_sculpt_keeps_sync_editor_contract) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    const std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&visible,grid);
+    CHECK(view.visualFrameReadyFor(grid,1.0));
+    renderer.render(gfx::PassDesc{});
+    const uint64_t oldRoadGeneration=view.roads().surfaceGeneration();
+    const float previousHeight=view.heightAt(grid,3.5f,2.5f);
+    CHECK(std::fabs(previousHeight)<1e-4f);
+
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),32);
+    dev.failBuffer=dev.bufferAttempts+1; // initial private terrain VB
+    bool rejected=false;
+    try {view.buildTerrainAtomic(dev,grid);}
+    catch(const std::runtime_error&){rejected=true;}
+    dev.failBuffer=0;
+    CHECK(rejected);
+    CHECK(std::fabs(view.heightAt(grid,3.5f,2.5f)-previousHeight)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoadGeneration);
+    CHECK(!view.publishedVisualFrame().ready());
+
+    dev.idleAllowed=false; // GPU idle is not part of the 5-owner commit
+    view.buildTerrainAtomic(dev,grid);
+    CHECK(view.surfacePresentationMapReady(grid));
+    CHECK(std::fabs(view.heightAt(grid,3.5f,2.5f)-2.0f)<1e-4f);
+    CHECK(view.roads().surfaceGeneration()==oldRoadGeneration+1);
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    dev.idleAllowed=true;
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b3a_atomic_same_size_map_before_first_camera_uses_r8_baseline) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(4,4);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    // No primary frame yet; the Fog sheet and R8 may still be absent.
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),16);
+    view.buildTerrainAtomic(dev,grid);
+    CHECK(view.surfacePresentationMapReady(grid));
+    CHECK(std::fabs(view.heightAt(grid,1.5f,1.5f)-1.0f)<1e-4f);
+    view.shutdown(dev);
+}
+
+TEST(lens_stage48b2b_unpublished_scene_lease_is_consumed_once) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),0);
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    const auto previous=view.surfacePrewarmStats();
+    const auto retired=view.terrainRenderer().pendingMeshGpuRetirements();
+    CHECK(view.prepareMapFrame(renderer,scene,1.0,&visible,grid));
+    const auto staged=view.surfacePrewarmStats();
+    CHECK(staged.staged==previous.staged+1);
+    CHECK(staged.consumed==previous.consumed);
+    CHECK(staged.discarded==previous.discarded);
+    // The private Fog and Terrain candidates have NOT retired old GPU
+    // generations; no secondary camera may consume the unfinished frame.
+    CHECK(view.terrainRenderer().pendingMeshGpuRetirements()==retired);
+    CHECK(!view.publishedVisualFrame().ready());
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&visible,grid);
+    const auto consumed=view.surfacePrewarmStats();
+    CHECK(consumed.staged==staged.staged);
+    CHECK(consumed.consumed==staged.consumed+1);
+    CHECK(consumed.discarded==staged.discarded);
+    CHECK(view.visualFrameReadyFor(grid,1.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_immediate_surface_publication_avoids_retained_source_snapshots) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    auto rules=skirmishRules();
+    game::RtsView view;
+    CHECK(view.init(dev,rules,[](const std::string&,std::string&){return false;}));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;std::vector<uint8_t> vision(size_t(grid.w)*grid.h,2);
+    render::RTSCamera camera;camera.target={6,0,4};camera.distance=35;camera.pitch=1.f;
+    for(int frame=1;frame<=3;++frame) {
+        renderer.beginScene(camera,640,480);
+        view.draw(renderer,scene,double(frame),&vision,grid);
+        CHECK(view.visualFrameReadyFor(grid,double(frame)));
+        CHECK(view.surfacePrewarmStats().sourceSnapshots==0);
+        renderer.render(gfx::PassDesc{});
+    }
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,4.,&vision,grid));
+    auto staged=view.surfacePrewarmStats();
+    CHECK(staged.sourceSnapshots==1);
+    // Cross-call validation must still reject a same-pointer byte mutation.
+    grid.creep[0]=1;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,4.,&vision,grid);
+    auto current=view.surfacePrewarmStats();
+    CHECK(current.discarded==staged.discarded+1);
+    CHECK(current.consumed==staged.consumed);
+    CHECK(current.sourceSnapshots==staged.sourceSnapshots);
+    CHECK(view.visualFrameReadyFor(grid,4.));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);renderer.shutdown();
+}
+
+TEST(lens_stage48b2b_stale_visibility_map_or_camera_discards_private_lease) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){
+        return false;
+    };
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    std::vector<uint8_t> vision(size_t(grid.w)*size_t(grid.h),0);
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,1.0,&vision,grid));
+    const auto first=view.surfacePrewarmStats();
+    vision[0]=2; // same pointer, mutated bytes: stale lease forbidden
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&vision,grid);
+    const auto afterVisibility=view.surfacePrewarmStats();
+    CHECK(afterVisibility.discarded==first.discarded+1);
+    CHECK(afterVisibility.consumed==first.consumed);
+    CHECK(view.visualFrameReadyFor(grid,1.0));
+    renderer.render(gfx::PassDesc{});
+
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,2.0,&vision,grid));
+    const auto beforeMap=view.surfacePrewarmStats();
+    grid.creep[0]=1; // valid dynamic data mutation, no buildTerrain call
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&vision,grid);
+    const auto afterMap=view.surfacePrewarmStats();
+    CHECK(afterMap.discarded==beforeMap.discarded+1);
+    CHECK(afterMap.consumed==beforeMap.consumed);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,3.0,&vision,grid));
+    const auto beforeCamera=view.surfacePrewarmStats();
+    camera.distance=41; // changed camera frustum / visible Detail LODs
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,3.0,&vision,grid);
+    const auto afterCamera=view.surfacePrewarmStats();
+    CHECK(afterCamera.discarded==beforeCamera.discarded+1);
+    CHECK(afterCamera.consumed==beforeCamera.consumed);
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b2a_scene_prewarm_invalidates_secondary_epoch_until_primary) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::Rules rules=skirmishRules();
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    const std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&visible,grid);
+    CHECK(view.publishedVisualFrame().ready());
+    const uint64_t prior=view.publishedVisualFrame().id;
+    renderer.render(gfx::PassDesc{});
+
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,2.0,&visible,grid));
+    CHECK(!view.publishedVisualFrame().ready());
+    CHECK(!view.visualFrameReadyFor(grid,1.0));
+    CHECK(!view.visualFrameReadyFor(grid,2.0));
+    CHECK(view.surfacePresentationMapReady(grid));
+
+    // A prewarm does not submit a scene or authorize secondary captures.
+    // Only the full primary draw finishes and publishes the frame epoch.
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    CHECK(view.publishedVisualFrame().id>prior);
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b2a_late_fog_failure_rolls_back_scene_prewarm) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::Rules rules=skirmishRules();
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(12,9);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    std::vector<uint8_t> unseen(size_t(grid.w)*size_t(grid.h),0);
+    std::vector<uint8_t> visible(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&unseen,grid);
+    renderer.render(gfx::PassDesc{});
+
+    const auto oldRetire=view.pendingModelRetirements();
+    const auto oldTerrainRetire=view.terrainRenderer().pendingMeshGpuRetirements();
+    const uint64_t oldRoadGeneration=view.roads().surfaceGeneration();
+    dev.failTexture=dev.textureAttempts+1; // late R8 Fog candidate allocation
+    bool rejected=false;
+    renderer.beginScene(camera,640,480);
+    try {
+        (void)view.prepareMapFrame(renderer,scene,2.0,&visible,grid);
+    }catch(const std::runtime_error&){rejected=true;}
+    dev.failTexture=0;
+    CHECK(rejected);
+    CHECK(!view.publishedVisualFrame().ready());
+    CHECK(view.roads().surfaceGeneration()==oldRoadGeneration);
+    CHECK(view.pendingModelRetirements()==oldRetire);
+    CHECK(view.terrainRenderer().pendingMeshGpuRetirements()==oldTerrainRetire);
+
+    // Retrying the same scene after a private GPU failure must work, with
+    // no publication of a secondary-camera epoch until primary draw.
+    renderer.beginScene(camera,640,480);
+    CHECK(view.prepareMapFrame(renderer,scene,2.0,&visible,grid));
+    CHECK(!view.publishedVisualFrame().ready());
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,grid);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48b1_fog_gpu_failure_rolls_back_entire_topology_cohort) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::TerrainRenderer terrain;
+    game::RtsRoadView roads;
+    game::RtsShoreView shores;
+    game::RtsGroundFx groundFx;
+    view::VisibilityField fog;
+    terrain.init(dev,rules,missing,"");
+    roads.init(dev,Json(),missing);
+    shores.init(dev,Json(),missing);
+    groundFx.init(dev,rules,missing,"");
+    CHECK(fog.init(dev));
+    game::MapGrid oldMap;oldMap.init(8,6);
+    for(auto& f:oldMap.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,oldMap,false));
+    auto initialGround=groundFx.prepareMapReset(oldMap);
+    CHECK(initialGround!=nullptr);
+    groundFx.commitFrame(std::move(initialGround));
+    CHECK(groundFx.mapMatches(oldMap.w,oldMap.h));
+    const std::function<float(float,float)> flat=[](float,float){return 0.0f;};
+    fog.build(dev,oldMap.w,oldMap.h,flat);
+    const auto fogTexture=fog.texture();
+    const auto roadGeneration=roads.surfaceGeneration();
+    const auto terrainRetired=terrain.pendingMeshGpuRetirements();
+    const auto roadsRetired=roads.pendingGpuRetirements();
+    const auto shoresRetired=shores.pendingGpuRetirements();
+    const auto groundRetired=groundFx.pendingMeshGpuRetirements();
+    const auto fogRetired=fog.pendingGpuRetirements();
+
+    game::MapGrid next;next.init(12,9);
+    for(auto& f:next.flags)f=game::kCellGround;
+    next.corner.assign(size_t(next.w+1)*size_t(next.h+1),32);
+    const std::vector<uint8_t> unexplored(size_t(next.w)*size_t(next.h),0);
+    std::shared_ptr<game::TerrainRenderer::PreparedMap> mapPending;
+    std::shared_ptr<game::RtsRoadView::PreparedRebuild> roadPending;
+    std::shared_ptr<game::RtsShoreView::PreparedRebuild> shorePending;
+    std::shared_ptr<game::RtsGroundFx::PreparedFrame> groundPending;
+    std::unique_ptr<view::VisibilityField::PreparedSheet> sheetPending;
+    std::unique_ptr<view::VisibilityField::PreparedUpdate> fieldPending;
+    const std::function<float(float,float)> nextHeight=
+        [&](float x,float z){
+            return terrain.preparedSurfaceAt(mapPending,next,x,z);
+        };
+    struct Part final:render::OwnerPrepareCommit::Participant {
+        std::function<void()> onPrepare,onCommit,onRollback;
+        Part(std::function<void()> p,std::function<void()> c,
+             std::function<void()> r)
+            :onPrepare(std::move(p)),onCommit(std::move(c)),
+             onRollback(std::move(r)){}
+        void prepare() override {onPrepare();}
+        void commit() noexcept override {onCommit();}
+        void rollback() noexcept override {onRollback();}
+    };
+    Part terrainPart(
+        [&]{mapPending=terrain.prepareMap(dev,next,false);},
+        [&]{(void)terrain.commitMap(std::move(mapPending));},
+        [&]{mapPending.reset();});
+    Part roadPart(
+        [&]{roadPending=roads.prepareRebuild(dev,nextHeight,true);},
+        [&]{roads.commitRebuild(std::move(roadPending));},
+        [&]{roadPending.reset();});
+    Part shorePart(
+        [&]{shorePending=shores.prepareRebuild(
+            dev,nextHeight,0.0f,next.w,next.h,true);},
+        [&]{shores.commitRebuild(std::move(shorePending));},
+        [&]{shorePending.reset();});
+    Part groundPart(
+        [&]{groundPending=groundFx.prepareMapReset(next);},
+        [&]{groundFx.commitFrame(std::move(groundPending));},
+        [&]{groundPending.reset();});
+    bool injectFogUpload=true;
+    Part fogPart(
+        [&]{
+            sheetPending=fog.prepareSheet(dev,next.w,next.h,nextHeight);
+            CHECK(sheetPending!=nullptr);
+            if(injectFogUpload)
+                dev.failTexture=dev.textureAttempts+1;
+            try {
+                fieldPending=fog.prepareUpdate(
+                    unexplored,next.w,next.h,0.0,sheetPending.get());
+            }catch(...) {
+                dev.failTexture=0;
+                throw;
+            }
+            dev.failTexture=0;
+            CHECK(fieldPending!=nullptr);
+        },
+        [&]{(void)fog.commitPreparedFrame(
+            std::move(sheetPending),std::move(fieldPending));},
+        [&]{
+            dev.failTexture=0;
+            fieldPending.reset();
+            sheetPending.reset();
+        });
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainPart);tx.add(roadPart);tx.add(shorePart);
+        tx.add(groundPart);tx.add(fogPart);
+        try {tx.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+        CHECK(!tx.publish());
+    }
+    CHECK(failed);
+    CHECK(!mapPending && !roadPending && !shorePending &&
+          !groundPending && !sheetPending && !fieldPending);
+    CHECK(terrain.mapMatches(oldMap.w,oldMap.h));
+    CHECK(groundFx.mapMatches(oldMap.w,oldMap.h));
+    CHECK(fog.sheetMatches(oldMap.w,oldMap.h));
+    CHECK(fog.texture().id==fogTexture.id);
+    CHECK(roads.surfaceGeneration()==roadGeneration);
+    CHECK(terrain.pendingMeshGpuRetirements()==terrainRetired);
+    CHECK(roads.pendingGpuRetirements()==roadsRetired);
+    CHECK(shores.pendingGpuRetirements()==shoresRetired);
+    CHECK(groundFx.pendingMeshGpuRetirements()==groundRetired);
+    CHECK(fog.pendingGpuRetirements()==fogRetired);
+
+    injectFogUpload=false;
+    dev.idleAllowed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainPart);tx.add(roadPart);tx.add(shorePart);
+        tx.add(groundPart);tx.add(fogPart);
+        tx.prepareAll();
+        CHECK(std::fabs(nextHeight(2,2)-2.0f)<1e-4f);
+        CHECK(tx.publish());
+    }
+    CHECK(terrain.mapMatches(next.w,next.h));
+    CHECK(groundFx.mapMatches(next.w,next.h));
+    CHECK(fog.sheetMatches(next.w,next.h));
+    CHECK(fog.texture().valid() && fog.texture().id!=fogTexture.id);
+    CHECK(fog.field().size()==unexplored.size());
+    CHECK(roads.surfaceGeneration()==roadGeneration+1);
+    dev.idleAllowed=true;
+    CHECK(fog.shutdownAfterGpuIdle());
+    groundFx.shutdown(dev);
+    shores.shutdown(dev);
+    roads.shutdown(dev);
+    terrain.shutdown(dev);
+}
+
+TEST(lens_stage48b1_editor_map_build_prepares_fog_and_groundfx_before_camera) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid oldMap;oldMap.init(6,4);
+    for(auto& f:oldMap.flags)f=game::kCellGround;
+    view.buildTerrain(dev,oldMap);
+    game::MapGrid next;next.init(12,9);
+    for(auto& f:next.flags)f=game::kCellGround;
+    next.corner.assign(size_t(next.w+1)*size_t(next.h+1),16);
+    view.buildTerrain(dev,next); // no scene, camera, or vision required
+    CHECK(view.surfacePresentationMapReady(next));
+    CHECK(!view.publishedVisualFrame().ready()); // old RT frames invalidated
+    const std::vector<uint8_t> visible(size_t(next.w)*size_t(next.h),2);
+    game::RtsScene scene;
+    render::RTSCamera camera;
+    camera.target={6,0,4};camera.distance=35;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&visible,next);
+    CHECK(view.publishedVisualFrame().ready());
+    CHECK(view.visualFrameReadyFor(next,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48a_topology_cohort_stages_new_height_and_rolls_back_late_failure) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::Rules rules=skirmishRules();
+    game::TerrainRenderer terrain;
+    game::RtsRoadView roads;
+    game::RtsShoreView shores;
+    terrain.init(dev,rules,missing,"");
+    roads.init(dev,Json(),missing);
+    shores.init(dev,Json(),missing);
+    game::MapGrid oldMap;oldMap.init(48,16);
+    for(auto& f:oldMap.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,oldMap,false));
+    game::RoadNetwork net;
+    game::RoadNode a,b;
+    a.id=1;b.id=2;
+    a.p={Fixed::fromInt(4),Fixed::fromInt(6)};
+    b.p={Fixed::fromInt(42),Fixed::fromInt(6)};
+    net.nodes={a,b};
+    game::RoadEdge edge;
+    edge.id=1;edge.a=1;edge.b=2;
+    int asphalt=0;
+    for(size_t i=0;i<roads.types().size();++i)
+        if(roads.types()[i].surface==game::RoadSurface::Asphalt &&
+           roads.types()[i].drivable()){asphalt=int(i);break;}
+    edge.typeIndex=asphalt;edge.type=roads.types()[size_t(asphalt)].id;
+    net.edges={edge};
+    roads.setNetwork(net);
+    const std::function<float(float,float)> level=[](float,float){return 0.0f;};
+    roads.commitRebuild(roads.prepareRebuild(dev,level));
+    const auto roadGeneration=roads.surfaceGeneration();
+    const auto wheelHeight=roads.surfaceAt(18,6,0.0f);
+    const auto terrainRetired=terrain.pendingMeshGpuRetirements();
+    const auto roadRetired=roads.pendingGpuRetirements();
+    const auto shoreRetired=shores.pendingGpuRetirements();
+
+    game::MapGrid next;next.init(72,20);
+    for(auto& f:next.flags)f=game::kCellGround;
+    next.corner.assign(size_t(next.w+1)*size_t(next.h+1),32);
+    std::shared_ptr<game::TerrainRenderer::PreparedMap> mapPending;
+    std::shared_ptr<game::RtsRoadView::PreparedRebuild> roadPending;
+    std::shared_ptr<game::RtsShoreView::PreparedRebuild> shorePending;
+    const std::function<float(float,float)> nextGround=
+        [&](float x,float z){return terrain.preparedSurfaceAt(mapPending,next,x,z);};
+    struct Part final:render::OwnerPrepareCommit::Participant {
+        std::function<void()> stage,accept,discard;
+        Part(std::function<void()> a,std::function<void()> b,
+             std::function<void()> c)
+            :stage(std::move(a)),accept(std::move(b)),discard(std::move(c)){}
+        void prepare() override {stage();}
+        void commit() noexcept override {accept();}
+        void rollback() noexcept override {discard();}
+    };
+    Part mapPart(
+        [&]{mapPending=terrain.prepareMap(dev,next,false);},
+        [&]{(void)terrain.commitMap(std::move(mapPending));},
+        [&]{mapPending.reset();});
+    Part roadPart(
+        [&]{roadPending=roads.prepareRebuild(dev,nextGround,true);},
+        [&]{roads.commitRebuild(std::move(roadPending));},
+        [&]{roadPending.reset();});
+    Part shorePart(
+        [&]{shorePending=shores.prepareRebuild(dev,nextGround,0.0f,72,20,true);},
+        [&]{shores.commitRebuild(std::move(shorePending));},
+        [&]{shorePending.reset();});
+    bool failLast=true;
+    Part last(
+        [&]{if(failLast)throw std::runtime_error("late owner rejected");},
+        []{},[]{});
+    bool refused=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(mapPart);tx.add(roadPart);tx.add(shorePart);tx.add(last);
+        try {tx.prepareAll();}catch(const std::runtime_error&){refused=true;}
+    }
+    CHECK(refused);
+    CHECK(!mapPending && !roadPending && !shorePending);
+    CHECK(terrain.mapMatches(48,16));
+    CHECK(roads.surfaceGeneration()==roadGeneration);
+    CHECK(roads.surfaceAt(18,6,0.0f)==wheelHeight);
+    CHECK(terrain.pendingMeshGpuRetirements()==terrainRetired);
+    CHECK(roads.pendingGpuRetirements()==roadRetired);
+    CHECK(shores.pendingGpuRetirements()==shoreRetired);
+    failLast=false;
+    dev.idleAllowed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(mapPart);tx.add(roadPart);tx.add(shorePart);tx.add(last);
+        tx.prepareAll();
+        CHECK(std::fabs(nextGround(18,6)-2.0f)<0.0001f);
+        CHECK(terrain.mapMatches(48,16));
+        CHECK(tx.publish());
+    }
+    CHECK(terrain.mapMatches(72,20));
+    CHECK(std::fabs(terrain.surfaceAt(next,18,6)-2.0f)<0.0001f);
+    CHECK(roads.surfaceGeneration()==roadGeneration+1);
+    CHECK(terrain.pendingMeshGpuRetirements()>terrainRetired);
+    CHECK(roads.pendingGpuRetirements()>roadRetired);
+    dev.idleAllowed=true;
+    shores.shutdown(dev);
+    roads.shutdown(dev);
+    terrain.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage48a_rts_view_build_terrain_publishes_new_topology_cohort) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid previous;previous.init(8,6);
+    for(auto& f:previous.flags)f=game::kCellGround;
+    view.buildTerrain(dev,previous);
+    const auto oldGeneration=view.roads().surfaceGeneration();
+    game::MapGrid next;next.init(12,9);
+    for(auto& f:next.flags)f=game::kCellGround;
+    next.corner.assign(size_t(next.w+1)*size_t(next.h+1),16);
+    view.buildTerrain(dev,next);
+    CHECK(view.terrainRenderer().mapMatches(12,9));
+    CHECK(view.roads().surfaceGeneration()==oldGeneration+1);
+    CHECK(std::fabs(view.heightAt(next,2.0f,2.0f)-1.0f)<0.0001f);
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage47b3c_trace_height_failure_does_not_publish_or_retire) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    renderer.setShadowQuality(render::ShadowQuality::High);
+    renderer.setTraceEnabled(true);
+    game::TerrainRenderer terrain;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(4,4);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    grid.corner.resize(size_t(grid.w+1)*size_t(grid.h+1),0);
+    CHECK(terrain.build(dev,grid,false));
+    render::RTSCamera camera;
+    camera.target={2,0,2};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    // The AIVERSE_TRACE=off override is supported; the test exercises
+    // traced RHI when the selected backend/environment enables it.
+    if(renderer.traceActive()) {
+        const auto before=terrain.heightField().tex;
+        const auto pending=terrain.pendingMeshGpuRetirements();
+        dev.failTexture=dev.textureAttempts+1;
+        bool rejected=false;
+        try {
+            (void)terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+        }catch(const std::runtime_error&){rejected=true;}
+        dev.failTexture=0;
+        CHECK(rejected);
+        CHECK(terrain.heightField().tex.id==before.id);
+        CHECK(terrain.pendingMeshGpuRetirements()==pending);
+        // The temporary shader/pipeline and any staged COW images must
+        // be cleaned by the candidate after the late height allocation fails.
+        auto ready=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+        CHECK(ready!=nullptr);
+        terrain.commitFrame(std::move(ready));
+        CHECK(terrain.heightField().tex.valid());
+        const auto shaderAttempts=dev.shaderAttempts;
+        const auto pipelineAttempts=dev.pipelineAttempts;
+        const auto textureAttempts=dev.textureAttempts;
+        const auto bufferAttempts=dev.bufferAttempts;
+        terrain.draw(renderer,grid,nullptr,false);
+        CHECK(dev.shaderAttempts==shaderAttempts);
+        CHECK(dev.pipelineAttempts==pipelineAttempts);
+        CHECK(dev.textureAttempts==textureAttempts);
+        CHECK(dev.bufferAttempts==bufferAttempts);
+    } else {
+        auto ready=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+        CHECK(ready!=nullptr);
+        terrain.commitFrame(std::move(ready));
+        terrain.draw(renderer,grid,nullptr,false);
+    }
+    renderer.render(gfx::PassDesc{});
+    terrain.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_stage47b3b_primary_pipeline_is_staged_before_draw) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(4,4);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,grid,false));
+    render::Renderer3D renderer;CHECK(renderer.init(dev));
+    render::RTSCamera camera;
+    camera.target={2,0,2};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    const auto oldShaders=dev.shaderAttempts;
+    const auto oldPipelines=dev.pipelineAttempts;
+    {
+        auto discarded=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+        CHECK(discarded!=nullptr);
+        CHECK(dev.shaderAttempts>=oldShaders);
+        CHECK(dev.pipelineAttempts>=oldPipelines);
+    }
+    auto prepared=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+    CHECK(prepared!=nullptr);
+    terrain.commitFrame(std::move(prepared));
+    const auto shadersAtDraw=dev.shaderAttempts;
+    const auto pipelinesAtDraw=dev.pipelineAttempts;
+    renderer.beginScene(camera,640,480);
+    terrain.draw(renderer,grid,nullptr,false);
+    CHECK(dev.shaderAttempts==shadersAtDraw);
+    CHECK(dev.pipelineAttempts==pipelinesAtDraw);
+    renderer.render(gfx::PassDesc{});
+    terrain.shutdown(dev);renderer.shutdown();
+}
+
+TEST(lens_stage47b3a_detail_lod_candidate_rollback_and_submission_only_draw) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader smooth=[](const std::string& path,std::string& out) {
+        if(path!="game.json")return false;
+        out=R"({"terrain":{"style":"smooth","detailLook":{"scale":2}}})";
+        return true;
+    };
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,smooth,"");
+    game::MapGrid grid;grid.init(8,8);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.detailActive());
+    render::Renderer3D renderer;CHECK(renderer.init(dev));
+    render::RTSCamera camera;
+    camera.target={4,0,4};camera.distance=14;camera.pitch=1.05f;
+    renderer.beginScene(camera,1024,720);
+    const auto before=dev.bufferAttempts;
+    const auto deleted=dev.destroyedBuffers;
+    const auto retired=terrain.pendingMeshGpuRetirements();
+    {
+        auto dropped=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+        CHECK(dropped!=nullptr);
+        CHECK(dev.bufferAttempts>before);
+        CHECK(terrain.pendingMeshGpuRetirements()==retired);
+    }
+    CHECK(dev.destroyedBuffers>deleted);
+    auto pending=terrain.prepareFrameVisible(renderer,grid,nullptr,nullptr);
+    CHECK(pending!=nullptr);
+    const auto beforeDraw=dev.bufferAttempts;
+    terrain.commitFrame(pending);
+    renderer.beginScene(camera,1024,720);
+    terrain.draw(renderer,grid,nullptr,false);
+    CHECK(dev.bufferAttempts==beforeDraw); // no primary fine-LOD uploads
+    renderer.render(gfx::PassDesc{});
+    terrain.commitFrame(std::move(pending));
+    terrain.shutdown(dev);renderer.shutdown();
+}
+
+TEST(lens_stage47b2_terrain_dynamic_vision_late_owner_rollback_and_retry) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    grid.corner.resize(size_t(grid.w+1)*size_t(grid.h+1),0);
+    CHECK(terrain.build(dev,grid,false));
+    CHECK(terrain.shaderFog());
+    const size_t previousRetire=terrain.pendingMeshGpuRetirements();
+    const size_t previousDeletes=dev.destroyedTextures;
+    const std::vector<uint8_t> visible(size_t(grid.w*grid.h),2);
+    std::vector<uint8_t> blurred(visible.size(),192);
+    grid.fieldRes[0]=1;
+    grid.fieldAmt[0]=Fixed::fromInt(30);
+    struct GroundOwner final: render::OwnerPrepareCommit::Participant {
+        game::TerrainRenderer& owner;
+        const game::MapGrid& grid;
+        const std::vector<uint8_t>& vision;
+        const std::vector<uint8_t>& filtered;
+        std::shared_ptr<game::TerrainRenderer::PreparedFrame> pending;
+        GroundOwner(game::TerrainRenderer& o,const game::MapGrid& g,
+                    const std::vector<uint8_t>& v,
+                    const std::vector<uint8_t>& f)
+            :owner(o),grid(g),vision(v),filtered(f){}
+        void prepare() override {
+            pending=owner.prepareFrame(grid,&vision,&filtered);
+            CHECK(pending!=nullptr);
+        }
+        void commit() noexcept override {owner.commitFrame(std::move(pending));}
+        void rollback() noexcept override {pending.reset();}
+    } terrainOwner(terrain,grid,visible,blurred);
+    struct LastOwner final: render::OwnerPrepareCommit::Participant {
+        bool fail=true;
+        void prepare() override {
+            if(fail)throw std::runtime_error("late owner failed");
+        }
+        void commit() noexcept override {}
+        void rollback() noexcept override {}
+    } last;
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainOwner);tx.add(last);
+        try {tx.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+    }
+    CHECK(failed);
+    CHECK(!terrainOwner.pending);
+    CHECK(terrain.pendingMeshGpuRetirements()==previousRetire);
+    CHECK(dev.destroyedTextures==previousDeletes+2); // discarded dynamic + R8
+    last.fail=false;
+    dev.idleAllowed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(terrainOwner);tx.add(last);
+        tx.prepareAll();
+        CHECK(tx.publish());
+    }
+    CHECK(terrain.pendingMeshGpuRetirements()==previousRetire+2);
+    dev.idleAllowed=true;
+    terrain.shutdown(dev);
+}
+
+TEST(lens_stage47b2_terrain_unchanged_frame_skips_gpu_texture_allocations) {
+    fogfaulttest::Device dev;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::TerrainRenderer terrain;
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(4,4);
+    for(auto& f:grid.flags)f=game::kCellGround;
+    grid.corner.resize(size_t(grid.w+1)*size_t(grid.h+1),0);
+    CHECK(terrain.build(dev,grid,false));
+    const std::vector<uint8_t> vision(size_t(grid.w*grid.h),0);
+    auto first=terrain.prepareFrame(grid,&vision);
+    CHECK(first!=nullptr);
+    terrain.commitFrame(std::move(first));
+    const size_t textures=dev.textureAttempts;
+    const size_t previous=terrain.pendingMeshGpuRetirements();
+    auto unchanged=terrain.prepareFrame(grid,&vision);
+    CHECK(unchanged!=nullptr);
+    CHECK(dev.textureAttempts==textures);
+    terrain.commitFrame(std::move(unchanged));
+    CHECK(terrain.pendingMeshGpuRetirements()==previous);
+    terrain.shutdown(dev);
+}
+
+TEST(lens_stage46_sheet_and_visibility_late_cohort_failure_rollback) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    const std::function<float(float,float)> ground=[](float,float){return 0.0f;};
+    fog.build(dev,4,4,ground);
+    const auto oldTexture=fog.texture();
+    const auto oldField=fog.field();
+    const size_t oldRetired=fog.pendingGpuRetirements();
+    const size_t deletedBuffers=dev.destroyedBuffers;
+    const size_t deletedTextures=dev.destroyedTextures;
+    auto look=fog.look();
+    look.height+=2.0f;
+    fog.setLook(look);
+    const std::vector<uint8_t> visible(16,2);
+    struct FogOwner final: render::OwnerPrepareCommit::Participant {
+        view::VisibilityField& fog;
+        fogfaulttest::Device& dev;
+        const std::function<float(float,float)>& height;
+        const std::vector<uint8_t>& vision;
+        std::unique_ptr<view::VisibilityField::PreparedSheet> sheet;
+        std::unique_ptr<view::VisibilityField::PreparedUpdate> field;
+        FogOwner(view::VisibilityField& f,fogfaulttest::Device& d,
+                 const std::function<float(float,float)>& h,
+                 const std::vector<uint8_t>& v)
+            :fog(f),dev(d),height(h),vision(v){}
+        void prepare() override {
+            sheet=fog.prepareSheet(dev,4,4,height);
+            CHECK(sheet!=nullptr);
+            field=fog.prepareUpdate(vision,4,4,2.0,sheet.get());
+            CHECK(field!=nullptr);
+        }
+        void commit() noexcept override {
+            (void)fog.commitPreparedFrame(std::move(sheet),std::move(field));
+        }
+        void rollback() noexcept override {field.reset();sheet.reset();}
+    } owner(fog,dev,ground,visible);
+    struct LastOwner final: render::OwnerPrepareCommit::Participant {
+        bool fail=true;
+        void prepare() override {
+            if(fail)throw std::runtime_error("late owner rejected");
+        }
+        void commit() noexcept override {}
+        void rollback() noexcept override {}
+    } last;
+    bool rejected=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(owner);tx.add(last);
+        try {tx.prepareAll();}
+        catch(const std::runtime_error&){rejected=true;}
+    }
+    CHECK(rejected);
+    CHECK(fog.texture().id==oldTexture.id);
+    CHECK(fog.field()==oldField);
+    CHECK(fog.sheetMatches(4,4));
+    CHECK(fog.pendingGpuRetirements()==oldRetired);
+    CHECK(dev.destroyedBuffers==deletedBuffers+2);
+    CHECK(dev.destroyedTextures==deletedTextures+1);
+    last.fail=false;
+    dev.idleAllowed=false;
+    {
+        render::OwnerPrepareCommit tx;
+        tx.add(owner);tx.add(last);
+        tx.prepareAll();
+        CHECK(tx.publish());
+    }
+    CHECK(fog.texture().valid() && fog.texture().id!=oldTexture.id);
+    CHECK(fog.pendingGpuRetirements()==oldRetired+3);
+    CHECK(fog.field().size()==16);
+    dev.idleAllowed=true;
+    CHECK(fog.shutdownAfterGpuIdle());
+}
+
+TEST(lens_stage46_sheet_resize_prepares_matching_gpu_field_without_gpu_idle) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    const std::function<float(float,float)> ground=[](float,float){return 1.0f;};
+    fog.build(dev,3,2,ground);
+    const auto oldTex=fog.texture();
+    const auto oldField=fog.field();
+    const auto oldPending=fog.pendingGpuRetirements();
+    const std::vector<uint8_t> vision(35,2);
+    dev.idleAllowed=false;
+    {
+        auto sheet=fog.prepareSheet(dev,7,5,ground);
+        CHECK(sheet!=nullptr);
+        auto field=fog.prepareUpdate(vision,7,5,1.0,sheet.get());
+        CHECK(field && field->changed());
+        CHECK(field->field().size()==35);
+        CHECK(fog.sheetMatches(3,2));
+        CHECK(fog.field()==oldField);
+        CHECK(fog.texture().id==oldTex.id);
+        CHECK(fog.pendingGpuRetirements()==oldPending);
+        CHECK(fog.commitPreparedFrame(std::move(sheet),std::move(field)));
+    }
+    CHECK(fog.sheetMatches(7,5));
+    CHECK(fog.field().size()==35);
+    CHECK(fog.texture().valid() && fog.texture().id!=oldTex.id);
+    CHECK(fog.pendingGpuRetirements()==oldPending+3);
+    dev.idleAllowed=true;
+    CHECK(fog.shutdownAfterGpuIdle());
+}
+
+TEST(visibility_field_prepared_gpu_upload_never_mutates_live_on_failure_or_discard) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    const auto height=[](float,float){return 0.0f;};
+    fog.build(dev,2,2,height);
+    const auto old=fog.texture();
+    const auto previousField=fog.field();
+    const auto destroyed=dev.destroyedTextures;
+    {
+        auto candidate=fog.prepareUpdate(std::vector<uint8_t>{2,2,2,2},2,2,1.0);
+        CHECK(candidate && candidate->changed());
+        CHECK(candidate->field().size()==4);
+        CHECK(fog.texture().id==old.id);
+        CHECK(fog.field()==previousField);
+        CHECK(fog.pendingGpuRetirements()==0);
+    }
+    CHECK(dev.destroyedTextures==destroyed+1); // discarded unpublished texture
+    CHECK(fog.texture().id==old.id);
+    dev.failTextureUpdate=dev.textureUpdates+1;
+    bool failed=false;
+    try {(void)fog.prepareUpdate(std::vector<uint8_t>{2,2,2,2},2,2,1.0);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(fog.texture().id==old.id);
+    CHECK(fog.field()==previousField);
+    CHECK(fog.pendingGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==destroyed+2);
+    dev.failTextureUpdate=0;
+    auto candidate=fog.prepareUpdate(std::vector<uint8_t>{2,2,2,2},2,2,1.0);
+    CHECK(candidate && candidate->changed());
+    CHECK(fog.commitPreparedUpdate(std::move(candidate)));
+    CHECK(fog.texture().valid() && fog.texture().id!=old.id);
+    CHECK(fog.pendingGpuRetirements()==1);
+    CHECK(fog.field().size()==4);
+    CHECK(fog.shutdownAfterGpuIdle());
+    CHECK(fog.pendingGpuRetirements()==0);
+}
+
+TEST(visibility_field_late_coordinator_failure_discards_private_gpu_texture) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    fog.build(dev,2,2,[](float,float){return 0.0f;});
+    const auto old=fog.texture();
+    const auto textureDeletes=dev.destroyedTextures;
+    struct FogCandidate final : render::OwnerPrepareCommit::Participant {
+        view::VisibilityField& owner;
+        std::unique_ptr<view::VisibilityField::PreparedUpdate> staged;
+        bool committed=false;
+        explicit FogCandidate(view::VisibilityField& fog):owner(fog){}
+        void prepare() override {
+            staged=owner.prepareUpdate(std::vector<uint8_t>{2,2,2,2},2,2,3.0);
+            if(!staged)throw std::runtime_error("no fog candidate");
+        }
+        void commit() noexcept override {
+            // Successful owner-local staging on the same render thread
+            // guarantees this prepared resource has not been superseded.
+            if(staged) {
+                try {(void)owner.commitPreparedUpdate(std::move(staged));committed=true;}
+                catch(...) {std::terminate();}
+            }
+        }
+        void rollback() noexcept override {staged.reset();}
+    } fogOwner(fog);
+    struct LastOwner final : render::OwnerPrepareCommit::Participant {
+        bool fail=true,prepared=false;
+        void prepare() override {
+            prepared=true;
+            if(fail)throw std::runtime_error("late scene owner failed");
+        }
+        void commit() noexcept override {prepared=false;}
+        void rollback() noexcept override {prepared=false;}
+    } last;
+    bool failed=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(fogOwner);transaction.add(last);
+        try {transaction.prepareAll();}
+        catch(const std::runtime_error&){failed=true;}
+        CHECK(failed);
+    }
+    CHECK(fog.texture().id==old.id);
+    CHECK(!fogOwner.committed);
+    CHECK(fog.pendingGpuRetirements()==0);
+    CHECK(dev.destroyedTextures==textureDeletes+1);
+    last.fail=false;
+    {
+        render::OwnerPrepareCommit transaction;
+        transaction.add(fogOwner);transaction.add(last);
+        transaction.prepareAll();
+        CHECK(fog.texture().id==old.id);
+        CHECK(transaction.publish());
+    }
+    CHECK(fogOwner.committed);
+    CHECK(fog.texture().id!=old.id);
+    CHECK(fog.pendingGpuRetirements()==1);
+    CHECK(fog.shutdownAfterGpuIdle());
+}
+
+TEST(shoreline_staged_rebuild_preserves_published_banks_on_gpu_failure) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::RtsShoreView shore;
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    shore.init(dev,Json(),missing);
+    const Json map=Json::parse(R"JSON({
+      "waterNetwork":{"bodies":[{
+        "id":1,"kind":"sea","side":"south",
+        "shore":[[4,12],[92,12]],
+        "shores":[{"side":1,"from":0,"to":1000,"type":"embankment"}]
+      }]}
+    })JSON");
+    shore.setMap(map);
+    CHECK(shore.active());
+    render::RTSCamera camera;
+    camera.target={48,0,12};camera.distance=150;camera.pitch=1.0f;
+    auto ground=[](float,float){return 0.0f;};
+    renderer.beginScene(camera,1024,720);
+    const auto beforeInitial=dev.bufferAttempts;
+    shore.draw(renderer,ground,0.0f,100,48);
+    CHECK(dev.bufferAttempts>beforeInitial);
+    renderer.render(gfx::PassDesc{});
+    CHECK(shore.pendingGpuRetirements()==0);
+    const auto deletedBefore=dev.destroyedBuffers;
+
+    shore.invalidateGround();
+    dev.failBuffer=dev.bufferAttempts+2; // candidate index buffer
+    bool failed=false;
+    renderer.beginScene(camera,1024,720);
+    try {shore.draw(renderer,ground,0.0f,100,48);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(shore.active());
+    CHECK(shore.pendingGpuRetirements()==0);
+    CHECK(dev.destroyedBuffers>deletedBefore);
+    dev.failBuffer=0;
+
+    renderer.beginScene(camera,1024,720);
+    shore.draw(renderer,ground,0.0f,100,48);
+    CHECK(shore.pendingGpuRetirements()>0); // old bank models retired only after success
+    renderer.render(gfx::PassDesc{});
+    shore.shutdown(dev);
+    renderer.shutdown();
+    CHECK(shore.pendingGpuRetirements()==0);
+}
+
+TEST(visibility_field_rejects_stale_prepared_generation_and_skips_noop_upload) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    fog.build(dev,3,2,[](float,float){return 0.0f;});
+    const std::vector<uint8_t> visible(6,2);
+    auto stale=fog.prepareUpdate(visible,3,2,1.0);
+    CHECK(stale && stale->changed());
+    CHECK(fog.update(visible,3,2,1.0));
+    const auto published=fog.texture();
+    const auto beforeRetirement=fog.pendingGpuRetirements();
+    const auto beforeAllocations=dev.textureAttempts;
+    const auto beforeUploads=dev.textureUpdates;
+    bool rejected=false;
+    try {(void)fog.commitPreparedUpdate(std::move(stale));}
+    catch(const std::logic_error&){rejected=true;}
+    CHECK(rejected);
+    CHECK(fog.texture().id==published.id);
+    CHECK(fog.pendingGpuRetirements()==beforeRetirement);
+    CHECK(!fog.update(visible,3,2,1.1));
+    CHECK(dev.textureAttempts==beforeAllocations);
+    CHECK(dev.textureUpdates==beforeUploads);
+    fog.shutdown();
+}
+
+TEST(visibility_field_gpu_init_failure_is_retryable) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    dev.failShader=1;
+    CHECK(!fog.init(dev));
+    CHECK(!fog.ready());
+    CHECK(dev.destroyedShaders==0);
+    dev.failShader=0;
+    dev.failPipeline=1;
+    CHECK(!fog.init(dev));
+    CHECK(!fog.ready());
+    CHECK(dev.destroyedShaders==1); // unpublished shader was cleaned
+    dev.failPipeline=0;
+    CHECK(fog.init(dev));
+    CHECK(fog.ready());
+    CHECK(fog.init(dev)); // idempotent on the same device
+    fogfaulttest::Device foreign;
+    bool wrongDevice=false;
+    try {(void)fog.init(foreign);}
+    catch(const std::logic_error&){wrongDevice=true;}
+    CHECK(wrongDevice);
+    CHECK(fog.shutdownAfterGpuIdle());
+    CHECK(!fog.ready());
+}
+
+TEST(visibility_field_gpu_build_rolls_back_buffers_texture_and_idle_refusal) {
+    fogfaulttest::Device dev;
+    view::VisibilityField fog;
+    CHECK(fog.init(dev));
+    const auto height=[](float,float){return 0.0f;};
+    fog.build(dev,2,2,height);
+    const auto initialTexture=fog.texture();
+    CHECK(initialTexture.valid());
+    CHECK(fog.update(std::vector<uint8_t>{2,2,2,2},2,2,0.0));
+    const auto previousTexture=fog.texture();
+    CHECK(previousTexture.valid() && previousTexture.id!=initialTexture.id);
+    CHECK(fog.pendingGpuRetirements()==1);
+    const auto originalField=fog.field();
+    CHECK(dev.destroyedBuffers==0);
+    CHECK(dev.destroyedTextures==0);
+
+    // A created VB must be destroyed when the following index allocation
+    // fails. Earlier published fog remains usable.
+    dev.failBuffer=dev.bufferAttempts+2;
+    bool failed=false;
+    try {fog.build(dev,3,3,height);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(fog.texture().id==previousTexture.id);
+    CHECK(fog.field()==originalField);
+    CHECK(fog.ready());
+    CHECK(dev.destroyedBuffers==1); // only unpublished replacement VB
+    CHECK(dev.destroyedTextures==0);
+    dev.failBuffer=0;
+
+    // A new texture allocation failure must not destroy the published VB/IB
+    // or change the visibility dimensions.
+    dev.failTexture=dev.textureAttempts+1;
+    failed=false;
+    try {fog.build(dev,3,3,height);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(fog.texture().id==previousTexture.id);
+    CHECK(fog.field()==originalField);
+    CHECK(dev.destroyedBuffers==3); // two more unpublished buffers
+    CHECK(dev.destroyedTextures==0);
+    dev.failTexture=0;
+
+    // Old GPU draws may still own previously published buffers/texture.
+    // Rejected idle must leave all published handles untouched.
+    dev.idleAllowed=false;
+    failed=false;
+    try {fog.build(dev,3,3,height);}
+    catch(const std::runtime_error&){failed=true;}
+    CHECK(failed);
+    CHECK(dev.idleRequests>0);
+    CHECK(dev.destroyedBuffers==5); // staged VB + IB after idle refusal
+    CHECK(dev.destroyedTextures==1); // unpublished candidate only
+    CHECK(fog.texture().id==previousTexture.id);
+    CHECK(fog.field()==originalField);
+    CHECK(!fog.shutdownAfterGpuIdle());
+    CHECK(fog.ready());
+
+    dev.idleAllowed=true;
+    fog.build(dev,3,3,height);
+    CHECK(fog.texture().valid());
+    CHECK(fog.texture().id!=previousTexture.id);
+    CHECK(fog.field().size()==9);
+    CHECK(dev.destroyedBuffers==7); // published old pair safely retired
+    CHECK(dev.destroyedTextures==2); // old texture safely retired
+    CHECK(fog.shutdownAfterGpuIdle());
+    CHECK(!fog.ready());
+}
+
+TEST(view_reload_checks_gpu_idle_before_mutating_overlay_and_fog_state) {
+    struct Device : entityfxtest::RecordingDevice {
+        bool idleAllowed=true;
+        unsigned idleRequests=0;
+        bool waitForResourceIdle() override {
+            ++idleRequests;
+            return idleAllowed;
+        }
+    } dev,foreign;
+    game::Rules rules=skirmishRules();
+    game::RtsView view;
+    const render::FileReader noAssets=[](const std::string&,std::string&){return false;};
+    CHECK(view.init(dev,rules,noAssets));
+    const auto overlaysBefore=view.overlays().set().defs.size();
+    const auto fogStyleBefore=view.fogLook().style;
+    dev.idleAllowed=false;
+    bool refused=false;
+    try {(void)view.init(dev,rules,noAssets);}
+    catch(const std::runtime_error&){refused=true;}
+    CHECK(refused);
+    CHECK(dev.idleRequests>0);
+    CHECK(view.overlays().set().defs.size()==overlaysBefore);
+    CHECK(view.fogLook().style==fogStyleBefore);
+    bool foreignRejected=false;
+    try {(void)view.init(foreign,rules,noAssets);}
+    catch(const std::logic_error&){foreignRejected=true;}
+    CHECK(foreignRejected);
+    CHECK(foreign.idleRequests==0);
+    dev.idleAllowed=true;
+    view.shutdown(dev);
+}
 
 TEST(selection_outline_mask_pipeline_preserves_scene_depth) {
     using namespace entityfxtest;
@@ -13198,6 +16451,284 @@ TEST(model_shadow_batches_material_overrides) {
     CHECK(!shadowBatchCompatible(mesh, {}));
 }
 
+TEST(lens_topology_frame_uploads_once_and_keeps_live_state_on_failure) {
+    struct Device final : fogfaulttest::Device {
+        bool rejectVisibility=false;
+        size_t terrainUploads=0;
+        gfx::TextureHandle createTexture(const gfx::TextureDesc& desc) override {
+            const std::string label=desc.label?desc.label:"";
+            if(label.starts_with("terrain "))++terrainUploads;
+            if(rejectVisibility && label=="terrain visibility COW")return {};
+            return fogfaulttest::Device::createTexture(desc);
+        }
+    } dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    game::RtsView view;
+    CHECK(view.init(dev,rules,missing));
+    game::MapGrid grid;grid.init(8,6);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.corner.assign(size_t(grid.w+1)*size_t(grid.h+1),0);
+    view.buildTerrain(dev,grid);
+    game::RtsScene scene;
+    std::vector<uint8_t> vision(size_t(grid.w)*size_t(grid.h),2);
+    render::RTSCamera camera;
+    camera.target={4,0,3};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,1.0,&vision,grid);
+    renderer.render(gfx::PassDesc{});
+    const auto oldRoad=view.roads().surfaceGeneration();
+    grid.corner.assign(grid.corner.size(),32);
+    renderer.beginScene(camera,640,480);
+    dev.rejectVisibility=true;
+    bool failed=false;
+    try {view.prepareTerrainAtomicFrame(dev,grid,renderer,scene,2.0,&vision);}
+    catch(const std::runtime_error&) {failed=true;}
+    CHECK(failed);
+    CHECK(std::fabs(view.heightAt(grid,4,3))<1e-5f);
+    CHECK(view.roads().surfaceGeneration()==oldRoad);
+    dev.rejectVisibility=false;
+    CHECK(view.prepareTerrainAtomicFrame(dev,grid,renderer,scene,2.0,&vision));
+    CHECK(std::fabs(view.heightAt(grid,4,3))<1e-5f);
+    const auto uploads=dev.terrainUploads;
+    renderer.beginScene(camera,640,480);
+    view.draw(renderer,scene,2.0,&vision,grid);
+    CHECK(dev.terrainUploads==uploads);
+    CHECK(std::fabs(view.heightAt(grid,4,3)-2.0f)<1e-5f);
+    CHECK(view.visualFrameReadyFor(grid,2.0));
+    renderer.render(gfx::PassDesc{});
+    view.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_topology_prepared_trace_transfers_without_reupload) {
+    fogfaulttest::Device dev;
+    render::Renderer3D renderer;
+    CHECK(renderer.init(dev));
+    renderer.setShadowQuality(render::ShadowQuality::High);
+    renderer.setTraceEnabled(true);
+    game::TerrainRenderer terrain;
+    game::Rules rules=skirmishRules();
+    const render::FileReader missing=[](const std::string&,std::string&){return false;};
+    terrain.init(dev,rules,missing,"");
+    game::MapGrid grid;grid.init(4,4);
+    for(auto& flag:grid.flags)flag=game::kCellGround;
+    grid.corner.assign(25,0);
+    CHECK(terrain.build(dev,grid,false));
+    render::RTSCamera camera;
+    camera.target={2,0,2};camera.distance=25;camera.pitch=1.0f;
+    renderer.beginScene(camera,640,480);
+    grid.corner.assign(25,48);
+    auto map=terrain.prepareMap(dev,grid,false);
+    terrain.prepareMapVisible(map,renderer,grid,nullptr);
+    CHECK(!terrain.heightField().tex.valid());
+    const auto uploads=dev.textureAttempts;
+    const auto buffers=dev.bufferAttempts;
+    const auto pipelines=dev.pipelineAttempts;
+    CHECK(terrain.commitMap(std::move(map)));
+    if(renderer.traceActive()) {
+        CHECK(terrain.heightField().tex.valid());
+        CHECK(std::fabs(terrain.heightField().heightMin-3.0f)<1e-5f);
+    }
+    terrain.draw(renderer,grid,nullptr,false);
+    CHECK(dev.textureAttempts==uploads);
+    CHECK(dev.bufferAttempts==buffers);
+    CHECK(dev.pipelineAttempts==pipelines);
+    renderer.render(gfx::PassDesc{});
+    terrain.shutdown(dev);
+    renderer.shutdown();
+}
+
+TEST(lens_preparation_budget_shared_leases_and_overflow) {
+    render::PreparationAllocationBudget budget(100);
+    auto first=budget.acquire(),second=budget.acquire();
+    first->reserve(6,10);second->reserve(4,10);
+    CHECK(budget.used()==100);
+    bool rejected=false;
+    try {second->reserve(1);}catch(const std::length_error&){rejected=true;}
+    CHECK(rejected && budget.used()==100);
+    first.reset();CHECK(budget.used()==40);
+    rejected=false;
+    try {budget.setLimit(39);}catch(const std::logic_error&){rejected=true;}
+    CHECK(rejected && budget.limit()==100);
+    rejected=false;
+    try {second->reserve(size_t(-1),2);}catch(const std::length_error&){rejected=true;}
+    CHECK(rejected && budget.used()==40);
+    second.reset();CHECK(budget.used()==0);
+}
+
+TEST(lens_topology_preparation_budget_rejects_before_gpu_and_recovers) {
+    for(bool smooth:{false,true}) {
+        fogfaulttest::Device dev;
+        render::Renderer3D renderer;CHECK(renderer.init(dev));
+        game::TerrainRenderer terrain;
+        auto rules=skirmishRules();
+        const render::FileReader reader=[smooth](const std::string& path,std::string& out) {
+            if(path!="rules.json")return false;
+            out=smooth?R"({"terrain":{"smooth":true}})":R"({"terrain":{"smooth":false}})";
+            return true;
+        };
+        terrain.init(dev,rules,reader,"");
+        game::MapGrid grid;grid.init(4,4);
+        for(auto& flags:grid.flags)flags=game::kCellGround;
+        grid.corner.assign(25,0);
+        grid.flags[0]=game::kCellWater;
+        CHECK(terrain.build(dev,grid,false));
+        const auto revision=terrain.stateRevision();
+        terrain.setTopologyPreparationBudgetBytes(0);
+        const auto buffers=dev.bufferAttempts,textures=dev.textureAttempts;
+        bool rejected=false;
+        try {(void)terrain.prepareMap(dev,grid,false);}
+        catch(const std::length_error&){rejected=true;}
+        CHECK(rejected && terrain.topologyPreparationBytes()==0);
+        CHECK(dev.bufferAttempts==buffers && dev.textureAttempts==textures);
+        CHECK(terrain.stateRevision()==revision);
+        terrain.setTopologyPreparationBudgetBytes(128u*1024u*1024u);
+        auto candidate=terrain.prepareMap(dev,grid,false);
+        const size_t bytes=terrain.topologyPreparationBytes();
+        CHECK(bytes>0);
+        terrain.setTopologyPreparationBudgetBytes(bytes);
+        rejected=false;
+        try {(void)terrain.prepareMap(dev,grid,false);}
+        catch(const std::length_error&){rejected=true;}
+        CHECK(rejected && terrain.topologyPreparationBytes()==bytes);
+        render::RTSCamera camera;camera.target={2,0,2};camera.distance=20;
+        renderer.beginScene(camera,320,240);
+        std::vector<uint8_t> vision(16,255);
+        rejected=false;
+        try {terrain.prepareMapVisible(candidate,renderer,grid,&vision);}
+        catch(const std::length_error&){rejected=true;}
+        CHECK(rejected && terrain.stateRevision()==revision);
+        candidate.reset();CHECK(terrain.topologyPreparationBytes()==0);
+        terrain.setTopologyPreparationBudgetBytes(128u*1024u*1024u);
+        candidate=terrain.prepareMap(dev,grid,false);
+        terrain.prepareMapVisible(candidate,renderer,grid,&vision);
+        CHECK(terrain.commitMap(candidate));
+        CHECK(terrain.topologyPreparationBytes()==0);
+        candidate.reset();
+        renderer.render(gfx::PassDesc{});
+        terrain.shutdown(dev);renderer.shutdown();
+    }
+}
+
+// LENS P2: a CameraLensComponent with driveExposure / driveDepthOfField pushes
+// that camera's PRISMA manual EV and defocus override; values change only when
+// the lens changes and are cleared when the drive is switched off.
+TEST(lens_physical_lens_drives_prisma_exposure_and_dof) {
+    {   // PRISMA per-view override API on its own (no device needed).
+        render::Prisma post;
+        render::Prisma::DepthOfFieldOverride in{};
+        in.focusDistance=5000.f;in.focusRangeMeters=NAN;in.maxBlur=-3.f;
+        post.setViewDepthOfField(9,in);
+        render::Prisma::DepthOfFieldOverride got{};
+        CHECK(post.viewDepthOfField(9,got));
+        CHECK(got.focusDistance==2000.f && got.focusRangeMeters==4.f && got.maxBlur==0.f);
+        CHECK(!post.viewDepthOfField(10,got));
+        post.retireView(9);
+        CHECK(!post.viewDepthOfField(9,got));
+        post.setViewDepthOfField(3,render::Prisma::DepthOfFieldOverride{false,10.f,2.f,4.f});
+        CHECK(post.viewDepthOfField(3,got) && !got.enabled);
+        post.clearViewDepthOfField(3);
+        CHECK(!post.viewDepthOfField(3,got));
+    }
+    entityfxtest::RecordingDevice dev;
+    World world;
+    const Entity cam=world.create();
+    world.add<WorldTransform>(cam,hierarchy_detail::root({}));
+    world.add<CameraComponent>(cam,CameraComponent{});
+    CameraLensComponent lens;lens.driveExposure=true;lens.driveDepthOfField=true;
+    lens.shutterSeconds=lens.shutterSeconds*2_fx;   // +1 stop vs the default lens
+    world.add<CameraLensComponent>(cam,lens);
+    render::CameraPostFxPool pool;
+    CHECK(pool.init(dev));
+    pool.configure(render::PostFxSettings{},render::PostFxQuality::High,false);
+    pool.bindWorld(world);
+    render::EcsCameraView view;
+    CHECK(render::resolveEcsCamera(world,cam,view));
+    pool.prepare(view,1920,1080);
+    auto state=pool.lensState(cam);
+    CHECK(state.exposure && std::fabs(state.ev-1.f)<0.01f);
+    CHECK(state.depthOfField && state.dof.enabled);
+    auto* post=static_cast<render::Prisma*>(pool.get(cam));
+    CHECK(post!=nullptr);
+    render::Prisma::DepthOfFieldOverride dof{};
+    CHECK(post->viewDepthOfField(post->viewId(),dof));
+    const auto plan=render::cameraLensDofPass(render::cameraLensDepthOfField(
+        render::cameraLensValues(lens),1080));
+    CHECK(plan.valid && std::fabs(dof.focusDistance-plan.focusDistance)<1e-4f &&
+          std::fabs(dof.maxBlur-plan.maxBlurPx)<1e-4f);
+    // Invalid lens: no stale focus is kept, defocus is switched off.
+    world.get<CameraLensComponent>(cam).focusDistance=Fixed::fromRatio(1,100);
+    pool.prepare(view,1920,1080);
+    CHECK(post->viewDepthOfField(post->viewId(),dof) && !dof.enabled);
+    // Drives off: both overrides cleared, authored PRISMA settings apply again.
+    world.get<CameraLensComponent>(cam).driveExposure=false;
+    world.get<CameraLensComponent>(cam).driveDepthOfField=false;
+    pool.prepare(view,1920,1080);
+    state=pool.lensState(cam);
+    CHECK(!state.exposure && !state.depthOfField);
+    CHECK(!post->viewDepthOfField(post->viewId(),dof));
+    pool.shutdownAfterGpuIdle();
+}
+
+// LENS P2: HDR frame recorder reads an RGBA16F target back and writes linear
+// EXR; rate limiting, single pending request and 8-bit rejection.
+namespace lenshdrtest {
+struct HalfReadDevice : entityfxtest::RecordingDevice {
+    bool accept=true;gfx::PixelFormat format=gfx::PixelFormat::RGBA16F;
+    std::vector<TextureReadFn> queued;
+    bool readTextureAsync(gfx::TextureHandle,gfx::TextureReadbackDesc,TextureReadFn fn) override {
+        if(!accept)return false;
+        queued.push_back(std::move(fn));return true;
+    }
+    void complete() {
+        auto pending=std::move(queued);queued.clear();
+        for(auto& fn:pending) {
+            gfx::TextureReadbackResult r;r.width=2;r.height=1;r.format=format;
+            r.pixels.assign(r.width*r.height*(format==gfx::PixelFormat::RGBA16F?8:4),0);
+            const uint16_t one=render::cameraFloatToHalf(3.5f); // HDR > 1
+            r.pixels[0]=uint8_t(one);r.pixels[1]=uint8_t(one>>8);
+            fn(std::move(r));
+        }
+    }
+};
+} // namespace lenshdrtest
+TEST(lens_hdr_recorder_writes_linear_exr_frames) {
+    lenshdrtest::HalfReadDevice dev;
+    render::CameraHdrFrameRecorder recorder;
+    std::vector<render::CameraCapturedHdrFrame> frames;
+    recorder.start(10,[&](render::CameraCapturedHdrFrame f){frames.push_back(std::move(f));});
+    const gfx::TextureHandle target{77};
+    CHECK(recorder.tick(dev,target,0.0));
+    CHECK(recorder.pending() && !recorder.tick(dev,target,1.0)); // one in flight
+    dev.complete();
+    CHECK(frames.size()==1 && frames[0].valid() && frames[0].index==0);
+    CHECK(!recorder.tick(dev,target,0.05));                       // 10 Hz limit
+    CHECK(recorder.tick(dev,target,0.1));
+    dev.complete();
+    CHECK(frames.size()==2 && frames[1].index==1);
+    const std::string path=(std::filesystem::temp_directory_path()/"aiverse_lens_hdr.exr").string();
+    CHECK(frames[1].writeExr(path));
+    std::ifstream in(path,std::ios::binary);
+    std::vector<uint8_t> file((std::istreambuf_iterator<char>(in)),{});
+    CHECK(file.size()>8 && file[0]==0x76 && file[1]==0x2f && file[2]==0x31 && file[3]==0x01);
+    std::filesystem::remove(path);
+    // An 8-bit readback is never written as HDR.
+    dev.format=gfx::PixelFormat::RGBA8;
+    CHECK(recorder.tick(dev,target,0.2));
+    dev.complete();
+    CHECK(frames.size()==3 && !frames[2].valid() && recorder.rejectedFrames()==1);
+    // A backend without HDR readback rejects up front.
+    dev.accept=false;
+    CHECK(!recorder.tick(dev,target,0.3) && !recorder.pending() && recorder.rejectedFrames()==2);
+    // Stopping drops late completions.
+    dev.accept=true;CHECK(recorder.tick(dev,target,0.4));
+    recorder.stop();dev.complete();
+    CHECK(frames.size()==3);
+}
+
 int main(int argc, char** argv) {
     // Diagnostic-only crash localization. CTest captures and buffers stdout,
     // so the last visible [ OK ] line can precede the actual crashing case
@@ -13212,13 +16743,22 @@ int main(int argc, char** argv) {
             std::fflush(stderr);
         }
         int before = g_failed;
-        fn();
+        try { fn(); }
+        catch(const std::exception& error) {
+            ++g_failed;
+            std::fprintf(stderr,"[EXCEPTION] %s: %s\n",name,error.what());
+        }
+        catch(...) {
+            ++g_failed;
+            std::fprintf(stderr,"[EXCEPTION] %s: unknown exception\n",name);
+        }
         if (trace) {
             std::fprintf(stderr, "[ DONE ] %s (%s)\n", name,
                          g_failed == before ? "OK" : "FAIL");
             std::fflush(stderr);
         }
         std::printf("%s %s\n", g_failed == before ? "[ OK ]" : "[FAIL]", name);
+        std::fflush(stdout);
     }
     std::printf("\n%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;

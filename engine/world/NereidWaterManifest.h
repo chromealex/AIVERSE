@@ -3,7 +3,9 @@
 // provide an ECS snapshot via WorldScene::setNereidSurfaces.
 #pragma once
 #include "engine/world/NereidWaterScene.h"
+#include "engine/world/NereidEntityManifest.h"
 #include "engine/data/Json.h"
+#include "engine/core/FixedMath.h"
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -188,6 +190,8 @@ inline NereidSceneSurface surface(const Json& j) {
         if(v.has("depthTint"))s.style.depthTint=scalar(v["depthTint"],"depthTint",0.f,1.f);
         if(v.has("underwaterDistortion"))s.style.underwaterDistortion=scalar(v["underwaterDistortion"],"underwaterDistortion",0.f,1.f);
         if(v.has("underwaterScattering"))s.style.underwaterScattering=scalar(v["underwaterScattering"],"underwaterScattering",0.f,1.f);
+        if(v.has("turbidity"))s.style.turbidity=scalar(v["turbidity"],"turbidity",0.f,1.f);
+        if(v.has("siltColor"))color(v["siltColor"],s.style.siltR,s.style.siltG,s.style.siltB);
         if(v.has("rapidFoamStrength"))s.style.rapidFoamStrength=scalar(v["rapidFoamStrength"],"rapidFoamStrength",0.f,1.f);
         if(v.has("rapidFlowThreshold"))s.style.rapidFlowThreshold=scalar(v["rapidFlowThreshold"],"rapidFlowThreshold",0.f,100.f);
         if(v.has("rapidNoiseScale"))s.style.rapidNoiseScale=scalar(v["rapidNoiseScale"],"rapidNoiseScale",0.1f,8.f);
@@ -204,14 +208,30 @@ inline NereidSceneSurface surface(const Json& j) {
             else throw JsonError("nereidWater.rapidDetail: unknown quality");
         }
     }
+    if(j.has("grade")){
+        const auto& g=j["grade"];if(!g.isObject()||!s.useGeometry||s.geometry.kind!=WaterGeometryKind::RiverSpline)throw JsonError("nereidWater.grade requires river");
+        auto& grade=s.mesh.grade;s.mesh.useGrade=true;
+        if(g.has("origin")){if(!g["origin"].isArray()||g["origin"].size()!=2)throw JsonError("nereidWater.grade.origin");grade.origin={coordinate(g["origin"][0],"grade.origin"),coordinate(g["origin"][1],"grade.origin")};}
+        if(g.has("risePerMetre")){if(!g["risePerMetre"].isArray()||g["risePerMetre"].size()!=2)throw JsonError("nereidWater.grade.risePerMetre");grade.risePerMetre={coordinate(g["risePerMetre"][0],"grade.rise",1_fx),coordinate(g["risePerMetre"][1],"grade.rise",1_fx)};}
+        if(g.has("slopeDegrees")){
+            const auto slope=coordinate(g["slopeDegrees"],"grade.slopeDegrees",20_fx);
+            const auto heading=g.has("downhillHeadingDegrees")?coordinate(g["downhillHeadingDegrees"],"grade.heading",360_fx):0_fx;
+            const auto angle=slope/360_fx;const auto rise=fxSinTurns(angle)/fxCosTurns(angle);
+            grade.risePerMetre={-fxSinTurns(heading/360_fx)*rise,-fxCosTurns(heading/360_fx)*rise};
+        }
+        grade.automaticCurrent=g.getBool("automaticCurrent",true);
+        if(g.has("responseSeconds"))grade.responseSeconds=positive(g["responseSeconds"],"grade.response",60_fx);
+        if(g.has("maxSpeed"))grade.maxSpeed=positive(g["maxSpeed"],"grade.maxSpeed",100_fx);
+        if(!validWaterRiverGrade(grade))throw JsonError("nereidWater.grade invalid");
+    }
     return s;
 }
 } // namespace nereid_manifest_detail
 
 inline NereidManifest parseNereidWaterManifest(const Json& root) {
     NereidManifest out;
-    if(!root.has("nereidWater"))return out;
-    const auto& config=root["nereidWater"];
+    const auto config=nereidEntityManifest(root);
+    if(config.isObject()&&config.size()==0)return out;
     if(!config.isObject())throw JsonError("nereidWater: expected object");
     out.maxUploadsPerFrame=uint32_t(worldInteger(config,"maxUploadsPerFrame",2,1,16));
     if(config.has("asyncPrepare") &&

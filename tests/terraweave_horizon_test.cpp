@@ -115,6 +115,7 @@ int main() {
     assert(model->materials.size()==2);
     assert(model->images.size()==1);
     assert(model->images[0].rgba==bake.atlasRgba);
+    assert(!model->images[0].preserveAlphaCoverage); // dynamic patching needs automatic mips
     assert(model->materials[1].alpha==aiverse::render::AlphaMode::Mask);
     assert(model->meshes[0].primitives.size()==2);
     // The terrain primitive may include an outer skirt, bounded inner

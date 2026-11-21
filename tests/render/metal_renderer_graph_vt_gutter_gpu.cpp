@@ -361,6 +361,7 @@ int aiverseMain(int,char**) {
                      error.what());
         return 2;
     }
+    const bool indexed=optIn("AIVERSE_TEST_INDEXED_VT");
     Fixture sourceFiles;
     check(sourceFiles.ready,"guttered page archive directory created");
     for(int side=0;side<2;++side)
@@ -410,13 +411,14 @@ int aiverseMain(int,char**) {
             streaming[size_t(side)]=
                 std::make_unique<gfx::VirtualTextureFileStreamer>(dev,limits);
             gfx::VirtualTextureStreamConfig atlas;
-            atlas.tilesX=2;atlas.tilesY=1;atlas.mipLevels=1;
+            atlas.tilesX=2;atlas.tilesY=1;atlas.mipLevels=indexed?2:1;
+            atlas.indexedMipTable=indexed;
             atlas.virtualLayers=2;atlas.physicalPages=2;
             atlas.physicalPageSize=kPage;atlas.physicalFormat=gfx::PixelFormat::RGBA8;
             atlas.pageTableBytesPerFlush=64;
             gfx::VirtualDiskPageConfig disk;
             disk.assetRoot=sourceFiles.root/(side==0?"left":"right");
-            disk.tilesX=2;disk.tilesY=1;disk.mipLevels=1;
+            disk.tilesX=2;disk.tilesY=1;disk.mipLevels=indexed?2:1;
             disk.virtualLayers=2;disk.pageSize=kPage;
             disk.maxOutstanding=8;disk.maxReadyBytes=2048;
             const bool ok=streaming[size_t(side)]->initialize(atlas,disk,2);
@@ -428,7 +430,8 @@ int aiverseMain(int,char**) {
             }
         }
         check(streaming[0]->physicalAtlas()!=streaming[1]->physicalAtlas() &&
-              streaming[0]->pageTableTexture()!=streaming[1]->pageTableTexture(),
+              (indexed ? streaming[0]->indexedMipPageTableTexture()!=streaming[1]->indexedMipPageTableTexture() :
+               streaming[0]->pageTableTexture()!=streaming[1]->pageTableTexture()),
               "real physical GPU atlas and page table identities differ");
         renderer.setModelVirtualTextureResolver(
             [&](const render::Model&,const render::Material& mat,
@@ -438,7 +441,12 @@ int aiverseMain(int,char**) {
                 if(side<0||!streaming[size_t(side)]||
                    !streaming[size_t(side)]->ready())return false;
                 out.physicalAtlas=streaming[size_t(side)]->physicalAtlas();
-                out.pageTable=streaming[size_t(side)]->pageTableTexture();
+                out.pageTable=indexed?streaming[size_t(side)]->indexedMipPageTableTexture():
+                    streaming[size_t(side)]->pageTableTexture();
+                out.indexedMipTable=indexed;
+                out.virtualMipLevels=indexed?2:1;
+                out.virtualWidthPixels=12;out.virtualHeightPixels=6;
+                out.virtualAnisotropyTaps=indexed?8:1;
                 out.layer=side;
                 out.gutterPixels=float(kGutter);
                 out.addressU=gfx::SamplerAddressMode::ClampToEdge;
@@ -485,7 +493,9 @@ int aiverseMain(int,char**) {
                     const gfx::VirtualPageKey key{0,tile,0,side};
                     const auto& streamer=*streaming[size_t(side)];
                     all&=streamer.exactResidentPage(key);
-                    const auto table=streamer.encodedPageTable(tile,0,side);
+                    const auto table=indexed?
+                        streamer.atlasStreamer().encodedPageTableForMip(tile,0,side,0):
+                        streamer.encodedPageTable(tile,0,side);
                     if(all)all&=(table==std::array<uint8_t,4>{
                         uint8_t(tile),0,0,255});
                 }
@@ -518,7 +528,10 @@ int aiverseMain(int,char**) {
         }
         if(prepared && gpu) {
             const auto stats=renderer.gpuModelDrawStats();
-            if(stats.shaderGraphIcbSubmissions>=1 &&
+            if(indexed && stats.eligible==0 && stats.shaderGraphIcbSubmissions==0 &&
+               stats.perCommandVtExecutions==0 && stats.gpuEncodedCommands==0 &&
+               stats.gpuIcbExecuteFailed==0)actualIcb[size_t(sample)]=true;
+            if(!indexed && stats.shaderGraphIcbSubmissions>=1 &&
                stats.mixedGraphSourceSubmissions>=1 &&
                stats.perCommandVtExecutions>=1 &&
                stats.mixedVtExecutions>=1 &&
@@ -554,13 +567,15 @@ int aiverseMain(int,char**) {
         if(step==10) {
             for(int i=0;i<5;++i) {
                 check(actualIcb[size_t(i)],
+                      indexed?"indexed VT retained safe direct rendering under ICB opt-in":
                       "actual mixed graph and VT GPU indirect draw submitted");
                 compareCaptured(captures[size_t(i*2)].pixels,
                                 captures[size_t(i*2+1)].pixels,
                                 "nonuniform-gutter");
             }
             if(!failed)independentSceneOracle(captures);
-            if(!failed)std::puts(
+            if(!failed)std::puts(indexed?
+                "PASS: production Renderer3D indexed VT nonuniform direct and ICB fallback parity":
                 "PASS: production Renderer3D Shader Graph nonuniform guttered disk VT mixed Metal GPU ICB seam parity");
             finished=true;
             platform::requestQuit();

@@ -81,7 +81,7 @@ you. AIVERSE ships the mechanics themselves — and makes the game something an 
 | **Multiplayer means endless desyncs.** One `float` is enough for a match on an iPhone and an Android phone to drift apart. | The simulation is bit-identical everywhere: fixed-point instead of floats, its own RNG, checksums. CI compares matches across Linux x64/ARM64, Windows and macOS on every push. Only commands go over the network; there is rollback lockstep and a server with matchmaking and replay-based verdicts. |
 | **Mobile GPUs are weak, yet the game must look good.** | Every expensive feature — shadows, particles, terrain, post-effects — has quality tiers and adapts to the GPU, from old Mali and Adreno to Apple Silicon. |
 | **Shipping on every platform is a project of its own.** Signing, icons, store and ads SDKs. | `aiversebuild` makes an .app, an Xcode project, Gradle/APK, web and .exe in one command. Icons and splash screens are generated. Plugins for the App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin and more — a build carries only the ones the game selects. |
-| **Every new game starts from zero.** | 30+ playable templates, genre kits with acceptance checklists, 200 skills for agents. A new game starts from a working one. |
+| **Every new game starts from zero.** | 30+ playable templates, genre kits with acceptance checklists, 238 skills for agents. A new game starts from a working one. |
 | **Meta and LiveOps get rewritten in every project.** | `aiverse::meta`: shop, currencies, quests, passes, daily rewards, energy, clans, tournaments, chests with pity — configured in JSON. |
 
 ---
@@ -104,9 +104,10 @@ from the mechanics libraries — each one deterministic, tested, with save/resto
 | **Roguelikes** | `run-graph`: seeded runs and encounter budgets; `loot-tables` with a guaranteed rare drop |
 | **Idle, factory, colony** | `big-numbers`, `offline-production` (exact offline progress), `production-networks`, `logistics`, `tasks` |
 | **Rhythm games** | `rhythm-timing`: tempo maps and frame-independent hit judgement |
+| **Racing, vehicles** | `vehicle-controllers`: cars (torque, gears, traction, drift), tanks, hovercraft, planes, seats, damage zones; race session: grid, countdown, ordered checkpoints, laps, standings, wrong way, race bots; map `race` block in any project, shared HUD and chase camera, 2 templates |
 | **Any mobile game** | `aiverse::meta` and LiveOps, tutorials, UI screens, store and ads plugins |
 
-Racing, sports and vehicles are still on the [roadmap](docs/genre-mechanics-roadmap.md). Full list of
+Sports games, boats, pit stops and penalties are still on the [roadmap](docs/genre-mechanics-roadmap.md). Full list of
 libraries: [`libraries/catalog.json`](libraries/catalog.json) and [genre packages](docs/genre-packages.md).
 
 ---
@@ -183,6 +184,7 @@ Every template is a fully playable game with bots. Open it in the editor and sta
 | Economy and building | **Hearth and Haul** (Knights and Merchants) · **Underlord** (Dungeon Keeper) |
 | 2D and experiments | **Crystal Dunes** (tiles, Dune II) · **Green Hills** (2D sprites on 3D terrain) · **Planets** (spherical planets and orbits) · **Wildfire** (fields: wildfires and creep) |
 | FPS | **Crossfire Arena** (5v5) · **Breach Protocol** (tactical rounds) · **Last Survivor** (100-player battle royale) · **Aim Lab** (shooting range) |
+| Racing | **Oval Sprint** (lap race against three bots) · **Road Circuit** (race on a spline road) |
 
 ---
 
@@ -205,7 +207,7 @@ Every template is a fully playable game with bots. Open it in the editor and sta
 
 **Graphics and audio**
 - Own RHI: Metal, GLES3 / WebGL2, GL 3.3, Vulkan (Windows / Linux / Android, opt-in)
-- PBR, glTF/OBJ, skeletal and procedural animation, procedural cables, parented entity rendering
+- PBR, glTF/OBJ, skeletal and procedural animation, procedural cables, parented entity rendering, physical sky, volumetric clouds and god rays, local sphere/OBB volumetric fog with runtime reveal
 - Shadows, dynamic lights, night, post-effects, Shader Graph
 - Particles with Unity ParticleSystem modules and an importer from Unity
 - 2D: sprites, tile maps with autotiling
@@ -218,9 +220,9 @@ Every template is a fully playable game with bots. Open it in the editor and sta
 
 **Tools**
 - Unity-style docking editor: scene, inspector, terrain, effects, lighting, UI, play test and device simulator
-- `aiversemcp` — MCP server for agents
+- `aiversemcp` — MCP server for agents — PHYSIS map configuration, validation and Undo/Redo
 - **Make a game** wizard
-- 200 skills for agents and genre kits with acceptance checklists
+- 238 skills for agents and genre kits with acceptance checklists
 - Importers for assets of classic games from your own copy
 
 </td>
@@ -315,3 +317,9 @@ OFL, CC0 and CC-BY, among others). Original assets of commercial games are not i
 from your own copy.
 
 Game builds automatically include `THIRD_PARTY_NOTICES.txt`; external SDK notices must be supplied by the project (see [details](docs/third-party-notices.md)).
+
+- [TerraWeave Rocks](docs/terrain/rocks.md): Seeded decorative stones, boulders, slabs and shards; shared PBR export and three native LODs (opt-in).
+
+**Terra-first authoring:** [native trees, dense grass and workflow skills](docs/terrain/vegetation-authoring.md); use existing TerraWeave capabilities before custom world generation.
+
+LENS camera workflows: [authoring and MCP](skills/visuals/aiverse-lens/SKILL.md), [native integration and capture](skills/visuals/aiverse-lens-native/SKILL.md).

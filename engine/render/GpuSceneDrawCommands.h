@@ -4,6 +4,7 @@
 // Render pass consumes the generated arguments with no CPU readback.
 // This is NOT multi-draw: each eligible model still has one API draw submission.
 #include "engine/gfx/Gfx.h"
+#include "GpuOwnedMemory.h"
 #include "Math3D.h"
 #include <array>
 #include <cstddef>
@@ -168,6 +169,20 @@ public:
     gfx::BufferHandle output(uint64_t frameSerial, size_t submission = 0) const {
         const Slot* slot = find(frameSerial, submission);
         return slot ? slot->output : gfx::BufferHandle{};
+    }
+    // All submissions in all three in-flight frame slots are owned by
+    // this pool; count input/output/compacted/visible-count once each.
+    // CPU lastRecords and backend-owned shader/compute pipeline excluded.
+    GpuOwnedMemoryStats ownedGpuMemoryStats(const gfx::Device& dev) const {
+        GpuOwnedMemoryCounter counter(dev);
+        for (const auto& pool : slots_)
+            for (const auto& slot : pool) {
+                counter.buffer(slot.input);
+                counter.buffer(slot.output);
+                counter.buffer(slot.compacted);
+                counter.buffer(slot.visibleCount);
+            }
+        return counter.stats();
     }
     void release(gfx::Device& device) {
         for (auto& pool : slots_) {

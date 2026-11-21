@@ -244,7 +244,7 @@ void GameClient::startNetMatch() {
         Json rules = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
-        configurePostFx(map);
+        configurePrisma(map);
     } catch (const std::exception& e) {
         netError_ = e.what();
         city_.reset(); sim_.reset();

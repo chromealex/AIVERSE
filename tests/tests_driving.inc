@@ -365,3 +365,77 @@ TEST(driving_steer_procedural_turns_front_wheels) {
     render::applyProcedural(mods, in, rt, pose, xf);
     CHECK(std::abs(pose[0].r.y + std::sin(0.25f)) < 1e-3f);
 }
+
+// Races (rules "race" + map "race", the format every project shares: docs/races.md) with the driving host: a
+// rectangular course, two cars. Player 1's hero is seated at the start and cannot get out; the bots race one lap;
+// the race decides the match; twins and a mid-race save stay bit-identical.
+namespace {
+std::string raceMap(bool firstIsBot) {
+    std::string rows;
+    for (int y = 0; y < 24; ++y) rows += std::string(y ? "," : "") + "\"" + std::string(40, '.') + "\"";
+    std::string line;
+    auto add = [&](double x, double z) { char b[48]; std::snprintf(b, sizeof b, "%s[%.1f,%.1f]", line.empty() ? "" : ",", x, z); line += b; };
+    for (int x = 8; x < 32; x += 2) add(x, 6);
+    for (int z = 6; z < 18; z += 2) add(32, z);
+    for (int x = 32; x > 8; x -= 2) add(x, 18);
+    for (int z = 18; z > 6; z -= 2) add(8, z);
+    return std::string(R"({"size":[40,24],"players":[{"name":"A","team":1)") + (firstIsBot ? R"(,"bot":true)" : "") +
+        R"(},{"name":"B","team":2,"bot":true}],"terrain":{"rows":[)" + rows + R"(]},
+      "entities":[{"type":"guy","owner":1,"pos":[5.5,11.5]},{"type":"sedan","owner":1,"pos":[7.5,10.5]},{"type":"sedan","owner":2,"pos":[8.5,8.5]}],
+      "race":{"laps":1,"checkpoints":[{"x":20,"z":6,"yaw":0.25,"width":5},{"x":32,"z":12,"yaw":0,"width":5},
+                                       {"x":20,"z":18,"yaw":-0.25,"width":5},{"x":8,"z":12,"yaw":0.5,"width":5}],
+              "grid":[{"x":7.5,"z":10.5,"yaw":0.5},{"x":8.5,"z":8.5,"yaw":0.5}],"line":[)" + line + "]}}";
+}
+const char* kRaceRules = R"J({
+  "victory": "noUnits",
+  "resources": {"gold": {"start": 0}},
+  "topDown": {"heroes": ["guy"], "autoFire": false},
+  "driving": {"metersPerCell": 4, "vehicles": {"sedan": {"length": 1.1, "width": 0.5, "wheeled": {"massMilli": 1200000}}}},
+  "race": {"countdownTicks": 40, "finishGraceTicks": 400, "vehicles": {"botMaxSpeedMilli": 22000, "botCornerAccelMilli": 6000}},
+  "types": {
+    "guy":   {"health": {"max": 100}, "move": {"speed": 4, "radius": 0.3}, "sight": 10},
+    "sedan": {"health": {"max": 400}, "move": {"speed": 0, "radius": 0.5}, "sight": 2}
+  }
+})J";
+} // namespace
+
+TEST(driving_race_shared_format_bots_finish_and_restore) {
+    auto sim = makeSimJson(kRaceRules, raceMap(true)), twin = makeSimJson(kRaceRules, raceMap(true));
+    CHECK(drv(*sim).racing(*sim));
+    std::string save;uint64_t at = 0;
+    for (int i = 0; i < 6000 && !sim->result(); ++i) {
+        sim->step(); twin->step();
+        if (i == 30) { auto v = drv(*sim).raceView(*sim, 1); CHECK(v.enabled && v.racers == 2 && v.countdownTicks > 0); }
+        if (i == 200) { save = sim->serialize(); at = sim->tick(); }
+        if (i % 97 == 0) CHECK(sim->checksum() == twin->checksum());
+    }
+    auto v = drv(*sim).raceView(*sim, 1);
+    CHECK(sim->result() == 1 || sim->result() == 2);
+    CHECK(v.phase == 2 && v.winner >= 1 && v.order.size() == 2);
+    // restore mid-race: the same continuation as the twin
+    auto copy = makeSimJson(kRaceRules, raceMap(true));
+    std::string err;
+    CHECK(!save.empty() && copy->deserialize(save, &err));
+    auto replay = makeSimJson(kRaceRules, raceMap(true));
+    while (replay->tick() < at) replay->step();
+    CHECK(copy->checksum() == replay->checksum());
+    for (int i = 0; i < 300; ++i) { copy->step(); replay->step(); }
+    CHECK(copy->checksum() == replay->checksum());
+}
+
+TEST(driving_race_seats_the_hero_and_holds_the_doors) {
+    auto sim = makeSimJson(kRaceRules, raceMap(false));
+    sim->step();
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    const game::DrivingCar* car = drv(*sim).carOf(*sim, hero);
+    CHECK(car != nullptr);
+    enterKey(*sim, 1); sim->step();
+    CHECK(drv(*sim).carOf(*sim, hero) != nullptr);        // racers stay at the wheel
+    // countdown: the brakes hold even with the stick forward
+    for (int i = 0; i < 30; ++i) { steer(*sim, 1, {Fixed{}, Fixed{}, Fixed::fromInt(-1)}); sim->step(); }
+    CHECK(fxAbs(drv(*sim).speed(*sim, drv(*sim).carOf(*sim, hero)->e)) < Fixed::fromRatio(1, 10));
+    // a map without "race" keeps racing off
+    auto plain = Json::parse(raceMap(false)); plain.erase("race");
+    auto free = makeSimJson(kRaceRules, plain.dump(-1));
+    CHECK(!drv(*free).racing(*free));
+}

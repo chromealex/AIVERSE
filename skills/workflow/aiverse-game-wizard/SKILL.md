@@ -3,6 +3,9 @@ name: aiverse-game-wizard
 description: Make a whole AIVERSE game project from art and an idea with the game wizard (game_make) - options, plan, generation, then verification with bots, screenshots and phone previews.
 ---
 
+For every game/world creation task, first follow `skills/workflow/aiverse-terra-first/SKILL.md`. Use native Terra capabilities before custom environment implementations; vegetation routing is `skills/world/aiverse-terra-vegetation/SKILL.md`.
+
+
 # Game wizard
 
 Reference: `docs/game-wizard.md`. Code: `apps/editor/core/GameWizard*.cpp`, `WizardOps.cpp`; runtime kit `templates/_wizard/`.

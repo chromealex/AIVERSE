@@ -37,9 +37,14 @@ inline void drawPhysisSceneOverlay(Editor& editor, const Viewport& vp,
                                    const render::RTSCamera& camera) {
     auto& overlay = physisSceneOverlayState();
     if (!overlay.enabled || vp.pointsW <= 0 || vp.pointsH <= 0) return;
-    const auto* sim = editor.sim();
-    if (!sim) return;
-    const aiverse::World& world = sim->world();
+    // Live game PHYSIS first; otherwise the editor's «Живая природа» private
+    // preview World, so the heatmap no longer needs a running play-test.
+    const aiverse::World* source = nullptr;
+    if (auto* sim = editor.sim(); sim && sim->world().resourceConst<physis::State>())
+        source = &sim->world();
+    if (!source) source = editor.physisNaturePreview().previewWorld();
+    if (!source) return;
+    const aiverse::World& world = *source;
     const auto* state = world.resourceConst<physis::State>();
     if (!state || state->settings.cellSizeMeters <= 0) return;
 

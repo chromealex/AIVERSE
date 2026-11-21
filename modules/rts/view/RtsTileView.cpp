@@ -31,25 +31,34 @@ int Rts2DView::depletedOf(int terrain) const {
 }
 
 void Rts2DView::buildTiles(gfx::Device& dev, const MapGrid& grid, float lh) {
-    batch_.destroyMesh(dev, tileMesh_);
-    fieldCells_.clear(); fieldState_.clear();
-    if (!tileset_ || grid.w == 0) return;
+    if(preparingFrame_ && frameTilesReplaced_)
+        throw std::logic_error("sprite tiles prepared twice");
+    if (!tileset_ || grid.w == 0) {
+        if(!preparingFrame_)tileRetirement_.retireBuffer(dev,tileMesh_.vb);
+        tileMesh_={};fieldCells_.clear();fieldState_.clear();
+        if(preparingFrame_)frameTilesReplaced_=true;
+        return;
+    }
+    render::TextureRef nextAtlas;
+    TileLayer nextLayer;
+    std::vector<uint32_t> nextCells;
+    std::vector<uint8_t> nextState;
     const Tileset& ts = *tileset_;
-    atlas_ = textures_.resolve(ts.atlas, ts.nearest, base_);
-    if (!atlas_.valid()) return;
-    layer_ = loadTileLayer(tilesJson_, ts, grid.w, grid.h);
+    nextAtlas = textures_.resolve(ts.atlas, ts.nearest, base_);
+    if (!nextAtlas.valid()) throw std::runtime_error("sprite tile atlas unavailable");
+    nextLayer = loadTileLayer(tilesJson_, ts, grid.w, grid.h);
     // used-up resource cells show their "depleted" terrain (view only; the sim owns the amounts)
-    TileLayer shown = layer_;
+    TileLayer shown = nextLayer;
     for (int i = 0; i < grid.w * grid.h; ++i) {
-        int d = depletedOf(layer_.terrain[size_t(i)]);
+        int d = depletedOf(nextLayer.terrain[size_t(i)]);
         if (d < 0) continue;
         bool has = grid.fieldAmt[size_t(i)].raw > 0;
-        fieldCells_.push_back(uint32_t(i));
-        fieldState_.push_back(has);
+        nextCells.push_back(uint32_t(i));
+        nextState.push_back(has);
         if (!has) shown.terrain[size_t(i)] = uint8_t(d);
     }
-    const float tw = float(ts.tileW) / float(atlas_.width), th = float(ts.tileH) / float(atlas_.height);
-    const float insetX = 0.5f / float(atlas_.width), insetY = 0.5f / float(atlas_.height); // Kingston: clamp bilinear footprint to tile texel centres
+    const float tw = float(ts.tileW) / float(nextAtlas.width), th = float(ts.tileH) / float(nextAtlas.height);
+    const float insetX = 0.5f / float(nextAtlas.width), insetY = 0.5f / float(nextAtlas.height); // Kingston: clamp bilinear footprint to tile texel centres
     auto uvOf = [&](int tile) {
         float u = float(tile % ts.columns) * tw, v = float(tile / ts.columns) * th;
         return float4{u + insetX, v + insetY, u + tw - insetX, v + th - insetY};
@@ -70,10 +79,17 @@ void Rts2DView::buildTiles(gfx::Device& dev, const MapGrid& grid, float lh) {
             float gy = float(grid.level[i]) * lh + float(grid.height[i]) / 16.0f;
             const float3 c[4] = {{float(x), gy, float(y)}, {float(x + 1), gy, float(y)}, {float(x + 1), gy, float(y + 1)}, {float(x), gy, float(y + 1)}};
             CellTiles ct = resolveCell(ts, shown, x, y);
-            if (ct.under >= 0) SpriteBatch::appendQuad(verts, atlas_, c, uvOf(ct.under), 0xffffffffu);
-            if (ct.top >= 0) SpriteBatch::appendQuad(verts, atlas_, c, uvOf(ct.top), 0xffffffffu);
+            if (ct.under >= 0) SpriteBatch::appendQuad(verts, nextAtlas, c, uvOf(ct.under), 0xffffffffu);
+            if (ct.top >= 0) SpriteBatch::appendQuad(verts, nextAtlas, c, uvOf(ct.top), 0xffffffffu);
         }
-    tileMesh_ = batch_.buildMesh(dev, verts);
+    auto nextMesh=batch_.buildMesh(dev,verts);
+    if(!verts.empty() && !nextMesh.vb.valid())
+        throw std::runtime_error("sprite tile candidate allocation failed");
+    if(!preparingFrame_)tileRetirement_.retireBuffer(dev,tileMesh_.vb);
+    tileMesh_=nextMesh;
+    layer_=std::move(nextLayer);atlas_=nextAtlas;
+    fieldCells_.swap(nextCells);fieldState_.swap(nextState);
+    if(preparingFrame_)frameTilesReplaced_=true;
 }
 
 void Rts2DView::refreshTiles(gfx::Device& dev, const MapGrid& grid, float lh) {

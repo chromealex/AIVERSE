@@ -1,0 +1,21 @@
+.command-palette__backdrop { position: fixed; inset: 0; z-index: 900; background: rgba(5, 9, 16, .55); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.command-palette { width: min(680px, calc(100vw - 32px)); max-height: 70vh; display: flex; flex-direction: column; background: var(--au-panel-raised); border: 1px solid #3a5170; border-radius: var(--au-radius-lg); box-shadow: 0 24px 64px rgba(0,0,0,.6); overflow: hidden; color: var(--au-text); }
+.command-palette__search { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 50px; border-bottom: 1px solid var(--studio-border); color: var(--au-accent); flex: none; }
+.command-palette__search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--au-text); font-size: 15px; user-select: text; }
+.command-palette__filters { display: flex; gap: 4px; }
+.command-palette__filters button { font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--studio-border); background: none; color: var(--au-text-muted); cursor: pointer; }
+.command-palette__filters button.is-active { background: var(--studio-selection); border-color: transparent; color: var(--au-text); }
+.command-palette__list { overflow: auto; padding: 4px 0 8px; }
+.command-palette__group { padding: 8px 14px 3px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--au-text-muted); }
+.command-palette__item { display: flex; align-items: center; gap: 12px; padding: 6px 14px; cursor: pointer; }
+.command-palette__item[data-active="true"] { background: var(--studio-selection); }
+.command-palette__item.is-disabled { opacity: .55; cursor: default; }
+.command-palette__icon { width: 22px; height: 22px; border-radius: 6px; flex: none; }
+.command-palette__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.command-palette__text b { font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.command-palette__text small { font-size: 11px; color: var(--au-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.command-palette__legacy { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #3a3020; color: #f2c46d; }
+.command-palette kbd { font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: var(--au-text-muted); }
+.command-palette__empty { padding: 18px 14px; color: var(--au-text-muted); }
+.command-palette__footer { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--studio-border); font-size: 11px; color: var(--au-text-muted); flex: none; }
+.command-palette__spacer { flex: 1; }

@@ -9,8 +9,10 @@
 // missing), UV0, vertex colours, tangents, one primitive per material, PBR material maps (base
 // colour, roughness, metalness, normal, emission, opacity), external and embedded textures,
 // skin deformers (4 strongest influences per vertex, split into kMaxPaletteJoints palettes),
-// animation stacks baked to linear TRS channels. Not supported (warning, skipped): blend shapes,
-// vertex caches, extra UV / colour sets, more than 4 influences, cameras, lights.
+// animation stacks baked to linear TRS and FBX blendshape weight channels,
+// including named in-between targets flattened to up to 64 morph GPU slots.
+// Not supported: over-capacity facial rigs, per-control morph weights, vertex
+// caches, extra UV/colour sets, more than 4 influences, cameras, lights.
 #include "Model.h"
 #include "LightmapUv.h"
 
@@ -26,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -64,11 +67,45 @@ struct Baked {
     ~Baked() { if (a) ufbx_free_baked_anim(a); }
 };
 
+// A multi-target FBX channel is piecewise-linear in *shape space*.
+// Each native shape is stored as one independent GPU morph slot. This
+// projects a source channel weight into nonnegative weights for the
+// two neighboring shape targets (base pose = zero shape), so the GPU
+// can reconstruct in-between geometry without a special morph shader.
+// The caller validates strictly increasing positive target weights.
+void appendFbxShapeBasis(const ufbx_blend_channel& channel,
+                         double value,std::vector<float>& out) {
+    const size_t n=channel.keyframes.count;
+    if(n==0 || !std::isfinite(value))
+        throw std::invalid_argument("invalid FBX blendshape evaluation");
+    const size_t offset=out.size();
+    out.resize(offset+n,0.f);
+    if(value<=0.0)return;
+    const auto* keys=channel.keyframes.data;
+    if(value<=keys[0].target_weight) {
+        out[offset]=float(std::clamp(
+            value/keys[0].target_weight,0.0,1.0));
+        return;
+    }
+    for(size_t i=1;i<n;++i) {
+        if(value>keys[i].target_weight)continue;
+        const double interval=keys[i].target_weight-
+                              keys[i-1].target_weight;
+        const double t=std::clamp(
+            (value-keys[i-1].target_weight)/interval,0.0,1.0);
+        out[offset+i-1]=float(1.0-t);
+        out[offset+i]=float(t);
+        return;
+    }
+    out[offset+n-1]=1.f;
+}
+
 // Vertex before palette assignment: global skin joint indices and float weights.
 struct RawVertex {
     ModelVertex v;
     int joints[4] = {0, 0, 0, 0};
     float weights[4] = {0, 0, 0, 0};
+    uint32_t sourceVertex = 0; // FBX control point after corner dedup
 };
 
 class FbxReader {
@@ -262,8 +299,15 @@ private:
                 const ufbx_node* n = mesh->instances.data[k];
                 int ni = n->is_root ? -1 : nodeMap_[n->typed_id];
                 if (ni < 0) continue;
-                model_->nodes[size_t(ni)].mesh = meshIndex;
-                if (skin) model_->nodes[size_t(ni)].skin = int(skin->typed_id);
+                auto& node=model_->nodes[size_t(ni)];
+                node.mesh=meshIndex;
+                // FBX's rest/default channel weights are Model-node local,
+                // just like glTF weights. They are normalised against the
+                // single supported target keyframe's authored weight.
+                for(size_t channel=0;channel<md.weights.size() &&
+                    channel<size_t(kMaxMorphTargets);++channel)
+                    node.weights[channel]=md.weights[channel];
+                if (skin) node.skin = int(skin->typed_id);
             }
             model_->meshes.push_back(std::move(md));
         }
@@ -273,7 +317,48 @@ private:
         meshNode_ = meshNode;
         rigidJoint_ = -1;
         const std::string where = "mesh '" + md.name + "'";
-        if (mesh.blend_deformers.count) warn(where + ": blend shapes are ignored");
+        activeShapes_.clear();
+        std::set<std::string> seenChannels,seenShapeKeys;
+        for(size_t di=0;di<mesh.blend_deformers.count;++di) {
+            const auto* deform=mesh.blend_deformers.data[di];
+            for(size_t ci=0;ci<deform->channels.count;++ci) {
+                const auto* ch=deform->channels.data[ci];
+                const std::string name=str(ch->name);
+                if(name.empty() || !seenChannels.insert(name).second)
+                    fail(where+": empty or duplicate blendshape channel name");
+                if(ch->keyframes.count==0 ||
+                   ch->keyframes.count>
+                       size_t(kMaxMorphTargets)-activeShapes_.size())
+                    fail(where+": shape targets exceed GPU morph capacity");
+                double prior=0.0;
+                for(size_t key=0;key<ch->keyframes.count;++key) {
+                    const auto& target=ch->keyframes.data[key];
+                    if(!target.shape ||
+                       !std::isfinite(target.target_weight) ||
+                       target.target_weight<=prior)
+                        fail(where+": invalid/nonascending in-between target weights");
+                    prior=target.target_weight;
+                    // Preserve real FBX channel/shape names; for in-between
+                    // targets both are needed for a stable semantic ID.
+                    std::string semantic=name;
+                    if(ch->keyframes.count>1) {
+                        const std::string shapeName=str(target.shape->name);
+                        if(shapeName.empty())
+                            fail(where+": in-between shape without authored name");
+                        semantic+="::"+shapeName;
+                    }
+                    if(!seenShapeKeys.insert(semantic).second)
+                        fail(where+": duplicate semantic morph target name");
+                    if(target.shape->offset_weights.count!=0)
+                        fail(where+": per-control-point morph weights unsupported");
+                    activeShapes_.push_back(target.shape);
+                    md.morphTargetNames.push_back(std::move(semantic));
+                }
+                if(!std::isfinite(ch->weight))
+                    fail(where+": invalid blendshape weight");
+                appendFbxShapeBasis(*ch,ch->weight,md.weights);
+            }
+        }
         if (mesh.cache_deformers.count) warn(where + ": vertex caches are ignored");
         if (mesh.uv_sets.count > 2) warn(where + ": only the first two UV sets are used (the second is the lightmap set)");
         // second UV set = lightmap UVs (Unity UV2) of unskinned meshes, packed into joints (LightmapUv.h)
@@ -336,6 +421,7 @@ private:
         std::memset(static_cast<void*>(&rv), 0, sizeof rv);
         ModelVertex& v = rv.v;
         v = ModelVertex{};
+        rv.sourceVertex=mesh.vertex_indices.data[ix];
         v.pos = f3(ufbx_get_vertex_vec3(&mesh.vertex_position, ix));
         if (mesh.vertex_normal.exists) v.nrm = normalize(f3(ufbx_get_vertex_vec3(&mesh.vertex_normal, ix)));
         if (mesh.vertex_uv.exists) {
@@ -418,6 +504,42 @@ private:
             for (auto& [j, slot] : palette) prim.jointPalette[size_t(slot)] = uint16_t(j);
             if (prim.jointPalette.empty()) prim.jointPalette.push_back(0);
         }
+        // Morph delta arrays are indexed by the FINAL per-primitive vertex
+        // span, not face-corner IDs or the pre-split FBX control point IDs.
+        // Required by GPU morph texel lookup and Model upload preflight.
+        prim.firstVertex=base;
+        prim.vertexCount=uint32_t(m.vertices.size()-size_t(base));
+        if(!activeShapes_.empty()) {
+            prim.morphTargets=int(activeShapes_.size());
+            const size_t count=m.vertices.size()-size_t(base);
+            prim.morphDeltas.assign(activeShapes_.size()*count*6u,0.f);
+            // The vertex remap is FINAL (including palette splits). FBX
+            // shape offsets index control points, not face corners.
+            for(size_t original=0;original<remap.size();++original) {
+                if(remap[original]<0)continue;
+                const size_t dst=size_t(remap[original]);
+                const uint32_t control=verts[original].sourceVertex;
+                for(size_t channel=0;channel<activeShapes_.size();++channel) {
+                    const auto* shape=activeShapes_[channel];
+                    const auto p=ufbx_get_blend_shape_vertex_offset(shape,control);
+                    const uint32_t index=ufbx_get_blend_shape_offset_index(shape,control);
+                    ufbx_vec3 n{};
+                    if(index!=UFBX_NO_INDEX &&
+                       size_t(index)<shape->normal_offsets.count)
+                        n=shape->normal_offsets.data[index];
+                    for(double v:{p.x,p.y,p.z,n.x,n.y,n.z})
+                        if(!std::isfinite(v))
+                            fail("nonfinite FBX blendshape offset");
+                    const size_t at=(channel*count+dst)*6u;
+                    prim.morphDeltas[at]=float(p.x);
+                    prim.morphDeltas[at+1]=float(p.y);
+                    prim.morphDeltas[at+2]=float(p.z);
+                    prim.morphDeltas[at+3]=float(n.x);
+                    prim.morphDeltas[at+4]=float(n.y);
+                    prim.morphDeltas[at+5]=float(n.z);
+                }
+            }
+        }
         if (needTangents) generateTangents(m.vertices, m.indices, prim.firstIndex, prim.indexCount);
         md.primitives.push_back(std::move(prim));
     }
@@ -429,6 +551,143 @@ private:
             model_->materials.push_back(m);
         }
         return defaultMat_;
+    }
+
+    // Bake a complete mesh's channel weights as ONE AnimChannel::Weights
+    // per visual node. The channel order is the real imported ufbx order,
+    // identical to MeshDef::morphTargetNames and Primitive::morphDeltas.
+    // Use ufbx's animation evaluator to honor FBX layer composition and
+    // cubic/step interpolation rather than reading raw per-layer curves.
+    // Sampling at 30 Hz mirrors the existing ufbx TRS resampling; include
+    // ufbx baked property key times to retain explicit step boundaries.
+    std::set<uint32_t> addMorphWeightChannels(
+            AnimClip& clip,const ufbx_anim_stack& stack,
+            const ufbx_baked_anim& baked) {
+        std::set<uint32_t> handledProperties;
+        if(!stack.anim)return handledProperties;
+        bool hasMorphs=false;
+        for(size_t mi=0;mi<scene_->meshes.count;++mi)
+            if(scene_->meshes.data[mi]->blend_deformers.count) {
+                hasMorphs=true;break;
+            }
+        if(!hasMorphs)return handledProperties;
+        const double duration=baked.playback_duration;
+        if(!std::isfinite(duration) || duration<0.0 || duration>1800.0)
+            fail("FBX blendshape animation duration is invalid or too long");
+        const size_t segments=std::max<size_t>(1,
+            size_t(std::ceil(duration*30.0)));
+        std::set<float> sampleTimes;
+        for(size_t k=0;k<=segments;++k)
+            sampleTimes.insert(float(duration*double(k)/double(segments)));
+        // Bo.trim_start_time=true: baked node and property key times use
+        // the same zero-based clip timeline as existing TRS channels.
+        for(size_t mi=0;mi<scene_->meshes.count;++mi) {
+            const auto* mesh=scene_->meshes.data[mi];
+            if(!mesh->blend_deformers.count)continue;
+            std::vector<const ufbx_blend_channel*> channels;
+            for(size_t di=0;di<mesh->blend_deformers.count;++di) {
+                const auto* blend=mesh->blend_deformers.data[di];
+                for(size_t ci=0;ci<blend->channels.count;++ci) {
+                    const auto* ch=blend->channels.data[ci];
+                    channels.push_back(ch);
+                    handledProperties.insert(ch->element_id);
+                    for(size_t ei=0;ei<baked.elements.count;++ei) {
+                        const auto& element=baked.elements.data[ei];
+                        if(element.element_id!=ch->element_id)continue;
+                        for(size_t pi=0;pi<element.props.count;++pi) {
+                            const auto& prop=element.props.data[pi];
+                            for(size_t ki=0;ki<prop.keys.count;++ki) {
+                                const double time=prop.keys.data[ki].time;
+                                if(std::isfinite(time) && time>=0.0 &&
+                                   time<=duration)
+                                    sampleTimes.insert(float(time));
+                            }
+                        }
+                    }
+                }
+            }
+            if(channels.empty())continue;
+            size_t slot=0;
+            if(mi>=model_->meshes.size())
+                fail("FBX animated blendshape mesh missing");
+            const auto& names=model_->meshes[mi].morphTargetNames;
+            for(const auto* channel:channels) {
+                for(size_t key=0;key<channel->keyframes.count;++key) {
+                    if(slot>=names.size() ||
+                       slot>=size_t(kMaxMorphTargets))
+                        fail("FBX animated blendshape slot limit exceeded");
+                    std::string semantic=str(channel->name);
+                    if(channel->keyframes.count>1)
+                        semantic+="::"+str(
+                            channel->keyframes.data[key].shape->name);
+                    if(names[slot]!=semantic)
+                        fail("FBX animated morph target ordering changed");
+                    ++slot;
+                }
+            }
+            if(slot!=names.size())
+                fail("FBX animated morph target count mismatch");
+        }
+        if(handledProperties.empty())return handledProperties;
+        if(sampleTimes.size()>65536)
+            fail("FBX blendshape animation has too many baked sample times");
+        // A source mesh may be instanced on multiple scene nodes. Each
+        // node needs its own weight channel because its NodePose is unique.
+        for(size_t mi=0;mi<scene_->meshes.count;++mi) {
+            const auto* mesh=scene_->meshes.data[mi];
+            if(!mesh->blend_deformers.count)continue;
+            std::vector<const ufbx_blend_channel*> channels;
+            for(size_t di=0;di<mesh->blend_deformers.count;++di)
+                for(size_t ci=0;
+                    ci<mesh->blend_deformers.data[di]->channels.count;++ci)
+                    channels.push_back(
+                        mesh->blend_deformers.data[di]->channels.data[ci]);
+            if(channels.empty())continue;
+            size_t slotCount=0;
+            for(const auto* channel:channels)
+                slotCount+=channel->keyframes.count;
+            if(slotCount==0 || slotCount>size_t(kMaxMorphTargets))
+                fail("FBX morph animation exceeds GPU slots");
+            std::vector<float> values;
+            values.reserve(sampleTimes.size()*slotCount);
+            for(float t:sampleTimes) {
+                const double nativeTime=stack.time_begin+double(t);
+                for(const auto* channel:channels) {
+                    const double evaluated=ufbx_evaluate_blend_weight(
+                        stack.anim,channel,nativeTime);
+                    if(!std::isfinite(evaluated))
+                        fail("FBX animated blendshape produced invalid weight");
+                    appendFbxShapeBasis(*channel,evaluated,values);
+                }
+            }
+            for(size_t ni=0;ni<mesh->instances.count;++ni) {
+                const auto* node=mesh->instances.data[ni];
+                if(!node || node->is_root || node->typed_id>=nodeMap_.size())
+                    continue;
+                const int index=nodeMap_[node->typed_id];
+                if(index<0 || size_t(index)>=model_->nodes.size())continue;
+                const auto& defaults=model_->nodes[size_t(index)];
+                bool changed=false;
+                for(size_t i=0;i<sampleTimes.size() && !changed;++i)
+                    for(size_t k=0;k<slotCount;++k)
+                        if(std::fabs(values[i*slotCount+k]-
+                                     defaults.weights[k])>1e-5f) {
+                            changed=true;break;
+                        }
+                if(!changed)continue;
+                AnimChannel weight;
+                weight.node=index;
+                weight.path=AnimChannel::Weights;
+                weight.interp=AnimChannel::Linear;
+                weight.comps=uint8_t(slotCount);
+                weight.times.assign(sampleTimes.begin(),sampleTimes.end());
+                weight.values=values;
+                if(!weight.times.empty())
+                    clip.duration=std::max(clip.duration,weight.times.back());
+                clip.channels.push_back(std::move(weight));
+            }
+        }
+        return handledProperties;
     }
 
     // ---- animation ----
@@ -457,11 +716,25 @@ private:
                 addRot(clip, node, bn.rotation_keys, bn.constant_rotation, nd.r);
                 addVec3(clip, node, AnimChannel::Scale, bn.scale_keys, bn.constant_scale, nd.s);
             }
+            const auto handledBlendProperties=addMorphWeightChannels(
+                clip,*st,*baked.a);
             clip.duration = std::max(clip.duration, float(baked.a->playback_duration));
             for (size_t e = 0; e < baked.a->elements.count; ++e)
-                for (size_t p = 0; p < baked.a->elements.data[e].props.count; ++p)
-                    if (!baked.a->elements.data[e].props.data[p].constant_value)
-                        warn("animation '" + clip.name + "': property animation (" + str(baked.a->elements.data[e].props.data[p].name) + ") is ignored");
+                for (size_t p = 0; p < baked.a->elements.data[e].props.count; ++p) {
+                    const auto& element=baked.a->elements.data[e];
+                    const auto& prop=element.props.data[p];
+                    const std::string name=str(prop.name);
+                    // Animated blendshape weights were consumed as
+                    // AnimChannel::Weights, not silently ignored.
+                    const bool blendWeight=(name=="UFBX_Weight" ||
+                                            name=="DeformPercent" ||
+                                            name=="Weight");
+                    if (!prop.constant_value &&
+                        !(blendWeight &&
+                          handledBlendProperties.count(element.element_id)))
+                        warn("animation '" + clip.name +
+                             "': property animation ("+name+") is ignored");
+                }
             clip.sourceStart = float(st->time_begin);
             clip.sourceFps = float(scene_->settings.frames_per_second);
             if (!clip.channels.empty()) model_->clips.push_back(std::move(clip));
@@ -509,6 +782,7 @@ private:
     std::map<uint32_t, int> texCache_;       // ufbx texture element_id -> image index
     const ufbx_vertex_vec2* uv2_ = nullptr;   // current mesh: lightmap UV set (unskinned meshes with two UV sets)
     int defaultMat_ = -1;
+    std::vector<const ufbx_blend_shape*> activeShapes_; // flattened in-between slots, importer-owned
     int meshNode_ = -1, rigidJoint_ = -1;   // current mesh: its node, extra joint for unweighted vertices
 };
 

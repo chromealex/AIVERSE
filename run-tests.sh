@@ -170,7 +170,9 @@ if (( RUN_EXTRA )); then
         if [[ -n "$args" ]]; then
             read -r -a suite_args <<< "$args"
         fi
-        stage "extra-$name" "$runner" "$ROOT/$relative" "${suite_args[@]}" || true
+        # ${arr[@]+...}: an empty array under set -u is an error on bash < 4.4 (macOS /bin/bash 3.2).
+        # </dev/null: the loop reads the manifest on stdin; a suite must not consume it.
+        stage "extra-$name" "$runner" "$ROOT/$relative" ${suite_args[@]+"${suite_args[@]}"} </dev/null || true
     done < "$MANIFEST"
     if (( suite_count == 0 )); then
         printf 'ERROR: no extra suites registered\n' | tee -a "$SUMMARY" >&2

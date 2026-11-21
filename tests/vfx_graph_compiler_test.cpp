@@ -2,6 +2,8 @@
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraModuleSchema.h"
 #include "engine/fx/ParticleSystem.h"
+#include "engine/fx/SpectraValueGraph.h"
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -121,6 +123,8 @@ int main() {
 
     Json invalid = base;
     invalid.set("version",Json::number(int64_t(2)));
+    check(spectra::compileGraph(invalid,effect,errors), "supported graph v2 rejected");
+    invalid.set("version",Json::number(int64_t(3)));
     check(!spectra::compileGraph(invalid,effect,errors), "invalid version accepted");
     invalid = base;
     invalid.set("outputs",Json::parse(R"JSON(["update"])JSON"));
@@ -139,6 +143,71 @@ int main() {
     invalid = base;
     invalid.set("outputs",Json::parse(R"JSON(["sprite","sprite"])JSON"));
     check(!spectra::compileGraph(invalid,effect,errors), "duplicate outputs accepted");
+
+    // Regression: shared sub-expressions are memoized. A chain where every
+    // node references its predecessor twice used to be re-evaluated 2^N
+    // times per $curve sample (N=18 x 64 samples took ~16 s on the UI
+    // thread); it must now be linear and produce the same values.
+    {
+        const auto chain=[](int n) {
+            Json nodes=Json::array();
+            nodes.push(Json::parse(R"JSON({"id":"n0","type":"AgeNormalized"})JSON"));
+            for(int i=1;i<=n;++i) {
+                const std::string prev="n"+std::to_string(i-1);
+                nodes.push(Json::parse("{\"id\":\"n"+std::to_string(i)+
+                    "\",\"type\":\"Add\",\"properties\":{\"a\":{\"$node\":\""+prev+
+                    "\"},\"b\":{\"$node\":\""+prev+"\"}}}"));
+            }
+            return nodes;
+        };
+        const Json noParams=Json::object();
+        for(const int n:{19,30}) {
+            const Json nodes=chain(n);
+            std::vector<std::string> valueErrors;
+            fx::vfx2::ValueGraph graph(nodes,noParams,noParams,valueErrors);
+            check(graph.initialize() && graph.validateAll(),"value chain validates");
+            const Json curve=Json::parse("{\"$curve\":\"n"+std::to_string(n)+"\",\"samples\":64}");
+            Json sampled;
+            const auto start=std::chrono::steady_clock::now();
+            const bool ok=graph.resolve(curve,sampled);
+            const double seconds=std::chrono::duration<double>(
+                std::chrono::steady_clock::now()-start).count();
+            check(seconds<5.0,"shared value references are not re-evaluated exponentially");
+            if(n==19) {
+                check(ok && sampled.size()==64,"memoized chain samples the curve");
+                check(sampled[size_t(63)][size_t(1)].integer()==int64_t(1)<<19,
+                      "memoized chain keeps exact values");
+                check(sampled[size_t(32)][size_t(1)].toDouble()>0,
+                      "memo distinguishes sampling ages");
+            } else {
+                check(!ok && !valueErrors.empty() &&
+                      valueErrors.back().find("depth")!=std::string::npos,
+                      "over-deep chain fails with a readable depth error");
+            }
+        }
+    }
+
+    // Regression: the shared JSON parser rejects pathological nesting with
+    // an error instead of overflowing the stack (500k '[' used to segfault).
+    {
+        bool rejected=false;
+        try { (void)Json::parse(std::string(500000,'[')); }
+        catch(const JsonError& e) {
+            rejected=std::string(e.what()).find("nesting")!=std::string::npos;
+        }
+        check(rejected,"deeply nested JSON rejected with a readable error");
+        rejected=false;
+        try { (void)Json::parse(std::string(100000,'{')); }
+        catch(const JsonError&) { rejected=true; }
+        check(rejected,"deeply nested JSON objects rejected");
+        const int okDepth=Json::kMaxParseDepth;
+        const Json deep=Json::parse(std::string(size_t(okDepth),'[')+std::string(size_t(okDepth),']'));
+        check(deep.isArray(),"JSON at the nesting limit still parses");
+        rejected=false;
+        try { (void)Json::parse(std::string(size_t(okDepth+1),'[')+std::string(size_t(okDepth+1),']')); }
+        catch(const JsonError&) { rejected=true; }
+        check(rejected,"JSON one level past the nesting limit rejected");
+    }
 
     std::cout<<"PASS vfx_graph_compiler_test (graph branching, CPU backend, parameters, validation)\n";
 }

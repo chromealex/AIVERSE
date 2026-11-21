@@ -74,7 +74,7 @@ public:
                               std::min(r.amplitude*fade*0.12f,2.f)};
             if(r.kind==lib::nereid::WaterInteractionKind::SurfaceWake &&
                (r.directionX!=0 || r.directionZ!=0))
-                result.shapes[i]={r.directionX,r.directionZ,1.35f,1.f};
+                result.shapes[i]={r.directionX,r.directionZ,float(kWakeTransverse),1.f};
         }
         return result;
     }
@@ -106,7 +106,16 @@ public:
                 std::max(std::abs(minZ-r.z),std::abs(maxZ-r.z)));
             const double ring=double(r.initialRadius)+double(r.speed)*double(r.age);
             constexpr double band=2.5; // Gaussian support in metres
-            if(nearest>ring+band || farthest<ring-band)continue;
+            // A directional SurfaceWake is an ellipse in the water shader:
+            // |(along*kWakeAlong, across*kWakeTransverse)| = ring, so its
+            // wavefront reaches ring/kWakeAlong along the heading and only
+            // ring/kWakeTransverse sideways. Cull against those bounds.
+            double outer=ring+band,inner=ring-band;
+            if(isDirectionalWake(r)){
+                outer=(ring+band)/kWakeAlong;
+                inner=(ring-band)/kWakeTransverse;
+            }
+            if(nearest>outer || farthest<inner)continue;
             const double dist=std::abs(std::hypot(r.x-centerX,r.z-centerZ)-ring);
             candidates.push_back({dist,i});
         }
@@ -121,7 +130,7 @@ public:
                              std::min(r.amplitude*fade*0.12f,2.f)};
             if(r.kind==lib::nereid::WaterInteractionKind::SurfaceWake &&
                (r.directionX!=0 || r.directionZ!=0))
-                result.shapes[i]={r.directionX,r.directionZ,1.35f,1.f};
+                result.shapes[i]={r.directionX,r.directionZ,float(kWakeTransverse),1.f};
         }
         return result;
     }
@@ -251,6 +260,14 @@ public:
         }
     }
 private:
+    // Must match the SurfaceWake ellipse in engine/render/Shaders.h (GLSL
+    // and MSL: `along*0.75`, `across*max(shape.z,1.0)`) and shapes[i].z.
+    static constexpr double kWakeAlong=0.75;
+    static constexpr double kWakeTransverse=1.35;
+    static bool isDirectionalWake(const NereidRipple& r){
+        return r.kind==lib::nereid::WaterInteractionKind::SurfaceWake &&
+               (r.directionX!=0 || r.directionZ!=0);
+    }
     std::vector<NereidRipple> ripples_;
     size_t limit_=kMaxRipples;
     uint32_t lastTick_=0;

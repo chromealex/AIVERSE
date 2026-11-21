@@ -5,7 +5,7 @@
 // TRS animations (step / linear / cubic spline), PBR metallic-roughness materials, normal /
 // occlusion / emissive maps, alpha modes, double sided, KHR_texture_transform,
 // KHR_materials_unlit, KHR_materials_emissive_strength, KHR_materials_pbrSpecularGlossiness
-// (converted), KHR_materials_variants, morph targets (position / normal deltas, up to 8 per primitive,
+// (converted), KHR_materials_variants, morph targets (position / normal deltas, up to 64 per primitive,
 // animated weights). Not supported (warning, skipped): TEXCOORD_1,
 // cameras. Light descriptions (KHR_lights_punctual) are preserved for scene consumers. Compressed geometry / textures (Draco, meshopt, KTX2, WebP) are an error when
 // required and skipped otherwise.
@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -350,9 +351,26 @@ private:
             m.alpha = am == "MASK" ? AlphaMode::Mask : am == "BLEND" ? AlphaMode::Blend : AlphaMode::Opaque;
             m.alphaCutoff = float(num(j["alphaCutoff"], 0.5));
             m.doubleSided = j.getBool("doubleSided");
+            m.thinTransmission = float(num(j["extras"]["aiverseThinTransmission"],0));
+            if (!std::isfinite(m.thinTransmission) || m.thinTransmission<0 || m.thinTransmission>1)
+                fail("aiverseThinTransmission must be 0..1");
             const Json& ext = j["extensions"];
             if (ext.has("KHR_materials_unlit")) m.shading = ShadingModel::Unlit;
             m.emissiveStrength = float(num(ext["KHR_materials_emissive_strength"]["emissiveStrength"], 1));
+            // Optional portable fallback + native layered eye, versioned and bounded.
+            if (const Json& eye=j["extras"]["aiverseEye"]; eye.isObject()) {
+                const Json& o=eye["optics"];
+                bool valid=eye.getInt("version",0)==1 && o.size()==4;
+                float values[6]{};
+                for(int k=0;k<4;++k){values[k]=float(num(o[size_t(k)],-1));valid=valid&&std::isfinite(values[k]);}
+                values[4]=float(num(eye["ior"],1.376));values[5]=float(num(eye["tearFilm"],.7));
+                valid=valid&&values[0]>=0&&values[0]<=1&&values[1]>=0&&values[1]<=1&&
+                    values[2]>.01f&&values[2]<=.5f&&values[3]>=0&&values[3]<=.05f&&
+                    std::isfinite(values[4])&&values[4]>=1&&values[4]<=2&&
+                    std::isfinite(values[5])&&values[5]>=0&&values[5]<=1;
+                if(valid){m.shading=ShadingModel::Eye;m.eyeOptics={values[0],values[1],values[2],values[3]};m.humanProfile={values[4],values[5]};}
+                else warn("material '"+m.name+"': invalid aiverseEye extras, retaining PBR fallback");
+            }
             if (const Json& sg = ext["KHR_materials_pbrSpecularGlossiness"]; sg.isObject() && !j.has("pbrMetallicRoughness")) {
                 // approximation: diffuse becomes base colour, glossiness becomes 1 - roughness, dielectric
                 if (const Json& d = sg["diffuseFactor"]; d.size() == 4)
@@ -412,7 +430,10 @@ private:
                 parentOf_[ci] = int(i);
             }
             if (const Json& w = j["weights"]; w.size() > 0) {
-                for (size_t k = 0; k < std::min<size_t>(w.size(), kMaxMorphTargets); ++k) n.weights[k] = float(num(w[k], 0));
+                if(w.size()>size_t(kMaxMorphTargets))
+                    fail("node '"+n.name+"': morph weights exceed 64-channel limit");
+                for(size_t k=0;k<w.size();++k)
+                    n.weights[k]=float(num(w[k],0));
                 nodeWeights_.insert(int(i));
             }
             if (j.has("camera")) warn("node '" + n.name + "': cameras are ignored");
@@ -469,7 +490,12 @@ private:
         for (auto& n : model_->nodes) if (n.mesh >= 0 && n.skin >= 0) skinOfMesh[n.mesh] = n.skin;
         // LOD meshes are not scene nodes; inherit the base skin so they retain palettes.
         for (const auto& n : model_->nodes) if (n.mesh >= 0 && n.mesh < int(meshes.size()) && n.skin >= 0) {
-            for (const auto& level : meshes[size_t(n.mesh)]["extras"]["rtsLods"].items()) {
+            const Json& meta=meshes[size_t(n.mesh)]["extras"];
+            // Preferred genre-neutral format: extras.aiverseLods.
+            // Legacy extras.rtsLods remains readable for old assets.
+            const Json& levels=meta.has("aiverseLods")
+                ?meta["aiverseLods"]:meta["rtsLods"];
+            for (const auto& level : levels.items()) {
                 const int target = inum(level["mesh"], -1);
                 if (target >= 0 && target < int(meshes.size())) skinOfMesh[target] = n.skin;
             }
@@ -479,10 +505,39 @@ private:
             MeshDef md;
             md.name = jm.getStr("name", "mesh" + std::to_string(mi));
             const auto& prims = jm["primitives"].items();
+            // The glTF ecosystem stores ordered morph semantic names in
+            // mesh.extras.targetNames (not in the core morph target schema).
+            // Preserve only real authored names and their original order.
+            // Reject incomplete/ambiguous metadata rather than fabricating
+            // channel identities or silently swapping facial expressions.
+            const Json& names=jm["extras"]["targetNames"];
+            if(!names.isNull()) {
+                if(!names.isArray())
+                    fail("mesh '" + md.name + "': targetNames must be an array");
+                std::set<std::string> seenMorphNames;
+                for(const auto& entry:names.items()) {
+                    if(!entry.isString() || entry.str().empty() ||
+                       !seenMorphNames.insert(entry.str()).second)
+                        fail("mesh '" + md.name + "': invalid or duplicate targetNames");
+                    md.morphTargetNames.push_back(entry.str());
+                }
+                if(md.morphTargetNames.size()>size_t(kMaxMorphTargets))
+                    fail("mesh '" + md.name + "': named morph channels exceed supported limit");
+                for(const auto& primitive:prims) {
+                    const size_t channels=primitive["targets"].size();
+                    if(channels!=md.morphTargetNames.size())
+                        fail("mesh '" + md.name + "': targetNames count differs from primitive morph channels");
+                }
+            }
             for (size_t pi = 0; pi < prims.size(); ++pi) loadPrimitive(prims[pi], md, skinOfMesh.count(int(mi)) > 0);
+            if(jm["weights"].size()>size_t(kMaxMorphTargets))
+                fail("mesh '"+md.name+"': default morph weights exceed 64-channel limit");
             for (const auto& w : jm["weights"].items()) md.weights.push_back(float(num(w, 0)));
             float previousPixels = 1e30f;
-            for (const auto& level : jm["extras"]["rtsLods"].items()) {
+            const Json& lodMeta=jm["extras"];
+            const Json& authoredLods=lodMeta.has("aiverseLods")
+                ?lodMeta["aiverseLods"]:lodMeta["rtsLods"];
+            for (const auto& level : authoredLods.items()) {
                 if (!level["mesh"].isNumber() || !level["maxPixels"].isNumber()) fail("LOD requires mesh and maxPixels numbers");
                 ModelLod lod; lod.mesh = inum(level["mesh"]); lod.maxPixels = float(num(level["maxPixels"], 0));
                 if (num(level["mesh"],-1) != double(lod.mesh) || lod.mesh < 0 || lod.mesh >= int(meshes.size()) || lod.mesh == int(mi) || !std::isfinite(lod.maxPixels) || lod.maxPixels <= 0 || lod.maxPixels >= previousPixels)
@@ -491,14 +546,51 @@ private:
             }
             model_->meshes.push_back(std::move(md));
         }
-        for (const auto& mesh : model_->meshes) for (const auto& lod : mesh.lods) {
-            const auto& target = model_->meshes[size_t(lod.mesh)];
-            if (!target.lods.empty()) fail("nested or cyclic LOD chains are unsupported");
-            const bool sourceSkin = std::any_of(mesh.primitives.begin(), mesh.primitives.end(), [](const Primitive& p){return !p.jointPalette.empty();});
-            for (const auto& p : mesh.primitives) if (p.morphTargets) fail("morph LOD sources are unsupported");
-            for (const auto& p : target.primitives) {
-                if (p.morphTargets) fail("morph LOD targets are unsupported");
-                if (sourceSkin != !p.jointPalette.empty()) fail("LOD skin binding must match its source");
+        // Compile an immutable semantic morph mapping per source -> LOD
+        // edge, not per LOD mesh: the same visual mesh may be referenced by
+        // different source meshes with different channel ordering.
+        for (auto& mesh : model_->meshes) for (auto& lod : mesh.lods) {
+            const auto& target=model_->meshes[size_t(lod.mesh)];
+            if(!target.lods.empty())
+                fail("nested or cyclic LOD chains are unsupported");
+            const auto hasSkin=[](const MeshDef& m) {
+                return std::any_of(m.primitives.begin(),m.primitives.end(),
+                    [](const Primitive& p){return !p.jointPalette.empty();});
+            };
+            const auto hasMorph=[](const MeshDef& m) {
+                return std::any_of(m.primitives.begin(),m.primitives.end(),
+                    [](const Primitive& p){return p.morphTargets>0;});
+            };
+            const bool sourceSkin=hasSkin(mesh);
+            for(const auto& p:target.primitives)
+                if(sourceSkin!=!p.jointPalette.empty())
+                    fail("LOD skin binding must match its source");
+            const bool sourceMorph=hasMorph(mesh);
+            const bool targetMorph=hasMorph(target);
+            if(sourceMorph!=targetMorph)
+                fail("LOD must preserve presence of source morph deformation");
+            if(!sourceMorph)continue; // legacy non-morph LOD is unchanged
+            if(mesh.morphTargetNames.empty() ||
+               target.morphTargetNames.empty())
+                fail("morph LOD needs explicit mesh extras.targetNames on both levels");
+            for(const auto& p:mesh.primitives)
+                if(p.morphTargets>0 &&
+                   size_t(p.morphTargets)!=mesh.morphTargetNames.size())
+                    fail("source morph LOD channel count differs from names");
+            for(const auto& p:target.primitives)
+                if(p.morphTargets>0 &&
+                   size_t(p.morphTargets)!=target.morphTargetNames.size())
+                    fail("target morph LOD channel count differs from names");
+            lod.morphSourceForTarget.reserve(target.morphTargetNames.size());
+            for(const auto& name:target.morphTargetNames) {
+                const auto found=std::find(
+                    mesh.morphTargetNames.begin(),
+                    mesh.morphTargetNames.end(),name);
+                if(found==mesh.morphTargetNames.end())
+                    fail("morph LOD target channel '"+name+
+                         "' missing from source '"+mesh.name+"'");
+                lod.morphSourceForTarget.push_back(int(std::distance(
+                    mesh.morphTargetNames.begin(),found)));
             }
         }
         for (const auto& n : model_->nodes) if(n.skin>=0 && n.mesh>=0 && n.mesh<int(model_->meshes.size())) {
@@ -570,8 +662,9 @@ private:
         std::vector<float> morph;
         int nt = 0;
         if (const Json& tg = p["targets"]; tg.size() > 0) {
-            nt = int(std::min<size_t>(tg.size(), kMaxMorphTargets));
-            if (tg.size() > size_t(kMaxMorphTargets)) warn(where + ": only the first 8 morph targets are used");
+            if(tg.size()>size_t(kMaxMorphTargets))
+                fail(where+": morph target count exceeds GPU channel limit");
+            nt=int(tg.size());
             morph.assign(size_t(nt) * n * 6, 0.0f);
             for (int t = 0; t < nt; ++t) {
                 const Json& tj = tg[size_t(t)];
@@ -770,7 +863,9 @@ private:
                     comps = want;
                     nv /= size_t(want);
                 }
-                c.comps = uint8_t(std::min(want, 255));
+                if(c.path==AnimChannel::Weights && want>kMaxMorphTargets)
+                    fail("animation '"+clip.name+"': animated morph weights exceed 64-channel limit");
+                c.comps=uint8_t(want);
                 if (comps != want || nv < nt * perKey || nt == 0) { warn("animation '" + clip.name + "': malformed channel skipped"); continue; }
                 c.times.assign(t.begin(), t.end());
                 c.values.reserve(nt * perKey * size_t(want));

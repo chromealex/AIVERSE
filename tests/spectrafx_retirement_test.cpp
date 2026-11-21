@@ -26,6 +26,11 @@ public:
     const gfx::DeviceInfo& info() const override {return info_;}
     const std::string& lastError() const override {return error_;}
     uint64_t frameSerial() const override {return serial_;}
+    // GPU completion is modelled separately from the CPU frame counter:
+    // retirement must follow completedFrameSerial(), never frameSerial().
+    uint64_t completedFrameSerial() const override {return completed_;}
+    void completeThrough(uint64_t serial) {completed_=serial;}
+    void setCompletionLag(uint64_t frames) {lag_=frames;}
     bool gpuHealthy() const override {return true;}
     bool supportsCompute() const override {return true;}
     bool supports(gfx::PixelFormat format) const override {
@@ -70,6 +75,7 @@ public:
     void beginFrame(int,int) override {
         check(!inFrame_,"frame not nested");
         inFrame_=true;++serial_;
+        if(lag_ && serial_>lag_) completed_=std::max(completed_,serial_-lag_);
     }
     void endFrame() override {
         check(inFrame_ && !inPass_ && !inCompute_,"frame ends safely");
@@ -107,7 +113,7 @@ private:
     }
     gfx::DeviceInfo info_{gfx::Backend::Metal,true,true,"FakeMetal policy"};
     std::string error_;
-    uint64_t serial_=0;
+    uint64_t serial_=0, completed_=0, lag_=0;
     uint32_t nextId_=0;
     bool inFrame_=false,inPass_=false,inCompute_=false;
     std::unordered_set<uint32_t> live_;
@@ -166,15 +172,26 @@ int main() {
               "dedicated GPU retirement recorded");
         device.endFrame();
 
-        for(int i=1;i<=3;++i) {
+        // CPU frame serial advances while the GPU has not completed the
+        // retiring frame: resources must stay alive however many frames pass.
+        const uint64_t retiredAt=device.serial();
+        for(int i=1;i<=6;++i) {
             device.beginFrame(128,128);
+            if(i==4) device.completeThrough(retiredAt-1);
             playback.updateGpu(0.016f,{0,0,2},{0,0,-1});
-            check((playback.retiringGpuSlots()==0)==(i==3),
-                  "retirement waits exactly three completed serial slots");
+            check(playback.retiringGpuSlots()==8,
+                  "retirement never released by frameSerial() alone");
             device.endFrame();
         }
+        device.beginFrame(128,128);
+        device.completeThrough(retiredAt);
+        playback.updateGpu(0.016f,{0,0,2},{0,0,-1});
+        check(playback.retiringGpuSlots()==0,
+              "retirement released once completedFrameSerial() reaches it");
+        device.endFrame();
         check(playback.stats().dedicatedGpuReleased==1,
               "retired GPU resources released exactly once");
+        device.setCompletionLag(2); // steady GPU latency for the stress run
 
         // Repeated keyed replacement and live-scene reset: old slot
         // allocations count against capacity until their fence expires.

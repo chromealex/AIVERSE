@@ -39,6 +39,7 @@ private:
     std::string filter_;
     float posEdit_[2] = {0, 0};
     bool posActive_ = false;
+    bool textEditSnapshot_ = false;   // one undo snapshot per name / id text edit session
     int truncated_ = 0;
 };
 

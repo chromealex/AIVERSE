@@ -1,0 +1,132 @@
+{
+  "version": 2,
+  "description": "Genre-independent additive Metal GPU-VM subset. Spawn captures per-instance intensity in custom attribute0; Update reuses attribute0 to modulate tint. No custom material/shader graph or unsupported event stages.",
+  "instanceParameters": {
+    "intensity": {
+      "slot": 0,
+      "default": 0.8,
+      "min": 0,
+      "max": 1
+    }
+  },
+  "parameters": {},
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 12
+      },
+      "position": [
+        20,
+        150
+      ]
+    },
+    {
+      "id": "initialize",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 0,
+        "size": 0.4,
+        "spread": 0,
+        "gravity": [
+          0,
+          0,
+          0
+        ],
+        "drag": 0
+      },
+      "position": [
+        240,
+        150
+      ]
+    },
+    {
+      "id": "vm",
+      "type": "ParticleProgramModule",
+      "properties": {
+        "version": 1,
+        "spawn": [
+          {
+            "target": "attribute0",
+            "value": {
+              "var": "param0"
+            }
+          }
+        ],
+        "update": [
+          {
+            "target": "tint.a",
+            "op": "set",
+            "value": {
+              "op": "multiply",
+              "a": {
+                "var": "attribute0"
+              },
+              "b": {
+                "op": "saturate",
+                "a": {
+                  "op": "subtract",
+                  "a": 1,
+                  "b": {
+                    "var": "ageNormalized"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "target": "size",
+            "op": "set",
+            "value": {
+              "op": "add",
+              "a": 0.1,
+              "b": {
+                "op": "multiply",
+                "a": 0.3,
+                "b": {
+                  "var": "attribute0"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "position": [
+        465,
+        150
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive",
+        "align": "camera"
+      },
+      "position": [
+        725,
+        150
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "initialize"
+    },
+    {
+      "from": "initialize",
+      "to": "vm"
+    },
+    {
+      "from": "vm",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

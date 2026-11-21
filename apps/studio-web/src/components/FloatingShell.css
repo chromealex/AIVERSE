@@ -1,0 +1,4 @@
+/* A floating Studio window (second monitor etc.): just its own small dock. */
+.floating-shell{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.floating-shell>.nested-workspace-root{flex:1;min-height:0}
+html.native-composite .floating-shell:has(.viewport-native){background:transparent!important}

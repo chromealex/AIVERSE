@@ -20,9 +20,11 @@ namespace aiverse::editor { void registerUiOps(Workspace& ws); }         // UiOp
 #include "DataOps.h"
 #include "BalanceOps.h"
 #include "LightOps.h"
+namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include "ScriptOps.h"
 #include "PostFxOps.h"
 #include "LightBakeOps.h"   // agent-lightbake
+#include "HumanCreatorOps.h"   // VIVID human_* ops
 #include "PlanetOps.h"
 #include "OverlayOps.h"
 #include "FieldOps.h"
@@ -219,7 +221,8 @@ bool Project::saveManifest(std::string* err) {
 
 // ================================================================= workspace
 
-Workspace::Workspace() { registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this);
+void registerLensOps(Workspace& ws);
+Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
@@ -1450,10 +1453,10 @@ void Workspace::registerCoreOps() {
         Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true};
         registerOp(std::move(op));
     };
-    gui("view_screenshot", "Screenshot of the editor viewport (what the user sees), optionally inside a device frame. Returns a PNG image.",
-        R"({"properties": {"device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "x": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}})");
-    gui("view_focus", "Move the editor camera to look at x,z (distance optional).",
-        R"({"properties": {"x": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
+    gui("view_screenshot", "Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
+        R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
+    gui("view_focus", "Move the editor camera to look at x,y,z (y and distance optional).",
+        R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
     gui("play_stop", "Stop the play-test and return to editing.", "{}");

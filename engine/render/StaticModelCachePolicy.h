@@ -18,7 +18,7 @@ inline bool staticModelCacheDrawCandidate(const ModelDraw& d,
                                           ModelStaticEligibility model) {
     return model.transforms && d.model && d.persistentId &&
         (d.flags & kDrawStatic) && !activeDisplacement &&
-        !d.nodeWorld && !d.pose && !d.baked &&
+        !d.nodeWorld && !d.pose && !d.baked && !d.vertexOverride.valid() &&
         !d.useVertexParameters && d.primitiveMaterialFilter < 0;
 }
 
@@ -37,7 +37,7 @@ inline bool staticModelCacheGeometryCompatible(const StaticModelCache& cache,
                                                 const ModelDraw& d,
                                                 bool activeDisplacement) {
     const Model* m = d.model;
-    return m && cache.model == m && !activeDisplacement &&
+    return m && cache.model == m && !activeDisplacement && !d.vertexOverride.valid() &&
         !d.useVertexParameters && d.primitiveMaterialFilter < 0 &&
         !d.nodeWorld && !d.pose && !d.baked && m->skins.empty() &&
         m->bindWorld.size() == m->nodes.size() &&
@@ -50,13 +50,21 @@ inline bool staticModelCacheGeometryCompatible(const StaticModelCache& cache,
 // resolved GPU material states, even for pointer-stable per-draw material copies.
 // Any non-material caller-side mutations still require staticPacketRevision.
 // Runtime LOD is selected again for each camera and checked before reuse.
+// GPU-authored selection packets carry a per-frame frameSerial and command
+// buffers that change every frame; a replayed CPU packet would resubmit the
+// stale packet captured at record time. Such draws never reuse packets.
+inline bool drawHasGpuSelectionPackets(const ModelDraw& d) {
+    return d.gpuIndexed.valid() || !d.gpuIndexedPrimitives.empty() ||
+        !d.gpuShadowPrimitives.empty();
+}
+
 inline bool staticRenderPacketDrawCandidate(
     const ModelDraw& d, bool activeDisplacement, bool bakedLighting,
     bool lodDiagnostics, ModelStaticEligibility model) {
     // Per-node material overrides and KHR material variants are draw inputs:
     // their selected state is validated separately against each saved packet.
     return model.packets && d.staticPacketRevision &&
-        !bakedLighting && !lodDiagnostics &&
+        !bakedLighting && !lodDiagnostics && !drawHasGpuSelectionPackets(d) &&
         staticModelCacheDrawCandidate(d, activeDisplacement, model);
 }
 

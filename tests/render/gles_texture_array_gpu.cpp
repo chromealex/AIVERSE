@@ -162,7 +162,12 @@ int main() {
     check(legacy.valid(),"legacy Texture2D allocation with dirty unpack state");
     check(statePreserved(),"legacy Texture2D allocation restores unpack state");
     const auto legacyColor=std::array<uint8_t,4>{78,145,214,255};
-    const auto legacyBytes=image(4,20,legacyColor);
+    // Row 0 carries a distinct marker: readback must return uploaded rows
+    // in top-left order (no flip for non-render-target textures).
+    const auto legacyMarker=std::array<uint8_t,4>{240,16,32,255};
+    auto legacyBytes=image(4,20,legacyColor);
+    for(int x=0;x<4;++x)
+        std::memcpy(legacyBytes.data()+size_t(x)*4,legacyMarker.data(),4);
     if(legacy.valid()) {
         dev->updateTexture(legacy,0,0,4,4,legacyBytes.data(),20);
         check(statePreserved(),"legacy updateTexture restores unpack/PBO/binding");
@@ -183,6 +188,8 @@ int main() {
     if(legacy.valid()) {
         auto read=std::make_shared<Read>();
         read->expected=packed(4,legacyColor);
+        for(int x=0;x<4;++x)
+            std::memcpy(read->expected.data()+size_t(x)*4,legacyMarker.data(),4);
         check(dev->readTextureAsync(legacy,{0,0},
             [read](TextureReadbackResult value) {
                 read->result=std::move(value);

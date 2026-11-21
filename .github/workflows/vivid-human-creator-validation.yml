@@ -1,0 +1,55 @@
+name: VIVID Human Creator validation
+
+on:
+  push:
+    branches: ['feature/vivid-human-creator-ui']
+  workflow_dispatch:
+
+concurrency:
+  group: vivid-human-creator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-human:
+    name: macOS VIVID human/Creator compile and headless tests
+    runs-on: macos-15
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake -S . -B build/vivid-human-ci \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF
+      - name: Compile native VIVID and Creator
+        run: |
+          cmake --build build/vivid-human-ci -j 4 --target \
+            aiverse_vivid_creator \
+            aiverse_vivid_human_dna_tests \
+            aiverse_vivid_human_rig_tests \
+            aiverse_vivid_human_appearance_tests \
+            aiverse_vivid_human_import_tests \
+            aiverse_vivid_human_creator_tests \
+            aiverse_vivid_face_tests \
+            aiverse_vivid_sparse_tests \
+            aiverse_vivid_shape_tests \
+            aiverse_vivid_morph_tests \
+            aiverse_vivid_gpu_contract_tests \
+            aiverse_vivid_motionweave_tests \
+            aiverse_vivid_metal_gpu_tests \
+            aiverse_vivid_metal_rhi_tests \
+            aiverse_vivid_actor_retirement_tests \
+            aiverse_vivid_vertex_override_tests \
+            aiverse_motionweave_api_tests
+      - name: Run VIVID and MotionWeave CTests
+        run: ctest --test-dir build/vivid-human-ci --output-on-failure -R '^(vivid_|motionweave_api$)' -j 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vivid-human-ci-logs
+          path: build/vivid-human-ci/Testing/**
+          if-no-files-found: ignore

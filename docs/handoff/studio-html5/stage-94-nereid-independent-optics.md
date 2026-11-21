@@ -1,0 +1,3 @@
+# Stage94 — shared NEREID optics (2026-11-21)
+
+Code ac2d3cdff66736ac884b778a7f18cf7e4529a407, feature/aiv87_terrain_pbr. Shared renderer/depth-capture and GLSL/MSL water paths only; no HTML5 DOM/palette/bridge or project-write change. Native Studio and Editor build PASS nereid-final-optics-build.log, NEREID contracts3/3PASS. Actual Metal renderbench capture/SSR quality gates and deterministic clock verified; Studio UI/pixel parity NOT RUN (Mac locked). Full forest water art remains unaccepted. Read the matching docs/nereid/HANDOFF.md stage for exact evidence, failures and next work. No main merge or production performance claim.

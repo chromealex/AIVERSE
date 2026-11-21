@@ -68,6 +68,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     fieldOps_ = std::make_unique<FieldOps>();   // repair / reclaim / stockpiles / ambient income ... ; nothing without the blocks
     fieldOps_->setup(sim, *this, rulesJson, mapIn);
     driving_->loadMap(sim, mapIn, rulesJson["roadTypes"]);   // bridges and tunnels as second levels (map "decks", spline roads)
+    driving_->loadRace(sim, rulesJson, mapIn);   // rules "race" + map "race": the map's cars race (docs/races.md)
     arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
     arsenal_->setup(sim, *this, rulesJson);
     traffic_ = std::make_unique<Traffic>();   // city traffic (rules "traffic"); nothing without the block
@@ -380,6 +381,47 @@ void RtsModule::setupMap(Simulation& sim, const Json& map) {
     gs.colliders.clear();
     std::vector<std::pair<std::string, Entity>> ids;
     std::vector<Entity> placed;
+    // Studio components.Transform: Y rotation -> facing, rest -> AuthoredPose.
+    struct MapPose { bool transform = false; Fixed yaw{}; AuthoredPose pose; bool posed = false; };
+    auto mapPose = [](const Json& ej) {
+        MapPose out;
+        const Json& tf = ej["components"]["Transform"];
+        if (!tf.isObject()) return out;
+        out.transform = true;
+        auto num = [&](const Json& v, const char* what) {
+            if (!v.isNumber()) throw std::runtime_error(std::string("map entity Transform: ") + what + " must be numeric");
+            return v.fx();
+        };
+        Fixed rot[3]{};
+        if (tf.has("rotation")) {
+            const Json& r = tf["rotation"];
+            if (!r.isArray() || r.size() != 3) throw std::runtime_error("map entity Transform: rotation must be [x, y, z] degrees");
+            for (size_t i = 0; i < 3; ++i) rot[i] = num(r[i], "rotation");
+        } else if (tf.has("yaw")) rot[1] = num(tf["yaw"], "yaw");
+        for (const Fixed& v : rot) if (fxAbs(v) > Fixed::fromInt(360000)) throw std::runtime_error("map entity Transform: rotation out of range");
+        out.yaw = rot[1];
+        out.pose.rotX = rot[0]; out.pose.rotZ = rot[2];
+        if (tf.has("y")) {
+            out.pose.hasY = true; out.pose.y = num(tf["y"], "y");
+            if (fxAbs(out.pose.y) > Fixed::fromInt(1000000)) throw std::runtime_error("map entity Transform: y out of range");
+        }
+        if (tf.has("scale")) {
+            const Json& sc = tf["scale"];
+            Fixed v[3];
+            if (sc.isNumber()) v[0] = v[1] = v[2] = sc.fx();
+            else if (sc.isArray() && sc.size() == 3) for (size_t i = 0; i < 3; ++i) v[i] = num(sc[i], "scale");
+            else throw std::runtime_error("map entity Transform: scale must be a number or [x, y, z]");
+            for (const Fixed& f : v) if (f < Fixed::fromRatio(1, 1000) || f > Fixed::fromInt(10000)) throw std::runtime_error("map entity Transform: scale out of range");
+            out.pose.scale = {v[0], v[1], v[2]};
+        }
+        const Fixed one = Fixed::fromInt(1);
+        out.posed = out.pose.hasY || out.pose.rotX.raw != 0 || out.pose.rotZ.raw != 0 ||
+                    out.pose.scale.x != one || out.pose.scale.y != one || out.pose.scale.z != one;
+        return out;
+    };
+    bool anyPose = false;
+    for (auto& ej : map["entities"].items()) anyPose = anyPose || mapPose(ej).posed;
+    if (anyPose) sim.registerPersistentComponent<AuthoredPose>("rts.authored_pose", 1);
     for (auto& ej : map["entities"].items()) {
         int t = rules_.findType(ej.getStr("type"));
         if (t < 0) throw std::runtime_error("map entity: unknown type '" + ej.getStr("type") + "'");
@@ -397,6 +439,12 @@ void RtsModule::setupMap(Simulation& sim, const Json& map) {
         if (ej.has("facing")) {   // degrees, clockwise on screen from north (-z): 0 north, 90 east, 180 south, 270 west
             const Fixed turns = ej.getFx("facing") / 360;
             w.get<Unit>(e).facing = {fxSinTurns(turns), Fixed{}, -fxCosTurns(turns)};
+        }
+        if (const MapPose mp = mapPose(ej); mp.transform) {
+            // Transform yaw is counter-clockwise from north, map facing clockwise.
+            const Fixed turns = (Fixed::fromInt(360) - mp.yaw) / 360;
+            w.get<Unit>(e).facing = {fxSinTurns(turns), Fixed{}, -fxCosTurns(turns)};
+            if (mp.posed) w.add<AuthoredPose>(e) = mp.pose;
         }
         if (auto* gg = w.tryGet<Garrison>(e)) gg->count = int(ej.getInt("garrison", 0));
         if (auto* rs = w.tryGet<ResourceStock>(e); rs && ej.has("amount")) rs->amount = ej.getFx("amount");

@@ -171,3 +171,35 @@ system does not expose arbitrary N-domain bindless textures
 inside one graph. Alpha-mask R8 reduction is still excluded
 for graph-backed assets. The new node and shaders have NOT
 been native-compiled or GPU-tested yet.
+
+
+## Material ambient occlusion output (2026-11-21)
+
+Material graphs may also provide `outputs.occlusion`. The red channel replaces
+the ordinary PBR texture AO and is clamped to0..1. It affects the same ambient/
+indirect lighting paths as existing AO, without multiplying the albedo or direct
+light a second time. Old graphs keep their ordinary texture AO. Postfx/particle
+domains still expose color only. Native Renderer3D GLSL/MSL inject this after
+standard material sampling. The legacy ImGui output selector has not been
+extended; agent-authored graph snapshots can use the output through existing
+material assignment APIs. Do not claim editor GUI parity from compiler support.
+
+
+## World-space height normals
+
+Material fragment node `normalFromHeight(Position, Normal, Height)` returns a
+unit world-space normal (W0). Position and scalar Height.r must use the SAME
+world units (normally metres); multiply normalized height maps by relief metres
+first. Normal is the unperturbed world-space direction. The node adds zero
+texture samples and uses screen derivatives; vertex/postfx/particle use is
+rejected. It changes shading only, not silhouette, depth, collision or picking.
+
+Example: worldPosition + normal + (height texture.r *0.01) -> normalFromHeight
+-> outputs.normal. Blend/layer heights before this node. Rescaling before final
+normalization preserves macro detail; degenerate derivatives return the input
+normal and a zero normal input falls back to up. Derivatives at hard projection
+seams/discontinuous masks still need care; this is not parallax/displacement.
+
+Math reference: Morten S. Mikkelsen, [Bump Mapping Unparametrized Surfaces on
+the GPU](https://mmikk.github.io/papers3d/mm_sfgrad_bump.pdf), surface-gradient
+formulation. Engine code uses the same GLSL/MSL semantics and numerical guards.

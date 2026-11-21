@@ -16,6 +16,7 @@
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
 #include "TextureCodec.h"
+#include "GpuOwnedMemory.h"
 #include "graph/ShaderGraph.h"
 
 namespace aiverse::render {
@@ -26,7 +27,7 @@ struct GeometryData;
 struct GeometryPoolPage;
 
 enum class AlphaMode : uint8_t { Opaque, Mask, Blend };
-enum class ShadingModel : uint8_t { Pbr, Unlit };
+enum class ShadingModel : uint8_t { Pbr, Unlit, Skin, Eye, Hair };
 // Where the team (player) colour goes:
 //   Tint        whole material multiplied by the team colour (procedural shapes, simple models)
 //   Mask        team mask texture, red channel 1 = team colour
@@ -63,6 +64,19 @@ struct Material {
     // (prop shaders of art pipelines that light every instance by its own world normals); w = 0: off
     float4 fixedLight{0, 0, 0, 0};          // xyz direction towards the light (normalized), w 1 = on
     float2 fixedShade{1, 0};                // ambient, diffuse
+    float shadowDiffusion = 0;            // extra received sun-shadow radius in world units [0,1]; medium/high only
+    float thinTransmission = 0;          // diffuse back-light fraction [0,1], 0 retains legacy PBR
+    float sssStrength = 0;                 // artistic diffuse wrap/backlight, 0 disables
+    float3 sssColor{1, 1, 1};             // linear scattering tint
+    float sssScale = 0.5f;                // wrap width and backlight falloff, [0,1]
+    float sssThickness = 0;               // max transmitted path in world units; 0 keeps artistic backlight
+    // Opt-in human BRDF parameters. Pbr/Unlit ignore these fields.
+    // Skin: scattering/wetness; Eye: corneal IOR/tear film;
+    // Hair: anisotropy/specular width.
+    float2 humanProfile{0, 0};
+    // Optional layered eye: UV centre, iris radius, refractive depth in UV units.
+    // z == 0 preserves legacy Eye shading. Only the colour pass uses parallax.
+    float4 eyeOptics{0, 0, 0, 0};
 };
 
 struct Image {
@@ -92,6 +106,11 @@ struct Image {
     // TextureCache must never receive either reduced texture.
     bool virtualFallbackPreserveAlpha = false;
     gfx::TextureHandle virtualAlphaMask;
+    // Derived before first upload for ordinary uncompressed alpha-test base
+    // images. Cache identity includes the threshold; source alpha is unchanged.
+    bool preserveAlphaCoverage = true;
+    uint8_t alphaCoverageThreshold = 0;
+    bool alphaCoverageMipmaps = false;
 };
 
 // 60 bytes, one interleaved stream for every model (unskinned meshes leave joints/weights zero).
@@ -110,7 +129,10 @@ struct ModelVertex {
 static_assert(sizeof(ModelVertex) == 60, "ModelVertex layout is shared with the shaders");
 
 constexpr int kMaxPaletteJoints = 80;  // joint matrices per draw (3 x vec4 each, fits a 4 KB uniform block)
-constexpr int kMaxMorphTargets = 8;    // morph targets applied on the GPU per primitive
+// Runtime facial-morph budget: >=52 ARKit-style channels plus spare slots.
+// The renderer uploads a per-draw SPARSE list, so GPU vertex work scales with
+// nonzero expressions rather than this maximum. GLSL/MSL U4 owns the same cap.
+constexpr int kMaxMorphTargets = 64;
 
 struct Primitive {
     uint32_t firstIndex = 0, indexCount = 0;
@@ -122,6 +144,10 @@ struct Primitive {
     int morphTargets = 0;                // 0..kMaxMorphTargets
     uint32_t morphTexel = 0;             // first texel of its deltas in Model::morphTex
     std::vector<float> morphDeltas;      // CPU: [target][vertex] position xyz, normal xyz (released after upload)
+    // Generated index-only morph LODs borrow the EXACT source primitive's
+    // vertex span and GPU morph texture allocation (no second upload).
+    // Both remain -1 for independently authored/imported morph primitives.
+    int morphAliasMesh = -1, morphAliasPrimitive = -1;
     bool lightmapUv = false;             // vertices carry lightmap UVs in `joints` (unskinned only, see ModelVertex)
     bool shadowBatched = false;          // cast through MeshDef::shadowBatch instead of its own shadow draw
 };
@@ -133,12 +159,22 @@ struct MaterialBatch {
     std::vector<size_t> parts;
 };
 
-struct ModelLod { int mesh = -1; float maxPixels = 0; };
+struct ModelLod {
+    int mesh = -1;
+    float maxPixels = 0;
+    // Authored visual LOD mesh-local morph slot -> source node morph slot.
+    // Compiled by an importer from exact semantic channel names; empty only
+    // for morph-free LODs. Never infer channel equivalence by index.
+    std::vector<int> morphSourceForTarget{};
+};
 
 struct MeshDef {
     std::string name;
     std::vector<Primitive> primitives;
     std::vector<float> weights;          // default morph weights
+    // Ordered mesh-local semantic morph names supplied by an importer.
+    // Empty means unavailable: never invent channel names from indices.
+    std::vector<std::string> morphTargetNames;
     std::vector<ModelLod> lods;          // coarse alternatives, descending maximum projected diameter
     // One index range covering the shadowBatched primitives (contiguous, opaque, same culling):
     // drawn once in shadow passes instead of each part. Not part of `primitives`. indexCount 0 = none.
@@ -224,6 +260,7 @@ struct Model {
         size_t primitivesBefore = 0, primitivesAfter = 0;
         bool compacted = false;
         std::string reason;
+        bool independentShadowLod = false; // opt-in camera/shadow mesh selection
     } batching;
     struct AutoLodInfo {
         bool attempted = false;
@@ -341,10 +378,24 @@ std::unique_ptr<Model> modelFromParts(const std::string& name, const std::vector
 void generateTangents(std::vector<ModelVertex>& v, const std::vector<uint32_t>& idx, uint32_t first, uint32_t count);
 
 // GPU resources. Textures get mipmaps. CPU copies are released unless keepCpu.
+// Authoring keepPickingGeometry retains vertices/indices/morph data and only
+// cutout/blended base-alpha image pixels; other texture CPU copies still release.
 void prepareModelUpload(Model& m); // CPU only: safe before main-thread upload
-bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu = false);
+// A speculative model import may borrow already resident shared textures,
+// but must not create new entries in the live shared GPU texture cache.
+// Pass publishSharedTextures=false only when an external host owns a staged
+// Model and can retire the entire Model on abort after a real GPU barrier.
+bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu = false,
+                 bool publishSharedTextures = true, bool keepPickingGeometry = false);
 bool readModelImage(const std::string& path, const FileReader& read, Image& image);
+// Upload one host-staged image without touching any live Model::images vector.
+// Returns false if the GPU did not create a valid texture handle.
+bool uploadStandaloneImage(gfx::Device& dev, Image& image);
 int addImage(gfx::Device& dev, Model& m, Image img);   // extra texture for material overrides; returns index
+// Unique owned model data (dedicated non-pooled vb/ib, nonborrowed images,
+// morph/baked textures). Shared model texture cache and pooled geometry pages
+// belong to their own owners and MUST NOT be counted through Model.
+void appendModelOwnedGpuMemory(const Model& m, GpuOwnedMemoryCounter& counter);
 void releaseModel(gfx::Device& dev, Model& m);
 
 } // namespace aiverse::render

@@ -64,4 +64,16 @@ struct AutoCpuBatchPolicy {
         if (count < 1000000u) ++count;
     }
 };
+
+// Per-pass CPU MDI admission under AIVERSE_BATCH_AUTO. A learning pass asks
+// the policy (exactly one useMdi() call per pass). A non-learning pass that
+// is large enough keeps ordinary CPU MDI (as without AUTO); only workloads
+// below the conservative small-item threshold stay on the direct path.
+inline bool autoCpuMdiPermit(AutoCpuBatchPolicy& policy, bool autoMode,
+                             bool learning, size_t phase, size_t items,
+                             size_t minimumItems) {
+    if (!autoMode) return true;
+    if (learning) return policy.useMdi(phase, items);
+    return items >= minimumItems;
+}
 } // namespace aiverse::render

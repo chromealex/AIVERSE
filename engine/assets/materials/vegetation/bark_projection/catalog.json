@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "materials": {
+    "oak_bark": {
+      "graph": "oak_bark.json",
+      "nodes": 92,
+      "samples": 6,
+      "sources": 2,
+      "repeatMeters": 1.5
+    },
+    "pine_bark": {
+      "graph": "pine_bark.json",
+      "nodes": 92,
+      "samples": 6,
+      "sources": 2,
+      "repeatMeters": 1.5
+    },
+    "birch_bark": {
+      "graph": "birch_bark.json",
+      "nodes": 92,
+      "samples": 6,
+      "sources": 2,
+      "repeatMeters": 1.5
+    },
+    "spruce_bark": {
+      "graph": "spruce_bark.json",
+      "nodes": 92,
+      "samples": 6,
+      "sources": 2,
+      "repeatMeters": 1.5
+    }
+  }
+}

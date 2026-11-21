@@ -1,0 +1,24 @@
+.lighting-editor{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;background:var(--studio-surface);color:var(--studio-foreground)}
+.lighting-heading{flex:none;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--studio-border);font-size:12px;font-weight:700}
+.lighting-heading span{display:flex;align-items:center;gap:8px}
+.lighting-scroll{flex:1;min-height:0;overflow:auto}
+.lighting-section-heading{padding:11px 14px 9px;text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:750;color:#a5bddc;background:#162135;border-bottom:1px solid #26364d}
+.lighting-fields{padding:13px 14px 9px}
+.lighting-fields .property-row{grid-template-columns:minmax(85px,43%) minmax(0,1fr);margin-bottom:11px}
+.lighting-fields .property-row select{width:100%;padding:7px 6px;background:#1b2637;color:#dce9f9;border:1px solid #344257;border-radius:5px;min-width:0}
+.lighting-fields .property-error{grid-column:2;color:var(--studio-danger);font-size:10px}
+.lighting-fields .property-description{grid-column:1/-1;color:#788ba7;font-size:10px;line-height:1.5}
+.lighting-list-heading{display:flex;align-items:center;justify-content:space-between}
+.lighting-add,.lighting-delete,.lighting-cancel{display:inline-flex;align-items:center;gap:6px;border:1px solid #405977;background:#253b58;color:#e0efff;padding:6px 9px;border-radius:6px;font-size:11px}
+.lighting-add:disabled,.lighting-delete:disabled{opacity:.5;cursor:not-allowed}
+.lighting-light-list{padding:8px 11px;max-height:164px;overflow:auto}
+.lighting-light-item{display:flex;width:100%;gap:9px;align-items:center;padding:9px;text-align:left;background:transparent;border:0;border-radius:6px;color:#a5b8d1;font-size:11px}
+.lighting-light-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lighting-light-item small{color:#7087a8}
+.lighting-light-item:hover{background:#273750}.lighting-light-item.active{background:#294569;color:white}
+.lighting-delete-actions{display:flex;gap:7px;padding:5px 0 12px}
+.lighting-delete{color:#f7adb4;background:#442935;border-color:#694252}.lighting-delete.pending{background:#80404b}
+.lighting-cancel{background:transparent;border-color:#36475f;color:#9eaec4}
+.lighting-state,.lighting-notice{padding:14px;font-size:11px;color:#859bb9;line-height:1.5}
+.lighting-notice{background:#302a1f;color:#d0b38b}
+.lighting-error{margin:8px 12px;padding:9px;border:1px solid #723c4c;border-radius:6px;background:#482b35;color:#ffb4be;font-size:11px}

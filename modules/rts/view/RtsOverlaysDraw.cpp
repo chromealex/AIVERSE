@@ -9,6 +9,10 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <stdexcept>
+#include <memory>
+#include <cstdint>
+#include <utility>
 
 namespace aiverse::game {
 
@@ -24,6 +28,97 @@ uint32_t scaleAlpha(uint32_t c, float k) {
 RtsModule* moduleOf(Simulation* sim) { return sim ? dynamic_cast<RtsModule*>(&sim->module()) : nullptr; }
 ImU32 imCol(float4 c) { return ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, c.w)); }
 } // namespace
+
+class RtsOverlays::PreparedFrame final {
+    friend class RtsOverlays;
+    RtsOverlays* owner=nullptr;
+    gfx::BufferHandle previousBuffer;
+    size_t previousCapacity=0;
+    std::function<void()> restore;
+    bool committed=false;
+public:
+    ~PreparedFrame() noexcept {
+        if(committed || !owner)return;
+        // Only private handles: no renderer submission may have occurred yet.
+        if(owner->vb_!=previousBuffer && owner->vb_.valid()) {
+            try {owner->dev_->destroyBuffer(owner->vb_);}catch(...) {}
+        }
+        owner->vb_=previousBuffer;owner->vbBytes_=previousCapacity;
+        restore();owner->preparingFrame_=false;
+    }
+};
+std::shared_ptr<RtsOverlays::PreparedFrame> RtsOverlays::beginFramePreparation() {
+    if(preparingFrame_)throw std::logic_error("nested overlay frame preparation");
+    auto frame=std::make_shared<PreparedFrame>();
+    frame->restore=[this,
+        state=state_,
+        quality=quality_,
+        scene=scene_,
+        grid=grid_,
+        vision=vision_,
+        view=view_,
+        r=r_,
+        time=time_,
+        lastPreview=lastPreview_,
+        zoom=zoom_,
+        lift=lift_,
+        camTarget=camTarget_,
+        camRight=camRight_,
+        camUp=camUp_,
+        selected=selected_,
+        hovered=hovered_,
+        bases=bases_,
+        lastTick=lastTick_,
+        popups=popups_,
+        carry=carry_,
+        insts=insts_,
+        pathPts=pathPts_,
+        tmpPts=tmpPts_,
+        text=text_,
+        canvasWarned=canvasWarned_,
+        marks=marks_,
+        buckets=buckets_,
+        upload=upload_]() mutable noexcept {
+        using std::swap;
+        swap(state_,state);
+        swap(quality_,quality);
+        swap(scene_,scene);
+        swap(grid_,grid);
+        swap(vision_,vision);
+        swap(view_,view);
+        swap(r_,r);
+        swap(time_,time);
+        swap(lastPreview_,lastPreview);
+        swap(zoom_,zoom);
+        swap(lift_,lift);
+        swap(camTarget_,camTarget);
+        swap(camRight_,camRight);
+        swap(camUp_,camUp);
+        swap(selected_,selected);
+        swap(hovered_,hovered);
+        swap(bases_,bases);
+        swap(lastTick_,lastTick);
+        swap(popups_,popups);
+        swap(carry_,carry);
+        swap(insts_,insts);
+        swap(pathPts_,pathPts);
+        swap(tmpPts_,tmpPts);
+        swap(text_,text);
+        swap(canvasWarned_,canvasWarned);
+        swap(marks_,marks);
+        swap(buckets_,buckets);
+        swap(upload_,upload);
+    };
+    frame->owner=this;frame->previousBuffer=vb_;frame->previousCapacity=vbBytes_;
+    preparingFrame_=true;frameReplacedBuffer_=false;
+    return frame;
+}
+void RtsOverlays::commitFramePreparation(const std::shared_ptr<PreparedFrame>& frame) noexcept {
+    if(!frame || frame->owner!=this || frame->committed)return;
+    if(vb_!=frame->previousBuffer)
+        retiredBuffers_.retireBuffer(*dev_,frame->previousBuffer);
+    frame->committed=true;preparingFrame_=false;
+}
 
 float RtsOverlays::radiusFor(const OverlayDef& d, const Inst& in) const {
     const UnitType* t = in.type < rules_->types.size() ? &rules_->types[in.type] : nullptr;
@@ -66,52 +161,127 @@ float RtsOverlays::radiusFor(const OverlayDef& d, const Inst& in) const {
 
 // GPU part of init (RtsView calls it): textures of icons, the batch shader and pipelines.
 void RtsOverlays::initGpu(gfx::Device& dev) {
-    dev_ = &dev;
-    images_.assign(set_.defs.size(), {});
-    textures_.init(dev);
-    for (size_t i = 0; i < set_.defs.size(); ++i)
-        if (!set_.defs[i].image.empty()) {
-            images_[i] = textures_.resolve(set_.defs[i].image, false, base_);
-            if (!images_[i].valid()) set_.warnings.push_back("overlay '" + set_.defs[i].id + "': " + set_.defs[i].image + ": " + textures_.lastError());
-        }
-    if (!shader_.valid()) {
+    if(dev_ && dev_!=&dev)
+        throw std::logic_error("RtsOverlays GPU init: device owner mismatch");
+
+    // New resources are private until every pipeline, fallback texture and
+    // requested icon is staged. The previous GPU state remains untouched on
+    // any allocation error or refused idle barrier.
+    render::TextureCache stagedTextures;
+    stagedTextures.init(dev);
+    std::vector<render::TextureRef> stagedImages(set_.defs.size());
+    std::vector<std::string> stagedWarnings=set_.warnings;
+    gfx::ShaderHandle stagedShader{};
+    gfx::PipelineHandle stagedPipes[4]{};
+    gfx::TextureHandle stagedWhite{};
+    try {
         gfx::ShaderDesc sd;
-        sd.glslVertex = shaders::kOverlayVS; sd.glslFragment = shaders::kOverlayFS; sd.msl = shaders::kOverlayMSL;
-        sd.textureSlots = 1; sd.uniformSlots = 1; sd.label = "overlays";
-        shader_ = dev.createShader(sd);
-        if (shader_.valid())
-            for (int p = 0; p < 4; ++p) {
-                gfx::PipelineDesc pd;
-                pd.shader = shader_;
-                pd.attrs[0] = {0, gfx::VertexFormat::Float3, 0};
-                pd.attrs[1] = {1, gfx::VertexFormat::Float2, 12};
-                pd.attrs[2] = {2, gfx::VertexFormat::UByte4N, 20};
-                pd.attrCount = 3; pd.stride = sizeof(BatchVertex);
-                pd.indexType = gfx::IndexType::None;
-                pd.cull = gfx::CullMode::None;
-                pd.blend = (p & 1) ? gfx::BlendMode::Additive : gfx::BlendMode::Alpha;
-                pd.depthTest = !(p & 2);
-                pd.depthWrite = false;
-                pd.label = "overlays";
-                pipes_[p] = dev.createPipeline(pd);
-            }
-        const uint32_t w = 0xffffffffu;
-        gfx::TextureDesc td; td.width = 1; td.height = 1; td.data = &w; td.label = "overlays white";
-        white_ = dev.createTexture(td);
+        sd.glslVertex=shaders::kOverlayVS;
+        sd.glslFragment=shaders::kOverlayFS;
+        sd.msl=shaders::kOverlayMSL;
+        sd.textureSlots=1; sd.uniformSlots=1; sd.label="overlays";
+        stagedShader=dev.createShader(sd);
+        if(!stagedShader.valid())
+            throw std::runtime_error("RtsOverlays GPU init: shader creation failed");
+        for(int p=0;p<4;++p) {
+            gfx::PipelineDesc pd;
+            pd.shader=stagedShader;
+            pd.attrs[0]={0,gfx::VertexFormat::Float3,0};
+            pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
+            pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
+            pd.attrCount=3; pd.stride=sizeof(BatchVertex);
+            pd.indexType=gfx::IndexType::None;
+            pd.cull=gfx::CullMode::None;
+            pd.blend=(p&1)?gfx::BlendMode::Additive:gfx::BlendMode::Alpha;
+            pd.depthTest=!(p&2);
+            pd.depthWrite=false;
+            pd.label="overlays";
+            stagedPipes[p]=dev.createPipeline(pd);
+            if(!stagedPipes[p].valid())
+                throw std::runtime_error("RtsOverlays GPU init: pipeline creation failed");
+        }
+        const uint32_t whitePixel=0xffffffffu;
+        gfx::TextureDesc td;
+        td.width=1; td.height=1; td.data=&whitePixel; td.label="overlays white";
+        stagedWhite=dev.createTexture(td);
+        if(!stagedWhite.valid())
+            throw std::runtime_error("RtsOverlays GPU init: white texture creation failed");
+        for(size_t i=0;i<set_.defs.size();++i) {
+            if(set_.defs[i].image.empty())continue;
+            stagedImages[i]=stagedTextures.resolve(set_.defs[i].image,false,base_);
+            if(!stagedImages[i].valid())
+                stagedWarnings.push_back("overlay '"+set_.defs[i].id+"': "+
+                    set_.defs[i].image+": "+stagedTextures.lastError());
+        }
+        // Includes old dynamic VB and icon textures. Never retire GPU-visible
+        // state without a completion proof from its owning device.
+        if(dev_ && !dev.waitForResourceIdle())
+            throw std::runtime_error("RtsOverlays GPU init: idle barrier failed");
+    } catch(...) {
+        // None of the staged handles has been submitted for drawing.
+        stagedTextures.shutdown();
+        if(stagedWhite.valid())dev.destroyTexture(stagedWhite);
+        for(auto p:stagedPipes)if(p.valid())dev.destroyPipeline(p);
+        if(stagedShader.valid())dev.destroyShader(stagedShader);
+        throw;
     }
+
+    const auto oldShader=shader_;
+    const auto oldWhite=white_;
+    const auto oldVb=vb_;
+    gfx::PipelineHandle oldPipes[4]{};
+    for(int p=0;p<4;++p) {
+        oldPipes[p]=pipes_[p];
+        pipes_[p]=stagedPipes[p];
+    }
+    shader_=stagedShader;
+    white_=stagedWhite;
+    vb_={}; vbBytes_=0;
+    // TextureCache map nodes own AtlasSprite pointers referred to by
+    // TextureRef. Swapping both owners preserves those heap allocations.
+    textures_.swap(stagedTextures);
+    images_.swap(stagedImages);
+    set_.warnings.swap(stagedWarnings);
+    buckets_.clear();
+    upload_.clear();
+    dev_=&dev;
+
+    // Previous resources may be destroyed only after the confirmed idle
+    // barrier above; the newly published owner remains valid.
+    if(oldVb.valid())dev.destroyBuffer(oldVb);
+    for(auto p:oldPipes)if(p.valid())dev.destroyPipeline(p);
+    if(oldShader.valid())dev.destroyShader(oldShader);
+    if(oldWhite.valid())dev.destroyTexture(oldWhite);
+    stagedTextures.shutdown();
+}
+
+bool RtsOverlays::shutdownAfterGpuIdle(gfx::Device& dev) {
+    if(!dev_)return true;
+    if(dev_!=&dev)
+        throw std::logic_error("RtsOverlays GPU shutdown: device owner mismatch");
+    if(!dev.waitForResourceIdle())return false;
+    shutdown(dev);
+    return true;
 }
 
 void RtsOverlays::shutdown(gfx::Device& dev) {
-    for (auto& p : pipes_) if (p.valid()) { dev.destroyPipeline(p); p = {}; }
-    if (shader_.valid()) dev.destroyShader(shader_);
-    if (vb_.valid()) dev.destroyBuffer(vb_);
-    if (white_.valid()) dev.destroyTexture(white_);
-    shader_ = {}; vb_ = {}; white_ = {}; vbBytes_ = 0;
+    if(dev_ && dev_!=&dev)
+        throw std::logic_error("RtsOverlays GPU shutdown: device owner mismatch");
+    // Retired dynamic buffers may still be in use by an earlier frame.
+    // A failed barrier must preserve live GPU ownership for retry.
+    if(dev_ && !retiredBuffers_.completeForShutdown(dev))
+        throw std::runtime_error("RtsOverlays shutdown: GPU retirement idle failed");
+    for(auto& p:pipes_)if(p.valid()) {dev.destroyPipeline(p);p={};}
+    if(shader_.valid())dev.destroyShader(shader_);
+    if(vb_.valid())dev.destroyBuffer(vb_);
+    if(white_.valid())dev.destroyTexture(white_);
+    shader_={}; vb_={}; white_={}; vbBytes_=0;
     textures_.shutdown();
     images_.clear();
     buckets_.clear();
+    upload_.clear();
     popups_.clear();
-    dev_ = nullptr;
+    dev_=nullptr;
 }
 
 size_t RtsOverlays::cellCap(const OverlayDef& d) const {
@@ -547,27 +717,60 @@ void RtsOverlays::flush(Renderer3D& r) {
     upload_.clear();
     for (auto& b : buckets_) upload_.insert(upload_.end(), b.verts.begin(), b.verts.end());
     const size_t bytes = upload_.size() * sizeof(BatchVertex);
-    if (!vb_.valid() || bytes > vbBytes_) {
-        if (vb_.valid()) dev_->destroyBuffer(vb_);
-        vbBytes_ = std::max<size_t>(bytes * 2, 64 * 1024);
-        gfx::BufferDesc bd; bd.type = gfx::BufferType::Vertex; bd.usage = gfx::Usage::Dynamic; bd.size = vbBytes_; bd.label = "overlays";
-        vb_ = dev_->createBuffer(bd);
+    if (preparingFrame_ || !vb_.valid() || bytes > vbBytes_) {
+        if(preparingFrame_ && frameReplacedBuffer_)
+            throw std::logic_error("overlay frame prepared more than once");
+        if(bytes>SIZE_MAX/2)
+            throw std::overflow_error("RtsOverlays: vertex upload size overflow");
+        const size_t capacity=std::max<size_t>(bytes*2,64*1024);
+        gfx::BufferDesc bd;
+        bd.type=gfx::BufferType::Vertex;
+        bd.usage=gfx::Usage::Dynamic;
+        bd.snapshotUpdates=true;
+        bd.size=capacity;
+        bd.label="overlays";
+        const auto replacement=dev_->createBuffer(bd);
+        if(!replacement.valid())
+            throw std::runtime_error("RtsOverlays: vertex buffer allocation failed");
+        // Safe inside a frame: ownership is deferred to a frame-boundary GPU
+        // token rather than destroying memory referenced by prior cameras.
+        if(!preparingFrame_)retiredBuffers_.retireBuffer(*dev_,vb_);
+        vb_=replacement;
+        if(preparingFrame_)frameReplacedBuffer_=true;
+        vbBytes_=capacity;
     }
-    const mat4 vp = r.viewProj();
-    r.drawCustom([this, vp, bytes](gfx::Device& dev) {
-        dev.updateBuffer(vb_, upload_.data(), bytes);
-        uint32_t first = 0;
-        for (auto& b : buckets_) {
-            const uint32_t n = uint32_t(b.verts.size());
-            if (!n) continue;
-            if (pipes_[b.pipe].valid()) {
-                dev.setPipeline(pipes_[b.pipe]);
-                dev.setUniforms(0, vp.m, sizeof vp.m);
-                dev.setVertexBuffer(vb_);
-                dev.setTexture(0, b.tex);
-                dev.draw(n, first);
-            }
-            first += n;
+    // Capture each submitted camera's data and RHI handles. A queued
+    // drawCustom callback must NOT read this->upload_, buckets_, vb_ or
+    // pipelines_: another camera can overwrite them before it executes.
+    struct Command {
+        gfx::PipelineHandle pipe;
+        gfx::TextureHandle texture;
+        uint32_t first=0,count=0;
+    };
+    std::vector<Command> commands;
+    commands.reserve(buckets_.size());
+    uint32_t first=0;
+    for(const auto& b:buckets_) {
+        if(b.verts.size()>UINT32_MAX-first)
+            throw std::overflow_error("RtsOverlays: draw vertex index overflow");
+        const uint32_t count=uint32_t(b.verts.size());
+        if(count && pipes_[b.pipe].valid())
+            commands.push_back({pipes_[b.pipe],b.tex,first,count});
+        first+=count;
+    }
+    const auto snapshot=std::make_shared<const std::vector<BatchVertex>>(upload_);
+    const mat4 vp=r.viewProj();
+    const gfx::BufferHandle buffer=vb_;
+    const bool prepared=preparingFrame_;
+    if(prepared)dev_->updateBuffer(buffer,snapshot->data(),bytes);
+    r.drawCustom([snapshot,commands=std::move(commands),vp,buffer,bytes,prepared](gfx::Device& dev) {
+        if(!prepared)dev.updateBuffer(buffer,snapshot->data(),bytes);
+        for(const auto& cmd:commands) {
+            dev.setPipeline(cmd.pipe);
+            dev.setUniforms(0,vp.m,sizeof vp.m);
+            dev.setVertexBuffer(buffer);
+            dev.setTexture(0,cmd.texture);
+            dev.draw(cmd.count,cmd.first);
         }
     });
 }

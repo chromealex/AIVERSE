@@ -1,0 +1,98 @@
+name: AIVERSE HTML5 Studio checks
+on:
+  push:
+    branches: [feature/studio-html5]
+    paths:
+      - 'apps/studio-web/**'
+      - 'apps/studio-native/**'
+      - 'tools/studio/**'
+      - '.github/workflows/studio-html5-web.yml'
+  pull_request:
+    paths:
+      - 'apps/studio-web/**'
+      - 'apps/studio-native/**'
+      - 'tools/studio/**'
+      - '.github/workflows/studio-html5-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Rapid AI iterations can trigger multiple pushes. Cancel stale checks.
+concurrency:
+  group: studio-html5-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-build:
+    name: TypeScript and Vite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # npm cache needs package-lock.json. Do not enable until a pinned lockfile is committed.
+      - name: Install frontend packages
+        working-directory: apps/studio-web
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        working-directory: apps/studio-web
+        run: npm run typecheck
+      - name: Docking and Inspector validation tests
+        working-directory: apps/studio-web
+        run: npm run test:web
+      - name: Build static HTML5 frontend
+        working-directory: apps/studio-web
+        run: npm run build
+
+  boundary:
+    name: ImGui boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Complete dependency-light headless editor contracts
+        run: bash tools/studio/verify_headless.sh
+
+  macos-native:
+    name: macOS HTML5 + Metal native compiler / contracts
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build HTML5 assets for WKWebView bundle
+        working-directory: apps/studio-web
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+      - name: Configure experimental Studio
+        run: |
+          cmake -S . -B build/studio-native-ci \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_EDITOR=ON \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_STUDIO_HTML5=ON
+      - name: Compile Metal host and native contracts
+        run: |
+          cmake --build build/studio-native-ci \
+            --target aiverse_studio aiverse_studio_content_tests aiverse_studio_asset_catalog_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_visual_picking_tests aiverse_studio_model_picking_tests aiverse_studio_session_tests aiverse_studio_lighting_validation_tests aiverse_studio_material_validation_tests aiverse_studio_pbr_adapter_tests aiverse_studio_shader_graph_name_tests aiverse_studio_shader_graph_draft_tests aiverse_studio_light_preview_math_tests aiverse_studio_authored_lights_tests aiverse_studio_fps_lighting_contract_tests aiverse_studio_fps_lighting_document_tests aiverse_studio_scene_nodes_tests aiverse_studio_document_visuals_tests aiverse_studio_viewport_layout_tests aiverse_studio_terrain_tests aiverse_studio_render_lighting_tests \
+            --parallel 3
+      # studio_metal_lighting is left out: it opens an NSWindow and needs a Metal device.
+      - name: Run native contract tests
+        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting)$'

@@ -50,6 +50,39 @@ public:
 
     struct Stats { int chunks = 0, drawn = 0, built = 0, culledHorizon = 0, culledFrustum = 0; uint64_t triangles = 0; double buildMs = 0; };
     const Stats& stats() const { return stats_; }
+    // Planet owner: all six-face chunk VBO/IBOs, per-body vision/detail
+    // atlases, shared sphere/atmosphere meshes, and own texture cache.
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        render::GpuOwnedMemoryCounter counter(*dev_);
+        counter.buffer(sphere_.vb);
+        counter.buffer(sphere_.ib);
+        counter.buffer(atmoSphere_.vb);
+        counter.buffer(atmoSphere_.ib);
+        for (auto tex : {white_,gray_,black_}) counter.texture(tex);
+        for (const auto& body : bodies_) {
+            counter.texture(body.vision);
+            counter.texture(body.detailTex);
+            for (const auto& chunk : body.chunks) {
+                counter.buffer(chunk.vb);
+                counter.buffer(chunk.ib);
+            }
+        }
+        const auto cache=textures_.ownedGpuMemoryStats();
+        auto stats=counter.stats();
+        stats.textureKnownBytes =
+            render::GpuOwnedMemoryCounter::saturatingAdd(
+                stats.textureKnownBytes,cache.textureKnownBytes);
+        stats.bufferKnownBytes =
+            render::GpuOwnedMemoryCounter::saturatingAdd(
+                stats.bufferKnownBytes,cache.bufferKnownBytes);
+        stats.textures+=cache.textures;
+        stats.buffers+=cache.buffers;
+        stats.unknownTextures+=cache.unknownTextures;
+        stats.unknownBuffers+=cache.unknownBuffers;
+        stats.multiVersionBuffers+=cache.multiVersionBuffers;
+        return stats;
+    }
 
 private:
     struct PV { render::float3 pos, nrm; uint32_t rgba; render::float3 morph; float uv[2]; uint32_t splat; float duv[2]; };

@@ -82,7 +82,7 @@ AIVERSE liefert die Mechaniken selbst – und macht das Spiel zu etwas, an dem e
 | **Multiplayer heißt endlose Desyncs.** Ein einziges `float` genügt, damit ein Match zwischen iPhone und Android auseinanderläuft. | Die Simulation ist überall bitgenau identisch: Festkomma statt Gleitkomma, eigener Zufallsgenerator, Prüfsummen. Die CI vergleicht bei jedem Push Matches auf Linux x64/ARM64, Windows und macOS. Über das Netz gehen nur Befehle; es gibt Lockstep mit Rollback und einen Server mit Matchmaking und Entscheidungen anhand von Replays. |
 | **Mobile GPUs sind schwach, das Spiel soll trotzdem gut aussehen.** | Jede teure Funktion – Schatten, Partikel, Terrain, Post-Effekte – hat Qualitätsstufen und passt sich der GPU an, von alten Mali- und Adreno-Chips bis Apple Silicon. |
 | **Die Veröffentlichung auf allen Plattformen ist ein eigenes Projekt.** Signaturen, Icons, Store- und Werbe-SDKs. | `aiversebuild` erzeugt mit einem Befehl eine .app, ein Xcode-Projekt, Gradle/APK, Web und .exe. Icons und Startbildschirme werden generiert. Plugins für App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin und mehr – ein Build enthält nur die, die das Spiel auswählt. |
-| **Jedes neue Spiel beginnt bei null.** | Über 30 spielbare Vorlagen, Genre-Kits mit Abnahme-Checklisten, 200 Skills für Agenten. Ein neues Spiel beginnt mit einem, das bereits funktioniert. |
+| **Jedes neue Spiel beginnt bei null.** | Über 30 spielbare Vorlagen, Genre-Kits mit Abnahme-Checklisten, 238 Skills für Agenten. Ein neues Spiel beginnt mit einem, das bereits funktioniert. |
 | **Meta und LiveOps werden in jedem Projekt neu geschrieben.** | `aiverse::meta`: Shop, Währungen, Quests, Pässe, tägliche Belohnungen, Energie, Clans, Turniere, Truhen mit Pity-System – in JSON konfiguriert. |
 
 ---
@@ -106,9 +106,10 @@ validierbarer Konfiguration.
 | **Roguelikes** | `run-graph`: Runs mit Seed und Begegnungsbudgets; `loot-tables` mit garantiertem seltenem Drop |
 | **Idle, Fabrik, Kolonie** | `big-numbers`, `offline-production` (exakter Offline-Fortschritt), `production-networks`, `logistics`, `tasks` |
 | **Rhythmusspiele** | `rhythm-timing`: Tempokarten und bildratenunabhängige Trefferbewertung |
+| **Rennspiele, Fahrzeuge** | `vehicle-controllers`: Autos (Drehmoment, Gänge, Traktion, Drift), Panzer, Hovercrafts, Flugzeuge, Sitze, Schadenszonen; Rennsitzung: Startaufstellung, Countdown, Checkpoints in Reihenfolge, Runden, Platzierungen, Falschfahrt, Renn-Bots; `race`-Block der Karte in jedem Projekt, gemeinsames HUD und Verfolgerkamera, 2 Vorlagen |
 | **Jedes Mobile-Spiel** | `aiverse::meta` und LiveOps, Tutorials, UI-Bildschirme, Store- und Werbe-Plugins |
 
-Rennspiele, Sport und Fahrzeuge stehen noch auf der [Roadmap](docs/genre-mechanics-roadmap.md). Vollständige
+Sportspiele, Boote, Boxenstopps und Strafen stehen noch auf der [Roadmap](docs/genre-mechanics-roadmap.md). Vollständige
 Liste der Bibliotheken: [`libraries/catalog.json`](libraries/catalog.json) und [Genre-Pakete](docs/genre-packages.md).
 
 ---
@@ -185,6 +186,7 @@ Jede Vorlage ist ein vollständig spielbares Spiel mit Bots. Im Editor öffnen u
 | Wirtschaft und Aufbau | **Hearth and Haul** (Knights and Merchants) · **Underlord** (Dungeon Keeper) |
 | 2D und Experimente | **Crystal Dunes** (Tiles, Dune II) · **Green Hills** (2D-Sprites auf 3D-Terrain) · **Planets** (kugelförmige Planeten und Umlaufbahnen) · **Wildfire** (Felder: Waldbrände und Creep) |
 | FPS | **Crossfire Arena** (5 gegen 5) · **Breach Protocol** (taktische Runden) · **Last Survivor** (Battle Royale mit 100 Spielern) · **Aim Lab** (Schießstand) |
+| Rennspiel | **Oval Sprint** (Rundenrennen gegen drei Bots) · **Road Circuit** (Rennen auf einer Spline-Straße) |
 
 ---
 
@@ -207,7 +209,7 @@ Jede Vorlage ist ein vollständig spielbares Spiel mit Bots. Im Editor öffnen u
 
 **Grafik und Audio**
 - Eigenes RHI: Metal, GLES3 / WebGL2, GL 3.3, Vulkan (Windows / Linux / Android, optional)
-- PBR, glTF/OBJ, Skelett- und prozedurale Animation, prozedurale Kabel, Rendering hierarchischer Entitäten
+- PBR, glTF/OBJ, Skelett- und prozedurale Animation, prozedurale Kabel, Rendering hierarchischer Entitäten, physikalischer Himmel, volumetrische Wolken und Sonnenstrahlen, lokaler volumetrischer Nebel in Kugeln/OBBs mit Freilegung zur Laufzeit
 - Schatten, dynamische Lichter, Nacht, Post-Effekte, Shader Graph
 - Partikel mit den Modulen von Unitys ParticleSystem und Importer aus Unity
 - 2D: Sprites, Tilemaps mit Autotiling
@@ -220,9 +222,9 @@ Jede Vorlage ist ein vollständig spielbares Spiel mit Bots. Im Editor öffnen u
 
 **Werkzeuge**
 - Andockbarer Editor im Unity-Stil: Szene, Inspector, Terrain, Effekte, Beleuchtung, UI, Testspiel und Gerätesimulator
-- `aiversemcp` – MCP-Server für Agenten
+- `aiversemcp` – MCP-Server für Agenten – PHYSIS-Kartenkonfiguration, Validierung und Undo/Redo
 - Assistent **Spiel erstellen**
-- 200 Skills für Agenten und Genre-Kits mit Abnahme-Checklisten
+- 238 Skills für Agenten und Genre-Kits mit Abnahme-Checklisten
 - Importer für Assets klassischer Spiele aus Ihrer eigenen Kopie
 
 </td>
@@ -316,3 +318,9 @@ Die Referenzdokumente sind auf Englisch. Die Übersicht, der Spiel-Assistent, de
 lesen sie aus Ihrer eigenen Kopie.
 
 Spiel-Builds enthalten automatisch `THIRD_PARTY_NOTICES.txt`; Hinweise für externe SDKs muss das Projekt bereitstellen (siehe [Details](docs/third-party-notices.md)).
+
+- [TerraWeave Rocks](docs/terrain/rocks.md): Dekorative Steine, Felsbrocken, Platten und Splitter per Seed; gemeinsamer PBR-Export und drei native LODs (optional).
+
+**Terra zuerst:** [native Bäume, dichtes Gras und Workflows](docs/terrain/vegetation-authoring.md); eigene Weltgenerierung nur für fehlende TerraWeave-Funktionen.
+
+LENS-Kameraabläufe: [Authoring und MCP](skills/visuals/aiverse-lens/SKILL.md), [native Integration und Aufnahme](skills/visuals/aiverse-lens-native/SKILL.md).

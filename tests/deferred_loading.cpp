@@ -24,6 +24,9 @@ public:
     aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc&) override { return {1}; }
     void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
+    // The fake device executes all commands synchronously and queues no GPU
+    // work, so every submitted operation is already idle on return.
+    bool waitForResourceIdle() override { return true; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
     void beginPass(const aiverse::gfx::PassDesc&) override {}

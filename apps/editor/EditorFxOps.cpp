@@ -29,8 +29,10 @@ void Editor::tickFx(const render::RTSCamera& cam, int w, int h, const std::vecto
     if (playing() && dt > 0) gameFxBridge_.update(*sim_, objects, dt);
     if (fxFrozen_) dt = 0;
     if (fxPreview_.loop && !fxPreview_.name.empty() && !gameFx_.playing(fxPreview_.h) && time_ >= fxPreview_.next && dt > 0) {
-        fxPreview_.h = gameFx_.play(fxPreview_.name, fxPreview_.pos, {0, 1, 0}, fxPreview_.scale, fxPreview_.tint);
         int id = gameFx_.effect(fxPreview_.name);
+        fxPreview_.h = id < 0 ? fx::FxHandle{} :
+            gameFx_.playWithProgramParameters(id,fxPreview_.pos,{0,1,0},
+                fxPreview_.scale,fxPreview_.tint,fxPreview_.programParams);
         const fx::EffectDef* d = gameFx_.def(id);
         fxPreview_.next = time_ + (d && !d->looping() ? std::min(8.0, double(d->lifetime()) + 0.5) : 0.5);
     }
@@ -57,12 +59,14 @@ void Editor::registerFxPreviewOps() {
             Json r = Json::object();
             if (p.getBool("stop")) {
                 gameFx_.kill(fxPreview_.h);
+                stopSpectraGpuPreview();
                 fxPreview_ = {};
                 fxFrozen_ = false;
                 r.set("ok", Json::fromBool(true));
                 r.set("summary", Json::string("Превью эффекта убрано"));
                 return r;
             }
+            stopSpectraGpuPreview(); // a CPU fx_preview replaces Metal preview
             if (ws_.project.dir.empty()) throw std::runtime_error("no game is open (open_game)");
             const std::string name = p.getStr("effect");
             if (!validFxName(name) || name == "fx") throw std::runtime_error("'effect' must be an effect name (fx_list)");
@@ -139,7 +143,7 @@ void Editor::registerFxPreviewOps() {
         "The current preview is replaced; old fx/*.json files remain untouched.",
         Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"overrides":{"type":"object"},
             "x":{"type":"number"},"y":{"type":"number"},"z":{"type":"number"},
-            "advance":{"type":"number"},"loop":{"type":"boolean"},"freeze":{"type":"boolean"}},"required":["graph"]})"),
+            "advance":{"type":"number"},"loop":{"type":"boolean"},"freeze":{"type":"boolean"},"gpu":{"type":"boolean"},"instanceValues":{"type":"object"}},"required":["graph"]})"),
         [this](const Json& p)->Json {
             if(ws_.project.dir.empty())throw std::runtime_error("open a game project first");
             fx::EffectDef compiled;
@@ -150,17 +154,75 @@ void Editor::registerFxPreviewOps() {
                 for(const auto& e:errors)why+="\n"+e;
                 throw std::runtime_error(why);
             }
+            // The graph stays compiled once. Each preview instance receives
+            // its own eight scalar VM inputs before the first particle Spawn,
+            // including prewarmed particles.
+            spectra::InstanceParameterTable definitions;
+            if(!spectra::loadInstanceParameterTable(
+                p["graph"]["instanceParameters"],definitions,errors))
+                throw std::runtime_error(errors.empty()?
+                    "invalid SpectraFX instance parameters":errors.back());
+            std::array<float,8> instanceParams{};
+            for(const auto& [name,def]:definitions) {
+                (void)name;
+                instanceParams[def.slot]=def.initial;
+            }
+            const Json& values=p["instanceValues"];
+            if(!values.isNull()&&!values.isObject())
+                throw std::runtime_error("instanceValues must be a JSON object");
+            if(values.isObject())
+                for(const auto& [name,value]:values.members()) {
+                    const auto it=definitions.find(name);
+                    if(it==definitions.end() || !value.isNumber() ||
+                       !spectra::checkInstanceParameterValue(it->second,
+                           float(value.toDouble())))
+                        throw std::runtime_error("invalid SpectraFX instanceValues."+name);
+                    instanceParams[it->second.slot]=float(value.toDouble());
+                }
             render::RTSCamera& cam=playing()?gameCam:sceneCam;
+            // x/y/z become the camera target and the emitter position: reject
+            // non-numbers, NaN/inf and absurd magnitudes before using them.
+            const auto coordinate=[&](const char* key,float fallback)->float {
+                if(!p.has(key) || p[key].isNull())return fallback;
+                const double v=p[key].toDouble(std::nan(""));
+                if(!p[key].isNumber() || !std::isfinite(v) || std::abs(v)>1.0e7)
+                    throw std::runtime_error(std::string("fx_graph_preview: ")+key+
+                        " must be a finite number within +-1e7");
+                return float(v);
+            };
             const fx::float3 pos{
-                p.has("x")?float(p["x"].toDouble()):cam.target.x,
-                p.has("y")?float(p["y"].toDouble()):cam.target.y,
-                p.has("z")?float(p["z"].toDouble()):cam.target.z
+                coordinate("x",cam.target.x),
+                coordinate("y",cam.target.y),
+                coordinate("z",cam.target.z)
             };
             cam.target={pos.x,pos.y,pos.z};
             if(!playing())sceneFlying_=false;
             Viewport* vp=playing()?gameViewport:sceneViewport;
             const int width=vp&&vp->w>0?vp->w:1280;
             const int height=vp&&vp->h>0?vp->h:720;
+            if(p.getBool("gpu")) {
+                if(!dev_ || dev_->info().backend!=gfx::Backend::Metal ||
+                   !dev_->supportsCompute())
+                    throw std::runtime_error("SpectraFX GPU preview requires a Metal compute device");
+                spectra::GraphRuntimeOptions options;
+                options.preference=spectra::ComputePreference::RequireGpu;
+                options.gpuProgram=true;options.gpuMaterial=true;
+                const auto eligibility=spectra::inspectGraphGpuEligibility(compiled,options);
+                if(!eligibility.eligible)
+                    throw std::runtime_error("SpectraFX Metal GPU preview rejected: "+eligibility.reason);
+                gameFx_.kill(fxPreview_.h);
+                fxPreview_={};fxFrozen_=false;
+                queueSpectraGpuPreview(compiled,instanceParams,pos,
+                    playing()&&!ws_.project.isFps(),p.getBool("loop"));
+                Json response=Json::object();
+                response.set("ok",Json::fromBool(true));
+                response.set("queued",Json::fromBool(true));
+                response.set("backend",Json::string("Metal"));
+                response.set("view",Json::string(playing()&&!ws_.project.isFps()?"game":"scene"));
+                response.set("summary",Json::string("Metal preview will start before the next scene render pass"));
+                return response;
+            }
+            stopSpectraGpuPreview();
             gameFx_.setView(cam,cam.proj(float(width)/float(height),
                 dev_&&dev_->info().clipDepthZeroToOne)*cam.view(),width,height);
 
@@ -168,13 +230,17 @@ void Editor::registerFxPreviewOps() {
             const std::string runtimeName="__spectrafx_editor_preview";
             const int id=gameFx_.define(runtimeName,compiled);
             if(id<0)throw std::runtime_error("SpectraFX preview definition rejected");
-            const fx::FxHandle handle=gameFx_.play(id,pos);
+            const fx::FxHandle handle=gameFx_.playWithProgramParameters(
+                id,pos,{0,1,0},1.f,{1,1,1,1},instanceParams);
             if(!handle.valid())throw std::runtime_error("SpectraFX preview could not start (culling or particle quality)");
-            const float advance=std::clamp(float(p["advance"].toDouble(0.12)),0.f,10.f);
+            double advanceSeconds=p["advance"].toDouble(0.12);
+            if(!std::isfinite(advanceSeconds))advanceSeconds=0.12; // NaN would make the loop count UB
+            const float advance=std::clamp(float(advanceSeconds),0.f,10.f);
             for(int i=0;i<int(advance*60.f);++i)gameFx_.update(1.f/60.f);
             fxFrozen_=p.getBool("freeze");
             fxPreview_={runtimeName,pos,1.f,{1,1,1,1},p.getBool("loop"),handle,
                 time_+(compiled.looping()?0.5:std::min(8.0,double(compiled.lifetime())+0.5)),false,0.f};
+            fxPreview_.programParams=instanceParams;
             fxTime_=time_;
             Json response=Json::object();
             response.set("ok",Json::fromBool(true));
@@ -185,6 +251,77 @@ void Editor::registerFxPreviewOps() {
             response.set("next",Json::string(playing()?"view_screenshot {\"window\":\"game\"}":"view_screenshot {\"window\":\"scene\"}"));
             return response;
         },true});
+    // PHYSIS «Живая природа» in the Scene view (PhysisNaturePreview.h).
+    ws_.registerOp({"physis_nature_preview",
+        "Show PHYSIS wildfire/wind as real scene presentation without a play-test: TerraWeave grass that burns to charred "
+        "stubble, SpectraFX flames/embers/smoke bent by the wind, fire light and fire/wind sound. Uses the map's authored "
+        "physis block in a PRIVATE preview World (never the game, never saved); a running game's PHYSIS is shown read-only. "
+        "Fields are optional: enabled, playing, speed, windSpeed (m/s), windDirection (degrees the wind blows towards, 0=+X), "
+        "humidity 0..1, cellMeters (0 = map grid, else detailed preview cell), grass, flames, sound, volume, "
+        "shoreSand (m of bare sand along authored NEREID water: no grass, no fuel; default 7), "
+        "ignite {x,z} (scene metres; preview only), advanceTicks (0..600, preview only), reset. Then view_screenshot {window:'scene'}.",
+        Json::parse(R"({"properties":{"enabled":{"type":"boolean"},"playing":{"type":"boolean"},"speed":{"type":"number"},
+            "windSpeed":{"type":"number"},"windDirection":{"type":"number"},"humidity":{"type":"number"},
+            "cellMeters":{"type":"integer","minimum":0,"maximum":64},"grass":{"type":"boolean"},"flames":{"type":"boolean"},
+            "sound":{"type":"boolean"},"volume":{"type":"number"},"shoreSand":{"type":"number"},
+            "ignite":{"type":"object","properties":{"x":{"type":"number"},"z":{"type":"number"}},"required":["x","z"]},
+            "advanceTicks":{"type":"integer","minimum":0,"maximum":600},"reset":{"type":"boolean"}},"additionalProperties":false})"),
+        [this](const Json& p) -> Json {
+            auto& nature = physisNaturePreview_;
+            auto& st = nature.settings;
+            const auto num = [&](const char* key, float lo, float hi, float& out) {
+                if (!p.has(key)) return false;
+                const double v = p[key].toDouble(out);
+                if (!std::isfinite(v)) throw std::invalid_argument(std::string(key) + " must be finite");
+                out = std::clamp(float(v), lo, hi);
+                return true;
+            };
+            if (p.has("enabled")) { const bool was = st.enabled; st.enabled = p.getBool("enabled"); if (st.enabled && !was) nature.requestReset(); }
+            if (p.has("playing")) st.playing = p.getBool("playing");
+            if (p.has("grass")) st.grass = p.getBool("grass");
+            if (p.has("flames")) st.flames = p.getBool("flames");
+            if (p.has("sound")) st.sound = p.getBool("sound");
+            num("speed", 0.f, 8.f, st.speed);
+            num("volume", 0.f, 1.f, st.volume);
+            bool wind = num("windSpeed", 0.f, 60.f, st.windSpeed);
+            wind = num("windDirection", -360.f, 360.f, st.windDirectionDeg) || wind;
+            if (num("humidity", 0.f, 1.f, st.humidity)) nature.requestReset();
+            if (num("shoreSand", 0.f, 40.f, st.shoreSandMeters)) nature.requestReset();
+            if (p.has("cellMeters")) { st.previewCellMeters = int(std::clamp<int64_t>(p.getInt("cellMeters"), 0, 64)); nature.requestReset(); }
+            if (wind) nature.applyWindSettings();
+            if (p.getBool("reset")) nature.requestReset();
+            Json r = Json::object();
+            const bool needsWorld = p.has("ignite") || p.getInt("advanceTicks", 0) > 0;
+            if (needsWorld) {
+                if (!st.enabled) throw std::runtime_error("enable the nature preview first (enabled: true)");
+                // Build the preview World now so agents can act in one call.
+                nature.setWater(authoredWater());
+                nature.prepareSource(gameFx_, doc(), sim_ ? &sim_->world() : nullptr,
+                    [this](float x, float z) { return surfaceHeightAt(x, z); });
+                if (nature.usingLive()) throw std::runtime_error("the running game's PHYSIS is read-only");
+            }
+            if (p.has("ignite")) {
+                const auto& at = p["ignite"];
+                std::string why;
+                const bool ok = nature.ignite(float(at["x"].toDouble()), float(at["z"].toDouble()), &why);
+                r.set("ignited", Json::fromBool(ok));
+                if (!ok) r.set("igniteError", Json::string(why));
+            }
+            const int64_t ticks = std::clamp<int64_t>(p.getInt("advanceTicks", 0), 0, 600);
+            if (ticks > 0) r.set("advanced", Json::number(int64_t(nature.advance(int(ticks)))));
+            r.set("ok", Json::fromBool(true));
+            r.set("enabled", Json::fromBool(st.enabled));
+            r.set("source", Json::string(nature.usingLive() ? "live (read-only)" : "preview"));
+            r.set("tick", Json::number(int64_t(nature.tick())));
+            r.set("flames", Json::number(int64_t(nature.flames())));
+            r.set("smoke", Json::number(int64_t(nature.smoke())));
+            r.set("voices", Json::number(int64_t(nature.voices())));
+            r.set("grassPatches", Json::number(int64_t(nature.grassPatches())));
+            r.set("burningAreaM2", Json::number(double(nature.burningArea()), 1));
+            if (!nature.status().empty()) r.set("status", Json::string(nature.status()));
+            r.set("next", Json::string("view_screenshot {\"window\":\"scene\"}"));
+            return r;
+        }, true});
 }
 
 } // namespace aiverse::editor

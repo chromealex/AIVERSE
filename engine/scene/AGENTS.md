@@ -58,9 +58,11 @@ Stage 1; this stage supplies deterministic ECS ownership and lifecycle APIs.
   with ECS scene ownership. Do not bypass it with direct `SceneRuntime`
   calls for managed scenes.
 - On rollback/cold restore, discard all old async tickets via
-  `invalidateAfterRestore`, rebuild SceneHierarchy, and use
+  `invalidateAfterRestore` (it keeps leases of scenes still Active with the
+  same asset and releases the rest), rebuild SceneHierarchy, and use
   `queueRestoredResidency` to reacquire non-authoritative dependencies of
-  Active scenes. Never respawn the restored gameplay entities.
+  non-resident Active scenes and to reschedule full jobs for restored Loading
+  records. Never respawn the restored gameplay entities.
 - SceneResourceAdapter keys are immutable dependency identities. Refcounting
   is per coordinator; cross-world shared GPU assets require an external
   cache. Resource `release` must not throw. Bound the incoming byte stream

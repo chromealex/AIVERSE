@@ -74,6 +74,10 @@ struct AppConfig {
 struct AppCallbacks {
     std::function<void(gfx::Device&)> init;          // device ready (after window creation)
     std::function<void(gfx::Device&, double dt)> frame;  // called inside the platform-owned beginFrame/endFrame pair
+    // Optional device-owner completion hook after endFrame submits work,
+    // outside an RHI frame and any render encoder. Suitable for fence
+    // collection / resource retirement; never schedules gameplay updates.
+    std::function<void(gfx::Device&)> afterFrame;
     std::function<void(const Event&)> event;
     std::function<void()> shutdown;
     // Optional: called by run() once the content root is known (readContentFile works) and before the

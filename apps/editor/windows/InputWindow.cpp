@@ -44,7 +44,7 @@ std::optional<platform::Key> capturedKey() {
     for (int n=0;n<12;++n)
         if (ImGui::IsKeyPressed(ImGuiKey(int(ImGuiKey_F1)+n)))
             return K(int(K::F1)+n);
-    for (const auto [imgui,key] : {
+    for (const auto& [imgui,key] : {
         std::pair{ImGuiKey_Space,K::Space},std::pair{ImGuiKey_Tab,K::Tab},
         std::pair{ImGuiKey_Enter,K::Enter},std::pair{ImGuiKey_Backspace,K::Backspace},
         std::pair{ImGuiKey_Delete,K::Delete},std::pair{ImGuiKey_Insert,K::Insert},

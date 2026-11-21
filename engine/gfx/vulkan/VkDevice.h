@@ -7,6 +7,7 @@
 
 #include <array>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@ public:
         items_.push_back(std::move(v)); alive_.push_back(1); return uint32_t(items_.size());
     }
     T* get(uint32_t id) { return id && id <= items_.size() && alive_[id - 1] ? &items_[id - 1] : nullptr; }
+    const T* get(uint32_t id) const { return id && id <= items_.size() && alive_[id - 1] ? &items_[id - 1] : nullptr; }
     void remove(uint32_t id) { if (get(id)) { alive_[id - 1] = 0; items_[id - 1] = T{}; free_.push_back(id - 1); } }
     template <class F> void each(F&& f) { for (size_t i = 0; i < items_.size(); ++i) if (alive_[i]) f(items_[i]); }
     template <class F> void eachWithId(F&& f) {
@@ -91,6 +93,8 @@ struct VCompute {
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptorLayout = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
+    bool bufferPushConstants = false;
+    uint32_t bufferBindings = 4;
 };
 struct VTextureView { VkImageView native = VK_NULL_HANDLE; uint32_t parentId = 0; };
 struct VSampler { VkSampler native = VK_NULL_HANDLE; };
@@ -117,6 +121,15 @@ struct VPipeline {
 };
 
 struct FrameSlot {
+    // Offscreen RT readbacks are owned by the submitting frame slot until its
+    // fence signals. Never recycle staging storage while a copy is in flight.
+    struct TextureCapture {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        Allocation allocation{};
+        int width=0, height=0;
+        Device::CaptureFn callback;
+    };
+    std::vector<TextureCapture> textureCaptures;
     VkCommandPool pool = VK_NULL_HANDLE;
     VkCommandBuffer pre = VK_NULL_HANDLE, main = VK_NULL_HANDLE;
     bool preRecording = false;
@@ -145,7 +158,9 @@ public:
     const std::string& lastError() const override { return error_; }
     bool supports(PixelFormat f) const override;
     std::vector<TextureResourceInfo> textureResources() const override;
-    bool supportsCompute() const override { return device_ && healthy_ && computeQueue_; }
+    bool supportsCompute() const override { return device_ && healthy_ && computeQueue_ &&
+        gpuProps_.limits.maxComputeWorkGroupInvocations >= 64 &&
+        gpuProps_.limits.maxComputeWorkGroupSize[0] >= 64; }
     bool supportsStorageTexture(PixelFormat,TextureDimension) const override;
     ComputeHandle createCompute(const ComputeDesc&) override;
     void destroyCompute(ComputeHandle) override;
@@ -155,6 +170,8 @@ public:
     bool bindComputeStorageTexture(int,TextureHandle) override;
     void setComputeUniforms(const void*,size_t) override;
     void dispatch(uint32_t,uint32_t) override;
+    bool dispatchChecked(uint32_t,uint32_t=1) override;
+    bool readBufferAsync(BufferHandle,size_t,BufferReadFn) override;
     void endCompute() override;
     bool supportsTextureViews() const override { return true; }
     bool supportsTextureDimension(TextureDimension d) const override {
@@ -165,11 +182,13 @@ public:
     void updateBuffer(BufferHandle h, const void* data, size_t size, size_t offset) override;
     bool updateSharedBufferChecked(BufferHandle h, const void* data,
                                    size_t size, size_t offset) override;
+    bool bufferInfo(BufferHandle h, BufferInfo& out) const override;
     void destroyBuffer(BufferHandle h) override;
     BufferUpdateStats bufferUpdateStats(BufferHandle h) override;
     TextureHandle createTexture(const TextureDesc& d) override;
     void updateTexture(TextureHandle h, int x, int y, int w, int h2, const void* pixels, int rowPitchBytes) override;
     bool updateTextureRegion(TextureHandle h, const TextureUploadDesc& u) override;
+    bool textureInfo(TextureHandle h, TextureInfo& out) const override;
     void destroyTexture(TextureHandle h) override;
     TextureViewHandle createTextureView(TextureHandle texture, const TextureViewDesc& desc) override;
     void destroyTextureView(TextureViewHandle h) override;
@@ -183,10 +202,29 @@ public:
     bool copyColor(TextureHandle from, TextureHandle to) override;
     bool readTextureAsync(TextureHandle, TextureReadbackDesc, TextureReadFn) override;
     bool gpuHealthy() const override { return healthy_; }
+    bool waitIdle() override;
+    // serial_ names the currently recording VkFence-backed frame. This is
+    // NOT evidence of completion. completed_ advances only after a real
+    // vkWaitForFences return of VK_SUCCESS for its recorded frame slot.
+    uint64_t gpuSubmissionFence() const override {
+        return recording_ && healthy_ ? serial_ : 0;
+    }
+    uint64_t gpuCompletedFence() const override {
+        return healthy_ ? completed_ : 0;
+    }
+    bool waitForSubmittedGpuWork() override;
+    bool waitForResourceIdle() override;
+    uint64_t beginResourceRetirement() override;
+    bool resourceRetirementComplete(uint64_t token) override;
+    ResourceRetirementStatus resourceRetirementStatus(uint64_t token) override;
+    void endResourceRetirement(uint64_t token) override;
+    void abandonRetirementTokenAfterIdle(uint64_t token) override;
 
     void beginFrame(int framebufferWidth, int framebufferHeight) override;
     void endFrame() override;
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
+    bool captureTexture(TextureHandle source,CaptureFn callback) override;
+    bool readTexturePixelAsync(TextureHandle,int,int,PixelReadFn) override;
 
     void beginPass(const PassDesc& d) override;
     bool supportsRenderTargetPasses() const override { return true; }
@@ -207,7 +245,17 @@ public:
     bool drawIndexedIndirect(BufferHandle commands, size_t offset,
                              uint32_t drawCount, uint32_t stride) override;
 
+    // Single compute-authored draw: Indirect or Storage argument buffers
+    // (both carry INDIRECT + STORAGE usage), no multiDrawIndirect needed.
+    bool supportsGpuAuthoredIndirectDraw() const override {
+        return drawIndirectFirstInstance_ && supportsCompute();
+    }
+    bool drawIndexedGpuIndirect(BufferHandle arguments, size_t offset) override;
+
 private:
+    // Shared encoder of validated indexed-indirect draws (VkDraw.cpp).
+    bool encodeIndexedIndirect(BufferHandle commands, size_t offset,
+                               uint32_t drawCount, uint32_t stride);
     // GfxVulkan.cpp
     bool createInstance(bool wantSurface, std::string& error);
     bool pickDevice(std::string& error);
@@ -217,9 +265,16 @@ private:
     void ensureBackBuffer(int w, int h);
     void prepareSlot();                          // waits for the slot's previous frame, resets its pools
     void collectGarbage();
+    void deliverPixelReads();  // called on owner thread at next beginFrame
     void present();
     void readBackBuffer();
+    void completeTextureCaptures(FrameSlot& slot,bool succeeded);
     void deliverTextureReads();
+    void deliverComputeReadbacks();
+    // After device loss no fence signals again: complete every accepted
+    // texture / buffer readback exactly once with an empty failure result.
+    void failPendingReadsAfterDeviceLoss();
+    void shutdownCompute();
     // VkResources.cpp
     bool createBufferObject(size_t size, VkBufferUsageFlags usage, bool host, VkBuffer& buf, Allocation& alloc);
     VkBufferUsageFlags bufferUsage(BufferType t) const;
@@ -261,6 +316,7 @@ private:
     DeviceInfo info_;
     std::string error_;
     bool multiDrawIndirect_ = false;
+    bool drawIndirectFirstInstance_ = false;
     bool cubeArray_ = false;
     bool computeQueue_ = false;
     bool samplerAnisotropy_ = false;
@@ -299,10 +355,19 @@ private:
     std::array<FrameSlot, kFramesInFlight> slots_;
     int slot_ = 0;
     uint64_t serial_ = 1, completed_ = 0;
+    uint64_t nextRetirementToken_ = 1;
+    std::map<uint64_t,VkFence> retirementFences_;
     bool recording_ = false;
     struct Garbage { uint64_t serial; std::function<void()> fn; };
     std::vector<Garbage> garbage_;
     CaptureFn capture_;
+    struct PixelRead {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        Allocation alloc{};
+        uint64_t serial = 0;
+        PixelReadFn callback;
+    };
+    std::vector<PixelRead> pixelReads_;
 
     // resources
     Pool<VBuffer> buffers_;
@@ -312,6 +377,15 @@ private:
     Pool<VShader> shaders_;
     Pool<VPipeline> pipelines_;
     Pool<VCompute> computes_;
+    struct PendingComputeRead {
+        uint64_t serial=0;
+        VkBuffer buffer=VK_NULL_HANDLE;
+        Allocation allocation{};
+        size_t bytes=0;
+        BufferReadFn callback;
+    };
+    std::vector<PendingComputeRead> computeReads_;
+
     VTexture dummy_;          // bound to unset texture slots
     VTexture dummyDepth_;     // ... of compare samplers
     struct SamplerKey { uint32_t key; VkSampler sampler; };
@@ -341,6 +415,10 @@ private:
         PixelFormat format = PixelFormat::RGBA8;
         uint64_t serial = 0;
         TextureReadFn callback;
+        // RHI render targets are stored bottom-up (GL convention); flip
+        // them to the documented top-left row order. Uploaded/storage
+        // images already have CPU row order.
+        bool flipRows = false;
     };
     std::vector<TextureRead> textureReads_;
 
@@ -371,7 +449,8 @@ private:
     uint32_t activeComputeId_ = 0;
     std::array<TextureHandle,4> computeStorage_{};
     std::array<TextureHandle,8> computeSampled_{};
-    std::array<BufferHandle,4> computeBuffers_{};
+    std::array<BufferHandle,8> computeBuffers_{};
+    bool computeStateValid_ = false;
     std::vector<uint8_t> computeUniforms_;
 };
 

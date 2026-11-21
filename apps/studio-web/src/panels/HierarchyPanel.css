@@ -1,0 +1,40 @@
+/* Dense Hierarchy: search always on top, 20px rows. Colors from --au-* tokens. */
+.hier{display:flex;flex-direction:column;height:100%;min-height:0;font-size:var(--au-font-sm)}
+.hier__toolbar{display:flex;gap:4px;align-items:center;padding:4px;border-bottom:1px solid var(--au-line);flex:none}
+.hier__search{display:flex;align-items:center;gap:5px;flex:1;min-width:0;height:22px;padding:0 6px;
+  background:var(--au-field);border:1px solid var(--au-line);border-radius:var(--au-radius-xs);color:var(--au-text-faint)}
+.hier__search:focus-within{border-color:var(--au-accent)}
+.hier__search input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--au-text);font:inherit;outline:none}
+.hier__search input::-webkit-search-cancel-button{display:none}
+.hier__search button{display:inline-flex;border:0;background:transparent;color:var(--au-text-faint);padding:0;cursor:pointer}
+.hier .hier__tool{width:22px;height:22px;min-height:22px;padding:0}
+.hier__create{display:flex;gap:4px;padding:4px;border-bottom:1px solid var(--au-line);flex:none}
+.hier__create .au-select{flex:1;min-width:0;height:24px;min-height:24px;font-size:var(--au-font-sm)}
+.hier__create .au-button{height:24px;min-height:24px;padding:0 10px;font-size:var(--au-font-sm)}
+.hier__error{display:flex;gap:6px;align-items:flex-start;padding:4px 6px;color:var(--au-danger);
+  border-bottom:1px solid var(--au-line);font-size:var(--au-font-xs)}
+.hier__error button{margin-left:auto;border:0;background:transparent;color:inherit;cursor:pointer}
+.hier__list{flex:1;min-height:0;overflow:auto;padding:2px 0}
+.hier__empty{margin:8px;color:var(--au-text-faint)}
+.hier__row{position:relative;display:flex;align-items:center;gap:5px;height:20px;padding-right:6px;
+  cursor:default;user-select:none;color:var(--au-text-soft);white-space:nowrap}
+.hier__row:hover{background:var(--au-hover)}
+.hier__row.is-selected{background:var(--au-active);color:var(--au-text)}
+.hier__row:focus-visible{outline:none;box-shadow:inset 0 0 0 1px var(--au-accent)}
+.hier__icon{flex:none;color:var(--au-text-faint)}
+.hier__row.is-selected .hier__icon{color:var(--au-accent)}
+.hier__name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hier__kind{flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;color:var(--au-text-faint);font-size:var(--au-font-xs)}
+.hier__row.is-drop-before::before,.hier__row.is-drop-after::after{content:"";position:absolute;left:4px;right:4px;
+  height:2px;background:var(--au-accent);border-radius:1px}
+.hier__row.is-drop-before::before{top:-1px}
+.hier__row.is-drop-after::after{bottom:-1px}
+.hier__footer{flex:none;padding:2px 8px;border-top:1px solid var(--au-line);color:var(--au-text-faint);font-size:var(--au-font-xs)}
+/* Stage 99: multi-select, hover, hide / lock */
+.hier__row.is-hover:not(.is-selected){background:var(--au-hover)}
+.hier__row.is-selected:not(.is-primary){background:color-mix(in srgb,var(--studio-selection) 70%,transparent)}
+.hier__row.is-hidden .hier__name,.hier__row.is-hidden .hier__icon{opacity:.45}
+.hier__flag{width:18px;height:18px;flex:none;display:grid;place-items:center;border:0;border-radius:4px;background:none;color:var(--au-text-faint);cursor:pointer;opacity:0}
+.hier__row:hover .hier__flag,.hier__flag.is-on{opacity:1}
+.hier__flag.is-on{color:var(--au-text-soft)}
+.hier__flag:hover{background:var(--au-hover);color:var(--au-text)}

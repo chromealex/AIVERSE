@@ -21,7 +21,6 @@ using namespace aiverse::render;
 namespace {
 void expect(bool ok,const char* what){if(!ok)throw std::runtime_error(what);}
 void u32(std::string& s,uint32_t n){for(int i=0;i<4;++i)s+=char(n>>(8*i));}
-void u64(std::string& s,uint64_t n){for(int i=0;i<8;++i)s+=char(n>>(8*i));}
 void patch64(std::string& s,size_t p,uint64_t n){for(int i=0;i<8;++i)s[p+size_t(i)]=char(n>>(8*i));}
 void cstr(std::string& s,const char* name){s+=name;s+='\0';}
 void attr(std::string& s,const char* name,const char* type,const std::string& data){

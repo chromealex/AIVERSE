@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "description": "SpectraFX bounded Metal GPU VM demo: dynamic per-instance lift and age fade, no custom attributes or event stages.",
+  "instanceParameters": {
+    "lift": {"slot": 0, "default": 2.0, "min": 0, "max": 15}
+  },
+  "parameters": {},
+  "nodes": [
+    {"id":"spawn","type":"Spawn","properties":{"burst":16},"position":[30,180]},
+    {"id":"init","type":"Initialize","properties":{"life":2,"speed":0,"size":0.4,"spread":0},"position":[240,180]},
+    {"id":"uplift","type":"InstanceParameter","properties":{"name":"lift"},"position":[40,460]},
+    {"id":"age","type":"AgeNormalized","properties":{},"position":[40,555]},
+    {"id":"remaining","type":"Subtract","properties":{"a":1,"b":{"$runtime":"age"}},"position":[265,540]},
+    {"id":"rise","type":"Multiply","properties":{"a":{"$runtime":"uplift"},"b":{"$runtime":"remaining"}},"position":[455,430]},
+    {"id":"vm","type":"ParticleProgramModule","properties":{
+      "version":1,
+      "spawn":[{"target":"velocity.y","op":"set","value":{"$runtime":"uplift"}}],
+      "update":[
+        {"target":"velocity.y","op":"addRate","value":{"$runtime":"rise"}},
+        {"target":"tint.a","op":"set","value":{"$runtime":"remaining"}}
+      ]
+    },"position":[470,180]},
+    {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft","blend":"additive"},"position":[730,180]}
+  ],
+  "links":[
+    {"from":"spawn","to":"init"},
+    {"from":"init","to":"vm"},
+    {"from":"vm","to":"out"}
+  ],
+  "outputs":["out"]
+}

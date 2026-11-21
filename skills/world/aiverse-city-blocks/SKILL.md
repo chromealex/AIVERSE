@@ -37,8 +37,8 @@ actual boundary position. Use the same support surface for paving, beds and thei
 
 In the current road renderer, ground-level sidewalk top is:
 `terrainY + roadLift + curbHeightMetres / cellMeters`.
-Verify constants in `modules/rts/view/RtsRoadView.cpp` and defaults in
-`modules/rts/RtsRoadNet.h` before implementing an adapter. Currently roadLift is 0.025 map
+Verify constants in `engine/roads/RoadView.cpp` and defaults in
+`engine/roads/RoadNet.h` before implementing an adapter. Currently roadLift is 0.025 map
 units, default curbHeight is 0.15 metres, and default cellMeters is 4. Thus a low curb on flat
 terrain ends at 0.0625, not 0.012. Low/sloped curbs use the configured height; high curbs multiply
 it by 1.35; none/shoulder have no curb rise. The curb's width is not its height.

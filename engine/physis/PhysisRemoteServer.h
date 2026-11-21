@@ -102,10 +102,15 @@ public:
             const auto before=entry.receipt;
             // Previously applied receipts are historical, but a rollback
             // can invalidate that history. Recheck at reconnect/poll time.
+            // A LATER legitimate edit (revision beyond the applied one) is
+            // not a rollback: only compare content while the registry is
+            // still at the exact revision this receipt committed.
             if(entry.receipt.result==Result::Applied) {
-                if(!state || state->revision<=entry.expectedRevision ||
+                const std::uint64_t appliedRevision=entry.expectedRevision+1;
+                if(!state || state->revision<appliedRevision ||
                    sim.tick()<entry.observedTick ||
-                   !matches(*state,entry.desired)) {
+                   (state->revision==appliedRevision &&
+                    !matches(*state,entry.desired))) {
                     entry.receipt.result=Result::Conflict;
                     entry.receipt.revision=state?state->revision:0;
                     entry.receipt.detail="PHYSIS applied edit invalidated by rollback";

@@ -18,6 +18,15 @@ public:
     void draw(render::Renderer3D& r, gfx::Device& dev, const std::vector<ViewGroundBatch>& batches, const std::string& base);
     void shutdown();
     size_t lastTriangles() const { return triangles_; }
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        auto r=batch_.ownedGpuMemoryStats(),c=textures_.ownedGpuMemoryStats();
+        r.textureKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(r.textureKnownBytes,c.textureKnownBytes);
+        r.bufferKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(r.bufferKnownBytes,c.bufferKnownBytes);
+        r.textures+=c.textures;r.buffers+=c.buffers;
+        r.unknownTextures+=c.unknownTextures;r.unknownBuffers+=c.unknownBuffers;
+        r.multiVersionBuffers+=c.multiVersionBuffers;return r;
+    }
 private:
     gfx::Device* dev_ = nullptr;
     render::SpriteBatch batch_;

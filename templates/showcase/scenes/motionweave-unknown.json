@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "scenes/motionweave-unknown",
+  "dependencies": [],
+  "objects": [
+    {"id":25,"prefab":"visual/not-registered","properties":{"x":1}}
+  ]
+}

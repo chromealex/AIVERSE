@@ -254,6 +254,7 @@ static void updateSizes(NSView* view) {
         if (S.cb.frame) S.cb.frame(*g_device, dt);
         const auto afterCallback = std::chrono::steady_clock::now();
         g_device->endFrame();
+        if (S.cb.afterFrame) S.cb.afterFrame(*g_device);
         const auto afterEnd = std::chrono::steady_clock::now();
         if (traceFrame) {
             // Report once per 120 frames, not on every frame (console I/O

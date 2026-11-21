@@ -26,10 +26,13 @@
 #include "engine/net/NetClient.h"
 #include "engine/platform/Platform.h"
 #include "engine/render/ImGuiLayer.h"
-#include "engine/render/PostFx.h"
+#include "engine/render/Prisma.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/QualityGovernor.h"
 #include "engine/render/Renderer3D.h"
+#include "engine/render/CameraClientAdapter.h"
+#include "engine/render/CameraModelSnapshot.h"
+#include "engine/render/RenderDeviceLifetime.h"
 #include "engine/services/Store.h"
 #include "engine/sim/Simulation.h"
 #include "engine/ui/UiLayer.h"
@@ -95,6 +98,11 @@ class GameClient {
     struct ScriptUiApi;     // ClientScriptUi.cpp: scripthost.event / send for engine/ui/lib/scriptui.lua
     friend struct ScriptUiApi;
 public:
+    // Embedded GameClient shares its editor's gfx::Device generation.
+    // Standalone client creates an epoch automatically during initStep(0).
+    void setGpuDeviceLease(render::RenderDeviceLifetime::Lease lease) {
+        gpuDeviceLease_=std::move(lease);
+    }
     void init(gfx::Device& dev);   // every init step at once
     // Startup in steps, one per frame, so the splash screen (ClientSplash.h) keeps animating.
     static constexpr int kInitSteps = 6;
@@ -122,8 +130,29 @@ public:
     Simulation* simulation() { return sim_.get(); }
     bool inMatch() const { return !mapLoading_ && sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
     const std::string& errorText() const { return error_; }
+    // Non-owning, frame-scoped LENS RT handles for native UI/material consumers.
+    gfx::TextureHandle lensColorTarget(uint64_t key) const {
+        return lensCamerasActive_?lensCameras_.colorTarget(key):gfx::TextureHandle{};
+    }
+    gfx::TextureHandle lensDepthTarget(uint64_t key) const {
+        return lensCamerasActive_?lensCameras_.depthTarget(key):gfx::TextureHandle{};
+    }
+    bool lensTargetInfo(uint64_t key,int& w,int& h,bool& hdr) const {
+        return lensCamerasActive_&&lensCameras_.targetInfo(key,w,h,hdr);
+    }
+    bool bindLensColorTarget(int slot,uint64_t key) const {
+        return lensCamerasActive_&&dev_&&lensCameras_.bindColorTarget(*dev_,slot,key);
+    }
+    // Editor controls affect only the existing local simulation. Network/city
+    // authority must keep advancing even when a local preview is paused.
+    bool hostCanControl() const;
+    bool hostPaused() const;
+    bool hostCanStep() const;
+    bool setHostPaused(bool paused);
+    bool requestHostStep();
 
 private:
+    bool hostPaused_ = false, hostStep_ = false;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
@@ -291,6 +320,8 @@ private:
     int addAction(std::function<void()> fn, bool enabled = true) { nextActions_.push_back(enabled ? std::move(fn) : nullptr); return int(nextActions_.size()) - 1; }
 
     gfx::Device* dev_ = nullptr;
+    std::unique_ptr<render::RenderDeviceLifetime> ownedGpuLifetime_;
+    render::RenderDeviceLifetime::Lease gpuDeviceLease_;
     gfx::TextureHandle hostColor_, hostDepth_;   // setHostTarget: invalid = the screen
     int hostW_ = 0, hostH_ = 0;
     int fbW() const { return hostColor_.valid() ? hostW_ : dev_->framebufferWidth(); }
@@ -328,15 +359,19 @@ private:
     Minimap minimap_;
 
     Renderer3D r3d_;
+    render::CameraClientAdapter lensCameras_;
+    render::CameraModelSnapshot lensModelSnapshot_;
+    bool lensCamerasActive_=false;
     // streamed static world (map "streamedWorld": {"async": true, ...}, docs/large-worlds.md): chunks around the camera
     std::unique_ptr<world::WorldScene> worldScene_;
     // Stage41: ordered nonblocking CPU/GPU samples only when the streamed
     // world's Horizon adaptive presentation quality is explicitly enabled.
     terraweave::HorizonFrameTimingBridge horizonFrameTiming_;
     int worldRadius_ = 2;
-    render::PostFx postFx_;               // post-processing: game.json / map "postfx" (engine/render/PostFx.h)
-    render::PostFxQuality postFxBase_ = render::PostFxQuality::Medium;   // tier before the governor stepped down
-    void configurePostFx(const Json& map);
+    render::PrismaVolumeStack prismaVolumes_; // camera-local PRISMA presentation profiles, nonauthoritative
+    render::Prisma prisma_;               // post-processing: game.json / map "postfx" (engine/render/Prisma.h)
+    render::PrismaQuality prismaBase_ = render::PrismaQuality::Medium;   // tier before the governor stepped down
+    void configurePrisma(const Json& map);
     render::BakedLighting baked_;         // the map's baked lightmaps / probes, "<map>.bake" (ClientBaked.cpp, agent-lightbake)
     void configureBakedLighting(const std::string& mapFile);
     RtsView view_;

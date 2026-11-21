@@ -1,5 +1,10 @@
 # FPS: reference runtime and examples
 
+Optional FPS skeletal animations are powered by **AIVERSE MotionWeave**.
+New native modules link `AIVERSE::MotionWeave` and include
+`<aiverselib/motionweave/MotionWeave.h>`.
+See [MotionWeave](motionweave.md). The old animation ECS target remains valid.
+
 FPS projects use `game.json` with `module: "fps"` and `genre: "fps"`. Choose FPS in
 New Project: `fps_training` (stationary targets), `fps_arena` (5 vs 5 bots), or
 `fps_survival` (100 slots, sparse large world, battle royale with air insertion and a phased zone). The editor launches a separate FPS client.
@@ -134,6 +139,14 @@ Passengers and gunners keep Fire / Aim / Reload / weapon keys; the driver does n
 thrown-out occupants are ejected; a destroyed vehicle kills everyone inside. Vehicles without `type` keep the
 legacy car. FPS save version 9 stores controller and seat state. `templates/fps_survival` has ten four-seat cars
 (`rules/vehicles.json`). Test: `typedVehicles` in `tests/fps/tests.cpp`.
+
+## Races
+
+A map `"race"` block makes the typed map vehicles race: the shared race capability of every project, documented in
+[races.md](races.md) (data, behaviour, HUD). This module's adapter is `modules/fps/FpsRace.cpp`: player `i` is seated
+as the driver of the `i`-th typed map vehicle; the race decides the round. `State::race` is saved as FPS save version
+10 only on maps with a race; snapshots carry the player's `lib::genre::RaceView` (authority protocol 6). The client
+shows the chase camera and the race HUD at the wheel and hides the weapon UI.
 
 ## Generated buildings (opt-in)
 
@@ -270,3 +283,134 @@ The current client HUD/viewmodel/smoke and audio changes require a successful li
 visual/audio check. The automated GUI launch was interrupted; do not treat a compiled
 client or the headless scenarios as proof of visual quality. Windows, web and mobile
 integration of these new controls has not been verified.
+
+### Opt-in animated remote FPS characters
+
+The reference FPS client now supports an optional character model without
+changing authoritative FPS simulation, saves, or network protocol:
+
+```json
+{ "fps": { "visual": { "model": "models/hero.glb", "scale": 1.0,
+                       "heightOffset": 0.0 } } }
+```
+
+Place the model under the FPS project directory. An optional
+`fps.visual.animationGraph` object uses the existing AnimationGraph JSON
+format; otherwise, the client builds a basic Idle/Walk or Idle/Run blend
+graph from recognized clip names. Input parameters projected from snapshots:
+`speed`, `moving`, `dead`, `grounded`, `reloading`.
+
+The reference client runs a separate presentation ECS World, not a gameplay
+world, and computes remote actor poses per render frame. Invalid model/graph
+assets retain the previous box rendering fallback. The procedural first-person
+weapon remains unchanged. This path requires a real model and visual testing.
+
+
+### Optional instanced GPU crowd skinning
+
+Set `fps.visual.bakedCrowd: true` with a skinned
+`fps.visual.model` and **no custom `fps.visual.animationGraph`**.
+The FPS client then bakes the model's clips into a joint-matrix texture,
+drives per-entity Idle/Walk/Run/Death through the shared
+`AnimationCrowdComponent`, and submits
+`Renderer3D::ModelDraw::baked` for GPU instancing. If a bake is
+unavailable, it uses the existing palette graph or box fallback.
+Complex avatars with IK, upper-body layers, and imported controllers
+stay in palette mode. The palette path now uses the shared
+`AnimationSignificanceComponent` / `assignAnimationBudgets`
+rather than hard-coded per-distance pose sampling.
+
+
+### Hot-reloadable FPS AnimationGraph
+
+Optional `fps.visual.graphFile: "animations/hero.json"` loads a
+project-relative AnimationGraph file instead of the generated Idle/Walk/Run
+graph. The client polls for changed file timestamps on its presentation
+thread (every 30 rendered frames), recompiles transactionally, retains the
+last good graph after an invalid edit, and swaps immutable graph pointers
+on existing presentation entities. Game/network simulation is unchanged.
+Changing a graph restarts its visual state machine. This file is resolved
+inside the current project; it must not contain parent-path traversal.
+
+## Automatic MotionWeave CPU/GPU backend
+
+Under `fps.visual`, optional `animationMode` is `"auto"` (default),
+`"cpu"`, or `"gpu"`. Existing `bakedCrowd: true` remains equivalent
+to forcing `"gpu"` when a suitable animation can be baked. Custom
+`animationGraph` or `graphFile`, native callbacks, IK and layered
+rigs remain on the CPU graph path.
+
+In auto mode, the client chooses GPU baked instanced skinning for simple
+imported clips at `gpuEnterActors` living remote characters (24 by default).
+It switches back to full CPU graph below or at `gpuExitActors` (12 by
+default), with hysteresis to reduce mode thrashing. Backend changes recreate
+**presentation-only** animation entities; simulation actor state, game
+networking and saves are not touched. A missing GPU bake retains CPU fallback.
+
+CPU graph animation automatically uses the host-owned persistent
+MotionWeave scheduler when 16 or more remote presentation actors exist.
+Its cost-aware worker jobs avoid custom callback/rig operations, which
+execute on the submitting thread after a barrier. Set
+`fps.visual.animationStats: true` to see CPU/GPU path, worker count,
+work estimates, jobs, and CPU timings in the FPS HUD. This is
+presentation profiling, not deterministic simulation state.
+
+
+### MotionWeave cosmetic Montages from replicated FPS actions
+
+Optional project-local JSON assets can be authored in the editor
+(`animations/montage/`) or through Workspace/MCP:
+
+```json
+{"fps":{"visual":{
+  "model":"models/hero.glb",
+  "montages":{
+    "shot":"animations/montage/fire.json",
+    "reload":"animations/montage/reload.json",
+    "death":"animations/montage/death.json"
+  }
+}}}
+```
+
+Montage files reference imported clip names, sections, optional masks,
+blend-in/out and cosmetic notifies. Missing or invalid files are logged
+and skipped; no crash or authoritative gameplay action is generated.
+While a death Montage is active the dead actor may still render
+until its visual section completes. Replicated shot count, reload
+deadline and health/life transitions are used for one-shot visual
+triggers; stale/duplicate snapshots never replay the same Montage.
+A newly visible actor doesn't invent a shot. The FPS game server,
+hit detection, ammo, damage and reloading remain authoritative.
+When any valid Montage is configured, the backend stays on the
+CPU Graph path so its upper-body mask/sections can be evaluated.
+
+
+When switching between simple CPU Graph and GPU Baked Animation,
+MotionWeave now captures each remote actor's normalized idle/walk
+clip phase and seeds the new presentation player. This avoids the
+previous forced restart at clip time zero. MotionWeave preserves
+confirmed replicated animation-action history across backend
+changes, so shot/reload/death cosmetics do not replay. The
+transition still cannot preserve arbitrary controller blends or
+motion-matching state and remains limited to simple clips.
+
+### Engine View for models and primitives
+
+The FPS reference client maps both animated models and ordinary
+scene meshes (cube fallback actors, collider debug shapes, world boxes)
+to the shared **genre-independent** `aiverse::View`.
+The renderer still receives the same world transforms, color and
+draw flags: `View::submitOne` for ModelDraw and
+`View::submitMesh` for simple Mesh packets. No FPS state is ever
+read by the core View, and a missing animated character continues
+to fall back to the visible cube.
+
+For groups of independent world objects, the host now collects
+`view::MeshObject` records into `view::ScenePacketBatch` and
+submits them through `View::submitPackets`. The draw command
+sequence for loot, vehicles, projectiles and planted objects
+is unchanged. A deliberate batch boundary before the
+royale-zone wall preserves the previous wall/crate ordering.
+Only generic geometry enters View; game-specific rules stay
+in the FPS host. `ScenePacketBatch` does not replace
+Renderer3D's existing material/mesh batching logic.

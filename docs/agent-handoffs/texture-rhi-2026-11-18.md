@@ -12721,3 +12721,66 @@ Require actual new SHA and `result=PASS`, `full_engine=1`, `safe_texture_tests=2
 **Regression:** extended `tests/render/virtual_texture_mip_pipeline.cpp` with two independent caches whose revision/geometry match but ready tile coordinates differ, and asserts table rebind invalidates stale samples. Existing streaming and indexed table CTests unchanged.
 
 **Validation:** GitHub source commit and ref update succeeded; new source/test not yet compiled/executed. The Linux feature-branch CI trigger is available, but prior run `44604340610` was only queued when last observed; a newer source push may cancel it and schedule a new run. Confirm exact SHA and individual job results before declaring a PASS. Full-engine Mac Studio and native Metal GPU tests remain outstanding.
+
+
+## 2026-11-20 - Stage 3 integration native acceptance
+
+Merge `38dbd0602119067425f4f1a776466e5e686131f5` on
+`integration/texture-rhi-main-stage3-20261120` preserves pinned main
+`f9aed9a705982e2c6b77b29869e309995ce8b163`. Existing owner-run full
+CTest 289/289 was confirmed in local logs. This agent built and ran seven
+native Texture RHI Metal tests: 7/7 PASS (23.54s), mandatory execution
+markers present, zero FAIL assertions. Skill checks passed. Unified runner
+no-build guard rejected unspecified build type; no wrapper PASS claimed.
+No runtime edits or production default changes during this acceptance.
+See [exact source, commands, log hashes and remaining gates](texture-rhi-stage3-native-acceptance-2026-11-20.md).
+Next: publish branch and inspect PR #86/CI/base; do not update main or infer
+Vulkan/GLES/WebGL/indexed-anisotropic GPU validation from these tests.
+
+## 2026-11-20 — indexed native Metal sampling acceptance
+
+Code `ed1a427a61960b02a658e1c46f29dc1ac4261ee7`, branch
+`codex/texture-completion`: 18 indexed mip/anisotropic GPU color probes
+plus 136 preserved bilinear probes PASS (7.28 s) through the unified runner,
+Debug build entirely on KINGSTON. Runtime/API/save formats unchanged.
+[Exact commands, limitations and next step](texture-rhi-indexed-metal-2026-11-20.md).
+Prior focused Linux/GLES/Vulkan CI remains queued; no CI PASS claimed.
+
+## 2026-11-20 — final GPU gates exposed indexed ICB admission defect
+
+Code `a6d32f7b8eb02302eb0242ba656c1c7b52defe8b`: 1330 low-level GPU
+color probes and six shader/packer tests pass. New indexed Renderer3D
+fixture fails because unsupported ICB submission is attempted every frame;
+pixels still match direct rendering. Full build is in progress on KINGSTON.
+[Failure evidence and exact next action](texture-rhi-final-gates-2026-11-20.md).
+
+## 2026-11-20 — indexed VT early admission fix
+
+Code `b17dba1a02066fd23d9764a5e07fbc16b9e27e63`: indexed bindings are
+excluded before legacy ICB preflight; eligible counters match actual supported
+items. Full Debug build PASS; targeted legacy/indexed Renderer3D scenes 2/2
+PASS, with zero execution errors. Full 300-test regression is RUNNING, not
+yet accepted. [Exact evidence and continuation](texture-rhi-indexed-admission-fix-2026-11-20.md).
+
+## 2026-11-20 — final native Texture RHI regression PASS
+
+Runtime code `b17dba1a02066fd23d9764a5e07fbc16b9e27e63`: full Debug
+editor/test build and **300/300 registered CTests PASS**, 0 skipped/failures,
+949.78 s, including all eight serial Metal texture tests and 1330 canonical
+GPU color probes. Indexed ICB admission bug fixed; legacy ICB remains intact.
+All local build/cache/report output is on KINGSTON. PR #96 targets main.
+[Final evidence, hashes and external CI/release boundary](texture-rhi-indexed-admission-fix-2026-11-20.md).
+Cross-backend runtime CI remains queued; Windows/macOS republish is due
+from the integrator per AGENTS §8. No unsupported parity/performance claims.
+
+## 2026-11-21 — review fixes (branch feature/aiv20261121_fix_gfx_strata)
+
+Texture/RHI part of the gfx-strata review pass; full detail in
+[review-fixes-gfx-strata-2026-11-21.md](review-fixes-gfx-strata-2026-11-21.md).
+- `817d0b5` GL: stale `glGetError()` drained before guarded sections (VT uploads no longer fail on foreign errors).
+- `aba1af2` `readTextureAsync` row order unified to top-left: GL and Vulkan flip only render targets; Metal unchanged; `gles_texture_array_gpu` gets a row-0 marker.
+- `a2fe676` Vulkan sampler `mipFilter None`: minLod = maxLod = 0.
+- `2558ba6` Vulkan device loss: pending texture/buffer readbacks complete once with an empty result.
+- `0298947` GL region uploads via `UNPACK_ROW_LENGTH`/`IMAGE_HEIGHT`; `TextureStreamQueue` deque + one-pass cancel.
+- `de4a989` Metal ordered staging-blit uploads also for 2D/cube/cube-array/3D (no auto mips, no open encoder). UNVERIFIED (ObjC++).
+Verification: syntax checks only for GL/Vulkan TUs; header-only streaming tests (texture_streaming, texture_resident_streamer, virtual_texture_file_streamer, virtual_texture_feedback_pass, texture_mip_residency) built and PASS standalone. GPU tests and full CTest NOT RUN.

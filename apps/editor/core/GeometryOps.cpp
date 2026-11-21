@@ -1,5 +1,8 @@
 #include "GeometryOps.h"
 #include "Workspace.h"
+#ifdef AIVERSE_STRATA_EDITOR_ENABLED
+#include "engine/render/StrataModelAdapter.h"
+#endif
 #include "engine/render/GeometryScene.h"
 #include <filesystem>
 #include <fstream>
@@ -22,6 +25,52 @@ Json ok(){Json j=Json::object();j.set("ok",Json::fromBool(true));return j;}
 void registerSurfaceProxyOps(Workspace& ws);
 void registerGeometryOps(Workspace& ws){
     registerSurfaceProxyOps(ws);
+    ws.registerOp({"strata_capabilities","Report compiled STRATA authoring support, analysis limits and verification boundaries; not live GPU status.",Json::parse(R"({"type":"object","properties":{},"additionalProperties":false})"),[](const Json&){
+        auto r=Json::parse(R"({"ok":true,"analysis":"CPU import staging only","maxVertices":250000,"maxIndices":750000,"maxReadBytes":67108864,"changesRenderer":false,"gpuVerified":false,"documentation":"docs/strata.md","skill":"skills/visuals/aiverse-strata/SKILL.md"})");
+#ifdef AIVERSE_STRATA_EDITOR_ENABLED
+        r.set("builderAvailable",Json::fromBool(true));
+#else
+        r.set("builderAvailable",Json::fromBool(false));
+#endif
+        return r;
+    }});
+    ws.registerOp({"strata_model_analyze","Build bounded CPU STRATA staging from a project-relative model; report eligibility, seam certificates and auxiliary index bytes. Read-only; no GPU parity or performance claim.",Json::parse(R"({"type":"object","properties":{"model":{"type":"string","minLength":1}},"required":["model"],"additionalProperties":false})"),[&ws](const Json& p){
+#ifndef AIVERSE_STRATA_EDITOR_ENABLED
+        (void)ws;(void)p;
+        throw std::runtime_error("STRATA builder unavailable; rebuild with AIVERSE_BUILD_STRATA=ON");
+        return Json::object();
+#else
+        const auto name=p.getStr("model");
+        projectPath(ws,name); // validate before invoking loaders, including their dependencies
+        size_t remaining=64*1024*1024;
+        auto model=render::loadModel(name,[&](const std::string& file,std::string& out){
+            const auto path=projectPath(ws,file);
+            std::ifstream f(path,std::ios::binary|std::ios::ate);
+            if(!f)return false;
+            const auto length=f.tellg();
+            if(length<0||uint64_t(length)>remaining)throw std::runtime_error("STRATA input exceeds 64 MiB read budget");
+            remaining-=size_t(length);out.resize(size_t(length));f.seekg(0);
+            return bool(f.read(out.data(),std::streamsize(length)));
+        });
+        if(model->vertices.size()>250000||model->indices.size()>750000)
+            throw std::runtime_error("STRATA analysis exceeds 250000 vertices or 750000 indices");
+        render::strata::ModelAsset asset;std::string error;
+        if(!render::strata::buildModelAsset(*model,{},asset,&error))throw std::runtime_error("STRATA build: "+error);
+        auto r=ok();Json skipped=Json::array();
+        for(const auto& v:asset.skipped){auto j=Json::object();j.set("mesh",Json::number(int64_t(v.mesh)));j.set("primitive",Json::number(int64_t(v.primitive)));j.set("reason",Json::string(v.reason));skipped.push(j);}
+        uint64_t nodes=0,meshlets=0,bytes=0,rejected=0,certified=0;
+        for(const auto& v:asset.primitives){nodes+=v.geometry.nodes.size();meshlets+=v.geometry.meshlets.size();bytes+=v.geometry.indices.size()*sizeof(uint32_t);rejected+=v.geometry.seamRejectedParents;certified+=v.geometry.seamCertified;}
+        r.set("eligiblePrimitives",Json::number(int64_t(asset.primitives.size())));
+        r.set("skipped",skipped);r.set("clusterNodes",Json::number(int64_t(nodes)));
+        r.set("meshlets",Json::number(int64_t(meshlets)));r.set("auxiliaryIndexBytes",Json::number(int64_t(bytes)));
+        r.set("seamCertifiedPrimitives",Json::number(int64_t(certified)));r.set("seamRejectedParents",Json::number(int64_t(rejected)));
+        r.set("sourceSeamsCertified",Json::fromBool(asset.sourceSeamsCertified));
+        r.set("sharedBoundarySegments",Json::number(int64_t(asset.sharedGeometricBoundarySegments)));
+        r.set("note",Json::string("CPU import analysis only. Certificates do not prove GPU pixel parity; bytes are auxiliary CPU index storage, not VRAM. Renderer settings unchanged."));
+        return r;
+#endif
+    }});
+
     ws.registerOp({"geometry_catalog","Geometry optimization choices, eligibility and platform-independent budgets. Analyze assets before selecting policies.",Json::object(),[](const Json&){return Json::parse(R"({"surfaceProxy":{"bake":"geometry_proxy_bake: offline plane/box GLB with embedded material maps","bind":"geometry_proxy_lod for RTS types; instance.proxy for static scenes","limits":"distant rigid opaque/masked PBR; sampled silhouette, no parallax; inspect oblique views"},"policies":{"shadowClusters":"Opt-in rigid shadow detail using the light matrix and shadowErrorPixels; masked casters stay fine. Never use camera occlusion for shadows.","clusters":"Large rigid opaque meshes: spatial clusters with boundary-locked coarse indices and pixel-error selection. Instanced batches remain whole.","occlusion":"Conservative current-frame CPU coverage, 64x36 cells, at most 8192 source triangles per frame. No temporal GPU readback.","occluder":"Only real opaque source triangles; never windows, bounds, transparent materials, animated or simplified HLOD proxies.","hlod":"Static decorative instances only. Spatial hierarchy merges compatible materials and chooses a proxy by pixel extent and geometric error. Not collision, entities, fog-of-war or destructible gameplay."},"selection":{"rtsCrowds":"Keep instancing and animation LOD; do not request clusters by default.","largeStaticMeshes":"Analyze triangle and material counts, enable clusters if profiling helps.","interiorsCities":"Use a small number of simple opaque occluders; test holes and camera changes.","distantScenery":"Put static decoration in geometry_scene_set with HLOD enabled.","mobileWeb":"Start with policies off; compare frame time and memory on target hardware."},"limits":{"sceneInstances":4096,"sourceVertices":2000000,"proxyVertices":2000000},"verification":["compare policy on/off","near/far and orthographic cameras","holes and near plane","shadows and reflections","CPU time and draw calls on target hardware"],"rtsScene":"game.json geometryScene; game-wide static scenery, flat maps only","fpsScene":"map geometryScene; map-local scenery","limitations":["CPU preparation at scene load, no disk streaming","two cluster detail levels, not Nanite","HLOD transitions switch without cross-fade","static scenery is visible regardless of RTS fog-of-war"]})");}});
     const auto analyze=Json::parse(R"({"type":"object","properties":{"model":{"type":"string"},"platform":{"enum":["desktop","mobile","web"]},"context":{"enum":["largeStatic","crowd","interior","scenery"]}},"required":["model"]})");
     ws.registerOp({"geometry_analyze","Inspect a real model and report eligibility, cluster reduction and a suggested policy. Does not modify the game or claim measured GPU speedup.",analyze,[&ws](const Json& p){

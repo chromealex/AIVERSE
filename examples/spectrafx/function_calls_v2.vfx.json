@@ -1,0 +1,167 @@
+{
+  "version": 2,
+  "description": "FunctionCall graph with reusable speed and age-fade logic",
+  "parameters": {
+    "baseSpeed": 3
+  },
+  "functions": {
+    "scale_speed": {
+      "parameters": {
+        "base": 1,
+        "gain": 1
+      },
+      "returns": "number",
+      "nodes": [
+        {
+          "id": "base",
+          "type": "Parameter",
+          "properties": {
+            "name": "base"
+          }
+        },
+        {
+          "id": "gain",
+          "type": "Parameter",
+          "properties": {
+            "name": "gain"
+          }
+        },
+        {
+          "id": "scaled",
+          "type": "Multiply",
+          "properties": {
+            "a": {
+              "$node": "base"
+            },
+            "b": {
+              "$node": "gain"
+            }
+          }
+        }
+      ],
+      "output": "scaled"
+    },
+    "age_fade": {
+      "parameters": {
+        "intensity": 1
+      },
+      "returns": "number",
+      "nodes": [
+        {
+          "id": "age",
+          "type": "AgeNormalized"
+        },
+        {
+          "id": "one",
+          "type": "Float",
+          "properties": {
+            "value": 1
+          }
+        },
+        {
+          "id": "fade",
+          "type": "Subtract",
+          "properties": {
+            "a": {
+              "$node": "one"
+            },
+            "b": {
+              "$node": "age"
+            }
+          }
+        },
+        {
+          "id": "intensity",
+          "type": "Parameter",
+          "properties": {
+            "name": "intensity"
+          }
+        },
+        {
+          "id": "out",
+          "type": "Multiply",
+          "properties": {
+            "a": {
+              "$node": "fade"
+            },
+            "b": {
+              "$node": "intensity"
+            }
+          }
+        }
+      ],
+      "output": "out"
+    }
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 20
+      }
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "size": 0.5,
+        "spread": 10,
+        "sizeOverLife": {
+          "$curve": "fadeCall",
+          "samples": 17
+        }
+      }
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive"
+      }
+    },
+    {
+      "id": "speedCall",
+      "type": "FunctionCall",
+      "properties": {
+        "function": "scale_speed",
+        "arguments": {
+          "base": {
+            "$param": "baseSpeed"
+          },
+          "gain": 1.8
+        }
+      }
+    },
+    {
+      "id": "fadeCall",
+      "type": "FunctionCall",
+      "properties": {
+        "function": "age_fade",
+        "arguments": {
+          "intensity": 1
+        }
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "out"
+    },
+    {
+      "from": "speedCall",
+      "to": "init",
+      "toPort": "speed"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

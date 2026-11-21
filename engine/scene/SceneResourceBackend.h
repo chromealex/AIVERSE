@@ -113,8 +113,19 @@ public:
             e.hooks = kinds_.at(e.spec.kind);
             e.phase = SceneResourcePhase::Queued;
         }
-        if(e.phase == SceneResourcePhase::Failed ||
-           e.phase == SceneResourcePhase::Cancelled) {
+        if(e.phase == SceneResourcePhase::Cancelled) {
+            // A cancelled entry is a tombstone for a still-running worker
+            // (its staging reservation is still held). A new interest
+            // resurrects it instead of failing forever: keep the running
+            // future, or queue a fresh preparation if none exists.
+            if(e.future.valid()) e.phase = SceneResourcePhase::Preparing;
+            else {
+                releaseStaging(e);
+                e.phase = SceneResourcePhase::Queued;
+            }
+            e.error.clear();
+        }
+        if(e.phase == SceneResourcePhase::Failed) {
             if(error) *error = e.error;
             return false;
         }

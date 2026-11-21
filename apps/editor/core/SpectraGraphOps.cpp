@@ -4,6 +4,7 @@
 #include "Workspace.h"
 #include "FxOps.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraAuthoring.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +15,9 @@
 #include <vector>
 
 namespace aiverse::editor {
+
+void registerSpectraFunctionOps(Workspace& ws); // reusable v2 function libraries
+
 namespace {
 namespace fs = std::filesystem;
 
@@ -38,6 +42,9 @@ fs::path graphDir(const Workspace& ws) {
 }
 fs::path graphFile(const Workspace& ws, const std::string& name) {
     return graphDir(ws) / (name + ".vfx.json");
+}
+fs::path draftFile(const Workspace& ws, const std::string& name) {
+    return graphDir(ws) / "_drafts" / (name + ".vfx.json");
 }
 fs::path effectFile(const Workspace& ws, const std::string& name) {
     return fs::path(ws.project.dir) / "fx" / (name + ".json");
@@ -90,6 +97,26 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
             if (e.trail.enabled && !e.trail.texture.empty()) textures.insert(e.trail.texture);
         }
         response.set("textures", graphStrings({textures.begin(), textures.end()}));
+        // GPU eligibility is a *schema* assessment only: the user's RHI
+        // device might still lack Metal compute, or shader setup might fail.
+        const auto eligibility = spectra::inspectGraphGpuEligibility(def);
+        response.set("metalGpuEligible", Json::fromBool(eligibility.eligible));
+        response.set("metalGpuReason", strGraph(eligibility.eligible
+            ? "Metal compute subset compatible; device/runtime still unverified"
+            : eligibility.reason));
+        // Separate opt-in GPU VM capability. This is a pure schema check;
+        // no Metal shader is executed or verified by the editor operation.
+        spectra::GraphRuntimeOptions vmOptions;
+        vmOptions.gpuProgram=true;
+        const auto vm=spectra::inspectGraphGpuEligibility(def,vmOptions);
+        const bool authoredVm=def.emitters.size()==1 &&
+                             !def.emitters[0].particleProgram.isNull();
+        response.set("metalVmEligible",Json::fromBool(authoredVm && vm.eligible));
+        response.set("metalVmReason",strGraph(!authoredVm
+            ? "effect has no per-particle VM program"
+            : vm.eligible
+                ? "experimental bounded Metal VM eligible; device execution not verified"
+                : vm.reason));
         if (compiled) *compiled = std::move(def);
     }
     return response;
@@ -197,6 +224,182 @@ void registerSpectraGraphOps(Workspace& ws) {
         return response;
     });
 
+    add("fx_graph_node_catalog",
+        "List SpectraFX v1/v2 authoring node types, categories, starter properties and typed data input ports.",
+        R"({"properties":{}})", [&ws](const Json&) {
+        requireGame(ws);
+        Json entries=Json::array();
+        for(const auto& info:spectra::authoring::nodeCatalog()) {
+            Json item=Json::object();
+            item.set("type",Json::string(info.type));
+            item.set("group",Json::string(info.group));
+            item.set("v2Only",Json::fromBool(info.v2Only));
+            item.set("properties",Json::parse(info.initialProperties));
+            item.set("ports",graphStrings(spectra::authoring::inputPorts(info.type)));
+            entries.push(std::move(item));
+        }
+        Json response=Json::object();
+        response.set("nodes",std::move(entries));
+        response.set("newGraph",spectra::authoring::newGraphV2());
+        return response;
+    });
+
+    // Safe model-only edit. Never overwrites an existing effect or source
+    // file, and allows temporarily disconnected drafts as the user builds
+    // a valid graph node by node. The caller can commit via fx_graph_set or
+    // preserve incomplete work using fx_graph_draft_set.
+    add("fx_graph_edit",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty; does not write files.",
+        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
+             "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
+             "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
+             "property":{"type":"string"},"value":{},"draft":{"type":"boolean"}},
+             "required":["action"]})", [&ws](const Json& p) {
+        requireGame(ws);
+        const std::string action=p.getStr("action");
+        Json graph;
+        if(action=="new")graph=spectra::authoring::newGraphV2();
+        else if(p.getBool("draft") && !p.has("graph") && !p.has("text"))
+            graph=Json::parse(readFile(draftFile(ws,requireGraphName(p))));
+        else graph=sourceGraph(p,ws);
+        std::string error;
+        std::string added;
+        bool ok=true;
+        if(action=="new") {}
+        else if(action=="upgrade") {
+            if(graph.getInt("version")!=1)ok=false;
+            else graph.set("version",Json::number(int64_t(2)));
+        } else if(action=="add")
+            ok=spectra::authoring::addNode(graph,p.getStr("type"),added,error);
+        else if(action=="connect") {
+            if(p.has("toPort"))
+                ok=spectra::authoring::connectData(
+                    graph,p.getStr("from"),p.getStr("to"),p.getStr("toPort"),error);
+            else ok=spectra::authoring::connectExec(
+                    graph,p.getStr("from"),p.getStr("to"),error);
+        } else if(action=="disconnect")
+            ok=spectra::authoring::disconnect(
+                graph,p.getStr("from"),p.getStr("to"),p.getStr("toPort"));
+        else if(action=="deleteNode") {
+            const std::string name=p.getStr("node");
+            const Json* found=spectra::authoring::node(
+                static_cast<const Json&>(graph),name);
+            if(!found)ok=false;
+            else {
+                Json nodes=Json::array(),links=Json::array(),outputs=Json::array();
+                for(const Json& n:graph["nodes"].items())
+                    if(n.getStr("id")!=name)nodes.push(n);
+                for(const Json& e:graph["links"].items())
+                    if(e.getStr("from")!=name&&e.getStr("to")!=name)links.push(e);
+                for(const Json& id:graph["outputs"].items())
+                    if(id.str()!=name)outputs.push(id);
+                graph.set("nodes",std::move(nodes));
+                graph.set("links",std::move(links));
+                graph.set("outputs",std::move(outputs));
+            }
+        } else if(action=="setProperty") {
+            Json* n=spectra::authoring::node(graph,p.getStr("node"));
+            if(!n || !p.has("value"))ok=false;
+            else {
+                Json props=(*n)["properties"];
+                if(!props.isObject())props=Json::object();
+                ok=fx::vfx2::nestedSet(props,p.getStr("property"),p["value"]);
+                if(ok)n->set("properties",std::move(props));
+            }
+        } else {ok=false;error="unknown graph edit action";}
+        Json response=Json::object();
+        response.set("ok",Json::fromBool(ok));
+        if(!ok) {
+            response.set("error",Json::string(error.empty()?"invalid or missing graph edit arguments":error));
+            return response;
+        }
+        response.set("graph",graph);
+        if(!added.empty())response.set("newNodeId",Json::string(added));
+        response.set("validation",graphEvaluation(graph,Json::object()));
+        response.set("summary",Json::string("In-memory SpectraFX graph edit; save via fx_graph_set or fx_graph_draft_set"));
+        return response;
+    });
+
+    add("fx_graph_draft_set",
+        "Save an incomplete SpectraFX graph in fx/graphs/_drafts/<name>.vfx.json without changing published assets. Return compiler diagnostics but do not reject disconnected drafts.",
+        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p) {
+        requireGame(ws);
+        const std::string name=requireGraphName(p);
+        if(!p.has("graph")&&!p.has("text"))
+            throw std::runtime_error("provide a draft graph or text");
+        const Json doc=sourceGraph(p,ws);
+        if(!doc.isObject() || !spectra::authoring::checkVersion(doc) ||
+           !doc["nodes"].isArray() || doc["nodes"].size()>256 ||
+           !doc["links"].isArray() || doc["links"].size()>512)
+            throw std::runtime_error("draft must be a bounded v1/v2 graph object");
+        writeFile(draftFile(ws,name),doc.dump(2)+"\n");
+        noteGraph(ws,"SpectraFX draft saved: "+name);
+        Json response=Json::object();
+        response.set("name",Json::string(name));
+        response.set("ok",Json::fromBool(true));
+        response.set("validation",graphEvaluation(doc,Json::object()));
+        response.set("summary",Json::string("Draft saved separately; published graph/effect unchanged"));
+        return response;
+    });
+
+    add("fx_graph_draft_get",
+        "Read a saved incomplete SpectraFX v1/v2 draft, including validation diagnostics.",
+        R"({"properties":{"name":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p) {
+        requireGame(ws);
+        const std::string name=requireGraphName(p);
+        const Json doc=Json::parse(readFile(draftFile(ws,name)));
+        Json response=Json::object();
+        response.set("name",Json::string(name));
+        response.set("graph",doc);
+        response.set("validation",graphEvaluation(doc,Json::object()));
+        return response;
+    });
+
+    add("fx_graph_draft_list",
+        "List SpectraFX draft graph names without publishing them.",
+        R"({"properties":{}})", [&ws](const Json&) {
+        requireGame(ws);
+        Json list=Json::array();
+        std::vector<std::string> names;
+        std::error_code ec;
+        for(fs::directory_iterator it(graphDir(ws)/"_drafts",ec),end;
+            !ec&&it!=end;it.increment(ec)) {
+            if(!it->is_regular_file(ec))continue;
+            const std::string filename=it->path().filename().string();
+            const std::string suffix=".vfx.json";
+            if(filename.size()<=suffix.size()||
+               filename.compare(filename.size()-suffix.size(),suffix.size(),suffix)!=0)continue;
+            const std::string name=filename.substr(0,filename.size()-suffix.size());
+            if(validFxName(name)&&name!="fx")names.push_back(name);
+        }
+        std::sort(names.begin(),names.end());
+        for(const auto& name:names)list.push(Json::string(name));
+        Json response=Json::object();
+        response.set("drafts",std::move(list));
+        return response;
+    });
+
+    add("fx_graph_draft_publish",
+        "Validate a draft and publish to fx/graphs/<name>.vfx.json; invalid drafts remain private and never replace the working asset.",
+        R"({"properties":{"name":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p) {
+        requireGame(ws);
+        const std::string name=requireGraphName(p);
+        const fs::path draft=draftFile(ws,name);
+        const Json doc=Json::parse(readFile(draft));
+        Json response=graphEvaluation(doc,Json::object());
+        response.set("name",Json::string(name));
+        if(!response.getBool("ok"))return response;
+        writeFile(graphFile(ws,name),doc.dump(2)+"\n");
+        std::error_code ec;
+        fs::remove(draft,ec); // publication succeeds even if cleanup fails
+        noteGraph(ws,"SpectraFX draft published: "+name);
+        response.set("summary",Json::string("Published validated SpectraFX graph "+name));
+        return response;
+    });
+
     add("fx_graph_bake", "Compile a SpectraFX graph into legacy fx/<effect>.json so fx_preview and existing game/event bindings can use it. Refuses to replace an effect unless overwrite=true.",
         R"({"properties":{"name":{"type":"string"},"effect":{"type":"string"},"overrides":{"type":"object"},"overwrite":{"type":"boolean"}},"required":["name","effect"]})",
         [&ws](const Json& p) {
@@ -217,6 +420,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         response.set("next", strGraph("fx_preview {\"effect\":\"" + effect + "\"}"));
         return response;
     });
+    registerSpectraFunctionOps(ws);
 }
 
 } // namespace aiverse::editor

@@ -490,7 +490,9 @@ void GameClient::initLua() {
     lua_pushcclosure(lua_, LuaApi::log, 1);
     lua_setglobal(lua_, "print");   // print -> the client log
     game::openScriptSound(lua_, &scriptSound_);
+#ifndef AIVERSE_CLIENT_NO_SPINE
     openSpineLua(lua_, &spine_);   // `spine`: skeleton views (ClientSpine.h)
+#endif
     spine_.onEvent = [this](const Json& e) { luaEmit("spine", e); };
     services_.attach(lua_, luaAlive_, [this](const char* name, const Json& e) { luaEmit(name, e); });
     openPadLua(lua_);   // game.sendPercent / game.useAbility   // `sound`: voice handles, music (modules/rts/view/ScriptSound.h)

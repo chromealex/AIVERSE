@@ -56,7 +56,9 @@ int main() {
             ok=ok && closed;
         }
         const char state=ok?'Y':'N';
-        (void)::write(ready[1],&state,1);
+        ssize_t sent=-1;
+        do {sent=::write(ready[1],&state,1);} while(sent<0 && errno==EINTR);
+        if(sent!=1)::_exit(44);
         ::close(ready[1]);
         if(!ok)::_exit(42);
         for(;;)::pause(); // parent kills the writer without destructors
@@ -67,7 +69,11 @@ int main() {
     do {polled=::poll(&pfd,1,10000);} while(polled<0 && errno==EINTR);
     char acquired='N';
     if(polled>0 && (pfd.revents&POLLIN))
-        (void)::read(ready[0],&acquired,1);
+    {
+        ssize_t count=-1;
+        do {count=::read(ready[0],&acquired,1);} while(count<0 && errno==EINTR);
+        if(count!=1)acquired='N';
+    }
     ::close(ready[0]);
     CHECK(polled>0 && acquired=='Y');
     if(acquired=='Y') {

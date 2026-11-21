@@ -7,6 +7,8 @@
 #include <aiverselib/water/NereidWater.h>
 #include "engine/sim/Simulation.h"
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -87,14 +89,13 @@ inline void applyNereidFlowObstructions(
         return;
     // Do not trust ECS pool insertion order: sorted by generation-safe
     // entity identity, identical in reference/indexed/adaptive water queries.
-    struct Candidate {
-        uint64_t order=0,ecsId=0;
-        const WaterFlowObstructionComponent* obstacle=nullptr;
+    struct Candidate { // trivial: only [0,count) is ever read
+        uint64_t order,ecsId;
+        const WaterFlowObstructionComponent* obstacle;
     };
-    std::vector<Candidate> candidates;
-    candidates.reserve(std::min<size_t>(
-        kMaxWaterFlowObstructions,
-        world.countExisting<WaterFlowObstructionComponent>()));
+    // Bounded stack scratch (no heap allocation per water probe).
+    std::array<Candidate,kMaxWaterFlowObstructions> candidates;
+    size_t count=0;
     world.eachExistingConst<WaterFlowObstructionComponent>(
         [&](Entity id,const WaterFlowObstructionComponent& o){
             if(!world.alive(id) || !o.enabled)return;
@@ -103,23 +104,25 @@ inline void applyNereidFlowObstructions(
             if(o.waterBody!=sample.body ||
                o.topY<=sample.bottomY || o.bottomY>=sample.surfaceY)
                 return;
-            if(candidates.size()>=kMaxWaterFlowObstructions)
+            if(count>=kMaxWaterFlowObstructions)
                 throw std::length_error("NEREID active flow obstruction budget");
             // Generated sources are sorted by stable source ID on BOTH ECS
             // and visual side, so overlapping logs/boulders deflect water in
             // the same sequence despite ECS entity recycling. Authored
             // obstacles use their generation-safe entity ID as a fallback.
-            candidates.push_back({
-                o.sourceKey?o.sourceKey:id.packed(),id.packed(),&o});
+            candidates[count++]={
+                o.sourceKey?o.sourceKey:id.packed(),id.packed(),&o};
         });
-    std::sort(candidates.begin(),candidates.end(),
+    std::sort(candidates.begin(),candidates.begin()+std::ptrdiff_t(count),
         [](const auto& a,const auto& b){
             return a.order==b.order ?
                 a.ecsId<b.ecsId : a.order<b.order;
         });
-    for(const auto& entry:candidates)
+    for(size_t i=0;i<count;++i){
+        const auto& entry=candidates[i];
         sample.flow=deflectNereidFlow(
             sample.flow,*entry.obstacle,sampleAt,entry.ecsId);
+    }
 }
 
 inline void io(Archive& a,WaterFlowObstructionComponent& o){

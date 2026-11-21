@@ -1,6 +1,10 @@
 #include "Net.h"
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <random>
+#include <system_error>
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -21,6 +25,7 @@ static bool wouldBlock() { return WSAGetLastError() == WSAEWOULDBLOCK; }
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #define AIVERSE_CLOSE ::close
 static void netInit() {}
@@ -56,7 +61,84 @@ sockaddr_in loopback(int port) {
     a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     return a;
 }
+// "GET / HTTP/1.1", "POST /x HTTP/1.1", ...: never valid agent-link JSON.
+bool httpRequestLine(const std::string& line) {
+    static const char* const methods[] = {"GET ", "POST ", "PUT ", "OPTIONS ", "HEAD ", "DELETE ",
+                                          "PATCH ", "CONNECT ", "TRACE ", "PRI "};
+    for (const char* m : methods)
+        if (line.compare(0, std::strlen(m), m) == 0) return true;
+    return false;
+}
+std::filesystem::path agentLinkDir() {
+    if (const char* d = std::getenv("AIVERSE_AGENT_LINK_DIR"); d && *d) return d;
+    const char* home = std::getenv("HOME");
+#if defined(_WIN32)
+    if (!home || !*home) home = std::getenv("USERPROFILE");
+#endif
+    if (!home || !*home) return {};
+    return std::filesystem::path(home) / ".aiverse" / "agent-link";
+}
+bool writeOwnerOnly(const std::filesystem::path& path, const std::string& text) {
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+#if defined(_WIN32)
+    // %USERPROFILE% is private to the user by its default ACL
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << text;
+    out.close();
+    return bool(out);
+#else
+    ::chmod(path.parent_path().c_str(), 0700);
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+    if (fd < 0) return false;
+    ::fchmod(fd, 0600);   // an existing file keeps its mode on O_CREAT
+    size_t off = 0;
+    while (off < text.size()) {
+        const auto n = ::write(fd, text.data() + off, text.size() - off);
+        if (n <= 0) { ::close(fd); return false; }
+        off += size_t(n);
+    }
+    return ::close(fd) == 0;
+#endif
+}
 } // namespace
+
+std::filesystem::path agentTokenPath(int port) {
+    const auto dir = agentLinkDir();
+    return dir.empty() ? std::filesystem::path() : dir / (std::to_string(port) + ".token");
+}
+
+bool readAgentToken(int port, std::string& token) {
+    const auto path = agentTokenPath(port);
+    if (path.empty()) return false;
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' ')) text.pop_back();
+    if (text.empty() || text.size() > 256) return false;
+    token = text;
+    return true;
+}
+
+std::string randomToken() {
+    std::random_device rd;   // OS CSPRNG on the supported desktop toolchains
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    out.reserve(64);
+    for (int i = 0; i < 8; ++i) {
+        uint32_t v = rd();
+        for (int k = 0; k < 8; ++k) { out += hex[v & 15u]; v >>= 4; }
+    }
+    return out;
+}
+
+bool tokenEquals(const std::string& a, const std::string& b) {
+    if (a.empty() || a.size() != b.size()) return false;
+    unsigned char diff = 0;
+    for (size_t i = 0; i < a.size(); ++i) diff |= static_cast<unsigned char>(a[i] ^ b[i]);
+    return diff == 0;
+}
 
 LineServer::~LineServer() { close(); }
 
@@ -64,8 +146,32 @@ void LineServer::close() {
     for (auto& c : conns_) AIVERSE_CLOSE(c.fd);
     conns_.clear();
     if (fd_ >= 0) AIVERSE_CLOSE(fd_);
+    if (tokenPublished_) {
+        // remove only our own file (another editor may have taken the port since)
+        std::string onDisk;
+        if (readAgentToken(port_, onDisk) && tokenEquals(onDisk, token_)) {
+            std::error_code ec;
+            std::filesystem::remove(agentTokenPath(port_), ec);
+        }
+    }
+    tokenPublished_ = false;
+    token_.clear();
     fd_ = -1;
     port_ = 0;
+}
+
+void LineServer::drop(int client) {
+    for (size_t i = 0; i < conns_.size(); ++i)
+        if (int(conns_[i].fd) == client) { AIVERSE_CLOSE(conns_[i].fd); conns_.erase(conns_.begin() + long(i)); return; }
+}
+
+void LineServer::setAuthenticated(int client) {
+    for (auto& c : conns_) if (int(c.fd) == client) c.authenticated = true;
+}
+
+bool LineServer::authenticated(int client) const {
+    for (const auto& c : conns_) if (int(c.fd) == client) return c.authenticated;
+    return false;
 }
 
 bool LineServer::listen(int port) {
@@ -86,6 +192,11 @@ bool LineServer::listen(int port) {
     setNonBlocking(fd);
     fd_ = fd;
     port_ = ntohs(a.sin_port);
+    token_ = randomToken();
+    if (publishToken_) {
+        const auto path = agentTokenPath(port_);
+        tokenPublished_ = !path.empty() && writeOwnerOnly(path, token_ + "\n");
+    }
     return true;
 }
 
@@ -106,18 +217,30 @@ std::vector<LineServer::Msg> LineServer::poll() {
     }
     char buf[65536];
     for (size_t i = 0; i < conns_.size();) {
-        bool closed = false;
+        bool closed = false, overflow = false;
         for (;;) {
             auto n = ::recv(conns_[i].fd, buf, sizeof buf, 0);
-            if (n > 0) { conns_[i].in.append(buf, size_t(n)); continue; }
+            if (n > 0) {
+                conns_[i].in.append(buf, size_t(n));
+                // bound the buffer: an unterminated line cannot grow memory without limit
+                if ((conns_[i].in.size() > kMaxLineBytes && conns_[i].in.find('\n') == std::string::npos) ||
+                    conns_[i].in.size() > 4 * kMaxLineBytes) { overflow = true; break; }
+                continue;
+            }
             if (n == 0 || !wouldBlock()) closed = true;
             break;
         }
+        const size_t first = out.size();
+        bool bad = overflow;
         size_t nl;
-        while ((nl = conns_[i].in.find('\n')) != std::string::npos) {
-            out.push_back({int(conns_[i].fd), conns_[i].in.substr(0, nl)});
+        while (!bad && (nl = conns_[i].in.find('\n')) != std::string::npos) {
+            std::string line = conns_[i].in.substr(0, nl);
             conns_[i].in.erase(0, nl + 1);
+            if (line.size() > kMaxLineBytes || httpRequestLine(line)) { bad = true; break; }
+            out.push_back({int(conns_[i].fd), std::move(line)});
         }
+        if (!bad && conns_[i].in.size() > kMaxLineBytes) bad = true;
+        if (bad) { out.resize(first); closed = true; }   // nothing from a rejected client is handled
         if (closed) { AIVERSE_CLOSE(conns_[i].fd); conns_.erase(conns_.begin() + long(i)); }
         else ++i;
     }

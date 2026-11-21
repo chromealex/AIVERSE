@@ -23,6 +23,8 @@ public:
     explicit SpatialWorld(int cellSize=32): cellSize_(cellSize>0?cellSize:32) {}
     bool add(Collider collider);
     bool addTriangle(uint32_t id,Triangle triangle);
+    // True when addTriangle(nonzero id, triangle) would accept it.
+    static bool validTriangle(const Triangle& triangle);
     Hit castCollider(uint32_t id,Vec3 start,Vec3 delta,Vec3 halfExtent={}) const;
     void remove(uint32_t id);
     void clear();

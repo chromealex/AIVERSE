@@ -68,7 +68,7 @@ public:
         return std::make_shared<const EarthworksLayer>(earth_);
     }
     std::vector<TerrainPatchDirtyRegion> pendingTerrainNotifications()const{
-        std::vector<TerrainPatchDirtyRegion> result;
+        std::vector<TerrainPatchDirtyRegion> result=retiredDirty_;
         for(const auto& [cell,resident]:residents_){
             (void)cell;
             const auto& pending=resident.pendingDirty();
@@ -176,12 +176,29 @@ public:
         // A camera/streaming jump can abandon work before publication.
         // Remove now-unneeded requests so old pending tiles cannot block
         // the WorldScene snapshot barrier forever.
+        // A still-RESIDENT tile keeps its stale mesh/collision, so its
+        // abandoned rebuild is parked in deferred_ and re-queued as soon as
+        // the tile is needed again (otherwise earthworks done while it was
+        // briefly unneeded would never reach its visuals or SpatialWorld).
         for(auto it=pending_.begin();it!=pending_.end();)
-            if(!needed.contains(it->first))it=pending_.erase(it);
-            else ++it;
-        for(const auto& tile:needed)
-            if(!residents_.contains(tile) && !pending_.contains(tile))
+            if(!needed.contains(it->first)){
+                if(residents_.contains(it->first)){
+                    auto& parked=deferred_[it->first];
+                    parked=std::max(parked,it->second);
+                }
+                it=pending_.erase(it);
+            }else ++it;
+        for(const auto& tile:needed){
+            if(pending_.contains(tile)){deferred_.erase(tile);continue;}
+            if(!residents_.contains(tile)){
                 pending_.insert_or_assign(tile,earth_.revision());
+                deferred_.erase(tile);
+            }else if(const auto parked=deferred_.find(tile);
+                     parked!=deferred_.end()){
+                pending_.insert_or_assign(tile,parked->second);
+                deferred_.erase(parked);
+            }
+        }
 
         size_t published=0;
         for(const auto& tile:needed){
@@ -214,7 +231,8 @@ public:
         if(complete)
             for(auto it=residents_.begin();it!=residents_.end();){
                 if(!needed.contains(it->first)){
-                    it->second.shutdown(device,spatial,colliders_);
+                    retire(it->second.shutdown(device,spatial,colliders_));
+                    deferred_.erase(it->first);
                     it=residents_.erase(it);
                 }else ++it;
             }
@@ -282,6 +300,7 @@ public:
                         const EarthworksNavSource& source,
                         std::string* error=nullptr) const {
         std::vector<RectCm> dirty;
+        for(const auto& change:retiredDirty_)dirty.push_back(change.bounds);
         for(const auto& [cell,resident]:residents_){
             (void)cell;
             for(const auto& change:resident.pendingDirty())
@@ -293,6 +312,7 @@ public:
 
     std::vector<TerrainPatchDirtyRegion> takeTerrainDirty(){
         std::vector<TerrainPatchDirtyRegion> out;
+        out.swap(retiredDirty_);
         for(auto& [cell,resident]:residents_){
             (void)cell;
             auto changed=resident.takeDirty();
@@ -309,14 +329,32 @@ public:
 
     void shutdown(gfx::Device& device,world::SpatialWorld& spatial){
         for(auto& [cell,resident]:residents_){
-            (void)cell;resident.shutdown(device,spatial,colliders_);
+            (void)cell;retire(resident.shutdown(device,spatial,colliders_));
         }
         residents_.clear();
+        deferred_.clear();
         grassRhi_.shutdown(device);
         // Preserve pending dirties/earthwater simulation data for reload.
     }
 
 private:
+    // Undelivered dirty records of an unloaded tile stay visible to
+    // listeners until takeTerrainDirty(); coalesced per tile rectangle.
+    void retire(std::vector<TerrainPatchDirtyRegion> regions){
+        for(const auto& region:regions){
+            auto same=std::find_if(retiredDirty_.begin(),retiredDirty_.end(),
+                [&](const TerrainPatchDirtyRegion& d){
+                    return d.cell==region.cell &&
+                           d.bounds.minX==region.bounds.minX &&
+                           d.bounds.minZ==region.bounds.minZ &&
+                           d.bounds.maxX==region.bounds.maxX &&
+                           d.bounds.maxZ==region.bounds.maxZ;
+                });
+            if(same==retiredDirty_.end())retiredDirty_.push_back(region);
+            else same->sourceRevision=std::max(same->sourceRevision,
+                                               region.sourceRevision);
+        }
+    }
     void schedule(const EarthworkChange& change){
         if(change.vertices.empty())return;
         // Edits to nonresident cells stay authoritative in Earthworks;
@@ -356,6 +394,9 @@ private:
     GrassPatchRenderer grassRhi_{};
     std::map<world::Cell,TerrainPatchResident> residents_;
     std::map<world::Cell,uint64_t> pending_;
+    // Resident tiles whose queued rebuild was abandoned while not needed.
+    std::map<world::Cell,uint64_t> deferred_;
+    std::vector<TerrainPatchDirtyRegion> retiredDirty_;
 };
 
 } // namespace aiverse::terraweave

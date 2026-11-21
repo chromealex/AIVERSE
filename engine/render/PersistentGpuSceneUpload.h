@@ -5,6 +5,7 @@
 // compute binding is deliberately separate until backend storage APIs exist.
 #include "PersistentGpuScene.h"
 #include "engine/gfx/Gfx.h"
+#include "GpuOwnedMemory.h"
 #include <array>
 #include <algorithm>
 #include <cstring>
@@ -73,6 +74,13 @@ public:
     }
     gfx::BufferHandle buffer(uint64_t frameIndex) const {
         return slots_[frameIndex % kFrames].buffer;
+    }
+    // All three GPU frame slots, not just the most recent upload.
+    // CPU mirrors/scene data and physical Metal buffer versions excluded.
+    GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        GpuOwnedMemoryCounter counter(device_);
+        for (const auto& slot : slots_) counter.buffer(slot.buffer);
+        return counter.stats();
     }
     void release() {
         for (auto& slot : slots_) {

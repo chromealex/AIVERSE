@@ -9,6 +9,7 @@
 #include "FxNoise.h"
 #include "ParticleShaders.h"
 #include "engine/render/graph/ShaderGraph.h"
+#include "engine/render/GpuResourceRetirement.h"
 
 namespace aiverse::fx {
 
@@ -218,6 +219,24 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         const EmitterDef& d = e.def.emitters[i];
         const std::string where = "fx/" + e.name + ".json: emitters[" + std::to_string(i) + "]";
         EmitterRT r;
+        if(!d.particleProgram.isNull())
+            spectra::program::compile(d.particleProgram,r.particleProgram,errors);
+        if(d.graphInputs.isArray()) {
+            for(size_t lane=0;lane<4;++lane) {
+                const std::string& name=d.graphInputs[lane].str();
+                uint8_t source=3; // zero
+                if(name=="age")source=0;
+                else if(name=="lifetime")source=1;
+                else if(name=="random")source=2;
+                else {
+                    for(uint8_t slot=0;slot<8;++slot) {
+                        if(name=="attribute"+std::to_string(slot))source=uint8_t(4+slot);
+                        else if(name=="param"+std::to_string(slot))source=uint8_t(12+slot);
+                    }
+                }
+                r.graphInputSources[lane]=source;
+            }
+        }
         r.tex = texture(d.texture, errors, where);
         r.batch = batchFor(r.tex, d.blend, d.shaderGraph);
         if(!batches[r.batch].error.empty()) errors.push_back(where + ": " + batches[r.batch].error);
@@ -234,7 +253,8 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         r.modules = d.localSpace || d.maxParticles > 0 || d.speedLimit.max > 0 || d.speedLimit.curved() || d.noise.enabled() || d.collision.enabled ||
                     !d.subEmitters.empty() || d.trail.enabled || d.light.enabled || d.velocity.x != 0 || d.velocity.y != 0 || d.velocity.z != 0 ||
                     r.anim || d.force.enabled || d.speedLimitAxes.enabled || d.externalForces > 0 || d.trigger.enabled || d.spin3D ||
-                    d.spinBySpeed.enabled || d.ringBuffer;
+                    d.spinBySpeed.enabled || d.ringBuffer ||
+                    !d.particleProgram.isNull();
         lutColor(r.startLut, d.startColor);
         lutColor(r.startMinLut, d.startColorMin);
         lutColor(r.colorSpeed, d.colorBySpeed);
@@ -337,6 +357,7 @@ void ParticleSystem::Impl::die(size_t i, bool events) {
         if (in->live > 0) --in->live;
     }
     const EmitterDef& d = defOf(p);
+    if(events)runProgram(p,spectra::program::Stage::Death,0.f);
     if (events && rtOf(p).modules) queueSub(p, FxSubEvent::Death, p.pos);
     if (p.trail >= 0 && !d.trail.dieWithParticles && trails[size_t(p.trail)].count > 1) {   // the trail fades out on its own
         orphans.push_back({p.trail, p.effect, p.emitter, p.scale, sizeNow(p, lifeT(p)), d.trail.inheritColor ? colorNow(p) : p.tint});
@@ -544,6 +565,12 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
     }
     p.pos += vt * dt;
     p.vtot = vt;
+    // Additional expression-program updates run once after standard
+    // integration, before collision/triggers, without replacing base physics.
+    if(er.particleProgram.enabled(spectra::program::Stage::Update)) {
+        runProgram(p,spectra::program::Stage::Update,dt);
+        p.vtot=p.vel; // expose any scripted velocity change to the renderer
+    }
     if (d.spin.curved()) p.rot += d.spin.at(t, prand(p.uid, 31)) * kDeg * dt * ((p.flags & 32) ? -1.0f : 1.0f);
     else p.rot += p.spin * dt;
     if (modules) {
@@ -587,6 +614,7 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
             }
             if (hit) {
                 p.age += c.lifeLoss / p.invLife;
+                runProgram(p,spectra::program::Stage::Collision,dt);
                 queueSub(p, FxSubEvent::Collision, p.pos);
                 const float sp = render::length(p.vel);
                 if (sp < c.minKillSpeed * p.scale || (c.maxKillSpeed > 0 && before > c.maxKillSpeed * p.scale) || p.age * p.invLife >= 1.0f) {
@@ -605,6 +633,8 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
             const bool known = p.flags & 8, was = p.flags & 4;
             p.flags = uint8_t((p.flags & ~12) | 8 | (inside ? 4 : 0));
             FxTriggerAction act = inside ? tg.inside : tg.outside;
+            if((known && inside!=was) || (!known && act==FxTriggerAction::Callback))
+                runProgram(p,spectra::program::Stage::Trigger,dt);
             if (known && inside != was) {
                 FxTriggerAction edge = inside ? tg.enter : tg.exit;
                 if (edge == FxTriggerAction::Kill) act = edge;
@@ -637,7 +667,22 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
 ParticleSystem::ParticleSystem() : impl_(std::make_unique<Impl>()) {}
 ParticleSystem::~ParticleSystem() { shutdown(); }
 
+render::GpuOwnedMemoryStats ParticleSystem::ownedGpuMemoryStats() const {
+    if (!impl_ || !impl_->dev) return {};
+    render::GpuOwnedMemoryCounter counter(*impl_->dev);
+    // Only buffers/atlas created in init(). Batch textures, custom mesh
+    // VBOs, graph images and loader sprites are owned by their providers.
+    counter.buffer(impl_->vb);
+    counter.buffer(impl_->ib);
+    counter.texture(impl_->atlas);
+    return counter.stats();
+}
+
 bool ParticleSystem::init(gfx::Device* dev) {
+    if(dev && !deviceLeaseValid(*dev)) {
+        error_="particles: GPU device generation expired";
+        return false;
+    }
     shutdown();
     auto& I = *impl_;
     I.dev = dev;
@@ -697,15 +742,47 @@ bool ParticleSystem::init(gfx::Device* dev) {
 void ParticleSystem::shutdown() {
     if (!impl_) return;
     auto& I = *impl_;
+    if(I.dev && !deviceLeaseValid(*I.dev)) {
+        // Destructor-safe fail closed: no Device call with an expired epoch.
+        // Any orphaned GPU handles remain for device teardown, not early free.
+        error_="particles: GPU resource shutdown after device generation expired";
+        I.dev=nullptr;
+    }
     if (I.dev) {
-        for (auto& b : I.batches) { for(auto p:b.graphPipe) if(p.valid()) I.dev->destroyPipeline(p); if(b.shader.valid()) I.dev->destroyShader(b.shader); }
-        for (auto& p : I.pipe) if (p.valid()) I.dev->destroyPipeline(p);
-        for (auto& p : I.meshPipe) if (p.valid()) I.dev->destroyPipeline(p);
-        if (I.shader.valid()) I.dev->destroyShader(I.shader);
-        if (I.mulShader.valid()) I.dev->destroyShader(I.mulShader);
-        if (I.vb.valid()) I.dev->destroyBuffer(I.vb);
-        if (I.ib.valid()) I.dev->destroyBuffer(I.ib);
-        if (I.atlas.valid()) I.dev->destroyTexture(I.atlas);
+        auto releasePipeline = [&](gfx::PipelineHandle& p) {
+            if (!p.valid()) return;
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,p);
+            else { I.dev->destroyPipeline(p); p={}; }
+        };
+        auto releaseShader = [&](gfx::ShaderHandle& p) {
+            if (!p.valid()) return;
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,p);
+            else { I.dev->destroyShader(p); p={}; }
+        };
+        auto releaseBuffer = [&](gfx::BufferHandle& p) {
+            if (!p.valid()) return;
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,p);
+            else { I.dev->destroyBuffer(p); p={}; }
+        };
+        auto releaseTexture = [&](gfx::TextureHandle& p) {
+            if (!p.valid()) return;
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,p);
+            else { I.dev->destroyTexture(p); p={}; }
+        };
+        for (auto& batch : I.batches) {
+            for (auto& p : batch.graphPipe) releasePipeline(p);
+            releaseShader(batch.shader);
+        }
+        for (auto& p : I.pipe) releasePipeline(p);
+        for (auto& p : I.meshPipe) releasePipeline(p);
+        releasePipeline(I.reactiveQuadPipe);
+        releasePipeline(I.reactiveMeshPipe);
+        releaseShader(I.shader);
+        releaseShader(I.mulShader);
+        releaseShader(I.reactiveShader);
+        releaseBuffer(I.vb);
+        releaseBuffer(I.ib);
+        releaseTexture(I.atlas);
     }
     TextureLoader keep = std::move(I.loader);
     MeshLoader keepMesh = std::move(I.meshLoader);
@@ -814,7 +891,20 @@ void ParticleSystem::reloadAll() {
     I.effects.clear();
     I.byName.clear();
     I.textures.clear();
-    if (I.dev) for(auto& b:I.batches) { for(auto p:b.graphPipe) if(p.valid()) I.dev->destroyPipeline(p); if(b.shader.valid()) I.dev->destroyShader(b.shader); }
+    if (I.dev) for (auto& batch : I.batches) {
+        // Old shader graph variants can still be referenced by an in-flight
+        // particle draw. The editor opt-in moves them to the GPU fence
+        // lifetime service; gameplay clients keep their existing owner path.
+        for (auto& p : batch.graphPipe) {
+            if (!p.valid()) continue;
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,p);
+            else { I.dev->destroyPipeline(p); p={}; }
+        }
+        if (batch.shader.valid()) {
+            if (gpuRetirement_) gpuRetirement_->retire(*I.dev,batch.shader);
+            else { I.dev->destroyShader(batch.shader); batch.shader={}; }
+        }
+    }
     I.batches.clear();
     I.meshes.clear();
     I.meshByName.clear();
@@ -837,6 +927,12 @@ FxHandle ParticleSystem::play(const std::string& name, float3 pos, float3 dir, f
 }
 
 FxHandle ParticleSystem::play(int effect, float3 pos, float3 dir, float scale, float4 tint) {
+    return playWithProgramParameters(effect,pos,dir,scale,tint,{});
+}
+FxHandle ParticleSystem::playWithProgramParameters(
+    int effect,float3 pos,float3 dir,float scale,float4 tint,
+    const std::array<float,8>& params) {
+    for(float value:params)if(!spectra::program::number(value))return {};
     auto& I = *impl_;
     if (quality_ == FxQuality::Off || effect < 0 || size_t(effect) >= I.effects.size() || !I.effects[size_t(effect)].valid) return {};
     auto& e = I.effects[size_t(effect)];
@@ -861,6 +957,7 @@ FxHandle ParticleSystem::play(int effect, float3 pos, float3 dir, float scale, f
     in.setDir(render::length(dir) > 1e-5f ? render::normalize(dir) : float3{0, 1, 0});
     in.scale = std::max(0.01f, scale);
     in.tint = tint;
+    in.programParams = params; // before prewarm emits any particles
     bool prewarm = false;
     float warm = 0;
     for (size_t k = 0; k < e.def.emitters.size(); ++k) {
@@ -897,6 +994,28 @@ template <class I> auto* findInstance(I& impl, FxHandle h) {
 }
 } // namespace
 
+bool ParticleSystem::setProgramParameter(FxHandle h, uint32_t slot, float value,
+                                         bool affectExisting) {
+    if(slot>=8 || !spectra::program::number(value))return false;
+    auto& I=*impl_;
+    auto* in=findInstance(I,h);
+    // A one-shot may finish emitting while its particles continue living.
+    // In that case update surviving owned particles, but never reuse an
+    // obsolete handle as a future-birth instance.
+    if(!in && !affectExisting)return false;
+    bool changed=false;
+    if(in) {
+        in->programParams[slot]=value;
+        changed=true;
+    }
+    if(affectExisting)
+        for(auto& p:I.particles)
+            if(p.owner==h.id) {
+                p.programParams[slot]=value;
+                changed=true;
+            }
+    return changed;
+}
 void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h)) in->pos = pos; }
 void ParticleSystem::move(FxHandle h, float3 pos, float3 dir) {
     if (auto* in = findInstance(*impl_, h)) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
@@ -910,6 +1029,9 @@ void ParticleSystem::kill(FxHandle h) {
         I.freeInstance((h.id & 0xffff) - 1);
     }
 }
+bool ParticleSystem::alive(FxHandle h) const {
+    return findInstance(*impl_, h) != nullptr;
+}
 bool ParticleSystem::playing(FxHandle h) const {
     const auto* in = findInstance(*impl_, h);
     return in && in->emitting && !in->stopped;
@@ -918,6 +1040,70 @@ void ParticleSystem::emitManual(FxHandle h) {
     auto& I = *impl_;
     if (!findInstance(I, h)) return;
     for (const auto& p : I.particles) if (p.owner == h.id) I.queueSub(p, FxSubEvent::Manual, p.pos);
+}
+
+bool ParticleSystem::importLiveParticles(
+    int effect,const std::vector<FxImportedParticle>& input) {
+    auto& I=*impl_;
+    if(effect<0 || size_t(effect)>=I.effects.size() ||
+       !I.effects[size_t(effect)].valid ||
+       I.effects[size_t(effect)].def.emitters.size()!=1 ||
+       I.effects[size_t(effect)].em.empty())return false;
+    if(input.size()>size_t(I.limits.maxParticles) ||
+       I.particles.size()>size_t(I.limits.maxParticles)-input.size())
+        return false;
+    // Strictly restrict imported checkpoint particles to the simple GPU
+    // emitter subset. No trailing instance, sub-emitter, ribbons or geometry
+    // ownership may be created implicitly.
+    const auto& emitter=I.effects[size_t(effect)].def.emitters[0];
+    if(emitter.trail.enabled || emitter.collision.enabled ||
+       emitter.trigger.enabled || !emitter.subEmitters.empty() ||
+       !emitter.meshes.empty() || !emitter.sprites.empty() ||
+       emitter.localSpace || emitter.ringBuffer)return false;
+    const auto valid=[](float v) {
+        return std::isfinite(v) && std::abs(v)<=1.0e7f;
+    };
+    const auto valid3=[&](float3 v) {
+        return valid(v.x)&&valid(v.y)&&valid(v.z);
+    };
+    const auto valid4=[&](float4 v) {
+        return valid(v.x)&&valid(v.y)&&valid(v.z)&&valid(v.w);
+    };
+    std::vector<Impl::Particle> staged;
+    staged.reserve(input.size());
+    for(const auto& src:input) {
+        if(!valid3(src.pos) || !valid3(src.vel) ||
+           !valid4(src.tint) || src.age<0 || !valid(src.age) ||
+           !valid(src.lifetime) || src.lifetime<=0.0f ||
+           src.age>=src.lifetime || !valid(src.size) || src.size<0)
+            return false;
+        for(float v:src.programParams)if(!valid(v))return false;
+        for(float v:src.customAttributes)if(!valid(v))return false;
+        Impl::Particle p{};
+        p.pos=src.pos;
+        p.vel=p.vtot=src.vel;
+        p.age=src.age;
+        p.invLife=1.0f/src.lifetime;
+        p.size=src.size;
+        p.tint=src.tint;
+        p.programParams=src.programParams;
+        p.customAttributes=src.customAttributes;
+        p.scale=p.nsize=p.aspect=p.depthK=p.grav=1.0f;
+        p.effect=uint16_t(effect);
+        p.emitter=0;
+        p.batch=I.effects[size_t(effect)].em[0].batch;
+        p.owner=0; // no emitter instance is revived or allowed to emit
+        p.trail=-1;
+        p.dir0={0,1,0};
+        staged.push_back(p);
+    }
+    // No changes to the CPU pool occur before all input has validated.
+    I.particles.reserve(I.particles.size()+staged.size());
+    for(auto& particle:staged) {
+        particle.uid=++I.nextUid;
+        I.particles.push_back(std::move(particle));
+    }
+    return true;
 }
 
 void ParticleSystem::snapshot(std::vector<FxParticleInfo>& out) const {

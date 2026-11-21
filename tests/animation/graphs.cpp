@@ -58,7 +58,17 @@ int main() {
     a.update(.2f);a.evaluate(p);check(near(p[0].t.x,.2f),"crossfade interpolation");
     a.parameters().set("go",0.f);a.update(0);a.evaluate(p);check(near(p[0].t.x,.2f),"interrupted fade has no pop");
     a.update(.2f);a.evaluate(p);check(near(p[0].t.x,.1f),"interrupted fade decays to destination");
-    a.update(std::numeric_limits<float>::quiet_NaN());check(near(a.stateTime(),.2f),"reject non-finite dt");
+    {
+        auto staged=a.cloneForPreparation();
+        staged->update(.1f);Pose candidate;staged->evaluate(candidate);
+        a.evaluate(p);check(near(p[0].t.x,.1f),"staged fade leaves published pose unchanged");
+        a.update(.1f);a.evaluate(p);
+        check(near(p[0].t.x,candidate[0].t.x),"staged interrupted fade preserves complete history");
+        a=std::move(*staged);
+        check(near(a.stateTime(),.3f),"prepared graph can publish by move");
+    }
+
+    a.update(std::numeric_limits<float>::quiet_NaN());check(near(a.stateTime(),.3f),"reject non-finite dt");
     check(!a.parameters().set("bad",std::numeric_limits<float>::infinity()),"reject infinite parameter");
     AnimationGraphInstance b;b.reset(AnimationGraph::compile(m,def));b.update(.25f);b.evaluate(p);check(near(p[0].t.x,.25f),"independent instances");
     b.parameters().set("speed",0.f);b.update(.25f);b.evaluate(p);check(near(p[0].t.x,.25f),"speed change preserves phase");
@@ -72,6 +82,15 @@ int main() {
     b.evaluate(p);check(near(p[0].t.y,0),"native state is per instance");
     a.evaluate(p);a.evaluate(p);check(near(p[0].t.y,.25f),"evaluation does not advance native state");
     check(nativeGraph->states()[0].program.size()==2,"compiled evaluation program");
+    {
+        auto staged=a.cloneForPreparation();
+        staged->update(.5f);Pose candidate;staged->evaluate(candidate);
+        check(near(candidate[0].t.y,.75f),"staged native state advances independently");
+        a.evaluate(p);check(near(p[0].t.y,.25f),"discard candidate preserves native state");
+        auto retry=a.cloneForPreparation();retry->update(.5f);retry->evaluate(p);
+        check(near(p[0].t.y,candidate[0].t.y),"retry has no double native tick");
+    }
+
     auto rejects=[&](Json j,const char* label){bool caught=false;try{AnimationGraph::compile(m,j);}catch(const std::exception&){caught=true;}check(caught,label);};
     rejects(nativeDef,"unregistered native operation is rejected");
     auto broken=def;broken.member("nodes").at(2).set("a",Json::string("mix"));rejects(broken,"reject graph cycle");

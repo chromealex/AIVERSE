@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#0d111c"/>
+  <title>AIVERSE Studio</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #0d121c; color: #dce5f4; font-family: system-ui, sans-serif; }
+    #studio-boot { padding: 36px; max-width: 680px; }
+    #studio-boot strong { color: #9cbfff; font-size: 19px; }
+    #studio-boot-status { color: #a4b8d0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="studio-boot" role="status">
+      <strong>AIVERSE Studio</strong>
+      <p id="studio-boot-status">Loading HTML5 interface…</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      function report(message) {
+        var text = String(message || 'Unknown startup error').slice(0, 1200);
+        var el = document.getElementById('studio-boot-status');
+        if (el) el.textContent = text;
+        try {
+          var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.aiverse;
+          if (handler) handler.postMessage({id: 0, method: 'studio.webDiagnostic', params: {message: text}});
+        } catch (_) {}
+      }
+      window.addEventListener('error', function (event) {
+        var source = event.target && (event.target.src || event.target.href);
+        report('JavaScript/resource error: ' + (event.message || source || 'unknown') +
+          (event.filename ? '\n' + event.filename + ':' + event.lineno : ''));
+      }, true);
+      window.addEventListener('unhandledrejection', function (event) {
+        report('JavaScript promise rejected: ' + (event.reason && event.reason.message || event.reason));
+      });
+      setTimeout(function () {
+        if (document.getElementById('studio-boot')) {
+          report('The HTML document loaded, but React did not start. Check bundled JavaScript module loading in the macOS logs.');
+        }
+      }, 4500);
+    }());
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

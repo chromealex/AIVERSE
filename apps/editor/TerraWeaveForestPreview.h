@@ -6,6 +6,13 @@
 #include "apps/editor/core/TerraWeaveOps.h"
 #include "apps/editor/TerraWeavePlacementMask.h"
 #include "engine/render/TerraWeaveForestAdapter.h"
+#include "engine/world/TerraWeaveBotanicalAppearance.h"
+#include "engine/render/TerraWeaveBotanicalForest.h"
+#include "engine/render/TerraWeaveHorizonScene.h"
+#include <fstream>
+#include <iterator>
+#include <unordered_map>
+#include <utility>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -22,10 +29,29 @@ class TerraWeaveForestPreview {
 public:
     bool enabled() const { return enabled_; }
     void setEnabled(bool enabled) { enabled_ = enabled; }
+    // GPU hierarchical wind masks (trunk -> branch -> twig -> leaf) on near
+    // trees. Takes effect on the next prototype build (release() first).
+    bool hierarchicalWind() const { return hierarchicalWind_; }
+    void setHierarchicalWind(bool on) { hierarchicalWind_ = on; }
+    // Botanical catalog (oak, birch, maple, spruce, pine) with the PBR bark and
+    // leaf maps of engine/assets/materials/vegetation/textures, else the two
+    // classic untextured prototypes. Takes effect after release().
+    bool botanical() const { return botanical_; }
+    void setBotanical(bool on) { botanical_ = on; }
+    // Distance multiplier for near-model LOD ranges (beauty captures); 1 = default.
+    float lodScale() const { return lodScale_; }
+    void setLodScale(float scale) { lodScale_ = std::clamp(scale, 0.25f, 4.f); }
+    // Near-tree geometry (merged whole-tree tiers vs one node per branch).
+    terraweave::ArborTreeGeometry treeGeometry() const { return treeGeometry_; }
+    void setTreeGeometry(terraweave::ArborTreeGeometry geometry) { treeGeometry_ = geometry; }
+    void setEngineDir(std::string dir) { engineDir_ = std::move(dir); }
     size_t visibleInstances() const { return visibleCount_; }
     size_t generatedInstances() const { return placements_.size(); }
 
     void release(gfx::Device& device) {
+        if (horizon_) horizon_->shutdown(device);
+        horizon_.reset();
+        horizonRecipe_.clear();
         if (forest_) forest_->releaseModels(device);
         forest_.reset();
         placements_.clear();
@@ -53,28 +79,18 @@ public:
 
         if (!forest_) {
             forest_ = std::make_unique<terraweave::ArborForestAdapter>();
-            terraweave::TreeProfile broadleaf;
-            broadleaf.speciesId = 1001;
-            broadleaf.minHeightCm = 550;
-            broadleaf.maxHeightCm = 1150;
-            broadleaf.primaryBranches = 12;
-            broadleaf.shape = terraweave::CrownShape::Broadleaf;
-            terraweave::TreeProfile conifer;
-            conifer.speciesId = 1002;
-            conifer.minHeightCm = 900;
-            conifer.maxHeightCm = 1750;
-            conifer.trunkRadiusCm = 19;
-            conifer.primaryBranches = 14;
-            conifer.leafRadiusCm = 55;
-            conifer.shape = terraweave::CrownShape::Conifer;
-            forest_->addPrototype(broadleaf, 0x544552524131ULL);
-            forest_->addPrototype(conifer, 0x544552524132ULL);
+            if (hierarchicalWind_) forest_->enableHierarchicalWind();
+            forest_->setTreeGeometry(treeGeometry_);
+            if (botanical_) addBotanicalPrototypes();
+            else addClassicPrototypes();
         }
         if (!forest_->uploadModels(device))
             throw std::runtime_error("TerraWeave forest GPU upload failed");
 
         constexpr int64_t kPreviewTileCm = 3200;
-        constexpr int kRadiusInTiles = 2;
+        // Horizon mode: individual trees (near merged models, then per-tree
+        // impostors) out to 250 m, TerraWeave Horizon cluster cards beyond.
+        const int kRadiusInTiles = horizonEnabled_ ? 8 : 2;
         // Camera/render coordinates are map-local; generator coordinates are
         // world-absolute and may have a nonzero origin in the saved recipe.
         const auto origin = terraweave_ops_detail::origin(recipe);
@@ -93,7 +109,8 @@ public:
         const int64_t tz = terraweave::detail::floorDiv(globalCameraZcm, kPreviewTileCm);
         const std::string recipeKey = recipe.dump();
         if (cachedRevision_ != doc.revision || cachedTileX_ != tx ||
-            cachedTileZ_ != tz || cachedRecipe_ != recipeKey) {
+            cachedTileZ_ != tz || cachedRecipe_ != recipeKey || cachedRadius_ != kRadiusInTiles) {
+            cachedRadius_ = kRadiusInTiles;
             placements_.clear();
             const auto t = terraweave_ops_detail::terrain(recipe);
             const auto b = terraweave::BiomeSettings{};
@@ -108,15 +125,15 @@ public:
                 terraweave::biomeBit(terraweave::Biome::Wetland) |
                 terraweave::biomeBit(terraweave::Biome::Tundra) |
                 terraweave::biomeBit(terraweave::Biome::Alpine);
-            terraweave::FoliageSpecies broadleaf;
-            broadleaf.id = 1001;
-            broadleaf.biomeMask = forestBiomes;
-            broadleaf.weight = 3;
-            broadleaf.maxSlopePermille = 1250;
-            terraweave::FoliageSpecies conifer = broadleaf;
-            conifer.id = 1002;
-            conifer.weight = 2;
-            const std::vector<terraweave::FoliageSpecies> species{broadleaf, conifer};
+            std::vector<terraweave::FoliageSpecies> species;
+            for (const auto& [id, weight] : speciesWeights_) {
+                terraweave::FoliageSpecies f;
+                f.id = id;
+                f.biomeMask = forestBiomes;
+                f.weight = weight;
+                f.maxSlopePermille = 1250;
+                species.push_back(f);
+            }
             terraweave::ScatterSettings scatter;
             scatter.seed = t.seed ^ 0x5457464f52455354ULL;
             scatter.spacingCm = 1100;
@@ -155,20 +172,100 @@ public:
         terraweave::FloraView view;
         view.cameraXcm = cameraXcm;
         view.cameraZcm = cameraZcm;
-        view.highRangeCm = 2100;
-        view.mediumRangeCm = 3800;
-        view.lowRangeCm = 5600;
-        view.cullRangeCm = 7700;
+        view.highRangeCm = int32_t(2100 * lodScale_);
+        view.mediumRangeCm = int32_t(3800 * lodScale_);
+        view.lowRangeCm = int32_t(5600 * lodScale_);
+        view.cullRangeCm = horizonEnabled_ ? std::max(int32_t(7700 * lodScale_), kHorizonCloseCm)
+                                           : int32_t(7700 * lodScale_);
         view.farDensityPermille = 1000;
         const auto batches = terraweave::buildFloraBatches(placements_, view);
         for (const auto& batch : batches) visibleCount_ += batch.instances.size();
         // Existing Renderer3D takes care of RHI, material sorting,
         // per-branch LOD and standard instance grouping.
         forest_->submit(renderer, batches, {});
+
+        if (horizonEnabled_) {
+            // Kilometre-scale forest HLOD: cluster cards in ONE model, from the
+            // same TerraWeave seeds, so the forest continues to the horizon.
+            if (!horizon_ || horizonRecipe_ != recipeKey) {
+                if (horizon_) horizon_->shutdown(device);
+                terraweave::HorizonSettings hs;
+                hs.closeForestEndCm = kHorizonCloseCm;
+                // Map ground covers the camera neighbourhood; far proxy ground
+                // starts where the authored map usually ends.
+                hs.terrainBeginCm = std::clamp<int32_t>(int32_t(std::min(doc.data.w, doc.data.h)) * origin.cellSizeCm / 2,
+                                                       kHorizonCloseCm, 110000);
+                hs.crownDetail = 3;
+                hs.orientationViews = 2;
+                hs.atlasTilePixels = 64;
+                horizon_ = std::make_unique<terraweave::TerraWeaveHorizonScene>(
+                    terraweave_ops_detail::terrain(recipe), terraweave::BiomeSettings{}, hs);
+                horizonRecipe_ = recipeKey;
+            }
+            horizon_->update(device, {globalCameraXcm, globalCameraZcm});
+            if (horizon_->ready())
+                horizon_->submit(renderer, {origin.worldOriginXcm, 0, origin.worldOriginZcm});
+        }
     }
+    bool horizon() const { return horizonEnabled_; }
+    void setHorizon(bool on) { horizonEnabled_ = on; }
 
 private:
+    void addClassicPrototypes() {
+        terraweave::TreeProfile broadleaf;
+        broadleaf.speciesId = 1001;
+        broadleaf.minHeightCm = 550;
+        broadleaf.maxHeightCm = 1150;
+        broadleaf.primaryBranches = 12;
+        broadleaf.shape = terraweave::CrownShape::Broadleaf;
+        terraweave::TreeProfile conifer;
+        conifer.speciesId = 1002;
+        conifer.minHeightCm = 900;
+        conifer.maxHeightCm = 1750;
+        conifer.trunkRadiusCm = 19;
+        conifer.primaryBranches = 14;
+        conifer.leafRadiusCm = 55;
+        conifer.shape = terraweave::CrownShape::Conifer;
+        forest_->addPrototype(broadleaf, 0x544552524131ULL);
+        forest_->addPrototype(conifer, 0x544552524132ULL);
+        speciesWeights_ = {{1001, 3}, {1002, 2}};
+    }
+
+    void addBotanicalPrototypes() {
+        static constexpr struct { size_t slot; uint32_t weight; } kPick[] = {
+            {4, 3}, {5, 2}, {6, 2}, {0, 2}, {1, 2}};   // oak, birch, maple, spruce, pine
+        const auto& presets = terraweave::botanicalTreePresets();
+        // Shared Terra recipe (also used by the WorldScene manifest).
+        terraweave::BotanicalMaterialTable table;
+        table.dir = engineDir_.empty() ? std::string() : engineDir_ + "/engine/assets/materials/vegetation/textures";
+        table.read = [](const std::string& path, std::string& bytes) {
+            std::ifstream f(path, std::ios::binary);
+            if (!f) return false;
+            bytes.assign((std::istreambuf_iterator<char>(f)), {});
+            return true;
+        };
+        for (const auto& pick : kPick) table.add(presets[pick.slot].profile.speciesId, presets[pick.slot]);
+        if (!engineDir_.empty()) forest_->setPrototypeDecorator(table.decorator());
+        speciesWeights_.clear();
+        for (const auto& pick : kPick) {
+            const auto& preset = presets[pick.slot];
+            auto mesh = terraweave::botanicalArborMeshSettings(preset);
+            forest_->addPrototype(preset.profile, 0x54574254ULL + preset.profile.speciesId, mesh);
+            speciesWeights_.push_back({preset.profile.speciesId, pick.weight});
+        }
+    }
     bool enabled_ = false;
+    bool hierarchicalWind_ = true;
+    bool botanical_ = true;
+    float lodScale_ = 1;
+    static constexpr int32_t kHorizonCloseCm = 25000;
+    bool horizonEnabled_ = false;
+    int cachedRadius_ = 0;
+    std::string horizonRecipe_;
+    std::unique_ptr<terraweave::TerraWeaveHorizonScene> horizon_;
+    terraweave::ArborTreeGeometry treeGeometry_ = terraweave::ArborTreeGeometry::Auto;
+    std::string engineDir_;
+    std::vector<std::pair<uint32_t, uint32_t>> speciesWeights_;
     uint64_t cachedRevision_ = std::numeric_limits<uint64_t>::max();
     int64_t cachedTileX_ = std::numeric_limits<int64_t>::max();
     int64_t cachedTileZ_ = std::numeric_limits<int64_t>::max();

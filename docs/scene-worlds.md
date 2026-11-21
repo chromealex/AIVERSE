@@ -297,11 +297,18 @@ non-transactional effects on external/global gameplay state.
 
 After `Simulation::loadState` or a successful binary `deserialize`, call
 `invalidateAfterRestore()`. This invalidates ticket epochs and discards
-outstanding results from the abandoned rollback timeline, then releases
-non-authoritative resource leases. Use `queueRestoredResidency()` to
-asynchronously reacquire dependencies for Active scenes **without re-spawning
-their already restored ECS entities**. Wait for and commit those residency
-tickets before simulating physics that depends on those resources.
+outstanding results from the abandoned rollback timeline, then diffs the
+non-authoritative resource leases against the restored `SceneState`: a scene
+that is still Active with the same asset keeps its leases (no release or
+restream); leases of every other scene are released. Use
+`queueRestoredResidency()` to asynchronously reacquire dependencies for Active
+scenes that are not resident **without re-spawning their already restored ECS
+entities**; it also schedules a full load job for every restored Loading
+record (its old job died with the epoch), so a restored `pendingReplace` can
+be committed or cancelled. Wait for and commit those tickets at the
+deterministic barrier before simulating physics that depends on them.
+Terminal job records (Committed/Unloaded/settled Failed) are pruned by
+`poll()` beyond `kMaxTerminalJobs` (64); older tickets then report Unknown.
 `SceneHierarchy::rebuild(world)` remains necessary after rollback.
 
 Limitations:
@@ -314,8 +321,8 @@ Limitations:
 - An external `SceneRuntime::unload` performed without the coordinator cannot
   adjust resource leases. Use `SceneLoadCoordinator::unload` when it owns
   presentation dependencies.
-- A restore with *incomplete Loading scene records* requires the host to
-  cancel/re-request those scene intents; only Active scenes are rehydrated.
+- Restored *Loading* scene records get a fresh full job from
+  `queueRestoredResidency()`; the host must commit or cancel that ticket.
 - `std::async` tasks cannot be forcibly interrupted. Cancel is nonblocking,
   tombstones are joined by `poll()`, and coordinator destruction can wait
   for remaining work. Reader callbacks must be thread-safe and lifetime-safe.

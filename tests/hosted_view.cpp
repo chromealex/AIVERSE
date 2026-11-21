@@ -6,6 +6,12 @@
 #include <fstream>
 #include <string>
 #include "engine/platform/Platform.h"
+#ifdef AIVERSE_TEST_HOSTED_CLIENT
+#include "apps/client/HostedClient.h"
+#include "apps/editor/ClientHost.h"
+#include <type_traits>
+static_assert(std::is_same_v<aiverse::client::HostedClient, aiverse::editor::ClientHost>);
+#endif
 
 using namespace aiverse;
 
@@ -13,6 +19,26 @@ static int g_failed = 0;
 #define CHECK(c) do { if (!(c)) { std::fprintf(stderr, "FAILED %s:%d: %s\n", __FILE__, __LINE__, #c); ++g_failed; } } while (0)
 
 int aiverseMain(int, char**) {
+#ifdef AIVERSE_TEST_HOSTED_CLIENT
+    // Both shells share the same implementation. A stopped host must ignore
+    // queued focus/input/frame callbacks without a graphics device or client.
+    {
+        client::HostedClient host;
+        platform::Event event; event.type=platform::EventType::KeyDown;
+        event.key=platform::Key::Space;
+        host.place(0,0,1,true);
+        host.event(event);
+        host.suspendInput();
+        host.frame(0.016,{}, {},800,600,800,600,false,{});
+        host.stop();
+        CHECK(!host.active() && !host.loading() && !host.inMatch());
+        CHECK(host.simulation()==nullptr && !host.capturing());
+        CHECK(!host.canControl() && !host.canStep() && !host.paused());
+        CHECK(!host.setPaused(true) && !host.stepOnce());
+        CHECK(host.pendingRetiredClients()==0);
+        CHECK(host.collectGpuRetirements()==0 && host.drainAfterGpuIdle()==0);
+    }
+#endif
     namespace fs = std::filesystem;
     const fs::path root = fs::temp_directory_path() / "aiverse_hosted_view_test";
     std::error_code ec;

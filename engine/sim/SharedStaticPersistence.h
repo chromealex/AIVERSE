@@ -16,6 +16,12 @@ void registerSharedPersistence(Simulation& sim,std::string stableTypeId,
     // duplicating payload in every serialized component.
     sim.registerPersistentComponent<SharedRef<T>>(stableTypeId+".shared_ref",version);
     sim.registerPersistentResource<SharedStore<T>>(stableTypeId+".shared_store",version);
+    // Reject a save whose refs point outside the loaded store with a
+    // readable error instead of later out_of_range / null reads.
+    sim.addPersistentLoadValidator(stableTypeId+".shared_ref",
+        [](const World& world,std::string& error) {
+            return validateSharedRefs<T>(world,error);
+        });
 }
 
 template<class T>

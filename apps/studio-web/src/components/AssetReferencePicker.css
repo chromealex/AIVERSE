@@ -1,0 +1,23 @@
+.studio-asset-reference{min-width:0;width:100%}
+.studio-asset-reference__control{display:flex;align-items:center;min-width:0;gap:4px}
+.studio-asset-reference__control .au-input{flex:1;min-width:0}
+.studio-asset-reference__control button,.studio-asset-reference__dialog header button{
+  background:var(--au-field);border:1px solid var(--au-line-strong);color:var(--au-text);
+  border-radius:var(--au-radius-sm);cursor:pointer;padding:6px;display:inline-flex}
+.studio-asset-reference__control button:disabled{opacity:.5;cursor:not-allowed}
+.studio-asset-reference__overlay{position:fixed;inset:0;z-index:9999;background:#060b12b8;
+  display:flex;justify-content:center;align-items:center;padding:20px}
+.studio-asset-reference__dialog{width:min(620px,95vw);height:min(590px,85vh);display:flex;
+  flex-direction:column;background:var(--au-overlay);border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-md);box-shadow:var(--au-shadow-md);color:var(--au-text)}
+.studio-asset-reference__dialog header{padding:15px;display:flex;justify-content:space-between;align-items:center}
+.studio-asset-reference__search{margin:0 15px 10px;display:flex;align-items:center;gap:8px;
+  background:var(--au-field);border:1px solid var(--au-line-strong);padding:7px;border-radius:6px}
+.studio-asset-reference__search input{width:100%;background:none;border:0;outline:none;color:inherit}
+.studio-asset-reference__results{overflow:auto;min-height:0;flex:1;padding:4px 12px}
+.studio-asset-reference__results button{display:flex;flex-direction:column;width:100%;text-align:left;
+  gap:4px;border:0;border-radius:5px;background:transparent;color:inherit;padding:10px;cursor:pointer}
+.studio-asset-reference__results button:hover,.studio-asset-reference__results button[aria-selected=true]{
+  background:var(--au-active)}
+.studio-asset-reference__results small{color:var(--au-text-muted);overflow-wrap:anywhere}
+.studio-asset-reference__dialog footer{padding:12px 15px;color:var(--au-text-muted);border-top:1px solid var(--au-line)}

@@ -83,7 +83,7 @@ travailler sur le jeu.
 | **Le multijoueur, c’est des désynchronisations sans fin.** Un seul `float` suffit pour qu’une partie entre un iPhone et un Android diverge. | La simulation est identique au bit près partout : virgule fixe au lieu de flottants, générateur aléatoire propre, sommes de contrôle. La CI compare les parties sur Linux x64/ARM64, Windows et macOS à chaque push. Seules les commandes transitent sur le réseau ; il y a un lockstep avec rollback et un serveur avec matchmaking et verdict par replay. |
 | **Les GPU mobiles sont faibles, mais le jeu doit être beau.** | Chaque fonction coûteuse — ombres, particules, terrain, post-traitement — a des niveaux de qualité et s’adapte au GPU, des vieux Mali et Adreno jusqu’à Apple Silicon. |
 | **Sortir sur toutes les plateformes est un projet à part entière.** Signatures, icônes, SDK des stores et de la publicité. | `aiversebuild` produit en une commande un .app, un projet Xcode, Gradle/APK, web et .exe. Icônes et écrans de démarrage sont générés. Plugins pour l’App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin et d’autres — un build n’embarque que ceux que le jeu choisit. |
-| **Chaque nouveau jeu repart de zéro.** | Plus de 30 modèles jouables, des kits de genre avec listes de recette, 200 compétences pour les agents. Un nouveau jeu part d’un jeu qui fonctionne déjà. |
+| **Chaque nouveau jeu repart de zéro.** | Plus de 30 modèles jouables, des kits de genre avec listes de recette, 238 compétences pour les agents. Un nouveau jeu part d’un jeu qui fonctionne déjà. |
 | **La méta et le LiveOps sont réécrits dans chaque projet.** | `aiverse::meta` : boutique, monnaies, quêtes, passes, récompenses quotidiennes, énergie, clans, tournois, coffres avec garantie — configurés en JSON. |
 
 ---
@@ -107,9 +107,10 @@ configuration validable.
 | **Roguelikes** | `run-graph` : runs à graine et budgets de rencontres ; `loot-tables` avec objet rare garanti |
 | **Idle, usine, colonie** | `big-numbers`, `offline-production` (progression hors ligne exacte), `production-networks`, `logistics`, `tasks` |
 | **Jeux de rythme** | `rhythm-timing` : cartes de tempo et jugement des frappes indépendant de la fréquence d’images |
+| **Course, véhicules** | `vehicle-controllers` : voitures (couple, rapports, adhérence, drift), chars, aéroglisseurs, avions, sièges, zones de dégâts ; session de course : grille, compte à rebours, points de passage dans l’ordre, tours, classement, contresens, bots de course ; bloc `race` de la carte dans tout projet, HUD commun et caméra de poursuite, 2 modèles |
 | **Tout jeu mobile** | `aiverse::meta` et LiveOps, tutoriels, écrans d’interface, plugins de stores et de publicité |
 
-Course, sport et véhicules sont encore dans la [feuille de route](docs/genre-mechanics-roadmap.md). Liste
+Les jeux de sport, les bateaux, les arrêts au stand et les pénalités sont encore dans la [feuille de route](docs/genre-mechanics-roadmap.md). Liste
 complète des bibliothèques : [`libraries/catalog.json`](libraries/catalog.json) et [paquets de genre](docs/genre-packages.md).
 
 ---
@@ -186,6 +187,7 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 | Économie et construction | **Hearth and Haul** (Knights and Merchants) · **Underlord** (Dungeon Keeper) |
 | 2D et expériences | **Crystal Dunes** (tuiles, Dune II) · **Green Hills** (sprites 2D sur terrain 3D) · **Planets** (planètes sphériques et orbites) · **Wildfire** (champs : incendies et creep) |
 | FPS | **Crossfire Arena** (5 contre 5) · **Breach Protocol** (manches tactiques) · **Last Survivor** (battle royale à 100 joueurs) · **Aim Lab** (stand de tir) |
+| Course | **Oval Sprint** (course en tours contre trois bots) · **Road Circuit** (course sur une route en spline) |
 
 ---
 
@@ -208,7 +210,7 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 
 **Graphismes et audio**
 - RHI maison : Metal, GLES3 / WebGL2, GL 3.3, Vulkan (Windows / Linux / Android, en option)
-- PBR, glTF/OBJ, animation squelettique et procédurale, câbles procéduraux, rendu des entités en hiérarchie
+- PBR, glTF/OBJ, animation squelettique et procédurale, câbles procéduraux, rendu des entités en hiérarchie, ciel physique, nuages volumétriques et rayons de soleil, brouillard volumétrique local en sphères/OBB avec dissipation à l’exécution
 - Ombres, lumières dynamiques, nuit, post-traitement, Shader Graph
 - Particules avec les modules du ParticleSystem d’Unity et importateur depuis Unity
 - 2D : sprites, cartes de tuiles avec autotiling
@@ -221,9 +223,9 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 
 **Outils**
 - Éditeur à fenêtres ancrables façon Unity : scène, inspecteur, terrain, effets, éclairage, UI, partie de test et simulateur d’appareils
-- `aiversemcp` — serveur MCP pour les agents
+- `aiversemcp` — serveur MCP pour les agents — configuration PHYSIS des cartes, validation et Undo/Redo
 - Assistant **Créer un jeu**
-- 200 compétences pour les agents et kits de genre avec listes de recette
+- 238 compétences pour les agents et kits de genre avec listes de recette
 - Importateurs de ressources de jeux classiques depuis votre propre copie
 
 </td>
@@ -318,3 +320,9 @@ Les documents de référence sont en anglais. La vue d’ensemble, l’assistant
 incluses : les importateurs les lisent depuis votre propre copie.
 
 Les builds incluent automatiquement `THIRD_PARTY_NOTICES.txt` ; le projet doit fournir les mentions des SDK externes (voir les [détails](docs/third-party-notices.md)).
+
+- [TerraWeave Rocks](docs/terrain/rocks.md): Pierres, rochers, dalles et éclats décoratifs par graine ; export PBR partagé et trois LOD natifs (optionnel).
+
+**Terra en premier :** [arbres natifs, herbe dense et workflows](docs/terrain/vegetation-authoring.md) ; génération personnalisée uniquement pour les capacités absentes de TerraWeave.
+
+Caméras LENS : [création et MCP](skills/visuals/aiverse-lens/SKILL.md), [intégration native et capture](skills/visuals/aiverse-lens-native/SKILL.md).

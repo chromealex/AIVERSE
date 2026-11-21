@@ -71,6 +71,9 @@ public:
     }
 
     void update(Editor& ed, double) override {
+        if ((!open || vp_.drawnFrame < ImGui::GetFrameCount()-1) &&
+            vp_.color.valid())
+            vp_.release(ed.device());
         if (ed.fxRevision != revision_) {   // an agent changed fx files: list, open effect (unless being edited), bindings
             revision_ = ed.fxRevision;
             listDirty_ = true;
@@ -91,6 +94,10 @@ public:
     void draw(Editor& ed) override {
         if (!dev_) {
             dev_ = &ed.device();
+            // FX preview graph reloads may still be in an in-flight GPU
+            // command buffer; retire old shader/buffer/texture handles.
+            preview_.setGpuResourceRetirement(&ed.gpuResourceRetirement());
+            textures_.setGpuResourceRetirement(&ed.gpuResourceRetirement());
             preview_.setQuality(fx::FxQuality::High);
             preview_.setFileReader([&ed](const std::string& path, std::string& out) { return readText(fs::path(ed.ws().project.dir) / path, out); });
             textures_.init(*dev_);
@@ -194,7 +201,7 @@ private:
         }
 
         const float dpi = ImGui::GetIO().DisplayFramebufferScale.x;
-        vp_.ensure(*dev_, int(w * dpi), int(h * dpi));
+        vp_.ensure(*dev_, int(w * dpi), int(h * dpi), ed.viewportRetirement(), "FX");
         auto& r = ed.renderer();
         r.beginScene(cam_, vp_.w, vp_.h);
         const uint32_t grid = render::rgba(80, 84, 92, 255), axis = render::rgba(120, 126, 136, 255);

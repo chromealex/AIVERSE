@@ -1,45 +1,60 @@
 #!/usr/bin/env bash
 # AIVERSE Texture RHI native macOS one-shot validation.
-# Pull feature/texture-rhi-unification before invoking.
-# bash tools/texture-rhi-final-verify.sh [--full-engine] [--jobs N]
+# Verify a clean main or feature checkout at an explicit revision.
+# bash tools/texture-rhi-final-verify.sh --build-root PATH [--expected-ref REF] [--full-engine] [--jobs N]
 # GPU tests are always separate processes and run sequentially.
 set -euo pipefail
 JOBS=4
 FULL_ENGINE=0
+BUILD_ROOT="${AIVERSE_TEXTURE_FINAL_BUILD_ROOT:-}"
+EXPECTED_REF=HEAD
+usage() {
+  echo "Usage: bash tools/texture-rhi-final-verify.sh --build-root ABSOLUTE_PATH [--expected-ref REF] [--full-engine] [--jobs N]"
+}
 while (($#)); do
   case "$1" in
+    --help|-h) usage; exit 0;;
+    --build-root|--expected-ref)
+      (($#>=2)) && [[ -n "$2" ]] || { usage >&2; exit 2; }
+      if [[ "$1" == --build-root ]]; then BUILD_ROOT="$2"; else EXPECTED_REF="$2"; fi
+      shift 2;;
     --full-engine) FULL_ENGINE=1; shift;;
     --jobs)
       (($#>=2)) && [[ "$2" =~ ^[1-9][0-9]*$ ]] || {
         echo "FAIL: --jobs needs a positive integer" >&2; exit 2;
       }
       JOBS="$2"; shift 2;;
-    *) echo "Usage: bash tools/texture-rhi-final-verify.sh [--full-engine] [--jobs N]" >&2; exit 2;;
+    *) usage >&2; exit 2;;
   esac
 done
 ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 cd "$ROOT"
-# Isolated validation worktrees often use task-specific local branch names
-# (e.g. verify-texture-rhi-...) or detached HEAD. Never gate on that name:
-# require the exact fetched feature revision, regardless of local ref name.
-EXPECTED_BRANCH="feature/texture-rhi-unification"
+# A merged feature must remain verifiable. Pin the caller's chosen revision,
+# not an obsolete feature branch, and reject uncommitted source changes.
 CURRENT_BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
 CURRENT_SHA="$(git rev-parse --verify HEAD)"
-REMOTE_SHA="$(git rev-parse --verify "refs/remotes/origin/$EXPECTED_BRANCH^{commit}" 2>/dev/null || true)"
-if [[ -z "$REMOTE_SHA" || "$CURRENT_SHA" != "$REMOTE_SHA" ]]; then
-  echo "FAIL: HEAD must equal the fetched origin/$EXPECTED_BRANCH revision" >&2
-  echo "HEAD=$CURRENT_SHA remote=${REMOTE_SHA:-not-fetched}" >&2
-  echo "Run: git fetch origin $EXPECTED_BRANCH && git pull --ff-only origin $EXPECTED_BRANCH" >&2
+EXPECTED_SHA="$(git rev-parse --verify "$EXPECTED_REF^{commit}")"
+if [[ "$CURRENT_SHA" != "$EXPECTED_SHA" ]] || [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  echo "FAIL: verification requires a clean checkout at $EXPECTED_REF ($EXPECTED_SHA)" >&2
   exit 2
 fi
+case "$BUILD_ROOT" in
+  /*) ;;
+  *) echo "FAIL: --build-root must name an absolute build location" >&2; exit 2;;
+esac
 printf 'Validated source: %s (%s)\n' "$CURRENT_SHA" "${CURRENT_BRANCH:-detached HEAD}"
 [[ "$(uname -s)" == "Darwin" ]] || {
   echo "FAIL: native Metal Mac required (no silent GPU skip)" >&2; exit 2;
 }
-LOGS="$ROOT/build/texture-final-logs"
-SAFE="$ROOT/build/texture-final-safe"
-GPU="$ROOT/build/texture-final-gpu"
-mkdir -p "$LOGS"
+mkdir -p "$BUILD_ROOT"
+BUILD_ROOT="$(cd "$BUILD_ROOT" && pwd -P)"
+LOGS="$BUILD_ROOT/logs"
+SAFE="$BUILD_ROOT/safe"
+GPU="$BUILD_ROOT/gpu"
+export TMPDIR="$BUILD_ROOT/tmp"
+export CLANG_MODULE_CACHE_PATH="$BUILD_ROOT/module-cache"
+export PYTHONPYCACHEPREFIX="$BUILD_ROOT/python-cache"
+mkdir -p "$LOGS" "$TMPDIR" "$CLANG_MODULE_CACHE_PATH"
 # A failed/new run must never leave an old PASS manifest visible.
 rm -f "$LOGS/acceptance.txt" "$LOGS/failure.txt"
 record_failure() {
@@ -56,7 +71,7 @@ record_failure() {
 }
 # EXIT also catches an explicit 'exit 1' after a CTest marker mismatch.
 trap record_failure EXIT
-trap 'echo "FAIL: one-shot texture verification stopped at line $LINENO; logs in build/texture-final-logs" >&2' ERR
+trap 'echo "FAIL: one-shot texture verification stopped at line $LINENO; logs in $LOGS" >&2' ERR
 run_logged() {
   local name="$1"
   shift
@@ -66,7 +81,7 @@ run_logged() {
 printf 'HEAD=%s jobs=%s full-engine=%s\n' "$(git rev-parse HEAD)" "$JOBS" "$FULL_ENGINE"
 
 run_logged safe-configure cmake -S . -B "$SAFE" \
-  -DAIVERSE_BUILD_TESTS=ON \
+  -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON \
   -DAIVERSE_TEXTURE_METAL_GPU_TESTS=OFF \
   -DAIVERSE_TEXTURE_METAL_ICB_GPU_TESTS=OFF \
   -DAIVERSE_TEXTURE_METAL_RENDERER_GRAPH_GPU_TESTS=OFF \
@@ -112,10 +127,10 @@ if ((FULL_ENGINE)); then
     --output-on-failure --no-tests=error --parallel "$JOBS"
 fi
 
-# The seven real Metal tests are opt-in and compiled from current source
+# The eight real Metal tests are opt-in and compiled from current source
 # before ANY CTest executes. CTest tests run serially, in fresh processes.
 run_logged gpu-configure cmake -S . -B "$GPU" \
-  -DAIVERSE_BUILD_TESTS=ON \
+  -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON \
   -DAIVERSE_TEXTURE_METAL_GPU_TESTS=ON \
   -DAIVERSE_TEXTURE_METAL_ICB_GPU_TESTS=ON \
   -DAIVERSE_TEXTURE_METAL_RENDERER_GRAPH_GPU_TESTS=ON \
@@ -135,7 +150,7 @@ gpu_tests=(
   metal_texture_gpu metal_texture_icb_graph_gpu
   metal_renderer_graph_icb_gpu metal_renderer_graph_vt_icb_gpu
   metal_renderer_graph_vt_seam_gpu metal_vt_bilinear_gpu
-  metal_renderer_graph_vt_gutter_gpu
+  metal_renderer_graph_vt_gutter_gpu metal_renderer_indexed_vt_gpu
 )
 markers=(
   ''
@@ -145,6 +160,7 @@ markers=(
   'PASS: Renderer3D Shader Graph disk VT missing-page and Repeat/MirrorRepeat seam GPU ICB oracle'
   'PASS: native Metal canonical VT bilinear nonuniform gutter seam and Repeat/MirrorRepeat CPU pixel oracle'
   'PASS: production Renderer3D Shader Graph nonuniform guttered disk VT mixed Metal GPU ICB seam parity'
+  'PASS: production Renderer3D indexed VT nonuniform direct and ICB fallback parity'
 )
 run_logged gpu-build cmake --build "$GPU" --target ${gpu_targets[@]} --parallel "$JOBS"
 for index in "${!gpu_tests[@]}"; do
@@ -166,9 +182,9 @@ done
 {
   echo "sha=$(git rev-parse HEAD)"
   echo "safe_texture_tests=22"
-  echo "native_metal_gpu_tests=7"
+  echo "native_metal_gpu_tests=8"
   echo "full_engine=$FULL_ENGINE"
   echo "result=PASS"
 } | tee "$LOGS/acceptance.txt"
-echo "PASS: all 22 portable texture/graph and 7 native Metal GPU tests"
+echo "PASS: all 22 portable texture/graph and 8 native Metal GPU tests"
 echo "Logs: $LOGS"

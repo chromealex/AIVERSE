@@ -109,6 +109,20 @@ struct mat4 {
         else { r.at(2, 2) = (zf + zn) / (zn - zf); r.at(2, 3) = 2 * zf * zn / (zn - zf); }
         return r;
     }
+    // Right-handed off-center perspective; l/r/b/t are near-plane coordinates.
+    // Shared by XR, portals and virtual production; framebuffer aspect is irrelevant.
+    static mat4 frustum(float l, float rgt, float b, float t, float zn, float zf, bool zeroToOne) {
+        mat4 p{};
+        p.at(0,0)=2.f*zn/(rgt-l);
+        p.at(1,1)=2.f*zn/(t-b);
+        p.at(0,2)=(rgt+l)/(rgt-l);
+        p.at(1,2)=(t+b)/(t-b);
+        p.at(3,2)=-1.f;
+        p.at(0,3)=p.at(1,3)=p.at(3,0)=p.at(3,1)=p.at(3,3)=0.f;
+        if (zeroToOne) {p.at(2,2)=zf/(zn-zf);p.at(2,3)=zn*zf/(zn-zf);}
+        else {p.at(2,2)=(zf+zn)/(zn-zf);p.at(2,3)=2.f*zn*zf/(zn-zf);}
+        return p;
+    }
     static mat4 ortho(float l, float rgt, float b, float t, float zn, float zf, bool zeroToOne) {
         mat4 r;
         r.at(0, 0) = 2 / (rgt - l); r.at(1, 1) = 2 / (t - b);
@@ -178,8 +192,10 @@ inline mat4 mat4::inverse() const {
     return r;
 }
 
-// RTS camera orbiting a ground target point.
-struct RTSCamera {
+// Generic target-orbit camera: usable for strategy, FPS spectator, orbit,
+// editor and scene previews. The old RTSCamera name stays as an alias.
+// LENS camera extends the original orbit API without genre coupling.
+struct Camera {
     float3 target{0, 0, 0};
     float distance = 30.0f;
     float pitch = 0.95f;   // radians from horizontal
@@ -190,29 +206,93 @@ struct RTSCamera {
     // distance * tan(fovY / 2), i.e. the same framing as the perspective camera at that distance.
     bool ortho = false;
     float2 jitter{0, 0}; // optional projection offset in NDC (temporal AA)
+    float2 lensShift{0,0}; // optical projection centre shift in NDC (stereo/physical lens)
+    // Optional exact asymmetric perspective frustum, slopes relative to the near plane.
+    // Unlike fovY/lensShift, these bounds do not depend on output pixel aspect.
+    bool useFrustumTangents=false;
+    float frustumLeftTan=-1.f, frustumRightTan=1.f;
+    float frustumDownTan=-1.f, frustumUpTan=1.f;
+    bool setFrustumTangents(float left,float right,float down,float up) {
+        if (!(std::isfinite(left)&&std::isfinite(right)&&std::isfinite(down)&&std::isfinite(up)) ||
+            !(left<right&&down<up&&left<0.f&&right>0.f&&down<0.f&&up>0.f))
+            return false;
+        frustumLeftTan=left;frustumRightTan=right;
+        frustumDownTan=down;frustumUpTan=up;
+        useFrustumTangents=true;
+        return true;
+    }
+    void clearFrustumTangents() {useFrustumTangents=false;}
+    bool obliqueClip=false; // opt-in world-plane clipping for mirrors/portals
+    float4 clipWorldPlane{}; // keep dot(worldPlane, float4(worldPos,1)) >= 0
     float zNear = 0.5f, zFar = 1000.0f;   // perspective clip planes (planet systems need a far plane)
 
+    // Direct world pose for ECS/cinematic cameras, including arbitrary roll.
+    // Legacy target/distance orbit cameras stay fully compatible when usePose=false.
+    bool usePose = false;
+    float3 position{};
+    quat rotation{};
+    float orthoHalfHeightOverride = 0.0f;
+    void setPose(float3 worldPosition, quat worldRotation) {
+        usePose = true;
+        position = worldPosition;
+        rotation = qnormalize(worldRotation);
+        // Preserve camera-facing target for legacy shadows, lighting, culling
+        // and systems that still query target instead of the view matrix.
+        target = position + rotation.rotate({0, 0, -1}) * distance;
+    }
+
     float3 eye() const {
+        if (usePose) return position;
         float cp = std::cos(pitch), sp = std::sin(pitch);
         return target + float3{std::sin(yaw) * cp, sp, std::cos(yaw) * cp} * distance;
     }
-    float orthoHalfHeight() const { return distance * std::tan(fovY * 0.5f); }
+    float orthoHalfHeight() const {
+        return orthoHalfHeightOverride > 0.0f ? orthoHalfHeightOverride : distance * std::tan(fovY * 0.5f);
+    }
     mat4 view() const {
+        if (usePose)
+            return mat4::lookAt(position, position + rotation.rotate({0, 0, -1}),
+                                rotation.rotate({0, 1, 0}));
         // straight down (pitch 90°, Red Alert / Dune II): world up is degenerate, use the ground
         // direction the camera faces as screen up
         float3 up = std::cos(pitch) < 1e-3f ? float3{-std::sin(yaw), 0, -std::cos(yaw)} : float3{0, 1, 0};
         return mat4::lookAt(eye(), target, up);
     }
     mat4 proj(float aspect, bool zeroToOne) const {
+        mat4 p;
         if (!ortho) {
-            mat4 p = mat4::perspective(fovY, aspect, zNear, zFar, zeroToOne);
-            for (int i = 0; i < 4; ++i) { p.at(0, i) += jitter.x * p.at(3, i); p.at(1, i) += jitter.y * p.at(3, i); }
-            return p;
+            p = useFrustumTangents
+                ? mat4::frustum(frustumLeftTan*zNear,frustumRightTan*zNear,
+                                frustumDownTan*zNear,frustumUpTan*zNear,
+                                zNear,zFar,zeroToOne)
+                : mat4::perspective(fovY, aspect, zNear, zFar, zeroToOne);
+            for (int i = 0; i < 4; ++i) {
+                p.at(0, i) += (jitter.x+lensShift.x) * p.at(3, i);
+                p.at(1, i) += (jitter.y+lensShift.y) * p.at(3, i);
+            }
+        } else {
+            float h = orthoHalfHeight(), w = h * aspect;
+            // negative near plane: terrain/sprites taller than the zoom distance are not clipped
+            p = mat4::ortho(-w, w, -h, h, -200.0f, 1000.0f, zeroToOne);
+            p.at(0, 3) += jitter.x+lensShift.x; p.at(1, 3) += jitter.y+lensShift.y;
         }
-        float h = orthoHalfHeight(), w = h * aspect;
-        // negative near plane: terrain/sprites taller than the zoom distance are not clipped
-        mat4 p = mat4::ortho(-w, w, -h, h, -200.0f, 1000.0f, zeroToOne);
-        p.at(0, 3) += jitter.x; p.at(1, 3) += jitter.y;
+        if(obliqueClip) {
+            // Plane in camera coordinates = transpose(inverse(view)) * worldPlane.
+            const mat4 inverseView=view().inverse();
+            const float source[4]={clipWorldPlane.x,clipWorldPlane.y,
+                                   clipWorldPlane.z,clipWorldPlane.w};
+            float c[4]{};
+            for(int j=0;j<4;++j)
+                for(int i=0;i<4;++i)c[j]+=inverseView.at(i,j)*source[i];
+            const auto q=p.inverse()*float4{c[0]>=0?1.f:-1.f,
+                                              c[1]>=0?1.f:-1.f,1.f,1.f};
+            const float den=c[0]*q.x+c[1]*q.y+c[2]*q.z+c[3]*q.w;
+            if(std::isfinite(den) && std::fabs(den)>1.e-5f) {
+                const float factor=(zeroToOne?1.f:2.f)/den;
+                for(int j=0;j<4;++j)
+                    p.at(2,j)=c[j]*factor-(zeroToOne?0.f:p.at(3,j));
+            }
+        }
         return p;
     }
 
@@ -243,5 +323,8 @@ struct RTSCamera {
         return true;
     }
 };
+// Compatibility names kept for existing MotionWeave/RTS callers.
+using Camera3D = Camera;
+using RTSCamera = Camera;
 
 } // namespace aiverse::render

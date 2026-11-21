@@ -7,6 +7,8 @@ description: Set the look of an AIVERSE game through MCP - lighting and sky, poi
 
 Always look at the result: `view_focus` + `view_screenshot` after every step.
 
+**PRISMA ownership:** For any postprocessing changes in C++ or a new screen effect, use `aiverse-prisma` and `docs/prisma.md`. Existing `postfx_*` controls below configure PRISMA; they do not belong to SpectraFX. Scene VFX particles belong to `aiverse-spectrafx`.
+
 1. Lighting: `lighting_set` (sun, sky, day/night, presets); local lights `light_add` / `light_update` / `light_list`. `view_lighting` to preview.
 2. Post effects: `postfx_catalog` -> `postfx_preset` (cinematic, vivid, mobile, noir, retro, miniature, sunset, winter, nightVision, clean; `scope` game or map) or `postfx_add` / `postfx_set`. Answers carry `warnings` with ms per frame for heavy effects (bloom, fxaa, sunShafts) - pass them to the user. `postfx_estimate` for the budget, `view_postfx {quality: low}` + screenshot for weak phones. Neutral LUT: `postfx_lut_neutral`.
 3. Materials: `texture_patterns` -> `texture_generate` (bricks, panels, wood, camo, scales, normal maps, team masks) -> `material_set` (shared `materials.json`) -> `material_apply {type, material, target|node}`.

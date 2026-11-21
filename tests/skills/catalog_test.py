@@ -43,3 +43,10 @@ assert both['serverModules']==server['serverModules']
 assert both['clientFeatures']==['economy','social']
 assert any('CLIENT)' in call for call in both['nativeCmake'])
 assert m.plan(entries,['aiverse-card-runtime'],'both')['clientFeatures']==[]
+
+# LENS authoring and host integration route to existing engine workflows.
+for skill_id in ('aiverse-lens', 'aiverse-lens-native'):
+    entry = entries[skill_id]
+    assert entry['runtime'] == 'none' and entry['target'] is None
+    assert m.search(entries, skill_id)[0][1]['id'] == skill_id
+    assert m.plan(entries, [skill_id], 'both')['cmake'] == []

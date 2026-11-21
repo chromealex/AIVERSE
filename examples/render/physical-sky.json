@@ -1,0 +1,18 @@
+{
+  "postfx": {
+    "hdr": "on",
+    "physicalSky": {
+      "enabled": true,
+      "clouds": true,
+      "godRays": true,
+      "cloudBase": 1500,
+      "cloudThickness": 1500,
+      "cloudScale": 2400,
+      "coverage": 0.53,
+      "extinction": 0.003,
+      "haze": 0.00001,
+      "windX": 12,
+      "windZ": 4
+    }
+  }
+}

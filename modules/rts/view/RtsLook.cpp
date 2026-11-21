@@ -2,6 +2,11 @@
 // overrides, clip mapping and procedural animation presets. Problems become warnings with the
 // type id, never errors: a broken model must not stop a game from starting.
 #include "RtsView.h"
+#include "engine/view/ModelPoseRetarget.h"
+#include "engine/view/ModelPublicationEpoch.h"
+#include "RtsModelStreaming.h"
+#include "engine/view/AppearanceAuthoringService.h"
+#include "engine/view/AppearanceChoiceAuthoring.h"
 
 #include <algorithm>
 #include <chrono>
@@ -9,6 +14,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <iterator>
+#include <stdexcept>
 #include <unordered_set>
 
 namespace aiverse::game {
@@ -74,94 +81,27 @@ const char* const kAuto[RtsView::kAnimCount][6] = {
     {"hit", "hurt", "damage", nullptr}, {"working", "produce", "work", nullptr},
     {"construct", nullptr}, {"cast", "spell", nullptr},
 };
-// case-insensitive glob with * and ? (node names in "assign")
-bool globMatchCi(const std::string& pat, const std::string& text) {
-    size_t p = 0, t = 0, star = std::string::npos, mark = 0;
-    auto eq = [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); };
-    while (t < text.size()) {
-        if (p < pat.size() && (pat[p] == '?' || eq(pat[p], text[t]))) { ++p; ++t; }
-        else if (p < pat.size() && pat[p] == '*') { star = p++; mark = t; }
-        else if (star != std::string::npos) { p = star + 1; t = ++mark; }
-        else return false;
-    }
-    while (p < pat.size() && pat[p] == '*') ++p;
-    return p == pat.size();
-}
+
 } // namespace
 
 Json RtsView::resolveMaterial(const UnitType& t, const Json& ref, int depth) {
-    if (depth > 8) { warn(t, "materials: reference chain too deep (a loop of \"base\" / \"use\"?)"); return Json::object(); }
-    auto overlay = [](Json base, const Json& top, const char* skip) {
-        for (const auto& [k, val] : top.members()) if (k != skip) base.set(k, val);
-        return base;
-    };
-    if (ref.isString()) {
-        const Json& e = materialLib_[ref.str()];
-        if (!e.isObject()) { warn(t, "materials: unknown library material '" + ref.str() + "' (materials.json)"); return Json::object(); }
-        return e.has("base") ? overlay(resolveMaterial(t, e["base"], depth + 1), e, "base") : e;
-    }
-    if (!ref.isObject()) return Json::object();
-    if (ref.has("use")) return overlay(resolveMaterial(t, ref["use"], depth + 1), ref, "use");
-    return ref.has("base") ? overlay(resolveMaterial(t, ref["base"], depth + 1), ref, "base") : ref;   // an unsaved library entry
+    return view::AppearanceAuthoringService::resolveMaterial(
+        materialLib_,ref,[this,&t](const std::string& message) {
+            warn(t,message);
+        },depth);
 }
 
-void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Material& mt, const Json& ref) {
-    const Json o = resolveMaterial(t, ref);
-    if (o.getBool("replace")) { const std::string keep = mt.name; mt = Material{}; mt.name = keep; }
-    if (const Json& col = o["color"]; col.size() >= 3) mt.baseColor = {num(col[0], 1), num(col[1], 1), num(col[2], 1), col.size() > 3 ? num(col[3], 1) : mt.baseColor.w};
-    if (o.has("shaderGraph")) {
-        try {
-            mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material"));
-            for(size_t i=0;i<mt.shaderGraph->textures.size();++i) mt.graphTextures[i]=loadTexture(dev,t,m,mt.shaderGraph->textures[i]);
-        }
-        catch (const std::exception& e) { warn(t, e.what()); mt.shaderGraph.reset(); }
-    }
-    mt.metallic = num(o["metallic"], mt.metallic);
-    mt.roughness = num(o["roughness"], mt.roughness);
-    if (o.has("emissive")) mt.emissive = vec3(o["emissive"], mt.emissive);
-    mt.emissiveStrength = num(o["emissiveStrength"], mt.emissiveStrength);
-    if (o.has("alpha")) {
-        std::string a = o.getStr("alpha");
-        mt.alpha = a == "mask" ? AlphaMode::Mask : a == "blend" ? AlphaMode::Blend : AlphaMode::Opaque;
-        if (a != "mask" && a != "blend" && a != "opaque") warn(t, "alpha must be opaque, mask or blend");
-    }
-    mt.alphaCutoff = num(o["cutoff"], mt.alphaCutoff);
-    mt.doubleSided = o.getBool("doubleSided", mt.doubleSided);
-    if (o.has("unlit")) mt.shading = o.getBool("unlit") ? ShadingModel::Unlit : ShadingModel::Pbr;
-    if (const Json& fl = o["fixedLight"]; fl.size() == 5) {   // [x, y, z, ambient, diffuse]: unlit, shaded by the world normal
-        float3 d{num(fl[0], 0), num(fl[1], 1), num(fl[2], 0)};
-        const float l = length(d);
-        if (l > 1e-6f) {
-            d = d * (1.0f / l);
-            mt.fixedLight = {d.x, d.y, d.z, 1};
-            mt.fixedShade = {num(fl[3], 1), num(fl[4], 0)};
-            mt.shading = ShadingModel::Unlit;
-        } else warn(t, "fixedLight direction is zero");
-    } else if (o.has("fixedLight")) warn(t, "fixedLight is [x, y, z, ambient, diffuse]");
-    mt.castShadow = o.getBool("castShadow", mt.castShadow);
-    mt.transparent = o.getBool("transparent", mt.transparent);   // render::kDrawTransparent for this material
-    mt.receiveShadow = o.getBool("receiveShadow", mt.receiveShadow);
-    mt.vertexColors = o.getBool("vertexColors", mt.vertexColors);
-    if (o.has("team")) {
-        std::string tm = o.getStr("team");
-        mt.team = tm == "tint" ? TeamMode::Tint : tm == "mask" ? TeamMode::Mask : tm == "alpha" ? TeamMode::BaseAlpha
-                : tm == "vertex" ? TeamMode::VertexAlpha : TeamMode::None;
-        if (tm != "tint" && tm != "mask" && tm != "alpha" && tm != "vertex" && tm != "none") warn(t, "team must be tint, mask, alpha, vertex or none");
-    }
-    mt.teamStrength = num(o["teamStrength"], mt.teamStrength);
-    if (o.has("teamMask")) { mt.teamTex = loadTexture(dev, t, m, o.getStr("teamMask")); if (mt.team == TeamMode::None || mt.team == TeamMode::Tint) mt.team = TeamMode::Mask; }
-    if (o.has("texture")) mt.baseTex = loadTexture(dev, t, m, o.getStr("texture"));
-    if (o.has("normalMap")) {
-        mt.normalTex = loadTexture(dev, t, m, o.getStr("normalMap")); // tangents: from the file or generated for its own normal maps
-    }
-    if (o.has("emissiveMap")) { mt.emissiveTex = loadTexture(dev, t, m, o.getStr("emissiveMap")); if (!o.has("emissive")) mt.emissive = {1, 1, 1}; }
-    // glTF channel layout (G roughness, B metallic; occlusion in R): the Unity importer repacks URP maps into it
-    if (o.has("metallicRoughnessMap")) mt.mrTex = loadTexture(dev, t, m, o.getStr("metallicRoughnessMap"));
-    if (o.has("occlusionMap")) mt.occlusionTex = loadTexture(dev, t, m, o.getStr("occlusionMap"));
-    mt.occlusionStrength = num(o["occlusionStrength"], mt.occlusionStrength);
-    mt.normalScale = num(o["normalScale"], mt.normalScale);
-    if (const Json& uv = o["uvScale"]; uv.size() == 2) mt.uvScale = {num(uv[0], 1), num(uv[1], 1)};
-    if (const Json& uv = o["uvOffset"]; uv.size() == 2) mt.uvOffset = {num(uv[0], 0), num(uv[1], 0)};
+void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t,
+                            Model& model, Material& material,const Json& ref) {
+    // The host decides source reader, GPU texture insertion and warning
+    // scope; generic authoring resolves all material fields consistently
+    // for RTS/FPS/editor/native projects without their genre rules.
+    view::AppearanceAuthoringService::applyMaterial(
+        material,materialLib_,ref,
+        [&](const std::string& path) {
+            return loadTexture(dev,t,model,path);
+        },
+        [this,&t](const std::string& message) {warn(t,message);});
 }
 
 const char* RtsView::animName(int k) {
@@ -258,12 +198,12 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.shape = L.models.empty();
     if (L.shape) {
         std::string shape = v.getStr("shape", t.structure ? (t.resourceNode >= 0 ? "mine" : "structure") : "generic");
-        if (!models_.count("shape:" + shape)) {
+        if (!resources_.contains("shape:" + shape)) {
             warn(t, "unknown shape '" + shape + "'");
             shape = t.structure ? "structure" : "generic";
         }
         ModelChoice ch;
-        ch.model = models_["shape:" + shape].get();
+        ch.model = resources_.find("shape:" + shape);
         ch.materials = ch.model->materials;
         configureChoice(dev, t, v, ch, true);
         L.models.push_back(std::move(ch));
@@ -289,7 +229,29 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
             lc.lodDistance = num(lj["distance"], 30);
             const Model& base = *L.models[0].model;
             for (const auto& c0 : base.clips) lc.clipMap.push_back(lc.model->findClip(c0.name));
-            for (const auto& n : lc.model->nodes) lc.nodeMap.push_back(base.findNode(n.name));
+            // Every genre uses the same name-based authoring helper;
+            // the resulting explicit source-to-visual map is compiled once.
+            auto retarget=std::make_shared<view::ModelPoseRetarget>(
+                view::makeNamedModelPoseRetarget(base,*lc.model));
+            lc.nodeMap=retarget->sourceNodeForVisual; // historical fallback only
+            if(auto plan=view::compileModelPoseRetarget(
+                   base,*lc.model,*retarget,
+                   L.models[0].modelGeneration,lc.modelGeneration)) {
+                lc.poseRetarget=std::move(retarget);
+                lc.compiledPoseRetarget=std::move(plan);
+            }else {
+                // Only author-time failure diagnostics, never per crowd draw.
+                // Keep the older, uncompiled LOD behavior for compatibility
+                // until the editor's model visual parity suite is verified.
+                const auto report=view::describeModelPoseRetarget(
+                    base,*lc.model,*retarget,
+                    L.models[0].modelGeneration,lc.modelGeneration);
+                warn(t,"LOD '" + lc.model->path + "' retarget rejected: " +
+                    view::modelPoseRetargetIssueName(report.issue) +
+                    " (visual node " + std::to_string(report.targetNode) +
+                    ", matched " + std::to_string(report.mappedNodes) +
+                    ", unbound " + std::to_string(report.unboundNodes) + ")");
+            }
             for (int k = 0; k < kAnimCount; ++k) { lc.clips[k] = L.models[0].clips[k]; lc.hasClip[k] = L.models[0].hasClip[k]; }
             procedural(lc, v);
             configureExtras(dev, t, v, lc);
@@ -360,67 +322,55 @@ bool RtsView::prepareType(uint16_t type, bool allVariants) {
     GeometryPolicy policy;
     try { policy = parseGeometryPolicy(t.view["geometry"]); } catch (const std::exception&) {}
     const bool geometry = policy.clusters || policy.shadowClusters || policy.occluder;
-    if (prepareType_ != int(type) || prepareAllVariants_ != allVariants) {
-        if (preparing_.valid()) { preparing_.wait(); preparing_ = {}; }
-        prepareType_ = type; prepareAllVariants_ = allVariants; preparePaths_.clear(); prepareCursor_ = 0;
-        auto add = [&](const std::string& path) {
-            if (path.empty()) return;
-            const auto key = path + (geometry ? "#geometry" : "");
-            if (models_.count(key)) return;
-            const auto entry = std::make_pair(path, key);
-            if (std::find(preparePaths_.begin(), preparePaths_.end(), entry) == preparePaths_.end()) preparePaths_.push_back(entry);
-        };
-        // Main choices, LODs, attachments and construction stages share the model syntax.
-        std::function<void(const Json&)> visit = [&](const Json& v) {
-            if (v.isObject()) for (const auto& [key, value] : v.members()) {
-                if (key == "model") {
-                    if (value.isString()) add(value.str());
-                    for (const auto& choice : value.items()) {
-                        if (choice.isString()) add(choice.str()); else add(choice.getStr("file"));
-                    }
-                }
-                visit(value);
-            }
-            else for (const auto& value : v.items()) visit(value);
+    if (!resources_.preparation().matches(int(type),allVariants)) {
+        resources_.preparation().begin(int(type),allVariants);
+        const auto discover=[&](const Json& authored) {
+            view_adapter::discoverModelPaths(authored,geometry,
+                [&](const std::string& key) {
+                    return resources_.contains(key);
+                },
+                [&](const std::string& path,const std::string& key) {
+                    resources_.preparation().appendPath(path,key);
+                });
         };
         if (!allVariants && deferredLoading_ && deferAppearanceVariants_ && t.view["model"].isArray() && t.view["streaming"].getInt("initialModels", 0) > 0) {
             Json initialView = t.view, choices = Json::array();
             for (size_t index : initialModelChoices(t.view)) choices.push(t.view["model"][index]);
             initialView.set("model", std::move(choices));
-            visit(initialView);
-        } else visit(t.view);
+            discover(initialView);
+        } else discover(t.view);
     }
-    if (preparing_.valid()) {
-        if (preparing_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return false;
-        auto result = preparing_.get();
+    if (resources_.preparation().busy()) {
+        if (!resources_.preparation().ready()) return false;
+        auto result = resources_.preparation().take();
         for (const auto& message : result.warnings) warn(t, message);
         // A runtime spawn can have synchronously cached the same file while the worker ran.
-        const auto& key = preparePaths_[prepareCursor_].second;
-        if (!models_.count(key)) {
-            if (result.model) uploadModel(*dev_, *result.model);
-            models_.emplace(key, std::move(result.model));
+        const auto& key = resources_.preparation().current().second;
+        try {
+            const bool published=resources_.publishPrepared(
+                *dev_,key,std::move(result));
+            if(!published && !resources_.contains(key))
+                warn(t,"async Model upload failed for "+key);
+        }catch(const std::exception& e) {
+            // publishPrepared has already queued any partially uploaded
+            // Model for GPU-safe retirement; do not retry the same worker
+            // result or leave preparation stalled on its failed key.
+            warn(t,std::string("async Model publish: ")+e.what());
         }
-        ++prepareCursor_;
+        resources_.preparation().advance();
     }
-    if (prepareCursor_ < preparePaths_.size()) {
-        const auto path = preparePaths_[prepareCursor_].first;
-        preparingResource_ = path;
+    if (resources_.preparation().hasRemaining()) {
+        const auto path = resources_.preparation().current().first;
         const auto reader = asyncReader_;
-        const auto textures = textureCache_;
+        const auto textures = resources_.textures();
         const bool prepareSkin = t.view.getStr("skinning", "auto") != "palette" && !t.view.has("animationGraph") && !t.view.getBool("programmableAnimation");
-        preparing_ = std::async(std::launch::async, [path, reader, geometry, prepareSkin, textures] {
-            PreparedModel result;
-            try {
-                result.model = loadModel(path, reader, &result.warnings, textures);
-                if (geometry && result.model) prepareGeometry(*result.model);
-                if (prepareSkin && result.model) prepareAnimationBake(*result.model);
-                if (result.model) prepareModelUpload(*result.model);
-            } catch (const std::exception& e) { result.warnings.push_back(e.what()); result.model.reset(); }
-            return result;
+        resources_.preparation().launch(path,[path, reader, geometry, prepareSkin, textures] {
+            return view_adapter::prepareModelCpu(
+                path,reader,textures,{geometry,prepareSkin});
         });
         return false;
     }
-    preparingResource_.clear();
+    resources_.preparation().clearResource();
 #else
     (void)type; (void)allVariants;
 #endif
@@ -461,11 +411,11 @@ void RtsView::streamModelVariants(double budgetMs) {
         }
         look.pendingVariants.clear(); look.nextVariant = 0;
 #ifndef __EMSCRIPTEN__
-        for (const auto& path : preparePaths_) {
-            auto it = models_.find(path.second);
-            if (it != models_.end() && it->second) std::vector<float>().swap(it->second->baked.pending);
+        for (const auto& path : resources_.preparation().paths()) {
+            auto it = resources_.models().find(path.second);
+            if (it != resources_.models().end() && it->second) std::vector<float>().swap(it->second->baked.pending);
         }
-        prepareType_ = -1; preparePaths_.clear(); prepareCursor_ = 0;
+        resources_.preparation().reset();
 #endif
         if (std::chrono::steady_clock::now() >= deadline) return;
     }
@@ -483,20 +433,32 @@ bool RtsView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
 void RtsView::trimTypes(const std::vector<bool>& keep, bool compact) {
     if (!dev_ || keep.size()!=looks_.size()) return;
 #ifndef __EMSCRIPTEN__
-    if (prepareType_ >= 0 || preparing_.valid()) return; // prepared models do not yet have looks
+    if (resources_.preparation().active()) return; // prepared models do not yet have looks
 #endif
     bool changed=compact;
     for (size_t t=0;t<keep.size();++t) if (!keep[t] && loadedTypes_[t]) {
         looks_[t]=TypeLook{}; loadedTypes_[t]=false; changed=true;
     }
     if (!changed) return;
+    // Detach MotionWeave presentation sources of unloaded types BEFORE their
+    // Models are released below: MotionWeaveSourceBridge::sync would
+    // otherwise snapshot the player of a retired Model on the next frame.
+    std::vector<uint64_t> sourceIds;
+    for (const auto& [id,animation] : anims_) {
+        (void)id;
+        if (animation.type<keep.size() && !keep[animation.type] &&
+            animation.genericViewId!=0)
+            sourceIds.push_back(animation.genericViewId);
+    }
+    if (genericView_ && !sourceIds.empty())
+        genericView_->forgetSources(sourceIds);
     for (auto it=anims_.begin();it!=anims_.end();) {
         if (!keep[it->second.type]) it=anims_.erase(it); else ++it;
     }
     // Large projects can keep hundreds of model assets. A hash set makes
     // reclamation linear instead of repeatedly scanning the entire keep list.
     std::unordered_set<const render::Model*> used;
-    used.reserve(models_.size());
+    used.reserve(resources_.models().size());
     auto visit=[&](const ModelChoice& c){
         if(c.model)used.insert(c.model);
         for(const auto& a:c.attach)if(a.model)used.insert(a.model);
@@ -506,14 +468,443 @@ void RtsView::trimTypes(const std::vector<bool>& keep, bool compact) {
         for(const auto& c:look.lods)visit(c);
         for(const auto& s:look.stages)visit(s.choice);
     }
-    size_t released=0;
-    for(auto it=models_.begin();it!=models_.end();) {
-        if(it->first.rfind("shape:",0)==0 || used.contains(it->second.get())){++it;continue;}
-        if(it->second){animationCache_.erase(it->second.get());releaseModel(*dev_,*it->second);}
-        it=models_.erase(it);++released;
+    const size_t released=resources_.trimUnused(*dev_,used,
+        [this](const render::Model* model) {
+            animationCache_.erase(model);
+        });
+    if(std::getenv("AIVERSE_STREAM_TRACE"))std::fprintf(stderr,"[residency] released=%zu models=%zu textures=%zu\n",released,resources_.models().size(),resources_.textures()->gpuCount());
+}
+
+// A hot reload is a new GPU/Model publication, not a new gameplay spawn.
+// Capture only named playback clocks and presentation event ages; old
+// Graph, Animator, pose, rig and Model* must be destroyed before eviction.
+// Bounded even if the host repeatedly reloads sources for unseen entities.
+void RtsView::rememberReloadPlayback(uint64_t key,const EntityAnim& state) noexcept {
+    // State preservation is best-effort, never a prerequisite for a safe
+    // source/graph transaction. Allocation failure falls back to restart
+    // rather than interrupting committed GPU/publication cleanup.
+    try {
+    constexpr size_t kMaxPending=8192;
+    constexpr uint64_t kMaxAgeFrames=120;
+    if(reloadPlayback_.size()>=kMaxPending &&
+       !reloadPlayback_.contains(key)) {
+        // Preserve a strict memory bound across repeated source imports
+        // when some deleted entities never return to consume their state.
+        for(auto it=reloadPlayback_.begin();it!=reloadPlayback_.end();) {
+            if(frame_>=it->second.capturedFrame &&
+               frame_-it->second.capturedFrame>kMaxAgeFrames)
+                it=reloadPlayback_.erase(it);
+            else ++it;
+        }
+        if(reloadPlayback_.size()>=kMaxPending)return;
     }
-    textureCache_->trim(*dev_);
-    if(std::getenv("AIVERSE_STREAM_TRACE"))std::fprintf(stderr,"[residency] released=%zu models=%zu textures=%zu\n",released,models_.size(),textureCache_->gpuCount());
+    ReloadPlayback snapshot;
+    snapshot.type=state.type;
+    snapshot.choice=state.choice;
+    snapshot.capturedFrame=frame_;
+    if(!state.genericViewPose && !state.wasGenericViewPose) {
+        snapshot.graph=state.graph.snapshotPlayback();
+        // Legacy Animator publishes no independent ECS graph clock.
+        // Capture ONLY a stable, unblended base clip; cross-fades and
+        // secondary layers must restart safely on different model rigs.
+        const auto* oldModel=state.anim.model();
+        const int oldClip=state.anim.clip(0);
+        const auto sampled=state.anim.baseSample();
+        if(oldModel && state.baseKind>=0 && state.baseKind<kAnimCount &&
+           oldClip>=0 && size_t(oldClip)<oldModel->clips.size() &&
+           sampled.clipA==oldClip && sampled.clipB<0 &&
+           oldModel->clips[size_t(oldClip)].duration>0.f &&
+           std::isfinite(state.anim.time(0))) {
+            snapshot.baseClip=oldModel->clips[size_t(oldClip)].name;
+            snapshot.basePhase=std::clamp(
+                state.anim.time(0)/
+                    oldModel->clips[size_t(oldClip)].duration,
+                0.f,1.f);
+            snapshot.baseLoop=sampled.loopA;
+            snapshot.baseKind=state.baseKind;
+        }
+    }
+    std::copy(std::begin(state.eventAge),std::end(state.eventAge),
+              std::begin(snapshot.eventAge));
+    snapshot.castAge=state.castAge;
+    snapshot.deathAge=state.deathAge;
+    snapshot.phase=state.phase;
+    snapshot.yaw=state.yaw;
+    snapshot.speed=state.speed;
+    snapshot.lastPos=state.lastPos;
+    snapshot.dead=state.dead;
+    reloadPlayback_.insert_or_assign(key,std::move(snapshot));
+    }catch(...) {
+        // Graph/Model source invalidation remains safe with no snapshot.
+    }
+}
+
+// Invalidate model-source dependencies as one render-thread transaction.
+// No affected Model/Graph pointers may survive the release barrier. Keep
+// unaffected TypeLooks and MotionWeave players alive to preserve their clocks.
+size_t RtsView::reloadModelSources(const std::vector<std::string>& sources) {
+    if(!dev_ || !rules_ || sources.empty())return 0;
+    std::unordered_set<std::string> changed;
+    for(const auto& source:sources)
+        if(!source.empty())
+            changed.insert(view_adapter::RtsModelResourceCache::sourceForKey(source));
+    std::vector<uint16_t> rebuild;
+    const size_t invalidated=resources_.invalidateSources(*dev_,sources,
+        [&](const std::vector<view_adapter::RtsModelResourceCache::AffectedModel>& affected) {
+            std::unordered_set<const render::Model*> stale;
+            for(const auto& resource:affected)
+                if(resource.model)stale.insert(resource.model);
+            const auto choiceUsesStale=[&](const ModelChoice& choice) {
+                if(stale.contains(choice.model))return true;
+                for(const auto& attachment:choice.attach)
+                    if(stale.contains(attachment.model))return true;
+                return false;
+            };
+            std::vector<bool> typeAffected(looks_.size(),false);
+            for(size_t i=0;i<looks_.size();++i) {
+                if(!loadedTypes_[i])continue;
+                const auto& look=looks_[i];
+                bool hit=false;
+                for(const auto& choice:look.models)hit |= choiceUsesStale(choice);
+                for(const auto& choice:look.lods)hit |= choiceUsesStale(choice);
+                for(const auto& stage:look.stages)hit |= choiceUsesStale(stage.choice);
+                // A failed/null load may currently render a built-in shape.
+                // Source dependencies are also read from the authored tree,
+                // including LODs, stages and attachments not currently loaded.
+                view_adapter::discoverModelPaths(rules_->types[i].view,false,
+                    [](const std::string&){return false;},
+                    [&](const std::string& path,const std::string&){
+                        if(changed.contains(
+                            view_adapter::RtsModelResourceCache::sourceForKey(path)))
+                            hit=true;
+                    });
+                const auto& streaming=rules_->types[i].view["streaming"];
+                hit |= changed.contains(
+                    view_adapter::RtsModelResourceCache::sourceForKey(
+                        streaming.getStr("coarseModel")));
+                hit |= changed.contains(
+                    view_adapter::RtsModelResourceCache::sourceForKey(
+                        streaming.getStr("detailModel")));
+                if(!requestedModels_[i].empty())
+                    hit |= changed.contains(
+                        view_adapter::RtsModelResourceCache::sourceForKey(
+                            requestedModels_[i]));
+                typeAffected[i]=hit;
+                if(hit)rebuild.push_back(uint16_t(i));
+            }
+            // Destroy selective ECS pose sources BEFORE the model GPU buffers.
+            std::vector<uint64_t> sourceIds;
+            for(const auto& [id,animation]:anims_) {
+                (void)id;
+                if(animation.type<typeAffected.size() &&
+                   typeAffected[animation.type] &&
+                   (animation.genericViewPose || animation.wasGenericViewPose ||
+                    animation.genericViewId!=0))
+                    sourceIds.push_back(animation.genericViewId);
+            }
+            if(genericView_ && !sourceIds.empty())
+                genericView_->forgetSourcesForReimport(sourceIds);
+            for(auto it=anims_.begin();it!=anims_.end();) {
+                if(it->second.type<typeAffected.size() &&
+                   typeAffected[it->second.type]) {
+                    rememberReloadPlayback(it->first,it->second);
+                    it=anims_.erase(it);
+                } else ++it;
+            }
+            for(auto it=streamingChoices_.begin();it!=streamingChoices_.end();) {
+                if(it->second.first<typeAffected.size() &&
+                   typeAffected[it->second.first])
+                    it=streamingChoices_.erase(it);
+                else ++it;
+            }
+            // Ghost previews are transient and may reference any choice.
+            ghostAnim_=EntityAnim{};
+            for(const auto* model:stale)animationCache_.erase(model);
+            for(const auto type:rebuild) {
+                looks_[type]=TypeLook{};
+                loadedTypes_[type]=false;
+            }
+        });
+    // Rebind only previously resident appearances. Unloaded editor types
+    // continue to load on demand from fresh sources.
+    for(const auto type:rebuild)loadType(type);
+    return invalidated;
+}
+
+// Rebuild authored appearances for external graph/material-library changes.
+// Keep GPU Model resources resident and stage all replacement looks BEFORE
+// unlinking any old animation state, so malformed edits preserve last-good.
+bool RtsView::reloadAppearanceTypes(const std::set<size_t>& types,
+                                    bool reloadMaterialLibrary,
+                                    size_t* refreshed) {
+    if(refreshed)*refreshed=0;
+    gpuAppearancePending_=false;
+    if(!dev_ || !rules_)return false;
+#ifndef __EMSCRIPTEN__
+    resources_.preparation().reset(); // no worker may publish during staging
+#endif
+    Json previousLibrary=materialLib_;
+    if(reloadMaterialLibrary) {
+        try {
+            std::string text;
+            Json next=Json::object();
+            if(read_ && read_("materials.json",text)) {
+                next=Json::parse(text)["materials"];
+                if(!next.isObject())
+                    throw std::runtime_error("materials.json must have a materials object");
+            }
+            materialLib_=std::move(next);
+        } catch(const std::exception& e) {
+            warnings_.push_back(std::string("material reload: ")+e.what());
+            return false;
+        }
+    }
+
+    // A successful appearance may use proposed future texture indices,
+    // but neither new images nor entire newly imported Models may appear
+    // in the live resource cache until ALL authored choices have passed.
+    render::ModelImageUploadTransaction imageTransaction(
+        *dev_,imageRollback_,gpuDeviceLease_);
+    render::ModelResourceCache::ModelMap stagedModels;
+    struct StagedModelRollback final {
+        render::ModelResourceCache& resources;
+        gfx::Device& device;
+        render::ModelResourceCache::ModelMap& models;
+        ~StagedModelRollback() {
+            for(auto& [key,model]:models) {
+                (void)key;
+                resources.retireUnpublished(device,model);
+            }
+        }
+    } scratchRollback{resources_,*dev_,stagedModels};
+    std::map<size_t,TypeLook> staged;
+    std::set<size_t> preserveAnimation;
+    // Local registry is published only into the replacement TypeLooks after
+    // ALL selected type choices successfully stage; old snapshots remain live.
+    view::AppearanceAssetRegistry preparedSnapshots;
+    struct StrictReloadScope final {
+        bool& enabled;
+        render::ModelImageUploadTransaction*& activeImages;
+        render::ModelResourceCache::ModelMap*& activeModels;
+        StrictReloadScope(bool& flag,
+                          render::ModelImageUploadTransaction*& targetImages,
+                          render::ModelResourceCache::ModelMap*& targetModels,
+                          render::ModelImageUploadTransaction& images,
+                          render::ModelResourceCache::ModelMap& models)
+            :enabled(flag),activeImages(targetImages),activeModels(targetModels) {
+            if(enabled || activeImages || activeModels)
+                throw std::logic_error("nested RTS appearance transaction");
+            enabled=true;
+            activeImages=&images;
+            activeModels=&models;
+        }
+        ~StrictReloadScope() {
+            activeModels=nullptr;
+            activeImages=nullptr;
+            enabled=false;
+        }
+    };
+    try {
+        StrictReloadScope strict(strictAppearanceReload_,activeImageTransaction_,
+                                 activeStagedModels_,imageTransaction,stagedModels);
+        for(const size_t index:types) {
+            if(index>=loadedTypes_.size() || !loadedTypes_[index])continue;
+            const auto& authored=rules_->types[index];
+            TypeLook candidate;
+            const std::string path=requestedModels_[index].empty()
+                ?authored.view["streaming"].getStr("detailModel")
+                :requestedModels_[index];
+            if(path.empty())
+                buildLook(*dev_,authored,candidate);
+            else {
+                auto selected=authored;
+                selected.view.set("model",Json::string(path));
+                buildLook(*dev_,selected,candidate);
+            }
+            // If a previously working graph fails compilation, leave every
+            // old TypeLook and its running players intact. This applies to
+            // original choices, LODs and stage-specific appearances.
+            const auto invalidGraph=[](const ModelChoice& oldChoice,
+                                       const ModelChoice& nextChoice) {
+                return bool(oldChoice.graph) && !nextChoice.graph;
+            };
+            const auto& previous=looks_[index];
+            bool invalid=false;
+            for(size_t i=0;i<previous.models.size() && i<candidate.models.size();++i)
+                invalid|=invalidGraph(previous.models[i],candidate.models[i]);
+            for(size_t i=0;i<previous.lods.size() && i<candidate.lods.size();++i)
+                invalid|=invalidGraph(previous.lods[i],candidate.lods[i]);
+            for(size_t i=0;i<previous.stages.size() && i<candidate.stages.size();++i)
+                invalid|=invalidGraph(previous.stages[i].choice,candidate.stages[i].choice);
+            if(candidate.models.size()<previous.models.size() ||
+               candidate.lods.size()<previous.lods.size() ||
+               candidate.stages.size()<previous.stages.size() || invalid)
+                throw std::runtime_error(
+                    "appearance reload declined: a model/graph was lost");
+
+            // Every unchanged runtime graph/model keeps its existing program
+            // pointer and ECS source clock. Shader/material-only changes must
+            // not replay attack, locomotion, montage or death animations.
+            const auto sameRuntime=[](const ModelChoice& oldChoice,
+                                      const ModelChoice& nextChoice) {
+                return oldChoice.model==nextChoice.model &&
+                    oldChoice.graphSignature==nextChoice.graphSignature &&
+                    oldChoice.programmableAnimation==nextChoice.programmableAnimation &&
+                    oldChoice.needsPose==nextChoice.needsPose &&
+                    oldChoice.baked==nextChoice.baked &&
+                    oldChoice.procs.size()==nextChoice.procs.size() &&
+                    oldChoice.legs.size()==nextChoice.legs.size() &&
+                    oldChoice.attach.size()==nextChoice.attach.size() &&
+                    oldChoice.additive.size()==nextChoice.additive.size() &&
+                    oldChoice.weaponPoses.size()==nextChoice.weaponPoses.size();
+            };
+            bool canPreserve=reloadMaterialLibrary &&
+                candidate.models.size()==previous.models.size() &&
+                candidate.lods.size()==previous.lods.size() &&
+                candidate.stages.size()==previous.stages.size();
+            if(canPreserve) {
+                for(size_t i=0;i<candidate.models.size();++i)
+                    canPreserve &= sameRuntime(previous.models[i],candidate.models[i]);
+                for(size_t i=0;i<candidate.lods.size();++i)
+                    canPreserve &= sameRuntime(previous.lods[i],candidate.lods[i]);
+                for(size_t i=0;i<candidate.stages.size();++i)
+                    canPreserve &= sameRuntime(previous.stages[i].choice,
+                                               candidate.stages[i].choice);
+            }
+            if(canPreserve) {
+                for(size_t i=0;i<candidate.models.size();++i)
+                    candidate.models[i].graph=previous.models[i].graph;
+                for(size_t i=0;i<candidate.lods.size();++i)
+                    candidate.lods[i].graph=previous.lods[i].graph;
+                for(size_t i=0;i<candidate.stages.size();++i)
+                    candidate.stages[i].choice.graph=previous.stages[i].choice.graph;
+                preserveAnimation.insert(index);
+            }
+            // The host renderer is the only owner of GPU shader/pipeline
+            // caches. Prewarm all candidate model/LOD/stage materials before
+            // publishing either Model GPU residency or TypeLook snapshots.
+            // Pending asynchronous jobs retain last-good visuals and ask the
+            // host watcher to retry. Failed backend programs reject the edit.
+            if(appearancePipelineValidator_) {
+                bool pending=false;
+                const auto warm=[&](const ModelChoice& choice) {
+                    if(!choice.model)return;
+                    const auto status=appearancePipelineValidator_(
+                        *choice.model,choice.materials);
+                    if(status==render::Renderer3D::PipelineWarmStatus::Failed)
+                        throw std::runtime_error(
+                            "appearance GPU shader/pipeline compilation failed");
+                    pending|=status==
+                        render::Renderer3D::PipelineWarmStatus::Pending;
+                };
+                for(const auto& choice:candidate.models)warm(choice);
+                for(const auto& choice:candidate.lods)warm(choice);
+                for(const auto& stage:candidate.stages)warm(stage.choice);
+                if(pending) {
+                    gpuAppearancePending_=true;
+                    throw std::runtime_error(
+                        "appearance GPU shader compilation still pending");
+                }
+            }
+            // The prepared snapshot publishes copies of EXACTLY the
+            // material/node/variant data already authored for the RTS choice.
+            // It performs no second texture upload or graph compilation.
+            size_t packetOrdinal=0;
+            const auto stageChoice=[&](ModelChoice& choice,const std::string& kind) {
+                view::AppearanceAssetRegistry::Asset prepared;
+                prepared.model=choice.model;
+                prepared.materials=choice.materials;
+                prepared.nodeMaterial=choice.nodeMaterial;
+                prepared.graph=choice.graph;
+                prepared.geometry=choice.geometry;
+                prepared.variant=choice.variant;
+                prepared.graphDefinition=choice.graphSignature;
+                prepared.modelSource=choice.model?choice.model->path:std::string{};
+                prepared.sources={prepared.modelSource,"materials.json"};
+                ++packetOrdinal;
+                prepared.sourceId=choice.graph ?
+                    ((uint64_t(index+1)<<32) | uint64_t(packetOrdinal)) : 0;
+                const std::string key=std::to_string(index)+"/"+kind+"/"+
+                                      std::to_string(packetOrdinal);
+                std::string error;
+                if(!preparedSnapshots.publishPrepared(key,prepared,&error))
+                    throw std::runtime_error("appearance snapshot "+key+": "+error);
+                choice.appearanceSnapshot=preparedSnapshots.find(key);
+            };
+            for(auto& choice:candidate.models)stageChoice(choice,"model");
+            for(auto& choice:candidate.lods)stageChoice(choice,"lod");
+            for(auto& stage:candidate.stages)stageChoice(stage.choice,"stage");
+            staged.emplace(index,std::move(candidate));
+        }
+    } catch(const std::exception& e) {
+        materialLib_=std::move(previousLibrary);
+        warnings_.push_back(std::string("appearance reload: ")+e.what());
+        return false;
+    }
+    if(staged.empty())return true;
+    try {
+        // Check all cache keys and prepare shared GPU cache map nodes
+        // BEFORE the first live Model image vector is modified. This
+        // preflights allocations and duplicate scratch texture aliases.
+        std::vector<render::Model*> scratch;
+        scratch.reserve(stagedModels.size());
+        for(const auto& [key,model]:stagedModels) {
+            if(resources_.models().contains(key))
+                throw std::logic_error("staged Model key became resident: "+key);
+            if(model)scratch.push_back(model.get());
+        }
+        const auto refs=imageTransaction.pendingImageReferences();
+        std::vector<render::ModelTextureCache::PendingImage> proposed;
+        proposed.reserve(refs.size());
+        for(const auto& ref:refs)
+            proposed.push_back({ref.model,ref.appendIndex,ref.staged});
+        auto shared=resources_.textures()->prepareGpuPromotion(
+            scratch,proposed);
+        // Reserve capacity for ALL affected Model vectors before publishing
+        // the first Image. Failure preserves Model image counts and TypeLooks;
+        // the transaction destructor queues staged GPU handles for retirement.
+        imageTransaction.commit();
+        // Model ownership moves by preallocated std::map node handles;
+        // original Model* pointers inside staged TypeLooks remain stable.
+        resources_.publishStagedModels(*dev_,stagedModels);
+        // Shared-cache hits have already been borrowed during import.
+        // Promote only missing keys from accepted scratch Models without
+        // uploading them again. Duplicate dedicated GPU handles are not
+        // destroyed here: they retire on the image GPU-fence queue.
+        auto duplicates=shared.commit();
+        imageRollback_.retire(*dev_,std::move(duplicates));
+    }catch(const std::exception& e) {
+        materialLib_=std::move(previousLibrary);
+        warnings_.push_back(std::string("appearance image commit: ")+e.what());
+        return false;
+    }
+    std::set<size_t> affected;
+    for(const auto& [index,look]:staged)
+        if(!preserveAnimation.contains(index))
+            affected.insert(index);
+    std::vector<uint64_t> graphSources;
+    for(const auto& [entity,state]:anims_) {
+        (void)entity;
+        if(affected.contains(state.type) && state.genericViewId!=0)
+            graphSources.push_back(state.genericViewId);
+    }
+    if(genericView_ && !graphSources.empty())
+        genericView_->forgetSourcesForReimport(graphSources);
+    for(auto it=anims_.begin();it!=anims_.end();) {
+        if(affected.contains(it->second.type)) {
+            rememberReloadPlayback(it->first,it->second);
+            it=anims_.erase(it);
+        } else ++it;
+    }
+    for(auto it=streamingChoices_.begin();it!=streamingChoices_.end();) {
+        if(affected.contains(it->second.first))it=streamingChoices_.erase(it);
+        else ++it;
+    }
+    if(affected.contains(ghostAnim_.type))ghostAnim_=EntityAnim{};
+    for(auto& [index,look]:staged)
+        looks_[index]=std::move(look);
+    if(refreshed)*refreshed=staged.size();
+    return true;
 }
 
 void RtsView::requestDetail(uint16_t type, bool detailed) {
@@ -521,7 +912,7 @@ void RtsView::requestDetail(uint16_t type, bool detailed) {
     const auto& t=rules_->types[type];const auto coarse=t.view["streaming"].getStr("coarseModel");
     if(coarse.empty() || t.speed.raw!=0)return;
 #ifndef __EMSCRIPTEN__
-    if(prepareType_>=0 || preparing_.valid())return; // never replace an in-flight publication
+    if(resources_.preparation().active())return; // never replace an in-flight publication
 #endif
     requestedModels_[type]=detailed ? std::string{} : coarse;
 }
@@ -536,18 +927,34 @@ void RtsView::loadType(uint16_t type) {
         std::fprintf(stderr,"[lod-residency] type=%u level=%s\n",unsigned(type),requestedModels_[type].empty()?"detail":"coarse");
     if(!(replacing && ready.shape && !looks_[type].shape))looks_[type]=std::move(ready);
     loadedModels_[type]=requestedModels_[type];
+    if(replacing) {
+        // The old Models stay CPU-readable until trimTypes() below; detach
+        // their MotionWeave sources now (with portable playback) so the
+        // bridge never snapshots a player of a released Model.
+        std::vector<uint64_t> sourceIds;
+        for(const auto& [id,animation]:anims_) {
+            (void)id;
+            if(animation.type==type && animation.genericViewId!=0)
+                sourceIds.push_back(animation.genericViewId);
+        }
+        if(genericView_ && !sourceIds.empty())
+            genericView_->forgetSourcesForReimport(sourceIds);
+    }
     if(replacing)for(auto it=anims_.begin();it!=anims_.end();) {
-        if(it->second.type==type)it=anims_.erase(it);else ++it;
+        if(it->second.type==type) {
+            rememberReloadPlayback(it->first,it->second);
+            it=anims_.erase(it);
+        } else ++it;
     }
     if (twoD_) twoD_->loadType(type);
     loadedTypes_[type] = true;
 #ifndef __EMSCRIPTEN__
-    if (prepareType_ == int(type)) {
-        for (const auto& path : preparePaths_) {
-            auto it = models_.find(path.second);
-            if (it != models_.end() && it->second) std::vector<float>().swap(it->second->baked.pending);
+    if (resources_.preparation().type() == int(type)) {
+        for (const auto& path : resources_.preparation().paths()) {
+            auto it = resources_.models().find(path.second);
+            if (it != resources_.models().end() && it->second) std::vector<float>().swap(it->second->baked.pending);
         }
-        prepareType_ = -1; preparePaths_.clear(); prepareCursor_ = 0;
+        resources_.preparation().reset();
     }
 #endif
     if(replacing)trimTypes(std::vector<bool>(looks_.size(),true),true);
@@ -564,20 +971,60 @@ Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::
     try { policy = parseGeometryPolicy(t.view["geometry"]); }
     catch (const std::exception& e) { warn(t, e.what()); }
     const std::string key = path + ((policy.clusters || policy.shadowClusters || policy.occluder) ? "#geometry" : "");
-    auto it = models_.find(key);
-    if (it == models_.end()) {
+    if(activeStagedModels_) {
+        // Return a speculative Model for repeated choices/attachments in
+        // this transaction without creating a resident cache entry.
+        const auto pending=activeStagedModels_->find(key);
+        if(pending!=activeStagedModels_->end())
+            return pending->second.get();
+    }
+    auto it = resources_.models().find(key);
+    if (it == resources_.models().end()) {
+        if(activeStagedModels_) {
+            std::unique_ptr<Model> m;
+            try {
+                std::vector<std::string> warnings;
+                // CPU decode can read the shared decoded cache; speculative
+                // GPU upload may BORROW resident texture leases, but never
+                // insert a new key into ModelTextureCache::gpu_.
+                m=loadModel(path,read_,&warnings,resources_.textures());
+                if(!m)throw std::runtime_error("appearance Model import failed: "+path);
+                for(const auto& message:warnings)warn(t,message);
+                if(policy.clusters||policy.shadowClusters||policy.occluder)
+                    prepareGeometry(*m);
+                if(!uploadModel(dev,*m,false,false,resources_.retainPickingGeometry()))
+                    throw std::runtime_error("appearance Model GPU upload failed: "+path);
+                auto [staged,inserted]=activeStagedModels_->try_emplace(
+                    key,std::move(m));
+                (void)inserted;
+                return staged->second.get();
+            }catch(...) {
+                // Failed/partially uploaded scratch Models still own GPU
+                // geometry, imported images and morph targets. They must be
+                // retired behind a token, never freed by unique_ptr reset.
+                if(m)resources_.retireUnpublished(dev,m);
+                throw;
+            }
+        }
         std::unique_ptr<Model> m;
         try {
             std::vector<std::string> w;
-            m = loadModel(path, read_, &w, textureCache_);
+            m = loadModel(path, read_, &w, resources_.textures());
             for (auto& s : w) warn(t, s);
+            if (!m)throw std::runtime_error("Model load failed: "+path);
             if (policy.clusters || policy.shadowClusters || policy.occluder) prepareGeometry(*m);
-            uploadModel(dev, *m);
+            if (!uploadModel(dev,*m,false,true,resources_.retainPickingGeometry()))
+                throw std::runtime_error("Model GPU upload failed: "+path);
         } catch (const std::exception& e) {
             warn(t, e.what());
-            m.reset();
+            // Upload may have allocated geometry or earlier images before a
+            // later texture/morph allocation failed. Never call m.reset()
+            // while those handles may still be in flight on the GPU.
+            if(m)resources_.retireUnpublished(dev,m);
         }
-        it = models_.emplace(key, std::move(m)).first;
+        // Preserve the existing failed-load tombstone (null Model) so this
+        // authored type can choose a safe fallback instead of a broken draw.
+        return resources_.insertIfAbsent(key,std::move(m));
     }
     return it->second.get();
 }
@@ -680,13 +1127,11 @@ void RtsView::finishChoice(const UnitType& t, ModelChoice& c) {
 }
 
 std::vector<std::string> RtsView::modelFiles() const {
-    std::vector<std::string> out;
-    for (const auto& [path, m] : models_) if (path.rfind("shape:", 0) != 0) out.push_back(m ? m->path : path);
-    return out;
+    return resources_.modelFiles();
 }
 
 bool RtsView::loadChoice(gfx::Device& dev, const UnitType& t, const Json& view, const std::string& path, ModelChoice& out) {
-    const bool known = models_.count(path) > 0;
+    const bool known = resources_.models().count(path) > 0;
     out.model = loadModelCached(dev, t, path);
     if (!out.model) {
         if (!known) warn(t, path + ": using the built-in shape");
@@ -694,25 +1139,57 @@ bool RtsView::loadChoice(gfx::Device& dev, const UnitType& t, const Json& view, 
     }
     out.materials = out.model->materials;
     configureChoice(dev, t, view, out, false);
+    out.modelGeneration=view::ModelPublicationEpoch::next();
     return true;
 }
 
 int RtsView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const std::string& path) {
-    for (size_t i = 0; i < m.images.size(); ++i) if (m.images[i].name == path) return int(i);
-    std::string bytes;
+    for (size_t i = 0; i < m.images.size(); ++i)
+        if (m.images[i].name == path)return int(i);
     Image img;
-    img.name = path;
-    if (!read_(path, bytes)) { warn(t, "texture '" + path + "' not found"); return -1; }
-    if (!decodeImage(bytes, img)) { warn(t, "texture '" + path + "': unsupported format (PNG, JPEG, TGA)"); return -1; }
-    return addImage(dev, m, std::move(img));
+    img.name=path;
+    if(activeImageTransaction_) {
+        // Reuse the shared decoded CPU image cache, but do not publish
+        // a GPU cache entry until the entire authored transaction succeeds.
+        // Its image keeps textureKey/textureCache for the shared promotion plan.
+        if(!read_ || !resources_.textures()->read(path,read_,img))
+            throw std::runtime_error("appearance texture not found/unsupported: "+path);
+        return activeImageTransaction_->stage(m,std::move(img));
+    }
+    std::string bytes;
+    if(!read_ || !read_(path,bytes)) {
+        warn(t,"texture '"+path+"' not found");
+        return -1;
+    }
+    if(!decodeImage(bytes,img)) {
+        warn(t,"texture '"+path+"': unsupported format (PNG, JPEG, TGA)");
+        return -1;
+    }
+    return addImage(dev,m,std::move(img));
 }
 
 void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v, ModelChoice& c, bool isShape) {
     Model& m = *c.model;
     c.programmableAnimation=v.getBool("programmableAnimation")||v.has("animationGraph");
-    if (v.has("animationGraph")) {
-        try { c.graph = AnimationGraph::compile(m, v["animationGraph"], animationOperations_, animationTraits_); }
-        catch (const std::exception& e) { warn(t, e.what()); }
+    if(v.has("animationGraph")) {
+        try {
+            Json definition=v["animationGraph"];
+            // Resolve external JSON exactly once so a graph's hot-reload
+            // signature describes the compiled bytes, not just its path.
+            if(definition.isString()) {
+                std::string source;
+                if(!read_ || !read_(definition.str(),source))
+                    throw std::runtime_error("animationGraph file not found: "+
+                                             definition.str());
+                definition=render::parseAnimationAsset(source);
+            }
+            c.graph=view::AppearanceAuthoringService::compileGraph(
+                m,definition,{},animationOperations_,animationTraits_);
+            c.graphSignature=definition.dump(0);
+        }catch(const std::exception& e) {
+            if(strictAppearanceReload_)throw;
+            warn(t,e.what());
+        }
     }
     try { c.geometry = parseGeometryPolicy(t.view["geometry"]); }
     catch (const std::exception& e) { warn(t, e.what()); }
@@ -746,46 +1223,44 @@ void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v
     for (const auto& n : team.items())
         if (m.findMaterial(n.str()) < 0) warn(t, "team: material '" + n.str() + "' not found in " + m.path);
 
-    // ---- material overrides: "*" first, then by name; values are override objects or library
-    // references ("steel", {"use": "steel", "roughness": 0.2})
-    auto apply = [&](Material& mt, const Json& ref) { applyMaterial(dev, t, m, mt, ref); };
-    const Json& mats = v["materials"];
-    if (const Json& all = mats["*"]; all.isObject() || all.isString()) for (auto& mt : c.materials) apply(mt, all);
-    for (const auto& [name, o] : mats.members()) {
-        if (name == "*") continue;
-        int i = m.findMaterial(name);
-        if (i < 0) { warn(t, "materials: '" + name + "' not found in " + m.path); continue; }
-        apply(c.materials[size_t(i)], o);
+    // Shared genre-independent CPU policy preserves authored "*" then
+    // named material layering, descendant node assignments and variants.
+    // GPU texture loading and warnings remain owned by this RTS host.
+    const auto appearance=view::AppearanceChoiceAuthoring::resolve(
+        m,v,[this,&t](const std::string& message) {warn(t,message);});
+    if(strictAppearanceReload_) {
+        // CPU preflight rejects invalid authored graphs and references before
+        // texture loader callbacks add more GPU-backed Model images.
+        const auto verify=[&](const Json& ref) {
+            const auto resolved=view::AppearanceAuthoringService::resolveMaterial(
+                materialLib_,ref,[](const std::string& message) {
+                    throw std::runtime_error(message);
+                });
+            if(resolved.has("shaderGraph"))
+                (void)render::graph::compile(resolved["shaderGraph"],"material");
+        };
+        for(const auto& layers:appearance.materialLayers)
+            for(const auto& layer:layers)verify(layer);
+        for(const auto& extra:appearance.extraMaterials)
+            verify(extra.reference);
     }
-    // ---- "assign": a fresh material for the meshes of matching nodes ("Turret": "steel", "Wheel*": {...})
-    c.nodeMaterial.clear();
-    for (const auto& [pattern, ref] : v["assign"].members()) {
-        Material nm;
-        nm.name = ref.isString() ? ref.str() : pattern;
-        Json fresh = resolveMaterial(t, ref);
-        apply(nm, fresh);
-        const int idx = int(c.materials.size());
-        bool any = false;
-        // a matching node and everything under it ("Turret" = the turret with its barrel); later
-        // entries override earlier ones
-        std::vector<int> stack;
-        for (size_t n = 0; n < m.nodes.size(); ++n) if (globMatchCi(pattern, m.nodes[n].name)) stack.push_back(int(n));
-        while (!stack.empty()) {
-            const int n = stack.back();
-            stack.pop_back();
-            for (int ch : m.nodes[size_t(n)].children) stack.push_back(ch);
-            if (m.nodes[size_t(n)].mesh < 0) continue;
-            if (c.nodeMaterial.empty()) c.nodeMaterial.assign(m.nodes.size(), -1);
-            c.nodeMaterial[size_t(n)] = idx;
-            any = true;
-        }
-        if (any) c.materials.push_back(nm);
-        else warn(t, "assign: no node (with meshes under it) matches '" + pattern + "' in " + m.path);
+    auto apply=[&](Material& material,const Json& ref) {
+        applyMaterial(dev,t,m,material,ref);
+    };
+    for(size_t i=0;i<appearance.materialLayers.size();++i)
+        for(const auto& layer:appearance.materialLayers[i])
+            apply(c.materials[i],layer);
+    for(const auto& extra:appearance.extraMaterials) {
+        Material material;
+        material.name=extra.name;
+        // Name/reference defaults and GPU texture side effects match the
+        // pre-existing RTS choice path; only the rule resolution moved.
+        const Json resolved=resolveMaterial(t,extra.reference);
+        apply(material,resolved);
+        c.materials.push_back(std::move(material));
     }
-    if (!v.getStr("variant").empty()) {   // "" = default materials (a model entry can clear the view's variant)
-        c.variant = m.findVariant(v.getStr("variant"));
-        if (c.variant < 0) warn(t, "variant '" + v.getStr("variant") + "' not found in " + m.path);
-    }
+    c.nodeMaterial=appearance.nodeMaterial;
+    c.variant=appearance.variant;
 
     // ---- clips
     const Json& anims = v["animations"];

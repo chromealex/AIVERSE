@@ -34,9 +34,26 @@ public:
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }
 
-    ~MaterialsWindow() override { preview_.shutdown(); }
+    ~MaterialsWindow() override { retirePreview(); }
+    void retirePreview() {
+        if (!previewInit_) return;
+        auto former = std::move(preview_);
+        preview_ = std::make_shared<game::Portrait>();
+        previewInit_ = false;
+        if (!former || !previewDev_) return;
+        if (!gpuResourceOwner_) {
+            // Standalone path requires a genuine idle GPU.
+            former->shutdown();
+            return;
+        }
+        gfx::Device& gpu = *previewDev_;
+        gpuResourceOwner_->retireOwned(gpu,
+            [former = std::move(former)] { former->shutdown(); });
+    }
 
     void update(Editor& ed, double dt) override {
+        if (previewInit_ && (!open || !ed.isWindowInFront(this)))
+            retirePreview();
         time_ += dt;
         if (registered_) return;
         registered_ = true;
@@ -60,6 +77,8 @@ public:
     }
 
     void draw(Editor& ed) override {
+        gpuResourceOwner_ = &ed.gpuResourceRetirement();
+        previewDev_ = &ed.device();
         if (ed.ws().project.dir.empty()) { ImGui::TextDisabled("Нет открытой игры"); return; }
         Json lib;
         try { lib = loadMaterialLibrary(ed.ws()); }
@@ -91,14 +110,14 @@ public:
         ImGui::EndChild();
 
         // ---- preview
-        if (!previewInit_) { previewInit_ = true; preview_.init(ed.device(), 256); }
+        if (!previewInit_) { previewInit_ = true; preview_->init(ed.device(), 256); }
         if (!edit_.isObject() && !edit_.isString()) edit_ = Json::object();
-        preview_.renderMaterial(ed.view(), edit_, shape_, time_);
-        if (preview_.texture().valid()) {
+        preview_->renderMaterial(ed.view(), edit_, shape_, time_);
+        if (preview_->texture().valid()) {
             const bool flip = ed.device().info().renderTargetFlipY;
             const float side = std::clamp(ImGui::GetContentRegionAvail().x, 120.0f, 220.0f);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - side) * 0.5f);
-            ImGui::Image(ImTextureRef(ImTextureID(preview_.texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
+            ImGui::Image(ImTextureRef(ImTextureID(preview_->texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
         }
         static const char* shapes[] = {"Шар", "Куб"};
         ui::segmented("##shape", shape_, shapes, 2);
@@ -261,7 +280,10 @@ private:
         edit_ = lib[name].isObject() ? lib[name] : Json::object();
     }
 
-    game::Portrait preview_;
+    std::shared_ptr<game::Portrait> preview_ =
+        std::make_shared<game::Portrait>();
+    render::GpuResourceRetirement* gpuResourceOwner_ = nullptr;
+    gfx::Device* previewDev_ = nullptr;
     bool previewInit_ = false, registered_ = false;
     double time_ = 0;
     int shape_ = 0, pattern_ = 4, genSeed_ = 1, applyType_ = 0, applyByNode_ = 0;

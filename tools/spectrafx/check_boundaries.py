@@ -8,6 +8,10 @@ ROOT = Path(__file__).resolve().parents[2]
 FILES = sorted((ROOT / "engine" / "fx").glob("SpectraFx*.h"))
 FILES += [ROOT / "engine" / "fx" / "ParticleSystem.h",
           ROOT / "engine" / "fx" / "ParticleSystem.cpp"]
+FILES += [ROOT / "engine" / "fx" / (name + suffix)
+          for name in ("SpectraBatchWorld", "SpectraGpuPoolWorld",
+                       "SpectraGpuParticles", "SpectraGraphRuntime")
+          for suffix in (".h", ".cpp")]
 REQUIRED = ROOT / "engine" / "fx" / "SpectraFxView.h"
 errors = []
 if REQUIRED not in FILES:

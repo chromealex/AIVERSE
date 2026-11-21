@@ -3,6 +3,7 @@
 // readTextureAsync run through the same backend as AIVERSE applications.
 // Call only on a Mac with a real Metal device. No silent device skip.
 #include "engine/gfx/Gfx.h"
+#include "engine/render/AlphaCoverageMips.h"
 #include "engine/gfx/VirtualTextureFeedbackPass.h"
 #include "engine/gfx/VirtualTextureStreamer.h"
 #include "engine/gfx/VirtualTextureFileStreamer.h"
@@ -474,6 +475,103 @@ void shaderSampleVolume(Device& dev) {
                 elapsedMs(start,Clock::now()));
 }
 
+
+// Minified sparse cutouts must survive the same fragment alpha test used by
+// foliage, rather than vanishing when ordinary mip averages fall below0.5.
+void shaderSampleAlphaCoverage(Device& dev) {
+    std::vector<uint8_t> pixels(32*32*4);
+    for(int y=0;y<32;++y)for(int x=0;x<32;++x) {
+        const size_t at=(size_t(y)*32+x)*4;
+        const unsigned count=unsigned((x/4)*13+(y/4)*7)%8;
+        pixels[at]=20;pixels[at+1]=150;pixels[at+2]=40;
+        pixels[at+3]=unsigned((y%4)*4+x%4)<count?255:0;
+    }
+    std::vector<aiverse::render::AlphaCoverageMip> levels;
+    check(aiverse::render::buildAlphaCoverageMips(32,32,pixels,128,levels),"alpha coverage CPU chain");
+    if(levels.size()<2)return;
+    const auto& selected=levels[1];size_t pixel=0;
+    while(pixel<selected.rgba.size()/4&&selected.rgba[pixel*4+3]<128)++pixel;
+    check(pixel<selected.rgba.size()/4,"preserved mip has leaf texel");
+    if(pixel>=selected.rgba.size()/4)return;
+    std::string source=kVolumeSampleMSL;
+    source.replace(source.find("texture3d<float>"),16,"texture2d<float>");
+    const std::string old="return tex0.sample(s0,coord.xyz,level(coord.w));";
+    source.replace(source.find(old),old.size(),"float4 c=tex0.sample(s0,coord.xy,level(coord.w)); if(c.a<0.5) discard_fragment(); return float4(1.0);");
+    ShaderDesc shader;shader.msl=source.c_str();shader.textureSlots=1;shader.uniformSlots=1;shader.label="AlphaCoverageMipAcceptance";
+    const auto sh=dev.createShader(shader);
+    PipelineDesc pd;pd.shader=sh;pd.attrCount=0;pd.stride=0;pd.indexType=IndexType::None;
+    pd.cull=CullMode::None;pd.depthTest=false;pd.depthWrite=false;pd.colorFormat=PixelFormat::RGBA8;pd.colorAttachmentCount=1;
+    const auto pipeline=sh.valid()?dev.createPipeline(pd):PipelineHandle{};
+    check(pipeline.valid(),"alpha coverage fragment pipeline");
+    if(!pipeline.valid()){if(sh.valid())dev.destroyShader(sh);return;}
+    TextureDesc targetDesc;targetDesc.width=targetDesc.height=4;targetDesc.renderTarget=true;
+    const auto target=dev.createTexture(targetDesc);
+    for(bool preserve:{false,true}) {
+        TextureDesc input;input.width=input.height=32;input.data=pixels.data();input.filter=Filter::Linear;
+        input.mipmaps=!preserve;input.mipLevels=preserve?int(levels.size()+1):0;
+        const auto texture=dev.createTexture(input);check(texture.valid(),"cutout texture allocation");
+        if(preserve&&texture.valid())for(size_t i=0;i<levels.size();++i) {
+            TextureUploadDesc upload;upload.mipLevel=int(i+1);upload.width=levels[i].width;upload.height=levels[i].height;
+            upload.rowPitchBytes=upload.width*4;upload.data=levels[i].rgba.data();
+            check(dev.updateTextureRegion(texture,upload),"coverage mip explicit upload");
+        }
+        if(texture.valid()&&target.valid()) {
+            dev.beginFrame(16,16);RenderTargetPassDesc pass;pass.colorCount=1;pass.colors[0].texture=target;
+            const bool active=dev.beginRenderTargets(pass);check(active,"coverage mip render pass");
+            if(active) {
+                dev.setViewport({0,0,4,4});dev.setPipeline(pipeline);dev.setTexture(0,texture);
+                const std::array<float,4> uv{(float(pixel%size_t(selected.width))+.5f)/selected.width,
+                    (float(pixel/size_t(selected.width))+.5f)/selected.height,0,2};
+                dev.setUniforms(0,uv.data(),sizeof(uv));dev.draw(3);dev.endPass();
+            }
+            dev.endFrame();
+            if(active)verifyReads(dev,{probe(target,0,0,4,4,solid(4,4,preserve?Color{255,255,255,255}:Color{0,0,0,0}),
+                preserve?"preserved mip retains minified alpha-test foliage":"ordinary mip loses thin alpha-test foliage")},"alpha coverage mips");
+        }
+        if(texture.valid())dev.destroyTexture(texture);
+    }
+    if(target.valid())dev.destroyTexture(target);dev.destroyPipeline(pipeline);dev.destroyShader(sh);
+}
+
+// Generic RHI bilinear acceptance, independent of Terra/material/genre.
+// The centre of a 2x2 checker must average four texels, not select one.
+void shaderSampleBilinear(Device& dev) {
+    std::string source=kVolumeSampleMSL;
+    source.replace(source.find("texture3d<float>"),16,"texture2d<float>");
+    source.replace(source.find("coord.xyz"),9,"coord.xy");
+    ShaderDesc shader;shader.msl=source.c_str();shader.textureSlots=1;shader.uniformSlots=1;
+    shader.label="GenericBilinearAcceptance";
+    const auto sh=dev.createShader(shader);
+    PipelineDesc pd;pd.shader=sh;pd.attrCount=0;pd.stride=0;pd.indexType=IndexType::None;
+    pd.cull=CullMode::None;pd.depthTest=false;pd.depthWrite=false;pd.colorFormat=PixelFormat::RGBA8;pd.colorAttachmentCount=1;
+    const auto pipeline=sh.valid()?dev.createPipeline(pd):PipelineHandle{};
+    check(sh.valid()&&pipeline.valid(),"generic bilinear shader/pipeline");
+    if(!pipeline.valid()){if(sh.valid())dev.destroyShader(sh);return;}
+    TextureDesc td;td.width=td.height=4;td.renderTarget=true;
+    const auto target=dev.createTexture(td);td.format=PixelFormat::Depth;
+    const auto depth=dev.createTexture(td);
+    check(target.valid()&&depth.valid(),"generic bilinear targets");
+    const uint8_t pixels[]={0,0,0,255,255,255,255,255,255,255,255,255,0,0,0,255};
+    for(const auto filter:{Filter::Nearest,Filter::Linear}) {
+        TextureDesc input;input.width=input.height=2;input.data=pixels;input.filter=filter;
+        const auto texture=dev.createTexture(input);check(texture.valid(),"generic filter texture");
+        if(texture.valid()&&target.valid()&&depth.valid()) {
+            dev.beginFrame(16,16);
+            RenderTargetPassDesc pass;pass.colorCount=1;pass.colors[0].texture=target;pass.colors[0].clear=true;
+            pass.depth.texture=depth;pass.depth.clear=true;
+            const bool active=dev.beginRenderTargets(pass);check(active,"generic bilinear render pass");
+            if(active){dev.setViewport({0,0,4,4});dev.setPipeline(pipeline);dev.setTexture(0,texture);
+                const std::array<float,4> uv{.5f,.5f,0,0};dev.setUniforms(0,uv.data(),sizeof(uv));dev.draw(3);dev.endPass();}
+            dev.endFrame();
+            if(active){const auto value=uint8_t(filter==Filter::Linear?128:0);
+                verifyReads(dev,{probe(target,0,0,4,4,solid(4,4,{value,value,value,255}),
+                    filter==Filter::Linear?"bilinear averages four texels":"nearest retains authored pixel sampling",1)},"generic texture filtering");}
+        }
+        if(texture.valid())dev.destroyTexture(texture);
+    }
+    dev.destroyPipeline(pipeline);dev.destroyShader(sh);
+    if(target.valid())dev.destroyTexture(target);if(depth.valid())dev.destroyTexture(depth);
+}
 
 // Tests the actual *shader -> RGBA8 feedback render target -> Metal async
 // readback -> CPU virtual-page decoder* contract. Does not touch disk or
@@ -1211,6 +1309,8 @@ int main() {
         layered(*device,TextureDimension::Cube,6,"Cube");
         layered(*device,TextureDimension::CubeArray,12,"CubeArray");
         shaderSampleVolume(*device);
+        shaderSampleBilinear(*device);
+        shaderSampleAlphaCoverage(*device);
         gpuVirtualTextureFeedback(*device);
         gpuPhysicalVirtualAtlas(*device);
         gpuDiskBackedVirtualAtlas(*device);

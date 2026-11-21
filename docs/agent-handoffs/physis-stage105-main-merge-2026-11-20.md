@@ -37,3 +37,8 @@ The user's macOS system volume had only **6.9 GiB available** at the end of acce
 For next PHYSIS development, start a **new feature/integration branch from the current main**, not the now-merged PR head. Preserve PHYSIS genre independence and ownership: PHYSIS weather, stress and disasters; TerraWeave terrain/foliage; NEREID canonical water; optional Box3D physics integration at the host boundary. Continue one implementation code commit followed by a separate handoff commit containing exact tests and pending work.
 
 Do not treat this native CTest suite as proof of untested Vulkan/GLES pixel parity, Metal production visuals or cross-platform physical determinism.
+
+
+## 2026-11-20 continuation — Stage106 system QA
+
+Current-main source `1dc657128d6ae04a6e65b3e5265b1b6a1306dc59` was checked on `codex/physis-system-qa`: 32/32 PHYSIS CTests and editor build PASS on macOS x86_64/Rosetta, all builds on KINGSTON. Two findings: malformed floodMode falls back to LocalShallow, and the focused script/CI omit six current headless targets. GUI interaction BLOCKED by locked macOS. Report commit `de5549064984f16e31573905c745faa121d54f1d`; see [Stage106 exact evidence and next work](physis-stage106-system-qa-2026-11-20.md). No product source or main merge in this QA stage.

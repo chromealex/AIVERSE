@@ -1,0 +1,647 @@
+// Road Circuit: a race on a spline road (docs/races.md). Generated map: templates/_tools/roadracegen.py.
+{
+ "victory": "noUnits",
+ "resources": {
+  "credits": {
+   "name": "Credits",
+   "kind": "stock",
+   "start": 0
+  }
+ },
+ "fogOfWar": {
+  "mode": "none"
+ },
+ "topDown": {
+  "heroes": [
+   "driver"
+  ],
+  "autoFire": false,
+  "move": {
+   "accel": 30,
+   "decel": 40
+  }
+ },
+ "driving": {
+  "metersPerCell": 4,
+  "enterRange": 1,
+  "exitSpeed": 3,
+  "controls": "tank",
+  "crash": {
+   "minSpeed": 6,
+   "damage": 2,
+   "restitution": 0.3
+  },
+  "vehicles": {
+   "truck_red": {
+    "length": 1.12,
+    "width": 0.6,
+    "wheeled": {
+     "massMilli": 1300000,
+     "torque": [
+      [
+       900,
+       200
+      ],
+      [
+       4500,
+       320
+      ],
+      [
+       7000,
+       250
+      ]
+     ],
+     "gearsMilli": [
+      3200,
+      2200,
+      1600,
+      1250,
+      1000
+     ],
+     "finalDriveMilli": 3700,
+     "frictionMilli": 2600,
+     "maxSteerMilli": 110,
+     "steerRateMilli": 700,
+     "steerFalloffSpeedMilli": 30000,
+     "handbrakeGripMilli": 400,
+     "shiftTicks": 3,
+     "wheels": [
+      {
+       "offsetMilli": [
+        880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      }
+     ]
+    }
+   },
+   "truck_green": {
+    "length": 1.12,
+    "width": 0.6,
+    "wheeled": {
+     "massMilli": 1300000,
+     "torque": [
+      [
+       900,
+       200
+      ],
+      [
+       4500,
+       320
+      ],
+      [
+       7000,
+       250
+      ]
+     ],
+     "gearsMilli": [
+      3200,
+      2200,
+      1600,
+      1250,
+      1000
+     ],
+     "finalDriveMilli": 3700,
+     "frictionMilli": 2600,
+     "maxSteerMilli": 110,
+     "steerRateMilli": 700,
+     "steerFalloffSpeedMilli": 30000,
+     "handbrakeGripMilli": 400,
+     "shiftTicks": 3,
+     "wheels": [
+      {
+       "offsetMilli": [
+        880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      }
+     ]
+    }
+   },
+   "truck_yellow": {
+    "length": 1.12,
+    "width": 0.6,
+    "wheeled": {
+     "massMilli": 1300000,
+     "torque": [
+      [
+       900,
+       200
+      ],
+      [
+       4500,
+       320
+      ],
+      [
+       7000,
+       250
+      ]
+     ],
+     "gearsMilli": [
+      3200,
+      2200,
+      1600,
+      1250,
+      1000
+     ],
+     "finalDriveMilli": 3700,
+     "frictionMilli": 2600,
+     "maxSteerMilli": 110,
+     "steerRateMilli": 700,
+     "steerFalloffSpeedMilli": 30000,
+     "handbrakeGripMilli": 400,
+     "shiftTicks": 3,
+     "wheels": [
+      {
+       "offsetMilli": [
+        880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      }
+     ]
+    }
+   },
+   "truck_purple": {
+    "length": 1.12,
+    "width": 0.6,
+    "wheeled": {
+     "massMilli": 1300000,
+     "torque": [
+      [
+       900,
+       200
+      ],
+      [
+       4500,
+       320
+      ],
+      [
+       7000,
+       250
+      ]
+     ],
+     "gearsMilli": [
+      3200,
+      2200,
+      1600,
+      1250,
+      1000
+     ],
+     "finalDriveMilli": 3700,
+     "frictionMilli": 2600,
+     "maxSteerMilli": 110,
+     "steerRateMilli": 700,
+     "steerFalloffSpeedMilli": 30000,
+     "handbrakeGripMilli": 400,
+     "shiftTicks": 3,
+     "wheels": [
+      {
+       "offsetMilli": [
+        880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        1371
+       ],
+       "radiusMilli": 480,
+       "steered": true
+      },
+      {
+       "offsetMilli": [
+        880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      },
+      {
+       "offsetMilli": [
+        -880,
+        0,
+        -1051
+       ],
+       "radiusMilli": 480,
+       "driven": true,
+       "handbrake": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ "race": {
+  "countdownTicks": 60,
+  "finishGraceTicks": 300,
+  "vehicles": {
+   "wrongWayTicks": 30,
+   "respawnWrongWayTicks": 120,
+   "stuckSpeedMilli": 500,
+   "stuckTicks": 120,
+   "botMaxSpeedMilli": 30000,
+   "botCornerAccelMilli": 9000,
+   "botBrakeDecelMilli": 9000,
+   "botLaneOffsetMilli": 2500,
+   "botSkillMilli": 1000,
+   "botRubberBandMilli": 40
+  }
+ },
+ "roadTypes": {
+  "cellMeters": 4,
+  "circuit": {
+   "name": "Circuit",
+   "category": "highway",
+   "surface": "asphalt",
+   "speed": 160,
+   "centre": "dashed",
+   "laneLines": false,
+   "crossings": false,
+   "lanes": {
+    "forward": 1,
+    "backward": 1,
+    "width": 4.5
+   },
+   "props": [],
+   "sides": {
+    "curb": "low",
+    "sidewalk": 0,
+    "shoulder": 1.2,
+    "shoulderSurface": "grass",
+    "barrier": "none"
+   }
+  }
+ },
+ "types": {
+  "driver": {
+   "name": "Driver",
+   "health": {
+    "max": 100
+   },
+   "move": {
+    "speed": 4,
+    "radius": 0.3
+   },
+   "sight": 12,
+   "view": {
+    "shape": "soldier",
+    "scale": 0.7
+   }
+  },
+  "truck": {
+   "abstract": true,
+   "name": "Truck",
+   "health": {
+    "max": 2000
+   },
+   "move": {
+    "speed": 0,
+    "radius": 0.55
+   },
+   "sight": 14
+  },
+  "truck_red": {
+   "extends": "truck",
+   "view": {
+    "model": "models/vehicles/truck_red.glb",
+    "forward": "+z",
+    "scale": 0.4,
+    "procedural": [
+     {
+      "type": "steer",
+      "node": "wheel-front-left",
+      "limit": 35
+     },
+     {
+      "type": "steer",
+      "node": "wheel-front-right",
+      "limit": 35
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     }
+    ]
+   }
+  },
+  "truck_green": {
+   "extends": "truck",
+   "view": {
+    "model": "models/vehicles/truck_green.glb",
+    "forward": "+z",
+    "scale": 0.4,
+    "procedural": [
+     {
+      "type": "steer",
+      "node": "wheel-front-left",
+      "limit": 35
+     },
+     {
+      "type": "steer",
+      "node": "wheel-front-right",
+      "limit": 35
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     }
+    ]
+   }
+  },
+  "truck_yellow": {
+   "extends": "truck",
+   "view": {
+    "model": "models/vehicles/truck_yellow.glb",
+    "forward": "+z",
+    "scale": 0.4,
+    "procedural": [
+     {
+      "type": "steer",
+      "node": "wheel-front-left",
+      "limit": 35
+     },
+     {
+      "type": "steer",
+      "node": "wheel-front-right",
+      "limit": 35
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     }
+    ]
+   }
+  },
+  "truck_purple": {
+   "extends": "truck",
+   "view": {
+    "model": "models/vehicles/truck_purple.glb",
+    "forward": "+z",
+    "scale": 0.4,
+    "procedural": [
+     {
+      "type": "steer",
+      "node": "wheel-front-left",
+      "limit": 35
+     },
+     {
+      "type": "steer",
+      "node": "wheel-front-right",
+      "limit": 35
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-front-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-left",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     },
+     {
+      "type": "wheel",
+      "node": "wheel-back-right",
+      "axis": [
+       -1,
+       0,
+       0
+      ],
+      "radius": 0.12
+     }
+    ]
+   }
+  }
+ }
+}

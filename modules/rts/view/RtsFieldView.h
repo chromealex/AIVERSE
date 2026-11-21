@@ -60,6 +60,13 @@ public:
     std::vector<Effect> takeEffects() { std::vector<Effect> e; e.swap(effects_); return e; }
     const Look* look(int field) const { return field >= 0 && size_t(field) < looks_.size() ? &looks_[size_t(field)] : nullptr; }
     static Look parseLook(const GridFieldDef& d);
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        render::GpuOwnedMemoryCounter c(*dev_);
+        c.buffer(vb_);c.buffer(ib_);
+        for (const auto& field : tex_) c.texture(field.tex);
+        return c.stats();
+    }
 
 private:
     struct Tex { gfx::TextureHandle tex; int w = 0, h = 0; uint32_t version = ~0u; bool low = false; double lastFog = -1; std::vector<uint8_t> px; double nextFx = 0; uint32_t fxSeed = 0; };

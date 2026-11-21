@@ -28,6 +28,8 @@
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
 #include "StaticLightGrid.h"
+#include "GpuOwnedMemory.h"
+#include "OffscreenTargetLifetime.h"
 
 namespace aiverse::render {
 
@@ -90,6 +92,17 @@ public:
     static constexpr float kMapRange = 4.0f;
     static constexpr size_t kMaxLights = 1024;
 
+    // Borrow the owning Renderer3D pool; never create a second GPU epoch.
+    // Set before init, clear only after normal lights.shutdown().
+    void setTargetRetirement(OffscreenTargetRetirement* owner) noexcept {
+        targetRetirement_=owner;
+    }
+    // Standalone hosts without a renderer-owned GPU retirement queue may
+    // orphan a texture rather than free it without a proven idle barrier.
+    uint64_t standaloneTargetOrphans() const noexcept { return standaloneTargetOrphans_; }
+    uint64_t standaloneRetirementIdleFailures() const noexcept {
+        return standaloneRetirementIdleFailures_;
+    }
     bool init(gfx::Device& dev);
     void shutdown();
     void setQuality(LightQuality q);
@@ -108,11 +121,38 @@ public:
     // Cloud shadows on the sun: coverage 0..1, strength 0..1 (0 = off), drift offset in world units.
     void setClouds(float coverage, float strength, float scale, float offsetX, float offsetZ);
 
+    // Camera-neutral prepared lighting. Capture after all scene light producers
+    // have run, then replay after each secondary camera's beginScene().
+    // Camera-space maps, spot selection and halo geometry remain per-view.
+    struct PreparedFrame {
+        struct Contact {
+            float3 center;
+            float halfX=0, halfZ=0, strength=0;
+            bool box=false;
+            float softness=0.5f;
+        };
+        std::vector<PointLight> lights;
+        std::vector<Contact> contacts;
+        float nightGlow=0;
+        float3 unlitTint{1,1,1};
+        float cloud[4]{};
+        float cloudStrength=0;
+        bool waterReflections=true;
+    };
+    PreparedFrame capturePrepared() const;
+    // Allocation-free owner-thread exchange for aborted scene preparation.
+    void swapPrepared(PreparedFrame& frame) noexcept;
+    void replayPrepared(const PreparedFrame& frame);
+
     void begin(const RTSCamera& cam, float aspect);  // Renderer3D::beginScene
     void add(const PointLight& l);
     void add(float3 pos, float radius, float3 color, float intensity = 1) { add(PointLight{pos, radius, color, intensity}); }
     size_t count() const { return lights_.size(); }
     const LightStats& stats() const { return stats_; }
+    // Own GPU allocations only: light maps, spot/planar reflections,
+    // static light atlas, owned light-vertex streaming buffers.
+    // All values are known lower bounds, not device total VRAM.
+    GpuOwnedMemoryStats ownedGpuMemoryStats() const;
     void noteReflectionTime(float ms) { stats_.reflMs = ms; }
 
     // Renderer3D::render, after the sun shadow pass: picks the spot that gets a shadow this frame
@@ -133,6 +173,11 @@ public:
     bool reflectionsWanted() const { return reflectOn_ && quality_ == LightQuality::High && dev_; }
     bool beginReflection(int viewW, int viewH, float3 clearColor);   // opens the pass (half res)
     void endReflection();
+    // Diagnostic only: read the *actual planar reflection RTT* after
+    // Renderer3D::render() finishes. Fails rather than substitute screen
+    // pixels when the LDR reflection target is not current/available.
+    // Does not give ownership of reflColor_ to the caller.
+    bool requestPlanarReflectionColorReadback(gfx::Device::ColorReadFn callback) const;
     void drawHalos(const mat4& viewProj, bool decals = true);  // inside the main pass, after the opaque scene
 
     // Contact shadows / AO: soft dark decals on the ground under objects (all tiers, very cheap).
@@ -147,6 +192,8 @@ private:
     struct MapVertex { float x, y, u, v, r, g, b, a, dx, dy, dz, h, co, ci, rad, pad, lx, lz, gy, sh; };
     struct HaloVertex { float x, y, z, u, v, r, g, b, a; };
     void createMap(int size);
+    void retireTarget(gfx::TextureHandle color,
+                      gfx::TextureHandle depth={}) noexcept;
     // Dynamic vertex data is appended (ring) instead of rewritten: Metal keeps one copy of a dynamic
     // buffer per frame in flight, so two uploads in one frame (water reflection + main pass, or the
     // editor's two views) would overwrite each other. Returns the byte offset to draw from.
@@ -154,6 +201,8 @@ private:
     void pickPixelLights();
 
     gfx::Device* dev_ = nullptr;
+    OffscreenTargetRetirement* targetRetirement_=nullptr; // borrowed
+    uint64_t standaloneTargetOrphans_=0,standaloneRetirementIdleFailures_=0;
     gfx::ShaderHandle shader_, haloShader_;
     gfx::PipelineHandle pipe_, haloPipe_;
     gfx::BufferHandle vb_, haloVB_;
@@ -172,6 +221,7 @@ private:
     float mapX_ = 0, mapZ_ = 0, mapExtent_ = 64;      // what the map texture holds
     float3 focus_, camRight_{1, 0, 0}, camUp_{0, 1, 0};
     std::vector<PointLight> lights_;
+    std::vector<PreparedFrame::Contact> contacts_;
     std::vector<uint8_t> perPixel_;
     std::vector<uint32_t> prevKeys_;   // per-pixel set of the last frame (sorted)
     std::vector<MapVertex> verts_;

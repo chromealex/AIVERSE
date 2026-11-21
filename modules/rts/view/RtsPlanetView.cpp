@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include "../RtsModule.h"
 #include "RtsView.h"
+#include "engine/view/View.h"
 
 namespace aiverse::game {
 
@@ -321,7 +322,14 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
         }
         const float3 pv = place.transformPoint({0, 0, 0});
         if (o.isProjectile) {
-            if (o.visible) r.drawMesh(projectile_, mat4::translate(place.transformPoint({0, 0.3f, 0})), {1, 0.95f, 0.8f, 1}, kDrawUnlit);
+            if (o.visible) {
+                ::aiverse::view::MeshObject packet;
+                packet.mesh=&projectile_;
+                packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
+                packet.color={1,0.95f,0.8f,1};
+                packet.flags=kDrawUnlit;
+                ::aiverse::View::submitMesh(r,packet);
+            }
             continue;
         }
         if (o.type >= looks_.size()) continue;

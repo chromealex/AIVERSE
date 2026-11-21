@@ -2,9 +2,11 @@
 // Versioned save/load (genre::save/load from Persistence.h, version 1) and checksum hashing for vehicle-controllers.
 // Record kinds 88..95 are shared by vehicle-controllers and sports-rules: VehicleState 88, VehicleDamageState 89,
 // VehicleSeatState 90, RaceState 91, (sports) SportsState 92, 93 reserved, RaceBotState 94, (sports) SportsBotState 95.
+// RaceSessionState (RaceSession.h) is kind 128 (block 128..135: vehicle race sessions).
 // Store each record in its own NativeState key; feed vehicleHash(state) into the simulation checksum and bind
 // vehicleDefinitionHash(def) / raceCourseHash(course) / raceLineHash(line) in the save envelope.
 #include "Vehicles.h"
+#include "RaceSession.h"
 #include "Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
@@ -63,4 +65,18 @@ inline uint16_t stateKind(const RaceBotState&){return 94;}
 using genre::save;using genre::load;
 template<class T> uint64_t raceBotHash(const T& value){auto copy=value;std::string bytes;Archive a(&bytes);io(a,copy);Hasher h;h.str(bytes);return h.value();}
 inline uint64_t raceLineHash(const RaceLine& l){return raceBotHash(l);}
+}
+namespace aiverse::lib::genre {
+// After the bots block: the session state holds race bot states.
+inline void io(Archive& a,RaceSessionState& s){
+    a(s.phase,s.goTick,s.firstFinishTick,s.endTick,s.lastInputTick,s.lastTick,s.race,s.bots,s.standings);
+    a(s.firstFinished,s.inputsInitialized,s.initialized);
+}
+inline void io(Archive& a,RaceView& v){
+    a(v.enabled);if(!v.enabled)return;
+    a(v.phase,v.racer,v.place,v.racers,v.lap,v.laps,v.checkpoint,v.checkpoints,v.countdownTicks,v.wrongWay,v.finished,v.winner);
+    uint32_t n=a.count(v.order.size());if(n>kRaceMaxRacers){a.fail();return;}if(!a.writing())v.order.resize(n);for(auto& x:v.order)a(x);
+}
+inline void io(Archive& a,RaceSessionConfig& c){a(c.countdownTicks,c.finishGraceTicks,c.timeoutTicks,c.race);}
+inline uint16_t stateKind(const RaceSessionState&){return 128;}
 }

@@ -20,6 +20,12 @@ namespace aiverse::physis::remote::admin {
 #ifndef __EMSCRIPTEN__
 class LoopbackAdminEndpoint {
 public:
+    // Unauthenticated peers get a small separate quota and a short
+    // handshake deadline, so anonymous loopback sockets cannot occupy the
+    // slots reserved for already authenticated editors.
+    static constexpr std::size_t kMaxPeers=16;
+    static constexpr std::size_t kMaxUnauthenticatedPeers=4;
+    static constexpr std::uint64_t kHandshakeTimeoutMs=2000;
     using KeyLookup=ServerHandshake::KeyLookup;
     using ReadAcl=std::function<bool(const std::string&)>;
     using WriteAcl=std::function<bool(const std::string&,const Command&)>;
@@ -112,16 +118,23 @@ public:
         // Cached receipts become Unknown when the journal is unsafe.
         if(!journalLock_.valid())gateway_.suspendJournal();
         auto newlyConnected=listener_.poll(nowMs);
+        std::size_t pending=0;
+        for(const auto& peer:peers_)
+            if(peer && !peer->handshake.authenticated() &&
+               peer->conn->state()!=net::ConnState::Closed)++pending;
         for(auto& conn:newlyConnected) {
-            if(peers_.size()>=16) {conn->close();continue;}
+            if(peers_.size()>=kMaxPeers ||
+               pending>=kMaxUnauthenticatedPeers) {conn->close();continue;}
             peers_.push_back(std::make_unique<Peer>(
                 std::move(conn),keys_,nowMs));
+            ++pending;
         }
         for(auto& peer:peers_) {
             if(!peer || peer->conn->state()==net::ConnState::Closed)continue;
             peer->conn->update(nowMs);
             if(!peer->handshake.authenticated()) {
-                if(nowMs>=peer->createdAt && nowMs-peer->createdAt>10000) {
+                if(nowMs>=peer->createdAt &&
+                   nowMs-peer->createdAt>kHandshakeTimeoutMs) {
                     peer->conn->close();continue;
                 }
                 net::Bytes message;

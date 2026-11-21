@@ -1,6 +1,8 @@
 #include "ModelingUi.h"
 #include "tools/modeling/Modeling.h"
 #include "engine/render/AnimationGraph.h"
+#include "engine/render/FailedModelUpload.h"
+#include <stdexcept>
 #include <algorithm>
 #include <cmath>
 namespace aiverse::editor {
@@ -13,6 +15,7 @@ class ModelingWindow final : public EditorWindow {
     render::Renderer3D renderer_;
     Viewport viewport_;
     gfx::Device *device_ = nullptr;
+    Editor* owner_ = nullptr;
     modeling::GeometryCache cache_;
     render::Pose pose_;
     std::vector<render::mat4> world_;
@@ -27,31 +30,51 @@ class ModelingWindow final : public EditorWindow {
         return r;
     }
     void load(Editor &ed) {
+        owner_ = &ed;
         pinned_ = false;
         auto r = call(ed, "modeling_get", modelParams(name_));
         if (r.has("error"))
             return;
         auto built = modeling::build(r["document"], nullptr, &cache_);
+        if(!built.model)
+            throw std::runtime_error("modeling build returned no Model");
+        // Finish authoring and graph compilation against the NEW CPU Model
+        // before touching the current preview. Failed edits keep last-good.
+        render::AnimationGraphInstance nextGraph;
+        if(r["document"]["graph"].isObject())
+            nextGraph.reset(render::AnimationGraph::compile(
+                *built.model,modeling::evaluateDocument(r["document"])["graph"]));
+        // A compatible authored reload can keep the preview clip's named
+        // phase without retaining any pointer into the replaced CPU Model.
+        const bool continued=play_ && graph_.graph() && nextGraph.graph() &&
+            nextGraph.restorePlayback(graph_.snapshotPlayback());
+        render::Pose nextPose;
+        render::bindPose(*built.model,nextPose);
+        const auto nextProject=ed.ws().project.dir;
+        const auto nextRevision=r.getInt("revision");
         if (!device_) {
             device_ = &ed.device();
             if (!renderer_.init(*device_))
                 throw std::runtime_error("modeling renderer initialization failed");
             renderer_.setShadowQuality(render::ShadowQuality::Low);
         }
-        if (!render::uploadModel(*device_, *built.model, true))
-            throw std::runtime_error("modeling upload failed");
+        try {
+            if(!render::uploadModel(*device_,*built.model,true))
+                throw std::runtime_error("modeling GPU upload failed");
+        }catch(...) {
+            // A partial vertex/image/morph upload may own GPU handles.
+            ed.retirePreviewModel(built.model);
+            throw;
+        }
         graph_.reset({});
-        if (model_)
-            render::releaseModel(*device_, *model_);
-        model_ = std::move(built.model);
-        state_ = r;
-        revision_ = r.getInt("revision");
-        project_ = ed.ws().project.dir;
-        time_ = 0;
-        if (state_["document"]["graph"].isObject())
-            graph_.reset(
-                render::AnimationGraph::compile(*model_, modeling::evaluateDocument(state_["document"])["graph"]));
-        render::bindPose(*model_, pose_);
+        ed.retirePreviewModel(model_);
+        model_=std::move(built.model);
+        graph_=std::move(nextGraph);
+        pose_=std::move(nextPose);
+        state_=std::move(r);
+        revision_=nextRevision;
+        project_=nextProject;
+        if(!continued)time_=0;
         select(selected_);
     }
     void select(const std::string &id) {
@@ -94,13 +117,14 @@ class ModelingWindow final : public EditorWindow {
     ~ModelingWindow() override {
         graph_.reset({});
         if (device_) {
-            if (model_)
-                render::releaseModel(*device_, *model_);
+            if(owner_)owner_->retirePreviewModel(model_);
+            else (void)render::abortFailedModelUpload(*device_,model_);
             viewport_.release(*device_);
             renderer_.shutdown();
         }
     }
     void update(Editor &ed, double dt) override {
+        owner_=&ed;
         labels_.load(ed);
         title_ = labels_.text("title");
         if (!registered_) {
@@ -146,10 +170,21 @@ class ModelingWindow final : public EditorWindow {
         }
         if (project_ != ed.ws().project.dir && model_) {
             graph_.reset({});
-            render::releaseModel(*device_, *model_);
-            model_.reset();
+            ed.retirePreviewModel(model_);
             state_ = Json{};
             revision_ = -1;
+        }
+        if(!open && model_) {
+            // Dock tab closed: release the borrowed rig/pose and enqueue the
+            // old GPU Model at next owner's pre-render frame boundary.
+            // The window object survives for MCP registration/reopening.
+            graph_.reset({});
+            ed.retirePreviewModel(model_);
+            state_=Json{};
+            revision_=-1;
+            pinned_=false;
+            play_=false;
+            if(device_)viewport_.release(*device_); // uses Editor offscreen target queue
         }
         if (play_ && model_) {
             time_ += float(std::min(dt, .1));
@@ -207,6 +242,9 @@ class ModelingWindow final : public EditorWindow {
                 ImGui::SameLine();
                 if (ImGui::Button(tr("export").c_str()))
                     call(ed, "modeling_export", modelParams(name_, revision_));
+                ImGui::SameLine();
+                if (ImGui::Button("Attachments"))
+                    ed.focusWindow("animation_attachments");
             }
             if (!message_.empty())
                 ImGui::TextWrapped("%s", message_.c_str());
@@ -303,7 +341,9 @@ class ModelingWindow final : public EditorWindow {
                 ImGui::Checkbox(tr("skeleton").c_str(), &skeleton_);
                 auto avail = ImGui::GetContentRegionAvail();
                 float height = std::max(160.f, avail.y * .55f);
-                viewport_.ensure(*device_, std::clamp(int(avail.x), 64, 1600), std::clamp(int(height), 64, 1000));
+                viewport_.ensure(*device_, std::clamp(int(avail.x), 64, 1600),
+                                 std::clamp(int(height), 64, 1000),
+                                 ed.viewportRetirement(), "Modeling preview");
                 render::RTSCamera cam;
                 cam.target = (model_->boundsMin + model_->boundsMax) * .5f;
                 cam.distance = std::max(2.f, render::length(model_->boundsMax - model_->boundsMin) * 1.15f);

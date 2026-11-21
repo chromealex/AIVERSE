@@ -23,6 +23,7 @@ struct NereidUnderwaterView {
     float turbidity=0;
     float distortion=0, scattering=0;
     float surfaceBlend=0; // soft camera crossing opacity, 0..1
+    float silt=0; // authored turbidity of the winning body, 0..1
 };
 
 // Priority semantics follow shared NEREID samples where possible, but only
@@ -32,8 +33,9 @@ inline NereidUnderwaterView sampleNereidUnderwaterFrom(
         EachFn&& each,Vec3 camera) {
     const NereidSceneSurface* winner=nullptr;
     uint64_t winnerId=0;
+    lib::nereid::WaterBodyComponent winnerBody{};
     each([&](const NereidSceneSurface& s,size_t i) {
-        const auto& body=s.body;
+        const auto body=lib::nereid::gradedWaterBody(s.body,s.mesh.useGrade?&s.mesh.grade:nullptr,camera);
         if(!body.enabled || body.surfaceY<=body.bottomY ||
            camera.y>body.surfaceY+Fixed::fromRatio(2,5) ||
            camera.y<body.bottomY)return;
@@ -41,17 +43,20 @@ inline NereidUnderwaterView sampleNereidUnderwaterFrom(
         if(!lib::nereid::coversWaterBody(body,geometry,camera))return;
         const uint64_t id=s.id?s.id:
             ((uint64_t(1)<<63)|(uint64_t(i)+1));
-        if(!winner || body.priority>winner->body.priority ||
-           (body.priority==winner->body.priority &&
-            (body.surfaceY>winner->body.surfaceY ||
-             (body.surfaceY==winner->body.surfaceY && id<winnerId)))) {
-            winner=&s;winnerId=id;
+        if(!winner || body.priority>winnerBody.priority ||
+           (body.priority==winnerBody.priority &&
+            (body.surfaceY>winnerBody.surfaceY ||
+             (body.surfaceY==winnerBody.surfaceY && id<winnerId)))) {
+            winner=&s;winnerId=id;winnerBody=body;
         }
     });
     NereidUnderwaterView out;
     if(!winner)return out;
-    const auto& body=winner->body;
-    const auto& style=winner->style;
+    const auto& body=winnerBody;
+    // Same resolved optics as the surface shader: turbidity seen from above
+    // and below the water line always matches.
+    const auto style=lib::nereid::resolvedWaterOptics(winner->style);
+    out.silt=std::clamp(winner->style.turbidity,0.f,1.f);
     out.submerged=camera.y<body.surfaceY;
     const double signedDepth=(body.surfaceY-camera.y).toDouble();
     out.surfaceBlend=float(std::clamp(0.5+signedDepth/0.8,0.0,1.0));

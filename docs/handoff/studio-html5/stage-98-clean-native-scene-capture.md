@@ -1,0 +1,3 @@
+# Stage98: clean native Scene screenshots
+
+Coded24752fcf, feature/aiv87_terrain_pbr. Shared nativeEditor SceneWindow/agent/render path only; no frontendpanels/bridgeallowlistchanges. NativeEditor/StudiobuildPASS, picking/gizmoCTest2/2PASS0.55s. ActualMetal2560x1440output ANDinternalrender verified, selectioncontours14929/0/14912before/clean/after, malformed/concurrent/hiddenScene errorscheckedwithmapclean1431entities. NativecameraAPIupwardpitchworks. SeparateHTML5StudioMetalScene screenshotparity NOTRUN; buildisnotUIparity. MacfreshCUAchecklocked; mouseY/orbitNOTRUN. Fullpaths/evidence/nextYgizmofix interrainhandoff.

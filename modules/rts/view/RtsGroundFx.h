@@ -18,12 +18,17 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 #include "../../../engine/render/Renderer3D.h"
 #include "../../../engine/render/TextureCache.h"
+#include "../../../engine/render/NativePresentationRetirement.h"
+#include "../../../engine/render/RenderDeviceLifetime.h"
 #include "../RtsData.h"
 #include "../RtsMap.h"
+
+namespace aiverse::render { class NativeMeshBatch; }
 
 namespace aiverse::game {
 
@@ -81,15 +86,66 @@ public:
         Tex tex;
     };
 
+    void setGpuDeviceLease(render::RenderDeviceLifetime::Lease lease) {gpuDeviceLease_=std::move(lease);}
     void init(gfx::Device& dev, const Rules& rules, const render::FileReader& read, const std::string& contentBase);
+    // Explicit safe teardown when the caller has not yet established RHI
+    // completion. A failed barrier preserves the published GPU owner.
+    bool shutdownAfterGpuIdle(gfx::Device& dev);
     void shutdown(gfx::Device& dev);
-    void invalidate() { geomDirty_ = true; }   // terrain rebuilt (heights may have changed): rebuild geometry
+    bool ownsGpuResources() const noexcept {return dev_!=nullptr;}
+    // Poll only at the host pre-render retirement boundary, never in a draw.
+    bool collectRetiredMeshBuffers(gfx::Device& dev) {
+        checkGpuDevice(dev);
+        return retiredMeshes_.collect(dev);
+    }
+    size_t pendingMeshGpuRetirements() const noexcept {
+        return retiredMeshes_.pending();
+    }
+    uint64_t stateRevision() const noexcept {return publicationRevision_;}
+    void invalidate() { geomDirty_ = true; ++publicationRevision_; }   // terrain rebuilt (heights may have changed): rebuild geometry
     // Map roads / lanes between buildings are drawn here (RtsView skips its flat road quads).
     bool drawsLinks() const { return lane_.on && pipe_.valid(); }
     // The terrain leaves diggable cells flat when these blocks are drawn instead.
     bool drawsDig() const { return dig_.on && rules_ && !rules_->diggables.empty(); }
-    void draw(render::Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision,
-              const MapGrid& grid, const RtsView& view);
+    // Stage GroundFX mesh uploads and CPU scene memory without mutating any
+    // published state. The returned opaque owner destroys private RHI buffers
+    // when abandoned. Suitable for the generic OwnerPrepareCommit coordinator.
+    class PreparedFrame;
+    std::shared_ptr<PreparedFrame> prepareFrame(
+        render::Renderer3D& r, const RtsScene& s, double time,
+        const std::vector<uint8_t>* vision, const MapGrid& grid,
+        const RtsView& view);
+    // Stage a CPU-only map reset without requiring a camera, scene, clock,
+    // or visibility mask. A candidate carries no new GPU meshes; its commit
+    // retires old map meshes and lane ribbons with normal completion tokens.
+    // Visible chunks are then filled by prepareFrame on the first primary
+    // camera. This lets synchronous editor buildTerrain join the same
+    // topology cohort as Roads/Shores/Fog.
+    std::shared_ptr<PreparedFrame> prepareMapReset(
+        const MapGrid& grid,bool forceSameSize=false);
+    // Scene-aware topology preparation: fill the PRIVATE map-reset clone
+    // directly, before publishing Terrain/Roads/Shore/Fog. All visible
+    // GroundFX chunks use the caller's scoped unpublished surface policy.
+    // The camera is already configured with Renderer3D::beginScene().
+    std::shared_ptr<PreparedFrame> prepareMapSceneFrame(
+        render::Renderer3D& renderer,const RtsScene& scene,double time,
+        const std::vector<uint8_t>* vision,const MapGrid& grid,
+        const RtsView& view,bool forceSameSize=false);
+    bool mapMatches(int w,int h) const noexcept {
+        return gridW_==w && gridH_==h && !invalid_;
+    }
+    void commitFrame(std::shared_ptr<PreparedFrame> candidate) noexcept;
+    // Draws the current published snapshot; no mesh rebuild or visibility scan.
+    void drawCandidate(const std::shared_ptr<PreparedFrame>& frame,
+        render::Renderer3D& r,const RtsScene& s,double time,
+        const std::vector<uint8_t>* vision,const MapGrid& g,const RtsView& v);
+    void drawPrepared(render::Renderer3D& r, const RtsScene& s,
+                      double time, const std::vector<uint8_t>* vision,
+                      const MapGrid& grid, const RtsView& view);
+    // Standalone legacy caller uses the same prepare / publish / draw pipeline.
+    void draw(render::Renderer3D& r, const RtsScene& s, double time,
+              const std::vector<uint8_t>* vision, const MapGrid& grid,
+              const RtsView& view);
     // Looks as configured (planet overlays reuse them: RtsPlanetGroundFx).
     const TerritoryLook& territoryLook() const { return terr_; }
     const RoadLook& roadLook() const { return road_; }
@@ -97,6 +153,24 @@ public:
     const LaneLook& laneLook() const { return lane_; }
     bool showsTerritory() const { return useT_ && terr_.on; }
     bool territoryOn() const { return terr_.on; }
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        render::GpuOwnedMemoryCounter c(*dev_);
+        const auto mesh=[&](const render::Mesh& m){c.buffer(m.vb);c.buffer(m.ib);};
+        for (const auto& chunk : chunks_) {
+            mesh(chunk.fill);mesh(chunk.border);mesh(chunk.rock);
+            mesh(chunk.veins);mesh(chunk.gems);mesh(chunk.marks);
+            mesh(chunk.road);mesh(chunk.concrete);
+        }
+        mesh(lanes_);c.texture(white_);
+        auto total=c.stats(), cache=textures_.ownedGpuMemoryStats();
+        total.textureKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(total.textureKnownBytes,cache.textureKnownBytes);
+        total.bufferKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(total.bufferKnownBytes,cache.bufferKnownBytes);
+        total.textures+=cache.textures;total.buffers+=cache.buffers;
+        total.unknownTextures+=cache.unknownTextures;total.unknownBuffers+=cache.unknownBuffers;
+        total.multiVersionBuffers+=cache.multiVersionBuffers;
+        return total;
+    }
 
 private:
     struct Chunk {
@@ -104,8 +178,17 @@ private:
         bool dT = true, dD = true, dM = true, dR = true, dC = true;
         float yMin = 0, yMax = 2;
     };
+    // Initialize a never-published staging owner. The outer init() keeps
+    // the live GPU kit untouched until staging and device-idle succeed.
+    void initUnpublished(gfx::Device& dev,const Rules& rules,
+                         const render::FileReader& read,const std::string& base);
     void parseLook(const Json& terrain);
     void resetGrid(const MapGrid& g);
+    std::shared_ptr<PreparedFrame> prepareSceneIntoCandidate(
+        std::shared_ptr<PreparedFrame> candidate,
+        render::Renderer3D& renderer,const RtsScene& scene,double time,
+        const std::vector<uint8_t>* vision,const MapGrid& grid,
+        const RtsView& view);
     void scan(const MapGrid& g, const std::vector<uint8_t>* vision, uint8_t viewer);
     void dirty(int x, int y, bool neighbours, int what);
     void buildTerritory(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);
@@ -125,13 +208,25 @@ private:
     render::float3 ownerColor(int slot) const;
     void loadTex(Tex& t);
 
+    void checkGpuDevice(const gfx::Device& dev) const {
+        if(gpuDeviceLease_.device() && !gpuDeviceLease_.validFor(dev))
+            throw std::logic_error("RtsGroundFx GPU device generation expired");
+    }
+    render::RenderDeviceLifetime::Lease gpuDeviceLease_;
     gfx::Device* dev_ = nullptr;
+    render::NativePresentationRetirement retiredMeshes_;
+    render::NativeMeshBatch* activeMeshBatch_ = nullptr; // prepare-only GPU batch
+    // Non-null exclusively on a temporary CPU staging clone. Its copies of
+    // currently published Mesh handles are BORROWED, never destroyed/retired.
+    std::vector<render::Mesh*>* stagingJournal_ = nullptr;
+    uint64_t publicationRevision_ = 1;
     const Rules* rules_ = nullptr;
     std::string base_;
     render::TextureCache textures_;
     gfx::ShaderHandle shader_;
     gfx::PipelineHandle pipe_;
     gfx::TextureHandle white_;
+    render::TextureRef cobbleTexture_, dirtTexture_; // immutable GPU kit defaults
     TerritoryLook terr_;
     DigLook dig_;
     LaneLook lane_;

@@ -1,0 +1,9 @@
+.studio-game .au-panel__body { display:flex; flex-direction:column; min-height:0; }
+.studio-game__area { flex:1; min-height:80px; min-width:0; display:flex; align-items:center; justify-content:center; overflow:hidden; background:var(--au-canvas); }
+.studio-game__surface { flex:none; position:relative; overflow:hidden; }
+.studio-game__devices { display:flex; flex-wrap:wrap; align-items:center; gap:var(--au-space-2); padding:var(--au-space-2) var(--au-space-4); border-bottom:1px solid var(--au-line); }
+.studio-game__devices .au-field { flex:1 1 180px; min-width:0; max-width:340px; }
+.studio-game .au-panel__header { flex-wrap:wrap; }
+.studio-game .au-panel__actions { flex:1 1 auto; flex-wrap:wrap; justify-content:flex-end; }
+.studio-game .au-panel__footer { gap:var(--au-space-2); flex-wrap:wrap; }
+.studio-game__surface--device { background:#05070b; }

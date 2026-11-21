@@ -4199,3 +4199,255 @@ game state on the renderer thread. Grass is patch-aggregated, not per blade.
 **QA:** source committed; no fresh CMake/CTest/performance/Metal test after
 this stage. Earlier NEREID full test PASS applies only to preceding main
 head. Keep source integrated but feature PR Draft until validation.
+
+
+## 2026-11-20 native Terra landscape + NEREID host integration
+
+Implementation b2c8c5d9235d697274239b17f29e64fbad621d0d on feature/aiv87_terrain_pbr, publication feature/terraweave. New TerraWeaveRiverbed authoring bridge carves native Earthworks from NEREID spline geometry with half-open bounded edits. Native landscape exporter uses TerrainSettings/Earthworks/terrain patches, existing scatter and rockPose; shared ground snapshot drives grass/trees/water masks. Shared ExportModel helper fixes a discovered dangling Json nested-member reference (adding material sibling keys invalidated pbr). No replacement water shader or project noise solver.
+
+NereidManifestHost composes existing parser/residency/draw in renderbench and native editor Scene/RTS Game views. Missing water block clears previous scene. MapDoc extra owns presentation settings, not authoritative ECS water state. API additions preserve existing saves; offline assets are not live terrain/collision/ecology. Water uses renderer clock even with renderbench freeze-time. No new production rendering flags.
+
+Executed: Release arm64 editor, renderbench, landscape/vegetation exporter and new landscape test builds PASS. CTest ^terraweave 15/15 PASS (0.72s), assertion checks enabled. Strict c++20 Wall/Wextra/Werror syntax landscape PASS; skills catalog 228 PASS; diff check PASS. Exported 48 terrain tiles, 12 tree prototypes and 202 grass patches; PBR binding audit PASS (192 terrain material bindings, 24 tree bindings, 202 constant dielectric grass materials). First generic PBR audit incorrectly required textures on constant-PBR grass and raised KeyError; corrected assertion explicitly checks grass dielectric factors. First landscape run aborted due dangling Json reference, fixed above and rerun successfully. Earlier build attempts lacked native manifest link library, then fixed a namespace ambiguity and RockInstance field name before successful build. Do not repeat those failures.
+
+Real Metal renderbench capture /private/tmp/terra-nereid-final.png inspected: native river present, pipelineFailures=0, 61 pipelines. External project /Users/aleksandrfeer/Projects/AIVERSE-AlpineValley active rules use models/native-world.gltf; map NEREID points offset +24m X/Z to match asset entity. Actual editor Scene screenshot /private/tmp/terra-nereid-editor.png inspected and confirms water/terrain placement. Terrain/forest/mountains are authored by Terra, river by NEREID, sky uses existing PRISMA. The project has 935 trees and 200 rocks; counts are objects, not draw calls. Initial broad foam ribbon reduced with standard NEREID parameters, no shader fork.
+
+Limits: current mountains are visibly round, crowns still lack requested species/age/winter diversity; this is integration evidence, NOT final art acceptance or SpeedTree parity. Editor lighting differs from renderbench; no Game-view capture, native gameplay buoyancy/contact test, GL/Vulkan/mobile, CI or full suite run. No performance improvement claimed. Main remains unchanged. Next: refine Terra mountain composition, canopy profiles and mixed species, season/age and near/far LOD acceptance; keep native ownership and capture scene-only results before main merge.
+
+
+## 2026-11-20 NEREID animation clock stage
+
+Implementation d3b7f872054f54449347c52e1ed9b2210baeab77 on feature/aiv87_terrain_pbr, publish feature/terraweave. Tagged NEREID water waves/cascade/whitewater use existing U1 camPos.w render clock, not cloud offsets. GLSL/MSL parity; untagged legacy water keeps cloud-clock behavior. Wave coordinates advect by configured local NEREID current, not wind direction. No uniform/save change or gameplay flow solver change.
+
+Release editor/renderbench build PASS. Actual Metal sequences /private/tmp/nereid-flow-sequence and /private/tmp/nereid-advection-sequence captured16frames each at fixed camera/sky; zero pipeline failures. Initial frame change at800x500 mean4.84/255 (includes water/temporal effects, not quantitative flow velocity). First high foam tuning made regular bright blobs; reduced foam/refraction in external scene. Source clock repair is verified, not a substitute for editor flow controls.
+
+Final Terra valley export /private/tmp/alpine-land-v3:48 native tiles, normal smoothness, atlas sampler/normal/dielectric audit PASS, max horizontal seam gradient ratio1.78<2. Newbank screenshot /private/tmp/nereid-bank-final.png inspected: sand transitions improved but grass still on sand, water rim too bright; user explicitly requires dense tufted grass and editor LOD verification. These remain next work. Current active externalproject assets updated locally but recipes/captures need commit once final. Main untouched.
+
+New user requirement: flow must be editable in editor; automatic default from actual slope (example1degree), clocks only animate configured flow. Existing bodies are horizontal and current fields accept manual velocities; need additive native grade/profile contract shared by sampling, mesh and Terra bank, deterministic tests/persistence plus editor controls. Do not claim slope-based flow exists yet. Also verify LOD using editor node-level counters, not merely glTF presence. No full regression/CI/Vulkan/mobile testing.
+
+
+## 2026-11-20 editable river grade native stage
+
+Implementation f9b764f83e5b42c26585eeff0f099b933d52c449 on feature/aiv87_terrain_pbr, publication feature/terraweave. New optional WaterRiverGradeComponent schema1, opt-in native pipeline registration, deterministic inclined water plane, nearest-tangent automatic downhill velocity with configurable linear-drag response/cap, manual body.flow retained. Reference/indexed samples, contacts, ECS presentation, mesh vertices/normals/residency keys share grade. Parser accepts signed slopeDegrees and downhillHeadingDegrees or explicit risePerMetre. Typed editNereidFlow plus legacy editor agent operations validate before Undo transaction. Current velocity is supplied even when foam strength0. Terrain authoring can alignRiverGrade and carve bank from local water plane; grass mask excludes relative shore heights<270cm. PBR shoreline weights read same grade. No old component byte/version changes; optional new registration defaultsOFF to preserve old native catalog/checksums. Horizontal planar reflections and confluence/cascade reference-level connectors still approximate graded water and need dedicated future parity. Automatic current is friction-limited estimate, not hydraulic discharge conservation.
+
+Executed: new standalone native CTest ecs_nereid_river_grade_test PASS (0.73s): reference/indexed parity, two independent hosts, native save/load/replay, COW rollback, manual/flat modes, mesh-vs-contact grade, invalid authoring. Earlier Terra landscape expanded test PASS. Release exporter/renderbench build PASS; legacy editor completed build before last minor header updates, final recompile pending. Initial direct test link missed worldVector/worldInteger; corrected WorldAssets/model dependencies and registered CMake target. New CMake target first invocation before regeneration failed no rule; explicit configure then target build PASS. No final graded GPU capture yet. Full NEREID suite/CI/cross-platform NOT RUN.
+
+HTML5 UI is being implemented independently on feature/studio-html5 using generated Studio UI panel, typed bridge, native MapDoc Undo and native NEREID host; source copied only after baseline equality checks, no unrelated root changes overwritten. Its build/QA/handoff still pending; do not claim editor UI ready. Next finish Studio native tests/visual QA, rebuild external scene at1degree with matching Terra grade, dense tuft grass/no sand, and investigate editor LOD counters. Main untouched.
+
+
+## 2026-11-20 explicit surface ownership and shoreline coverage
+
+Implementation 8457e97bd7712ebcf187d964220aeaadef787b08 on feature/aiv87_terrain_pbr. TerrainLook.render defaulttrue for legacy projects; game/rules terrain.render=false suppresses legacy terrain/water and stale trace heightfield. New MapDoc.reset writes terrainPresentation=entities; old loaded maps missing key retain legacy behavior. RtsView per-map enable flag and editor sync honor the document mode. Root HTML5 Studio is receiving the corresponding flag/empty-grid suppression separately. User explicitly confirmed green rectangular pieces were the unwanted standard plane and now requires no automatic terrain on blank maps, plus individually selectable entity/component terrain, rocks, trees and grass. Current packed single-valley entity must therefore be replaced, not relabeled as finished.
+
+NEREID shader adds undistorted depth shoreline coverage and lower broken foam (GLSL/MSL), avoiding refraction moving the physical shoreline. Offline PBR baker darkens/roughness-adjusts wet sand by the same water plane. Executed: actual GLSL330 and GLES300 compile/link via glslangValidator PASS; native editor/renderbench build PASS for renderer/rules flag and shader. Later new-map default/per-map flag source additions need fresh build/test. Metal capture /private/tmp/nereid-final-shore.png has0pipelineFailures; visually white rim reduced but water looks excessively transparent, so final water optics acceptance is NOT claimed. No-optics debug /private/tmp/water-nooptics.ppm pending to isolate opacity vs contact. Wet atlas48tiles currently rebaking.
+
+Next bounded stage: new blank-map tests and canonical authored entity components with stable IDs, native model transforms and shared selection/Inspector/Undo; replace packed external scene with individual native assets. Preserve old game compatibility and do not claim full authoritative RTS/ECS migration or physics ready just because editor entities exist. Main untouched; final visual capture and any corrective depth work pending.
+
+
+## 2026-11-20 explicit authored environment entities
+
+Implementation db2263ba1887a190415d5e0afa58cb14b5cc9f62 on feature/aiv87_terrain_pbr, publication feature/terraweave. Canonical MapDoc entities now support opt-in Transform Y/yaw/uniform scale plus StaticModel/provenance components; X/Z remain canonical pos, with existing LocalTransform affine presentation math. Shared transform adapter reads/edits actual authored Y and atomically validates Transform patches. Legacy planar objects still reject Y. Native editor model parentFrame consumes the authored transform. Duplicate retains components with a fresh document ID and fresh NEREID numeric surface ID. See docs/terrain/entity-authoring.md for schema/limits.
+
+NEREID entity-owned local surface data compiles read-only to the existing native host; body heights/centre, river/polygon points, grade origin and vortices translate with the object. Rotation/non-unit scale explicitly unsupported. Flow edits write only the canonical component with MapDoc Undo; legacy top-level manifests continue to parse. No new native ECS registry/save/checksum contract; this is authored document identity, NOT completed gameplay ECS/physics migration. Scene/game screenshot requests now fail closed if viewport unavailable and do not create a notification over their own image.
+
+External AlpineValley active map replaced packed valley entity with1391 stable IDs:48 TerraTerrain tiles,967 TerraTree,221 TerraRock,154 TerraGrassPatch and1 NereidWater. Shared assets under content/models, generated legacy rules bindings match canonical StaticModel refs. Generated assets~992MiB remain local/reproducible; native/install-entities.py and recipe/notes persist the conversion. Grass patches are individual document entities, NOT individual tuft/blade identities. User wants all environment objects as entities; per-tuft authoring remains a known unfinished part rather than an implied ECS conversion.
+
+Executed: Release arm64 aiverse_editor and aiverse_editor_scene_adapter_tests builds PASS; final targeted CTest editor_scene_adapter PASS0.33s. Coverage includes new blank-map entity mode, authored XYZ/Y/scale/yaw, Undo/Redo, invalid atomic edit, duplicate identity, translated water and component-owned flow Undo. Initial build target AiverseEditor failed (wrong target name); corrected aiverse_editor. Two temporary Python editing scripts had indentation errors before any execution; corrected and reran. No current build failure. Actual final Metal editor via local API rendered1390 Terra model nodes plus native water; LOD chains1342, blocked0, shadowLimited0, camera levels48/834/508 at initial camera (counts are nodes, not draw calls/FPS). Clean scene capture /private/tmp/terra-entity-clean.png inspected: green rectangular standard ground absent. Actual map_new32x32 capture /private/tmp/terra-empty-entity-map.png inspected: empty dark viewport, no floor. Returned test editor to maps/valley.json afterward. Screenshot-only API never captures desktop; full-editor fallback prohibited for scene/game requests.
+
+Studio HTML5 counterpart code f1aaffadab5b4212a3688955aa367d4622132248 on feature/studio-html5: stable entity:@ID, real model component transform/asset, Inspector Y/yaw/scale, masked/LOD rigid render support, no automatic plane/grid. Native app/tests built PASS; CTest editor_scene_adapter + studio_terrain_geometry + studio_session3/3 PASS6.19s. Its actual UI visual QA remains NOT VERIFIED; prior CUA session failed and desktop screenshot was auto-review rejected, no bypass. Root unrelated AGENTS/npm changes preserved.
+
+CI/full Terra/NEREID regression/Vulkan/mobile/shadow pixel parity/runtime collision-buoyancy NOT RUN. New metadata defaults preserve old loaded-map rendering; no production MDI/ICB flags enabled. Current forest/mountain/water optics are still not accepted as final beauty art; river looks too transparent,10species/age/winter and per-tuft editing remain. Main untouched. Next: finish per-tuft entity/presentation strategy without unbounded meshes/DOM, precise masked/LOD/water picking and runtime ECS ownership; separately repair water optical visibility and continue final tree/mountain art before merge/gallery publication.
+
+
+## 2026-11-21 graded underwater host integration
+
+Code 1ba820ca4b34e9871439e6fb3e97797b7dc589d1, feature/aiv87_terrain_pbr. NereidUnderwaterView now resolves graded local surface/bottom before camera volume admission/priority/depth. New small NereidUnderwaterPrisma adapter maps snapshot to existing PrismaUnderwater; old WorldScene bridge delegates. Shared NereidManifestHost updates PRISMA after prepare in native editor Scene/Game, HTML5 Studio and renderbench. Studio always passes its HDR/PRISMA pipeline even with GI/direct lighting disabled; underwater no longer depends on lighting opt-in. No new water solver, authoritative simulation change or postprocess copy. Editor still respects its Scene postprocess toggle. Temporal underwater snapshot is currently one shared Prisma state; multi-camera smoothing isolation remains a limitation. Optical ray clipping uses local horizontal plane approximation of inclined water, not a full graded-plane ray equation.
+
+Executed KINGSTON: ecs_nereid_renderer_contract_test build PASS and CTest1/1 PASS0.44s, includes graded above/below regression. Full native aiverse_editor build PASS; command then stopped on wrong target aiverse_studio_html5 (actual target aiverse_studio). Corrected renderbench+Studio build RUNNING underwater-host-build.log, not yet a PASS. No GPU underwater scene capture yet. Prepared above/crossing/submerged reference configs on KINGSTON. User video /Users/aleksandrfeer/Projects/video.mp4 decoded via AVFoundation18.033s,12frames; ffprobe unavailable, Swift extraction succeeds with deprecation warnings. Reference shows moving waterline and lingering lens drops after exit. User explicitly assigns screen effects to PRISMA and requires lens film to be separate DISABLABLE/CONFIGURABLE effect, independent of underwater absorption. Next stage add opt-in PRISMA lensWater catalog effect (amount/drop size/density/refraction/drain/dry time), per-view wetness, common GLSL/MSL compositor and real frames. Do not describe current host fix as full video parity. Water tiling/current/foam,1K/4m high-detail terrain, multiple sand variants/noise underlay and final tree/grass art remain pending. Main untouched.
+
+
+## 2026-11-21 configurable PRISMA lensWater
+
+Code 14ac558b7e1c4bdde5749d5e654aeedf8b19b046, feature/aiv87_terrain_pbr. Optional new PrismaType appended beforeCount; old numeric effect IDs preserved. Independent lensWater catalog entry, default absent/OFF, enabled/amount disable; amount/dropSize/density/distortion/flowSpeed/dryTime/film parameters share parser/serialization/volume/catalog UI. Native setUnderwater uses bounded64 per-view wetness histories; never-wet camera stays dry, submerged camera wets and exit starts complete bounded drying. retireView/shutdown clear lens ownership; disabled/zero/tier-off clears on next input update. Underwater absorption is separate and still works with lens effect absent/disabled. Screen compositor uses bounded9-neighbour jittered variable-size drops plus draining film and two source samples; no new image/target/pass or water/ECS solver. Internal composite U0 adds32bytes, GLSL/MSL field/feature count now array-derived. Output-pixel radius/distortion/speed preserve scale under input reconstruction. Renderbench preview uses real elapsed preview time for wetness, deterministic benchmark uses1/60; captured reports record actual effect execution and camera immersion after timing interval.
+
+Actually executed on KINGSTON: Release lens/volume/NEREID contracts + renderbench build PASS; CTest prisma_lens_water + prisma_volume + ecs_nereid_renderer_contract_test3/3 PASS0.74s. Tests cover dry/no input, immersion/exit/dry interval, nonfinite delta, independent disabled parsing/roundtrip and grade. Final shader/bench source builds PASS lens-flow-build.log. Real Metal captures /Volumes/KINGSTON/AIVERSE-builds/terraweave-unified/underwater-reference: lens-on capturedPrismaEffects lensWater requested/encodedTRUE, lens-off requested/encodedFALSE reason effect disabled in camera profile, cameraUnderwaterFALSE and underwaterBlend0 in both; submerged without lensWater cameraUnderwaterTRUE, underwaterBlend0.999. Each completeTRUE/error empty, pipelineFailures0. Captures are diagnostic finite-terrain views with black horizon, not final forest/water beauty/reference acceptance.
+
+Meaningful corrections: first implementation left hard-coded16feature/23uniform counts, so new pipeline key compiled without lens code. Actual pixel inspection found this; replaced with array-derived bounds, reran real GPU. First regular grid droplets looked artificial; new jitter/size+neighbour version inspected and more irregular, still screen approximation not video parity. Initial reference capture failed because glTF buffer URIs were absolute and importer prefixes directory; changed diagnostic relative paths using read-only ground symlink. System Python3.8 lacked is_relative_to; fixed diagnostic path script. ffprobe unavailable; supplied18.033s video read through AVFoundation12frames (Swift deprecation warnings only).
+
+NOT RUN: latest full editor/Studio rebuild after adding LensWater enum, final editor UI toggle interaction, actual GL/Vulkan/GLES pixels, full regression/CI/performance. Previous underwater-only editor/Studio builds PASS; do not equate them with latest lens application build. PRISMA skill and docs/prisma-lens-water.md updated. No main merge or remote push this stage; full active-scene/tree/material acceptance remains pending. Requested1K/4m detail mapping, multiple sand PBR variants and grayscale noise-underlay material are not implemented yet. User now requests editor: silhouette-only selection contour, visual triangle/alpha picking instead of radius, no generic HP bars (health overlay only opting-in gameplay modules). Next bounded stage inspect/fix shared editor/HTML5 picking/outline and remove generic Scene HP HUD, preserve game module behavior and all dirty user files.
+
+
+## 2026-11-21 finite NEREID shore masks restore native meadow cover
+
+Code 23dde575c0ffd9530bf7d03c480989c79213b537, feature/aiv87_terrain_pbr. Added optional fixed-point waterFootprintDistance for finite box/disc/polygon/river bounds and Terra shoreCover authoring helper. River distance is a projected centreline/width approximation, not exact tapered SDF; existing water membership/contact and authoritative state unchanged. Ground v2 shares graded sand/wet masks between native PBR baker and grass exporter. Native mask replaces the erroneous additional infinite water-plane exclusion; v1 compatibility retained. Recipe exposes bank width, sand limit and grass maximum elevation. No live erosion/moisture/fall integration or save/wire change.
+
+Executed on KINGSTON: geometry/landscape tests and both exporters built PASS (native-shore-mask-build.log); CTest ecs_nereid_geometry + terraweave_landscape 2/2 PASS 0.91s. terrain-shore-full-v1 export and four 1024/detail baker parts PASS; detail materials build PASS. Heights and waterHeight unchanged, all48 terrain.bin buffers byte-identical. Eligible ground vertices75954->107323. flora-shore-v1 exported40 prototypes/194 patches versus154. CPU audit1326768 High-LOD blade roots: terrain-height error<1.1cm, interpolated sand<=50.4875 for threshold50 with integer tolerance. Far-river tile sand channel mean43.2019->0. Python compile PASS after cache write rerun with external-drive permission; first sandbox cache write denied. diff --check PASS (CRLF warnings).
+
+Review-project-v5 preserves1391 old entity IDs/transforms and adds40 grass entities;1431 total/mapdirtyfalse. Original dirty AlpineValley and user47324 unchanged. Owned editor47326 session60968. Actual Metal same-camera scene-only /private/tmp/grass-shore-before.png and grass-shore-after.png inspected: lowland grass restored, sand bank remains bare. Camera6366348 triangles, shadows554980,1433 draw calls, LOD492/218/40,729 chains,0 blocked. These are scene counters, not GPU speedup. Native grass still uniform green ribbons; water tiling/foam/flow, organic branch junctions, mountains, snow and full physics/reference/picking/site goals unfinished. No final-beauty claim, push, main merge or CI. Mouse Y/Undo NOT RUN: Mac locked. Next bounded stage improve shared native grass pigment/shape at unchanged bounded population, verify real close/mid/far and preserve tuft-root LOD correspondence.
+
+
+## 2026-11-21 independent NEREID optics and transported irregular whitewater
+
+Code ac2d3cdff66736ac884b778a7f18cf7e4529a407, feature/aiv87_terrain_pbr. Shared Renderer3D now captures opaque colour/depth for tagged NEREID optical coefficients/refraction regardless of traced-shadow quality. Existing trace2.w=.25 means optics-only;1/2 retain water/model SSR. Ray marching and opaque reflection replay remain trace-gated; legacy water/sprite helper overload preserves old behavior. No GPU uniform layout, ECS water velocity/save/wire schema change. Renderer3D appends explicit setPresentationTime (finite seconds, negative resumes steady clock), renderbench --freeze-time now fixes shader time too; C++ object layout requires rebuild. Current still comes from the existing authored/manual/grade-spline Fixed owner. Native wave/noise/whitewater detail uses worldXZ-flow*time; independently moving six-direction phases no longer override a moving current. Planar and SSR normal distortion uses the NEREID resolved normal, not cloud-offset sines; native planar Fresnel dielectric .02, legacy helper retains its old stylization.
+
+Replaced rapid whitewater sine-product ellipses with transported, stretched domain-warped noise (1/2/3 layers Low/Medium/High). Undistorted contact-depth foam composites after refraction; vertical band no longer changes shore-coverage fade width. Screen-depth obstacle tail uses bounded4/8/16 upstream probes by rapidDetail, overlapping average and transverse taper/downstream fade. Zero shoreFoamDepth disables contact/tail, rapidFoamStrength remains independent. This is screen-space presentation, NOT hydrodynamics/erosion; offscreen/occluded obstacles absent, steep silhouettes/large-world/performance still need QA. Editor geometry_stats appends read-only cameraMeshTriangles/opaqueSceneCapture/ssrRaymarch/nereidConfiguredSurfaces; bench separates capture from SSR. Existing counters retained.
+
+KINGSTON actual commands: final renderbench+nativeEditor+Studio+geometry contracts build PASS nereid-final-optics-build.log; CTest river_grade/surface_mesh/renderer_contract3/3 PASS0.58s. Follow-up nativeEditor diagnostic-only build PASS nereid-editor-capture-diagnostics-build.log. Earlier native-reflection-editors build also PASS but shader source changed during its later Studio dependency pass; explicit final rebuild of ALL targets above is the authoritative result. Full common Lit GLSL + real ColorSpace prefix compiles ES300/GL330 2/2 PASS with glslangValidator; actual GLES/Vulkan pixels NOT RUN. No source/temp/compiler products on internal build dirs.
+
+Actual Metal fixture water-contact-v1 uses existing Terra terrain--1--1 and a native Terra rock. Final final0/final1/reverse/foamoff/low/manual-minus/full/no-water/repeat0 reports ALL completeTRUE/error empty and pipelineFailures0. hdr+Low capturesTRUE/SSRfalse, full captureTRUE/SSRtrue, no-water captureFALSE/SSRfalse. fixed time0 repeat PPM bytes exactly identical; time0->1 mean RGBdelta0.81607 (whole frame, NOT a flow-direction metric; sky clock also changes). Opposite manual1.8m/s vectors produce tail on opposite sides, PNGs inspected. Nine reports retained on KINGSTON/water-contact-v1; /private/tmp/water-final0.png, water-reverse.png, water-full.png, water-graph.png. Grid of white ellipses reproduced strongly with reverse1.8 before the rapid-noise fix, absent in final render. First4probe prototype made detached ghost-rock foam; next8max version made comb tips; rejected, replaced with overlapping4/8/16 average and taper. Source remains procedural with no new texture allocations.
+
+Important NOT FINAL: full native forest still looks too bottom-dominant/brown with weak contact foam, despite actual water geometry2048triangles, captureTRUE/SSRtrue/configured1. ShaderGraph terrain bench reproduces stronger bottom appearance: graph.json/report completeTRUE, pipelineFailures0, shows correct scene-colour/detail involvement. This is a remaining optical/art/composition investigation, not missing surface or disabled capture. Need isolate actual depth/thickness and soil-detail colour before claiming reference-quality water. Review-project-v7 retains1431entities/all poses; only NEREID style .16m shore depth, absorption2, tint1, refraction.24 and existing autoLOD55/170m hysteresis8 tuned. Original user app47324, baseline47325 and dirty AlpineValley files untouched. Owned47326 session12108, screenshots forest-water-native-v7[-hdr|-diag].png. Transform Y+2.5 test through canonical entity:@water-1 succeeded; Undo restored position but MapDoc dirty flag stayedTRUE by its existing contract. Restarted from unchanged disk afterward; no map_save. Invalid initial unprefixed scene entity/component calls rejected with no mutation.
+
+Corrected verification errors: initial GLSL dump omitted mandatory RHI ColorSpace prefix (missing rtsEncodeScene), fixed and reran; initial fixture used file instead of path and unplaced local tile, reportfailed despite native exit0; corrected path and original -64/-64 glTF root placement, all subsequent reports asserted. Existing string contracts expected refracted-depth foam; first CTest failed, updated existing contracts for undistorted foam and explicit non-npos post-SSR order, reran PASS. First reflection wrapper generation malformed before compilation, regenerated from unchanged HEAD source and GLSL verified. One non-escalated ctest -N failed external log write; reran with external-volume permission, discovered absent surface_mesh executable, built it explicitly. No failures counted as passes.
+
+No CI/performance/GPU time or mobile parity claim. No main merge/push/final gallery publication. Mouse Y/Undo interaction still NOT RUN because Mac locked (API Transform/Undo above is not mouse parity). All original tree junction/LOD/art, snow/ground/sand/mountains, live erosion-root/fall host, PRISMA video parity, universal deformed/water picking and final scene/site goals remain active. Next bounded stage: isolate NEREID optical thickness in terrain-graph/full-editor path; source geometry has1.58m actual water-minus-bed at (-12,-32), so do not hide the issue by raising the whole river. Then shared parent-centreline branch attachment/junction anatomy, preserving foliage/LOD ownership.
+
+
+## 2026-11-21 remove double riverbed compositing; inspect real optical inputs
+
+Code f9d094e336afb9f93c02d733b18da98fc06e1de5, feature/aiv87_terrain_pbr. Resolved NEREID absorption/refraction already includes background colour; old85%-capped mix followed by ordinary opacity added unattenuated riverbed again. Now one absorbed-background/Fresnel surface composite, authored opacity scales optical density/refraction/Fresnel internally and final framebuffer alpha is contact coverage when optics resolved. Invalid depth/legacy untagged water retains old alpha fallback. Contact coverage fades only over3.5cm, independent of foam band, and foam strength scales with authored opacity. Existing style range .001.. .98 unchanged; this intentionally changes NEREID appearance, not save format/Fixed current/body or GPU uniform layout. LDR colour-space approximation/TAA/underwater/backfaces still need broader parity; do not call this full spectral/physical water BRDF.
+
+Explicit read-only AIVERSE_NEREID_DIAGNOSTIC env selects depth,coefficients,basecolor,transmission,coverage shader variants in a separate owned process. Default0 compiler guards preserve ordinary GLSL/MSL; invalid value leaves normal rendering. Red depth/4m, negative green/unavailable blue; other modes inspect actual inputs/opacity after display postfx. No scene mutation, frontend UI/bridge or public struct ABI addition. Diagnostic images are NEVER final screenshots.
+
+Investigation actual Metal water-contact-v1: depth-scene-v2 and depth-graph both centreRGB205,0,0, matching1.58m known ground snapshot; coefficient graph211,131,239; basecolor0,50,58; transmission46gray; coverage231gray. All7 inspection reports completeTRUE/error empty/pipelineFailures0. This excluded missing depth/parameters/source albedo and located excessive background mixing rather than moving river height. Final optical-new/minimum/no-water reports3/3 completeTRUE/error empty/pipelineFailures0, source terrain ShaderGraph13samples/4textures actually enabled. Minimum opacity.001 versus no water: final meanRGBdelta0.0631963, P99=1,max=1; ordinary.88 vs absent has a substantial colour difference (previous iteration47.5261mean), no fake screenshots. First test tried opacity0; existing manifest rejected it as expected, corrected to documented minimum. No widening of valid save/style input.
+
+KINGSTON builds: nereid-optical-alpha-final-build.log all nativeEditor/Studio/renderbench/contracts PASS; contact-final-editors buildPASS with narrowercoverage, CTest river_grade/surface_mesh/renderer_contract3/3PASS0.34s. Last guard-only source build all four targets PASS nereid-default-diagnostic-guard-build.log; renderer_contract1/1PASS0.20s. Actual12 GLSL ES300/GL330 mode0..5 variants PASS before contact constant change; final RAW/default ES300/GL330 PASS with final guards. Raw ES initially FAILED because undefined macro in #if is illegal in GLES (the matrix had explicitly defined0); added #ifndef default0 to BOTH shader bodies, reran raw compile and all nativehosts. Commit attempt stopped on failure before Git mutation. No default-WebGL failure left. Other GPU pixels/CI/performance NOTRUN. Updating a header during an earlier build meant explicit final rebuilds, not relying on partial source snapshots.
+
+Actual owned nativeEditor47326/session52132 review-project-v7: forest-water-optical-alpha.png and final forest-water-contact-final.png show water now blue/green and coast foam line visible with same terrain/poses; inspected Scene-only903x605. Final screenshot prior to guard-only recompilation, which changes default macro preprocessing only. MapdirtyFALSE1431entities. Same camera921748modeltris +2048water/meshtris,372drawcalls, captureTRUE, SSRtrue, configuredWater1; no FPS claim. Original user47324/baseline47325/dirtyAlpineValley untouched. /private/tmp/water-optical-contact-final.png actualMetal standalone diagnostic scene (black finite-ground horizon), NOT final beauty hero. Full forest still has synthetic foliage, repeated sand ripples and flat mountain/composition gaps. No main merge/push/gallery publication yet.
+
+Next bounded work returns to native Arbor organic branch anatomy: current conifer mesh sags branches but source children start on STRAIGHT parent skeleton; the parent mesh/child/foliage must use one shared presentation centreline/attachment offset. Broadleaf twigs are straight1ring; add bounded opt-in curved scaffold/collars while keeping thin-twig budgets and exact leaf ownership/LOD support. Do not bend only woody mesh and leave leaves/children floating, and do not claim intersecting normal-blended collars are actual welded geometry. Shared PBR material currently has no true thin-leaf subsurface scattering (shadowDiffusion is shadow radius only); don't mistake it for SSS. All broad tree/season/ground/mountain/live-erosion/picking/video/site/main requirements remain active. Maclocked mouseY/Undo stillunverified. No new question/approval needed for existing authorized independent work.
+
+## 2026-11-21 camera-independent local current grid — CPU stage only
+
+Code87ea8c294, feature/aiv87_terrain_pbr. Newengine/world/NereidFlowMap.h snapshots EXISTING gradedWaterBody +waterCurrentWithVortices atlocalgraded surfaceY-.1m. NereidFlowMapSource borrowscanonicalbody/geometry/grade/current/vortexcomponents onlyduringbuild; outputownsfloattexels, noWorld/GPUhandles/RNG/save state. Finiteboundsindependentofcamera/meshLOD, default2mworldlattice, max256axis/16384texels, power-of-two spacing growthunderbudget. Infinitewaterrequiresboundedexplicitpatch; overlappingequal-scale patches sampleidenticalworldcentres. RGworldXZvelocitym/s,Blocalrapidintensity,Avalid. CPUclamp+bilinearsampler, rebasedrecthelper, invalidnonfinite/budget/boundsreject ordisabledsourceempty. Headeruses Fixed::fromRaw roundedcanonicalpositions (no nonexistentfromDouble); floatneverfeedsphysics. No canonicalwatermembershipreplacement.
+
+KINGSTONflow-map-configure.log CMakePASS; flow-map-build/final-build/guards-build PASSnewtargetaiverse_nereid_flow_map_tests. Final CTestnereid_flow_map1/1PASS.53s. Testsmanualconstantflow/rapidintensity/clamp/nonfiniteinput, gradeprojectionfollows31degreebend(nearp0X0,p1XnegativewithXZratio.6), manualoverrideunchanged, additiveexistingcurrentnodes/vortexincludingcanonicaltexelcompare, copiedsnapshotunchangedaftersourcemutation, overlappinginfinitepatchsamplingidentical, boundedenlargedgrid, invalidbudget/NaN/disable. NoGPU/editorintegrationclaimed. CMakeonlytesttarget, nopackagedclientdependency/moduledefaultchange. Architecture explicitlystatesCPUreadinessandmissingrendererhook.
+
+NEXT REQUIRED GPUstage: currentNereidWaterScene drawstillonehydraulicsvectorpertile/observer-dependentuntiledfallback; userbugNOTyetfixedinvisiblewater. UploadthisCPUfield asboundedlinearRGBA16F (reusehdr_detail::toHalf), texslot6freeinlitMeshshader(existing0shadow1lights2reflection3height4opaque5depth); increaseShaderDesc.textureSlots6->7andbindwhite6fornonwater/reflection. AddwaterFlowRectvec4 toDrawUniforms+DrawUniformsR andALLmatchingGLSL/MSLU0blocks; appendborrowedflowTexture/rect toCameraGeometryCommand+DrawItemandpreservecapture/replayinCameraModelSnapshot. SampleflowatfragmentWORLDXZ, useitforbasewaveadvection/rapidfoam/obstacletails. Keepmanual/grade controlscanonical, legacyuntaggedwaterunchanged. Avoidunboundedworld-flow*time shearingforvariableflow: boundeddual-phaseflowmapadvectionwithsmoothresetmayberequired. Fixed renderer.setPresentationTime /bench.freeze-time alreadyexists, doNOTinventanotherclock.
+
+Ownership/gates: flowmapversionseparatefromstaticVB/IB(meshrevisiondoesNOTchangeoncurrentfield/styleonlychanges). Finitefieldmustnotrebakeoncamera/LOD. Preserveconfluence transferFlow throughprepare-timecanonicalresolver; currentdraw callbackisnotavailableatGPUprepare unlessnativehostpassesitthere. NoGPUallocationsinsideactiveencoder/drawcallback. Immutabletextureversion+CPUcaptureleaseandGpuResourceRetirementfencesneeded; capturedsecondarycameras mustpinoldfielduntilCPUreplaydoneandlastGPUfencecompleted. No borrowedowner destruction afterDevice lifetime; explicitshutdown/quarantineifcapturesremain. Bounduploads/retainedtexturebytes andreportdeferredratherthanunboundednewtextures. DoNOTstealripple/wakearrayentries, overloadnormalattributes, addglobalMeshVertexoverhead, orincreasewaterdrawspersegmentjusttofakebends.
+
+GPUacceptance: nativeflowdebugcolouratSAMEworldpoints projectedintotwocamerasandacrossLOD; actualcurvedriverfourframes(time0/1,cameraA/B), manualreverse, foamoff, vortex/grade,movingcamera, Metal+GLshaderpixels completeTRUE/pipelineFailures0. UserlatestrockrequirementstillOPEN: supportlostunderrockmustsettle/tilt/fallviaactualPHYSIS/Box3DhostandupdatedTerra colliders, notinitialscatteronly/teleportedvisualY. Broadtree/LOD/liveecology/PRISMA/deformedpicking/GI/STRATA/VIVID/site/mainremainactive. CPUperffixc8c0c108c+d71cbc24falreadyPUSHEDfeature/terraweave, ABACPU~17.1->5.155->17.1SceneMs,440LENSchecksPASS; noFPS/GPUclaim. CurrentownQA47326STOPPED(freesGPUforuser), QAartifactbinaryAfromrepeat, nativebuiltbinaryBhasCPUfix/GPUread-onlyfields. UnlockedMacconfirmedbutmouseYUndoNOTRUNduetouserperformance/flowsteering. NoCI/mainmerge/finalacceptance.
+
+
+## 2026-11-21 local river flow GPU integration and native bend validation
+
+Code ff84b6648bd3825eea62471614611fced9f196fc; GPU-test follow-up
+6402e0bbd28ceffa575a86ee283d4c1841322920, branch feature/aiv87_terrain_pbr.
+This completes the renderer connection missing from CPU stage87ea8c294.
+NereidWaterScene prepares a bounded linear signed RGBA16F world-current texture;
+Renderer3D lit meshes sample texture6 at fragment world X/Z. U0 and reflection U0
+append waterFlowRect (672B); Model/PBR U2 stays unchanged. Waves, rapid foam,
+contact-tail orientation and contact-foam advection share the local field.
+Four-second overlapping transport phases avoid unbounded current*time shear.
+Untiled fallback current uses a stable source reference rather than the camera.
+Finite fields ignore observer/selected LOD; source current/vortex edits invalidate
+flow without remeshing. Manual/automatic grade/current/vortex ownership and all
+Fixed/save/checksum schemas remain unchanged. Rebuild native callers for appended
+renderer/capture ABI. No new draw per river segment, MeshVertex field or solver.
+
+NereidFlowTextureCache bounds active+pending logical GPU payloads to32MiB and256
+versions; exact signed-half payload and bounds/dimensions equality deduplicates
+uploads. CPU capture leases pin replaced textures, followed by real GPU-fence
+retirement. Shutdown revokes replay then drains after proven GPU idle, otherwise
+quarantines handles. CameraModelSnapshot checks revocation before mesh dereference.
+CPU half payload retention is additional memory, not included in GPU payload stat.
+WorldScene supplies existing confluence/cascade/obstruction resolution only when
+those sources exist. Nonzero resolver revision is an explicit immutable-input
+promise; unversioned resolver refreshes bounded grids and deduplicates GPU bytes.
+Many dynamic bodies may refresh over multiple frames; host CPU cost/latency still
+requires measurement. Under budget failure, draw retains valid old field or uses
+stable uniform fallback; flowPending reports deferral. No atomic mesh+field GPU
+publication or new hydraulic simulation is claimed.
+
+Native investigation found origin-amplified chevrons in rapid foam: rotating
+absolute world position by a varying current tangent shifts noise phase by the
+large world coordinate. Replaced with world-anchored noise and bounded directional
+local averaging. Actual native automatic/zero-current A/B isolated the artifact;
+zero-current temporary edit was Undo-restored, no save. Final fresh QA launch has
+original disk state and the automatic inclined river. Do not rotate absolute
+world X/Z into a per-fragment tangent frame again.
+
+ACTUALLY EXECUTED on KINGSTON root terraweave-unified:
+- flow-world-foam-build.log: aiverse_editor, aiverse_studio, aiverse_renderbench,
+  aiverse_renderbench_gl, aiverse_ecs_nereid_renderer_contract_test PASS. Earlier
+  flow-final-editors-build/final-relink also PASS; final source is world-foam build.
+- ctest -R '^(nereid_flow_map|ecs_nereid_renderer_contract_test|ecs_nereid_river_grade_test|ecs_nereid_surface_mesh_test)$'
+  4/4 PASS .26s. Includes signed half(+2/-1), capture lease before GPU fence,
+  shutdown revocation,256-version cap, resolver preserve/dedupe, no finite camera/
+  LOD rebuild, manual current edit with unchanged mesh revision.
+- python3 tests/render/verify_nereid_flow.py <native/aiverse_renderbench> <flow-foam-final-metal>
+  and <native/aiverse_renderbench_gl> <flow-foam-final-gl>:11actual GPU captures
+  EACH PASS. World coordinates offset(256,128), two cameras x two times diagnostic
+  and shaded frames, farLOD, manual reverse, foam-off. All reports completeTRUE,
+  error empty; Metal pipelineFailures0, GL no API errors. Identical world points
+  across cameras/times and near/far: RGB[128,103,50] straight,[116,109,43] turned;
+  manual(-2,0,+1) RGB[77,153,114] both. Active whitewater and foam-off differ in real
+  shaded pixels; animation changes while velocity diagnostics remain fixed.
+  Earlier flow-world-final-* used rapid foam defaultOFF, so final enabled-foam
+  rerun above is required evidence. Bench revision metadata predates commits:
+  binaries were built from the working source now committed as ff84b6648.
+- check-nereid-final-glsl.py PASS14linked GLSL330/GLES300 mode0..6 variants.
+  Compilation/generated shader/temp/module artifacts all on KINGSTON.
+- aiverse_tests buildPASS flow-lens-build.log; native/aiverse_tests lens_ PASS
+  440checks0failed flow-lens-tests.log. No retained-camera Metal GPU test, Vulkan,
+  WebGL device, mobile acceptance, full suite or CI executed. GLES compile is not
+  WebGL pixel validation. No FPS/GPU speedup claim.
+
+Failed/retried commands: initial cache used stats() without Device ->compile
+failure, fixed exact API. Extended contract test initially lacked aiverse_models
+MeshBuilder link ->fixed CMake test link. New resolver test assumed negativeY,
+failed for default elevated body ->compares local surfaceY instead, rerunPASS.
+First GL capture started before executable existed ->FileNotFound; rebuilt GL,
+all final runs abovePASS. Initial clean native screenshot omitted window:scene
+and was rejected without capture ->corrected. No failed command counted asPASS.
+
+Owned unique AiverseTerraQA.app on47326 opened review-project-v24; actual clean
+1280x720 scene captures /private/tmp/forest-local-current-final.png and
+forest-local-current-close.png (also KINGSTON/flow-native-final). Final native
+water bends smoothly without old foam chevrons; these are water-fix evidence,
+NOT final art/website hero acceptance. Native source/entities/assets preserved;
+all final scene state readbacks are native-flow-final-* JSON. User editor47325
+and original dirty project untouched. GPU is also used by that user editor,
+so whole-frame GPU readings are not isolated benchmark results. Startup graph
+compilation dominates first120-frame average; do not report it as steady runtime.
+
+Next: publish code+this separate handoff to feature/terraweave with ordinary
+non-force push. Main readiness remains unmet. Under-eroded rock settling/fall is
+STILL OPEN: authored rocks are static, initial nine-point support sampling is
+not live physics. Need actual shared ECS rigid support + PHYSIS/Box3D body host
+and changed Terra colliders, not visual Y teleport. The independent cheap shader
+binding rejection CPU hotspot is still unimplemented. All broader tree/season/
+live ecology, PRISMA video, deformed picking, native Y mouse/Undo, GI/STRATA/VIVID,
+final gallery/site/main work remains active; do not infer completion from water.
+
+Final publication checkpoint: code+handoff ordinary push to origin/feature/terraweave succeeded at427c9a097 (remote wasd71cbc24f, no force). Final map_info dirtyFALSE/1803entities. Owned QA47326 STOPPED after captures to release GPU; user47325 untouched and still loaded with its older running binary. Native built editor/QA artifacts now contain the local-flow fix; restart is needed to load it in an already-running editor. Code worktree clean at publication. Main not merged; preceding open requirements remain.
+
+
+## 2026-11-21 main publication explicitly requested
+
+User «Заливай в мейн» supersedes the prior defer-main condition for publication. Fresh remote main973b32970654cc5318fa6b6571f35d020501dcdd was an ancestor of TerraWeave ab5d360f4cb2f2f1f2e99b78b0262f596c48f8d9; normal push HEAD:main succeeded and ls-remote confirmed that exact SHA. No merge conflicts/new code. Repeated4NEREIDCTestPASS +440LENSchecks0failed. CI/fullGPU rerun NOTRUN this unchanged-code promotion; previous actual GPU evidence remains above. Details and still-open work: docs/agent-handoffs/terraweave-main-promotion-2026-11-21.md. Original dirty checkout/user editor untouched. This separate docs commit records the completed publication and is also published to main/TerraWeave; no claim that erosion-driven rocks or all broader art goals are done.
+
+
+## Turbidity (`style.turbidity`, `style.siltColor`)
+
+One authored value for suspended silt, 0..1 (default 0 = legacy optics).
+`lib::nereid::resolvedWaterOptics(style)` derives the effective optics and is
+the single source for both views:
+
+- surface shader (outside): extinction `absorption + 1.6*t` (capped 4/m; t=1 sees ~2 m),
+  deep colour milked toward `siltColor` by `0.75*t`, depth tint toward 1,
+  refraction strength halved at t=1 - the bed fades sooner and the body
+  turns milky;
+- `NereidUnderwaterView` (diving): the same extinction, tint and
+  `underwaterScattering >= 0.85*t` - visibility shrinks, the haze takes the
+  silt colour. `view.silt` reports the authored value.
+
+`siltColor` default `[0.42,0.43,0.31]` (linear). Both fields are parsed for
+surfaces, entity water (`NereidWater` component) and cascades, validated,
+and part of cache/change keys. No uniform or layout change. Contract test:
+`ecs_nereid_renderer_contract_test` (turbidity block).
+
+```json
+"style": {"deepColor":[0.03,0.2,0.26], "absorption":0.5, "depthTint":0.85,
+          "turbidity":0.22, "siltColor":[0.36,0.42,0.33]}
+```

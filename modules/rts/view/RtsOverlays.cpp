@@ -35,9 +35,13 @@ void appendNumber(std::string& out, double v) {
 // ------------------------------------------------------------------ setup
 
 void RtsOverlays::init(const Rules& rules, const Json& rulesOverlays, const Json& gameOverlays, const std::string& contentBase) {
+    initPrepared(rules,loadOverlaySet(rules,rulesOverlays,gameOverlays),contentBase);
+}
+
+void RtsOverlays::initPrepared(const Rules& rules, OverlaySet prepared, const std::string& contentBase) {
     rules_ = &rules;
     base_ = contentBase;
-    set_ = loadOverlaySet(rules, rulesOverlays, gameOverlays);
+    set_ = std::move(prepared);
     outlineSelected_ = outlineHovered_ = false;
     for (const OverlayDef& d : set_.defs) {
         if (d.id == "selection") outlineSelected_ = d.enabled;

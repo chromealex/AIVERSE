@@ -1,3 +1,4 @@
+#include "apps/editor/core/ErosionZoneOps.h"
 #include "TerrainOps.h"
 #include "TerraWeaveOps.h"
 #include <algorithm>
@@ -269,6 +270,7 @@ bool importHeightmap(MapDoc& doc, const std::string& file, float scale, float of
 void registerTerrainOps(Workspace& ws) {
     registerTerrainDetailOps(ws);
     registerTerraWeaveOps(ws);
+    registerErosionZoneOps(ws);
     Workspace* w = &ws;
     auto lh = [w] { return float(w->project.rules.levelHeight.toDouble()); };
     auto needMap = [w] { if (w->project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };

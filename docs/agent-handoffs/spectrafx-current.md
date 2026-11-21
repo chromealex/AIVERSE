@@ -1,4 +1,35 @@
+## 2026-11-20 — Inspector revalidated with lighting main
+
+Combined implementation `4acfb482742d2bb1d615c3eaae60308af09ffa1b` preserves incoming main `d84e958b1`.
+Editor build PASS; SpectraFX 20/20 PASS (16.78s), five real Metal checks with
+no skips; actual PRISMA frame review 5/5 PASS. Two unused GraphWindow helpers
+removed; cleanup build has zero warnings. Full repository/platform/manual UI
+coverage remains unrun. Exact commands and integration decisions: `docs/agent-handoffs/inspector-spectrafx-lighting-sync-2026-11-20.md`.
+
+
+## 2026-11-20 — Inspector graph-v2 integration with current main
+
+Implementation `9db6d2014137e41cd67ff82dc187cf1136f73bb3`; branch `feature/aiv20261120_perf_inspector_integration`.
+Editor build PASS; final SpectraFX 20/20 PASS including five hardware Metal tests;
+actual PRISMA frame checks 5/5 PASS. Source-compatible view adapters and GPU
+preview retirement corrections preserve newer main ownership. No experimental
+defaults enabled. Full repo/Release/Vulkan/GLES/manual editor UI NOT RUN.
+Exact commands, earlier failures, warnings, APIs and next steps:
+`docs/agent-handoffs/inspector-spectrafx-main-2026-11-20.md`. Separate documentation commit follows implementation.
+
+
 # SpectraFX — handoff for the next implementation agent
+
+## 2026-11-21 packaged client build selection
+
+On `feature/studio-html5`, implementation `7d92031a3` adds opt-in `fx` to
+`packaging.engineModules`; omitting it from an explicit packaged-client list
+excludes the client FX host and SpectraFX libraries. The editor-hosted client
+and default legacy client retain full FX. macOS client builds with FX ON/OFF,
+the hosted client build and the packager build passed; WebAssembly and GPU
+visual parity were NOT RUN. See
+`docs/agent-handoffs/spectrafx-stage121-client-build-pruning-2026-11-21.md`
+for exact measurements and risks.
 
 ## Stage 120 — merged main + SpectraFX full native acceptance PASS (M3 Ultra)
 
@@ -636,3 +667,46 @@ git merge origin/main
 
 If your working tree is rebasing or has unmerged files, do not run
 blind `git pull`: inspect `git status` and use a new worktree.
+
+
+## Lighting integration compatibility checkpoint
+
+2026-11-20; branch integration/lighting-main-stage1-20261120.
+Implementation: 6ce5b19c061ec16a450f60bc475e0e9f6e6674fe.
+
+Restored two merged legacy SpectraFX preview calls to the existing shared
+ViewportGpuRetirement API (GPU Assets and Graph windows). No VFX behavior or
+new ImGui UI. Repaired Studio UI skill frontmatter, escaped Markdown and editor
+workflow/category registration; regenerated skills/catalog.json. Added opt-in
+Release arm64 OFF/ON/OFF lighting acceptance runner and updated lighting docs
+and AGENTS checkpoint. No save-format or public rendering API changes.
+
+All builds, dependencies, temporary data and logs reside at
+/Volumes/KINGSTON/AIVERSE/Builds/.temp/lighting-completion-20261120.
+Actual checks:
+- Release arm64 aiverse_renderbench, aiverse_hdr_scene, aiverse_studio,
+  aiverse_studio_metal_lighting_tests and aiverse_client builds PASS.
+- Release CTest lighting GPU/host/ICB/animated selection: 10/10 PASS (27.87s),
+  logs/stage29-release-gpu.log and .xml.
+- Release studio_metal_lighting: 1/1 PASS (4.95s), stage29-release-studio.log/xml.
+- Debug full build including AiverseEditor PASS after fixing the two calls.
+- Full ./run-tests.sh --quick --build-dir <root>/build --jobs 12 --ctest-jobs 2
+  still RUNNING at handoff, report 20261120-155447-18337, session 24647.
+  Main aiverse_tests passed in 840.79s. Three catalog/routing/audit tests failed
+  before the metadata fix; rerun through CTest after completion is required.
+- catalog.py generate/check, tests/skills/catalog_test.py, tools/skills/audit.py
+  PASS after fix (227 skills, zero audit errors/warnings). Python syntax check
+  of acceptance runner PASS; performance runner NOT EXECUTED yet.
+- Earlier own low-parallel build processes were terminated and resumed at 12
+  jobs; first resumed Debug build failed on the two Viewport calls, then fixed.
+  Interrupted/failed attempts are not passes. Logs stage29-quick*.log and
+  stage29-release*.log preserve evidence.
+- git diff --check PASS. CI N/A, no push.
+
+Locked Mac still blocks interactive HTML/native screenshot QA. User confirms no
+Android/Vulkan hardware stand presently: hardware acceptance NOT RUN. Native
+Metal capture tests work independently. Experimental ICB stays OFF by default;
+Studio geometry remains terrain/proxy preview, not full game asset parity.
+Next: fix FPS preview/GI bounds and camera using actual geometry rather than
+MapDoc default RTS dimensions, verify actual Metal; then consolidate full-suite
+results and run isolated Release Sponza OFF/ON/OFF acceptance.

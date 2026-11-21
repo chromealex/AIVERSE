@@ -1,0 +1,39 @@
+/* Scene orientation gizmo. Layout only; colors come from --au-* tokens. */
+.scene-axis-gizmo{position:absolute;top:var(--au-space-2);right:var(--au-space-2);z-index:4;
+  display:flex;flex-direction:column;align-items:center;gap:0;user-select:none;pointer-events:auto}
+.scene-axis-gizmo svg{display:block;overflow:visible}
+.scene-axis-gizmo__backdrop{fill:var(--au-overlay);fill-opacity:.55;stroke:var(--au-line);stroke-opacity:.6}
+.scene-axis-gizmo__hit{fill:transparent}
+.scene-axis-gizmo__arm{cursor:pointer;outline:none}
+.scene-axis-gizmo__arm.axis-x{--axis:var(--au-axis-x)}
+.scene-axis-gizmo__arm.axis-y{--axis:var(--au-axis-y)}
+.scene-axis-gizmo__arm.axis-z{--axis:var(--au-axis-z)}
+.scene-axis-gizmo__arm.is-negative{--axis:var(--au-axis-negative)}
+.scene-axis-gizmo__stem{stroke:var(--axis);stroke-width:2.4;stroke-linecap:round}
+.scene-axis-gizmo__cone{fill:var(--axis);stroke:var(--au-canvas);stroke-width:.6;stroke-linejoin:round}
+.scene-axis-gizmo__label{fill:var(--axis);font-size:var(--au-font-sm);font-weight:800;text-anchor:middle;
+  paint-order:stroke;stroke:var(--au-canvas);stroke-width:2.5px}
+.scene-axis-gizmo__arm.is-hover .scene-axis-gizmo__cone,
+.scene-axis-gizmo__arm:focus-visible .scene-axis-gizmo__cone{fill:var(--au-axis-hover)}
+.scene-axis-gizmo__arm:focus-visible .scene-axis-gizmo__hit{stroke:var(--au-accent);stroke-width:1.5}
+.scene-axis-gizmo__center{cursor:pointer;outline:none}
+.scene-axis-gizmo__center rect{fill:var(--au-text-soft);stroke:var(--au-canvas);stroke-width:1}
+.scene-axis-gizmo__center:hover rect,.scene-axis-gizmo__center:focus-visible rect{fill:var(--au-axis-hover)}
+.scene-axis-gizmo__center:focus-visible rect{stroke:var(--au-accent);stroke-width:1.5}
+.scene-axis-gizmo__caption{margin-top:-2px;padding:1px 7px;border:1px solid transparent;border-radius:var(--au-radius-xs);
+  background:transparent;color:var(--au-text-soft);font:inherit;font-size:var(--au-font-xs);font-weight:700;
+  letter-spacing:.02em;cursor:pointer;text-shadow:0 1px 2px var(--au-canvas)}
+.scene-axis-gizmo__caption:hover{background:var(--au-overlay);border-color:var(--au-line)}
+.scene-axis-gizmo__caption:focus-visible{outline:none;box-shadow:var(--au-focus)}
+.scene-axis-gizmo.is-disabled{opacity:.55}
+.scene-axis-gizmo.is-disabled .scene-axis-gizmo__arm,.scene-axis-gizmo.is-disabled .scene-axis-gizmo__center{cursor:default}
+/* Fly speed / navigation hint chip shares the overlay style. */
+.studio-scene-fly-speed{position:absolute;right:var(--au-space-3);bottom:var(--au-space-3);z-index:3;pointer-events:none;
+  padding:5px 9px;border:1px solid var(--au-line-strong);border-radius:var(--au-radius-sm);
+  background:var(--au-overlay);color:var(--au-text);font-size:var(--au-font-xs);font-weight:700}
+/* Character Creator sculpt brush footprint under the cursor. */
+.studio-sculpt-brush{position:absolute;z-index:3;pointer-events:none;border-radius:50%;
+  border:1.5px solid rgba(120,180,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35),inset 0 0 14px rgba(120,180,255,.18)}
+.studio-sculpt-brush::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:rgba(120,180,255,.95)}
+/* Character Creator reference photo over the viewport (never takes input). */
+.studio-reference-photo{position:absolute;left:50%;top:50%;z-index:2;pointer-events:none;max-width:none;object-fit:contain;border-radius:4px}

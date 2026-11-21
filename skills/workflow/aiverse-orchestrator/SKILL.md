@@ -3,6 +3,9 @@ name: aiverse-orchestrator
 description: Find AIVERSE repository skills and select the smallest library set for a game or meta subsystem, separating client, server and database responsibilities. Use before generating integrations across multiple capabilities.
 ---
 
+For every game/world creation task, first follow `skills/workflow/aiverse-terra-first/SKILL.md`. Use native Terra capabilities before custom environment implementations; vegetation routing is `skills/world/aiverse-terra-vegetation/SKILL.md`.
+
+
 This is a workflow skill with no runtime library. The machine-readable index is
 `skills/catalog.json`; do not load every SKILL.md or the whole schema.
 

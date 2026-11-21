@@ -1,0 +1,23 @@
+// A race on a spline road circuit (docs/races.md, docs/roads.md): the hero sits in the red truck, three race bots
+// drive the others; wheels roll and steer (procedural "wheel" / "steer" on the Kenney truck's wheel nodes).
+{
+  "name": "Road Circuit",
+  "id": "com.aiverse.roadcircuit",
+  "version": "0.1.0",
+  "build": 1,
+  "module": "rts",
+  "genre": "racing",
+  "sourceLanguage": "en",
+  "languages": ["en"],
+  "rules": "rules.json",
+  "maps": [ { "file": "maps/start.json", "title": "Road Circuit" } ],
+  "lighting": { "time": 0.45, "clouds": 0.2 },
+  "orientation": "landscape",
+  "topDown": {
+    "touchControls": "auto",
+    "joystick": { "mode": "floating", "radius": 64, "deadzone": 0.12, "area": [0, 0.3, 0.5, 1], "center": [0.14, 0.78] },
+    "gamepad": { "deadzone": 0.15 },
+    "camera": { "pitch": 55, "yaw": 0, "distance": 30, "minDistance": 18, "maxDistance": 50, "smoothing": 5,
+                "lookAhead": 4, "lookAheadSmoothing": 3, "bounds": true, "margin": 6 }
+  }
+}

@@ -2,6 +2,7 @@
 // No gameplay mutation, native genre dependencies, or legacy RTS ownership.
 #pragma once
 #include "engine/render/NereidSurfaceResident.h"
+#include "engine/render/NereidFlowTexture.h"
 #include "engine/world/WorldAssets.h"
 #include "engine/world/NereidRipples.h"
 #include "engine/world/NereidWindField.h"
@@ -54,6 +55,7 @@ inline bool sameNereidSceneSurface(const NereidSceneSurface& a,
        x.flow.x!=y.flow.x || x.flow.y!=y.flow.y ||
        x.flow.z!=y.flow.z || x.priority!=y.priority ||
        x.enabled!=y.enabled || a.useGeometry!=b.useGeometry ||
+       m.useGrade!=n.useGrade || (m.useGrade&&!lib::nereid::sameWaterRiverGrade(m.grade,n.grade)) ||
        m.lod!=n.lod || m.uvScale!=n.uvScale ||
        m.foamWidth!=n.foamWidth || m.oceanPatchRadius!=n.oceanPatchRadius ||
        m.maxVertices!=n.maxVertices ||
@@ -69,6 +71,7 @@ inline bool sameNereidSceneSurface(const NereidSceneSurface& a,
        u.depthTint!=v.depthTint ||
        u.underwaterDistortion!=v.underwaterDistortion ||
        u.underwaterScattering!=v.underwaterScattering ||
+       u.turbidity!=v.turbidity || u.siltR!=v.siltR || u.siltG!=v.siltG || u.siltB!=v.siltB ||
        u.rapidFoamStrength!=v.rapidFoamStrength ||
        u.rapidFlowThreshold!=v.rapidFlowThreshold ||
        u.rapidNoiseScale!=v.rapidNoiseScale ||
@@ -78,6 +81,21 @@ inline bool sameNereidSceneSurface(const NereidSceneSurface& a,
         u.rapidDetail!=v.rapidDetail ||
        u.opacity!=v.opacity ||
        u.specular!=v.specular)return false;
+    if(a.useCurrentField!=b.useCurrentField||a.useVortices!=b.useVortices)return false;
+    if(a.useCurrentField) {
+        const auto& f=a.currentField;const auto& g=b.currentField;
+        if(f.enabled!=g.enabled||f.bankFade!=g.bankFade||f.nodes.size()!=g.nodes.size())return false;
+        for(size_t i=0;i<f.nodes.size();++i)
+            if(f.nodes[i].downstream!=g.nodes[i].downstream||f.nodes[i].lateral!=g.nodes[i].lateral||f.nodes[i].shear!=g.nodes[i].shear)return false;
+    }
+    if(a.useVortices) {
+        const auto& f=a.vortices;const auto& g=b.vortices;
+        if(f.enabled!=g.enabled||f.vortices.size()!=g.vortices.size())return false;
+        for(size_t i=0;i<f.vortices.size();++i) {
+            const auto& p=f.vortices[i];const auto& q=g.vortices[i];
+            if(p.center!=q.center||p.radius!=q.radius||p.circulation!=q.circulation||p.radial!=q.radial)return false;
+        }
+    }
     // Camera coordinates are intentionally excluded: resident ocean patches
     // separately snap their camera anchor to a stable grid.
     if(!a.useGeometry)return true;
@@ -103,6 +121,7 @@ inline bool sameNereidSceneMeshSource(const NereidSceneSurface& a,
        x.bottomY!=y.bottomY || x.halfExtents!=y.halfExtents ||
        x.radius!=y.radius || x.enabled!=y.enabled ||
        a.useGeometry!=b.useGeometry ||
+       m.useGrade!=n.useGrade || (m.useGrade&&!lib::nereid::sameWaterRiverGrade(m.grade,n.grade)) ||
        m.lod!=n.lod || m.uvScale!=n.uvScale ||
        m.foamWidth!=n.foamWidth ||
        m.oceanPatchRadius!=n.oceanPatchRadius ||
@@ -132,6 +151,7 @@ struct NereidSceneStats {
     size_t estimatedBytesAdmitted=0; // legacy metric name: now exact VB+IB array bytes
     size_t preparedBytes=0, budgetDeferred=0;
     size_t asyncPreparing=0, asyncDiscarded=0, stagingReservedBytes=0;
+    size_t flowBuilds=0,flowUploads=0,flowPending=0,flowKnownBytes=0;
 };
 
 class NereidWaterScene final {
@@ -143,6 +163,10 @@ class NereidWaterScene final {
         bool visible=true;
         std::optional<render::NereidPreparedSurface> prepared;
         std::optional<lib::nereid::WaterSurfaceLod> selectedLod;
+        uint64_t flowRevision=1;
+        uint64_t preparedFlowRevision=0,preparedFlowMeshRevision=0,preparedFlowResolverRevision=0;
+        double flowAnchorX=0,flowAnchorZ=0;
+        std::shared_ptr<const render::NereidFlowTextureVersion> flow;
     };
 public:
     static constexpr size_t kMaxSurfaces=64;
@@ -174,6 +198,11 @@ public:
         std::vector<Slot> next;next.reserve(incoming.size());
         std::map<uint64_t,size_t> oldIds;
         for(size_t i=0;i<slots_.size();++i)oldIds.emplace(slots_[i].source.id,i);
+        for(const auto& source:incoming)if(const auto found=oldIds.find(source.id);found!=oldIds.end()) {
+            const auto& old=slots_[found->second];
+            if(old.flowRevision==UINT64_MAX&&!sameNereidSceneSurface(source,old.source))
+                throw std::overflow_error("NEREID flow revision");
+        }
         for(auto& source:incoming) {
             Slot slot;
             const auto found=oldIds.find(source.id);
@@ -184,8 +213,21 @@ public:
                 slot.visible=old.visible;
                 slot.prepared=std::move(old.prepared);
                 slot.selectedLod=old.selectedLod;
+                slot.flowRevision=old.flowRevision;
+                if(!sameNereidSceneSurface(source,old.source)) {
+                    ++slot.flowRevision;
+                }
+                slot.flow=std::move(old.flow);
+                slot.flowAnchorX=old.flowAnchorX;slot.flowAnchorZ=old.flowAnchorZ;
+                slot.preparedFlowRevision=old.preparedFlowRevision;
+                slot.preparedFlowMeshRevision=old.preparedFlowMeshRevision;
+                slot.preparedFlowResolverRevision=old.preparedFlowResolverRevision;
                 if(!sameNereidSceneMeshSource(source,old.source)) {
-                    ++slot.revision;
+                    // Revisions come from ONE scene-wide monotonic counter
+                    // (never a per-slot ++): a removed and re-added id can
+                    // then never reuse the revision of a pending async job
+                    // and adopt its stale mesh.
+                    slot.revision=++nextRevision_;
                     slot.prepared.reset();
                     slot.selectedLod.reset();
                 }
@@ -245,7 +287,7 @@ public:
                                          slot.source.body.enabled) {
             const auto& src=slot.source;
             return lib::nereid::waterCurrentWithVortices(
-                src.body,src.useGeometry?&src.geometry:nullptr,
+                lib::nereid::gradedWaterBody(src.body,src.mesh.useGrade?&src.mesh.grade:nullptr,position,src.useGeometry?&src.geometry:nullptr),src.useGeometry?&src.geometry:nullptr,
                 src.useCurrentField?&src.currentField:nullptr,
                 src.useVortices?&src.vortices:nullptr,position);
         }
@@ -333,7 +375,11 @@ public:
         }
         const double dx=cx-observer->x.toDouble();
         const double dz=cz-observer->z.toDouble();
-        const double sq=dx*dx+dz*dz;
+        const auto fixed=[](double v){return Fixed::fromRaw(int64_t(std::llround(v*Fixed::kOne)));};
+        const Vec3 point{fixed(cx),{},fixed(cz)};
+        const Fixed height=s.body.surfaceY+(s.mesh.useGrade?lib::nereid::waterGradeOffset(s.mesh.grade,point):0_fx);
+        const double dy=height.toDouble()-observer->y.toDouble();
+        const double sq=dx*dx+dy*dy+dz*dz;
         // Schmitt trigger around each boundary avoids uploads while the
         // camera jitters within a narrow range. From Far, require crossing
         // the lower threshold; from Near, require crossing the upper one.
@@ -427,7 +473,10 @@ public:
             opts.originZ=source.body.center.z.toDouble();
         }
     }
-    void update(gfx::Device& device,const Vec3* observer=nullptr) {
+    void update(gfx::Device& device,const Vec3* observer=nullptr,
+            const std::function<Vec3(uint64_t,Vec3,Vec3)>& resolveFlow={},
+            uint64_t flowResolverRevision=0) {
+        flowTextures_.collect(device);
         observer_=observer?std::optional<Vec3>(*observer):std::nullopt;
         for(auto& old:retired_)old->release(device);
         retired_.clear();
@@ -441,6 +490,7 @@ public:
             slot.visible=visibleFrom(slot.source,observer,visibilityRange_);
             if(slot.visible)++stats_.visible;
             if(!slot.source.body.enabled) {
+                slot.flow.reset();
                 slot.gpu->release(device);
                 slot.prepared.reset();
             }
@@ -544,7 +594,47 @@ public:
             }
             nextUpload_=(i+1)%slots_.size();
         }
-        for(const auto& slot:slots_)if(slot.gpu->resident())++stats_.resident;
+        for(size_t offset=0,count=slots_.size(),start=nextFlow_;offset<count;++offset) {
+            const size_t index=(start+offset)%count;
+            auto& slot=slots_[index];
+            if(slot.gpu->resident())++stats_.resident;
+            if(!slot.visible||!slot.gpu->resident())continue;
+            const auto& source=slot.source;
+            const auto& basis=slot.gpu->key();
+            if(basis.sourceRevision!=slot.revision){++stats_.flowPending;continue;}
+            const bool infinite=(!source.useGeometry||!source.geometry.enabled)&&
+                source.body.footprint==lib::nereid::WaterFootprint::Infinite;
+            const double anchorX=infinite?basis.originX:0,anchorZ=infinite?basis.originZ:0;
+            if(slot.flow&&slot.preparedFlowRevision==slot.flowRevision&&
+               slot.preparedFlowMeshRevision==slot.revision&&
+               slot.flow->resolvedTransfer==bool(resolveFlow)&&
+               (!resolveFlow||(flowResolverRevision&&slot.preparedFlowResolverRevision==flowResolverRevision))&&
+               slot.flowAnchorX==anchorX&&slot.flowAnchorZ==anchorZ)continue;
+            if(stats_.flowBuilds>=maxUploadsPerFrame_){++stats_.flowPending;continue;}
+            ++stats_.flowBuilds;nextFlow_=(index+1)%count;
+            NereidFlowMapOptions options;
+            if(infinite) {
+                const double radius=source.mesh.oceanPatchRadius;
+                options.infinitePatch=NereidFlowBounds{anchorX-radius,anchorZ-radius,anchorX+radius,anchorZ+radius};
+            }
+            NereidFlowMapSource flowSource{source.body,source.useGeometry?&source.geometry:nullptr,
+                source.mesh.useGrade?&source.mesh.grade:nullptr,
+                source.useCurrentField?&source.currentField:nullptr,
+                source.useVortices?&source.vortices:nullptr,
+                source.style.rapidFoamStrength,source.style.rapidFlowThreshold,{}};
+            if(resolveFlow)flowSource.resolve=[&](Vec3 position,Vec3 ordinary){return resolveFlow(source.id,position,ordinary);};
+            const auto map=buildNereidFlowMap(flowSource,options);
+            bool created=false;
+            auto replacement=flowTextures_.upload(device,map,slot.flowRevision,slot.revision,
+                bool(resolveFlow),slot.flow,&created);
+            if(replacement) {
+                slot.flow=std::move(replacement);slot.flowAnchorX=anchorX;slot.flowAnchorZ=anchorZ;
+                slot.preparedFlowRevision=slot.flowRevision;slot.preparedFlowMeshRevision=slot.revision;
+                slot.preparedFlowResolverRevision=flowResolverRevision;
+                if(created)++stats_.flowUploads;
+            }else ++stats_.flowPending;
+        }
+        stats_.flowKnownBytes=flowTextures_.knownBytes(device);
         stats_.stagingReservedBytes=retainedPreparedBytes()+
             (pendingJob_?pendingJob_->reservation:0);
     }
@@ -558,6 +648,11 @@ public:
         for(const auto& slot:slots_) {
             if(!slot.visible || !slot.gpu->resident())continue;
             const auto& basis=slot.gpu->key();
+            // Legacy external confluence callbacks remain on their established
+            // path until supplied to field preparation; never drop that input.
+            const auto flowBinding=slot.flow&&(!transferFlow||slot.flow->resolvedTransfer)&&
+                slot.preparedFlowMeshRevision==basis.sourceRevision?
+                slot.flow->binding(worldOriginX,worldOriginZ):render::NereidFlowBinding{};
             const auto transform=render::mat4::translate({
                 float(basis.originX-worldOriginX),
                 float(basis.originY-worldOriginY),
@@ -567,8 +662,6 @@ public:
             // geometry residency or the fixed ECS simulation.
             const auto whitewaterAt=[&](double x,double z) {
                 const auto& style=slot.source.style;
-                if(style.rapidFoamStrength<=0.f)
-                    return render::float4{};
                 const auto fixed=[](double value) {
                     const double bounded=std::clamp(value,-1e10,1e10);
                     return Fixed::fromRaw(int64_t(std::llround(
@@ -580,7 +673,7 @@ public:
                     fixed(z)};
                 const auto& source=slot.source;
                 const Vec3 ordinary=lib::nereid::waterCurrentWithVortices(
-                    source.body,source.useGeometry?&source.geometry:nullptr,
+                    lib::nereid::gradedWaterBody(source.body,source.mesh.useGrade?&source.mesh.grade:nullptr,position,source.useGeometry?&source.geometry:nullptr),source.useGeometry?&source.geometry:nullptr,
                     source.useCurrentField?&source.currentField:nullptr,
                     source.useVortices?&source.vortices:nullptr,position);
                 const Vec3 current=transferFlow?
@@ -610,7 +703,7 @@ public:
                         tile.centerX,tile.centerZ);
                     slot.gpu->drawTile(renderer,transform,tile,
                                        packet.rings,packet.shapes,wind,
-                                       whitewater);
+                                       whitewater,flowBinding);
                 }
             }else{
                 NereidRippleShaderPacket packet{};
@@ -625,13 +718,22 @@ public:
                 const render::float4 wind=windField?
                     windField->sample(windX,windZ).shaderUniform():
                     render::float4{};
-                const auto whitewater=whitewaterAt(windX,windZ);
+                // Never choose the whole surface's fallback current from the
+                // camera. A field-less draw has one stable source reference.
+                double referenceX=slot.source.body.center.x.toDouble();
+                double referenceZ=slot.source.body.center.z.toDouble();
+                if(slot.source.useGeometry&&!slot.source.geometry.points.empty()) {
+                    const auto& p=slot.source.geometry.points[slot.source.geometry.points.size()/2];
+                    referenceX=p.x.toDouble();referenceZ=p.z.toDouble();
+                }
+                const auto whitewater=whitewaterAt(referenceX,referenceZ);
                 slot.gpu->draw(renderer,transform,
-                               packet.rings,packet.shapes,wind,whitewater);
+                               packet.rings,packet.shapes,wind,whitewater,flowBinding);
             }
         }
     }
     void shutdown(gfx::Device& device) {
+        (void)flowTextures_.shutdown(device);
         // Shutdown is an explicit synchronization barrier; never abandon a
         // worker that owns copied inputs before device/scene destruction.
         if(pendingJob_) {
@@ -651,6 +753,8 @@ public:
         return count;
     }
 private:
+    render::NereidFlowTextureCache flowTextures_;
+    size_t nextFlow_=0;
     std::vector<Slot> slots_;
     std::vector<std::unique_ptr<render::NereidSurfaceResident>> retired_;
     uint64_t nextRevision_=0;

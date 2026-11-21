@@ -774,7 +774,7 @@ void BwAI::update(Simulation& sim, RtsModule& m) {
 
 // ---- save state (next to Simulation::serialize; RtsAI::saveState v4)
 namespace {
-void io(Archive& a, BwAI::PS& p) {
+void ioPs(Archive& a, BwAI::PS& p) {   // not "io": game::io overloads (RtsModule.h) would hide it from qualified lookup
     aiverse::io(a, p.total); aiverse::io(a, p.attackers); aiverse::io(a, p.defenders); aiverse::io(a, p.firstEnemy); aiverse::io(a, p.byPlayer);
     aiverse::io(a, p.available); aiverse::io(a, p.attackOnWay); aiverse::io(a, p.defenseOnWay); aiverse::io(a, p.attack); aiverse::io(a, p.defense);
     aiverse::io(a, p.minTimeAttack); aiverse::io(a, p.minTimeDefense); aiverse::io(a, p.lastTimeAttack); aiverse::io(a, p.lastTimeDefense);
@@ -807,7 +807,7 @@ void BwAI::stateIo(Archive& a) {
     ioVec(a, casters_, [&](Caster& k) { io(a, k.ability); io(a, k.slot); io(a, k.kind); io(a, k.timer); io(a, k.heat); io(a, k.a); io(a, k.b); io(a, k.n); });
     ioVec(a, moveTasks_, [&](MoveTask& t) { io(a, t.from); io(a, t.owner); io(a, t.timer); io(a, t.duration); io(a, t.percent); });
     io(a, lastGroupId_);
-    ioVec(a, ms_, [&](PS& p) { game::io(a, p); });
+    ioVec(a, ms_, [&](PS& p) { ioPs(a, p); });
     io(a, ownPoints_);
     io(a, debut_); io(a, debutPlaying_); io(a, debutCursor_);
     io(a, trigGroupOn_); io(a, trigArrived_);

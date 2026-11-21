@@ -149,6 +149,8 @@ Build build(const Json &input, const std::atomic<bool> *cancel, GeometryCache *c
         mt.roughness = number(j["roughness"], .7f, key);
         require(mt.metallic >= 0 && mt.metallic <= 1 && mt.roughness >= 0 && mt.roughness <= 1,
                 "material factors must be 0..1");
+        mt.thinTransmission=number(j["thinTransmission"],0,key);
+        require(mt.thinTransmission>=0 && mt.thinTransmission<=1,"thinTransmission must be 0..1");
         mt.doubleSided = j.getBool("doubleSided");
         mt.emissive = vector3(j["emissive"], {}, key);
         mt.alpha = mt.baseColor.w < 1 ? AlphaMode::Blend : AlphaMode::Opaque;

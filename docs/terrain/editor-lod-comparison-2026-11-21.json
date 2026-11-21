@@ -1,0 +1,146 @@
+[
+  {
+    "camera": "near",
+    "distance": 65,
+    "mode": "before",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 998,
+      "cameraModelTriangles": 10949072,
+      "sunShadowModelTriangles": 12398641,
+      "cameraLodNodes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "lodChains": 0,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  },
+  {
+    "camera": "near",
+    "distance": 65,
+    "mode": "after",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 1623,
+      "cameraModelTriangles": 2899639,
+      "sunShadowModelTriangles": 2378576,
+      "cameraLodNodes": [
+        186,
+        382,
+        109,
+        0
+      ],
+      "lodChains": 662,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  },
+  {
+    "camera": "mid",
+    "distance": 140,
+    "mode": "before",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 2417,
+      "cameraModelTriangles": 16790047,
+      "sunShadowModelTriangles": 18137346,
+      "cameraLodNodes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "lodChains": 0,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  },
+  {
+    "camera": "mid",
+    "distance": 140,
+    "mode": "after",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 2662,
+      "cameraModelTriangles": 2766159,
+      "sunShadowModelTriangles": 3387462,
+      "cameraLodNodes": [
+        84,
+        529,
+        527,
+        0
+      ],
+      "lodChains": 1114,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  },
+  {
+    "camera": "far",
+    "distance": 300,
+    "mode": "before",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 1545,
+      "cameraModelTriangles": 10232616,
+      "sunShadowModelTriangles": 9365818,
+      "cameraLodNodes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "lodChains": 0,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  },
+  {
+    "camera": "far",
+    "distance": 300,
+    "mode": "after",
+    "stats": {
+      "clustersTested": 0,
+      "clustersCulled": 0,
+      "coarseClusters": 0,
+      "occluded": 0,
+      "occluderTriangles": 0,
+      "drawCalls": 1050,
+      "cameraModelTriangles": 1888490,
+      "sunShadowModelTriangles": 2135828,
+      "cameraLodNodes": [
+        41,
+        39,
+        1303,
+        0
+      ],
+      "lodChains": 1342,
+      "lodBlocked": 0,
+      "shadowLimitedLod": 0
+    }
+  }
+]

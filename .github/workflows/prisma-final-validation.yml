@@ -1,0 +1,119 @@
+# Stage 66: a single source-backed native PRISMA acceptance workflow.
+# Trigger only when this workflow or PRISMA source changes, not when agent
+# documentation is committed. This intentionally leaves the PR as Draft.
+name: PRISMA consolidated validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/prisma-postfx']
+    paths:
+      - '.github/workflows/prisma-final-validation.yml'
+      - 'engine/render/Prisma*'
+      - 'engine/render/Renderer3D.cpp'
+      - 'engine/render/Renderer3D.h'
+      - 'engine/render/Renderer3DReactiveShaders.h'
+      - 'apps/editor/**'
+      - 'apps/client/**'
+      - 'tests/render/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prisma-final-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: PRISMA full CMake + CTest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      AIVERSE_PRISMA_DOF: '1'
+      AIVERSE_PRISMA_AUTO_EXPOSURE: '1'
+      AIVERSE_PRISMA_MOTION_BLUR: '1'
+      AIVERSE_PRISMA_TEMPORAL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux headers and offscreen renderer
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev \
+            libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri xvfb
+      - name: Configure full editor, tests and HDR fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/prisma-final \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_HDR_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=ON 2>&1 | tee prisma-configure.log
+      - name: Build all native targets once
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/prisma-final --parallel 4 2>&1 | tee prisma-build.log
+      - name: Run full native CTest once
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/prisma-final --output-on-failure -j 4 \
+            2>&1 | tee prisma-ctest.log
+      - name: GPU backend smoke (conditional on available context)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+          build = pathlib.Path('build/prisma-final')
+          backend = ('aiverse_hdr_gl' if sys.platform == 'darwin' else 'aiverse_hdr_scene')
+          exe = build / backend
+          if not exe.is_file():
+              print(f'GPU SMOKE NOT RUN: {exe} not built on this runner', flush=True)
+              raise SystemExit(0)
+          env = os.environ.copy()
+          env['AIVERSE_HDR_VERIFY'] = '1'
+          env['AIVERSE_HDR_CAPTURE'] = str(pathlib.Path('prisma-hdr-capture.ppm').resolve())
+          cmd = [str(exe)]
+          if sys.platform != 'darwin':
+              cmd = ['xvfb-run', '-a'] + cmd
+          print('GPU fixture invocation:', cmd, flush=True)
+          try:
+              result = subprocess.run(cmd, env=env, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, timeout=240,
+                                      text=True, errors='replace')
+          except subprocess.TimeoutExpired as exc:
+              pathlib.Path('prisma-gpu.log').write_text(
+                  'TIMEOUT (240 s)\n' + str(exc.stdout or ''))
+              print('GPU SMOKE FAIL: timed out', flush=True)
+              raise SystemExit(124)
+          pathlib.Path('prisma-gpu.log').write_text(result.stdout)
+          print(result.stdout[-16000:], flush=True)
+          print(f'GPU fixture exit: {result.returncode}', flush=True)
+          raise SystemExit(result.returncode)
+          PY
+      - name: Upload genuine diagnostics and rendered capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prisma-stage66-${{ matrix.os }}-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            prisma-configure.log
+            prisma-build.log
+            prisma-ctest.log
+            prisma-gpu.log
+            prisma-hdr-capture.ppm
+            build/prisma-final/Testing/Temporary/LastTest.log
+            build/prisma-final/Testing/Temporary/CTestCostData.txt

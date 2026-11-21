@@ -9,6 +9,7 @@
 #include "engine/render/PostFx.h"
 #include "engine/render/PostFxShaders.h"
 #include "engine/render/NereidWaterReflectionPolicy.h"
+#include "tests/cloth/FakeDevice.h"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -17,6 +18,10 @@ using namespace aiverse;
 static void check(bool value,const char* message) {
     if(!value)throw std::runtime_error(message);
 }
+struct WaterTestDevice final:FakeDevice {
+    bool waitForResourceIdle()override{return true;}
+    bool gpuHealthy()const override{return true;}
+};
 int main() {
     lib::nereid::WaterSurfaceVertex shore;
     shore.shore=1.f;
@@ -241,6 +246,10 @@ int main() {
     check(world::NereidWaterScene::selectedLod(lodSurface,&farCam)==
           lib::nereid::WaterSurfaceLod::Far,
           "far-distance water should select far LOD");
+    Vec3 overhead{lodSurface.body.center.x,lodSurface.body.surfaceY+200_fx,lodSurface.body.center.z};
+    check(world::NereidWaterScene::selectedLod(lodSurface,&overhead)==
+          lib::nereid::WaterSurfaceLod::Far,
+          "camera altitude over water must select far LOD instead of staying near");
     Vec3 boundaryCam{31_fx,0_fx,0_fx};
     check(world::NereidWaterScene::selectedLod(
               lodSurface,&boundaryCam,lib::nereid::WaterSurfaceLod::Near)==
@@ -452,12 +461,12 @@ int main() {
     check(std::string(render::shaders::kLitFS).find(
           "thickness = v_wpos.y - opaquePos.y")!=std::string::npos &&
           std::string(render::shaders::kLitFS).find(
-          "u_params.x < -0.5 && u_trace2.w > 0.5")!=std::string::npos,
+          "u_params.x < -0.5 && u_trace2.w > 0.0")!=std::string::npos,
           "GLSL depth-gated NEREID optics missing");
     check(std::string(render::shaders::kLitMSL).find(
           "thickness = in.wpos.y - opaquePos.y")!=std::string::npos &&
           std::string(render::shaders::kLitMSL).find(
-          "u.params.x < -0.5 && f.trace2.w > 0.5")!=std::string::npos,
+          "u.params.x < -0.5 && f.trace2.w > 0.0")!=std::string::npos,
           "Metal depth-gated NEREID optics missing");
     // Stage 17 optics controls are opt-in and must invalidate cached visuals.
     auto opticalStyle=style;
@@ -487,14 +496,15 @@ int main() {
       "style":{"shoreFoamDepth":21}
     }]}})"),"reject invalid depth foam width");
     check(std::string(render::shaders::kLitFS).find(
-          "float transmission = exp(-thickness * u_color.r)")!=std::string::npos &&
+          "float transmission = exp(-opticalPath * u_color.r * clamp(albedo.a,0.0,1.0))")!=std::string::npos &&
+          std::string(render::shaders::kLitFS).find("float opticalPath = thickness + length(v_wpos - opaquePos)")!=std::string::npos &&
           std::string(render::shaders::kLitFS).find(
-          "shallow = clamp(1.0 - thickness / u_color.g")!=std::string::npos,
+          "contactFoam=1.0-smoothstep(0.0,u_color.g,depth)")!=std::string::npos,
           "GLSL Beer-Lambert approximation or shore foam missing");
     check(std::string(render::shaders::kLitMSL).find(
-          "float transmission = exp(-thickness * u.color.r)")!=std::string::npos &&
+          "float transmission = exp(-opticalPath * u.color.r * clamp(albedo.a,0.0,1.0))")!=std::string::npos &&
           std::string(render::shaders::kLitMSL).find(
-          "shallow = clamp(1.0 - thickness / u.color.g")!=std::string::npos,
+          "contactFoam=1.0-smoothstep(0.0,u.color.g,depth)")!=std::string::npos,
           "Metal Beer-Lambert approximation or shore foam missing");
     // Underwater visual state is derived from ECS/manifest snapshot only.
     // It neither mutates ECS nor requires a graphics or postfx backend.
@@ -507,6 +517,13 @@ int main() {
     underwaterLake.body.bottomY=-50_fx;
     underwaterLake.style.absorption=0.5f;
     underwaterLake.style.deepR=0.1f;
+    auto inclined=underwaterLake;inclined.mesh.useGrade=true;
+    inclined.mesh.grade.risePerMetre={Fixed::fromRatio(1,10),Fixed{}};
+    const auto belowGrade=world::sampleNereidUnderwater({inclined},{10_fx,10_fx,0_fx});
+    check(belowGrade.submerged&&std::abs(belowGrade.waterSurfaceY-11.0)<.001,
+          "underwater camera must use graded local water surface");
+    check(!world::sampleNereidUnderwater({inclined},{-10_fx,10_fx,0_fx}).submerged,
+          "above local grade must not inherit reference-plane submersion");
     const std::vector<world::NereidSceneSurface> opticalVolumes{underwaterLake};
     auto submerged=world::sampleNereidUnderwater(opticalVolumes,
                                                  {0_fx,8_fx,0_fx});
@@ -542,11 +559,12 @@ int main() {
     // Foam and extinction happen *after* SSR to keep shore foam visible.
     const auto glShader=std::string(render::shaders::kLitFS);
     const auto metalShader=std::string(render::shaders::kLitMSL);
-    check(glShader.find("float foamWeight = shallow")>
-          glShader.find("vec3 rc = ssrWater") &&
-          metalShader.find("float foamWeight = shallow")>
-          metalShader.find("float3 rc = ssrWater"),
-          "depth optics must composite after SSR in both backends");
+    const auto glFoam=glShader.find("if(contactFoam>0.0)");
+    const auto metalFoam=metalShader.find("if(contactFoam>0.0)");
+    check(glFoam!=std::string::npos && metalFoam!=std::string::npos &&
+          glFoam>glShader.find("vec3 rc = ssrWater") &&
+          metalFoam>metalShader.find("float3 rc = ssrWater"),
+          "undistorted contact foam must composite after refraction and SSR");
     // Stage 18: Prisma's underwater shader is an opt-in composite variant.
     check(std::string(render::postfx::kComposite).find(
           "#ifdef PF_UNDERWATER")!=std::string::npos &&
@@ -612,6 +630,39 @@ int main() {
     check(opticsManifest.surfaces[0].style.underwaterDistortion>0.69f &&
           opticsManifest.surfaces[0].style.underwaterScattering==0.5f,
           "manifest must expose underwater settings per surface");
+    // Turbidity: one authored value, same resolved optics above and below.
+    const auto murkyManifest=world::parseNereidWaterManifest(Json::parse(R"({
+      "nereidWater":{"surfaces":[{"kind":"lake","shape":"box",
+        "surfaceY":4,"bottomY":-10,"halfExtents":[5,5],
+        "style":{"absorption":0.3,"turbidity":0.5,"siltColor":[0.5,0.45,0.3]}}]}}
+    )"));
+    const auto& murkyStyle=murkyManifest.surfaces[0].style;
+    check(murkyStyle.turbidity==0.5f && murkyStyle.siltR==0.5f,
+          "manifest must expose turbidity and silt colour");
+    const auto clearResolved=lib::nereid::resolvedWaterOptics(style);
+    check(clearResolved.absorption==style.absorption && clearResolved.deepR==style.deepR,
+          "zero turbidity must keep legacy optics");
+    const auto murkyResolved=lib::nereid::resolvedWaterOptics(murkyStyle);
+    check(murkyResolved.absorption>murkyStyle.absorption+0.7f &&
+          murkyResolved.depthTint>murkyStyle.depthTint &&
+          murkyResolved.deepR>murkyStyle.deepR && murkyResolved.absorption<=4.f,
+          "turbidity must raise extinction, in-scatter and milkiness");
+    check(render::validNereidWaterStyle(murkyStyle),"bounded turbidity must be valid");
+    auto badSilt=murkyStyle;badSilt.turbidity=1.5f;
+    check(!render::validNereidWaterStyle(badSilt),"unbounded turbidity must be rejected");
+    check(!render::sameNereidSurfaceKey(
+          render::makeNereidSurfaceKey(30,false,highOpts,style),
+          render::makeNereidSurfaceKey(30,false,highOpts,murkyStyle)),
+          "water presentation cache must notice turbidity changes");
+    world::NereidSceneSurface clearCamera=underwaterLake,murkyCamera=underwaterLake;
+    clearCamera.style.absorption=0.3f;
+    murkyCamera.style=murkyStyle;
+    const auto clearView=world::sampleNereidUnderwater({clearCamera},{0_fx,3_fx,0_fx});
+    const auto murkyView=world::sampleNereidUnderwater({murkyCamera},{0_fx,3_fx,0_fx});
+    check(murkyView.absorption>clearView.absorption+0.7f &&
+          murkyView.scattering>clearView.scattering && murkyView.silt==0.5f &&
+          murkyView.transmission<clearView.transmission,
+          "diving into turbid water must shorten visibility");
     render::PostFxUnderwater cameraTarget{};
     cameraTarget.submerged=true;
     cameraTarget.distortion=0.8f;
@@ -724,5 +775,31 @@ int main() {
           std::string::npos &&
           depthComposite.find("immersedFraction")!=std::string::npos,
           "shared GL/Metal shader must clip underwater distance to water plane");
+    // Finite flow texture depends on canonical water data, never observer/mesh LOD.
+    WaterTestDevice flowDevice;
+    world::NereidWaterScene localWater;
+    world::NereidSceneSurface localSource;
+    localSource.id=42;localSource.body.halfExtents={8_fx,8_fx};
+    localSource.body.flow={1_fx,0_fx,-2_fx};
+    localSource.autoLod=true;localSource.mediumDistance=20;localSource.farDistance=40;
+    localWater.setSurfaces({localSource});
+    Vec3 nearObserver{0_fx,5_fx,0_fx},farObserver{100_fx,5_fx,100_fx};
+    localWater.update(flowDevice,&nearObserver);
+    check(localWater.stats().flowUploads==1,"first resident water needs local current texture");
+    localWater.update(flowDevice,&farObserver);
+    check(localWater.stats().flowUploads==0&&localWater.stats().flowBuilds==0,
+          "camera and LOD must not rebuild finite flow field");
+    const auto meshRevision=localWater.surfaceRevision(42);
+    localSource.body.flow.x=-1_fx;localWater.setSurfaces({localSource});
+    check(localWater.surfaceRevision(42)==meshRevision,"current change must not remesh water");
+    localWater.update(flowDevice,&nearObserver);
+    check(localWater.stats().flowUploads==1,"manual current edit must update local texture");
+    auto transfer=[](uint64_t id,Vec3,Vec3 flow){check(id==42,"resolver stable water identity");flow.z=3_fx;return flow;};
+    localWater.update(flowDevice,&nearObserver,transfer);
+    check(localWater.stats().flowUploads==1,"host confluence current must reach local texture");
+    localWater.update(flowDevice,&nearObserver,transfer);
+    check(localWater.stats().flowUploads==0&&localWater.stats().flowBuilds==1,
+          "unversioned resolver must revalidate but reuse exact unchanged GPU payload");
+    localWater.shutdown(flowDevice);
     std::cout<<"PASS NEREID renderer bridge + multi-height planar fallback contract\n";
 }

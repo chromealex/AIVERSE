@@ -1,0 +1,115 @@
+# Full post-merge native validation: one Release build with the editor and HDR tests, then every
+# registered CTest case, on each push to main (and on demand via workflow_dispatch).
+name: AIVERSE post-merge full validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiverse-postmerge-full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Full CMake and CTest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux native graphics build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri xvfb
+      - name: Configure single Release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/postmerge-full \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=ON \
+            -DAIVERSE_BUILD_HDR_TESTS=ON \
+            2>&1 | tee configure.log
+      - name: Compile all targets once
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/postmerge-full --parallel 4 2>&1 | tee build.log
+      - name: Confirm full CTest registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/postmerge-full -N 2>&1 | tee registered-tests.log
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("registered-tests.log").read_text(errors="replace")
+          values = re.findall(r"Total Tests:\s*(\d+)", text)
+          if not values:
+              raise SystemExit("ERROR: CTest registered test count missing")
+          n = int(values[-1])
+          print("Registered CTest cases:", n, flush=True)
+          if n < 201:
+              raise SystemExit(f"ERROR: expected at least 201, got {n}")
+          PY
+      - name: Execute full CTest once
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/postmerge-full \
+            --output-on-failure --no-tests=error --parallel 4 2>&1 | tee ctest.log
+      - name: Report GPU backend evidence without false-green claims
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d build/postmerge-full/Testing ]; then
+            ctest --test-dir build/postmerge-full -N -L MetalGPU \
+              > metal-registered.log 2>&1 || true
+            ctest --test-dir build/postmerge-full -N -R '^vulkan_backend$' \
+              > vulkan-registered.log 2>&1 || true
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          for label, path in [('Metal', 'metal-registered.log'),
+                              ('Vulkan', 'vulkan-registered.log')]:
+              if not Path(path).exists():
+                  print(label + ' registration: NOT EVALUATED')
+                  continue
+              text=Path(path).read_text(errors='replace')
+              print(label + ' registration: ' +
+                    next((l.strip() for l in text.splitlines()
+                          if 'Total Tests:' in l), 'UNKNOWN'))
+          if Path('ctest.log').exists():
+              txt=Path('ctest.log').read_text(errors='replace')
+              print('CTest SKIP occurrences:', txt.count('***Skipped'))
+              print('CTest explicit FAILED occurrences:', txt.count('***Failed'))
+              print('Note: a skipped hardware case does not prove GPU parity.')
+          PY
+      - name: Preserve build, CTest, backend and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postmerge-${{ matrix.os }}-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            configure.log
+            build.log
+            registered-tests.log
+            ctest.log
+            metal-registered.log
+            vulkan-registered.log
+            build/postmerge-full/Testing/Temporary/LastTest.log

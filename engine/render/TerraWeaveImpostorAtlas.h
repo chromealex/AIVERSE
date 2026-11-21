@@ -195,6 +195,197 @@ inline ArborImpostorAtlas makeArborImpostorAtlas(
     return out;
 }
 
+
+// Re-bake an impostor atlas from the REAL near tree: CPU rasterization of
+// `nearModel` (every node's base mesh, model space in metres, identity node
+// transforms as built by Arbor) with its base-colour textures and alpha
+// cutout, 2x2 supersampled, simple wrap lighting. Bark triangles (material 0)
+// go to the bark page, foliage (material 1) to the foliage page, so seasons
+// and winter bark-only draws keep working. The quad is resized to the mesh's
+// real extent. Images must still hold CPU pixels (call before GPU upload).
+// Deterministic: same model -> same atlas bytes.
+inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
+        const render::Model& nearModel, ArborImpostorAtlasSettings settings = {}) {
+    if (!out.model || out.views == 0 || out.model->images.empty() ||
+        out.model->vertices.size() != 8)
+        throw std::invalid_argument("TerraWeave impostor atlas not built");
+    const uint32_t views = out.views;
+    const int W = int(settings.tile.width), H = int(settings.tile.height);
+    const int gutter = int(settings.tile.margin);
+    render::Image& atlas = out.model->images[0];
+    if (atlas.width != W * int(views) * 2 || atlas.height != H)
+        throw std::invalid_argument("TerraWeave impostor atlas size");
+
+    // Real extent of the near geometry (metres).
+    float radius = 0.5f, top = 1.0f;
+    for (const auto& node : nearModel.nodes) {
+        if (node.mesh < 0) continue;
+        for (const auto& p : nearModel.meshes[size_t(node.mesh)].primitives)
+            for (uint32_t i = p.firstVertex; i < p.firstVertex + p.vertexCount && i < nearModel.vertices.size(); ++i) {
+                const auto& v = nearModel.vertices[i].pos;
+                radius = std::max(radius, std::sqrt(v.x * v.x + v.z * v.z));
+                top = std::max(top, v.y);
+            }
+    }
+    // Resize both coplanar quads (bark 0..3, foliage 4..7) to that extent.
+    for (size_t i = 0; i < 8; ++i) {
+        auto& pos = out.model->vertices[i].pos;
+        pos.x = pos.x < 0 ? -radius : radius;
+        pos.y = pos.y > 0.001f ? top : 0.0f;
+    }
+    out.model->finalize();
+
+    const int SS = 2, SW = W * SS, SH = H * SS;
+    const float pxX = float(SW / 2 - gutter * SS) / radius;
+    const float pxY = float(SH - 2 * gutter * SS) / top;
+    std::fill(atlas.rgba.begin(), atlas.rgba.end(), uint8_t(0));
+    std::vector<float> depth(size_t(SW) * SH), color(size_t(SW) * SH * 3);
+    std::vector<uint8_t> cover(size_t(SW) * SH);
+    constexpr double tau = 6.283185307179586476925286766559;
+    auto sample = [&](const render::Material& m, render::float2 uv, float rgba[4]) {
+        rgba[0] = m.baseColor.x; rgba[1] = m.baseColor.y; rgba[2] = m.baseColor.z; rgba[3] = m.baseColor.w;
+        if (m.baseTex < 0 || size_t(m.baseTex) >= nearModel.images.size()) return;
+        const auto& img = nearModel.images[size_t(m.baseTex)];
+        if (img.width <= 0 || img.rgba.size() < size_t(img.width) * img.height * 4) return;
+        float u = uv.x * m.uvScale.x + m.uvOffset.x, v = uv.y * m.uvScale.y + m.uvOffset.y;
+        u -= std::floor(u); v -= std::floor(v);
+        const int x = std::clamp(int(u * float(img.width)), 0, img.width - 1);
+        const int y = std::clamp(int(v * float(img.height)), 0, img.height - 1);
+        const uint8_t* t = &img.rgba[(size_t(y) * img.width + x) * 4];
+        // sRGB texel -> linear-ish (gamma 2.2) so lighting mixes sensibly.
+        for (int k = 0; k < 3; ++k) rgba[k] *= std::pow(float(t[k]) / 255.f, 2.2f);
+        rgba[3] *= float(t[3]) / 255.f;
+    };
+    for (uint32_t frame = 0; frame < views; ++frame) {
+        const double angle = tau * double(frame) / double(views);
+        const float c = float(std::cos(angle)), sn = float(std::sin(angle));
+        // Screen right = (c, 0, -s) as in makeArborImpostorAtlas; camera
+        // forward = (-s, 0, -c): smaller depth = nearer the camera.
+        const render::float3 toCamera{sn, 0.f, c};
+        const render::float3 light = [&] {
+            render::float3 l{sn * 0.6f + c * 0.35f, 0.75f, c * 0.6f - sn * 0.35f};
+            const float n = std::sqrt(l.x * l.x + l.y * l.y + l.z * l.z);
+            return render::float3{l.x / n, l.y / n, l.z / n};
+        }();
+        for (int layer = 0; layer < 2; ++layer) {
+            std::fill(depth.begin(), depth.end(), 1e30f);
+            std::fill(cover.begin(), cover.end(), uint8_t(0));
+            for (const auto& node : nearModel.nodes) {
+                if (node.mesh < 0) continue;
+                for (const auto& p : nearModel.meshes[size_t(node.mesh)].primitives) {
+                    if (p.material != layer || size_t(p.material) >= nearModel.materials.size()) continue;
+                    const auto& mat = nearModel.materials[size_t(p.material)];
+                    const float cutoff = mat.alpha == render::AlphaMode::Mask ? mat.alphaCutoff : 0.01f;
+                    for (uint32_t i = 0; i + 2 < p.indexCount; i += 3) {
+                        const render::ModelVertex* v[3];
+                        float sx[3], sy[3], sz[3];
+                        bool ok = true;
+                        for (int k = 0; k < 3; ++k) {
+                            const uint32_t idx = nearModel.indices[p.firstIndex + i + uint32_t(k)];
+                            if (idx >= nearModel.vertices.size()) { ok = false; break; }
+                            v[k] = &nearModel.vertices[idx];
+                            const auto& q = v[k]->pos;
+                            sx[k] = float(SW) * 0.5f + (q.x * c - q.z * sn) * pxX;
+                            sy[k] = float(SH - 1 - gutter * SS) - q.y * pxY;
+                            sz[k] = -(q.x * sn + q.z * c);
+                        }
+                        if (!ok) continue;
+                        const float area = (sx[1] - sx[0]) * (sy[2] - sy[0]) - (sy[1] - sy[0]) * (sx[2] - sx[0]);
+                        if (std::fabs(area) < 1e-6f) continue;
+                        const int x0 = std::max(0, int(std::floor(std::min({sx[0], sx[1], sx[2]}))));
+                        const int x1 = std::min(SW - 1, int(std::ceil(std::max({sx[0], sx[1], sx[2]}))));
+                        const int y0 = std::max(0, int(std::floor(std::min({sy[0], sy[1], sy[2]}))));
+                        const int y1 = std::min(SH - 1, int(std::ceil(std::max({sy[0], sy[1], sy[2]}))));
+                        for (int y = y0; y <= y1; ++y)
+                            for (int x = x0; x <= x1; ++x) {
+                                const float px = float(x) + 0.5f, py = float(y) + 0.5f;
+                                const float w0 = ((sx[1] - px) * (sy[2] - py) - (sy[1] - py) * (sx[2] - px)) / area;
+                                const float w1 = ((sx[2] - px) * (sy[0] - py) - (sy[2] - py) * (sx[0] - px)) / area;
+                                const float w2 = 1.f - w0 - w1;
+                                if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                                const float z = w0 * sz[0] + w1 * sz[1] + w2 * sz[2];
+                                const size_t at = size_t(y) * SW + x;
+                                if (z >= depth[at]) continue;
+                                render::float2 uv{w0 * v[0]->uv.x + w1 * v[1]->uv.x + w2 * v[2]->uv.x,
+                                                  w0 * v[0]->uv.y + w1 * v[1]->uv.y + w2 * v[2]->uv.y};
+                                float rgba[4];
+                                sample(mat, uv, rgba);
+                                if (rgba[3] < cutoff) continue;
+                                render::float3 n{w0 * v[0]->nrm.x + w1 * v[1]->nrm.x + w2 * v[2]->nrm.x,
+                                                 w0 * v[0]->nrm.y + w1 * v[1]->nrm.y + w2 * v[2]->nrm.y,
+                                                 w0 * v[0]->nrm.z + w1 * v[1]->nrm.z + w2 * v[2]->nrm.z};
+                                const float len = std::sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
+                                if (len > 1e-6f) { n.x /= len; n.y /= len; n.z /= len; }
+                                // Two-sided cards: face the normal toward the camera.
+                                if (n.x * toCamera.x + n.z * toCamera.z < 0 && layer == 1) { n.x = -n.x; n.y = -n.y; n.z = -n.z; }
+                                const float ndl = n.x * light.x + n.y * light.y + n.z * light.z;
+                                // Self-shadow inside the crown: deeper (farther) texels darker.
+                                const float shade = 0.42f + 0.58f * std::clamp(ndl * 0.5f + 0.5f, 0.f, 1.f);
+                                depth[at] = z;
+                                cover[at] = 1;
+                                for (int k = 0; k < 3; ++k) color[at * 3 + size_t(k)] = rgba[k] * shade;
+                            }
+                    }
+                }
+            }
+            // 2x2 resolve into this view's tile; alpha = coverage >= 2/4.
+            const size_t tileLeft = size_t(layer * int(views) + int(frame)) * size_t(W);
+            for (int y = 0; y < H; ++y)
+                for (int x = 0; x < W; ++x) {
+                    float sum[3] = {0, 0, 0};
+                    int n = 0;
+                    for (int dy = 0; dy < SS; ++dy)
+                        for (int dx = 0; dx < SS; ++dx) {
+                            const size_t at = size_t(y * SS + dy) * SW + size_t(x * SS + dx);
+                            if (!cover[at]) continue;
+                            ++n;
+                            for (int k = 0; k < 3; ++k) sum[k] += color[at * 3 + size_t(k)];
+                        }
+                    if (n == 0) continue;
+                    const size_t o = (size_t(y) * size_t(atlas.width) + tileLeft + size_t(x)) * 4;
+                    for (int k = 0; k < 3; ++k)
+                        atlas.rgba[o + size_t(k)] = uint8_t(std::clamp(
+                            std::pow(sum[k] / float(n), 1.f / 2.2f) * 255.f + 0.5f, 0.f, 255.f));
+                    atlas.rgba[o + 3] = n * 2 >= SS * SS ? 255 : 0;
+                }
+            // Bleed colour into transparent texels (alpha stays 0) so mips and
+            // bilinear filtering do not pull black halos into the silhouette.
+            std::vector<uint8_t> filled(size_t(W) * H);
+            for (int y = 0; y < H; ++y)
+                for (int x = 0; x < W; ++x)
+                    filled[size_t(y) * W + x] = atlas.rgba[(size_t(y) * atlas.width + tileLeft + x) * 4 + 3] ||
+                        atlas.rgba[(size_t(y) * atlas.width + tileLeft + x) * 4] ||
+                        atlas.rgba[(size_t(y) * atlas.width + tileLeft + x) * 4 + 1];
+            for (int pass = 0; pass < 6; ++pass) {
+                std::vector<uint8_t> next = filled;
+                for (int y = 0; y < H; ++y)
+                    for (int x = 0; x < W; ++x) {
+                        if (filled[size_t(y) * W + x]) continue;
+                        int sum[3] = {0, 0, 0}, n = 0;
+                        for (int dy = -1; dy <= 1; ++dy)
+                            for (int dx = -1; dx <= 1; ++dx) {
+                                const int nx = x + dx, ny = y + dy;
+                                if (nx < 0 || ny < 0 || nx >= W || ny >= H || !filled[size_t(ny) * W + nx]) continue;
+                                const size_t q = (size_t(ny) * atlas.width + tileLeft + nx) * 4;
+                                for (int k = 0; k < 3; ++k) sum[k] += atlas.rgba[q + size_t(k)];
+                                ++n;
+                            }
+                        if (!n) continue;
+                        const size_t o = (size_t(y) * atlas.width + tileLeft + x) * 4;
+                        for (int k = 0; k < 3; ++k) atlas.rgba[o + size_t(k)] = uint8_t(sum[k] / n);
+                        next[size_t(y) * W + x] = 1;
+                    }
+                filled.swap(next);
+            }
+        }
+    }
+    // Textured bake: the atlas already carries the albedo; keep the impostor
+    // materials untinted, and copy the near foliage cutout threshold.
+    for (auto& variant : out.viewMaterials)
+        for (auto& m : variant) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
+    for (auto& m : out.model->materials) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
+}
+
 // Nearest captured azimuth relative to the *tree's local yaw*.
 // The quad itself always faces the camera; the captured view determines
 // which side of the deterministic original tree is visible on the card.

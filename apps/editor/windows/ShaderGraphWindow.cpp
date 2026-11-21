@@ -9,22 +9,26 @@
 namespace aiverse::editor {
 class ShaderGraphWindow : public EditorWindow {
 public:
+    ~ShaderGraphWindow() override { retirePreview(); }
     const char* id() const override {return "shader_graph";}
     const char* title() const override {return "Shader Graph";}
     const char* group() const override {return "look";}
     const char* dockArea() const override {return "center";}
     bool openByDefault() const override {return false;}
     void update(Editor& ed,double dt) override {
+        gpuResourceOwner_ = &ed.gpuResourceRetirement();
+        if (!open && preview_ && preview_->activeDevice())
+            retirePreview();
         time_+=dt;dt_=float(std::min(dt,0.05));
         if(!registered_) {
             ed.ws().registerOp({"shader_graph_preview","Open a graph in the node editor. Refuses to replace unsaved edits.",Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),[this,&ed](const Json& p){
                 if(dirty_)throw std::runtime_error("save or discard the current graph first");
                 Json g=p["graph"];if(g.isNull()) {auto r=ed.ws().call("shader_graph_get",p);if(r.has("error"))return r;g=r["graph"];}
-                previewReady_=false;render::graph::compile(g);project_=ed.ws().project.dir;doc_=g;name_=p.getStr("name","untitled");saved_=doc_;undo_.clear();redo_.clear();selected_=0;preview_.shutdown();
+                previewReady_=false;render::graph::compile(g);project_=ed.ws().project.dir;doc_=g;name_=p.getStr("name","untitled");saved_=doc_;undo_.clear();redo_.clear();selected_=0;retirePreview();
                 ed.focusWindow(id());Json r=Json::object();r.set("ok",Json::fromBool(true));return r;
             },true});
             ed.ws().registerOp({"shader_graph_preview_status","Current graph preview GPU diagnostics (call after a rendered frame).",Json::object(),[this](const Json&) {
-                Json r=Json::object();r.set("ready",Json::fromBool(previewReady_));r.set("diagnostic",Json::string(preview_.error));return r;
+                Json r=Json::object();r.set("ready",Json::fromBool(previewReady_));r.set("diagnostic",Json::string(preview_->error));return r;
             },true});registered_=true;
         }
     }
@@ -35,7 +39,7 @@ public:
             if(!project_.empty() && dirty_) { // Keep an explicit draft per project while switching.
                 drafts_[project_]={name_,doc_};
             }
-            project_=ed.ws().project.dir;preview_.shutdown();undo_.clear();redo_.clear();
+            project_=ed.ws().project.dir;retirePreview();undo_.clear();redo_.clear();
             if(auto it=drafts_.find(project_);it!=drafts_.end()){name_=it->second.first;doc_=it->second.second;dirty_=true;}
             else {doc_=render::graph::makeDefault("material");name_="untitled";dirty_=false;}
             saved_=doc_;selected_=0;
@@ -43,14 +47,14 @@ public:
         ImGui::SetNextItemWidth(180);ui::inputString("##name",name_);ImGui::SameLine();
         if(ImGui::Button(tr("shaderGraph.save").c_str()))save(ed);
         ImGui::SameLine();ImGui::BeginDisabled(dirty_);
-        if(ImGui::Button(tr("shaderGraph.load").c_str())) {Json p=Json::object();p.set("name",Json::string(name_));auto r=ed.ws().call("shader_graph_get",p);if(check(r)){doc_=saved_=r["graph"];undo_.clear();redo_.clear();selected_=0;preview_.shutdown();}}
+        if(ImGui::Button(tr("shaderGraph.load").c_str())) {Json p=Json::object();p.set("name",Json::string(name_));auto r=ed.ws().call("shader_graph_get",p);if(check(r)){doc_=saved_=r["graph"];undo_.clear();redo_.clear();selected_=0;retirePreview();}}
         ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.new").c_str())){doc_=render::graph::makeDefault(doc_.getStr("domain"));saved_=doc_;undo_.clear();redo_.clear();selected_=0;}
         ImGui::EndDisabled();ImGui::SameLine();
         if(ImGui::Button(tr("shaderGraph.undo").c_str())&&!undo_.empty()){redo_.push_back(doc_);doc_=undo_.back();undo_.pop_back();dirty_=true;}
         ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.redo").c_str())&&!redo_.empty()){undo_.push_back(doc_);doc_=redo_.back();redo_.pop_back();dirty_=true;}
         if(dirty_){ImGui::SameLine();ImGui::TextUnformatted("*");ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.discard").c_str())){doc_=saved_;dirty_=false;undo_.clear();redo_.clear();drafts_.erase(project_);}}
         const char* domains[]={"material","postfx","particle"};int domain=doc_.getStr("domain")=="postfx"?1:doc_.getStr("domain")=="particle"?2:0;
-        ImGui::SetNextItemWidth(150);if(ImGui::Combo(tr("shaderGraph.domain").c_str(),&domain,domains,3)){remember();doc_.set("domain",Json::string(domains[domain]));if(domain)doc_.erase("minQuality");if(domain)for(auto k:{"roughness","metallic","emission","normal","vertexOffset","vertexNormal"})doc_.find("outputs")->erase(k);preview_.shutdown();}
+        ImGui::SetNextItemWidth(150);if(ImGui::Combo(tr("shaderGraph.domain").c_str(),&domain,domains,3)){remember();doc_.set("domain",Json::string(domains[domain]));if(domain)doc_.erase("minQuality");if(domain)for(auto k:{"roughness","metallic","emission","normal","vertexOffset","vertexNormal"})doc_.find("outputs")->erase(k);retirePreview();}
         if(domain==0) {
             ImGui::SameLine();ImGui::SetNextItemWidth(120);
             if(ImGui::BeginCombo(tr("shaderGraph.quality").c_str(),doc_.getStr("minQuality","low").c_str())) {
@@ -72,9 +76,16 @@ public:
         previewReady_=false;bool valid=true;
         try {render::graph::compile(doc_);}catch(const std::exception& e){valid=false;ui::callout(ui::Tone::Error,e.what());}
         if(valid) {
-            const auto texture=preview_.render(ed,doc_,time_,dt_);previewReady_=texture.valid();
+            // Any graph edit may replace materials, shaders, palettes, FX
+            // pipelines or GPU textures. Keep the COMPLETE former preview
+            // bundle alive until its last GPU submission completes.
+            const std::string nextPreviewKey = ShaderGraphPreview::resourceKey(doc_);
+            if (!previewKey_.empty() && previewKey_ != nextPreviewKey)
+                retirePreview();
+            previewKey_ = nextPreviewKey;
+            const auto texture=preview_->render(ed,doc_,time_,dt_);previewReady_=texture.valid();
             if(texture.valid()){bool flip=ed.device().info().renderTargetFlipY;ImGui::Image(ImTextureRef(ImTextureID(texture.id)),ImVec2(192,192),ImVec2(0,flip?0:1),ImVec2(1,flip?1:0));}
-            if(!preview_.error.empty())ui::callout(ui::Tone::Error,preview_.error);
+            if(!preview_->error.empty())ui::callout(ui::Tone::Error,preview_->error);
         }
         ui::inputHint("##target",tr("shaderGraph.target").c_str(),target_);
         if(domain==2)ImGui::SetNextItemWidth(120);
@@ -89,6 +100,23 @@ public:
         ImGui::EndChild();
     }
 private:
+    void retirePreview() {
+        auto former = std::move(preview_);
+        preview_ = std::make_shared<ShaderGraphPreview>();
+        previewKey_.clear();
+        previewReady_ = false;
+        if (!former || !former->activeDevice()) return;
+        if (!gpuResourceOwner_) {
+            // Legacy standalone window: caller must ensure GPU idle.
+            former->shutdown();
+            return;
+        }
+        gfx::Device& device = *former->activeDevice();
+        gpuResourceOwner_->retireOwned(device,
+            [former=std::move(former)]() {
+                former->shutdownAfterGpuCompletion();
+            });
+    }
     void remember(){if(undo_.size()>=64)undo_.erase(undo_.begin());undo_.push_back(doc_);redo_.clear();dirty_=true;}
     bool check(const Json& r){error_=r.has("error");message_=r.getStr("error");return !error_;}
     bool save(Editor& ed){Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);if(!check(ed.ws().call("shader_graph_set",p)))return false;saved_=doc_;dirty_=false;drafts_.erase(project_);return true;}
@@ -165,7 +193,11 @@ private:
     Json doc_=render::graph::makeDefault("material"),saved_=doc_;std::vector<Json> undo_,redo_;
     std::map<std::string,std::pair<std::string,Json>> drafts_;
     std::string project_,name_="untitled",target_,connecting_,message_,search_;int selected_=0,emitter_=0;
-    bool dirty_=false,error_=false,registered_=false,previewReady_=false,draggingNode_=false;ImVec2 pan_{20,20};double time_=0;float dt_=0;ShaderGraphPreview preview_;
+    bool dirty_=false,error_=false,registered_=false,previewReady_=false,draggingNode_=false;ImVec2 pan_{20,20};double time_=0;float dt_=0;
+    std::shared_ptr<ShaderGraphPreview> preview_ =
+        std::make_shared<ShaderGraphPreview>();
+    render::GpuResourceRetirement* gpuResourceOwner_ = nullptr;
+    std::string previewKey_;
 };
 AIVERSE_EDITOR_WINDOW(ShaderGraphWindow);
 }

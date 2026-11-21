@@ -82,6 +82,18 @@ progress fill { background-color: #e8c26a; border-radius: 2dp; }
 #topbar .item { display: inline-block; margin: 0 9dp; }
 #topbar .item.warn { color: #ff7a6b; }
 #topbar .sub { color: #8d98a6; font-size: 13dp; margin-left: 2dp; }
+/* Scrollbars of overflow:auto boxes (#card, #chatlog, menus). They MUST have a size: an unstyled RmlUi
+   scrollbar is a full-width block, and the box's content then shrinks to almost nothing (one word per line). */
+scrollbarvertical { width: 6dp; margin-left: 2dp; }
+scrollbarhorizontal { height: 6dp; margin-top: 2dp; }
+scrollbarvertical slidertrack, scrollbarhorizontal slidertrack { background-color: #ffffff10; border-radius: 3dp; }
+scrollbarvertical sliderbar { min-height: 18dp; background-color: #ffffff48; border-radius: 3dp; }
+scrollbarhorizontal sliderbar { min-width: 18dp; background-color: #ffffff48; border-radius: 3dp; }
+scrollbarvertical sliderbar:hover, scrollbarhorizontal sliderbar:hover { background-color: #ffffff70; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { width: 6dp; height: 0; }
+scrollbarhorizontal sliderarrowdec, scrollbarhorizontal sliderarrowinc { width: 0; height: 6dp; }
+scrollbarcorner { width: 6dp; height: 6dp; }
+
 #topbar button { margin: 0 4dp; }
 
 #notices { position: absolute; top: 48dp; left: 0; right: 0; text-align: center; }

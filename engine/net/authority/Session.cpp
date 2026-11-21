@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "libraries/include/aiverselib/genre/VehiclePersistence.h"
 #include <algorithm>
 
 namespace aiverse::net::authority {
@@ -22,7 +23,7 @@ Bytes encodeSnapshot(const Snapshot& snapshot) {
     std::string s;Archive a(&s);Message type=Message::Snapshot;header(a,type);
     auto copy=snapshot;uint32_t count=uint32_t(copy.actors.size());a(copy.tick,copy.ack,copy.localSlot,copy.winner,count);
     for(auto& actor:copy.actors)a(actor);
-    a(copy.projectiles,copy.loot,copy.vehicles,copy.match,copy.round,copy.royale,copy.gear);
+    a(copy.projectiles,copy.loot,copy.vehicles,copy.match,copy.round,copy.royale,copy.gear,copy.race);
     return bytes(s);
 }
 bool decodeSnapshot(const Bytes& b,Snapshot& out) {
@@ -35,8 +36,8 @@ bool decodeSnapshot(const Bytes& b,Snapshot& out) {
         fps::Actor actor;a(actor);if(!a.ok()||!validActor(actor)||actor.slot<=previous)return false;
         previous=actor.slot;own|=actor.slot==v.localSlot;v.actors.push_back(actor);
     }
-    a(v.projectiles,v.loot,v.vehicles,v.match,v.round,v.royale,v.gear);
-    if(!a.ok()||v.projectiles.size()>128||v.loot.size()>128||v.vehicles.size()>32||v.royale.crates.size()>8||v.royale.feed.size()>6||v.royale.divePhase>3||v.gear.slots.size()>lib::systems::kGearMaxSlots)return false;
+    a(v.projectiles,v.loot,v.vehicles,v.match,v.round,v.royale,v.gear,v.race);
+    if(!a.ok()||v.race.order.size()>32||v.projectiles.size()>128||v.loot.size()>128||v.vehicles.size()>32||v.royale.crates.size()>8||v.royale.feed.size()>6||v.royale.divePhase>3||v.gear.slots.size()>lib::systems::kGearMaxSlots)return false;
     auto position=[](Vec3 p){return fxAbs(p.x)<=100000_fx&&fxAbs(p.y)<=100000_fx&&fxAbs(p.z)<=100000_fx;};
     for(const auto& p:v.projectiles)if(p.kind>4||p.weapon>=4||p.owner>200||p.piercedCount>8||!position(p.pos))return false;
     for(const auto& l:v.loot)if(!position(l.pos)||l.count<1||l.count>20)return false;
@@ -51,7 +52,7 @@ template<class T> std::string record(T value){std::string out;Archive a(&out);a(
 }
 lib::delta::RecordSet snapshotRecords(const Snapshot& snapshot) {
     lib::delta::RecordSet r;auto c=snapshot;
-    {std::string g;Archive a(&g);a(c.tick,c.ack,c.localSlot,c.winner,c.match,c.round,c.royale,c.gear);r[kGlobals]=std::move(g);}
+    {std::string g;Archive a(&g);a(c.tick,c.ack,c.localSlot,c.winner,c.match,c.round,c.royale,c.gear,c.race);r[kGlobals]=std::move(g);}
     for(const auto& actor:c.actors)r[kActor|actor.slot]=record(actor);
     for(const auto& p:c.projectiles)r[kProjectile|(p.id&kIdMask)]=record(p);
     for(const auto& l:c.loot)r[kLoot|(l.id&kIdMask)]=record(l);
@@ -61,7 +62,7 @@ lib::delta::RecordSet snapshotRecords(const Snapshot& snapshot) {
 bool recordsSnapshot(const lib::delta::RecordSet& records,Snapshot& out) {
     // Rebuild the classic packet and reuse its validation so both paths accept exactly the same snapshots.
     Snapshot v;auto g=records.find(kGlobals);if(g==records.end())return false;
-    {Archive a(g->second);a(v.tick,v.ack,v.localSlot,v.winner,v.match,v.round,v.royale,v.gear);if(!a.ok()||a.remaining())return false;}
+    {Archive a(g->second);a(v.tick,v.ack,v.localSlot,v.winner,v.match,v.round,v.royale,v.gear,v.race);if(!a.ok()||a.remaining())return false;}
     for(const auto& [id,bytes]:records){
         if(id==kGlobals)continue;Archive a(bytes);auto kind=id&~kIdMask;
         if(kind==kActor){fps::Actor x;a(x);v.actors.push_back(x);}
@@ -137,7 +138,7 @@ void Server::broadcast() {
             s.actors.push_back(actor);
         }
         const auto& state=module().state(simulation_);
-        s.round=state.round;s.match=state.match;s.royale=module().royaleView(simulation_,p.slot);if(!state.gear.empty())s.gear=state.gear[p.slot-1];
+        s.round=state.round;s.match=state.match;s.royale=module().royaleView(simulation_,p.slot);s.race=module().raceView(simulation_,p.slot);if(!state.gear.empty())s.gear=state.gear[p.slot-1];
         auto nearby=[&](const auto& objects,auto& out,size_t limit){for(const auto& object:objects)if(out.size()<limit&&(object.pos-own.pos).lengthSq()<=radius*radius)out.push_back(object);};
         nearby(state.projectiles,s.projectiles,128);nearby(state.loot,s.loot,128);nearby(state.vehicles,s.vehicles,32);
         auto records=snapshotRecords(s);uint64_t full=0;for(const auto& [id,bytes]:records)full+=bytes.size()+5;
@@ -165,6 +166,7 @@ void Client::predict(const fps::Input& input) {
     Vec3 extent{radius,radius,radius};
     if(streamedCollision_&&!streamedCollision_->covers({predicted_.pos-extent,predicted_.pos+extent}))return;
     if(latest_.royale.enabled&&latest_.royale.divePhase!=3)return;   // skydive is server-driven: keep the authoritative pose
+    if(predicted_.vehicle)return;   // a seated actor rides with its vehicle: the server drives the pose
     fps::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
 }
 void Client::poll(uint64_t now) {

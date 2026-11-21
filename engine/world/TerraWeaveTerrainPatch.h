@@ -103,8 +103,8 @@ struct TerrainCollisionRange {
 // Transactionally replace the terrain triangles owned by this adapter.
 // The host must reserve a unique nonzero collider-ID range for each tile,
 // disjoint from gameplay actors and OTHER streamed terrain tiles.
-// All validations/uploads are performed on a COPY before the authoritative
-// SpatialWorld is replaced; a failed triangle cannot corrupt the old map.
+// All validations are performed BEFORE the authoritative SpatialWorld is
+// mutated in place; a rejected triangle cannot corrupt the old map.
 class TerrainCollisionPublisher {
 public:
     const std::map<world::Cell,TerrainCollisionRange>& ranges() const {
@@ -136,32 +136,30 @@ public:
             if(!owned && spatial.colliders().contains(uint32_t(i)))
                 throw std::invalid_argument("TerraWeave terrain collider ID occupied");
         }
-        auto replacement=spatial;
-        if(old!=active_.end())
-            for(uint64_t i=old->second.firstId;
-                i<uint64_t(old->second.firstId)+old->second.count;++i)
-                replacement.remove(uint32_t(i));
+        // Prevalidate everything that can fail BEFORE touching the live
+        // SpatialWorld, then mutate it in place (no full-world deep copy
+        // per tile publish). On a validation failure nothing changes.
         for(size_t i=0;i<count;++i)
-            if(!replacement.addTriangle(
-                    firstId+uint32_t(i),patch.collision[i]))
+            if(!world::SpatialWorld::validTriangle(patch.collision[i]))
                 throw std::invalid_argument("TerraWeave collision triangle rejected");
         auto next=active_;
         next.insert_or_assign(patch.cell,TerrainCollisionRange{
             patch.cell,firstId,uint32_t(count),patch.sourceRevision});
-        spatial=std::move(replacement);
+        if(old!=active_.end())
+            for(uint64_t i=old->second.firstId;
+                i<uint64_t(old->second.firstId)+old->second.count;++i)
+                spatial.remove(uint32_t(i));
+        for(size_t i=0;i<count;++i)
+            if(!spatial.addTriangle(firstId+uint32_t(i),patch.collision[i]))
+                throw std::logic_error("TerraWeave prevalidated collision triangle rejected");
         active_.swap(next);
     }
     void unload(world::SpatialWorld& spatial,world::Cell cell) {
         const auto it=active_.find(cell);
         if(it==active_.end())return;
-        auto replacement=spatial;
-        for(uint64_t i=it->second.firstId;
-            i<uint64_t(it->second.firstId)+it->second.count;++i)
-            replacement.remove(uint32_t(i));
-        auto next=active_;
-        next.erase(cell);
-        spatial=std::move(replacement);
-        active_.swap(next);
+        const uint64_t first=it->second.firstId,last=first+it->second.count;
+        active_.erase(it);
+        for(uint64_t i=first;i<last;++i)spatial.remove(uint32_t(i));
     }
 private:
     std::map<world::Cell,TerrainCollisionRange> active_;

@@ -1,6 +1,7 @@
 // Built-in procedural shapes: simple archetypes (units ~1 unit tall facing +X, structures on a
 // 1x1 footprint) built with MeshBuilder and turned into Models, one node per part.
 #include "RtsView.h"
+#include "RtsShapeModels.h"
 
 #include <cmath>
 #include <map>
@@ -10,7 +11,7 @@ namespace aiverse::game {
 
 using namespace render;
 
-void RtsView::buildShapes(gfx::Device& dev) {
+std::vector<std::pair<std::string, std::unique_ptr<Model>>> buildRtsShapeModels() {
     const uint32_t wood = rgba(122, 86, 52), stone = rgba(150, 146, 140), darkStone = rgba(105, 102, 98), skin = rgba(233, 196, 160),
                    metal = rgba(170, 176, 186), leaf = rgba(52, 120, 48), leaf2 = rgba(70, 140, 60), gold = rgba(240, 196, 60),
                    roofTile = rgba(255, 255, 255), cream = rgba(236, 226, 200), dark = rgba(60, 60, 64);
@@ -115,6 +116,7 @@ void RtsView::buildShapes(gfx::Device& dev) {
     add("structure", "base", false, [&](MeshBuilder& b) { b.color(stone).box({0, 0.3f, 0}, {0.9f, 0.6f, 0.9f}); });
     add("structure", "roof", true, [&](MeshBuilder& b) { b.box({0, 0.63f, 0}, {0.95f, 0.06f, 0.95f}); });
     (void)roofTile;
+    std::vector<std::pair<std::string, std::unique_ptr<Model>>> out;
     for (auto& [shape, list] : parts) {
         std::vector<ModelPart> mp;
         for (size_t i = 0; i < list.size(); ++i) {
@@ -124,9 +126,18 @@ void RtsView::buildShapes(gfx::Device& dev) {
             m.team = teamParts[shape][i] ? TeamMode::Tint : TeamMode::None;
             mp.push_back({list[i].first, list[i].second.get(), m, mat4{}});
         }
-        auto model = modelFromParts("shape:" + shape, mp);
-        uploadModel(dev, *model);
-        models_["shape:" + shape] = std::move(model);
+        out.emplace_back(shape, modelFromParts("shape:" + shape, mp));
+    }
+    return out;
+}
+
+void RtsView::buildShapes(gfx::Device& dev) {
+    for (auto& [shape, model] : buildRtsShapeModels()) {
+        uploadModel(dev,*model,false,true,resources_.retainPickingGeometry());
+        resources_.replace(dev,"shape:" + shape,std::move(model),
+            [this](const render::Model* previous) {
+                animationCache_.erase(previous);
+            });
     }
     MeshBuilder pb; pb.color(rgba(255, 240, 200)).sphere({0, 0, 0}, 0.08f, 4, 6);
     projectile_ = pb.upload(dev);

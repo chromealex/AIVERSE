@@ -234,6 +234,10 @@ struct FxForceField {
 
 struct EmitterDef {
     Json shaderGraph;
+    // Four optional shader-graph vertex channels. Each is age/lifetime/
+    // random/zero/attribute0..7/param0..7; defaults preserve old shader data.
+    Json graphInputs;
+    Json particleProgram; // optional bounded per-particle expression stages
     std::string texture = "builtin:soft";
     int frameCols = 1, frameRows = 1;
     float fps = 0;

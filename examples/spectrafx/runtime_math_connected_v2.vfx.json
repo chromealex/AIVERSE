@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "description": "Runtime VM instructions generated from connected typed data nodes (not static age-curve baking)",
+  "parameters": {
+    "lift": 5
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 24
+      },
+      "position": [
+        20,
+        110
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 2,
+        "size": 0.3,
+        "spread": 12
+      },
+      "position": [
+        220,
+        110
+      ]
+    },
+    {
+      "id": "vm",
+      "type": "ParticleProgramModule",
+      "properties": {
+        "version": 1,
+        "spawn": [
+          {
+            "target": "attribute0",
+            "value": 1
+          }
+        ],
+        "update": [
+          {
+            "op": "set",
+            "target": "tint.a",
+            "value": 1
+          },
+          {
+            "op": "addRate",
+            "target": "velocity.y",
+            "value": {
+              "$param": "lift"
+            }
+          }
+        ]
+      },
+      "position": [
+        500,
+        110
+      ]
+    },
+    {
+      "id": "output",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive"
+      },
+      "position": [
+        800,
+        110
+      ]
+    },
+    {
+      "id": "age",
+      "type": "ParticleRead",
+      "properties": {
+        "field": "ageNormalized"
+      },
+      "position": [
+        60,
+        440
+      ]
+    },
+    {
+      "id": "one",
+      "type": "Float",
+      "properties": {
+        "value": 1
+      },
+      "position": [
+        60,
+        590
+      ]
+    },
+    {
+      "id": "fade",
+      "type": "Subtract",
+      "properties": {
+        "a": 1,
+        "b": 0
+      },
+      "position": [
+        310,
+        480
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "vm"
+    },
+    {
+      "from": "vm",
+      "to": "output"
+    },
+    {
+      "from": "age",
+      "to": "fade",
+      "toPort": "b"
+    },
+    {
+      "from": "one",
+      "to": "fade",
+      "toPort": "a"
+    },
+    {
+      "from": "fade",
+      "to": "vm",
+      "toPort": "update.0.value"
+    }
+  ],
+  "outputs": [
+    "output"
+  ]
+}

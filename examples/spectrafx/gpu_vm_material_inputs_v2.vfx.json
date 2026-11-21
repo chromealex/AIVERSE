@@ -1,0 +1,142 @@
+{
+  "version": 2,
+  "description": "Opt-in Metal-only shaderGraph material subset. One live GPU attribute controls tint brightness via graphInputs; CPU material graph uses the same particle-domain graph.",
+  "parameters": {},
+  "instanceParameters": {
+    "intensity": {
+      "slot": 0,
+      "default": 0.85,
+      "min": 0,
+      "max": 1
+    }
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 16
+      },
+      "position": [
+        20,
+        200
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 0,
+        "size": 0.4,
+        "spread": 0,
+        "gravity": [
+          0,
+          0,
+          0
+        ],
+        "drag": 0
+      },
+      "position": [
+        250,
+        200
+      ]
+    },
+    {
+      "id": "vm",
+      "type": "ParticleProgramModule",
+      "properties": {
+        "version": 1,
+        "spawn": [
+          {
+            "target": "attribute0",
+            "value": {
+              "var": "param0"
+            }
+          }
+        ],
+        "update": [
+          {
+            "target": "tint.a",
+            "op": "set",
+            "value": {
+              "op": "saturate",
+              "a": {
+                "op": "subtract",
+                "a": 1,
+                "b": {
+                  "var": "ageNormalized"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "position": [
+        470,
+        200
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive",
+        "align": "camera",
+        "graphInputs": [
+          "attribute0",
+          "param0",
+          "age",
+          "lifetime"
+        ],
+        "shaderGraph": {
+          "version": 1,
+          "domain": "particle",
+          "nodes": [
+            {
+              "id": "input",
+              "op": "input"
+            },
+            {
+              "id": "intensity",
+              "op": "particleAge"
+            },
+            {
+              "id": "multiply",
+              "op": "multiply",
+              "inputs": [
+                "input",
+                "intensity"
+              ]
+            }
+          ],
+          "outputs": {
+            "color": "multiply"
+          }
+        }
+      },
+      "position": [
+        770,
+        200
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "vm"
+    },
+    {
+      "from": "vm",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

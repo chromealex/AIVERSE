@@ -1,0 +1,8 @@
+.studio-runtime__list { max-height:260px; overflow:auto; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); }
+.studio-runtime__paging { display:flex; flex-wrap:wrap; gap:var(--au-space-2); align-items:center; justify-content:space-between; }
+.studio-runtime__component { border-bottom:1px solid var(--au-line); padding:var(--au-space-2) 0; }
+.studio-runtime__component > summary { font-weight:600; cursor:pointer; }
+.studio-runtime__fields { margin:var(--au-space-2) 0; font-size:var(--au-font-sm); }
+.studio-runtime__fields > div { display:grid; grid-template-columns:minmax(70px,1fr) minmax(0,1.5fr); gap:var(--au-space-2); padding:var(--au-space-1) 0; }
+.studio-runtime__fields dt { color:var(--au-text-muted); overflow-wrap:anywhere; }
+.studio-runtime__fields dd { margin:0; overflow-wrap:anywhere; }

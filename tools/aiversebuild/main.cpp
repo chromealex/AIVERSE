@@ -50,10 +50,12 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -100,6 +102,7 @@ struct Options {
     std::string target, config = "Release", team;
     bool generateOnly = false;
     bool estimate = false;    // --estimate: content packs and size-report.json only, no app build (editor Build window)
+    bool checkEngineModules = false;
     bool pack = true;
     int packLevel = 0;        // 0 = by config: 19 for Release, 3 for Debug
     bool atlas = true;
@@ -115,6 +118,53 @@ struct Options {
     unsigned jobs = std::max(2u, std::thread::hardware_concurrency());
     bool installMissing = false;   // --install-missing: install what the target needs, then build
 };
+
+// game.json "module": "scene": the project has no game module. It ships the minimal scene client
+// (apps/client/SceneMain.cpp, CMake AIVERSE_SCENE_CLIENT) and only its own files, no engine/assets.
+bool sceneClient(const Options& o) { return o.gameJson.getStr("module", "") == "scene"; }
+
+// Spline roads anywhere in the project: a roads/ folder, rules "roadTypes", or a map "roadNetwork".
+bool projectUsesRoads(const Options& o) {
+    std::error_code ec;
+    if (fs::is_directory(o.project / "roads", ec)) return true;
+    try {
+        const Json rules = aiverse::readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), aiverse::fileReader());
+        if (!rules["roadTypes"].isNull()) return true;
+    } catch (const std::exception&) { return true; }   // unreadable rules: keep everything
+    for (auto it = fs::recursive_directory_iterator(o.project / "maps", ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec) || it->path().extension() != ".json") continue;
+        try {
+            const Json m = Json::parseFile(it->path().string());
+            if (!m["roadNetwork"].isNull() || !m["rules"]["roadTypes"].isNull()) return true;
+        } catch (const std::exception&) { return true; }
+    }
+    return false;
+}
+
+// engine/assets/materials (terrain + vegetation PBR libraries, ~145 MB) is an authoring source:
+// projects copy what they use into their own materials/ (tools/terrain/install_pbr_pack.py, the
+// editor's empty-project template) and the runtime never reads engine/materials. Ship it only to a
+// project whose own data names an engine/materials/ path.
+bool projectUsesEngineMaterials(const Options& o) {
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(o.project, fs::directory_options::skip_permission_denied, ec);
+         !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        const std::string name = it->path().filename().string();
+        if (it->is_directory(ec)) {
+            if (name == "Builds" || name == "Logs" || name == "logs" || name == "dist" || name == ".aiverse" ||
+                name == "node_modules" || name == ".git" || name == "native" || name == "source")
+                it.disable_recursion_pending();
+            continue;
+        }
+        const std::string ext = it->path().extension().string();
+        if (ext != ".json" && ext != ".lua" && ext != ".rml" && ext != ".rcss" && ext != ".gltf") continue;
+        if (it->file_size(ec) > 64ull * 1024 * 1024) continue;
+        std::ifstream in(it->path(), std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (text.find("engine/materials/") != std::string::npos) return true;
+    }
+    return !!ec;   // could not scan the project: keep everything
+}
 
 struct Game {
     std::string name = "Game", id = "com.example.game", version = "0.1.0", orientation = "landscape";
@@ -454,7 +504,15 @@ fs::path contentPack(Options& o) {
         if (Json::parseFile((o.project / "game.json").string()).getBool("external")) w.markExternal();
     } catch (const std::exception&) {}
     std::string err;
-    if (w.addDirectory(game.string(), "", rules, &err) < 0 || w.addDirectory((o.engine / "engine" / "assets").string(), "engine", aiverse::pack::IgnoreRules{}, &err) < 0)
+    // Engine assets only some games need: the road paint atlas (RoadView draws a generated one without it).
+    aiverse::pack::IgnoreRules engineRules;
+    if (!projectUsesRoads(o)) engineRules.add("roads/markings.png");
+    if (!projectUsesEngineMaterials(o)) {
+        engineRules.add("materials/");
+        info("engine/materials не нужен проекту (материалы копируются в проект): не входит в пак");
+    }
+    if (w.addDirectory(game.string(), "", rules, &err) < 0 ||
+        (!sceneClient(o) && w.addDirectory((o.engine / "engine" / "assets").string(), "engine", engineRules, &err) < 0))
         die(err);
     // models in formats the runtime doesn't read (.blend, .lwo, .x, ...) ship as glTF sidecars
     // (tools/models/ModelConvert.h); their sources stay out of the pack
@@ -594,7 +652,11 @@ void placeContent(Options& o, const fs::path& contentDir) {
         copyFile(contentPack(o), contentDir / "content.rpak");
     } else {
         copyDir(gameContent(o), contentDir);
-        copyDir(o.engine / "engine" / "assets", contentDir / "engine");
+        if (!sceneClient(o)) {
+            copyDir(o.engine / "engine" / "assets", contentDir / "engine");
+            std::error_code ec;
+            if (!projectUsesEngineMaterials(o)) fs::remove_all(contentDir / "engine" / "materials", ec);   // as in the pack
+        }
     }
 }
 
@@ -641,6 +703,209 @@ void reportSize(const Options& o, const std::string& target, const fs::path& art
 
 std::string packVar(Options& o) { return o.pack ? " -DAIVERSE_CONTENT_PACK=" + quote(contentPack(o)) : std::string(" -DAIVERSE_CONTENT_PACK="); }
 
+struct AutoModuleEvidence {
+    bool fx = false, fbx = false, legacyModels = false, obj = false, blp = false;
+};
+
+bool hasGlbSidecar(const fs::path& source) {
+    const fs::path sidecar = source.string() + ".glb";
+    std::error_code ec;
+    const uintmax_t size = fs::file_size(sidecar, ec);
+    if (ec || size < 20 || size > UINT32_MAX) return false;
+    std::ifstream in(sidecar, std::ios::binary);
+    unsigned char header[12]{};
+    if (!in.read(reinterpret_cast<char*>(header), sizeof header)) return false;
+    auto word = [&](int offset) { return uint32_t(header[offset]) | (uint32_t(header[offset + 1]) << 8) |
+                                     (uint32_t(header[offset + 2]) << 16) | (uint32_t(header[offset + 3]) << 24); };
+    return word(0) == 0x46546c67 && word(4) == 2 && word(8) == size;
+}
+
+bool hasFxKey(const Json& value) {
+    if (value.isArray()) {
+        for (const auto& item : value.items()) if (hasFxKey(item)) return true;
+    } else if (value.isObject()) {
+        for (const auto& [key, item] : value.members()) {
+            if (key == "fx" && !item.isNull() && (item.isString() || item.size() != 0)) return true;
+            if (hasFxKey(item)) return true;
+        }
+    }
+    return false;
+}
+
+AutoModuleEvidence detectAutoModules(const Options& o) {
+    AutoModuleEvidence found;
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(o.project, fs::directory_options::skip_permission_denied, ec);
+         !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        const auto& path = it->path();
+        if (it->is_directory(ec)) {
+            const std::string name = path.filename().string();
+            if (name == "Builds" || name == "logs" || name == "node_modules" || name == ".git" || name == ".aiverse")
+                it.disable_recursion_pending();
+            continue;
+        }
+        if (!it->is_regular_file(ec)) continue;
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+        const bool legacy = ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" ||
+                            ext == ".3ds" || ext == ".dae" || ext == ".mdx" || ext == ".mdl" ||
+                            ext == ".3do" || ext == ".w3d";
+        if ((ext == ".fbx" || ext == ".obj" || legacy) && !hasGlbSidecar(path)) {
+            if (ext == ".fbx") found.fbx = true;
+            else if (ext == ".obj") found.obj = true;
+            else found.legacyModels = true;
+        }
+        if (ext == ".blp") found.blp = true;
+        if (ext == ".json") {
+            try { if (hasFxKey(Json::parseFile(path.string()))) found.fx = true; }
+            catch (const std::exception&) {} // unrelated or generated JSON need not be valid game data
+        }
+    }
+    if (fs::exists(o.project / "fx" / "fx.json") || fs::exists(o.project / "fx" / "gpu" / "routes.json") ||
+        fs::exists(o.project / "fx" / "graphs")) found.fx = true;
+    return found;
+}
+
+// Optional simulation systems (CMake aiverse_game_module): each runs only when its rules block is
+// present, so its use is decided by the composed rules, per-map "rules" overrides and map blocks.
+struct SimModule {
+    const char* name;      // packaging.engineModules name
+    const char* var;       // CMake option
+    bool (*inRules)(const Json& rules);
+    bool (*inMap)(const Json& map);
+};
+bool objectBlock(const Json& r, const char* key) { return r[key].isObject() && r[key].getBool("enabled", true); }
+const SimModule kSimModules[] = {
+    {"traffic", "AIVERSE_GAME_WITH_TRAFFIC", [](const Json& r) { return objectBlock(r, "traffic"); }, nullptr},
+    {"bw-ai", "AIVERSE_GAME_WITH_BWAI", [](const Json& r) { return r["ai"]["controller"].str() == "bw"; }, nullptr},
+    {"encounters", "AIVERSE_GAME_WITH_ENCOUNTERS", [](const Json& r) { return r["encounters"].isObject(); }, nullptr},
+    {"commerce", "AIVERSE_GAME_WITH_COMMERCE", [](const Json& r) { return r["commerce"].isObject(); }, nullptr},
+    {"careers", "AIVERSE_GAME_WITH_CAREERS", [](const Json& r) { return r["careers"].isObject(); }, nullptr},
+    {"arsenal", "AIVERSE_GAME_WITH_ARSENAL", [](const Json& r) { return r["arsenal"].isObject(); }, nullptr},
+    {"mapgen", "AIVERSE_GAME_WITH_MAPGEN", nullptr, [](const Json& m) {
+        if (m["generate"].isObject()) return true;
+        for (const auto& b : m["world"]["bodies"].items()) if (b["generate"].isObject()) return true;
+        return false;
+    }},
+};
+constexpr size_t kSimModuleCount = sizeof(kSimModules) / sizeof(kSimModules[0]);
+
+// Which optional simulation systems the project's data needs: the composed rules, every map JSON under
+// maps/ and the maps game.json lists (their "rules" overrides and map-level blocks). Unreadable files
+// are skipped: they fail later with their own error.
+std::array<bool, kSimModuleCount> simModulesUsed(const Options& o) {
+    std::array<bool, kSimModuleCount> used{};
+    auto checkRules = [&](const Json& r) {
+        for (size_t i = 0; i < kSimModuleCount; ++i) if (kSimModules[i].inRules && kSimModules[i].inRules(r)) used[i] = true;
+    };
+    try {
+        checkRules(aiverse::readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), aiverse::fileReader()));
+    } catch (const std::exception&) {}
+    std::vector<fs::path> maps;
+    for (const auto& m : o.gameJson["maps"].items()) if (!m.getStr("file").empty()) maps.push_back(o.project / m.getStr("file"));
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(o.project / "maps", ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+        if (it->is_regular_file(ec) && it->path().extension() == ".json") maps.push_back(it->path());
+    for (const auto& path : maps) {
+        try {
+            const Json m = Json::parseFile(path.string());
+            if (m["rules"].isObject()) checkRules(m["rules"]);
+            for (size_t i = 0; i < kSimModuleCount; ++i) if (kSimModules[i].inMap && kSimModules[i].inMap(m)) used[i] = true;
+        } catch (const std::exception&) {}
+    }
+    return used;
+}
+
+// Explicit optional engine modules for packaged clients. Without a declaration
+// preserve the historical CMake defaults; an empty array selects none.
+std::string engineModuleVars(const Options& o) {
+    if (sceneClient(o)) {   // no game module: nothing optional can be used
+        info("модули движка: клиент сцены (без игрового модуля)");
+        std::string flags = " -DAIVERSE_SCENE_CLIENT=ON -DAIVERSE_BUILD_STRATA=OFF -DAIVERSE_RUNTIME_AUTOLOD=OFF -DAIVERSE_VULKAN=OFF"
+               " -DAIVERSE_CLIENT_WITH_SPINE=OFF -DAIVERSE_CLIENT_WITH_GAMEPAD=OFF -DAIVERSE_CLIENT_WITH_FX=OFF -DAIVERSE_FBX=OFF"
+               " -DAIVERSE_LEGACY_MODELS=OFF -DAIVERSE_OBJ=OFF -DAIVERSE_BLP=OFF -DAIVERSE_CLIENT_WITH_CITY=OFF";
+        for (const auto& m : kSimModules) flags += std::string(" -D") + m.var + "=OFF";
+        return flags;
+    }
+    const Json& packaging = o.gameJson["packaging"];
+    const Json& perTarget = packaging["targets"][o.profile];
+    const Json& modules = perTarget.has("engineModules") ? perTarget["engineModules"] : packaging["engineModules"];
+    // A build folder reused after "module" changed must not keep the scene client.
+    if (modules.isNull()) return " -DAIVERSE_SCENE_CLIENT=OFF";
+    if (!modules.isArray()) die("packaging.engineModules: ожидается массив имён модулей");
+    bool strata = false, autolod = false, vulkan = false, spine = false, gamepad = false, fx = false, fbx = false, legacyModels = false, obj = false, blp = false, city = false;
+    std::array<bool, kSimModuleCount> sim{};
+    bool automatic = false;
+    for (const auto& item : modules.items()) {
+        if (!item.isString()) die("packaging.engineModules: каждое имя должно быть строкой");
+        const std::string name = item.str();
+        if (name == "auto") automatic = true;
+        else if (name == "strata") strata = true;
+        else if (name == "runtime-autolod") autolod = true;
+        else if (name == "vulkan") vulkan = true;
+        else if (name == "spine") spine = true;
+        else if (name == "gamepad") gamepad = true;
+        else if (name == "fx") fx = true;
+        else if (name == "fbx") fbx = true;
+        else if (name == "legacy-models") legacyModels = true;
+        else if (name == "obj") obj = true;
+        else if (name == "blp") blp = true;
+        else if (name == "city-client") city = true;
+        else {
+            size_t i = 0;
+            while (i < kSimModuleCount && name != kSimModules[i].name) ++i;
+            if (i == kSimModuleCount) die("packaging.engineModules: неизвестный модуль " + name);
+            sim[i] = true;
+        }
+    }
+    if (automatic) {
+        const AutoModuleEvidence found = detectAutoModules(o);
+        spine |= o.gameJson["spine"].size() != 0;
+        gamepad |= o.gameJson["gamepad"].size() != 0;
+        fx |= found.fx;
+        fbx |= found.fbx;
+        legacyModels |= found.legacyModels;
+        obj |= found.obj;
+        blp |= found.blp;
+    }
+    const std::array<bool, kSimModuleCount> simUsed = simModulesUsed(o);
+    for (size_t i = 0; i < kSimModuleCount; ++i) {
+        if (automatic) sim[i] = sim[i] || simUsed[i];
+        if (!sim[i] && simUsed[i])
+            die(std::string("packaging.engineModules: данные игры используют ") + kSimModules[i].name + "; добавьте модуль " + kSimModules[i].name);
+    }
+    if (vulkan && o.profile != "windows" && o.profile != "linux" && o.profile != "android")
+        die("packaging.engineModules: vulkan недоступен для " + o.profile);
+    if (!spine && o.gameJson["spine"].size() != 0)
+        die("packaging.engineModules: game.json использует spine; добавьте модуль spine");
+    if (!gamepad && o.gameJson["gamepad"].size() != 0)
+        die("packaging.engineModules: game.json использует gamepad; добавьте модуль gamepad");
+    if (!fx && (fs::exists(o.project / "fx" / "fx.json") || fs::exists(o.project / "fx" / "gpu" / "routes.json") ||
+                fs::exists(o.project / "fx" / "graphs")))
+        die("packaging.engineModules: проект содержит FX-ресурсы; добавьте модуль fx");
+    std::string selected = std::string(strata ? "strata " : "") + (autolod ? "runtime-autolod " : "") +
+         (vulkan ? "vulkan " : "") + (spine ? "spine " : "") + (gamepad ? "gamepad " : "") + (fx ? "fx " : "") + (fbx ? "fbx " : "") + (legacyModels ? "legacy-models " : "") + (obj ? "obj " : "") + (blp ? "blp " : "") + (city ? "city-client " : "");
+    for (size_t i = 0; i < kSimModuleCount; ++i) if (sim[i]) selected += std::string(kSimModules[i].name) + " ";
+    if (selected.empty()) selected = "нет дополнительных";
+    if (!selected.empty() && selected.back() == ' ') selected.pop_back();
+    info("модули движка: " + selected);
+    return std::string(" -DAIVERSE_SCENE_CLIENT=OFF -DAIVERSE_BUILD_STRATA=") + (strata ? "ON" : "OFF") +
+           " -DAIVERSE_RUNTIME_AUTOLOD=" + (autolod ? "ON" : "OFF") +
+           " -DAIVERSE_VULKAN=" + (vulkan ? "ON" : "OFF") +
+           " -DAIVERSE_CLIENT_WITH_SPINE=" + (spine ? "ON" : "OFF") +
+           " -DAIVERSE_CLIENT_WITH_GAMEPAD=" + (gamepad ? "ON" : "OFF") +
+           " -DAIVERSE_CLIENT_WITH_FX=" + (fx ? "ON" : "OFF") +
+           " -DAIVERSE_FBX=" + (fbx ? "ON" : "OFF") +
+           " -DAIVERSE_LEGACY_MODELS=" + (legacyModels ? "ON" : "OFF") +
+           " -DAIVERSE_OBJ=" + (obj ? "ON" : "OFF") +
+           " -DAIVERSE_BLP=" + (blp ? "ON" : "OFF") +
+           " -DAIVERSE_CLIENT_WITH_CITY=" + (city ? "ON" : "OFF") + [&] {
+               std::string f;
+               for (size_t i = 0; i < kSimModuleCount; ++i) f += std::string(" -D") + kSimModules[i].var + (sim[i] ? "=ON" : "=OFF");
+               return f;
+           }();
+}
+
 std::string cmakeVars(const Game& g, const Options& o, const fs::path& content, const fs::path& gen) {
     std::string s;
     s += " -DCMAKE_BUILD_TYPE=" + o.config;
@@ -653,7 +918,8 @@ std::string cmakeVars(const Game& g, const Options& o, const fs::path& content, 
     s += " -DAIVERSE_GAME_VERSION=" + g.version;
     s += " -DAIVERSE_GAME_BUILD=" + std::to_string(g.build);
     s += " -DAIVERSE_GAME_EXECUTABLE=" + g.exe;
-    s += " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF";
+    s += " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF";
+    s += engineModuleVars(o);
     if (!gen.empty()) s += " -DAIVERSE_GEN_DIR=" + quote(gen);
     s += " -DAIVERSE_SPLASH_BACKGROUND=" + aiverse::build::splashBackgroundHex(o.gameJson);   // window colour before the first frame
     return s;
@@ -825,6 +1091,16 @@ void buildAndroid(const Game& g, Options& o) {
     std::string orientation = g.orientation == "portrait" ? "sensorPortrait" : g.orientation == "any" ? "fullUser" : "sensorLandscape";
     aiverse::build::PluginSet plugins = pluginsFor(o, "android");
     const auto pluginText = aiverse::build::androidPlaceholders(plugins);
+    const std::string moduleArgs = engineModuleVars(o);
+    std::string gradleModules;
+    for (size_t start = 0; start < moduleArgs.size();) {
+        while (start < moduleArgs.size() && moduleArgs[start] == ' ') ++start;
+        if (start == moduleArgs.size()) break;
+        size_t end = moduleArgs.find(' ', start);
+        if (end == std::string::npos) end = moduleArgs.size();
+        gradleModules += ", '" + moduleArgs.substr(start, end - start) + "'";
+        start = end;
+    }
     for (auto& e : fs::recursive_directory_iterator(tpl)) {
         if (!e.is_regular_file()) continue;
         fs::path rel = fs::relative(e.path(), tpl);
@@ -838,6 +1114,7 @@ void buildAndroid(const Game& g, Options& o) {
         t = replaceAll(t, "@AGP_VERSION@", "8.7.3");
         t = replaceAll(t, "@NDK_VERSION_LINE@", ndkLine);
         t = replaceAll(t, "@CMAKE_VERSION_LINE@", cmakeLine);
+        t = replaceAll(t, "@ENGINE_MODULE_ARGS@", gradleModules);
         for (auto& [key, value] : pluginText) t = replaceAll(t, key, value);
         writeText(proj / rel, t);
     }
@@ -980,7 +1257,7 @@ void buildWindows(const Game& g, Options& o) {
               "@echo off\r\nrem Requires Visual Studio 2022 (Desktop C++) and CMake.\r\n"
               "cmake -S . -B build -A x64 -DAIVERSE_CONTENT_DIR=%~dp0content -DAIVERSE_GAME_NAME=\"" + g.name + "\" -DAIVERSE_GAME_ID=" + g.id +
               " -DAIVERSE_GAME_EXECUTABLE=" + g.exe + packArg + " -DAIVERSE_GEN_DIR=%~dp0gen" +
-              (splashBg.empty() ? std::string() : " -DAIVERSE_SPLASH_BACKGROUND=" + splashBg) + " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF || exit /b 1\r\n"
+              (splashBg.empty() ? std::string() : " -DAIVERSE_SPLASH_BACKGROUND=" + splashBg) + " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF" + engineModuleVars(o) + " || exit /b 1\r\n"
               "cmake --build build --target aiverse_client --config Release || exit /b 1\r\n"
               "echo Done: build\\Release\\" + g.exe + ".exe\r\n");
     info("Исходники: " + src.string() + " — на Windows запустите build.bat.");
@@ -1012,6 +1289,7 @@ void usage() {
               "                [--plugins name,name]   (native plugins; default: game.json \"plugins\")\n"
                  "                [--split | --no-split] [--chunk-size 8MB] [--base-size 40MB] [--total-size 1GB] [--fill-base]\n"
                  "                [--estimate]  (content pack + size-report.json per target only, for the editor)\n"
+                 "                [--check-engine-modules]  (show selected optional client modules without building)\n"
                  "                [--install-missing]  (install missing toolchains into ~/.aiverse/toolchains first)\n"
                  "       aiversebuild --check-toolchain <target> [--json]\n"
                  "       aiversebuild --install-toolchain <target|emsdk|cmake|jdk|android-sdk|android-ndk|android-cmake|gradle|xcode-clt>\n";
@@ -1063,6 +1341,7 @@ int main(int argc, char** argv) {
         else if (a == "--jobs") o.jobs = unsigned(std::atoi(next().c_str()));
         else if (a == "--generate-only") o.generateOnly = true;
         else if (a == "--estimate") o.estimate = true;
+        else if (a == "--check-engine-modules") o.checkEngineModules = true;
         else if (a == "--no-pack") o.pack = false;
         else if (a == "--pack-level") o.packLevel = std::atoi(next().c_str());
         else if (a == "--no-atlas") o.atlas = false;
@@ -1144,6 +1423,16 @@ int main(int argc, char** argv) {
     std::cout << "aiversebuild: " << g.name << " " << g.version << " (" << g.id << ")\n"
               << "  проект: " << o.project.string() << "\n  движок: " << o.engine.string() << "\n  вывод:  " << o.out.string()
               << "\n  хост:   " << kHost << ", конфигурация " << o.config << std::endl;
+    if (o.checkEngineModules) {
+        const auto targets = o.target == "all" ? std::vector<std::string>{"macos", "ios", "android", "web", "windows", "linux"}
+                                                : std::vector<std::string>{o.target};
+        for (const auto& target : targets) {
+            o.profile = target;
+            const std::string flags = engineModuleVars(o);
+            std::cout << target << ": " << (flags.find("AIVERSE_BUILD_STRATA") == std::string::npos ? "legacy defaults" : flags) << '\n';
+        }
+        return 0;
+    }
     if (o.estimate) { // editor Build window: only the content as it would ship, per target
         std::vector<std::string> ts = o.target == "all" ? std::vector<std::string>{"macos", "ios", "android", "web", "windows", "linux"} : std::vector<std::string>{o.target};
         for (auto& t : ts) {

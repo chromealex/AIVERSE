@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
+#include <utility>
 #include "../../../engine/platform/Platform.h"
 #include "RtsTerrainRender.h"
 #include "RtsTerrainSurface.h"
@@ -40,6 +42,7 @@ float vnoise(float x, float y, uint32_t s) {
 } // namespace
 
 void TerrainRenderer::setDetail(const terrain::DetailSurface* d, const std::vector<uint8_t>* splat) {
+    ++publicationRevision_;
     const bool has = d && d->valid();
     std::vector<uint8_t> sp = splat ? *splat : std::vector<uint8_t>{};
     // same size as the drawn surface: only the changed samples are rebuilt (editor sculpting)
@@ -65,9 +68,16 @@ void TerrainRenderer::setDetail(const terrain::DetailSurface* d, const std::vect
     fileDetailChanged_ = true;
 }
 
-float TerrainRenderer::surfaceAt(const MapGrid& g, float x, float z) const {
-    if (detailOn_ && detail_.w == g.w && detail_.h == g.h) return detail_.sample(x, z);
-    return terrain::heightAt(g, lh_, x, z);
+float TerrainRenderer::surfaceAt(const MapGrid& g,float x,float z) const {
+    if(detailOn_ && detail_.valid())
+        return detail_.sample(x,z);
+    // MapGrid may have been edited in place before buildTerrainAtomic().
+    // Query the LAST SUCCESSFULLY PUBLISHED height geometry, not mutable
+    // input. This also keeps road/shore and camera heights coherent when
+    // a pending GPU map candidate fails and is discarded.
+    if(publishedSurfaceGrid_)
+        return terrain::heightAt(*publishedSurfaceGrid_,lh_,x,z);
+    return terrain::heightAt(g,lh_,x,z);
 }
 
 size_t TerrainRenderer::detailSampleCap() const {
@@ -160,7 +170,10 @@ bool TerrainRenderer::buildDetail(gfx::Device& dev, const MapGrid& g, bool flatD
         c.bmin = {float(c.x0), std::min(mn, kApronY) - 1.0f, float(c.y0)};
         c.bmax = {float(c.x1), mx + 0.1f, float(c.y1)};
         if (c.valid && gh == c.geoHash) continue;
-        for (auto& l : c.lods) { geoBytes_ -= std::min<size_t>(geoBytes_, size_t(l.indexCount) * 4 + size_t(l.vertexCount) * sizeof(TV)); dev.destroyBuffer(l.vb); dev.destroyBuffer(l.ib); l = {}; }
+        for (auto& l : c.lods) { geoBytes_ -= std::min<size_t>(geoBytes_, size_t(l.indexCount) * 4 + size_t(l.vertexCount) * sizeof(TV));
+            retiredMeshes_.retireBuffer(dev,l.vb);
+            retiredMeshes_.retireBuffer(dev,l.ib);
+            l={}; }
         c.geoHash = gh;
         c.valid = true;
         changed = true;
@@ -180,22 +193,232 @@ bool TerrainRenderer::buildDetail(gfx::Device& dev, const MapGrid& g, bool flatD
     return changed || resized;
 }
 
+// Transaction for same-size detail sculpt/cell edits. Changed coarse LODs are
+// staged privately; unchanged published chunk buffers are NOT re-uploaded.
+// All six map/detail texture generations are rebuilt privately because queued
+// camera commands may still sample the old generation.
+bool TerrainRenderer::tryBuildDetailIncremental(gfx::Device& dev,const MapGrid& g,bool flatDig) {
+    if(!detailOn_ || !detail_.valid() || fileDetailChanged_ ||
+       materialLayerChanged_ || chunks_.empty() ||
+       detail_.w!=g.w || detail_.h!=g.h ||
+       texW_!=g.w || texH_!=g.h ||
+       !cellTex_.valid() || !dynTex_.valid() ||
+       !splatTex_.valid() || !visionTex_.valid() ||
+       !detailNrmTex_.valid() || !detailSplatTex_.valid())
+        return false;
+    int want=hasFileDetail_?fileDetail_.k:look_.detailScale;
+    if(tierFor0()==0)want=std::min(want,2);
+    if(detail_.k!=terrain::detailScaleFor(g.w,g.h,want,detailSampleCap()))
+        return false;
+    const bool samplesDirty=dirtyI1_>dirtyI0_ && dirtyJ1_>dirtyJ0_;
+    constexpr size_t kMaxIncrementalChunks=16;
+    constexpr uint64_t kMaxTransientBytes=128ull*1024ull*1024ull;
+    size_t estimatedDirty=0;
+    for(const auto& c:chunks_) {
+        const bool changedHash=!c.valid || chunkHash(g,c,flatDig)!=c.hash;
+        const bool changedSamples=samplesDirty &&
+            !(c.x1*detailK_<dirtyI0_ || c.x0*detailK_>=dirtyI1_ ||
+              c.y1*detailK_<dirtyJ0_ || c.y0*detailK_>=dirtyJ1_);
+        if(changedHash || changedSamples)++estimatedDirty;
+        if(estimatedDirty>kMaxIncrementalChunks)return false;
+    }
+    if(estimatedDirty==0)return false;
+    // This bounds the fast path's extra allocation, not the full-map
+    // fallback. CPU cache copies and six private GPU textures are included.
+    const uint64_t mapPixels=uint64_t(g.w)*uint64_t(g.h);
+    const uint64_t normalPixels=uint64_t(nrmW_)*uint64_t(nrmH_);
+    const uint64_t surfaceBytes=uint64_t(detail_.hgt.size())*sizeof(float);
+    const uint64_t stagingBytes=mapPixels*32ull+normalPixels*16ull+
+                               surfaceBytes*2ull+
+                               uint64_t(estimatedDirty)*1024ull*1024ull;
+    if(stagingBytes>kMaxTransientBytes)return false;
+
+    TerrainRenderer staged;
+    staged.dev_=&dev;
+    staged.gpuDeviceLease_=gpuDeviceLease_;
+    staged.rules_=rules_;
+    staged.look_=look_;
+    staged.lh_=lh_;
+    staged.heightfield_=heightfield_;
+    staged.lodLevels_=lodLevels_;
+    staged.mapW_=mapW_;
+    staged.mapH_=mapH_;
+    staged.cw_=cw_;
+    staged.ch_=ch_;
+    staged.detail_=detail_;
+    staged.detailOn_=true;
+    staged.detailK_=detailK_;
+    staged.materialLayer_=materialLayer_;
+    staged.hasFileDetail_=hasFileDetail_;
+    staged.fileDetail_=fileDetail_;
+    staged.fileSplat_=fileSplat_;
+    staged.dirtyI0_=dirtyI0_;
+    staged.dirtyJ0_=dirtyJ0_;
+    staged.dirtyI1_=dirtyI1_;
+    staged.dirtyJ1_=dirtyJ1_;
+    staged.nrmW_=nrmW_;
+    staged.nrmH_=nrmH_;
+    staged.dsplatW_=dsplatW_;
+    staged.dsplatH_=dsplatH_;
+    staged.nrmPx_=nrmPx_;
+    staged.dsplatPx_=dsplatPx_;
+    staged.frame_=frame_;
+    staged.chunks_=chunks_;
+    // Metadata and bounds are copied, but no published GPU handle is owned
+    // by the staging instance. Only changed chunks may acquire new handles.
+    for(auto& c:staged.chunks_)
+        for(auto& l:c.lods)l={};
+    auto cleanup=[&]() {
+        for(auto& c:staged.chunks_)
+            for(auto& l:c.lods) {
+                if(l.vb.valid()){dev.destroyBuffer(l.vb);l.vb={};}
+                if(l.ib.valid()){dev.destroyBuffer(l.ib);l.ib={};}
+            }
+        if(staged.water_.vb.valid())dev.destroyBuffer(staged.water_.vb);
+        if(staged.water_.ib.valid())dev.destroyBuffer(staged.water_.ib);
+        for(auto* tex:{&staged.cellTex_,&staged.dynTex_,&staged.splatTex_,
+                      &staged.visionTex_,&staged.detailNrmTex_,
+                      &staged.detailSplatTex_})
+            if(tex->valid()){dev.destroyTexture(*tex);*tex={};}
+    };
+    const auto start=std::chrono::steady_clock::now();
+    try {
+        staged.updateCellTextures(dev,g,flatDig);
+        (void)staged.buildDetail(dev,g,flatDig,false);
+        std::vector<size_t> dirty;
+        int x0=staged.detail_.sw(),y0=staged.detail_.sh(),x1=0,y1=0;
+        for(size_t i=0;i<chunks_.size();++i) {
+            const Chunk& old=chunks_[i];
+            const Chunk& next=staged.chunks_[i];
+            if(!old.valid || old.hash!=next.hash ||
+               old.geoHash!=next.geoHash) {
+                dirty.push_back(i);
+                x0=std::min(x0,next.x0*staged.detailK_);
+                y0=std::min(y0,next.y0*staged.detailK_);
+                x1=std::max(x1,next.x1*staged.detailK_+1);
+                y1=std::max(y1,next.y1*staged.detailK_+1);
+            }
+        }
+        if(dirty.size()>kMaxIncrementalChunks) {
+            cleanup();
+            return false; // use the complete Stage 39 transaction instead
+        }
+        if(samplesDirty) {
+            x0=std::min(x0,dirtyI0_);
+            y0=std::min(y0,dirtyJ0_);
+            x1=std::max(x1,dirtyI1_);
+            y1=std::max(y1,dirtyJ1_);
+        }
+        // Even a cell-color-only change (unchanged height hash) can affect
+        // detail splat weights. Pixel caches preserve every clean texel.
+        if(x1>x0 && y1>y0)
+            staged.updateDetailTextures(dev,x0,y0,x1,y1);
+        staged.buildWater(dev,g,flatDig);
+        staged.updateDynamic(dev,g,true);
+        const int coarse=staged.lodLevels_-1;
+        for(size_t i:dirty) {
+            Chunk& c=staged.chunks_[i];
+            staged.buildDetailLod(dev,g,c,coarse);
+            c.lastUse.assign(size_t(staged.lodLevels_),frame_);
+        }
+        // All fallible uploads have completed. Publish the new texture
+        // generation and only the chunks that actually changed.
+        auto chunkBytes=[](const Chunk& c) {
+            size_t n=0;
+            for(const Lod& l:c.lods)
+                n+=size_t(l.indexCount)*sizeof(uint32_t)+
+                   size_t(l.vertexCount)*sizeof(TV);
+            return n;
+        };
+        for(size_t i:dirty) {
+            geoBytes_-=std::min(geoBytes_,chunkBytes(chunks_[i]));
+            freeChunk(dev,chunks_[i]);
+            chunks_[i]=std::move(staged.chunks_[i]);
+        }
+        geoBytes_+=staged.geoBytes_;
+        retiredMeshes_.retireBuffer(dev,water_.vb);
+        retiredMeshes_.retireBuffer(dev,water_.ib);
+        for(auto* tex:{&cellTex_,&dynTex_,&splatTex_,&visionTex_,
+                      &detailNrmTex_,&detailSplatTex_})
+            retiredMeshes_.retireTexture(dev,*tex);
+        water_=staged.water_;
+        hasWater_=staged.hasWater_;
+        waterSheet_=staged.waterSheet_;
+        detail_=std::move(staged.detail_);
+        detailK_=staged.detailK_;
+        lodLevels_=staged.lodLevels_;
+        cellCol_=std::move(staged.cellCol_);
+        cellLayerOf_=std::move(staged.cellLayerOf_);
+        cellTex_=std::exchange(staged.cellTex_,gfx::TextureHandle{});
+        dynTex_=std::exchange(staged.dynTex_,gfx::TextureHandle{});
+        splatTex_=std::exchange(staged.splatTex_,gfx::TextureHandle{});
+        visionTex_=std::exchange(staged.visionTex_,gfx::TextureHandle{});
+        detailNrmTex_=std::exchange(staged.detailNrmTex_,gfx::TextureHandle{});
+        detailSplatTex_=std::exchange(staged.detailSplatTex_,gfx::TextureHandle{});
+        cellPx_=std::move(staged.cellPx_);
+        dynPx_=std::move(staged.dynPx_);
+        splatPx_=std::move(staged.splatPx_);
+        visionPx_=std::move(staged.visionPx_);
+        nrmPx_=std::move(staged.nrmPx_);
+        dsplatPx_=std::move(staged.dsplatPx_);
+        texW_=staged.texW_;texH_=staged.texH_;
+        nrmW_=staged.nrmW_;nrmH_=staged.nrmH_;
+        dsplatW_=staged.dsplatW_;dsplatH_=staged.dsplatH_;
+        dynRow_=staged.dynRow_;
+        visionInit_=false;
+        fogFieldChanged_=true;
+        dirtyI0_=dirtyJ0_=1<<30;
+        dirtyI1_=dirtyJ1_=-1;
+        fileDetailChanged_=false;
+        materialLayerChanged_=false;
+        heightDirty_=true;
+        stats_.rebuilt=int(dirty.size());
+        stats_.chunks=int(chunks_.size());
+        stats_.lodMax=lodLevels_;
+        stats_.detailK=detailK_;
+        stats_.geometryBytes=geoBytes_;
+        stats_.buildMs=std::chrono::duration<double,std::milli>(
+            std::chrono::steady_clock::now()-start).count();
+        return true;
+    }catch(...) {
+        cleanup();
+        throw;
+    }
+}
+
 // Normal (rg = n.xz, b = cavity, a = macro noise) and splat textures at detail resolution (at most
 // kMaxTex per side; larger maps get one texel per few samples). Only the rect around [i0,i1)x[j0,j1)
 // (detail samples) is recomputed and uploaded.
 void TerrainRenderer::updateDetailTextures(gfx::Device& dev, int i0, int j0, int i1, int j1) {
     const int SW = detail_.sw(), SH = detail_.sh(), W = detail_.w, H = detail_.h, k = detail_.k;
     const int TW = std::min(SW, maxTexSide()), TH = std::min(SH, maxTexSide());
-    if (TW != nrmW_ || TH != nrmH_ || !detailNrmTex_.valid()) {
-        if (detailNrmTex_.valid()) dev.destroyTexture(detailNrmTex_);
-        if (detailSplatTex_.valid()) dev.destroyTexture(detailSplatTex_);
-        nrmW_ = TW; nrmH_ = TH;
-        nrmPx_.assign(size_t(TW) * size_t(TH) * 4, 128);
-        dsplatPx_.assign(size_t(TW) * size_t(TH) * 4, 0);
-        gfx::TextureDesc td; td.width = TW; td.height = TH; td.filter = gfx::Filter::Linear; td.mipmaps = true;
-        td.data = nrmPx_.data(); td.label = "terrain detail normals"; detailNrmTex_ = dev.createTexture(td);
-        td.data = dsplatPx_.data(); td.label = "terrain detail splat"; detailSplatTex_ = dev.createTexture(td);
-        i0 = 0; j0 = 0; i1 = SW; j1 = SH;
+    if (TW != nrmW_ || TH != nrmH_ ||
+        !detailNrmTex_.valid() || !detailSplatTex_.valid()) {
+        // Staged same-resolution updates inherit the last published CPU
+        // pixel caches. Keep unchanged texels and compute only the dirty
+        // rectangle. GPU images remain private until the transaction commits.
+        const size_t pixelBytes=size_t(TW)*size_t(TH)*4;
+        const bool preservePixels=(nrmW_==TW && nrmH_==TH &&
+            nrmPx_.size()==pixelBytes && dsplatPx_.size()==pixelBytes);
+        if (!preservePixels) {
+            nrmPx_.assign(pixelBytes,128);
+            dsplatPx_.assign(pixelBytes,0);
+        }
+        if(detailNrmTex_.valid())retiredMeshes_.retireTexture(dev,detailNrmTex_);
+        if(detailSplatTex_.valid())retiredMeshes_.retireTexture(dev,detailSplatTex_);
+        nrmW_=TW; nrmH_=TH;
+        gfx::TextureDesc td;
+        td.width=TW; td.height=TH; td.filter=gfx::Filter::Linear; td.mipmaps=true;
+        td.data=nrmPx_.data(); td.label="terrain detail normals";
+        detailNrmTex_=createTerrainTexture(dev,td);
+        if (!detailNrmTex_.valid())
+            throw std::runtime_error("TerrainRenderer: detail normal texture allocation failed");
+        td.data=dsplatPx_.data(); td.label="terrain detail splat";
+        detailSplatTex_=createTerrainTexture(dev,td);
+        if (!detailSplatTex_.valid())
+            throw std::runtime_error("TerrainRenderer: detail splat texture allocation failed");
+        dsplatW_=TW; dsplatH_=TH;
+        if (!preservePixels) {i0=0; j0=0; i1=SW; j1=SH;}
     }
     // texel t <-> sample t * (S - 1) / (T - 1)
     const float sx = float(SW - 1) / float(std::max(TW - 1, 1)), sz = float(SH - 1) / float(std::max(TH - 1, 1));
@@ -251,7 +474,8 @@ void TerrainRenderer::updateDetailTextures(gfx::Device& dev, int i0, int j0, int
     dev.updateTexture(detailSplatTex_, 0, u0, TW, u1 - u0, &dsplatPx_[size_t(u0) * size_t(TW) * 4], TW * 4);
 }
 
-void TerrainRenderer::buildDetailLod(gfx::Device& dev, const MapGrid& g, Chunk& c, int L) {
+void TerrainRenderer::buildDetailLod(gfx::Device& dev,const MapGrid& g,
+                                    Chunk& c,int L,size_t* stagedBytes) {
     const int k = detail_.k, s = 1 << L, W = g.w, H = g.h;
     const int si0 = c.x0 * k, sj0 = c.y0 * k, si1 = c.x1 * k, sj1 = c.y1 * k;
     std::vector<int> is, js;
@@ -323,7 +547,10 @@ void TerrainRenderer::buildDetailLod(gfx::Device& dev, const MapGrid& g, Chunk& 
     Lod& l = c.lods[size_t(L)];
     upload(dev, v, idx, l);
     l.vertexCount = uint32_t(v.size());
-    geoBytes_ += size_t(l.indexCount) * 4 + size_t(l.vertexCount) * sizeof(TV);
+    const size_t footprint=size_t(l.indexCount)*sizeof(uint32_t)+
+                           size_t(l.vertexCount)*sizeof(TV);
+    if(stagedBytes)*stagedBytes+=footprint;
+    else geoBytes_+=footprint;
 }
 
 } // namespace aiverse::game

@@ -1,0 +1,195 @@
+{
+  "version": 2,
+  "description": "SpectraFX v2: typed math ports, normalized-age LUT and reusable CPU noise/trail modules",
+  "parameters": {
+    "baseSpeed": 2.5,
+    "size": 0.45
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 24
+      },
+      "position": [
+        10,
+        170
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 1.2,
+        "spread": 18,
+        "size": {
+          "$param": "size"
+        },
+        "sizeOverLife": {
+          "$curve": "sizeFade",
+          "samples": 17
+        }
+      },
+      "position": [
+        260,
+        170
+      ]
+    },
+    {
+      "id": "noise",
+      "type": "NoiseModule",
+      "properties": {
+        "strength": 0.2,
+        "frequency": 1.5,
+        "axes": [
+          1,
+          1,
+          1
+        ]
+      },
+      "position": [
+        520,
+        170
+      ]
+    },
+    {
+      "id": "trail",
+      "type": "TrailModule",
+      "properties": {
+        "time": 0.3,
+        "width": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "texture": "builtin:soft",
+        "blend": "additive"
+      },
+      "position": [
+        780,
+        170
+      ]
+    },
+    {
+      "id": "output",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive"
+      },
+      "position": [
+        1030,
+        170
+      ]
+    },
+    {
+      "id": "speedParam",
+      "type": "Parameter",
+      "name": "baseSpeed",
+      "position": [
+        40,
+        440
+      ]
+    },
+    {
+      "id": "multiplier",
+      "type": "Float",
+      "properties": {
+        "value": 1.5
+      },
+      "position": [
+        40,
+        570
+      ]
+    },
+    {
+      "id": "speedMultiply",
+      "type": "Multiply",
+      "properties": {},
+      "position": [
+        280,
+        470
+      ]
+    },
+    {
+      "id": "age",
+      "type": "AgeNormalized",
+      "position": [
+        40,
+        730
+      ]
+    },
+    {
+      "id": "one",
+      "type": "Float",
+      "properties": {
+        "value": 1
+      },
+      "position": [
+        40,
+        840
+      ]
+    },
+    {
+      "id": "sizeFade",
+      "type": "Subtract",
+      "properties": {},
+      "position": [
+        290,
+        760
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "noise"
+    },
+    {
+      "from": "noise",
+      "to": "trail"
+    },
+    {
+      "from": "trail",
+      "to": "output"
+    },
+    {
+      "from": "speedParam",
+      "to": "speedMultiply",
+      "toPort": "a"
+    },
+    {
+      "from": "multiplier",
+      "to": "speedMultiply",
+      "toPort": "b"
+    },
+    {
+      "from": "speedMultiply",
+      "to": "init",
+      "toPort": "speed"
+    },
+    {
+      "from": "one",
+      "to": "sizeFade",
+      "toPort": "a"
+    },
+    {
+      "from": "age",
+      "to": "sizeFade",
+      "toPort": "b"
+    }
+  ],
+  "outputs": [
+    "output"
+  ]
+}

@@ -4,11 +4,13 @@
 // This adapter intentionally creates ONE near model + ONE impostor per species,
 // not unique models per tree.
 #pragma once
+#include <functional>
 
 #include "engine/render/TerraWeaveModelAdapter.h"
 #include "engine/render/TerraWeaveRootModel.h"
 #include "engine/render/TerraWeaveImpostorAtlas.h"
 #include "engine/render/TerraWeaveVertexWind.h"
+#include "engine/render/TerraWeaveArborWind.h"
 #include "engine/world/TerraWeaveWindField.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/TerraWeaveFlora.h"
@@ -36,35 +38,124 @@ struct ForestCameraCm {
     int64_t x = 0, z = 0;
 };
 
+enum class ArborTreeGeometry : uint8_t { Auto, PerBranch, Merged };
+
 class ArborForestAdapter {
 public:
     // Build a shared procedural geometry prototype off the render thread.
     // Mesh seeds are per species: an individual FoliageInstance varies only
     // in position/yaw/scale, so the GPU can instance identical geometry.
+    // Opt-in GPU hierarchical wind (engine/render/WindRig*.h): every near
+    // tree sways trunk -> branches -> twigs -> leaves in ONE draw, with masks
+    // shared by all species and a WindProfile per species. Replaces the CPU
+    // per-branch pose arena and whole-tree lean for near trees; impostors keep
+    // the cheap crown wind. Call before the first addPrototype.
+    void enableHierarchicalWind(render::wind::WindMaskLibrary masks = {},
+                                render::wind::WindProfile defaultProfile = {}) {
+        if(!models_.empty())
+            throw std::logic_error("TerraWeave hierarchical wind: enable before addPrototype");
+        hierarchicalWind_=true;
+        windMasks_=std::move(masks);
+        windAtlas_=render::wind::WindMaskAtlas::fromLibrary(windMasks_);
+        defaultWindProfile_=std::move(defaultProfile);
+    }
+    bool hierarchicalWind() const {return hierarchicalWind_;}
+    void setSpeciesWindProfile(uint32_t speciesId,render::wind::WindProfile profile) {
+        if(models_.contains(speciesId))
+            throw std::logic_error("TerraWeave species wind profile must precede addPrototype");
+        windProfiles_[speciesId]=std::move(profile);
+    }
+    // Displacement (m) at mask 1 / flex 1 per m/s of wind, before the
+    // ForestWindState lean and flex scaling.
+    void setHierarchicalWindScale(float metresPerMps) {
+        if(!std::isfinite(metresPerMps)||metresPerMps<0||metresPerMps>0.5f)
+            throw std::invalid_argument("TerraWeave hierarchical wind scale");
+        hierarchicalWindScale_=metresPerMps;
+    }
+
+    // Near-tree geometry. PerBranch: one render node per branch with its own
+    // screen-size LOD (needed for CPU per-branch wind poses), but one draw
+    // per branch node. Merged: whole-tree Full/Reduced/Minimal meshes, one
+    // instanced draw per species, tier and material. Auto (default) = Merged
+    // when GPU hierarchical wind is on (it bends branches in the shader),
+    // otherwise PerBranch. Call before the first addPrototype.
+    void setTreeGeometry(ArborTreeGeometry geometry,TreeLodSettings lod={}) {
+        if(!models_.empty())
+            throw std::logic_error("TerraWeave tree geometry: set before addPrototype");
+        treeGeometry_=geometry;
+        treeLod_=lod;
+    }
+    ArborTreeGeometry treeGeometry() const {
+        if(treeGeometry_!=ArborTreeGeometry::Auto)return treeGeometry_;
+        return hierarchicalWind_?ArborTreeGeometry::Merged:ArborTreeGeometry::PerBranch;
+    }
+
+    // Optional host hook (editor / native presentation): assign textures or
+    // material tweaks to each near-tree prototype right after mesh build,
+    // before GPU upload. Called once per species, never per instance.
+    using PrototypeDecorator=std::function<void(uint32_t speciesId,render::Model& model)>;
+    void setPrototypeDecorator(PrototypeDecorator decorator) {decorator_=std::move(decorator);}
+    // Far impostor atlas: rasterized from the near tree mesh and textures
+    // (default) or the legacy skeleton disk/line silhouette. Before addPrototype.
+    void setImpostorFromNearModel(bool on) {impostorFromNearModel_=on;}
+    bool impostorFromNearModel() const {return impostorFromNearModel_;}
+
     void addPrototype(const TreeProfile& profile, uint64_t meshSeed,
                       ArborMeshSettings mesh = {8, true}) {
         if (profile.speciesId == 0 || models_.contains(profile.speciesId))
             throw std::invalid_argument("TerraWeave duplicate/zero forest species");
-        BranchLodSettings settings;
-        settings.mesh = mesh;
-        auto model = makeArborBranchLodModel(profile, meshSeed, settings);
+        std::vector<int32_t> owners;
+        const bool merged=treeGeometry()==ArborTreeGeometry::Merged;
+        std::unique_ptr<render::Model> model;
+        if(merged) {
+            TreeLodSettings settings=treeLod_;
+            settings.mesh=mesh;
+            model=makeArborTreeLodModel(profile,meshSeed,settings,
+                                        hierarchicalWind_ ? &owners : nullptr);
+        } else {
+            BranchLodSettings settings;
+            settings.mesh = mesh;
+            model = makeArborBranchLodModel(profile, meshSeed, settings,
+                                            hierarchicalWind_ ? &owners : nullptr);
+        }
         // BranchLOD nodes and the skeleton use the same ordered seed. Store
         // compact branch origins once per SPECIES, never per cosmetic tree.
+        if(decorator_)decorator_(profile.speciesId,*model);
         const TreeSkeleton skeleton=generateTree(profile,meshSeed,TreeLOD::High);
+        if(hierarchicalWind_) {
+            const auto found=windProfiles_.find(profile.speciesId);
+            applyArborWind(*model,skeleton,owners,
+                found!=windProfiles_.end()?found->second:defaultWindProfile_,
+                windMasks_,*windAtlas_);
+        }
         std::vector<render::float3> pivots;
         pivots.reserve(skeleton.branches.size());
-        for(const TreeBranch& branch:skeleton.branches)
+        if(mesh.organicBranches) {
+            const auto curves=arbor_detail::branchCurves(skeleton,mesh);
+            for(const auto& curve:curves){const auto at=arbor_detail::curveSample(curve,0);
+                pivots.push_back({at.x*.01f,at.y*.01f,at.z*.01f});}
+        } else for(const TreeBranch& branch:skeleton.branches)
             pivots.push_back({float(branch.x0)*0.01f,
                               float(branch.y0)*0.01f,
                               float(branch.z0)*0.01f});
-        if(pivots.size()!=model->nodes.size())
+        // Merged trees have one node: no CPU per-branch pose (GPU rig or
+        // whole-tree lean + crown wind instead).
+        if(merged) pivots.clear();
+        else if(pivots.size()!=model->nodes.size())
             throw std::logic_error("TerraWeave branch pose/skeleton mismatch");
-        auto impostor = makeArborImpostorAtlas(profile, meshSeed);
+        // Far impostors are baked from the actual near tree (geometry +
+        // textures from the decorator), so near and far trees match. Textured
+        // bakes use 256x512 view tiles (4096x512 atlas per species).
+        ArborImpostorAtlasSettings impostorSettings;
+        if(impostorFromNearModel_) impostorSettings.tile={256,512,8};
+        auto impostor = makeArborImpostorAtlas(profile, meshSeed, impostorSettings);
+        if(impostorFromNearModel_)
+            bakeArborImpostorFromModel(impostor,*model,impostorSettings);
         models_.emplace(profile.speciesId, std::move(model));
         billboardMaterials_.emplace(profile.speciesId, std::move(impostor.viewMaterials));
         billboards_.emplace(profile.speciesId, std::move(impostor.model));
         branchPivots_.emplace(profile.speciesId,std::move(pivots));
-        evergreen_[profile.speciesId]=(profile.shape==CrownShape::Conifer);
+        evergreen_[profile.speciesId]=treeIsEvergreen(profile);
         prototypeSeeds_[profile.speciesId]=meshSeed;
         if(phenology_!=CanopyPhenology{} || gpuCrownWindActive())
             rebuildPhenologyMaterials();
@@ -321,7 +412,8 @@ public:
                     draw.materials=&seasonalNearMaterials_.at(batch.speciesId);
                 }
                 draw.world = render::mat4::translate(relative);
-                if(localWindActive) {
+                const bool rigWind=hierarchicalWind_ && batch.lod!=TreeLOD::Impostor;
+                if(localWindActive && !rigWind) {
                     const auto lean=forestTreeLean(
                         windAtTree,presentationTick_,
                         instance.key ^ (uint64_t(instance.speciesId)<<32));
@@ -341,7 +433,7 @@ public:
                 // and branches. Bend each child around its own stable
                 // branch pivot while preserving parent hierarchy. More
                 // distant impostors remain on the cheap whole-tree sway.
-                if(batch.lod!=TreeLOD::Impostor &&
+                if(batch.lod!=TreeLOD::Impostor && !rigWind &&
                    windAtTree.branchFlexPermille>0 &&
                    localWindActive) {
                     const auto& pivots=branchPivots_.at(batch.speciesId);
@@ -365,13 +457,46 @@ public:
                     0x54eaa75eedc0de11ULL);
                 if (draw.persistentId == 0) draw.persistentId = 1;
                 draw.flags = render::kDrawStatic;
-                if(gpuCrownWindActive()) {
+                // Merged trees: Terra's FloraView distance tier picks the
+                // whole-tree mesh (High=Full, Medium=Reduced, Low=Minimal).
+                // The renderer's projected-size metric is too conservative
+                // for a whole 20 m tree and would keep it at Full.
+                if(batch.lod!=TreeLOD::Impostor && model->nodes.size()==1 &&
+                   !model->meshes.empty() && model->meshes[0].lods.size()==2)
+                    draw.lodLevel=batch.lod==TreeLOD::High?0:batch.lod==TreeLOD::Medium?1:2;
+                if(rigWind) {
+                    // Rig materials always carry a vertex-offset graph. A zero
+                    // bound means "unbounded" to Renderer3D (no culling, no
+                    // LOD), so calm trees declare a tiny bound; scene wind
+                    // (Renderer3D::applyWindRig) widens it when it applies.
+                    draw.maxVertexOffsetMetres=0.01f;
+                    // One GPU pass bends trunk, branches, twigs and leaves.
+                    if(localWindActive) {
+                        render::wind::SceneWind sw;
+                        sw.x=float(windAtTree.xCmPerSec)*0.01f;
+                        sw.z=float(windAtTree.zCmPerSec)*0.01f;
+                        sw.gust=float(windAtTree.gustPermille)*0.001f;
+                        sw.metresPerMps=hierarchicalWindScale_*
+                            (float(windAtTree.maxLeanMilliDegrees)/1500.0f)*
+                            (0.25f+0.75f*float(windAtTree.branchFlexPermille)*0.001f)*
+                            (batch.lod==TreeLOD::High?1.0f:batch.lod==TreeLOD::Medium?0.8f:0.55f);
+                        auto params=render::wind::windRigParamsForDraw(sw,draw.world);
+                        constexpr double tau=6.283185307179586;
+                        const uint64_t cycle=std::max<uint32_t>(1,windAtTree.cycleTicks);
+                        const double stagger=double(detail::mix64(instance.key)%1000u)*0.001*tau;
+                        params.phase=float(std::fmod(tau*double(presentationTick_%(cycle*64u))/double(cycle)+stagger,tau*64.0));
+                        draw.vertexParameters=render::wind::windRigVertexParameters(params);
+                        draw.useVertexParameters=true;
+                        draw.maxVertexOffsetMetres=std::min(10.0f,
+                            render::wind::windRigMaxOffsetMetres(params)*scale);
+                    }
+                } else if(gpuCrownWindActive()) {
                     // Bound is also required for leafless bark-only draws:
                     // graph materials remain attached to the model even when
                     // primitiveMaterialFilter suppresses the leaf primitive.
                     draw.maxVertexOffsetMetres=kCanopyGpuWindMaxOffsetMetres;
                 }
-                if(gpuCrownWindActive() && localWindActive &&
+                if(!rigWind && gpuCrownWindActive() && localWindActive &&
                    canopyCover>0u) {
                     const float tier=batch.lod==TreeLOD::High ? 1.0f :
                                      batch.lod==TreeLOD::Medium ? 0.75f :
@@ -451,7 +576,7 @@ private:
     // All Arbor branch geometry is authored in model-space centimetres
     // converted to metres, not re-centered around a local branch origin.
     // Therefore compose cumulative model-space transforms around each
-    // branch's ORIGINAL start pivot; children inherit their parent's pose.
+    // branch's presentation start pivot; children inherit their parent's pose.
     void buildBranchWindPose(
             const render::Model& model,
             const std::vector<render::float3>& pivots,
@@ -514,7 +639,8 @@ private:
             if(materials.size()>1) {
                 tint(materials[1],canopyCoverPermille(
                     phenology_,evergreen_.at(id)));
-                if(gpuCrownWindActive())
+                // Rigged near trees keep their hierarchical wind graph.
+                if(gpuCrownWindActive() && !hierarchicalWind_)
                     materials[1].shaderGraph=canopyWindGraph();
             }
             seasonalNearMaterials_.emplace(id,std::move(materials));
@@ -553,6 +679,16 @@ private:
     std::map<uint32_t,std::vector<render::float3>> branchPivots_;
     std::map<uint32_t,bool> evergreen_;
     std::map<uint32_t,uint64_t> prototypeSeeds_;
+    PrototypeDecorator decorator_;
+    bool impostorFromNearModel_=true;
+    ArborTreeGeometry treeGeometry_=ArborTreeGeometry::Auto;
+    TreeLodSettings treeLod_;
+    bool hierarchicalWind_=false;
+    float hierarchicalWindScale_=0.035f;
+    render::wind::WindMaskLibrary windMasks_;
+    std::shared_ptr<render::wind::WindMaskAtlas> windAtlas_;
+    render::wind::WindProfile defaultWindProfile_;
+    std::map<uint32_t,render::wind::WindProfile> windProfiles_;
     std::map<uint32_t,RootProfile> rootProfiles_;
     std::map<std::pair<uint32_t,uint64_t>,RootState> rootStates_;
     std::map<std::pair<uint32_t,uint32_t>,

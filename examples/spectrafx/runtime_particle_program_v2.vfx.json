@@ -1,0 +1,145 @@
+{
+  "version": 2,
+  "description": "Runtime CPU per-particle scalar program: variable-driven tint, air current and user attribute",
+  "parameters": {
+    "lift": 2
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 36
+      },
+      "position": [
+        20,
+        120
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2.5,
+        "speed": 3,
+        "size": 0.2,
+        "spread": 35
+      },
+      "position": [
+        260,
+        120
+      ]
+    },
+    {
+      "id": "custom",
+      "type": "ParticleProgramModule",
+      "properties": {
+        "version": 1,
+        "spawn": [
+          {
+            "op": "set",
+            "target": "attribute0",
+            "value": 0.75
+          },
+          {
+            "op": "set",
+            "target": "tint.g",
+            "value": 0.4
+          }
+        ],
+        "update": [
+          {
+            "op": "addRate",
+            "target": "velocity.y",
+            "value": {
+              "op": "multiply",
+              "a": 2.2,
+              "b": {
+                "op": "subtract",
+                "a": 1,
+                "b": {
+                  "var": "ageNormalized"
+                }
+              }
+            }
+          },
+          {
+            "op": "set",
+            "target": "tint.a",
+            "value": {
+              "op": "saturate",
+              "a": {
+                "op": "subtract",
+                "a": 1,
+                "b": {
+                  "var": "ageNormalized"
+                }
+              }
+            }
+          },
+          {
+            "op": "set",
+            "target": "size",
+            "value": {
+              "op": "multiply",
+              "a": 0.2,
+              "b": {
+                "op": "add",
+                "a": 1,
+                "b": {
+                  "op": "multiply",
+                  "a": {
+                    "var": "attribute0"
+                  },
+                  "b": {
+                    "var": "ageNormalized"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "death": [
+          {
+            "op": "set",
+            "target": "attribute7",
+            "value": 1
+          }
+        ]
+      },
+      "position": [
+        500,
+        120
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive"
+      },
+      "position": [
+        760,
+        120
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "custom"
+    },
+    {
+      "from": "custom",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

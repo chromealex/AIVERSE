@@ -110,6 +110,11 @@ public:
             const std::string& id,uint32_t oldVersion,Fn&& reader) {
         persistentEcs_.registerResourceMigration<T>(id,oldVersion,std::forward<Fn>(reader));
     }
+    // Optional cross-schema check of a decoded save before it is committed.
+    void addPersistentLoadValidator(std::string name,
+                                    PersistentEcsRegistry::LoadValidator validator) {
+        persistentEcs_.addLoadValidator(std::move(name),std::move(validator));
+    }
     const PersistentEcsRegistry& persistentEcs()const{return persistentEcs_;}
 
     // Queue a command. If cmd.tick == 0 it is scheduled for currentTick + inputDelay.

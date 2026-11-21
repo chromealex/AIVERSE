@@ -30,6 +30,13 @@ Tests: `aiverse_tests driving_`.
 - **State / determinism.** `DrivingStore` world resource: hashed, saved after the top-down heroes, copied by
   rollback snapshots. Fixed maths only. Games without the block keep their checksums and save layout.
 
+## Races
+
+A map `"race"` block makes the map's cars race (the shared race capability, [races.md](races.md)): racer `i` is the
+`i`-th car (entity order) of player `i + 1`, whose hero is seated in it at the start; players marked `"bot"` or
+without a hero race with the race bot. Adapter: `Driving::loadRace` / `raceBefore` / `raceAfter`; state:
+`DrivingRaceState` (`modules/rts/RtsRace.h`), hashed and saved only on maps with a race. Tests: `aiverse_tests driving_race_`.
+
 ## Computer drivers
 
 `Driving::setAutopilot(sim, vehicle, VehicleInput)` gives a vehicle nobody drives its pedals (throttle, brake,

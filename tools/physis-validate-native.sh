@@ -111,6 +111,11 @@ else
     if [[ "$MODE" == full ]]; then
         TARGETS=(
         aiverse_physis_core_test
+        aiverse_physis_nereid_contacts_test
+        aiverse_physis_nature_stress_test
+        aiverse_physis_fracture_outbox_test
+        aiverse_physis_nature_fall_host_test
+        aiverse_physis_sky_tests
         aiverse_physis_climate_test
         aiverse_physis_environment_test
         aiverse_physis_disasters_test
@@ -135,7 +140,7 @@ else
         aiverse_physis_journal_crash_recovery_test
         )
         if [[ "$ENABLE_PHYSICS" == ON ]]; then
-            TARGETS+=(aiverse_physis_box3d_test)
+            TARGETS+=(aiverse_physis_box3d_test aiverse_physis_terraweave_fall_bridge_test)
         fi
     fi
     stage build cmake --build "$BUILD_DIR" --parallel "$JOBS" --target "${TARGETS[@]}"

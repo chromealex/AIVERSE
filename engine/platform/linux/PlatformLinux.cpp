@@ -315,6 +315,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
         device->beginFrame(S.fbW, S.fbH);
         if (S.cb.frame) S.cb.frame(*device, dt);
         device->endFrame();
+        if (S.cb.afterFrame) S.cb.afterFrame(*device);
         ++frameNo;
         if (capture.active() && frameNo >= capture.frames) {
             if (!capture.path.empty() && !vulkan) saveScreenshot(capture.path, S.fbW, S.fbH);

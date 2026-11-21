@@ -3,6 +3,7 @@
 #include <aiverselib/genre/VehicleConfigured.h>
 #include <aiverselib/genre/VehicleData.h>
 #include <aiverselib/genre/VehiclePersistence.h>
+#include <aiverselib/genre/RaceSessionData.h>
 #include <aiverselib/genre/SportsConfigured.h>
 #include <aiverselib/genre/SportsData.h>
 #include <aiverselib/genre/SportsPersistence.h>
@@ -180,6 +181,66 @@ void raceBot(const std::string& root){
     CHECK(!bots::stepRaceBot(cfg,*line,lead,0,{{30_fx,Fixed{},-20_fx},{},Fixed{},1,4,{}}));   // repeated tick
 }
 
+// Race session: countdown holds the grid, bots and a player race two laps, results and restore are deterministic.
+uint64_t raceSessionRun(const std::string& root,uint32_t restoreAt,RaceSessionState* out=nullptr){
+    auto defs=readVehicleDefinitions(Json::parseFile(root+"/examples/libraries/genre/vehicles-sports/vehicles.json"));
+    const auto& def=defs.vehicles.at(1);auto course=defs.tracks.at(1).course;course.laps=2;auto line=bots::makeRaceLine(defs.tracks.at(1).line);CHECK(line);
+    RaceSessionConfig cfg;cfg.countdownTicks=60;cfg.finishGraceTicks=900;cfg.bot.cornerAccel=Fixed::fromRatio(84,10);cfg.race.stuckTicks=300;
+    std::vector<RaceSessionRacer> racers{{1,false},{2,true},{3,true},{4,true}};
+    auto s=makeRaceSession(course,cfg,racers,&*line,0);CHECK(s&&s->phase==RacePhase::Countdown&&s->goTick==60&&s->bots.size()==3);
+    std::vector<VehicleState> cars;for(std::size_t i=0;i<4;++i)cars.push_back(makeVehicleState(def.controller,course.grid[i].position,course.grid[i].yaw));
+    bots::RaceBotState pilot;auto pilotCfg=cfg.bot;pilotCfg.skillMilli=900;   // the "player" drives with its own bot at 90% pace
+    Hasher h;bool started=false,ended=false;uint32_t tick=0;
+    for(;tick<6000&&!ended;++tick){
+        if(tick==restoreAt){auto bytes=save(*s);CHECK(!bytes.empty());RaceSessionState copy;CHECK(load(bytes,copy));*s=copy;}
+        std::vector<RaceDriver> drivers;
+        for(std::size_t i=0;i<4;++i){RaceDriver d{int64_t(i+1),cars[i].position,cars[i].velocity,cars[i].yaw,{}};
+            if(i==0){auto o=bots::stepRaceBot(pilotCfg,*line,pilot,tick,{cars[0].position,cars[0].velocity,cars[0].yaw,1,4,{}});CHECK(o);d.input=o->input;}
+            drivers.push_back(d);}
+        auto inputs=raceSessionInputs(cfg,&*line,*s,tick,drivers);CHECK(inputs&&inputs->size()==4);
+        CHECK(!raceSessionInputs(cfg,&*line,*s,tick,drivers));   // repeated tick
+        if(tick<60)for(const auto& x:*inputs)CHECK(x.input.brake==1_fx&&x.input.throttle==Fixed{});
+        CHECK((*inputs)[1].bot&&!(*inputs)[0].bot);
+        std::vector<RaceSample> samples;
+        for(std::size_t i=0;i<4;++i){CHECK(stepVehicle(def.controller,cars[i],tick,dt,(*inputs)[i].input,{}));samples.push_back({int64_t(i+1),cars[i].position,cars[i].velocity});}
+        auto report=stepRaceSession(course,cfg,*s,tick,samples);CHECK(report);
+        for(const auto& r:report->race.respawns){auto& car=cars[size_t(r.racer-1)];respawnVehicle(def.controller,car,r.position,r.yaw);}
+        for(auto e:report->session){if(e==RaceSessionEventKind::Started){CHECK(tick==60);started=true;}if(e==RaceSessionEventKind::Ended)ended=true;}
+        if(tick==59)for(const auto& car:cars)CHECK((Vec2{car.velocity.x,car.velocity.z}.length()<Fixed::fromRatio(1,10)));   // nobody left the grid
+        hashVehicle(h,*s);
+    }
+    CHECK(started&&ended&&s->phase==RacePhase::Finished&&raceSessionWinner(*s)>0);
+    CHECK(raceSessionCountdown(*s,0)==60&&raceSessionCountdown(*s,tick)==0);
+    CHECK(s->standings.size()==4&&s->standings[0].finished&&s->standings[0].racer==raceSessionWinner(*s));
+    CHECK(!stepRaceSession(course,cfg,*s,tick-1,{}));   // backwards tick
+    roundtrip(*s);if(out)*out=*s;return h.value();
+}
+void raceSession(const std::string& root){
+    RaceSessionState done;auto a=raceSessionRun(root,UINT32_MAX,&done),b=raceSessionRun(root,700),c=raceSessionRun(root,30);CHECK(a==b&&b==c);
+    CHECK(raceFinished(done.race)||done.endTick>=done.firstFinishTick+900);
+    CHECK(stateKind(RaceSessionState{})==128);
+    // Invalid setups: unsorted ids, bots without a racing line, an invalid config.
+    auto defs=readVehicleDefinitions(Json::parseFile(root+"/examples/libraries/genre/vehicles-sports/vehicles.json"));const auto& course=defs.tracks.at(1).course;
+    std::vector<RaceSessionRacer> unsorted{{2,false},{1,false}},bot{{1,true}},one{{1,false}};RaceSessionConfig cfg;
+    CHECK(!makeRaceSession(course,cfg,unsorted,nullptr,0)&&!makeRaceSession(course,cfg,bot,nullptr,0)&&makeRaceSession(course,cfg,one,nullptr,0));
+    auto bad=cfg;bad.bot.skillMilli=0;CHECK(!makeRaceSession(course,bad,one,nullptr,0));
+    // No countdown: running at once; a racer missing from the race is rejected.
+    cfg.countdownTicks=0;auto s=makeRaceSession(course,cfg,one,nullptr,5);CHECK(s&&s->phase==RacePhase::Running&&raceSessionRunning(*s,5));
+    std::vector<RaceDriver> stranger{{9}};CHECK(!raceSessionInputs(cfg,nullptr,*s,5,stranger));
+    // Shared data (rules / map "race", docs/races.md): units scale to metres, gates face their yaw, errors name the key.
+    auto track=readRaceTrack(Json::parse(R"({"laps":2,"checkpoints":[{"x":10,"z":0,"yaw":0.25,"width":4},{"x":0,"z":5,"yaw":0,"width":3,"respawn":[1,4]}],
+        "grid":[{"x":1,"z":1,"yaw":0.5}],"line":[[0,0],[10,0],[10,10],[0,10]]})"),"map race",4_fx);
+    CHECK(track.grid&&track.course.laps==2&&track.course.checkpoints[0].gate.center.x==40_fx&&track.course.checkpoints[0].gate.radius==8_fx);
+    CHECK(track.course.checkpoints[0].gate.normal.x==1_fx&&track.course.checkpoints[1].respawn.z==16_fx&&track.line.size()==4&&track.course.grid[0].yaw==Fixed::fromRatio(1,2));
+    throwsWith([]{readRaceTrack(Json::parse(R"({"checkpoints":[{"x":0,"z":0,"width":1}]})"),"map race",1_fx);},"map race.checkpoints: expected 2..");
+    throwsWith([]{readRaceTrack(Json::parse(R"({"checkpoints":[{"x":0,"z":0},{"x":1,"z":0,"width":1}]})"),"map race",1_fx);},"map race.checkpoints[0].width: required");
+    throwsWith([]{readRaceTrack(Json::parse(R"({"checkpoints":[{"x":0,"z":0,"width":1},{"x":1,"z":0,"width":1}],"line":[[0,0],[0,0],[1,1]]})"),"map race",1_fx);},"map race.line: a closed loop");
+    auto rules=readRaceRules(Json::parse(R"({"countdownTicks":30,"laps":5,"crashDamage":true,"vehicles":{"stuckTicks":200}})"),"race",60);
+    CHECK(rules.session.countdownTicks==30&&rules.session.finishGraceTicks==600&&rules.laps==5&&rules.crashDamage&&rules.session.race.stuckTicks==200);
+    CHECK(readRaceRules(Json(),"race",30).session.countdownTicks==90);
+    throwsWith([]{readRaceRules(Json::parse(R"({"pits":1})"),"race",60);},"race.pits: unknown key");
+}
+
 // ---- Sports ----
 std::vector<SportsPlayer> pair2(Vec2 a,Vec2 b){SportsPlayer x;x.id=1;x.team=1;x.position=a;SportsPlayer y;y.id=2;y.team=2;y.position=b;return {x,y};}
 SportsState liveMatch(const SportsRulesConfig& c,const SportsField& f,std::vector<SportsPlayer>& players,Random& rng){
@@ -349,8 +410,8 @@ void dataAndSettings(const std::string& root){
 int main(int argc,char** argv){
     try{
         CHECK(argc==2);std::string root=argv[1];
-        wheeledController();otherControllers();damageZones();seats();raceCourse();raceBot(root);
+        wheeledController();otherControllers();damageZones();seats();raceCourse();raceBot(root);raceSession(root);
         sportsRules();sportsBoundaries();sportsContests();sportsClock();formations(root);sportsBot(root);persistenceAndKinds(root);dataAndSettings(root);
-        std::cout<<"Vehicles + sports: controllers, damage zones, seats, race positions, race bot, ball rules, formations, sports bot, persistence, data: OK\n";
+        std::cout<<"Vehicles + sports: controllers, damage zones, seats, race positions, race bot, race session, ball rules, formations, sports bot, persistence, data: OK\n";
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

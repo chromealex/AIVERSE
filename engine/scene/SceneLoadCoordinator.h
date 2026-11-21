@@ -57,9 +57,9 @@ public:
     // Pending std::async futures join when jobs_ is destroyed; reader callbacks
     // must not depend on an external object already being destroyed.
     ~SceneLoadCoordinator() {
-        for(const auto& [id, leases] : resident_) {
+        for(const auto& [id, resident] : resident_) {
             (void)id;
-            release(leases);
+            release(resident.leases);
         }
     }
 
@@ -123,6 +123,7 @@ public:
             }
             ++it;
         }
+        pruneTerminalJobs();
     }
 
     SceneLoadStatus status(SceneTicket ticket) const {
@@ -247,11 +248,14 @@ public:
 
         // Refcounts are non-authoritative presentation/collision residency.
         // World SceneOwner/SceneState remain canonical across snapshots.
-        resident_[ticket.scene.value] = std::move(leases);
+        resident_[ticket.scene.value] = Resident{job->manifest->id, std::move(leases)};
         for(uint64_t sceneId : discarded) {
             releaseResident(sceneId);
             markUnloaded(sceneId);
         }
+        // The committed manifest is no longer needed; keep only the status
+        // until pruneTerminalJobs() retires the record.
+        job->manifest.reset();
         job->status = SceneLoadStatus::Committed;
         return true;
     }
@@ -288,44 +292,78 @@ public:
     }
 
     // Invoke AFTER Simulation::loadState / deserialize at a host barrier.
-    // Discard all pre-rollback future results, invalidate their SceneTickets,
-    // and release derived presentation leases. Authoritative scene ECS state
-    // is NOT changed. Use queueRestoredResidency() before resuming gameplay.
+    // Discard all pre-rollback future results and invalidate their
+    // SceneTickets. Derived presentation leases are diffed against the
+    // restored SceneState: a resident scene that is still Active with the
+    // same asset keeps its leases (no restream); every other lease is
+    // released. Authoritative scene ECS state is NOT changed.
+    // Use queueRestoredResidency() before resuming gameplay.
     void invalidateAfterRestore() {
         if(epoch_ == std::numeric_limits<uint64_t>::max()) {
             // Cannot ever alias a previous epoch, so abort explicitly.
             throw std::overflow_error("scene coordinator epoch exhausted");
         }
         ++epoch_;
-        for(auto& [serial, job] : jobs_) {
-            (void)serial;
+        for(auto it = jobs_.begin(); it != jobs_.end();) {
+            Job& job = it->second;
+            // Old-epoch tickets are unreachable; only running workers stay
+            // as tombstones until poll() joins them.
+            if(!job.future.valid()) {
+                it = jobs_.erase(it);
+                continue;
+            }
             job.manifest.reset();
             job.status = SceneLoadStatus::Cancelled;
+            ++it;
         }
+        const SceneState* state = scenes_.stateView();
         for(auto it = resident_.begin(); it != resident_.end();) {
-            release(it->second);
+            const SceneRecord* record = nullptr;
+            if(state) {
+                const auto found = state->scenes.find(it->first);
+                if(found != state->scenes.end()) record = &found->second;
+            }
+            if(record && record->phase == ScenePhase::Active &&
+               record->asset == it->second.asset) {
+                ++it;
+                continue;
+            }
+            release(it->second.leases);
             it = resident_.erase(it);
         }
     }
 
-    // Non-authoritative residency restore only: no ECS entities are respawned.
-    // Queue existing Active scene records after rollback / cold deserialize.
-    // The host must await/commit these leases before its next relevant tick.
+    // Non-authoritative restore after rollback / cold deserialize.
+    // Active scene records that are not resident get a residency-only job
+    // (no ECS entities are respawned). Loading scene records lost their job
+    // with the old epoch; they get a full preparation job again so the host
+    // can commit (or cancel) them, which also clears a restored
+    // pendingReplace. The host must await/commit these tickets at its
+    // deterministic barrier before its next relevant tick. Calls beyond the
+    // worker cap leave records for a later call.
     std::vector<SceneTicket> queueRestoredResidency() {
         std::vector<SceneTicket> result;
         const SceneState* state = scenes_.stateView();
         if(!state) return result;
         for(const auto& [id, record] : state->scenes) {
-            if(record.phase != ScenePhase::Active || resident_.contains(id) ||
-               hasActiveResidencyJob(id) || inFlight() >= maxPreparing_ ||
-               serial_ == std::numeric_limits<uint64_t>::max())
+            const bool residencyOnly = record.phase == ScenePhase::Active;
+            if(residencyOnly ? (resident_.contains(id) || hasActiveResidencyJob(id))
+                             : hasLiveLoadJob(id))
                 continue;
+            if(inFlight() >= maxPreparing_ ||
+               serial_ == std::numeric_limits<uint64_t>::max())
+                break;
             const SceneTicket ticket{{id}, epoch_, ++serial_};
-            if(schedule(ticket, record.asset, true))
+            if(schedule(ticket, record.asset, residencyOnly))
                 result.push_back(ticket);
         }
         return result;
     }
+
+    // Terminal (Committed/Unloaded/settled Failed) job records retained for
+    // status() queries; older ones are pruned by poll().
+    static constexpr size_t kMaxTerminalJobs = 64;
+    size_t jobCount() const { return jobs_.size(); }
 
     size_t residentSceneCount() const { return resident_.size(); }
     size_t sharedResourceCount() const { return refcounts_.size(); }
@@ -338,6 +376,10 @@ private:
     struct Prepared {
         SceneAsset asset;
         std::string error;
+    };
+    struct Resident {
+        std::string asset;
+        std::vector<std::string> leases;
     };
     struct Job {
         SceneTicket ticket;
@@ -392,6 +434,48 @@ private:
                 job.status == SceneLoadStatus::Committed)) return true;
         }
         return false;
+    }
+    bool hasLiveLoadJob(uint64_t sceneId) const {
+        for(const auto& [serial, job] : jobs_) {
+            (void)serial;
+            if(job.ticket.epoch == epoch_ && job.ticket.scene.value == sceneId &&
+               !job.residencyOnly &&
+               (job.status == SceneLoadStatus::Preparing ||
+                job.status == SceneLoadStatus::Ready ||
+                job.status == SceneLoadStatus::Failed)) return true;
+        }
+        return false;
+    }
+    // A Failed full-load job whose Loading record still exists must remain
+    // so the host can cancel() it; every other terminal job is prunable.
+    bool terminal(const Job& job) const {
+        if(job.future.valid()) return false;
+        switch(job.status) {
+            case SceneLoadStatus::Committed:
+            case SceneLoadStatus::Unloaded:
+                return true;
+            case SceneLoadStatus::Failed: {
+                if(job.residencyOnly || job.ticket.epoch != epoch_) return true;
+                const SceneRecord* record = scenes_.record(job.ticket.scene);
+                return !record || record->phase != ScenePhase::Loading;
+            }
+            default:
+                return false;
+        }
+    }
+    void pruneTerminalJobs() {
+        size_t count = 0;
+        for(const auto& [serial, job] : jobs_) {
+            (void)serial;
+            if(terminal(job)) ++count;
+        }
+        // jobs_ is ordered by serial: erase the oldest terminal records.
+        for(auto it = jobs_.begin(); it != jobs_.end() && count > kMaxTerminalJobs;) {
+            if(terminal(it->second)) {
+                it = jobs_.erase(it);
+                --count;
+            } else ++it;
+        }
     }
     size_t inFlight() const {
         size_t count = 0;
@@ -461,16 +545,23 @@ private:
             const auto count = refcounts_.find(*it);
             if(count == refcounts_.end()) continue;
             if(--count->second == 0) {
-                if(resources_.release) resources_.release(count->first);
+                // Erase first: the refcount table stays consistent even if a
+                // (contract-violating) release callback throws.
+                const std::string key = count->first;
                 refcounts_.erase(count);
+                if(resources_.release) {
+                    try { resources_.release(key); }
+                    catch(...) {} // Must not throw; never abort a teardown loop.
+                }
             }
         }
     }
     void releaseResident(uint64_t sceneId) {
         const auto it = resident_.find(sceneId);
         if(it == resident_.end()) return;
-        release(it->second);
+        const std::vector<std::string> leases = std::move(it->second.leases);
         resident_.erase(it);
+        release(leases);
     }
     void markUnloaded(uint64_t sceneId) {
         for(auto& [serial, job] : jobs_) {
@@ -495,7 +586,7 @@ private:
     uint64_t epoch_ = 1;
     uint64_t serial_ = 0;
     std::map<uint64_t, Job> jobs_;
-    std::map<uint64_t, std::vector<std::string>> resident_;
+    std::map<uint64_t, Resident> resident_;
     std::map<std::string, size_t> refcounts_;
 };
 

@@ -12,9 +12,13 @@
 #include "engine/world/TerraWeaveForestEcologyEcs.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "engine/world/TerraWeaveForestDeadwoodEcs.h"
+#include "engine/world/TerraWeaveForestNutrientEcs.h"
+#include "engine/world/TerraWeaveNereidMicroNutrients.h"
+#include "engine/world/TerraWeavePhysisNutrientBridge.h"
 #include "engine/world/TerraWeaveFlowObstructionEcs.h"
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -45,7 +49,50 @@ inline void registerSystems(
         bool enableForestDeadwood=false,
         terraweave::ForestDeadwoodDecaySettings deadwoodSettings={},
         std::function<void(const terraweave::ForestDeadwoodDecayOutcome&)>
-            onDeadwoodDecay={}) {
+            onDeadwoodDecay={},
+        terraweave::ForestDeadwoodClimateSampler deadwoodClimate={},
+        bool enableForestNutrientCycle=false,
+        terraweave::ForestNutrientCycleSettings nutrientSettings={},
+        terraweave::ForestNutrientWeatherSampler nutrientWeather={},
+        std::function<void(const terraweave::ForestNutrientCycleOutcome&)>
+            onNutrientCycle={},
+        terraweave::NereidNutrientJunctionSettings junctionSettings={},
+        bool useNativePhysisWeather=false,
+        bool enableFourMetreNutrients=false,
+        terraweave::ForestMicroSettings microSettings={},
+        terraweave::ForestNereidMicroJunctionSettings microJunctionSettings={},
+        std::function<void(const terraweave::ForestMicroOutcome&)>
+            onMicroNutrients={}) {
+    // Stage68 cannot run without the versioned organic ledger. Reject
+    // invalid setup BEFORE registering any ECS system or persistence type.
+    if(enableForestNutrientCycle && !enableForestDeadwood)
+        throw std::invalid_argument(
+            "TerraWeave nutrient cycle requires forest deadwood");
+    if(enableFourMetreNutrients && !enableForestNutrientCycle)
+        throw std::invalid_argument(
+            "TerraWeave 4m nutrient residency requires nutrient cycle");
+    if(enableFourMetreNutrients){
+        terraweave::validateForestMicroSettings(microSettings);
+        terraweave::validateForestNereidMicroJunctionSettings(
+            microJunctionSettings);
+    }
+    if(useNativePhysisWeather){
+        if(!enableForestDeadwood)
+            throw std::invalid_argument(
+                "TerraWeave PHYSIS ecology needs forest deadwood enabled");
+        if(!terraweave::terraweavePhysisWeatherAvailable())
+            throw std::logic_error(
+                "TerraWeave PHYSIS nature-sampling code is not in this build");
+        // PHYSIS state is read from the SAME Simulation World at each
+        // authoritative tick; it is not copied at registration time.
+        // Callers can still override either specialized sampler.
+        if(!deadwoodClimate)
+            deadwoodClimate=terraweave::makeTerraWeavePhysisDecayClimate(
+                sim.world());
+        if(!nutrientWeather && enableForestNutrientCycle)
+            nutrientWeather=terraweave::makeTerraWeavePhysisNutrientWeather(
+                sim.world());
+    }
     lib::nereid::NativeWaterPipelineConfig water{};
     water.enableBankErosion=true;
     // Geometry and current state belong to NEREID, including polygon/
@@ -130,7 +177,22 @@ inline void registerSystems(
     if(enableForestDeadwood)
         terraweave::addTerraWeaveForestDeadwoodSystem(
             sim,"terraweave.forest_deadwood",deadwoodSettings,
-            std::move(onDeadwoodDecay));
+            std::move(onDeadwoodDecay),std::move(deadwoodClimate));
+    // PHYSIS weather snapshots and NEREID current are sampled only by
+    // the opt-in nutrient cycle after soil/wood/ecology authority commits.
+    if(enableForestNutrientCycle && enableFourMetreNutrients){
+        // Exclusive with Stage68 coarse system: only ONE nutrient
+        // scheduler can mutate the persistent World per simulation tick.
+        terraweave::addTerraWeaveForestMicroNutrientSystem(
+            sim,"terraweave.forest_nutrients_4m",cfg,
+            microSettings,std::move(nutrientWeather),
+            microJunctionSettings,std::move(onMicroNutrients));
+    }else if(enableForestNutrientCycle){
+        terraweave::addTerraWeaveForestNutrientSystem(
+            sim,"terraweave.forest_nutrients",cfg,nutrientSettings,
+            std::move(nutrientWeather),std::move(onNutrientCycle),
+            junctionSettings);
+    }
 }
 
 inline Entity addWaterBody(

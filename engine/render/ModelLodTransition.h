@@ -11,6 +11,15 @@ struct ModelLodBlend {
     size_t level = 0;
     float progress = 0;
 };
+// Host-chosen level (0 = base mesh, n = levels[n-1], clamped to the chain).
+template<class Levels>
+ModelLodBlend forcedModelLod(int base, const Levels& levels, int level) {
+    ModelLodBlend out;
+    const size_t n = std::min<size_t>(size_t(std::max(level, 0)), levels.size());
+    out.mesh = n == 0 ? base : levels[n - 1].mesh;
+    out.level = n;
+    return out;
+}
 template<class Levels>
 ModelLodBlend selectModelLod(int base, const Levels& levels, float pixels, float width) {
     ModelLodBlend result{base};

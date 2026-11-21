@@ -63,6 +63,8 @@ public:
             }
         }
 
+        drawNaturePreview(ed);
+
         // Project-authored wind/storm/gravity sources are always editable,
         // including edit mode where no running PHYSIS ECS World exists.
         drawPhysisFieldsPanel(ed);
@@ -117,7 +119,8 @@ public:
         }
         ui::section(ICON_SCENE, "PHYSIS в окне «Сцена»");
         auto& sceneOverlay = physisSceneOverlayState();
-        ImGui::BeginDisabled(!live);
+        const bool overlaySource = live || ed.physisNaturePreview().previewWorld();
+        ImGui::BeginDisabled(!overlaySource);
         if (ImGui::Checkbox("Показать 3D-оверлей в «Сцене»", &sceneOverlay.enabled))
             sceneOverlay.dirty = true;
         if (sceneOverlay.enabled) {
@@ -131,7 +134,8 @@ public:
         }
         ImGui::EndDisabled();
         if (!live)
-            ui::hint("3D-оверлей читает только игровую PHYSIS, не демонстрацию.");
+            ui::hint(overlaySource ? "3D-оверлей показывает предпросмотр «Живой природы»."
+                                   : "3D-оверлей: включите «Живую природу» или запустите игру с PHYSIS.");
         if (sceneOverlay.layer != layer_ ||
             sceneOverlay.palette != static_cast<DebugPalette>(palette_)) {
             sceneOverlay.layer = layer_;
@@ -229,8 +233,15 @@ private:
     // Live edits go through a GameModule-opted-in Simulation command, never
     // from the Scene overlay into the authoritative World directly.
     void drawRemoteEdit(Editor& ed) {
-        ui::section(ICON_GLOBE,"PHYSIS · Remote Editing");
+        ui::section(ICON_GLOBE,"PHYSIS · Remote Editing (только API)");
         auto& remote=physis_remote::link();
+        // Review 2026-11-21: nothing in the shipped editor/engine calls
+        // link().attachAuthenticated(); be explicit instead of implying a
+        // connection may appear by itself.
+        if(!remote.attached() && !remote.authenticating())
+            ui::hint("Только API: в этой сборке редактор не подключает канал "
+                     "PHYSIS. Нужен хост проекта, вызывающий "
+                     "physis_remote::link().attachAuthenticated().");
         // Poll the handshake even before EditorLink is fully authenticated.
         // Otherwise a host-started loopback connector could never finish.
         remote.poll(::aiverse::net::nowMs());
@@ -298,7 +309,12 @@ private:
     }
 
     void drawLiveEdit(Editor& ed) {
-        ui::section(ICON_PENCIL, "PHYSIS · Live Editing");
+        ui::section(ICON_PENCIL, "PHYSIS · Live Editing (только API)");
+        // Review 2026-11-21: no engine GameModule implements FieldEditHost,
+        // so this panel only works for a game's own native module.
+        ui::hint("Только API: встроенные GameModule движка не реализуют "
+                 "FieldEditHost; правки доступны лишь нативному модулю игры, "
+                 "который явно разрешил их.");
         auto* sim=ed.sim();
         liveEdit_.observe(sim);
         std::string reason;
@@ -333,6 +349,53 @@ private:
             ui::hint("Отправлено не означает применено. Статус обновится после нужного тика.");
         }
         ui::hint("Только поле ветра/шторма/гравитации; климат и вода здесь не обновляются.");
+    }
+
+    // «Живая природа»: real fire/wind/grass/smoke/sound in the Scene view
+    // without a play-test. See apps/editor/PhysisNaturePreview.h.
+    void drawNaturePreview(Editor& ed) {
+        auto& nature = ed.physisNaturePreview();
+        auto& st = nature.settings;
+        ui::section(ICON_FLAME, "Живая природа в «Сцене»");
+        if (ImGui::Checkbox("Показать огонь, ветер и траву##physisNature", &st.enabled) && st.enabled)
+            nature.requestReset();
+        if (!st.enabled) {
+            ui::hint("Пожар по траве, который гонит ветер, дым, угли и звук — прямо в редакторе, "
+                     "без запуска игры. Используется PHYSIS-блок карты (климат и поля ветра).");
+            return;
+        }
+        ImGui::TextColored(nature.usingLive() ? ImVec4(0.35f, 0.78f, 0.73f, 1) : ImVec4(0.92f, 0.76f, 0.35f, 1),
+            "%s", nature.usingLive() ? "Игровая PHYSIS (только чтение)"
+                                     : "Предпросмотр: отдельный World, в игру не попадает");
+        if (!nature.usingLive()) {
+            ImGui::Checkbox("Идёт##physisNature", &st.playing);
+            ImGui::SameLine();
+            ImGui::Checkbox("Поджигать кликом (ЛКМ)##physisNature", &st.igniteOnClick);
+            ImGui::SameLine();
+            if (ImGui::Button("Сброс##physisNature")) nature.requestReset();
+            ImGui::SliderFloat("Скорость##physisNature", &st.speed, 0.1f, 6.f, "%.1fx");
+            bool wind = ImGui::SliderFloat("Ветер, м/с##physisNature", &st.windSpeed, 0.f, 30.f, "%.1f");
+            wind |= ImGui::SliderFloat("Куда дует, °##physisNature", &st.windDirectionDeg, -180.f, 180.f, "%.0f");
+            if (wind) nature.applyWindSettings();
+            ImGui::SliderFloat("Влажность##physisNature", &st.humidity, 0.f, 1.f, "%.2f");
+            ImGui::SliderInt("Детализация, м/ячейка##physisNature", &st.previewCellMeters, 0, 16,
+                             st.previewCellMeters == 0 ? "сетка карты" : "%d м");
+            if (ImGui::IsItemDeactivatedAfterEdit()) nature.requestReset();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("0 — точная сетка PHYSIS карты; 2–8 м — подробный пожар для просмотра.");
+        }
+        ImGui::Checkbox("Трава##physisNature", &st.grass);
+        ImGui::SameLine();
+        ImGui::Checkbox("Пламя и дым##physisNature", &st.flames);
+        ImGui::SameLine();
+        ImGui::Checkbox("Звук##physisNature", &st.sound);
+        static const char* kGrassQuality[] = {"низкое", "среднее", "высокое"};
+        ImGui::Combo("Качество травы##physisNature", &st.grassQuality, kGrassQuality, 3);
+        if (st.sound) ImGui::SliderFloat("Громкость##physisNature", &st.volume, 0.f, 1.f, "%.2f");
+        ImGui::TextDisabled("тик %llu · ячейка %.0f м · очагов %zu · дым %zu · звуков %zu · патчей травы %zu · горит ≈%.0f м²",
+            (unsigned long long)nature.tick(), nature.cellMeters(), nature.flames(), nature.smoke(),
+            nature.voices(), nature.grassPatches(), nature.burningArea());
+        if (!nature.status().empty()) ui::hint(nature.status().c_str());
     }
 
     void makeDemo() {

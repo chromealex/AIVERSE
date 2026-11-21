@@ -72,6 +72,8 @@ inline std::unique_ptr<render::Model> makeHorizonModel(
     atlas.height=static_cast<int>(b.atlasHeight);
     atlas.repeat=false;
     atlas.nearest=false;
+    // Mutable atlas patches rely on backend automatic mip regeneration.
+    atlas.preserveAlphaCoverage=false;
     atlas.rgba=b.atlasRgba;
     model->images.push_back(std::move(atlas));
 

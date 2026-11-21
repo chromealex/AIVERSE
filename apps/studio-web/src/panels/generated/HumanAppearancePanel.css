@@ -1,0 +1,3 @@
+.studio-panel-human_appearance .human-look-value { display:grid;grid-template-columns:minmax(0,1fr) 5.5em;gap:var(--au-space-2); }
+.studio-panel-human_appearance summary { cursor:pointer;padding:var(--au-space-2);font-weight:600; }
+.studio-panel-human_appearance .au-row { flex-wrap:wrap; }

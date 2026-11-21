@@ -31,6 +31,18 @@ public:
     bool draw(gfx::Device& dev, render::Renderer3D& r, const PlanetRenderer& planets, const PlanetViewFrame& frame, const RtsScene& s,
               double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const RtsGroundFx& looks, const Rules& rules);
     int quads() const { return quads_; }
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats(const gfx::Device& dev) const {
+        render::GpuOwnedMemoryCounter c(dev);
+        const auto mesh=[&](const render::Mesh& m){c.buffer(m.vb);c.buffer(m.ib);};
+        for (const auto& body : bodies_) {
+            mesh(body.lanes);
+            for (const auto& tile : body.tiles) {
+                mesh(tile.fill);mesh(tile.border);mesh(tile.road);
+                mesh(tile.rock);mesh(tile.veins);mesh(tile.gems);mesh(tile.marks);
+            }
+        }
+        return c.stats();
+    }
     static constexpr int kTile = 32;
 
 private:

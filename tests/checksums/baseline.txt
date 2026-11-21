@@ -55,6 +55,9 @@ perk_arena 3 29ca9f0591eeb31f
 planets 1 124c8c10bb9bbdf4
 planets 2 eb381e9e20d5222c
 planets 3 b72f846e5d219199
+road_race 1 15405ef00964f850
+road_race 2 bbc77ef5a772c854
+road_race 3 2191443575a27e2e
 scripted 1 6713abb3ff55b1b6
 scripted 2 b2cb91506bc48043
 scripted 3 40be1c7c67946a3d

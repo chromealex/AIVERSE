@@ -5,7 +5,7 @@
 #include <deque>
 
 namespace aiverse::net::authority {
-constexpr uint32_t kProtocol=5;
+constexpr uint32_t kProtocol=6;   // 6: RaceView in snapshots
 uint64_t contentId(const Json& rules,const Json& map);
 struct Snapshot {
     uint32_t tick=0,ack=0;uint8_t localSlot=0;int32_t winner=0;
@@ -13,6 +13,7 @@ struct Snapshot {
     std::vector<fps::Projectile> projectiles;std::vector<fps::Loot> loot;std::vector<fps::Vehicle> vehicles;fps::RoundState match;uint32_t round=1;
     fps::RoyaleView royale;
     lib::systems::GearLoadout gear;   // own gear (fps.gear)
+    lib::genre::RaceView race;        // own race standing (map "race")
 };
 Bytes encodeSnapshot(const Snapshot& snapshot);
 bool decodeSnapshot(const Bytes&,Snapshot& out);

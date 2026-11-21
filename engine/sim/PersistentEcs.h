@@ -109,6 +109,17 @@ public:
     bool empty()const{return entries_.empty();}
     void seal(){sealed_=true;}
 
+    // Cross-schema consistency check run on the fully decoded staged World
+    // before a load is committed (e.g. SharedRef slots vs SharedStore size).
+    // Returning false rejects the load with "persistent ECS: <name>: <error>".
+    // Registered during setup only; has no effect on save bytes or hashes.
+    using LoadValidator=std::function<bool(const World&,std::string&)>;
+    void addLoadValidator(std::string name,LoadValidator validator) {
+        if(sealed_)throw std::logic_error("persistent ECS validators register during setup");
+        if(!validator)throw std::invalid_argument("empty persistent ECS validator");
+        validators_.push_back({std::move(name),std::move(validator)});
+    }
+
     bool serialize(Archive& a,World& world,std::string* err=nullptr,
                    LoadedHash* loaded=nullptr)const {
         auto fail=[&](const std::string& reason) {
@@ -155,7 +166,14 @@ public:
                 if(loaded)loaded->chunks.push_back({e.id,e.kind,version,std::move(chunk)});
             }
         }
-        if(!a.writing())world=std::move(staged);
+        if(!a.writing()) {
+            for(const auto& [name,validate]:validators_) {
+                std::string reason;
+                if(!validate(staged,reason))
+                    return fail(name+": "+(reason.empty()?"invalid state":reason));
+            }
+            world=std::move(staged);
+        }
         return a.ok();
     }
 
@@ -211,6 +229,7 @@ private:
         entries_.insert(at,std::move(e));
     }
     std::vector<Entry> entries_;
+    std::vector<std::pair<std::string,LoadValidator>> validators_;
     bool sealed_=false;
 };
 } // namespace aiverse

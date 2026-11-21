@@ -19,6 +19,10 @@ int main(){try {
     }
     Json g=Json::parse(R"({"version":1,"domain":"material","nodes":[{"id":"multiply","op":"multiply","inputs":["c","c"]},{"id":"c","op":"constant","value":[0.2,0.4,0.8,1]}],"outputs":{"color":"multiply","roughness":"c"}})");
     auto p=compile(g);require(p.glsl.find("sg_n1 =")<p.glsl.find("sg_n0 ="),"topological order");
+    auto ao=g;ao.find("outputs")->set("occlusion",Json::string("c"));
+    require(compile(ao).outputs.count("occlusion")==1,"material occlusion output missing");
+    auto wrongAo=makeDefault("postfx");wrongAo.find("outputs")->set("occlusion",Json::string("input"));rejects(wrongAo);
+    wrongAo=makeDefault("particle");wrongAo.find("outputs")->set("occlusion",Json::string("input"));rejects(wrongAo);
     auto bad=g;bad.find("nodes")->at(0).find("inputs")->at(0)=Json::string("multiply");rejects(bad);
     bad=g;bad.find("nodes")->at(1).set("id",Json::string("multiply"));rejects(bad);
     bad=g;bad.find("nodes")->at(0).find("inputs")->at(1)=Json::string("absent");rejects(bad);
@@ -30,8 +34,18 @@ int main(){try {
     bad=g;bad.set("version",Json::number(int64_t(2)));rejects(bad);
     bad=makeDefault("material");
     for(int i=0;i<128;++i){Json n=Json::object();n.set("id",Json::string("extra"+std::to_string(i)));n.set("op",Json::string("input"));bad.find("nodes")->push(n);}rejects(bad);
+    {auto wide=bad;wide.set("nodeBudget",Json::number(int64_t(192)));
+     require(compile(wide).domain=="material","explicit material node budget ignored");
+     auto over=wide;over.set("nodeBudget",Json::number(int64_t(193)));rejects(over);
+     auto post=wide;post.set("domain",Json::string("postfx"));rejects(post);}
     bad=makeDefault("postfx");
     for(int i=0;i<9;++i){Json n=Json::object();n.set("id",Json::string("tex"+std::to_string(i)));n.set("op",Json::string("texture"));n.set("inputs",Json::parse("[\"input\"]"));bad.find("nodes")->push(n);}rejects(bad);
+    auto layered=bad;layered.set("domain",Json::string("material"));
+    rejects(layered); // default budget remains eight even for materials
+    layered.set("sampleBudget",Json::number(int64_t(16)));
+    require(compile(layered).samples==9,"explicit material sample budget ignored");
+    for(auto invalidBudget:{0.0,16.5,17.0}) {auto invalid=layered;invalid.set("sampleBudget",Json::number(invalidBudget));rejects(invalid);}
+    layered.set("domain",Json::string("postfx"));rejects(layered);
     bad=g;bad.find("nodes")->at(0).set("position",Json::parse("[1]"));rejects(bad);
     auto stage=makeDefault("material");
     auto displacement=Json::parse(R"({"id":"offset","op":"constant","value":[0,0.2,0,0]})");
@@ -58,6 +72,13 @@ int main(){try {
     quality.set("minQuality",Json::string("medium"));quality.set("domain",Json::string("particle"));rejects(quality);
     auto normal=makeDefault("material");normal.find("outputs")->set("normal",Json::string("input"));
     require(compile(normal).outputs.count("normal")==1,"normal output lost");
+    auto heightNormal=Json::parse(R"({"version":1,"domain":"material","nodes":[{"id":"p","op":"worldPosition"},{"id":"n","op":"normal"},{"id":"h","op":"constant","value":0},{"id":"b","op":"normalFromHeight","inputs":["p","n","h"]}],"outputs":{"color":"h","normal":"b"}})");
+    auto hn=compile(heightNormal);require(hn.samples==0,"height normal unexpectedly samples a texture");
+    require(hn.glsl.find("dFdx")!=std::string::npos && hn.msl.find("dfdx")!=std::string::npos,"height normal derivatives missing");
+    heightNormal.find("outputs")->set("vertexNormal",Json::string("b"));rejects(heightNormal);
+    heightNormal.find("outputs")->erase("vertexNormal");
+    heightNormal.set("domain",Json::string("postfx"));rejects(heightNormal);
+    heightNormal.set("domain",Json::string("particle"));rejects(heightNormal);
     Json fx=Json::parse(R"({"emitters":[{"burst":1}]})");fx.find("emitters")->at(0).set("shaderGraph",makeDefault("particle"));
     fx::EffectDef def;std::vector<std::string> errors;require(fx::parseEffect(fx,"test",def,errors),"particle graph parser");
     require(def.emitters[0].shaderGraph==makeDefault("particle"),"particle graph lost");

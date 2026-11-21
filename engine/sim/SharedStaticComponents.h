@@ -157,6 +157,22 @@ bool updateShared(World& world, Entity entity, Fn&& transform) {
     transform(value);
     return setShared<T>(world,entity,std::move(value)).valid();
 }
+// Readable variant for save loading: names the first offending entity/slot.
+template<class T> bool validateSharedRefs(const World& world, std::string& error) {
+    const auto* store=world.resourceConst<SharedStore<T>>();
+    const size_t size=store?store->uniqueCount():0;
+    bool valid=true;
+    world.eachExistingConst<SharedRef<T>>([&](Entity e,const SharedRef<T>& ref) {
+        if(!valid)return;
+        if(!world.alive(e) || !ref.valid() || ref.slot>size) {
+            valid=false;
+            error="shared ref of entity "+std::to_string(e.index)+":"+
+                  std::to_string(e.gen)+" has slot "+std::to_string(ref.slot)+
+                  " but the shared store holds "+std::to_string(size)+" values";
+        }
+    });
+    return valid;
+}
 template<class T> bool validateShared(const World& world) {
     const auto* store=world.resourceConst<SharedStore<T>>();
     bool valid=true;

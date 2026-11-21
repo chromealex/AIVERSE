@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "model": "import-head.obj",
+  "morphs": "import-face.json",
+  "routes": [
+    {"channel": "jawOpen", "target": "jawOpen", "gain": 1.0}
+  ],
+  "materials": {
+    "default": "skin"
+  }
+}

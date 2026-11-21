@@ -2,6 +2,8 @@
 // Content convention: fx/gpu/<safe-name>.gpu.json.
 // Loading is transactional and retains the last known-good asset when a
 // hot-reload fails. The library owns configuration only, never GPU resources.
+// A cached asset is served without file IO; it is re-read (and re-hashed)
+// only after invalidate()/invalidateAll(), e.g. when the editor saves it.
 #pragma once
 
 #include <cstdint>
@@ -28,6 +30,7 @@ public:
         SpectraFxHybridEmitter::Config config;
         uint64_t revision=1;
         uint64_t contentHash=0;
+        bool stale=false; // set by invalidate: next load re-reads the file
     };
 
     explicit SpectraFxGpuEmitterLibrary(FileReader reader)
@@ -52,9 +55,18 @@ public:
             return result;
         }
         const auto old=cache_.find(name);
+        // Hot path (every Play cue): no file read or hash for a cached asset.
+        if(old!=cache_.end() && !old->second.stale) {
+            result.valid=true;
+            result.revision=old->second.revision;
+            return result;
+        }
         auto fallback=[&](std::string error) {
             result.error=std::move(error);
             if(old!=cache_.end()) {
+                // Keep serving the last known-good asset without retrying
+                // the failing read on every cue; a new invalidate retries.
+                old->second.stale=false;
                 result.valid=true;
                 result.fallback=true;
                 result.revision=old->second.revision;
@@ -69,6 +81,7 @@ public:
         uint64_t hash=14695981039346656037ull;
         for(unsigned char c:text) {hash^=c;hash*=1099511628211ull;}
         if(old!=cache_.end() && old->second.contentHash==hash) {
+            old->second.stale=false; // unchanged bytes keep their revision
             result.valid=true;
             result.revision=old->second.revision;
             return result;
@@ -90,10 +103,10 @@ public:
     }
     void invalidate(const std::string& name) {
         const auto it=cache_.find(name);
-        if(it!=cache_.end()) it->second.contentHash=0;
+        if(it!=cache_.end()) it->second.stale=true;
     }
     void invalidateAll() {
-        for(auto& pair:cache_) pair.second.contentHash=0;
+        for(auto& pair:cache_) pair.second.stale=true;
     }
     void clear() {cache_.clear();}
     size_t size() const {return cache_.size();}

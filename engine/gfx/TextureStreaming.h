@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <map>
@@ -195,13 +196,7 @@ public:
         auto it = resources_.find(id.value);
         if (it == resources_.end()) return false;
         // Discard pending jobs before the physical handle can be recycled.
-        for (size_t i = 0; i < pending_.size();) {
-            if (pending_[i].resource == id) {
-                stagedBytes_ -= pending_[i].bytes.size();
-                pending_.erase(pending_.begin() + ptrdiff_t(i));
-                ++cancelled_;
-            } else ++i;
-        }
+        cancelPendingFor(id);
         device_->destroyTexture(it->second.gpu);
         gpuBytes_ -= it->second.estimatedBytes;
         resources_.erase(it);
@@ -221,7 +216,7 @@ public:
             const size_t bytes = pending_.front().bytes.size();
             if (bytes > config_.uploadBytesPerFrame - transferred) break;
             Job job = std::move(pending_.front());
-            pending_.erase(pending_.begin());
+            pending_.pop_front();
             stagedBytes_ -= bytes;
             auto it = resources_.find(job.resource.value);
             if (it == resources_.end() || it->second.failed) continue;
@@ -236,14 +231,7 @@ public:
                 ++failed_;
                 error_ = device_->lastError();
                 if (error_.empty()) error_ = "GPU streaming subresource upload failed";
-                const TextureStreamId failedResource = job.resource;
-                for (size_t i = 0; i < pending_.size();) {
-                    if (pending_[i].resource == failedResource) {
-                        stagedBytes_ -= pending_[i].bytes.size();
-                        pending_.erase(pending_.begin() + ptrdiff_t(i));
-                        ++cancelled_;
-                    } else ++i;
-                }
+                cancelPendingFor(job.resource);
             }
         }
         // Deliberately invoke callbacks only after the queue iteration.
@@ -270,6 +258,21 @@ public:
     }
 
 private:
+    // One linear pass (FIFO order of the remaining jobs is preserved);
+    // the previous per-match erase was quadratic for large queues.
+    void cancelPendingFor(TextureStreamId id) {
+        size_t kept = 0;
+        for (size_t i = 0; i < pending_.size(); ++i) {
+            if (pending_[i].resource == id) {
+                stagedBytes_ -= pending_[i].bytes.size();
+                ++cancelled_;
+            } else {
+                if (kept != i) pending_[kept] = std::move(pending_[i]);
+                ++kept;
+            }
+        }
+        pending_.resize(kept);
+    }
     struct Record {
         TextureHandle gpu;
         TextureDesc desc;
@@ -309,7 +312,7 @@ private:
     Device* device_ = nullptr; // must outlive this queue
     TextureStreamConfig config_;
     std::map<uint64_t, Record> resources_;
-    std::vector<Job> pending_;
+    std::deque<Job> pending_; // FIFO: drain pops from the front in O(1)
     size_t gpuBytes_ = 0;
     size_t stagedBytes_ = 0;
     uint64_t nextResource_ = 1, nextTicket_ = 1;

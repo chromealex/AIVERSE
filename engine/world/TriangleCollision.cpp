@@ -39,17 +39,33 @@ bool triangleCast(Vec3 p,Vec3 delta,Vec3 half,const Triangle& triangle,Fixed& fr
     return true;
 }
 }
-bool SpatialWorld::addTriangle(uint32_t id,Triangle triangle) {
+namespace {
+// Exactly the checks addTriangle()/add() apply, so validTriangle() can be
+// used to prevalidate a batch before mutating a SpatialWorld in place.
+bool prepareTriangle(const Triangle& triangle,Bounds& bounds) {
     for(auto p:{triangle.a,triangle.b,triangle.c})if(p.x< -1000000_fx||p.x>1000000_fx||p.y< -1000000_fx||p.y>1000000_fx||p.z< -1000000_fx||p.z>1000000_fx)return false;
     // Chunk-local edges keep all SAT arithmetic within Fixed's supported range.
     for(auto e:{triangle.b-triangle.a,triangle.c-triangle.a})if(fxAbs(e.x)>4096_fx||fxAbs(e.y)>20000_fx||fxAbs(e.z)>4096_fx)return false;
     if(cross(unit(triangle.b-triangle.a),unit(triangle.c-triangle.a)).lengthSq().raw<=1)return false;
-    Bounds bounds{{fxMin(triangle.a.x,fxMin(triangle.b.x,triangle.c.x)),fxMin(triangle.a.y,fxMin(triangle.b.y,triangle.c.y)),fxMin(triangle.a.z,fxMin(triangle.b.z,triangle.c.z))},
-                  {fxMax(triangle.a.x,fxMax(triangle.b.x,triangle.c.x)),fxMax(triangle.a.y,fxMax(triangle.b.y,triangle.c.y)),fxMax(triangle.a.z,fxMax(triangle.b.z,triangle.c.z))}};
+    bounds={{fxMin(triangle.a.x,fxMin(triangle.b.x,triangle.c.x)),fxMin(triangle.a.y,fxMin(triangle.b.y,triangle.c.y)),fxMin(triangle.a.z,fxMin(triangle.b.z,triangle.c.z))},
+            {fxMax(triangle.a.x,fxMax(triangle.b.x,triangle.c.x)),fxMax(triangle.a.y,fxMax(triangle.b.y,triangle.c.y)),fxMax(triangle.a.z,fxMax(triangle.b.z,triangle.c.z))}};
     const auto epsilon=Fixed::fromRaw(1);
     if(bounds.min.x==bounds.max.x)bounds.max.x+=epsilon;
     if(bounds.min.y==bounds.max.y)bounds.max.y+=epsilon;
     if(bounds.min.z==bounds.max.z)bounds.max.z+=epsilon;
+    // Same bound limit as SpatialWorld::add().
+    constexpr auto limit=Fixed::fromInt(1000000);
+    for(auto p:{bounds.min,bounds.max})if(fxAbs(p.x)>limit||fxAbs(p.y)>limit||fxAbs(p.z)>limit)return false;
+    return true;
+}
+}
+bool SpatialWorld::validTriangle(const Triangle& triangle) {
+    Bounds bounds;
+    return prepareTriangle(triangle,bounds);
+}
+bool SpatialWorld::addTriangle(uint32_t id,Triangle triangle) {
+    Bounds bounds;
+    if(!prepareTriangle(triangle,bounds))return false;
     if(!add({id,bounds}))return false;
     triangles_[id]=triangle;return true;
 }

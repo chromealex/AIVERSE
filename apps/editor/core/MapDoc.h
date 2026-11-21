@@ -172,6 +172,11 @@ public:
     void mirrorPoint();      // 180° rotation of the left half
     std::string ascii(int maxW = 128) const; // text preview for agents (terrain + objects)
 
+    // Batch edits (Studio paste / reset of several properties): many beginEdit()
+    // calls collapse into ONE undo step; a failed batch restores the state before it.
+    size_t undoDepth() const { return undo_.size(); }
+    void mergeUndoSince(size_t depth) { if (undo_.size() > depth + 1) undo_.resize(depth + 1); }
+    void abandonSince(size_t depth) { if (depth < undo_.size()) { data = undo_[depth]; undo_.resize(depth); touched(); } }
     bool canUndo() const { return !undo_.empty(); }
     bool canRedo() const { return !redo_.empty(); }
     void undo();

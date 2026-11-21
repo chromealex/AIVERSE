@@ -83,10 +83,14 @@ public:
             const std::string candidate(data.begin(),data.end());
             if(!validPrincipal(candidate) || !lookup_)return deny(conn);
             auto key=lookup_(candidate);
-            if(!key || net::isZero(*key))return deny(conn);
             principal_=candidate;
-            secret_=*key;
-            net::wipe(key->data(),key->size());
+            // Unknown principals receive the same random Challenge and are
+            // denied only at Proof, so Hello cannot enumerate valid accounts.
+            // A throwaway random key keeps the Proof work identical.
+            knownPrincipal_=key && !net::isZero(*key);
+            if(knownPrincipal_)secret_=*key;
+            else net::secureRandom(secret_.data(),secret_.size());
+            if(key)net::wipe(key->data(),key->size());
             nonce_.resize(32);
             net::secureRandom(nonce_.data(),nonce_.size());
             conn.send(encode(Kind::Challenge,nonce_));
@@ -96,7 +100,8 @@ public:
         if(state_==State::AwaitProof) {
             if(kind!=Kind::Proof || data.size()!=32)return deny(conn);
             const auto expected=authenticator(secret_,principal_,nonce_);
-            const bool matched=net::equalBytes(expected.data(),data.data(),32);
+            const bool matched=net::equalBytes(expected.data(),data.data(),32) &&
+                               knownPrincipal_;
             net::wipe(secret_.data(),secret_.size());
             nonce_.clear();
             if(!matched)return deny(conn);
@@ -120,6 +125,7 @@ private:
     std::string principal_;
     net::Key secret_{};
     net::Bytes nonce_;
+    bool knownPrincipal_=false;
 };
 
 class ClientHandshake {

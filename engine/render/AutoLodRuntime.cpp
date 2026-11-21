@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <numeric>
+#include <unordered_set>
 #include <vector>
 
 namespace aiverse::render {
@@ -16,25 +18,47 @@ constexpr size_t kMaxVertices = 500000; // bound import latency + temporary memo
 constexpr size_t kMaxIndices = 1500000;
 constexpr std::array<float, 3> kRatios{0.50f, 0.25f, 0.125f};
 constexpr std::array<float, 3> kError{0.005f, 0.01f, 0.02f};
-constexpr float kAttributeWeights[15] = {
+constexpr std::array<float, 27> kAttributeWeights{
     .5f, .5f, .5f,  // normals
     1.f, 1.f,       // UV0
     .25f, .25f, .25f, .25f, // tangent incl. handedness
-    1.f, 1.f, 1.f, 1.f, // vertex RGBA (can carry AO)
-    1.f, 1.f        // encoded lightmap UV1
+    1.f, 1.f, 1.f, 1.f, // RGBA
+    1.f, 1.f,       // encoded lightmap UV1
+    2.f, 2.f, 2.f, 2.f, 2.f, 2.f, // signed POSITION morph envelope
+    .5f, .5f, .5f, .5f, .5f, .5f // signed NORMAL morph envelope
 };
 
 bool eligible(const Model& model, const MeshDef& mesh) {
-    if (!mesh.lods.empty() || mesh.deformable || mesh.primitives.empty())
-        return false;
+    if (!mesh.lods.empty() || mesh.primitives.empty()) return false;
+    const bool hasMorph=std::any_of(mesh.primitives.begin(),mesh.primitives.end(),
+        [](const Primitive& p){return p.morphTargets>0;});
+    // Deformation can also mean skinning; this first generator only
+    // supports unskinned meshes with complete semantic morph identities.
+    if(mesh.deformable && !hasMorph)return false;
+    if(hasMorph) {
+        if(mesh.morphTargetNames.empty() ||
+           mesh.morphTargetNames.size()>size_t(kMaxMorphTargets))return false;
+        std::unordered_set<std::string> names;
+        for(const auto& name:mesh.morphTargetNames)
+            if(name.empty() || !names.insert(name).second)return false;
+    }
     for (const Primitive& p : mesh.primitives) {
         if (p.indexCount == 0 || p.material < 0 ||
             size_t(p.material) >= model.materials.size() ||
             p.indexCount % 3 || p.firstIndex > model.indices.size() ||
             p.indexCount > model.indices.size() - p.firstIndex ||
-            !p.jointPalette.empty() || p.morphTargets ||
-            !p.variantMaterial.empty())
+            !p.jointPalette.empty() || !p.variantMaterial.empty() ||
+            p.morphAliasMesh>=0 || p.morphAliasPrimitive>=0)
             return false;
+        if(hasMorph && (p.morphTargets!=int(mesh.morphTargetNames.size()) ||
+           p.firstVertex>model.vertices.size() ||
+           p.vertexCount>model.vertices.size()-p.firstVertex ||
+           p.vertexCount==0 ||
+           p.vertexCount>std::numeric_limits<size_t>::max()/6u/
+               size_t(p.morphTargets) ||
+           p.morphDeltas.size()!=size_t(p.morphTargets)*p.vertexCount*6u))
+            return false;
+        if(!hasMorph && p.morphTargets!=0)return false;
         const Material& material = model.materials[size_t(p.material)];
         // Opaque ordinary materials only. Masked foliage, custom vertex
         // displacement and transparent glass require author-controlled LOD.
@@ -45,9 +69,13 @@ bool eligible(const Model& model, const MeshDef& mesh) {
     return true;
 }
 
+// The source GPU morph layout is unchanged. Attribute-aware simplification
+// additionally protects the worst signed displacement over ALL channels,
+// rather than silently considering only the first handful of expressions.
+// Position + normal min/max occupy 12 of meshoptimizer's <=32 attributes.
 std::vector<float> vertexAttributes(const Model& model) {
     std::vector<float> attrs;
-    attrs.reserve(model.vertices.size() * 15);
+    attrs.reserve(model.vertices.size() * kAttributeWeights.size());
     for (const ModelVertex& v : model.vertices) {
         attrs.insert(attrs.end(), {
             v.nrm.x, v.nrm.y, v.nrm.z, v.uv.x, v.uv.y,
@@ -59,6 +87,28 @@ std::vector<float> vertexAttributes(const Model& model) {
         const uint32_t lmV = uint32_t(v.joints[2]) | (uint32_t(v.joints[3]) << 8);
         attrs.push_back(float(lmU) / 65535.f);
         attrs.push_back(float(lmV) / 65535.f);
+        attrs.insert(attrs.end(),12u,0.f);
+    }
+    // Add envelopes only for source primitives eligible for this generator.
+    // A malformed morph source cannot create an apparently valid LOD.
+    for(const auto& mesh:model.meshes) {
+        if(!eligible(model,mesh))continue;
+        for(const auto& p:mesh.primitives) {
+            if(p.morphTargets==0)continue;
+            const size_t count=p.vertexCount;
+            for(size_t t=0;t<size_t(p.morphTargets);++t)
+                for(size_t v=0;v<count;++v) {
+                    const size_t dst=(size_t(p.firstVertex)+v)*27u;
+                    const size_t src=(t*count+v)*6u;
+                    for(size_t axis=0;axis<6u;++axis) {
+                        const float delta=p.morphDeltas[src+axis];
+                        const size_t low=axis<3?15u+axis:21u+axis-3u;
+                        const size_t high=axis<3?18u+axis:24u+axis-3u;
+                        attrs[dst+low]+=std::min(0.f,delta);
+                        attrs[dst+high]+=std::max(0.f,delta);
+                    }
+                }
+        }
     }
     return attrs;
 }
@@ -89,10 +139,9 @@ size_t generateMissingModelLods(Model& model) {
         return 0;
     }
 
-    // Keep animated rigid nodes (cars: wheels, doors, hoods) unchanged. Only
-    // simplify their own mesh indices: all node IDs, mesh ownership, vertex
-    // attributes and clip channels remain the same. Skinned and morphed
-    // assets are better precomputed offline with deformation-aware metrics.
+    // Preserve animated nodes and the exact original vertex/morph buffer.
+    // Mesh simplification is index-only: reductions save triangle work, not
+    // morph texture VRAM. Skinned meshes still require authored LODs.
     if (!model.skins.empty()) {
         info.reason = "skinned asset requires authored deformation-aware LOD";
         return 0;
@@ -123,7 +172,7 @@ size_t generateMissingModelLods(Model& model) {
             hasCandidate |= count >= kMinPrimitiveIndices;
         }
     if (!hasCandidate) {
-        info.reason = "no eligible rigid mesh missing an imported LOD chain";
+        info.reason = "no eligible rigid/morph mesh missing an imported LOD chain";
         return 0;
     }
 
@@ -138,7 +187,10 @@ size_t generateMissingModelLods(Model& model) {
     // gains references to independently simplified index streams.
     model.meshes.reserve(sourceMeshes * 4);
     for (size_t mi = 0; mi < sourceMeshes; ++mi) {
-        const MeshDef original = model.meshes[mi];
+        // Capacity is reserved for source plus 3 levels each: references
+        // remain stable while coarse meshes are appended. Avoid copying the
+        // potentially huge 64-channel CPU morph arrays at every LOD level.
+        const MeshDef& original = model.meshes[mi];
         if (!used[mi] || !eligible(model, original)) continue;
         size_t baseIndices = 0;
         for (const Primitive& p : original.primitives) baseIndices += p.indexCount;
@@ -148,11 +200,35 @@ size_t generateMissingModelLods(Model& model) {
         size_t previousIndices = baseIndices;
         float previousPixels = std::numeric_limits<float>::max();
         for (size_t level = 0; level < kRatios.size(); ++level) {
-            MeshDef coarse = original;
+            MeshDef coarse;
             coarse.name = original.name + "-auto-lod" + std::to_string(level + 1);
-            coarse.lods.clear();
-            coarse.materialBatches.clear();
-            coarse.shadowBatch = {};
+            coarse.weights = original.weights;
+            coarse.morphTargetNames = original.morphTargetNames;
+            coarse.primitives.reserve(original.primitives.size());
+            // Copy metadata only. Never duplicate large authored 52/64
+            // channel CPU morph arrays just to generate an index-only LOD.
+            for(size_t pi=0;pi<original.primitives.size();++pi) {
+                const Primitive& src=original.primitives[pi];
+                Primitive dst;
+                dst.firstIndex=src.firstIndex;
+                dst.indexCount=src.indexCount;
+                dst.material=src.material;
+                dst.jointPalette=src.jointPalette;
+                dst.variantMaterial=src.variantMaterial;
+                dst.boundsMin=src.boundsMin;
+                dst.boundsMax=src.boundsMax;
+                dst.firstVertex=src.firstVertex;
+                dst.vertexCount=src.vertexCount;
+                dst.morphTargets=src.morphTargets;
+                dst.morphTexel=src.morphTexel;
+                dst.lightmapUv=src.lightmapUv;
+                dst.shadowBatched=false;
+                if(src.morphTargets>0) {
+                    dst.morphAliasMesh=int(mi);
+                    dst.morphAliasPrimitive=int(pi);
+                }
+                coarse.primitives.push_back(std::move(dst));
+            }
             std::vector<uint32_t> appended;
             float maximumError = 0.f;
             size_t total = 0;
@@ -170,8 +246,8 @@ size_t generateMissingModelLods(Model& model) {
                         source.indexCount,
                         &model.vertices[0].pos.x,
                         model.vertices.size(), sizeof(ModelVertex),
-                        attrs.data(), 15 * sizeof(float),
-                        kAttributeWeights, 15, nullptr,
+                        attrs.data(), 27 * sizeof(float),
+                        kAttributeWeights.data(), 27, nullptr,
                         target, kError[level], meshopt_SimplifyLockBorder, &error);
                     if (reduced >= 3 && reduced % 3 == 0 &&
                         reduced < size_t(double(source.indexCount) * 0.8)) {
@@ -201,7 +277,13 @@ size_t generateMissingModelLods(Model& model) {
             });
             if (!std::isfinite(pixels) || pixels <= 0) continue;
             const int lodMesh = int(model.meshes.size());
-            model.meshes[mi].lods.push_back({lodMesh, pixels});
+            ModelLod lod{lodMesh,pixels};
+            if(!original.morphTargetNames.empty()) {
+                lod.morphSourceForTarget.resize(original.morphTargetNames.size());
+                std::iota(lod.morphSourceForTarget.begin(),
+                          lod.morphSourceForTarget.end(),0);
+            }
+            model.meshes[mi].lods.push_back(std::move(lod));
             model.meshes.push_back(std::move(coarse));
             model.indices.insert(model.indices.end(), appended.begin(), appended.end());
             ++info.generatedLevels;
@@ -215,7 +297,7 @@ size_t generateMissingModelLods(Model& model) {
         // Only new primitive bounds and node hierarchy are recalculated.
         // Original node transforms, clips and vertex data stay untouched.
         model.finalize();
-        info.reason = "generated from imported rigid meshes before GPU upload";
+        info.reason = "generated index-only rigid/morph LODs before GPU upload";
     } else info.reason = "simplifier could not reach a useful 20% triangle saving";
     return info.generatedLevels;
 }

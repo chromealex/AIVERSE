@@ -1,0 +1,74 @@
+/* Studio UI v1 — legacy HTML5 shell adapter.
+   Presentation only. Do not change .viewport, .viewport-native or Metal layout. */
+.studio{background:var(--au-canvas);color:var(--au-text)}
+.titlebar{background:linear-gradient(180deg,#111c2a,#0d1623);border-bottom-color:var(--au-line)}
+.brand-logo{background:linear-gradient(140deg,#345b88,#1b314e);
+  border-color:#5a7fad;color:#d0e6ff;box-shadow:inset 0 1px 0 #b8d4f522}
+.wordmark{color:var(--au-text);font-weight:750;letter-spacing:.075em}
+.project-breadcrumb{color:var(--au-text-muted)}
+.project-breadcrumb b{color:var(--au-text)}
+.toolbar{background:var(--au-panel-raised);border-color:var(--au-line)}
+.tool-button{color:var(--au-text-muted);border-radius:var(--au-radius-md)}
+.tool-button.selected{background:var(--au-active);border-color:var(--au-line-strong);color:var(--au-text)}
+.tool-button:not(:disabled):hover{background:var(--au-hover);color:var(--au-text)}
+.mode-pill{border-radius:var(--au-radius-sm)}
+.nested-toolbar{border-color:var(--au-line);background:var(--au-panel-raised);color:var(--au-text-muted)}
+.nested-panels-list summary{background:var(--au-field);border-color:var(--au-line-strong);color:var(--au-text-soft)}
+.nested-panels-popover{background:var(--au-overlay);border-color:var(--au-line-strong);box-shadow:var(--au-shadow-md)}
+.nested-stack{border-color:var(--au-line);background:var(--au-panel)}
+.nested-tabs{background:var(--au-panel-raised);border-color:var(--au-line);scrollbar-width:thin}
+.nested-tab{color:var(--au-text-muted);border-color:var(--au-line)}
+.nested-tab:hover{background:var(--au-hover);color:var(--au-text)}
+.nested-tab.nested-active{background:linear-gradient(180deg,#263c57,#23344c);
+  color:var(--au-text);box-shadow:inset 0 -2px var(--au-accent)}
+.nested-tab-close{color:var(--au-text-faint)}
+.nested-tab-close:hover{color:#ffd6de;background:#563745}
+.nested-divider{background:#0b1421}
+.nested-divider:hover,.nested-divider:focus-visible{background:var(--au-accent)}
+.panel-heading{min-height:43px;padding-inline:var(--au-space-4);
+  background:var(--au-panel-raised);color:var(--au-text-soft);border-color:var(--au-line)}
+.panel-footer{border-color:var(--au-line);background:var(--au-panel-raised);color:var(--au-text-faint)}
+.search-box,.materials-search,.graph-search{background:var(--au-field);
+  border-color:var(--au-line-strong);border-radius:var(--au-radius-md)}
+.search-box:focus-within,.materials-search:focus-within,.graph-search:focus-within{
+  border-color:var(--au-accent);box-shadow:0 0 0 2px #82b5ff30}
+.tree-row{color:var(--au-text-soft);border-radius:var(--au-radius-md)}
+.tree-row:hover{background:var(--au-hover);color:var(--au-text)}
+.tree-row.active{background:var(--au-active);color:var(--au-text)}
+.selected-object{background:#172438;border-color:var(--au-line)}
+.object-icon{background:var(--au-active);color:var(--au-accent)}
+.inspector-section{padding:var(--au-space-4)}
+.property-row{color:var(--au-text-muted)}
+.property-row input:not([type=checkbox]),.property-row select{
+  background:var(--au-field);border-color:var(--au-line-strong);
+  border-radius:var(--au-radius-sm);color:var(--au-text);font-variant-numeric:tabular-nums}
+.property-row input:focus-visible,.property-row select:focus-visible{
+  outline:none;border-color:var(--au-accent);box-shadow:var(--au-focus)}
+.property-row input[type=checkbox]{accent-color:var(--au-accent)}
+.property-row .property-description{color:var(--au-text-faint)}
+.lighting-editor,.materials-editor,.studio-shader-graphs{background:var(--au-panel);color:var(--au-text)}
+.lighting-heading,.materials-heading,.graph-heading{background:var(--au-panel-raised);border-color:var(--au-line)}
+.lighting-section-heading,.materials-list,.graph-library{background:var(--au-panel-raised);border-color:var(--au-line)}
+.lighting-light-item.active,.materials-list-item.active{background:var(--au-active);color:var(--au-text)}
+.lighting-light-item:hover,.materials-list-item:hover{background:var(--au-hover)}
+.graph-summary{background:var(--au-panel-raised);border-color:var(--au-line)}
+.statusbar{background:var(--au-panel-raised);border-color:var(--au-line);color:var(--au-text-faint)}
+@media(prefers-reduced-motion:reduce){.nested-tab,.tool-button{transition:none}}
+
+/* Global UI scale is applied at document root; settings surface follows the shell. */
+.studio-editor-settings{position:fixed;right:14px;top:55px;z-index:5000;
+  width:290px;padding:16px;display:flex;flex-direction:column;gap:12px;
+  background:var(--au-overlay);border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-md);box-shadow:var(--au-shadow-md);color:var(--au-text)}
+.studio-editor-settings label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px}
+.studio-editor-settings input[type=range]{width:100%;accent-color:var(--au-accent)}
+.studio-editor-settings button{background:var(--au-field);border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-sm);padding:8px;color:var(--au-text);cursor:pointer}
+
+/* Editor-only Scene camera controls; overlay must never intercept GPU gestures. */
+.studio-scene-nav-help{position:absolute;left:12px;bottom:12px;z-index:3;
+  pointer-events:none;max-width:calc(100% - 24px);padding:7px 10px;
+  border:1px solid var(--au-line-strong);border-radius:var(--au-radius-sm);
+  background:var(--au-overlay);color:var(--au-text-muted);
+  font-size:var(--au-font-xs);line-height:1.4}
+.viewport:focus-visible{outline:1px solid var(--au-accent);outline-offset:-1px}

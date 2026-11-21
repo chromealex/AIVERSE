@@ -1,0 +1,2489 @@
+# Strata — AIVERSE virtual geometry
+
+Status (2026-11-20): **integrated into main; experimental and opt-in, with
+CPU planning, streaming, portable indexed rendering and gated Vulkan GPU
+selection/indirect routing implemented. Full production acceptance is open.**
+
+## Current implementation and verification
+
+| Subsystem | Implemented behavior | Verification and remaining limits |
+| --- | --- | --- |
+| Builder, source seams, LOD planning | Rigid opaque source adaptation, hierarchy and source seam certification, per-view CPU selection and hysteresis | CPU fixtures pass; certificates do not prove lossy visual quality |
+| Residency and disk streaming | Budgeted index pages, root fallback, asynchronous disk reads and shared multi-world coordination | CPU/recording lifecycle, corrupt-archive and budget tests pass, including repeated runs; hardware residency-pressure orbit remains open |
+| Portable rendering | CPU-selected frontiers submitted through the existing Renderer3D and original source vertex buffers | Actual Metal lossless raster, sun-depth and reflection fixtures pass; Vulkan/GLES/GL/WebGL hardware visual acceptance remains open |
+| GPU selection and temporal state | Metal/Vulkan compute culling and bounded GPU temporal histories | Actual Metal selection and three-frame temporal fixtures pass; Vulkan runtime requires its own real device gate |
+| Vulkan GPU indirect rendering | Explicitly gated per-material/instance/pass packets consumed by Renderer3D | Recording contracts and GLSL/SPIR-V compilation pass; real Vulkan compute/indirect/temporal and raster/depth/reflection acceptance is not certified |
+| Production readiness | Experimental flags and manual parity gates stay OFF by default | Spot-shadow, lossy mixed-LOD seam ROI, hardware pressure/popping, native arm64 and performance acceptance are not established by the current QA run |
+
+The latest [system QA report](qa/strata-system-2026-11-20.md) records the
+tested SHA, actual device, evidence and failures. That Mac run used x86_64
+binaries under Rosetta on Apple M3 Ultra, not native arm64 binaries. Successful
+Metal fixture execution must not be generalized to other backends or scenes.
+The [visual acceptance matrix](strata-stage18-visual-acceptance.md) remains
+the release checklist; it is not a declaration that every scenario passed.
+
+The Vulkan test executable supports `--compile-only` (no device required),
+the default optional runtime mode (CTest skip code 77 if unavailable), and
+`--require-device` (unavailable device/compute is a failure). The focused
+Lavapipe CI uses the strict mode. Shader compilation alone is not GPU parity.
+
+Resume from the [Stage21 QA handoff](agent-handoffs/strata-stage21-system-qa-2026-11-20.md)
+and its follow-up fixes. The [original feature log](agent-handoffs/strata-virtual-geometry.md)
+and numbered stages below are historical implementation checkpoints;
+their dated “not implemented/not tested” statements describe those stages,
+not the current summary above.
+
+## Scope and ownership
+Strata is a genre-independent **presentation** system for rigid, opaque geometry.
+It must not own ECS worlds, physics/terrain simulation, game logic or materials.
+It does not replace `GeometryScene`, existing `GeometryCluster`, AutoLOD,
+`GlobalGeometryPool`, Metal batching, or the existing RHI.
+Strata is an optional geometry representation consumed by the shared renderer.
+It prepares selections and index/indirect data; Renderer3D remains the single
+draw owner, with the original geometry/material ownership and Legacy fallback.
+
+## Builder and CPU asset contract
+- `engine/render/StrataGeometry.h`: `ClusterNode`, `SelectionInput`,
+  `SelectionOutput`, `validate()`, CPU reference `select()`.
+- `engine/render/StrataBuilder.h`: `BuildInput`, `BuildOptions`,
+  `Meshlet`, `ClusterBounds`, `Asset`, `build()`.
+- `engine/render/StrataModelAdapter.h`: `ModelAsset`,
+  `ModelPrimitiveAsset`, `ModelPrimitiveSkip`, `buildModelAsset()`.
+  This is a read-only, opt-in adapter for CPU `Model` assets, not a renderer hook.
+- Link `aiverse_strata_builder` or `aiverse_strata_model_adapter` in project
+  CMake when `AIVERSE_BUILD_STRATA=ON` (ON by default). Both reuse the pinned
+  `aiverse_meshoptimizer_lod` dependency. Runtime integration uses the separate
+  `aiverse_strata_view`, `aiverse_strata_portable`, `aiverse_strata_gpu_scene`,
+  `aiverse_strata_gpu_culling` and `aiverse_strata_render_routing` targets.
+- `build()` accepts **one material partition per invocation**; vertex
+  positions begin with three floats and may be interleaved. Source indices
+  and positions are borrowed during the call only. On failure, output stays
+  unchanged. Output is a CPU-owned asset independent of gfx::Device.
+- `Meshlet` is a **leaf** with compact local uint8 triangle indices and
+  a map to original global vertex indices. Defaults: max 64 vertices, max
+  124 triangles. Original global indices are retained for indexed fallback.
+- `ClusterNode` is a **drawable group** in the current schema; interior nodes
+  are not guaranteed to fit a single hardware meshlet. `firstIndex` and
+  `indexCount` reference the asset's flat index array. Children are
+  contiguous and listed after parents (breadth-first reordering).
+  `Asset::bounds` aligns one-to-one with `Asset::nodes`.
+- Parent clusters use `meshopt_simplify` (position-only inputs) or
+  `meshopt_simplifyWithAttributes` (optional 1..32 weighted float attributes),
+  with `meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute`.
+  The parent's geometric error is conservatively accumulated from its
+  children. A group with under 10% reduction stays unmerged; multiple roots
+  are permitted. Max levels, target ratio and relative error are configurable.
+  Error in `ClusterNode` is in object units; the caller must project it to
+  pixels using the correct pass and transform.
+- `select()` requires **all roots resident**. A missing child prevents
+  refinement of its parent; budget pressure retains the parent.
+  The caller supplies a valid projected error for every node. The implementation
+  is a CPU reference selector, not GPU culling or residency.
+- `buildModelAsset()` projects 15 attribute components per vertex from `Model`
+  (normal xyz, UV0, tangent xyzw, vertex RGBA, packed lightmap UV1), with
+  weighted seam-aware simplification. It does not mutate source Model or LOD0.
+  It skips mutable nodes, skinned/morphed, already uploaded, meshes with existing
+  authored/generated LODs, material variants and alpha/custom-shader materials.
+  It returns explicit skip reasons and fails transactionally on invalid eligible
+  geometry. GeometryScene staging consumes these assets; the adapter itself
+  does not submit draws or take ownership from Renderer3D.
+- This is still experimental; the limited verified scenarios are listed above.
+  Do not automatically route displaced surfaces here.
+  Importers should preserve existing meshes and exact LOD0 as a fallback.
+
+## Stage 4 — optional CPU staging in GeometryScene
+
+`GeometryScene` remains the source-of-truth for scene instances, model
+ownership, existing HLOD, visibility and draw submission. New APIs:
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataStagingEnabled(true);  // Before load/loadPrepared, default OFF
+scene.loadPrepared(device, sceneJson, std::move(models));
+// Scene draws through the existing Renderer3D exactly as before.
+const auto& counters = scene.stats(); // strataSources, strataNodes,
+// strataMeshlets, strataIndexBytes, strataSkippedSources,
+// strataSkippedPrimitives, strataFailures
+const auto* cpuAsset = scene.strataAsset("models/stone.glb");
+// cpuAsset is nullptr when unavailable or the key is not staged.
+scene.shutdown(device); // invalidates cpuAsset and all staging handles
+```
+
+Staging is compiled only when `AIVERSE_BUILD_STRATA=ON`, and is inert unless
+`setStrataStagingEnabled(true)` is called before loading a scene.
+`strataStagingSupported()` reports compile-time availability. The method
+returns false on builds where Strata was disabled. Scene staging is configured
+by **native API**, not via scene JSON, so no existing saved scene is affected.
+There are no additional draw calls and no GPU-resident Strata buffers.
+
+The CPU `SceneStaging` object is in
+`engine/render/StrataModelAdapter.h` and can also be used by tools without
+creating a scene or renderer. It stores at most one copy per unique source key.
+It preserves the source `Model`, reports skip/failure diagnostics and
+has configurable default caps of 250k vertices and 750k indices per source.
+These are **per-source preparation bounds**, not global Strata/VRAM limits.
+All staged data is released with `GeometryScene::shutdown` and re-created
+on subsequent loads. Source proxies and generated HLOD proxies are deliberately
+excluded. Models ineligible for Strata continue through the existing renderer
+unchanged. A failed staging operation must never fail the scene's legacy upload.
+
+The `strataIndexBytes` counter measures only auxiliary Strata flat index
+storage (not total Strata CPU heap usage); do not report it as resident VRAM.
+All counters are diagnostics and are not part of a public save/network schema.
+
+**Not yet active:** GPU scene buffers, meshlet culling, GPU residency,
+GPU-encoded indirect draws, software rasterization, per-pass Strata selection,
+actual Strata render submission, or terrain/foliage integration.
+
+## Stage 5 — shared GPU batching foundation (pinned integration)
+
+A genuine two-parent merge commit `0913b82088b63913e1313557de16d85e7c79b89f`
+integrates the pinned `perf/incremental-static-model-cache` head
+`1043a9de747fe89cb42de899c15c6d2f4db8e0e1` into the Strata feature.
+The batching branch/PR #34 remains separately owned by its agent.
+
+**Reused existing systems** (do not recreate them in Strata):
+- `GlobalGeometryPool`, eligibility checks and geometry revisions: shared GPU
+  source buffers and safe invalidation. Strata's future resident pages must
+  coordinate allocator lifetime and buffer handles with this pool.
+- `StaticModelCache`, `StaticModelCachePolicy.h` and persistent render
+  packets: existing per-draw transform/primitive reuse; never add a second
+  static transform cache to Strata.
+- `StaticCrossModelBatchPolicy` and CPU MDI/GPU ICB paths:
+  `Renderer3D` remains the single owner of material grouping/indirect
+  submissions. A future Strata culler supplies selected cluster ranges to
+  the same render submission path, with source selection mutually exclusive.
+- `EcsStaticModelRender.h`: the common ECS-to-presentation adapter. No Strata
+  ECS components are necessary to render static instances.
+
+**Current behavior remains unchanged:** `GeometryScene` Strata staging is
+OFF unless explicitly enabled; CPU/GPU batching experimental flags retain
+their existing defaults. No Strata GPU culling, selected-cluster draw,
+streaming or residency path has been activated or validated. PR #35 is a
+stacked draft based on the batching work until PR #34 is merged or replaced.
+The batching agent may push new commits after the pinned snapshot; explicitly
+review and merge those changes before relying on later APIs.
+
+Do not conflate the already existing `GeometryCluster`/static pooling path
+with Strata's new `ClusterNode` hierarchy. Strata staging currently stores
+auxiliary CPU data; it is NOT a substitute for pooled GPU pages and must not
+double-submit scene primitives.
+
+## Stage 6 — per-pass Strata selection contract
+
+`engine/render/StrataView.h/.cpp` introduces a CPU-only per-pass reference
+selector. The selected geometry uses **Asset-local index ranges**; ranges
+are not GPU draw commands and MUST NOT be passed to
+`gfx::Device::drawIndexedIndirect` without first arranging the auxiliary
+index stream through the shared geometry residency/allocator and correct
+material/instance grouping.
+
+```cpp
+#include "engine/render/StrataView.h"
+render::strata::ViewConfig pass{};
+pass.objectToClip = cameraViewProj * instanceWorld * bindNodeWorld;
+pass.width = renderTargetWidth;
+pass.height = renderTargetHeight;
+pass.clipDepthZeroToOne = device.info().clipDepthZeroToOne;
+pass.errorThresholdPixels = 1.0f;
+pass.maxSelectedNodes = 65536;
+render::strata::ViewPlan selected;
+std::string error;
+bool ok = scene.planStrataView(
+    "models/stone.glb", /* mesh */ 0, /* primitive */ 0,
+    pass, selected, &error);
+// Existing Renderer3D remains the sole draw issuer regardless of 'ok'.
+```
+
+`planStrataView` resolves the already-staged source once and calls the
+independent `strata::planView(asset, pass, result, error)`.
+The caller must supply the correct mesh-to-clip matrix **for each node and
+pass**. The API does not silently reuse the main view for shadows,
+reflections, portals or stereo. `strata::planView` validates bounds,
+index ranges, matrix and viewport; projects the existing per-cluster
+geometric error with `geometryErrorPixels`, runs the resident-parent
+fallback selector, then conservatively rejects offscreen selected nodes
+through `geometryBoxVisible`. Errors leave prior output unchanged.
+The resulting ranges identify node ID, firstIndex, indexCount and material
+group in their individual `strata::Asset` index stream; stats include
+tested/cut nodes, triangles, residency misses and budget pressure.
+
+The planner is packaged as `aiverse_strata_view`, using the existing
+`aiverse_models` geometry helpers. The CTest target is
+`aiverse_strata_view_tests` / `strata_view`. Neither test execution nor
+Metal/Vulkan validation has been claimed. The implementation remains a
+CPU reference path to compare eventual compute culling against; there is
+**no GPU scene buffer, RHI command upload or Strata draw path** yet.
+
+## Stage 7A — experimental GPU cluster metadata (not geometry residency)
+
+`engine/render/StrataGpuScene.h/.cpp` supplies a versioned, fixed-layout
+storage buffer for CPU-prepared cluster records, primitive mappings and
+hierarchy root indices. It is optional, off by default, and requires the
+source `Model` to have been uploaded into **the existing**
+`GlobalGeometryPool`. It does not create or own geometry VB/IB pages.
+
+The CPU packer `strata::packGpuMetadata(ModelAsset, bytes, error)` is pure,
+transactional and validates unique primitive keys, all cluster hierarchies,
+bounds, materials, source-local index ranges and u32 offsets. Layout version 1:
+
+| GPU metadata record | Size | Purpose |
+| --- | ---: | --- |
+| `GpuMetadataHeader` | 32 B | Version, counts, byte offsets |
+| `GpuPrimitive` | 32 B | Model mesh/primitive IDs, global node/root spans |
+| `GpuNode` | 64 B | AABB, global child ID, **source-local** index span, error/flags |
+| Root IDs | 4 B each | Global root IDs, padded to 16-byte total length |
+
+The compact arrays are stored in one RHI `BufferType::Storage` buffer
+per eligible source (not per instance). Default bounds: 1 MiB per source,
+8 MiB per scene for metadata. Experimental upload is restricted to Metal
+and Vulkan devices reporting compute support and a matching existing
+`Model::geometryPoolPage`, shared VB/IB and nonempty pooled extents.
+Noneligible sources do not abort scene loading and continue normal rendering.
+`Model::geometryRevision`, source identity and source GPU handles are checked
+when retrieving metadata; stale source records are never silently reused.
+
+Native integration is explicit:
+```cpp
+render::GeometryScene scene;
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true); // both OFF by default
+scene.loadPrepared(dev, sceneJson, std::move(models));
+auto gpuBuffer = scene.strataGpuMetadataBuffer("models/stone.glb");
+auto stats = scene.stats();
+// strataGpuMetadataSources, strataGpuMetadataDeclined,
+// strataGpuMetadataFailures, strataGpuMetadataBytes
+scene.shutdown(dev); // call before destroying gfx::Device
+```
+
+The metadata buffer is read-only for future compute code; it is **not** a
+GPU scene draw list and no compute shader consumes it yet. `GpuNode::resident`
+is a snapshot of the CPU cluster flag, NOT proof of GPU-resident Strata
+geometry. Most importantly, `GpuNode::sourceFirstIndex` references the
+auxiliary CPU `strata::Asset::indices`, not the `Model::ib` index stream or
+any pooled GPU allocation. Until the shared pool gains safe, versioned
+**auxiliary Strata index-stream allocations**, **do not emit** indexed or
+indirect draws from these metadata offsets.
+
+Existing `GeometryCluster` preparation can make `Model::geometry` non-null
+and intentionally exclude that model from the current rigid shared geometry
+pool. Such a source will decline experimental GPU metadata staging. Resolve
+the pool's admission/ownership policy explicitly; do not bypass its safety
+guards. This stage leaves `GlobalGeometryPool.cpp`, active `Renderer3D`
+batching, all render passes, ECS and saved scene formats unmodified.
+
+`aiverse_strata_gpu_scene` builds the metadata and shared-page sidecar layer; CTest
+`strata_gpu_scene` checks CPU binary layout, multi-primitive global
+offsets, source flags, malformed ranges and transactional failure.
+**Native compilation and GPU/CTest execution have not been verified**.
+
+## Stage 7B — shared-page auxiliary Strata index residency
+
+**Status: code committed; native/GPU validation NOT RUN.** All data remains
+experimental and the draw path remains the existing `Renderer3D`.
+
+`GlobalGeometryPool.h/.cpp` now offers the following opt-in source-attached
+API. It does not introduce a second GPU geometry allocator:
+
+```cpp
+render::GeometryPoolIndexSpan lease;
+if (render::uploadAuxiliaryGeometryIndices(
+        device, sourceModel, strataIndices.data(), strataIndices.size(), lease)) {
+    // lease.buffer == sourceModel.ib == sourceModel.vb (same page).
+    // lease.firstIndex is an absolute uint32 GPU index element offset.
+    // lease.indexCount counts only uploaded indices in the sidecar stream.
+    // Indices remain relative to sourceModel.gpuBaseVertex.
+    assert(render::auxiliaryGeometryIndicesValidFor(lease, sourceModel));
+}
+// Explicitly retire before destroying device / source GPU objects:
+render::releaseAuxiliaryGeometryIndices(device, lease);
+```
+
+The function accepts only models **already uploaded into the existing
+`GlobalGeometryPool`**, valid shared VB/IB handles, a complete checked
+shared-buffer write, and source-relative indices that fit the reserved
+vertex slice. It never creates a new page for Strata indices. If the page's
+remaining vertex-to-index gap is too small, the caller keeps the existing
+legacy renderer. No change is committed to the allocator if the RHI write
+fails; all previous model and sidecar byte ranges remain reserved.
+
+Index-only allocations use the same `GeometryPoolPage::indexBegin` frontier
+as ordinary model index allocations. A sidecar lease retains its GPU page
+through `shared_ptr`, preventing page destruction even if the source
+`Model` releases its own lease first. The source revision, base vertex,
+first index, shared page and GPU buffer handles must all match for a binding
+to be usable. `geometryPoolStats` now reports separate *actual*
+`liveModels` and live/retired/reusable auxiliary index counters.
+
+Released auxiliary spans may be recycled only when the existing
+`AIVERSE_GEOMETRY_POOL_RECYCLE=1` opt-in is enabled **and** the backend
+reports a nonzero, healthy `completedFrameSerial()` at or past the recorded
+release `frameSerial()`. Otherwise, storage remains conservatively
+quarantined/stranded until the entire page is destroyed. This is intentional:
+no CPU allocator is allowed to overwrite an in-flight GPU read. There is
+no extra Strata-specific fencing or background worker.
+
+`GpuMetadataScene::stage()` now concatenates each eligible primitive's
+`strata::Asset::indices` and uploads that stream to its source model's
+shared page (default max 1 MiB per source and 8 MiB per scene). Once uploaded,
+it publishes a **version 2** cluster metadata buffer:
+`GpuPrimitive::gpuFirstIndex` contains the *absolute GPU sidecar index
+base for that primitive*; `GpuNode::sourceFirstIndex` remains local to the
+primitive, so the future draw offset is their sum. The original, pure CPU
+`packGpuMetadata()` intentionally emits **version 1** with
+`gpuFirstIndex=invalidNode`; that format is **not GPU drawable**.
+
+```cpp
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true); // both default OFF
+scene.loadPrepared(device, json, std::move(models));
+GeometryScene::StrataIndexBinding binding;
+if (scene.strataGpuIndexBinding("models/stone.glb", binding)) {
+    // binding.buffer: same pool as the source Model.
+    // binding.firstIndex: base of the entire Strata sidecar.
+    // binding.baseVertex: original pooled source vertex base.
+    // No Strata draw/dispatch is issued by this API.
+}
+```
+
+The metadata and sidecar allocations share one source lifetime and are
+released **before** `GeometryScene` frees its source models. Source geometry
+remains immutable; existing materials, HLOD, batching and shadows remain
+authoritative. No GPU compute culling, Hi-Z, indirect command generation,
+Strata render pass, texture streaming or actual measured FPS benefit yet.
+
+`tests/render/strata_gpu_scene.cpp` extends the CPU packing fixture with a
+recording RHI and exercises same-page reservation, index byte identity,
+neighboring model protection, upload failure rollback, revision invalidation,
+source-vs-sidecar lifetime and release behavior. These scenarios are **not
+claimed to pass until run**. The next stage must validate deferred recycling
+under real backend serials, build all focused CTests, add OFF/ON draw parity,
+then implement a capability-gated single render submission owner.
+
+## Stage 8 — diagnostic Metal GPU cluster culling
+
+**Experimental, no render integration or visual parity claim.** The
+`aiverse_strata_gpu_culling` library adds a Metal compute kernel that traverses
+the version-2 Strata GPU metadata hierarchy for each static source instance
+and applies the same projected-error and conservative frustum policies as
+the CPU `strata::planView` reference.
+
+Inputs are a staged metadata v2 storage buffer, a bounded per-source list of
+`GpuSceneInstance` records (object-to-world matrices including each Model
+node bind transform, GPU primitive index, enabled flag, diagnostic token),
+and `GpuPassConfig` with a separate **view-projection** matrix. Do not pass
+a pre-multiplied objectToClip matrix to the GPU and multiply the instance
+twice. Use `strata::cpuReferenceView(pass, instance)` to obtain the matching
+CPU per-instance `ViewConfig`.
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true);
+scene.setStrataGpuCullingEnabled(true); // ALL opt-in, default OFF
+scene.loadPrepared(device, sceneJson, std::move(models));
+
+// Within the graphics frame and OUTSIDE any render/compute encoder:
+render::strata::GpuPassConfig pass;
+pass.viewProjection = mainCameraViewProj;
+pass.width = viewportWidth;
+pass.height = viewportHeight;
+pass.clipDepthZeroToOne = device.info().clipDepthZeroToOne;
+pass.errorThresholdPixels = 1.f;
+pass.maxOutputClusters = 65536;
+render::strata::GpuSelectionSubmission result;
+bool encoded = scene.dispatchStrataGpuView(
+    device, "models/stone.glb", pass, device.frameSerial(), result);
+// result.ranges / result.counters are GPU buffers; NOT a draw command list.
+```
+
+`GeometryScene::collectStrataGpuInstances(sourceKey, output)` constructs
+the static scene input from its **existing** instance and node transforms;
+it does not copy ECS state into a second world. A token is a local
+diagnostic identifier, not a persistent Entity ID. More than 4096 staged
+primitive instances is rejected conservatively. The source must have valid
+Strata v2 metadata backed by the same `GlobalGeometryPool` index lease.
+
+`GpuClusterCulling::dispatch()` uses Metal `gfx::Device::createCompute()`
+and slots 0/1/2/3 for metadata, instances, selected clusters and atomic
+counters, with pass uniform bytes on slot 8. Each GPU thread walks one
+primitive instance's cluster hierarchy, refining only when all child
+clusters are resident. The 128-item local traversal stack and bounded
+output flag malformed/excessive work; **overflow/invalid results must never
+be used for drawing**. The shader emits `GpuSelectedCluster` entries with
+instance token, absolute pooled GPU index offset, count, material ID,
+global node ID and primitive ID. The atomic compaction order is undefined,
+so eventual GPU/CPU comparisons must sort by stable instance/node keys.
+
+This stage does NOT issue any `drawIndexed`, GPU-authored indexed indirect
+commands, GPU ICBs, or readback in the normal render loop. The existing
+`Renderer3D` remains sole draw owner and continues drawing all original
+geometry, even when the diagnostic dispatch succeeds. No Hi-Z, occlusion
+history, mesh shading, streaming or Vulkan compute path has been added.
+
+Frame safety: three frame slots, up to 64 independent submissions per
+frame slot, fresh storage buffers per same-frame submission. A recycled
+slot is rejected unless the backend confirms its old frame completed
+(`completedFrameSerial >= previousFrameSerial`); an absent/unknown
+completion serial fails closed rather than overwriting in-flight data.
+Call `GpuClusterCulling::shutdown(device)`, or
+`GeometryScene::shutdown(device)` when scene-owned, before the device is
+destroyed. Metal-only capability gate rejects other backends; the legacy
+renderer is untouched.
+
+Targeted tests:
+`aiverse_strata_gpu_culling_tests` (`strata_gpu_culling`) uses recording
+RHI assertions for CPU reference transform composition, disabled backends,
+Metal compute dispatch setup, independent same-frame submissions, frame-slot
+retirement and zero draw calls. This does **not** compile the shader through
+Metal or confirm that GPU selections equal CPU selections. The focused
+workflow `.github/workflows/strata-focused.yml` configures and runs all
+five Strata CPU/mock contract targets on Linux and macOS. Treat queued,
+cancelled or unavailable Actions as **NOT VERIFIED**.
+
+Before enabling draws: native compile + focused tests, actual Metal shader
+compilation, asynchronous GPU counter/result readback in a test harness,
+CPU `planView` comparison over randomized projections, LOD/fallback
+transitions, shadows, meshes/materials and multiple instances. Then prove
+exclusive draw ownership and compare legacy-vs-Strata pixels on real GPU
+before even considering using compacted ranges in an indirect path.
+
+## Stage 8.2 — asynchronous readback, CPU oracle and real Metal parity runner
+
+The owner ran the **previous Stage 8 code** on Mac Studio on 2026-11-19.
+`aiverse_strata_gpu_culling_tests` built, and all five focused CTests
+(`strata_builder`, `strata_model_adapter`, `strata_view`,
+`strata_gpu_scene`, `strata_gpu_culling`) **passed (5/5, 1.19 s)**.
+That evidence proves the prior native C++ tests, **not** actual Metal shader
+execution or the new Stage 8.2 code.
+
+Stage 8.2 adds a bounded, asynchronous diagnostics API:
+
+```cpp
+render::strata::GpuSelectionSubmission selected;
+if (scene.dispatchStrataGpuView(device, sourceKey, pass,
+                                device.frameSerial(), selected)) {
+    scene.requestStrataGpuReadback(device, selected,
+        [&](render::strata::GpuSelectionReadback readback) {
+            // Device owner thread at a subsequent beginFrame.
+            // Incomplete/overflow/invalid results may NEVER be drawn.
+            if (!readback.valid()) return;
+            // Verify against CPU planView before considering rendering.
+        });
+}
+```
+
+`GpuClusterCulling::requestReadback` submits two independent RHI
+`Device::readBufferAsync` requests (GPU counters and selected ranges).
+The existing Metal backend limits each request to 64 KiB, so requests
+with `GpuSelectionSubmission::capacity > 2048` are rejected instead of
+publishing an apparently complete prefix. Callbacks run later on the
+**device owner thread**, not synchronously with the GPU dispatch.
+The output is a `GpuSelectionReadback` containing counters and a status
+(`Valid`, `Overflow`, `Invalid`, `ReadbackFailed`). It never allocates
+new GPU geometry or submits draw commands. Do not retain pointers to an
+unloaded `GeometryScene` in readback callbacks; manage observer lifetime
+explicitly. On rejected readback scheduling, the callback reports failure.
+
+`strata::compareGpuSelection(source, instances, pass, pooledFirstIndex,
+readback, error)` is the CPU/GPU oracle. It independently projects each
+instance via `cpuReferenceView()` and `planView()`, converts each local
+range into absolute shared-pool index/node addresses, sorts CPU/GPU records
+by their stable record fields, and requires exact equality. It rejects
+malformed instances, duplicate/zero enabled tokens, output overflow and
+invalid GPU status. GPU atomic ordering is explicitly not significant.
+The pooledFirstIndex must be the original v2 sidecar binding base from the
+same source/revision. This comparison is **diagnostic**, never an authority
+for production draw submission.
+
+A separate **real Metal GPU** executable was added at
+`tests/render/strata_metal_parity.cpp`, gated by the CMake option
+`AIVERSE_STRATA_METAL_GPU_TESTS=ON` (default OFF, macOS only).
+It uses the real `platform::run` + CAMetalLayer, actual
+`GlobalGeometryPool` source upload, Strata metadata v2, diagnostic compute
+and asynchronous GPU readback. It executes five cases: fine LOD with
+two instances (four leaves), coarse LOD (two parents), frustum rejection,
+a disabled instance, and deliberate output overflow. It reports the
+result of each GPU/CPU comparison on the console and exits nonzero on
+failure. It enables only the old **CPU shared pool admission**
+(`AIVERSE_METAL_CPU_MDI=1`) locally for the fixture; it does not submit
+ICB or Strata draws.
+
+Mac Studio commands:
+
+```sh
+cd ~/Projects/AIVERSE-strata-stage8
+git status --short
+git fetch origin feature/strata-virtual-geometry
+git switch --detach origin/feature/strata-virtual-geometry
+cmake -S . -B build/strata \
+  -DAIVERSE_BUILD_TESTS=ON \
+  -DAIVERSE_BUILD_STRATA=ON \
+  -DAIVERSE_STRATA_METAL_GPU_TESTS=ON
+cmake --build build/strata \
+  --target aiverse_strata_gpu_culling_tests aiverse_strata_metal_parity \
+  --parallel 8
+ctest --test-dir build/strata \
+  -R '^strata_(builder|model_adapter|view|gpu_scene|gpu_culling)
+- **One scene/instance truth**: `GeometryScene` owns static render instances
+  and HLOD; do not create separate Strata transforms or introduce gameplay
+  entities solely for rendering.
+- **One grouping authority**: indirect draw grouping/material binding stays
+  in the existing renderer, with a future Strata adapter supplying visible
+  cluster ranges. Never double-submit the same primitives.
+- **GPU capability negotiation**: GLES3/WebGL2 should retain traditional
+  indexing paths. Metal/Vulkan/D3D future paths must gate compute, indirect
+  count, storage resources and synchronization independently.
+- **Multi-world**: geometry assets can be shared by handle across worlds,
+  while scene-resident instance tables and render budgets are per world/view.
+- **Dynamic terrain**: TerraWeave owns chunk geometry and versions; Strata
+  consumes immutable snapshots and schedules deferred release. PHYSIS owns
+  simulation/events, not GPU buffers.
+- **Pass separation**: main-camera, shadows, reflections and portals may
+  require distinct culling/error metrics and shadow caster inclusion.
+
+## Known shortcomings / next steps
+
+1. Compile and execute focused tests on a native project checkout:
+   ```sh
+   cmake -S . -B build/strata -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STRATA=ON
+   cmake --build build/strata --target aiverse_strata_builder_tests aiverse_strata_model_adapter_tests aiverse_strata_view_tests aiverse_strata_gpu_scene_tests aiverse_strata_gpu_culling_tests -j 8
+   ctest --test-dir build/strata -R '^strata_(builder|model_adapter|view|gpu_scene) --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. The existing `GlobalGeometryPool` now reserves auxiliary Strata index
+   spans without creating a new page, and version-2 metadata maps primitive
+   bases to their actual pooled GPU offsets. Verify on Mac Metal and Vulkan:
+   shared-buffer writes, reupload/revision invalidation, in-flight retirement,
+   surrounding rigid models, and all original fallback paths before enabling
+   submission. Default staging remains OFF.
+5. Stage 9 adds an explicit exclusive route/candidate command preflight.
+   Execute the Stage 8.2 real Metal parity runner and the sixth route test,
+   then randomized camera/LOD/material variants before accepting GPU output;
+   previous mock/CPU tests do not establish raster parity.
+6. Add mutually exclusive Renderer3D selected-range submission only after
+   GPU/CPU selection AND screenshot parity. Preserve legacy fallback on all
+   unsupported devices; then pursue Hi-Z, streaming and independent CPU/GPU
+   benchmarks.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+ --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. Extend **existing** `GlobalGeometryPool` to safely allocate an auxiliary
+   Strata index stream on an existing pooled page, with explicit scene/
+   model revision checks, upload failure rollback, frame-fenced retirement
+   and shared-buffer synchronization. Do not add a second geometry VB/IB pool.
+   All current Strata metadata offsets remain source-local, not drawable.
+5. Build a capability-gated GPU scene/cluster selection path using the
+   CPU planner as a correctness oracle. Submit visible ranges through one
+   existing `Renderer3D` batching/MDI owner, or fall back to normal models.
+6. Benchmark CPU and GPU time separately, validate view-dependent shadows,
+   reflection views and multi-world lifetime, then pursue streaming.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+ \
+  --output-on-failure
+build/strata/aiverse_strata_metal_parity
+```
+
+**Validation distinction:** The previous five CPU/mock CTests were
+owner-confirmed PASS. The new Stage 8.2 changes, real MSL shader compile,
+GPU dispatch, asynchronous readback, Metal GPU-vs-CPU selection parity and
+image parity are **NOT RUN** as of this documentation entry. The real
+runner is intentionally not an unattended CTest; it creates a macOS window.
+Do not infer speedup or complete rendering from a valid diagnostic selection.
+
+Remaining mandatory gate before enabling draw submission:
+native Stage 8.2 tests, genuine Metal shader compilation, mismatched/overflow
+handling, camera thresholds and geometry quality, explicit GPU/CPU parity
+over randomized transformations and materials, per-pass shadows/reflections,
+and a one-owner, non-double-submitted Renderer3D integration. Vulkan compute,
+Hi-Z and streaming remain future work.
+
+## Stage 9 — exclusive renderer routing preflight (no GPU draws)
+
+After Stage 8.2, the batching PR #34 was merged into `main` at
+`58e29ab052458fffcdebebffe27022b53adb9367`. Strata synchronizes
+this `main` through a two-parent merge `a77cd830e8dee751658028786066111bc8e65f6a`
+while preserving the independent batching changes and handoff.
+Renderer3D, StaticModelCache, GlobalGeometryPool and CPU MDI/GPU ICB still
+belong to the existing batching implementation.
+
+`engine/render/StrataRenderRouting.h/.cpp` defines an explicit **candidate
+preflight and exclusive source route decision** (not a live submission path).
+
+```cpp
+using namespace aiverse::render;
+strata::RenderCandidate candidate;
+strata::ViewConfig view; // pass object-to-clip, viewport & error budget
+// Scene must have been staged with both CPU and pooled-GPU Strata enabled.
+const bool prepared = scene.prepareStrataRenderCandidate(
+    "models/stone.glb", 0, 0, strata::RenderPass::MainOpaque,
+    view, candidate);
+
+// Renderer3D owns final material/pipeline validation and the real uniform slot.
+strata::RenderRouteGate gate;
+gate.requested = true;
+// DO NOT set proof flags speculatively: real Metal CPU/GPU and raster parity
+// must be established first, for the applicable pass/material.
+gate.sourceAndMaterialSafe = prepared;
+gate.sourceResident = prepared;
+gate.cpuGpuSelectionParityVerified = false; // unverified in production
+gate.rasterParityVerified = false; // unverified in production
+gate.rendererOwnsSubmission = false;
+auto route = strata::chooseExclusiveRenderRoute(gate);
+// route == Legacy; original Renderer3D draws stay authoritative.
+```
+
+The CPU preflight validates an exact source model, primitive and material,
+checks a **fresh** `GpuMetadataScene::indexBinding` shared-pool sidecar
+lease, live source/model GPU handles, geometry and material revisions,
+no animation/skin/morph/vertex displacement/custom shader, no alpha
+blending, existing model LOD, shadow batch, material batch or variant
+ownership. It calls CPU `planView` with the correct pass projection and
+converts selected primitive-local indices into absolute shared GPU
+index offsets. For fully offscreen primitives it may return an empty
+candidate; this is a valid pass-specific cull, **not** an instruction
+to also draw the original primitive.
+
+`encodeRendererCommands(liveModel, liveResidency, candidate, slot, gate,
+commands)` converts the geometry ranges into the shared 20-byte
+`gfx::DrawIndexedIndirectCommand` ABI **only if** every route gate is
+explicitly satisfied. It independently rechecks the live material/geometry
+revisions, source pointer identity, GPU buffers and *current* sidecar lease
+(including bounds). The real `firstInstance` uniform slot must be
+provided by Renderer3D; Strata never allocates a second transform table,
+pipeline or material grouping authority. On failure it leaves output
+untouched. This is still diagnostic command construction, NOT dispatch.
+
+**Important:** merely setting every `RenderRouteGate` boolean does not
+constitute genuine GPU or raster parity. The production renderer does not
+currently call this encoder or suppress legacy draws. Do not wire in a
+Strata-only branch until the Stage 8.2 real Metal runner and full OFF/ON
+visual parity pass, including sun shadows, reflections, material/LOD
+transitions and multiple instances. Never submit a Strata candidate in
+addition to the corresponding `ModelDraw`.
+
+A new `aiverse_strata_render_routing` static target and focused CTest
+`strata_render_routing` cover the gate, pooled index translation,
+per-pass parent/leaf choices, fully culled primitives, live source
+mutation, revoked/invalid GPU leases and absence of actual raster/
+indirect draws. Tests are not considered passing until executed.
+The `.github/workflows/strata-focused.yml` workflow builds this sixth
+contract suite on Linux/macOS.
+
+## Stage 10 — actual ModelDraw dry-run in Renderer3D (no rendering change)
+
+**Renderer3D now has a diagnostic preview call, not a Strata draw path.**
+The Stage 9 source routing preflight alone was unaware of the actual
+per-draw tint, pose, node transforms and independent renderer passes.
+The new `StrataRendererPreview.h/.cpp` adds a stateless, testable
+`strata::previewModelDraw` evaluator that accepts the existing
+`ModelDraw`, per-source `ModelAsset` and GPU sidecar residency,
+plus a `PreviewContext` containing main/sun view projections and
+target dimensions. It never creates command buffers, calls
+`drawIndexed`, changes ModelDraw or caches transform ownership.
+
+`Renderer3D::previewStrataModel(draw, stagedAsset, gpuScene, sourceKey)`
+runs the same evaluator with the **renderer’s real** current matrices,
+sun shadow quality, viewport size and depth convention.
+`Renderer3D::strataPreviewStats()` provides per-`beginScene` counts:
+modelDraws, attempted, ready, rejected, selectedClusters, fullyCulled
+and skippedUnsafeDraws. A 'ready' candidate only means the CPU
+reference geometry and pooled indices passed preflight — it does
+**not** mean GPU/CPU selection or image parity has passed.
+
+`GeometryScene` owns the only current integration call:
+```cpp
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true);
+scene.setStrataRenderPreviewEnabled(true); // additional opt-in, default OFF
+scene.loadPrepared(device, json, std::move(models));
+// In an existing renderer frame:
+scene.draw(renderer);
+// Every source still goes through original Renderer3D::drawModel().
+auto diagnostics = renderer.strataPreviewStats();
+```
+
+Only source models (not HLOD or surface proxy replacements) are
+previewed, and only when the source is already GPU-resident in the
+original `GlobalGeometryPool` and its Strata CPU data is staged.
+No new ECS data, renderer material cache, GPU pool or alternate draw
+path is introduced. The temporary sourceKey and pooled data are borrowed
+only synchronously for this evaluation and never stored in Renderer3D
+packets. Preview refuses animated pose/baked skinning, material and node
+overrides, alpha/fade, model variants, reveal, water passes and
+incompatible live shader/material/geometry. Each eligible source node
+is evaluated separately with the proper per-node bind transform and
+per-pass projection. Sun shadow selection is independent of the main
+camera, and an empty successful selection counts as a fully culled
+preview rather than an invitation to render a second source.
+
+**No duplicate draw calls:** after an optional preview,
+`GeometryScene::drawInstance` ALWAYS invokes the original
+`renderer.drawModel(d)` exactly once. HLOD/proxy substitutions never
+enter the dry-run. Stage 9 `RenderRouteGate` remains a proof contract
+and is not connected to the live submission path, even if a caller
+manually enables the preview flag.
+
+`tests/render/strata_render_routing.cpp` additionally exercises
+source ModelDraw with independent main/shadow views and a recording
+RHI to verify correct preflight counts, opaque/alpha restrictions,
+and **zero draw submissions**. The six focused Strata CTests are still
+required on a native build; Stage 10 has not been executed by this
+assistant. The user's earlier Stage 8 Mac Studio 5/5 CTest PASS remains
+a confirmed **older** code snapshot, not Stage 10 verification.
+
+## Stage 10 verified Metal selection (owner Mac Studio, 2026-11-19)
+
+Native macOS focused suite: **6/6 CTest PASS**, 0 failed, including
+`strata_gpu_culling` and `strata_render_routing`.
+Owner also compiled and ran the actual `aiverse_strata_metal_parity`
+executable on Mac Studio. The real GPU created the Strata Metal compute
+pipeline, dispatched it, copied visible clusters asynchronously and
+compared them to the CPU oracle. All five supplied fixture cases passed:
+fine LOD (selected 4, examined 6), coarse LOD (2/2), frustum rejection
+(0/6), disabled instance (2/3), and bounded-output overflow correctly
+rejected. Final output: `[strata-metal] cases=5/5 status=PASSED`.
+
+The tested checkout SHA was not included in the supplied terminal output.
+These results **do not** yet establish screenshot parity of legacy and
+Strata raster geometry; they do not enable Strata draws in Renderer3D.
+Production still renders exactly the legacy model once, and the Stage 10
+preview remains opt-in. The next required gate is real Metal raster/image
+parity with the source geometry and sun shadow/reflective passes, with
+no duplicate primitive submission and a conservative fallback.
+
+A separate `AIVERSE-static-scene` full CTest run reported 125/127 PASS;
+its two skill-registration failures were unrelated to this Strata
+GPU fixture and should not be conflated with Strata's 6/6 focused tests.
+
+## Stage 11 — real Metal raster A/B fixture, separate frames (not production)
+
+`tests/render/strata_metal_raster_parity.cpp` is an **opt-in
+macOS Metal raster parity probe** built by target
+`aiverse_strata_metal_raster_parity` when
+`AIVERSE_STRATA_METAL_GPU_TESTS=ON`. The target is purposefully not
+an unattended CTest because it opens a real CAMetalLayer.
+
+The fixture creates one simple rigid, opaque, UV-mapped quad and
+stages a v2 Strata source whose parent uses the same original two
+triangles as both resident children combined. It uploads the source
+only once via the existing `GlobalGeometryPool`, then stages the
+auxiliary Strata indices **inside the same pooled GPU buffer**.
+Two test-only alias models borrow that exact vertex/index GPU buffer
+with `gpuBaseVertex` from the original source and `gpuFirstIndex`
+from the staged sidecar; neither is uploaded or freed separately.
+The alias primitives reference the CPU `prepareRenderCandidate`
+selected ranges, not a second vertex allocation.
+
+Using the production `Renderer3D::drawModel`, each test frame
+submits at most ONE of: nothing, Legacy source, Strata fine children,
+or Strata coarse parent. A floor serves as a shadow receiver.
+The normal renderer processes its main and sun shadow passes; no
+model is drawn through a second competing raster pipeline.
+Separate frames are captured with the existing Metal
+`gfx::Device::captureNextFrame`. The test requires an empty-vs-Legacy
+image difference (guards against black/blank images), then byte-exact
+Legacy-vs-fine and Legacy-vs-coarse screenshots. This **exact**
+fixture deliberately uses non-simplified parent geometry; it is not
+a crack/seam or perceptual-error allowance for coarse real-world LODs.
+
+The runner writes four binary PPM captures to the working directory
+by default (`strata-raster-empty.ppm`,
+`strata-raster-legacy.ppm`,
+`strata-raster-strata-fine.ppm`,
+`strata-raster-strata-coarse.ppm`). Set
+`AIVERSE_STRATA_RASTER_CAPTURE_PREFIX=/path/to/prefix` to choose
+the location. It checks a single ModelDraw submission per candidate
+frame, nonzero main and sun-shadow submission counters and
+zero changed channels in the compared screenshots.
+It does NOT yet read the shadow-map texture directly, exercise
+planar-water reflection or automatically use the GPU compute
+selected-range buffer as authoritative draw input. These remain
+separate acceptance tests.
+
+Manual validation on a Mac Studio:
+```sh
+cd ~/Projects/AIVERSE-strata-validation
+git status --short
+git fetch origin feature/strata-virtual-geometry
+# If clean (or after preserving local modifications):
+git switch --detach origin/feature/strata-virtual-geometry
+cmake -S . -B build/strata -DAIVERSE_BUILD_TESTS=ON \
+  -DAIVERSE_BUILD_STRATA=ON -DAIVERSE_STRATA_METAL_GPU_TESTS=ON
+cmake --build build/strata --target \
+  aiverse_strata_metal_parity aiverse_strata_metal_raster_parity \
+  --parallel 8
+ctest --test-dir build/strata \
+  -R '^strata_(builder|model_adapter|view|gpu_scene|gpu_culling|render_routing)
+- **One scene/instance truth**: `GeometryScene` owns static render instances
+  and HLOD; do not create separate Strata transforms or introduce gameplay
+  entities solely for rendering.
+- **One grouping authority**: indirect draw grouping/material binding stays
+  in the existing renderer, with a future Strata adapter supplying visible
+  cluster ranges. Never double-submit the same primitives.
+- **GPU capability negotiation**: GLES3/WebGL2 should retain traditional
+  indexing paths. Metal/Vulkan/D3D future paths must gate compute, indirect
+  count, storage resources and synchronization independently.
+- **Multi-world**: geometry assets can be shared by handle across worlds,
+  while scene-resident instance tables and render budgets are per world/view.
+- **Dynamic terrain**: TerraWeave owns chunk geometry and versions; Strata
+  consumes immutable snapshots and schedules deferred release. PHYSIS owns
+  simulation/events, not GPU buffers.
+- **Pass separation**: main-camera, shadows, reflections and portals may
+  require distinct culling/error metrics and shadow caster inclusion.
+
+## Known shortcomings / next steps
+
+1. Compile and execute focused tests on a native project checkout:
+   ```sh
+   cmake -S . -B build/strata -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STRATA=ON
+   cmake --build build/strata --target aiverse_strata_builder_tests aiverse_strata_model_adapter_tests aiverse_strata_view_tests aiverse_strata_gpu_scene_tests aiverse_strata_gpu_culling_tests -j 8
+   ctest --test-dir build/strata -R '^strata_(builder|model_adapter|view|gpu_scene) --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. The existing `GlobalGeometryPool` now reserves auxiliary Strata index
+   spans without creating a new page, and version-2 metadata maps primitive
+   bases to their actual pooled GPU offsets. Verify on Mac Metal and Vulkan:
+   shared-buffer writes, reupload/revision invalidation, in-flight retirement,
+   surrounding rigid models, and all original fallback paths before enabling
+   submission. Default staging remains OFF.
+5. Experimental Metal compute culling now emits diagnostic GPU-selected
+   ranges but does not render them. Run native Metal compile, GPU readback
+   and sorted CPU `planView` parity, including stack/output overflow and
+   zero-to-one depth convention, before any renderer connection.
+6. Add mutually exclusive Renderer3D selected-range submission only after
+   GPU/CPU selection AND screenshot parity. Preserve legacy fallback on all
+   unsupported devices; then pursue Hi-Z, streaming and independent CPU/GPU
+   benchmarks.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+ --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. Extend **existing** `GlobalGeometryPool` to safely allocate an auxiliary
+   Strata index stream on an existing pooled page, with explicit scene/
+   model revision checks, upload failure rollback, frame-fenced retirement
+   and shared-buffer synchronization. Do not add a second geometry VB/IB pool.
+   All current Strata metadata offsets remain source-local, not drawable.
+5. Build a capability-gated GPU scene/cluster selection path using the
+   CPU planner as a correctness oracle. Submit visible ranges through one
+   existing `Renderer3D` batching/MDI owner, or fall back to normal models.
+6. Benchmark CPU and GPU time separately, validate view-dependent shadows,
+   reflection views and multi-world lifetime, then pursue streaming.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+ \
+  --output-on-failure
+./build/strata/aiverse_strata_metal_parity
+./build/strata/aiverse_strata_metal_raster_parity
+```
+
+Expected **but NOT yet observed** for the new raster probe:
+`[strata-raster] PASS: real Renderer3D legacy vs fine/coarse source-page pixel parity`
+followed by `[strata-raster] status=PASSED`.
+Failure exit or any image difference means raster parity remains unverified.
+The prior **actual** Metal GPU compute parity 5/5 and focused CPU
+CTests 6/6 are recorded separately and must not be represented as
+proof that Stage 11 raster parity passes.
+
+`.github/workflows/strata-focused.yml` now uses the corrected
+six-test CTest regex and additionally **compiles** both native Metal
+fixtures on macOS CI. It does **not execute the GUI tests there**,
+so a green compile job alone is not evidence of GPU raster parity.
+Keep the feature PR Draft and production renderer unchanged until
+exact visual and shadow/reflection parity is demonstrated on hardware.
+
+## Stage 11.1 — Metal raster capture alignment fix (2026-11-19)
+
+The owner compiled the real Metal `aiverse_strata_metal_raster_parity`
+fixture and ran it on Mac Studio. The prior GPU cluster compute parity
+**remains PASS (5/5)**, but the raster fixture reported:
+
+```text
+[strata-raster] FAIL: Legacy and empty screenshots identical; test drew no model
+[strata-raster] status=FAILED frames=45
+[metal-assets] ... pipelines=16 pipelineFailures=0
+```
+
+This does **not** prove a vertex/index geometry bug. Inspection of
+`GfxMetal.mm` revealed a test scheduling defect: when the current
+drawable is `framebufferOnly`, `captureNextFrame` sets
+`captureDelay_=1` and the requested image is copied in a *later*
+frame. The fixture requested its captures on frames 8, 19, 30 and
+41, exactly before transitions at 9, 20, 31 and 42. Thus an
+"Empty" request could capture the following Legacy geometry, a
+"Legacy" request the following Fine/Strata geometry, etc. Identical
+"Empty/Legacy" screenshots may therefore be a false attribution
+even when valid geometry was rendered. Do not weaken the independent
+blank-baseline requirement to hide this test failure.
+
+Fix `bcc471e93c9a4a35f7fda457d4fa15ccbda13fe9` in
+`tests/render/strata_metal_raster_parity.cpp`:
+
+- Explicitly use `Device::setScreenReadable(true)` at fixture
+  initialization, before the platform begins drawing, so drawable
+  textures can be captured in the intended frame. Reset the flag
+  before shutdown.
+- Request each image in the middle of its steady test mode:
+  **frame 4 Empty, 15 Legacy, 26 Strata Fine, 37 Strata Coarse**.
+  These slots remain safe even if a supported RHI adds up to two
+  capture frames of delay.
+- Print requested mode/frame and actual callback frame, with
+  main/shadow pass counters. If Empty and Legacy remain identical,
+  print captured mode counters before failing, to distinguish model
+  invisibility from screenshot phase errors.
+- Retain strict `Empty != Legacy`, `Legacy == Fine` and
+  `Legacy == Coarse` bytewise GPU screenshot checks. Do not
+  alter production renderer, shadow pipelines, asset builder,
+  global GPU source pool or the indexed sidecar.
+
+**Validation:** This fix is committed in GitHub but has
+**NOT yet been compiled or run by the assistant**. The owner's
+pre-fix Stage 11 raster result is FAIL, not PASS. The owner-confirmed
+six focused CPU/mock tests and five real Metal compute parity scenarios
+remain independently PASS on their prior tested snapshot.
+Real main/shadow screenshot parity remains unverified until a
+post-fix successful Mac run; a pure CMake build or queued CI is not
+proof of visual correctness.
+
+From the existing worktree, after making sure local changes are
+preserved:
+
+```sh
+cd ~/Projects/AIVERSE-strata-validation
+git status --short
+git fetch origin feature/strata-virtual-geometry
+git switch --detach origin/feature/strata-virtual-geometry
+cmake --build build/strata --target aiverse_strata_metal_raster_parity --parallel 8
+./build/strata/aiverse_strata_metal_raster_parity
+```
+
+If the corrected baseline still fails, inspect the new
+`capture requested` / `capture received` frame indices,
+the `shadow/opaque` counters, and four saved PPM files. Confirm
+actual model visibility/culling and valid source pooled base offsets
+before changing Strata geometry or relaxing screenshot parity.
+Future real raster parity still needs separate shadow-map depth
+readback, water reflection view, multi-material and simplified
+LOD error-budget tests before production draw routing.
+
+## Architectural constraints
+- **One scene/instance truth**: `GeometryScene` owns static render instances
+  and HLOD; do not create separate Strata transforms or introduce gameplay
+  entities solely for rendering.
+- **One grouping authority**: indirect draw grouping/material binding stays
+  in the existing renderer, with a future Strata adapter supplying visible
+  cluster ranges. Never double-submit the same primitives.
+- **GPU capability negotiation**: GLES3/WebGL2 should retain traditional
+  indexing paths. Metal/Vulkan/D3D future paths must gate compute, indirect
+  count, storage resources and synchronization independently.
+- **Multi-world**: geometry assets can be shared by handle across worlds,
+  while scene-resident instance tables and render budgets are per world/view.
+- **Dynamic terrain**: TerraWeave owns chunk geometry and versions; Strata
+  consumes immutable snapshots and schedules deferred release. PHYSIS owns
+  simulation/events, not GPU buffers.
+- **Pass separation**: main-camera, shadows, reflections and portals may
+  require distinct culling/error metrics and shadow caster inclusion.
+
+## Known shortcomings / next steps
+
+1. Compile and execute focused tests on a native project checkout:
+   ```sh
+   cmake -S . -B build/strata -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STRATA=ON
+   cmake --build build/strata --target aiverse_strata_builder_tests aiverse_strata_model_adapter_tests aiverse_strata_view_tests aiverse_strata_gpu_scene_tests aiverse_strata_gpu_culling_tests -j 8
+   ctest --test-dir build/strata -R '^strata_(builder|model_adapter|view|gpu_scene) --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. The existing `GlobalGeometryPool` now reserves auxiliary Strata index
+   spans without creating a new page, and version-2 metadata maps primitive
+   bases to their actual pooled GPU offsets. Verify on Mac Metal and Vulkan:
+   shared-buffer writes, reupload/revision invalidation, in-flight retirement,
+   surrounding rigid models, and all original fallback paths before enabling
+   submission. Default staging remains OFF.
+5. Experimental Metal compute culling now emits diagnostic GPU-selected
+   ranges but does not render them. Run native Metal compile, GPU readback
+   and sorted CPU `planView` parity, including stack/output overflow and
+   zero-to-one depth convention, before any renderer connection.
+6. Add mutually exclusive Renderer3D selected-range submission only after
+   GPU/CPU selection AND screenshot parity. Preserve legacy fallback on all
+   unsupported devices; then pursue Hi-Z, streaming and independent CPU/GPU
+   benchmarks.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+ --output-on-failure
+   ```
+2. Add a recording-device scene fixture comparing Strata staging OFF/ON,
+   instance deduplication, material/LOD/shadow draw parity and unload/reload.
+3. Validate silhouette and seam quality for different LOD depths and attribute
+   discontinuities; parent simplification and locked borders alone do not
+   guarantee crack-free transitions.
+4. Extend **existing** `GlobalGeometryPool` to safely allocate an auxiliary
+   Strata index stream on an existing pooled page, with explicit scene/
+   model revision checks, upload failure rollback, frame-fenced retirement
+   and shared-buffer synchronization. Do not add a second geometry VB/IB pool.
+   All current Strata metadata offsets remain source-local, not drawable.
+5. Build a capability-gated GPU scene/cluster selection path using the
+   CPU planner as a correctness oracle. Submit visible ranges through one
+   existing `Renderer3D` batching/MDI owner, or fall back to normal models.
+6. Benchmark CPU and GPU time separately, validate view-dependent shadows,
+   reflection views and multi-world lifetime, then pursue streaming.
+
+## Verification policy
+
+Compiler, CTest, screenshots, GPU timing and benchmarks must be reported only
+after **actual execution** with exact logs or CI URLs. Queued/cancelled runs
+are not passing results.
+
+
+## Stage 11.1 — owner-verified real Metal raster parity PASS (2026-11-19)
+
+**Actual native Mac Studio output**, after the Metal screenshot scheduling
+fix `bcc471e93c9a4a35f7fda457d4fa15ccbda13fe9`, confirms:
+
+- `aiverse_strata_metal_raster_parity` successfully built and executed.
+- Capture requests/callbacks: Empty frame 4→6; Legacy 15→17;
+  Strata Fine 26→28; Strata Coarse 37→39. All four capture callbacks
+  returned **1,920,000 bytes**, consistent with 800 × 600 × 4.
+- Renderer profile draw counts per requested frame:
+  Empty shadow=0 opaque=0; Legacy shadow=1 opaque=1;
+  Fine shadow=2 opaque=2; Coarse shadow=1 opaque=1.
+- `Legacy/Fine changed_channels=0`;
+  `Legacy/Coarse changed_channels=0`.
+- Three reported PASS assertions: actual `Renderer3D`
+  source-page raster pixel parity, main+sun-shadow submissions, and
+  one ModelDraw per comparison frame with no second GPU geometry pool.
+- Final `[strata-raster] status=PASSED frames=44`.
+- Metal pipeline diagnostics:
+  `[metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0`.
+
+The prior fixture's `Legacy and empty screenshots identical` failure
+was fixed without relaxing the nonblank baseline check or pixel parity
+criteria. Real Metal cluster-selection parity had already been
+owner-verified independently: `cases=5/5 status=PASSED`;
+the focused native CPU/recording-RHI CTests passed 6/6 on the earlier
+provided log. The Stage 11.1 run did **not** rerun all six CTests.
+
+**This proves only lossless parent/leaf indices produce identical final
+main-camera RGBA images through the existing renderer on this fixture,
+with main/shadow pass submission counters.** It does NOT demonstrate
+direct shadow-map depth-texture equality, reflection parity,
+arbitrary material equivalence, intentionally simplified LOD visual
+quality, crack-free mixed LOD seams, GPU-selected indirect rendering,
+automatic streaming, or cross-backend parity. Production Strata
+draw routing remains OFF; main remains unchanged; PR #35 stays Draft.
+
+Next: add independent shadow depth texture readback parity and reflection/
+multiview fixtures, then materially varied, simplified and multi-instance
+cases. Continue enforcing one `GlobalGeometryPool` owner and one
+`Renderer3D` draw authority; only then consider opt-in exclusive
+Legacy/Strata production switching.
+
+
+## Stage 12 — native Metal raw shadow-depth and independent two-view parity (2026-11-19)
+
+**Implementation is committed; native compilation and execution are NOT
+YET VERIFIED**. This is a new, opt-in, standalone fixture that does not
+modify the previously owner-verified Stage 11 raster fixture, does not
+switch Strata production renderer ownership, and does not introduce a
+second GPU geometry pool.
+
+### Diagnostic GPU API and lifetime
+
+- `engine/gfx/Gfx.h`: `gfx::Device::readDepthTextureAsync(TextureHandle,
+  DepthReadFn)` is optional (default false on other RHI backends);
+  returns tightly packed native `float32` pixels in a
+  `std::vector<uint8_t>` with width and height, or empty data on GPU
+  failure. The callback fires on the owning device thread at a later
+  `beginFrame`. The caller must schedule it after the writing pass
+  and keep the texture alive until the command completes.
+- `engine/gfx/metal/GfxMetal.mm`: bounded, non-stalling Metal
+  `Depth32Float` private-texture-to-shared-buffer GPU blit. It only
+  accepts non-multisampled 2D depth texture; rejects open encoders,
+  invalid handles, unsupported format, dimensions over 4096², more
+  than eight outstanding readbacks or transfers over 64 MiB.
+  Uses 256-byte aligned Metal blit rows, repacks as tightly packed
+  float32, checks GPU completion status and delivers callbacks on
+  the device owner thread; no global synchronizing GPU wait.
+  This API remains unused in ordinary rendering.
+- `engine/render/Renderer3D.h/.cpp`:
+  `requestSunShadowDepthReadback(DepthReadFn)` exposes **no owned
+  shadow texture handle** and delegates to the RHI only when an
+  active sun shadow map exists. Call after `Renderer3D::render`
+  and after ending the still-open main pass.
+
+### Stage 12 executable
+
+`tests/render/strata_metal_depth_multiview_parity.cpp` builds as
+`aiverse_strata_metal_depth_multiview_parity` on macOS with
+`AIVERSE_STRATA_METAL_GPU_TESTS=ON`. It is intentionally not
+registered as a headless CTest, since it opens a real CAMetalLayer.
+
+For each of TWO independent cameras (view 0: pitch 0.2, yaw 0,
+distance 5; view 1: pitch 0.55, yaw 0.7, distance 6), render four
+separate and *exclusive* steady-mode frames:
+Empty (no ModelDraw), Legacy, Strata Fine (two children) and
+Strata Coarse (lossless parent). No frame ever submits both
+legacy source and Strata; all draws go through the ordinary
+`Renderer3D::drawModel`. The Strata alias uses the original
+`GlobalGeometryPool` source VB and auxiliary index sidecar.
+The sun map is intentionally 512×512 for bounded readback, while
+the real screen image remains 800×600.
+
+For each view/mode, the fixture captures:
+- An actual main RGBA frame via `captureNextFrame`, after enabling
+  screen-readability before frame acquisition, with screenshots
+  requested inside a steady mode to avoid the known capture-delay
+  bug; and
+- The current sun shadow texture's real `Depth32Float` pixels,
+  via the new GPU blit **after closing the main pass**, in the same
+  frame. Data are not derived from GPU draw counters.
+
+Acceptance requires: all eight RGBA and eight depth captures,
+nonblank Legacy vs Empty for BOTH formats, zero changed RGBA channels
+between Legacy/Fine/Coarse in each view, **zero byte changes in
+raw float32 sun-shadow depth** between Legacy/Fine/Coarse in each
+view, finite depth values in [0,1], at least one sample different
+from clear-depth, nonzero shadow/opaque draw counters for model
+cases, exactly one candidate ModelDraw per frame, and distinct
+Legacy RGBA images from the two camera views.
+This strict oracle is appropriate only because the fixture's
+hierarchical LODs are intentionally **geometrically lossless**.
+It does NOT prove fidelity of simplified LODs.
+
+By default the runner saves eight `strata-depth-view{0|1}-MODE.ppm`
+color captures and eight
+`strata-depth-view{0|1}-MODE-shadow.f32` packed little-endian
+32-bit float raw depth snapshots in the working directory.
+Set `AIVERSE_STRATA_DEPTH_CAPTURE_PREFIX=/path/prefix` to adjust.
+With 512² float32 values, each depth file is 1 MiB.
+
+Manual Mac Studio build/run:
+
+```sh
+cd ~/Projects/AIVERSE-strata-validation
+git status --short
+git fetch origin feature/strata-virtual-geometry
+git switch --detach origin/feature/strata-virtual-geometry
+cmake -S . -B build/strata \
+  -DAIVERSE_BUILD_TESTS=ON \
+  -DAIVERSE_BUILD_STRATA=ON \
+  -DAIVERSE_STRATA_METAL_GPU_TESTS=ON
+cmake --build build/strata --target \
+  aiverse_strata_metal_depth_multiview_parity --parallel 8
+./build/strata/aiverse_strata_metal_depth_multiview_parity
+```
+
+Switching commits requires a clean worktree or saved local edits.
+Expected, **not yet observed**, successful summaries:
+
+```text
+[strata-depth] view=0 color_fine=0 color_coarse=0 depth_fine_bytes=0 depth_coarse_bytes=0
+[strata-depth] view=1 color_fine=0 color_coarse=0 depth_fine_bytes=0 depth_coarse_bytes=0
+[strata-depth] PASS: exact sun-shadow Depth32Float Legacy/Fine/Coarse parity
+[strata-depth] status=PASSED views=2 modes=4 ...
+```
+
+The `.github/workflows/strata-focused.yml` macOS job now
+**compiles** the Stage 12 executable, but does not execute GUI GPU
+fixtures. Until real owner Mac Studio output is provided, do not
+claim Stage 12 PASS, real shadow-depth parity, independent-view
+parity, or safety of production Strata rendering. Stage 11's prior
+real Metal main-raster strict parity remains **actually PASS**
+(0 changed channels for Fine and Coarse), and the prior real
+Metal compute oracle remains **5/5 PASS** in its separate fixture.
+
+**Next gates:** Planar reflection target readback and per-reflection
+camera selection, multi-material and UV boundary parity, GPU selected
+cluster range draw execution with exclusive legacy fallback, lossy
+LOD quality/edge cracks, multi-world lifecycle, and GPU performance
+before considering a production default.
+
+
+## Stage 12 hardware verification — real Metal depth/multiview PASS (2026-11-19)
+
+Owner-supplied Mac Studio terminal output confirms **successful native
+compilation and runtime execution** of the Stage 12 manual fixture
+`aiverse_strata_metal_depth_multiview_parity`.
+
+- Earlier real Metal GPU compute selection fixture was rerun and
+  confirmed `[strata-metal] cases=5/5 status=PASSED`.
+- Earlier Stage 11 raster fixture was rerun and confirmed both
+  `Legacy/Fine changed_channels=0` and
+  `Legacy/Coarse changed_channels=0`, with
+  `[strata-raster] status=PASSED frames=44`.
+- **Stage 12** captured all **8 main-camera RGBA** images
+  (800×600, 1,920,000 bytes each) and **8 sun shadow Depth32Float**
+  maps (512×512, 262,144 float samples each), covering
+  Empty/Legacy/Strata Fine/Strata Coarse for two distinct cameras.
+  Every GPU callback completed, including asynchronous depth
+  readbacks and delayed colour screenshots.
+- Exact parity, camera 0:
+  `color_fine=0 color_coarse=0 depth_fine_bytes=0 depth_coarse_bytes=0`.
+- Exact parity, camera 1:
+  `color_fine=0 color_coarse=0 depth_fine_bytes=0 depth_coarse_bytes=0`.
+- Raw maps were nonempty and had a nonconstant model contribution:
+  `nonclear_shadow_samples=73179` (view 0),
+  `nonclear_shadow_samples=34765` (view 1).
+- PASS messages confirmed independent camera views, exact
+  main-colour parity, exact **real GPU depth-texture parity** and
+  exclusive model submission:
+  `[strata-depth] status=PASSED views=2 modes=4 frames=89`.
+- Metal reported
+  `[metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0`
+  for the Stage 12 run.
+
+The previous documentation's `NOT RUN` status describes the
+*pre-verification state* and is superseded by this actual Mac Studio
+output. The owner did not print `git rev-parse HEAD` in the log;
+the exact **tested** commit SHA therefore remains unverified and
+must not be guessed.
+
+**Proof scope:** The fixture uses intentionally **lossless**
+parent/leaf cluster geometry. It validates two real main views
+and the sun shadow **raw depth bytes**, not merely shadow draw
+counters. It does NOT establish reflection render-target parity,
+different materials and UV seams, intentionally lossy LODs,
+cross-chunk crack prevention, real GPU-selected draw submission,
+production Strata/Legacy routing, memory streaming,
+cross-backend Vulkan parity or performance. Those are explicit
+next gates. All production Strata render paths remain default-OFF;
+the original `Renderer3D` remains authoritative and `main`
+is not modified by this verification.
+
+
+## Stage 13 — actual Metal planar-reflection RTT A/B with two textured materials (2026-11-19)
+
+**Implementation committed; real Mac Studio Stage 13 compile and runtime
+execution have NOT YET BEEN PERFORMED.** This stage preserves every
+previously verified Metal fixture (5/5 selection, Stage 11 raster,
+Stage 12 two-view sun shadow depth) without modifications and keeps
+the PR Draft. It does not introduce a production Strata draw route,
+create a second GPU geometry pool or double-submit source geometry.
+
+### Diagnostic offscreen colour readback
+
+- \`gfx::Device::readColorTextureAsync(TextureHandle,ColorReadFn)\`
+  is an opt-in diagnostic RHI hook, returning false by default on
+  unsupported backends. It captures the **actual offscreen render
+  target**; it must not return an ordinary screen screenshot in its
+  place. Callback returns tightly packed top-down RGBA8 bytes, width
+  and height, on the device owner thread in a subsequent frame,
+  without blocking the GPU.
+- The Metal implementation accepts only non-MSAA
+  \`RGBA8\` render-target textures backed by
+  \`MTLPixelFormatBGRA8Unorm\`; it rejects invalid/non-RT images,
+  active graphics/compute encoders, >4096² or >64 MiB readbacks,
+  or more than eight outstanding requests. It GPU-blits the **real
+  private reflection texture** to a temporary shared MTLBuffer,
+  respecting Metal's 256-byte row alignment. Completion repacks
+  BGRA to RGBA8 and delivers the result on the owner thread.
+  Empty result indicates GPU command failure.
+  **HDR/RGBA16F reflection readback is intentionally unsupported.**
+- \`LightSystem::requestPlanarReflectionColorReadback\` offers
+  narrow read-only access to the renderer's existing
+  \`reflColor_\` texture only after this frame's actual
+  \`beginReflection/endReflection\` pass succeeded, and only
+  for LDR. \`Renderer3D::requestPlanarReflectionColorReadback\`
+  also requires the selected reflection plane to be valid;
+  it does not expose raw texture ownership.
+- A new separate **diagnostic** \`strata::RenderPass::PlanarReflection\`
+  permits selection preflights with the actual mirrored camera
+  view-projection. It does not enable any production Strata
+  commands. The source geometry still uses the single
+  \`GlobalGeometryPool\` source allocation and indexed sidecar.
+
+### Stage 13 manual Metal fixture
+
+\`tests/render/strata_metal_reflection_material_parity.cpp\`,
+target \`aiverse_strata_metal_reflection_material_parity\`, is
+built on macOS only when \`AIVERSE_STRATA_METAL_GPU_TESTS=ON\`.
+The fixture uses two physical adjacent opaque mesh primitives,
+with a shared x=0 boundary but **duplicated seam vertices,
+independent UV coordinates and distinct PBR materials**. Each
+material samples its own 4×4 GPU checker texture with an independent
+UV transform and has a separately staged lossless parent/leaf
+hierarchy (one parent with both triangles, two child triangles).
+All GPU geometry is uploaded **once** for the original Model
+using the existing \`GlobalGeometryPool\`; Fine/Coarse are
+test-only aliases with borrowed source GPU buffers and sidecar
+index offsets, not duplicate GPU model allocations.
+
+A translucent water surface using the existing
+\`kDrawWaterSurface\` flag, specular 0.98 and high-quality
+\`LightSystem\` triggers \`Renderer3D::renderReflection()\`,
+the real half-resolution reflection RTT. Other render paths are
+unchanged. Four mutually exclusive frame modes
+Empty/Legacy/Fine/Coarse are rendered with the same ordinary
+\`Renderer3D::drawModel\` across two distinct camera positions.
+\`prepareRenderCandidate\` uses the mirrored reflection
+view-projection for each material. Frustum culling is disabled
+in this preflight fixture to isolate strict multi-material
+indexed-offset/LOD selection; the **existing production
+Renderer3D reflection view still performs visibility culling**.
+No frame ever draws Legacy and Strata together.
+
+The fixture requests GPU readbacks inside each steady mode,
+covering 2 views × 4 modes × THREE outputs:
+
+- Actual main camera 800×600 RGBA8 screenshot
+  (\`strata-reflect-view{0|1}-MODE.ppm\`).
+- Actual 512×512 sun shadow Depth32Float texture
+  (\`strata-reflect-view{0|1}-MODE-shadow.f32\`).
+- **Actual 400×300 planar reflection render target RGBA8**
+  (\`strata-reflect-view{0|1}-MODE-reflection.ppm\`).
+  This is not a crop of the main screen.
+
+Strict acceptance requires all 24 GPU results; an **actual**
+reflection pass; Legacy main, depth AND reflection different
+from the empty baseline (per view); exact zero changed bytes
+between Legacy/Fine/Coarse in all three outputs and both
+cameras; distinct Legacy main and reflection images between
+views; at least two opaque/material source draws and four
+fine cluster draws; and one ModelDraw per candidate frame.
+Zero-delta equality is valid because this hierarchy is
+intentionally lossless. This is NOT an error metric for
+deliberately simplified LODs or an assertion of water
+reflection support on every RHI backend.
+
+Manual owner verification on Mac Studio:
+
+\`\`\`sh
+cd ~/Projects/AIVERSE-strata-validation
+git status --short
+git fetch origin feature/strata-virtual-geometry
+git switch --detach origin/feature/strata-virtual-geometry
+cmake -S . -B build/strata -DAIVERSE_BUILD_TESTS=ON \
+  -DAIVERSE_BUILD_STRATA=ON \
+  -DAIVERSE_STRATA_METAL_GPU_TESTS=ON
+cmake --build build/strata --target \
+  aiverse_strata_metal_reflection_material_parity --parallel 8
+./build/strata/aiverse_strata_metal_reflection_material_parity
+\`\`\`
+
+Preserve any local uncommitted work before the branch switch.
+Expected successful summary (NOT YET OBSERVED):
+
+\`\`\`text
+[strata-reflect] view=0 main_fine=0 main_coarse=0 shadow_fine=0 shadow_coarse=0 reflection_fine=0 reflection_coarse=0
+[strata-reflect] view=1 main_fine=0 main_coarse=0 shadow_fine=0 shadow_coarse=0 reflection_fine=0 reflection_coarse=0
+[strata-reflect] PASS: actual planar reflection RTT nonblank and byte-identical across Legacy/Fine/Coarse
+[strata-reflect] status=PASSED views=2 modes=4 frames=...
+\`\`\`
+
+The focused macOS GitHub workflow **compiles** the new target, but
+does not execute interactive GUI GPU tests. CI being queued, pending,
+or merely green at compile time does not prove Stage 13 native parity.
+
+**Still pending:** Stage 13 actual Mac Studio build/run; HDR
+planar reflections, intentionally lossy meshlet LOD quality and
+cross-cluster seam tests, live GPU-selected raster/ICB submission
+with exclusive Legacy fallback, streaming/lifetime tests, Vulkan
+reflection parity, and controlled real GPU performance benchmarks.
+
+
+## Stage 13.1 hardware verification — actual Metal planar reflection RTT PASS (2026-11-19)
+
+The owner supplied the **actual Mac Studio build and GPU runtime log**
+for `aiverse_strata_metal_reflection_material_parity`. It was
+successfully compiled and linked, then completed with
+
+```text
+[strata-reflect] view=0 main_fine=0 main_coarse=0 shadow_fine=0 shadow_coarse=0 reflection_fine=0 reflection_coarse=0
+[strata-reflect] view=1 main_fine=0 main_coarse=0 shadow_fine=0 shadow_coarse=0 reflection_fine=0 reflection_coarse=0
+[strata-reflect] PASS: actual planar reflection RTT nonblank and byte-identical across Legacy/Fine/Coarse
+[strata-reflect] PASS: two independent cameras, two opaque UV-textured materials
+[strata-reflect] PASS: sun-shadow and main RGBA strict pixel parity, one pooled source and one ModelDraw
+[strata-reflect] status=PASSED views=2 modes=4 frames=89
+[metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0
+```
+
+Eight main-view RGBA snapshots (800×600, 1,920,000 bytes each),
+eight actual Metal sun-shadow depth readbacks (512×512, 262,144
+float samples each) and eight **independent offscreen planar
+reflection RTT readbacks** (400×300, 120,000 pixels each) completed,
+across two independent cameras and four separate
+Empty/Legacy/Strata Fine/Strata Coarse modes. Captures were
+delivered asynchronously (screen callbacks 2–3 frames after requests),
+while depth and RTT callbacks arrived same/next frame. The fixture's
+nonempty reflection baseline checks and per-material render
+submission assertions passed.
+
+Per-camera source-versus-Strata differences are all **zero**
+for the main colour, raw shadow-depth bytes and reflection
+RTT colour, with the intentionally *lossless* parent/leaf
+hierarchy. This is real renderer parity evidence, not a
+surrogate screenshot of the screen or a mocked RHI.
+
+The owner ran the new fixture inside a clean isolated
+`AIVERSE-strata-stage13` worktree, after the earlier
+`AIVERSE-strata-validation` worktree was found dirty.
+The user log does **not** include a printed `git rev-parse HEAD`
+for that run: the exact tested source SHA was not independently
+observed; do not invent one.
+
+**What this does not prove:** lossy simplified LOD appearance,
+crack-free LOD boundaries, GPU-selected indirect raster command
+submission, Vulkan or HDR reflection parity, production Strata
+legacy suppression/fallback, GPU frame times or multiworld
+streaming/recycling. Stage 13 is now owner-verified **PASS
+within the strict fixture scope**, superseding the earlier
+'not yet run' planning note. PR #35 remains Draft and the
+production renderer remains unchanged.
+
+### Integration risk
+
+At this verification point the branch remained diverged from
+the concurrent `main` work. The isolated Stage 13 PASS does
+**not** certify the combined main+Strata tree. Before merging
+anything, preserve local worktrees, reconcile the latest main
+changes in a separate integration validation, and run the
+focused CTests plus all native Metal parity executables against
+that merged source snapshot.
+
+
+## Stage 14 — actual portable Strata raster path on Vulkan and GLES3 (2026-11-19)
+
+Unlike the earlier Metal-only GPU compute diagnostics, Strata
+now has an **opt-in real raster route** for the existing
+\`Renderer3D\` on Vulkan, GLES3/WebGL2, Metal and desktop GL.
+The route uses **CPU-selected** hierarchical cluster LODs.
+It requires no GPU compute, shader-storage buffers or ICB support.
+All backend-specific shading, index formats, materials,
+sun-shadow, water reflection, draw submission and pipeline ownership
+stay in the **existing backend of Renderer3D**.
+
+### Public API
+
+\`\`\`cpp
+scene.setStrataPortableRenderingEnabled(true); // before load
+scene.load(device, sceneJson, readFile);
+renderer.beginScene(camera, width, height);
+scene.draw(renderer);
+renderer.render(mainPass); // submits one source OR selected Strata
+device.endPass();
+\`\`\`
+
+Default is OFF: exactly the old Legacy path. The option
+automatically requests \`SceneStaging\` and is genre-neutral.
+On upload it uses \`strata::PortableSource\` per eligible rigid
+model and collects per-instance aliases with stable lifetime
+through \`Renderer3D::render\`.
+
+\`engine/render/StrataPortableRender.h/.cpp\` also exposes
+\`PortableSource::stage(device, uploadedSource, sourceAsset)\`,
+\`prepareModel(drawWorld, passViews, forceFinestForUnspecifiedPass,
+outputAlias)\`, \`validFor\` and explicit \`shutdown(device)\` for
+native game or editor callers. The \`outputAlias\` borrows all
+GPU vertex buffers and textures: **never call \`uploadModel\` or
+\`releaseModel\` on this alias**. Keep it alive until the renderer
+has consumed all pass submissions. On failure the output
+is untouched: draw the original source.
+
+### Backend behavior
+
+| Backend | Visible geometry path | Indices | GPU compute LOD |
+| --- | --- | --- | --- |
+| Metal | existing Renderer3D Metal PBR/main/shadow/reflection | existing GlobalGeometryPool pooled sidecar where possible, else index-only IB | optional diagnostic GPU compute (separate, not authoritative) |
+| Vulkan | existing Renderer3D Vulkan indexed draws / CPU MDI | same source pool sidecar where Vulkan supports shared indexed MDI, otherwise one immutable index-only IB | **CPU selection**; Vulkan RHI's compute dispatch is not currently implemented |
+| GLES3/WebGL2 | existing GLES3 \`glDrawElements\`, GL RHI baseVertex emulation | immutable index-only IB borrowing source VB | CPU selection, no compute/SSBO requirement |
+| GL33 | existing GL indexed draws | pooled if supported, else immutable index-only IB | CPU selection |
+
+**No second Strata vertex buffer, no second geometry pool, no
+separate renderer or duplicate source + Strata draw.**
+The source vertex buffer remains the only GPU vertex allocation.
+A standalone index-only sidecar on GLES3 is intentional: the
+existing GlobalGeometryPool was MDI-gated and ES3.0/WebGL2 do
+not support the required GPU-indirect features. The index buffer
+reuses the original source's vertex indices and base vertex.
+
+### Multi-pass LOD and fallback
+
+\`PortableSource::prepareModel\` builds a conservative
+frontier across every source-node transform and all supplied
+camera/shadow pass view-projections. It merges paths by
+selecting the finest required cluster (rather than drawing
+a parent AND child over the same geometry). It delegates
+actual per-pass visibility/culling to \`Renderer3D\` and
+does not discard triangles simply because they are absent
+from the main camera. Because the planar reflection view
+is selected later by the existing renderer, the portable
+route selects the **finest resident frontier** whenever
+reflection may use the same model. This may draw more
+clusters but avoids incorrect missing geometry.
+
+Only rigid, opaque, non-skinned, non-morphing models
+with complete Strata source primitive coverage are
+accepted. Unsupported shader graphs, transparent or
+animated materials, stale source geometry/material
+revisions, invalid resident hierarchies, index bounds,
+source uploads and budget failures cause **Legacy fallback**
+for that instance. Original HLOD/surface proxy draws remain
+Legacy. The \`GeometryScene::Stats\` report staged/declined
+portable sources, actual portable draws/fallbacks and
+selected cluster counts.
+
+### Full CPU preparation before import-time staging
+
+The normal \`uploadModel()\` may generate LODs, tangents,
+shadow/material batches and even perform opt-in rigid
+compaction, altering source indices after early staging.
+Portable geometry now explicitly runs
+\`prepareModelUpload(source)\` **before building Strata assets**
+so the CPU model, source GPU upload and sidecar index
+stream share the same finalized vertex/index layout.
+Portable \`SceneStaging\` stages only root meshes actually
+referenced by live model nodes and can stage a prepared
+LOD0 root even when authored/generated alternate LOD
+meshes exist. Those alternate meshes stay untouched for
+Legacy fallback; the alias has no secondary built-in
+LOD chain, which prevents two independent LOD selections.
+This opt-in behavior does not change the older
+diagnostic-only staging default.
+
+### Validation status
+
+**Code committed; Vulkan, GLES3 and new Metal portable
+runtime/visual parity have NOT yet been built or tested.**
+The owner explicitly requested **no intermediate tests**:
+finish functionality, then perform one final build/error
+check and one native Mac Studio validation pass. The
+existing Stage 8–13 results refer to earlier fixtures,
+not the new portable draw route.
+
+New test targets staged for the final run:
+\`aiverse_strata_portable_tests\` (recording GLES3/Vulkan/
+Metal/GL backend index+LOD/lease contract) and
+\`aiverse_strata_metal_portable_parity\` (actual native Metal
+same Renderer3D raster path). Source and target
+in \`tests/render/strata_portable.cpp\`,
+\`tests/render/strata_metal_portable_parity.cpp\`,
+\`CMakeLists.txt\`. No tests have been executed by the agent.
+The focused CI builds the portable test but does not run
+its new case until final validation.
+
+**Remaining Vulkan optimization:** native Vulkan GPU
+compute culling, SSBO selected-range compaction and GPU-authored
+indirect submission are not part of the current Vulkan RHI;
+the completed CPU-selected raster fallback remains usable and
+correctness-first. Vulkan GPU compute parity requires additional
+Vulkan RHI compute API, GLSL/SPIR-V shader and hardware evidence.
+
+
+## Stage 14.1 — stable spatial LOD hierarchy and safe multi-backend fallback
+
+Strata now groups **parent LOD clusters by Morton-ordered 3D AABB
+centres at every hierarchy level**. This reduces accidental merging of
+far-away meshlet groups when model import order is nonspatial. Leaf LOD0
+triangles, UV/attribute vertex IDs and original vertex-buffer layout
+remain untouched. Parents still use border-locked, attribute-aware
+meshoptimizer simplification and conservative cumulative error.
+
+`PortableSource` is device-affine: a staged index buffer may only be
+destroyed by its original live RHI device; preparations refuse unhealthy
+devices. Source models with precomputed ordinary `GeometryData`
+(occluders/legacy clusters) are now permitted. The original `Model`
+retains that metadata for an atomic Legacy fallback, whereas the
+Strata alias deliberately has no independent `GeometryData` and no
+second built-in LOD chain, so the renderer cannot double-select a
+cluster hierarchy. Vulkan and GLES3 use the same CPU-selected path;
+GLES3 can use the original VB with one dedicated index buffer.
+A pooled Vulkan/Metal sidecar remains opportunistic, never required.
+
+Sidecar staging now checks every hierarchy node's finite ordered
+bounds, parent bounds containment, nondecreasing parent LOD error and
+the sum of leaf index counts against the original primitive's
+`indexCount` before uploading a GPU buffer. It prevents obvious
+incomplete/corrupt streamed assets from producing missing triangles.
+It cannot verify exact triangle identities once the original CPU
+index data has been released.
+
+New regression **test code** covers far-separated interleaved mesh
+islands, malformed parent bounds/leaf coverage, device loss and
+foreign-device shutdown, plus pre-existing legacy clustered sources
+on Vulkan/GLES3. **None of these tests or a native build have been
+executed in Stage 14.1.** The earlier owner-verified Stage 13 Metal
+strict reflection/shadow/main pixel parity applies only to the
+older test scenario, not the new production CPU-selected route.
+
+See `docs/agent-handoffs/strata-virtual-geometry.md` for exact
+Stage 14.1 commits, changed files, limitations and next validation
+plan. `main` is not merged into this unfinished feature branch;
+retain the default-OFF switch and do not treat this as hardware
+Vulkan/GLES3 certification.
+
+
+## Stage 15 — opt-in budgeted GPU index residency (implementation, not yet validated)
+
+For sources that should not keep their entire Strata parent+leaf index
+hierarchy resident in GPU memory, the portable Metal/Vulkan/GLES3 path
+now supports a compact **index-only** residency cache. The original
+Model vertex buffer is always reused and kept by the existing renderer.
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataPortableRenderingEnabled(true);
+scene.setStrataStreamingIndexBudgetBytes(256 * 1024); // bytes PER source
+scene.load(device, json, fileReader);
+// Renderer3D::beginScene(...)
+scene.draw(renderer); // preflight all instances, then submit one draw/source
+// renderer.render(...)
+```
+
+A positive budget selects the streamed path; zero preserves the Stage 14
+fully resident pooled/dedicated index sidecar. Must be configured before
+scene load. Each CPU model retains an immutable complete Strata hierarchy.
+Only the GPU index stream is compacted/streamed; mesh vertex data,
+textures, animations, material ownership and node/world transforms
+are unchanged.
+
+Root clusters are pinned. Demands are merged across main camera,
+sun-shadow, multiple scene instances and unknown future planar reflection
+views. Complete sibling groups can be promoted when budget allows; on
+pressure, earlier resident parent geometry remains drawable. Each GPU
+rebuild uploads a **new immutable** index-buffer generation before
+atomically publishing it. Invalid assets, allocations that fail,
+incomplete available children or stale source GPU handles cannot
+produce partial submissions. The same Renderer3D still issues all
+raster, shadow and reflection draws, with Legacy fallback available.
+
+`StrataIndexResidency` can also be used by native callers directly:
+`initialize(device, modelAsset, budgetBytes)`,
+`update(demands)`, `span(primitive,node)`, `stats()` and
+`shutdown(device)`. `PortableSource` additionally supports
+`collectResidencyDemands` and `updateResidency`. A positive budget
+is currently limited to at most 64 MiB per source; pinned-root size is
+the minimum. `GeometryScene::Stats` exposes live streamed index bytes,
+source counts, preparation failures and eviction counts.
+
+**Important limits:** per-source GPU index *active allocation* budget,
+not an aggregate scene/multi-world budget; old in-flight GPU buffers can
+temporarily exceed the active budget until their RHI release completes.
+The system does not yet stream indices from disk/network, compact the
+original CPU assets, implement GPU sparse pages, perform Vulkan compute
+meshlet culling or guarantee crack-free *lossy* cluster transitions.
+Repeated buffer repacking is correctness-first rather than optimized
+small page upload. Tests were authored but **not executed**; Stage 15
+has no verified real Metal/Vulkan/GLES3 visual or performance results.
+
+Detailed commit-level handoff:
+`docs/agent-handoffs/strata-virtual-geometry.md` (Stage 15).
+
+
+### Stage 15.1 — aggregate scene budget, deterministic root admission
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataPortableRenderingEnabled(true);
+scene.setStrataStreamingIndexBudgetBytes(256 * 1024);  // per-source cap
+scene.setStrataStreamingSceneBudgetBytes(8 * 1024 * 1024); // TOTAL scene active index cap
+scene.load(device, sceneJson, readFile);
+```
+
+The scene budget is optional and defaults to zero (no aggregate cap).
+If set by itself, it also activates streaming; each compatible source
+has a maximum of its full Strata indices or 64 MiB, whichever is
+smaller. Root index bytes must be admitted for an entire source before
+STRATA can draw it. With insufficient memory, sources with smaller
+root allocations are admitted first (deterministic key tie-break);
+unadmitted sources continue through Legacy. Remaining bytes are
+apportioned across admitted sources according to their available
+headroom. `strataStreamingBudgetDeclined` counts these fallbacks.
+
+This guarantees **active STRATA index storage per GeometryScene**
+cannot exceed the configured aggregate cap, excluding the original
+source vertex/index buffers, other rendering systems and RHI copies
+of retired but still in-flight Strata index generations. It is not
+a global/multi-world GPU memory manager and does not yet avoid
+whole-buffer repacking. The pure allocation policy is tested by
+authored but **unexecuted** regression fixtures. For commit references
+see Stage 15.1 in the agent handoff.
+
+
+## Stage 15.2 — Incremental GPU index pages on Metal and Vulkan
+
+The previous Stage 15 cache replaces a whole compact immutable index
+buffer whenever its resident node set changes. Stage 15.2 adds an
+**opt-in incremental mode** on Metal/Vulkan that owns one fixed-capacity
+`Storage`/INDEX-compatible RHI buffer and uploads only newly requested
+cluster-node index subranges into unused or GPU-fence-released slots.
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataPortableRenderingEnabled(true);
+scene.setStrataStreamingIndexBudgetBytes(256 * 1024);
+scene.setStrataStreamingSceneBudgetBytes(8 * 1024 * 1024);
+scene.setStrataIncrementalIndexStreamingEnabled(true);  // NEW
+scene.setStrataStreamingUploadBudgetBytes(128 * 1024); // NEW, bytes/source/update
+scene.load(device, sceneJson, readFile);
+```
+
+Both options are configured **before** `load/loadPrepared`. The new
+mode is default OFF. If only scene budget is set, streaming is still
+enabled. GLES3/WebGL2 and GL33 automatically keep the existing safe
+immutable-generation fallback; no WebGL2 compute or base-vertex
+extension is required.
+
+Index allocation is per Strata cluster node, and all children of a
+parent are promoted as one complete group to avoid partially missing
+triangles. Demands from all source instances, main view, shadow and
+reflection are merged before any new Renderer3D draw submission.
+A parent remains usable while a group awaits its upload bandwidth
+budget or a completed GPU fence. Stable GPU index offsets and a
+stable RHI buffer handle avoid whole-buffer repacks for ordinary
+Metal/Vulkan page additions; evicted pages are quarantined until
+`completedFrameSerial()` confirms the retirement frame completed.
+The manager atomically exposes a new residency table only after
+every checked page write succeeds. If a write fails, old visible
+pages remain addressable. The original vertex and Legacy index
+buffers remain independently owned by `Model`.
+
+`IndexResidencyStats` adds `incremental`, `arenaBytes`,
+`uploadedBytes`, `uploadCalls`, `uploadBudgetDeferrals`
+and `fenceReuseDeferrals`. `GeometryScene::Stats` aggregates them.
+**Important:** `arenaBytes` is the full fixed Storage allocation,
+not only visible `activeBytes`. Vulkan may maintain extra safe GPU
+versions and a CPU shadow, so incremental API subrange uploads do not
+guarantee that the hardware copies only those bytes. This release
+does NOT yet provide SSD streaming, GPU sparse page binding,
+global cross-world budgets, page compaction or Vulkan compute LOD
+selection. An upload limit below one required sibling group will
+defer that group's refinement indefinitely until reconfigured.
+
+Stage 15.2 source and regression tests are committed, but **no
+Stage 15.2 compilation, native CTest or real-device parity has yet
+been performed**. See the Stage 15.2 entry in
+`docs/agent-handoffs/strata-virtual-geometry.md` for exact changed
+files, commits, failure cases and continuation.
+
+
+## Stage 15.3 — disk-backed async GPU index streaming (2026-11-20)
+
+Stage 15.3 adds a distinct offline/online data boundary: STRATA
+hierarchy pages can now be **written to indexed on-disk archives**,
+then read by bounded background I/O workers and uploaded as whole
+sibling groups into the Stage 15.2 GPU index arena. The render thread
+never waits for a child page to be read; it draws the resident parent
+until the entire set of children has passed checksum and checked GPU
+upload.
+
+### Offline content preparation
+
+```cpp
+render::strata::SceneStaging staging;
+staging.stage(sourceKey, cpuModel); // CPU source, before normal GPU upload
+std::vector<std::string> errors;
+const bool ok=staging.writeDiskArchives("Content/Strata", &errors);
+```
+
+This emits `strata-<key-hash>.strataidx` per staged source. The archive
+contains a versioned header, source-geometry fingerprint, per-node
+directory and separate source-index payloads. File keys are hashed,
+not interpreted as paths, avoiding traversal by model names.
+**FNV-1a hashes detect accidental corruption; they do NOT
+authenticate hostile packages.** Build/archive signing belongs to
+the content packaging system. The imported original `ModelAsset`
+currently remains in CPU memory for planning and reference checks.
+
+### Runtime integration
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataPortableRenderingEnabled(true);
+scene.setStrataStreamingSceneBudgetBytes(8 * 1024 * 1024);
+scene.setStrataIncrementalIndexStreamingEnabled(true);
+scene.setStrataStreamingUploadBudgetBytes(128 * 1024); // bytes / source / update
+scene.setStrataStreamingFrameUploadBudgetBytes(256 * 1024); // total / RHI frame
+scene.setStrataDiskPageDirectory("Content/Strata");
+scene.load(device, sceneJson, readFile);
+```
+
+All setters are configured before scene load. Only Metal and Vulkan
+incremental GPU index streaming consumes the archives. GLES3/WebGL2
+and GL33 continue their ordinary portable CPU-selected immutable
+sidecar fallback, independent of async disk support.
+
+Scene load verifies the exact archive/source identity. Root pages are
+loaded synchronously once while initializing (failure => that source
+remains Legacy). Other pages are loaded by a native worker as needed.
+Requests and verified CPU-ready bytes are bounded per source; old
+queued/ready requests are discarded when camera/shadow requirements
+change. The CPU hierarchy selects ideal LODs, but GPU upload waits
+until **all siblings** are ready, then atomically publishes the new
+node ranges after checked device writes. A corrupt or missing leaf
+cannot erase an existing parent; any RHI upload failure preserves the
+previous visible frontier.
+
+The new scene-wide GPU transfer budget includes successful checked
+writes even if a subsequent sibling fails, and rotates which source
+has first access to the remaining allowance each prepass. It is
+reset on each new RHI frame serial; if no frame serial is supported
+the limit applies per draw prepass instead. This is an incremental
+Metal/Vulkan upload governor, not a GPU physical-memory measurement,
+not a disk bytes/sec limiter, and not a promise of reduced Vulkan
+internal buffer-copy bandwidth.
+
+**Stage 15.3 code is committed but not yet natively built or run**.
+The archive format, worker, scene integration and GPU upload governor
+have recording-RHI tests authored for the final verification pass.
+Full CPU index release, shared global IO workers, cross-world
+memory budgets, Vulkan GPU-driven selection and crack-free lossy LOD
+remain future stages. For all exact commits and test cases see
+`docs/agent-handoffs/strata-virtual-geometry.md`, Stage 15.3.
+
+
+## Stage 15.4 — Shared Multi-World Streaming Coordinator (2026-11-20)
+
+STRATA now has a **genre-independent process-wide native disk IO pool**
+and **device-wide index streaming budget reservations** shared across
+multiple concurrently loaded `GeometryScene` / ECS worlds.
+The legacy per-scene and per-source budgets remain additional upper
+bounds. The default game/render path is unchanged until the user opts
+in to the Strata portable + incremental disk route.
+
+### Configuration (before any scene is loaded)
+
+```cpp
+// Configures one shared native background pool. Call once before the
+// first archive request. Defaults: 2 threads and 64 MiB CPU ready cache.
+aiverse::render::strata::configureSharedDiskIo(
+    2, 64u * 1024u * 1024u);
+
+render::GeometryScene worldA;
+worldA.setStrataPortableRenderingEnabled(true);
+worldA.setStrataStreamingIndexBudgetBytes(256u * 1024u);
+worldA.setStrataStreamingSceneBudgetBytes(8u * 1024u * 1024u);
+worldA.setStrataGlobalIndexBudgetBytes(128u * 1024u * 1024u);
+worldA.setStrataIncrementalIndexStreamingEnabled(true);
+worldA.setStrataStreamingUploadBudgetBytes(128u * 1024u);
+worldA.setStrataStreamingFrameUploadBudgetBytes(256u * 1024u);
+worldA.setStrataGlobalFrameUploadBudgetBytes(512u * 1024u);
+worldA.setStrataDiskPageDirectory("Content/Strata");
+worldA.setStrataDropArchivedCpuIndicesEnabled(true);
+worldA.load(device, jsonA, readFile);
+
+// worldB may be an entirely different ECS world/scene, but must use
+// the SAME device-wide nonzero limits if loaded simultaneously.
+// Its source allocations count toward worldA's global GPU index cap.
+```
+
+The process-wide I/O executor uses up to 2 worker threads by default
+(configurable 1–8 *before* starting any worker), a bounded global job
+queue, and bounded total **verified ready-page cache** memory. Each
+archive schedules at most one shared job concurrently; no new thread
+is created per source/world. Cancellation and scene unload clear
+queued and ready pages and release their shared CPU cache reservations.
+Worker tasks capture reference-counted archive state, not pointers to
+the scene or source ModelAsset. A cancelled archive cannot publish
+into a destroyed scene.
+
+A device-wide index reservation is made **before** an admitted source
+allocates its Stage 15 index buffer/arena. If a second world's sources
+exceed the shared cap, their index budget is reduced where roots
+still fit; otherwise those sources render using original Legacy
+geometry. GPU handles and page ownership remain with the original
+`gfx::Device` and renderer. Tokens are returned only after sidecars
+are destroyed; different device objects have independent ledgers.
+An additional device-wide checked GPU page-transfer cap applies to
+every scene sharing the same RHI frame serial. Zero serial prevents
+new incremental promotions under a configured cross-world cap.
+Root uploads at scene-load time are outside this per-frame governor.
+
+### Optional CPU index memory saving
+
+When the archive has been matched to the complete imported
+`ModelAsset` and its pinned root index pages have been checked and
+uploaded to GPU, enabling
+`setStrataDropArchivedCpuIndicesEnabled(true)` releases the
+**duplicate staged STRATA index vectors**. `Asset::logicalIndexCount()`
+retains the immutable validation bounds and `planView` continues to
+work without the released `indices` vector. The original
+`Model` vertex/index allocations and Legacy fallback remain intact.
+Diagnostics/GPU metadata/preview requests keep the CPU STRATA index
+copy instead of risking invalid reads. This is an opt-in steady-state
+CPU memory reduction, **not** full removal of source/model geometry or
+an import-time peak-memory reduction.
+
+### Limits and verification
+
+The shared GPU cap is a logical **reserved STRATA index arena** budget,
+not an exact physical VRAM or in-flight copy limit. Vulkan may retain
+extra CPU shadows and GPU versions; shared IO accounting excludes
+short-lived file-read buffers and copies exposed to callers. This
+does not yet deduplicate pages shared between different source keys,
+provide cross-device/physical-GPU limits, perform mesh-shader indirect
+culling, or solve lossy LOD cracks. GLES3/WebGL2 retains the existing
+CPU-selected immutable-buffer route without disk-native worker support.
+
+**Code and new regression fixtures are committed, but Stage 15.4
+has not been natively compiled or run.** The
+`aiverse_strata_streaming_coordinator_tests` target covers two-world
+GPU leases, cross-world per-frame transfer counters and 24 archive
+instances sharing two workers. ModelAdapter/View/Disk tests additionally
+exercise release of staged CPU indices after verification. Full
+Stage 15.4 file/commit/test handoff:
+`docs/agent-handoffs/strata-virtual-geometry.md`.
+
+
+## Stage 16.1–16.2 — Vulkan GPU cluster compute and indexed-indirect candidates
+
+Stage 16 adds an **opt-in Vulkan compute backend** to AIVERSE's
+shared `gfx::Device` interface, using standalone GLSL 450 compilation
+through glslang/SPIR-V. Vulkan now supports compute pipeline creation,
+storage-buffer descriptors, `dispatchChecked`, barriers to subsequent
+indirect/vertex input, and asynchronous diagnostic storage readback.
+Storage buffers remain valid for pooled vertex **and** index input;
+GPU-authored indirect buffers have both STORAGE and INDIRECT usage.
+
+`GpuClusterCulling` reuses the same STRATA hierarchy metadata v2
+and CPU parity oracle as Metal, but selects a GLSL compute kernel
+on Vulkan. The selected list is limited to 2048 cluster records per
+diagnostic submission; GPU status counters signal malformed metadata
+or output overflow. No CPU readback is required to produce cluster
+records or subsequent GPU indirect data.
+
+### Vulkan compute-authored indirect arguments
+
+A Vulkan submission now writes its own 20-byte
+`gfx::DrawIndexedIndirectCommand` records into an RHI
+`BufferType::Indirect` array. Three GPU compute passes
+**clear → select → safety** run outside graphics render passes.
+Unused slots are zeroed (no draw); a failed selection zeroes all
+commands. An optional, separately validated one-material path may
+write one **original full-primitive** fallback command to slot0,
+so GPU overflow does not silently erase the complete source.
+`GpuSelectionSubmission::gpuIndirectPrepared()` indicates that an
+argument buffer exists, **not** that its material/transforms have
+been approved for production raster.
+
+`StrataVulkanIndirectContract.h/.cpp` provides strict, read-only
+source/submission preflight for one rigid opaque material, one
+primitive/node/instance, source VB/IB sharing its pooled allocation,
+matching model revisions and one main-camera view (no additional
+shadow/reflection). Unsupported/animated/transparent/multi-material
+sources remain on existing CPU-selected or Legacy routes.
+
+### Status, limitations and verification
+
+| Item | Implementation | Hardware confirmation |
+| --- | --- | --- |
+| Vulkan compute / GLSL450 → SPIR-V | Code written | NOT RUN |
+| Vulkan GPU cluster selection | Code written (diagnostic) | NOT RUN |
+| Vulkan GPU indirect clear/select/safety | Code written | NOT RUN |
+| Vulkan asynchronous range/indirect readback | Code written | NOT RUN |
+| Vulkan source/material eligibility checks | Code written | NOT RUN |
+| Real exclusive Renderer3D GPU draw substitution | NOT DONE | N/A |
+| Multiple materials / shadows / reflection GPU raster | NOT DONE | N/A |
+| GLES3 CPU portable fallback | Preserved | NOT RECHECKED |
+
+The rendering engine is **not yet switched to a Vulkan GPU-driven
+production draw path**. The checked `Device::drawIndexedGpuIndirect`
+API is available to the renderer, but a Renderer3D-owned integration
+must bind exactly the same model/material/lighting/instance state and
+first prove GPU pixel parity. No Vulkan driver test, shader compile
+test, offscreen readback or native build was run for Stage 16 in this
+turn. New test fixtures:
+`strata_vulkan_kernel` (optional real GPU + SPIR-V),
+`strata_gpu_culling` (recording backend), and
+`strata_render_routing` (strict material/state gate).
+See Stage 16.1 and Stage 16.2 in
+`docs/agent-handoffs/strata-virtual-geometry.md` for code commits,
+explicit limitations and the next agent handoff.
+
+
+## Stage 16.3 — single-primitive Vulkan Renderer3D GPU indirect route (experimental)
+
+A strictly bounded **production Renderer3D path** is now authored for
+Vulkan GPU-authored STRATA cluster commands. Unlike Stage 16.2's
+diagnostic-only packet, `GeometryScene` may attach an approved
+`GpuIndexedSelectionPacket` to its **existing** `ModelDraw` (one
+per source). `Renderer3D::renderModels(opaque)` then binds the
+original model shader pipeline, PBR material textures, lighting and
+U0 instance transform with `drawModelBatch(...,submit=false)`.
+Only after a final frame/resource/material/world validity check does
+it invoke Vulkan's indexed indirect RHI command. On success, the
+normal original draw is **skipped**; on any failure, the same item
+follows the original CPU/Legacy draw path. No duplicate render owner
+or second vertex allocator is created.
+
+### Explicit opt-in and parity acceptance
+
+```cpp
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true);
+scene.setStrataGpuCullingEnabled(true);
+scene.setStrataVulkanGpuIndirectEnabled(true);
+
+// IMPORTANT: leave both FALSE until actual CPU/GPU selection parity
+// and Renderer3D Vulkan pixel parity are verified for this exact build.
+scene.setStrataVulkanGpuParityGates(false,false);
+scene.load(device,sceneJson,readFile);
+```
+
+The route is **default OFF**, and the two separate parity gates
+are never enabled automatically. To activate, both must be accepted
+explicitly after native A/B checks. The route currently supports
+only ONE source model, ONE scene instance, ONE static rigid opaque
+primitive/material/node, ONE active main view, and pooled GPU
+geometry with matching model revisions. No morph/skin/other author
+LOD, shadow batches, shader graph, extra material state or unstable
+transforms. With sun shadows or planar reflections enabled, GPU
+selection is declined and the complete Legacy or portable CPU
+path remains authoritative for the same source across all passes.
+Metal and GLES3 continue through their previous paths.
+
+The RHI `Device::drawIndexedGpuIndirect` primitive still exists
+for other validated uses, but the Stage16.3 Renderer3D route submits
+a bounded GPU-authored multi-command array through its existing
+`drawIndexedIndirect` call, so all visible clusters are represented.
+The Stage16.2 GPU clear/select/safety chain means empty and invalid
+slots are harmless, and its explicit fallback can restore the entire
+original primitive when selection metadata is invalid.
+
+Diagnostics: `GeometryScene::Stats` exposes the number of Vulkan
+GPU candidates, prepared packets, and declines; `ModelRenderStats`
+exposes Renderer3D candidates, successful GPU submissions, rejected
+packets and regular-draw fallbacks. GPU output triangle counts
+remain unknown without asynchronous readback, not guessed from
+CPU-selected LODs.
+
+**Stage 16.3 implementation has not been compiled or tested yet.**
+Its packet copying and eligibility behavior have authored recording
+test cases, but an actual native Renderer3D main-camera RGBA
+Legacy-vs-GPU A/B fixture is still required before enabling
+`setStrataVulkanGpuParityGates(true,true)`. Multiple independent
+materials/instances, shadow/reflection GPU routing and optimized
+GPU page workloads remain further functionality work. Complete
+file/commit/API handoff: `docs/agent-handoffs/strata-virtual-geometry.md`,
+Stage 16.3.
+
+
+## Stage 16.4 — bounded multi-material / multi-instance / multi-camera GPU rendering
+
+The experimental Vulkan Renderer3D path now supports **up to 16
+opaque source primitives/materials** in one immutable pooled mesh
+and **up to 16 source instances** (further limited by the global
+64 compute-submissions-per-frame pool). GPU packets are strictly
+per original primitive and per instance. Renderer3D retains the
+original PBR texture/material state and one U0 transform per
+ModelItem; it never groups different materials into one state
+or submits the same primitive twice. Incompatible authored LOD,
+deformation/skin, transparency or GPU resource revisions always
+fall through to existing Legacy or portable CPU-selected geometry.
+
+### Per-camera GPU selections
+
+The main camera and sun shadow have independent selections before
+`Renderer3D::render`. Spot-shadow and mirrored planar-water
+reflection cameras are only finalized later in
+`Renderer3DReflect.cpp`: STRATA now performs bounded GPU compute
+selection **after computing the actual spot/mirror matrix but
+before each GPU render pass begins**. The renderer checks pass
+identity, target dimensions, source material/transform and current
+RHI frame before consuming any GPU indirect buffer. If compute
+fails, the same original ModelItem is rendered through Legacy
+in that pass. Nothing performs a synchronous GPU readback in the
+production renderer. Metal/GLES3/GL33 remain on their established
+selection/fallback routes.
+
+### Explicit opt-in; never enable unverified passes by default
+
+```cpp
+scene.setStrataStagingEnabled(true);
+scene.setStrataGpuMetadataEnabled(true);
+scene.setStrataGpuCullingEnabled(true);
+scene.setStrataVulkanGpuIndirectEnabled(true);
+
+// All stay FALSE until actual native A/B pixel/depth parity is verified
+// for this precise source SHA, device and shader configuration.
+scene.setStrataVulkanGpuParityGates(false,false);
+scene.setStrataVulkanGpuAuxiliaryParityGates(
+    false,  // sun shadow depth
+    false,  // spot shadow depth
+    false); // planar-reflection RTT image
+```
+
+The base two gates guard source GPU/CPU selection and main-image
+raster parity; the other three independently certify sun/spot
+depth and mirrored reflection. Setting flags merely records
+manual acceptance: it does **not** execute or prove a test. A
+scene that requests sun shadow or water reflections declines
+GPU source routing until the corresponding pass gate is accepted;
+spot shadows may independently stay on Legacy. `Renderer3D`
+records GPU candidate, preparation and submitted draw counters
+for all cameras; GPU triangle counts cannot be inferred without
+asynchronous readback.
+
+**Validation status:** all Stage16.4 implementations are committed,
+but CMake and CTest have NOT run and real Vulkan raster/depth/RTT
+pixel parity is NOT verified. Recording fixtures were extended
+for two separate opaque materials, independent instance transforms,
+correct main/sun/spot/reflection packet identity, unique Vulkan
+compute slots, alpha rejection, and material-revision invalidation.
+These tests also remain **unexecuted**. Production acceptance
+requires a real Vulkan Renderer3D legacy/GPU A/B fixture covering
+the exact colors, shadows and planar RTT; finish Stage17 crack-free
+lossy LOD and Stage18 profiling before the owner's combined final
+suite. Full Stage16.4a/b/c file and test handoffs are in
+`docs/agent-handoffs/strata-virtual-geometry.md`.
+
+
+## Stage 17 — crack-resistant mixed-depth LOD contour certification (2026-11-20)
+
+The STRATA offline/import builder now performs **exact geometric
+boundary-preservation checks** rather than relying solely on the
+`meshopt_SimplifyLockBorder` option. A candidate coarser parent is
+accepted only if its oriented perimeter edge segments exactly match
+the perimeter of the UNION of its finer children, using the same
+original vertex IDs and winding. If one segment is removed, split,
+duplicated or reverses orientation, the builder **does not publish
+that parent**: its children remain in the renderable hierarchy.
+After construction, an independent
+`strata::auditSeamHierarchy(asset,report,error)` validates every
+parent-child relationship. Only a complete successful audit sets
+`Asset::seamCertified=true`. Mesh/texture/material ownership and
+the original unchanged LOD0 triangles remain the same.
+
+### Across UV seams, materials and source meshes
+
+Because material/UV seams may duplicate vertex IDs at the *same
+physical position*, the source-level
+`strata::auditModelSourceSeams(model,modelAsset,report,error)`
+performs a SECOND, import-time geometric boundary certification.
+It compares exact world/bind-space segment endpoints across
+eligible material partitions and independently transformed rigid
+Model meshes. A bounded 3-D BVH finds endpoints landing in the
+interior of another material boundary segment (existing T-junction)
+and positions extremely close to, but not identical to, neighboring
+material border endpoints (potential micro-cracks). Suspicious
+sources use Legacy instead of claiming a safe mixed-depth LOD.
+This geometry verifier **does not move vertices or rewrite UVs**;
+source positions must already match for exact certification.
+
+The full `buildModelAsset` API returns
+`ModelAsset::sourceSeamsCertified=true` only after all partitions
+have passed source-level seam checks, while each individual
+`Asset::seamCertified` covers its own parent-child hierarchy.
+`SceneStaging` refuses uncertified assets and
+`GeometryScene` requires both certificates before entering
+portable Metal/Vulkan/GLES or Vulkan indirect GPU rendering.
+Stats include per-partition certified source/mesh count,
+rejected unsafe coarser parents, successfully matched physical
+material boundaries and declined sources.
+
+### Guarantees, limitations and validation
+
+The guarantee is **topological segment continuity for compatible,
+already correctly stitched static source geometry**, not full
+pixel-identical lossy geometry, continuous normals/UV shading,
+smooth LOD morphing or source crack repair. Separately instantiated
+`Model` sources, other ECS worlds, independently generated terrain
+chunks and animated/skinned/deformable surfaces are outside the
+current source audit. Very close separate surfaces may be declined
+conservatively. The new source audit has a 250,000 boundary-edge
+limit and runs only during import/loading, not every render frame.
+The regular CPU/Legacy renderer is retained whenever the audit
+rejects a source.
+
+New CPU CTest targets `strata_seams` (within a material,
+mixed-depth parent/child proof, T-junctions, nonmanifold edges)
+and `strata_source_seams` (duplicated-vertex material seam,
+different transformed meshes, split physical edge and near-offset
+gap) were **authored but NOT RUN** in Stage17. The branch has
+not been natively compiled or rendered since these changes.
+Actual Vulkan/Metal/GLES3 pixel/depth and mixed-LOD visual
+acceptance is still required. Full architecture, specific commits,
+test cases and limitations:
+`docs/agent-handoffs/strata-virtual-geometry.md`,
+Stage17.1 and Stage17.2.
+
+**Next functional work:** optional stable LOD hysteresis and popping
+mitigation, multi-source terrain boundary coordination, Stage18
+performance optimizations and the owner's single combined final
+build/GPU acceptance run. Do NOT enable the Vulkan manual parity
+gates based solely on this CPU offline certificate.
+
+
+**Stage17.2 UV-island refinement:** the spatial source checker also
+handles disconnected triangle-edge components inside a *single*
+material/primitive. A split UV island with duplicate vertex IDs is
+certified only when its exact physical contour meets the neighboring
+island, and existing sub-edge T-junctions/nearby gaps cause Legacy
+fallback. Two components touching at one vertex are not incorrectly
+treated as fully edge-connected. This refinement and its regression
+fixture are committed but still **not compiled or executed**.
+
+
+## Stage 17.3 — temporal LOD stability (portable CPU selector)
+
+AIVERSE STRATA now has **opt-in per-instance, per-camera temporal
+LOD hysteresis** for the common portable indexed renderer on
+Metal, Vulkan, GLES3/WebGL2 and desktop GL. This stabilizes
+otherwise rapid parent/child switching when the projected
+geometric error oscillates around a single threshold.
+
+```cpp
+render::GeometryScene scene;
+scene.setStrataPortableRenderingEnabled(true);
+const bool ok=scene.setStrataLodHysteresisFraction(0.20f);
+scene.load(device, sceneJson, readFile);
+```
+
+The value is validated in **0..0.45**; zero is the default and
+preserves all prior reference thresholds and memory behavior.
+A previously refined node can remain fine until its projected
+error drops below `threshold * (1-h)`, while a previously
+coarse node is refined only once error exceeds
+`threshold * (1+h)`. The first observation has **no special
+bias**: it uses the original threshold.
+
+The history belongs to the scene instance rather than its
+shared ModelAsset. Separate source-node, primitive and camera
+slots are tracked independently (main camera, sun shadow, etc.).
+Every update is committed only after a complete successful
+`PortableSource::prepareModel`; any GPU allocation failure,
+missing child residency or malformed source keeps the previous
+history and uses the existing parent/Legacy fallback. Changing
+the policy, unloading the source or temporarily using an
+unrelated proxy resets its history. Unknown late-selected
+planar reflections still use the **finest resident frontier**
+and reset temporal state to avoid missing reflected geometry.
+
+The Stage15 page-demand planner also reads the SAME previous
+refinement state: a fine frontier held by hysteresis continues
+to request its child pages even if unmodified instantaneous
+CPU selection would prefer a parent. This prevents needless
+GPU page eviction/reload thrash. None of these mechanisms
+introduce a separate draw owner or change the exact static
+source-border seam certificates from Stage17.1–17.2.
+`GeometryScene::Stats` exposes retained temporal histories
+and successful refinement-state flips.
+
+**Known limits:** this is temporal selection stabilization, not
+vertex geomorphing, fading, cross-source terrain stitching or
+smooth shading between different lossy interiors. Stage16
+Vulkan/Metal GPU-compute selection still uses its original
+stateless policy; true GPU temporal buffers and CPU/GPU
+cold/warm parity are future Stage17.4 tasks. No native CMake,
+CTest, Metal/Vulkan/GLES3 hardware run or LOD frame-time
+benchmark was conducted on this code. Extended existing
+`strata_view` and `strata_portable` test fixtures are
+**authored but unexecuted**. See the Stage17.3 handoff in
+`docs/agent-handoffs/strata-virtual-geometry.md`.
+
+
+## Stage 17.4 — GPU-only temporal LOD hysteresis (Metal + Vulkan)
+
+Stage17.3 CPU portable LOD hysteresis now has a corresponding
+GPU-only implementation for the existing Metal/Vulkan compute
+cluster selectors. The same scene setting controls the
+hysteresis band for both CPU and GPU:
+
+```cpp
+scene.setStrataLodHysteresisFraction(0.20f);
+
+// These earlier flags are required for experimental Vulkan GPU raster.
+// Keep all acceptance flags FALSE until passing real device parity:
+scene.setStrataVulkanGpuIndirectEnabled(true);
+scene.setStrataVulkanGpuParityGates(false,false);
+scene.setStrataVulkanGpuAuxiliaryParityGates(false,false,false);
+
+// NEW: independent acceptance for GPU temporal (warm-history) parity.
+// Stateless GPU parity is NOT sufficient.
+scene.setStrataGpuTemporalParityVerified(false);
+```
+
+### How the GPU histories work
+
+`GpuClusterCulling` maintains independent GPU Storage masks for
+each source metadata identity, original primitive, scene-instance
+token, camera/pass (main/sun/spot/planar reflection), and model/policy
+revision. A completed warm history allows a previously refined node
+to coarsen only when projected error falls below
+`threshold*(1-h)`, and a previously coarse node to refine only
+above `threshold*(1+h)`. Cold start uses the original threshold.
+A history is discarded on source revision/policy changes, camera
+viewport/clip-depth changes, or more than two missing RHI epochs.
+
+Masks are **GPU-only** and triple-buffered by RHI frame serial.
+The previous frame's mask remains read-only while the current
+frame writes another buffer. No in-flight slot is reused without
+a completion fence. Three compute steps reset the candidate mask,
+perform the same hierarchy traversal with hysteresis, and restore
+the previous mask if selection reports invalid metadata or overflow.
+No synchronous GPU readback affects rendering; async reads are
+reserved for diagnostics and test fixtures.
+
+One selector has explicit limits: up to 262,144 nodes in its
+metadata, 256 independent temporal history keys, and 32 MiB of
+logical GPU Storage masks. Exceeding limits declines experimental
+GPU temporal submission; original portable CPU/Legacy remains.
+These limits do not account for extra physical RHI versions,
+original geometry, indirect arguments or other worlds.
+
+For users calling `GpuClusterCulling::dispatch` directly,
+`GpuPassConfig` now exposes `hysteresisFraction`,
+`temporalNodeCount`, `temporalPassId` and
+`temporalRevision` (all needed for h>0). Only one enabled
+instance may be dispatched per temporal history. The 112-byte
+`GpuSelectionUniforms` preserves all previous 96 bytes of
+shader ABI. `GpuSelectionSubmission::temporalApplied`
+means an acceptable GPU command sequence was encoded, not
+that hardware parity was proven. `GpuTemporalStats` and
+`GeometryScene::Stats` expose mask memory, sources/cameras,
+cold starts and budget rejections.
+
+### Tests and remaining work
+
+Recording backend regressions are authored for independent
+camera histories, revision changes, triple-frame GPU fence
+protection, 32 MiB caps and default-stateless behavior.
+Real Vulkan offscreen GPU fixtures queue four consecutive
+frames and compare asynchronously returned selected clusters
+and refined-node masks against the CPU cold/warm oracle.
+A separate opt-in macOS `aiverse_strata_metal_temporal`
+runner covers the first three consecutive GPU temporal frames
+on actual Metal. These are **NOT compiled or run** yet.
+`AIVERSE_STRATA_METAL_GPU_TESTS=ON` builds that native Metal
+runner. No Metal/Vulkan temporal pixel/depth, shadow or
+reflection parity is yet certified. GLES3/GL33/WebGL2 still
+use Stage17.3 CPU/portable hysteresis, without GPU compute.
+
+This stage stabilizes **which LOD geometry is drawn**; it does
+not morph vertices, fade between interior surfaces, reconcile
+unrelated terrain chunks or guarantee continuous normal/UV
+shading. Stage17.1/17.2 boundary certification remains
+mandatory. Next Stage18 covers performance, descriptor/encoder
+count, GPU mask bandwidth, memory/high-water and frame-time
+comparison to the zero-hysteresis baseline; Stage19 is the
+single final full build, CTest and real hardware acceptance.
+Exact commits/next-agent handoff:
+`docs/agent-handoffs/strata-virtual-geometry.md`, Stage17.4.
+
+
+## Engine skill and MCP authoring (2026-11-20)
+
+The engine skill is [aiverse-strata](../skills/visuals/aiverse-strata/SKILL.md),
+registered in `skills/catalog.json` (regenerate with `python3 tools/skills/catalog.py generate`).
+It ships with the engine; no global Codex skill installation is required.
+
+Rebuild `aiversemcp` and the editor to expose the shared Workspace operations:
+
+- `strata_capabilities {}` reports whether this executable includes the builder,
+  analysis limits and documentation paths. `gpuVerified: false` means this command
+  does not verify a GPU; it is not a device capability probe.
+- `strata_model_analyze {"model":"models/scenery.glb"}` requires an open project.
+  It loads the actual source and invokes `buildModelAsset` with default options,
+  reporting eligible/skipped primitives, exact skip reasons, node/meshlet counts,
+  auxiliary index bytes and source/primitive seam certificates. No scene edits,
+  archive writes, GPU resources or flag changes occur.
+
+Analysis allows at most 250000 vertices, 750000 indices and 64 MiB cumulative
+file reads. All dependency paths are project-contained, including resolved
+symlinks. These bounds limit importer input and builder work, not decoded image
+memory. `AIVERSE_BUILD_STRATA=OFF` retains capability discovery and returns an
+explicit unavailable error for analysis. CPU eligibility and seam certification
+are not GPU visual parity, draw-call counts, VRAM usage or measured speedups.
+
+Use the existing AIVERSE MCP connection. The stdio server can run these Workspace
+operations locally without an editor (`--no-editor`); when connected, calls use
+the live editor registry. Restart/rebuild both sides to avoid stale tool lists.
+
+## Debug visualisation of clusters and geometry (2026-11-21)
+
+`engine/render/StrataDebugView.{h,cpp}` (in `aiverse_strata_portable`) draws
+the **actually selected** portable frontier as an overlay. It is presentation
+only: it consumes `PortableSource::debugSelection()` — the exact clusters the
+last successful `prepareModel` wrote into the alias — and emits immediate
+`Renderer3D::line/triangle` primitives. It never selects LODs, changes
+routing, uploads GPU data or reads back GPU selections. Default OFF.
+
+```cpp
+scene.setStrataPortableRenderingEnabled(true);
+scene.setStrataDebugGeometryCaptureEnabled(true); // BEFORE load: wireframe/fill
+scene.load(device, json, reader);
+strata::DebugViewOptions debug;
+debug.enabled = true;
+debug.clusterBounds = true;        // AABB of each selected cluster ("chunk")
+debug.clusterWireframe = true;     // triangle edges of each selected cluster
+debug.clusterFill = false;         // translucent per-cluster colour
+debug.instanceBounds = true;       // instance box coloured by route
+debug.color = strata::DebugColorMode::LodDepth; // Cluster | LodDepth | Error | Material
+scene.setStrataDebugView(debug);   // runtime toggle, false for invalid options
+// after scene.draw(renderer): scene.strataDebugStats()
+```
+
+| Colour mode | Meaning |
+| --- | --- |
+| `Cluster` | stable hash per (primitive, node); adjacent chunks differ |
+| `LodDepth` | hierarchy depth: red = coarse root … blue = finest leaf |
+| `Error` | log-normalised object-space `geometricError`: red = coarse, blue = fine |
+| `Material` | staged primitive / material partition |
+
+Instance boxes: green = STRATA portable, cyan = Vulkan GPU indirect (bounds
+only; no CPU frontier exists for that route), orange = staged STRATA source
+that fell back to legacy this frame, grey = non-STRATA instance
+(`includeLegacy=false` hides them).
+
+Limits and honesty rules:
+- Wireframe/fill need CPU positions, which `uploadModel` releases. The capture
+  copies `float3` positions of STRATA sources only
+  (`strataDebugGeometryBytes()`); without it, or after
+  `setStrataDropArchivedCpuIndicesEnabled` discarded CPU indices, only bounds
+  are drawn and `DebugDrawStats::wireframeUnavailable` counts the clusters.
+- Per-frame caps `maxLines` / `maxTriangles` (default 262144 / 131072) are
+  shared by all instances; dropped primitives are counted in `truncated`.
+- The overlay shows the single conservative frontier used for main + sun
+  shadow (+ finest for reflections), not a main-camera-only cut.
+- HLOD group proxies and surface proxies are not STRATA draws and are not
+  shown as clusters.
+- No game host or editor viewport currently enables portable STRATA, so the
+  overlay is reachable only from code that configures `GeometryScene`
+  (fixtures, custom hosts). No MCP/editor toggle exists yet.
+
+Verification: `strata_debug_view` CTest (recording RHI + recording sink:
+transactional capture, OFF by default, bounds/wireframe/fill counts, caps,
+archived-index and missing-position cases, colour/route determinism).
+On-screen pixels have not been checked on any backend.

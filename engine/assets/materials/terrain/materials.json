@@ -1,0 +1,324 @@
+{
+  "terrain_grass": {
+    "description": "Bundled terrain PBR: grass. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/grass_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/grass_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/grass_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/grass_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_soil": {
+    "description": "Bundled terrain PBR: soil. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/soil_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/soil_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/soil_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/soil_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_sand": {
+    "description": "Bundled terrain PBR: sand. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/sand_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/sand_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/sand_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/sand_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_rock": {
+    "description": "Bundled terrain PBR: rock. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/rock_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/rock_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/rock_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/rock_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_snow": {
+    "description": "Bundled terrain PBR: snow. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/snow_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/snow_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/snow_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/snow_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_forest_floor": {
+    "description": "Bundled terrain PBR: forest_floor. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/forest_floor_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/forest_floor_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/forest_floor_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/forest_floor_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_wet_soil": {
+    "description": "Bundled terrain PBR: wet_soil. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/wet_soil_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/wet_soil_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/wet_soil_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/wet_soil_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_gravel_soil": {
+    "description": "Bundled terrain PBR: gravel_soil. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/gravel_soil_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/gravel_soil_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/gravel_soil_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/gravel_soil_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_snow_crust": {
+    "description": "Bundled terrain PBR: snow_crust. Dielectric; 2 m repeat.",
+    "texture": "materials/terrain/textures/snow_crust_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/snow_crust_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/snow_crust_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/snow_crust_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_river_sand": {
+    "description": "Bundled terrain PBR: river_sand. Dielectric; 4 m repeat.",
+    "texture": "materials/terrain/textures/river_sand_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/river_sand_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/river_sand_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/river_sand_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_pebble_sand": {
+    "description": "Bundled terrain PBR: pebble_sand. Dielectric; 4 m repeat.",
+    "texture": "materials/terrain/textures/pebble_sand_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/pebble_sand_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/pebble_sand_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/pebble_sand_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_granite_rock": {
+    "description": "Bundled terrain PBR: granite_rock. Dielectric; 4 m repeat.",
+    "texture": "materials/terrain/textures/granite_rock_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/granite_rock_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/granite_rock_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/granite_rock_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_schist_rock": {
+    "description": "Bundled terrain PBR: schist_rock. Dielectric; 4 m repeat.",
+    "texture": "materials/terrain/textures/schist_rock_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/schist_rock_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/schist_rock_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/schist_rock_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  },
+  "terrain_checkerboard": {
+    "description": "Bundled terrain PBR: checkerboard. Dielectric; 4 m repeat.",
+    "texture": "materials/terrain/textures/checkerboard_basecolor_repeat.png",
+    "normalMap": "materials/terrain/textures/checkerboard_normal_repeat.png",
+    "metallicRoughnessMap": "materials/terrain/textures/checkerboard_orm_repeat.png",
+    "occlusionMap": "materials/terrain/textures/checkerboard_ao_repeat.png",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 1,
+    "metallic": 0,
+    "normalScale": 1,
+    "occlusionStrength": 1,
+    "vertexColors": false,
+    "team": "none",
+    "uvScale": [
+      1,
+      1
+    ]
+  }
+}

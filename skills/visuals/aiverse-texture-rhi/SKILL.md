@@ -1955,3 +1955,21 @@ The focused Texture RHI workflow now triggers on pushes to `feature/texture-rhi-
 ## Stage 10CX — cache identity also matters for revision skip (SHA fbaaf8ed)
 
 `VirtualTexturePageTable::rebuild` now requires the same cache object AND same revision to return early. A different cache object with coincidentally equal revision forces full table rebuild. New `virtual_texture_mip_pipeline` regression compares page table values when switching two caches with identical revision counters. Not yet compiled/tested; do not claim PASS until CI or Mac log evidence.
+
+## Main integration acceptance gates (2026-11-20)
+
+PR #86 and #95 have merged to main. Do not use the obsolete feature-only
+revision restriction or infer current test status from the historical
+SOURCE ADDED entries above. Consult the newest texture handoff.
+`metal_vt_bilinear_gpu` now includes independent nonuniform indexed mip,
+physical-mip and bounded streamed-LRU pixel oracles.
+`metal_renderer_indexed_vt_gpu` checks production graph sampling with the
+48-byte uniform contract and safe direct fallback under ICB opt-in;
+indexed graph ICB acceleration is intentionally unsupported. Reject indexed
+bindings during GPU draw admission, before command staging; a late backend
+rejection is not an acceptable steady-state fallback. Preserve this
+guard, legacy ICB execution checks and serial native GPU tests.
+The final verifier requires an absolute `--build-root`, supports
+`--expected-ref` (default HEAD), and builds Debug. On the owner's machine
+all builds, logs, module cache and temporary fixtures belong on KINGSTON.
+Focused CI triggers for main as well as the historical feature branch.

@@ -160,9 +160,9 @@ struct HorizonForestWindPatchResult {
     bool fullRangeFallback=false;
 };
 
-// Single-region atomic *plan* and all-range preflight. The device update
-// function returns void, so device loss remains the caller's responsibility;
-// on the normal RHI path revision advances only after every planned write.
+// Single-region atomic *plan* and all-range preflight. Writes use the
+// checked shared-buffer update; the revision advances only after EVERY
+// planned write was accepted (a refused write returns ready=false).
 // No terrain vertices, atlas pixels, indices or topology are changed.
 inline HorizonForestWindPatchResult applyHorizonForestWindOverlay(
         gfx::Device& device,render::Model& resident,
@@ -226,13 +226,30 @@ inline HorizonForestWindPatchResult applyHorizonForestWindOverlay(
                           sizeof(render::ModelVertex))
             return {};
     }
+    size_t written=0,writtenBytes=0;
     for(const auto& range:plan->ranges) {
         const size_t absoluteVertex=size_t(overlay.firstVertex)+
                                     range.firstVertex;
-        device.updateBuffer(
-            resident.vb,replacement.data()+range.firstVertex,
-            size_t(range.vertexCount)*sizeof(render::ModelVertex),
-            absoluteVertex*sizeof(render::ModelVertex));
+        const size_t rangeBytes=
+            size_t(range.vertexCount)*sizeof(render::ModelVertex);
+        if(!device.updateSharedBufferChecked(
+               resident.vb,replacement.data()+range.firstVertex,
+               rangeBytes,absoluteVertex*sizeof(render::ModelVertex))) {
+            // Keep the CPU mirror equal to what the GPU now holds: ranges
+            // already written carry the new colours, the rest stay old.
+            // appliedRevision is NOT advanced, so the next call re-plans
+            // exactly the remaining difference.
+            for(size_t k=0;k<written;++k){
+                const auto& done=plan->ranges[k];
+                std::copy_n(replacement.begin()+done.firstVertex,
+                            done.vertexCount,
+                            overlay.vertices.begin()+done.firstVertex);
+            }
+            return {false,written!=0,writtenBytes,written,
+                    plan->changedClusters,plan->fullRangeFallback};
+        }
+        ++written;
+        writtenBytes+=rangeBytes;
     }
     overlay.vertices.swap(replacement);
     overlay.appliedRevision=desiredRevision;

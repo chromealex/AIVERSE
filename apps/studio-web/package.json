@@ -1,0 +1,37 @@
+{
+  "name": "@aiverse/studio-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:shell": "node --experimental-strip-types --test tests/workspaces.test.mjs tests/inspectorActions.test.mjs tests/hierarchyFilter.test.mjs tests/rulesSchema.test.mjs tests/floating.test.mjs tests/buildLogic.test.mjs",
+    "test:dock": "node --experimental-strip-types --test tests/dock-layout.mjs tests/nested-dock.mjs",
+    "test:fields": "node --experimental-strip-types --test tests/propertyLogic.test.mjs",
+    "test:web": "npm run test:dock && npm run test:shell && npm run test:fields && npm run test:lighting && npm run test:materials && npm run test:graphs && npm run test:mock && npm run test:scene && npm run test:facial && npm run test:assets && npm run test:bridge && npm run test:human",
+    "test:lighting": "node --experimental-strip-types --test tests/lightingSchema.test.mjs",
+    "test:materials": "node --experimental-strip-types --test tests/materialSchema.test.mjs",
+    "test:graphs": "node --experimental-strip-types --test tests/shaderGraphLayout.test.mjs tests/shaderGraphEdit.test.mjs",
+    "test:mock": "node --experimental-strip-types --test tests/mock.test.mjs",
+    "test:scene": "node --experimental-strip-types --test tests/sceneState.test.mjs tests/gameViewport.test.mjs tests/sceneCamera.test.mjs tests/keyboard.test.mjs",
+    "test:bridge": "node --experimental-strip-types --test tests/bridge.test.mjs",
+    "test:facial": "node --experimental-strip-types --test tests/facialRigSchema.test.mjs",
+    "test:human": "node --experimental-strip-types --test tests/humanLookSchema.test.mjs tests/humanCreatorSchema.test.mjs",
+    "test:assets": "node --experimental-strip-types --test tests/assetTree.test.mjs"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.0"
+  }
+}

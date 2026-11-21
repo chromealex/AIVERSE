@@ -35,6 +35,13 @@ struct ForestSceneSettings {
     uint32_t requestsPerUpdate = 2;  // 1..8
     uint32_t publicationsPerUpdate = 2; // 1..8
     FloraView view{0, 0, 3000, 9000, 12000, 24000, 650, 3000};
+    // Near-tree geometry (ArborForestAdapter::setTreeGeometry): Merged draws
+    // every tree of a species/tier/material in one instanced call.
+    ArborTreeGeometry treeGeometry = ArborTreeGeometry::Auto;
+    TreeLodSettings treeLod;
+    // GPU hierarchical wind masks on near trees (docs/wind-masks.md); with
+    // Auto geometry this also selects merged whole-tree draws.
+    bool hierarchicalWind = false;
 };
 
 struct ForestSceneStats {
@@ -119,18 +126,28 @@ public:
         adapter_.setWindTransitionRange(
             std::min<int32_t>(settings_.view.mediumRangeCm,windEnd-1),
             windEnd);
+        if(settings_.hierarchicalWind)adapter_.enableHierarchicalWind();
+        adapter_.setTreeGeometry(settings_.treeGeometry,settings_.treeLod);
+    }
+
+    // Per-species material hook (e.g. BotanicalMaterialTable textures);
+    // call before addSpecies.
+    void setPrototypeDecorator(ArborForestAdapter::PrototypeDecorator decorator) {
+        if (residentStarted_ || gpuUploaded_)
+            throw std::logic_error("TerraWeave species registry already in use");
+        adapter_.setPrototypeDecorator(std::move(decorator));
     }
 
     void addSpecies(const TreeProfile& profile,
                     const FoliageSpecies& placement,
-                    uint64_t prototypeSeed) {
+                    uint64_t prototypeSeed,ArborMeshSettings mesh = {8,true}) {
         if (residentStarted_ || gpuUploaded_)
             throw std::logic_error("TerraWeave species registry already in use");
         if (placement.id != profile.speciesId || placement.id == 0)
             throw std::invalid_argument("TerraWeave forest species ids");
         // Validates profile before insertion and prepares shared geometry/
         // impostor atlas once per species, rather than once per tree.
-        adapter_.addPrototype(profile, prototypeSeed);
+        adapter_.addPrototype(profile, prototypeSeed,mesh);
         adapter_.setRootProfile(profile.speciesId,
             defaultRootProfile(placement.habit));
         species_.push_back(placement);

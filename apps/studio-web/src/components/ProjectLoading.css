@@ -1,0 +1,13 @@
+.project-loading__backdrop{position:fixed;inset:0;z-index:950;background:rgba(5,9,16,.6);display:flex;align-items:center;justify-content:center}
+.project-loading{width:min(440px,calc(100vw - 32px));padding:20px 22px;background:var(--au-panel-raised);border:1px solid #3a5170;border-radius:var(--au-radius-lg);box-shadow:0 24px 64px rgba(0,0,0,.6);color:var(--au-text)}
+.project-loading h2{margin:0 0 6px;font-size:var(--au-font-lg)}
+.project-loading__message{margin:0 0 14px;color:var(--au-text-soft);font-size:12px;word-break:break-word}
+.project-loading__hint{margin:8px 0 0;color:var(--au-text-faint);font-size:11px;font-variant-numeric:tabular-nums}
+.project-loading button{height:28px;padding:0 14px;border:1px solid var(--studio-border);border-radius:7px;background:var(--studio-background);color:var(--au-text);cursor:pointer}
+.project-loading__bar{height:6px;border-radius:3px;background:var(--studio-background);overflow:hidden;position:relative}
+.project-loading__bar span{position:absolute;top:0;bottom:0;width:35%;border-radius:3px;background:var(--au-accent)}
+.is-indeterminate span{animation:studio-load-slide 1.1s ease-in-out infinite}
+@keyframes studio-load-slide{0%{left:-35%}100%{left:100%}}
+.scene-loading-strip{position:absolute;left:0;right:0;bottom:-1px;height:2px;background:transparent;overflow:hidden;pointer-events:none;z-index:31}
+.scene-loading-strip span{position:absolute;left:0;top:0;bottom:0;background:var(--au-accent);transition:width .2s ease-out}
+.scene-loading-strip.is-indeterminate span{width:35%}

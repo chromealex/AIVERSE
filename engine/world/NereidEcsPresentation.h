@@ -34,6 +34,7 @@ inline std::vector<NereidSceneSurface> snapshotNereidEcsWater(
             surface.body=body;
             surface.mesh=options.mesh;
             surface.style=options.style;
+            if(const auto* grade=world.tryGetConst<lib::nereid::WaterRiverGradeComponent>(e)){surface.mesh.useGrade=grade->enabled;surface.mesh.grade=*grade;}
             if(const auto* eddies=world.tryGetConst<lib::nereid::WaterVortexFieldComponent>(e)) {
                 surface.useVortices=true;
                 surface.vortices=*eddies;

@@ -71,9 +71,40 @@ std::string findTool(const std::string& self, const char* name) {
 class EditorLink {
 public:
     EditorLink(Options o, std::string self) : opt_(std::move(o)), self_(std::move(self)) {}
+    // Connect and authenticate (agent-link protocol 2, docs/mcp-agent-link.md): the editor
+    // accepts tool calls only after {"method":"hello","token":...} with the token it wrote to
+    // net::agentTokenPath(port). The token is re-read on every connect (a restarted editor
+    // publishes a new one).
+    bool connectAndHello() {
+        if (!cli_.connect(opt_.port)) return false;
+        std::string token;
+        for (int i = 0; i < 20 && !net::readAgentToken(opt_.port, token); ++i)   // written right after listen()
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (token.empty()) {
+            lastError_ = "no agent-link token at " + net::agentTokenPath(opt_.port).string();
+            cli_.close();
+            return false;
+        }
+        Json hello = Json::object();
+        hello.set("id", Json::number(int64_t(++seq_)));
+        hello.set("method", Json::string("hello"));
+        hello.set("token", Json::string(token));
+        if (!cli_.send(hello.dump(-1))) return false;
+        std::string line;
+        while (cli_.recv(line, 5000)) {
+            Json resp;
+            try { resp = Json::parse(line); } catch (...) { break; }
+            if (resp["id"].integer() != int64_t(seq_)) continue;
+            if (resp["result"].getBool("ok")) { lastError_.clear(); return true; }
+            lastError_ = resp["result"].getStr("error", "agent link refused");
+            break;
+        }
+        cli_.close();
+        return false;
+    }
     bool ensure() {
         if (cli_.connected()) return true;
-        if (cli_.connect(opt_.port)) return true;
+        if (connectAndHello()) return true;
         if (opt_.noEditor || launched_) return false;
         launched_ = true;
         std::string ed = findEditor(opt_, self_);
@@ -88,10 +119,11 @@ public:
         if (std::system(cmd.c_str()) != 0) return false;
         for (int i = 0; i < 100; ++i) {          // up to 10 s for the window to come up
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            if (cli_.connect(opt_.port)) return true;
+            if (connectAndHello()) return true;
         }
         return false;
     }
+    const std::string& lastError() const { return lastError_; }
     // Returns false if the editor is gone (caller falls back to the local workspace).
     bool request(const std::string& method, const Json& params, Json& result) {
         if (!ensure()) return false;
@@ -103,7 +135,8 @@ public:
         std::string line;
         // builds and matches can take a while; the editor answers when the op is done
         while (cli_.recv(line, 600000)) {
-            Json resp = Json::parse(line);
+            Json resp;
+            try { resp = Json::parse(line); } catch (...) { break; }
             if (resp["id"].integer() != int64_t(seq_)) continue;
             result = resp["result"];
             return true;
@@ -117,6 +150,7 @@ private:
     Options opt_;
     std::string self_;
     net::LineClient cli_;
+    std::string lastError_;
     bool launched_ = false;
     uint64_t seq_ = 0;
 };
@@ -170,6 +204,7 @@ Json toContent(const Json& result) {
 
 const char* kInstructions =
     "Tools to build real-time strategy games with AIVERSE: a game is data (game.json, rules.json, maps). "
+    "STRATA virtual geometry: strata_capabilities reports compiled authoring support; strata_model_analyze {model: project-relative path} builds read-only CPU staging, not GPU acceptance. "
     "Projects live anywhere on disk; the engine ships templates (sample games). "
     "Workflow: list_projects (recent projects + templates) / create_project {name, template, location} / open_game {game: folder} -> read rules_schema (the data format reference) -> rules_list / rules_get -> "
     "edit rules with rules_set / rules_merge (keep rules small: shared values in an \"abstract\": true base that entries \"extends\", "
@@ -198,18 +233,26 @@ const char* kInstructions =
     "Visual effects: fx_templates (explosion, fire, smoke, magic, weather, ...) or fx_import_unity {source: a Unity .prefab / folder} "
     "to make the same effect as a Unity one, tune with fx_get / fx_set, look with fx_preview {effect, advance, freeze} + view_screenshot, "
     "attach to events with fx_bind (died, hit, attack, ability, spawned per type / weapon / ability). "
+    "LENS cameras: lens_scene_get -> lens_scene_validate -> lens_camera_set / lens_scene_set / lens_camera_delete. "
+    "Writes require expectedRevision (the revision from the last lens_scene_get; expectedScene is still accepted) and save immediately without undo; Reload the native LENS window afterward. "
     "Look of the game: own meshes / textures via asset_import, then the type's \"view\" block with rules_merge "
     "(model, materials overrides per material name, team colour, clips: docs/models.md; model_info lists nodes, clips, materials); "
     "custom materials: texture_generate (bricks, metal panels, wood, camo, scales, ... + normal maps, team masks) -> material_set "
     "(shared library materials.json) -> material_apply {type, material, target | node} -> material_preview + view_screenshot; "
     "lighting: lighting_set (sun, sky, day/night, presets), light_add / light_update (point lights on the map); "
+    "PHYSIS map authoring: physis_get -> physis_validate -> physis_set with expectedRevision from physis_get; "
+    "these edit map configuration only, not live simulation or visual fog. "
     "fog of war: rules_merge {path: \"fogOfWar\"} (mode, colour, style, softness, grid, lineOfSight for 3D visibility by heights, "
     "vision.blocks on wall types, delivery.blocksVision on smoke skills); "
+    "Scene entities/components: scene_entity_list -> scene_entity_get -> scene_component_set. "
+    "Lights: scene_light_create/delete with persistent entityId; configure GI/Luma with scene_render_lighting_get/set. "
+    "Read engine skills/editor/aiverse-scene-entities/SKILL.md and skills/visuals/aiverse-lighting/SKILL.md; "
+    "map_save persists requested edits. Other legacy scene IDs remain provisional. "
     "post effects (bloom, colour grading, LUT, vignette, tilt-shift, ...): postfx_catalog -> postfx_preset / postfx_add; their answers carry "
     "'warnings' with ms per frame for heavy effects (bloom, fxaa, sunShafts) - pass them on to the user; view_postfx {quality: low} + view_screenshot "
     "shows what weak phones get; "
     "game UI: ui_contract (documents, data bindings, events) -> game_file_write ui/hud.rml, ui/skin.rcss ... (the game's ui/ overrides the engine's). "
-    "Everything you do shows up live in the user's editor window and can be undone there. "
+    "Map edits appear live in the editor with undo. Project-file tools describe their own save and reload behavior. "
     "You can only change game projects, never the engine.";
 
 } // namespace
@@ -274,6 +317,8 @@ int main(int argc, char** argv) {
                 fwd.set("name", Json::string(name));
                 fwd.set("arguments", args.isObject() ? args : Json::object());
                 bool viaEditor = link.request("call", fwd, result);
+                if (!viaEditor && !link.lastError().empty())
+                    std::fprintf(stderr, "aiversemcp: editor link: %s\n", link.lastError().c_str());
                 if (!viaEditor) result = local.call(name, args, "agent");
                 reply(id, toContent(result));
             } else if (method == "ping") {

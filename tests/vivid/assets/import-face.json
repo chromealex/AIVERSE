@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "vertices": 3,
+  "targets": [
+    {
+      "name": "jawOpen",
+      "deltas": [
+        {"vertex": 0, "position": [0.0, -0.25, 0.0]},
+        {"vertex": 1, "position": [0.0, -0.25, 0.0]}
+      ]
+    }
+  ]
+}

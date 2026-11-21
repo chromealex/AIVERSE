@@ -50,6 +50,7 @@ int main() {
         auto b = build(doc);
         check(b.model->nodes.size() == 34, "robot hierarchy");
         check(b.model->clips.size() == 4, "robot clips");
+        b.model->materials[0].thinTransmission=.375f;
         auto bytes = exportGlb(*b.model);
         std::vector<std::string> warnings;
         auto loaded = loadModel(
@@ -59,6 +60,7 @@ int main() {
                 return true;
             },
             &warnings);
+        check(loaded->materials[0].thinTransmission==.375f,"thin PBR GLB roundtrip");
         check(loaded->nodes.size() == b.model->nodes.size(), "GLB hierarchy roundtrip");
         check(loaded->clips.size() == 4, "GLB clips roundtrip");
         check(loaded->indices.size() == b.model->indices.size(), "GLB mesh roundtrip");
@@ -115,6 +117,23 @@ int main() {
             },
             &warnings);
         check(loaded->skins.size() == 1 && loaded->vertices[0].weights[0] == 255, "skin roundtrip");
+        auto& morphMesh=sk.model->meshes[0];
+        morphMesh.morphTargetNames={"jawOpen","eyeBlinkLeft"};morphMesh.weights={.1f,.2f};
+        for(auto& primitive:morphMesh.primitives) {
+            primitive.morphTargets=2;primitive.morphDeltas.resize(size_t(primitive.vertexCount)*12,.025f);
+        }
+        const int owner=sk.model->findNode("mesh");sk.model->nodes[size_t(owner)].weights[0]=.4f;
+        AnimClip face;face.name="Expression";face.duration=1;
+        AnimChannel channel;channel.node=owner;channel.path=AnimChannel::Weights;channel.comps=2;
+        channel.times={0,1};channel.values={0,0,1,.5f};face.channels.push_back(channel);sk.model->clips.push_back(face);
+        bytes=exportGlb(*sk.model);
+        loaded=loadModel("face.glb",[&](const std::string&,std::string& s){s=bytes;return true;});
+        check(loaded && loaded->meshes[0].morphTargetNames==morphMesh.morphTargetNames,"facial semantic names roundtrip");
+        check(loaded->meshes[0].primitives[0].morphTargets==2 &&
+              std::abs(loaded->meshes[0].primitives[0].morphDeltas[0]-.025f)<1e-6f,"facial deltas roundtrip");
+        check(std::abs(loaded->nodes[size_t(owner)].weights[0]-.4f)<1e-6f,"node morph weight roundtrip");
+        check(loaded->clips.back().channels[0].path==AnimChannel::Weights &&
+              loaded->clips.back().channels[0].values==channel.values,"morph animation roundtrip");
         auto graph = Json::parse(R"({"nodes":[{"id":"walk","kind":"clip","clip":"Walk"}],"output":"walk"})");
         doc.set("graph", graph);
         auto baked = bake(doc, Json::parse(R"({"clip":"Baked","duration":1,"fps":12})"));

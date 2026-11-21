@@ -145,7 +145,9 @@ static void testPipeline() {
     AIVERSE_TEST_CHECK(resources.status().residentReserved==64);
 
     // Restore a World snapshot: ECS entities/registry are restored, not
-    // re-created. Presentation dependencies are reacquired independently.
+    // re-created. Rollback diffs residency: scenes still Active in the
+    // restored World keep their leases (no restream); only the scene that
+    // the rollback removed releases its private dependency.
     w.enableCowSnapshots(true);
     World before=w;
     const auto villageAgain=pipeline.request("scenes/village");
@@ -155,12 +157,25 @@ static void testPipeline() {
     });
     AIVERSE_TEST_CHECK(pipeline.commit(villageAgain));
     AIVERSE_TEST_CHECK(scenes.count()==3);
+    AIVERSE_TEST_CHECK(resources.status().residentReserved==96);
+    World withVillage=w;
     w.copyFrom(before);
     pipeline.invalidateAfterRestore();
-    AIVERSE_TEST_CHECK(resources.status().residentReserved==0);
+    AIVERSE_TEST_CHECK(resources.status().residentReserved==64);
+    AIVERSE_TEST_CHECK(retired["collision/village"]==2);
+    AIVERSE_TEST_CHECK(retired["render/shared"]==0);
     AIVERSE_TEST_CHECK(scenes.count()==2);
+    AIVERSE_TEST_CHECK(pipeline.queueRestoredResidency().empty());
+    AIVERSE_TEST_CHECK(resources.leaseCount("render/shared")==1);
+    AIVERSE_TEST_CHECK(loader.resourceRefCount("render/shared")==2);
+
+    // Forward restore to a World where village is Active again: only the
+    // missing scene gets a residency job; shared render stays published.
+    w.copyFrom(withVillage);
+    pipeline.invalidateAfterRestore();
+    AIVERSE_TEST_CHECK(resources.status().residentReserved==64);
     auto jobs=pipeline.queueRestoredResidency();
-    AIVERSE_TEST_CHECK(jobs.size()==2);
+    AIVERSE_TEST_CHECK(jobs.size()==1 && jobs[0].scene==villageAgain.scene);
     until([&]{
         pipeline.poll(2,2,64);
         for(const auto& ticket:jobs) if(!pipeline.ready(ticket))return false;
@@ -168,6 +183,10 @@ static void testPipeline() {
     });
     for(const auto& ticket:jobs)
         AIVERSE_TEST_CHECK(pipeline.commit(ticket));
+    AIVERSE_TEST_CHECK(published["render/shared"]==1);
+    AIVERSE_TEST_CHECK(loader.resourceRefCount("render/shared")==3);
+    AIVERSE_TEST_CHECK(pipeline.unload(villageAgain.scene));
+    AIVERSE_TEST_CHECK(retired["collision/village"]==3);
     AIVERSE_TEST_CHECK(resources.leaseCount("render/shared")==1);
     AIVERSE_TEST_CHECK(loader.resourceRefCount("render/shared")==2);
     AIVERSE_TEST_CHECK(scenes.count()==2);
@@ -177,9 +196,9 @@ static void testPipeline() {
     AIVERSE_TEST_CHECK(pipeline.unload(lake.scene));
     AIVERSE_TEST_CHECK(loader.resourceRefCount("render/shared")==0);
     AIVERSE_TEST_CHECK(resources.leaseCount("render/shared")==0);
-    // Once for rollback invalidation, once after both restored scenes unload.
-    AIVERSE_TEST_CHECK(retired["render/shared"]==2);
-    AIVERSE_TEST_CHECK(published["render/shared"]==2);
+    // Shared render survived both rollbacks: published and retired once.
+    AIVERSE_TEST_CHECK(retired["render/shared"]==1);
+    AIVERSE_TEST_CHECK(published["render/shared"]==1);
     AIVERSE_TEST_CHECK(resources.status().residentReserved==0);
     AIVERSE_TEST_CHECK(resources.status().stagingReserved==0);
     AIVERSE_TEST_CHECK(resources.status().published==0);
@@ -234,8 +253,55 @@ static void testBudgetAndLateCancellation() {
     AIVERSE_TEST_CHECK(resources.phase("other/b")==sc::SceneResourcePhase::Unknown);
 }
 
+// Review 2026-11-21: an entry cancelled while its worker still runs must be
+// resurrected by a new pin (it used to fail forever with an empty error, so
+// restored residency could never become ready).
+static void testRepinCancelledEntry() {
+    sc::SceneResourceBackend resources({
+        .stagingBytes=16, .residentBytes=16, .maxConcurrent=1, .maxEntries=8
+    });
+    std::promise<void> signal;
+    const auto gate=signal.get_future().share();
+    std::atomic<int> prepareCalls=0;
+    sc::SceneResourceHooks hooks;
+    hooks.prepare=[gate,&prepareCalls](const std::string& key,std::string&) {
+        ++prepareCalls;
+        gate.wait();
+        return std::static_pointer_cast<void>(std::make_shared<std::string>(key));
+    };
+    hooks.publish=[](const std::string&,const sc::ScenePreparedResource&,
+                     std::string&) { return true; };
+    hooks.retire=[](const std::string&){};
+    AIVERSE_TEST_CHECK(resources.registerKind(sc::SceneResourceKind::Other,hooks));
+    AIVERSE_TEST_CHECK(resources.define("other/a",
+        {sc::SceneResourceKind::Other,16,16,16}));
+    std::string error;
+    AIVERSE_TEST_CHECK(resources.pin("other/a",&error));
+    resources.poll(1);
+    AIVERSE_TEST_CHECK(resources.phase("other/a")==sc::SceneResourcePhase::Preparing);
+    resources.unpin("other/a");
+    AIVERSE_TEST_CHECK(resources.phase("other/a")==sc::SceneResourcePhase::Cancelled);
+    error.clear();
+    AIVERSE_TEST_CHECK(resources.pin("other/a",&error));
+    AIVERSE_TEST_CHECK(error.empty());
+    AIVERSE_TEST_CHECK(resources.phase("other/a")==sc::SceneResourcePhase::Preparing);
+    AIVERSE_TEST_CHECK(resources.status().stagingReserved==16);
+    signal.set_value();
+    until([&]{
+        resources.update(1,1,16);
+        return resources.phase("other/a")==sc::SceneResourcePhase::Published;
+    });
+    AIVERSE_TEST_CHECK(prepareCalls==1); // The running worker was reused.
+    AIVERSE_TEST_CHECK(resources.status().stagingReserved==0);
+    AIVERSE_TEST_CHECK(resources.status().residentReserved==16);
+    resources.unpin("other/a");
+    AIVERSE_TEST_CHECK(resources.phase("other/a")==sc::SceneResourcePhase::Unknown);
+    AIVERSE_TEST_CHECK(resources.status().residentReserved==0);
+}
+
 int main() {
     testPipeline();
     testBudgetAndLateCancellation();
+    testRepinCancelledEntry();
     std::cout<<"PASS scene resource pipeline budgets, cross-system leases, replace and rollback\n";
 }

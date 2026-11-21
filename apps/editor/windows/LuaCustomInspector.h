@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
+#include <cstdint>
+#include <cstdlib>
 #include <set>
 #include <sstream>
 #include <string>
@@ -28,7 +31,19 @@ extern "C" {
 namespace aiverse::editor {
 
 class LuaCustomInspector {
+    // Sandbox contract (review fix 2026-11-21):
+    // - every call into script code runs inside lua_pcall of a C trampoline with the
+    //   instruction-budget hook and the memory cap active, so a script error never
+    //   reaches the panic handler;
+    // - tables returned by scripts are read only with raw access (lua_rawget / lua_next),
+    //   so __index / __len metamethods can neither error outside pcall nor loop;
+    // - globals are looked up raw (a metatable on _G cannot intercept the lookup);
+    // - setmetatable rejects __gc (finalizers run without hooks, also at lua_close);
+    // - the allocator caps script allocations at kMaxLuaMemory (string.rep etc.);
+    //   host-side pushes of document data are not capped (they mirror existing data).
+    struct LuaMem { size_t used = 0; bool strict = false; };
     lua_State* L_ = nullptr;
+    std::unique_ptr<LuaMem> mem_;
     std::string file_, type_, source_, draft_, message_;
     std::filesystem::file_time_type stamp_{};
     std::map<std::string, std::string> textFields_;
@@ -36,11 +51,43 @@ class LuaCustomInspector {
     bool editorOpen_ = false;
     bool applyAll_ = true;
     int lastEntity_ = -1;
+    uint64_t seenRevision_ = 0;      // doc revision the text field caches belong to
+    std::string liveKey_;            // slider / drag being edited: one undo snapshot per drag
+    uint64_t liveRevision_ = 0;      // doc revision right after the last live write
     static constexpr int kMaxNodes = 384;
     static constexpr int kMaxDepth = 12;
     static constexpr int kMaxEdits = 128;
+    static constexpr int kMaxJsonNodes = 65536;   // values converted from one script result
     static constexpr size_t kMaxSource = 128 * 1024;
+    static constexpr size_t kMaxLuaMemory = size_t(64) << 20;
 
+    static void* luaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
+        auto* mem = static_cast<LuaMem*>(ud);
+        const size_t old = ptr ? osize : 0;
+        if (nsize == 0) { std::free(ptr); mem->used -= old; return nullptr; }
+        if (mem->strict && nsize > old && mem->used - old + nsize > kMaxLuaMemory) return nullptr;
+        void* p = std::realloc(ptr, nsize);
+        if (p) mem->used = mem->used - old + nsize;
+        return p;
+    }
+    static int panic(lua_State* L) {
+        const char* m = lua_type(L, -1) == LUA_TSTRING ? lua_tostring(L, -1) : "?";
+        std::fprintf(stderr, "Lua Inspector: unprotected Lua error: %s\n", m);
+        return 0;   // Lua aborts; by construction no host call raises outside pcall
+    }
+    static int safeSetMetatable(lua_State* L) {
+        lua_settop(L, 2);
+        if (lua_type(L, 2) == LUA_TTABLE) {
+            lua_pushstring(L, "__gc");
+            const bool gc = lua_rawget(L, 2) != LUA_TNIL;
+            lua_pop(L, 1);
+            if (gc) return luaL_error(L, "setmetatable: __gc is not allowed in inspector scripts");
+        }
+        lua_pushvalue(L, lua_upvalueindex(1));
+        lua_insert(L, 1);
+        lua_call(L, 2, 1);
+        return 1;
+    }
     static void hook(lua_State* L, lua_Debug*) { luaL_error(L, "Lua Inspector exceeded instruction budget"); }
     static void budget(lua_State* L) { lua_sethook(L, hook, LUA_MASKCOUNT, 100000); }
     static void unbudget(lua_State* L) { lua_sethook(L, nullptr, 0, 0); }
@@ -49,25 +96,36 @@ class LuaCustomInspector {
         for (unsigned char c : type) out += std::isalnum(c) || c == '_' || c == '-' ? char(c) : '_';
         return out.empty() ? "unnamed" : out;
     }
-    static std::string field(lua_State* L, int index, const char* key, const char* fallback = "") {
+    // Raw t[key] onto the stack (never calls metamethods). Returns its type.
+    static int rawField(lua_State* L, int index, const char* key) {
         index = lua_absindex(L, index);
-        lua_getfield(L, index, key);
-        const char* v = lua_tostring(L, -1);
+        if (!lua_istable(L, index)) { lua_pushnil(L); return LUA_TNIL; }
+        lua_pushstring(L, key);
+        return lua_rawget(L, index);
+    }
+    static int rawGlobal(lua_State* L, const char* name) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+        lua_pushstring(L, name);
+        lua_rawget(L, -2);
+        lua_remove(L, -2);
+        return lua_type(L, -1);
+    }
+    static std::string field(lua_State* L, int index, const char* key, const char* fallback = "") {
+        const int t = rawField(L, index, key);
+        const char* v = t == LUA_TSTRING || t == LUA_TNUMBER ? lua_tostring(L, -1) : nullptr;
         std::string out = v ? v : fallback;
         lua_pop(L, 1);
         return out;
     }
     static bool flag(lua_State* L, int index, const char* key, bool fallback = false) {
-        index = lua_absindex(L, index);
-        lua_getfield(L, index, key);
+        rawField(L, index, key);
         bool v = lua_isboolean(L, -1) ? lua_toboolean(L, -1) != 0 : fallback;
         lua_pop(L, 1);
         return v;
     }
     static double num(lua_State* L, int index, const char* key, double fallback = 0) {
-        index = lua_absindex(L, index);
-        lua_getfield(L, index, key);
-        double v = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : fallback;
+        rawField(L, index, key);
+        double v = lua_type(L, -1) == LUA_TNUMBER ? lua_tonumber(L, -1) : fallback;
         lua_pop(L, 1);
         return std::isfinite(v) ? v : fallback;
     }
@@ -148,43 +206,55 @@ class LuaCustomInspector {
         }
         return true;
     }
-    static Json luaJson(lua_State* L, int index, int depth = 0) {
+    // Raw, allocation-free (on the Lua side) conversion; `nodes` bounds the total work
+    // so shared / self-referencing tables cannot blow up (t = {t, t, ...}).
+    static Json luaJson(lua_State* L, int index) { int nodes = kMaxJsonNodes; return luaJson(L, index, 0, nodes); }
+    static Json luaJson(lua_State* L, int index, int depth, int& nodes) {
         index = lua_absindex(L, index);
-        if (depth > kMaxDepth) return {};
-        if (lua_isboolean(L, index)) return Json::fromBool(lua_toboolean(L, index) != 0);
-        if (lua_isinteger(L, index)) return Json::number(int64_t(lua_tointeger(L, index)));
-        if (lua_isnumber(L, index)) {
+        if (depth > kMaxDepth || --nodes < 0 || !lua_checkstack(L, 3)) return {};
+        const int type = lua_type(L, index);
+        if (type == LUA_TBOOLEAN) return Json::fromBool(lua_toboolean(L, index) != 0);
+        if (type == LUA_TNUMBER) {
+            if (lua_isinteger(L, index)) return Json::number(int64_t(lua_tointeger(L, index)));
             double v = lua_tonumber(L, index);
             return std::isfinite(v) ? Json::number(v, 4) : Json{};
         }
-        if (lua_isstring(L, index)) return Json::string(lua_tostring(L, index));
-        if (!lua_istable(L, index)) return {};
+        if (type == LUA_TSTRING) {
+            size_t len = 0;
+            const char* s = lua_tolstring(L, index, &len);
+            return Json::string(std::string(s, len));
+        }
+        if (type != LUA_TTABLE) return {};
         const size_t n = lua_rawlen(L, index);
         bool isArray = n > 0;
         lua_pushnil(L);
         while (lua_next(L, index)) {
             if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) < 1 || size_t(lua_tointeger(L, -2)) > n) isArray = false;
             lua_pop(L, 1);
+            if (--nodes < 0) { lua_pop(L, 1); return {}; }
         }
         if (isArray) {
             Json a = Json::array();
-            for (size_t i = 1; i <= std::min(n, size_t(4096)); ++i) {
-                lua_rawgeti(L, index, lua_Integer(i)); a.push(luaJson(L, -1, depth + 1)); lua_pop(L, 1);
+            for (size_t i = 1; i <= std::min(n, size_t(4096)) && nodes > 0; ++i) {
+                lua_rawgeti(L, index, lua_Integer(i)); a.push(luaJson(L, -1, depth + 1, nodes)); lua_pop(L, 1);
             }
             return a;
         }
         Json object = Json::object();
         lua_pushnil(L);
         while (lua_next(L, index)) {
-            if (lua_type(L, -2) == LUA_TSTRING) {
-                const char* k = lua_tostring(L, -2);
-                if (k && std::strlen(k) <= 128) object.set(k, luaJson(L, -1, depth + 1));
+            if (lua_type(L, -2) == LUA_TSTRING && nodes > 0) {
+                size_t len = 0;
+                const char* k = lua_tolstring(L, -2, &len);
+                if (k && len <= 128 && std::strlen(k) == len) object.set(k, luaJson(L, -1, depth + 1, nodes));
             }
             lua_pop(L, 1);
         }
         return object;
     }
+    // Only called inside the protected trampoline (callProtected).
     static void pushJson(lua_State* L, const Json& value, int depth = 0) {
+        if (!lua_checkstack(L, 3)) luaL_error(L, "Lua Inspector: value too deep");
         if (depth > kMaxDepth) { lua_pushnil(L); return; }
         if (value.isString()) { const auto s = value.str(); lua_pushlstring(L, s.data(), s.size()); }
         else if (value.isNumber()) lua_pushnumber(L, value.toDouble());
@@ -208,9 +278,54 @@ class LuaCustomInspector {
         pushJson(L, ent.extra); lua_setfield(L, -2, "values");
     }
     void reset() {
-        if (L_) lua_close(L_);
+        if (L_) lua_close(L_);   // no finalizers: setmetatable rejects __gc
         L_ = nullptr;
-        textFields_.clear(); initialized_.clear();
+        mem_.reset();
+        textFields_.clear(); initialized_.clear(); liveKey_.clear();
+    }
+    std::string errorText(const char* fallback) const {
+        return lua_type(L_, -1) == LUA_TSTRING ? std::string(lua_tostring(L_, -1)) : std::string(fallback);
+    }
+    struct CallArgs {
+        const char* function; const DocEntity* ent; size_t count;
+        const std::string* key; const Json* value; LuaMem* mem;
+    };
+    // Runs entirely under lua_pcall: global lookup, argument construction and the
+    // script call itself. Returns (found, result).
+    static int callProtected(lua_State* L) {
+        auto* a = static_cast<CallArgs*>(lua_touserdata(L, 1));
+        lua_settop(L, 0);
+        if (!lua_checkstack(L, 2 * kMaxDepth + 16)) return luaL_error(L, "Lua Inspector: stack exhausted");
+        if (rawGlobal(L, a->function) != LUA_TFUNCTION) { lua_pushboolean(L, 0); lua_pushnil(L); return 2; }
+        context(L, *a->ent, a->count);
+        int nargs = 1;
+        if (a->key) { lua_pushlstring(L, a->key->data(), a->key->size()); ++nargs; }
+        if (a->value) { pushJson(L, *a->value); ++nargs; }
+        a->mem->strict = true;
+        budget(L);
+        lua_call(L, nargs, 1);
+        unbudget(L);
+        a->mem->strict = false;
+        lua_pushboolean(L, 1);
+        lua_insert(L, -2);
+        return 2;
+    }
+    // On LUA_OK with found == true the script's single result is left on the stack.
+    int invoke(const char* function, const DocEntity& ent, size_t count, const std::string* key,
+               const Json* value, bool& found) {
+        found = false;
+        if (!L_ || !lua_checkstack(L_, 8)) return LUA_ERRMEM;
+        CallArgs args{function, &ent, count, key, value, mem_.get()};
+        lua_pushcfunction(L_, callProtected);
+        lua_pushlightuserdata(L_, &args);
+        const int rc = lua_pcall(L_, 1, 2, 0);
+        unbudget(L_);
+        mem_->strict = false;
+        if (rc != LUA_OK) { message_ = errorText("Lua callback failed"); lua_pop(L_, 1); return rc; }
+        found = lua_toboolean(L_, -2) != 0;
+        lua_remove(L_, -2);
+        if (!found) lua_pop(L_, 1);
+        return LUA_OK;
     }
     void reload() {
         reset(); source_.clear(); message_.clear();
@@ -218,18 +333,23 @@ class LuaCustomInspector {
         if (!in) return;
         std::ostringstream contents; contents << in.rdbuf(); source_ = contents.str();
         if (source_.size() > kMaxSource) { message_ = "Lua script exceeds 128 KiB"; return; }
-        L_ = luaL_newstate();
-        if (!L_) { message_ = "Could not allocate Lua state"; return; }
+        mem_ = std::make_unique<LuaMem>();
+        L_ = lua_newstate(luaAlloc, mem_.get());
+        if (!L_) { mem_.reset(); message_ = "Could not allocate Lua state"; return; }
+        lua_atpanic(L_, panic);
         const luaL_Reg libs[] = {{LUA_GNAME, luaopen_base}, {LUA_STRLIBNAME, luaopen_string},
             {LUA_TABLIBNAME, luaopen_table}, {LUA_MATHLIBNAME, luaopen_math}, {LUA_UTF8LIBNAME, luaopen_utf8}};
         for (const auto& lib : libs) { luaL_requiref(L_, lib.name, lib.func, 1); lua_pop(L_, 1); }
         for (const char* k : {"dofile", "loadfile", "load", "collectgarbage"}) { lua_pushnil(L_); lua_setglobal(L_, k); }
         lua_getglobal(L_, "string"); lua_pushnil(L_); lua_setfield(L_, -2, "dump"); lua_pop(L_, 1);
+        lua_getglobal(L_, "setmetatable"); lua_pushcclosure(L_, safeSetMetatable, 1); lua_setglobal(L_, "setmetatable");
+        mem_->strict = true;
         budget(L_);
         int err = luaL_loadbufferx(L_, source_.data(), source_.size(), file_.c_str(), "t");
         if (err == LUA_OK) err = lua_pcall(L_, 0, 0, 0);
         unbudget(L_);
-        if (err != LUA_OK) { message_ = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "Lua error"; reset(); }
+        mem_->strict = false;
+        if (err != LUA_OK) { message_ = errorText("Lua error"); reset(); }
     }
     std::vector<int> targets(Editor& ed) const {
         std::vector<int> out;
@@ -247,14 +367,14 @@ class LuaCustomInspector {
         auto one = [&](int at) {
             const std::string path = field(L, at, "key", field(L, at, "path").c_str());
             if (!safePath(path)) return false;
-            lua_getfield(L, at, "value");
+            rawField(L, at, "value");
             Edit e{path, luaJson(L, -1), field(L, at, "op", "set")};
             lua_pop(L, 1);
             if (e.op != "set" && e.op != "remove" && e.op != "append") return false;
             result.push_back(std::move(e));
             return true;
         };
-        lua_getfield(L, index, "edits");
+        rawField(L, index, "edits");
         if (lua_istable(L, -1)) {
             const size_t n = lua_rawlen(L, -1);
             if (n > kMaxEdits) { lua_pop(L, 1); return false; }
@@ -273,22 +393,11 @@ class LuaCustomInspector {
     bool runCallback(Editor& ed, int index, const char* function, const std::string& key,
                      const Json* newValue, std::vector<Edit>& edits) {
         if (!L_) return false;
-        lua_getglobal(L_, function);
-        if (!lua_isfunction(L_, -1)) { lua_pop(L_, 1); return false; }
-        context(L_, ed.doc().data.entities[size_t(index)], targets(ed).size());
-        lua_pushstring(L_, key.c_str());
-        int nargs = 2;
-        if (newValue) { pushJson(L_, *newValue); ++nargs; }
-        budget(L_);
-        const int rc = lua_pcall(L_, nargs, 1, 0);
-        unbudget(L_);
-        if (rc != LUA_OK) {
-            message_ = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "Lua callback failed";
-            lua_pop(L_, 1);
-            edits.clear();
-            return true;
-        }
-        if (lua_isstring(L_, -1) && std::string(lua_tostring(L_, -1)) == "cancel") {
+        bool found = false;
+        const int rc = invoke(function, ed.doc().data.entities[size_t(index)], targets(ed).size(), &key, newValue, found);
+        if (rc != LUA_OK) { edits.clear(); return true; }
+        if (!found) return false;
+        if (lua_type(L_, -1) == LUA_TSTRING && std::string(lua_tostring(L_, -1)) == "cancel") {
             edits.clear();
         } else if (lua_istable(L_, -1)) {
             std::vector<Edit> replacement;
@@ -327,7 +436,10 @@ class LuaCustomInspector {
         }
         return false;
     }
-    void transact(Editor& ed, std::vector<Edit> edits) {
+    // liveKey: a continuous widget (slider / drag / color) writing every frame. The
+    // first write of a drag takes the undo snapshot, later writes of the same drag
+    // (same key, no other document change in between) update in place.
+    void transact(Editor& ed, std::vector<Edit> edits, const std::string* liveKey = nullptr) {
         if (ed.playing() || edits.empty()) return;
         auto ids = targets(ed);
         if (ids.empty() || edits.size() > kMaxEdits) return;
@@ -344,38 +456,33 @@ class LuaCustomInspector {
         bool different = false;
         for (size_t i = 0; i < ids.size(); ++i) if (!(next[i] == doc.data.entities[size_t(ids[i])].extra)) different = true;
         if (!different) return;
-        doc.beginEdit();
+        const bool merge = liveKey && !liveKey_.empty() && liveKey_ == *liveKey && liveRevision_ == doc.revision;
+        if (!merge) doc.beginEdit();
         for (size_t i = 0; i < ids.size(); ++i) doc.data.entities[size_t(ids[i])].extra = std::move(next[i]);
         doc.touched();
+        if (liveKey) { liveKey_ = *liveKey; liveRevision_ = doc.revision; } else liveKey_.clear();
         textFields_.clear(); initialized_.clear();
+        seenRevision_ = doc.revision;
         message_ = "Applied to " + std::to_string(ids.size()) + " object(s) · Undo available";
     }
     bool validate(Editor& ed, int index, const std::string& key, const Json& v) {
         if (!L_) return true;
-        lua_getglobal(L_, "on_validate");
-        if (!lua_isfunction(L_, -1)) { lua_pop(L_, 1); return true; }
-        context(L_, ed.doc().data.entities[size_t(index)], targets(ed).size());
-        lua_pushstring(L_, key.c_str());
-        pushJson(L_, v);
-        budget(L_);
-        const int rc = lua_pcall(L_, 3, 1, 0);
-        unbudget(L_);
-        if (rc != LUA_OK) {
-            message_ = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "Validation failed";
-            lua_pop(L_, 1);
-            return false;
-        }
+        bool found = false;
+        const int rc = invoke("on_validate", ed.doc().data.entities[size_t(index)], targets(ed).size(), &key, &v, found);
+        if (rc != LUA_OK) return false;
+        if (!found) return true;
         bool valid = !lua_isboolean(L_, -1) || lua_toboolean(L_, -1);
-        if (lua_isstring(L_, -1)) { message_ = lua_tostring(L_, -1); valid = false; }
+        // Only a string is a message (lua_isstring is also true for numbers).
+        if (lua_type(L_, -1) == LUA_TSTRING) { message_ = lua_tostring(L_, -1); valid = false; }
         if (!valid && message_.empty()) message_ = "Lua validation rejected the edit";
         lua_pop(L_, 1);
         return valid;
     }
-    void change(Editor& ed, int index, const std::string& key, const Json& v) {
+    void change(Editor& ed, int index, const std::string& key, const Json& v, bool live = false) {
         if (!validate(ed, index, key, v)) return;
         std::vector<Edit> edits = {{key, v, "set"}};
         runCallback(ed, index, "on_change", key, &v, edits);
-        transact(ed, std::move(edits));
+        transact(ed, std::move(edits), live ? &key : nullptr);
     }
     void action(Editor& ed, int index, const std::string& name) {
         std::vector<Edit> edits;
@@ -423,7 +530,7 @@ class LuaCustomInspector {
         }
     }
     bool widget(Editor& ed, int index, int at, int& budgetNodes, int depth, const std::string& prefix = "") {
-        if (++budgetNodes > kMaxNodes || depth > kMaxDepth) return false;
+        if (++budgetNodes > kMaxNodes || depth > kMaxDepth || !lua_checkstack(L_, 6)) return false;
         at = lua_absindex(L_, at);
         const std::string kind = field(L_, at, "kind", "label");
         const std::string rawKey = field(L_, at, "key");
@@ -440,7 +547,7 @@ class LuaCustomInspector {
             bool show = kind == "row" || ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
             if (show) {
                 if (kind == "row") ImGui::BeginGroup();
-                lua_getfield(L_, at, "children");
+                rawField(L_, at, "children");
                 if (lua_istable(L_, -1)) {
                     const size_t n = std::min(static_cast<size_t>(lua_rawlen(L_, -1)), size_t(kMaxNodes));
                     for (size_t i = 1; i <= n && budgetNodes < kMaxNodes; ++i) {
@@ -468,7 +575,8 @@ class LuaCustomInspector {
                 float v = float(current.toDouble(num(L_, at, "default")));
                 const float lo = float(num(L_, at, "min")), hi = float(num(L_, at, "max", 100));
                 bool edited = kind == "slider" ? ImGui::SliderFloat(label.c_str(), &v, lo, std::max(lo, hi)) : ImGui::DragFloat(label.c_str(), &v, 0.1f);
-                if (edited && std::isfinite(v)) change(ed, index, key, kind == "int" ? Json::number(int64_t(std::llround(v))) : Json::number(double(v), 4));
+                if (ImGui::IsItemActivated()) liveKey_.clear();   // a new drag gets its own undo step
+                if (edited && std::isfinite(v)) change(ed, index, key, kind == "int" ? Json::number(int64_t(std::llround(v))) : Json::number(double(v), 4), true);
             } else if (kind == "text" || kind == "multiline" || kind == "asset") {
                 if (kind == "asset") assetWidget(ed, index, key, label, current);
                 else {
@@ -481,10 +589,11 @@ class LuaCustomInspector {
             } else if (kind == "enum" || kind == "dropdown") {
                 std::string value = current.str();
                 if (ImGui::BeginCombo(label.c_str(), value.c_str())) {
-                    lua_getfield(L_, at, "options");
+                    rawField(L_, at, "options");
                     if (lua_istable(L_, -1)) for (size_t i = 1; i <= std::min(static_cast<size_t>(lua_rawlen(L_, -1)), size_t(128)); ++i) {
                         lua_rawgeti(L_, -1, lua_Integer(i));
-                        const std::string option = lua_isstring(L_, -1) ? lua_tostring(L_, -1) : lua_istable(L_, -1) ? field(L_, -1, "value") : std::string();
+                        const int ot = lua_type(L_, -1);
+                        const std::string option = ot == LUA_TSTRING || ot == LUA_TNUMBER ? lua_tostring(L_, -1) : ot == LUA_TTABLE ? field(L_, -1, "value") : std::string();
                         if (ImGui::Selectable(option.c_str(), value == option)) change(ed, index, key, Json::string(option));
                         lua_pop(L_, 1);
                     }
@@ -495,17 +604,20 @@ class LuaCustomInspector {
                 float vec[4] = {0, 0, 0, 1};
                 for (int i = 0; i < n; ++i) if (current.isArray() && size_t(i) < current.size()) vec[i] = float(current[size_t(i)].toDouble());
                 bool changed = kind == "color" ? ImGui::ColorEdit4(label.c_str(), vec) : n == 2 ? ImGui::DragFloat2(label.c_str(), vec, 0.1f) : n == 3 ? ImGui::DragFloat3(label.c_str(), vec, 0.1f) : ImGui::DragFloat4(label.c_str(), vec, 0.1f);
+                if (ImGui::IsItemActivated()) liveKey_.clear();
                 if (changed) {
                     Json arr = Json::array();
                     for (int i = 0; i < n; ++i) arr.push(Json::number(double(vec[i]), 4));
-                    change(ed, index, key, arr);
+                    change(ed, index, key, arr, true);
                 }
             } else if (kind == "array") {
-                const Json& array = current;
+                // A copy: transact() below replaces entities[index].extra, which
+                // `current` points into (use-after-free while iterating).
+                const Json array = current;
                 ImGui::Text("%s (%zu)", label.c_str(), array.isArray() ? array.size() : 0u);
                 ImGui::SameLine();
                 if (ImGui::SmallButton("+")) {
-                    lua_getfield(L_, at, "default"); Json d = luaJson(L_, -1); lua_pop(L_, 1);
+                    rawField(L_, at, "default"); Json d = luaJson(L_, -1); lua_pop(L_, 1);
                     transact(ed, {{key, d, "append"}});
                 }
                 if (array.isArray()) for (size_t i = 0; i < array.size() && i < 128; ++i) {
@@ -513,9 +625,14 @@ class LuaCustomInspector {
                     const std::string childPath = key + "[" + std::to_string(i + 1) + "]";
                     const bool open = ImGui::TreeNodeEx("##element", ImGuiTreeNodeFlags_SpanAvailWidth, "[%zu]", i + 1);
                     ImGui::SameLine();
-                    if (ImGui::SmallButton("-")) transact(ed, {{childPath, {}, "remove"}});
+                    if (ImGui::SmallButton("-")) {
+                        transact(ed, {{childPath, {}, "remove"}});
+                        if (open) ImGui::TreePop();
+                        ImGui::PopID();
+                        break;   // indices shifted: redraw from the document next frame
+                    }
                     if (open) {
-                        lua_getfield(L_, at, "element");
+                        rawField(L_, at, "element");
                         if (lua_istable(L_, -1)) {
                             // Child widgets inherit element's path, e.g. inventory[1].count.
                             widget(ed, index, -1, budgetNodes, depth + 1, childPath);
@@ -553,6 +670,12 @@ public:
         const auto path = (std::filesystem::path(ed.ws().project.dir) / "editor" / "inspectors" / (type + ".lua")).string();
         if (file_ != path) { file_ = path; type_ = ent.type; draft_.clear(); source_.clear(); stamp_ = {}; editorOpen_ = false; reset(); }
         if (lastEntity_ != ed.selection.index) { lastEntity_ = ed.selection.index; textFields_.clear(); initialized_.clear(); }
+        // Undo / redo / other windows change the document: drop cached text field
+        // values (not while a field is being typed into; that edit commits first).
+        if (seenRevision_ != ed.doc().revision && !ImGui::IsAnyItemActive()) {
+            seenRevision_ = ed.doc().revision; textFields_.clear(); initialized_.clear();
+        }
+        if (!ImGui::IsAnyItemActive()) liveKey_.clear();   // a released drag ends its undo step
         std::error_code ec;
         auto now = std::filesystem::last_write_time(file_, ec);
         if (ec) now = {};
@@ -569,21 +692,19 @@ public:
         if (ui::toolButton(ICON_REFRESH, "Перезагрузить Lua")) { reload(); draft_ = source_; }
         if (!message_.empty()) ui::callout(ui::Tone::Warn, message_);
         if (L_) {
-            lua_getglobal(L_, "inspector");
-            if (lua_isfunction(L_, -1)) {
-                context(L_, ent, targets(ed).size());
-                budget(L_); const int rc = lua_pcall(L_, 1, 1, 0); unbudget(L_);
-                if (rc == LUA_OK && lua_istable(L_, -1)) {
+            bool found = false;
+            if (invoke("inspector", ent, targets(ed).size(), nullptr, nullptr, found) == LUA_OK && found) {
+                if (lua_istable(L_, -1)) {
                     int count = 0;
                     size_t n = std::min(static_cast<size_t>(lua_rawlen(L_, -1)), size_t(kMaxNodes));
-                    for (size_t i = 1; i <= n && count < kMaxNodes; ++i) {
+                    for (size_t i = 1; i <= n && count < kMaxNodes && L_; ++i) {
                         lua_rawgeti(L_, -1, lua_Integer(i));
                         if (lua_istable(L_, -1)) widget(ed, ed.selection.index, -1, count, 0);
                         lua_pop(L_, 1);
                     }
-                } else if (rc != LUA_OK) message_ = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "Inspector error";
+                }
                 lua_pop(L_, 1);
-            } else lua_pop(L_, 1);
+            }
         } else if (!editorOpen_) ui::hint("Для этого типа ещё нет Lua-инспектора. Нажмите «Редактировать Lua».");
         if (editorOpen_) {
             if (draft_.empty() && source_.empty()) draft_ =

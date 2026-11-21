@@ -68,6 +68,9 @@ inline std::optional<InstallOptions> optionsFromMap(const Json& map) {
     options.enableWindZones = readFlag("enableWindZones");
     options.enableGravityFields = readFlag("enableGravityFields");
     options.enableForces = readFlag("enableForces");
+    const auto& floodMode = config["floodMode"];
+    if (!floodMode.isNull() && !floodMode.isString())
+        throw std::invalid_argument("PHYSIS floodMode must be a string");
     const auto mode = config.getStr("floodMode", "LocalShallow");
     if (mode == "LocalShallow") options.floodMode = FloodMode::LocalShallow;
     else if (mode == "ExternalAuthority") options.floodMode = FloodMode::ExternalAuthority;

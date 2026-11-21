@@ -7,6 +7,8 @@
 #include <limits>
 #include <cstring>
 #include <cstdio>
+#include <deque>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -115,6 +117,7 @@ public:
         items_.push_back(std::move(v)); alive_.push_back(1); return uint32_t(items_.size());
     }
     T* get(uint32_t id) { return id && id <= items_.size() && alive_[id - 1] ? &items_[id - 1] : nullptr; }
+    const T* get(uint32_t id) const { return id && id <= items_.size() && alive_[id - 1] ? &items_[id - 1] : nullptr; }
     void remove(uint32_t id) { if (get(id)) { alive_[id - 1] = 0; free_.push_back(id - 1); } }
     template <class F> void each(F&& fn) {
         for (size_t i = 0; i < items_.size(); ++i)
@@ -149,6 +152,9 @@ struct GLTextureRead {
     int width = 0, height = 0;
     PixelFormat format = PixelFormat::RGBA8;
     Device::TextureReadFn callback;
+    // GL stores render targets bottom-up; uploaded textures keep the CPU row
+    // order. Only render targets are flipped to the top-left row contract.
+    bool flipRows = false;
 };
 
 constexpr size_t kUniformRingSize = 1 << 20;
@@ -213,6 +219,43 @@ public:
     // Core GL 3.3 / GLES 3 has independent sampler objects, but not native
     // arbitrary subresource texture views. Identity views can still be bound.
     bool supportsTextureViews() const override { return false; }
+    // Nonblocking GLsync timeline. Fence placed after the current frame's
+    // GPU commands, polled with timeout=0 on the GL/context owner thread.
+    uint64_t gpuSubmissionFence() const override {
+        return frameActive_ ? nextGpuToken_ : 0;
+    }
+    uint64_t gpuCompletedFence() const override {
+        return completedGpuToken_;
+    }
+    bool waitForSubmittedGpuWork() override {
+#if defined(__EMSCRIPTEN__)
+        // WebGL2 cannot promise a portable synchronous GPU-idle barrier.
+        // Retain quarantined textures until an explicit host-safe teardown.
+        return false;
+#else
+        // ONLY at the owner's pre-render pressure point; never every frame.
+        glFinish();
+        // All previously submitted commands are GPU-complete now.
+        for (const auto& entry : gpuFences_) {
+            completedGpuToken_ = std::max(completedGpuToken_,entry.first);
+            glDeleteSync(entry.second);
+        }
+        gpuFences_.clear();
+        return true;
+#endif
+    }
+    void pollCompletedGpuFences() {
+        while (!gpuFences_.empty()) {
+            auto& front = gpuFences_.front();
+            const GLenum status = glClientWaitSync(front.second, 0, 0);
+            if (status != GL_ALREADY_SIGNALED &&
+                status != GL_CONDITION_SATISFIED)
+                break;
+            completedGpuToken_ = front.first;
+            glDeleteSync(front.second);
+            gpuFences_.pop_front();
+        }
+    }
     bool supports(PixelFormat f) const override {
         switch (f) {
             case PixelFormat::ETC2_RGB8: case PixelFormat::ETC2_RGBA8:
@@ -237,9 +280,24 @@ public:
             if (read.pbo) glDeleteBuffers(1, &read.pbo);
         }
         textureReads_.clear();
+        for (const auto& pending : gpuFences_) glDeleteSync(pending.second);
+        gpuFences_.clear();
+#if !defined(AIVERSE_GL_LOADER) && !defined(__EMSCRIPTEN__)
+        for(auto& pending:pixelReads_) {
+            if(pending.fence)glDeleteSync(pending.fence);
+            if(pending.pbo)glDeleteBuffers(1,&pending.pbo);
+        }
+        pixelReads_.clear();
+#endif
+        for(const auto& [token,sync]:retirementFences_) {
+            (void)token;
+            if(sync)glDeleteSync(sync);
+        }
+        retirementFences_.clear();
 #if defined(__APPLE__) || defined(_WIN32)
-        if (queryActive_) glEndQuery(GL_TIME_ELAPSED);
+        if (queryActive_ || scopeActive_) glEndQuery(GL_TIME_ELAPSED);
         for (const auto& t:timedQueries_) glDeleteQueries(1,&t.query);
+        for (const auto& t:scopedQueries_) glDeleteQueries(1,&t.query);
 #endif
 #if defined(__EMSCRIPTEN__) || defined(__APPLE__)
         glDeleteBuffers(kMaxUniformSlots, slotUbos_);
@@ -277,6 +335,35 @@ public:
         return result;
     }
     const std::string& lastError() const override { return error_; }
+    // GL errors are sticky context state: a stale error raised by unrelated
+    // code (UI, plugins, an earlier frame) would otherwise be attributed to
+    // the next guarded section and fail an upload/allocation that succeeded.
+    // Drain the queue before each section that checks glGetError() so the
+    // check observes only the section's own calls. Bounded because a lost
+    // context may report GL_CONTEXT_LOST indefinitely.
+    void drainPendingGlErrors() {
+        for (int i = 0; i < 32; ++i) {
+            const GLenum e = glGetError();
+            if (e == GL_NO_ERROR) return;
+            if (!loggedStaleGlError_) {
+                loggedStaleGlError_ = true;
+                std::fprintf(stderr, "GL: discarded stale error 0x%04X raised outside the RHI\n",
+                             static_cast<unsigned>(e));
+            }
+        }
+    }
+    bool waitIdle() override {
+        drainPendingGlErrors();
+        glFinish();
+        return glGetError()==GL_NO_ERROR;
+    }
+    uint64_t frameSerial() const override {
+#if defined(__EMSCRIPTEN__) || defined(AIVERSE_GL_LOADER)
+        return 0; // native readback/fenced frame identity not implemented
+#else
+        return frameActive_ ? frameSerial_ : 0;
+#endif
+    }
 
     // ---------- buffers ----------
     BufferHandle createBuffer(const BufferDesc& d) override {
@@ -301,6 +388,12 @@ public:
         }
         glBufferSubData(b->target, GLintptr(offset), GLsizeiptr(size), data);
         attribsDirty_ = true;
+    }
+    bool bufferInfo(BufferHandle h, BufferInfo& out) const override {
+        const auto* b = buffers_.get(h.id);
+        if (!b) return false;
+        out = {b->size,1};
+        return true;
     }
     void destroyBuffer(BufferHandle h) override {
         if (auto* b = buffers_.get(h.id)) { glDeleteBuffers(1, &b->id); buffers_.remove(h.id); }
@@ -340,6 +433,7 @@ public:
         const GLenum internal = uncompressedInternal(d.format);
         const GLenum format = uncompressedExternal(d.format);
         const GLenum type = uncompressedType(d.format);
+        drainPendingGlErrors();
         const size_t bpp = size_t(uncompressedTexturePixelBytes(d.format));
         // GLES3/WebGL2 share pixel-unpack state across all upload paths.
         // GL_PIXEL_UNPACK_BUFFER changes host pointers into byte offsets;
@@ -457,6 +551,7 @@ public:
                 error_ = "GL: unsupported multisample attachment format";
                 return {};
             }
+            drainPendingGlErrors();
             GLint maxSamples = 0;
             glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
             if (d.sampleCount > maxSamples) {
@@ -495,6 +590,7 @@ public:
             error_ = "GL: requested compressed pixel format unsupported";
             return {};
         }
+        drainPendingGlErrors();
         // Legacy Texture2D and compressed uploads also consume CPU pointers.
         // Inherit no pixel-unpack/PBO state from previous render systems.
         struct Scoped2DUnpack {
@@ -675,6 +771,7 @@ public:
         GLint previousUnpackAlignment = 4, previousRowLength = 0;
         GLint previousImageHeight = 0, previousSkipPixels = 0;
         GLint previousSkipRows = 0, previousSkipImages = 0;
+        drainPendingGlErrors();
         glGetIntegerv(bindingQuery, &previousBinding);
         glGetIntegerv(kUnpackBufferBinding, &previousUnpackBuffer);
         glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
@@ -696,20 +793,42 @@ public:
         glPixelStorei(kSkipRows,0);
         glPixelStorei(kSkipImages,0);
         const auto* src = static_cast<const uint8_t*>(u.data);
+        // GL33/GLES3/WebGL2 all support UNPACK_ROW_LENGTH / IMAGE_HEIGHT:
+        // one call per region (or per slice) when pitches are whole pixels
+        // / whole rows; per-row uploads remain for odd byte pitches.
+        // Both values are restored below with the rest of the unpack state.
+        const bool wholePixelRows = u.rowPitchBytes % bpp == 0;
+        const bool wholeRowSlices = wholePixelRows && imagePitch % u.rowPitchBytes == 0;
+        if (wholePixelRows) glPixelStorei(kRowLength, u.rowPitchBytes / bpp);
         if (t->dimension == TextureDimension::Texture2D ||
             t->dimension == TextureDimension::Cube) {
             const GLenum target = t->dimension == TextureDimension::Cube ?
                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + GLenum(u.arrayLayer) : GL_TEXTURE_2D;
-            for (int y = 0; y < u.height; ++y)
-                glTexSubImage2D(target, u.mipLevel, u.x, u.y + y, u.width, 1, format, type,
-                                src + size_t(y) * size_t(u.rowPitchBytes));
+            if (wholePixelRows)
+                glTexSubImage2D(target, u.mipLevel, u.x, u.y, u.width, u.height,
+                                format, type, src);
+            else
+                for (int y = 0; y < u.height; ++y)
+                    glTexSubImage2D(target, u.mipLevel, u.x, u.y + y, u.width, 1, format, type,
+                                    src + size_t(y) * size_t(u.rowPitchBytes));
         } else {
             const int z = t->dimension == TextureDimension::Texture3D ? u.z : u.arrayLayer;
-            for (int zz = 0; zz < u.depth; ++zz)
-                for (int y = 0; y < u.height; ++y)
-                    glTexSubImage3D(t->target, u.mipLevel, u.x, u.y + y, z + zz,
-                      u.width, 1, 1, format, type,
-                      src + size_t(zz) * size_t(imagePitch) + size_t(y) * size_t(u.rowPitchBytes));
+            if (wholeRowSlices) {
+                glPixelStorei(kImageHeight, imagePitch / u.rowPitchBytes);
+                glTexSubImage3D(t->target, u.mipLevel, u.x, u.y, z,
+                                u.width, u.height, u.depth, format, type, src);
+            } else if (wholePixelRows) {
+                for (int zz = 0; zz < u.depth; ++zz)
+                    glTexSubImage3D(t->target, u.mipLevel, u.x, u.y, z + zz,
+                                    u.width, u.height, 1, format, type,
+                                    src + size_t(zz) * size_t(imagePitch));
+            } else {
+                for (int zz = 0; zz < u.depth; ++zz)
+                    for (int y = 0; y < u.height; ++y)
+                        glTexSubImage3D(t->target, u.mipLevel, u.x, u.y + y, z + zz,
+                          u.width, 1, 1, format, type,
+                          src + size_t(zz) * size_t(imagePitch) + size_t(y) * size_t(u.rowPitchBytes));
+            }
         }
         if (t->mips && u.mipLevel == 0) glGenerateMipmap(t->target);
         const GLenum uploadError = glGetError();
@@ -783,6 +902,7 @@ public:
             }
             return GL_LEQUAL;
         };
+        drainPendingGlErrors();
         GLuint sampler = 0;
         glGenSamplers(1, &sampler);
         if (!sampler) { error_ = "GL sampler allocation failed"; return {}; }
@@ -829,12 +949,18 @@ public:
             if (!s) return false;
             sampler = s->native;
         }
+        drainPendingGlErrors();
         glActiveTexture(GL_TEXTURE0 + GLenum(slot));
         glBindTexture(t->target, t->id);
         glBindSampler(GLuint(slot), sampler);
         return glGetError() == GL_NO_ERROR;
     }
-
+    bool textureInfo(TextureHandle h, TextureInfo& out) const override {
+        const auto* t = textures_.get(h.id);
+        if (!t) return false;
+        out = {t->w,t->h,t->fmt};
+        return true;
+    }
     void destroyTexture(TextureHandle h) override {
         std::vector<uint32_t> children;
         views_.each([&](uint32_t id, GLTextureView& view) {
@@ -992,9 +1118,11 @@ public:
 #if defined(__APPLE__) || defined(_WIN32)
     struct TimedQuery { uint64_t tag; GLuint query; };
     std::vector<TimedQuery> timedQueries_;
-    bool queryActive_ = false;
+    std::vector<TimedQuery> scopedQueries_;
+    bool queryActive_ = false, scopeActive_ = false;
     bool timeGpuFrame(uint64_t tag) override {
-        if (info_.backend != Backend::GL33 || queryActive_ || timedQueries_.size() >= 64) return false;
+        if (info_.backend != Backend::GL33 || queryActive_ || scopeActive_ ||
+            timedQueries_.size() >= 64) return false;
         GLuint q=0; glGenQueries(1,&q); glBeginQuery(GL_TIME_ELAPSED,q);
         timedQueries_.push_back({tag,q}); queryActive_=true; return true;
     }
@@ -1011,7 +1139,94 @@ public:
         return out;
     }
 #endif
+#if defined(__APPLE__) || defined(_WIN32)
+    // Desktop GL33 can measure one bounded region using the native elapsed
+    // GPU query. Do NOT use while a whole-frame GL_TIME_ELAPSED query runs:
+    // OpenGL prohibits overlapping queries of the same target.
+    bool beginGpuScope(uint64_t tag) override {
+        if (info_.backend != Backend::GL33 || !frameActive_ ||
+            queryActive_ || scopeActive_ || scopedQueries_.size() >= 64)
+            return false;
+        GLuint q=0;
+        glGenQueries(1,&q);
+        if (!q) return false;
+        glBeginQuery(GL_TIME_ELAPSED,q);
+        scopedQueries_.push_back({tag,q});
+        scopeActive_=true;
+        return true;
+    }
+    void endGpuScope() override {
+        if (!scopeActive_) return;
+        glEndQuery(GL_TIME_ELAPSED);
+        scopeActive_=false;
+        glFlush(); // submit query progress without CPU/GPU synchronization
+    }
+    std::vector<GpuTiming> takeGpuScopeTimings() override {
+        std::vector<GpuTiming> out;
+        for (size_t i=0;i<scopedQueries_.size();) {
+            const auto q=scopedQueries_[i];
+            if (scopeActive_ && i+1==scopedQueries_.size()) {++i;continue;}
+            GLuint ready=0;
+            glGetQueryObjectuiv(q.query,GL_QUERY_RESULT_AVAILABLE,&ready);
+            if (!ready) {++i;continue;}
+            GLuint64 ns=0;
+            glGetQueryObjectui64v(q.query,GL_QUERY_RESULT,&ns);
+            out.push_back({q.tag,double(ns)/1000000.0,true});
+            glDeleteQueries(1,&q.query);
+            scopedQueries_.erase(scopedQueries_.begin()+i);
+        }
+        return out;
+    }
+#endif
+    bool waitForResourceIdle() override {
+        // Fallback for unsupported/failed async sync objects.
+        drainPendingGlErrors();
+        glFinish();
+        return glGetError()==GL_NO_ERROR;
+    }
+    uint64_t beginResourceRetirement() override {
+        // Fence is enqueued behind earlier GL commands on this context.
+        // Submission must happen only at a host frame boundary.
+        GLsync sync=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+        if(!sync)return 0;
+        glFlush(); // allows asynchronous progress without glFinish
+        const uint64_t token=nextRetirementToken_++;
+        retirementFences_.emplace(token,sync);
+        return token;
+    }
+    bool resourceRetirementComplete(uint64_t token) override {
+        return resourceRetirementStatus(token)==ResourceRetirementStatus::Complete;
+    }
+    ResourceRetirementStatus resourceRetirementStatus(uint64_t token) override {
+        const auto it=retirementFences_.find(token);
+        if(it==retirementFences_.end())return ResourceRetirementStatus::Failed;
+        const GLenum status=glClientWaitSync(it->second,0,0);
+        if(status==GL_ALREADY_SIGNALED ||
+           status==GL_CONDITION_SATISFIED)
+            return ResourceRetirementStatus::Complete;
+        if(status==GL_TIMEOUT_EXPIRED)
+            return ResourceRetirementStatus::Pending;
+        return ResourceRetirementStatus::Failed; // GL_WAIT_FAILED
+    }
+    void endResourceRetirement(uint64_t token) override {
+        const auto it=retirementFences_.find(token);
+        if(it==retirementFences_.end())return;
+        const GLenum status=glClientWaitSync(it->second,0,0);
+        if(status!=GL_ALREADY_SIGNALED &&
+           status!=GL_CONDITION_SATISFIED)return;
+        glDeleteSync(it->second);
+        retirementFences_.erase(it);
+    }
+    void abandonRetirementTokenAfterIdle(uint64_t token) override {
+        // The host first completed glFinish successfully on this context.
+        const auto it=retirementFences_.find(token);
+        if(it==retirementFences_.end())return;
+        glDeleteSync(it->second);
+        retirementFences_.erase(it);
+    }
     void beginFrame(int w, int h) override {
+        pollCompletedGpuFences();
+        frameActive_ = true;
         fbW_ = w; fbH_ = h;
         deliverTextureReads();
 #if defined(__EMSCRIPTEN__) && defined(AIVERSE_WEBGL_CONTEXT_ACCEPTANCE)
@@ -1022,6 +1237,11 @@ public:
         for (auto& result : completedWeb)
             if (result.callback) result.callback(std::move(result.value));
 #endif
+        // Each real native GLES/GL submission has a monotonic owner-frame
+        // identity. The async readback's GLsync, not this counter, proves
+        // GPU completion before the callback is delivered.
+        if(++frameSerial_==0)++frameSerial_;
+        deliverPixelReads();
         uboOffset_ = 0;
         for (auto& d : slotData_) d.clear();
 #if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
@@ -1032,8 +1252,22 @@ public:
     }
     void endFrame() override { // swap is done by the platform layer (EGL/WGL/browser)
 #if defined(__APPLE__) || defined(_WIN32)
+        if (scopeActive_) endGpuScope();
         if (queryActive_) {glEndQuery(GL_TIME_ELAPSED);queryActive_=false;glFlush();}
 #endif
+        if (frameActive_) {
+            GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            if (sync) {
+                gpuFences_.push_back({nextGpuToken_,sync});
+                glFlush(); // ensures this fence is submitted, no CPU wait
+            } else {
+                // No proof of GPU completion. Never advance completed token.
+                // Any retired target with this token remains quarantined
+                // until a true idle drain by its owner.
+            }
+            ++nextGpuToken_;
+            frameActive_ = false;
+        }
         if (!capture_) return;
         std::vector<uint8_t> px(size_t(fbW_) * size_t(fbH_) * 4);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1051,6 +1285,43 @@ public:
         fn(fbW_, fbH_, std::move(px));
     }
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
+    bool captureTexture(TextureHandle source,CaptureFn fn) override {
+        // Explicit debug/export path: GL requires a synchronous glReadPixels.
+        // Do not invoke it during ordinary frame rendering or from a worker.
+        auto* tex=textures_.get(source.id);
+        if(!fn || !tex || (tex->fmt!=PixelFormat::RGBA8 &&
+                           tex->fmt!=PixelFormat::RGBA8_sRGB) ||
+           tex->w<=0 || tex->h<=0)return false;
+        drainPendingGlErrors();
+        GLint oldFbo=0,oldPack=4;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING,&oldFbo);
+        glGetIntegerv(GL_PACK_ALIGNMENT,&oldPack);
+        const GLuint fbo=framebufferFor(source.id,0);
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){
+            glBindFramebuffer(GL_FRAMEBUFFER,GLuint(oldFbo));return false;
+        }
+        glPixelStorei(GL_PACK_ALIGNMENT,1);
+        const int w=tex->w,h=tex->h;
+        std::vector<uint8_t> pixels(size_t(w)*size_t(h)*4);
+        glReadPixels(0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+        const GLenum error=glGetError();
+        glPixelStorei(GL_PACK_ALIGNMENT,oldPack);
+        glBindFramebuffer(GL_FRAMEBUFFER,GLuint(oldFbo));
+        if(error!=GL_NO_ERROR)return false;
+        const size_t stride=size_t(w)*4;
+        std::vector<uint8_t> scratch(stride);
+        for(int y=0;y<h/2;++y) {
+            auto* a=pixels.data()+size_t(y)*stride;
+            auto* b=pixels.data()+size_t(h-1-y)*stride;
+            std::copy(a,a+stride,scratch.data());
+            std::copy(b,b+stride,a);
+            std::copy(scratch.data(),scratch.data()+stride,b);
+        }
+        fn(w,h,std::move(pixels));
+        return true;
+    }
+
 
     bool readTextureAsync(TextureHandle h, TextureReadbackDesc request,
                           TextureReadFn callback) override {
@@ -1071,6 +1342,7 @@ public:
         const int height=std::max(1,t->h>>request.mipLevel);
         const size_t bytes=size_t(width)*size_t(height)*4u;
         if (bytes > (size_t(256)<<10)) return false;
+        drainPendingGlErrors();
         GLint oldReadFbo=0,oldPackPbo=0,oldPackAlignment=4,oldReadBuffer=GL_BACK;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&oldReadFbo);
         glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&oldPackPbo);
@@ -1102,14 +1374,16 @@ public:
             glBindBuffer(GL_PIXEL_PACK_BUFFER,0);
             glPixelStorei(GL_PACK_ALIGNMENT,1);
             const size_t row=size_t(width)*4u;
-            std::vector<uint8_t> bottomUp(bytes);
-            glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,bottomUp.data());
+            std::vector<uint8_t> glRows(bytes);
+            glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,glRows.data());
             if(glGetError()==GL_NO_ERROR) {
                 result.width=width;result.height=height;
                 result.pixels.resize(bytes);
+                // Render targets are bottom-up; uploaded rows are already
+                // in CPU (top-left) order and must not be flipped.
                 for(int y=0;y<height;++y)
                     std::memcpy(result.pixels.data()+size_t(y)*row,
-                                bottomUp.data()+size_t(height-1-y)*row,row);
+                                glRows.data()+size_t(t->renderTarget ? height-1-y : y)*row,row);
             }
         }
         glBindFramebuffer(GL_READ_FRAMEBUFFER,GLuint(oldReadFbo));
@@ -1150,6 +1424,7 @@ public:
         const int height = std::max(1, t->h >> request.mipLevel);
         const size_t bytes = size_t(width) * size_t(height) * 4u;
         if (bytes > (size_t(256) << 20)) return false;
+        drainPendingGlErrors();
         GLint oldReadFbo = 0, oldPackPbo = 0, oldPackAlignment = 4;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &oldReadFbo);
         glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &oldPackPbo);
@@ -1199,7 +1474,8 @@ public:
         }
         // A fence is not a CPU wait; flushing only submits pending commands.
         glFlush();
-        textureReads_.push_back({pbo, fence, width, height, t->fmt, std::move(callback)});
+        textureReads_.push_back({pbo, fence, width, height, t->fmt, std::move(callback),
+                                 t->renderTarget});
         return true;
 #endif
     }
@@ -1222,6 +1498,22 @@ public:
                 GLint oldPbo = 0;
                 glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &oldPbo);
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, read.pbo);
+#if defined(__EMSCRIPTEN__)
+                // WebGL2 has no buffer mapping; getBufferSubData copies the PBO
+                // after the fence, which is the browser's non-blocking path.
+                std::vector<uint8_t> staging(bytes);
+                for (int i = 0; i < 8 && glGetError() != GL_NO_ERROR; ++i) {}   // clear stale flags: only this copy decides
+                glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, GLsizeiptr(bytes), staging.data());
+                const uint8_t* p = glGetError() == GL_NO_ERROR ? staging.data() : nullptr;
+                if (p) {
+                    result.width = read.width;
+                    result.height = read.height;
+                    result.pixels.resize(bytes);
+                    for (int y=0;y<read.height;++y)
+                        std::memcpy(result.pixels.data()+size_t(y)*row,
+                                    p+size_t(read.height-1-y)*row, row);
+                }
+#else
                 const uint8_t* p = static_cast<const uint8_t*>(
                     glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, GLsizeiptr(bytes), GL_MAP_READ_BIT));
                 if (p) {
@@ -1230,12 +1522,13 @@ public:
                     result.pixels.resize(bytes);
                     for (int y=0;y<read.height;++y)
                         std::memcpy(result.pixels.data()+size_t(y)*row,
-                                    p+size_t(read.height-1-y)*row, row);
+                                    p+size_t(read.flipRows ? read.height-1-y : y)*row, row);
                     if (glUnmapBuffer(GL_PIXEL_PACK_BUFFER) != GL_TRUE) {
                         result = {};
                         result.format = read.format;
                     }
                 }
+#endif
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, GLuint(oldPbo));
             }
             glDeleteSync(read.fence);
@@ -1428,6 +1721,94 @@ public:
         }
         pipelineId_ = 0;
         return true;
+    }
+
+    // Native GLES3/GL33: one-pixel async PBO readback guarded by GLsync.
+    // Emscripten/WebGL2 and WGL loader return unsupported; they retain the
+    // CPU BVH picker until a correct platform-specific delivery path exists.
+    bool readTexturePixelAsync(TextureHandle h,int x,int y,
+                               PixelReadFn callback) override {
+#if defined(AIVERSE_GL_LOADER) || defined(__EMSCRIPTEN__)
+        (void)h;(void)x;(void)y;(void)callback;
+        return false;
+#else
+        auto* texture=textures_.get(h.id);
+        if(!frameActive_ || inPass_ || !texture ||
+           texture->fmt!=PixelFormat::RGBA8 ||
+           !callback || x<0 || y<0 ||
+           x>=texture->w || y>=texture->h ||
+           pixelReads_.size()>=32u)return false;
+        GLint previousRead=0,previousDraw=0,previousPack=0,
+              previousAlignment=0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&previousRead);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&previousDraw);
+        glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&previousPack);
+        glGetIntegerv(GL_PACK_ALIGNMENT,&previousAlignment);
+        auto restore=[&]() {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER,GLuint(previousPack));
+            glBindFramebuffer(GL_READ_FRAMEBUFFER,GLuint(previousRead));
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER,GLuint(previousDraw));
+            glPixelStorei(GL_PACK_ALIGNMENT,previousAlignment);
+        };
+        const auto framebuffer=framebufferFor(h.id,0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);
+        if(glCheckFramebufferStatus(GL_READ_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE) {
+            restore();
+            return false;
+        }
+        GLuint pbo=0;
+        glGenBuffers(1,&pbo);
+        if(!pbo){restore();return false;}
+        glBindBuffer(GL_PIXEL_PACK_BUFFER,pbo);
+        glBufferData(GL_PIXEL_PACK_BUFFER,4,nullptr,GL_STREAM_READ);
+        glPixelStorei(GL_PACK_ALIGNMENT,1);
+        // Native GLES/GL framebuffers use bottom-left coordinates.
+        glReadPixels(x,texture->h-1-y,1,1,
+                     GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+        if(glGetError()!=GL_NO_ERROR) {
+            restore();
+            glDeleteBuffers(1,&pbo);
+            return false;
+        }
+        GLsync fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+        glFlush();
+        restore();
+        if(!fence) {
+            glDeleteBuffers(1,&pbo);
+            return false;
+        }
+        pixelReads_.push_back({pbo,fence,std::move(callback)});
+        return true;
+#endif
+    }
+    void deliverPixelReads() {
+#if !defined(AIVERSE_GL_LOADER) && !defined(__EMSCRIPTEN__)
+        std::vector<std::pair<PixelReadFn,std::vector<std::uint8_t>>> ready;
+        for(auto it=pixelReads_.begin();it!=pixelReads_.end();) {
+            const GLenum status=glClientWaitSync(it->fence,0,0);
+            if(status==GL_TIMEOUT_EXPIRED){++it;continue;}
+            std::vector<std::uint8_t> rgba;
+            if(status==GL_ALREADY_SIGNALED ||
+               status==GL_CONDITION_SATISFIED) {
+                GLint previousPack=0;
+                glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&previousPack);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER,it->pbo);
+                auto* bytes=static_cast<const std::uint8_t*>(
+                    glMapBufferRange(GL_PIXEL_PACK_BUFFER,0,4,GL_MAP_READ_BIT));
+                if(bytes) {
+                    rgba.assign(bytes,bytes+4);
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                }
+                glBindBuffer(GL_PIXEL_PACK_BUFFER,GLuint(previousPack));
+            }
+            glDeleteSync(it->fence);
+            glDeleteBuffers(1,&it->pbo);
+            ready.emplace_back(std::move(it->callback),std::move(rgba));
+            it=pixelReads_.erase(it);
+        }
+        // Deliver after mutation so callbacks can schedule additional work.
+        for(auto& item:ready)if(item.first)item.first(std::move(item.second));
+#endif
     }
 
     void beginPass(const PassDesc& d) override {
@@ -1704,10 +2085,15 @@ public:
     }
 
 private:
+    std::deque<std::pair<uint64_t,GLsync>> gpuFences_;
+    uint64_t nextGpuToken_ = 1;
+    uint64_t completedGpuToken_ = 0;
+    bool frameActive_ = false;
     bool hdr_ = false;
     bool hdrPass_ = false;
     DeviceInfo info_;
     std::string error_;
+    bool loggedStaleGlError_ = false;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;
 #if defined(__EMSCRIPTEN__) || defined(__APPLE__)   // same guard as every use (Android: unused private field)
     GLuint slotUbos_[kMaxUniformSlots] = {};
@@ -1720,6 +2106,7 @@ private:
     bool srgbWrite_ = false;   // GL33: GL_FRAMEBUFFER_SRGB enabled for the current pass
     std::vector<uint8_t> slotData_[kMaxUniformSlots]; // last data per slot, re-uploaded when the ring is orphaned
     int passW_ = 0, passH_ = 0;
+    uint64_t frameSerial_=0; // native owner-frame identity (inPass_/frameActive_ declared above/below)
     std::vector<GLFramebuffer> fbos_;
     std::vector<GLTextureRead> textureReads_;
 #if defined(__EMSCRIPTEN__) && defined(AIVERSE_WEBGL_CONTEXT_ACCEPTANCE)
@@ -1736,6 +2123,16 @@ private:
     int explicitPassSamples_ = 0;
     int explicitPassColors_ = -1;
     std::array<PixelFormat, kMaxRenderTargetColors> explicitPassFormats_{};
+    uint64_t nextRetirementToken_=1;
+    std::map<uint64_t,GLsync> retirementFences_;
+#if !defined(AIVERSE_GL_LOADER) && !defined(__EMSCRIPTEN__)
+    struct PixelRead {
+        GLuint pbo=0;
+        GLsync fence=nullptr;
+        PixelReadFn callback;
+    };
+    std::vector<PixelRead> pixelReads_;
+#endif
     Pool<GLBuffer> buffers_;
     Pool<GLTexture> textures_;
     Pool<GLTextureView> views_;

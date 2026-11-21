@@ -2,6 +2,7 @@
 #include "Renderer3D.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace aiverse::render {
 
@@ -130,11 +131,28 @@ Mesh MeshBuilder::upload(gfx::Device& dev) const {
         m.boundsMax = {std::max(m.boundsMax.x, v.pos.x), std::max(m.boundsMax.y, v.pos.y), std::max(m.boundsMax.z, v.pos.z)};
     }
     gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = verts_.size() * sizeof(MeshVertex); vb.data = verts_.data();
-    m.vb = dev.createBuffer(vb);
-    // Indices are always uploaded as 32-bit: GLES3/WebGL2/Metal all support them and it keeps one pipeline.
-    gfx::BufferDesc ib; ib.type = gfx::BufferType::Index; ib.size = idx_.size() * sizeof(uint32_t); ib.data = idx_.data();
-    m.ib = dev.createBuffer(ib);
-    m.indexCount = uint32_t(idx_.size());
+    // Keep both handles local and unpublished until allocation succeeds.
+    // A failed index upload must release its new vertex allocation; otherwise
+    // callers cannot recover the missing first handle.
+    if(idx_.empty())return m;
+    try {
+        m.vb=dev.createBuffer(vb);
+        if(!m.vb.valid())
+            throw std::runtime_error("MeshBuilder: vertex upload failed");
+        // GLES3/WebGL2/Metal support 32-bit indices.
+        gfx::BufferDesc ib;
+        ib.type=gfx::BufferType::Index;
+        ib.size=idx_.size()*sizeof(uint32_t);
+        ib.data=idx_.data();
+        m.ib=dev.createBuffer(ib);
+        if(!m.ib.valid())
+            throw std::runtime_error("MeshBuilder: index upload failed");
+    }catch(...) {
+        if(m.ib.valid())dev.destroyBuffer(m.ib);
+        if(m.vb.valid())dev.destroyBuffer(m.vb);
+        throw;
+    }
+    m.indexCount=uint32_t(idx_.size());
     return m;
 }
 

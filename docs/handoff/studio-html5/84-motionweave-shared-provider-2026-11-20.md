@@ -1,0 +1,3 @@
+# Studio facial preview shared provider
+
+Code `4a719af8c1c5a97b381c768155e28fd858877903` on `integration/motionweave-studio-facial-stage184`. Async CPU import, pre-upload rig validation, transactional shared ModelAssetProvider publication, frame ModelReadLease, renderer cache detach and fenced retirement now replace the direct import path. One Animator; unchanged bridge allowlist and project save format. Real Studio Metal lifecycle plus five related tests PASS; 29 Python contracts PASS. All builds on KINGSTON. Full commands, failed setup attempts, risks and next action: [joint handoff](../../agent-handoffs/motionweave-vivid-integration-2026-11-20.md). WKWebView screenshot/full UI parity NOT VERIFIED.

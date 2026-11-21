@@ -22,6 +22,7 @@ public:
         uint64_t submitted=0,accepted=0,coalescedMoves=0;
         uint64_t dropped=0,hidden=0,invalid=0,stale=0,evicted=0;
         uint64_t drained=0,dispatchFailed=0,resets=0;
+        uint64_t coalescedStops=0,reservedLifecycle=0;
     };
 
     explicit SpectraFxCueInbox(size_t capacity=kDefaultCapacity)
@@ -74,6 +75,16 @@ public:
                 if(victim!=pending_.end()) {
                     pending_.erase(victim);
                     ++stats_.evicted;
+                } else if(coalesceLifecycle(cue)) {
+                    // Queue holds only Stop/Kill: the key's latest pending
+                    // cue already stops it (Kill supersedes Stop).
+                    ++stats_.coalescedStops;
+                    ++stats_.accepted;
+                    return true;
+                } else if(pending_.size()<capacity_*2) {
+                    // Lifecycle reserve: a looping effect must never stay
+                    // alive because other keys' Stop/Kill filled the inbox.
+                    ++stats_.reservedLifecycle;
                 } else {
                     ++stats_.dropped;return false;
                 }
@@ -123,6 +134,16 @@ public:
     }
 
 private:
+    bool coalesceLifecycle(const SpectraFxCue& cue) {
+        for(auto it=pending_.rbegin();it!=pending_.rend();++it) {
+            if(it->key!=cue.key) continue;
+            if(it->action!=SpectraFxCue::Action::Stop &&
+               it->action!=SpectraFxCue::Action::Kill) return false;
+            if(cue.action==SpectraFxCue::Action::Kill) *it=cue;
+            return true;
+        }
+        return false;
+    }
     static bool finite(float3 p) {
         return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
     }

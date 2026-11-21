@@ -26,6 +26,9 @@ class Json {
 public:
     enum class Type { Null, Bool, Number, String, Array, Object };
 
+    // Arrays / objects nested deeper than this are rejected with a JsonError instead of
+    // recursing until the stack overflows (untrusted text from MCP, packs, user files).
+    static constexpr int kMaxParseDepth = 256;
     static Json parse(const std::string& text);       // throws JsonError
     static Json parseFile(const std::string& path);   // throws JsonError
 

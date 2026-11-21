@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "description": "One graph definition, per-instance adjustable vertical lift and alpha fade. Only CPU VM supports per-instance param0..param7.",
+  "parameters": {},
+  "instanceParameters": {
+    "lift": {"slot":0,"default":2.2,"min":0,"max":25}
+  },
+  "nodes": [
+    {"id":"spawn","type":"Spawn","properties":{"burst":12},"position":[20,120]},
+    {"id":"initialize","type":"Initialize","properties":{"life":2,"speed":0,"size":0.3,"spread":0},"position":[245,120]},
+    {"id":"power","type":"InstanceParameter","properties":{"name":"lift"},"position":[80,380]},
+    {"id":"age","type":"AgeNormalized","properties":{},"position":[80,480]},
+    {"id":"inverseAge","type":"Subtract","properties":{"a":1,"b":{"$node":"age"}},"position":[295,480]},
+    {"id":"rise","type":"Multiply","properties":{"a":{"$node":"power"},"b":{"$node":"inverseAge"}},"position":[500,410]},
+    {"id":"program","type":"ParticleProgramModule","properties":{
+      "version":1,
+      "spawn":[{"target":"attribute0","value":{"$runtime":"power"}}],
+      "update":[
+        {"target":"velocity.y","op":"addRate","value":{"$runtime":"rise"}},
+        {"target":"tint.a","op":"set","value":{"$runtime":"inverseAge"}}
+      ]
+    },"position":[490,120]},
+    {"id":"output","type":"SpriteOutput","properties":{"texture":"builtin:soft","blend":"additive"},"position":[750,120]}
+  ],
+  "links":[
+    {"from":"spawn","to":"initialize"},
+    {"from":"initialize","to":"program"},
+    {"from":"program","to":"output"}
+  ],
+  "outputs":["output"]
+}

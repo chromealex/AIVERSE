@@ -489,3 +489,48 @@ AIVERSE_ADAPTIVE_DRAW_GROUPS=1 AIVERSE_METAL_CPU_MDI=1 AIVERSE_METAL_MDI_MIN_COM
 # Experimental GPU adaptive: only on tested Metal devices, NOT production
 AIVERSE_ADAPTIVE_DRAW_GROUPS=1 AIVERSE_EXPERIMENTAL_METAL_ICB=1 AIVERSE_GPU_AUTHORED_DRAWS=1 AIVERSE_GPU_ENCODED_ICB=1 AIVERSE_GPU_ICB_RIGID=1 AIVERSE_GPU_ICB_ADAPTIVE=1 AIVERSE_ICB_TRACE=1 AIVERSE_BENCH_UNCAPPED=1 ./build-metal/AiverseEditor.app/Contents/MacOS/AiverseEditor
 ```
+
+# Lighting Stage 28 — Metal dynamic GI ICB ABI
+
+2026-11-20, integration/lighting-main-stage1-20261120.
+Code 8b2d945d4a04ab6d891bd837ee7acf2616a5605d.
+ICB PBR argument buffer conditionally owns dynamicGI texture13 at argument26;
+GiDynamicU remains inherited uniformU6/buffer7. Metal CPU/GPU ICB owners bind
+and declare the atlas as an indirect fragment reader, without requiring an
+unused sampler. Remove GI blanket GPU-authored fallback; other graph/deformation/
+baked-GI eligibility checks remain. Ordinary PBR/graph sampler ABI unchanged.
+All experimental ICB flags stay OFF by default. No performance claim or general
+Metal ICB production acceptance implied by this lighting fixture.
+
+Actual validation on KINGSTON:
+- Debug aiverse_hdr_scene/gl built PASS (initial test used wrong ModelDraw field
+  transform; corrected to world).
+- run-tests --no-build --build-dir <KINGSTON>/lighting-completion-20261120/build
+  --filter '^lighting_(icb.*|dynamic_gi_gpu|dynamic_gi_gl|compute_gi_gpu|graph_gi_gpu|graph_gi_gl|terrain_gi_gpu|terrain_gi_gl|luma_gpu)$':
+  10/10 PASS, report20261120-154538-96530.
+- Both new ICB tests assert actual gpuEncodedSubmissions>0 and commands>=2,
+  plus six analytic pixel cases (attach, detach, lowquality, AO, light removal,
+  restoration). CPU and GPU transport providers both PASS. Ordinary Metal/GL
+  PBR/graph/terrain and Luma pixels PASS. Experimental flags confined to tests.
+- diff --check PASS, CI N/A/no push. Release/other hardware NOT RUN this stage.
+
+Next: full quick native suite and editor/client builds, Releasearm64 current
+source and Sponza timings, platform gates. UI screenshot remains blocked by
+locked Mac; user asked asynchronously to unlock. Do not mark all complete yet.
+
+## 2026-11-21 Terra native Scene CPU source-snapshot fix
+
+Codec8c0c108c, feature/aiv87_terrain_pbr. Removed unused full MapGrid/scene fingerprints ONLY from immediate same-call surface publication; retained LENS leases still exactvalidate. NativeLENS440checksPASS. Same-scene A/B/A shoreline SceneCPU medians18.2485 ->5.155 ->17.1125ms, rendererCPUunchanged~1.46ms, exactsame959302modeltris/2048water/355draws. WholeGPUvariable/anothereditoractive, noFPSclaim. Details, scope, logs, pendingwater/rigidsupport andQAprocess state: docs/agent-handoffs/lens-terra-immediate-publication-performance-2026-11-21.md. Newgeometry_stats GPUfields readcompletedqueriesonly; unavailableviewportcountersempty, nocounter-derivedtimings. DefaultICB/MDIflagsuntouched.
+
+
+## 2026-11-21 NEREID local flow renderer connection
+
+Codeff84b6648bd3825eea62471614611fced9f196fc, test6402e0bbd28ceffa575a86ee283d4c1841322920. Lit mesh U0/reflection U0 append flow rectangle (672B), texture slots6->7 with flow at6 and white fallback. PBR ModelU2/GI/terrain bindings unchanged. Captured water packets retain an immutable flow lifetime lease; shutdown revocation checked before mesh use, normal old version retires after CPU release+GPU fence. No extra draw/segment, unsafeICB flags or batching defaults changed. NativeEditor/Studio buildPASS,22Metal/GL bent-current capturesPASS, GLES/GLSL14linked variantsPASS,4NEREIDCTest+440LENSchecksPASS. Full evidence and limitations: docs/nereid/HANDOFF.md latest entry. No GPU performance improvement or full retained-camera Metal pixel claim. Native initial graph compilation first120-frame average is startup, not steady runtime.
+
+## 2026-11-21 — VIVID skinned fixed-PCF visual repair
+
+Implementation `93fb42cbd79a4c3877bf6f460331d9733d907e33`, integration/motionweave-studio-facial-stage184. No batching/RHI/timing changes. Shaders.h GLSL/MSL suppress receiver-plane extrapolation on SKINNED/BAKED fixed-PCF surfaces, with bounded footprint-dependent normal offset1..4x. Rigid floor/cyclorama slope correction and PCSS unchanged. Creator/Studio Metal builds and native Bruce/Ada captures PASS, glslang12/12 syntax PASS. This is visual acne mitigation, not performance or Vulkan/mobile parity evidence. Detailed failure experiments/artifacts/limits: docs/qa/vivid-bruce-clothing-2026-11-21.md. Keep experimental ICB defaults unchanged.
+
+## 2026-11-21 — human studio backdrop receiver-only host flag
+
+Implementation `ba0f89312774dbd21ecafa52cc12f87f88ca578a` on integration/motionweave-studio-facial-stage184 sets existing kDrawNoCastShadow only for the VIVID cyclorama in Creator/Studio facial view. Background still receives character shadows. No common renderer, cache, RHI, batching or timing edits; no ICB default changes. Native eight-light and pose captures on Metal plus Creator/Studio builds verified; no performance/Vulkan claims. Evidence and limits: docs/qa/vivid-wardrobe-regression-2026-11-21.md.

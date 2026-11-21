@@ -59,7 +59,7 @@ All values used by gameplay use `Fixed`; never feed presentation floats back int
 
 - The implemented weather evolution is a deterministic simplified local model, not a physically accurate global circulation model; seasons are triangle waves, fronts have Manhattan falloff.
 - Fire, flood and quakes are base ECS mechanics; hurricane/tornado are simplified deterministic vortex/forcing fields, **not** complete atmospheric CFD, volcano, avalanche, fluid, terrain deformation or destruction solvers.
-- Responses like traction multiplier and runoff potential are coefficients/hints. An **optional, explicit** `engine/physics/PhysisBox3D.h` adapter now applies PHYSIS wind/ gravity corrections to `physics::Scene` dynamic bodies, but no automatic Scene/WorldScene hookup or production Terra, NEREID, Foliage, VFX, Audio or Editor integration is wired.
+- Responses like traction multiplier and runoff potential are coefficients/hints. An **optional, explicit** `engine/physics/PhysisBox3D.h` adapter now applies PHYSIS wind/ gravity corrections to `physics::Scene` dynamic bodies, but no automatic Scene/WorldScene hookup is wired. Since 2026-11-21 an opt-in **nature presentation host** drives TerraWeave grass (burn/wind), SpectraFX fire/smoke, fire light and audio, and the editor shows it live without a play-test (see «Nature presentation host» below); the native game client is not hooked up yet.
 - Grid updates are currently serial and eager; do not advertise parallel job execution, streaming, distributed weather or efficient millions-of-cells throughput.
 - No compile/CTest/CI verification has been completed in this connector session; **code present does not mean tests passed**.
 
@@ -1175,3 +1175,43 @@ Prior Stage81 user macOS 2/2 nature tests PASS confirmed;
 Stage82 native compile/CTest **NOT RUN**. PR #25 remains
 Draft. Handoff:
 `docs/agent-handoffs/physis-stage82-fracture-outbox-2026-11-19.md`.
+
+## MCP map configuration
+
+The engine skill `skills/world/aiverse-physis-authoring/SKILL.md` describes
+`physis_get`, `physis_validate`, and `physis_set` in `aiversemcp`.
+Read the current config/default and document revision, validate the complete
+candidate, then set it with `expectedRevision`. Stale edits fail without
+mutation. Explicit `config:null` removes the block; missing config fails.
+Edits use ordinary MapDoc Undo/Redo and do not save files, tick/install
+PHYSIS, or submit live/remote edits. Existing map/native formats are unchanged.
+Physical sky and fog remain presentation APIs documented in the PRISMA skill.
+
+## Nature presentation host — wildfire on grass, wind, smoke, sound (2026-11-21)
+
+Read-only host layer in `engine/world/` (PHYSIS core stays headless):
+
+| Header | API |
+|---|---|
+| `PhysisNaturePresentation.h` | `buildNaturePresentation(world, NaturePresentationPolicy)` → `NaturePresentationFrame` (bilinear fire / charred = 1 − fuel / wetness / snow / `windAt`, stable sub-cell flame points, fire clusters, `signature(rect)`) |
+| `PhysisNatureCues.h` | `NatureFxPlanner`, `NatureAudioPlanner` (device-free), built-in `physis_flame` / `physis_smoke`, `addPhysisNatureSounds(bank)` |
+| `PhysisNatureFxHost.h` | `PhysisNatureFxHost::init/update/reset` on `fx::ParticleSystem` (wind via `setWind`) |
+| `PhysisNatureAudioHost.h` | `PhysisNatureAudioHost::update/reset` on `audio::AudioEngine` |
+| `PhysisNatureGrass.h` | `applyPhysisGrassPresentation`, `applyPhysisGrassWind` → `terraweave::GrassPatchRenderer` |
+
+TerraWeave grass gained an optional `GrassPresentationOptions` overlay
+(`TerraWeaveGrassRender.h`): ash stubble, emissive burning blades, wind sway
+via `canopyWindGraph`. Without it the model is unchanged.
+
+Editor: PHYSIS window → «Живая природа в «Сцене»» or MCP `physis_nature_preview`.
+It shows a running game's PHYSIS read-only, otherwise a private preview World
+built from the map's `physis` block; LMB ignites in «Поджигать кликом». The
+heatmap overlay reads the same preview World.
+
+Fire spread fix (same date): wind now pushes fire downwind (source-cell wind
+along the spread direction, tailwind ×2 at 20 m/s, headwind ×¼). Zero wind is
+unchanged; wind+fire replays from before differ.
+
+Tests: `physis_nature_presentation`, `physis_nature_cues`, `physis_nature_preview`,
+extended `physis_disasters`. Handoff:
+`docs/agent-handoffs/physis-nature-host-2026-11-21.md` (macOS build/visual QA NOT RUN).

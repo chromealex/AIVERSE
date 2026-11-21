@@ -27,6 +27,20 @@ inline ArborMesh buildArborBranchMesh(const TreeSkeleton& tree,
         detail != BranchDetail::Minimal)
         throw std::invalid_argument("TerraWeave branch detail");
 
+    base.trunkFlare=branchIndex==0;
+    base.includeLeader=branchIndex==0;
+    if (detail == BranchDetail::Reduced) {
+        base.longitudinalSegments=3;
+        base.sprayPairs = std::max(2u,base.sprayPairs/2);
+        base.radialSegments = std::max<uint32_t>(3, (base.radialSegments + 1) / 2);
+    } else if (detail == BranchDetail::Minimal) {
+        base.longitudinalSegments=1;
+        base.sprayPairs = 2;
+        base.radialSegments = 3;
+        base.leafPlanes = 1;
+    }
+    if(base.organicBranches)return buildArborMesh(tree,base,int32_t(branchIndex),detail!=BranchDetail::Full);
+
     TreeSkeleton section;
     section.speciesId = tree.speciesId;
     section.seed = tree.seed;
@@ -38,19 +52,13 @@ inline ArborMesh buildArborBranchMesh(const TreeSkeleton& tree,
     section.branches[0].parent = -1;
     for (const LeafCluster& leaf : tree.leaves) {
         if (leaf.parentBranch != static_cast<int32_t>(branchIndex)) continue;
-        section.leaves.push_back(leaf);
+        auto localLeaf=leaf;localLeaf.parentBranch=0;section.leaves.push_back(localLeaf);
     }
     if (detail != BranchDetail::Full && section.leaves.size() > 1) {
         // Keep the outermost cluster stable, not a globally selected half-tree.
         const LeafCluster far = section.leaves.back();
         section.leaves.clear();
         section.leaves.push_back(far);
-    }
-    if (detail == BranchDetail::Reduced) {
-        base.radialSegments = std::max<uint32_t>(3, (base.radialSegments + 1) / 2);
-    } else if (detail == BranchDetail::Minimal) {
-        base.radialSegments = 3;
-        base.leafPlanes = 1;
     }
     return buildArborMesh(section, base);
 }

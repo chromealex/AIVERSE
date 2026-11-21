@@ -1,0 +1,8 @@
+.studio-panel-wind .au-empty{min-height:240px}
+.studio-panel-wind .wind-masks{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:var(--au-space-2)}
+.studio-panel-wind .wind-mask{display:flex;flex-direction:column;gap:var(--au-space-1);color:var(--au-accent)}
+.studio-panel-wind .wind-mask span{color:var(--au-text);font-size:var(--au-font-sm)}
+.studio-panel-wind .wind-mask small{color:var(--au-text-muted)}
+.studio-panel-wind .wind-curve{width:100%;height:40px;border:1px solid var(--au-line);border-radius:var(--au-radius-sm)}
+.studio-panel-wind .wind-legend{color:var(--au-text-muted);font-size:var(--au-font-sm);margin:0}
+.studio-panel-wind .wind-profile{display:flex;flex-direction:column;gap:var(--au-space-1);font-size:var(--au-font-sm)}

@@ -51,10 +51,27 @@ struct SpriteLook {
 
 class Rts2DView {
 public:
+    class PreparedFrame;
+    std::shared_ptr<PreparedFrame> beginFramePreparation();
+    void commitFramePreparation(const std::shared_ptr<PreparedFrame>&) noexcept;
+    bool collectRetiredFrames(gfx::Device& dev) {
+        const bool primary=batch_.collectRetired(dev);
+        const bool secondary=secondaryBatch_.collectRetired(dev);
+        const bool tiles=tileRetirement_.collect(dev);
+        return primary && secondary && tiles;
+    }
+
     // `defaults`: rules/game.json "sprites" block (shadow mode, lit)
     bool init(gfx::Device& dev, const Rules& rules, const std::string& contentBase, const SpriteDefaults& defaults = {}, bool deferTypes = false);
     void loadType(uint16_t type);
     void shutdown(gfx::Device& dev);
+    // Retryable recovery for partial initialization or host teardown.
+    // Returns false and keeps all GPU resources owned when idle cannot
+    // be established; never call shutdown() on an in-flight device.
+    bool shutdownAfterGpuIdle(gfx::Device& dev);
+    // Used by the owning host to retain failed staged instances until an idle
+    // barrier permits teardown. Does not prove that the device is still alive.
+    bool ownsGpuResources() const noexcept { return resourceDevice_ != nullptr; }
     bool hasSprite(uint16_t type) const { return type < looks_.size() && looks_[type].valid; }
     const SpriteLook& look(uint16_t type) const { return looks_[type]; }
 
@@ -66,6 +83,10 @@ public:
     void endFrame(const MapGrid& grid);          // death animations of objects that disappeared
     // queues tiles + sprites into the renderer's main pass (`grid` must outlive the frame)
     void submit(render::Renderer3D& r, const MapGrid& grid, float levelHeight);
+    // Secondary camera: resubmit the already evaluated sprite queue and
+    // uploaded tile mesh. Never beginFrame/addObject/endFrame/refreshTiles.
+    // Rebuild per-camera billboards from immutable same-frame sprite packets.
+    void submitPrepared(render::Renderer3D& r);
 
     // world point at the top centre of the drawn sprite (health bars)
     render::float3 barPoint(const SceneObject& o, float groundY) const;
@@ -75,14 +96,39 @@ public:
     // ---- tiles (RtsTileView.cpp)
     void setTiles(const Json& tiles);             // map "tiles" block (null: no tile map)
     bool hasTiles() const { return tileset_ != nullptr; }
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats(const gfx::Device& dev) const {
+        render::GpuOwnedMemoryCounter c(dev);
+        c.buffer(tileMesh_.vb);
+        auto total=c.stats(),batch=batch_.ownedGpuMemoryStats(),cache=textures_.ownedGpuMemoryStats();
+        const auto add=[&](const render::GpuOwnedMemoryStats& v) {
+            total.textureKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(total.textureKnownBytes,v.textureKnownBytes);
+            total.bufferKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(total.bufferKnownBytes,v.bufferKnownBytes);
+            total.textures+=v.textures;total.buffers+=v.buffers;
+            total.unknownTextures+=v.unknownTextures;total.unknownBuffers+=v.unknownBuffers;
+            total.multiVersionBuffers+=v.multiVersionBuffers;
+        };
+        add(batch);add(cache);return total;
+    }
     void buildTiles(gfx::Device& dev, const MapGrid& grid, float levelHeight);
     void refreshTiles(gfx::Device& dev, const MapGrid& grid, float levelHeight); // depleted fields
 
 private:
+    struct PreparedSprite {
+        // Borrowed from the fixed-size looks_ table, never from a local scaled copy.
+        // Valid until the next shutdown/init; captures are consumed in this frame.
+        const SpriteLook* look = nullptr;
+        float width = 1, height = 1;
+        render::float3 ground, facing;
+        int action = 0;
+        double startTime = 0;
+        uint32_t team = 0, tint = 0;
+        bool corpse = false;
+        float fade = 1;
+    };
     struct Corpse { uint16_t type; uint8_t owner; render::float3 pos, facing; double start; };
     struct Seen { uint16_t type; uint8_t owner; render::float3 pos, facing; bool visible; uint32_t frame; };
     void loadLook(SpriteLook& L, const UnitType& t, const Json& s);
-    void emit(const SpriteLook& L, render::float3 ground, render::float3 facing, int act, double t0, uint32_t team, uint32_t tint, bool loopHold, float fade);
+    void emit(const SpriteLook& L, render::float3 ground, render::float3 facing, int act, double t0, uint32_t team, uint32_t tint, bool loopHold, float fade, const SpriteLook* sourceLook);
     void corners(const SpriteLook& L, render::float3 ground, render::float3 (&c)[4], float& sortKey) const;
     int facingIndex(const SpriteLook& L, render::float3 facing, bool& flip) const;
     float groundAt(float x, float z) const;   // the ground decals are cut from (surface_)
@@ -92,13 +138,28 @@ private:
     void decalShape(const render::TextureRef& tex, render::float4 uv, render::float3 origin, render::float3 aU, float lenU, render::float3 aV, float lenV,
                uint32_t color, uint32_t team, int layer, float key, uint32_t flags);
 
+    bool preparingFrame_=false, frameTilesReplaced_=false, preparedGpuFrame_=false;
+    render::NativePresentationRetirement tileRetirement_;
     std::string base_;
     render::TextureCache textures_;
     render::SpriteBatch batch_;
+    render::SpriteBatch secondaryBatch_;
+    render::SpriteBatch* emittingBatch_ = nullptr;
+    std::vector<PreparedSprite> preparedSprites_;
+    bool replayingPrepared_ = false;
+    // Reuse the most recent secondary geometry when another camera differs
+    // only by translation/projection. The last renderer still supplies its
+    // own view-projection, light map, and post-processing.
+    bool secondaryGeometryValid_ = false;
+    render::float3 secondaryRight_{}, secondaryUp_{}, secondaryFwd_{};
+    render::float3 secondaryGroundRight_{}, secondaryGroundFront_{}, secondaryCasterRight_{};
+    render::ShadowQuality secondaryQuality_ = render::ShadowQuality::Off;
     render::TextureRef shadowTex_;
     std::vector<SpriteLook> looks_;
     std::vector<bool> loadedTypes_;
     const Rules* rules_ = nullptr;
+    // Borrowed GPU device identity, retained through failed init for later recovery.
+    gfx::Device* resourceDevice_ = nullptr;
     bool ready_ = false;
 
     render::RTSCamera cam_;

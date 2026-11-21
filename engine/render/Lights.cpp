@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <utility>
+#include <stdexcept>
 
 namespace aiverse::render {
 
@@ -25,78 +27,120 @@ LightQuality LightSystem::defaultQualityFor(const gfx::Device& dev, bool mobile)
     return LightQuality::High;
 }
 
-bool LightSystem::init(gfx::Device& dev) {
-    dev_ = &dev;
-    gfx::ShaderDesc sd;
-    sd.glslVertex = shaders::kLightMapVS; sd.glslFragment = shaders::kLightMapFS; sd.msl = shaders::kLightMapMSL;
-    sd.uniformSlots = 1; sd.textureSlots = 1; sd.label = "lightmap";   // U0 + tex0: spot shadow
-    shader_ = dev.createShader(sd);
-    if (!shader_.valid()) return false;
-    gfx::PipelineDesc pd;
-    pd.shader = shader_;
-    pd.attrs[0] = {0, gfx::VertexFormat::Float2, 0};
-    pd.attrs[1] = {1, gfx::VertexFormat::Float2, 8};
-    pd.attrs[2] = {2, gfx::VertexFormat::Float4, 16};
-    pd.attrs[3] = {3, gfx::VertexFormat::Float4, 32};
-    pd.attrs[4] = {4, gfx::VertexFormat::Float4, 48};
-    pd.attrs[5] = {5, gfx::VertexFormat::Float4, 64};
-    pd.attrCount = 6; pd.stride = sizeof(MapVertex);
-    pd.indexType = gfx::IndexType::None;
-    pd.cull = gfx::CullMode::None;
-    pd.blend = gfx::BlendMode::Additive;
-    pd.depthTest = false; pd.depthWrite = false;
-    pd.label = "lightmap";
-    pipe_ = dev.createPipeline(pd);
-    gfx::BufferDesc bd; bd.usage = gfx::Usage::Dynamic; bd.size = kMaxLights * 6 * sizeof(MapVertex) * 2; bd.label = "lightmap";
-    vb_ = dev.createBuffer(bd);
-    vbCap_ = bd.size;
-    const uint8_t zero[4] = {0, 0, 0, 0};
-    gfx::TextureDesc td; td.width = td.height = 1; td.data = zero; td.label = "nolight";
-    black_ = dev.createTexture(td);
+GpuOwnedMemoryStats LightSystem::ownedGpuMemoryStats() const {
+    if (!dev_) return {};
+    GpuOwnedMemoryCounter counter(*dev_);
+    counter.texture(map_);
+    counter.texture(mapDepth_);
+    counter.texture(black_);
+    counter.texture(spotShadow_);
+    counter.texture(reflColor_);
+    counter.texture(reflDepth_);
+    counter.texture(staticGrid_);
+    counter.buffer(vb_);
+    counter.buffer(haloVB_);
+    counter.buffer(beamVB_);
+    counter.buffer(decalVB_);
+    return counter.stats();
+}
 
-    gfx::ShaderDesc hs;
-    hs.glslVertex = shaders::kHaloVS; hs.glslFragment = shaders::kHaloFS; hs.msl = shaders::kHaloMSL;
-    hs.uniformSlots = 1; hs.label = "halo";
-    haloShader_ = dev.createShader(hs);
-    if (!haloShader_.valid()) return false;
-    gfx::PipelineDesc hp;
-    hp.shader = haloShader_;
-    hp.attrs[0] = {0, gfx::VertexFormat::Float3, 0};
-    hp.attrs[1] = {1, gfx::VertexFormat::Float2, 12};
-    hp.attrs[2] = {2, gfx::VertexFormat::Float4, 20};
-    hp.attrCount = 3; hp.stride = sizeof(HaloVertex);
-    hp.indexType = gfx::IndexType::None;
-    hp.cull = gfx::CullMode::None;
-    hp.blend = gfx::BlendMode::Additive;
-    hp.depthTest = true; hp.depthWrite = false;
-    hp.label = "halo";
-    haloPipe_ = dev.createPipeline(hp);
-    gfx::BufferDesc hb; hb.usage = gfx::Usage::Dynamic; hb.size = 2048 * 6 * sizeof(HaloVertex); hb.label = "halos";
-    haloVB_ = dev.createBuffer(hb);
-    smallCap_ = hb.size;
-    gfx::ShaderDesc ds = hs;
-    ds.glslFragment = shaders::kDecalFS; ds.msl = shaders::kDecalMSL; ds.label = "contact shadow";
-    decalShader_ = dev.createShader(ds);
-    if (!decalShader_.valid()) return false;
-    gfx::PipelineDesc dp = hp;
-    dp.shader = decalShader_;
-    dp.blend = gfx::BlendMode::Alpha;
-    dp.label = "contact shadow";
-    decalPipe_ = dev.createPipeline(dp);
-    gfx::ShaderDesc bs = hs;
-    bs.glslFragment = shaders::kBeamFS; bs.msl = shaders::kBeamMSL; bs.label = "light shaft";
-    beamShader_ = dev.createShader(bs);
-    if (!beamShader_.valid()) return false;
-    gfx::PipelineDesc bp = hp;
-    bp.shader = beamShader_;
-    bp.label = "light shaft";
-    beamPipe_ = dev.createPipeline(bp);
-    gfx::BufferDesc bb = hb; bb.label = "light shafts";
-    beamVB_ = dev.createBuffer(bb);
-    gfx::BufferDesc db = hb; db.label = "contact shadows";
-    decalVB_ = dev.createBuffer(db);
-    setQuality(quality_);
-    return pipe_.valid() && vb_.valid() && black_.valid() && haloPipe_.valid() && haloVB_.valid() && decalPipe_.valid() && decalVB_.valid();
+bool LightSystem::init(gfx::Device& dev) {
+    if(dev_)throw std::logic_error("LightSystem init: already initialized");
+    dev_ = &dev;
+    // LightSystem can also be initialized by a standalone native host.
+    // Roll back partial allocations only after proven device idle. When
+    // Renderer3D owns it, both share the renderer's target retirement pool.
+    auto rollback = [&]() {
+        if(!dev.waitForResourceIdle())
+            throw std::runtime_error("LightSystem init rollback: GPU idle barrier failed");
+        shutdown();
+    };
+    bool initialized = false;
+    try {
+        initialized = [&]() -> bool {
+            gfx::ShaderDesc sd;
+            sd.glslVertex = shaders::kLightMapVS; sd.glslFragment = shaders::kLightMapFS; sd.msl = shaders::kLightMapMSL;
+            sd.uniformSlots = 1; sd.textureSlots = 1; sd.label = "lightmap";   // U0 + tex0: spot shadow
+            shader_ = dev.createShader(sd);
+            if (!shader_.valid()) return false;
+            gfx::PipelineDesc pd;
+            pd.shader = shader_;
+            pd.attrs[0] = {0, gfx::VertexFormat::Float2, 0};
+            pd.attrs[1] = {1, gfx::VertexFormat::Float2, 8};
+            pd.attrs[2] = {2, gfx::VertexFormat::Float4, 16};
+            pd.attrs[3] = {3, gfx::VertexFormat::Float4, 32};
+            pd.attrs[4] = {4, gfx::VertexFormat::Float4, 48};
+            pd.attrs[5] = {5, gfx::VertexFormat::Float4, 64};
+            pd.attrCount = 6; pd.stride = sizeof(MapVertex);
+            pd.indexType = gfx::IndexType::None;
+            pd.cull = gfx::CullMode::None;
+            pd.blend = gfx::BlendMode::Additive;
+            pd.depthTest = false; pd.depthWrite = false;
+            pd.label = "lightmap";
+            pipe_ = dev.createPipeline(pd);
+            gfx::BufferDesc bd; bd.usage = gfx::Usage::Dynamic; bd.size = kMaxLights * 6 * sizeof(MapVertex) * 2; bd.label = "lightmap";
+            vb_ = dev.createBuffer(bd);
+            vbCap_ = bd.size;
+            const uint8_t zero[4] = {0, 0, 0, 0};
+            gfx::TextureDesc td; td.width = td.height = 1; td.data = zero; td.label = "nolight";
+            black_ = dev.createTexture(td);
+
+            gfx::ShaderDesc hs;
+            hs.glslVertex = shaders::kHaloVS; hs.glslFragment = shaders::kHaloFS; hs.msl = shaders::kHaloMSL;
+            hs.uniformSlots = 1; hs.label = "halo";
+            haloShader_ = dev.createShader(hs);
+            if (!haloShader_.valid()) return false;
+            gfx::PipelineDesc hp;
+            hp.shader = haloShader_;
+            hp.attrs[0] = {0, gfx::VertexFormat::Float3, 0};
+            hp.attrs[1] = {1, gfx::VertexFormat::Float2, 12};
+            hp.attrs[2] = {2, gfx::VertexFormat::Float4, 20};
+            hp.attrCount = 3; hp.stride = sizeof(HaloVertex);
+            hp.indexType = gfx::IndexType::None;
+            hp.cull = gfx::CullMode::None;
+            hp.blend = gfx::BlendMode::Additive;
+            hp.depthTest = true; hp.depthWrite = false;
+            hp.label = "halo";
+            haloPipe_ = dev.createPipeline(hp);
+            gfx::BufferDesc hb; hb.usage = gfx::Usage::Dynamic; hb.size = 2048 * 6 * sizeof(HaloVertex); hb.label = "halos";
+            haloVB_ = dev.createBuffer(hb);
+            smallCap_ = hb.size;
+            gfx::ShaderDesc ds = hs;
+            ds.glslFragment = shaders::kDecalFS; ds.msl = shaders::kDecalMSL; ds.label = "contact shadow";
+            decalShader_ = dev.createShader(ds);
+            if (!decalShader_.valid()) return false;
+            gfx::PipelineDesc dp = hp;
+            dp.shader = decalShader_;
+            dp.blend = gfx::BlendMode::Alpha;
+            dp.label = "contact shadow";
+            decalPipe_ = dev.createPipeline(dp);
+            gfx::ShaderDesc bs = hs;
+            bs.glslFragment = shaders::kBeamFS; bs.msl = shaders::kBeamMSL; bs.label = "light shaft";
+            beamShader_ = dev.createShader(bs);
+            if (!beamShader_.valid()) return false;
+            gfx::PipelineDesc bp = hp;
+            bp.shader = beamShader_;
+            bp.label = "light shaft";
+            beamPipe_ = dev.createPipeline(bp);
+            gfx::BufferDesc bb = hb; bb.label = "light shafts";
+            beamVB_ = dev.createBuffer(bb);
+            gfx::BufferDesc db = hb; db.label = "contact shadows";
+            decalVB_ = dev.createBuffer(db);
+            setQuality(quality_);
+            return pipe_.valid() && vb_.valid() && black_.valid() &&
+                   haloShader_.valid() && haloPipe_.valid() && haloVB_.valid() &&
+                   decalShader_.valid() && decalPipe_.valid() && decalVB_.valid() &&
+                   beamShader_.valid() && beamPipe_.valid() && beamVB_.valid() &&
+                   spotShadow_.valid() &&
+                   (quality_ == LightQuality::Off ||
+                    (map_.valid() && mapDepth_.valid()));
+        }();
+    } catch (...) {
+        rollback();
+        throw;
+    }
+    if(!initialized)rollback();
+    return initialized;
 }
 
 bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize,const std::vector<StaticPointShadow>* shadows,const StaticDiffuseField* diffuse) {
@@ -113,32 +157,79 @@ bool LightSystem::setStaticRadiance(float3 points,float3 sun,float3 sky) {
 bool LightSystem::setStaticLightGrid(const StaticLightGrid& grid) {
     if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
     if(!grid.texels.empty()&&(grid.size.w!=2048||grid.texels.size()%2048||grid.texels.size()>4194304))return false;
-    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
-    staticGrid_={};gridOrigin_={};gridSize_={};
-    if(grid.texels.empty())return true;
-    gfx::TextureDesc td;td.width=int(grid.size.w);td.height=int(grid.texels.size()/size_t(td.width));
-    td.format=gfx::PixelFormat::RGBA32F;td.filter=gfx::Filter::Nearest;td.data=grid.texels.data();td.label="static point light grid";
-    staticGrid_=dev_->createTexture(td);gridOrigin_=grid.origin;gridSize_=grid.size;
-    std::fprintf(stderr,"Static lights: max %d per cell, %d x %d atlas\n",grid.maxCellLights,td.width,td.height);
-    return staticGrid_.valid();
+    if(grid.texels.empty()) {
+        retireTarget(staticGrid_);
+        staticGrid_={};gridOrigin_={};gridSize_={};
+        return true;
+    }
+    gfx::TextureDesc td;
+    td.width=int(grid.size.w);
+    td.height=int(grid.texels.size()/size_t(td.width));
+    td.format=gfx::PixelFormat::RGBA32F;
+    td.filter=gfx::Filter::Nearest;
+    td.data=grid.texels.data();
+    td.label="static point light grid";
+    auto replacement=dev_->createTexture(td);
+    if(!replacement.valid())return false; // old atlas remains usable
+    retireTarget(staticGrid_);
+    staticGrid_=replacement;gridOrigin_=grid.origin;gridSize_=grid.size;
+    std::fprintf(stderr,"Static lights: max %d per cell, %d x %d atlas\n",
+                 grid.maxCellLights,td.width,td.height);
+    return true;
+}
+
+void LightSystem::retireTarget(gfx::TextureHandle color,
+                               gfx::TextureHandle depth) noexcept {
+    if(!color.valid() && !depth.valid())return;
+    if(targetRetirement_) {
+        targetRetirement_->retire(color,depth);
+        return;
+    }
+    // A standalone LightSystem has no shared GPU epoch to enqueue into.
+    // Never delete a potentially in-flight target unless the backend proves
+    // all prior submissions idle. Hosts must call this at a frame boundary;
+    // a failed/unsupported barrier deliberately retains the native texture.
+    try {
+        if(!dev_ || !dev_->waitForResourceIdle()) {
+            ++standaloneRetirementIdleFailures_;
+            ++standaloneTargetOrphans_;
+            return;
+        }
+        if(color.valid())dev_->destroyTexture(color);
+        if(depth.valid())dev_->destroyTexture(depth);
+    }catch(...) {
+        // Never propagate cleanup exceptions; the remaining handle is
+        // orphaned until its Device epoch is destroyed.
+        ++standaloneTargetOrphans_;
+    }
 }
 
 void LightSystem::createMap(int size) {
-    if (size == mapSize_ && (size == 0 || map_.valid())) return;
-    if (map_.valid()) dev_->destroyTexture(map_);
-    if (mapDepth_.valid()) dev_->destroyTexture(mapDepth_);
-    map_ = mapDepth_ = {};
-    mapSize_ = size;
-    mapReady_ = false;
-    if (size == 0) return;
-    gfx::TextureDesc td;
-    td.width = td.height = size;
-    td.renderTarget = true; td.filter = gfx::Filter::Linear; td.label = "lightmap";
-    map_ = dev_->createTexture(td);
-    // Metal pipelines always declare a depth attachment, so the pass gets one too (never written).
-    gfx::TextureDesc dd = td;
-    dd.format = gfx::PixelFormat::Depth; dd.filter = gfx::Filter::Nearest; dd.label = "lightmap depth";
-    mapDepth_ = dev_->createTexture(dd);
+    if(size==mapSize_ && (size==0 || (map_.valid() && mapDepth_.valid())))
+        return;
+    gfx::TextureHandle next{}, nextDepth{};
+    if(size>0) {
+        gfx::TextureDesc td;
+        td.width=td.height=size;
+        td.renderTarget=true;
+        td.filter=gfx::Filter::Linear;
+        td.label="lightmap";
+        next=dev_->createTexture(td);
+        // Metal pipelines always declare a depth attachment.
+        gfx::TextureDesc dd=td;
+        dd.format=gfx::PixelFormat::Depth;
+        dd.filter=gfx::Filter::Nearest;
+        dd.label="lightmap depth";
+        if(next.valid())nextDepth=dev_->createTexture(dd);
+        if(!next.valid() || !nextDepth.valid()) {
+            retireTarget(next,nextDepth);
+            return; // retain last-good lightmap on failed replacement
+        }
+    }
+    retireTarget(map_,mapDepth_);
+    map_=next;mapDepth_=nextDepth;
+    mapSize_=size;
+    mapReady_=false;
 }
 
 size_t LightSystem::stream(gfx::BufferHandle buf, size_t& cursor, size_t capacity, const void* data, size_t bytes) {
@@ -154,14 +245,17 @@ size_t LightSystem::stream(gfx::BufferHandle buf, size_t& cursor, size_t capacit
 }
 
 void LightSystem::createSpotShadow(int size) {
-    if (size == spotShadowSize_ && spotShadow_.valid()) return;
-    if (spotShadow_.valid()) dev_->destroyTexture(spotShadow_);
+    if(size==spotShadowSize_ && spotShadow_.valid())return;
     gfx::TextureDesc td;
-    td.width = td.height = size;
-    td.format = gfx::PixelFormat::Depth;
-    td.renderTarget = true; td.compare = true; td.filter = gfx::Filter::Linear; td.label = "spot shadow";
-    spotShadow_ = dev_->createTexture(td);
-    spotShadowSize_ = size;
+    td.width=td.height=size;
+    td.format=gfx::PixelFormat::Depth;
+    td.renderTarget=true;td.compare=true;
+    td.filter=gfx::Filter::Linear;
+    td.label="spot shadow";
+    auto replacement=dev_->createTexture(td);
+    if(!replacement.valid())return; // preserve last-good shadow target
+    retireTarget(spotShadow_);
+    spotShadow_=replacement;spotShadowSize_=size;
 }
 
 void LightSystem::setQuality(LightQuality q) {
@@ -176,31 +270,44 @@ void LightSystem::setQuality(LightQuality q) {
 
 void LightSystem::shutdown() {
     if (!dev_) return;
-    createMap(0);
-    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
+    // Renderer3D has already established a real device-idle barrier.
+    // This must also work when init failed halfway through allocation.
+    // Do not rely on mapSize_ matching the actual pair during rollback.
+    retireTarget(map_,mapDepth_);
+    map_=mapDepth_={};
+    mapSize_=0;
+    retireTarget(staticGrid_);
     staticGrid_={};
-    if (spotShadow_.valid()) dev_->destroyTexture(spotShadow_);
-    spotShadow_ = {};
-    if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
-    if (reflDepth_.valid()) dev_->destroyTexture(reflDepth_);
-    reflColor_ = reflDepth_ = {};
-    dev_->destroyTexture(black_);
-    dev_->destroyBuffer(vb_);
-    dev_->destroyBuffer(haloVB_);
-    dev_->destroyBuffer(decalVB_);
-    dev_->destroyPipeline(decalPipe_);
-    dev_->destroyShader(decalShader_);
-    dev_->destroyPipeline(beamPipe_);
-    dev_->destroyBuffer(beamVB_);
-    dev_->destroyShader(beamShader_);
-    dev_->destroyPipeline(pipe_);
-    dev_->destroyPipeline(haloPipe_);
-    dev_->destroyShader(shader_);
-    dev_->destroyShader(haloShader_);
+    retireTarget(spotShadow_);
+    spotShadow_={};
+    retireTarget(reflColor_,reflDepth_);
+    reflColor_=reflDepth_={};
+    if(black_.valid())dev_->destroyTexture(black_);
+    if(vb_.valid())dev_->destroyBuffer(vb_);
+    if(haloVB_.valid())dev_->destroyBuffer(haloVB_);
+    if(decalVB_.valid())dev_->destroyBuffer(decalVB_);
+    if(beamVB_.valid())dev_->destroyBuffer(beamVB_);
+    if(decalPipe_.valid())dev_->destroyPipeline(decalPipe_);
+    if(beamPipe_.valid())dev_->destroyPipeline(beamPipe_);
+    if(pipe_.valid())dev_->destroyPipeline(pipe_);
+    if(haloPipe_.valid())dev_->destroyPipeline(haloPipe_);
+    if(decalShader_.valid())dev_->destroyShader(decalShader_);
+    if(beamShader_.valid())dev_->destroyShader(beamShader_);
+    if(shader_.valid())dev_->destroyShader(shader_);
+    if(haloShader_.valid())dev_->destroyShader(haloShader_);
+    black_={};
+    vb_=haloVB_=decalVB_=beamVB_={};
+    decalPipe_=beamPipe_=pipe_=haloPipe_={};
+    decalShader_=beamShader_=shader_=haloShader_={};
+    vbCap_=smallCap_=0;
+    vbCursor_=haloCursor_=beamCursor_=decalCursor_=0;
+    spotShadowSize_=reflW_=reflH_=0;
+    reflReady_=mapReady_=mapHasLights_=false;
     dev_ = nullptr;
 }
 
 void LightSystem::begin(const RTSCamera& cam, float aspect) {
+    contacts_.clear();
     lights_.clear();
     decals_.clear();
     shadowLight_ = -1;
@@ -231,6 +338,40 @@ void LightSystem::begin(const RTSCamera& cam, float aspect) {
     const float texel = extent_ / float(std::max(mapSize_, 16));
     originX_ = std::floor(((minX + maxX) * 0.5f - extent_ * 0.5f) / texel) * texel;
     originZ_ = std::floor(((minZ + maxZ) * 0.5f - extent_ * 0.5f) / texel) * texel;
+}
+
+LightSystem::PreparedFrame LightSystem::capturePrepared() const {
+    PreparedFrame frame;
+    frame.lights=lights_;
+    frame.contacts=contacts_;
+    frame.nightGlow=nightGlow_;
+    frame.unlitTint=unlitTint_;
+    for(int i=0;i<4;++i)frame.cloud[i]=u_.cloud[i];
+    frame.cloudStrength=u_.sky[0];
+    frame.waterReflections=reflectOn_;
+    return frame;
+}
+
+void LightSystem::swapPrepared(PreparedFrame& frame) noexcept {
+    lights_.swap(frame.lights);contacts_.swap(frame.contacts);
+    using std::swap;
+    swap(nightGlow_,frame.nightGlow);swap(unlitTint_,frame.unlitTint);
+    for(int i=0;i<4;++i)swap(u_.cloud[i],frame.cloud[i]);
+    swap(u_.sky[0],frame.cloudStrength);
+    swap(reflectOn_,frame.waterReflections);
+}
+
+void LightSystem::replayPrepared(const PreparedFrame& frame) {
+    // Called after beginScene(): never replay through a stale light-map or
+    // touch the camera's projection/focus/halo basis.
+    nightGlow_=frame.nightGlow;
+    unlitTint_=frame.unlitTint;
+    for(int i=0;i<4;++i)u_.cloud[i]=frame.cloud[i];
+    u_.sky[0]=frame.cloudStrength;
+    reflectOn_=frame.waterReflections;
+    for(const auto& light:frame.lights)add(light);
+    for(const auto& c:frame.contacts)
+        addContactShadow(c.center,c.halfX,c.halfZ,c.strength,c.box,c.softness);
 }
 
 void LightSystem::add(const PointLight& l) {
@@ -374,18 +515,26 @@ void LightSystem::setClouds(float coverage, float strength, float scale, float o
 bool LightSystem::beginReflection(int viewW, int viewH, float3 clear) {
     if (!reflectionsWanted() || viewW <= 0 || viewH <= 0) return false;
     const int w = std::max(viewW / 2, 16), h = std::max(viewH / 2, 16);
-    if (w != reflW_ || h != reflH_ || !reflColor_.valid() || reflectionLinear_ != linearScene_) {
-        if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
-        if (reflDepth_.valid()) dev_->destroyTexture(reflDepth_);
+    if(w!=reflW_ || h!=reflH_ || !reflColor_.valid() ||
+       !reflDepth_.valid() || reflectionLinear_!=linearScene_) {
         gfx::TextureDesc td;
-        td.width = w; td.height = h; td.renderTarget = true; td.filter = gfx::Filter::Linear; td.label = "water reflection";
-        td.format = linearScene_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
-        reflectionLinear_ = linearScene_;
-        reflColor_ = dev_->createTexture(td);
-        gfx::TextureDesc dd = td;
-        dd.format = gfx::PixelFormat::Depth; dd.filter = gfx::Filter::Nearest; dd.label = "water reflection depth";
-        reflDepth_ = dev_->createTexture(dd);
-        reflW_ = w; reflH_ = h;
+        td.width=w;td.height=h;td.renderTarget=true;
+        td.filter=gfx::Filter::Linear;
+        td.label="water reflection";
+        td.format=linearScene_?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA8;
+        auto replacement=dev_->createTexture(td);
+        gfx::TextureDesc dd=td;
+        dd.format=gfx::PixelFormat::Depth;
+        dd.filter=gfx::Filter::Nearest;
+        dd.label="water reflection depth";
+        auto replacementDepth=replacement.valid()?dev_->createTexture(dd):gfx::TextureHandle{};
+        if(!replacement.valid() || !replacementDepth.valid()) {
+            retireTarget(replacement,replacementDepth);
+            return false;
+        }
+        retireTarget(reflColor_,reflDepth_);
+        reflColor_=replacement;reflDepth_=replacementDepth;
+        reflW_=w;reflH_=h;reflectionLinear_=linearScene_;
     }
     if (!reflColor_.valid() || !reflDepth_.valid()) return false;
     viewW_ = float(viewW); viewH_ = float(viewH);
@@ -406,6 +555,13 @@ void LightSystem::endReflection() {
     dev_->endPass();
     reflReady_ = true;
     stats_.reflection = true; stats_.reflW = reflW_; stats_.reflH = reflH_;
+}
+
+bool LightSystem::requestPlanarReflectionColorReadback(
+    gfx::Device::ColorReadFn callback) const {
+    return dev_ && reflReady_ && reflColor_.valid() &&
+           !reflectionLinear_ && reflW_ > 0 && reflH_ > 0 &&
+           dev_->readColorTextureAsync(reflColor_, std::move(callback));
 }
 
 void LightSystem::bind(int uniformSlot, int textureSlot, int reflectionSlot) {
@@ -434,6 +590,7 @@ void LightSystem::bind(int uniformSlot, int textureSlot, int reflectionSlot) {
 
 void LightSystem::addContactShadow(float3 c, float hx, float hz, float strength, bool box, float softness) {
     if (!contact_ || strength <= 0 || decals_.size() >= kMaxLights * 6) return;
+    contacts_.push_back({c,hx,hz,strength,box,softness});
     const float y = c.y + 0.025f, s = box ? 1.0f : 0.0f;
     const HaloVertex v0{c.x - hx, y, c.z - hz, -1, -1, s, softness, 0, strength}, v1{c.x + hx, y, c.z - hz, 1, -1, s, softness, 0, strength},
                      v2{c.x + hx, y, c.z + hz, 1, 1, s, softness, 0, strength}, v3{c.x - hx, y, c.z + hz, -1, 1, s, softness, 0, strength};

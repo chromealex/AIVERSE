@@ -242,4 +242,49 @@ bool compileComputeProgram(const std::string& glslBody,
     return true;
 }
 
+bool compileComputeProgram(const std::string& source,
+                           std::vector<uint32_t>& spirv,
+                           std::string* error) {
+    if (error) error->clear();
+    if (source.empty() || source.size()>256u*1024u) {
+        if (error) *error="Vulkan compute: empty or oversized GLSL";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_mutex);
+    std::call_once(g_init, [] { glslang::InitializeProcess(); });
+    const char* raw=source.c_str();
+    glslang::TShader shader(EShLangCompute);
+    shader.setStrings(&raw,1);
+    shader.setEnvInput(glslang::EShSourceGlsl, EShLangCompute,
+                       glslang::EShClientVulkan, 100);
+    shader.setEnvClient(glslang::EShClientVulkan,
+                        glslang::EShTargetVulkan_1_1);
+    shader.setEnvTarget(glslang::EShTargetSpv,
+                        glslang::EShTargetSpv_1_3);
+    const auto messages=EShMessages(EShMsgSpvRules|EShMsgVulkanRules);
+    if (!shader.parse(GetDefaultResources(),450,false,messages)) {
+        if (error) *error=std::string("Vulkan compute: ")+shader.getInfoLog();
+        return false;
+    }
+    glslang::TProgram program;
+    program.addShader(&shader);
+    if (!program.link(messages) || !program.getIntermediate(EShLangCompute)) {
+        if (error) *error=std::string("Vulkan compute link: ")+program.getInfoLog();
+        return false;
+    }
+    std::vector<uint32_t> compiled;
+    glslang::SpvOptions options;
+    options.disableOptimizer=true;
+    options.validate=false;
+    glslang::GlslangToSpv(*program.getIntermediate(EShLangCompute),
+                         compiled,&options);
+    if (compiled.empty()) {
+        if (error) *error="Vulkan compute: compiler returned empty SPIR-V";
+        return false;
+    }
+    spirv=std::move(compiled);
+    return true;
+}
+
+
 } // namespace aiverse::gfx::vk

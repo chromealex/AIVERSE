@@ -490,5 +490,79 @@ int main() {
     CHECK(has(deep.update(0.016f),"Node0",Phase::Triggered));
     CHECK(deep.state("Node0")->active);
 
+    // Review fix 2026-11-21: action-level Tap / Released / HoldAndRelease decide on the
+    // release frame even when the mapping itself has no triggers.
+    {
+        InputFlow level;
+        CHECK(level.defineAction({"Tap",ValueType::Boolean,{},{Trigger::tap(0.3f)}}));
+        CHECK(level.defineAction({"Up",ValueType::Boolean,{},{Trigger::released()}}));
+        CHECK(level.defineAction({"Charge",ValueType::Boolean,{},{Trigger::holdAndRelease(0.2f)}}));
+        MappingContext ctx{"Level"};
+        ctx.bind("Tap",{Device::Keyboard,200});
+        ctx.bind("Up",{Device::Keyboard,201});
+        ctx.bind("Charge",{Device::Keyboard,202});
+        CHECK(level.registerContext(ctx));
+        CHECK(level.activateContext("Level"));
+        level.setControl({Device::Keyboard,200},1);
+        CHECK(!has(level.update(0.05f),"Tap",Phase::Triggered));
+        level.setControl({Device::Keyboard,200},0);
+        CHECK(has(level.update(0.05f),"Tap",Phase::Triggered));
+        level.setControl({Device::Keyboard,200},1);
+        level.update(0.2f); level.update(0.2f);
+        level.setControl({Device::Keyboard,200},0);
+        CHECK(!has(level.update(0.01f),"Tap",Phase::Triggered));   // held too long
+        level.setControl({Device::Keyboard,201},1);
+        CHECK(!has(level.update(0.05f),"Up",Phase::Triggered));
+        level.setControl({Device::Keyboard,201},0);
+        CHECK(has(level.update(0.05f),"Up",Phase::Triggered));
+        level.setControl({Device::Keyboard,202},1);
+        level.update(0.15f); level.update(0.15f);
+        level.setControl({Device::Keyboard,202},0);
+        CHECK(has(level.update(0.01f),"Charge",Phase::Triggered));
+    }
+    // DoubleTap: a triple tap fires once, and a long first press does not arm it.
+    {
+        InputFlow dbl;
+        CHECK(dbl.defineAction({"Double",ValueType::Boolean}));
+        MappingContext ctx{"Dbl"};
+        ctx.bind("Double",{Device::Keyboard,210},{},{Trigger::doubleTap(0.25f)});
+        CHECK(dbl.registerContext(ctx));
+        CHECK(dbl.activateContext("Dbl"));
+        const Control k{Device::Keyboard,210};
+        int fired=0;
+        for (int tap=0; tap<3; ++tap) {
+            dbl.setControl(k,1); if (has(dbl.update(0.03f),"Double",Phase::Triggered)) ++fired;
+            dbl.setControl(k,0); if (has(dbl.update(0.03f),"Double",Phase::Triggered)) ++fired;
+        }
+        CHECK(fired==1);
+        InputFlow slow;
+        CHECK(slow.defineAction({"Double",ValueType::Boolean}));
+        CHECK(slow.registerContext(ctx));
+        CHECK(slow.activateContext("Dbl"));
+        slow.setControl(k,1); slow.update(0.5f); slow.update(0.5f);   // long hold, not a tap
+        slow.setControl(k,0); slow.update(0.03f);
+        slow.setControl(k,1);
+        CHECK(!has(slow.update(0.03f),"Double",Phase::Triggered));
+    }
+    // cancelAll(): Canceled phases reach a consumer that only reads update().
+    {
+        InputFlow cancel;
+        CHECK(cancel.defineAction({"Hold",ValueType::Boolean}));
+        MappingContext ctx{"C"};
+        ctx.bind("Hold",{Device::Keyboard,220});
+        CHECK(cancel.registerContext(ctx));
+        CHECK(cancel.activateContext("C"));
+        cancel.setControl({Device::Keyboard,220},1);
+        CHECK(has(cancel.update(0.016f),"Hold",Phase::Started));
+        cancel.cancelAll();
+        CHECK(has(cancel.update(0.016f),"Hold",Phase::Canceled));
+        CHECK(!has(cancel.update(0.016f),"Hold",Phase::Canceled));
+        cancel.setControl({Device::Keyboard,220},1);
+        cancel.update(0.016f);
+        cancel.cancelAll();
+        CHECK(has(cancel.events(),"Hold",Phase::Canceled));        // read right away
+        CHECK(!has(cancel.update(0.016f),"Hold",Phase::Canceled)); // not delivered twice
+    }
+
     std::cout << "Enhanced Input action/context/trigger/modifier scenarios passed\n";
 }

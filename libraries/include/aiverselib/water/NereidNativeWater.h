@@ -29,6 +29,7 @@ struct NativeWaterPipelineConfig {
     uint32_t bankErosionTickMs=16;
     bool probeFromTransform=true;
     AdaptiveWaterSamplingConfig adaptive{};
+    bool enableRiverGrade=false;
 };
 
 // Register the ECS components and ordered systems once during native setup.
@@ -36,6 +37,7 @@ struct NativeWaterPipelineConfig {
 inline void registerNativeWaterPipeline(Simulation& sim,
         std::string prefix="nereid",NativeWaterPipelineConfig config={}) {
     registerNereidWaterPersistence(sim);
+    if(config.enableRiverGrade)registerNereidRiverGradePersistence(sim);
     if(config.enableGeometry)registerNereidGeometryPersistence(sim);
     if(config.enableBuoyancy)registerNereidBuoyancyPersistence(sim);
     if(config.enableInteractions)registerNereidInteractionPersistence(sim);

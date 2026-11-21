@@ -263,8 +263,12 @@ static void nativeSceneLifecycle() {
     AIVERSE_TEST_CHECK(sceneState.count()==2);
     AIVERSE_TEST_CHECK(world.countExisting<st::StaticRef<fixture::Config>>()==3);
     AIVERSE_TEST_CHECK(entities(world,town.scene).size()==2);
+    // Rollback diffs residency: the persistent global scene stayed Active
+    // and keeps its leases; only the restored town needs a residency job.
+    AIVERSE_TEST_CHECK(loader.residentSceneCount()==1);
     auto restoredTickets=loader.queueRestoredResidency();
-    AIVERSE_TEST_CHECK(restoredTickets.size()==2);
+    AIVERSE_TEST_CHECK(restoredTickets.size()==1 &&
+                       restoredTickets[0].scene==town.scene);
     for(const auto ticket:restoredTickets) {
         awaitReady(loader,ticket);
         AIVERSE_TEST_CHECK(loader.commit(ticket));

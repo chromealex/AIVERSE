@@ -17,3 +17,7 @@ Builds/
 
 # Agent scratch output (reports, generated test projects)
 /outputs/
+
+# editor / agent backup copies (never committed)
+*.bak
+*.studio-v*.bak

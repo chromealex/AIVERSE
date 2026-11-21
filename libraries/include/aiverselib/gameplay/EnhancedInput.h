@@ -368,10 +368,14 @@ public:
 
     // Use on global focus loss. Emits Canceled and drops all held devices.
     void cancelAll() {
-        events_.clear();
+        // Canceled phases stay visible through events() right away and are
+        // also handed out by the next update() unless events() was read first,
+        // so a consumer that only reads update()'s return value never loses them.
         for (const auto& [name, state] : states_) {
-            if (state.active) events_.push_back({name, Phase::Canceled, {}});
+            if (state.active) pendingCanceled_.push_back({name, Phase::Canceled, {}});
         }
+        events_ = pendingCanceled_;
+        eventsRead_ = false;
         controls_.clear();
         mappingRuntime_.clear();
         actionRuntime_.clear();
@@ -381,6 +385,9 @@ public:
 
     std::span<const ActionEvent> update(float deltaSeconds) {
         events_.clear();
+        if (!eventsRead_) events_ = pendingCanceled_;
+        pendingCanceled_.clear();
+        eventsRead_ = false;
         const float dt = std::isfinite(deltaSeconds) ? std::max(0.0f, deltaSeconds) : 0.0f;
 
         // Stable processing: higher context priority first; equal priorities lexicographic by name.
@@ -502,7 +509,11 @@ public:
 
         std::map<Control,bool> consumed;
         struct Aggregate { Value value; bool active = false, triggered = false,
-                           began = false, interrupted = false; };
+                           began = false, interrupted = false,
+                           // an eligible mapping lets action-level triggers decide this
+                           // frame: it fired, or it has no triggers of its own and its
+                           // control was down / pressed / released (Tap, Released, ...)
+                           permit = false; };
         std::map<std::string,Aggregate> result;
         std::set<std::string> presentedActions;
 
@@ -534,6 +545,8 @@ public:
                 if (eligible && !suppressed) {
                     fired = evaluateTriggers(mapping.triggers, runtime, down, pressed, released,
                                              tapWithinFrame, dt, chordLevels);
+                    if (mapping.triggers.empty() ? (down || pressed || released) : fired)
+                        result[mapping.action].permit = true;
                 } else if (eligible && suppressed) {
                     // Context activated after physical KeyDown: continuous Down
                     // is visible, but timed/edge triggers wait for a fresh press.
@@ -597,7 +610,10 @@ public:
             } else if (!action.triggers.empty()) {
                 const bool actionGate = evaluateTriggers(action.triggers, runtime, sourceDown,
                                                          press, release, press && release, dt, chordLevels);
-                triggered = triggered && actionGate;
+                // Mapping-level "fired" is Down for trigger-less mappings, which is false
+                // on a release frame: action-level Tap / Released / HoldAndRelease would
+                // never fire. Trigger-less mappings only feed the value; action triggers decide.
+                triggered = aggregate.permit && actionGate;
             } else {
                 runtime.wasDown = sourceDown;
                 if (!sourceDown) { runtime.seconds = 0; runtime.holdFired = false; }
@@ -633,7 +649,7 @@ public:
         const auto it = states_.find(name);
         return it == states_.end() ? nullptr : &it->second;
     }
-    std::span<const ActionEvent> events() const { return events_; }
+    std::span<const ActionEvent> events() const { eventsRead_ = true; return events_; }
     // Enumerate every declared context (including inactive UI/vehicle/modal contexts) for Settings UI.
     std::vector<std::string> registeredContexts() const {
         std::vector<std::string> names;
@@ -655,7 +671,7 @@ private:
     static constexpr float kEpsilon = 0.00001f;
     struct Raw { float value = 0; bool pressed = false, released = false, transient = false; };
     struct Runtime {
-        bool wasDown=false, holdFired=false, releaseArmed=false;
+        bool wasDown=false, holdFired=false, releaseArmed=false, skipNextArm=false;
         bool suppressUntilRelease=false;
         float seconds=0, sinceRelease=1000000.0f, lastPulse=0;
     };
@@ -664,6 +680,7 @@ private:
         runtime.seconds=0;
         runtime.holdFired=false;
         runtime.releaseArmed=false;
+        runtime.skipNextArm=false;
         runtime.sinceRelease=1000000.0f;
         runtime.lastPulse=0;
     }
@@ -750,8 +767,24 @@ private:
         if (matched) for (const auto& trigger : triggers) {
             if (trigger.kind == TriggerKind::Hold)runtime.holdFired=true;
             if (trigger.kind == TriggerKind::Pulse)runtime.lastPulse=runtime.seconds;
+            if (trigger.kind == TriggerKind::DoubleTap) {
+                // A completed double tap consumes its pair: the release of the second
+                // press does not arm a third press (triple tap fires once, not twice).
+                runtime.releaseArmed=false;
+                runtime.skipNextArm=true;
+            }
         }
-        if(released){runtime.releaseArmed=true;runtime.sinceRelease=0;}
+        if(released){
+            // The first press must itself be a tap: a long hold followed by a quick
+            // press is not a double tap.
+            bool arm=!runtime.skipNextArm;
+            for (const auto& trigger : triggers)
+                if (trigger.kind == TriggerKind::DoubleTap && held > std::max(0.0f,trigger.seconds))
+                    arm=false;
+            runtime.skipNextArm=false;
+            runtime.releaseArmed=arm;
+            runtime.sinceRelease=0;
+        }
         runtime.wasDown = down;
         if (!down) { runtime.seconds = 0; runtime.holdFired = false; }
         return matched;
@@ -784,6 +817,8 @@ private:
     std::map<std::string,ActionState> states_;
     std::set<std::string> interruptedActions_;
     std::vector<ActionEvent> events_;
+    std::vector<ActionEvent> pendingCanceled_;   // cancelAll() phases not yet returned by update()
+    mutable bool eventsRead_ = false;
 };
 
 // Compatibility alias: callers using the old Enhanced Input type keep working.

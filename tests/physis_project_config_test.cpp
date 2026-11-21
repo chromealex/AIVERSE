@@ -58,6 +58,34 @@ void optionsAndRejections() {
     catch (const std::invalid_argument&) { rejected=true; }
     CHECK(rejected);
 }
+void floodModeValidation() {
+    for (const char* value : {"false", "true", "0", "42", "{}", "[]",
+                              "\"invalid\"", "\"\""}) {
+        auto map = authored();
+        auto config = map["physis"];
+        config.set("floodMode", Json::parse(value));
+        map.set("physis", config);
+        bool rejected = false;
+        try { (void)optionsFromMap(map); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        CHECK(rejected);
+    }
+    for (const char* value : {"\"LocalShallow\"", "\"ExternalAuthority\"", "null"}) {
+        auto map = authored();
+        auto config = map["physis"];
+        config.set("floodMode", Json::parse(value));
+        map.set("physis", config);
+        const auto options = optionsFromMap(map);
+        CHECK(options.has_value());
+        CHECK(options->floodMode == (std::string(value) == "\"ExternalAuthority\""
+            ? FloodMode::ExternalAuthority : FloodMode::LocalShallow));
+    }
+    auto map = authored();
+    auto config = map["physis"];
+    config.erase("floodMode");
+    map.set("physis", config);
+    CHECK(optionsFromMap(map)->floodMode == FloodMode::LocalShallow);
+}
 class GenericNativeHost final : public GameModule {
 public:
     std::string name() const override { return "physis-config-test"; }
@@ -138,7 +166,8 @@ void nativeHostAndSave() {
 }
 }
 int main() {
-    optionsAndRejections();nativeHostAndSave();nativeAuthoredFieldsAndRollback();
+    optionsAndRejections();
+    floodModeValidation();nativeHostAndSave();nativeAuthoredFieldsAndRollback();
     std::printf("PHYSIS ProjectConfig: %s\n",failed?"FAIL":"PASS");
     return failed?1:0;
 }

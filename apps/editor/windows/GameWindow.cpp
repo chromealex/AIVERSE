@@ -35,7 +35,13 @@ public:
     bool zeroPadding() const override { return true; }
     ImGuiWindowFlags flags() const override { return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse; }
 
-    void update(Editor& ed, double dt) override { dt_ = dt; if (!ed.playing()) gameHud_.reset(); }
+    void update(Editor& ed, double dt) override {
+        dt_ = dt;
+        if (!ed.playing()) gameHud_.reset();
+        if ((!open || vp_.drawnFrame < ImGui::GetFrameCount()-1) &&
+            vp_.color.valid())
+            vp_.release(ed.device());
+    }
 
     void draw(Editor& ed) override {
         if(ed.ws().project.isFps()) {
@@ -99,7 +105,9 @@ public:
         }
         if (sw <= 1 || sh <= 1) return;
         const float dpi = ImGui::GetIO().DisplayFramebufferScale.x;
-        vp_.ensure(ed.device(), int(sw * dpi), int(sh * dpi));
+        vp_.setGpuDeviceLease(ed.gpuDeviceLease());
+        vp_.ensure(ed.device(), int(sw * dpi), int(sh * dpi), ed.viewportRetirement(), "Game");
+
         if (ed.clientPlaying()) { drawClient(ed, dev, dl, origin, avail, sx, sy, sw, sh, k, devW, devH); return; }
         ImGui::SetCursorScreenPos(ImVec2(sx, sy));
         vp_.originX = sx; vp_.originY = sy; vp_.pointsW = sw; vp_.pointsH = sh;

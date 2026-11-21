@@ -533,6 +533,7 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         g_device->beginFrame(S.fbW, S.fbH);
         if (S.cb.frame) S.cb.frame(*g_device, dt);
         g_device->endFrame();
+        if (S.cb.afterFrame) S.cb.afterFrame(*device);
         if (!g_vulkan) eglSwapBuffers(g_dpy, g_surf);
     }
     if (S.cb.shutdown) S.cb.shutdown();

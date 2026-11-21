@@ -12,11 +12,15 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 #include "../gfx/Gfx.h"
+#include "GpuOwnedMemory.h"
 
 #include "engine/atlas/AtlasFormat.h"
 
 namespace aiverse::render {
+class GpuResourceRetirement;
+
 
 // An atlased image drawn straight from its pages (TextureCache::resolveSprite): per frame of the
 // frame grid (cols x rows over the logical image; 1 x 1 for a whole image) its region (trim,
@@ -46,6 +50,24 @@ struct TextureRef {
 class TextureCache {
 public:
     void init(gfx::Device& dev) { dev_ = &dev; }
+    // Atomic owner handoff for staged GPU icon caches. AtlasSprite addresses
+    // remain valid because their heap objects stay inside unique_ptr nodes.
+    void swap(TextureCache& other) noexcept {
+        using std::swap;
+        swap(atlas_,other.atlas_);
+        atlasBase_.swap(other.atlasBase_);
+        atlasPages_.swap(other.atlasPages_);
+        sprites_.swap(other.sprites_);
+        cache_.swap(other.cache_);
+        error_.swap(other.error_);
+        swap(dev_,other.dev_);
+        swap(gpuRetirement_,other.gpuRetirement_);
+    }
+    // Optional editor hot-reload owner; retained by Editor across TextureCache
+    // asset reloads. Doesn't own borrowed atlased sprite references.
+    void setGpuResourceRetirement(GpuResourceRetirement* owner) {
+        gpuRetirement_ = owner;
+    }
     void shutdown();
     // `base` is prefixed to the path when reading (editor: "<project dir>/", game: "").
     // `tiling`: a repeating world-space texture (terrain splat layers): never taken from an atlas
@@ -60,6 +82,20 @@ public:
     // Procedural texture registered under a logical name (e.g. "builtin:shadow").
     TextureRef addGenerated(const std::string& name, int w, int h, const std::vector<uint32_t>& rgba, bool nearest);
     const std::string& lastError() const { return error_; }
+    // Owned sprite/atlas textures, not their borrowed AtlasFrame aliases.
+    // Render-thread only; GPU retirement owns quarantined old textures.
+    // Shared atlas pages are de-duplicated against cache references.
+    GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        GpuOwnedMemoryCounter counter(*dev_);
+        for (const auto& [key, page] : atlasPages_) {
+            (void)key; counter.texture(page);
+        }
+        for (const auto& [key, ref] : cache_) {
+            (void)key; counter.texture(ref.tex);
+        }
+        return counter.stats();
+    }
 
 private:
     // Build-time texture atlases (engine/atlas): images packed into a page resolve to the page +
@@ -72,6 +108,7 @@ private:
     std::string atlasBase_;             // base the manifest was loaded for
     std::map<std::string, gfx::TextureHandle> atlasPages_;
     gfx::Device* dev_ = nullptr;
+    GpuResourceRetirement* gpuRetirement_ = nullptr;
     std::map<std::string, TextureRef> cache_;
     std::string error_;
 };

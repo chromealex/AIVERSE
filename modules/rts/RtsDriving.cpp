@@ -3,11 +3,15 @@
 // vehicle-controllers step and this module's part of the contract: the sweep of the body over the map grid and other
 // units, collision response, crash and run-over damage. Fixed maths only; every loop runs in entity-index order.
 #include "RtsDriving.h"
+#include "RtsRace.h"
 #include "RtsRoadNet.h"
 #include "RtsInternal.h"
 #include "../../engine/core/Archive.h"
 #include "../../engine/core/FixedMath.h"
 #include "../../libraries/include/aiverselib/genre/VehicleData.h"
+#include "../../libraries/include/aiverselib/genre/VehiclePersistence.h"
+#include "../../libraries/include/aiverselib/genre/RaceSessionData.h"
+#include "../../libraries/include/aiverselib/genre/VehicleDrive.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -21,11 +25,6 @@ const Fixed kGap = Fixed::fromRatio(1, 64);
 
 Vec3 forwardOf(Fixed yaw) { return {fxSinTurns(yaw), Fixed{}, fxCosTurns(yaw)}; }   // yaw 0 = +z, a quarter turn = +x
 Vec3 rightOf(Vec3 f) { return {f.z, Fixed{}, -f.x}; }
-Fixed wrapTurns(Fixed t) {
-    int64_t r = t.raw % Fixed::kOne;
-    if (r > Fixed::kOne / 2) r -= Fixed::kOne; else if (r <= -Fixed::kOne / 2) r += Fixed::kOne;
-    return Fixed::fromRaw(r);
-}
 Fixed number(const Json& j, const char* key, Fixed def, const std::string& where, bool positive) {
     Fixed v = j.getFx(key, def);
     if (v.raw < 0 || (positive && v.raw == 0))
@@ -207,6 +206,11 @@ void Driving::hash(Simulation& sim, Hasher& h) const {
         for (Fixed f : {c.pilot.throttle, c.pilot.brake, c.pilot.steer}) h.fx(f);
         h.u32(uint32_t(c.pilot.handbrake) | uint32_t(c.pilot.shiftUp) << 1 | uint32_t(c.pilot.shiftDown) << 2);
     }
+    if (auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr) {   // maps with a race only
+        h.u32(uint32_t(rs->started)); h.i32(rs->winnerTeam);
+        for (Entity e : rs->racers) h.u64(e.packed());
+        h.u64(vl::vehicleHash(rs->grid)); h.u64(vl::vehicleHash(rs->session));
+    }
 }
 
 void Driving::io(Simulation& sim, Archive& a) {
@@ -229,6 +233,12 @@ void Driving::io(Simulation& sim, Archive& a) {
     for (auto& d : st->decks) a(d.id, d.width, d.pts, d.at);
     if (!a.writing())
         for (auto& c : st->cars) if (c.deck >= int(nd)) { a.fail(); return; }
+    if (auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr) {   // maps with a race only: layout unchanged otherwise
+        a(rs->started, rs->winnerTeam, rs->racers, rs->grid);
+        vl::io(a, rs->session);
+        if (!a.writing() && (rs->racers.size() > vl::kRaceMaxRacers || !vl::valid(rs->session) ||
+                             (rs->started && rs->racers.size() != rs->session.race.racers.size()))) { a.fail(); return; }
+    }
 }
 
 // ================================================================= levels
@@ -418,13 +428,18 @@ void Driving::enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity he
         if (!best || d < bestD) { best = &c; bestD = d; }   // cars are in entity order: ties keep the lower index
     }
     if (!best || best->locked) return;   // a locked door: the game says so and decides who opens it
-    best->driver = hero;
-    best->player = player;
-    best->doorUntil = sim.tick() + rules_.doorTicks;
-    hu.flags |= kUnitInCargo;               // off the map: not hit, not targeted, not drawn; it follows the car
+    seat(sim, *best, player, hero);
+}
+
+void Driving::seat(Simulation& sim, DrivingCar& car, uint8_t player, Entity hero) {
+    World& w = sim.world();
+    car.driver = hero;
+    car.player = player;
+    car.doorUntil = sim.tick() + rules_.doorTicks;
+    w.get<Unit>(hero).flags |= kUnitInCargo;   // off the map: not hit, not targeted, not drawn; it follows the car
     if (auto* c = w.tryGet<Combat>(hero)) c->target = kNullEntity;
     if (auto* td = m_->topDown()->store(sim); td && player < td->pilots.size()) { td->pilots[player].vel = {}; td->pilots[player].target = kNullEntity; }
-    w.get<Transform>(hero).pos = w.get<Transform>(best->e).pos;
+    w.get<Transform>(hero).pos = w.get<Transform>(car.e).pos;
 }
 
 bool Driving::leave(Simulation& sim, DrivingCar& c, bool forced) {
@@ -464,7 +479,7 @@ bool Driving::command(Simulation& sim, const Command& cmd) {
     if (!td || cmd.player == 0 || cmd.player >= td->pilots.size()) return true;
     const Entity hero = td->pilots[cmd.player].hero;
     if (!sim.world().alive(hero)) return true;
-    for (auto& c : st->cars) if (c.driver == hero) { leave(sim, c, false); return true; }
+    for (auto& c : st->cars) if (c.driver == hero) { if (!raceHoldsCar(sim, c.e)) leave(sim, c, false); return true; }
     enter(sim, *st, cmd.player, hero);
     return true;
 }
@@ -472,6 +487,11 @@ bool Driving::command(Simulation& sim, const Command& cmd) {
 // ================================================================= per tick
 
 vl::VehicleInput Driving::inputOf(Simulation& sim, const DrivingCar& c) const {
+    for (const auto& [index, in] : raceInput_) if (index == c.e.index) return in;   // a racer: the race session's pedals
+    return ownInput(sim, c);
+}
+
+vl::VehicleInput Driving::ownInput(Simulation& sim, const DrivingCar& c) const {
     vl::VehicleInput in;
     auto* td = m_->topDown()->store(sim);
     if (!c.driver.valid()) {   // nobody at the wheel: a traffic car's bot driver (RtsTraffic.cpp), else parked
@@ -481,33 +501,19 @@ vl::VehicleInput Driving::inputOf(Simulation& sim, const DrivingCar& c) const {
         return in;
     }
     if (!td || c.player >= td->pilots.size()) { in.handbrake = true; return in; }   // parked
+    // the shared screen-stick mapping (genre/VehicleDrive.h): "tank" or "stick" (steer toward the stick)
     const topdown::Input& s = td->pilots[c.player].input;
-    const Fixed mag = Fixed::fromRatio(s.moveMag, topdown::kMagMax), ang = Fixed::fromRaw(s.moveAngle);
-    in.handbrake = s.fire;
-    if (rules_.controls == DriveControls::Tank) {
-        // stick up the screen (-z) = throttle, down = brake / reverse, sideways = steering; diagonals count in full
-        const Fixed boost = Fixed::fromRatio(3, 2);
-        // the map is seen with +x to the right and +z down the screen, so a turn to the right on screen is a negative
-        // library yaw (the library turns from +z toward +x for a positive steer)
-        const Fixed t = -fxCosTurns(ang) * mag * boost, st = -fxSinTurns(ang) * mag * boost;
-        in.throttle = fxClamp(t, Fixed{}, kUnit);
-        in.brake = fxClamp(-t, Fixed{}, kUnit);
-        in.steer = fxClamp(st, -kUnit, kUnit);
-        return in;
-    }
-    const Fixed v = vl::vehicleForwardSpeed(c.st);
-    if (s.moveMag <= 0) { if (v > kHalf) in.brake = Fixed::fromRatio(3, 10); return in; }   // let go: roll to a stop
-    const Fixed diff = wrapTurns(ang - c.st.yaw);
-    in.steer = fxClamp(diff * 6, -kUnit, kUnit);
-    in.throttle = fxAbs(diff) > Fixed::fromRatio(1, 4) ? mag / 2 : mag;
-    return in;
+    const vl::DriveScreenStick stick{Fixed::fromRaw(s.moveAngle), Fixed::fromRatio(s.moveMag, topdown::kMagMax), s.fire};
+    return vl::vehicleInputFromStick(rules_.controls == DriveControls::Tank ? vl::DriveStick::Tank : vl::DriveStick::Steer, stick, c.st);
 }
 
 void Driving::tick(Simulation& sim) {
     auto* st = store(sim);
     if (!st) return;
     adoptAndDrop(sim, *st);
+    raceBefore(sim, *st);
     for (size_t i = 0; i < st->cars.size(); ++i) drive(sim, *st, i);
+    raceAfter(sim, *st);
 }
 
 void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
@@ -713,10 +719,146 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
             crash = fxMax(crash, vl::vehicleResolveCollision(c.st, c.st.position, normal, rules_.restitution));
             hit = true;
         });
-    if (crash > rules_.crashMinSpeed) hurt.push_back({c.e, (crash - rules_.crashMinSpeed) * rules_.crashDamage, kNullEntity, 0});
+    if (crash > rules_.crashMinSpeed && (!race_ || race_->crashDamage || !raceHoldsCar(sim, c.e)))   // racers: rules race.crashDamage
+        hurt.push_back({c.e, (crash - rules_.crashMinSpeed) * rules_.crashDamage, kNullEntity, 0});
     for (auto& h : hurt)
         if (h.dmg.raw > 0 && w.alive(h.e) && w.get<Unit>(h.e).hp.raw > 0) m_->dealDamage(sim, h.e, h.dmg, 0, h.by, h.owner);
     return hit;
+}
+
+// ================================================================= races (RtsRace.h)
+
+void Driving::loadRace(Simulation& sim, const Json& rules, const Json& map) {
+    race_.reset();
+    raceInput_.clear();
+    if (!map.has("race")) return;
+    if (!store(sim)) throw std::runtime_error("map race: the cars are the vehicles of rules \"driving\"");
+    const vl::RaceRules r = vl::readRaceRules(rules["race"], "race", sim.tickRate());
+    vl::RaceTrack t = vl::readRaceTrack(map["race"], "map race", rules_.metersPerCell);   // map cells -> metres
+    if (r.laps) t.course.laps = r.laps;
+    auto d = std::make_shared<DrivingRace>();
+    d->config = r.session;
+    d->crashDamage = r.crashDamage;
+    d->course = std::move(t.course);
+    d->mapGrid = t.grid;
+    if (!t.line.empty()) d->line = lib::bots::makeRaceLine(t.line);
+    // the bots steer in units of the cars' steering lock
+    if (!rules_.vehicles.empty() && rules_.vehicles.front().def.wheeled.maxSteer.raw > 0) d->config.bot.maxSteer = rules_.vehicles.front().def.wheeled.maxSteer;
+    if (!vl::valid(d->config)) throw std::runtime_error("race: invalid race settings");
+    for (auto& p : map["players"].items()) d->bots.push_back(p.getBool("bot", false));
+    race_ = std::move(d);
+    sim.world().setResource<DrivingRaceState>();
+}
+
+bool Driving::racing(Simulation& sim) const { return race_ && sim.world().resource<DrivingRaceState>(); }
+
+bool Driving::raceHoldsCar(Simulation& sim, Entity vehicle) const {
+    auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr;
+    if (!rs || !rs->started || rs->session.phase == vl::RacePhase::Finished) return false;
+    return std::find(rs->racers.begin(), rs->racers.end(), vehicle) != rs->racers.end();
+}
+
+void Driving::raceStart(Simulation& sim, DrivingStore& st) {
+    World& w = sim.world();
+    auto& rs = *w.resource<DrivingRaceState>();
+    rs.started = true;
+    const Fixed mpc = rules_.metersPerCell;
+    auto* td = m_->topDown()->store(sim);
+    size_t n = std::min(st.cars.size(), vl::kRaceMaxRacers);
+    if (race_->mapGrid) n = std::min(n, race_->course.grid.size());
+    std::vector<vl::RaceSessionRacer> racers;
+    for (size_t i = 0; i < n; ++i) {
+        DrivingCar& c = st.cars[i];
+        if (!w.alive(c.e)) continue;
+        Unit& u = w.get<Unit>(c.e);
+        const DrivingVehicleType& vt = *typeOf(u.type);
+        if (race_->mapGrid) {   // on the map's grid
+            const auto& g = race_->course.grid[i];
+            vl::respawnVehicle(vt.def, c.st, g.position, g.yaw);
+            Transform& tr = w.get<Transform>(c.e);
+            tr.pos = {g.position.x / mpc, tr.pos.y, g.position.z / mpc};
+            u.facing = forwardOf(g.yaw);
+        }
+        rs.grid.push_back({c.st.position, c.st.yaw});
+        const uint8_t player = uint8_t(std::min<size_t>(i + 1, 255));
+        const Entity hero = td && player < td->pilots.size() ? td->pilots[player].hero : kNullEntity;
+        const bool bot = (i < race_->bots.size() && race_->bots[i]) || !w.alive(hero) || w.get<Unit>(hero).hp.raw <= 0;
+        if (!bot) {
+            for (auto& other : st.cars) if (other.driver == hero) leave(sim, other, true);
+            if (c.driver.valid() && c.driver != hero) leave(sim, c, true);
+            if (c.driver != hero) seat(sim, c, player, hero);
+        } else {
+            if (c.driver.valid()) leave(sim, c, true);
+            c.autopilot = true;   // stepped every tick (a racing bot never sleeps)
+            c.pilot = {};
+            c.pilot.brake = kUnit;
+            c.pilot.handbrake = true;
+        }
+        c.locked = true;
+        rs.racers.push_back(c.e);
+        racers.push_back({int64_t(rs.racers.size()), bot});
+    }
+    vl::RaceCourse course = race_->course;
+    course.grid = rs.grid;
+    auto session = vl::makeRaceSession(course, race_->config, racers, race_->line ? &*race_->line : nullptr, sim.tick());
+    if (!session) { rs.racers.clear(); rs.grid.clear(); return; }   // no cars, or bots without a racing line: no race
+    rs.session = std::move(*session);
+}
+
+void Driving::raceBefore(Simulation& sim, DrivingStore& st) {
+    raceInput_.clear();
+    auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr;
+    if (!rs) return;
+    if (!rs->started) raceStart(sim, st);
+    if (rs->racers.empty()) return;
+    std::vector<vl::RaceDriver> drivers;
+    for (size_t i = 0; i < rs->racers.size(); ++i)
+        if (DrivingCar* c = findCar(st, rs->racers[i]))
+            drivers.push_back({int64_t(i + 1), c->st.position, c->st.velocity, c->st.yaw, ownInput(sim, *c)});
+    if (auto in = vl::raceSessionInputs(race_->config, race_->line ? &*race_->line : nullptr, rs->session, sim.tick(), drivers))
+        for (const auto& x : *in) raceInput_.push_back({rs->racers[size_t(x.racer - 1)].index, x.input});
+}
+
+void Driving::raceAfter(Simulation& sim, DrivingStore& st) {
+    raceInput_.clear();
+    auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr;
+    if (!rs || rs->racers.empty()) return;
+    World& w = sim.world();
+    const Fixed mpc = rules_.metersPerCell;
+    std::vector<vl::RaceSample> samples;
+    for (size_t i = 0; i < rs->racers.size(); ++i)
+        if (DrivingCar* c = findCar(st, rs->racers[i])) samples.push_back({int64_t(i + 1), c->st.position, c->st.velocity});
+    vl::RaceCourse course = race_->course;
+    course.grid = rs->grid;
+    auto report = vl::stepRaceSession(course, race_->config, rs->session, sim.tick(), samples);
+    if (!report) return;
+    for (const auto& spot : report->race.respawns) {   // back on the track at the last checkpoint
+        DrivingCar* c = findCar(st, rs->racers[size_t(spot.racer - 1)]);
+        if (!c || !w.alive(c->e)) continue;
+        Unit& u = w.get<Unit>(c->e);
+        vl::respawnVehicle(typeOf(u.type)->def, c->st, spot.position, spot.yaw);
+        Transform& tr = w.get<Transform>(c->e);
+        tr.pos = {spot.position.x / mpc, tr.pos.y, spot.position.z / mpc};
+        u.facing = forwardOf(spot.yaw);
+        c->deck = -1;
+        if (c->driver.valid() && w.alive(c->driver)) w.get<Transform>(c->driver).pos = tr.pos;
+    }
+    if (rs->session.phase == vl::RacePhase::Finished && rs->winnerTeam < 0) {   // the race decides the match
+        const int64_t winner = vl::raceSessionWinner(rs->session);
+        int team = 0;   // nobody finished: a draw
+        if (winner >= 1 && size_t(winner) <= sim.players().size()) team = sim.players()[size_t(winner - 1)].team;
+        rs->winnerTeam = team;
+        m_->state(sim).winnerTeam = team;
+    }
+}
+
+vl::RaceView Driving::raceView(Simulation& sim, uint8_t player) const {
+    auto* rs = race_ ? sim.world().resource<DrivingRaceState>() : nullptr;
+    if (!rs || rs->racers.empty()) return {};
+    vl::RaceCourse course = race_->course;
+    course.grid = rs->grid;
+    const int64_t racer = player >= 1 && player <= rs->racers.size() ? int64_t(player) : 0;
+    return vl::raceView(course, rs->session, racer, sim.tick());
 }
 
 } // namespace aiverse::game

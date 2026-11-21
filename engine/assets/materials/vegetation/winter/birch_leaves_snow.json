@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "domain": "material",
+  "minQuality": "low",
+  "nodes": [
+    {
+      "id": "snow0",
+      "op": "input"
+    },
+    {
+      "id": "snow1",
+      "op": "normal"
+    },
+    {
+      "id": "snow2",
+      "op": "worldPosition"
+    },
+    {
+      "id": "snow3",
+      "op": "swizzle",
+      "mask": "rbra",
+      "inputs": [
+        "snow2"
+      ]
+    },
+    {
+      "id": "snow4",
+      "op": "constant",
+      "value": 6
+    },
+    {
+      "id": "snow5",
+      "op": "multiply",
+      "inputs": [
+        "snow3",
+        "snow4"
+      ]
+    },
+    {
+      "id": "snow6",
+      "op": "gradientNoise",
+      "inputs": [
+        "snow5"
+      ]
+    },
+    {
+      "id": "snow7",
+      "op": "green",
+      "inputs": [
+        "snow1"
+      ]
+    },
+    {
+      "id": "snow8",
+      "op": "constant",
+      "value": 0.5
+    },
+    {
+      "id": "snow9",
+      "op": "subtract",
+      "inputs": [
+        "snow6",
+        "snow8"
+      ]
+    },
+    {
+      "id": "snow10",
+      "op": "constant",
+      "value": 0.12
+    },
+    {
+      "id": "snow11",
+      "op": "multiply",
+      "inputs": [
+        "snow9",
+        "snow10"
+      ]
+    },
+    {
+      "id": "snow12",
+      "op": "add",
+      "inputs": [
+        "snow7",
+        "snow11"
+      ]
+    },
+    {
+      "id": "snow13",
+      "op": "constant",
+      "value": 0.28
+    },
+    {
+      "id": "snow14",
+      "op": "constant",
+      "value": 0.78
+    },
+    {
+      "id": "snow15",
+      "op": "smoothstep",
+      "inputs": [
+        "snow13",
+        "snow14",
+        "snow12"
+      ]
+    },
+    {
+      "id": "snow16",
+      "op": "constant",
+      "value": 0.65
+    },
+    {
+      "id": "snow17",
+      "op": "multiply",
+      "inputs": [
+        "snow15",
+        "snow16"
+      ]
+    },
+    {
+      "id": "snow18",
+      "op": "constant",
+      "value": [
+        0.68,
+        0.75,
+        0.83,
+        1
+      ]
+    },
+    {
+      "id": "snow19",
+      "op": "constant",
+      "value": [
+        0.89,
+        0.94,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "snow20",
+      "op": "mix",
+      "inputs": [
+        "snow18",
+        "snow19",
+        "snow6"
+      ]
+    },
+    {
+      "id": "snow21",
+      "op": "mix",
+      "inputs": [
+        "snow0",
+        "snow20",
+        "snow17"
+      ]
+    },
+    {
+      "id": "snow22",
+      "op": "alpha",
+      "inputs": [
+        "snow0"
+      ]
+    },
+    {
+      "id": "snow23",
+      "op": "setAlpha",
+      "inputs": [
+        "snow21",
+        "snow22"
+      ]
+    },
+    {
+      "id": "snow24",
+      "op": "constant",
+      "value": 0.85
+    },
+    {
+      "id": "snow25",
+      "op": "constant",
+      "value": 0.92
+    },
+    {
+      "id": "snow26",
+      "op": "mix",
+      "inputs": [
+        "snow24",
+        "snow25",
+        "snow17"
+      ]
+    },
+    {
+      "id": "snow27",
+      "op": "constant",
+      "value": 0
+    },
+    {
+      "id": "snow28",
+      "op": "mix",
+      "inputs": [
+        "snow27",
+        "snow27",
+        "snow17"
+      ]
+    },
+    {
+      "id": "snow29",
+      "op": "mix",
+      "inputs": [
+        "snow1",
+        "snow1",
+        "snow17"
+      ]
+    },
+    {
+      "id": "snow30",
+      "op": "normalize3",
+      "inputs": [
+        "snow29"
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "snow23",
+    "roughness": "snow26",
+    "metallic": "snow28",
+    "normal": "snow30"
+  }
+}

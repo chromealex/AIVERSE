@@ -48,6 +48,11 @@ int main() {
     name.set("name", Json::string("spark"));
     auto got = call("fx_graph_get", name);
     require(got["graph"].isObject() && got["validation"].getBool("ok"), "graph_get failed");
+    require(got["validation"].has("metalGpuEligible") &&
+            !got["validation"].getBool("metalGpuEligible"),
+            "smoke sprite should expose CPU fallback diagnostics");
+    require(!got["validation"].getStr("metalGpuReason").empty(),
+            "CPU fallback reason was not reported");
     auto all = call("fx_graph_list", Json::object());
     require(all["graphs"].isArray() && all["graphs"].size()==1, "graph list did not find asset");
     require(all["graphs"][size_t(0)].getBool("ok"), "list reported graph compiler failure");
@@ -73,7 +78,7 @@ int main() {
     require(refused.has("error"), "bake overwrote an effect without permission");
 
     Json invalid = graph;
-    invalid.set("version", Json::number(int64_t(2)));
+    invalid.set("version", Json::number(int64_t(3))); // v2 is now supported
     create.set("graph", invalid);
     const auto rejected = call("fx_graph_set", create);
     require(!rejected.getBool("ok"), "invalid graph should not be saved");

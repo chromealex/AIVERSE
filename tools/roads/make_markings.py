@@ -3,7 +3,7 @@
 
 4 x 4 cells, white paint with alpha (tinted per decal): line, arrows (straight, left, right, straight+left,
 straight+right, left+right), STOP, BUS. Arrows and text point to the top of their cell (v = 0); text is stretched
-along the road as painted road text is. Slot order matches roadkit::Mark (modules/rts/view/RtsRoadKit.h).
+along the road as painted road text is. Slot order matches roadkit::Mark (engine/roads/RoadKit.h).
 Letters: Inter SemiBold (third_party/fonts/inter, SIL OFL). Needs Pillow. Usage: make_markings.py [out.png]
 """
 import os, random, sys

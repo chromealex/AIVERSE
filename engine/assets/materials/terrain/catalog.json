@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "default": "checkerboard",
+  "normalConvention": "+Y (OpenGL)",
+  "colorSpace": {
+    "basecolor": "sRGB",
+    "normal": "linear",
+    "orm": "linear",
+    "height": "linear"
+  },
+  "materials": [
+    {
+      "id": "grass",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.004,
+      "heightMap": "materials/terrain/textures/grass_height_repeat.png",
+      "terrainLayer": {
+        "id": "grass",
+        "texture": "materials/terrain/textures/grass_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/grass_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "soil",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.035,
+      "heightMap": "materials/terrain/textures/soil_height_repeat.png",
+      "terrainLayer": {
+        "id": "soil",
+        "texture": "materials/terrain/textures/soil_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/soil_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sand",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.012,
+      "heightMap": "materials/terrain/textures/sand_height_repeat.png",
+      "terrainLayer": {
+        "id": "sand",
+        "texture": "materials/terrain/textures/sand_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/sand_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "rock",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.065,
+      "heightMap": "materials/terrain/textures/rock_height_repeat.png",
+      "terrainLayer": {
+        "id": "rock",
+        "texture": "materials/terrain/textures/rock_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/rock_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "snow",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.008,
+      "heightMap": "materials/terrain/textures/snow_height_repeat.png",
+      "terrainLayer": {
+        "id": "snow",
+        "texture": "materials/terrain/textures/snow_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/snow_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "forest_floor",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.025,
+      "heightMap": "materials/terrain/textures/forest_floor_height_repeat.png",
+      "terrainLayer": {
+        "id": "forest_floor",
+        "texture": "materials/terrain/textures/forest_floor_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/forest_floor_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "wet_soil",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.022,
+      "heightMap": "materials/terrain/textures/wet_soil_height_repeat.png",
+      "terrainLayer": {
+        "id": "wet_soil",
+        "texture": "materials/terrain/textures/wet_soil_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/wet_soil_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "gravel_soil",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.045,
+      "heightMap": "materials/terrain/textures/gravel_soil_height_repeat.png",
+      "terrainLayer": {
+        "id": "gravel_soil",
+        "texture": "materials/terrain/textures/gravel_soil_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/gravel_soil_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "snow_crust",
+      "repeatMeters": 2.0,
+      "heightMeters": 0.006,
+      "heightMap": "materials/terrain/textures/snow_crust_height_repeat.png",
+      "terrainLayer": {
+        "id": "snow_crust",
+        "texture": "materials/terrain/textures/snow_crust_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/snow_crust_terrain_normal_repeat.png",
+        "scale": 2.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "river_sand",
+      "repeatMeters": 4.0,
+      "heightMeters": 0.002,
+      "heightMap": "materials/terrain/textures/river_sand_height_repeat.png",
+      "terrainLayer": {
+        "id": "river_sand",
+        "texture": "materials/terrain/textures/river_sand_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/river_sand_terrain_normal_repeat.png",
+        "scale": 4.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "pebble_sand",
+      "repeatMeters": 4.0,
+      "heightMeters": 0.012,
+      "heightMap": "materials/terrain/textures/pebble_sand_height_repeat.png",
+      "terrainLayer": {
+        "id": "pebble_sand",
+        "texture": "materials/terrain/textures/pebble_sand_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/pebble_sand_terrain_normal_repeat.png",
+        "scale": 4.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "granite_rock",
+      "repeatMeters": 4.0,
+      "heightMeters": 0.04,
+      "heightMap": "materials/terrain/textures/granite_rock_height_repeat.png",
+      "terrainLayer": {
+        "id": "granite_rock",
+        "texture": "materials/terrain/textures/granite_rock_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/granite_rock_terrain_normal_repeat.png",
+        "scale": 4.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "schist_rock",
+      "repeatMeters": 4.0,
+      "heightMeters": 0.035,
+      "heightMap": "materials/terrain/textures/schist_rock_height_repeat.png",
+      "terrainLayer": {
+        "id": "schist_rock",
+        "texture": "materials/terrain/textures/schist_rock_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/schist_rock_terrain_normal_repeat.png",
+        "scale": 4.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "checkerboard",
+      "repeatMeters": 4.0,
+      "heightMeters": 0,
+      "heightMap": "materials/terrain/textures/checkerboard_height_repeat.png",
+      "terrainLayer": {
+        "id": "checkerboard",
+        "texture": "materials/terrain/textures/checkerboard_terrain_color_repeat.png",
+        "normal": "materials/terrain/textures/checkerboard_terrain_normal_repeat.png",
+        "scale": 4.0,
+        "tint": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ]
+}

@@ -194,6 +194,26 @@ static void nativeSaveAndRollback() {
     auto wrongTable=wrong->seal();
     AIVERSE_TEST_CHECK(!st::validateStatic(restored->world(),*wrongTable));
     AIVERSE_TEST_CHECK(!st::bindStaticTable(restored->world(),*wrongTable));
+
+    // Review 2026-11-21: a save whose SharedRef slot points past the loaded
+    // SharedStore is rejected at load with a readable error, and the target
+    // simulation is left unchanged.
+    auto corrupt=simulation(immutable);
+    Entity victim=kNullEntity;
+    corrupt->world().eachExistingConst<st::SharedRef<sample::ActorConfig>>(
+        [&](Entity e,const auto&) { if(!victim.valid()) victim=e; });
+    AIVERSE_TEST_CHECK(victim.valid());
+    corrupt->world().get<st::SharedRef<sample::ActorConfig>>(victim).slot=999;
+    AIVERSE_TEST_CHECK(!st::validateShared<sample::ActorConfig>(corrupt->world()));
+    const std::string badBytes=corrupt->serialize();
+    auto target=simulation(immutable);
+    const uint64_t before=target->checksum();
+    error.clear();
+    AIVERSE_TEST_CHECK(!target->deserialize(badBytes,&error));
+    AIVERSE_TEST_CHECK(error.find("sample.actor.shared_ref")!=std::string::npos);
+    AIVERSE_TEST_CHECK(error.find("slot 999")!=std::string::npos);
+    AIVERSE_TEST_CHECK(target->checksum()==before);
+    AIVERSE_TEST_CHECK(st::validateShared<sample::ActorConfig>(target->world()));
 }
 
 int main() {

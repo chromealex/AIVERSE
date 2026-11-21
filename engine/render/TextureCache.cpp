@@ -1,4 +1,5 @@
 #include "TextureCache.h"
+#include "GpuResourceRetirement.h"
 #include "../platform/Platform.h"
 
 // Private copy of stb_image (static functions) so this file links next to the UI's copy.
@@ -36,13 +37,29 @@ bool decodeImage(const std::string& bytes, int& w, int& h, std::vector<uint8_t>&
 }
 
 void TextureCache::shutdown() {
-    auto isPage = [&](gfx::TextureHandle h) { for (auto& [k, p] : atlasPages_) if (p == h) return true; return false; };
-    std::vector<gfx::TextureHandle> gone;   // resolveSprite's fallbacks share resolve()'s textures
-    auto destroyed = [&](gfx::TextureHandle h) { for (auto& g : gone) if (g == h) return true; return false; };
-    if (dev_)
-        for (auto& [k, t] : cache_)
-            if (t.tex.valid() && !isPage(t.tex) && !destroyed(t.tex)) { dev_->destroyTexture(t.tex); gone.push_back(t.tex); }
-    if (dev_) for (auto& [k, t] : atlasPages_) if (t.valid()) dev_->destroyTexture(t);
+    auto isPage = [&](gfx::TextureHandle h) {
+        for (const auto& [k, p] : atlasPages_) if (p == h) return true;
+        return false;
+    };
+    std::vector<gfx::TextureHandle> gone;
+    auto alreadyReleased = [&](gfx::TextureHandle h) {
+        for (auto old : gone) if (old == h) return true;
+        return false;
+    };
+    auto releaseOwned = [&](gfx::TextureHandle h) {
+        if (!dev_ || !h.valid() || alreadyReleased(h)) return;
+        // A texture may still be sampled by the old particle pipeline or
+        // current ImGui preview. Never destroy before its GPU fence.
+        gfx::TextureHandle owned = h;
+        if (gpuRetirement_) gpuRetirement_->retire(*dev_,owned);
+        else dev_->destroyTexture(h);
+        gone.push_back(h);
+    };
+    for (const auto& [key, texture] : cache_)
+        if (texture.tex.valid() && !isPage(texture.tex))
+            releaseOwned(texture.tex);
+    for (const auto& [key, texture] : atlasPages_)
+        releaseOwned(texture);
     cache_.clear();
     atlasPages_.clear();
     sprites_.clear();

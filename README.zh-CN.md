@@ -78,7 +78,7 @@
 | **多人游戏意味着无尽的不同步。** 一个 `float` 就足以让 iPhone 和 Android 上的对局分道扬镳。 | 模拟在所有平台上逐位一致：用定点数代替浮点、自有随机数生成器、校验和。CI 在每次推送时比对 Linux x64/ARM64、Windows 和 macOS 上的对局。网络上只传输指令；支持带回滚的锁步，以及带匹配和录像裁决的服务器。 |
 | **移动端 GPU 很弱，但游戏必须好看。** | 每个高开销功能——阴影、粒子、地形、后处理——都有画质等级并自动适配 GPU，从老旧的 Mali、Adreno 到 Apple Silicon。 |
 | **多平台发布本身就是一个项目。** 签名、图标、商店和广告 SDK。 | `aiversebuild` 一条命令生成 .app、Xcode 项目、Gradle/APK、Web 和 .exe。图标和启动画面自动生成。提供 App Store、Google Play、RuStore、Yandex Games、Steam、AdMob、AppLovin 等插件——构建中只包含游戏选用的那些。 |
-| **每款新游戏都从零开始。** | 30+ 个可玩模板、带验收清单的类型套件、200 个智能体技能。新游戏从一个能运行的游戏开始。 |
+| **每款新游戏都从零开始。** | 30+ 个可玩模板、带验收清单的类型套件、238 个智能体技能。新游戏从一个能运行的游戏开始。 |
 | **元游戏和 LiveOps 在每个项目里都要重写。** | `aiverse::meta`：商店、货币、任务、通行证、每日奖励、体力、公会、锦标赛、带保底的宝箱——用 JSON 配置。 |
 
 ---
@@ -101,9 +101,10 @@
 | **Roguelike** | `run-graph`：基于种子的流程与遭遇预算；`loot-tables` 带稀有保底 |
 | **放置、工厂、殖民地** | `big-numbers`、`offline-production`（精确的离线收益）、`production-networks`、`logistics`、`tasks` |
 | **节奏游戏** | `rhythm-timing`：节拍图和与帧率无关的判定 |
+| **竞速、载具** | `vehicle-controllers`：汽车（扭矩、挡位、牵引力、漂移）、坦克、气垫船、飞机、座位、损伤区域；比赛会话：发车格、倒计时、按顺序通过的检查点、圈数、名次、逆行、竞速机器人；任何项目都可用的地图 `race` 块、通用 HUD 和追尾镜头，2 个模板 |
 | **任何手机游戏** | `aiverse::meta` 和 LiveOps、新手教程、界面、商店和广告插件 |
 
-竞速、体育和载具仍在[路线图](docs/genre-mechanics-roadmap.md)中。完整的库列表：
+体育游戏、船只、进站和处罚仍在[路线图](docs/genre-mechanics-roadmap.md)中。完整的库列表：
 [`libraries/catalog.json`](libraries/catalog.json) 和[类型包](docs/genre-packages.md)。
 
 ---
@@ -178,6 +179,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | 经济与建造 | **Hearth and Haul**（Knights and Merchants）· **Underlord**（Dungeon Keeper） |
 | 2D 与实验 | **Crystal Dunes**（瓦片地图，Dune II）· **Green Hills**（3D 地形上的 2D 精灵）· **Planets**（球形星球与轨道）· **Wildfire**（场：野火与菌毯） |
 | FPS | **Crossfire Arena**（5v5）· **Breach Protocol**（战术回合）· **Last Survivor**（100 人大逃杀）· **Aim Lab**（射击训练场） |
+| 竞速 | **Oval Sprint**（与三个机器人比赛的绕圈赛）· **Road Circuit**（样条道路上的比赛） |
 
 ---
 
@@ -200,7 +202,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **画面与音频**
 - 自研 RHI：Metal、GLES3 / WebGL2、GL 3.3、Vulkan（Windows / Linux / Android，可选）
-- PBR、glTF/OBJ、骨骼与程序化动画、程序化线缆、父子实体渲染
+- PBR、glTF/OBJ、骨骼与程序化动画、程序化线缆、父子实体渲染、物理天空、体积云与体积光束、支持运行时消散的球形/OBB局部体积雾
 - 阴影、动态光源、夜晚、后处理、Shader Graph
 - 支持 Unity ParticleSystem 模块的粒子系统及 Unity 导入器
 - 2D：精灵、带自动拼接的瓦片地图
@@ -213,9 +215,9 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **工具**
 - Unity 风格的可停靠编辑器：场景、检视器、地形、特效、光照、UI、试玩和设备模拟器
-- `aiversemcp`——面向智能体的 MCP 服务器
+- `aiversemcp`——面向智能体的 MCP 服务器——地图 PHYSIS 配置、验证与 Undo/Redo
 - **“制作游戏”**向导
-- 200 个智能体技能和带验收清单的类型套件
+- 238 个智能体技能和带验收清单的类型套件
 - 从你自己的正版副本导入经典游戏资源
 
 </td>
@@ -308,3 +310,9 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 仓库不包含商业游戏的原始资源：导入器从你自己的副本中读取它们。
 
 游戏构建会自动包含 `THIRD_PARTY_NOTICES.txt`；外部 SDK 的许可声明须由项目提供（见[详情](docs/third-party-notices.md)）。
+
+- [TerraWeave Rocks](docs/terrain/rocks.md): 按种子生成装饰性石头、巨石、石板与碎岩；共享 PBR 纹理导出和三级原生 LOD（可选）。
+
+**Terra 优先：**[原生树木、茂密草地及工作流](docs/terrain/vegetation-authoring.md)；仅为 TerraWeave 尚未提供的能力编写自定义生成逻辑。
+
+LENS 摄像机：[编辑与 MCP](skills/visuals/aiverse-lens/SKILL.md)、[原生集成与捕获](skills/visuals/aiverse-lens-native/SKILL.md)。

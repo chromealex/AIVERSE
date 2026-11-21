@@ -30,6 +30,12 @@ struct WaterFloodCell {
     uint32_t volumeCm=0;              // 0..100000, equal-area column
     Entity waterBody=kNullEntity;     // originating real NEREID water body
     int32_t flowXcmPerSec=0,flowZcmPerSec=0;
+    // Persisted sub-centimetre flux progress through a partially permeable
+    // obstruction on this cell's +X / +Z edge, in milli-cm (-999..999).
+    // Positive = towards the +X/+Z neighbour, negative = towards this cell.
+    // Without it, integer quantization made any permeability<1000 watertight
+    // for small heads. Schema "nereid.flood" v2; v1 saves load with 0.
+    int16_t carryXMilliCm=0,carryZMilliCm=0;
     constexpr bool operator==(const WaterFloodCell&) const = default;
 };
 enum class WaterFloodPortKind : uint8_t {
@@ -79,6 +85,18 @@ using WaterFloodPermeability=std::function<uint32_t(
     Entity waterBody,int64_t edgeXcm,int64_t edgeZcm,
     int32_t waterSurfaceCm)>;
 
+// Index of the cell (x,z) in the strictly sorted cell list, or cells.size().
+inline size_t findNereidFloodCell(const WaterFloodResource& r,
+                                  int32_t x,int32_t z){
+    const auto key=std::pair{x,z};
+    const auto it=std::lower_bound(r.cells.begin(),r.cells.end(),key,
+        [](const WaterFloodCell& a,const std::pair<int32_t,int32_t>& b){
+            return std::pair{a.x,a.z}<b;
+        });
+    if(it==r.cells.end() || it->x!=x || it->z!=z)return r.cells.size();
+    return size_t(it-r.cells.begin());
+}
+
 inline void validateNereidFlood(const WaterFloodResource& r){
     if(r.version!=1 || r.gridCm<10 || r.gridCm>10000 ||
        r.originXcm<-100000000 || r.originXcm>100000000 ||
@@ -98,6 +116,8 @@ inline void validateNereidFlood(const WaterFloodResource& r){
            (!c.volumeCm && c.waterBody.valid()) ||
            c.flowXcmPerSec<-100000 || c.flowXcmPerSec>100000 ||
            c.flowZcmPerSec<-100000 || c.flowZcmPerSec>100000 ||
+           c.carryXMilliCm<-999 || c.carryXMilliCm>999 ||
+           c.carryZMilliCm<-999 || c.carryZMilliCm>999 ||
            int64_t(c.x)*r.gridCm+r.originXcm<-100000000 ||
            int64_t(c.x+int64_t(1))*r.gridCm+r.originXcm>100000000 ||
            int64_t(c.z)*r.gridCm+r.originZcm<-100000000 ||
@@ -115,11 +135,20 @@ inline void validateNereidFlood(const WaterFloodResource& r){
             !p.waterBody.valid()) ||
            !uniquePorts.emplace(p.x,p.z,uint8_t(p.kind)).second)
             throw std::invalid_argument("NEREID invalid/duplicate flood boundary port");
+        // Rejected at load/publication instead of throwing on every tick.
+        if(findNereidFloodCell(r,p.x,p.z)==r.cells.size())
+            throw std::invalid_argument("NEREID flood boundary port outside grid");
     }
+}
+// Schema v1 (formatVersion 1) has no flux carries; v2+ (and unversioned
+// hashing, formatVersion UINT32_MAX) persists them.
+inline bool nereidFloodHasCarries(const Archive& a){
+    return a.formatVersion>=2u;
 }
 inline void io(Archive& a,WaterFloodCell& c){
     a(c.x,c.z,c.groundCm,c.volumeCm,c.waterBody,
       c.flowXcmPerSec,c.flowZcmPerSec);
+    if(nereidFloodHasCarries(a))a(c.carryXMilliCm,c.carryZMilliCm);
 }
 inline void io(Archive& a,WaterFloodPort& p){
     a(p.x,p.z,p.kind,p.maxCmPerTick,p.waterBody);
@@ -128,8 +157,9 @@ inline void io(Archive& a,WaterFloodResource& r){
     a(r.version,r.gridCm,r.originXcm,r.originZcm,
       r.revision,r.wetnessRevision,r.groundRevision,r.lastTick,
       r.externalVolumeCm);
-    // Each cell is exactly 32 persisted bytes (6 int32 fields + Entity).
-    uint32_t n=a.count(r.cells.size(),32);
+    // Each cell is exactly 32 persisted bytes (6 int32 fields + Entity),
+    // plus two int16 flux carries from schema v2.
+    uint32_t n=a.count(r.cells.size(),nereidFloodHasCarries(a)?36:32);
     if(!a.ok() || n>16384u){a.fail();return;}
     if(!a.writing())r.cells.assign(n,{});
     for(auto& c:r.cells)if(a.ok())a(c);
@@ -143,7 +173,11 @@ inline void io(Archive& a,WaterFloodResource& r){
     }
 }
 inline void registerNereidFloodPersistence(Simulation& sim){
-    sim.registerPersistentResource<WaterFloodResource>("nereid.flood",1);
+    // v2 adds per-edge flux carries (WaterFloodCell::carry*MilliCm).
+    sim.registerPersistentResource<WaterFloodResource>("nereid.flood",2);
+    // The v1 chunk is decoded with formatVersion=1, i.e. without carries.
+    sim.registerPersistentResourceMigration<WaterFloodResource>(
+        "nereid.flood",1,[](Archive& a,WaterFloodResource& r){io(a,r);});
 }
 
 inline WaterFloodTick stepNereidFlood(
@@ -164,22 +198,26 @@ inline WaterFloodTick stepNereidFlood(
     WaterFloodTick result;
     result.totalBeforeCm=r.externalVolumeCm;
     const size_t n=r.cells.size();
-    std::map<std::pair<int32_t,int32_t>,size_t> lookup;
-    for(size_t i=0;i<n;++i){
-        const auto& c=r.cells[i];
-        lookup.emplace(std::pair{c.x,c.z},i);
-        result.totalBeforeCm+=c.volumeCm;
-    }
+    for(size_t i=0;i<n;++i)result.totalBeforeCm+=r.cells[i].volumeCm;
     // All transfers are proposed from the OLD snapshot, then committed once.
     // Each undirected edge is processed once (+X or +Z only), so opposite
     // proposals cannot double-spend or make source iteration order relevant.
     std::vector<uint32_t> incoming(n,0),outgoing(n,0);
     std::vector<int64_t> netX(n,0),netZ(n,0);
     std::vector<Entity> newBody(n,kNullEntity);
+    // Edge carries are rewritten every tick; an edge that does not flow (or
+    // flows the other way) restarts from zero, so the carry stays < 1 cm.
+    std::vector<int16_t> newCarryX(n,0),newCarryZ(n,0);
     const auto tryEdge=[&](size_t i,int32_t nx,int32_t nz) {
-        const auto found=lookup.find({nx,nz});
-        if(found==lookup.end())return;
-        const size_t j=found->second;
+        // Cells are sorted by (x,z): the +Z neighbour is usually next.
+        size_t j=n;
+        if(i+1<n && r.cells[i+1].x==nx && r.cells[i+1].z==nz)j=i+1;
+        else j=findNereidFloodCell(r,nx,nz);
+        if(j==n)return;
+        const bool alongX=nx!=r.cells[i].x;
+        int16_t& carryOut=alongX?newCarryX[i]:newCarryZ[i];
+        const int16_t carryIn=alongX?r.cells[i].carryXMilliCm:
+                                     r.cells[i].carryZMilliCm;
         const auto& a=r.cells[i],&b=r.cells[j];
         const int64_t ha=int64_t(a.groundCm)+a.volumeCm;
         const int64_t hb=int64_t(b.groundCm)+b.volumeCm;
@@ -209,16 +247,25 @@ inline WaterFloodTick stepNereidFlood(
             1000u;
         if(permeability>1000u)
             throw std::invalid_argument("NEREID flood obstruction permeability");
-        potential=potential*permeability/1000u;
-        // Tiny permeability is allowed to block sub-cm flux at this
-        // resolution; do not force an unphysical 1cm transfer through it.
-        if(!potential)return;
+        // Partial permeability scales the quantized flux exactly: the
+        // sub-cm remainder is carried per edge (same direction only), so a
+        // 25% permeable log passes 1 cm every 4 ticks instead of nothing.
+        // permeability 1000 leaves potential unchanged (carry stays 0).
+        const int16_t direction=source==i?1:-1;
+        const uint64_t prior=(carryIn>0)==(direction>0) && carryIn!=0 ?
+            uint64_t(carryIn<0?-int32_t(carryIn):int32_t(carryIn)):0u;
+        const uint64_t scaled=potential*permeability+prior;
+        potential=scaled/1000u;
+        const int16_t remainder=int16_t(int32_t(scaled%1000u)*direction);
+        if(!potential){carryOut=remainder;return;}
         const uint32_t sourceRemaining=from.volumeCm-outgoing[source];
         const uint32_t targetSpace=100000u-to.volumeCm-incoming[destination];
         const uint32_t moved=uint32_t(std::min<uint64_t>({
             potential,uint64_t(settings.maxFluxCmPerEdge),
             uint64_t(sourceRemaining),uint64_t(targetSpace),gradient}));
         if(!moved)return;
+        // A capped transfer drops its fractional progress (bounded budget).
+        if(moved==potential)carryOut=remainder;
         outgoing[source]+=moved;incoming[destination]+=moved;
         if(!to.volumeCm){
             if(!newBody[destination].valid())
@@ -227,6 +274,7 @@ inline WaterFloodTick stepNereidFlood(
                 // Only the first compatible water source may wet a dry cell
                 // in one tick. Real confluences remain NEREID-owned.
                 outgoing[source]-=moved;incoming[destination]-=moved;
+                carryOut=0;
                 return;
             }
         }
@@ -253,24 +301,36 @@ inline WaterFloodTick stepNereidFlood(
         if(!r.cells[i].volumeCm && c.volumeCm)
             c.waterBody=newBody[i];
         if(!c.volumeCm)c.waterBody=kNullEntity;
-        // Derived local surface flow is deterministic signed cm/s.
-        // Limiting to +/-1000m/s matches NEREID's existing current clamp.
+        c.carryXMilliCm=newCarryX[i];
+        c.carryZMilliCm=newCarryZ[i];
+        // Derived local surface flow is deterministic signed cm/s:
+        // velocity = moved column-cm * cell width / (column depth * dt).
+        // Without *gridCm the value had units cells/s. The multiply
+        // saturates before the +/-1000m/s clamp (NEREID's current clamp).
         const int64_t divisor=std::max<uint64_t>(1,
             uint64_t(c.volumeCm)*uint64_t(dtMs));
-        c.flowXcmPerSec=int32_t(std::clamp<int64_t>(
-            netX[i]*1000/divisor,-100000,100000));
-        c.flowZcmPerSec=int32_t(std::clamp<int64_t>(
-            netZ[i]*1000/divisor,-100000,100000));
+        const int64_t scale=int64_t(1000)*r.gridCm;
+        const auto velocity=[&](int64_t net){
+            const int64_t limit=std::numeric_limits<int64_t>::max()/scale;
+            const int64_t numerator=net>limit ?
+                std::numeric_limits<int64_t>::max() :
+                net< -limit ? -std::numeric_limits<int64_t>::max() :
+                net*scale;
+            return int32_t(std::clamp<int64_t>(
+                numerator/divisor,-100000,100000));
+        };
+        c.flowXcmPerSec=velocity(netX[i]);
+        c.flowZcmPerSec=velocity(netZ[i]);
     }
     // Explicit boundary ports feed/discharge this finite grid from/to the
     // SAME counted external store. They can create a hydraulic head rise
     // before a blocked outlet, but never conjure infinite water from a
     // static NEREID WaterBodyComponent footprint.
     for(const auto& port:r.ports){
-        const auto found=lookup.find({port.x,port.z});
-        if(found==lookup.end())
+        const size_t found=findNereidFloodCell(r,port.x,port.z);
+        if(found==n) // unreachable: validateNereidFlood rejects it
             throw std::invalid_argument("NEREID flood boundary port outside grid");
-        auto& c=candidate.cells[found->second];
+        auto& c=candidate.cells[found];
         uint32_t amount=0;
         if(port.kind==WaterFloodPortKind::Inflow) {
             if(c.volumeCm && c.waterBody!=port.waterBody)continue;
@@ -382,6 +442,55 @@ inline WaterSample applyNereidFloodSample(
     return base;
 }
 
+// Enabled obstructions bucketed once per flood tick by water body (sorted by
+// generation-safe entity id), instead of iterating every ECS obstruction for
+// each of up to 32768 edge probes. permeability() is the minimum over the
+// matching obstructions, so it is independent of iteration order and equal
+// to the former per-call ECS scan.
+class NereidFloodObstructionIndex {
+public:
+    explicit NereidFloodObstructionIndex(const World& read){
+        entries_.reserve(read.countExisting<WaterFlowObstructionComponent>());
+        read.eachExistingConst<WaterFlowObstructionComponent>(
+            [&](Entity id,const WaterFlowObstructionComponent& obs){
+                if(!read.alive(id) || !obs.enabled)return;
+                entries_.push_back({obs.waterBody.packed(),obs.center,
+                    obs.radius,obs.bottomY,obs.topY,
+                    obs.permeabilityPermille});
+            });
+        std::stable_sort(entries_.begin(),entries_.end(),
+            [](const Entry& a,const Entry& b){return a.body<b.body;});
+    }
+    uint32_t permeability(Entity body,int64_t x,int64_t z,
+                          int32_t surface)const{
+        uint32_t strength=1000u;
+        const uint64_t key=body.packed();
+        auto it=std::lower_bound(entries_.begin(),entries_.end(),key,
+            [](const Entry& e,uint64_t k){return e.body<k;});
+        if(it==entries_.end() || it->body!=key)return strength;
+        const Fixed fx=Fixed::fromRatio(x,100);
+        const Fixed fz=Fixed::fromRatio(z,100);
+        const Fixed top=Fixed::fromRatio(surface,100);
+        for(;it!=entries_.end() && it->body==key;++it){
+            if(it->topY<=top-Fixed::fromInt(1) ||
+               it->bottomY>=top ||
+               fxAbs(fx-it->center.x)>=it->radius ||
+               fxAbs(fz-it->center.y)>=it->radius)continue;
+            strength=std::min(strength,it->permeabilityPermille);
+        }
+        return strength;
+    }
+    bool empty()const{return entries_.empty();}
+private:
+    struct Entry {
+        uint64_t body=0;
+        Vec2 center{};
+        Fixed radius{},bottomY{},topY{};
+        uint32_t permeabilityPermille=1000;
+    };
+    std::vector<Entry> entries_;
+};
+
 inline void addNereidFloodRoutingSystem(
         Simulation& sim,std::string name,
         uint32_t dtMs=16,WaterFloodSettings config={}){
@@ -390,40 +499,38 @@ inline void addNereidFloodRoutingSystem(
             World& world=current.world();
             const auto* stored=world.resourceConst<WaterFloodResource>();
             if(!stored || stored->cells.empty())return;
-            for(const auto& port:stored->ports){
-                if(port.kind!=WaterFloodPortKind::Inflow)continue;
+            WaterFloodResource next=*stored;
+            // An inflow whose NEREID water body died or was disabled is
+            // skipped for this tick (deterministically, in port order)
+            // instead of throwing every tick; the configured ports persist.
+            std::vector<WaterFloodPort> configured;
+            const auto liveInflow=[&](const WaterFloodPort& port){
+                if(port.kind!=WaterFloodPortKind::Inflow)return true;
                 const auto* body=world.tryGetConst<WaterBodyComponent>(
                     port.waterBody);
-                if(!world.alive(port.waterBody) ||
-                   !body || !validWaterBody(*body))
-                    throw std::invalid_argument(
-                        "NEREID flood inflow references invalid water body");
+                return world.alive(port.waterBody) && body &&
+                       validWaterBody(*body);
+            };
+            if(!std::all_of(stored->ports.begin(),stored->ports.end(),
+                            liveInflow)){
+                configured=next.ports;
+                next.ports.erase(std::remove_if(next.ports.begin(),
+                    next.ports.end(),[&](const WaterFloodPort& port){
+                        return !liveInflow(port);
+                    }),next.ports.end());
             }
-            WaterFloodResource next=*stored;
-            // Obstruction callback is host-independent, based only on the
+            // Obstruction lookup is host-independent, based only on the
             // immutable ECS record for the same water tick.
-            const World& read=world;
-            WaterFloodPermeability resistance=
-                [&read](Entity body,int64_t x,int64_t z,int32_t surface){
-                    uint32_t strength=1000u;
-                    read.eachExistingConst<WaterFlowObstructionComponent>(
-                        [&](Entity id,const WaterFlowObstructionComponent& obs){
-                            if(!read.alive(id) || !obs.enabled ||
-                               obs.waterBody!=body)return;
-                            const Fixed fx=Fixed::fromRatio(x,100);
-                            const Fixed fz=Fixed::fromRatio(z,100);
-                            const Fixed top=Fixed::fromRatio(surface,100);
-                            if(obs.topY<=top-Fixed::fromInt(1) ||
-                               obs.bottomY>=top ||
-                               fxAbs(fx-obs.center.x)>=obs.radius ||
-                               fxAbs(fz-obs.center.y)>=obs.radius)return;
-                            strength=std::min(strength,
-                                obs.permeabilityPermille);
-                        });
-                    return strength;
+            const NereidFloodObstructionIndex obstructions(world);
+            WaterFloodPermeability resistance;
+            if(!obstructions.empty())
+                resistance=[&obstructions](Entity body,int64_t x,int64_t z,
+                                           int32_t surface){
+                    return obstructions.permeability(body,x,z,surface);
                 };
             (void)stepNereidFlood(next,current.tick(),dtMs,
                                   config,resistance);
+            if(!configured.empty())next.ports=std::move(configured);
             world.setResource<WaterFloodResource>(std::move(next));
         });
 }

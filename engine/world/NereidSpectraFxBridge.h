@@ -45,7 +45,15 @@ public:
             float(e.position.z.toDouble())},{0.f,1.f,0.f},scale);
         if(handle.valid()) {
             if(handles_.size()>=kMaxTracked) {
-                // This bridge owns only its own one-shot handles. Killing an
+                // First forget cues that have finished emitting (their
+                // particles fade out on their own), so a full list does not
+                // cut off a cue that is still playing.
+                handles_.erase(std::remove_if(handles_.begin(),handles_.end(),
+                    [&](spectra::Handle h){return !particles_.playing(h);}),
+                    handles_.end());
+            }
+            if(handles_.size()>=kMaxTracked) {
+                // This bridge owns only its own one-shot handles. Stopping an
                 // oldest cue caps rollback tracking, not global SpectraFX.
                 particles_.stop(handles_.front());
                 handles_.erase(handles_.begin());

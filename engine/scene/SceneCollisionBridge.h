@@ -60,8 +60,14 @@ public:
         };
     }
 
+    // Reference counted per key: several SceneLoadCoordinators (or other
+    // owners) may share one bridge; each successful acquire() must be
+    // matched by one release(). The stream lives until the last release.
     bool acquire(const std::string& key,std::string& error) {
-        if(resident_.contains(key)) return true;
+        if(const auto found=resident_.find(key);found!=resident_.end()) {
+            ++found->second.refs;
+            return true;
+        }
         const auto it=sources_.find(key);
         if(it==sources_.end()) {
             error="unknown scene collision source: "+key;
@@ -87,9 +93,16 @@ public:
     }
 
     void release(const std::string& key) {
+        const auto it=resident_.find(key);
+        if(it==resident_.end())return;
+        if(--it->second.refs>0)return;
         // The stream is destroyed first (removes only its collider IDs),
         // then the move-only namespace lease is returned to the catalog.
-        resident_.erase(key);
+        resident_.erase(it);
+    }
+    size_t leaseCount(const std::string& key)const noexcept {
+        const auto it=resident_.find(key);
+        return it==resident_.end()?0:it->second.refs;
     }
 
     // Poll actual collision chunks and publish prepared shapes before
@@ -128,6 +141,7 @@ private:
         // destructor: members are destroyed in reverse declaration order.
         std::optional<SceneCollisionNamespaces::Lease> lease;
         std::unique_ptr<world::CollisionStream> stream;
+        size_t refs=1;
     };
 
     world::SpatialWorld& target_;

@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 #if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
 #include <cerrno>
 #include <csignal>
@@ -660,7 +661,9 @@ void killedProcessReleasesJournalLock() {
         JournalProcessLock held;
         std::string reason;
         const char state=held.acquire(journal,&reason)?'Y':'N';
-        (void)::write(ready[1],&state,1);
+        ssize_t sent=-1;
+        do {sent=::write(ready[1],&state,1);} while(sent<0 && errno==EINTR);
+        if(sent!=1)::_exit(44);
         ::close(ready[1]);
         if(state!='Y')::_exit(42);
         for(;;)::pause();
@@ -672,7 +675,11 @@ void killedProcessReleasesJournalLock() {
     while(polled<0 && errno==EINTR);
     char acquired='N';
     if(polled>0 && (descriptor.revents&POLLIN))
-        (void)::read(ready[0],&acquired,1);
+    {
+        ssize_t count=-1;
+        do {count=::read(ready[0],&acquired,1);} while(count<0 && errno==EINTR);
+        if(count!=1)acquired='N';
+    }
     ::close(ready[0]);
     CHECK(polled>0 && acquired=='Y');
     if(acquired=='Y') {
@@ -819,7 +826,9 @@ void killedEndpointRecoversQueuedJournal() {
         const bool unknown=opened && endpoint.gateway().entries().size()==1 &&
             endpoint.gateway().entries().begin()->second.receipt.result==Result::Unknown;
         const char state=unknown?'Y':'N';
-        (void)::write(ready[1],&state,1);
+        ssize_t sent=-1;
+        do {sent=::write(ready[1],&state,1);} while(sent<0 && errno==EINTR);
+        if(sent!=1)::_exit(44);
         ::close(ready[1]);
         if(!unknown)::_exit(43);
         for(;;)::pause();
@@ -831,7 +840,11 @@ void killedEndpointRecoversQueuedJournal() {
     while(polled<0 && errno==EINTR);
     char received='N';
     if(polled>0 && (descriptor.revents&POLLIN))
-        (void)::read(ready[0],&received,1);
+    {
+        ssize_t count=-1;
+        do {count=::read(ready[0],&received,1);} while(count<0 && errno==EINTR);
+        if(count!=1)received='N';
+    }
     ::close(ready[0]);
     CHECK(polled>0 && received=='Y');
     if(received=='Y') {
@@ -947,6 +960,32 @@ void authProof() {
     CHECK(badS->recv(b));
     CHECK(!badServer.consume(*badS,b));
     CHECK(!badServer.authenticated());
+    // Review fix: an unknown (well-formed) principal must receive the same
+    // 32-byte Challenge as a known one and be denied only at Proof, so Hello
+    // cannot be used to enumerate accounts.
+    auto [unkC,unkS]=net::makeLoopbackPair();
+    ServerHandshake unkServer([&](const std::string& user)->std::optional<net::Key>{
+        return user=="admin"?std::optional<net::Key>(k):std::nullopt;
+    });
+    ClientHandshake unkClient("intruder",k);
+    CHECK(unkClient.begin(*unkC));
+    CHECK(unkS->recv(b));
+    CHECK(unkServer.consume(*unkS,b));
+    CHECK(!unkServer.rejected());
+    CHECK(unkC->recv(b));
+    {
+        Kind kind{};
+        net::Bytes payload;
+        CHECK(decode(b,kind,payload));
+        CHECK(kind==Kind::Challenge && payload.size()==32);
+    }
+    CHECK(unkClient.consume(*unkC,b));
+    CHECK(unkS->recv(b));
+    CHECK(!unkServer.consume(*unkS,b));
+    CHECK(!unkServer.authenticated() && unkServer.rejected());
+    CHECK(unkC->recv(b));
+    CHECK(!unkClient.consume(*unkC,b));
+    CHECK(!unkClient.authenticated());
 }
 #ifndef __EMSCRIPTEN__
 void realLoopbackWebSocket() {
@@ -961,10 +1000,31 @@ void realLoopbackWebSocket() {
             return name=="admin"?std::optional<net::Key>(key()):std::nullopt;
         },reader,writer,&error));
     CHECK(service.port()!=0);
-    LoopbackAdminConnector connector;
     const auto url="ws://127.0.0.1:"+std::to_string(service.port());
+    // Review fix: idle unauthenticated sockets get a separate small quota
+    // and cannot take every admin slot.
+    std::vector<std::unique_ptr<net::Conn>> idle;
+    for(int i=0;i<6;++i)
+        if(auto conn=net::connectWebSocket(url))idle.push_back(std::move(conn));
+    CHECK(idle.size()==6);
+    std::uint64_t idleClock=net::nowMs();
+    for(int i=0;i<40;++i) {
+        idleClock+=10;
+        for(auto& conn:idle)conn->update(idleClock);
+        service.poll(*sim,idleClock);
+        CHECK(service.connections()<=LoopbackAdminEndpoint::kMaxUnauthenticatedPeers);
+    }
+    CHECK(service.connections()>=1);
+    // Past the short handshake deadline the anonymous peers are dropped.
+    idleClock+=LoopbackAdminEndpoint::kHandshakeTimeoutMs+10;
+    service.poll(*sim,idleClock);
+    service.poll(*sim,idleClock+1);
+    CHECK(service.connections()==0);
+    for(auto& conn:idle)conn->close();
+    idle.clear();
+    LoopbackAdminConnector connector;
     CHECK(connector.connect(url,"admin",key(),&error));
-    const auto start=net::nowMs();
+    const auto start=idleClock+2;
     std::uint64_t lastPollMs=start;
     bool established=false;
     for(int i=0;i<200;++i) {

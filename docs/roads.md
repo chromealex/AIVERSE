@@ -6,10 +6,14 @@ the heights of the spline points, branches that leave chosen lanes of another ro
 
 | Part | Where |
 |---|---|
-| Data, built-in types, shared geometry (Fixed math) | `modules/rts/RtsRoadNet.{h,cpp}`, `modules/rts/RtsRoadTypes.cpp` |
-| Look: meshes, paint decals, props, signals | `modules/rts/view/RtsRoadView.{h,cpp}`, `modules/rts/view/RtsRoadKit.{h,cpp}` |
+| Data, built-in types, shared geometry (Fixed math) | `engine/roads/RoadNet.{h,cpp}`, `engine/roads/RoadTypes.cpp` (target `AIVERSE::roads`, namespace `aiverse::roads`) |
+| Look: meshes, paint decals, props, signals | `engine/roads/RoadView.{h,cpp}`, `engine/roads/RoadKit.{h,cpp}` (target `AIVERSE::roads_view`); every client draws it: the grid-map view and the metre-map client (`apps/fps/client.cpp`, with `setWorldShift` for its moving origin) |
 | Editor window «Дороги» (Мир) | `apps/editor/windows/RoadsWindow.cpp` |
 | Edit helpers + MCP | `apps/editor/core/RoadOps.{h,cpp}` |
+
+Roads are shared by every project, whatever its module: a metre map sets rules `roadTypes.cellMeters` to 1. The old
+`modules/rts/RtsRoadNet.h` and `modules/rts/view/RtsRoadView.h` are compatibility headers (`game::RtsRoadView` =
+`roads::RoadView`).
 
 Water (straits, rivers, the sea with embankments, cliffs and beaches) is drawn the same way: `docs/water.md`.
 
@@ -145,12 +149,12 @@ lamp glows (the water reflection of the map; a map without water bodies has none
 
 A map without weather can fix the look: `"roadNetwork": {"weather": {"wet": 1, "puddles": 0.6}, ...}` (a game's
 `setWeather` overrides it). A game that draws its own reflective water reads the spots,
-`RtsRoadView::puddleSpots()` (centre on the road surface, long axis, full length / width, the level it starts at,
-dirt or not), and sizes them with `RtsRoadView::puddleScale(spot, puddles)`.
+`RoadView::puddleSpots()` (centre on the road surface, long axis, full length / width, the level it starts at,
+dirt or not), and sizes them with `RoadView::puddleScale(spot, puddles)`.
 
 ### Surface for wheels
 
-The carriageway is drawn a little over the ground, kerbs and raised sidewalks higher still. `RtsRoadView::surfaceAt`
+The carriageway is drawn a little over the ground, kerbs and raised sidewalks higher still. `RoadView::surfaceAt`
 (and `RtsView::groundAt`, which falls back to the ground) returns the drawn top of the road surfaces: carriageways,
 kerbs, sidewalks, junctions, medians, driveways, verges and low embankments, sampled 8 times per cell and interpolated,
 so a kerb is a short ramp a wheel rolls up. Barriers, poles, signal heads, pillars and props are not part of it, nor

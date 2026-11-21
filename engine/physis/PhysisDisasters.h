@@ -130,10 +130,18 @@ inline void advanceDisasters(World& world,
                 const auto nx = x + dx[direction], nz = z + dz[direction];
                 if (nx < 0 || nz < 0 || nx >= width || nz >= height) continue;
                 const auto j = std::size_t(nz) * std::size_t(width) + std::size_t(nx);
-                // Wind in the direction of spread increases ember transport.
-                const auto wind = direction < 2 ? air[i].wind.x : air[i].wind.y;
-                const auto downwind = (direction % 2 == 0) ? wind : -wind;
-                const auto windGain = fxClamp(downwind / 20, Fixed{}, Fixed::fromInt(1));
+                // Embers travel from the burning neighbour j into this cell i,
+                // i.e. along (-dx,-dz). The SOURCE cell's wind carries them:
+                // a tailwind (wind blowing from j towards i) speeds spread up
+                // to 2x at 20 m/s; a headwind suppresses it down to 1/4.
+                // (Before 2026-11-21 the sign was inverted and the target
+                // cell's wind was used, so fire crept upwind.)
+                const auto& sourceWind = air[j].wind;
+                const auto along = direction < 2
+                    ? (dx[direction] > 0 ? -sourceWind.x : sourceWind.x)
+                    : (dz[direction] > 0 ? -sourceWind.y : sourceWind.y);
+                const auto windGain = fxClamp(along / 20, -Fixed::fromRatio(3, 4),
+                                              Fixed::fromInt(1));
                 neighborFire += old[j].fire * (Fixed::fromInt(1) + windGain);
                 if (floodMode == FloodMode::LocalShallow) {
                     const auto neighborHead = positions[j].elevation + old[j].waterDepth;

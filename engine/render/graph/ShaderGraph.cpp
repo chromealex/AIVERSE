@@ -36,7 +36,7 @@ const std::vector<Op>& catalog() {
         {"tilingOffset",3},{"rotateUV",3},{"polarUV",2},{"panner",3},{"flipbook",4},
         {"noise",1},{"gradientNoise",1},{"voronoi",1},{"checkerboard",1},
         {"luminance",1},{"desaturate",2},{"contrast",2},{"saturation",2},
-        {"linearToSrgb",1},{"srgbToLinear",1},{"normalUnpack",1},{"normalStrength",2},
+        {"linearToSrgb",1},{"srgbToLinear",1},{"normalUnpack",1},{"normalStrength",2},{"normalFromHeight",3,1,false},
         {"lessThan",2},{"greaterThan",2},{"equal",2},{"branch",3},
         {"ddx",1,7,false},{"ddy",1,7,false},{"fwidth",1,7,false}
     };
@@ -72,8 +72,18 @@ Program compile(const Json& g, const std::string& expected) {
             }
         }
     }
+    // Default 128 nodes. Layered material graphs (Terra detail with
+    // anti-tiling) may opt into up to 192, like the material sampleBudget.
+    size_t nodeBudget=128;
+    if(g.has("nodeBudget")) {
+        const auto& budget=g["nodeBudget"];
+        if(p.domain!="material" || !budget.isNumber() ||
+           budget.toDouble()!=budget.integer() || budget.integer()<1 || budget.integer()>192)
+            fail("nodeBudget must be an integer 1..192 for material graphs only");
+        nodeBudget=size_t(budget.integer());
+    }
     const auto& ns = g["nodes"];
-    if (!ns.isArray() || ns.size() == 0 || ns.size() > 128) fail("expected 1..128 nodes");
+    if (!ns.isArray() || ns.size() == 0 || ns.size() > nodeBudget) fail("expected 1.."+std::to_string(nodeBudget)+" nodes");
     std::map<std::string,size_t> ids;
     for (size_t i=0;i<ns.size();++i) {
         const auto& n=ns[i]; const auto id=n.getStr("id");
@@ -114,7 +124,7 @@ Program compile(const Json& g, const std::string& expected) {
     auto order=lib::topological(edges); if (!order) fail("cycle in node connections");
     if (!g["outputs"].isObject() || !g["outputs"]["color"].isString()) fail("color output is required");
     for (const auto& [key,v]:g["outputs"].members()) {
-        if (key!="color" && (p.domain!="material" || (key!="roughness" && key!="metallic" && key!="emission" && key!="vertexOffset" && key!="vertexNormal" && key!="normal"))) fail("unsupported output '"+key+"'");
+        if (key!="color" && (p.domain!="material" || (key!="roughness" && key!="metallic" && key!="occlusion" && key!="emission" && key!="vertexOffset" && key!="vertexNormal" && key!="normal"))) fail("unsupported output '"+key+"'");
         auto it=ids.find(v.str()); if (!v.isString() || it==ids.end()) fail("output '"+key+"': missing node");
         p.outputs[key]="sg_n"+std::to_string(it->second);
     }
@@ -165,7 +175,15 @@ Program compile(const Json& g, const std::string& expected) {
             const auto& v=n["value"];if(v.isNumber())number(v);else {if(!v.isArray()||v.size()!=4)fail("constant/parameter value must be RGBA");for(auto& c:v.items())number(c);}
         }
     }
-    if(p.samples>8) fail("at most 8 texture samples are allowed");
+    int sampleBudget=8;
+    if(g.has("sampleBudget")) {
+        const auto& budget=g["sampleBudget"];
+        if(p.domain!="material" || !budget.isNumber() ||
+           budget.toDouble()!=budget.integer() || budget.integer()<1 || budget.integer()>16)
+            fail("sampleBudget must be an integer 1..16 for material graphs only");
+        sampleBudget=int(budget.integer());
+    }
+    if(p.samples>sampleBudget) fail("texture sample budget exceeded");
     return p;
 }
 std::string statements(const Program& p,bool metal) { return metal?p.msl:p.glsl; }

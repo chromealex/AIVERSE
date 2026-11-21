@@ -1,4 +1,6 @@
 #include "WaterOps.h"
+#include "engine/world/NereidFlowAuthoring.h"
+#include "apps/editor/AuthoringWater.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -206,6 +208,10 @@ void registerWaterOps(Workspace& ws) {
         w->note({Change::Cells, 0, 0, w->map.data.w - 1, w->map.data.h - 1, -1, text});
         return r;
     };
+    add("nereid_water_state","Native NEREID surfaces and resolved authoring currents.","{}",[w,need](const Json&){need();return world::nereidFlowState(authoredWaterDocument(w->map));});
+    add("nereid_flow_set","Set NEREID manual velocity or automatic slope current; editable grade in degrees. Undoable map authoring, does not mutate legacy waterNetwork.",
+        R"({"type":"object","properties":{"id":{"type":"integer"},"mode":{"type":"string","enum":["automatic","manual"]},"flow":{"type":"array"},"slopeDegrees":{"type":"number"},"downhillHeadingDegrees":{"type":"number"},"responseSeconds":{"type":"number"},"maxSpeed":{"type":"number"},"origin":{"type":"array"}},"required":["id","mode"]})",
+        [w,need](const Json& input){need();if(w->project.isFps())throw std::runtime_error("NEREID MapDoc operation requires a flat map");editAuthoredWaterFlow(w->map,input);w->note({Change::Cells,0,0,0,0,-1,"NEREID flow"});return world::nereidFlowState(authoredWaterDocument(w->map));});
     add("water_types",
         "Shore types of water from splines (docs/water.md): the built-in library (embankment, embankment_stone, cliff, "
         "beach, bank) plus rules \"shoreTypes\" (a game retunes a type by id, gives its own textures per surface and "

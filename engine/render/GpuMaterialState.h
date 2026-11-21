@@ -1,6 +1,18 @@
 // GPU material equivalence for batching. Material object identity is irrelevant:
 // only shader programs, pipeline state, uniforms and resolved texture resources matter.
 #pragma once
+#include <algorithm>
+#include <cmath>
+namespace aiverse::render {
+// PBR material uniform light.w carries two independent features:
+// floor() = thin diffuse transmission quantised to 1/255 (0 = legacy PBR),
+// fract() = backlit SSS max transmitted world depth in [0, 0.999] (0 = artistic backlight).
+inline float gpuPackThinSss(float thinTransmission, float sssThickness) {
+    const float thin = std::isfinite(thinTransmission) ? std::clamp(thinTransmission, 0.0f, 1.0f) : 0.0f;
+    const float depth = std::isfinite(sssThickness) ? std::clamp(sssThickness, 0.0f, 0.999f) : 0.0f;
+    return std::round(thin * 255.0f) + depth;
+}
+}
 #include "Model.h"
 #include <tuple>
 #include <bit>
@@ -30,7 +42,8 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
             m.emissive.z, m.emissiveStrength, m.uvOffset.x,
             m.uvOffset.y, m.uvScale.x, m.uvScale.y, m.uvRotation,
             m.fixedLight.x, m.fixedLight.y, m.fixedLight.z, m.fixedLight.w,
-            m.fixedShade.x, m.fixedShade.y);
+            m.thinTransmission, m.shadowDiffusion, m.fixedShade.x, m.fixedShade.y,
+            m.sssStrength, m.sssColor.x, m.sssColor.y, m.sssColor.z, m.sssScale, m.sssThickness, m.humanProfile.x, m.humanProfile.y, m.eyeOptics.x, m.eyeOptics.y, m.eyeOptics.z, m.eyeOptics.w);
     };
     if (state(a) != state(b)) return false;
     auto texture = [](const Model& model, int slot) -> uint32_t {
@@ -88,7 +101,11 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
     f(m.uvOffset.x); f(m.uvOffset.y);
     f(m.uvScale.x); f(m.uvScale.y); f(m.uvRotation);
     f(m.fixedLight.x); f(m.fixedLight.y); f(m.fixedLight.z); f(m.fixedLight.w);
-    f(m.fixedShade.x); f(m.fixedShade.y);
+    f(m.thinTransmission); f(m.shadowDiffusion); f(m.fixedShade.x); f(m.fixedShade.y);
+    f(m.sssStrength); f(m.sssColor.x); f(m.sssColor.y); f(m.sssColor.z); f(m.sssScale);
+    f(m.sssThickness);
+    f(m.humanProfile.x); f(m.humanProfile.y);
+    f(m.eyeOptics.x); f(m.eyeOptics.y); f(m.eyeOptics.z); f(m.eyeOptics.w);
     auto texture = [&](int index) {
         u(index >= 0 && size_t(index) < model.images.size()
             ? model.images[size_t(index)].tex.id : 0);

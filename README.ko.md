@@ -79,7 +79,7 @@
 | **멀티플레이는 끝없는 동기화 오류입니다.** `float` 하나만으로 iPhone과 Android의 경기가 어긋나기 시작합니다. | 시뮬레이션은 어디서나 비트 단위로 동일합니다. 부동소수점 대신 고정소수점, 자체 난수 생성기, 체크섬. CI가 푸시할 때마다 Linux x64/ARM64, Windows, macOS의 경기를 비교합니다. 네트워크로는 명령만 전송되며, 롤백 락스텝과 매치메이킹 및 리플레이 판정을 갖춘 서버가 있습니다. |
 | **모바일 GPU는 약하지만 게임은 아름다워야 합니다.** | 그림자, 파티클, 지형, 포스트 이펙트 등 비용이 큰 모든 기능에는 품질 단계가 있으며, 오래된 Mali와 Adreno부터 Apple Silicon까지 GPU에 맞춰 자동 조정됩니다. |
 | **모든 플랫폼 출시는 그 자체로 하나의 프로젝트입니다.** 서명, 아이콘, 스토어와 광고 SDK. | `aiversebuild` 명령 하나로 .app, Xcode 프로젝트, Gradle/APK, 웹, .exe를 만듭니다. 아이콘과 스플래시 화면은 자동 생성됩니다. App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin 등의 플러그인이 있으며, 빌드에는 게임이 선택한 것만 들어갑니다. |
-| **새 게임은 매번 처음부터 시작합니다.** | 30개 이상의 플레이 가능한 템플릿, 인수 체크리스트가 포함된 장르 키트, 에이전트용 스킬 200개. 새 게임은 이미 돌아가는 게임에서 출발합니다. |
+| **새 게임은 매번 처음부터 시작합니다.** | 30개 이상의 플레이 가능한 템플릿, 인수 체크리스트가 포함된 장르 키트, 에이전트용 스킬 238개. 새 게임은 이미 돌아가는 게임에서 출발합니다. |
 | **메타와 LiveOps는 프로젝트마다 다시 작성됩니다.** | `aiverse::meta`: 상점, 재화, 퀘스트, 패스, 일일 보상, 에너지, 클랜, 토너먼트, 천장이 있는 상자 — JSON으로 설정합니다. |
 
 ---
@@ -102,9 +102,10 @@
 | **로그라이크** | `run-graph`: 시드 기반 런과 조우 예산. 희귀 보상이 보장되는 `loot-tables` |
 | **방치형, 공장, 콜로니** | `big-numbers`, `offline-production`(정확한 오프라인 진행), `production-networks`, `logistics`, `tasks` |
 | **리듬 게임** | `rhythm-timing`: 템포 맵과 프레임레이트와 무관한 판정 |
+| **레이싱, 탈것** | `vehicle-controllers`: 자동차(토크, 기어, 접지력, 드리프트), 전차, 호버크래프트, 비행기, 좌석, 피해 구역; 레이스 세션: 출발 그리드, 카운트다운, 순서대로 통과하는 체크포인트, 랩, 순위, 역주행, 레이싱 봇; 모든 프로젝트에서 쓰는 맵 `race` 블록, 공통 HUD와 추격 카메라, 템플릿 2개 |
 | **모든 모바일 게임** | `aiverse::meta`와 LiveOps, 튜토리얼, UI 화면, 스토어와 광고 플러그인 |
 
-레이싱, 스포츠, 탈것은 아직 [로드맵](docs/genre-mechanics-roadmap.md)에 있습니다. 전체 라이브러리 목록:
+스포츠 게임, 보트, 피트 스톱과 페널티는 아직 [로드맵](docs/genre-mechanics-roadmap.md)에 있습니다. 전체 라이브러리 목록:
 [`libraries/catalog.json`](libraries/catalog.json) 및 [장르 패키지](docs/genre-packages.md).
 
 ---
@@ -180,6 +181,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | 경제와 건설 | **Hearth and Haul**(Knights and Merchants) · **Underlord**(Dungeon Keeper) |
 | 2D와 실험 | **Crystal Dunes**(타일, Dune II) · **Green Hills**(3D 지형 위의 2D 스프라이트) · **Planets**(구형 행성과 궤도) · **Wildfire**(필드: 산불과 크립) |
 | FPS | **Crossfire Arena**(5대5) · **Breach Protocol**(전술 라운드) · **Last Survivor**(100인 배틀로얄) · **Aim Lab**(사격장) |
+| 레이싱 | **Oval Sprint**(봇 3대와 겨루는 랩 레이스) · **Road Circuit**(스플라인 도로 레이스) |
 
 ---
 
@@ -202,7 +204,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **그래픽과 사운드**
 - 자체 RHI: Metal, GLES3 / WebGL2, GL 3.3, Vulkan (Windows / Linux / Android, 선택 사항)
-- PBR, glTF/OBJ, 스켈레탈 및 절차적 애니메이션, 절차적 케이블, 부모·자식 엔티티 렌더링
+- PBR, glTF/OBJ, 스켈레탈 및 절차적 애니메이션, 절차적 케이블, 부모·자식 엔티티 렌더링, 물리 기반 하늘, 볼류메트릭 구름과 빛줄기, 런타임 해제가 가능한 구/OBB 로컬 볼류메트릭 안개
 - 그림자, 동적 조명, 밤, 포스트 이펙트, Shader Graph
 - Unity ParticleSystem 모듈을 지원하는 파티클과 Unity 임포터
 - 2D: 스프라이트, 오토타일 타일맵
@@ -215,9 +217,9 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **도구**
 - Unity 스타일 도킹 에디터: 씬, 인스펙터, 지형, 이펙트, 조명, UI, 테스트 플레이, 기기 시뮬레이터
-- `aiversemcp` — 에이전트용 MCP 서버
+- `aiversemcp` — 에이전트용 MCP 서버 — 맵 PHYSIS 설정, 검증 및 Undo/Redo
 - **"게임 만들기"** 마법사
-- 에이전트용 스킬 200개와 인수 체크리스트가 있는 장르 키트
+- 에이전트용 스킬 238개와 인수 체크리스트가 있는 장르 키트
 - 직접 소유한 사본에서 고전 게임 에셋을 가져오는 임포터
 
 </td>
@@ -312,3 +314,9 @@ OFL, CC0, CC-BY 등). 상용 게임의 원본 에셋은 포함되어 있지 않�
 읽어 옵니다.
 
 게임 빌드에는 `THIRD_PARTY_NOTICES.txt`가 자동으로 포함됩니다. 외부 SDK의 라이선스 고지는 프로젝트에서 제공해야 합니다([자세히 보기](docs/third-party-notices.md)).
+
+- [TerraWeave Rocks](docs/terrain/rocks.md): 시드 기반 장식용 돌, 바위, 석판, 파편 생성. 공유 PBR 텍스처 내보내기 및 네이티브 LOD 3단계(선택 기능).
+
+**Terra 우선:** [네이티브 나무, 빽빽한 풀과 워크플로](docs/terrain/vegetation-authoring.md). TerraWeave에 없는 기능만 별도로 구현합니다.
+
+LENS 카메라: [편집 및 MCP](skills/visuals/aiverse-lens/SKILL.md), [네이티브 통합 및 캡처](skills/visuals/aiverse-lens-native/SKILL.md).

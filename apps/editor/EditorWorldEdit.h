@@ -2,6 +2,7 @@
 // each is one undo step of the map document.
 #pragma once
 #include <string>
+#include <algorithm>
 #include <vector>
 #include "core/MapDoc.h"
 
@@ -36,6 +37,13 @@ inline std::vector<int> duplicate(MapDoc& doc, const std::vector<int>& idx, floa
         if (!valid(doc, i)) continue;
         DocEntity e = doc.data.entities[size_t(i)];
         if (!e.id.empty()) e.id = doc.uniqueId(e.id);
+        if(e.extra["components"]["NereidWater"].isObject()) {
+            int64_t highest=0;
+            for(const auto& other:doc.data.entities)highest=std::max(highest,other.extra["components"]["NereidWater"].getInt("id"));
+            for(const auto& other:doc.data.extra["nereidWater"]["surfaces"].items())highest=std::max(highest,other.getInt("id"));
+            if(highest>=2147483647)continue;
+            auto components=e.extra["components"];auto water=components["NereidWater"];water.set("id",Json::number(highest+1));components.set("NereidWater",water);e.extra.set("components",components);
+        }
         e.x += dx; e.z += dz;
         if (e.at.isObject()) {   // planets: move along the face
             e.at.set("x", Json::number(double(e.x), 2));

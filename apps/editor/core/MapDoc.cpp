@@ -1,3 +1,4 @@
+#include "apps/editor/core/DocumentLightIdentity.h"
 #include "MapDoc.h"
 #include "TerrainOps.h"
 #include <cstring>
@@ -84,6 +85,7 @@ void MapDoc::ensureLayers() {
 
 void MapDoc::reset(int w, int h) {
     data = MapData{};
+    data.extra.set("terrainPresentation",Json::string("entities"));
     data.w = w; data.h = h;
     ensureLayers();
     path.clear();
@@ -259,6 +261,7 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
         d.extra = Json::object();
         for (auto& [k, v] : j.members()) if (!owned(k)) d.extra.set(k, v);
         if (d.fps.isNull() && j["world"].isObject()) loadWorld(j["world"], d);
+        ensureDocumentLightIds(d.fps.isNull()?d.extra:d.fps,true);
         data = std::move(d);
         dirty = false;
         ++revision;

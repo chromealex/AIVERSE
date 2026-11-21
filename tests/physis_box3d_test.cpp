@@ -1,4 +1,5 @@
 #include "engine/physics/PhysisBox3D.h"
+#include "engine/world/TerraWeaveBox3DTerrain.h"
 #include <cmath>
 #include <cstdio>
 using namespace aiverse;
@@ -85,6 +86,32 @@ void testZeroGAndWindAndVortex() {
     CHECK(tornadoScene.position(lifted).y>before);
 }
 }
+// Review fix: an older terrain bake must not replace a newer Box3D collider.
+void testTerrainBox3DRevisionOrdering() {
+    using namespace aiverse::terraweave;
+    EarthworksLayer earth(100,[](int64_t,int64_t){return int32_t(0);});
+    TerrainPatch older=bakeEarthworksTerrainPatch(earth,{1,0,2},16,3);
+    TerrainPatch newer=older;
+    older.sourceRevision=3;
+    newer.sourceRevision=7;
+    Scene scene;
+    TerrainBox3DPublisher publisher;
+    CHECK(publisher.publish(scene,newer));
+    const auto body=publisher.body({1,0,2});
+    CHECK(body!=kNoBody && publisher.revision({1,0,2})==7);
+    CHECK(!publisher.publish(scene,older));      // stale: rejected
+    CHECK(publisher.body({1,0,2})==body);        // scene untouched
+    CHECK(publisher.revision({1,0,2})==7);
+    CHECK(scene.valid(body));
+    newer.sourceRevision=8;
+    CHECK(publisher.publish(scene,newer));       // newer: replaces
+    CHECK(publisher.revision({1,0,2})==8);
+    CHECK(!scene.valid(body) && scene.valid(publisher.body({1,0,2})));
+    publisher.unload(scene,{1,0,2});             // rollback path
+    CHECK(publisher.publish(scene,older) && publisher.revision({1,0,2})==3);
+    publisher.shutdown(scene);
+}
 int main(){testNoDoubleGravity();testZeroGAndWindAndVortex();
+testTerrainBox3DRevisionOrdering();
 std::printf("PHYSIS Box3D: %s\n",failures?"FAIL":"PASS");
 return failures?1:0;}

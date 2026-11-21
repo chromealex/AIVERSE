@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <stdexcept>
 namespace aiverse::game {
 namespace {
 const char* vs=R"(
@@ -298,6 +299,7 @@ void coastDistance(const std::vector<uint8_t>& sea,int w,int h,std::vector<uint8
 void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::PaintLayer& p,const MapGrid& g,const RtsView& view,int id,double time){
  auto& l=layers_[id];
  if(!cellPipe_.valid()){
+  if(cellShader_.valid()){retirement_->retire(cellShader_);cellShader_={};}
   gfx::ShaderDesc sd;sd.glslVertex=cellVs;sd.glslFragment=cellFs;sd.msl=cellMsl;sd.textureSlots=2;sd.label="paint cells";cellShader_=dev.createShader(sd);
   gfx::PipelineDesc pd;pd.shader=cellShader_;pd.attrs[0]={0,gfx::VertexFormat::Float3,0};pd.attrCount=1;pd.stride=sizeof(render::MeshVertex);
   pd.indexType=gfx::IndexType::UInt32;pd.depthWrite=false;pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Alpha;
@@ -305,7 +307,7 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
   if(!cellPipe_.valid()){std::fprintf(stderr,"[paint] cells: %s\n",dev.lastError().c_str());return;}
  }
  const int d=std::max(1,p.density),tw=p.cellsW*d,th=p.cellsH*d;
- if(!l.canvas.handle().valid()){if(!l.canvas.init(dev,tw,th))return;p.cellsDirty=true;}
+ if(!l.canvas.handle().valid()){l.canvas.setRetirementOwner(retirement_.get());if(!l.canvas.init(dev,tw,th))return;p.cellsDirty=true;}
  if(p.cellsDirty||p.paletteDirty){
   l.bytes.resize(size_t(tw)*th*4);
   for(int y=0;y<th;++y)for(int x=0;x<tw;++x){
@@ -313,7 +315,8 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
    for(int k=0;k<3;++k)l.bytes[i*4+size_t(k)]=p.palette[size_t(c)*4+size_t(k)];
    l.bytes[i*4+3]=c;
   }
-  l.canvas.upload(0,0,tw,th,l.bytes.data(),tw*4);
+  if(!l.canvas.upload(0,0,tw,th,l.bytes.data(),tw*4))
+   return; // retain palette/cell dirty flags until GPU upload succeeds
   if(p.coast&&p.cellsDirty){   // the shoreline is static: rebuilt only when the sea mask changes
    std::vector<uint8_t> sea(size_t(tw)*th);uint64_t key=14695981039346656037ull;
    for(size_t i=0;i<sea.size();++i){sea[i]=l.bytes[i*4+3]==p.seaId;key=(key^sea[i])*1099511628211ull;}
@@ -321,16 +324,22 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
     std::vector<uint8_t> coast;coastDistance(sea,tw,th,coast);
     if(!l.coast.valid()){gfx::TextureDesc td;td.width=tw;td.height=th;td.filter=gfx::Filter::Linear;td.data=coast.data();td.label="paint coast";l.coast=dev.createTexture(td);}
     else dev.updateTexture(l.coast,0,0,tw,th,coast.data(),tw*4);
+    if(!l.coast.valid())return; // retry without acknowledging stale coastline
     l.seaKey=key;
    }
   }
   p.cellsDirty=p.paletteDirty=false;
  }
- l.canvas.flush();
+ if(!l.canvas.flushChecked())return; // retain queued brush commands
  if(!l.mesh.vb.valid()){   // one quad over the bounds, at the terrain height of its centre + lift
   render::MeshBuilder mb;const float y=view.heightAt(g,p.x+p.w*.5f,p.z+p.h*.5f)+p.lift;
   mb.quad(render::float3{p.x,y,p.z},render::float3{p.x,y,p.z+p.h},render::float3{p.x+p.w,y,p.z+p.h},render::float3{p.x+p.w,y,p.z});
-  l.mesh=mb.upload(dev);
+  auto mesh=mb.upload(dev);
+  if(!mesh.vb.valid() || !mesh.ib.valid() || mesh.indexCount==0) {
+   retirement_->retire(mesh.vb);retirement_->retire(mesh.ib);
+   return; // no invalid GPU buffers in a deferred render packet
+  }
+  l.mesh=mesh;
  }
  struct U{render::mat4 vp;render::float4 bounds,size,border,style,outside,groundA,groundB,coastA,beach,shallow,earthNear,earthFar,foam;};
  const size_t o=size_t(p.outside)*4;
@@ -344,17 +353,49 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
  auto mesh=l.mesh;auto texture=l.canvas.handle();auto pipe=cellPipe_;auto coastTex=coast?l.coast:texture;
  r.drawCustom([u,mesh,texture,coastTex,pipe](gfx::Device& d){d.setPipeline(pipe);d.setUniforms(0,&u,sizeof(u));d.setTexture(0,texture);d.setTexture(1,coastTex);d.setVertexBuffer(mesh.vb);d.setIndexBuffer(mesh.ib);d.drawIndexed(mesh.indexCount);});
 }
+void RtsPaintLayers::resetLayers(){
+ if(dev_){
+  for(auto& [id,l]:layers_){
+   (void)id;
+   l.canvas.shutdown(); // borrowed shared GPU completion owner
+   retirement_->retire(l.coast);
+   retirement_->retire(l.mesh.vb);
+   retirement_->retire(l.mesh.ib);
+  }
+  // These programs may remain referenced by earlier drawCustom packets.
+  retirement_->retire(pipe_);
+  retirement_->retire(cellPipe_);
+  retirement_->retire(shader_);
+  retirement_->retire(cellShader_);
+ }
+ layers_.clear();memory_.clear();source_.reset();
+ shader_={};pipe_={};cellShader_={};cellPipe_={};
+ w_=h_=0;lastTime_=-1;revision_=0;
+}
 void RtsPaintLayers::shutdown(){
- if(dev_){for(auto& [id,l]:layers_){l.canvas.shutdown();if(l.coast.valid())dev_->destroyTexture(l.coast);dev_->destroyBuffer(l.mesh.vb);dev_->destroyBuffer(l.mesh.ib);}dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);dev_->destroyPipeline(cellPipe_);dev_->destroyShader(cellShader_);}
- layers_.clear();memory_.clear();source_.reset();dev_=nullptr;shader_={};pipe_={};cellShader_={};cellPipe_={};w_=h_=0;lastTime_=-1;
+ resetLayers();
+ if(retirement_ && !retirement_->drain())
+  throw std::runtime_error("RtsPaintLayers shutdown: GPU idle barrier failed");
+ retirement_.reset();
+ dev_=nullptr;
 }
 void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shared_ptr<render::PaintLayers>& source,
  const MapGrid& g,const RtsView& view,const std::vector<uint8_t>* vision,double time,uint8_t viewer){
  if(!source)return; // The editor may also draw its edit scene using this view in the same frame.
- if(source!=source_||g.w!=w_||g.h!=h_||time<lastTime_||viewer!=viewer_)shutdown();
- if(!source||source->layers.empty()){if(dev_)shutdown();return;}
+ if(dev_ && dev_!=&dev)
+  throw std::logic_error("RtsPaintLayers: device changed without shutdown");
  if(!dev_){
-  dev_=&dev;source_=source;w_=g.w;h_=g.h;viewer_=viewer;revision_=1;memory_.assign(size_t(w_)*h_,0);
+  retirement_=std::make_unique<render::CanvasGpuRetirement>(dev,gpuDeviceLease_);
+  dev_=&dev;
+ }
+ if(source!=source_||g.w!=w_||g.h!=h_||time<lastTime_||viewer!=viewer_)
+  resetLayers(); // retain the owner and all queued GPU resources
+ if(source->layers.empty()){resetLayers();return;}
+ if(!source_){
+  source_=source;w_=g.w;h_=g.h;viewer_=viewer;revision_=1;memory_.assign(size_t(w_)*h_,0);
+ }
+ if(!pipe_.valid()){
+  if(shader_.valid()){retirement_->retire(shader_);shader_={};}
   gfx::ShaderDesc sd;sd.glslVertex=vs;sd.glslFragment=fs;sd.msl=msl;sd.textureSlots=1;sd.label="paint surface";shader_=dev.createShader(sd);
   gfx::PipelineDesc pd;pd.shader=shader_;pd.attrs[0]={0,gfx::VertexFormat::Float3,0};pd.attrCount=1;pd.stride=sizeof(render::MeshVertex);
   pd.indexType=gfx::IndexType::UInt32;pd.depthWrite=false;pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Alpha;
@@ -368,15 +409,22 @@ void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shar
   uint8_t owner=i<g.territory.size()?g.territory[i]:0;if(owner!=memory_[i]){memory_[i]=owner;changed=true;}
  }
  if(changed)++revision_;
- for(auto it=layers_.begin();it!=layers_.end();)if(!source->layers.count(it->first)){it->second.canvas.shutdown();if(it->second.coast.valid())dev.destroyTexture(it->second.coast);dev.destroyBuffer(it->second.mesh.vb);dev.destroyBuffer(it->second.mesh.ib);it=layers_.erase(it);}else ++it;
+ for(auto it=layers_.begin();it!=layers_.end();)if(!source->layers.count(it->first)){
+  it->second.canvas.shutdown();
+  retirement_->retire(it->second.coast);
+  retirement_->retire(it->second.mesh.vb);
+  retirement_->retire(it->second.mesh.ib);
+  it=layers_.erase(it);
+ }else ++it;
  for(auto& [id,p]:source->layers){
   if(p.categorical){drawCells(r,dev,p,g,view,id,time);continue;}
   auto& l=layers_[id];const bool field=p.territoryOwner>0;
   if(!p.textureId&&!l.canvas.handle().valid()){
    const int tw=field?w_:std::min(p.width,r.materialQuality()==render::MaterialQuality::Low?512:2048);
    const int th=field?h_:std::max(1,p.height*tw/p.width);
-   if(!l.canvas.init(dev,tw,th))continue;
+   l.canvas.setRetirementOwner(retirement_.get());if(!l.canvas.init(dev,tw,th))continue;
    l.value.assign(size_t(w_)*h_,0);l.target=l.value;l.bytes.assign(size_t(w_)*h_*4,0);
+   l.uploadRetry=false;
   }
   if(field){
    // Compact scalar source, smoothed in CPU space then sampled bilinearly by the GPU.
@@ -394,13 +442,26 @@ void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shar
     if(a!=l.bytes[size_t(i)*4+3]){l.bytes[size_t(i)*4+3]=a;x0=std::min(x0,x);y0=std::min(y0,y);x1=std::max(x1,x);y1=std::max(y1,y);}
    }
    l.revision=revision_;
-   if(x1>=x0)l.canvas.upload(x0,y0,x1-x0+1,y1-y0+1,l.bytes.data()+size_t(y0*w_+x0)*4,w_*4);
+   // A previously failed partial upload left the CPU bytes newer than
+   // the target texture; retry the complete known image, even if no
+   // per-cell difference is visible this frame.
+   if(l.uploadRetry){x0=0;y0=0;x1=w_-1;y1=h_-1;}
+   if(x1>=x0)
+    l.uploadRetry=!l.canvas.upload(x0,y0,x1-x0+1,y1-y0+1,
+                  l.bytes.data()+size_t(y0*w_+x0)*4,w_*4);
   }else{
    if(p.clear)l.canvas.clear();
-   if(p.copyFrom){auto it=layers_.find(p.copyFrom);if(it!=layers_.end())l.canvas.blit(it->second.canvas.handle());p.copyFrom=0;}
+   if(p.copyFrom){
+    auto it=layers_.find(p.copyFrom);
+    if(it==layers_.end() ||
+       !l.canvas.blit(it->second.canvas.handle()))
+     continue; // retry copy next frame, before accepting later strokes
+    p.copyFrom=0;
+   }
    for(auto& stroke:p.strokes)l.canvas.stroke(stroke);
   }
-  p.clear=false;p.strokes.clear();l.canvas.flush();
+  p.clear=false;p.strokes.clear();
+  if(!l.canvas.flushChecked())continue; // retry authored strokes next frame
   if(!p.surface)continue;
   gfx::TextureHandle sample=l.canvas.handle();
   if(p.textureId){auto it=layers_.find(p.textureId);if(it==layers_.end())continue;sample=it->second.canvas.handle();}
@@ -418,11 +479,22 @@ void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shar
    auto point=[&](float xx,float zz){return render::float3{xx,view.heightAt(g,xx,zz)+p.lift,zz};};
    mb.quad(point(float(x),float(y)),point(float(x),float(y+1)),point(float(x+1),float(y+1)),point(float(x+1),float(y)));
   }
-  // Cached geometry must populate every frame-in-flight. Dynamic Metal buffers rotate;
-  // updating only the current slice leaves the other slices empty while the mask is static.
-  dev.destroyBuffer(l.mesh.vb);dev.destroyBuffer(l.mesh.ib);
-  l.mesh=mb.upload(dev);l.meshKey=key;
+  // Upload the replacement before retiring old frame-visible geometry.
+  // On OOM, keep the last-good surface and retry next frame.
+  if(mb.empty()){
+   retirement_->retire(l.mesh.vb);retirement_->retire(l.mesh.ib);
+   l.mesh={};l.meshKey=key;
+  }else{
+   auto replacement=mb.upload(dev);
+   if(replacement.vb.valid() && replacement.ib.valid() && replacement.indexCount>0){
+    retirement_->retire(l.mesh.vb);retirement_->retire(l.mesh.ib);
+    l.mesh=replacement;l.meshKey=key;
+   }else{
+    retirement_->retire(replacement.vb);retirement_->retire(replacement.ib);
+   }
   }
+  }
+  if(!l.mesh.vb.valid()||!l.mesh.ib.valid()||!l.mesh.indexCount)continue;
   struct U{render::mat4 vp;render::float4 bounds,color,style;};
   U u{r.viewProj(),{p.x,p.z,p.w,p.h},{p.color[0],p.color[1],p.color[2],p.color[3]},{p.opacity,p.border,0,0}};
   auto mesh=l.mesh;auto texture=sample;auto pipe=pipe_;

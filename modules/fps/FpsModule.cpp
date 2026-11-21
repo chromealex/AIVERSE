@@ -37,6 +37,7 @@ void royaleIo(Archive& a,RoyaleRun& r) {
 }
 }
 void ioVehicleRuns(Archive&,std::vector<VehicleRun>&);
+void raceIo(Archive&,RaceRun&);   // FpsRace.cpp
 namespace {
 void stateIo(Archive& a,State& s,bool programs=false,bool melee=false) {
     a(s.round,s.winner,s.actors,s.nextObject,s.projectiles,s.loot,s.vehicles,s.match);
@@ -489,6 +490,7 @@ void Module::setup(Simulation& sim,const Json& rules,const Json& map) {
     setupRoyale(sim,map,s);
     if(!config_.gear.empty())s.gear.assign(s.actors.size(),{});
     setupVehicles(sim,map,s);
+    setupRace(sim,rules,map,s);
     setupBots(sim,map,s);
     meleeAttacks_.clear();
     if(config_.melee.enabled){
@@ -849,8 +851,10 @@ void Module::tick(Simulation& sim) {
             } else {skydive(sim,a);continue;}   // a body in the air keeps falling (battle royale)
         }
         if(skydive(sim,a))continue;
-        if(bots_[a.slot-1]&&a.lastSequence==0&&thinkBot(sim,a)){}
-        else if(bots_[a.slot-1]&&a.lastSequence==0) {
+        // Race bots drive through the race session (tickRace); they never run the on-foot bot.
+        const bool footBot=bots_[a.slot-1]&&a.lastSequence==0&&!s.race.enabled;
+        if(footBot&&thinkBot(sim,a)){}
+        else if(footBot) {
             const Actor* target=nullptr;Fixed nearest=config_.weapons[a.weaponIndex].range*config_.weapons[a.weaponIndex].range;
             for(const auto& candidate:s.actors)if(candidate.health>0&&!candidate.downed&&candidate.team!=a.team) {
                 auto distance=(candidate.pos-a.pos).lengthSq();if(distance<nearest){
@@ -920,6 +924,7 @@ void Module::tick(Simulation& sim) {
             if((a.pos-config_.zoneCenter).xz().lengthSq()>radius*radius)a.health=std::max(0,a.health-config_.zoneDamage);
         }
     }
+    if(s.race.enabled){tickRace(sim);return;}
     tickVehicles(sim);
     if(config_.mode=="bomb")return;
     if(config_.royale){settleRoyale(sim);if(s.winner)return;}
@@ -1001,11 +1006,13 @@ void Module::hashState(Simulation& sim,Hasher& hash) {
     if(s.royale.enabled){std::string extra;Archive r(&extra);royaleIo(r,s.royale);hash.str(extra);}
     for(const auto& g:s.gear)hash.u64(lib::systems::gearHash(g));
     if(!s.vehicleRuns.empty()){std::string extra;Archive v(&extra);ioVehicleRuns(v,s.vehicleRuns);hash.str(extra);}
+    if(s.race.enabled){std::string extra;Archive r(&extra);raceIo(r,s.race);hash.str(extra);}
     for(const auto& b:s.botStates)hash.str(b);
 }
 bool Module::serializeState(Simulation& sim,Archive& archive) {
-    uint32_t version=9;uint64_t content=contentHash_;archive(version,content);
-    if((version!=3&&version<6)||version>9||content!=contentHash_)return false;
+    // Version 10 only adds the race run; maps without a race keep writing version 9 byte for byte.
+    uint32_t version=raceRules_?10:9;uint64_t content=contentHash_;archive(version,content);
+    if((version!=3&&version<6)||version>10||content!=contentHash_)return false;
     // On load, Simulation has already restored the saved Entity allocator;
     // old v9 saves may not have any ECS actor identities yet. Only writing
     // materializes canonical ECS payloads; reading starts from the old state.
@@ -1015,6 +1022,9 @@ bool Module::serializeState(Simulation& sim,Archive& archive) {
     if(version>=9){uint32_t n=archive.count(copy.gear.size());if(n>256){archive.fail();return false;}if(!archive.writing())copy.gear.resize(n);for(auto& g:copy.gear)lib::systems::io(archive,g);}else copy.gear.clear();
     if(version>=9)ioVehicleRuns(archive,copy.vehicleRuns);else copy.vehicleRuns.clear();
     if(version>=9){archive(copy.botStates);if(copy.botStates.size()>256)return false;}else copy.botStates.clear();
+    if(version>=10)raceIo(archive,copy.race);else copy.race=RaceRun{};
+    if(copy.race.enabled!=bool(raceRules_))return false;
+    if(copy.race.enabled&&!validRace(copy))return false;
     if(copy.botStates.size()!=(botHost_?spawns_.size():0))return false;
     for(const auto& r:copy.vehicleRuns){
         if(!config_.vehicleTypes||!config_.vehicleTypes->vehicles.contains(r.type)||!lib::genre::valid(r.controller)||!lib::genre::valid(r.seats))return false;

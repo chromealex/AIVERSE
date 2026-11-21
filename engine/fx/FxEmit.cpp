@@ -255,7 +255,13 @@ bool ParticleSystem::Impl::emit(Instance& in, uint32_t owner, int effect, int em
         p.flags |= 16;
     }
     p.uid = ++nextUid == 0 ? ++nextUid : nextUid;
+    p.programParams = in.programParams; // snapshot after instance validation
     p.depth = in.depth;
+    // Spawn expression bytecode may initialize custom particle attributes,
+    // tint, size and velocity before trails/sub-events observe the particle.
+    // Emitter programs are precompiled in Impl::build; old assets do not
+    // enter the VM or allocate additional per-spawn state.
+    runProgram(p,spectra::program::Stage::Spawn,0.f);
     if (d.trail.enabled && !d.trail.ribbon && quality >= d.trail.minQuality && (d.trail.ratio >= 1 || prand(p.uid, 77) < d.trail.ratio)) {
         if (freeTrails.empty()) { freeTrails.push_back(int32_t(trails.size())); trails.emplace_back(); }
         p.trail = freeTrails.back();

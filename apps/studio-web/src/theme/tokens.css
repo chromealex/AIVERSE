@@ -1,0 +1,89 @@
+:root {
+  /* AIVERSE Studio Design System v1. Shared by EVERY HTML5 editor window.
+     Keep legacy --studio-* variables for pre-design-system panels. */
+  color-scheme: dark;
+  --studio-background: #0b111b;
+  --studio-surface: #111a27;
+  --studio-surface-raised: #172335;
+  --studio-canvas: #090f19;
+  --studio-border: #2a3a50;
+  --studio-foreground: #e5edf8;
+  --studio-muted: #98abc5;
+  --studio-accent: #82b5ff;
+  --studio-selection: #29496c;
+  --studio-danger: #ff929e;
+  --studio-success: #6de0b0;
+  --studio-radius: 8px;
+  --studio-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Semantic surfaces, never hard-code new panel backgrounds. */
+  --au-canvas: var(--studio-background);
+  --au-panel: var(--studio-surface);
+  --au-panel-raised: var(--studio-surface-raised);
+  --au-overlay: #1b2b41;
+  --au-hover: #203249;
+  --au-active: #2a4567;
+  --au-field: #142135;
+  --au-line: #2c3e55;
+  --au-line-strong: #476182;
+  --au-text: var(--studio-foreground);
+  --au-text-soft: #b9c8dc;
+  --au-text-muted: var(--studio-muted);
+  --au-text-faint: #7388a4;
+  --au-accent: var(--studio-accent);
+  --au-accent-strong: #3969a5;
+  --au-accent-ink: #f4f9ff;
+  --au-success: var(--studio-success);
+  --au-warning: #efbf79;
+  --au-danger: var(--studio-danger);
+  --au-info: #94c7f8;
+
+  /* 4px spacing rhythm, shared geometry and responsive density. */
+  --au-space-1: 4px;
+  --au-space-2: 8px;
+  --au-space-3: 12px;
+  --au-space-4: 16px;
+  --au-space-5: 20px;
+  --au-space-6: 24px;
+  --au-space-8: 32px;
+  --au-radius-xs: 4px;
+  --au-radius-sm: 6px;
+  --au-radius-md: 9px;
+  --au-radius-lg: 13px;
+  --au-radius-xl: 18px;
+  --au-font-xs: 10px;
+  --au-font-sm: 11px;
+  --au-font-md: 12px;
+  --au-font-lg: 14px;
+  --au-font-xl: 18px;
+  --au-font-title: 22px;
+  --au-line-height: 1.55;
+  --au-control-height: 34px;
+  --au-list-row-height: 36px;
+  --au-shadow-sm: 0 3px 12px #04091040;
+  --au-shadow-md: 0 14px 42px #030811a6;
+  --au-focus: 0 0 0 2px #0c1726, 0 0 0 4px #82b5ff;
+  --au-transition-fast: 125ms ease-out;
+  /* First Cinematic Concept: selected by user (NOT the later flat variant). */
+  --au-accent-secondary: #9b91ff;
+  --au-accent-glow: #82b5ff26;
+  --au-active-glow: #77aaff3a;
+  --au-shell-header: #101a2b;
+  --au-shell-toolbar: #17253a;
+  --au-shell-tab: #1c2b42;
+  --au-panel-gradient: linear-gradient(160deg,#18273b,#111b2a 70%,#101826);
+  --au-header-gradient: linear-gradient(180deg,#213550,#192a42);
+  --au-selection-gradient: linear-gradient(90deg,#315b94,#263f67);
+  --au-popover-shadow: 0 18px 48px #030817b3;
+  /* Scene orientation gizmo: conventional X/Y/Z axis colors (editor-wide). */
+  --au-axis-x: #e8665f;
+  --au-axis-y: #86cf6c;
+  --au-axis-z: #5f97ee;
+  --au-axis-negative: #6f7f96;
+  --au-axis-hover: #f4f8ff;
+
+}
+:root[data-studio-density="comfortable"] {
+  --au-control-height: 40px;
+  --au-list-row-height: 44px;
+}

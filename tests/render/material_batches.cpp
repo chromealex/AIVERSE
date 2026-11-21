@@ -10,8 +10,51 @@
 #include <iterator>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <ctime>
 #include <vector>
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/thread_info.h>
+#endif
 using namespace aiverse;
+
+// CPU consumed by this calling thread, not whole-process CPU. Wall time
+// includes descheduling/waits; their delta is diagnostic, not proof of a GPU
+// stall or scheduler fault. Unsupported platforms report unavailable.
+static bool cpuClockNs(bool processClock, uint64_t& result) {
+#if defined(__APPLE__) || defined(__linux__)
+    timespec ts{};
+    const clockid_t id = processClock ? CLOCK_PROCESS_CPUTIME_ID
+                                       : CLOCK_THREAD_CPUTIME_ID;
+    if (clock_gettime(id, &ts) != 0) return false;
+    result = uint64_t(ts.tv_sec) * 1000000000ull + uint64_t(ts.tv_nsec);
+    return true;
+#else
+    (void)processClock;
+    (void)result;
+    return false;
+#endif
+}
+
+#if defined(__APPLE__)
+static bool machCurrentThreadCpuNs(uint64_t& result) {
+    thread_basic_info_data_t info{};
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    const thread_t thread = mach_thread_self();
+    const kern_return_t status = thread_info(thread, THREAD_BASIC_INFO,
+                                             reinterpret_cast<thread_info_t>(&info),
+                                             &count);
+    mach_port_deallocate(mach_task_self(), thread);
+    if (status != KERN_SUCCESS) return false;
+    const uint64_t seconds =
+        uint64_t(info.user_time.seconds) + uint64_t(info.system_time.seconds);
+    const uint64_t micros =
+        uint64_t(info.user_time.microseconds) + uint64_t(info.system_time.microseconds);
+    result = seconds * 1000000000ull + micros * 1000ull;
+    return true;
+}
+#endif
 // GPU-free invariants, including shared vertices and material overrides.
 static bool unitChecks() {
     using namespace render;
@@ -114,6 +157,15 @@ static bool unitChecks() {
     calibrated.observe(0, 1024, true, 0.65);
     ok &= check(calibrated.useMdi(0, 1024)); // MDI now wins after warmup
     ok &= check(!calibrated.useMdi(1, 1024)); // independent opaque lane
+    // Review 2026-11-21: non-learning AUTO passes keep CPU MDI for large
+    // workloads; only the small-item threshold forces the direct path.
+    AutoCpuBatchPolicy gate;
+    ok &= check(autoCpuMdiPermit(gate, false, false, 0, 8, 64));
+    ok &= check(autoCpuMdiPermit(gate, true, false, 0, 1024, 64));
+    ok &= check(!autoCpuMdiPermit(gate, true, false, 0, 32, 64));
+    ok &= check(gate.lanes[0][2].opportunities == 0); // policy untouched
+    ok &= check(!autoCpuMdiPermit(gate, true, true, 0, 1024, 64)); // first probe direct
+    ok &= check(gate.lanes[0][2].opportunities == 1);
 
     std::printf("material palette CPU checks=%d result=%s\n",checks,ok?"passed":"FAILED");
     return ok;
@@ -122,7 +174,9 @@ static bool unitChecks() {
 // Deterministic 16-primitive fixture with one shader/material and independent
 // node transforms. MDI and the fallback must render byte-identical images.
 static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = false,
-                                                       size_t primitives = 16) {
+                                                       size_t primitives = 16,
+                                                       uint32_t meshSubdivisions = 1,
+                                                       float triangleScale = 1.0f) {
     using namespace render;
     auto m = std::make_unique<Model>();
     m->path = "indirect-fixture";
@@ -140,19 +194,47 @@ static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = fal
     }
     for (size_t i = 0; i < primitives; ++i) {
         const uint32_t start = uint32_t(m->vertices.size());
-        for (float3 pos : {float3{-.3f, 0, 0}, float3{.3f, 0, 0}, float3{0, .75f, 0}}) {
-            ModelVertex v;
-            v.pos = pos;
-            v.nrm = {0, 0, 1};
-            m->vertices.push_back(v);
-        }
-        m->indices.insert(m->indices.end(), {start, start + 1, start + 2});
+        const uint32_t firstIndex = uint32_t(m->indices.size());
+        // Test-only regular triangle tessellation: changes vertex/triangle
+        // work while keeping model nodes, material and MDI command counts fixed.
+        // Direct and MDI consume the exact same geometry for raster parity.
+        const float3 a{-.3f, 0, 0}, b{.3f, 0, 0}, c{0, .75f, 0};
+        auto point = [&](uint32_t u, uint32_t v) {
+            const float fu = float(u) / float(meshSubdivisions);
+            const float fv = float(v) / float(meshSubdivisions);
+            const float x = a.x + (b.x - a.x) * fu + (c.x - a.x) * fv;
+            const float y = a.y + (b.y - a.y) * fu + (c.y - a.y) * fv;
+            const float z = a.z + (b.z - a.z) * fu + (c.z - a.z) * fv;
+            // Test-only coverage sweep, centered on the original triangle
+            // centroid. Same draw topology and vertex count at both scales.
+            // N=4 subdivision work stays exactly the same for Direct and MDI.
+            return float3{x * triangleScale,
+                          .25f + (y - .25f) * triangleScale,
+                          z * triangleScale};
+        };
+        auto triangle = [&](float3 x, float3 y, float3 z) {
+            const uint32_t firstVertex = uint32_t(m->vertices.size());
+            for (const float3 pos : {x, y, z}) {
+                ModelVertex vertex;
+                vertex.pos = pos;
+                vertex.nrm = {0, 0, 1};
+                m->vertices.push_back(vertex);
+            }
+            m->indices.insert(m->indices.end(),
+                              {firstVertex, firstVertex + 1, firstVertex + 2});
+        };
+        for (uint32_t u = 0; u < meshSubdivisions; ++u)
+            for (uint32_t v = 0; v < meshSubdivisions - u; ++v) {
+                triangle(point(u, v), point(u + 1, v), point(u, v + 1));
+                if (u + v + 1 < meshSubdivisions)
+                    triangle(point(u + 1, v), point(u + 1, v + 1), point(u, v + 1));
+            }
         Primitive p;
         p.material = variedMaterials ? int(i % 3) : 0;
-        p.firstIndex = uint32_t(m->indices.size() - 3);
-        p.indexCount = 3;
+        p.firstIndex = firstIndex;
+        p.indexCount = uint32_t(m->indices.size()) - firstIndex;
         p.firstVertex = start;
-        p.vertexCount = 3;
+        p.vertexCount = uint32_t(m->vertices.size()) - start;
         MeshDef mesh;
         mesh.name = "primitive_" + std::to_string(i);
         mesh.primitives.push_back(p);
@@ -176,7 +258,58 @@ static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = fal
 
 int aiverseMain(int argc, char** argv) {
     if (!unitChecks()) return 1;
-    if (argc == 2 && std::string(argv[1]) == "--unit") return 0;
+    if (argc == 2 && std::string(argv[1]) == "--unit") {
+        // CPU-only topology sanity: N subdivisions must generate N*N triangles
+        // per primitive without changing the number of meshes or model nodes.
+        for (uint32_t subdivisions : {1u, 2u, 4u, 8u}) {
+            auto fixture = indirectFixture(false, 16, subdivisions);
+            const uint32_t verticesPerPrimitive = 3u * subdivisions * subdivisions;
+            if (fixture->meshes.size() != 16 || fixture->nodes.size() != 16 ||
+                fixture->vertices.size() != size_t(16u * verticesPerPrimitive) ||
+                fixture->indices.size() != size_t(16u * verticesPerPrimitive)) {
+                std::fprintf(stderr, "mesh subdivision CPU topology FAILED N=%u\n",
+                             unsigned(subdivisions));
+                return 1;
+            }
+            for (const auto& mesh : fixture->meshes)
+                if (mesh.primitives.size() != 1 ||
+                    mesh.primitives[0].indexCount != verticesPerPrimitive ||
+                    mesh.primitives[0].vertexCount != verticesPerPrimitive) {
+                    std::fprintf(stderr, "mesh subdivision primitive FAILED N=%u\n",
+                                 unsigned(subdivisions));
+                    return 1;
+                }
+        }
+        std::printf("mesh subdivision CPU checks=passed\n");
+        // The raster-coverage knob must preserve primitive/vertex/index counts
+        // and node transforms, while increasing each primitive's projected
+        // bounds. Test both settings without invoking a graphics device.
+        const auto compact = indirectFixture(false, 16, 4, 1.0f);
+        const auto expanded = indirectFixture(false, 16, 4, 4.0f);
+        if (compact->indices.size() != expanded->indices.size() ||
+            compact->vertices.size() != expanded->vertices.size() ||
+            compact->meshes.size() != expanded->meshes.size() ||
+            compact->nodes.size() != expanded->nodes.size()) return 1;
+        for (size_t i = 0; i < compact->meshes.size(); ++i) {
+            const auto& a = compact->meshes[i].primitives[0];
+            const auto& b = expanded->meshes[i].primitives[0];
+            const float widthA = a.boundsMax.x - a.boundsMin.x;
+            const float widthB = b.boundsMax.x - b.boundsMin.x;
+            const float heightA = a.boundsMax.y - a.boundsMin.y;
+            const float heightB = b.boundsMax.y - b.boundsMin.y;
+            if (a.indexCount != b.indexCount || a.vertexCount != b.vertexCount ||
+                std::fabs(widthB - 4.0f * widthA) > 1e-4f ||
+                std::fabs(heightB - 4.0f * heightA) > 1e-4f ||
+                compact->nodes[i].t.x != expanded->nodes[i].t.x ||
+                compact->nodes[i].t.y != expanded->nodes[i].t.y ||
+                compact->nodes[i].t.z != expanded->nodes[i].t.z) {
+                std::fprintf(stderr, "triangle coverage topology FAILED mesh=%zu\n", i);
+                return 1;
+            }
+        }
+        std::printf("triangle coverage CPU checks=passed\n");
+        return 0;
+    }
     if (argc != 3) { std::fprintf(stderr, "usage: material_batches MODEL OUTPUT_PREFIX\n"); return 2; }
     auto read = [](const std::string& path, std::string& bytes) {
         std::ifstream f(path, std::ios::binary); if (!f) return false;
@@ -202,6 +335,34 @@ int aiverseMain(int argc, char** argv) {
     }
     const std::string scenario = std::getenv("AIVERSE_PALETTE_TEST_CASE") ? std::getenv("AIVERSE_PALETTE_TEST_CASE") : "default";
     const bool stress = scenario == "auto_stress";
+    // Experimental fixture switch, not a product-level quality option.
+    // Compare full/one-pass Direct vs MDI at equal visual workloads.
+    const std::string diagnosticPass = stress &&
+        std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MODEL_PASS")
+        ? std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MODEL_PASS") : "full";
+    if (diagnosticPass != "full" && diagnosticPass != "shadow" &&
+        diagnosticPass != "opaque") {
+        std::fprintf(stderr, "Invalid AIVERSE_BATCH_DIAGNOSTIC_MODEL_PASS: %s\n",
+                     diagnosticPass.c_str());
+        return 2;
+    }
+    const uint8_t modelPassMask = diagnosticPass == "shadow" ? 1u
+        : diagnosticPass == "opaque" ? 2u : 3u;
+    // Explicit per-fixture cap tests ICB submission size without touching the
+    // instance uniform capacity or the native shader specialization.
+    uint32_t diagnosticMdiGroupCap = 0;
+    if (stress && std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MDI_GROUP_CAP")) {
+        const char* raw = std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MDI_GROUP_CAP");
+        char* end = nullptr;
+        const unsigned long n = std::strtoul(raw, &end, 10);
+        if (end == raw || *end != '\0' ||
+            (n != 0 && (n < 16 || n > 256))) {
+            std::fprintf(stderr,
+                "AIVERSE_BATCH_DIAGNOSTIC_MDI_GROUP_CAP must be 0 or 16..256\n");
+            return 2;
+        }
+        diagnosticMdiGroupCap = uint32_t(n);
+    }
     size_t stressItems = 0;
     if (stress) {
         const char* raw = std::getenv("AIVERSE_BATCH_STRESS_ITEMS");
@@ -214,12 +375,45 @@ int aiverseMain(int argc, char** argv) {
         }
         stressItems = size_t(parsed);
     }
+    // Diagnostic only: do not change the default model fixture or renderer.
+    // Each original primitive remains one draw, with N*N triangles instead
+    // of one; cap total triangles to avoid accidental huge stress allocations.
+    uint32_t meshSubdivisions = 1;
+    if (stress && std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS")) {
+        const char* raw = std::getenv("AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS");
+        char* end = nullptr;
+        const unsigned long n = std::strtoul(raw, &end, 10);
+        if (end == raw || *end != '\0' ||
+            (n != 1 && n != 2 && n != 4 && n != 8)) {
+            std::fprintf(stderr,
+                "AIVERSE_BATCH_DIAGNOSTIC_MESH_SUBDIVISIONS must be 1, 2, 4 or 8\n");
+            return 2;
+        }
+        meshSubdivisions = uint32_t(n);
+    }
+    if (stress && uint64_t(stressItems) * meshSubdivisions * meshSubdivisions > 1000000ull) {
+        std::fprintf(stderr, "Stress fixture exceeds 1000000 triangles\n");
+        return 2;
+    }
+    // Strict test-only knob: alter projected triangle area without changing
+    // authored meshes, vertex count, materials or MDI command count.
+    float triangleScale = 1.0f;
+    if (stress && std::getenv("AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE")) {
+        const std::string value = std::getenv("AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE");
+        if (value != "1" && value != "4") {
+            std::fprintf(stderr,
+                "AIVERSE_BATCH_DIAGNOSTIC_TRIANGLE_SCALE must be 1 or 4\n");
+            return 2;
+        }
+        if (value == "4") triangleScale = 4.0f;
+    }
     // Cold-vs-warm packet screenshot parity uses the same self-contained
     // varied-material 16-rigid-part fixture as the indirect palette test.
     auto model = scenario == "indirect" || scenario == "indirect_palette" ||
                  scenario == "static_packets" || scenario == "auto_stress"
         ? indirectFixture(scenario != "indirect" && !stress,
-                          stress ? stressItems : 16) : render::loadModel(argv[1],read);
+                          stress ? stressItems : 16,
+                          meshSubdivisions, triangleScale) : render::loadModel(argv[1],read);
     const std::string prefix = argv[2];
     const bool reflection=std::getenv("AIVERSE_SHADOW_TEST_REFLECTION")!=nullptr;
     render::Renderer3D renderer; render::Mesh floor; gfx::Device* device = nullptr;
@@ -236,6 +430,42 @@ int aiverseMain(int argc, char** argv) {
     const bool cpuTiming = std::getenv("AIVERSE_BATCH_CPU_TIMING") &&
         std::string(std::getenv("AIVERSE_BATCH_CPU_TIMING")) == "1";
     std::vector<double> cpuRenderBefore, cpuRenderAfter;
+    const bool threadCpuTiming = stress &&
+        std::getenv("AIVERSE_BATCH_THREAD_CPU_TIMING") &&
+        std::string(std::getenv("AIVERSE_BATCH_THREAD_CPU_TIMING")) == "1";
+    // Opt-in per-frame CPU timeline: buffer data in memory and write once
+    // after the capture window to avoid I/O during measured render frames.
+    const bool frameTimeline = stress && std::getenv("AIVERSE_BATCH_FRAME_TIMELINE") &&
+        std::string(std::getenv("AIVERSE_BATCH_FRAME_TIMELINE")) == "1";
+    struct FrameCpuSample {
+        int index = 0;
+        double renderMs = 0.0;
+        double threadCpuMs = -1.0; // -1 means unsupported / clock read failed
+        double processCpuMs = -1.0;
+        double machThreadCpuMs = -1.0;
+        uint64_t mdiSubmissions = 0;
+        uint64_t mdiCommands = 0;
+        uint32_t shadowDraws = 0, opaqueDraws = 0;
+        double shadowCpuMs = 0.0, opaqueCpuMs = 0.0;
+        double shadowBackendMs = 0.0, opaqueBackendMs = 0.0;
+    };
+    std::vector<FrameCpuSample> frameCpuTimeline;
+    if (frameTimeline) frameCpuTimeline.reserve(128);
+    // Existing RHI command-buffer GPU timestamps are asynchronous. Tag the
+    // command buffer from this fixture, then collect completed tags later.
+    // This is whole-frame GPU command-buffer time, NOT model-pass GPU time.
+    const bool gpuTimeline = stress && std::getenv("AIVERSE_BATCH_GPU_TIMELINE") &&
+        std::string(std::getenv("AIVERSE_BATCH_GPU_TIMELINE")) == "1";
+    std::vector<gfx::Device::GpuTiming> gpuTimelineSamples;
+    bool gpuTimingUnsupported = false;
+    bool modelCountersUnsupported = false;
+    if (gpuTimeline) gpuTimelineSamples.reserve(96);
+    const bool modelGpuCounters = stress &&
+        std::getenv("AIVERSE_BATCH_MODEL_GPU_COUNTERS") &&
+        std::string(std::getenv("AIVERSE_BATCH_MODEL_GPU_COUNTERS")) == "1";
+    std::vector<gfx::Device::ModelGpuCounter> modelGpuSamples;
+    uint64_t firstModelGpuSerial = 0;
+    if (modelGpuCounters) modelGpuSamples.reserve(220);
     // Stage 76: do not conflate AUTO exploration frames with its learned
     // Direct frames. Retain CPU samples for *actual* successful MDI frames.
     std::vector<double> stressDirectFallbackMs, stressSuccessfulMdiMs;
@@ -276,6 +506,12 @@ int aiverseMain(int argc, char** argv) {
     if (stress) {
         std::printf("stress requested_items=%zu authored_unique_primitives=%zu "
                     "submitted_model_draws=1\n", stressItems, model->meshes.size());
+        std::printf("stress diagnostic mesh subdivisions=%u "
+                    "triangles_per_primitive=%u vertices_per_primitive=%u\n",
+                    unsigned(meshSubdivisions),
+                    unsigned(meshSubdivisions * meshSubdivisions),
+                    unsigned(3 * meshSubdivisions * meshSubdivisions));
+        std::printf("stress diagnostic triangle_scale=%.0f\n", double(triangleScale));
     }
     // Benchmark only: independent runs for CPU MDI and GPU ICB. The latter
     // may legitimately retain CPU MDI for a different render pass.
@@ -291,6 +527,14 @@ int aiverseMain(int argc, char** argv) {
     platform::AppCallbacks cb;
     cb.init=[&](gfx::Device& d) {
         device=&d; if (!renderer.init(d) || !render::uploadModel(d,*model)) { failed=true; return; }
+        if (modelGpuCounters && !d.enableModelGpuCounters(true)) {
+            std::fprintf(stderr,
+                "GPU model-pass draw-boundary timestamp counters UNSUPPORTED "
+                "(Metal capability; no samples recorded)\n");
+            modelCountersUnsupported = true;
+            failed = true;
+            return;
+        }
         if (scenario == "indirect") {
             secondModel = indirectFixture();
             if (!render::uploadModel(d, *secondModel)) { failed=true; return; }
@@ -308,6 +552,17 @@ int aiverseMain(int argc, char** argv) {
             failed = true;
             return;
         }
+        renderer.setDiagnosticModelPassMask(modelPassMask);
+        renderer.setDiagnosticCpuMdiGroupCap(diagnosticMdiGroupCap);
+        if (stress) std::printf(
+            "stress diagnostic geometry pooled=%d vertex_bytes=%u index_bytes=%u\n",
+            int(bool(model->geometryPoolPage)),
+            unsigned(model->gpuPoolVertexBytes),
+            unsigned(model->gpuPoolIndexBytes));
+        if (stress) std::printf("stress diagnostic CPU MDI group cap=%u\n",
+                                unsigned(diagnosticMdiGroupCap));
+        if (stress) std::printf("stress diagnostic model pass=%s mask=%u\n",
+                                diagnosticPass.c_str(), unsigned(modelPassMask));
         renderer.setProfiling(true); renderer.setShadowQuality(render::ShadowQuality::High);
         renderer.lighting.fogDensity=0;
         if (const char* q=std::getenv("AIVERSE_PALETTE_TEST_QUALITY")) renderer.setMaterialQuality(render::MaterialQuality(std::atoi(q)));
@@ -326,7 +581,23 @@ int aiverseMain(int argc, char** argv) {
         for (const auto& mesh:model->meshes) batches.push_back(mesh.materialBatches);
     };
     cb.frame=[&](gfx::Device& d,double) {
+        if (modelGpuCounters) {
+            if (!firstModelGpuSerial) firstModelGpuSerial = d.frameSerial();
+            auto completed = d.takeModelGpuCounters();
+            modelGpuSamples.insert(modelGpuSamples.end(),
+                                   completed.begin(), completed.end());
+        }
+        if (gpuTimeline) {
+            auto completed = d.takeGpuTimings();
+            gpuTimelineSamples.insert(gpuTimelineSamples.end(),
+                                      completed.begin(), completed.end());
+        }
         if(failed||finished||frame>maximumFrame){platform::requestQuit();return;}
+        // Stop tagging early enough for GPU completion results to be polled
+        // over the remaining fixture frames without a blocking GPU wait.
+        if (gpuTimeline && frame >= 115 && frame <= 180 &&
+            !d.timeGpuFrame(uint64_t(frame)))
+            gpuTimingUnsupported = true;
         const bool batch=frame>=startBatchFrame;
         // In cpu_mdi mode explicitly exclude GPU-authored draws, regardless
         // of process flags. In gpu_icb mode the original real GPU ICB path is
@@ -384,8 +655,51 @@ int aiverseMain(int argc, char** argv) {
         if(scenario=="instanced"){draw.world=render::mat4::translate({3,0,0})*draw.world;renderer.drawModel(draw);}
         gfx::PassDesc pass;
         const auto startCpu = std::chrono::steady_clock::now();
+        uint64_t threadCpuStartNs = 0, threadCpuEndNs = 0;
+        uint64_t processCpuStartNs = 0, processCpuEndNs = 0;
+        uint64_t machCpuStartNs = 0, machCpuEndNs = 0;
+        const bool threadStartOk = threadCpuTiming &&
+            cpuClockNs(false, threadCpuStartNs);
+        const bool processStartOk = threadCpuTiming &&
+            cpuClockNs(true, processCpuStartNs);
+#if defined(__APPLE__)
+        const bool machStartOk = threadCpuTiming &&
+            machCurrentThreadCpuNs(machCpuStartNs);
+#else
+        const bool machStartOk = false;
+#endif
         renderer.render(pass);
+        const bool threadEndOk = threadStartOk &&
+            cpuClockNs(false, threadCpuEndNs);
+        const bool processEndOk = processStartOk &&
+            cpuClockNs(true, processCpuEndNs);
+#if defined(__APPLE__)
+        const bool machEndOk = machStartOk &&
+            machCurrentThreadCpuNs(machCpuEndNs);
+#else
+        const bool machEndOk = false;
+#endif
         const auto endCpu = std::chrono::steady_clock::now();
+        const double threadCpuMs = threadEndOk && threadCpuEndNs >= threadCpuStartNs
+            ? double(threadCpuEndNs - threadCpuStartNs) * 1e-6 : -1.0;
+        const double processCpuMs = processEndOk && processCpuEndNs >= processCpuStartNs
+            ? double(processCpuEndNs - processCpuStartNs) * 1e-6 : -1.0;
+        const double machThreadCpuMs = machEndOk && machCpuEndNs >= machCpuStartNs
+            ? double(machCpuEndNs - machCpuStartNs) * 1e-6 : -1.0;
+        if (frameTimeline && batch && frame <= captureAfterFrame) {
+            const auto& stats = renderer.modelStats();
+            const auto& profile = renderer.profile();
+            frameCpuTimeline.push_back({
+                frame,
+                std::chrono::duration<double, std::milli>(endCpu-startCpu).count(),
+                threadCpuMs, processCpuMs, machThreadCpuMs,
+                stats.multiDrawSubmissions, stats.indirectCommands,
+                profile.draws[0], profile.draws[1],
+                stats.mdiCpuStages[0].totalMs, stats.mdiCpuStages[1].totalMs,
+                stats.mdiCpuStages[0].backendSubmitMs,
+                stats.mdiCpuStages[1].backendSubmitMs
+            });
+        }
         if (stress && batch && captureMdi && frame >= 100 &&
             !mdiCaptureRequested && renderer.modelStats().multiDrawSubmissions > 0) {
             // Capture a frame with a *real* CPU MDI submission rather than
@@ -555,6 +869,50 @@ int aiverseMain(int argc, char** argv) {
                 }
             }
 
+        }
+        if (frameTimeline && frame == captureAfterFrame) {
+            const std::string path = prefix + "-frames.csv";
+            std::ofstream csv(path, std::ios::binary);
+            csv << "frame,render_cpu_ms,mdi_submissions,mdi_commands,"
+                   "shadow_draws,opaque_draws,shadow_cpu_ms,opaque_cpu_ms,"
+                   "shadow_backend_ms,opaque_backend_ms";
+            if (threadCpuTiming)
+                csv << ",render_thread_cpu_ms,render_offcpu_ms,"
+                       "render_process_cpu_ms,render_mach_thread_cpu_ms";
+            csv << '\n';
+            for (const auto& sample : frameCpuTimeline) {
+                csv << sample.index << ',' << sample.renderMs << ','
+                    << sample.mdiSubmissions << ',' << sample.mdiCommands << ','
+                    << sample.shadowDraws << ',' << sample.opaqueDraws << ','
+                    << sample.shadowCpuMs << ',' << sample.opaqueCpuMs << ','
+                    << sample.shadowBackendMs << ',' << sample.opaqueBackendMs;
+                if (threadCpuTiming) {
+                    // On macOS the native Mach thread accounting is the
+                    // cross-checked source. Keep the POSIX clock separately
+                    // for diagnosing its observed ~1/42 disagreement.
+#if defined(__APPLE__)
+                    const double trustedThreadMs = sample.machThreadCpuMs;
+#else
+                    const double trustedThreadMs = sample.threadCpuMs;
+#endif
+                    csv << ',' << sample.threadCpuMs << ','
+                        << (trustedThreadMs >= 0.0
+                            ? std::max(0.0, sample.renderMs - trustedThreadMs)
+                            : -1.0)
+                        << ',' << sample.processCpuMs
+                        << ',' << sample.machThreadCpuMs;
+                }
+                csv << '\n';
+            }
+            csv.close();
+            if (!csv) {
+                std::fprintf(stderr, "stress frame timeline CSV write failed: %s\n",
+                             path.c_str());
+                failed = true;
+            } else {
+                std::printf("stress frame timeline samples=%zu path=%s\n",
+                            frameCpuTimeline.size(), path.c_str());
+            }
         }
         if (stress && frame == captureAfterFrame && captureMdi &&
             (!mdiCaptureRequested || !mdiCaptureVerified)) {
@@ -795,6 +1153,83 @@ int aiverseMain(int argc, char** argv) {
         }
         failed|=!renderer.modelError().empty();d.endPass();++frame;
     };
-    cb.shutdown=[&]{device->destroyBuffer(floor.vb);device->destroyBuffer(floor.ib);if(secondModel)render::releaseModel(*device,*secondModel);render::releaseModel(*device,*model);renderer.shutdown();};
-    platform::run(cfg,cb);return failed||!finished?1:0;
+    cb.shutdown=[&]{
+        // The fixture exits cleanly with a distinct unsupported code instead
+        // of emitting misleading "0/66" secondary GPU timeline failures.
+        if (modelGpuCounters && !modelCountersUnsupported) {
+            auto completed = device->takeModelGpuCounters();
+            modelGpuSamples.insert(modelGpuSamples.end(),
+                                   completed.begin(), completed.end());
+            std::sort(modelGpuSamples.begin(), modelGpuSamples.end(),
+                      [](const auto& a, const auto& b) { return a.frame < b.frame; });
+            std::ofstream out(prefix + "-model-gpu-counters.csv");
+            out << "frame,shadow_gpu_ticks,opaque_gpu_ticks,valid\n";
+            size_t validCount = 0;
+            uint64_t lastFrame = 0;
+            for (const auto& entry : modelGpuSamples) {
+                if (!firstModelGpuSerial || entry.frame < firstModelGpuSerial)
+                    continue;
+                const uint64_t logicalFrame = entry.frame - firstModelGpuSerial;
+                if (logicalFrame < 115 || logicalFrame > 180) continue;
+                if (lastFrame && logicalFrame <= lastFrame) {
+                    failed = true;
+                    continue;
+                }
+                lastFrame = logicalFrame;
+                if (entry.valid && entry.shadowTicks > 0 && entry.opaqueTicks > 0)
+                    ++validCount;
+                else failed = true;
+                out << logicalFrame << ',' << entry.shadowTicks << ','
+                    << entry.opaqueTicks << ',' << (entry.valid ? 1 : 0) << '\n';
+            }
+            out.close();
+            if (!out || validCount != 66) {
+                std::fprintf(stderr,
+                    "GPU model counter timeline INVALID: valid=%zu expected=66\n",
+                    validCount);
+                failed = true;
+            } else {
+                std::printf("GPU model counter timeline samples=%zu path=%s\n",
+                            validCount, (prefix + "-model-gpu-counters.csv").c_str());
+            }
+        }
+        if (gpuTimeline && !modelCountersUnsupported) {
+            auto completed = device->takeGpuTimings();
+            gpuTimelineSamples.insert(gpuTimelineSamples.end(),
+                                      completed.begin(), completed.end());
+            std::sort(gpuTimelineSamples.begin(), gpuTimelineSamples.end(),
+                      [](const auto& x, const auto& y) { return x.tag < y.tag; });
+            const std::string path = prefix + "-gpu-frames.csv";
+            std::ofstream out(path);
+            out << "frame,gpu_command_buffer_ms,valid\n";
+            size_t validCount = 0;
+            uint64_t previousTag = 0;
+            for (const auto& sample : gpuTimelineSamples) {
+                if (sample.tag < 115 || sample.tag > 180 ||
+                    sample.tag <= previousTag) { failed = true; continue; }
+                previousTag = sample.tag;
+                if (sample.valid && std::isfinite(sample.milliseconds) &&
+                    sample.milliseconds > 0.0) ++validCount;
+                else failed = true;
+                out << sample.tag << ',' << sample.milliseconds << ','
+                    << (sample.valid ? 1 : 0) << '\n';
+            }
+            out.close();
+            if (!out || gpuTimingUnsupported || validCount != 66) {
+                std::fprintf(stderr,
+                    "GPU command-buffer timeline INVALID: valid=%zu expected=66 unsupported=%d\n",
+                    validCount, int(gpuTimingUnsupported));
+                failed = true;
+            } else {
+                std::printf("GPU command-buffer timeline samples=%zu path=%s\n",
+                            validCount, path.c_str());
+            }
+        }
+        device->destroyBuffer(floor.vb);device->destroyBuffer(floor.ib);
+        if(secondModel)render::releaseModel(*device,*secondModel);
+        render::releaseModel(*device,*model);renderer.shutdown();
+    };
+    platform::run(cfg,cb);
+    if (modelCountersUnsupported) return 77; // explicit hardware capability skip
+    return failed||!finished?1:0;
 }

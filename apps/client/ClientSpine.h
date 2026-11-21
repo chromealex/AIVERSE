@@ -18,10 +18,13 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 #include "engine/data/Json.h"
 #include "engine/gfx/Gfx.h"
+#ifndef AIVERSE_CLIENT_NO_SPINE
 #include "engine/render/TextureCache.h"
 #include "engine/spine/SpineRender.h"
+#endif
 
 struct lua_State;
 
@@ -42,9 +45,16 @@ public:
     void render(float dt);
     // spine events -> the UI scripts (GameClient::luaEmit)
     std::function<void(const Json&)> onEvent;
-    size_t count() const { return views_.size(); }
+    size_t count() const {
+#ifdef AIVERSE_CLIENT_NO_SPINE
+        return 0;
+#else
+        return views_.size();
+#endif
+    }
 
 private:
+#ifndef AIVERSE_CLIENT_NO_SPINE
     struct View {
         std::unique_ptr<spine::SpinePlayer> player;
         gfx::TextureHandle target;
@@ -62,6 +72,7 @@ private:
     spine::SpineRenderer renderer_;
     bool ready_ = false;
     std::map<std::string, View> views_;
+#endif
 };
 
 // The `spine` table for the client's UI Lua state.

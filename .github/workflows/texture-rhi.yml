@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - feature/texture-rhi-unification
     paths:
       - 'engine/gfx/**'
@@ -20,6 +21,7 @@ on:
       - 'apps/editor/windows/TextureResourcesWindow.cpp'
       - 'tests/render/**'
       - 'tools/verify-texture-rhi.sh'
+      - 'tools/texture-rhi-final-verify.sh'
       - '.github/workflows/texture-rhi.yml'
       - 'CMakeLists.txt'
 
@@ -57,6 +59,7 @@ jobs:
           tools/verify-texture-rhi.sh \
             --build-dir "${{ github.workspace }}/build/texture-rhi-ci" \
             --jobs 4 \
+            -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_CLIENT=OFF \
             -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_HEADLESS=OFF \
@@ -99,6 +102,7 @@ jobs:
           tools/verify-texture-rhi.sh \
             --vulkan --jobs 4 \
             --build-dir "${{ github.workspace }}/build/texture-rhi-vulkan" \
+            -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_CLIENT=OFF \
             -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_HEADLESS=OFF \
@@ -143,6 +147,7 @@ jobs:
         run: |
           cmake -S . -B build/texture-gles-gpu -G Ninja \
             -DAIVERSE_BUILD_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_CLIENT=OFF \
             -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_HEADLESS=OFF \

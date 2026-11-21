@@ -5,6 +5,7 @@
 #pragma once
 #include "SceneResourceBackend.h"
 #include "engine/world/WorldScene.h"
+#include <cstdio>
 #include <exception>
 #include <functional>
 #include <map>
@@ -80,12 +81,18 @@ public:
                 return false;
             }
         };
-        result.retire = [state](const std::string& key) {
+        result.retire = [state](const std::string& key) noexcept {
+            // SceneResourceHooks::retire must not throw, but
+            // WorldScene::shutdown throws when its GPU barrier fails.
+            // Detach the instance from the key first (the key can be
+            // republished), then park a failed instance so its GPU
+            // resources are torn down later instead of leaking/aborting.
             const auto it=state->instances.find(key);
             if(it==state->instances.end())return;
-            it->second->shutdown(*state->device);
+            std::unique_ptr<world::WorldScene> scene=std::move(it->second);
             state->instances.erase(it);
             state->updated.erase(key);
+            shutdownOrPark(*state,key,std::move(scene));
         };
         return result;
     }
@@ -93,6 +100,7 @@ public:
     // Continue existing WorldScene chunk streaming per frame. Shared scene
     // dependencies are updated once per key and never duplicated per owner.
     void update(std::span<const Vec3> observers,int radius=2) {
+        retryParkedShutdowns();
         for(auto& [key,scene] : state_->instances) {
             scene->update(*state_->device,observers,radius);
             state_->updated.insert(key);
@@ -116,6 +124,19 @@ public:
     }
 
     size_t sceneCount() const {return state_->instances.size();}
+
+    // Retired WorldScenes whose shutdown failed (GPU barrier) are parked
+    // here and retried on the owner thread by update() or explicitly.
+    // Returns the number of parked scenes still awaiting teardown.
+    size_t retryParkedShutdowns() {
+        auto parked=std::move(state_->parked);
+        state_->parked.clear();
+        for(auto& entry : parked)
+            shutdownOrPark(*state_,entry.key,std::move(entry.scene));
+        return state_->parked.size();
+    }
+    size_t parkedCount() const {return state_->parked.size();}
+    const std::string& lastRetireError() const {return state_->lastRetireError;}
 private:
     struct State {
         State(gfx::Device& d, ManifestReader manifest,
@@ -129,7 +150,34 @@ private:
         std::shared_ptr<render::ModelTextureCache> textures;
         std::map<std::string,std::unique_ptr<world::WorldScene>> instances;
         std::set<std::string> updated;
+        struct Parked {
+            std::string key;
+            std::unique_ptr<world::WorldScene> scene;
+        };
+        std::vector<Parked> parked;
+        std::string lastRetireError;
     };
+    static void shutdownOrPark(State& state,const std::string& key,
+                               std::unique_ptr<world::WorldScene> scene) noexcept {
+        if(!scene)return;
+        std::string error;
+        try {
+            scene->shutdown(*state.device);
+            return;
+        } catch(const std::exception& ex) {
+            error=ex.what();
+        } catch(...) {
+            error="unknown WorldScene shutdown exception";
+        }
+        try {
+            state.lastRetireError="WorldScene '"+key+"' retire deferred: "+error;
+            std::fprintf(stderr,"[scene] %s\n",state.lastRetireError.c_str());
+            state.parked.push_back({key,std::move(scene)});
+        } catch(...) {
+            // Out of memory while parking: the scene is released by its
+            // destructor here; nothing else can be done without throwing.
+        }
+    }
     std::shared_ptr<State> state_;
 };
 

@@ -1,6 +1,7 @@
 // AIVERSE NEREID -- opt-in ECS sampling; no FPS/RTS or rendering coupling.
 #pragma once
 #include <aiverselib/water/NereidCascadeFlow.h>
+#include <aiverselib/water/NereidRiverGrade.h>
 #include <aiverselib/water/NereidConfluenceFlow.h>
 #include <aiverselib/water/NereidFlowObstacles.h>
 #include <aiverselib/water/NereidFloodRouting.h>
@@ -14,10 +15,12 @@ namespace aiverse::lib::nereid {
 // Selection is independent of ECS pool insertion order. Higher priority wins,
 // then higher surface, then smallest generation-safe Entity ID. No RNG / floats.
 inline void considerWaterCandidate(WaterSample& sample,Entity entity,
-                                   const WaterBodyComponent& body,Vec3 position,
+                                   const WaterBodyComponent& sourceBody,Vec3 position,
                                    const WaterGeometryComponent* geometry=nullptr,
                                    const WaterCurrentFieldComponent* field=nullptr,
-                                   const WaterVortexFieldComponent* vortices=nullptr) {
+                                   const WaterVortexFieldComponent* vortices=nullptr,
+                                   const WaterRiverGradeComponent* grade=nullptr) {
+    const auto body=gradedWaterBody(sourceBody,grade,position,geometry);
     const bool better=!sample.found ||
         body.priority>sample.priority ||
         (body.priority==sample.priority &&
@@ -43,7 +46,7 @@ inline WaterSample sampleWater(const World& world,Vec3 position) {
             if(!coversWaterBody(body,geometry,position))return;
             const auto* field=world.tryGetConst<WaterCurrentFieldComponent>(entity);
             const auto* vortices=world.tryGetConst<WaterVortexFieldComponent>(entity);
-            considerWaterCandidate(sample,entity,body,position,geometry,field,vortices);
+            considerWaterCandidate(sample,entity,body,position,geometry,field,vortices,world.tryGetConst<WaterRiverGradeComponent>(entity));
         });
     // Confluences blend upstream rivers first; cascade mouth continuity
     // runs last so drops take local precedence without changing body flow.
@@ -94,6 +97,9 @@ inline void addWaterSamplingSystem(Simulation& sim,std::string name) {
 
 inline void registerNereidVortexPersistence(Simulation& sim) {
     sim.registerPersistentComponent<WaterVortexFieldComponent>("nereid.vortex_field",1);
+}
+inline void registerNereidRiverGradePersistence(Simulation& sim) {
+    sim.registerPersistentComponent<WaterRiverGradeComponent>("nereid.river_grade",1);
 }
 inline void registerNereidCurrentPersistence(Simulation& sim) {
     sim.registerPersistentComponent<WaterCurrentFieldComponent>("nereid.current_field",1);

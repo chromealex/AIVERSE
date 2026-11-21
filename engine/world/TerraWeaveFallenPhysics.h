@@ -4,6 +4,7 @@
 #pragma once
 #include "engine/world/TerraWeaveRootEvents.h"
 #include "engine/world/TerraWeaveForestScene.h"
+#include "engine/world/TerraWeaveDeadwoodPresentation.h"
 #include "engine/physics/Scene.h"
 #include "engine/render/Renderer3D.h"
 #include <algorithm>
@@ -191,15 +192,26 @@ public:
     template<class Prototype>
     void submit(render::Renderer3D& renderer,
                 FallenRenderOriginCm origin,
-                Prototype&& prototype)const {
+                Prototype&& prototype,
+                const ForestDeadwoodResource* deadwood=nullptr)const {
         for(const auto& [id,item]:bodies_){
             if(!scene_.valid(item.body))continue;
+            const auto appearance=deadwood?
+                deadwoodVisualState(*deadwood,id):DeadwoodVisualState{};
+            if(appearance.tier==DeadwoodVisualTier::Gone)continue;
             const auto* model=prototype(id.speciesId);
             if(!model)continue;
             const b3Vec3 p=scene_.position(item.body);
             const b3Quat q=scene_.rotation(item.body);
             render::ModelDraw draw;
             draw.model=model;
+            // O(log N) lookup, one model prototype per species and one
+            // existing ModelDraw tint per instance. Alpha stays opaque:
+            // no extra transparent pass or per-tree geometry allocation.
+            draw.tint={
+                float(appearance.tintRPermille)*0.001f,
+                float(appearance.tintGPermille)*0.001f,
+                float(appearance.tintBPermille)*0.001f,1.0f};
             draw.persistentId=detail::mix64(
                 id.key^(uint64_t(id.speciesId)<<32)^0x5ab0fa11bade0011ULL);
             if(!draw.persistentId)draw.persistentId=1;

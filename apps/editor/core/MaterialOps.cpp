@@ -1,6 +1,7 @@
 #include "MaterialOps.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <fstream>
@@ -134,7 +135,7 @@ Json patternSchema() {
 }
 
 const char* kMaterialDoc =
-    "Material keys: color [r,g,b(,a)] linear 0..1, metallic 0..1, roughness 0..1, emissive [r,g,b], emissiveStrength, "
+    "Material keys: color [r,g,b(,a)] linear 0..1, metallic 0..1, roughness 0..1, thinTransmission 0..1, shadowDiffusion 0..1 world units, sssStrength 0..1, sssScale 0..1, sssThickness 0..1 world units (0 = artistic backlight), sssColor [r,g,b] linear 0..1, emissive [r,g,b], emissiveStrength, "
     "alpha opaque|mask|blend, cutoff, doubleSided, unlit, castShadow, receiveShadow, vertexColors, team tint|mask|alpha|vertex|none, "
     "teamStrength, texture / normalMap / emissiveMap / teamMask (PNG/JPEG/TGA/KTX2 paths in the game folder, e.g. made by texture_generate), "
     "metallicRoughnessMap (glTF layout: G roughness, B metallic) / occlusionMap (R) with occlusionStrength, normalScale, "
@@ -143,7 +144,7 @@ const char* kMaterialDoc =
 } // namespace
 
 const std::vector<std::string>& materialKeys() {
-    static const std::vector<std::string> keys = {"shaderGraph", "color", "metallic", "roughness", "emissive", "emissiveStrength", "alpha", "cutoff",
+    static const std::vector<std::string> keys = {"shaderGraph", "color", "metallic", "roughness", "thinTransmission", "shadowDiffusion", "sssStrength", "sssScale", "sssThickness", "sssColor", "emissive", "emissiveStrength", "alpha", "cutoff",
                                                   "doubleSided", "unlit", "castShadow", "receiveShadow", "vertexColors", "team", "teamStrength",
                                                   "teamMask", "texture", "normalMap", "emissiveMap", "uvScale", "base", "use", "replace", "description",
                                                   "metallicRoughnessMap", "occlusionMap", "occlusionStrength", "normalScale", "uvOffset"};
@@ -157,8 +158,16 @@ std::vector<std::string> checkMaterial(const Json& m) {
     for (const auto& [k, v] : m.members()) {
         if (std::find(keys.begin(), keys.end(), k) == keys.end()) { out.push_back("unknown key '" + k + "'"); continue; }
         if (k == "shaderGraph") { try { render::graph::compile(v, "material"); } catch (const std::exception& e) { out.push_back(e.what()); } }
-        if ((k == "color" || k == "emissive") && (!v.isArray() || v.size() < 3)) out.push_back(k + " must be [r, g, b]");
-        if ((k == "metallic" || k == "roughness" || k == "cutoff" || k == "teamStrength") && (!v.isNumber() || v.toDouble() < 0 || v.toDouble() > 1))
+        if ((k == "color" || k == "emissive" || k == "sssColor") && (!v.isArray() || v.size() < 3)) out.push_back(k + " must be [r, g, b]");
+        if (k == "sssColor" && v.isArray() && v.size() >= 3) {
+            for (size_t channel=0; channel<3; ++channel)
+                if (!v[channel].isNumber() || !std::isfinite(v[channel].toDouble()) ||
+                    v[channel].toDouble()<0 || v[channel].toDouble()>1) {
+                    out.push_back("sssColor channels must be numbers 0..1");
+                    break;
+                }
+        }
+        if ((k == "metallic" || k == "roughness" || k == "thinTransmission" || k == "shadowDiffusion" || k == "sssStrength" || k == "sssScale" || k == "sssThickness" || k == "cutoff" || k == "teamStrength") && (!v.isNumber() || !std::isfinite(v.toDouble()) || v.toDouble() < 0 || v.toDouble() > 1))
             out.push_back(k + " must be a number 0..1");
         if (k == "alpha" && v.str() != "opaque" && v.str() != "mask" && v.str() != "blend") out.push_back("alpha must be opaque, mask or blend");
         if (k == "team" && v.str() != "tint" && v.str() != "mask" && v.str() != "alpha" && v.str() != "vertex" && v.str() != "none")
@@ -275,7 +284,8 @@ void registerMaterialOps(Workspace& ws) {
             if (mat.getStr("base") == name) throw std::runtime_error("a material can't be its own base");
             std::vector<std::string> warnings;
             for (const char* k : {"texture", "normalMap", "emissiveMap", "teamMask", "metallicRoughnessMap", "occlusionMap"})
-                if (mat[k].isString() && !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
+                if (mat[k].isString() && !mat.getStr(k).empty() &&
+                    !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);
             saveMaterialLibrary(*w, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);

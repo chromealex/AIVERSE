@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 #include "ParticleSystem.h"
+#include "SpectraParticleProgram.h"
 
 namespace aiverse::fx {
 
@@ -163,6 +164,11 @@ struct ParticleSystem::Impl {
         float du = 1, dv = 1;          // one flipbook cell in UV
         // optional modules (FxEffect.h); `modules` false keeps the original per-particle path
         bool modules = false;
+        spectra::program::Program particleProgram;
+        // Four typed shader-graph vertex channels; defaults preserve
+        // legacy (age, lifetime, deterministic random, zero).
+        // Values: 0..3 builtins, 4..11 customAttributes, 12..19 instance params.
+        std::array<uint8_t,4> graphInputSources{0,1,2,3};
         ColorLut startLut, startMinLut, colorSpeed, trailColor, trailLife, colorMinLut;
         ScalarLut sizeSpeed, trailWidth, sizeMinLut, sizeYLut, sizeZLut, spinSpeed, lightRadius, lightIntensity, noiseRemap;
         FxTexture trailTex;
@@ -193,6 +199,8 @@ struct ParticleSystem::Impl {
         float3 pos, prev, dir{0, 1, 0};
         float scale = 1;
         float4 tint{1, 1, 1, 1};
+        // Changeable per-instance scalar uniforms for the visual particle VM.
+        std::array<float,8> programParams{};
         float time = 0;
         std::array<float, kMaxEmitters> accum{};
         std::array<bool, kMaxEmitters> burstDone{};
@@ -212,6 +220,8 @@ struct ParticleSystem::Impl {
     };
     struct Particle {
         float3 pos, vel;
+        std::array<float,8> customAttributes{}; // writable, per-particle
+        std::array<float,8> programParams{};    // read-only VM instance snapshot
         float age, invLife;
         float size, rot, spin, scale;
         float4 tint;
@@ -273,6 +283,16 @@ struct ParticleSystem::Impl {
     std::vector<Particle> particles;
     std::vector<Rec> recs;
     std::vector<Vertex> verts, meshVerts;
+    // Runs from the MOST RECENT render() only; reuse that exact vertex buffer
+    // for a one-pass reactive mask after the scene pass ends.
+    struct ReactiveRun {
+        gfx::TextureHandle texture; // borrowed from particle batch/atlas
+        uint32_t first = 0, count = 0;
+        bool mesh = false;  // true: nonindexed triangles; false: indexed quads
+    };
+    std::vector<ReactiveRun> reactiveRuns;
+    gfx::ShaderHandle reactiveShader;
+    gfx::PipelineHandle reactiveQuadPipe, reactiveMeshPipe;
     Rng rng;
     QualityLimits limits = limitsFor(FxQuality::Medium);
     FxQuality quality = FxQuality::Medium;
@@ -311,6 +331,16 @@ struct ParticleSystem::Impl {
     const EmitterDef& defOf(const Particle& p) const { return effects[p.effect].def.emitters[p.emitter]; }
     const EmitterRT& rtOf(const Particle& p) const { return effects[p.effect].em[p.emitter]; }
     float lifeT(const Particle& p) const { return std::min(p.age * p.invLife, 1.0f); }
+    void runProgram(Particle& p, spectra::program::Stage stage, float dt) {
+        const auto& bytecode=rtOf(p).particleProgram;
+        if(!bytecode.enabled(stage))return;
+        spectra::program::Context ctx{p.pos,p.vel,p.tint,p.size,p.rot,
+            p.customAttributes,p.age,lifeT(p),dt,float(p.uid)};
+        ctx.instanceParams=&p.programParams;
+        // Runtime math failures are bounded and ignored for this visual cue;
+        // never allow NaN or unbounded values to poison renderer resources.
+        (void)spectra::program::execute(bytecode,stage,ctx);
+    }
     float4 colorNow(const Particle& p) const;
     float sizeNow(const Particle& p, float t) const;   // world size (life curves, by speed, noise; no screen caps)
 

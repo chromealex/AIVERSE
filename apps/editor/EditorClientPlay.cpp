@@ -68,7 +68,7 @@ void Editor::startClientPlay() {
     std::error_code ec;
     for (const fs::path& c : {fs::path(opt_.engineDir) / "engine" / "assets", fs::path(platform::contentRoot()) / "engine"})
         if (fs::exists(c / "ui" / "theme.rcss", ec)) { assets = c.string(); break; }
-    clientHost_.start(*dev_, ws_.project.dir, assets);
+    clientHost_.start(*dev_, ws_.project.dir, assets, gpuDeviceLease());
     ws_.log("play", "Игра как в клиенте: " + ws_.project.dir);
     focusWindow("game");
     status = "Игра как в клиенте (меню и скрипты игры)";

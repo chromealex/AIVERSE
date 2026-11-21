@@ -1,13 +1,20 @@
 // Chunked terrain renderer (see RtsTerrainRender.h).
 #include "RtsTerrainRender.h"
+#include "engine/view/Frustum.h"
+#include "engine/view/GridGeometry.h"
 #include "../../../engine/data/JsonCompose.h"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <memory>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include "../../../engine/platform/Platform.h"
 #include "RtsTerrainShaders.h"
 #include "RtsTerrainSurface.h"
@@ -35,7 +42,7 @@ float3 jsonColor(const Json& j, float3 def) {
     return {float(j[0].toDouble()), float(j[1].toDouble()), float(j[2].toDouble())};
 }
 
-struct TU0 { float lod[4], mode[4], scale[4], cliff[4], fog[4], tint[4][4], cliffTint[4], fogColor[4], fogGrid[4], detail[4], rock[4], blend[4]; };
+struct TU0 { float lod[4], mode[4], scale[4], cliff[4], fog[4], tint[4][4], cliffTint[4], fogColor[4], fogGrid[4], detail[4], rock[4], blend[4], pbr[4]; };
 
 const char* kKindNames[] = {"grass", "sand", "ramp", "rock", "blocked", "lakebed", "shallows", "dug"};
 } // namespace
@@ -56,33 +63,89 @@ std::vector<uint8_t> parseMaterialRows(const Json& rows, int w, int h) {
 // ------------------------------------------------------------------ setup
 
 void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReader& read, const std::string& contentBase) {
-    if (dev_) shutdown(*dev_);
-    dev_ = &dev;
-    rules_ = &rules;
-    base_ = contentBase;
-    read_ = read;
-    textures_.init(dev);
-    look_ = {};
-    if (read) { // visual `terrain` block: rules file first, game.json overrides per key (as RtsGroundFx)
-        std::string text, rulesPath = "rules.json";
+    checkGpuDevice(dev);
+    if (dev_ && dev_ != &dev)
+        throw std::logic_error("TerrainRenderer: GPU device owner mismatch");
+
+    // Parse and allocate *before* touching an existing published terrain.
+    // The three fallback textures are unpublished until the complete kit
+    // exists. Missing textures must fail, not leave a half-bound renderer.
+    TerrainRenderer parsed;
+    parsed.look_ = {};
+    if(read) {
+        std::string text, rulesPath="rules.json";
         Json game;
-        try { if (read("game.json", text)) { game = Json::parse(text); rulesPath = game.getStr("rules", "rules.json"); } } catch (...) {}
-        try { parseLook(readComposedJson(rulesPath, [&](const std::string& p, std::string& o) { return read(p, o); })["terrain"]); } catch (...) {}
-        if (game.isObject()) parseLook(game["terrain"]);
+        try {
+            if(read("game.json",text)) {
+                game=Json::parse(text);
+                rulesPath=game.getStr("rules","rules.json");
+            }
+        }catch(...) {}
+        try {
+            parsed.parseLook(readComposedJson(rulesPath,
+                [&](const std::string& p,std::string& out){return read(p,out);})["terrain"]);
+        }catch(...) {}
+        if(game.isObject())parsed.parseLook(game["terrain"]);
     }
-    auto tex1 = [&](uint32_t px, const char* label) {
-        gfx::TextureDesc td; td.width = td.height = 1; td.data = &px; td.repeat = true; td.label = label;
-        return dev.createTexture(td);
+    std::string nextBase=contentBase;
+    FileReader nextReader=read;
+    gfx::TextureHandle nextWhite{},nextFlatNormal{},nextGray{};
+    const auto tex1=[&](uint32_t px,const char* label) {
+        gfx::TextureDesc td;
+        td.width=td.height=1;
+        td.data=&px;
+        td.repeat=true;
+        td.label=label;
+        return createTerrainTexture(dev,td);
     };
-    white_ = tex1(0xffffffffu, "terrain white");
-    flatN_ = tex1(0xffff8080u, "terrain flat normal");
-    gray_ = tex1(0xff808080u, "terrain gray");
-    texturesLoaded_ = false;
-    built_ = false;
+    try {
+        nextWhite=tex1(0xffffffffu,"terrain white");
+        if(!nextWhite.valid())
+            throw std::runtime_error("TerrainRenderer: white GPU texture allocation failed");
+        nextFlatNormal=tex1(0xffff8080u,"terrain flat normal");
+        if(!nextFlatNormal.valid())
+            throw std::runtime_error("TerrainRenderer: flat normal GPU texture allocation failed");
+        nextGray=tex1(0xff808080u,"terrain gray");
+        if(!nextGray.valid())
+            throw std::runtime_error("TerrainRenderer: gray GPU texture allocation failed");
+
+        // A previous draw may still refer to the old terrain kit. Never
+        // destroy it without an actual full-device idle boundary.
+        if(dev_ && !dev.waitForResourceIdle())
+            throw std::runtime_error("TerrainRenderer: reload GPU idle barrier failed");
+        if(dev_)shutdown(dev);
+    }catch(...) {
+        // These unpublished textures cannot be referenced by a draw call.
+        if(nextGray.valid())dev.destroyTexture(nextGray);
+        if(nextFlatNormal.valid())dev.destroyTexture(nextFlatNormal);
+        if(nextWhite.valid())dev.destroyTexture(nextWhite);
+        throw;
+    }
+
+    dev_=&dev;
+    rules_=&rules;
+    base_.swap(nextBase);
+    read_.swap(nextReader);
+    using std::swap;
+    swap(look_,parsed.look_);
+    textures_.init(dev);
+    white_=nextWhite;
+    flatN_=nextFlatNormal;
+    gray_=nextGray;
+    texturesLoaded_=false;
+    built_=false;
+    ++publicationRevision_;
 }
 
 void TerrainRenderer::parseLook(const Json& t) {
     if (!t.isObject()) return;
+    look_.render=t.getBool("render",look_.render);
+    if (t["pbr"].isObject()) {
+        const Json& p=t["pbr"];
+        look_.pbr=p.getBool("enabled",look_.pbr);
+        look_.packedPbr=p.getBool("packedMaps",look_.packedPbr);
+        look_.pbrRoughness=std::clamp(float(p["roughness"].toDouble(look_.pbrRoughness)),0.045f,1.0f);
+    }
     if (t["layers"].isArray()) {
         look_.layers.clear();
         for (auto& l : t["layers"].items()) {
@@ -158,44 +221,165 @@ void TerrainRenderer::loadTextures(gfx::Device&) {
     for (size_t i = 0; i < look_.layers.size(); ++i) { layerTex_[i] = load(look_.layers[i].texture); layerNrm_[i] = load(look_.layers[i].normal); }
     cliffTex_ = load(look_.cliffTexture);
     cliffNrm_ = load(look_.cliffNormal);
+    // GL33 has a 16-active-fragment-texture-unit limit on Apple.
+    // Pack all four independently tiled normal maps into one repeatable
+    // padded atlas. This leaves the splat, albedo, cliff and baked inputs
+    // intact. A failed atlas is never sampled: the shader falls back.
+    layerNormalAtlasSize_ = 0;
+    if (dev_ && dev_->info().backend == gfx::Backend::GL33) {
+        struct Source { int width=1, height=1; std::vector<uint8_t> rgba; };
+        Source source[4];
+        int tile = 1;
+        bool valid = true;
+        for (int i=0; i<4; ++i) {
+            const auto& name = i < int(look_.layers.size())
+                ? look_.layers[size_t(i)].normal : std::string{};
+            if (name.empty() || !layerNrm_[i].valid()) continue;
+            std::string bytes;
+            if (!platform::readContentFile(base_ + name, bytes) ||
+                !render::decodeImage(bytes,source[i].width,source[i].height,
+                                     source[i].rgba) ||
+                source[i].width<=0 || source[i].height<=0) {
+                valid=false;
+                break;
+            }
+            tile=std::max(tile,std::max(source[i].width,source[i].height));
+        }
+        // The atlas is optional. Larger images retain the existing bounded
+        // shader-tier fallback instead of silently downsampling source maps.
+        if (valid && tile<=2048) {
+            constexpr int gutter=16;
+            const int stride=tile+2*gutter;
+            const int extent=2*stride;
+            std::vector<uint8_t> rgba(size_t(extent)*size_t(extent)*4);
+            for (int layer=0;layer<4;++layer) {
+                const Source& src=source[layer];
+                for (int y=-gutter;y<tile+gutter;++y) {
+                    const int sy=((y%tile)+tile)%tile;
+                    const int iy=std::min(src.height-1,int((int64_t(sy)*src.height)/tile));
+                    for (int x=-gutter;x<tile+gutter;++x) {
+                        const int sx=((x%tile)+tile)%tile;
+                        const int ix=std::min(src.width-1,int((int64_t(sx)*src.width)/tile));
+                        const size_t dst=(size_t((layer/2)*stride+y+gutter)*extent+
+                                          size_t((layer%2)*stride+x+gutter))*4;
+                        if (src.rgba.empty()) {
+                            rgba[dst+0]=128;rgba[dst+1]=128;
+                            rgba[dst+2]=255;rgba[dst+3]=255;
+                        } else {
+                            const size_t from=(size_t(iy)*src.width+size_t(ix))*4;
+                            for(int channel=0;channel<4;++channel)
+                                rgba[dst+channel]=src.rgba[from+size_t(channel)];
+                        }
+                    }
+                }
+            }
+            gfx::TextureDesc td;
+            td.width=extent;td.height=extent;
+            td.data=rgba.data();td.filter=gfx::Filter::Linear;
+            td.mipmaps=true;td.repeat=false;td.label="terrain GL33 normal atlas";
+            layerNormalAtlas_=dev_->createTexture(td);
+            if (layerNormalAtlas_.valid()) {
+                layerNormalAtlasSize_=tile;
+                std::fprintf(stderr,"[terrain] GL33 layer normal atlas %dx%d, four source normals\n",
+                             extent,extent);
+            }
+        }
+    }
+}
+
+bool TerrainRenderer::shutdownAfterGpuIdle(gfx::Device& dev) {
+    checkGpuDevice(dev);
+    if(!dev_)return true;
+    if(dev_!=&dev)
+        throw std::logic_error("TerrainRenderer shutdown: GPU device owner mismatch");
+    if(!dev.waitForResourceIdle())return false;
+    shutdown(dev);
+    return true;
 }
 
 void TerrainRenderer::shutdown(gfx::Device& dev) {
+    checkGpuDevice(dev);
+    if(!dev_)return;
+    if(dev_!=&dev)
+        throw std::logic_error("TerrainRenderer shutdown: GPU device owner mismatch");
     for (auto& c : chunks_) freeChunk(dev, c);
     chunks_.clear();
-    for (auto* l : {&apron_}) { dev.destroyBuffer(l->vb); dev.destroyBuffer(l->ib); *l = {}; }
-    dev.destroyBuffer(water_.vb); dev.destroyBuffer(water_.ib); water_ = {};
-    for (auto t : {cellTex_, dynTex_, splatTex_, visionTex_, white_, flatN_, gray_, heightField_.tex}) if (t.valid()) dev.destroyTexture(t);
-    cellTex_ = dynTex_ = splatTex_ = visionTex_ = white_ = flatN_ = gray_ = {};
+    retiredMeshes_.retireBuffer(dev,apron_.vb);
+    retiredMeshes_.retireBuffer(dev,apron_.ib);
+    apron_={};
+    retiredMeshes_.retireBuffer(dev,water_.vb);
+    retiredMeshes_.retireBuffer(dev,water_.ib);
+    water_={};
+    if(!retiredMeshes_.completeForShutdown(dev))
+        throw std::runtime_error("TerrainRenderer: pending GPU mesh retirement could not reach idle");
+    for (auto t : {cellTex_, dynTex_, splatTex_, visionTex_, detailNrmTex_, detailSplatTex_, white_, flatN_, gray_, heightField_.tex}) if (t.valid()) dev.destroyTexture(t);
+    cellTex_ = dynTex_ = splatTex_ = visionTex_ = detailNrmTex_ = detailSplatTex_ = white_ = flatN_ = gray_ = {};
+    dev.destroyTexture(layerNormalAtlas_);
+    layerNormalAtlas_ = {};
+    layerNormalAtlasSize_ = 0;
     heightField_ = {};
     heightDirty_ = true;
-    for (int i = 0; i < 3; ++i) {
+    // Base/detail, full GI and compact GI variants.
+    for (int i = 0; i < 13; ++i) {
         if (pipes_[i].valid()) dev.destroyPipeline(pipes_[i]);
         if (shaders_[i].valid()) dev.destroyShader(shaders_[i]);
         pipes_[i] = {}; shaders_[i] = {}; shaderFailed_[i] = false;
     }
     textures_.shutdown();
+    publishedSurfaceGrid_.reset();
     texW_ = texH_ = 0;
     built_ = false;
     globalHash_ = 0;
+    frameFieldsPrepared_=false;
     dev_ = nullptr;
+    ++publicationRevision_;
 }
 
 void TerrainRenderer::freeChunk(gfx::Device& dev, Chunk& c) {
-    for (auto& l : c.lods) { dev.destroyBuffer(l.vb); dev.destroyBuffer(l.ib); }
+    for(auto& l:c.lods) {
+        retiredMeshes_.retireBuffer(dev,l.vb);
+        retiredMeshes_.retireBuffer(dev,l.ib);
+    }
     c.lods.clear();
-    c.valid = false;
+    c.valid=false;
 }
 
-void TerrainRenderer::upload(gfx::Device& dev, const std::vector<TV>& v, const std::vector<uint32_t>& idx, Lod& out) {
-    dev.destroyBuffer(out.vb); dev.destroyBuffer(out.ib);
-    out = {};
-    if (idx.empty()) return;
-    gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = v.size() * sizeof(TV); vb.data = v.data(); vb.label = "terrain";
-    out.vb = dev.createBuffer(vb);
-    gfx::BufferDesc ib; ib.type = gfx::BufferType::Index; ib.size = idx.size() * sizeof(uint32_t); ib.data = idx.data(); ib.label = "terrain";
-    out.ib = dev.createBuffer(ib);
-    out.indexCount = uint32_t(idx.size());
+void TerrainRenderer::upload(gfx::Device& dev, const std::vector<TV>& v,
+                             const std::vector<uint32_t>& idx, Lod& out) {
+    checkGpuDevice(dev);
+    if(dev_!=&dev)
+        throw std::logic_error("TerrainRenderer upload: GPU device owner mismatch");
+    Lod next{};
+    if(!idx.empty()) {
+        try {
+            gfx::BufferDesc vb;
+            vb.type=gfx::BufferType::Vertex;
+            vb.size=v.size()*sizeof(TV);
+            vb.data=v.data(); vb.label="terrain";
+            reservePreparationBytes(v.size(),sizeof(TV));
+            next.vb=dev.createBuffer(vb);
+            if(!next.vb.valid())
+                throw std::runtime_error("TerrainRenderer: vertex upload failed");
+            gfx::BufferDesc ib;
+            ib.type=gfx::BufferType::Index;
+            ib.size=idx.size()*sizeof(uint32_t);
+            ib.data=idx.data(); ib.label="terrain";
+            reservePreparationBytes(idx.size(),sizeof(uint32_t));
+            next.ib=dev.createBuffer(ib);
+            if(!next.ib.valid())
+                throw std::runtime_error("TerrainRenderer: index upload failed");
+            next.indexCount=uint32_t(idx.size());
+            next.vertexCount=uint32_t(v.size());
+        }catch(...) {
+            // Unpublished handles have not been submitted to any frame.
+            if(next.ib.valid())dev.destroyBuffer(next.ib);
+            if(next.vb.valid())dev.destroyBuffer(next.vb);
+            throw;
+        }
+    }
+    retiredMeshes_.retireBuffer(dev,out.vb);
+    retiredMeshes_.retireBuffer(dev,out.ib);
+    out=next;
 }
 
 // ------------------------------------------------------------------ cell look
@@ -251,9 +435,229 @@ uint64_t TerrainRenderer::chunkHash(const MapGrid& g, const Chunk& c, bool flatD
     return h.h;
 }
 
-bool TerrainRenderer::build(gfx::Device& dev, const MapGrid& g, bool flatDig) {
+// Private full-map terrain candidate. Never invokes TerrainRenderer::shutdown():
+// its kit references are borrowed from the published owner, whereas the CPU
+// maps and GPU geometry/field textures in `staged_` are newly allocated.
+class TerrainRenderer::PreparedMap final {
+    friend class TerrainRenderer;
+public:
+    PreparedMap()=default;
+    PreparedMap(const PreparedMap&)=delete;
+    PreparedMap& operator=(const PreparedMap&)=delete;
+    ~PreparedMap() noexcept {
+        if(committed_ || !staged_ || !device_)return;
+        auto dropBuffer=[this](gfx::BufferHandle& buffer) noexcept {
+            if(!buffer.valid())return;
+            try {device_->destroyBuffer(buffer);}catch(...) {}
+            buffer={};
+        };
+        auto dropTexture=[this](gfx::TextureHandle& texture) noexcept {
+            if(!texture.valid())return;
+            try {device_->destroyTexture(texture);}catch(...) {}
+            texture={};
+        };
+        for(auto& chunk:staged_->chunks_)
+            for(auto& lod:chunk.lods) {
+                dropBuffer(lod.vb);
+                dropBuffer(lod.ib);
+            }
+        dropBuffer(staged_->apron_.vb);
+        dropBuffer(staged_->apron_.ib);
+        dropBuffer(staged_->water_.vb);
+        dropBuffer(staged_->water_.ib);
+        for(auto* texture:{&staged_->cellTex_,&staged_->dynTex_,
+                           &staged_->splatTex_,&staged_->visionTex_,
+                           &staged_->detailNrmTex_,&staged_->detailSplatTex_,
+                           &staged_->heightField_.tex})
+            dropTexture(*texture);
+        // Shader, layer textures and fallback texture kit belong to the
+        // original live TerrainRenderer and are NOT destroyed here.
+    }
+private:
+    TerrainRenderer* owner_=nullptr;
+    gfx::Device* device_=nullptr;
+    uint64_t revision_=0;
+    bool committed_=false;
+    std::unique_ptr<TerrainRenderer> staged_;
+    std::shared_ptr<PreparedFrame> frame_;
+};
+
+gfx::TextureHandle TerrainRenderer::createTerrainTexture(
+        gfx::Device& dev,const gfx::TextureDesc& desc) {
+    if(preparationAllocation_) {
+        // Terrain fields use R8 visibility and RGBA8 material/height data.
+        if((desc.format!=gfx::PixelFormat::RGBA8 &&
+            desc.format!=gfx::PixelFormat::R8) || desc.levelCount!=0 ||
+           desc.width<=0 || desc.height<=0)
+            throw std::logic_error("unsupported Terrain preparation texture layout");
+        const size_t pixelBytes=desc.format==gfx::PixelFormat::R8?1:4;
+        size_t w=size_t(desc.width),h=size_t(desc.height);
+        for(;;) {
+            if(w>std::numeric_limits<size_t>::max()/h)
+                throw std::length_error("Terrain texture payload overflow");
+            reservePreparationBytes(w*h,pixelBytes);
+            if(!desc.mipmaps || (w==1 && h==1))break;
+            w=std::max<size_t>(1,w/2);h=std::max<size_t>(1,h/2);
+        }
+    }
+    return dev.createTexture(desc);
+}
+
+std::shared_ptr<TerrainRenderer::PreparedMap> TerrainRenderer::prepareMap(
+        gfx::Device& dev,const MapGrid& grid,bool flatDig) {
+    checkGpuDevice(dev);
+    if(dev_!=&dev)
+        throw std::logic_error("TerrainRenderer map prepare: wrong device");
+    if(!texturesLoaded_ || !built_)
+        throw std::logic_error("TerrainRenderer map prepare: live GPU kit not primed");
+    if(grid.w<=0 || grid.h<=0)return {};
+    auto candidate=std::make_shared<PreparedMap>();
+    candidate->owner_=this;
+    candidate->device_=&dev;
+    candidate->revision_=publicationRevision_;
+    candidate->staged_=std::make_unique<TerrainRenderer>();
+    TerrainRenderer& staged=*candidate->staged_;
+    staged.preparationAllocation_=topologyBudget_.acquire();
+    staged.dev_=&dev;
+    staged.gpuDeviceLease_=gpuDeviceLease_;
+    staged.rules_=rules_;
+    staged.look_=look_;
+    staged.mapSurfaceEnabled_=mapSurfaceEnabled_;
+    staged.materialLayer_=materialLayer_;
+    staged.hasFileDetail_=hasFileDetail_;
+    staged.fileDetail_=fileDetail_;
+    staged.fileSplat_=fileSplat_;
+    staged.fileDetailChanged_=fileDetailChanged_;
+    // A fully prepared, *published* material kit stays in its current owner.
+    // No material cache, shader or pipeline allocations are made in staging.
+    staged.texturesLoaded_=true;
+    std::copy(std::begin(layerTex_),std::end(layerTex_),std::begin(staged.layerTex_));
+    std::copy(std::begin(layerNrm_),std::end(layerNrm_),std::begin(staged.layerNrm_));
+    staged.cliffTex_=cliffTex_;staged.cliffNrm_=cliffNrm_;
+    staged.white_=white_;staged.flatN_=flatN_;staged.gray_=gray_;
+    staged.fogLook_=fogLook_;
+    staged.layerNormalAtlas_=layerNormalAtlas_;
+    staged.layerNormalAtlasSize_=layerNormalAtlasSize_;
+    // Borrow the immutable live kit; the frame candidate owns only misses.
+    std::copy(std::begin(shaders_),std::end(shaders_),std::begin(staged.shaders_));
+    std::copy(std::begin(pipes_),std::end(pipes_),std::begin(staged.pipes_));
+    std::copy(std::begin(shaderFailed_),std::end(shaderFailed_),
+              std::begin(staged.shaderFailed_));
+    (void)staged.build(dev,grid,flatDig); // complete private rebuild
+    return candidate;
+}
+
+float TerrainRenderer::preparedSurfaceAt(
+        const std::shared_ptr<PreparedMap>& candidate,
+        const MapGrid& grid,float x,float z) const {
+    if(!candidate || candidate->owner_!=this ||
+       candidate->device_!=dev_ || candidate->committed_ ||
+       candidate->revision_!=publicationRevision_ || !candidate->staged_ ||
+       !candidate->staged_->mapMatches(grid.w,grid.h))
+        throw std::logic_error("TerrainRenderer: stale prepared surface query");
+    return candidate->staged_->surfaceAt(grid,x,z);
+}
+
+bool TerrainRenderer::commitMap(std::shared_ptr<PreparedMap> candidate) noexcept {
+    if(!candidate || candidate->committed_)return false;
+    if(candidate->owner_!=this || candidate->device_!=dev_ ||
+       candidate->revision_!=publicationRevision_ || !candidate->staged_)
+        std::terminate();
+    TerrainRenderer& next=*candidate->staged_;
+    gfx::Device& dev=*dev_;
+    for(auto& chunk:chunks_)freeChunk(dev,chunk);
+    retiredMeshes_.retireBuffer(dev,apron_.vb);
+    retiredMeshes_.retireBuffer(dev,apron_.ib);
+    retiredMeshes_.retireBuffer(dev,water_.vb);
+    retiredMeshes_.retireBuffer(dev,water_.ib);
+    for(auto* texture:{&cellTex_,&dynTex_,&splatTex_,&visionTex_,
+                      &detailNrmTex_,&detailSplatTex_,&heightField_.tex})
+        retiredMeshes_.retireTexture(dev,*texture);
+    // Swaps/moves of ready handles and standard vector storage only;
+    // no CPU allocations, GPU uploads, or waits are allowed in commit.
+    chunks_.swap(next.chunks_);
+    publishedSurfaceGrid_.swap(next.publishedSurfaceGrid_);
+    apron_=std::exchange(next.apron_,{});
+    water_=std::exchange(next.water_,{});
+    using std::swap;
+    swap(detail_,next.detail_);
+    swap(cellCol_,next.cellCol_);
+    swap(cellLayerOf_,next.cellLayerOf_);
+    swap(cellPx_,next.cellPx_);
+    swap(dynPx_,next.dynPx_);
+    swap(splatPx_,next.splatPx_);
+    swap(visionPx_,next.visionPx_);
+    swap(nrmPx_,next.nrmPx_);
+    swap(dsplatPx_,next.dsplatPx_);
+    cellTex_=std::exchange(next.cellTex_,{});
+    dynTex_=std::exchange(next.dynTex_,{});
+    splatTex_=std::exchange(next.splatTex_,{});
+    visionTex_=std::exchange(next.visionTex_,{});
+    detailNrmTex_=std::exchange(next.detailNrmTex_,{});
+    detailSplatTex_=std::exchange(next.detailSplatTex_,{});
+    heightField_={}; // trace texture rebuilt lazily after this publication
+    frameFieldsPrepared_=false;
+    heightDirty_=true;
+    heightW_=heightH_=0;
+    heightBuiltAt_=-1e9;
+    mapW_=next.mapW_;mapH_=next.mapH_;
+    cw_=next.cw_;ch_=next.ch_;
+    lh_=next.lh_;
+    globalHash_=next.globalHash_;
+    lodLevels_=next.lodLevels_;
+    heightfield_=next.heightfield_;
+    built_=next.built_;
+    hasWater_=next.hasWater_;
+    waterSheet_=next.waterSheet_;
+    waterHash_=next.waterHash_;
+    texW_=next.texW_;texH_=next.texH_;dynRow_=next.dynRow_;
+    nrmW_=next.nrmW_;nrmH_=next.nrmH_;
+    dsplatW_=next.dsplatW_;dsplatH_=next.dsplatH_;
+    detailOn_=next.detailOn_;detailK_=next.detailK_;
+    geoBytes_=next.geoBytes_;frame_=next.frame_;
+    stats_=next.stats_;
+    materialLayerChanged_=false;
+    fileDetailChanged_=false;
+    dirtyI0_=dirtyJ0_=1<<30;dirtyI1_=dirtyJ1_=-1;
+    visionInit_=false;
+    fogFieldChanged_=true;
+    candidate->committed_=true;
+    ++publicationRevision_;
+    commitMapVisible(*candidate);
+    next.preparationAllocation_.reset(); // resources now belong to published/retired owners
+    return true;
+}
+
+bool TerrainRenderer::build(gfx::Device& dev,const MapGrid& g,
+                            bool flatDig) {
+    // Stage CPU height inputs before touching GPU resources. A late GPU
+    // failure leaves both the old height snapshot and old meshes intact.
+    std::unique_ptr<MapGrid> nextSurface;
+    if(g.w>0 && g.h>0) {
+        nextSurface=std::make_unique<MapGrid>();
+        nextSurface->w=g.w;
+        nextSurface->h=g.h;
+        nextSurface->flags=g.flags;
+        nextSurface->level=g.level;
+        nextSurface->height=g.height;
+        nextSurface->corner=g.corner;
+    }
+    const bool changed=buildInternal(dev,g,flatDig);
+    if(changed)publishedSurfaceGrid_.swap(nextSurface);
+    return changed;
+}
+
+bool TerrainRenderer::buildInternal(gfx::Device& dev,
+                                    const MapGrid& g,bool flatDig) {
+    checkGpuDevice(dev);
+    ++publicationRevision_;
     auto t0 = std::chrono::steady_clock::now();
     if (g.w <= 0 || g.h <= 0) return false;
+    // Resolve the stable material kit before any map transaction is published.
+    if (!texturesLoaded_) loadTextures(dev);
+    const float previousLh=lh_;
+    const bool previousHeightfield=heightfield_;
+    const int previousLodLevels=lodLevels_;
     lh_ = rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f;
     heightfield_ = g.hasCorners() && g.corner.size() == size_t((g.w + 1) * (g.h + 1));
     const bool lod = heightfield_ && (look_.lod == 1 || (look_.lod < 0 && std::max(g.w, g.h) > 256));
@@ -263,6 +667,278 @@ bool TerrainRenderer::build(gfx::Device& dev, const MapGrid& g, bool flatDig) {
     gh.add(uint64_t(g.w)); gh.add(uint64_t(g.h)); gh.add(uint64_t(heightfield_)); gh.add(uint64_t(detail ? 99 : lodLevels_));
     uint32_t lhBits; std::memcpy(&lhBits, &lh_, 4); gh.add(lhBits);
     bool all = gh.h != globalHash_ || !built_;
+    // Detail rebuilds are staged as one visual publication. The old CPU
+    // surface, normal/splat images, coarse LOD meshes and water remain live
+    // until every replacement upload has finished successfully.
+    if (detail) {
+        bool needsDetailRebuild=all || !detailOn_ || fileDetailChanged_ ||
+            dirtyI1_>dirtyI0_ || materialLayerChanged_;
+        if (!needsDetailRebuild)
+            for (const auto& c:chunks_) {
+                if (!c.valid || chunkHash(g,c,flatDig)!=c.hash) {
+                    needsDetailRebuild=true;
+                    break;
+                }
+            }
+        if (!needsDetailRebuild) {
+            // Dynamic field/creep data can change without a geometry rebuild.
+            updateCellTextures(dev,g,flatDig);
+            updateDynamic(dev,g,true);
+            stats_.rebuilt=0;
+            stats_.chunks=int(chunks_.size());
+            stats_.lodMax=lodLevels_;
+            stats_.detailK=detailK_;
+            stats_.buildMs=std::chrono::duration<double,std::milli>(
+                std::chrono::steady_clock::now()-t0).count();
+            return false;
+        }
+
+        // Small same-topology edits keep clean chunk VBs/IBs and only
+        // stage affected coarse LODs + copy-on-write texture generations.
+        if(!all && detailOn_) {
+            try {
+                if(tryBuildDetailIncremental(dev,g,flatDig))return true;
+            }catch(...) {
+                lh_=previousLh;
+                heightfield_=previousHeightfield;
+                lodLevels_=previousLodLevels;
+                throw;
+            }
+        }
+
+        TerrainRenderer staged;
+        staged.dev_=&dev;
+        staged.preparationAllocation_=preparationAllocation_;
+        staged.gpuDeviceLease_=gpuDeviceLease_;
+        try {
+            staged.rules_=rules_;
+            staged.look_=look_;
+            staged.lh_=lh_;
+            staged.heightfield_=heightfield_;
+            staged.lodLevels_=lodLevels_;
+            staged.materialLayer_=materialLayer_;
+            staged.hasFileDetail_=hasFileDetail_;
+            staged.fileDetail_=fileDetail_;
+            staged.fileSplat_=fileSplat_;
+            staged.fileDetailChanged_=fileDetailChanged_;
+            staged.mapW_=g.w;
+            staged.mapH_=g.h;
+            staged.cw_=(g.w+kChunk-1)/kChunk;
+            staged.ch_=(g.h+kChunk-1)/kChunk;
+            staged.frame_=frame_;
+            staged.chunks_.resize(size_t(staged.cw_*staged.ch_));
+            for (int cy=0;cy<staged.ch_;++cy)
+                for (int cx=0;cx<staged.cw_;++cx) {
+                    Chunk& c=staged.chunks_[size_t(cy*staged.cw_+cx)];
+                    c.x0=cx*kChunk;
+                    c.y0=cy*kChunk;
+                    c.x1=std::min(g.w,c.x0+kChunk);
+                    c.y1=std::min(g.h,c.y0+kChunk);
+                }
+            staged.updateCellTextures(dev,g,flatDig);
+            // Always rebuild a complete new detail CPU surface; this is
+            // intentionally conservative for editor edits and avoids any
+            // published-in-place mutation of detail height or textures.
+            staged.buildDetail(dev,g,flatDig,true);
+            staged.buildApron(dev,g);
+            staged.buildWater(dev,g,flatDig);
+            staged.updateDynamic(dev,g,true);
+            // Prepare a compact fallback LOD for every camera before publish.
+            // Fine LODs remain lazy and follow existing primary-view policy.
+            const int coarse=staged.lodLevels_-1;
+            for(auto& c:staged.chunks_) {
+                staged.buildDetailLod(dev,g,c,coarse);
+                c.lastUse.assign(size_t(staged.lodLevels_),frame_);
+            }
+        } catch (...) {
+            // All staging handles are private: no camera has submitted them.
+            for(auto& c:staged.chunks_)
+                for(auto& l:c.lods) {
+                    if(l.vb.valid())dev.destroyBuffer(l.vb);
+                    if(l.ib.valid())dev.destroyBuffer(l.ib);
+                }
+            if(staged.apron_.vb.valid())dev.destroyBuffer(staged.apron_.vb);
+            if(staged.apron_.ib.valid())dev.destroyBuffer(staged.apron_.ib);
+            if(staged.water_.vb.valid())dev.destroyBuffer(staged.water_.vb);
+            if(staged.water_.ib.valid())dev.destroyBuffer(staged.water_.ib);
+            for(auto* t:{&staged.cellTex_,&staged.dynTex_,&staged.splatTex_,
+                         &staged.visionTex_,&staged.detailNrmTex_,&staged.detailSplatTex_})
+                if(t->valid())dev.destroyTexture(*t);
+            lh_=previousLh;
+            heightfield_=previousHeightfield;
+            lodLevels_=previousLodLevels;
+            throw;
+        }
+        for(auto& c:chunks_)freeChunk(dev,c);
+        retiredMeshes_.retireBuffer(dev,apron_.vb);
+        retiredMeshes_.retireBuffer(dev,apron_.ib);
+        retiredMeshes_.retireBuffer(dev,water_.vb);
+        retiredMeshes_.retireBuffer(dev,water_.ib);
+        for(auto* t:{&cellTex_,&dynTex_,&splatTex_,&visionTex_,
+                     &detailNrmTex_,&detailSplatTex_})
+            retiredMeshes_.retireTexture(dev,*t);
+        chunks_=std::move(staged.chunks_);
+        apron_=staged.apron_;
+        water_=staged.water_;
+        hasWater_=staged.hasWater_;
+        waterSheet_=staged.waterSheet_;
+        mapW_=staged.mapW_;
+        mapH_=staged.mapH_;
+        cw_=staged.cw_;
+        ch_=staged.ch_;
+        globalHash_=gh.h;
+        detail_=std::move(staged.detail_);
+        detailOn_=true;
+        detailK_=staged.detailK_;
+        geoBytes_=staged.geoBytes_;
+        cellCol_=std::move(staged.cellCol_);
+        cellLayerOf_=std::move(staged.cellLayerOf_);
+        cellTex_=std::exchange(staged.cellTex_,gfx::TextureHandle{});
+        dynTex_=std::exchange(staged.dynTex_,gfx::TextureHandle{});
+        splatTex_=std::exchange(staged.splatTex_,gfx::TextureHandle{});
+        visionTex_=std::exchange(staged.visionTex_,gfx::TextureHandle{});
+        detailNrmTex_=std::exchange(staged.detailNrmTex_,gfx::TextureHandle{});
+        detailSplatTex_=std::exchange(staged.detailSplatTex_,gfx::TextureHandle{});
+        cellPx_=std::move(staged.cellPx_);
+        dynPx_=std::move(staged.dynPx_);
+        splatPx_=std::move(staged.splatPx_);
+        visionPx_=std::move(staged.visionPx_);
+        nrmPx_=std::move(staged.nrmPx_);
+        dsplatPx_=std::move(staged.dsplatPx_);
+        texW_=staged.texW_;
+        texH_=staged.texH_;
+        nrmW_=staged.nrmW_;
+        nrmH_=staged.nrmH_;
+        dsplatW_=staged.dsplatW_;
+        dsplatH_=staged.dsplatH_;
+        dynRow_=staged.dynRow_;
+        visionInit_=false;
+        fogFieldChanged_=true;
+        fileDetailChanged_=false;
+        dirtyI0_=dirtyJ0_=1<<30;
+        dirtyI1_=dirtyJ1_=-1;
+        materialLayerChanged_=false;
+        heightDirty_=true;
+        built_=true;
+        stats_.rebuilt=staged.stats_.rebuilt;
+        stats_.chunks=int(chunks_.size());
+        stats_.lodMax=lodLevels_;
+        stats_.detailK=detailK_;
+        stats_.geometryBytes=geoBytes_;
+        stats_.buildMs=std::chrono::duration<double,std::milli>(
+            std::chrono::steady_clock::now()-t0).count();
+        return true;
+    }
+    // Whole-map non-detail rebuild is transactional across every chunk, the
+    // apron and water. Never retire any published GPU handle until the final
+    // replacement upload has succeeded. The detail path is handled separately.
+    if (all && !detail) {
+        TerrainRenderer staged;
+        staged.dev_=&dev;
+        staged.preparationAllocation_=preparationAllocation_;
+        staged.gpuDeviceLease_=gpuDeviceLease_;
+        try {
+            staged.rules_=rules_;
+            staged.look_=look_;
+            staged.materialLayer_=materialLayer_;
+            staged.lh_=lh_;
+            staged.heightfield_=heightfield_;
+            staged.lodLevels_=lodLevels_;
+            staged.detailOn_=false;
+            staged.mapW_=g.w;
+            staged.mapH_=g.h;
+            staged.cw_=(g.w+kChunk-1)/kChunk;
+            staged.ch_=(g.h+kChunk-1)/kChunk;
+            staged.chunks_.resize(size_t(staged.cw_*staged.ch_));
+            for (int cy=0; cy<staged.ch_; ++cy)
+                for (int cx=0; cx<staged.cw_; ++cx) {
+                    Chunk& c=staged.chunks_[size_t(cy*staged.cw_+cx)];
+                    c.x0=cx*kChunk;
+                    c.y0=cy*kChunk;
+                    c.x1=std::min(g.w,c.x0+kChunk);
+                    c.y1=std::min(g.h,c.y0+kChunk);
+                    c.hash=staged.chunkHash(g,c,flatDig);
+                    if (staged.heightfield_) staged.buildHeightChunk(dev,g,c);
+                    else staged.buildLevelsChunk(dev,g,c,flatDig);
+                    c.valid=true;
+                }
+            staged.buildApron(dev,g);
+            staged.buildWater(dev,g,flatDig);
+            // Fully populate map textures before publishing any geometry.
+            staged.updateCellTextures(dev,g,flatDig);
+            staged.updateDynamic(dev,g,true);
+        } catch (...) {
+            // These buffers belong exclusively to a not-yet-submitted map.
+            // Unlike old published buffers they can be destroyed immediately.
+            for (auto& c:staged.chunks_)
+                for (auto& l:c.lods) {
+                    if (l.vb.valid()) dev.destroyBuffer(l.vb);
+                    if (l.ib.valid()) dev.destroyBuffer(l.ib);
+                }
+            if (staged.apron_.vb.valid()) dev.destroyBuffer(staged.apron_.vb);
+            if (staged.apron_.ib.valid()) dev.destroyBuffer(staged.apron_.ib);
+            if (staged.water_.vb.valid()) dev.destroyBuffer(staged.water_.vb);
+            if (staged.water_.ib.valid()) dev.destroyBuffer(staged.water_.ib);
+            for(auto* t:{&staged.cellTex_,&staged.dynTex_,&staged.splatTex_,&staged.visionTex_})
+                if(t->valid())dev.destroyTexture(*t);
+            lh_=previousLh;
+            heightfield_=previousHeightfield;
+            lodLevels_=previousLodLevels;
+            throw;
+        }
+        // Publish only after the last map buffer (including water) is ready.
+        for (auto& c:chunks_) freeChunk(dev,c);
+        retiredMeshes_.retireBuffer(dev,apron_.vb);
+        retiredMeshes_.retireBuffer(dev,apron_.ib);
+        retiredMeshes_.retireBuffer(dev,water_.vb);
+        retiredMeshes_.retireBuffer(dev,water_.ib);
+        for(auto* t:{&cellTex_,&dynTex_,&splatTex_,&visionTex_})
+            retiredMeshes_.retireTexture(dev,*t);
+        chunks_=std::move(staged.chunks_);
+        apron_=staged.apron_;
+        water_=staged.water_;
+        hasWater_=staged.hasWater_;
+        waterSheet_=staged.waterSheet_;
+        mapW_=g.w;
+        mapH_=g.h;
+        cw_=staged.cw_;
+        ch_=staged.ch_;
+        globalHash_=gh.h;
+        // Switching from detail to ordinary terrain retires all old normal
+        // and splat textures too, not just the shared per-cell textures.
+        retiredMeshes_.retireTexture(dev,detailNrmTex_);
+        retiredMeshes_.retireTexture(dev,detailSplatTex_);
+        detail_={};
+        detailOn_=false;
+        detailK_=0;
+        stats_.detailK=0;
+        nrmPx_.clear();
+        dsplatPx_.clear();
+        nrmW_=nrmH_=dsplatW_=dsplatH_=0;
+        geoBytes_=0;
+        cellTex_=std::exchange(staged.cellTex_,gfx::TextureHandle{});
+        dynTex_=std::exchange(staged.dynTex_,gfx::TextureHandle{});
+        splatTex_=std::exchange(staged.splatTex_,gfx::TextureHandle{});
+        visionTex_=std::exchange(staged.visionTex_,gfx::TextureHandle{});
+        cellPx_=std::move(staged.cellPx_);
+        dynPx_=std::move(staged.dynPx_);
+        splatPx_=std::move(staged.splatPx_);
+        visionPx_=std::move(staged.visionPx_);
+        cellLayerOf_=std::move(staged.cellLayerOf_);
+        texW_=staged.texW_;
+        texH_=staged.texH_;
+        dynRow_=staged.dynRow_;
+        visionInit_=false;
+        fogFieldChanged_=true;
+        heightDirty_=true;
+        built_=true;
+        stats_.rebuilt=int(chunks_.size());
+        stats_.chunks=int(chunks_.size());
+        stats_.lodMax=lodLevels_;
+        stats_.buildMs=std::chrono::duration<double,std::milli>(
+            std::chrono::steady_clock::now()-t0).count();
+        return true;
+    }
     if (all) {
         for (auto& c : chunks_) freeChunk(dev, c);
         mapW_ = g.w; mapH_ = g.h;
@@ -276,26 +952,34 @@ bool TerrainRenderer::build(gfx::Device& dev, const MapGrid& g, bool flatDig) {
         globalHash_ = gh.h;
         buildApron(dev, g);
     }
-    if (!texturesLoaded_) loadTextures(dev);
     stats_.rebuilt = 0;
-    if (detail) { // sub-cell detail surface (RtsTerrainDetailMesh.cpp)
-        updateCellTextures(dev, g, flatDig);
-        const bool changed = buildDetail(dev, g, flatDig, all);
-        updateDynamic(dev, g, true);
-        if (changed) { buildWater(dev, g, flatDig); heightDirty_ = true; }
-        built_ = true;
-        stats_.chunks = int(chunks_.size());
-        stats_.lodMax = lodLevels_;
-        stats_.buildMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-        return changed;
-    }
-    detailOn_ = false;
-    for (auto& c : chunks_) {
-        uint64_t h = chunkHash(g, c, flatDig);
-        if (c.valid && h == c.hash) continue;
-        c.hash = h;
-        if (heightfield_) buildHeightChunk(dev, g, c); else buildLevelsChunk(dev, g, c, flatDig);
-        c.valid = true;
+    detailOn_=false;
+    for(auto& c:chunks_) {
+        const uint64_t h=chunkHash(g,c,flatDig);
+        if(c.valid && h==c.hash)continue;
+        // Build every LOD into private buffers. A late LOD failure must not
+        // replace an earlier LOD of the published chunk or its bounds/hash.
+        Chunk next;
+        next.x0=c.x0; next.y0=c.y0;
+        next.x1=c.x1; next.y1=c.y1;
+        next.hash=h;
+        try {
+            if(heightfield_)buildHeightChunk(dev,g,next);
+            else buildLevelsChunk(dev,g,next,flatDig);
+        }catch(...) {
+            // No renderer has ever submitted a staged chunk buffer.
+            for(auto& l:next.lods) {
+                if(l.vb.valid())dev.destroyBuffer(l.vb);
+                if(l.ib.valid())dev.destroyBuffer(l.ib);
+            }
+            throw;
+        }
+        next.valid=true;
+        for(auto& old:c.lods) {
+            retiredMeshes_.retireBuffer(dev,old.vb);
+            retiredMeshes_.retireBuffer(dev,old.ib);
+        }
+        c=std::move(next);
         ++stats_.rebuilt;
     }
     const bool changed = all || stats_.rebuilt > 0;
@@ -491,13 +1175,10 @@ void TerrainRenderer::buildHeightChunk(gfx::Device& dev, const MapGrid& g, Chunk
                 if (k == 0) { bmin = min3(bmin, p); bmax = max3(bmax, p); }
                 v.push_back({p, normalAt(X, Y), colorAt(X, Y), {morphAt(X, Y), 0}});
             }
+        // Shared quad diagonal/winding; terrain LOD skirts are still
+        // authored by this host immediately after these indices.
+        ::aiverse::view::appendQuadGridIndices(idx,nx,ny);
         auto vi = [&](int i, int j) { return uint32_t(j * nx + i); };
-        for (int j = 0; j + 1 < ny; ++j)
-            for (int i = 0; i + 1 < nx; ++i) {
-                // diagonal (0,0)-(1,1), counter-clockwise seen from above (+y): a, d, b and a, c, d
-                uint32_t a = vi(i, j), b = vi(i + 1, j), cc = vi(i, j + 1), d = vi(i + 1, j + 1);
-                idx.insert(idx.end(), {a, d, b, a, cc, d});
-            }
         // skirts: hide cracks between chunks on different LOD levels
         if (lodLevels_ > 1) {
             const float depth = 0.3f + 0.25f * float(s);
@@ -576,19 +1257,33 @@ void TerrainRenderer::buildApron(gfx::Device& dev, const MapGrid& g) {
 // terrain dips. Bodies: every connected water area gets its own surface just below its lowest shore
 // corner, so lakes on plateaus and heightfield valleys hold water at their own level.
 void TerrainRenderer::buildWater(gfx::Device& dev, const MapGrid& g, bool flatDig) {
-    dev.destroyBuffer(water_.vb); dev.destroyBuffer(water_.ib);
-    water_ = {};
-    hasWater_ = false;
+    // The existing water mesh can still be referenced by submitted cameras.
+    // Publish replacement only after the new mesh has uploaded successfully.
+    auto publish=[&](Mesh replacement,bool has,bool sheet) {
+        retiredMeshes_.retireBuffer(dev,water_.vb);
+        retiredMeshes_.retireBuffer(dev,water_.ib);
+        water_=replacement;
+        hasWater_=has;
+        waterSheet_=sheet;
+    };
+    bool nextHasWater=false;
     const int W = g.w, H = g.h;
-    for (auto f : g.flags) if ((f & kCellWater) && !(f & kCellGround)) { hasWater_ = true; break; }
-    waterSheet_ = look_.water == TerrainLook::Water::Sheet || (look_.water == TerrainLook::Water::Auto && !heightfield_);
+    for (auto f : g.flags) if ((f & kCellWater) && !(f & kCellGround)) { nextHasWater = true; break; }
+    const bool nextWaterSheet=look_.water==TerrainLook::Water::Sheet ||
+        (look_.water==TerrainLook::Water::Auto && !heightfield_);
+    const auto uploadWater=[&](const MeshBuilder& builder) {
+        reservePreparationBytes(builder.vertices().size(),sizeof(MeshVertex));
+        // Conservative upper bound: MeshBuilder may choose 16-bit indices.
+        reservePreparationBytes(builder.indices().size(),sizeof(uint32_t));
+        return builder.upload(dev);
+    };
     MeshBuilder wb;
     wb.color(rgba(255, 255, 255));
-    if (waterSheet_) {
-        if (!hasWater_) return;
+    if (nextWaterSheet) {
+        if (!nextHasWater) { publish({},false,nextWaterSheet); return; }
         const float a = float(kApron), y = look_.waterOffset;
         wb.quad({-a, y, -a}, {-a, y, float(H) + a}, {float(W) + a, y, float(H) + a}, {float(W) + a, y, -a});
-        water_ = wb.upload(dev);
+        publish(uploadWater(wb),true,nextWaterSheet);
         return;
     }
     std::vector<int> body(size_t(W * H), -1);
@@ -660,8 +1355,9 @@ void TerrainRenderer::buildWater(gfx::Device& dev, const MapGrid& g, bool flatDi
                 i = j;
             }
         }
-    hasWater_ = !wb.empty();
-    if (hasWater_) water_ = wb.upload(dev);
+    nextHasWater = !wb.empty();
+    if(nextHasWater)publish(uploadWater(wb),true,nextWaterSheet);
+    else publish({},false,nextWaterSheet);
 }
 
 // ------------------------------------------------------------------ per-cell textures
@@ -669,20 +1365,51 @@ void TerrainRenderer::buildWater(gfx::Device& dev, const MapGrid& g, bool flatDi
 void TerrainRenderer::updateCellTextures(gfx::Device& dev, const MapGrid& g, bool flatDig) {
     const int W = g.w, H = g.h;
     if (texW_ != W || texH_ != H) {
-        for (auto* t : {&cellTex_, &dynTex_, &splatTex_, &visionTex_}) if (t->valid()) { dev.destroyTexture(*t); *t = {}; }
-        texW_ = W; texH_ = H;
-        cellPx_.assign(size_t(W * H) * 4, 0);
-        dynPx_.assign(size_t(W * H) * 4, 0);
-        splatPx_.assign(size_t(W * H) * 4, 0);
-        visionPx_.assign(size_t(W * H), 255);
-        gfx::TextureDesc td; td.width = W; td.height = H; td.filter = gfx::Filter::Nearest;
-        td.data = cellPx_.data(); td.label = "terrain cells"; cellTex_ = dev.createTexture(td);
-        td.data = dynPx_.data(); td.label = "terrain dynamic"; dynTex_ = dev.createTexture(td);
-        td.filter = gfx::Filter::Linear;
-        td.data = splatPx_.data(); td.label = "terrain splat"; splatTex_ = dev.createTexture(td);
-        td.format = gfx::PixelFormat::R8; td.filter = gfx::Filter::Linear;   // smooth fog edges (cells: snapped in the shader)
-        td.data = visionPx_.data(); td.label = "terrain vision"; visionTex_ = dev.createTexture(td);
-        visionInit_ = false;
+        // Allocate all replacements and their CPU storage first. A failed
+        // second/third GPU allocation must not destroy the published set.
+        std::vector<uint8_t> nextCell(size_t(W)*size_t(H)*4,0);
+        std::vector<uint8_t> nextDyn(size_t(W)*size_t(H)*4,0);
+        std::vector<uint8_t> nextSplat(size_t(W)*size_t(H)*4,0);
+        std::vector<uint8_t> nextVision(size_t(W)*size_t(H),255);
+        gfx::TextureHandle nextCellTex{},nextDynTex{},nextSplatTex{},nextVisionTex{};
+        try {
+            gfx::TextureDesc td;
+            td.width=W; td.height=H; td.filter=gfx::Filter::Nearest;
+            td.data=nextCell.data(); td.label="terrain cells";
+            nextCellTex=createTerrainTexture(dev,td);
+            if(!nextCellTex.valid())throw std::runtime_error("terrain cell texture allocation failed");
+            td.data=nextDyn.data(); td.label="terrain dynamic";
+            nextDynTex=createTerrainTexture(dev,td);
+            if(!nextDynTex.valid())throw std::runtime_error("terrain dynamic texture allocation failed");
+            td.filter=gfx::Filter::Linear;
+            td.data=nextSplat.data(); td.label="terrain splat";
+            nextSplatTex=createTerrainTexture(dev,td);
+            if(!nextSplatTex.valid())throw std::runtime_error("terrain splat texture allocation failed");
+            td.format=gfx::PixelFormat::R8;
+            td.data=nextVision.data(); td.label="terrain vision";
+            nextVisionTex=createTerrainTexture(dev,td);
+            if(!nextVisionTex.valid())throw std::runtime_error("terrain vision texture allocation failed");
+        }catch(...) {
+            if(nextCellTex.valid())dev.destroyTexture(nextCellTex);
+            if(nextDynTex.valid())dev.destroyTexture(nextDynTex);
+            if(nextSplatTex.valid())dev.destroyTexture(nextSplatTex);
+            if(nextVisionTex.valid())dev.destroyTexture(nextVisionTex);
+            throw;
+        }
+        retiredMeshes_.retireTexture(dev,cellTex_);
+        retiredMeshes_.retireTexture(dev,dynTex_);
+        retiredMeshes_.retireTexture(dev,splatTex_);
+        retiredMeshes_.retireTexture(dev,visionTex_);
+        cellTex_=nextCellTex;
+        dynTex_=nextDynTex;
+        splatTex_=nextSplatTex;
+        visionTex_=nextVisionTex;
+        cellPx_=std::move(nextCell);
+        dynPx_=std::move(nextDyn);
+        splatPx_=std::move(nextSplat);
+        visionPx_=std::move(nextVision);
+        texW_=W; texH_=H;
+        visionInit_=false;
     }
     cellLayerOf_.resize(size_t(W * H));
     for (int y = 0; y < H; ++y)
@@ -766,17 +1493,27 @@ int TerrainRenderer::tierFor(const Renderer3D& r) const {
     return std::min(tier(r.materialQuality()), deviceTier);
 }
 
-gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
+gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant, bool dynamicGi, bool compactGi) {
+    if(compactGi && (!dynamicGi || variant!=0 ||
+         dev.info().backend!=gfx::Backend::GLES3))return {};
     const int dbase = variant >= 3 ? 3 : 0;
     for (int tier = variant - dbase; tier >= 0; --tier) {
-        const int slot = dbase + tier;
+        const int slot = compactGi ? 12 : (dynamicGi ? 6 : 0) + dbase + tier;
         if (pipes_[slot].valid()) return pipes_[slot];
         if (shaderFailed_[slot]) continue;
-        const std::string def = "#define TERRAIN_TIER " + std::to_string(tier) + "\n#define TERRAIN_DETAIL " + std::to_string(dbase ? 1 : 0) + "\n";
+        const std::string def = "#define TERRAIN_TIER " + std::to_string(tier) +
+            "\n#define TERRAIN_DETAIL " + std::to_string(dbase ? 1 : 0) +
+            (dynamicGi ? "\n#define DYNAMIC_GI 1\n#define DYNAMIC_GI_TERRAIN 1" : "") +
+            (compactGi ? "\n#define DYNAMIC_GI_TERRAIN_COMPACT 1" : "") +
+            "\n#define TERRAIN_GL_NORMAL_ATLAS " +
+            std::to_string(layerNormalAtlas_.valid() && dev.info().backend ==
+                           gfx::Backend::GL33 ? 1 : 0) + "\n";
         const std::string vs = def + shaders::kTerrainVS, fs = def + shaders::kTerrainFS, msl = def + shaders::kTerrainMSL;
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = 4; sd.textureSlots = 21; sd.label = "terrain";   // tex18: height field (traced shadows); U3 + tex19/20: baked lightmap
+        sd.uniformSlots = dynamicGi ? 7 : 4;
+        sd.textureSlots = compactGi ? 16 : dynamicGi ? 22 : 21;
+        sd.label = dynamicGi ? "terrain + dynamic GI" : "terrain";   // tex18: height field (traced shadows); U3 + tex19/20: baked lightmap
         shaders_[slot] = dev.createShader(sd);
         if (!shaders_[slot].valid()) {
             std::fprintf(stderr, "[terrain] tier %d%s shader: %s\n", tier, dbase ? " detail" : "", dev.lastError().c_str());
@@ -796,41 +1533,448 @@ gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
         if (pipes_[slot].valid()) return pipes_[slot];
         shaderFailed_[slot] = true;
     }
-    return {};
+    // GL3.3 may exceed its active fragment sampler budget when detail
+    // textures are present. Preserve terrain using the non-detail shader.
+    // A Metal backend which compiled the detailed shader retains it.
+    if (dbase) {
+        std::fprintf(stderr, "[terrain] detail shader unavailable; falling back to non-detail tier %d\n", variant - dbase);
+        return pipeline(dev, variant - dbase, dynamicGi, compactGi);
+    }
+    // A failed GI shader must fall back to baseline terrain, not a black
+    // surface. On GLES avoid sampling a phantom tex8/tex18/tex19 source.
+    return dynamicGi ? pipeline(dev, variant, false, false) : gfx::PipelineHandle{};
 }
 
-void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<uint8_t>* vision, bool) {
+// Dynamic fields and visibility are published with all other LENS owners.
+// A staged frame owns at most two private textures and the matching CPU image
+// generations. It never references the live handle for GPU writes.
+class TerrainRenderer::PreparedFrame final {
+    friend class TerrainRenderer;
+public:
+    PreparedFrame()=default;
+    PreparedFrame(const PreparedFrame&)=delete;
+    PreparedFrame& operator=(const PreparedFrame&)=delete;
+    ~PreparedFrame() noexcept {
+        if(committed_ || !device_)return;
+        if(vision_.valid())try {device_->destroyTexture(vision_);}catch(...) {}
+        if(dynamic_.valid())try {device_->destroyTexture(dynamic_);}catch(...) {}
+        for(auto& item:lods_) {
+            if(item.mesh.vb.valid())try {device_->destroyBuffer(item.mesh.vb);}catch(...) {}
+            if(item.mesh.ib.valid())try {device_->destroyBuffer(item.mesh.ib);}catch(...) {}
+        }
+        if(traceHeight_.tex.valid())
+            try {device_->destroyTexture(traceHeight_.tex);}catch(...) {}
+        if(pipeline_.valid())
+            try {device_->destroyPipeline(pipeline_);}catch(...) {}
+        if(shader_.valid())
+            try {device_->destroyShader(shader_);}catch(...) {}
+    }
+private:
+    TerrainRenderer* owner_=nullptr;
+    gfx::Device* device_=nullptr;
+    uint64_t revision_=0;
+    bool committed_=false;
+    gfx::TextureHandle dynamic_{},vision_{};
+    std::vector<uint8_t> dynamicPx_,visionPx_;
+    struct PendingLod {
+        size_t chunk=0,level=0,bytes=0;
+        Lod mesh{};
+    };
+    std::vector<PendingLod> lods_;
+    gfx::ShaderHandle shader_{};
+    gfx::PipelineHandle pipeline_{};
+    int pipelineSlot_=-1;
+    render::HeightField traceHeight_{};
+    double traceBuiltAt_=-1e9;
+    int traceWidth_=0,traceHeightPixels_=0;
+    int nextDynRow_=0;
+    bool nextVisionInit_=false;
+};
+
+std::shared_ptr<TerrainRenderer::PreparedFrame> TerrainRenderer::prepareFrame(
+        const MapGrid& g,const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility) {
+    if(!dev_ || !built_ || mapW_!=g.w || mapH_!=g.h ||
+       texW_!=g.w || texH_!=g.h || g.w<=0 || g.h<=0)
+        return {};
+    checkGpuDevice(*dev_);
+    const size_t count=size_t(g.w)*size_t(g.h);
+    if(dynPx_.size()!=count*4 || visionPx_.size()!=count ||
+       g.fieldRes.size()<count || g.fieldAmt.size()<count ||
+       g.creep.size()<count)
+        throw std::logic_error("TerrainRenderer: malformed dynamic map fields");
+    auto next=std::make_shared<PreparedFrame>();
+    next->owner_=this;
+    next->device_=dev_;
+    next->revision_=publicationRevision_;
+    next->dynamicPx_=dynPx_;
+    next->nextDynRow_=dynRow_;
+    next->nextVisionInit_=visionInit_;
+    const int W=g.w,H=g.h;
+    const int rows=std::clamp(65536/std::max(W,1),1,H);
+    bool changedDynamic=false;
+    for(int row=0;row<rows;++row) {
+        const int y=(dynRow_+row)%H;
+        for(int x=0;x<W;++x) {
+            const size_t i=size_t(y)*size_t(W)+size_t(x);
+            uint8_t px[4]={0,0,0,255};
+            if(g.fieldRes[i]>=0 && g.fieldAmt[i].raw>0) {
+                const float k=std::min(1.0f,float(g.fieldAmt[i].toDouble())/60.0f)*
+                    (0.55f+noiseOf(x,y)*0.25f);
+                px[0]=uint8_t(std::clamp(k*255.0f+0.5f,1.0f,255.0f));
+                px[1]=uint8_t((g.fieldRes[i]%3)*127);
+            }
+            if(g.creep[i])px[2]=255;
+            uint8_t* dst=&next->dynamicPx_[i*4];
+            if(std::memcmp(dst,px,4)!=0) {
+                std::memcpy(dst,px,4);
+                changedDynamic=true;
+            }
+        }
+    }
+    next->nextDynRow_=(dynRow_+rows)%H;
+    if(changedDynamic) {
+        gfx::TextureDesc td;
+        td.width=W;td.height=H;td.filter=gfx::Filter::Nearest;
+        td.data=next->dynamicPx_.data();
+        td.label="terrain dynamic COW";
+        next->dynamic_=createTerrainTexture(*dev_,td);
+        if(!next->dynamic_.valid())
+            throw std::runtime_error("TerrainRenderer: private dynamic texture allocation failed");
+    }
+    // Heightfield terrain samples the processed visibility field; classic
+    // terrain continues to use the separate Fog Sheet owner. A resized or
+    // changed Fog candidate may supply its unpublished processed pixel field.
+    if(heightfield_ && vision && vision->size()==count) {
+        const bool filtered=filteredVisibility && filteredVisibility->size()==count;
+        next->visionPx_=visionPx_;
+        bool changed=!visionInit_;
+        for(size_t i=0;i<count;++i) {
+            const uint8_t v=filtered?(*filteredVisibility)[i]:
+                ((*vision)[i]>=2?uint8_t(255):
+                 ((*vision)[i]==1?uint8_t(128):uint8_t(0)));
+            if(next->visionPx_[i]!=v) {
+                next->visionPx_[i]=v;
+                changed=true;
+            }
+        }
+        next->nextVisionInit_=true;
+        if(changed) {
+            gfx::TextureDesc td;
+            td.width=W;td.height=H;td.filter=gfx::Filter::Linear;
+            td.format=gfx::PixelFormat::R8;
+            td.data=next->visionPx_.data();
+            td.label="terrain visibility COW";
+            next->vision_=createTerrainTexture(*dev_,td);
+            if(!next->vision_.valid())
+                throw std::runtime_error("TerrainRenderer: private visibility texture allocation failed");
+        }
+    }
+    return next;
+}
+
+// Prepare only visible missing fine LODs. No published chunk, GPU
+// allocation or byte accounting is modified until commitFrame.
+std::shared_ptr<TerrainRenderer::PreparedFrame>
+TerrainRenderer::prepareFrameVisible(
+        const Renderer3D& camera,const MapGrid& g,
+        const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility) {
+    auto pending=prepareFrame(g,vision,filteredVisibility);
+    if(!pending || !dev_)return pending;
+    if(detailOn_) {
+    constexpr size_t kMaxNewLods=16;
+    pending->lods_.reserve(kMaxNewLods);
+    const auto frustum=::aiverse::view::SideFrustum::fromViewProjection(
+        camera.viewProj());
+    const float3 eye=camera.camera().eye();
+    for(size_t i=0;i<chunks_.size() &&
+                   pending->lods_.size()<kMaxNewLods;++i) {
+        const Chunk& published=chunks_[i];
+        if(!published.valid || published.lods.empty() ||
+           !frustum.visibleAABB(published.bmin,published.bmax))
+            continue;
+        float3 closest=max3(published.bmin,min3(eye,published.bmax));
+        const float distance=length(closest-eye);
+        float range=look_.detailRange*4.0f/float(std::max(detailK_,1));
+        int lod=0;
+        while(lod+1<lodLevels_ && distance>=range) {
+            ++lod;range*=2.0f;
+        }
+        if(size_t(lod)>=published.lods.size() ||
+           published.lods[size_t(lod)].indexCount)
+            continue;
+        // The shallow chunk copy borrows existing LOD handles. Clear the
+        // target slot so buildDetailLod only creates a new private pair.
+        Chunk staging=published;
+        staging.lods[size_t(lod)]={};
+        size_t bytes=0;
+        buildDetailLod(*dev_,g,staging,lod,&bytes);
+        Lod& newLod=staging.lods[size_t(lod)];
+        pending->lods_.push_back({i,size_t(lod),bytes,
+                                 std::exchange(newLod,Lod{})});
+    }
+    }
+
+    // Prepare shader/pipeline variants before any multi-owner publication.
+    // Shader and pipeline handles are unpublished and owned by this candidate
+    // until commitFrame transfers them. A lower quality tier is attempted on
+    // backend compile failures, preserving the existing fallback policy.
+    const bool compactGi=camera.dynamicGiOverlayEnabled() && dev_->info().backend==gfx::Backend::GLES3 &&
+        !detailOn_ && !camera.bakedActive() && !camera.traceActive();
+    const bool dynamicGi=compactGi || (camera.dynamicGiOverlayEnabled() &&
+        (dev_->info().backend==gfx::Backend::Metal || dev_->info().backend==gfx::Backend::Vulkan));
+    const int first=compactGi?0:tierFor(camera);
+    const int dbase=compactGi?12:(detailOn_?3:0)+(dynamicGi?6:0);
+    for(int tier=first;tier>=0;--tier) {
+        const int slot=dbase+tier;
+        if(pipes_[slot].valid())break;
+        if(shaderFailed_[slot])continue;
+        const std::string def="#define TERRAIN_TIER "+
+            std::to_string(tier)+"\n#define TERRAIN_DETAIL "+
+            std::to_string(detailOn_?1:0)+"\n"+
+            (dynamicGi?"#define DYNAMIC_GI 1\n#define DYNAMIC_GI_TERRAIN 1\n":"")+
+            (compactGi?"#define DYNAMIC_GI_TERRAIN_COMPACT 1\n":"");
+        const std::string vs=def+shaders::kTerrainVS;
+        const std::string fs=def+shaders::kTerrainFS;
+        const std::string msl=def+shaders::kTerrainMSL;
+        const bool borrowedShader=shaders_[slot].valid();
+        if(!borrowedShader) {
+            gfx::ShaderDesc sd;
+            sd.glslVertex=vs.c_str();
+            sd.glslFragment=fs.c_str();
+            sd.msl=msl.c_str();
+            sd.uniformSlots=dynamicGi?7:4;
+            sd.textureSlots=compactGi?16:dynamicGi?22:21;
+            sd.label="terrain staged pipeline";
+            pending->shader_=dev_->createShader(sd);
+            if(!pending->shader_.valid())continue;
+        }
+        gfx::PipelineDesc p;
+        p.shader=borrowedShader?shaders_[slot]:pending->shader_;
+        p.attrs[0]={0,gfx::VertexFormat::Float3,0};
+        p.attrs[1]={1,gfx::VertexFormat::Float3,12};
+        p.attrs[2]={2,gfx::VertexFormat::UByte4N,24};
+        p.attrs[3]={3,gfx::VertexFormat::Float2,28};
+        p.attrCount=4;
+        p.stride=sizeof(TV);
+        p.indexType=gfx::IndexType::UInt32;
+        p.label="terrain staged pipeline";
+        pending->pipeline_=dev_->createPipeline(p);
+        if(pending->pipeline_.valid()) {
+            pending->pipelineSlot_=slot;
+            break;
+        }
+        // Failed private shaders were never submitted and need no idle proof.
+        if(pending->shader_.valid()) {
+            dev_->destroyShader(pending->shader_);
+            pending->shader_={};
+        }
+    }
+
+    // Never publish a frame with missing terrain material pipeline. A
+    // lower-tier fallback is fine, but a fully unusable backend must fail
+    // the owner transaction instead of silently publishing a blank surface.
+    bool usablePipeline=pending->pipeline_.valid();
+    for(int tier=first;tier>=0 && !usablePipeline;--tier)
+        usablePipeline=pipes_[dbase+tier].valid();
+    if(!usablePipeline)
+        throw std::runtime_error("TerrainRenderer: no usable staged pipeline");
+
+    // Traced shadows require a GPU height texture. Stage the replacement
+    // privately so an exception cannot replace a prior-camera generation.
+    if(camera.traceActive() && heightDirty_) {
+        using clock=std::chrono::steady_clock;
+        const double now=std::chrono::duration<double>(
+            clock::now().time_since_epoch()).count();
+        if(!heightField_.tex.valid() || now-heightBuiltAt_>=0.3) {
+            const int tw=std::max(2,std::min(1024,g.w*2));
+            const int th=std::max(2,std::min(1024,g.h*2));
+            std::vector<float> heights(size_t(tw)*size_t(th));
+            float mn=1e9f,mx=-1e9f;
+            for(int j=0;j<th;++j) {
+                const float z=(float(j)+0.5f)*float(g.h)/float(th);
+                for(int i=0;i<tw;++i) {
+                    const float x=(float(i)+0.5f)*float(g.w)/float(tw);
+                    const float value=surfaceAt(g,x,z);
+                    heights[size_t(j)*size_t(tw)+size_t(i)]=value;
+                    mn=std::min(mn,value);
+                    mx=std::max(mx,value);
+                }
+            }
+            const float range=std::max(mx-mn,1e-3f);
+            std::vector<uint8_t> pixels(heights.size()*4);
+            for(size_t i=0;i<heights.size();++i) {
+                const int q=std::clamp(int((heights[i]-mn)/range*
+                                           65535.0f+0.5f),0,65535);
+                pixels[i*4]=uint8_t(q>>8);
+                pixels[i*4+1]=uint8_t(q&255);
+                pixels[i*4+2]=0;pixels[i*4+3]=255;
+            }
+            gfx::TextureDesc desc;
+            desc.width=tw;desc.height=th;
+            desc.filter=gfx::Filter::Linear;
+            desc.data=pixels.data();
+            desc.label="terrain trace height staged";
+            pending->traceHeight_.tex=createTerrainTexture(*dev_,desc);
+            if(!pending->traceHeight_.tex.valid())
+                throw std::runtime_error(
+                    "TerrainRenderer: private trace height upload failed");
+            pending->traceHeight_.originX=0;
+            pending->traceHeight_.originZ=0;
+            pending->traceHeight_.extentX=float(g.w);
+            pending->traceHeight_.extentZ=float(g.h);
+            pending->traceHeight_.heightMin=mn;
+            pending->traceHeight_.heightRange=
+                mx-mn>1e-3f?mx-mn:0.0f;
+            pending->traceBuiltAt_=now;
+            pending->traceWidth_=tw;
+            pending->traceHeightPixels_=th;
+        }
+    }
+    return pending;
+}
+
+void TerrainRenderer::prepareMapVisible(
+        const std::shared_ptr<PreparedMap>& candidate,
+        const Renderer3D& renderer,const MapGrid& grid,
+        const std::vector<uint8_t>* vision,
+        const std::vector<uint8_t>* filteredVisibility) {
+    if(!candidate || candidate->owner_!=this || candidate->device_!=dev_ ||
+       candidate->committed_ || candidate->revision_!=publicationRevision_ ||
+       !candidate->staged_ || candidate->frame_ ||
+       !candidate->staged_->mapMatches(grid.w,grid.h))
+        throw std::logic_error("TerrainRenderer: stale topology frame prepare");
+    candidate->frame_=candidate->staged_->prepareFrameVisible(
+        renderer,grid,vision,filteredVisibility);
+    if(!candidate->frame_)
+        throw std::runtime_error("TerrainRenderer: topology frame prepare failed");
+}
+
+void TerrainRenderer::commitMapVisible(PreparedMap& candidate) noexcept {
+    if(!candidate.frame_)return;
+    // commitMap has just transferred the exact staged chunk/texture layout.
+    // No intervening owner mutation or external frame rebinding is allowed.
+    auto frame=std::move(candidate.frame_);
+    if(frame->owner_!=candidate.staged_.get() || frame->device_!=dev_ ||
+       frame->revision_!=candidate.staged_->publicationRevision_)
+        std::terminate();
+    frame->owner_=this;
+    frame->revision_=publicationRevision_;
+    commitFrame(std::move(frame));
+}
+
+void TerrainRenderer::drawCandidate(const std::shared_ptr<PreparedFrame>& next,
+        Renderer3D& r,const MapGrid& g,const std::vector<uint8_t>* vision) {
+    if(!next){drawPrepared(r,g,vision);drawWater(r);return;}
+    if(next->owner_!=this || next->revision_!=publicationRevision_ || next->committed_)
+        throw std::logic_error("Terrain: stale candidate draw");
+    const bool dynamic=next->dynamic_.valid(),visible=next->vision_.valid();
+    const bool trace=next->traceHeight_.tex.valid(),pipeline=next->pipeline_.valid();
+    const auto exchange=[&]() noexcept {
+        using std::swap;
+        if(dynamic)swap(dynTex_,next->dynamic_);
+        if(visible)swap(visionTex_,next->vision_);
+        if(trace)swap(heightField_,next->traceHeight_);
+        if(pipeline)swap(pipes_[next->pipelineSlot_],next->pipeline_);
+        for(auto& item:next->lods_)swap(chunks_[item.chunk].lods[item.level],item.mesh);
+    };
+    exchange();try {drawPrepared(r,g,vision);drawWater(r);}catch(...) {exchange();throw;}exchange();
+}
+void TerrainRenderer::drawMapCandidate(const std::shared_ptr<PreparedMap>& c,
+        Renderer3D& r,const MapGrid& g,const std::vector<uint8_t>* vision) {
+    if(!c || c->owner_!=this || c->revision_!=publicationRevision_ || c->committed_)
+        throw std::logic_error("Terrain: stale map candidate draw");
+    c->staged_->drawCandidate(c->frame_,r,g,vision);
+}
+
+void TerrainRenderer::commitFrame(std::shared_ptr<PreparedFrame> next) noexcept {
+    if(!next || next->committed_)return;
+    if(next->owner_!=this || next->device_!=dev_ ||
+       next->revision_!=publicationRevision_)
+        std::terminate();
+    if(next->dynamic_.valid()) {
+        retiredMeshes_.retireTexture(*dev_,dynTex_);
+        dynTex_=std::exchange(next->dynamic_,{});
+        dynPx_.swap(next->dynamicPx_);
+    }
+    if(next->vision_.valid()) {
+        retiredMeshes_.retireTexture(*dev_,visionTex_);
+        visionTex_=std::exchange(next->vision_,{});
+        visionPx_.swap(next->visionPx_);
+    }
+    dynRow_=next->nextDynRow_;
+    visionInit_=next->nextVisionInit_;
+    for(auto& item:next->lods_) {
+        if(item.chunk>=chunks_.size() ||
+           item.level>=chunks_[item.chunk].lods.size() ||
+           chunks_[item.chunk].lods[item.level].indexCount)
+            std::terminate();
+        chunks_[item.chunk].lods[item.level]=
+            std::exchange(item.mesh,Lod{});
+        geoBytes_+=item.bytes;
+    }
+    if(next->pipeline_.valid()) {
+        const int slot=next->pipelineSlot_;
+        if(slot<0 || slot>=13 || pipes_[slot].valid() ||
+           (next->shader_.valid() && shaders_[slot].valid()))
+            std::terminate();
+        if(next->shader_.valid())
+            shaders_[slot]=std::exchange(next->shader_,{});
+        pipes_[slot]=std::exchange(next->pipeline_,{});
+        shaderFailed_[slot]=false;
+    }
+    if(next->traceHeight_.tex.valid()) {
+        retiredMeshes_.retireTexture(*dev_,heightField_.tex);
+        heightField_=std::exchange(next->traceHeight_,{});
+        heightW_=next->traceWidth_;
+        heightH_=next->traceHeightPixels_;
+        heightBuiltAt_=next->traceBuiltAt_;
+        heightDirty_=false;
+    }
+    frameFieldsPrepared_=true;
+    fogFieldChanged_=false;
+    next->committed_=true;
+    ++publicationRevision_;
+}
+
+void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g,
+                           const std::vector<uint8_t>* vision, bool) {
+    drawInternal(r,g,vision,false);
+}
+void TerrainRenderer::drawPrepared(Renderer3D& r,const MapGrid& g,
+                                   const std::vector<uint8_t>* vision) {
+    drawInternal(r,g,vision,true);
+}
+void TerrainRenderer::drawInternal(Renderer3D& r,const MapGrid& g,
+                                   const std::vector<uint8_t>* vision,
+                                   bool preparedOnly) {
+    // terrain.render=false or entity-authored terrain suppresses the map surface.
+    if(!look_.render||!mapSurfaceEnabled_){r.setHeightField({});return;}
     if (!built_ || !dev_ || g.w != mapW_ || g.h != mapH_) return;
     gfx::Device& dev = *dev_;
-    updateDynamic(dev, g, false);
+    // A LENS primary owner transaction has already installed the immutable
+    // copy-on-write texture generations. Standalone legacy draws retain
+    // the old path until their callers use prepareFrame explicitly.
+    const bool stagedFields=!preparedOnly && frameFieldsPrepared_;
+    if(!preparedOnly && !stagedFields)updateDynamic(dev, g, false);
     const bool fog = heightfield_ && vision && !vision->empty();
-    if (fog) {
+    if (fog && !preparedOnly && !stagedFields) {
         if (fogField_ && fogField_->size() == visionPx_.size()) { if (fogFieldChanged_) { visionPx_ = *fogField_; dev.updateTexture(visionTex_, 0, 0, texW_, texH_, visionPx_.data(), texW_); visionInit_ = true; } }
         else updateVision(dev, *vision);
         fogFieldChanged_ = false;
     }
-    // frustum: left/right/bottom/top planes of the view-projection (independent of the clip depth range)
-    const mat4& vp = r.viewProj();
-    float4 planes[4];
-    for (int i = 0; i < 4; ++i) {
-        int row = i / 2;
-        float s = (i % 2) ? -1.0f : 1.0f;
-        planes[i] = {vp.at(3, 0) + s * vp.at(row, 0), vp.at(3, 1) + s * vp.at(row, 1), vp.at(3, 2) + s * vp.at(row, 2), vp.at(3, 3) + s * vp.at(row, 3)};
-    }
-    auto visible = [&](float3 mn, float3 mx) {
-        for (auto& p : planes) {
-            float3 q{p.x >= 0 ? mx.x : mn.x, p.y >= 0 ? mx.y : mn.y, p.z >= 0 ? mx.z : mn.z};
-            if (p.x * q.x + p.y * q.y + p.z * q.z + p.w < 0) return false;
-        }
-        return true;
-    };
+    // Shared, unnormalized four side-plane AABB test (clip-depth independent).
+    const auto frustum=::aiverse::view::SideFrustum::fromViewProjection(r.viewProj());
     const float3 eye = r.camera().eye();
-    struct Item { const Lod* lod; float morphStart, morphEnd; };
+    struct Item { Lod lod; float morphStart, morphEnd; };
     auto items = std::make_shared<std::vector<Item>>();
-    stats_.drawn = 0;
-    stats_.triangles = apron_.indexCount / 3;
+    if(!preparedOnly) {
+        stats_.drawn = 0;
+        stats_.triangles = apron_.indexCount / 3;
+    }
     for (auto& c : chunks_) {
-        if (!c.valid || c.lods.empty() || !visible(c.bmin, c.bmax)) continue;
+        if (!c.valid || c.lods.empty() || !frustum.visibleAABB(c.bmin,c.bmax)) continue;
         int k = 0;
         float start = 1e9f, end = 2e9f;
         if (lodLevels_ > 1) {
@@ -841,33 +1985,80 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
             while (k + 1 < lodLevels_ && d >= range) { ++k; range *= 2; }
             if (k + 1 < lodLevels_) { start = range * 0.75f; end = range; }
         }
-        if (detailOn_ && !c.lods[size_t(k)].indexCount) buildDetailLod(dev, g, c, k);
-        if (detailOn_) c.lastUse[size_t(k)] = frame_;
+        // A secondary camera may use a coarser prebuilt level, but it may
+        // not allocate/upload a new mesh while source GPU work is in flight.
+        if(detailOn_ && !c.lods[size_t(k)].indexCount &&
+           !preparedOnly && !stagedFields)
+            buildDetailLod(dev,g,c,k); // standalone legacy path only
+        // Published primary and secondary camera frames are read-only.
+        if(preparedOnly || stagedFields) {
+            while(k+1<lodLevels_ && !c.lods[size_t(k)].indexCount)++k;
+            if(!c.lods[size_t(k)].indexCount)
+                while(k>0 && !c.lods[size_t(k)].indexCount)--k;
+        }
+        if(detailOn_ && !preparedOnly)c.lastUse[size_t(k)]=frame_;
         const Lod& l = c.lods[size_t(k)];
         if (!l.indexCount) continue;
-        items->push_back({&l, start, end});
-        ++stats_.drawn;
-        stats_.triangles += l.indexCount / 3;
+        items->push_back({l, start, end});
+        if(!preparedOnly) {
+            ++stats_.drawn;
+            stats_.triangles += l.indexCount / 3;
+        }
     }
-    ++frame_;
-    if (detailOn_ && geoBytes_ > look_.detailBudgetMB * 1048576.0) { // LRU: drop LOD meshes not drawn for a while
+    if(!preparedOnly)++frame_;
+    if (!preparedOnly && !stagedFields && detailOn_ &&
+        geoBytes_ > look_.detailBudgetMB * 1048576.0) { // legacy LRU only; LENS GPU lifetime is frame-fenced
         for (auto& c : chunks_)
             for (size_t L = 0; L < c.lods.size(); ++L) {
                 Lod& l = c.lods[L];
                 if (!l.indexCount || c.lastUse[L] + 120 > frame_) continue;
                 geoBytes_ -= std::min<size_t>(geoBytes_, size_t(l.indexCount) * 4 + size_t(l.vertexCount) * sizeof(TV));
-                dev.destroyBuffer(l.vb); dev.destroyBuffer(l.ib); l = {};
+                retiredMeshes_.retireBuffer(dev,l.vb);
+                retiredMeshes_.retireBuffer(dev,l.ib);
+                l={};
             }
     }
-    stats_.geometryBytes = geoBytes_;
+    if(!preparedOnly)stats_.geometryBytes = geoBytes_;
+    if(!preparedOnly && stagedFields) {
+        // Consume one prepared primary frame, never reuse a stale skip flag
+        // for standalone draws on later frames.
+        frameFieldsPrepared_=false;
+    }
     const int tier = tierFor(r);
-    gfx::PipelineHandle pipe = pipeline(dev, tier + (detailOn_ ? 3 : 0));
+    const bool mobileGi = r.dynamicGiOverlayEnabled() &&
+        dev.info().backend==gfx::Backend::GLES3 &&
+        !detailOn_ && !r.bakedActive() && !r.traceActive();
+    const bool fullGi = r.dynamicGiOverlayEnabled() &&
+        (dev.info().backend==gfx::Backend::Metal ||
+         dev.info().backend==gfx::Backend::Vulkan);
+    const bool giRequest=mobileGi || fullGi;
+    const int desiredVariant=mobileGi ? 0 : tier+(detailOn_ ? 3 : 0);
+    int effectiveTier=mobileGi ? 0 : tier;
+    gfx::PipelineHandle pipe{};
+    if(preparedOnly || stagedFields) {
+        // Secondary cameras and staged primary frames never compile shaders.
+        const int first=mobileGi ? 12 : desiredVariant+(fullGi?6:0);
+        const int minimum=mobileGi ? 12 : (detailOn_?3:0)+(fullGi?6:0);
+        for(int i=first;i>=minimum;--i)
+            if(pipes_[i].valid()) {
+                pipe=pipes_[i];
+                effectiveTier=i-minimum; // shader fallback must match uniforms
+                break;
+            }
+    }else pipe=pipeline(dev,desiredVariant,giRequest,mobileGi);
     if (!pipe.valid()) return;
+    bool giPipeline=false;
+    for (int i=6;i<13;++i) if (pipes_[i].valid() && pipes_[i]==pipe)
+        giPipeline=true;
+    const bool compactGi=giPipeline && pipes_[12].valid() && pipe==pipes_[12];
     TU0 u{};
+    u.pbr[0]=look_.pbr ? 1.0f:0.0f;
+    u.pbr[1]=look_.pbrRoughness;
+    u.pbr[3]=look_.packedPbr ? 1.0f:0.0f;
     u.lod[2] = float(mapW_); u.lod[3] = float(mapH_);
     u.mode[0] = 0.05f;
-    u.mode[1] = tier >= 1 && look_.materials() ? 1.0f : 0.0f;
-    u.mode[2] = tier >= 2 ? 1.0f : 0.0f;
+    u.mode[1] = effectiveTier >= 1 && look_.materials() ? 1.0f : 0.0f;
+    u.mode[2] = effectiveTier >= 2 ? 1.0f : 0.0f;
     u.mode[3] = fog ? 1.0f : 0.0f;
     for (int i = 0; i < 4; ++i) {
         const TerrainLook::Layer* L = i < int(look_.layers.size()) ? &look_.layers[size_t(i)] : nullptr;
@@ -899,26 +2090,65 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         if (!cliffTex) { u.cliff[2] = look_.slopeStart; u.cliff[3] = look_.slopeEnd; }
         u.blend[0] = look_.blendSharpness; u.blend[1] = look_.macro; u.blend[2] = 1.0f;
     }
-    const Lod* apron = apron_.indexCount ? &apron_ : nullptr;
+    if (layerNormalAtlasSize_ > 0) {
+        constexpr int gutter=16;
+        u.blend[3]=float(layerNormalAtlasSize_)/
+                   float(2*(layerNormalAtlasSize_+2*gutter));
+    }
+    // Capture the per-camera GPU bindings by value. A subsequent terrain
+    // rebuild can replace the live maps while this draw command is queued.
+    struct GpuBindings {
+        gfx::TextureHandle cell,dynamic,splat,vision,detailNormal,detailSplat;
+        gfx::TextureHandle cliff,cliffNormal,layerNormalAtlas;
+        std::array<gfx::TextureHandle,4> layer{},layerNormal{};
+        bool detail=false;
+    };
+    GpuBindings bindings{};
+    bindings.layerNormalAtlas=layerNormalAtlas_;
+    bindings.cell=cellTex_;
+    bindings.dynamic=dynTex_;
+    bindings.splat=splatTex_;
+    bindings.vision=visionTex_;
+    bindings.detailNormal=detailNrmTex_;
+    bindings.detailSplat=detailSplatTex_;
+    bindings.cliff=cliffTex_.valid()?cliffTex_.tex:gray_;
+    bindings.cliffNormal=cliffNrm_.valid()?cliffNrm_.tex:flatN_;
+    bindings.detail=detailOn_;
+    for(int i=0;i<4;++i) {
+        bindings.layer[size_t(i)]=layerTex_[i].valid()?layerTex_[i].tex:white_;
+        bindings.layerNormal[size_t(i)]=layerNrm_[i].valid()?layerNrm_[i].tex:flatN_;
+    }
+    const Lod apron=apron_;
     // traced terrain shadows (Renderer3D trace tier): the height map of the drawn surface
     if (r.traceActive()) {
-        if (heightDirty_) updateHeightField(dev, g);
+        if(!preparedOnly && !stagedFields && heightDirty_)
+            updateHeightField(dev,g); // standalone compatibility only
         r.setHeightField(heightField_);
     } else r.setHeightField({});
-    r.drawCustomOpaque([this, &r, items, u, pipe, apron](gfx::Device& d) {
+    r.drawCustomOpaque([&r, items, u, pipe, apron, bindings, giPipeline, compactGi](gfx::Device& d) {
         d.setPipeline(pipe);
         r.bindLitFrame();
-        r.bindTrace(18);
-        r.bindBakedTerrain(3, 19, 20);   // agent-lightbake
-        d.setTexture(2, cellTex_); d.setTexture(3, dynTex_); d.setTexture(4, splatTex_);
-        for (int i = 0; i < 4; ++i) {
-            d.setTexture(5 + i, layerTex_[i].valid() ? layerTex_[i].tex : white_);
-            d.setTexture(9 + i, layerNrm_[i].valid() ? layerNrm_[i].tex : flatN_);
+        if(!compactGi) {
+            r.bindTrace(18);
+            r.bindBakedTerrain(3, 19, 20);
         }
-        d.setTexture(13, cliffTex_.valid() ? cliffTex_.tex : gray_);
-        d.setTexture(14, cliffNrm_.valid() ? cliffNrm_.tex : flatN_);
-        d.setTexture(15, visionTex_);
-        if (detailOn_) { d.setTexture(16, detailNrmTex_); d.setTexture(17, detailSplatTex_); }
+        d.setTexture(2, bindings.cell);
+        d.setTexture(3, bindings.dynamic);
+        d.setTexture(4, bindings.splat);
+        for (int i = 0; i < 4; ++i) {
+            d.setTexture(5 + i, bindings.layer[size_t(i)]);
+            d.setTexture(9 + i, bindings.layerNormal[size_t(i)]);
+        }
+        d.setTexture(13, bindings.cliff);
+        d.setTexture(14, bindings.cliffNormal);
+        d.setTexture(15, bindings.vision);
+        if (bindings.detail) {
+            d.setTexture(16, bindings.detailNormal);
+            d.setTexture(17, bindings.detailSplat);
+        }
+        if (bindings.layerNormalAtlas.valid()) d.setTexture(9,bindings.layerNormalAtlas);
+        if (giPipeline)
+            (void)r.bindDynamicGiForCustomAt(compactGi ? 8 : 21);
         TU0 uu = u;
         auto drawLod = [&](const Lod& l, float s, float e) {
             uu.lod[0] = s; uu.lod[1] = e;
@@ -927,13 +2157,16 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
             d.setIndexBuffer(l.ib);
             d.drawIndexed(l.indexCount);
         };
-        if (apron) drawLod(*apron, 1e9f, 2e9f);
-        for (auto& it : *items) drawLod(*it.lod, it.morphStart, it.morphEnd);
+        if (apron.indexCount) drawLod(apron, 1e9f, 2e9f);
+        for (const auto& it : *items) drawLod(it.lod, it.morphStart, it.morphEnd);
     });
-    if (hasWater_ && water_.indexCount) r.drawMesh(water_, mat4{}, look_.waterColor, kDrawNoCastShadow, 0.9f);
+    // Water was already captured as a model/mesh packet in the primary
+    // view; avoid duplicating it when the secondary terrain path runs.
+    if (look_.render && mapSurfaceEnabled_ && !preparedOnly && hasWater_ && water_.indexCount)
+        r.drawMeshSnapshot(water_,mat4{},look_.waterColor,kDrawNoCastShadow,0.9f);
     // AIVERSE_TERRAIN_STATS=1: chunks / triangles / frame time every 60 frames (stderr; perf checks on big maps)
     static const bool printStats = std::getenv("AIVERSE_TERRAIN_STATS") != nullptr;
-    if (printStats) {
+    if (printStats && !preparedOnly) {
         static auto last = std::chrono::steady_clock::now();
         static int frames = 0;
         if (++frames == 60) {
@@ -951,8 +2184,8 @@ void TerrainRenderer::updateHeightField(gfx::Device& dev, const MapGrid& g) {
     using clock = std::chrono::steady_clock;
     const double now = std::chrono::duration<double>(clock::now().time_since_epoch()).count();
     if (heightField_.tex.valid() && now - heightBuiltAt_ < 0.3) return;   // sculpting: at most ~3 rebuilds per second
-    heightBuiltAt_ = now;
-    heightDirty_ = false;
+    // Only mark the traced surface clean after the replacement GPU image
+    // has been allocated and published successfully.
     // two samples per cell, at most 1024 per side (2048-cell maps: one sample per two cells - the
     // long shadows this map serves are a coarse feature anyway); 16-bit heights in R (high) and G (low)
     const int tw = std::max(2, std::min(1024, g.w * 2)), th = std::max(2, std::min(1024, g.h * 2));
@@ -973,20 +2206,27 @@ void TerrainRenderer::updateHeightField(gfx::Device& dev, const MapGrid& g) {
         const int q = std::clamp(int((h[n] - mn) / range * 65535.0f + 0.5f), 0, 65535);
         px[n * 4 + 0] = uint8_t(q >> 8); px[n * 4 + 1] = uint8_t(q & 255); px[n * 4 + 2] = 0; px[n * 4 + 3] = 255;
     }
-    if (heightField_.tex.valid() && (heightW_ != tw || heightH_ != th)) { dev.destroyTexture(heightField_.tex); heightField_.tex = {}; }
-    if (!heightField_.tex.valid()) {
-        gfx::TextureDesc td; td.width = tw; td.height = th; td.filter = gfx::Filter::Linear; td.data = px.data(); td.label = "terrain height field";
-        heightField_.tex = dev.createTexture(td);
-        heightW_ = tw; heightH_ = th;
-    } else dev.updateTexture(heightField_.tex, 0, 0, tw, th, px.data(), tw * 4);
+    // A queued multi-camera trace may still sample the previous image.
+    // Never mutate or destroy it in place while its frame can be in flight.
+    gfx::TextureDesc td;
+    td.width=tw; td.height=th; td.filter=gfx::Filter::Linear;
+    td.data=px.data(); td.label="terrain height field";
+    const gfx::TextureHandle newHeight=createTerrainTexture(dev,td);
+    if (!newHeight.valid())
+        throw std::runtime_error("TerrainRenderer: trace height texture upload failed");
+    retiredMeshes_.retireTexture(dev,heightField_.tex);
+    heightField_.tex=newHeight;
+    heightW_=tw; heightH_=th;
+    heightBuiltAt_=now;
+    heightDirty_=false;
     heightField_.originX = 0; heightField_.originZ = 0;
     heightField_.extentX = float(g.w); heightField_.extentZ = float(g.h);
     heightField_.heightMin = mn; heightField_.heightRange = mx - mn > 1e-3f ? mx - mn : 0.0f;   // flat map: nothing to shadow
 }
 
 void TerrainRenderer::drawWater(render::Renderer3D& r) {
-    if (hasWater_ && water_.indexCount)
-        r.drawMesh(water_, render::mat4{}, look_.waterColor, render::kDrawNoCastShadow, .9f);
+    if (look_.render && mapSurfaceEnabled_ && hasWater_ && water_.indexCount)
+        r.drawMeshSnapshot(water_, render::mat4{}, look_.waterColor, render::kDrawNoCastShadow, .9f);
 }
 
 } // namespace aiverse::game

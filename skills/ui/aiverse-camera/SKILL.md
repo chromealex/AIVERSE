@@ -5,6 +5,9 @@ description: Reuse AIVERSE camera for rts/follow/orbit target controls, limits, 
 
 # camera
 
+For ECS camera assets, multi-camera outputs and capture use
+`skills/visuals/aiverse-lens/SKILL.md`. This package owns input/controller helpers.
+
 Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `libraries/include/aiverselib/gameplay/Camera.h` from the engine root.
 Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys or APIs.
 

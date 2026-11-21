@@ -10,7 +10,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT/'skills/catalog.json'
 # Category folders: skills/<category>/<skill>/SKILL.md (AGENTS.md 'Adding and updating repository skills').
-CATEGORIES = ('core','gameplay','genres','ai','world','ui','visuals','network','verification','meta','workflow')
+CATEGORIES = ('core','gameplay','genres','ai','world','ui','visuals','network','verification','meta','workflow','editor')
 
 def load_meta():
     spec = importlib.util.spec_from_file_location('meta_catalog', ROOT/'tools/meta/catalog.py')
@@ -87,6 +87,13 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-lens','LENS camera scene authoring, MCP validation and native Studio PNG capture','apps/editor/core/LensOps.cpp'),
+ ('aiverse-lens-native','LENS native multi-camera scheduling, prepared-frame replay and GPU capture ownership','docs/camera-system.md'),
+
+ ('aiverse-scene-entities','Native scene entity and component MCP authoring with stable light identity','docs/studio-light-entities.md'),
+ ('aiverse-lighting','Light entity authoring, probe GI and Luma through native MCP and shared runtime','docs/dynamic-gi.md'),
+ ('studio-ui','HTML5 Studio editor windows with shared UI v1 components, typed native bridge and visual QA','docs/studio-design-system.md'),
+ ('aiverse-human-creator','VIVID digital humans: DNA skin/eyes/hair/proportions, 52 rest channels, routes, rig and skin edits via human_* MCP or Studio Human Creator','docs/vivid.md'),
  ('aiverse-bots-configure','Computer player setup: rules.ai knobs, play styles, scripted director, strategic bots','docs/ai-controllers.md'),
  ('aiverse-bots-tune','Bot strength tuning with bot batches and a sweep over every map','modules/rts/RtsAI.cpp'),
  ('aiverse-bots-debug','Diagnose bots that do not play and teach RtsAI a new mechanic','modules/rts/RtsMechAI.cpp'),
@@ -99,6 +106,10 @@ WORKFLOWS=[
  ('aiverse-fx','Visual effects from templates or Unity prefabs, tuning, event binding, preview','docs/particles.md'),
  ('aiverse-niagara-vfx','Legacy Niagara-style discovery alias; use the official SpectraFX workflow','docs/spectrafx.md'),
  ('aiverse-spectrafx','SpectraFX universal graphs, particle assets and ECS presentation for native games','docs/spectrafx.md'),
+ ('aiverse-prisma','PRISMA universal HDR post-processing, screen effects, volumes, camera profiles and GPU quality','docs/prisma.md'),
+ ('aiverse-animation-ecs','Legacy C++ presentation ECS animation API and fixed-point root-motion handoff','libraries/include/aiverselib/animation/EcsAnimationSystems.h'),
+ ('aiverse-motionweave','Universal multithreaded MotionWeave animation scheduler and native integration','docs/motionweave.md'),
+ ('aiverse-view','Genre-independent scene View: appearance, layers, visibility, packets and rendering adapters','docs/view.md'),
  ('aiverse-game-screens','Game screens and HUD with RmlUi and Lua, validation, phone previews','docs/ui-scripting.md'),
  ('aiverse-release-build','Platform packaging: branding, toolchains, size estimate, build and status','docs/overview.md'),
  ('aiverse-port-game','Port Unity or Godot projects: scan, import, resolve report items, verify','docs/engine-import.md'),
@@ -118,16 +129,21 @@ WORKFLOWS=[
  ('aiverse-online-battles','Online PvP and PvE: rollback, tick rate, simulated mobile links, reconnect','docs/battle-net.md'),
  ('aiverse-determinism-triage','Checksum mismatches: first differing tick and field, causes, fix and proof','docs/native-toolkit.md'),
  ('aiverse-docs-upkeep','README and translations, translated docs, format sections, readme check','tools/readme/check.py'),
+ ('aiverse-shared-capability','Make a module-only feature usable by every project: move to engine/libraries, data blocks instead of genre modes, compatibility headers, thin host adapters, checksum A/B','AGENTS.md'),
  ('aiverse-capability-audit','Feasibility and gap estimates from the genre status file, catalogs and module docs, not from memory','docs/genre-implementation.json'),
  ('aiverse-terrain','Terrain levels, heightfield, sub-cell detail, materials and heightmaps through MCP','docs/terrain.md'),
+ ('aiverse-terra-first','TerraWeave-first world capability selection for every new game; custom only for verified gaps','skills/workflow/aiverse-terra-first/SKILL.md'),
+ ('aiverse-terra-vegetation','Native Arbor trees, dense grass patches, rocks, PBR and LOD authoring','skills/world/aiverse-terra-vegetation/SKILL.md'),
  ('aiverse-terraweave','Procedural world terrain, biomes, Arbor/Flora, Horizon HLOD, authored seams and native C++ scene integration','docs/terrain/TERRAWEAVE.md'),
  ('aiverse-water','Spline straits, rivers and open sea with shore types, bridges and the water window','docs/water.md'),
+ ('aiverse-physis-authoring','PHYSIS map configuration through revision-checked MCP operations and Undo/Redo','apps/editor/core/PhysisOps.cpp'),
  ('aiverse-physis','Genre-neutral nature, climate, wind, gravity, storms, ECS and Box3D adapter with editor diagnostics','docs/physis.md'),
  ('aiverse-city-blocks','City block paving, curb elevations, planting beds and street furniture','skills/world/aiverse-city-blocks/SKILL.md'),
  ('aiverse-city-planner','Procedural city maps with the city / metropolis generator preset','docs/city-planner.md'),
  ('aiverse-city-economy','City-game commerce, careers and the top-down hero arsenal','docs/commerce.md'),
  ('aiverse-projectile-programs','Ordered projectile flight programs: pierce, split, ricochet, arcs for RTS and FPS','docs/projectile-programs.md'),
  ('aiverse-cloth','Optional XPBD visual cloth: CPU/GPU solver, render, pins, colliders, wind, LOD','docs/cloth.md'),
+ ('aiverse-wind-masks','Hierarchical wind masks: shared mask library, per-class profiles, model sidecars, Arbor tree rigs, one GPU graph','docs/wind-masks.md'),
  ('aiverse-cables','Procedural cable geometry: power lines, ropes, wire bundles with sag','docs/cables.md'),
  ('aiverse-paint-layers','View Lua render-texture canvases and ground paint layers','docs/render-texture.md'),
  ('aiverse-script-hud','Data-only HUD bindings: scriptHud panels, world counters, entity actions','docs/script-hud.md'),
@@ -137,17 +153,25 @@ WORKFLOWS=[
  ('rts-bunkerwars-skills','Convert Bunker Wars energy skills into rules player abilities','docs/bunkerwars-skills.md'),
  ('rts-flow-war','Flow-economy wars: radar, jammers, reclaim, stockpiles and interceptors, wind, attack runs, TA import','docs/game-format.md'),
  ('aiverse-voxel-game','Minecraft-like game from the voxel packages and existing libraries: loop order, data, checks, gaps','docs/voxel.md'),
+ ('aiverse-strata','STRATA virtual geometry CPU authoring, MCP analysis, native routing and GPU verification','docs/strata.md'),
  ('aiverse-texture-rhi','Native texture dimensions, virtual pages, mip streaming, backend sampling and GPU acceptance','docs/texture-rhi.md'),
  ('aiverse-skill-authoring','Add or change a repository skill with its code, registration, catalog and audit','tools/skills/audit.py'),
  ('aiverse-publish-builds','Editor packages for Windows and macOS on the builds branch (MAIN only)','tools/release/publish_builds.py'),
  ('aiverse-driving','Top-down hero at the wheel: rules driving, handling table, steering wheels, decks, autopilot','docs/driving.md'),
+ ('aiverse-racing','Races in any project: rules and map "race" (grid, countdown, ordered checkpoints, laps, standings, wrong way, respawn, race bots, shared HUD and chase camera), racegen tracks','docs/races.md'),
  ('aiverse-city-server','Persistent city server: near-hero snapshots, tickets, seats, accounts, client mirror','docs/city-server.md'),
  ('aiverse-replica','Generic server-authoritative replication: schema, delta snapshots, interest, budget, prediction, clock','docs/replica.md'),
  ('aiverse-place-server','Server-authoritative place hosting: tickets, encrypted UDP, WebSocket gate, reconnect, bots','docs/replica.md'),
  ('aiverse-autolod','Static model LOD generation with meshoptimizer and LOD transitions in the renderer','docs/autolod.md'),
 ]
 WORKFLOW_ALIASES={
+ 'aiverse-lens':'lens camera cameras capture offscreen minimap камер захват линз',
+ 'aiverse-lens-native':'lens native camera replay snapshot gpu capture натив камер захват',
+
+ 'aiverse-strata':'strata страта virtual geometry meshlet streaming lod batching батчинг геометрия',
+ 'aiverse-physis-authoring':'physis authoring mcp map config validate weather wind gravity настройка погода карта',
  'aiverse-physis':'physis nature weather wind gust storms tornado hurricane gravity force physical fields ecs climate environment box3d diagnostics terra water природ природные явления ветер смерч ураган гравитац климат',
+ 'aiverse-racing':'racing race racer lap laps track circuit kart grid countdown checkpoint finish standings chase гонк гонщик трасс круг финиш старт заезд кольцев',
  'aiverse-driving':'drive driving car vehicle wheel steer autopilot deck tunnel bridge crash вожден машин руль колес автопилот туннел мост авари',
  'aiverse-city-server':'city server persistent world mmo seats tickets accounts mirror сервер город постоянн мир игроков билет счет',
  'aiverse-replica':'replica replication server authoritative snapshot delta interest budget prediction interpolation schema репликация сервер авторитетный снапшот предсказание',
@@ -167,8 +191,11 @@ WORKFLOW_ALIASES={
  'aiverse-online-battles':'online network pvp pve rollback netcode multiplayer онлайн сеть мультиплеер откат',
  'aiverse-determinism-triage':'determinism desync checksum mismatch детерминизм рассинхрон контрольн сумм',
  'aiverse-docs-upkeep':'docs readme documentation translation документац ридми перевод',
+ 'aiverse-shared-capability':'genre split shared capability any project module only extract move engine library adapter host compatibility header no genre mode жанр разделение общий любой проект вынести перенести модуль адаптер',
  'aiverse-capability-audit':'capability audit gap gaps missing feasibility estimate limits can engine genre minecraft voxel sandbox чего не хватает оценк можно ли сделать возможност ограничен пробел жанр движок умеет',
  'aiverse-terrain':'terrain relief heightfield heightmap sculpt cliff detail splat рельеф высот скульпт обрыв ландшафт',
+ 'aiverse-terra-first':'new game create game world environment terra terraweave новый проект игра создать мир окружение терра',
+ 'aiverse-terra-vegetation':'terra trees grass rocks vegetation foliage arbor density lod pbr терра деревья трава камни валуны растительность лес',
  'aiverse-terraweave':'terraweave terra weave terrain foliage forest arbor flora horizon hlod canopy biome tree generation seam near far генерация лес деревья биомы ландшафт',
  'aiverse-water':'water river strait sea shore beach cliff embankment вода река пролив море берег пляж набережн',
  'aiverse-city-blocks':'city blocks plaza courtyard curb sidewalk planter flowerbed paving zfight квартал площадь двор бордюр тротуар клумб мощение',
@@ -176,6 +203,7 @@ WORKFLOW_ALIASES={
  'aiverse-city-economy':'commerce business bank loan career rank perk arsenal weapon ammo money бизнес банк кредит карьер ранг оружие патрон деньг',
  'aiverse-projectile-programs':'projectile pierce split fork ricochet chain arc homing снаряд пробит рикошет разделен дуга самонавод',
  'aiverse-cloth':'cloth flag cape curtain sail xpbd ткань флаг плащ занавес парус',
+ 'aiverse-wind-masks':'wind sway foliage tree branch mask vegetation ветер маска колыхание дерево ветка листва',
  'aiverse-cables':'cable cables wire power line rope трос провод кабель лэп',
  'aiverse-paint-layers':'render texture canvas paint trail mask decal холст рисован след маск',
  'aiverse-script-hud':'hud panel counter label binding entity action худ панел счётчик подпис кнопк',
@@ -195,10 +223,17 @@ WORKFLOW_ALIASES={
  'aiverse-lua-gameplay':'lua script scripting mechanic луа скрипт механик',
  'aiverse-campaign':'campaign mission briefing objective dialog cutscene кампани мисси брифинг цел диалог',
  'aiverse-new-mechanic':'mechanic feature engine branch механик фича движок',
+ 'aiverse-human-creator':'human character digital human face skin eyes iris hair groom dna creator vivid metahuman avatar персонаж человек лицо кожа глаза волосы причёска цифровой',
  'aiverse-look':'look lighting light postfx bloom material texture visual свет освещен постэффект материал текстур вид',
  'aiverse-fx':'fx effect particles explosion эффект частиц взрыв',
  'aiverse-niagara-vfx':'niagara unreal vfx legacy compatibility ниягара анриал старая совместимость',
  'aiverse-spectrafx':'spectrafx spectra vfx particles particle graph effects visual ecs game genre gpu cpu spectrum спектрафх эффекты частицы граф универсальн',
+ 'aiverse-scene-entities':'scene entity component inspector hierarchy transform mcp сущность компоненты лампа свет',
+ 'aiverse-lighting':'lighting light luma gi probes mcp освещение свет лампа пробы',
+ 'aiverse-prisma':'prisma postfx postprocess post-processing bloom hdr exposure tonemap lut grade depth of field motion blur taa ssr volume screen-space постобработка постэффект призма камера',
+ 'aiverse-animation-ecs':'animation ecs clip montage retarget budget fixed root motion animation system анимация бюджет корневая',
+ 'aiverse-motionweave':'motionweave animation rig retarget pose workers scheduler shared universal анимация риг потоки',
+ 'aiverse-view':'view scene appearance packet visibility frustum layers universal genre independent отображение сцена видимость',
  'aiverse-game-screens':'ui screen menu hud shop rml интерфейс экран меню худ магазин',
  'aiverse-release-build':'build release platform android ios web windows macos linux package сборк релиз платформ',
  'aiverse-port-game':'port import unity godot перенос импорт порт',
@@ -235,7 +270,7 @@ def generate():
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source='tools/skills/catalog.py'))
     entries.append(dict(id='aiverse-roads',package=None,path='skills/world/aiverse-roads/SKILL.md',domain='gameplay',
         summary='Spline roads: road types, map roadNetwork, editor tool and road_* ops, tiles, checks',
-        side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source='modules/rts/RtsRoadNet.cpp'))
+        side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source='engine/roads/RoadNet.cpp'))
     # Native ECS opt-in engine feature, not a separately installed library.
     # Register it as a gameplay recipe (runtime=none) so skill routing reads
     # its native headers without inventing a duplicate CMake library target.

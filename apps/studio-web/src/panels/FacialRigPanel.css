@@ -1,0 +1,49 @@
+/* Stage 181: layout only. Typography, controls and palette come from Studio UI v1. */
+.facial-editor { min-width:0; min-height:0; padding:var(--au-space-4); gap:var(--au-space-4); }
+.facial-editor .au-section { min-width:0; }
+.facial-editor .au-row { display:flex; flex-wrap:wrap; align-items:end; gap:var(--au-space-2); }
+.facial-new .au-field { flex:1 1 160px; min-width:0; }
+.facial-actions { margin:var(--au-space-3) 0; }
+.facial-actions .au-input { flex:1 1 160px; min-width:0; }
+.facial-preset-list { display:flex; flex-wrap:wrap; gap:var(--au-space-2); padding-block:var(--au-space-2); }
+.facial-preset-list p, .facial-morph-list p { margin:0; padding:var(--au-space-3); }
+.facial-preview-note { display:flex; gap:var(--au-space-2); align-items:flex-start; }
+.facial-preview-note svg { flex:none; margin-top:2px; }
+.facial-morphs { display:grid; grid-template-columns:minmax(156px,35%) minmax(0,1fr); gap:var(--au-space-3); min-height:260px; }
+.facial-morph-list { min-width:0; max-height:390px; overflow:auto; border:1px solid var(--au-line); border-radius:var(--au-radius-md); }
+.facial-morph-item { display:flex; flex-direction:column; width:100%; border:0; background:transparent; color:var(--au-text); padding:var(--au-space-2) var(--au-space-3); text-align:left; gap:var(--au-space-1); cursor:pointer; }
+.facial-morph-item+.facial-morph-item { border-top:1px solid var(--au-line); }
+.facial-morph-item.active { background:var(--au-active); }
+.facial-morph-item:focus-visible { outline:2px solid var(--au-accent); outline-offset:-2px; }
+.facial-morph-item span, .facial-morph-item small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.facial-morph-item small { color:var(--au-text-muted); font-size:var(--au-font-xs); }
+.facial-morph-detail { min-width:0; display:flex; flex-direction:column; gap:var(--au-space-3); }
+.facial-morph-detail .au-field { min-width:0; }
+.facial-ik-card { display:flex; flex-direction:column; gap:var(--au-space-3); margin-block:var(--au-space-3); }
+.facial-footer { width:100%; justify-content:flex-end; gap:var(--au-space-2); align-items:center; }
+.facial-footer .au-badge { margin-right:auto; }
+.facial-footnote { font-size:var(--au-font-xs); color:var(--au-text-muted); margin:0; line-height:1.6; }
+@media (max-width:600px) {
+  .facial-editor { padding:var(--au-space-2); }
+  .facial-morphs { grid-template-columns:minmax(0,1fr); }
+  .facial-morph-list { max-height:180px; }
+}
+
+.facial-morph-row {display:flex;align-items:center;min-width:0;border-bottom:1px solid var(--au-line);}
+.facial-morph-row:last-child {border-bottom:0;}
+.facial-morph-row .facial-morph-item {flex:1;min-width:0;}
+.facial-morph-row .facial-gain-slider {width:60px;min-width:48px;flex:none;margin:0 var(--au-space-2);accent-color:var(--au-accent);padding:0;}
+.facial-morph-row .facial-morph-item+.facial-morph-item {border-top:0;}
+
+/* Stage 184: reuses Studio's central AssetReferencePicker and semantic UI tokens. */
+.facial-native-controls {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:var(--au-space-2);max-height:200px;overflow:auto;margin-block:var(--au-space-2)}
+.facial-native-controls .au-field {min-width:0}
+.facial-native-controls .au-input[type=range]{flex:1;min-width:60px;padding:0;accent-color:var(--au-accent)}
+.facial-native-controls .au-row span{font-variant-numeric:tabular-nums;color:var(--au-text-muted);min-width:40px}
+
+.facial-ik-vector{padding:var(--au-space-2) 0;border-top:1px solid var(--au-line)}
+.facial-vector-coordinates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:var(--au-space-2)}
+.facial-vector-coordinates .au-field{min-width:0}
+.facial-vector-coordinates .au-input{width:100%;min-width:0}

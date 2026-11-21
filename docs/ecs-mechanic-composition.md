@@ -278,6 +278,7 @@ RTS/FPS mechanics comply.
 | --- | --- | --- |
 | ECS/Parent/job infrastructure | Shared engine components and opt-in scheduler exist | Validation and safe structural lifecycle integration |
 | Generic locomotion, recoil, melee, vehicle, projectile policies | Public C++ policy headers exist | Wire every concrete gameplay consumer to the same systems and state |
+| Race session (vehicle-controllers `genre/RaceSession.h`) | Host-independent policy: grid/countdown, bot or player pedals, checkpoints, laps, standings, respawns, phases; same rules / map `"race"` in every project (docs/races.md); adapters in `modules/fps/FpsRace.cpp` and `modules/rts/RtsDriving.cpp` | One shared vehicle system instead of two hosts, and ECS components (`RaceSessionState` as a world resource / per-racer components) before calling it migrated |
 | FPS authority | Opt-in full ECS runtime payloads at tick boundaries; direct motor partially migrated | Remove `State::actors` and dynamic workspace authority from all combat, AI, shooting, vehicles, loot, projectile, history and net paths |
 | RTS mechanics | Many systems and native hooks refer to `RtsModule&` | Extract neutral feature components/policies/systems, retain adapters during parity |
 | Editor/serialization | Generic runtime component views exist; many genre-specific cards remain | Component registration/schema and versioned, cross-genre save/rollback |

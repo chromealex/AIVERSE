@@ -728,15 +728,19 @@ private:
                                   device_.frameSerial()});
         ++stats_.pooledResourceRetired;
     }
+    // Gfx.h retirement contract: a resource retired at frameSerial() S is
+    // released only once completedFrameSerial() (GPU-completed, not merely
+    // the CPU frame counter) is nonzero and >= S. Never by elapsed frames.
+    static bool retirementCompleted(uint64_t retiredAt,uint64_t completed) {
+        return retiredAt!=0 && completed!=0 && completed>=retiredAt;
+    }
     void collectRetiredPools() {
         if(!device_.canUpdateSharedBuffers()) return;
-        const uint64_t serial=device_.frameSerial();
-        if(!serial) return; // unknown RHI completion: never guess safe
+        const uint64_t completed=device_.completedFrameSerial();
+        if(!completed) return; // unknown RHI completion: never guess safe
         for(size_t i=0;i<retiringPools_.size();) {
             auto& retired=retiringPools_[i];
-            if(!retired.lastSubmittedSerial ||
-               serial<retired.lastSubmittedSerial ||
-               serial-retired.lastSubmittedSerial<kMetalRetireFrameSlots) {
+            if(!retirementCompleted(retired.lastSubmittedSerial,completed)) {
                 ++i;continue;
             }
             retired.arena->shutdown();
@@ -746,9 +750,7 @@ private:
         }
         for(size_t i=0;i<retiringDedicated_.size();) {
             auto& retired=retiringDedicated_[i];
-            if(!retired.lastSubmittedSerial ||
-               serial<retired.lastSubmittedSerial ||
-               serial-retired.lastSubmittedSerial<kMetalRetireFrameSlots) {
+            if(!retirementCompleted(retired.lastSubmittedSerial,completed)) {
                 ++i;continue;
             }
             retired.emitter->stop();

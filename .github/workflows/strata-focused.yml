@@ -1,0 +1,107 @@
+name: Strata focused CPU and GPU-dispatch contracts
+
+on:
+  pull_request:
+    paths:
+      - 'engine/render/Strata*.h'
+      - 'engine/render/Strata*.cpp'
+      - 'engine/render/GeometryScene.*'
+      - 'engine/render/GlobalGeometryPool.*'
+      - 'engine/render/Renderer3D.*'
+      - 'tests/render/strata_*.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/strata-focused.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: strata-focused-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu-and-recording-rhi:
+    name: Strata contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S . -B build/strata-focused
+          -DAIVERSE_BUILD_TESTS=ON
+          -DAIVERSE_BUILD_TOOLS=OFF
+          -DAIVERSE_BUILD_EDITOR=OFF
+          -DAIVERSE_BUILD_STRATA=ON
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build Strata contracts
+        run: >
+          cmake --build build/strata-focused
+          --target
+          aiverse_strata_builder_tests
+          aiverse_strata_model_adapter_tests
+          aiverse_strata_view_tests
+          aiverse_strata_gpu_scene_tests
+          aiverse_strata_gpu_culling_tests
+          aiverse_strata_render_routing_tests
+          aiverse_strata_portable_tests
+          --parallel 4
+      - name: Test Strata contracts
+        run: >
+          ctest --test-dir build/strata-focused
+          -R '^strata_(builder|model_adapter|view|gpu_scene|gpu_culling|render_routing)$'
+          --output-on-failure
+      # Compile the real GPU fixtures on a native macOS runner.
+      # Do not launch an AppKit window in CI; compilation is not GPU parity.
+      - name: Compile real Metal parity fixtures (no GPU execution)
+        if: matrix.os == 'macos-15'
+        run: |
+          cmake -S . -B build/strata-focused -DAIVERSE_STRATA_METAL_GPU_TESTS=ON
+          cmake --build build/strata-focused --target \
+            aiverse_strata_metal_parity \
+            aiverse_strata_metal_raster_parity \
+            aiverse_strata_metal_depth_multiview_parity \
+            aiverse_strata_metal_reflection_material_parity --parallel 4
+
+  # Vulkan remains a supported backend. Linux Mesa Lavapipe supplies a
+  # software Vulkan ICD for shader/compute/indirect contract validation;
+  # this is NOT a discrete-GPU performance or driver certification.
+  vulkan-lavapipe:
+    name: Vulkan kernel parity (Ubuntu / Lavapipe)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vulkan SDK prerequisites and software ICD
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-tools glslang-tools
+          find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print
+      - name: Configure full Vulkan backend and STRATA
+        run: |
+          cmake -S . -B build/strata-vulkan \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_STRATA=ON \
+            -DAIVERSE_VULKAN=ON \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build native Vulkan kernel contract
+        run: |
+          cmake --build build/strata-vulkan \
+            --target aiverse_strata_vulkan_kernel_tests \
+            --parallel 4
+      - name: Run Vulkan compute / indirect / temporal parity via Lavapipe
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICD="$(find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' | head -n 1)"
+          test -n "$ICD"
+          export VK_ICD_FILENAMES="$ICD"
+          vulkaninfo --summary
+          ctest --test-dir build/strata-vulkan \
+            -R '^strata_vulkan_compile$' --output-on-failure --no-tests=error
+          # This job promises real compute execution: a loader/device/compute
+          # failure must fail CI, not turn an optional CTest skip into green.
+          build/strata-vulkan/aiverse_strata_vulkan_kernel_tests --require-device

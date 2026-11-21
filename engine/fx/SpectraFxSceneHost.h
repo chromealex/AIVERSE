@@ -35,6 +35,7 @@ public:
               std::string textureBase={}) {
         shutdown();
         lastError_.clear();
+        device_=&device;
         if(!reader) {lastError_="SpectraFX scene host missing reader";return false;}
         std::string routesText;
         if(!reader("fx/gpu/routes.json",routesText)) return true;
@@ -194,7 +195,12 @@ public:
         render(lighting,SpectraFxView::fromCamera(
             camera,viewProj,1,1));
     }
+    // Call outside render/compute encoders (host teardown or re-init).
     void shutdown() {
+        // Playback teardown destroys live and retiring GPU buffers at once;
+        // first wait for every submitted frame that may still read them
+        // (Gfx.h: never rely on frameSerial() alone).
+        if(playback_ && device_) device_->waitIdle();
         if(playback_) playback_.reset(); // all GPU resources before RHI
         library_.reset();
         if(enabled_) cpu_.shutdown();
@@ -203,6 +209,7 @@ public:
         inbox_.reset();
         reader_={};
         textureBase_.clear();
+        device_=nullptr;
     }
     const SpectraFxHybridPlayback* playback() const {
         return playback_.get();
@@ -214,6 +221,7 @@ private:
     render::TextureCache textures_;
     std::unique_ptr<SpectraFxGpuEmitterLibrary> library_;
     std::unique_ptr<SpectraFxHybridPlayback> playback_;
+    gfx::Device* device_=nullptr; // not owned; set by init for teardown waits
     FileReader reader_;
     std::string textureBase_;
     std::string lastError_;

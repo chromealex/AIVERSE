@@ -1,5 +1,6 @@
 // NEREID polygon/spline water geometry in two unrelated native game hosts.
 #include <aiverselib/water/NereidWaterSystems.h>
+#include <aiverselib/water/NereidFootprintDistance.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -121,6 +122,33 @@ template<class Tag> uint64_t run(bool cow) {
     return moved;
 }
 int main() {
+    {
+        nw::WaterBodyComponent b;b.halfExtents={2_fx,3_fx};
+        check(nw::waterFootprintDistance(b,nullptr,{0_fx,0_fx})==-2_fx,"box interior distance");
+        check(nw::waterFootprintDistance(b,nullptr,{2_fx,0_fx})==0_fx,"box boundary distance");
+        check(nw::waterFootprintDistance(b,nullptr,{5_fx,0_fx})==3_fx,"box exterior distance");
+        b.footprint=nw::WaterFootprint::Disc;b.radius=3_fx;
+        check(nw::waterFootprintDistance(b,nullptr,{-5_fx,0_fx})==2_fx,"disc distance");
+        nw::WaterGeometryComponent g;g.kind=nw::WaterGeometryKind::RiverSpline;
+        g.points={{0_fx,-10_fx,2_fx},{0_fx,10_fx,4_fx}};
+        check(nw::waterFootprintDistance(b,&g,{5_fx,0_fx})==2_fx,"tapered river exterior");
+        check(nw::waterFootprintDistance(b,&g,{0_fx,0_fx})==-3_fx,"river interior");
+        check(nw::waterFootprintDistance(b,&g,{0_fx,13_fx})==-1_fx,"river round end");
+        g.kind=nw::WaterGeometryKind::Polygon;g.points={{0_fx,0_fx,{}},{4_fx,0_fx,{}},{4_fx,4_fx,{}},{0_fx,4_fx,{}}};
+        check(nw::waterFootprintDistance(b,&g,{2_fx,2_fx})==-2_fx,"polygon interior");
+        check(nw::waterFootprintDistance(b,&g,{7_fx,2_fx})==3_fx,"polygon exterior");
+        check(nw::waterFootprintDistance(b,&g,{4_fx,4_fx})==0_fx,"polygon vertex");
+        for(int x=-8;x<=8;++x)for(int z=-8;z<=8;++z) {
+            const Vec2 point{Fixed::fromInt(x),Fixed::fromInt(z)};
+            const auto distance=nw::waterFootprintDistance(b,&g,point);
+            check(distance.has_value(),"valid polygon missing distance");
+            check((*distance<=0_fx)==nw::coversWaterBody(b,&g,{point.x,{},point.y}),"clearance membership mismatch");
+        }
+        g.points.clear();b.footprint=nw::WaterFootprint::Infinite;
+        check(!nw::waterFootprintDistance(b,&g,{}),"invalid geometry fell back to ocean");
+        g.enabled=false;check(nw::waterFootprintDistance(b,&g,{}).value()<0_fx,"disabled override fallback");
+        b.enabled=false;check(!nw::waterFootprintDistance(b,nullptr,{}),"disabled water distance");
+    }
     const uint64_t baseline=run<SailingGameTag>(false);
     check(run<AdventureGameTag>(false)==baseline,"different genre divergence");
     check(run<SailingGameTag>(true)==baseline,"sailing COW divergence");

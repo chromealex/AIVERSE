@@ -13,10 +13,13 @@
 // (built-in overlays are never capped, so games without the block look exactly as before).
 #pragma once
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "../../../engine/render/Renderer3D.h"
+#include "../../../engine/render/NativePresentationRetirement.h"
 #include "../../../engine/render/TextureCache.h"
 #include "../../../engine/sim/Simulation.h"
 #include "../RtsMap.h"
@@ -55,15 +58,52 @@ enum class OverlayQuality : uint8_t { Low, Medium, High };
 
 class RtsOverlays {
 public:
+    class PreparedFrame;
+    // Capture before drawWorld; discard pending renderer queues before rollback.
+    // Candidate CPU state and a replacement VB publish only at commit.
+    std::shared_ptr<PreparedFrame> beginFramePreparation();
+    void commitFramePreparation(const std::shared_ptr<PreparedFrame>&) noexcept;
     // Definitions (no GPU: tests and tools evaluate overlays without a device).
     void init(const Rules& rules, const Json& rulesOverlays, const Json& gameOverlays, const std::string& contentBase);
-    void initGpu(gfx::Device& dev);   // after init: icon textures, batch shader (RtsOverlaysDraw.cpp)
+    // Publish a CPU-prepared overlay definition snapshot without reparsing it
+    // after the view has begun replacing live GPU presentation resources.
+    void initPrepared(const Rules& rules, OverlaySet prepared, const std::string& contentBase);
+    // Stage all icon textures, shader, pipelines and fallback white texture
+    // before publication. Failure leaves the previous GPU owner intact.
+    void initGpu(gfx::Device& dev);
+    bool shutdownAfterGpuIdle(gfx::Device& dev);
+    // Pre-render frame boundary only, after previous overlay draws submitted.
+    bool collectRetiredGpuResources(gfx::Device& dev) {
+        return retiredBuffers_.collect(dev);
+    }
+    size_t pendingGpuRetirements() const noexcept {
+        return retiredBuffers_.pending();
+    }
+    // Caller has already established a full GPU idle barrier.
     void shutdown(gfx::Device& dev);
+    bool gpuReady() const noexcept {
+        if(!dev_ || !shader_.valid() || !white_.valid())return false;
+        for(const auto& pipe:pipes_)if(!pipe.valid())return false;
+        return true;
+    }
     void setContext(const OverlayContext& c) { ctx_ = c; }
     const OverlayContext& context() const { return ctx_; }
     // Default: from the renderer's material quality (AIVERSE_OVERLAYS=low|medium|high overrides).
     void setQuality(OverlayQuality q) { quality_ = q; qualityForced_ = true; }
     OverlayQuality quality() const { return quality_; }
+    render::GpuOwnedMemoryStats ownedGpuMemoryStats() const {
+        if (!dev_) return {};
+        render::GpuOwnedMemoryCounter c(*dev_);
+        c.buffer(vb_);c.texture(white_);
+        const auto own=c.stats(), cache=textures_.ownedGpuMemoryStats();
+        render::GpuOwnedMemoryStats total=own;
+        total.textureKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(own.textureKnownBytes,cache.textureKnownBytes);
+        total.bufferKnownBytes=render::GpuOwnedMemoryCounter::saturatingAdd(own.bufferKnownBytes,cache.bufferKnownBytes);
+        total.textures+=cache.textures;total.buffers+=cache.buffers;
+        total.unknownTextures+=cache.unknownTextures;total.unknownBuffers+=cache.unknownBuffers;
+        total.multiVersionBuffers+=cache.multiVersionBuffers;
+        return total;
+    }
     const OverlaySet& set() const { return set_; }
     // Mesh outlines follow the built-in "selection" / "hover" overlays: a game that disables one loses its outline too.
     bool outlineSelected() const { return outlineSelected_; }
@@ -159,6 +199,8 @@ private:
     OverlayQuality quality_ = OverlayQuality::High;
     bool qualityForced_ = false;
 
+    bool preparingFrame_ = false, frameReplacedBuffer_ = false;
+
     // frame state (prepare)
     const RtsScene* scene_ = nullptr;
     const MapGrid* grid_ = nullptr;
@@ -188,6 +230,7 @@ private:
     gfx::ShaderHandle shader_;
     gfx::PipelineHandle pipes_[4];             // bit 0: additive, bit 1: always on top
     gfx::BufferHandle vb_;
+    render::NativePresentationRetirement retiredBuffers_;
     size_t vbBytes_ = 0;
     gfx::TextureHandle white_;
 };

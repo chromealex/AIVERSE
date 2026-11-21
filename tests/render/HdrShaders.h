@@ -30,6 +30,45 @@ inline bool checkHdrShaders(gfx::Device& device) {
         std::string vs=std::string(source.defs)+source.vs,fs=std::string(source.defs)+source.fs,msl=std::string(source.defs)+source.msl;
         gfx::ShaderDesc sd;sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();sd.msl=msl.c_str();sd.linearTarget=hdr;sd.uniformSlots=3;sd.textureSlots=20;
         auto shader=device.createShader(sd);
+        if(!shader.valid() && std::string(source.name)=="terrain high" &&
+           device.info().backend==gfx::Backend::GL33) {
+            // Production GL33 packs four layer normals into a padded
+            // texture atlas at tex9, reducing active fragment texture units.
+            const std::string packedDefs=std::string(source.defs)+
+                "#define TERRAIN_GL_NORMAL_ATLAS 1\n";
+            vs=packedDefs+source.vs;
+            fs=packedDefs+source.fs;
+            msl=packedDefs+source.msl;
+            sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();
+            sd.msl=msl.c_str();
+            shader=device.createShader(sd);
+            if(shader.valid())
+                std::fprintf(stderr,
+                    "terrain high (%s): GL33 normal atlas shader PASS, tier=2 detail=1\n",
+                    hdr?"HDR":"LDR");
+        }
+        if(!shader.valid() && std::string(source.name)=="terrain high") {
+            // Match the production terrain quality fallback: prefer full
+            // detail, then try non-detail high / medium / low, since high
+            // without detail can still exceed a GL3.3 16-sampler limit.
+            const std::string firstError=device.lastError();
+            for(int tier=2; tier>=0 && !shader.valid(); --tier) {
+                const std::string defs="#define TERRAIN_TIER "+
+                    std::to_string(tier)+"\n#define TERRAIN_DETAIL 0\n";
+                vs=defs+source.vs;
+                fs=defs+source.fs;
+                msl=defs+source.msl;
+                sd.glslVertex=vs.c_str();
+                sd.glslFragment=fs.c_str();
+                sd.msl=msl.c_str();
+                shader=device.createShader(sd);
+                if(shader.valid())
+                    std::fprintf(stderr,
+                        "terrain high (%s): preferred shader unavailable (%s); "
+                        "fallback tier=%d detail=0 PASS\n",
+                        hdr?"HDR":"LDR",firstError.c_str(),tier);
+            }
+        }
         if(!shader.valid()) {std::fprintf(stderr,"%s (%s): %s\n",source.name,hdr?"HDR":"LDR",device.lastError().c_str());return false;}
         device.destroyShader(shader);
     }

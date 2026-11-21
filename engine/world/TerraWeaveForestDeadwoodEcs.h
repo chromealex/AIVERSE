@@ -17,19 +17,30 @@ namespace aiverse::terraweave {
 
 inline void registerTerraWeaveForestDeadwoodPersistence(Simulation& sim) {
     sim.registerPersistentResource<ForestDeadwoodResource>(
-        "terraweave.forest_deadwood",1);
+        "terraweave.forest_deadwood",3);
+    // Stage70 schema v3 preserves all v1/v2 coarse 32m dissolved water
+    // as UNASSIGNED legacy state; only a game-validated migration command
+    // may transfer it to 4m body-tagged cells. Save writes v3.
+    sim.registerPersistentResourceMigration<ForestDeadwoodResource>(
+        "terraweave.forest_deadwood",1,
+        [](Archive& a,ForestDeadwoodResource& item){io(a,item);});
+    sim.registerPersistentResourceMigration<ForestDeadwoodResource>(
+        "terraweave.forest_deadwood",2,
+        [](Archive& a,ForestDeadwoodResource& item){io(a,item);});
     sim.world().setResource<ForestDeadwoodResource>(
         ForestDeadwoodResource{});
 }
 
 inline ForestDeadwoodDecayOutcome advanceForestDeadwoodEcs(
         World& ecs,uint64_t completedTick,
-        ForestDeadwoodDecaySettings settings={}) {
+        ForestDeadwoodDecaySettings settings={},
+        ForestDeadwoodClimateSampler climate={}) {
     const auto* existing=ecs.resourceConst<ForestDeadwoodResource>();
     if(!existing)
         throw std::logic_error("TerraWeave missing deadwood persistence");
     ForestDeadwoodResource next=*existing;
-    auto result=advanceForestDeadwood(next,completedTick,settings);
+    auto result=advanceForestDeadwood(
+        next,completedTick,settings,std::move(climate));
     // Even a no-loss tick advances the persistent cursor and sample times.
     // Never leave a partly processed soil/wood transaction in World.
     if(next.initialized &&
@@ -47,12 +58,14 @@ inline ForestDeadwoodDecayOutcome advanceForestDeadwoodEcs(
 inline void addTerraWeaveForestDeadwoodSystem(
         Simulation& sim,std::string name,
         ForestDeadwoodDecaySettings settings={},
-        std::function<void(const ForestDeadwoodDecayOutcome&)> onDecay={}) {
+        std::function<void(const ForestDeadwoodDecayOutcome&)> onDecay={},
+        ForestDeadwoodClimateSampler climate={}) {
     validateForestDeadwoodDecaySettings(settings);
     sim.addSystem(std::move(name),
-        [settings,onDecay=std::move(onDecay)](Simulation& current){
+        [settings,onDecay=std::move(onDecay),
+         climate=std::move(climate)](Simulation& current){
             auto result=advanceForestDeadwoodEcs(
-                current.world(),current.tick(),settings);
+                current.world(),current.tick(),settings,climate);
             if(onDecay && result.decayedUnits)
                 onDecay(result);
         });
@@ -152,6 +165,7 @@ inline size_t seedFallenForestDeadwoodEventsEcs(
         log.xCm=plant.anchor.xCm;log.zCm=plant.anchor.zCm;
         log.createdTick=log.lastEvaluatedTick=completedTick;
         log.remainingUnits=units;
+        log.initialUnits=units;
         log.fromFall=true;
         additions.push_back(log);
     }

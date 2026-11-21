@@ -1,0 +1,87 @@
+{
+  "pbr": {
+    "enabled": true,
+    "packedMaps": true,
+    "roughness": 0.68
+  },
+  "layers": [
+    {
+      "id": "checkerboard",
+      "texture": "materials/terrain/textures/checkerboard_terrain_color_repeat.png",
+      "normal": "materials/terrain/textures/checkerboard_terrain_normal_repeat.png",
+      "scale": 4.0,
+      "tint": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "cells": {
+    "grass": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "sand": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "ramp": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "rock": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "blocked": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "lakebed": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "shallows": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "dug": {
+      "layer": "checkerboard",
+      "color": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "splatStrength": 1
+}

@@ -116,9 +116,9 @@ void optionalCodecConfig() {
             "libktx default GPU target and fallback policy");
     using HdrImportFn = aiverse::gfx::TextureHandle (*)(
         aiverse::gfx::Device&,std::string_view,std::string&);
-    const HdrImportFn hdrImport=&uploadKtx2UastcHdrWithLibktx;
-    require(hdrImport!=nullptr,
-            "full-mip RGBA16F UASTC HDR optional loader ABI available");
+    // Typed initialization checks the ABI; a volatile pointer retains a link
+    // reference without comparing a function's necessarily non-null address.
+    [[maybe_unused]] HdrImportFn volatile hdrImport=&uploadKtx2UastcHdrWithLibktx;
 #if defined(AIVERSE_TEXTURE_WITH_LIBKTX)
     // Real BasisLZ/UASTC bytes and device tests require linked libktx
     // and a production asset fixture in a dedicated CI gate.
@@ -126,10 +126,9 @@ void optionalCodecConfig() {
     // Check APIs needed for the real LDR and HDR import paths are exported by
     // the installed development package; actual compressed sample validation
     // belongs to the separate codec and GPU asset CI suites.
-    require(&ktxTexture2_TranscodeBasis!=nullptr &&
-            &ktxTexture2_GetImageOffset!=nullptr &&
-            &ktxTexture2_IsHDR!=nullptr,
-            "installed libktx exports Basis and UASTC HDR entry points");
+    [[maybe_unused]] auto* volatile transcode=&ktxTexture2_TranscodeBasis;
+    [[maybe_unused]] auto* volatile imageOffset=&ktxTexture2_GetImageOffset;
+    [[maybe_unused]] auto* volatile isHdr=&ktxTexture2_IsHDR;
 #endif
 }
 void nativePassthrough(){

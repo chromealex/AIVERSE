@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include "FxInternal.h"
+#include "FxReactiveShaders.h"
 
 namespace aiverse::fx {
 
@@ -26,6 +27,8 @@ struct Frame { float u0, v0, u1, v1; int sprite = -1; };
 
 void ParticleSystem::render(const FxFog& fog) {
     auto& I = *impl_;
+    I.reactiveRuns.clear(); // stale frames must never leak reactive coverage
+    if(I.dev && !deviceLeaseValid(*I.dev))return; // expired GPU epoch, no draw
     stats_.drawn = stats_.batches = stats_.drawCalls = 0;
     stats_.fill = 0;
     stats_.trailQuads = stats_.meshVerts = 0;
@@ -326,7 +329,22 @@ void ParticleSystem::render(const FxFog& fog) {
             vcount[ri] = 4;
             continue;
         }
-        graphData={p.age,1.0f/p.invLife,prand(p.uid,71),0};
+        // The shader graph sees four packed float lanes. For legacy effects
+        // these remain age/lifetime/stable random/zero byte-for-byte.
+        // Opt-in graphInputs can instead forward custom VM attributes and
+        // snapshot instance parameters with no added vertex stride/batches.
+        const auto graphLane=[&](uint8_t code)->float {
+            if(code==0)return p.age;
+            if(code==1)return 1.0f/p.invLife;
+            if(code==2)return prand(p.uid,71);
+            if(code>=4&&code<12)return p.customAttributes[size_t(code-4)];
+            if(code>=12&&code<20)return p.programParams[size_t(code-12)];
+            return 0.f;
+        };
+        graphData={
+            graphLane(er.graphInputSources[0]),graphLane(er.graphInputSources[1]),
+            graphLane(er.graphInputSources[2]),graphLane(er.graphInputSources[3])
+        };
         float4 colf = I.colorNow(p);
         if (!d.colorBySpeed.empty()) colf = mul(colf, speedLut(er.colorSpeed, d.colorSpeed, render::length(p.vtot) / p.scale));
         const Frame fr = frameOf(p, d, er, t);
@@ -451,6 +469,12 @@ void ParticleSystem::render(const FxFog& fog) {
         uint32_t first = vstart[i], count = 0;
         for (size_t k = i; k < j; ++k) count += vcount[k];
         if (count > 0) {
+            if (batch.blend != FxBlend::Opaque) {
+                I.reactiveRuns.push_back({
+                    batch.tex.valid() ? batch.tex : I.atlas,
+                    meshRun ? meshBase + first : first,
+                    count, meshRun});
+            }
             if (meshRun) {
                 I.dev->draw(count, meshBase + first);
                 ++stats_.drawCalls;
@@ -467,6 +491,89 @@ void ParticleSystem::render(const FxFog& fog) {
         i = j;
     }
     stats_.drawn = int(I.recs.size());
+}
+
+bool ParticleSystem::hasReactiveGeometry() const {
+    return impl_ && impl_->dev && quality_ != FxQuality::Off &&
+           !impl_->reactiveRuns.empty();
+}
+
+// Called strictly inside the caller's already-open RGBA8 reactive pass.
+// Replays only the existing current-frame vertex-buffer ranges, not the
+// particle simulation, sorting, quad expansion or vertex uploads.
+uint32_t ParticleSystem::renderReactive(gfx::Device& device,
+                                        gfx::TextureHandle sceneDepth,
+                                        int width, int height) {
+    if (!hasReactiveGeometry() || &device != impl_->dev ||
+        !sceneDepth.valid() || width != impl_->fbW ||
+        height != impl_->fbH || width <= 0 || height <= 0 ||
+        !impl_->vb.valid() || !impl_->ib.valid())
+        return 0;
+    auto& I = *impl_;
+    if (!I.reactiveShader.valid()) {
+        gfx::ShaderDesc shader;
+        shader.glslVertex = reactive_shaders::kVS;
+        shader.glslFragment = reactive_shaders::kFS;
+        shader.msl = reactive_shaders::kMSL;
+        shader.textureSlots = 2;
+        shader.uniformSlots = 1;
+        shader.label = "prisma particle reactive coverage";
+        I.reactiveShader = device.createShader(shader);
+    }
+    if (!I.reactiveShader.valid()) return 0;
+    auto prepare = [&](bool mesh) -> gfx::PipelineHandle {
+        auto& pipeline = mesh ? I.reactiveMeshPipe : I.reactiveQuadPipe;
+        if (pipeline.valid()) return pipeline;
+        gfx::PipelineDesc desc;
+        desc.shader = I.reactiveShader;
+        desc.attrs[0] = {0,gfx::VertexFormat::Float3,0};
+        desc.attrs[1] = {1,gfx::VertexFormat::Float2,12};
+        desc.attrs[2] = {2,gfx::VertexFormat::UByte4N,20};
+        desc.attrCount = 3;
+        desc.stride = sizeof(Vertex);
+        desc.indexType = mesh ? gfx::IndexType::None :
+                                 gfx::IndexType::UInt16;
+        desc.cull = gfx::CullMode::None;
+        desc.depthTest = false;
+        desc.depthWrite = false;
+        desc.blend = gfx::BlendMode::Screen; // union coverage over prior mask
+        desc.colorFormat = gfx::PixelFormat::RGBA8;
+        desc.label = mesh ? "prisma particle reactive mesh" :
+                            "prisma particle reactive quad";
+        pipeline = device.createPipeline(desc);
+        return pipeline;
+    };
+    struct Uniforms { float viewProj[16]; float params[4]; };
+    Uniforms uniforms{};
+    std::memcpy(uniforms.viewProj,I.viewProj.m,sizeof uniforms.viewProj);
+    uniforms.params[0] = float(width);
+    uniforms.params[1] = float(height);
+    device.setViewport({0,0,width,height});
+    device.setUniforms(0,&uniforms,sizeof uniforms);
+    device.setVertexBuffer(I.vb);
+    device.setIndexBuffer(I.ib);
+    uint32_t draws = 0;
+    for (const auto& run : I.reactiveRuns) {
+        if (!run.texture.valid() || !run.count) continue;
+        const auto pipeline = prepare(run.mesh);
+        if (!pipeline.valid()) continue;
+        device.setPipeline(pipeline);
+        device.setUniforms(0,&uniforms,sizeof uniforms);
+        device.setTexture(0,run.texture);
+        device.setTexture(1,sceneDepth);
+        if (run.mesh) {
+            device.draw(run.count,run.first);
+            ++draws;
+        } else {
+            const uint32_t quads = run.count / 4;
+            for (uint32_t q = 0; q < quads; q += kQuadsPerDraw) {
+                const uint32_t n = std::min(kQuadsPerDraw,quads-q);
+                device.drawIndexed(n*6,0,int32_t(run.first+q*4));
+                ++draws;
+            }
+        }
+    }
+    return draws;
 }
 
 void ParticleSystem::collectLights(std::vector<FxPointLight>& out, int maxLights) const {

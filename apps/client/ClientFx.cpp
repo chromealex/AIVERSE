@@ -114,6 +114,8 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::RtsView& 
 }
 
 void ClientFx::stopMatch() {
+    lightBuf_.clear();
+    preparedLightsValid_ = false;
     if (attached_) bridge_.detach();
     attached_ = false;
     if(gpuInbox_) {
@@ -148,6 +150,8 @@ void ClientFx::setPlanetView(const game::RtsView* view) {
 
 void ClientFx::update(Simulation& sim, const game::RtsScene& scene, const render::RTSCamera& cam, const render::mat4& viewProj,
                       int fbW, int fbH, float dt) {
+    preparedLightsValid_ = false;
+    lightBuf_.clear();
     ps_.setView(cam, viewProj, fbW, fbH);
     // GPU feedback arrives asynchronously at a later beginFrame. Keep
     // presentation sub-effects bounded and submit after current camera setup.
@@ -252,12 +256,30 @@ void ClientFx::renderGpu(const render::mat4& viewProj,
 void ClientFx::addLights(render::LightSystem& lights) {
     lightBuf_.clear();
     ps_.collectLights(lightBuf_);
-    for (auto& l : lightBuf_) lights.add(planet_ ? space_.transformPoint(l.pos) : l.pos, l.radius, l.color, l.intensity);
+    preparedLightsValid_ = true;
+    addPreparedLights(lights);
+}
+
+void ClientFx::addPreparedLights(render::LightSystem& lights) const {
+    if (!preparedLightsValid_) return;
+    for (const auto& l : lightBuf_)
+        lights.add(planet_ ? space_.transformPoint(l.pos) : l.pos, l.radius, l.color, l.intensity);
 }
 
 void ClientFx::render(const render::Lighting& lighting) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
     ps_.render({lighting.fogColor, lighting.fogDensity});
+}
+
+void ClientFx::renderPrepared(const render::Camera3D& camera,
+                              const render::mat4& viewProj,
+                              int width,int height,
+                              const render::Lighting& lighting) {
+    // Particles have already advanced exactly once in update(). This path
+    // redoes camera-dependent culling/billboards and GPU draw submission only.
+    ps_.setView(camera,viewProj,width,height);
+    ps_.setLightDir(lighting.sunDir);
+    ps_.render({lighting.fogColor,lighting.fogDensity});
 }
 
 } // namespace aiverse::client

@@ -194,6 +194,22 @@ std::string createProject(const std::string& engineDir, const std::string& templ
             writeFile(dst / "maps" / "start.json", kEmptyMap);
             writeFile(dst / "game.json", "{}");
         }
+        // Every newly created game project has a dedicated content/ asset root.
+        // Templates may already contain content/; preserve their authored files.
+        // Never accept a template-provided symlink that redirects assets outside
+        // the new project directory.
+        const fs::path content = dst / "content";
+        ec.clear();
+        const fs::file_status contentStatus = fs::symlink_status(content, ec);
+        if (ec && ec != std::errc::no_such_file_or_directory)
+            throw std::runtime_error("cannot inspect content/: " + ec.message());
+        if (fs::is_symlink(contentStatus) ||
+            (fs::exists(contentStatus) && !fs::is_directory(contentStatus)))
+            throw std::runtime_error("content/ must be a real project directory");
+        ec.clear();
+        fs::create_directories(content, ec);
+        if (ec) throw std::runtime_error("cannot create content/: " + ec.message());
+
         Json m = Json::parseFile((dst / "game.json").string());
         m.set("name", Json::string(title));
         m.set("id", Json::string("com.aiverse." + slug(name)));
@@ -207,6 +223,23 @@ std::string createProject(const std::string& engineDir, const std::string& templ
             m.set("maps", maps);
         }
         if (templateId != "empty") m.set("template", Json::string(templateId));
+        if (templateId == "empty") {
+            // New blank projects start with a neutral scale reference, never procedural grass.
+            // Copy runtime assets into the project so packaging stays self-contained.
+            const fs::path pack = fs::path(engineDir) / "engine/assets/materials/terrain";
+            if (!fs::exists(pack / "default-terrain.json"))
+                return fail("bundled terrain PBR materials are missing: " + pack.string());
+            for (const auto& entry : fs::recursive_directory_iterator(pack)) {
+                const fs::path target = dst / "materials/terrain" / fs::relative(entry.path(), pack);
+                if (entry.is_directory()) fs::create_directories(target);
+                else aiverse::pack::copyFileReplaceOrThrow(entry.path(), target);
+            }
+            const Json terrain = Json::parseFile((pack / "default-terrain.json").string());
+            const Json library = Json::parseFile((pack / "materials.json").string());
+            m.set("terrain", terrain);
+            if (!writeFile(dst / "materials.json", library.dump(2) + "\n"))
+                return fail("cannot write bundled PBR material library");
+        }
         writeFile(dst / "game.json", m.dump() + "\n");
         ProjectFile pf;
         pf.name = title;

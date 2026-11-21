@@ -8,6 +8,7 @@
 #include <aiverselib/water/NereidSedimentTransport.h>
 #include <aiverselib/water/NereidConfluences.h>
 #include <aiverselib/water/NereidCascades.h>
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -113,6 +114,20 @@ inline EcsSedimentTransportResult transportNereidBankSediment(
                 return;
             links.push_back({link.inlet,link.outlet});
         });
+    // The transport kernel treats links as a set but enforces its 1024
+    // budget on the raw count: the same body pair authored by a confluence
+    // and a cascade (or several cascades) must not trip that limit and
+    // throw inside the system. Canonical (packed id) order, deterministic.
+    std::sort(links.begin(),links.end(),
+        [](const SedimentWaterLink& a,const SedimentWaterLink& b){
+            return a.inlet.packed()==b.inlet.packed() ?
+                a.outlet.packed()<b.outlet.packed() :
+                a.inlet.packed()<b.inlet.packed();
+        });
+    links.erase(std::unique(links.begin(),links.end(),
+        [](const SedimentWaterLink& a,const SedimentWaterLink& b){
+            return a.inlet==b.inlet && a.outlet==b.outlet;
+        }),links.end());
     const auto changed=advectSuspendedSediment(
         std::move(samples),spacingCm,dtMs,settings,links);
     // No callbacks or ECS structural writes during the publication loop.

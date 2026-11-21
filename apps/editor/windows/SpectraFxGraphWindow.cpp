@@ -21,7 +21,10 @@ namespace fs = std::filesystem;
 
 class SpectraFxGraphWindow : public EditorWindow {
 public:
-    const char* id() const override { return "spectrafx_graph"; }
+    // Distinct from SpectraGraphWindow, which keeps the legacy saved id
+    // "spectrafx_graph" (layouts, focusWindow, docs). Duplicate ids made the
+    // registry/layout resolve the wrong window.
+    const char* id() const override { return "spectrafx_vfx_graph"; }
     const char* title() const override { return "SpectraFX Graph"; }
     const char* group() const override { return "look"; }
     const char* dockArea() const override { return "center"; }
@@ -238,7 +241,8 @@ private:
         if(previewId_>=0 && !preview_.playing(previewHandle_))
             previewHandle_=preview_.play(previewId_,{0,0.5f,0});
         const float dpi=ImGui::GetIO().DisplayFramebufferScale.x;
-        previewViewport_.ensure(*device_,int(width*dpi),int(height*dpi));
+        previewViewport_.ensure(*device_,int(width*dpi),int(height*dpi),
+                                ed.viewportRetirement(), "SpectraFX Graph");
         auto& renderer=ed.renderer();
         renderer.beginScene(previewCamera_,previewViewport_.w,previewViewport_.h);
         const uint32_t grid=render::rgba(85,90,100,255);

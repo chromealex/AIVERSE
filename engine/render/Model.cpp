@@ -1,4 +1,6 @@
+#include "engine/render/WindRigModel.h"
 #include "ModelTextureCache.h"
+#include "AlphaCoverageMips.h"
 #include <filesystem>
 #include "Model.h"
 #include "../data/Json.h"
@@ -17,8 +19,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
-#include <stdexcept>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 // stb_image with static linkage: the UI layer has its own copy, both may end up in one binary.
@@ -110,6 +112,63 @@ void Model::finalize() {
                 p.boundsMin = min3(p.boundsMin, v); p.boundsMax = max3(p.boundsMax, v);
             }
             if (p.indexCount == 0) p.boundsMin = p.boundsMax = {0, 0, 0};
+            // AutoLOD's index-only morph alias must retain the source
+            // channel envelope even if this LOD drops extreme triangles.
+            if(p.morphAliasMesh>=0) {
+                if(p.morphAliasPrimitive<0 ||
+                   size_t(p.morphAliasMesh)>=meshes.size() ||
+                   size_t(p.morphAliasPrimitive)>=
+                       meshes[size_t(p.morphAliasMesh)].primitives.size())
+                    throw std::runtime_error("invalid AutoLOD morph source");
+                const Primitive& source=meshes[size_t(p.morphAliasMesh)]
+                    .primitives[size_t(p.morphAliasPrimitive)];
+                if(source.morphAliasMesh>=0 ||
+                   source.morphTargets!=p.morphTargets ||
+                   source.firstVertex!=p.firstVertex ||
+                   source.vertexCount!=p.vertexCount)
+                    throw std::runtime_error("incompatible AutoLOD morph source");
+                p.boundsMin=min3(p.boundsMin,source.boundsMin);
+                p.boundsMax=max3(p.boundsMax,source.boundsMax);
+            }
+            // Conservatively include all morph targets for normalized
+            // weights [0,1]. For any vertex, each target can independently
+            // contribute its negative or positive displacement. The LOD
+            // selector only enables morph LOD when current weights lie in
+            // this bounded interval.
+            if(p.morphTargets>0 && !p.morphDeltas.empty()) {
+                const size_t first=size_t(p.firstVertex);
+                const size_t count=size_t(p.vertexCount);
+                const size_t channels=size_t(p.morphTargets);
+                if(channels>size_t(kMaxMorphTargets) ||
+                   first>vertices.size() ||
+                   count>vertices.size()-first ||
+                   count==0 ||
+                   channels>std::numeric_limits<size_t>::max()/6u/count ||
+                   p.morphDeltas.size()!=channels*count*6u)
+                    throw std::runtime_error("invalid morph bounds source");
+                for(size_t v=0;v<count;++v) {
+                    float3 low=vertices[first+v].pos;
+                    float3 high=low;
+                    for(size_t channel=0;channel<channels;++channel) {
+                        const size_t at=(channel*count+v)*6u;
+                        const float x=p.morphDeltas[at],
+                                    y=p.morphDeltas[at+1],
+                                    z=p.morphDeltas[at+2];
+                        if(!std::isfinite(x) || !std::isfinite(y) ||
+                           !std::isfinite(z))
+                            throw std::runtime_error("nonfinite morph displacement");
+                        low.x+=std::min(0.f,x); high.x+=std::max(0.f,x);
+                        low.y+=std::min(0.f,y); high.y+=std::max(0.f,y);
+                        low.z+=std::min(0.f,z); high.z+=std::max(0.f,z);
+                    }
+                    if(!std::isfinite(low.x) || !std::isfinite(low.y) ||
+                       !std::isfinite(low.z) || !std::isfinite(high.x) ||
+                       !std::isfinite(high.y) || !std::isfinite(high.z))
+                        throw std::runtime_error("morph bounds overflow");
+                    p.boundsMin=min3(p.boundsMin,low);
+                    p.boundsMax=max3(p.boundsMax,high);
+                }
+            }
             mesh.boundsMin = min3(mesh.boundsMin, p.boundsMin); mesh.boundsMax = max3(mesh.boundsMax, p.boundsMax);
             mesh.deformable |= !p.jointPalette.empty() || p.morphTargets > 0;
         }
@@ -154,12 +213,17 @@ namespace {
 using Loader = std::unique_ptr<Model> (*)(const std::string&, const std::string&, const FileReader&, std::vector<std::string>*);
 struct Format { const char* ext; Loader load; };
 const Format kFormats[] = {
-    {".gltf", loadGltf}, {".glb", loadGltf}, {".obj", loadObj},
+    {".gltf", loadGltf}, {".glb", loadGltf},
+#if !defined(AIVERSE_NO_OBJ)
+    {".obj", loadObj},
+#endif
 #if !defined(AIVERSE_NO_FBX)
     {".fbx", loadFbx},
 #endif
+#if !defined(AIVERSE_NO_LEGACY_MODELS)
     {".vox", loadVox}, {".vxl", loadVxl}, {".ply", loadPly}, {".stl", loadStl}, {".3ds", load3ds}, {".dae", loadDae},
     {".mdx", loadMdx}, {".mdl", loadMdl}, {".3do", load3do}, {".w3d", loadW3d},
+#endif
 };
 std::string extOf(const std::string& path) {
     const size_t dot = path.find_last_of('.'), slash = path.find_last_of("/\\");
@@ -189,6 +253,8 @@ void applyModelBatchingSidecar(Model& model, const std::string& path, const File
     if (config.has("autoLod") && config["autoLod"].type() != Json::Type::Bool)
         throw std::runtime_error(path + ".batching.json: autoLod must be boolean");
     model.batching.autoLod = config.getBool("autoLod", true);
+    if(config.has("independentShadowLod")&&config["independentShadowLod"].type()!=Json::Type::Bool)throw std::runtime_error(path+".batching.json: independentShadowLod must be boolean");
+    model.batching.independentShadowLod=config.getBool("independentShadowLod",false);
     // Optional per-asset policy for native importers and project sidecars.
     // It is applied before GPU upload; editing it requires asset reupload.
     if (config.has("geometryPool")) {
@@ -252,10 +318,19 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
             auto m = loadGltf(path + ".glb", bytes, read, warnings);
             m->path = path;
             applyModelBatchingSidecar(*m, path, read);
+            wind::applyWindSidecar(*m, path, read, warnings);   // "<model>.wind.json" (WindRigModel.h)
             return m;
         }
 #if defined(AIVERSE_NO_FBX)
         if (ext == ".fbx") throw std::runtime_error(path + ": FBX import is disabled in this build (AIVERSE_FBX=OFF); convert to .glb");
+#endif
+#if defined(AIVERSE_NO_OBJ)
+        if (ext == ".obj") throw std::runtime_error(path + ": OBJ import is disabled in this build (AIVERSE_OBJ=OFF); convert to .glb");
+#endif
+#if defined(AIVERSE_NO_LEGACY_MODELS)
+        if (ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" || ext == ".3ds" ||
+            ext == ".dae" || ext == ".mdx" || ext == ".mdl" || ext == ".3do" || ext == ".w3d")
+            throw std::runtime_error(path + ": legacy model import is disabled in this build (AIVERSE_LEGACY_MODELS=OFF); convert to .glb");
 #endif
         if (!read(path, bytes)) throw std::runtime_error(path + ": file not found");
         throw std::runtime_error(path + ": unsupported model format '" + ext + "' (convert it with tools/models/modelconv, "
@@ -271,6 +346,7 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
     }
     applyClipSidecar(*m, path, read, warnings);   // "<model>.clips.json": splits, external clips (ModelClips.h)
     applyModelBatchingSidecar(*m, path, read);
+    wind::applyWindSidecar(*m, path, read, warnings);   // "<model>.wind.json": hierarchical wind masks (WindRigModel.h)
     return m;
 }
 
@@ -316,7 +392,13 @@ bool decodeImage(const std::string& bytes, Image& out) {
         out.compressed = std::move(ci);
         return true;
     }
-    if (bytes.size() >= 4 && (bytes.compare(0, 4, "BLP1") == 0 || bytes.compare(0, 4, "BLP2") == 0)) return decodeBlp(bytes, out);
+    if (bytes.size() >= 4 && (bytes.compare(0, 4, "BLP1") == 0 || bytes.compare(0, 4, "BLP2") == 0)) {
+#if defined(AIVERSE_NO_BLP)
+        return false;
+#else
+        return decodeBlp(bytes, out);
+#endif
+    }
     if (bytes.size() >= 4 && bytes.compare(0, 4, "DDS ") == 0) return decodeDds(bytes, out);
     int w = 0, h = 0, n = 0;
     stbi_uc* px = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()), int(bytes.size()), &w, &h, &n, 4);
@@ -343,6 +425,11 @@ std::unique_ptr<Model> modelFromParts(const std::string& name, const std::vector
         if (mat.name.empty()) mat.name = part.name;
         m->materials.push_back(mat);
         const uint32_t base = uint32_t(m->vertices.size());
+        // ModelVertex stream overrides and renderer LOD/geometry policies
+        // require the full model-relative vertex interval for each primitive.
+        // modelFromParts previously left these counts at their zero defaults.
+        p.firstVertex = base;
+        p.vertexCount = static_cast<uint32_t>(sv.size());
         for (const auto& v : sv) {
             ModelVertex mv;
             mv.pos = v.pos; mv.nrm = v.nrm;
@@ -523,6 +610,23 @@ void uploadImage(gfx::Device& dev, Image& img) {
     td.mipmaps = !img.nearest;
     td.data = pixels.data();
     td.label = img.name.c_str();
+    if(img.alphaCoverageThreshold && img.preserveAlphaCoverage && !img.nearest && !img.compressed) {
+        std::vector<AlphaCoverageMip> levels;
+        if(buildAlphaCoverageMips(img.width,img.height,pixels,img.alphaCoverageThreshold,levels)) {
+            td.mipmaps=false;td.mipLevels=int(levels.size()+1);
+            auto texture=dev.createTexture(td);
+            bool complete=texture.valid();
+            for(size_t i=0;complete&&i<levels.size();++i) {
+                const auto& level=levels[i];gfx::TextureUploadDesc upload;
+                upload.mipLevel=int(i+1);upload.width=level.width;upload.height=level.height;
+                upload.rowPitchBytes=level.width*4;upload.data=level.rgba.data();
+                complete=dev.updateTextureRegion(texture,upload);
+            }
+            if(complete){img.tex=texture;img.alphaCoverageMipmaps=true;return;}
+            if(texture.valid())dev.destroyTexture(texture);
+            td.mipmaps=true;td.mipLevels=0;
+        }
+    }
     img.tex = dev.createTexture(td);
 }
 } // namespace
@@ -546,18 +650,168 @@ void ensureTangents(Model& m) {
 }
 } // namespace
 
+void ModelTextureCache::invalidateSource(const std::string& path) {
+    const auto key=std::filesystem::path(path).lexically_normal().generic_string();
+    if(key.empty())return;
+    {
+        // CPU workers may still hold shared pixel leases; removing an LRU
+        // entry does not invalidate those leases.
+        std::lock_guard lock(mutex_);
+        const auto it=decoded_.find(key);
+        if(it!=decoded_.end()) {
+            bytes_-=it->second.bytes;
+            decoded_.erase(it);
+        }
+    }
+    // Called only on render thread, like upload(). Existing GPU leases are
+    // never mutated or destroyed at this point.
+    ++sourceRevisions_[key];
+}
+
+std::string ModelTextureCache::gpuKey(const Image& image) const {
+    const auto revision=sourceRevisions_.find(image.textureKey);
+    const uint64_t epoch=revision==sourceRevisions_.end()?0:revision->second;
+    return image.textureKey+(image.repeat?"#repeat":"#clamp")+
+           (image.nearest?"#nearest":"#linear")+
+           (image.alphaCoverageThreshold?"#alphaCoverage"+std::to_string(image.alphaCoverageThreshold):"")+
+           "#revision"+std::to_string(epoch);
+}
+
+bool ModelTextureCache::borrowResident(Image& image) const {
+    if(image.textureKey.empty())return false;
+    const auto key=gpuKey(image);
+    const auto it=gpu_.find(key);
+    if(it==gpu_.end() || !it->second.tex.valid())return false;
+    image.tex=it->second.tex;
+    image.textureLease=it->second.textureLease;
+    image.borrowedTexture=true;
+    image.gpuCompressed=it->second.gpuCompressed;
+    image.alphaCoverageMipmaps=it->second.alphaCoverageMipmaps;
+    return true;
+}
+
 void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
-    const auto key = image.textureKey + (image.repeat ? "#repeat" : "#clamp") + (image.nearest ? "#nearest" : "#linear");
+    const auto key=gpuKey(image);
     auto it = gpu_.find(key);
     if (it == gpu_.end()) {
-        Image owner = image; owner.textureCache.reset(); owner.borrowedTexture = false;
-        uploadImage(dev, owner);
-        if (!owner.tex.valid()) return;
-        owner.rgba.clear(); owner.sharedRgba.reset(); owner.compressed.reset(); owner.textureLease=std::make_shared<int>(0);
-        it = gpu_.emplace(key, std::move(owner)).first;
+        // Allocate the CPU lease/control block and map node BEFORE creating
+        // a GPU texture. An allocation failure after createTexture would
+        // otherwise destroy a local Image while its GPU handle is live,
+        // bypassing explicit Device retirement and GPU completion fences.
+        Image owner = image;
+        owner.textureCache.reset();
+        owner.borrowedTexture = false;
+        owner.textureLease = std::make_shared<int>(0);
+        auto [inserted, fresh] = gpu_.try_emplace(key, std::move(owner));
+        it = inserted;
+        if (fresh) {
+            try {
+                uploadImage(dev, it->second);
+            } catch (...) {
+                // uploadImage assigns a new handle only after a successful
+                // createTexture; no potentially live handle is destroyed on
+                // a failed Device allocation.
+                if (!it->second.tex.valid()) gpu_.erase(it);
+                throw;
+            }
+            if (!it->second.tex.valid()) {
+                gpu_.erase(it);
+                return;
+            }
+            it->second.rgba.clear();
+            it->second.sharedRgba.reset();
+            it->second.compressed.reset();
+        }
     }
-    image.textureLease = it->second.textureLease; image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true;
+    image.textureLease = it->second.textureLease; image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true; image.alphaCoverageMipmaps=it->second.alphaCoverageMipmaps;
 }
+ModelTextureCache::PreparedGpuPromotion
+ModelTextureCache::prepareGpuPromotion(
+        const std::vector<Model*>& models,
+        const std::vector<PendingImage>& appended) {
+    PreparedGpuPromotion plan(*this);
+    // Both existing scratch Model images and future material-override slots
+    // participate in ONE preallocated set of GPU-cache owner nodes.
+    const auto include=[&](const Image& image,Model* target,size_t index) {
+        if(image.textureCache.get()!=this || image.borrowedTexture ||
+           !image.tex.valid() || image.textureKey.empty())
+            return;
+        const auto key=gpuKey(image);
+        Image* owner=nullptr;
+        if(auto resident=gpu_.find(key);resident!=gpu_.end()) {
+            owner=&resident->second;
+        } else {
+            auto [it,inserted]=plan.pending_.try_emplace(key);
+            if(inserted) {
+                // Copying the descriptor does NOT transfer GPU ownership:
+                // the original Model/staged image retains its handle
+                // until the plan successfully commits.
+                Image prepared=image;
+                prepared.textureCache.reset();
+                prepared.borrowedTexture=false;
+                prepared.textureLease=std::make_shared<int>(0);
+                prepared.rgba.clear();
+                prepared.sharedRgba.reset();
+                prepared.compressed.reset();
+                it->second=std::move(prepared);
+            }
+            owner=&it->second;
+        }
+        plan.bindings_.push_back({target,index,owner});
+    };
+    for(Model* model:models) {
+        if(!model)continue;
+        for(size_t i=0;i<model->images.size();++i)
+            include(model->images[i],model,i);
+    }
+    for(const auto& proposed:appended) {
+        if(!proposed.model || !proposed.staged ||
+           proposed.appendIndex<proposed.model->images.size())
+            throw std::invalid_argument("invalid speculative material image reference");
+        include(*proposed.staged,proposed.model,proposed.appendIndex);
+    }
+    plan.redundant_.reserve(plan.bindings_.size());
+    return plan;
+}
+
+std::vector<Image> ModelTextureCache::PreparedGpuPromotion::commit() {
+    if(committed_ || !cache_)
+        throw std::logic_error("shared GPU texture plan already committed");
+    // All map keys are checked before the first node is transferred.
+    // A host that interleaves another cache publication must retry staging.
+    for(const auto& [key,owner]:pending_) {
+        (void)owner;
+        if(cache_->gpu_.contains(key))
+            throw std::logic_error("shared GPU texture key changed during staging: "+key);
+    }
+    // Material image slots are appended immediately before commit().
+    // Validate all indices BEFORE mutating shared GPU residency.
+    for(const auto& binding:bindings_)
+        if(!binding.model ||
+           binding.index>=binding.model->images.size())
+            throw std::logic_error("speculative material image was not committed");
+    // Merging preallocated std::map nodes does not create a new GPU object.
+    // Image* pointers into moved map nodes remain stable.
+    cache_->gpu_.merge(pending_);
+    for(const auto& binding:bindings_) {
+        Image& image=binding.model->images[binding.index];
+        const Image& owner=*binding.sharedOwner;
+        if(image.tex.valid() && image.tex!=owner.tex) {
+            Image retired;
+            retired.tex=image.tex;
+            retired.borrowedTexture=false;
+            // No allocation: redundant_ capacity was reserved in prepare.
+            redundant_.push_back(std::move(retired));
+        }
+        image.tex=owner.tex;
+        image.textureLease=owner.textureLease;
+        image.borrowedTexture=true;
+        image.gpuCompressed=owner.gpuCompressed;
+    }
+    committed_=true;
+    return std::move(redundant_);
+}
+
 void ModelTextureCache::trim(gfx::Device& dev) {
     for(auto it=gpu_.begin();it!=gpu_.end();) {
         if(it->second.textureLease && it->second.textureLease.use_count()==1) {
@@ -576,6 +830,7 @@ void ModelTextureCache::trim(gfx::Device& dev) {
 void ModelTextureCache::shutdown(gfx::Device& dev) {
     for (auto& [key, image] : gpu_) if (image.tex.valid()) dev.destroyTexture(image.tex);
     gpu_.clear();
+    sourceRevisions_.clear();
     std::lock_guard lock(mutex_); decoded_.clear(); bytes_ = 0;
 }
 
@@ -655,7 +910,8 @@ void prepareModelUpload(Model& m) {
     m.markGeometryChanged(); // runtime LOD / static / shadow / material batches
 }
 
-bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
+bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu,
+                 bool publishSharedTextures, bool keepPickingGeometry) {
     const bool hasCpuVertices = !m.vertices.empty();
     const bool needsGpuBuffers = hasCpuVertices || !m.indices.empty() ||
         m.vb.valid() || m.ib.valid() || bool(m.geometryPoolPage);
@@ -668,8 +924,48 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
         if (m.ib.valid()) dev.destroyBuffer(m.ib);
         m.vb = {}; m.ib = {};
     }
+    // CPU preparation can create morph aliases. Preflight the FINAL model
+    // topology before allocating a single GPU buffer/texture.
+    if(hasCpuVertices && !m.vb.valid())prepareModelUpload(m);
+    for(const auto& mesh:m.meshes)
+        for(const auto& primitive:mesh.primitives) {
+            if(primitive.morphAliasMesh>=0) {
+                const size_t sm=size_t(primitive.morphAliasMesh);
+                if(primitive.morphAliasPrimitive<0 ||
+                   sm>=m.meshes.size() ||
+                   size_t(primitive.morphAliasPrimitive)>=m.meshes[sm].primitives.size() ||
+                   !primitive.morphDeltas.empty() ||
+                   m.meshes[sm].morphTargetNames!=mesh.morphTargetNames)
+                    return false;
+                const auto& source=m.meshes[sm].primitives[
+                    size_t(primitive.morphAliasPrimitive)];
+                if(source.morphAliasMesh>=0 || source.morphTargets<=0 ||
+                   source.morphTargets!=primitive.morphTargets ||
+                   source.firstVertex!=primitive.firstVertex ||
+                   source.vertexCount!=primitive.vertexCount ||
+                   (source.morphDeltas.empty() && !m.morphTex.valid()))
+                    return false;
+                continue;
+            }
+            if(primitive.morphAliasPrimitive>=0)return false;
+            if(primitive.morphTargets<0 ||
+               primitive.morphTargets>kMaxMorphTargets)return false;
+            if(primitive.morphTargets==0) {
+                if(!primitive.morphDeltas.empty())return false;
+                continue;
+            }
+            if(primitive.vertexCount==0)return false;
+            if(primitive.morphDeltas.empty()) {
+                if(!m.morphTex.valid())return false;
+                continue;
+            }
+            const size_t channels=size_t(primitive.morphTargets);
+            const size_t vertices=size_t(primitive.vertexCount);
+            if(vertices>std::numeric_limits<size_t>::max()/6u/channels ||
+               primitive.morphDeltas.size()!=vertices*channels*6u)
+                return false;
+        }
     if (hasCpuVertices && !m.vb.valid()) {
-        prepareModelUpload(m);
         if (!uploadModelToGeometryPool(dev, m)) {
             gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = m.vertices.size() * sizeof(ModelVertex); vb.data = m.vertices.data(); vb.label = m.path.c_str();
             const gfx::BufferHandle newVb = dev.createBuffer(vb);
@@ -684,31 +980,102 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
             m.ib = newIb;
         }
     }
-    if (hasCpuVertices && (!m.vb.valid() || !m.ib.valid())) return false;
+    if(hasCpuVertices && !m.geometryPoolPage &&
+       (!m.vb.valid() || !m.ib.valid()))
+        return false;
+    // A single Image cannot have conflicting alpha-test policies or also be
+    // linear data/blended alpha. Keep those cases and authored compressed/VT
+    // mips unchanged instead of silently changing another material's content.
+    std::vector<int> cutoutThreshold(m.images.size(),0);
+    const auto disable=[&](int image){if(image>=0&&size_t(image)<cutoutThreshold.size())cutoutThreshold[size_t(image)]=-1;};
+    for(const auto& material:m.materials) {
+        for(int image:{material.mrTex,material.normalTex,material.occlusionTex,material.emissiveTex,material.teamTex})disable(image);
+        if(material.alpha!=AlphaMode::Mask)disable(material.baseTex);
+        for(int image:material.graphTextures)disable(image);
+        if(material.alpha==AlphaMode::Mask&&material.baseTex>=0&&size_t(material.baseTex)<cutoutThreshold.size()&&
+           std::isfinite(material.alphaCutoff)&&material.alphaCutoff>0&&
+           std::isfinite(material.baseColor.w)&&material.baseColor.w>0&&material.alphaCutoff<=material.baseColor.w) {
+            auto& threshold=cutoutThreshold[size_t(material.baseTex)];
+            const int value=std::clamp(int(std::ceil(material.alphaCutoff/material.baseColor.w*255.f)),1,255);
+            if(threshold==0)threshold=value;else if(threshold!=value)threshold=-1;
+        }
+    }
+    const char* coverageOption=std::getenv("AIVERSE_ALPHA_COVERAGE_MIPS");
+    const bool coverageEnabled=!(coverageOption&&std::strcmp(coverageOption,"0")==0);
+    for(size_t i=0;i<m.images.size();++i) {
+        auto& image=m.images[i];
+        if(!image.tex.valid()) {
+            const bool eligible=coverageEnabled&&image.preserveAlphaCoverage&&!image.nearest&&!image.compressed&&image.virtualFallbackMaxDimension==0;
+            image.alphaCoverageThreshold=eligible&&cutoutThreshold[i]>0?uint8_t(cutoutThreshold[i]):0;
+            image.alphaCoverageMipmaps=false;
+        }
+    }
+    std::vector<bool> pickAlpha(m.images.size(),false);
+    if(keepPickingGeometry)for(const auto& material:m.materials)
+        if(material.alpha!=AlphaMode::Opaque&&material.baseTex>=0&&size_t(material.baseTex)<pickAlpha.size())pickAlpha[size_t(material.baseTex)]=true;
+    size_t imageIndex=0;
     for (auto& img : m.images) {
         const auto previousTexture = img.tex;
-        // Virtual-image fallback sizing is per Model::Image. Never reuse
-        // a full-resolution ModelTextureCache entry for a reduced VT fallback.
-        bool fallbackOk = true;
+        // Reduced VT fallbacks are per-Image resources and must not borrow
+        // the full-resolution shared texture cache entry. Speculative model
+        // publication still keeps transactional GPU ownership and retirement.
         if (img.virtualFallbackMaxDimension > 0) {
             uploadImage(dev, img);
-            // The virtual source is archived: preserve CPU fallback bytes
-            // for retry if backend creation rejected the reduced resource.
-            fallbackOk = img.tex.valid();
-        } else if (img.textureCache) img.textureCache->upload(dev, img);
-        else uploadImage(dev, img);
+        } else if (img.textureCache && publishSharedTextures) {
+            img.textureCache->upload(dev, img);
+        } else if (img.textureCache && img.textureCache->borrowResident(img)) {
+            // Existing shared lease: a speculative Model does not own it.
+        } else {
+            // Speculative cache miss: use a dedicated transaction-owned image.
+            // Do not publish this resource into shared cache before commit.
+            uploadImage(dev, img);
+        }
         if (!(previousTexture == img.tex))
             m.markMaterialChanged(); // texture binding changed during upload
-        if (!fallbackOk) return false;
-        if (!keepCpu) { img.rgba.clear(); img.rgba.shrink_to_fit(); img.compressed.reset(); img.sharedRgba.reset(); }
+        // A reduced VT fallback must materialize even when it has no resident
+        // shared source. Other known-size images must also have GPU storage.
+        if ((img.virtualFallbackMaxDimension > 0 ||
+             (img.width > 0 && img.height > 0)) && !img.tex.valid())
+            return false;
+        if (!keepCpu && !pickAlpha[imageIndex]) {
+            // Release CPU pixels only after successful upload. swap cannot
+            // throw like shrink_to_fit, keeping rollback deterministic.
+            std::vector<uint8_t>{}.swap(img.rgba);
+            img.compressed.reset();
+            img.sharedRgba.reset();
+        }
+        ++imageIndex;
     }
-    // morph deltas of every primitive in one float texture: 2 texels (position, normal) per vertex and target
-    size_t texels = 0;
-    for (auto& mesh : m.meshes)
-        for (auto& p : mesh.primitives) if (p.morphTargets > 0 && !p.morphDeltas.empty()) texels += p.morphDeltas.size() / 3;
+    // Two RGBA32F texels per (morph channel, mesh vertex). The texture
+    // base offset is supplied to GLSL/MSL as a FLOAT uniform, which has
+    // exact integer precision only up to 2^24. Cap this texture accordingly
+    // rather than silently sampling the wrong channel on large facial rigs.
+    constexpr size_t kMorphWidth=2048u;
+    constexpr size_t kMaxMorphTexels=1u<<24; // 256 MiB RGBA32F, float-exact offsets
+    size_t morphBudgetTexels=kMaxMorphTexels;
+    // Optional project/device GPU morph budget in MiB. Smaller budgets
+    // reject an oversized asset BEFORE allocation; no silent morph
+    // channel truncation or LOD-pose corruption. RHI may impose even lower
+    // maximum texture dimensions and can still reject createTexture().
+    if(const char* budget=std::getenv("AIVERSE_MORPH_TEXTURE_MIB")) {
+        char* end=nullptr;
+        const unsigned long mib=std::strtoul(budget,&end,10);
+        if(end==budget || *end!='\0' || mib<1 || mib>256)return false;
+        morphBudgetTexels=std::min(
+            morphBudgetTexels,size_t(mib)*(1u<<20)/16u);
+    }
+    size_t texels=0;
+    for(const auto& mesh:m.meshes)
+        for(const auto& primitive:mesh.primitives)
+            if(primitive.morphTargets>0 && !primitive.morphDeltas.empty()) {
+                const size_t added=primitive.morphDeltas.size()/3u;
+                if(added>morphBudgetTexels-texels)return false;
+                texels+=added;
+            }
     if (texels > 0 && !m.morphTex.valid()) {
-        const int width = 2048, height = int((texels + width - 1) / width);
-        std::vector<float> data(size_t(width) * size_t(height) * 4, 0.0f);
+        const size_t rows=(texels+kMorphWidth-1u)/kMorphWidth;
+        const int width=int(kMorphWidth),height=int(rows);
+        std::vector<float> data(kMorphWidth*rows*4u, 0.0f);
         size_t at = 0;
         for (auto& mesh : m.meshes)
             for (auto& p : mesh.primitives) {
@@ -716,7 +1083,6 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
                 p.morphTexel = uint32_t(at);
                 for (size_t i = 0; i + 2 < p.morphDeltas.size(); i += 3, ++at)
                     for (int k = 0; k < 3; ++k) data[at * 4 + size_t(k)] = p.morphDeltas[i + size_t(k)];
-                if (!keepCpu) { p.morphDeltas.clear(); p.morphDeltas.shrink_to_fit(); }
             }
         gfx::TextureDesc td;
         td.width = width; td.height = height;
@@ -725,25 +1091,71 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
         td.data = data.data();
         td.label = "morph targets";
         m.morphTex = dev.createTexture(td);
+        if (!m.morphTex.valid()) return false;
         m.morphTexWidth = width;
     }
-    if (!keepCpu) {
-        m.vertices.clear(); m.vertices.shrink_to_fit();
-        m.indices.clear(); m.indices.shrink_to_fit();
+    // Resolve generated coarse primitives AFTER source offsets were assigned
+    // by the only RGBA32F allocation; aliases never consume extra texels.
+    for(auto& mesh:m.meshes)
+        for(auto& p:mesh.primitives)
+            if(p.morphAliasMesh>=0)
+                p.morphTexel=m.meshes[size_t(p.morphAliasMesh)]
+                    .primitives[size_t(p.morphAliasPrimitive)].morphTexel;
+    if (!keepCpu && !keepPickingGeometry) {
+        // Never discard morph deltas before a successful GPU morph texture
+        // allocation. Failed uploads retain their CPU source for diagnostics
+        // and safe retry/rollback by the host.
+        if (m.morphTex.valid()) {
+            for (auto& mesh : m.meshes)
+                for (auto& p : mesh.primitives)
+                    if (p.morphTargets > 0 && !p.morphDeltas.empty()) {
+                        std::vector<float>{}.swap(p.morphDeltas);
+                    }
+        }
+        std::vector<ModelVertex>{}.swap(m.vertices);
+        std::vector<uint32_t>{}.swap(m.indices);
     }
-    // Evaluate against the original CPU upload request: keepCpu=false
-    // clears source vectors, which must never turn a GPU allocation failure
-    // into a spurious success.
-    return !needsGpuBuffers || (m.vb.valid() && m.ib.valid());
+    // Validate original upload request after possible CPU pixel cleanup.
+    return !needsGpuBuffers || bool(m.geometryPoolPage) ||
+           (m.vb.valid() && m.ib.valid());
+}
+
+bool uploadStandaloneImage(gfx::Device& dev, Image& image) {
+    uploadImage(dev,image);
+    return image.tex.valid();
 }
 
 int addImage(gfx::Device& dev, Model& m, Image img) {
-    for (size_t i = 0; i < m.images.size(); ++i) if (!img.name.empty() && m.images[i].name == img.name) return int(i);
+    for (size_t i = 0; i < m.images.size(); ++i)
+        if (!img.name.empty() && m.images[i].name == img.name)
+            return int(i);
+    // Preallocate Model storage before allocating a GPU texture; a vector
+    // growth failure after createTexture could otherwise drop a live handle.
+    m.images.reserve(m.images.size()+1);
     uploadImage(dev, img);
-    img.rgba.clear(); img.rgba.shrink_to_fit();
+    if (!img.tex.valid()) return -1; // never publish an invalid material index
+    // Empty-vector swap frees CPU pixels without a potentially throwing
+    // shrink_to_fit after the new GPU resource has been allocated.
+    std::vector<uint8_t>{}.swap(img.rgba);
     m.images.push_back(std::move(img));
     m.markMaterialChanged(); // new texture may be selected by model materials
     return int(m.images.size() - 1);
+}
+
+void appendModelOwnedGpuMemory(const Model& m,
+                               GpuOwnedMemoryCounter& counter) {
+    // Shared pooled geometry is owned and counted by GlobalGeometryPool.
+    if (!m.geometryPoolPage) {
+        counter.buffer(m.vb);
+        counter.buffer(m.ib);
+    }
+    for (const auto& image : m.images)
+        // releaseModel frees precisely those images whose GPU handle is
+        // not leased from another owner; mirror its actual ownership flag.
+        if (!image.borrowedTexture)
+            counter.texture(image.tex);
+    counter.texture(m.morphTex);
+    counter.texture(m.baked.tex);
 }
 
 void releaseModel(gfx::Device& dev, Model& m) {

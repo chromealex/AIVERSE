@@ -1,0 +1,69 @@
+name: Prisma MotionWeave integration validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/prisma-motionweave-view
+    paths:
+      - '.github/workflows/prisma-motionweave-integration-validation.yml'
+      - 'CMakeLists.txt'
+      - 'apps/**'
+      - 'engine/**'
+      - 'libraries/**'
+      - 'modules/**'
+      - 'tests/**'
+      - 'tools/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prisma-motionweave-integrated-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-native:
+    name: Full native build and CTest (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Linux rendering headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri xvfb
+      - name: Configure full project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/integration-full -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_HDR_TESTS=ON 2>&1 | tee configure.log
+      - name: Build every target
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/integration-full --parallel 4 2>&1 | tee build.log
+      - name: Consolidated CTest
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/integration-full --output-on-failure --parallel 4 2>&1 | tee ctest.log
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-${{ matrix.os }}-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            configure.log
+            build.log
+            ctest.log
+            build/integration-full/Testing/Temporary/LastTest.log

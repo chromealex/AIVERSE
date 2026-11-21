@@ -8,14 +8,21 @@
 #include "Geometry.h"
 #include <algorithm>
 #include <array>
+#include <array>
+#include <span>
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <string>
 #include <vector>
+#include <deque>
 #include "../gfx/Gfx.h"
 #include "../gfx/VirtualTextureFeedbackPass.h"
 #include "Lights.h"
 #include "Math3D.h"
+#include "NereidFlowBinding.h"
+#include "PrismaMotionTextureInput.h"
+#include "PrismaGpuRetirement.h"
 #include "Model.h"
 #include "ModelVirtualTextureSampling.h"
 #include "GpuMaterialResourceTable.h"
@@ -26,10 +33,25 @@
 #include "PersistentGpuSceneUpload.h"
 #include "GpuSceneCulling.h"
 #include "GpuSceneDrawCommands.h"
+#include "RenderDeviceLifetime.h"
+#include "GpuProgramRetirement.h"
+#include "WindRigShader.h"
 #include <memory>
+#include <utility>
+#include <map>
+#include <tuple>
+#include <array>
 #include <unordered_map>
 
 namespace aiverse::render {
+namespace strata {
+    struct ModelAsset;
+    class GpuMetadataScene;
+    class GpuClusterCulling;
+}
+
+class GiMainGpuBridge;
+class GiMainCpuBridge; // optional per-scene CPU-bounced-light producer
 
 struct Mesh {
     gfx::BufferHandle vb, ib;
@@ -115,12 +137,17 @@ struct NodePose;
 class BakedLighting;   // baked lightmaps + light probes of a map (BakedLighting.h, agent-lightbake)
 enum class BakedQuality { Off, Low, High };
 
-// Post-processing hook (engine/render/PostFx.h implements it). With an active hook, render() draws
-// the scene into the hook's offscreen target instead of `screenPass`; resolvePostFx() then runs the
+// Post-processing hook (engine/render/Prisma.h; PostFx.h is legacy-compatible). With an active hook, render() draws
+// the scene into the hook's offscreen target instead of `screenPass`; resolvePrisma() then runs the
 // effect chain into `screenPass` and leaves that pass open (UI and overlays drawn after it are not
 // post-processed). Without a hook, or with no active effect, nothing changes and it costs nothing.
 struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0;
-                   gfx::TextureHandle sunShadow; mat4 lightViewProj; }; // sunShadow: empty when shadows are off
+                   gfx::TextureHandle sunShadow; mat4 lightViewProj;
+                   // Projection metadata for optional linear view-depth post FX.
+                   // Ortho projection uses explicit -200..1000 clip bounds.
+                   float depthNear = 0.5f, depthFar = 1000.0f;
+                   bool orthographic = false;
+                 }; // sunShadow: empty when shadows are off
 class PostProcess {
 public:
     virtual ~PostProcess() = default;
@@ -129,8 +156,35 @@ public:
     // True only while the post chain is accumulating a reprojection-validated HDR history.
     // Shadow sample scrambling must never be enabled without a temporal resolve pass.
     virtual bool temporalShadowResolve() const { return false; }
+    virtual bool wantsMaterialReceiverPass() const { return false; }
+    virtual gfx::PassDesc materialReceiverPass(int,int) { return {}; }
+    virtual void materialReceiverPublished(gfx::TextureHandle,int,int) {}
+    // Optional HIGH-quality PBR normal+roughness receiver. Independent depth
+    // attachment; producer must ensure it belongs to this same frame/view.
+    virtual bool wantsSurfaceReceiverPass() const { return false; }
+    virtual gfx::PassDesc surfaceReceiverPass(int,int) { return {}; }
+    virtual void surfaceReceiverPublished(gfx::TextureHandle,int,int) {}
     virtual gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) = 0;
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
+    // Optional read-only presentation bridge for object motion vectors.
+    virtual bool wantsObjectMotionVectors() const { return false; }
+    virtual gfx::TextureHandle objectMotionSceneDepth() const { return {}; }
+    // Monotonic per-view camera-cut epoch. Default hook remains inert.
+    virtual uint64_t objectMotionEpoch(uint64_t viewId) const { (void)viewId; return 0; }
+    virtual bool objectMotionContext(uint64_t& viewId, mat4& previousViewProj) const {
+        (void)viewId; (void)previousViewProj; return false;
+    }
+    virtual void acceptObjectMotionVectors(gfx::TextureHandle) {}
+    // Typed bridge: newer producers declare full-size signed RGBA16F.
+    // By default, forward to old implementations for compatibility.
+    virtual void acceptObjectMotionVectors(MotionTextureInput input) {
+        acceptObjectMotionVectors(input.texture);
+    }
+    // Optional borrowed current-frame reactive coverage (R=0..1).
+    virtual void acceptMotionReactiveMask(gfx::TextureHandle) {}
+    virtual void acceptMotionReactiveMask(MotionTextureInput input) {
+        acceptMotionReactiveMask(input.texture);
+    }
 };
 
 // Baked skinning sample (Animator::baseSample()): clip A blends to clip B by `mix`; clip -1 = bind pose.
@@ -147,6 +201,60 @@ struct StaticModelCache {
     std::vector<size_t> primitiveOffsets;
     bool displaced=false;
     void prepare(const Model& source,const mat4& transform);
+};
+// Optional Stage 16.3 GPU-authored indexed selection packet. All shading,
+// transforms, visibility and final draw ownership remain Renderer3D's.
+// GeometryScene supplies this ONLY for validated one-primitive Vulkan
+// sources, and keeps the buffer/metadata alive through the render epoch.
+// Failure to consume this packet falls back to the same Legacy ModelDraw.
+enum class GpuIndexedPass : uint8_t {
+    MainOpaque=0, SunShadow=1, PlanarReflection=2, SpotShadow=3
+};
+struct GpuIndexedSelectionPacket {
+    gfx::BufferHandle commands{};
+    gfx::BufferHandle vertex{}, index{};
+    mat4 selectedWorld{};
+    // Each GPU selection has its own camera. Shadow or reflection passes
+    // must NEVER consume another camera's main-view cluster list.
+    mat4 viewProjection{};
+    GpuIndexedPass pass=GpuIndexedPass::MainOpaque;
+    int viewWidth=0, viewHeight=0;
+    uint64_t frameSerial=0, geometryRevision=0, materialRevision=0;
+    uint32_t commandCapacity=0, sourceFirstIndex=0, sourceIndexCount=0;
+    // Source-local primitive identity, NOT GPU atomic output order.
+    uint32_t sourceMesh=0, sourcePrimitive=0, expectedMaterial=0;
+    int32_t sourceBaseVertex=0;
+    // Borrowed index metadata/selector for JUST-IN-TIME spot/reflection
+    // dispatch before those camera-specific graphics encoders begin.
+    // GeometryScene must outlive Renderer3D::render() as for source Model.
+    gfx::BufferHandle metadata{};
+    strata::GpuClusterCulling* selector=nullptr;
+    uint32_t instanceToken=0;
+    float errorThresholdPixels=2.f;
+    // Scene-staged GPU temporal history identity; the source Culling owner
+    // holds per-instance/pass triple-buffer masks. Auxiliary cameras use
+    // the same source revision but DIFFERENT pass IDs (3/4).
+    float lodHysteresisFraction=0.f;
+    uint32_t temporalNodeCount=0;
+    uint64_t temporalRevision=0;
+    bool allowSpotShadow=false, allowReflection=false;
+    bool exclusive=false;
+    bool valid() const {
+        return exclusive && commands.valid() && vertex.valid() &&
+               index.valid() && frameSerial && commandCapacity &&
+               commandCapacity<=2048 && sourceIndexCount &&
+               viewWidth>0 && viewHeight>0;
+    }
+    // Exact camera identity guard; sun / spot / reflection matrices must
+    // NEVER share a cluster selection simply because they share geometry.
+    bool matchesView(GpuIndexedPass expected,const mat4& projection,
+                     int width,int height) const {
+        if(!valid() || pass!=expected ||
+           viewWidth!=width || viewHeight!=height)return false;
+        for(unsigned i=0;i<16;++i)
+            if(viewProjection.m[i]!=projection.m[i])return false;
+        return true;
+    }
 };
 struct ModelDraw {
     const StaticModelCache* staticCache=nullptr;
@@ -184,18 +292,35 @@ struct ModelDraw {
     const BakedSample* baked = nullptr;            // skin from Model::baked instead of nodeWorld
     float dissolve = 0;                            // 0..1: burn away (spawn, death, construction)
     float4 outline{0, 0, 0, 0};                    // rgb (linear) + width in world units; a = 0: none
-    // Source Primitive::material slot selector for one drawModel call;
-    // -1 submits the complete model. Trailing field preserves existing
-    // positional ModelDraw aggregate initializers in native projects.
+    // Appended to preserve existing positional aggregate ModelDraw callers.
+    GpuIndexedSelectionPacket gpuIndexed{};
+    // Stage16.4a: one independent packet per original material/primitive.
+    // Appended to keep every preexisting ModelDraw aggregate initializer
+    // backwards compatible. Copies into renderer-owned ModelItems by value.
+    std::vector<GpuIndexedSelectionPacket> gpuIndexedPrimitives;
+    // Stage16.4b: distinct sun-shadow camera selections. Spot shadows and
+    // water reflections retain CPU/Legacy until their own view epochs
+    // can be selected before render passes.
+    std::vector<GpuIndexedSelectionPacket> gpuShadowPrimitives;
+    // Main branch ShaderGraph/source material selector; append to keep
+    // all prior positional ModelDraw initializers backward-compatible.
     int primitiveMaterialFilter = -1;
-    // Optional four per-instance vertex graph parameters for rigid models.
-    // Reuses the unused U0 Inst.anim slot (baked clip/lightmap take priority);
-    // no uniform-buffer layout change. Other users may reuse this contract.
     bool useVertexParameters = false;
     float4 vertexParameters{0, 0, 0, 0};
-    // Conservative local-metre vertexOffset envelope for safe frustum/LOD.
-    // 0 means unknown deformation; retain conservative uncullable behavior.
+    // Bounded vertexOffset (metres), zero means unknown displacement.
     float maxVertexOffsetMetres = 0;
+    // Host-chosen level of every node's MeshDef::lods chain (0 = base mesh,
+    // n = lods[n-1], clamped). Skips projected-size selection and crossfade;
+    // used by hosts with their own distance tiers (TerraWeave FloraView).
+    // -1 = renderer picks by projected size.
+    int lodLevel = -1;
+    // Opt-in full ModelVertex (60 bytes) dynamic GPU stream for THIS instance.
+    // Bind only on the same gfx::Device, after compute submission and before
+    // render passes. Owner keeps resource alive through all colour/shadow draws.
+    // Experimental path: Metal dedicated per-model buffers only; no pooled
+    // geometry, GPU ICB/MDI, instancing, LOD or legacy shader morph blending.
+    gfx::BufferHandle vertexOverride{};
+    uint32_t vertexOverrideCount = 0;
 };
 
 enum DrawFlags : uint32_t {
@@ -227,6 +352,14 @@ struct ModelRenderStats {
     uint64_t cameraLodBlocked = 0, cameraShadowLimitedLod = 0;
     uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
     uint64_t multiDrawSubmissions = 0, indirectCommands = 0;
+    // Stage 16.3: main opaque, one-primitive Vulkan STRATA route only.
+    uint64_t strataGpuCandidates=0, strataGpuSubmitted=0;
+    uint64_t strataGpuRejected=0, strataGpuFallbackDraws=0;
+    uint64_t strataGpuSunShadowSubmitted=0;
+    uint64_t strataGpuSpotShadowSubmitted=0;
+    uint64_t strataGpuReflectionSubmitted=0;
+    uint64_t strataGpuSpotShadowPrepared=0;
+    uint64_t strataGpuReflectionPrepared=0;
     // Submitted indexed MDI batches using an exact validated persistent
     // layout, without copying cached CPU commands into transient scratch.
     uint64_t mdiLayoutZeroCopySubmissions = 0;
@@ -311,21 +444,130 @@ struct ModelRenderStats {
     uint64_t mdiStateBreaks = 0;
 };
 
+// Immutable draw parameters for simple geometry emitted by any scene host.
+// Mesh GPU handles remain borrowed; the host owns their GPU retirement.
+struct CameraGeometryCommand {
+    enum class Kind : uint8_t { Mesh, Line, Triangle, Water, Selection };
+    Kind kind=Kind::Mesh;
+    const Mesh* mesh=nullptr;
+    mat4 world{};
+    float4 tint{1,1,1,1};
+    uint32_t flags=0;
+    float specular=.25f,emissive=0.f;
+    float3 a{},b{},c{};
+    uint32_t rgba=0xffffffffu;
+    // The water and selection variants must preserve their additional
+    // shader/outline parameters instead of being flattened to DrawMesh.
+    std::array<float4,16> ripples{},wakes{};
+    float4 wind{},hydraulics{},rapidColor{};
+    uint32_t firstIndex=0,indexCount=0;
+    float4 selection{};
+    NereidFlowBinding waterFlow{};
+};
+
 class Renderer3D {
 public:
+    void setGpuDeviceLease(RenderDeviceLifetime::Lease lease) {
+        gpuDeviceLease_=std::move(lease);
+    }
     bool init(gfx::Device& dev);
     void shutdown();
+    // Call only at a host frame boundary, outside any active graphics pass.
+    // A Pending or Failed token never authorizes GPU program destruction.
+    size_t pendingProgramRetirements() const noexcept {
+        return programRetirement_?programRetirement_->pendingBatches():0;
+    }
+    bool collectRetiredPrograms() {
+        if(!programRetirement_ || !dev_)return true;
+        checkGpuDevice(*dev_);
+        return programRetirement_->collect();
+    }
+    size_t pendingTargetRetirements() const noexcept {
+        return targetRetirement_?targetRetirement_->pendingPairs():0;
+    }
+    uint64_t targetRetirementOrphanPairs() const noexcept {
+        return (targetRetirement_?targetRetirement_->orphanedPairs():0) +
+            unleasedTargetOrphans_;
+    }
+    // Exceptional use before shared target owner initialization: a failed
+    // true-idle barrier never authorizes deleting still-in-flight textures.
+    uint64_t unleasedTargetIdleFailures() const noexcept {
+        return unleasedTargetIdleFailures_;
+    }
+    uint64_t targetRetirementEnqueueFailures() const noexcept {
+        return targetRetirement_?targetRetirement_->enqueueFailures():0;
+    }
+    bool collectRetiredTargets() {
+        if(!targetRetirement_ || !dev_)return true;
+        checkGpuDevice(*dev_);
+        return targetRetirement_->collect();
+    }
+    uint64_t programRetirementOrphanBatches() const noexcept {
+        return programRetirement_?programRetirement_->orphanBatches():0;
+    }
     // Optional fixed scene bounds for interior/model viewers; clear to use RTS ground fitting.
     void setShadowBounds(float3 lo, float3 hi) { shadowBoundsMin_=lo; shadowBoundsMax_=hi; hasShadowBounds_=true; }
     void clearShadowBounds() { hasShadowBounds_=false; }
     void setShadowQuality(ShadowQuality q);
     // Desktop/benchmark override of the High-tier map size (2048 default). Low/Medium keep their sizes.
     int shadowMapSize() const { return shadowSize_; }
-    bool setShadowMapSize(int size) { highShadowSize_=size; setShadowQuality(quality_); return quality_!=ShadowQuality::High||shadowMap_.valid(); }
+    // Diagnostic-only asynchronous sun shadow DEPTH readback on backends
+    // supporting gfx::Device::readDepthTextureAsync. Call after render()
+    // and after the main colour pass is ended; never waits on the GPU.
+    // A completed GPU failure arrives as an empty byte vector.
+    // Does not expose or change shadow texture ownership.
+    bool requestSunShadowDepthReadback(gfx::Device::DepthReadFn callback) const;
+    // Diagnostic-only readback of the actual LDR planar water reflection
+    // RTT (half-resolution). Not a main-screen screenshot or surrogate.
+    // Call after render() and closing its main pass; the callback is async.
+    bool requestPlanarReflectionColorReadback(gfx::Device::ColorReadFn callback) const;
+    bool setShadowMapSize(int size) {
+        highShadowSize_=size;
+        setShadowQuality(quality_);
+        // A failed allocation keeps the previous shadow texture alive;
+        // report that the requested High resolution was not published.
+        return quality_!=ShadowQuality::High ||
+               (shadowMap_.valid() && shadowSize_==size);
+    }
     ShadowQuality shadowQuality() const { return quality_; }
     static ShadowQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
 
-    void beginScene(const RTSCamera& cam, int fbW, int fbH);
+    // Shader presentation clock only; never changes simulation/current velocity.
+    // Negative resumes the steady clock. Set before beginScene on the render thread.
+    void setPresentationTime(float seconds);
+    void beginScene(const Camera3D& cam, int fbW, int fbH);
+    // Before render only: drop borrowed packets/callbacks of a failed host
+    // preparation before destroying its private CPU owners. No RHI work.
+    void discardSceneSubmission() noexcept;
+    void drawMeshSnapshot(const Mesh& m, const mat4& model, float4 color, uint32_t flags = 0, float specular = 0.25f, float emissive = 0.0f);
+
+    // Explicit per-view opt-in for CPU dynamic GI on ordinary PBR ModelDraws.
+    // Call AFTER beginScene and BEFORE render. Shader Graph and GPU ICB paths
+    // remain excluded; runtime never enables this for a view automatically.
+    // The host retains the GI owner and its atlas until GPU completion.
+    bool setDynamicGiOverlay(const GiMainCpuBridge& bridge);
+    bool setDynamicGiOverlay(const GiMainGpuBridge& bridge);
+    void clearDynamicGiOverlay() noexcept { dynamicGiAtlas_={}; }
+    bool dynamicGiOverlayEnabled() const noexcept { return dynamicGiAtlas_.valid(); }
+    // Generic custom terrain/foliage/mesh hook: call ONLY inside a valid
+    // custom graphics draw, after its shader pipeline has been bound.
+    // That shader must explicitly include GiDynamicShaders.h and declare
+    // U6 + tex13 (GLSL) / buffer(7) + texture(13) (Metal). No implicit
+    // material inference, no sampling during a shadow/depth-only pass.
+    // The producer must stay alive through the GPU completion fence.
+    bool bindDynamicGiForCustom() { return bindDynamicGiForCustomAt(13); }
+    // Reserve the sampled atlas texture slot explicitly. Models use 13;
+    // the stock high-terrain shaders already own 13 for cliff albedo,
+    // so their Metal/Vulkan GI variant must use 21 instead.
+    // Compact GLES3 terrain uses tex8 only when splat/baked/trace are off.
+    bool bindDynamicGiForCustomAt(int textureSlot) {
+        if(!dev_ || !dynamicGiAtlas_.valid() ||
+           (textureSlot!=8 && textureSlot!=13 && textureSlot!=21))return false;
+        dev_->setUniforms(6,dynamicGiUniforms_.data(),
+                          dynamicGiUniforms_.size()*sizeof(float));
+        dev_->setTexture(textureSlot,dynamicGiAtlas_);
+        return true;
+    }
     void drawMesh(const Mesh& m, const mat4& model, float4 color, uint32_t flags = 0, float specular = 0.25f, float emissive = 0.0f);
     // Bridge the current opaque immediate-mesh scene queue into VT feedback.
     // The caller supplies a compatible feedback pipeline and per-mesh
@@ -367,7 +609,8 @@ public:
                               uint32_t firstIndex=0,uint32_t indexCount=0,
                               const std::array<float4,16>& wakeShapes={},
                               float4 wind={},float4 hydraulics={},
-                               float4 rapidColor={0.84f,0.93f,0.94f,1.f});
+                               float4 rapidColor={0.84f,0.93f,0.94f,1.f},
+                               NereidFlowBinding flow={});
     // Editor Scene only: render selected geometry into a depth-tested mask
     // and composite its exterior silhouette in screen pixels.
     void setSceneSelectionOutline(bool enabled) { sceneSelectionOutline_ = enabled; }
@@ -378,8 +621,35 @@ public:
     void triangle(float3 a, float3 b, float3 c, uint32_t color);    // flat, alpha-blended
     void quadXZ(float3 a, float3 b, float width, uint32_t color, float y = 0.02f);
     void circleXZ(float3 c, float radius, uint32_t color, int segments = 40, float y = 0.03f);
+    enum class PipelineWarmStatus : uint8_t { Ready, Pending, Failed };
+    // Strict authoring preflight distinguishes an asynchronous GPU compiler
+    // still working from a rejected shader/pipeline. A rejected appearance
+    // must retain its last-good Model/Material/AnimationGraph publication.
+    PipelineWarmStatus warmModelPipelinesChecked(
+        const Model& model,const std::vector<Material>* materials=nullptr);
+    // Poll only jobs already staged by a previous candidate. This lets
+    // editor hot-reload hold the last-good appearance without reimporting
+    // scratch Models/textures every time a GPU compiler is still Pending.
+    bool hasPendingModelPipelineJobs() const noexcept;
+    bool pollPendingModelPipelineJobs();
+    struct GpuWarmStats {
+        size_t shaderJobs=0,pipelineJobs=0,colorVariants=0;
+        uint64_t colorPollAttempts=0,colorVariantsReady=0,colorVariantsFailed=0;
+    };
+    GpuWarmStats gpuWarmStats() const noexcept;
     bool warmModelPipelines(const Model& model, const std::vector<Material>* materials = nullptr);
     void drawModel(const ModelDraw& d);
+    // Diagnostic-only per-ModelDraw Strata preflight (legacy draws untouched).
+    // Only GeometryScene's opt-in native static scene calls this in Stage 10.
+    // No render pass, GPU commands, source cache or ECS state is mutated.
+    struct StrataPreviewStats {
+        uint64_t modelDraws=0, attempted=0, ready=0, rejected=0;
+        uint64_t selectedClusters=0, fullyCulled=0, skippedUnsafeDraws=0;
+    };
+    void previewStrataModel(const ModelDraw& d, const strata::ModelAsset& staged,
+                           const strata::GpuMetadataScene& pooled,
+                           const std::string& sourceKey);
+    StrataPreviewStats strataPreviewStats() const { return strataPreviewStats_; }
     // Optional VT sampling for built-in model material shaders. Resolver
     // returns the physical atlas/page-table domain for a given model and
     // material; it must only query existing GPU allocations (render thread).
@@ -448,6 +718,16 @@ public:
     // before starting another draw submission; no GPU resources are owned here.
     void invalidateStaticModelCache(uint64_t persistentId);
     void invalidateModelCachesFor(const Model* model);
+    // Hierarchical wind masks (WindRigShader.h). Scene wind drives every
+    // rigged draw that does not supply its own vertexParameters; the debug
+    // view (editors only) recolours rigged materials by part/depth/weight.
+    void setSceneWind(const wind::SceneWind& value) { sceneWind_ = value; }
+    const wind::SceneWind& sceneWind() const { return sceneWind_; }
+    void setWindRigDebugView(wind::WindDebugView view) {
+        if (view != windDebugView_) windDebugMaterials_.clear();
+        windDebugView_ = view;
+    }
+    wind::WindDebugView windRigDebugView() const { return windDebugView_; }
     // Drop one shared material-owner signature before its native source is
     // replaced or destroyed. Existing packets automatically rebuild when the
     // owner returns with a new signature serial; other owners are unaffected.
@@ -472,6 +752,97 @@ public:
         s.retainedBytes = staticRenderPacketBytes_;
         return s;
     }
+    // Frame-local provenance of Renderer3D's ACTUAL drawModel geometry/LOD
+    // decisions, taken after a source model was submitted to this scene.
+    // It is pre-render submission data, NOT proof an eventual draw passed
+    // GPU occlusion or pipeline compilation. Never cache pointers across
+    // beginScene, asset republish or Device resource retirement.
+    struct ModelViewPrimitive {
+        const Model* model=nullptr;
+        uint32_t nodeIndex=0,meshIndex=0,primitiveIndex=0;
+        uint64_t drawInvocation=0; // one renderer drawModel() instance
+        uint32_t firstIndex=0,indexCount=0;
+        gfx::BufferHandle vertexOverride{};
+        uint32_t vertexOverrideCount=0;
+        bool visible=false,colourCandidate=false;
+        bool gpuLodConditional=false,lodFade=false,batched=false;
+        bool alternativeMeshLod=false;
+        bool skinning=false,baked=false,shaderVertexOffset=false;
+        bool translucent=false; // real colour-pass tint/material/flag classification
+        bool customGpuStream=false;
+        // Stage 7BA: exact sampled Mask state used by the normal colour
+        // draw. No raw Material* escapes the frame. A later model/material
+        // hot-reload must NOT silently alter VIVID's alpha/depth source.
+        bool maskedMaterial=false,maskVertexColors=true;
+        gfx::TextureHandle maskBaseTexture{};
+        float maskAlpha=1.f,maskCutoff=.5f,maskUvRotation=0.f;
+        float2 maskUvOffset{0,0},maskUvScale{1,1};
+        mat4 world{};
+    };
+    struct ModelViewProvenance {
+        uint64_t frameSerial=0;
+        bool hasModel=false;
+        bool complete=false; // false if renderer source view is unsuitable
+        std::vector<ModelViewPrimitive> primitives;
+    };
+    // Source-owned introspection; no cached parallel picking scene database.
+    // Does not dereference async data or issue RHI operations.
+    ModelViewProvenance modelViewProvenance(const Model& model) const;
+    // Stage 7AW: opt-in, frame-local record of *encoded main-colour*
+    // indexed commands, not an extrapolation from staged ModelItems.
+    // Only one queried model is tracked, avoiding a per-world audit cost.
+    enum class ModelSubmissionKind : uint8_t {
+        Direct, DirectInstanced, IndexedIndirect, GpuIndirect, GpuIcb
+    };
+    struct ModelSubmittedPrimitive {
+        ModelViewPrimitive source{};
+        ModelSubmissionKind kind=ModelSubmissionKind::Direct;
+        uint8_t phase=0; // 1 opaque main, 2 blended, 4 transparent depth
+        gfx::PipelineHandle pipeline{};
+    };
+    struct ModelSubmissionProvenance {
+        uint64_t frameSerial=0;
+        bool mainPassEncoded=false;
+        bool truncated=false;
+        std::vector<ModelSubmittedPrimitive> commands;
+    };
+    // Stage 7BA: at most 1 selected model + 4 candidate blockers.
+    // Opt-in bounded, frame-local diagnostics; no global scene registry.
+    // The producer supplies candidate model identities before staging
+    // draws. Every unique pointer is borrowed only through this frame.
+    static constexpr std::size_t kMaxTrackedSubmissionModels=5u;
+    void trackModelSubmissionsMany(
+        std::span<const Model* const> models) noexcept {
+        trackedModelCount_=0;
+        for(auto& model:trackedModels_)model=nullptr;
+        modelSubmitted_.clear();
+        modelSubmissionTruncated_=
+            modelDrawInvocation_!=0 || modelSubmissionMainEncoded_ ||
+            models.empty() || models.size()>trackedModels_.size();
+        if(modelSubmissionTruncated_)return;
+        for(const auto* model:models) {
+            if(!model) {
+                modelSubmissionTruncated_=true;
+                return;
+            }
+            for(std::size_t i=0;i<trackedModelCount_;++i)
+                if(trackedModels_[i]==model) {
+                    modelSubmissionTruncated_=true;
+                    return;
+                }
+            trackedModels_[trackedModelCount_++]=model;
+        }
+    }
+    // Compatible with existing 7AW single and 7AZ paired callers.
+    void trackModelSubmissions(const Model* model,
+                               const Model* occluder=nullptr) noexcept {
+        const std::array<const Model*,2> models{{model,occluder}};
+        trackModelSubmissionsMany(
+            std::span<const Model* const>(models.data(),
+                                        occluder?2u:1u));
+    }
+    ModelSubmissionProvenance modelSubmissionProvenance(
+        const Model& model) const;
     // Diagnostic, opt-in persistent scene upload stats. This staging path is
     // not yet bound to model shaders or used for GPU culling.
     struct PersistentSceneStats {
@@ -518,7 +889,98 @@ public:
     void render(const gfx::PassDesc& screenPass, PostProcess* post = nullptr); // shadow pass + opens the main pass and draws everything
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
-    void resolvePostFx();
+    void resolvePrisma(); // canonical image processing resolve; leaves UI pass open
+    // Presentation-only camera cut / teleport / view replacement hooks.
+    // Invalidating a view keeps GPU target allocations but discards all
+    // previous transform and deformation history. No ECS mutation.
+    void resetObjectMotionHistory(uint64_t viewId);
+    void resetAllObjectMotionHistory();
+    // Explicit view closure after GPU-idle synchronization. NEVER call while
+    // submissions referencing the view textures can still be in flight.
+    void releaseObjectMotionViewAfterGpuIdle(uint64_t viewId);
+    // Optional non-blocking GPU-lifetime path. Fence tokens MUST be issued
+    // by the backend for the last GPU submission that may use a texture.
+    // Never use CPU frameSerial() or a guessed frame delay as completion.
+    void setObjectMotionSubmittedFence(uint64_t lastSubmittedFence) {
+        motionLastSubmittedFence_ = lastSubmittedFence;
+    }
+    void retireObjectMotionView(uint64_t viewId, uint64_t lastSubmittedFence = 0);
+    // Call at the end of a host frame with ALL live presentation camera IDs.
+    // Retire orphaned per-view motion targets behind backend submission fence
+    // (or quarantine until confirmed idle if the backend supplies no token).
+    // Cameras sharing pixel dimensions remain independent by ID.
+    size_t retireUnregisteredObjectMotionViews(
+        const std::vector<uint64_t>& liveViewIds);
+    size_t collectCompletedObjectMotion(uint64_t completedGpuFence);
+    // Valid only after the host has explicitly confirmed GPU idle.
+    size_t drainObjectMotionAfterGpuIdle();
+    struct ObjectMotionStats {
+        uint64_t viewId = 0;
+        uint32_t rigidInstances = 0;
+        uint32_t rigidDraws = 0;
+        uint32_t cutoutDraws = 0;
+        uint32_t skinnedDraws = 0;
+        uint32_t bakedDraws = 0;
+        uint32_t reactiveDraws = 0;
+        uint32_t reactiveAnimatedDraws = 0;
+        uint32_t reactiveCallbacks = 0; // invoked by the current-frame mask pass
+        uint32_t reactiveCallbacksDropped = 0; // scene/post/depth or pipeline unavailable
+        uint32_t reactiveMeshDraws = 0; // includes RTS water sheets
+        uint32_t cutoutReactiveDraws = 0; // per-pixel alpha cutout on rigid/animated
+        uint32_t dissolveReactiveDraws = 0; // current-deformed object-space discard
+        uint32_t actorRevealReactiveDraws = 0; // camera-local aperture mask
+        uint32_t lodReactiveDraws = 0;
+        uint32_t rejected = 0;
+        bool submitted = false; // actual object velocity draw, NEVER reactive-only
+        bool velocitySeedOnly = false; // cut/first/resize, do not fabricate prior pose
+        bool reactiveSubmitted = false; // independent current-frame mask encoded
+    };
+    const ObjectMotionStats& objectMotionStats() const { return objectMotionStats_; }
+    struct MotionRetirementStats {
+        size_t liveViews = 0;
+        size_t fencedTextures = 0;
+        size_t unfencedTextures = 0;
+        uint64_t knownPendingBytes = 0;
+        uint64_t lastGpuCompletedFence = 0;
+    };
+    MotionRetirementStats motionRetirementStats() const;
+    // Read-only lower-bound of GPU resources owned DIRECTLY by Renderer3D.
+    // Unique texture/buffer handles are counted once, including scene
+    // capture aliases and per-view motion buffers; deferred motion is
+    // reported separately. Excludes externally owned Model/Material assets,
+    // External Model/Material assets and PRISMA are always excluded;
+    // LightSystem, scene upload, culling and GPU-authored pools are included
+    // via their exclusive owner telemetry, never through borrowed aliases.
+    struct ResidentMemoryStats {
+        uint64_t liveTextureKnownBytes = 0;
+        uint64_t liveBufferKnownBytes = 0;
+        uint64_t sceneCaptureKnownBytes = 0;
+        uint64_t objectMotionKnownBytes = 0;
+        uint64_t pendingMotionKnownBytes = 0;
+        // Subowners not part of the direct Renderer3D handle list; each
+        // owns disjoint allocations and must not include borrowed assets.
+        uint64_t lightSystemKnownBytes = 0;
+        uint64_t persistentUploadKnownBytes = 0;
+        uint64_t persistentCullKnownBytes = 0;
+        uint64_t gpuAuthoredKnownBytes = 0;
+        size_t liveTextures = 0, liveBuffers = 0;
+        size_t unknownTextures = 0, unknownBuffers = 0;
+        size_t multiVersionBuffers = 0;
+    };
+    ResidentMemoryStats residentMemoryStats() const;
+    // Generic presentation-only reactive-mask hook for water, particles and
+    // user render modules. Register AFTER beginScene() and BEFORE resolvePrisma().
+    // Called once with the reactive RGBA8 render pass already open. The callback
+    // only submits draws (do not beginPass/endPass), writes R=coverage [0..1],
+    // binds its own pipeline/buffers and may sample the READ-ONLY scene depth.
+    // Prefer blending which preserves earlier coverage; keep all owned GPU
+    // resources alive through resolvePrisma. Zero callbacks => no extra pass.
+    using MotionReactiveDraw = std::function<void(gfx::Device&, gfx::TextureHandle sceneDepth,
+                                                   int width, int height)>;
+    void addMotionReactiveDraw(MotionReactiveDraw fn) {
+        if (fn) motionReactiveDraws_.push_back(std::move(fn));
+    }
+    void resolvePostFx() { resolvePrisma(); } // legacy API
     // Extra renderers (sprites, tiles) that draw with their own pipelines inside the main pass: run
     // after opaque and translucent meshes, before overlays (fog of war stays on top).
     // Cleared by beginScene.
@@ -529,6 +991,19 @@ public:
     void bindLitFrame();
     // Opaque custom renderers (terrain): run first in the main pass, before meshes and models, so
     // translucent meshes (water) blend over them. Same lifetime rules as drawCustom.
+    // Optional per-view native surface callbacks for LumaWeave:
+    // - Material: RGBA16F (linear diffuse base RGB, metallic A)
+    // - Surface:  RGBA16F (signed world normal XYZ, roughness A)
+    // Both callbacks must draw the EXACT same frontmost opaque geometry and
+    // depth as their main scene submission; they never execute on default
+    // PostProcess paths that did not request the corresponding receiver pass.
+    // Call after beginScene; callbacks are cleared automatically next beginScene.
+    void drawCustomMaterialReceiver(CustomDraw fn) {
+        customMaterialReceiver_.push_back(std::move(fn));
+    }
+    void drawCustomSurfaceReceiver(CustomDraw fn) {
+        customSurfaceReceiver_.push_back(std::move(fn));
+    }
     void drawCustomOpaque(CustomDraw fn) { customOpaque_.push_back(std::move(fn)); }
     // Optional rigid-model feedback. Animated/skinned/morphed model
     // primitives require a matching deformation pipeline and are excluded
@@ -771,7 +1246,7 @@ public:
     // the target bound; draw depth with lightViewProj(). Same lifetime rules as drawCustom.
     void drawCustomShadow(CustomDraw fn) { customShadow_.push_back(std::move(fn)); }
     const mat4& lightViewProj() const { return lightViewProj_; }
-    const RTSCamera& camera() const { return cam_; }
+    const Camera3D& camera() const { return cam_; }
     float4 actorReveal{}; // world-space actor centre + aperture radius, zero disables
 
     // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
@@ -813,6 +1288,17 @@ public:
     void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
     void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
     void setModelMultiDrawEnabled(bool on) { modelMultiDrawEnabled_ = on; }
+    // Diagnostic-only CPU MDI compatible-run cap; 0 means current renderer
+    // instance limit. Does not resize shader uniform arrays or change pipes.
+    // Never exposed as a production batching quality setting.
+    void setDiagnosticCpuMdiGroupCap(uint32_t cap) {
+        diagnosticCpuMdiGroupCap_ = cap == 0 ? 0 : std::clamp(cap, 16u, 256u);
+    }
+    // Diagnostic only: control which *model* phases emit GPU draws while
+    // retaining both render encoders, other scene draws and pass clears.
+    // Bit 0 = shadow models, bit 1 = main opaque models. Defaults to both.
+    // Do not expose this as a quality setting or use it for production frames.
+    void setDiagnosticModelPassMask(uint8_t mask) { diagnosticModelPassMask_ = mask & 3u; }
     // Explicit editor-view override for the opt-in pooled static CPU MDI
     // feature. Environment preserves the process-level opt-in (OFF by
     // default), and Forbid/Enable are scoped by the caller to one view.
@@ -1093,11 +1579,27 @@ public:
     // Light baker capture: every drawModel with kDrawStatic is reported (world matrix per node) until reset.
     using ModelCapture = std::function<void(const ModelDraw& d, const std::vector<mat4>& nodeWorld)>;
     void setModelCapture(ModelCapture fn) { capture_ = std::move(fn); }
+    // Synchronous tap for finalized models, animations and attachments.
+    // Copy borrowed pointers before drawModel returns; not light-baker capture.
+    using ModelPacketTap = std::function<void(const ModelDraw&)>;
+    void setModelPacketTap(ModelPacketTap tap) { modelPacketTap_=std::move(tap); }
+    ModelPacketTap exchangeModelPacketTap(ModelPacketTap tap){return std::exchange(modelPacketTap_,std::move(tap));}
+    // Optional synchronous capture of mesh/line/triangle commands.
+    // No callbacks retained by the renderer across frames; client removes it.
+    using GeometryPacketTap=std::function<void(const CameraGeometryCommand&)>;
+    void setGeometryPacketTap(GeometryPacketTap tap) {
+        geometryPacketTap_=std::move(tap);
+    }
     // Inside a custom lit draw (terrain): bind the terrain lightmap for AIVERSE_*_BAKED_TERRAIN (BakedShaders.h):
     // uniform block `uniformSlot`, RGBM page at `lightmapSlot`, shadow mask at `maskSlot` (placeholders when none).
     void bindBakedTerrain(int uniformSlot, int lightmapSlot, int maskSlot);
 
 private:
+    wind::SceneWind sceneWind_{};
+    wind::WindDebugView windDebugView_ = wind::WindDebugView::Off;
+    struct WindDebugMaterials { uint64_t revision = 0; size_t count = 0; std::vector<Material> materials; };
+    std::unordered_map<const void*, WindDebugMaterials> windDebugMaterials_;
+    bool applyWindRig(const ModelDraw& d);
     struct DrawItem {
         const Mesh* mesh; mat4 model; float4 color;
         uint32_t flags; float specular, emissive;
@@ -1108,12 +1610,27 @@ private:
         float4 waterHydraulics{};
         float4 waterRapidColor{};
         uint32_t waterFirstIndex=0,waterIndexCount=0;
+        NereidFlowBinding waterFlow{};
     };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
         int32_t materialIndex = -1; // remap material pointers on packet replay
+        // Captured at selection time, before colour/LOD batching. Stores
+        // real renderer-selected mesh and source primitive ordinals.
+        uint32_t nodeIndex=0,meshIndex=0,primitiveIndex=0;
+        uint64_t drawInvocation=0;
+        uint32_t vertexOverrideCount=0;
+        bool displacedVertexSource=false;
+        // Full per-instance ModelVertex buffer; empty for the legacy path.
+        gfx::BufferHandle vertexOverride{};
         bool rigid = false, castShadow = false;
         GeometryPolicy geometry;
+        // Copied by value from a transient ModelDraw into this frame's
+        // renderer-owned item. Never stores a pointer to GeometryScene.
+        GpuIndexedSelectionPacket gpuIndexed{};
+        GpuIndexedSelectionPacket gpuShadowIndexed{};
+        GpuIndexedSelectionPacket gpuSpotShadowIndexed{};
+        GpuIndexedSelectionPacket gpuReflectionIndexed{};
         size_t geometryPrimitive = 0;
         uint32_t firstIndex = 0, indexCount = 0;
         // Optional two-level, single-primitive GPU LOD choice. Always preserve
@@ -1123,13 +1640,15 @@ private:
         float gpuLodMaxPixels = 0, gpuLodError = 0;
         float3 gpuLodBoundsMin{}, gpuLodBoundsMax{};
         mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
+        uint64_t motionPersistentId = 0; // 0: transient, never tracked
+        int motionNodeIndex = -1;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
         float4 anim;        // baked row A, row B, mix
         float dissolve, teamGlow;
         float lodThreshold=1; bool lodInvert=false;
         float4 outline;
-        int32_t morph;      // offset into morphData_ (8 weights), -1 = none
+        int32_t morph;      // offset into morphData_ (sparse weights + channels + count), -1 = none
         int16_t lmPage = -1;  // baked lightmap page (anim = uv2 scale / offset), -1 = none
         uint8_t gi = 0;       // 0 realtime ambient, 1 lightmap, 2 light probes
         const std::vector<Material>* paletteMaterials = nullptr;
@@ -1140,8 +1659,16 @@ private:
     };
     void initModels();
     void shutdownModels();
+    void retireRenderTargets(gfx::TextureHandle color,
+                             gfx::TextureHandle depth={});
+    // Quality/instance-limit changes retire old shaders and pipelines
+    // without freeing GPU-visible handles until their own completion token.
+    void retireModelPrograms();
     gfx::PipelineHandle modelPipeline(const ModelItem& it, int phase, bool instanced,
                                       bool gpuInstances = false, bool instancePalette = false);
+    void recordModelSubmission(const ModelItem& item,int phase,
+                               ModelSubmissionKind kind,
+                               gfx::PipelineHandle pipeline);
     bool drawModelBatch(const uint32_t* items, uint32_t count, int phase,
                         bool submit = true, bool gpuInstances = false,
                         bool instancePalette = false);
@@ -1152,12 +1679,25 @@ private:
                                 bool instancePalette = false);
     void prepareGpuModelDraws();
     void renderModels(int phase);   // 0 shadow, 1 opaque, 2 blended, 3 outlines, 4 depth of transparent objects
+    // Stage16.4c: compute for auxiliary cameras ONLY outside the active
+    // render pass; no duplicate graphics submission or CPU GPU wait.
+    void prepareStrataAuxiliaryGpuPackets(GpuIndexedPass pass,
+                                          const mat4& projection,
+                                          int width,int height);
+    struct ObjectMotionHistory; // defined with per-view GPU owners below
+    void renderObjectMotionVectors(PostProcess& post); // RHI pass, rigid + deformed models
+    // Camera-current reactive coverage is NOT motion history: still encode
+    // it on first frame, camera cut, resize or unavailable RGBA16F velocity.
+    // Borrowed scene depth is only sampled; never owned by this renderer.
+    void renderCurrentFrameReactiveMask(PostProcess& post,
+        ObjectMotionHistory& history, gfx::TextureHandle sceneDepth,
+        int width, int height);
     bool initSelectionOutline();
     void renderSelectionOutline(const gfx::PassDesc& scenePass, int width, int height);
 
     void renderReflection();        // water planar reflection (Renderer3DReflect.cpp, lighting agent)
     void renderSpotShadow();        // depth of the casters seen from the main spot light (same file)
-    void computeShadowMatrix(const RTSCamera& cam, float aspect);
+    void computeShadowMatrix(const Camera3D& cam, float aspect);
     void uploadFrameUniforms(bool forShadow);
     // trace tier (Renderer3DTrace.cpp)
     bool initTrace();
@@ -1167,6 +1707,16 @@ private:
     void bindSceneTextures(int colorSlot, int depthSlot);   // after the capture: the scene targets, else placeholders
     void bindTraceTextures();                                // lit pipeline: tex3 height, tex4/tex5 scene
 
+    void checkGpuDevice(const gfx::Device& dev) const {
+        if(gpuDeviceLease_.device() && !gpuDeviceLease_.validFor(dev))
+            throw std::logic_error("Renderer3D GPU device generation expired");
+    }
+    RenderDeviceLifetime::Lease gpuDeviceLease_;
+    std::unique_ptr<GpuProgramRetirement> programRetirement_;
+    // One render-target owner is shared with LightSystem. It must outlive
+    // the light, trace and selection GPU resource owners.
+    std::unique_ptr<OffscreenTargetRetirement> targetRetirement_;
+    uint64_t unleasedTargetOrphans_=0,unleasedTargetIdleFailures_=0;
     gfx::Device* dev_ = nullptr;
     gfx::ShaderHandle litShader_, shadowShader_, colorShader_;
     gfx::PipelineHandle litPipe_, litBlendPipe_, shadowPipe_, linePipe_, triPipe_;
@@ -1188,7 +1738,10 @@ private:
     float3 shadowBoundsMin_{}, shadowBoundsMax_{};
     ShadowQuality quality_ = ShadowQuality::Medium;
     std::vector<DrawItem> items_;
+    std::deque<Mesh> meshSnapshots_;
     std::vector<ColorVertex> lines_, tris_;
+    bool lumaMaterialCapture_=false,lumaSurfaceCapture_=false;
+    std::vector<CustomDraw> customMaterialReceiver_,customSurfaceReceiver_;
     std::vector<CustomDraw> custom_, customOpaque_, customShadow_;
     std::vector<FeedbackCustomDraw> customFeedback_;
     VirtualTextureFeedbackScheduler feedbackScheduler_;
@@ -1205,7 +1758,7 @@ private:
     FeedbackLodBinder feedbackMaskedLodModelBinder_;
     FeedbackDeformedModelDraw feedbackDeformedModelDraw_;
     ModelVirtualTextureResolver modelVirtualTextureResolver_;
-    RTSCamera cam_;
+    Camera3D cam_;
     mat4 viewProj_, lightViewProj_;
     float3 camPos_;
     uint32_t drawCalls_ = 0;
@@ -1214,7 +1767,7 @@ private:
     uint32_t debugMainDrawId_ = 0;
     static float4 drawCallDebugColor(uint32_t drawId);
     int sceneW_ = 0, sceneH_ = 0;
-    PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePostFx()
+    PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePrisma()
     gfx::PassDesc postOut_;
 
     // trace tier
@@ -1233,6 +1786,7 @@ private:
     gfx::TextureHandle dummyDepth_, dummyHeight_;
     double graphEpoch_ = -1;
     float graphTime_ = 0;
+    float presentationTime_ = -1;
     uint64_t traceFrame_ = 0;
     gfx::ShaderHandle blitShader_;
     gfx::PipelineHandle blitPipe_;
@@ -1288,6 +1842,8 @@ private:
     void retireIndirectLayoutsFor(const Model* model);
     void maintainIndirectLayoutCaches();
     bool modelMultiDrawEnabled_ = true;
+    uint32_t diagnosticCpuMdiGroupCap_ = 0; // 0: unchanged default grouping
+    uint8_t diagnosticModelPassMask_ = 3u; // full output by default
     // Optional CPU MDI sorter for static rigid meshes sharing one GPU arena.
     // Never bypass per-object culling, LOD, material or shader compatibility.
     bool staticCrossModelBatchesEnabled_ = false;
@@ -1340,6 +1896,7 @@ private:
     int geometryShadowSize_=0;
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
+    StrataPreviewStats strataPreviewStats_{};
     // Immutable rigid packet templates; views / shadows / depth are replayed
     // for the current camera. Stored items own no GPU or Model resources.
     struct StaticPacketEntry {
@@ -1435,6 +1992,64 @@ private:
     uint64_t staticEligibilityEpoch_ = 0;
     StaticEligibilityStats staticEligibilityStats_{};
     ModelStaticEligibility cachedStaticModelEligibility(const Model& source);
+    struct MotionDeformPose {
+        const Model* sourceModel = nullptr; // identity only, never dereference after frame
+        mat4 world;
+        std::array<float, size_t(kMaxPaletteJoints) * 12> joints{};
+        std::array<float, kMaxMorphTargets> weights{};
+        bool hasSkin = false;
+        bool baked = false;
+        float4 animation{}; // baked clip A/B rows and interpolation for this view
+    };
+    struct MotionRigidPose {
+        const Model* sourceModel = nullptr;
+        mat4 world;
+    };
+    struct ObjectMotionHistory {
+        gfx::TextureHandle target;
+        gfx::TextureHandle depth;
+        gfx::TextureHandle reactive; // current-frame translucent coverage; no temporal content
+        int width = 0, height = 0;
+        uint64_t epoch = 0; // last observed PostProcess camera-cut generation
+        bool valid = false;
+        std::map<std::pair<uint64_t, int>, MotionRigidPose> previous;
+        // Same node can draw different primitives with distinct skin palettes.
+        std::map<std::tuple<uint64_t, int, size_t>, MotionDeformPose> previousDeformed;
+    };
+    void queueObjectMotionTexture(gfx::TextureHandle& texture,
+                                  uint64_t lastSubmittedFence);
+    std::map<uint64_t, ObjectMotionHistory> objectMotionViews_;
+    PrismaGpuRetirementQueue<gfx::TextureHandle> motionRetired_;
+    std::vector<gfx::TextureHandle> motionUnfenced_; // quarantined until GPU idle
+    uint64_t motionLastSubmittedFence_ = 0; // 0: unknown, never guess
+    ObjectMotionStats objectMotionStats_{};
+    std::vector<MotionReactiveDraw> motionReactiveDraws_;
+    gfx::ShaderHandle objectMotionShader_;
+    gfx::PipelineHandle objectMotionPipeline_;
+    gfx::ShaderHandle objectMotionInstancedShader_;
+    gfx::PipelineHandle objectMotionInstancedPipeline_;
+    gfx::ShaderHandle objectMotionDeformedShader_;
+    gfx::PipelineHandle objectMotionDeformedPipeline_;
+    gfx::ShaderHandle objectMotionBakedShader_;
+    gfx::PipelineHandle objectMotionBakedPipeline_;
+    gfx::ShaderHandle objectMotionMaskedShader_;
+    gfx::PipelineHandle objectMotionMaskedPipeline_;
+    gfx::ShaderHandle objectMotionReactiveShader_;
+    gfx::PipelineHandle objectMotionReactivePipeline_;
+    gfx::ShaderHandle objectMotionReactiveCutoutShader_;
+    gfx::PipelineHandle objectMotionReactiveCutoutPipeline_;
+    gfx::PipelineHandle objectMotionReactiveMeshPipeline_; // MeshVertex water/translucency
+    gfx::ShaderHandle objectMotionReactiveSkinShader_;
+    gfx::PipelineHandle objectMotionReactiveSkinPipeline_;
+    gfx::ShaderHandle objectMotionReactiveBakedShader_;
+    gfx::PipelineHandle objectMotionReactiveBakedPipeline_;
+
+    uint64_t modelDrawInvocation_=0; // reset per scene, no persistent identity
+    std::array<const Model*,kMaxTrackedSubmissionModels> trackedModels_{};
+    std::size_t trackedModelCount_=0;
+    std::vector<ModelSubmittedPrimitive> modelSubmitted_;
+    bool modelSubmissionTruncated_=false;
+    bool modelSubmissionMainEncoded_=false;
     // Material GPU-state equivalence is pass-independent within one scene.
     // Resolve each distinct (model, material) once for shadows, colour,
     // reflection and outline. All containers are cleared at beginScene(),
@@ -1563,10 +2178,23 @@ private:
     };
     struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; gfx::Device::ShaderJob job; };
     bool warmingPipelines_ = false, warmingPending_ = false;
+    bool warmingFailed_ = false;
     std::vector<std::pair<ModelShaderKey, gfx::Device::PipelineJob>> pendingModelPipes_;
+    // Backend colour-target warmup may be asynchronous even when it returns
+    // no ShaderJob/PipelineJob. Poll these handles without reloading Models.
+    std::vector<gfx::PipelineHandle> pendingColorWarms_;
+    // Do not re-poll or repeatedly count an HDR variant rejected by its backend.
+    // Invalidated alongside its original model pipeline generation.
+    std::vector<gfx::PipelineHandle> failedColorWarms_;
+    uint64_t colorWarmPollAttempts_=0,colorWarmReady_=0,colorWarmFailed_=0;
     std::vector<std::pair<ModelShaderKey, ShaderEntry>> modelShaders_;
     std::vector<std::pair<ModelShaderKey, gfx::PipelineHandle>> modelPipes_;
     gfx::TextureHandle white_, black_, flatNormal_;
+    // One-view borrowed atlas; beginScene drops it before the next view.
+    // U6 (nine float4, GiDynamicShaders.h): per cascade origin+1/spacing,
+    // dimensions+probe offset, ring(+cascade count in cascade 0).
+    gfx::TextureHandle dynamicGiAtlas_{};
+    std::array<float,36> dynamicGiUniforms_{};
     gfx::PipelineHandle currentPipe_;
     std::string modelError_;
     // baked lighting (Renderer3DBaked.cpp)
@@ -1574,6 +2202,9 @@ private:
     BakedQuality bakedQuality_ = BakedQuality::High;
     uint32_t bakedLightmapped_ = 0, bakedProbed_ = 0, bakedCountLm_ = 0, bakedCountPr_ = 0;
     ModelCapture capture_;
+    ModelPacketTap modelPacketTap_;
+    GeometryPacketTap geometryPacketTap_;
+    bool suppressGeometryTap_=false;
     void bakedItem(ModelItem& it, const ModelDraw& d, int node);
     void bindBakedGI(const ModelItem& it);
 };

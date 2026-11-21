@@ -1,6 +1,6 @@
 #pragma once
 #include "modules/rts/view/RtsPortrait.h"
-#include "engine/render/PostFx.h"
+#include "engine/render/Prisma.h"
 #include "engine/fx/ParticleSystem.h"
 #include "engine/render/TextureCache.h"
 #include "engine/platform/Platform.h"
@@ -10,14 +10,42 @@ namespace aiverse::editor {
 class ShaderGraphPreview {
 public:
     ~ShaderGraphPreview() { shutdown(); }
+    gfx::Device* activeDevice() const { return dev_; }
+    // UI-only node positions must not trigger GPU shader, material or
+    // particle recompilation on every mouse drag frame.
+    static std::string resourceKey(const Json& graph) {
+        Json gpu = graph;
+        if (auto* nodes = gpu.find("nodes"))
+            for (auto& node : nodes->itemsMut()) node.erase("position");
+        return gpu.dump(-1);
+    }
+    // Only used by GPU-fence-completed or host-idle owned-bundle callbacks.
+    // The entire preview, including Portrait, Prisma, FX and shaders, can
+    // now be released together after all GPU draws referring to it finish.
+    // Disable secondary color/depth re-retirement at this known safe point.
+    void shutdownAfterGpuCompletion() {
+        retirement_ = nullptr;
+        shutdown();
+    }
     void shutdown() {
         if(!dev_)return;
         portrait_.shutdown();post_.shutdown();particles_.shutdown();textures_.shutdown();
-        dev_->destroyTexture(color_);dev_->destroyTexture(depth_);dev_->destroyBuffer(vb_);
+        if (retirement_) {
+            // Preview may have been inserted into this frame's ImGui draw
+            // list; preserve the actual color/depth handles until GPU fence.
+            retirement_->retire(*dev_,color_);
+            retirement_->retire(*dev_,depth_);
+        } else {
+            // Legacy standalone preview owner: caller must ensure GPU idle.
+            dev_->destroyTexture(color_);
+            dev_->destroyTexture(depth_);
+        }
+        color_ = depth_ = {};
+        dev_->destroyBuffer(vb_);
         dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);dev_=nullptr;key_.clear();base_.clear();error.clear();
     }
     gfx::TextureHandle render(Editor& ed,const Json& g,double time,float dt) {
-        if(!dev_ && !init(ed.device()))return {};
+        if(!dev_ && !init(ed.device(),ed.viewportRetirement()))return {};
         const std::string base=ed.ws().project.dir+"/";
         if(base!=base_) {
             base_=base;
@@ -25,7 +53,7 @@ public:
             particles_.setTextureLoader([this,base](const std::string& path,fx::FxTexture& out){auto t=textures_.resolve(path,false,base,true);out={t.tex,t.u0,t.v0,t.u1,t.v1};return t.valid();});
         }
         const auto domain=g.getStr("domain");
-        const std::string key=g.dump(-1);
+        const std::string key=resourceKey(g);
         if(key!=key_) {
             key_=key;
             if(domain=="material") {portrait_.shutdown();portrait_.init(*dev_);}
@@ -62,9 +90,11 @@ public:
     }
     std::string error;
 private:
-    bool init(gfx::Device& dev) {
-        dev_=&dev;textures_.init(dev);if(!portrait_.init(dev)||!post_.init(dev)||!particles_.init(&dev)) {error=dev.lastError();shutdown();return false;}
-        post_.setQuality(render::PostFxQuality::High);
+    bool init(gfx::Device& dev,ViewportGpuRetirement& retirement) {
+        dev_=&dev;
+        retirement_=&retirement;
+        textures_.init(dev);if(!portrait_.init(dev)||!post_.init(dev)||!particles_.init(&dev)) {error=dev.lastError();shutdown();return false;}
+        post_.setQuality(render::PrismaQuality::High);
         gfx::TextureDesc td;td.width=td.height=256;td.renderTarget=true;color_=dev.createTexture(td);td.format=gfx::PixelFormat::Depth;depth_=dev.createTexture(td);
         const float vertices[]={-1,-1,3,-1,-1,3};gfx::BufferDesc bd;bd.data=vertices;bd.size=sizeof vertices;vb_=dev.createBuffer(bd);
         gfx::ShaderDesc sd;sd.textureSlots=1;
@@ -78,7 +108,9 @@ fragment float4 fs_main(O o [[stage_in]],constant float4& p [[buffer(1)]],textur
         shader_=dev.createShader(sd);gfx::PipelineDesc pd;pd.shader=shader_;pd.attrs[0]={0,gfx::VertexFormat::Float2,0};pd.attrCount=1;pd.stride=8;pd.indexType=gfx::IndexType::None;pd.depthTest=pd.depthWrite=false;pd.cull=gfx::CullMode::None;pipe_=dev.createPipeline(pd);
         if(!pipe_.valid()){error=dev.lastError();shutdown();return false;}return true;
     }
-    gfx::Device* dev_=nullptr;game::Portrait portrait_;render::PostFx post_;fx::ParticleSystem particles_;
+    gfx::Device* dev_=nullptr;
+    ViewportGpuRetirement* retirement_=nullptr; // owned by Editor, outlives windows
+    game::Portrait portrait_;render::Prisma post_;fx::ParticleSystem particles_;
     gfx::TextureHandle color_,depth_;gfx::ShaderHandle shader_;gfx::PipelineHandle pipe_;gfx::BufferHandle vb_;std::string key_,base_;render::TextureCache textures_;
 };
 }

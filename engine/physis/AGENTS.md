@@ -1289,3 +1289,9 @@ Draft. Handoff:
 - New source is **NOT YET native-compiled or CTest-verified**. Previous Mac Studio PHYSIS 29/29 passed on an older, uncombined branch only. Do not report a green Terra/Box3D integration before the final real suite.
 - **One-pass acceptance after the full implementation**: run `bash tools/physis-terraweave-final-validation.sh` from an isolated clean worktree. It configures Box3D, builds all desktop tests, confirms the conditional true integration target exists and runs one unfiltered CTest pass with reports. Fix actual failures and append handoffs before requesting main merge.
 - Stage94 handoff: `docs/agent-handoffs/physis-stage94-combined-fall-integration-2026-11-19.md`.
+
+## Nature presentation host (2026-11-21)
+- Host layer `engine/world/PhysisNature{Presentation,Cues,FxHost,AudioHost,Grass}.h` and editor `apps/editor/PhysisNaturePreview.h` READ PHYSIS only. Never add render/audio/TerraWeave includes to `engine/physis`.
+- Charred ground = `1 - HazardCell::fuel`; do not add a parallel "burned" component.
+- `advanceDisasters` wind fix: source-cell wind along j→i. Keep zero-wind results bit-identical.
+- Handoff: `docs/agent-handoffs/physis-nature-host-2026-11-21.md`. macOS build/visual QA NOT RUN.

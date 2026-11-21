@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -52,7 +53,8 @@ inline bool sameNereidCascadeSource(const NereidCascadeSource& a,
        s.specular!=t.specular || s.refractionStrength!=t.refractionStrength ||
        s.absorption!=t.absorption || s.shoreFoamDepth!=t.shoreFoamDepth ||
        s.depthTint!=t.depthTint || s.underwaterDistortion!=t.underwaterDistortion ||
-       s.underwaterScattering!=t.underwaterScattering)return false;
+       s.underwaterScattering!=t.underwaterScattering ||
+       s.turbidity!=t.turbidity || s.siltR!=t.siltR || s.siltG!=t.siltG || s.siltB!=t.siltB)return false;
     for(size_t i=0;i<x.points.size();++i)
         if(x.points[i].position!=y.points[i].position ||
            x.points[i].halfWidth!=y.points[i].halfWidth)return false;
@@ -231,6 +233,7 @@ inline render::Mesh uploadNereidCascade(gfx::Device& device,
         const lib::nereid::WaterCascadeMesh& cpu,
         lib::nereid::WaterSurfaceStyle style) {
     if(cpu.empty() || !render::validNereidWaterStyle(style))return {};
+    style=lib::nereid::resolvedWaterOptics(style);
     render::MeshBuilder builder;
     for(const auto& v:cpu.vertices) {
         const float foam=std::clamp(v.foam*style.foamStrength,0.f,1.f);
@@ -251,7 +254,9 @@ inline render::Mesh uploadNereidCascade(gfx::Device& device,
 class NereidCascadeScene final {
     struct Slot {
         NereidCascadeSource source;
-        render::Mesh mesh{};
+        // Heap-owned so its address survives setCascades(): Renderer3D
+        // items_ and camera geometry snapshots keep &*mesh until render.
+        std::unique_ptr<render::Mesh> mesh=std::make_unique<render::Mesh>();
         bool resident=false;
         bool dirty=true;
         std::optional<Fixed> inletLevel,outletLevel;
@@ -296,7 +301,7 @@ public:
             if(old==slots_.end())continue;
             slot.dirty=old->second.dirty ||
                 !sameNereidCascadeSource(slot.source,old->second.source);
-            slot.mesh=old->second.mesh;
+            slot.mesh=std::move(old->second.mesh);
             slot.resident=old->second.resident;
             slot.inletLevel=old->second.inletLevel;
             slot.inletRevision=old->second.inletRevision;
@@ -305,12 +310,12 @@ public:
             slot.originX=old->second.originX;
             slot.originY=old->second.originY;
             slot.originZ=old->second.originZ;
-            old->second.mesh={};
         }
+        // Removed slots: the Mesh object stays alive (and its GPU buffers
+        // valid) until the next device-thread update()/shutdown().
         for(auto& [id,old]:slots_) {
             (void)id;
-            if(old.mesh.vb.valid() || old.mesh.ib.valid())
-                retired_.push_back(old.mesh);
+            if(old.mesh)retired_.push_back(std::move(old.mesh));
         }
         slots_.swap(next);
     }
@@ -321,6 +326,12 @@ public:
         maxUploadsPerFrame_=count;
     }
     size_t count()const{return slots_.size();}
+    // Mesh object submitted by draw() for this cascade id (stable address
+    // across setCascades while the id persists), or nullptr.
+    const render::Mesh* meshFor(uint64_t id)const{
+        const auto it=slots_.find(id);
+        return it==slots_.end()?nullptr:it->second.mesh.get();
+    }
     // Uses the SAME fixed-point cascade-mouth kernel as NEREID ECS sampling.
     // The water body's ordinary current/vortex sampling is supplied by the
     // caller, and the cascade field merely blends it near linked mouths.
@@ -370,13 +381,13 @@ public:
     }
     void update(gfx::Device& device,
                 const NereidWaterScene* water=nullptr) {
-        for(auto& old:retired_)render::releaseNereidWaterSurface(device,old);
+        for(auto& old:retired_)render::releaseNereidWaterSurface(device,*old);
         retired_.clear();
         uint32_t attempts=0;
         for(auto& [id,slot]:slots_) {
             (void)id;
             if(!slot.source.cascade.enabled) {
-                render::releaseNereidWaterSurface(device,slot.mesh);
+                render::releaseNereidWaterSurface(device,*slot.mesh);
                 slot.resident=false;slot.dirty=true;
                 continue;
             }
@@ -454,8 +465,8 @@ public:
                 render::releaseNereidWaterSurface(device,replacement);
                 continue;
             }
-            render::releaseNereidWaterSurface(device,slot.mesh);
-            slot.mesh=replacement;
+            render::releaseNereidWaterSurface(device,*slot.mesh);
+            *slot.mesh=replacement;
             slot.originX=opts.originX;
             slot.originY=opts.originY;
             slot.originZ=opts.originZ;
@@ -473,7 +484,7 @@ public:
                 float(slot.originX-x),float(slot.originY-y),
                 float(slot.originZ-z)});
             const auto& style=slot.source.style;
-            renderer.drawMesh(slot.mesh,xf,
+            renderer.drawMesh(*slot.mesh,xf,
                 {style.absorption,style.shoreFoamDepth,
                  style.depthTint,style.opacity},
                 render::kDrawNoCastShadow|render::kDrawWaterSurface|
@@ -482,17 +493,17 @@ public:
         }
     }
     void shutdown(gfx::Device& device) {
-        for(auto& old:retired_)render::releaseNereidWaterSurface(device,old);
+        for(auto& old:retired_)render::releaseNereidWaterSurface(device,*old);
         retired_.clear();
         for(auto& [id,slot]:slots_) {
             (void)id;
-            render::releaseNereidWaterSurface(device,slot.mesh);
+            render::releaseNereidWaterSurface(device,*slot.mesh);
             slot.resident=false;slot.dirty=true;
         }
     }
 private:
     std::map<uint64_t,Slot> slots_;
-    std::vector<render::Mesh> retired_;
+    std::vector<std::unique_ptr<render::Mesh>> retired_;
     uint32_t maxUploadsPerFrame_=2;
 };
 

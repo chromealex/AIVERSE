@@ -17,7 +17,8 @@ initiative, cover, overwatch and WeGo (`tactics-grid`) and their card/turn bots 
 ([genre-packages.md](genre-packages.md#cards-and-turn-strategy-card-games-010-tactics-grid-010-cards-turns-bots-010)).
 Vehicles and sports (step 4 batch): wheeled/tracked/hover/flight controllers, damage zones, seats, race positions and the race bot are
 `vehicle-controllers`; ball rules, formations and the positioning bot are `sports-rules`, both with an executable example
-([genre-packages.md](genre-packages.md#vehicles-vehicle-controllers-010)).
+([genre-packages.md](genre-packages.md#vehicles-vehicle-controllers-020)). Whole races (grid, countdown, phases, results) are the race
+session of `vehicle-controllers`; any project with cars gets them from a map `"race"` block (docs/races.md, `templates/racing`).
 Settlement/production and survival/ecology: needs, schedules, jobs, recipes, hauling, power/fluid graphs, disasters and a colony
 planner bot are `settlement-production`; body model, weather modifiers, ecosystems, animal behavior and resource renewal are
 `survival-ecology` ([genre-packages.md](genre-packages.md#settlement-and-production-settlement-production-010)), with the executable

@@ -15,7 +15,7 @@
 namespace aiverse::spectra {
 
 enum class FieldKind : unsigned char {
-    Number, Integer, Boolean, String, Choice, Vector3
+    Number, Integer, Boolean, String, Choice, Vector3, Color
 };
 
 struct FieldSpec {
@@ -71,6 +71,102 @@ inline constexpr std::array<FieldSpec, 1> kRibbonFields{{
     {"hidden", "Hidden trail source", FieldKind::Boolean, 0, 0, "true"}
 }};
 
+// V2 module authoring fields. Only common primitives are typed; complex
+// FxRange curves, sub-emitter handlers, custom shaders and gradients remain
+// editable as full JSON without losing authored data or $node references.
+inline constexpr std::array<FieldSpec,9> kNoiseModuleFields{{
+    {"strength","Noise strength",FieldKind::Number,0,100,"0.3"},
+    {"frequency","Frequency",FieldKind::Number,0.001,100,"1.5"},
+    {"scroll","Scroll speed",FieldKind::Number,-100,100,"0"},
+    {"axes","Axis weights",FieldKind::Vector3,0,0,"[1,1,1]"},
+    {"octaves","Octaves",FieldKind::Integer,1,4,"1"},
+    {"damping","Damping",FieldKind::Boolean,0,0,"false"},
+    {"position","Position influence",FieldKind::Number,0,10,"1"},
+    {"rotation","Rotation influence",FieldKind::Number,-3600,3600,"0"},
+    {"size","Size influence",FieldKind::Number,0,10,"0"}
+}};
+inline constexpr std::array<FieldSpec,8> kCollisionModuleFields{{
+    {"height","Ground offset",FieldKind::Number,-100,100,"0"},
+    {"bounce","Bounce",FieldKind::Number,0,2,"0.5"},
+    {"dampen","Collision damping",FieldKind::Number,0,1,"0"},
+    {"lifeLoss","Lifetime loss",FieldKind::Number,0,1,"0"},
+    {"minKillSpeed","Minimum kill speed",FieldKind::Number,0,1000,"0"},
+    {"maxKillSpeed","Maximum kill speed",FieldKind::Number,0,100000,"0"},
+    {"ground","Terrain collision",FieldKind::Boolean,0,0,"true"},
+    {"radius","Particle radius multiplier",FieldKind::Number,0,10,"0"}
+}};
+inline constexpr std::array<FieldSpec,10> kTrailModuleFields{{
+    {"time","Trail time",FieldKind::Number,0.01,10,"0.3"},
+    {"lifeFraction","Lifetime ratio",FieldKind::Number,0,1,"0"},
+    {"texture","Trail texture",FieldKind::String,0,0,"\"builtin:soft\""},
+    {"blend","Blend mode",FieldKind::Choice,0,0,"\"additive\"","alpha|additive|premultiplied|multiply|subtract|opaque"},
+    {"ratio","Trail emission ratio",FieldKind::Number,0,1,"1"},
+    {"minDistance","Minimum distance",FieldKind::Number,0,100,"0"},
+    {"ribbons","Ribbon count",FieldKind::Integer,1,16,"1"},
+    {"dieWithParticles","Die with particle",FieldKind::Boolean,0,0,"true"},
+    {"inheritColor","Inherit colour",FieldKind::Boolean,0,0,"true"},
+    {"sizeAffectsWidth","Size affects width",FieldKind::Boolean,0,0,"true"}
+}};
+inline constexpr std::array<FieldSpec,7> kLightModuleFields{{
+    {"color","Light colour",FieldKind::Color,0,0,"\"#ffcc99\""},
+    {"radius","Light radius",FieldKind::Number,0.01,100,"3"},
+    {"intensity","Intensity",FieldKind::Number,0,20,"1"},
+    {"ratio","Emission ratio",FieldKind::Number,0,1,"1"},
+    {"max","Maximum lights",FieldKind::Integer,0,64,"8"},
+    {"useParticleColor","Use particle colour",FieldKind::Boolean,0,0,"true"},
+    {"alphaAffectsIntensity","Alpha affects light",FieldKind::Boolean,0,0,"true"}
+}};
+inline constexpr std::array<FieldSpec,5> kForceModuleFields{{
+    {"x","Force X",FieldKind::Number,-1000,1000,"0"},
+    {"y","Force Y",FieldKind::Number,-1000,1000,"0"},
+    {"z","Force Z",FieldKind::Number,-1000,1000,"0"},
+    {"space","Coordinate space",FieldKind::Choice,0,0,"\"world\"","world|local"},
+    {"randomize","Randomize force",FieldKind::Boolean,0,0,"false"}
+}};
+inline constexpr std::array<FieldSpec,6> kVelocityModuleFields{{
+    {"x","Velocity X",FieldKind::Number,-1000,1000,"0"},
+    {"y","Velocity Y",FieldKind::Number,-1000,1000,"0"},
+    {"z","Velocity Z",FieldKind::Number,-1000,1000,"0"},
+    {"radial","Radial speed",FieldKind::Number,-1000,1000,"0"},
+    {"space","Coordinate space",FieldKind::Choice,0,0,"\"local\"","world|local"},
+    {"orbitalOffset","Orbital offset",FieldKind::Vector3,0,0,"[0,0,0]"}
+}};
+inline constexpr std::array<FieldSpec,5> kShapeModuleFields{{
+    {"shape","Shape",FieldKind::Choice,0,0,"\"sphere\"","point|sphere|hemisphere|disc|ring|donut|cone|box|line|mesh"},
+    {"radius","Radius",FieldKind::Number,0,100,"1"},
+    {"arc","Arc",FieldKind::Number,0,360,"360"},
+    {"thickness","Thickness",FieldKind::Number,0,1,"1"},
+    {"box","Box size",FieldKind::Vector3,0,0,"[1,1,1]"}
+}};
+inline constexpr std::array<FieldSpec,3> kMaterialModuleFields{{
+    {"texture","Texture",FieldKind::String,0,0,"\"builtin:soft\""},
+    {"blend","Blend",FieldKind::Choice,0,0,"\"additive\"","alpha|additive|premultiplied|multiply|subtract|opaque"},
+    {"align","Facing",FieldKind::Choice,0,0,"\"camera\"","camera|velocity|ground|upright|world|local"}
+}};
+inline constexpr std::array<FieldSpec,3> kSortModuleFields{{
+    {"sort","Sort policy",FieldKind::Choice,0,0,"\"auto\"","auto|none|distance|oldest|youngest"},
+    {"sortOrder","Sort order",FieldKind::Integer,-100,100,"0"},
+    {"minScreenSize","Min screen size",FieldKind::Number,0,1,"0"}
+}};
+inline constexpr std::array<FieldSpec,4> kTriggerModuleFields{{
+    {"inside","Inside action",FieldKind::Choice,0,0,"\"ignore\"","ignore|kill|callback"},
+    {"outside","Outside action",FieldKind::Choice,0,0,"\"ignore\"","ignore|kill|callback"},
+    {"enter","Enter action",FieldKind::Choice,0,0,"\"ignore\"","ignore|kill|callback"},
+    {"exit","Exit action",FieldKind::Choice,0,0,"\"ignore\"","ignore|kill|callback"}
+}};
+inline constexpr std::array<FieldSpec,2> kFlipbookModuleFields{{
+    {"fps","Animation FPS",FieldKind::Number,0,120,"12"},
+    {"cycles","Cycles",FieldKind::Number,0.01,1000,"1"}
+}};
+inline constexpr std::array<FieldSpec,3> kSpeedLimitModuleFields{{
+    {"x","Max X speed",FieldKind::Number,0,1000000,"8"},
+    {"y","Max Y speed",FieldKind::Number,0,1000000,"8"},
+    {"z","Max Z speed",FieldKind::Number,0,1000000,"8"}
+}};
+inline constexpr std::array<FieldSpec,1> kInheritVelocityFields{{
+    {"amount","Inherited velocity",FieldKind::Number,-10,10,"1"}
+}};
+
 inline std::span<const FieldSpec> fieldsForNode(std::string_view type) {
     if (type == "Spawn") return kSpawnFields;
     if (type == "Initialize") return kInitializeFields;
@@ -78,6 +174,19 @@ inline std::span<const FieldSpec> fieldsForNode(std::string_view type) {
     if (type == "SpriteOutput") return kSpriteFields;
     if (type == "MeshOutput") return kMeshFields;
     if (type == "RibbonOutput") return kRibbonFields;
+    if (type == "NoiseModule") return kNoiseModuleFields;
+    if (type == "CollisionModule") return kCollisionModuleFields;
+    if (type == "TrailModule") return kTrailModuleFields;
+    if (type == "LightModule") return kLightModuleFields;
+    if (type == "ForceModule") return kForceModuleFields;
+    if (type == "VelocityModule") return kVelocityModuleFields;
+    if (type == "ShapeModule") return kShapeModuleFields;
+    if (type == "MaterialModule") return kMaterialModuleFields;
+    if (type == "SortModule") return kSortModuleFields;
+    if (type == "TriggerModule") return kTriggerModuleFields;
+    if (type == "FlipbookModule") return kFlipbookModuleFields;
+    if (type == "SpeedLimitModule") return kSpeedLimitModuleFields;
+    if (type == "InheritVelocityModule") return kInheritVelocityFields;
     return {};
 }
 inline const FieldSpec* fieldForNode(std::string_view type, std::string_view key) {
@@ -102,6 +211,11 @@ inline bool validateTypedField(const FieldSpec& field, const Json& value, std::s
     case FieldKind::Boolean:
         if (value.type() != Json::Type::Bool) return fail("expected boolean");
         return true;
+    case FieldKind::Color: {
+        fx::float4 rgba;
+        if(!fx::parseColor(value,rgba))return fail("expected hex colour or [r,g,b,a]");
+        return true;
+    }
     case FieldKind::String:
         if (!value.isString() || value.str().empty()) return fail("expected nonempty string");
         if (value.str().size() > 512) return fail("string is too long");

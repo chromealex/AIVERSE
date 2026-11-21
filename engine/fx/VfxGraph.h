@@ -14,6 +14,11 @@
 
 namespace aiverse::fx {
 
+// Version-2 frontend is defined by SpectraGraphV2.h at the end of this
+// header to keep all existing v1 callers source-compatible.
+inline bool compileSpectraGraphV2(const Json& graph, const Json& overrides,
+                                 EffectDef& out, std::vector<std::string>& errors);
+
 namespace vfxgraph_detail {
 inline bool fail(std::vector<std::string>& errors, const std::string& reason) {
     errors.push_back("vfx graph: " + reason);
@@ -93,6 +98,8 @@ inline bool resolve(const Json& input, const Json& defaults, const Json& overrid
 // Graph validation does not perform any IO, shader compilation, or runtime mutation.
 inline bool compileSpectraGraph(const Json& graph, const Json& overrides, EffectDef& out,
                             std::vector<std::string>& errors) {
+    if(graph.isObject() && graph.getInt("version")==2)
+        return compileSpectraGraphV2(graph,overrides,out,errors);
     errors.clear();
     out = {};
     if (!graph.isObject() || !graph["version"].isNumber() || graph.getInt("version") != 1)
@@ -255,3 +262,7 @@ inline bool compileVfxGraph(const Json& graph, EffectDef& out,
 }
 
 } // namespace aiverse::fx
+
+// The v2 frontend lowers to the v1 compiler above. Include only AFTER
+// its definition: the header guard makes direct V2 includes safe, too.
+#include "SpectraGraphV2.h"

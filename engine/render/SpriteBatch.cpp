@@ -1,8 +1,12 @@
 #include "SpriteBatch.h"
 #include "SpriteShaders.h"
+#include "SpriteReactiveShaders.h"
+#include "Renderer3D.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 
 namespace aiverse::render {
 
@@ -15,7 +19,18 @@ constexpr float kCasterCut = 0.5f;
 } // namespace
 
 bool SpriteBatch::init(gfx::Device& dev) {
+    if (dev_) throw std::logic_error("SpriteBatch init: already initialized");
     dev_ = &dev;
+    auto rollback = [&] {
+        // A failed init may have created GPU objects. Release only after
+        // the backend confirms previous users of this device are idle.
+        if (!dev.waitForResourceIdle())
+            throw std::runtime_error("SpriteBatch init rollback: GPU idle barrier failed");
+        shutdown();
+    };
+    bool initialized = false;
+    try {
+        initialized = [&]() -> bool {
     gfx::ShaderDesc sd;
     sd.glslVertex = shaders::kSpriteVS; sd.glslFragment = shaders::kSpriteFS; sd.msl = shaders::kSpriteMSL;
     sd.textureSlots = 2; sd.uniformSlots = 3; sd.label = "sprite";   // U2 + tex1: lights (LightShaders.h)
@@ -94,19 +109,114 @@ bool SpriteBatch::init(gfx::Device& dev) {
     }
     gfx::BufferDesc ib; ib.type = gfx::BufferType::Index; ib.size = idx.size() * sizeof(uint16_t); ib.data = idx.data(); ib.label = "sprite quads";
     ib_ = dev.createBuffer(ib);
-    gfx::BufferDesc vb; vb.usage = gfx::Usage::Dynamic; vb.size = 1024 * 4 * sizeof(SpriteVertex); vb.label = "sprites";
+    gfx::BufferDesc vb; vb.usage = gfx::Usage::Dynamic;
+    // Camera captures can upload several vertex versions within one frame.
+    // Keep already submitted GPU reads immutable on snapshot-aware backends.
+    vb.snapshotUpdates = true;
+    vb.size = 1024 * 4 * sizeof(SpriteVertex); vb.label = "sprites";
     vb_ = dev.createBuffer(vb);
-    vb.size = 256 * 4 * sizeof(SpriteVertex); vb.label = "sprite casters";   // own buffer: written in the same frame
+    vb.size = 256 * 4 * sizeof(SpriteVertex); vb.label = "sprite casters";   // distinct snapshot stream
     casterVb_ = dev.createBuffer(vb);
-    return blendPipe_.valid() && groundPipe_.valid() && decalPipe_.valid() && ib_.valid() && vb_.valid();
+    return blendPipe_.valid() && groundPipe_.valid() && decalPipe_.valid() &&
+           ib_.valid() && vb_.valid() && casterVb_.valid();
+        }();
+    } catch (...) {
+        rollback();
+        throw;
+    }
+    if (!initialized) rollback();
+    return initialized;
+}
+
+class SpriteBatch::PreparedFrame final {
+    friend class SpriteBatch;
+    SpriteBatch* owner=nullptr;
+    gfx::BufferHandle vertex,casters;
+    std::function<void()> restore;
+    bool committed=false;
+public:
+    ~PreparedFrame() noexcept {
+        if(committed || !owner)return;
+        for(auto pair:{std::pair{owner->vb_,vertex},std::pair{owner->casterVb_,casters}})
+            if(pair.first.valid() && pair.first!=pair.second)
+                try {owner->dev_->destroyBuffer(pair.first);}catch(...) {}
+        owner->vb_=vertex;owner->casterVb_=casters;
+        restore();owner->preparingFrame_=owner->privateFrameBuffers_=false;
+    }
+};
+std::shared_ptr<SpriteBatch::PreparedFrame> SpriteBatch::beginFramePreparation() {
+    if(preparingFrame_)throw std::logic_error("nested sprite frame preparation");
+    auto frame=std::make_shared<PreparedFrame>();
+    frame->restore=[this,waterReactive=waterReactive_, casters=casters_, casterVerts=casterVerts_, quads=quads_, order=order_, verts=verts_, drawCalls=drawCalls_, drawUploadValid=drawUploadValid_, casterUploadValid=casterUploadValid_]() mutable noexcept {
+        using std::swap;
+        swap(waterReactive_,waterReactive);
+        swap(casters_,casters);
+        swap(casterVerts_,casterVerts);
+        swap(quads_,quads);
+        swap(order_,order);
+        swap(verts_,verts);
+        swap(drawCalls_,drawCalls);
+        swap(drawUploadValid_,drawUploadValid);
+        swap(casterUploadValid_,casterUploadValid);
+    };
+    frame->owner=this;frame->vertex=vb_;frame->casters=casterVb_;
+    preparingFrame_=true;privateFrameBuffers_=false;
+    return frame;
+}
+void SpriteBatch::prepareFrameUploads(gfx::Device& dev) {
+    if(!preparingFrame_ || dev_!=&dev)
+        throw std::logic_error("sprite uploads require a private frame owner");
+    if(privateFrameBuffers_)throw std::logic_error("sprite frame prepared twice");
+    privateFrameBuffers_=true;
+    auto allocate=[&](size_t count,const char* label) {
+        constexpr size_t stride=4*sizeof(SpriteVertex);
+        if(count>std::numeric_limits<size_t>::max()/stride)
+            throw std::length_error("sprite frame payload overflow");
+        gfx::BufferDesc desc;desc.usage=gfx::Usage::Dynamic;
+        desc.snapshotUpdates=true;desc.size=std::max<size_t>(1,count*stride);desc.label=label;
+        const auto buffer=dev.createBuffer(desc);
+        if(!buffer.valid())throw std::runtime_error("sprite candidate allocation failed");
+        return buffer;
+    };
+    if(!quads_.empty())vb_=allocate(quads_.size(),"sprite frame candidate");
+    if(!casters_.empty())casterVb_=allocate(casters_.size(),"sprite caster frame candidate");
+    drawUploadValid_=casterUploadValid_=false;
+    prepareDrawUpload(dev);prepareCasterUpload(dev);
+}
+void SpriteBatch::commitFramePreparation(const std::shared_ptr<PreparedFrame>& frame) noexcept {
+    if(!frame || frame->owner!=this || frame->committed)return;
+    if(vb_!=frame->vertex)frameRetirement_.retireBuffer(*dev_,frame->vertex);
+    if(casterVb_!=frame->casters)frameRetirement_.retireBuffer(*dev_,frame->casters);
+    frame->committed=true;preparingFrame_=privateFrameBuffers_=false;
+}
+
+bool SpriteBatch::shutdownAfterGpuIdle() {
+    if (!dev_) return true;
+    if (!dev_->waitForResourceIdle()) return false;
+    shutdown();
+    return true;
 }
 
 void SpriteBatch::shutdown() {
+    drawUploadValid_ = casterUploadValid_ = false;
     if (!dev_) return;
-    dev_->destroyBuffer(vb_); dev_->destroyBuffer(ib_); dev_->destroyBuffer(casterVb_);
+    if(!frameRetirement_.completeForShutdown(*dev_))
+        throw std::runtime_error("SpriteBatch frame retirement requires GPU idle");
+    for (auto h : {vb_, ib_, casterVb_})
+        if (h.valid()) dev_->destroyBuffer(h);
     for (auto p : {blendPipe_, groundPipe_, decalPipe_, litPipe_, litGroundPipe_, litDecalPipe_, casterPipe_, waterPipe_})
         if (p.valid()) dev_->destroyPipeline(p);
-    for (auto sh : {shader_, litShader_, casterShader_, waterShader_}) if (sh.valid()) dev_->destroyShader(sh);
+    for (auto sh : {shader_, litShader_, casterShader_, waterShader_})
+        if (sh.valid()) dev_->destroyShader(sh);
+    vb_ = ib_ = casterVb_ = {};
+    blendPipe_ = groundPipe_ = decalPipe_ = litGroundPipe_ = {};
+    litPipe_ = litDecalPipe_ = casterPipe_ = waterPipe_ = {};
+    shader_ = litShader_ = casterShader_ = waterShader_ = {};
+    if (waterReactivePipe_.valid()) dev_->destroyPipeline(waterReactivePipe_);
+    if (waterReactiveShader_.valid()) dev_->destroyShader(waterReactiveShader_);
+    waterReactivePipe_ = {};
+    waterReactiveShader_ = {};
+    waterReactive_.clear();
     dev_ = nullptr;
 }
 
@@ -198,6 +308,7 @@ void SpriteBatch::casterPolygon(gfx::TextureHandle tex, const float3* c, const f
 
 void SpriteBatch::quad(const TextureRef& t, const float3 (&c)[4], float4 uv, uint32_t color, uint32_t team, int layer, float sortKey) {
     if (!t.valid()) return;
+    drawUploadValid_ = false;
     if (t.sprite) {
         SpriteShape sh;
         if (!spriteShape(t, uv, sh)) return;
@@ -218,6 +329,7 @@ void SpriteBatch::quad(const TextureRef& t, const float3 (&c)[4], float4 uv, uin
 
 void SpriteBatch::quadEx(gfx::TextureHandle tex, const SpriteVertex (&v)[4], int layer, float sortKey, uint32_t flags) {
     if (!tex.valid()) return;
+    drawUploadValid_ = false;
     Quad q;
     q.tex = tex; q.layer = layer; q.key = sortKey; q.seq = uint32_t(quads_.size()); q.flags = flags;
     for (int i = 0; i < 4; ++i) q.v[i] = v[i];
@@ -226,6 +338,7 @@ void SpriteBatch::quadEx(gfx::TextureHandle tex, const SpriteVertex (&v)[4], int
 
 void SpriteBatch::caster(gfx::TextureHandle tex, const float3 (&c)[4], const float2 (&uv)[4]) {
     if (!tex.valid()) return;
+    casterUploadValid_ = false;
     Caster k;
     k.tex = tex;
     for (int i = 0; i < 4; ++i) k.v[i] = {c[i], uv[i], 0, 0, {}};
@@ -243,14 +356,44 @@ void SpriteBatch::drawRange(gfx::Device& dev, gfx::BufferHandle vb, uint32_t fir
     }
 }
 
+void SpriteBatch::prepareCasterUpload(gfx::Device& dev) {
+    if(casters_.empty() || !casterPipe_.valid())return;
+    // group by texture (no painter order in a depth pass)
+    if (!casterUploadValid_) {
+        std::stable_sort(casters_.begin(), casters_.end(), [](const Caster& a, const Caster& b) { return a.tex.id < b.tex.id; });
+        casterVerts_.clear();
+        casterVerts_.reserve(casters_.size() * 4);
+        for (auto& k : casters_) for (auto& v : k.v) casterVerts_.push_back(v);
+        if (casterVerts_.size() > std::numeric_limits<size_t>::max() / sizeof(SpriteVertex))
+            throw std::length_error("SpriteBatch: caster vertex upload size overflow");
+        dev.updateBuffer(casterVb_, casterVerts_.data(), casterVerts_.size() * sizeof(SpriteVertex));
+        casterUploadValid_ = true;
+    }
+}
+void SpriteBatch::prepareDrawUpload(gfx::Device& dev) {
+    if(quads_.empty())return;
+    if (!drawUploadValid_) {
+        order_.resize(quads_.size());
+        for (uint32_t i = 0; i < order_.size(); ++i) order_[i] = i;
+        std::sort(order_.begin(), order_.end(), [&](uint32_t a, uint32_t b) {
+            const Quad& A = quads_[a]; const Quad& B = quads_[b];
+            if (A.layer != B.layer) return A.layer < B.layer;
+            if (A.key != B.key) return A.key < B.key;
+            return A.seq < B.seq;
+        });
+        verts_.clear();
+        verts_.reserve(quads_.size() * 4);
+        for (uint32_t i : order_) for (auto& v : quads_[i].v) verts_.push_back(v);
+        if (verts_.size() > std::numeric_limits<size_t>::max() / sizeof(SpriteVertex))
+            throw std::length_error("SpriteBatch: sprite vertex upload size overflow");
+        dev.updateBuffer(vb_, verts_.data(), verts_.size() * sizeof(SpriteVertex));
+        drawUploadValid_ = true;
+    }
+}
+
 void SpriteBatch::flushCasters(gfx::Device& dev, const mat4& lightViewProj) {
     if (casters_.empty() || !casterPipe_.valid()) return;
-    // group by texture (no painter order in a depth pass)
-    std::stable_sort(casters_.begin(), casters_.end(), [](const Caster& a, const Caster& b) { return a.tex.id < b.tex.id; });
-    casterVerts_.clear();
-    casterVerts_.reserve(casters_.size() * 4);
-    for (auto& k : casters_) for (auto& v : k.v) casterVerts_.push_back(v);
-    dev.updateBuffer(casterVb_, casterVerts_.data(), casterVerts_.size() * sizeof(SpriteVertex));
+    prepareCasterUpload(dev);
     dev.setPipeline(casterPipe_);
     Uniforms u{};
     std::memcpy(u.viewProj, lightViewProj.m, sizeof u.viewProj);
@@ -288,18 +431,7 @@ void SpriteBatch::flush(gfx::Device& dev, const mat4& viewProj, const SpriteLigh
     drawCalls_ = 0;
     if (quads_.empty()) return;
     const bool canLight = lighting && lighting->bind && litPipe_.valid() && litDecalPipe_.valid();
-    order_.resize(quads_.size());
-    for (uint32_t i = 0; i < order_.size(); ++i) order_[i] = i;
-    std::sort(order_.begin(), order_.end(), [&](uint32_t a, uint32_t b) {
-        const Quad& A = quads_[a]; const Quad& B = quads_[b];
-        if (A.layer != B.layer) return A.layer < B.layer;
-        if (A.key != B.key) return A.key < B.key;
-        return A.seq < B.seq;
-    });
-    verts_.clear();
-    verts_.reserve(quads_.size() * 4);
-    for (uint32_t i : order_) for (auto& v : quads_[i].v) verts_.push_back(v);
-    dev.updateBuffer(vb_, verts_.data(), verts_.size() * sizeof(SpriteVertex));
+    prepareDrawUpload(dev);
     // runs of equal texture and pipeline; the lit shader takes the sheet in slot 2 (0/1: shadow + lights)
     auto flagsOf = [&](uint32_t qi) { uint32_t f = quads_[qi].flags; if (!canLight) f &= ~uint32_t(kSpriteLit); return f; };
     uint32_t curFlags = ~0u;
@@ -346,13 +478,92 @@ void SpriteBatch::drawMesh(gfx::Device& dev, const SpriteMesh& m, gfx::TextureHa
 }
 
 void SpriteBatch::drawWater(gfx::Device& dev, const SpriteMesh& m, gfx::TextureHandle tex, const mat4& viewProj, const SpriteLighting& lighting) {
-    if (!waterPipe_.valid() || !lighting.bind) { drawMesh(dev, m, tex, viewProj, &lighting, true); return; }
-    if (!m.vb.valid() || !tex.valid()) return;
+    if (!m.vb.valid() || !tex.valid() || m.quads == 0) return;
+    // Capture exact source mesh/alpha texture; this is just draw metadata.
+    // The optional reactive render reuses the same uploaded buffers later.
+    waterReactive_.push_back({m,tex,viewProj});
+    if (!waterPipe_.valid() || !lighting.bind) {
+        drawMesh(dev, m, tex, viewProj, &lighting, true);
+        return;
+    }
     dev.setPipeline(waterPipe_);
     setUniforms(dev, viewProj, true, &lighting);
     dev.setTexture(2, tex);
     if (lighting.bindReflection) lighting.bindReflection(3);
     drawRange(dev, m.vb, 0, m.quads);
+}
+
+
+void SpriteBatch::registerWaterReactive(Renderer3D& renderer) {
+    // Each view callback owns only borrowed handles, captured by value.
+    // Owner must keep SpriteBatch, mesh buffers and textures alive through
+    // this frame's synchronous Renderer3D::resolvePrisma.
+    auto draws = std::move(waterReactive_);
+    waterReactive_.clear();
+    for (const auto& d : draws) {
+        renderer.addMotionReactiveDraw([this,d](gfx::Device& device,
+                                    gfx::TextureHandle depth,int w,int h) {
+            renderWaterReactive(device,depth,w,h,
+                                d.mesh,d.texture,d.viewProj);
+        });
+    }
+}
+
+uint32_t SpriteBatch::renderWaterReactive(
+    gfx::Device& dev, gfx::TextureHandle sceneDepth,
+    int w, int h, const SpriteMesh& m,
+    gfx::TextureHandle tex, const mat4& viewProj) {
+    if (&dev != dev_ || !sceneDepth.valid() || !m.vb.valid() ||
+        !ib_.valid() || !tex.valid() || !m.quads || w <= 0 || h <= 0)
+        return 0;
+    if (!waterReactiveShader_.valid()) {
+        gfx::ShaderDesc sd;
+        sd.glslVertex = sprite_reactive_shaders::kVS;
+        sd.glslFragment = sprite_reactive_shaders::kFS;
+        sd.msl = sprite_reactive_shaders::kMSL;
+        sd.uniformSlots = 1;
+        sd.textureSlots = 2;
+        sd.label = "prisma sprite water reactive";
+        waterReactiveShader_ = dev.createShader(sd);
+    }
+    if (!waterReactiveShader_.valid()) return 0;
+    if (!waterReactivePipe_.valid()) {
+        gfx::PipelineDesc pd;
+        pd.shader = waterReactiveShader_;
+        pd.attrs[0] = {0,gfx::VertexFormat::Float3,0};
+        pd.attrs[1] = {1,gfx::VertexFormat::Float2,12};
+        pd.attrs[2] = {2,gfx::VertexFormat::UByte4N,20};
+        pd.attrCount = 3;
+        pd.stride = sizeof(SpriteVertex);
+        pd.indexType = gfx::IndexType::UInt16;
+        pd.cull = gfx::CullMode::None;
+        pd.depthTest = false;
+        pd.depthWrite = false;
+        pd.blend = gfx::BlendMode::Screen;
+        pd.colorFormat = gfx::PixelFormat::RGBA8;
+        pd.label = "prisma sprite water reactive";
+        waterReactivePipe_ = dev.createPipeline(pd);
+    }
+    if (!waterReactivePipe_.valid()) return 0;
+    struct U { float viewProj[16], params[4]; };
+    U u{};
+    std::memcpy(u.viewProj,viewProj.m,sizeof u.viewProj);
+    u.params[0]=float(w);
+    u.params[1]=float(h);
+    dev.setPipeline(waterReactivePipe_);
+    dev.setViewport({0,0,w,h});
+    dev.setUniforms(0,&u,sizeof u);
+    dev.setTexture(0,tex);
+    dev.setTexture(1,sceneDepth);
+    dev.setVertexBuffer(m.vb);
+    dev.setIndexBuffer(ib_);
+    uint32_t draws=0;
+    for(uint32_t q=0;q<m.quads;q+=kMaxQuadsPerDraw){
+        const uint32_t n=std::min(kMaxQuadsPerDraw,m.quads-q);
+        dev.drawIndexed(n*6,0,int32_t(q*4));
+        ++draws;
+    }
+    return draws;
 }
 
 } // namespace aiverse::render

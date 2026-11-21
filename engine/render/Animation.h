@@ -46,6 +46,7 @@ public:
         float speed = 1;
         float fade = 0.2f;      // cross-fade seconds
         bool restart = false;   // restart even if this clip is already playing
+        float startTime = 0;    // initial clip seconds; preserves the outgoing fade track
     };
     void setModel(const Model* m);
     const Model* model() const { return model_; }
@@ -64,6 +65,9 @@ public:
     void evaluate(Pose& pose) const;         // bind pose + all layers
     int clip(int layer) const { return valid(layer) ? layers_[layer].cur.clip : -1; }
     float time(int layer) const { return valid(layer) ? layers_[layer].cur.time : 0; }
+    // Cosmetic phase migration when switching between baked crowd and Graph.
+    // Seeks the current layer without emitting notifies or changing any gameplay.
+    bool seek(int layer,float seconds);
     bool finished(int layer) const;          // non-looping clip reached its end (or nothing playing)
 
 private:

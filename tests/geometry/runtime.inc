@@ -218,3 +218,324 @@ TEST(geometry_prepared_scene_rejects_null_source_and_recovers) {
     models["a.obj"]=std::make_unique<Model>(geometrytest::grid(2));scene.loadPrepared(dev,json,std::move(models));
     CHECK(scene.stats().instances==1);scene.shutdown(dev);
 }
+
+
+TEST(geometry_transactional_reload_preserves_live_scene_on_source_failure) {
+    using namespace render;
+    entityfxtest::RecordingDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"old.obj"}]})");
+    const auto candidate=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"new.obj"},{"id":"b","model":"missing.obj"}]})");
+    const auto good=[](const std::string&,std::string& out) {
+        out=geometrytest::boxObj();return true;
+    };
+    scene.loadTransactional(dev,original,good);
+    CHECK(scene.stats().instances==1);
+    const auto before=scene.stats();
+    bool requestedNew=false,rejected=false;
+    try {
+        scene.loadTransactional(dev,candidate,[&](const std::string& file,std::string& out) {
+            if(file=="new.obj"){requestedNew=true;out=geometrytest::boxObj();return true;}
+            return false; // Fault injection AFTER the first source was decoded.
+        });
+    } catch(const std::exception&) {rejected=true;}
+    CHECK(requestedNew&&rejected);
+    CHECK(scene.stats().instances==before.instances);
+    CHECK(scene.stats().groups==before.groups);
+    CHECK(scene.stats().proxies==before.proxies);
+    CHECK(scene.pendingGpuRetirements()==0); // No old source retired.
+    // A previously built model/cache must remain draw-capable.
+    Renderer3D renderer;CHECK(renderer.init(dev));renderer.setShadowQuality(ShadowQuality::Off);
+    RTSCamera cam;cam.distance=20;cam.pitch=0;
+    renderer.beginScene(cam,800,600);
+    scene.draw(renderer);
+    renderer.render(gfx::PassDesc{});
+    CHECK(scene.stats().submitted==1);
+    renderer.shutdown();
+    scene.loadTransactional(dev,candidate,good);
+    CHECK(scene.stats().instances==2);
+    scene.shutdown(dev);
+}
+
+TEST(geometry_transactional_reload_keeps_strata_policy_and_resources) {
+    // Regression: the staging owner was default-constructed, so a
+    // transactional reload silently disabled every STRATA path.
+    using namespace render;
+    entityfxtest::RecordingDevice dev;
+    const auto json=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"box.obj"}]})");
+    const auto good=[](const std::string&,std::string& out){
+        out=geometrytest::boxObj();return true;
+    };
+    // Reference: the direct (non-transactional) load path.
+    GeometryScene reference;
+    reference.setStrataStagingEnabled(true);
+    reference.load(dev,json,good);
+    const auto ref=reference.stats();
+    const bool refAsset=reference.strataAsset("box.obj")!=nullptr;
+    if(reference.strataStagingSupported())
+        CHECK(ref.strataSources+ref.strataSkippedSources+ref.strataFailures>0);
+    reference.shutdown(dev);
+
+    GeometryScene scene;
+    scene.setStrataStagingEnabled(true);
+    scene.setStrataStreamingIndexBudgetBytes(4096);
+    for(int pass=0;pass<2;++pass){
+        scene.loadTransactional(dev,json,good);
+        CHECK(scene.strataStagingEnabled());
+        CHECK(scene.strataStreamingIndexBudgetBytes()==4096);
+        CHECK(scene.stats().strataSources==ref.strataSources);
+        CHECK(scene.stats().strataSkippedSources==ref.strataSkippedSources);
+        CHECK(scene.stats().strataFailures==ref.strataFailures);
+        CHECK((scene.strataAsset("box.obj")!=nullptr)==refAsset);
+    }
+    scene.shutdown(dev);
+}
+
+TEST(geometry_transactional_reload_preserves_hlod_after_proxy_source_failure) {
+    using namespace render;
+    entityfxtest::RecordingDevice dev;
+    GeometryScene scene;
+    const auto oldScene=Json::parse(R"({"version":1,"hlod":{"enabled":true},
+        "instances":[{"id":"a","model":"old-a.obj"},{"id":"b","model":"old-b.obj","position":[4,0,0]}]})");
+    const auto newScene=Json::parse(R"({"version":1,
+        "instances":[{"id":"a","model":"new.obj",
+        "proxy":{"model":"missing-proxy.obj","maxPixels":96}}]})");
+    const auto good=[](const std::string&,std::string& out){
+        out=geometrytest::boxObj();return true;
+    };
+    scene.loadTransactional(dev,oldScene,good);
+    const auto before=scene.stats();
+    CHECK(before.instances==2);
+    CHECK(before.groups>0);
+    bool failed=false;
+    try {
+        scene.loadTransactional(dev,newScene,[&](const std::string& file,std::string& out) {
+            if(file=="missing-proxy.obj")return false;
+            out=geometrytest::boxObj();return true;
+        });
+    }catch(const std::exception&){failed=true;}
+    CHECK(failed);
+    CHECK(scene.stats().instances==before.instances);
+    CHECK(scene.stats().groups==before.groups);
+    CHECK(scene.stats().proxies==before.proxies);
+    scene.loadTransactional(dev,newScene,good);
+    CHECK(scene.stats().instances==1);
+    scene.shutdown(dev);
+}
+
+
+namespace geometrytest {
+struct GpuUploadFailDevice : entityfxtest::RecordingDevice {
+    size_t attempts=0, failAt=0, refused=0;
+    bool allowIdle=true;
+    gfx::BufferHandle createBuffer(const gfx::BufferDesc& desc) override {
+        ++attempts;
+        if(failAt && attempts==failAt)return {};
+        return entityfxtest::RecordingDevice::createBuffer(desc);
+    }
+    bool waitForResourceIdle() override {
+        ++refused;
+        return allowIdle;
+    }
+};
+}
+
+TEST(geometry_transactional_gpu_source_upload_failure_preserves_live) {
+    using namespace render;
+    geometrytest::GpuUploadFailDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"old","model":"old.obj"}]})");
+    const auto replacement=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj"}]})");
+    const auto reader=[](const std::string&,std::string& bytes) {
+        bytes=geometrytest::boxObj();return true;
+    };
+    scene.loadTransactional(dev,original,reader);
+    CHECK(scene.stats().instances==1);
+    const auto before=scene.stats();
+    // Let the first source upload allocate its vertex/index buffers.
+    // Fail the next model's vertex buffer to exercise partial staging.
+    dev.failAt=dev.attempts+3;
+    bool rejected=false;
+    try {scene.loadTransactional(dev,replacement,reader);}
+    catch(const std::exception&) {rejected=true;}
+    CHECK(rejected);
+    CHECK(dev.attempts>=dev.failAt);
+    CHECK(scene.stats().instances==before.instances);
+    CHECK(scene.stats().groups==before.groups);
+    CHECK(scene.stats().proxies==before.proxies);
+    CHECK(scene.pendingGpuRetirements()==0);
+    dev.failAt=0;
+    scene.loadTransactional(dev,replacement,reader);
+    CHECK(scene.stats().instances==2);
+    scene.shutdown(dev);
+}
+
+TEST(geometry_transactional_gpu_hlod_proxy_upload_failure_preserves_live) {
+    using namespace render;
+    geometrytest::GpuUploadFailDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"old","model":"old.obj"}]})");
+    const auto candidate=Json::parse(R"({"version":1,"hlod":{"enabled":true},
+        "instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj","position":[4,0,0]}]})");
+    const auto reader=[](const std::string&,std::string& bytes) {
+        bytes=geometrytest::boxObj();return true;
+    };
+    scene.loadTransactional(dev,original,reader);
+    const auto before=scene.stats();
+    // HLOD proxy upload precedes source uploads when the proxy is created.
+    dev.failAt=dev.attempts+1;
+    bool rejected=false;
+    try {scene.loadTransactional(dev,candidate,reader);}
+    catch(const std::exception&) {rejected=true;}
+    CHECK(rejected);
+    CHECK(dev.attempts>=dev.failAt);
+    CHECK(scene.stats().instances==before.instances);
+    CHECK(scene.stats().groups==before.groups);
+    CHECK(scene.stats().proxies==before.proxies);
+    dev.failAt=0;
+    scene.loadTransactional(dev,candidate,reader);
+    CHECK(scene.stats().instances==2);
+    scene.shutdown(dev);
+}
+
+
+TEST(geometry_failed_gpu_idle_preserves_staging_retirement_for_retry) {
+    using namespace render;
+    geometrytest::GpuUploadFailDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"old","model":"old.obj"}]})");
+    const auto candidate=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj"}]})");
+    const auto reader=[](const std::string&,std::string& bytes) {
+        bytes=geometrytest::boxObj();return true;
+    };
+    scene.loadTransactional(dev,original,reader);
+    const auto before=scene.stats();
+    dev.failAt=dev.attempts+3; // fail second source after partial upload
+    dev.allowIdle=false;
+    bool rejected=false;
+    try {scene.loadTransactional(dev,candidate,reader);}
+    catch(const std::exception&) {rejected=true;}
+    CHECK(rejected);
+    CHECK(scene.stats().instances==before.instances);
+    CHECK(scene.pendingFailedStages()==1);
+    CHECK(scene.pendingGpuRetirements()>0);
+    CHECK(dev.refused>0);
+    // Successful reload must not delete the earlier failed-stage owner.
+    dev.failAt=0;
+    dev.allowIdle=true;
+    scene.loadTransactional(dev,candidate,reader);
+    CHECK(scene.stats().instances==2);
+    CHECK(scene.pendingFailedStages()==1);
+    scene.shutdown(dev); // retry retirement after the device resumes
+    CHECK(scene.pendingFailedStages()==0);
+    CHECK(scene.pendingGpuRetirements()==0);
+}
+
+
+namespace geometrytest {
+// CPU-only fake GPU completion tokens. An individual completed token is the
+// *only* condition that allows collectRetired to destroy that stage's models.
+struct GpuTokenDevice : GpuUploadFailDevice {
+    uint64_t nextToken=1;
+    std::set<uint64_t> completedTokens;
+    std::set<uint64_t> closedTokens;
+    uint64_t beginResourceRetirement() override {return nextToken++;}
+    bool resourceRetirementComplete(uint64_t token) override {
+        return completedTokens.count(token)!=0;
+    }
+    void endResourceRetirement(uint64_t token) override {
+        closedTokens.insert(token);
+    }
+};
+}
+
+TEST(geometry_failed_stages_collect_only_their_completed_gpu_tokens) {
+    using namespace render;
+    geometrytest::GpuTokenDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"old","model":"old.obj"}]})");
+    const auto candidate=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj"}]})");
+    const auto reader=[](const std::string&,std::string& out) {
+        out=geometrytest::boxObj();
+        return true;
+    };
+    scene.loadTransactional(dev,original,reader);
+    const auto oldStats=scene.stats();
+    dev.allowIdle=false;
+    for(int i=0;i<2;++i) {
+        // First source is uploaded; the following allocation fails.
+        dev.failAt=dev.attempts+3;
+        bool rejected=false;
+        try {scene.loadTransactional(dev,candidate,reader);}
+        catch(const std::exception&) {rejected=true;}
+        CHECK(rejected);
+    }
+    CHECK(scene.pendingFailedStages()==2);
+    CHECK(scene.stats().instances==oldStats.instances);
+    const auto pending=scene.pendingGpuRetirements();
+    CHECK(pending>=2);
+    CHECK(!scene.collectRetired(dev)); // two fresh, still-pending tokens
+    CHECK(dev.nextToken==3);
+    CHECK(scene.pendingFailedStages()==2);
+    CHECK(scene.pendingGpuRetirements()==pending);
+    CHECK(dev.closedTokens.empty());
+    dev.completedTokens.insert(1);
+    CHECK(!scene.collectRetired(dev)); // second token remains pending
+    CHECK(scene.pendingFailedStages()==1);
+    CHECK(scene.pendingGpuRetirements()>0);
+    CHECK(dev.closedTokens.count(1)==1);
+    CHECK(dev.closedTokens.count(2)==0);
+    dev.completedTokens.insert(2);
+    CHECK(scene.collectRetired(dev));
+    CHECK(scene.pendingFailedStages()==0);
+    CHECK(scene.pendingGpuRetirements()==0);
+    CHECK(dev.closedTokens.count(2)==1);
+    CHECK(scene.stats().instances==oldStats.instances);
+    dev.allowIdle=true;
+    scene.shutdown(dev);
+}
+
+TEST(geometry_failed_stage_backpressure_and_explicit_idle_recovery) {
+    using namespace render;
+    geometrytest::GpuUploadFailDevice dev;
+    GeometryScene scene;
+    const auto original=Json::parse(R"({"version":1,"instances":[{"id":"old","model":"old.obj"}]})");
+    const auto candidate=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj"}]})");
+    size_t reads=0;
+    const auto reader=[&](const std::string&,std::string& out) {
+        ++reads;
+        out=geometrytest::boxObj();
+        return true;
+    };
+    scene.loadTransactional(dev,original,reader);
+    dev.allowIdle=false;
+    for(size_t n=0;n<GeometryScene::kMaxFailedStages;++n) {
+        dev.failAt=dev.attempts+3;
+        bool rejected=false;
+        try {scene.loadTransactional(dev,candidate,reader);}
+        catch(const std::exception&) {rejected=true;}
+        CHECK(rejected);
+        CHECK(scene.pendingFailedStages()==n+1);
+    }
+    CHECK(scene.stats().instances==1);
+    const size_t attemptedBuffers=dev.attempts;
+    const size_t attemptedReads=reads;
+    bool throttled=false;
+    try {scene.loadTransactional(dev,candidate,reader);}
+    catch(const std::runtime_error&) {throttled=true;}
+    CHECK(throttled);
+    CHECK(scene.rejectedFailedStageLoads()==1);
+    CHECK(scene.pendingFailedStages()==GeometryScene::kMaxFailedStages);
+    CHECK(dev.attempts==attemptedBuffers);
+    CHECK(reads==attemptedReads); // backpressure before source loading
+    CHECK(!scene.recoverFailedStagesAfterGpuIdle(dev));
+    CHECK(scene.pendingFailedStages()==GeometryScene::kMaxFailedStages);
+    dev.failAt=0;
+    dev.allowIdle=true;
+    CHECK(scene.recoverFailedStagesAfterGpuIdle(dev));
+    CHECK(scene.pendingFailedStages()==0);
+    CHECK(scene.pendingGpuRetirements()==0);
+    scene.loadTransactional(dev,candidate,reader);
+    CHECK(scene.stats().instances==2);
+    scene.shutdown(dev);
+}

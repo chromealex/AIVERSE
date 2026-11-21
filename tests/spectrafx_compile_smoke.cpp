@@ -81,3 +81,19 @@ struct CinemaCamera {
     particles.setView(camera,raw.viewProj,1920,1080);
 }
 } // namespace
+
+namespace {
+[[maybe_unused]] void compilePooledGraphView(
+    aiverse::spectra::BatchWorld& cpu,aiverse::spectra::GpuPoolWorld& gpu,
+    aiverse::spectra::ComputeParticles& particles,aiverse::spectra::GraphRuntime& graph) {
+    const CinemaCamera camera{};
+    const auto view=aiverse::fx::SpectraFxView::fromCamera(
+        camera,aiverse::render::mat4::identity(),1920,1080);
+    cpu.setView(view); particles.setView(view); graph.setView(view);
+    (void)gpu.beginPresentationFrame(view);
+    cpu.setView(camera,view.viewProj,1920,1080);
+    particles.setView(camera,view.viewProj,1920,1080);
+    graph.setView(camera,view.viewProj,1920,1080);
+    (void)gpu.beginPresentationFrame(camera,view.viewProj,1920,1080);
+}
+}

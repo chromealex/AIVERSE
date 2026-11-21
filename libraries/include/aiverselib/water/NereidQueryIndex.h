@@ -163,7 +163,7 @@ private:
         if(!coversWaterBody(*body,geometry,position))return;
         const auto* field=world_.tryGetConst<WaterCurrentFieldComponent>(entity);
         const auto* vortices=world_.tryGetConst<WaterVortexFieldComponent>(entity);
-        considerWaterCandidate(out,entity,*body,position,geometry,field,vortices);
+        considerWaterCandidate(out,entity,*body,position,geometry,field,vortices,world_.tryGetConst<WaterRiverGradeComponent>(entity));
     }
     void visit(int index,Vec3 position,WaterSample& out) const {
         const auto& node=nodes_[size_t(index)];

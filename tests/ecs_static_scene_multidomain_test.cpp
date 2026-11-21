@@ -366,8 +366,11 @@ static void multiDomainIntegration() {
     AIVERSE_TEST_CHECK(world.get<fixture::InstanceState>(fieldEntities[1]).ammo==999);
     AIVERSE_TEST_CHECK(configs.registry->validateWorld(world));
     AIVERSE_TEST_CHECK(world.countExisting<st::StaticRef<fixture::Weapon>>()==4);
+    // Rollback diffs residency: the persistent scene stayed Active and keeps
+    // its leases; only the restored field scene needs a residency job.
+    AIVERSE_TEST_CHECK(loader.residentSceneCount()==1);
     const auto restored=loader.queueRestoredResidency();
-    AIVERSE_TEST_CHECK(restored.size()==2);
+    AIVERSE_TEST_CHECK(restored.size()==1 && restored[0].scene==field.scene);
     for(const auto ticket:restored) {
         awaitReady(loader,ticket);
         AIVERSE_TEST_CHECK(loader.commit(ticket));

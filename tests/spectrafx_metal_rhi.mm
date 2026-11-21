@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
@@ -87,6 +88,35 @@ int main() {
         check(colorA.valid() && colorB.valid() && depth.valid(),
               "two render-to-texture color targets and depth");
         if (failures) return 1;
+
+        // Inspector graph-v2 compatibility: real checked storage upload and
+        // bounded ranged readback must preserve offsets and owner-thread delivery.
+        const uint32_t storageWords[4]={11,22,33,44};
+        auto storage=device->createBuffer({aiverse::gfx::BufferType::Storage,
+            aiverse::gfx::Usage::Dynamic,sizeof(storageWords),nullptr,"graph-v2 RHI test"});
+        check(storage.valid(),"graph-v2 storage allocation");
+        check(!device->updateStorageBufferChecked(storage,storageWords,sizeof(storageWords)),
+              "checked upload rejects missing frame");
+        auto ranged=std::make_shared<std::vector<uint8_t>>();
+        auto deliveredRange=std::make_shared<bool>(false);
+        device->beginFrame(kWidth,kHeight);
+        check(device->updateStorageBufferChecked(storage,storageWords,sizeof(storageWords)),
+              "checked storage upload accepted in frame");
+        check(!device->readBufferRangeAsync(storage,sizeof(storageWords),4,[](auto){}),
+              "ranged read rejects overflow");
+        check(device->readBufferRangeAsync(storage,4,8,[ranged,deliveredRange](auto bytes) {
+            *ranged=std::move(bytes);*deliveredRange=true;
+        }),"ranged storage read accepted");
+        check(!*deliveredRange,"readback callback is asynchronous");
+        device->endFrame();
+        check(device->waitIdle(),"storage readback idle barrier");
+        device->beginFrame(kWidth,kHeight);
+        device->endFrame();
+        check(*deliveredRange && ranged->size()==8 &&
+              std::memcmp(ranged->data(),storageWords+1,8)==0,
+              "ranged storage read matches uploaded offset bytes");
+        check(device->waitIdle(),"storage teardown idle barrier");
+        device->destroyBuffer(storage);
 
         const auto sharedCompute=device->createCompute(
             {aiverse::fx::kSpectraFxComputeMetal,nullptr,

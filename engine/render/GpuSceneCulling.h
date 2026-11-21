@@ -3,6 +3,7 @@
 // This dispatch is diagnostic; results are NOT used to decide draw visibility
 // until shaders/indirect commands can consume the GPU visibility buffer.
 #include "engine/gfx/Gfx.h"
+#include "GpuOwnedMemory.h"
 #include "Math3D.h"
 #include <array>
 #include <cstdint>
@@ -53,6 +54,12 @@ public:
     }
     gfx::BufferHandle visibility(uint64_t frameIndex) const {
         return slots_[frameIndex % slots_.size()].visible;
+    }
+    // One visibility allocation per GPU frame slot, never sampled/read back.
+    GpuOwnedMemoryStats ownedGpuMemoryStats(const gfx::Device& dev) const {
+        GpuOwnedMemoryCounter counter(dev);
+        for (const auto& slot : slots_) counter.buffer(slot.visible);
+        return counter.stats();
     }
     void release(gfx::Device& device) {
         for (auto& slot : slots_) {

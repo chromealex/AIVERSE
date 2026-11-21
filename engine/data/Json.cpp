@@ -90,7 +90,20 @@ private:
         ++p_;
         return out;
     }
+    // Guards array()/object() recursion; see Json::kMaxParseDepth.
+    struct DepthGuard {
+        JsonParser& p;
+        explicit DepthGuard(JsonParser& parser) : p(parser) {
+            if (p.depth_ >= Json::kMaxParseDepth)
+                p.fail("nesting deeper than " + std::to_string(Json::kMaxParseDepth) + " levels");
+            ++p.depth_;
+        }
+        ~DepthGuard() { --p.depth_; }
+        DepthGuard(const DepthGuard&) = delete;
+        DepthGuard& operator=(const DepthGuard&) = delete;
+    };
     Json array() {
+        DepthGuard guard(*this);
         ++p_;
         Json j; j.type_ = Json::Type::Array;
         ws();
@@ -104,6 +117,7 @@ private:
         }
     }
     Json object() {
+        DepthGuard guard(*this);
         ++p_;
         Json j; j.type_ = Json::Type::Object;
         ws();
@@ -125,6 +139,7 @@ private:
 
     const std::string& s_;
     size_t p_ = 0;
+    int depth_ = 0;
 };
 
 Json Json::parse(const std::string& text) { return JsonParser(text).parseRoot(); }

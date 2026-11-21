@@ -160,14 +160,27 @@ public:
         std::vector<TerrainPatchDirtyRegion> nextDirty;
         try {
             nextDirty=dirty_;
-            if(nextDirty.size()>=64u)nextDirty.erase(nextDirty.begin());
             const int64_t x=int64_t(patch.cell.x)*
                             patch.cellSizeMetres*100;
             const int64_t z=int64_t(patch.cell.z)*
                             patch.cellSizeMetres*100;
-            nextDirty.push_back({patch.cell,{
+            const TerrainPatchDirtyRegion region{patch.cell,{
                 x,z,x+int64_t(patch.cellSizeMetres)*100,
-                z+int64_t(patch.cellSizeMetres)*100},patch.sourceRevision});
+                z+int64_t(patch.cellSizeMetres)*100},patch.sourceRevision};
+            // Coalesce per tile rectangle (keep the newest revision) instead
+            // of dropping the oldest records once a fixed cap is reached:
+            // a listener that polls late still sees the latest republish.
+            const auto same=std::find_if(nextDirty.begin(),nextDirty.end(),
+                [&](const TerrainPatchDirtyRegion& d){
+                    return d.cell==region.cell &&
+                           d.bounds.minX==region.bounds.minX &&
+                           d.bounds.minZ==region.bounds.minZ &&
+                           d.bounds.maxX==region.bounds.maxX &&
+                           d.bounds.maxZ==region.bounds.maxZ;
+                });
+            if(same==nextDirty.end())nextDirty.push_back(region);
+            else same->sourceRevision=std::max(same->sourceRevision,
+                                               region.sourceRevision);
             collisions.publish(spatial,patch,firstColliderId);
         }catch(...){
             render::releaseModel(device,*candidate);
@@ -200,15 +213,20 @@ public:
 
     // Must run BEFORE the shared graphics Device is destroyed.
     // The host calls this at chunk unload, map change or game shutdown.
-    void shutdown(gfx::Device& device,world::SpatialWorld& spatial,
-                  TerrainCollisionPublisher& collisions) {
-        if(!model_)return;
+    // Returns the dirty records not yet taken by listeners, so the owner can
+    // still deliver the last republish of an unloaded tile.
+    std::vector<TerrainPatchDirtyRegion> shutdown(
+            gfx::Device& device,world::SpatialWorld& spatial,
+            TerrainCollisionPublisher& collisions) {
+        std::vector<TerrainPatchDirtyRegion> undelivered;
+        undelivered.swap(dirty_);
+        if(!model_)return undelivered;
         collisions.unload(spatial,cell_);
         render::releaseModel(device,*model_);
         model_.reset();
         revision_=0;
         cellSizeMetres_=0;
-        dirty_.clear();
+        return undelivered;
     }
 private:
     std::unique_ptr<render::Model> model_;

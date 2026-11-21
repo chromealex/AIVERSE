@@ -1,17 +1,16 @@
 // Models: the selected type as the game draws it (portrait with its idle clip), with what its model
 // contains — clips, nodes, materials, variants, baked skinning — and the warnings of its view
-// block. Model files are watched: saving a model file reloads the views. Formats the runtime does
-// not read (.blend, .lwo, .x, ...) are converted to a "<file>.glb" sidecar with modelconv (next to
-// aiversebuild) when they are first used and whenever they change. Agents get the same information
-// through the `model_info` operation.
+// block. The editor-owned VisualAssetDependencyService watches model files,
+// even with this panel closed. Agents can inspect assets via `model_info`.
 #include <algorithm>
-#include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <limits>
 #include "../Editor.h"
 #include "../EditorUtil.h"
 #include "modules/rts/view/RtsPortrait.h"
-
-namespace fs = std::filesystem;
+#include "engine/render/RenderResourceOwnerGroup.h"
 
 namespace aiverse::editor {
 
@@ -101,9 +100,29 @@ public:
     int order() const override { return 3; }
     bool openByDefault() const override { return false; }
 
-    ~ModelWindow() override { portrait_.shutdown(); }
+    ~ModelWindow() override {
+        if(rawDevice_)rawModels_.shutdown(*rawDevice_);
+        retirePortrait();
+    }
+    void retirePortrait() {
+        if (!portraitInit_) return;
+        auto former = std::move(portrait_);
+        portrait_ = std::make_shared<game::Portrait>();
+        portraitInit_ = false;
+        if (!former || !portraitDev_) return;
+        if (!gpuResourceOwner_) {
+            // Standalone owner: requires its existing GPU-idle teardown.
+            former->shutdown();
+            return;
+        }
+        gfx::Device& gpu = *portraitDev_;
+        gpuResourceOwner_->retireOwned(gpu,
+            [former = std::move(former)] { former->shutdown(); });
+    }
 
     void draw(Editor& ed) override {
+        gpuResourceOwner_ = &ed.gpuResourceRetirement();
+        portraitDev_ = &ed.device();
         const auto& types = ed.rules().types;
         if (types.empty()) { ImGui::TextDisabled("Нет типов"); return; }
         if (ed.selection.kind == Selection::Type) {
@@ -132,14 +151,103 @@ public:
         // A type chosen in this panel might not occur on the open map.
         // Load it on demand and keep it resident while its preview is visible.
         ed.retainEditorType(uint16_t(type_));
-        if (!portraitInit_) { portraitInit_ = true; portrait_.init(ed.device(), 256); }
+        const render::Model* current=ed.view().modelOf(uint16_t(type_));
+        // Explicit alternate INSPECTION mode: the imported static asset
+        // without game-type tint, graph, materials or transform overrides.
+        // Ordinary default portraits always retain their original path.
+        bool canShowRaw=current && current->clips.empty() &&
+            current->skins.empty() && !current->path.empty() &&
+            current->path.rfind("shape:",0)!=0;
+        if(canShowRaw) {
+            const std::filesystem::path path(current->path);
+            canShowRaw=path.is_relative();
+            for(const auto& part:path)if(part=="..")canShowRaw=false;
+        }
+        if(canShowRaw)ImGui::Checkbox("Исходная 3D-модель (без overrides)",&rawMode_);
+        else rawMode_=false;
+        if (!portraitInit_) { portraitInit_ = true; portrait_->init(ed.device(), 256); }
         time_ += ImGui::GetIO().DeltaTime;
-        portrait_.render(ed.view(), uint16_t(type_), uint8_t(owner_), time_);
-        if (portrait_.texture().valid()) {
+        bool rawDrawn=false;
+        if(rawMode_ && canShowRaw) {
+            // Keep this provider entirely separate from RtsView's model
+            // ownership; rebind at project/cache revision boundaries.
+            const auto& project=ed.ws().project.dir;
+            const auto revision=ed.view().modelResources().generation();
+            if(rawProject_!=project || rawRevision_!=revision) {
+                if(rawDevice_)rawModels_.shutdown(*rawDevice_);
+                rawModels_.setReader([project](const std::string& path,
+                                              std::string& bytes) {
+                    std::ifstream in(std::filesystem::path(project)/path,
+                                     std::ios::binary);
+                    if(!in)return false;
+                    bytes.assign(std::istreambuf_iterator<char>(in),
+                                 std::istreambuf_iterator<char>());
+                    return true;
+                });
+                // Advisory size estimate, not a hard VRAM cap. Busy GPU
+                // allocations remain alive until their retirement token.
+                rawModels_.resources().setEstimatedRetirementByteLimit(
+                    64ull*1024ull*1024ull);
+#ifndef __EMSCRIPTEN__
+                rawModels_.setCpuWorkerCount(2);
+                rawModels_.setCpuMaxQueued(8);
+#endif
+                rawDevice_=&ed.device();
+                rawProject_=project;
+                rawRevision_=revision;
+            }
+            // One resource budget across THREE live native host owners:
+            // the world RtsView, this portrait's generated geometry and the
+            // independent raw-source model provider. Shared GPU pool pages
+            // and texture-owner allocations are never charged per Model.
+            render::RenderResourceOwnerGroup ownerGroup;
+            const auto deviceEpoch=ed.gpuDeviceLease();
+            const auto sceneLease=ownerGroup.registerScoped(
+                deviceEpoch,ed.view().modelResources());
+            const auto portraitLease=ownerGroup.registerScoped(
+                deviceEpoch,portrait_->modelResources());
+            const auto rawLease=ownerGroup.registerScoped(
+                deviceEpoch,rawModels_.resources());
+            ownerGroup.setEstimatedBudgetBytes(256ull*1024ull*1024ull);
+            const auto group=ownerGroup.snapshot(ed.device());
+            const bool admission=ownerGroup.mayAdmitNewSources(group);
+            ImGui::TextDisabled("Ресурсы: %zu хоста · %zu модели · %.1f MiB (оценка)",
+                group.uniqueOwners,group.residentModels+group.retiredModels,
+                double(group.estimatedKnownBytes())/(1024.0*1024.0));
+            if(group.health==render::RenderResourceHealth::DeviceUnhealthy)
+                ImGui::TextDisabled("GPU сообщил об ошибке; новые источники не загружаются");
+            else if(group.health==render::RenderResourceHealth::RetirementFenceFailed)
+                ImGui::TextDisabled("Ошибка GPU fence (%zu): ресурсы удерживаются, новые импорты отложены",
+                                    group.unresolvedFailedFences);
+            else if(!admission)
+                ImGui::TextDisabled("Бюджет визуальных ресурсов занят, загрузка отложена");
+            else if(group.health==render::RenderResourceHealth::PendingGpuRetirement)
+                ImGui::TextDisabled("GPU завершает освобождение предыдущих моделей");
+#ifndef __EMSCRIPTEN__
+            if(admission && !rawModels_.resources().contains(current->path))
+                rawModels_.requestAsync(
+                    current->path,render::ModelLoadPriority::Interactive);
+            if(admission)rawModels_.publishReady(ed.device(),1,1.0);
+            const auto progress=rawModels_.cpuStats();
+            if(progress.workerActive || progress.queued)
+                ImGui::TextDisabled("CPU моделей: %zu / %zu задач · очередь %zu",
+                    progress.activeWorkers,progress.configuredWorkers,
+                    progress.queued);
+#else
+            if(admission)rawModels_.load(ed.device(),current->path);
+#endif
+            if(rawModels_.find(current->path))
+                rawDrawn=portrait_->renderStaticModel(
+                    rawModels_,current->path,0.5f);
+            else ImGui::TextDisabled("Загрузка исходной модели...");
+        }
+        if(!rawDrawn)
+            portrait_->render(ed.view(), uint16_t(type_), uint8_t(owner_), time_);
+        if (portrait_->texture().valid()) {
             const bool flip = ed.device().info().renderTargetFlipY;
             const float side = std::clamp(ImGui::GetContentRegionAvail().x, 120.0f, 260.0f);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - side) * 0.5f);
-            ImGui::Image(ImTextureRef(ImTextureID(portrait_.texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
+            ImGui::Image(ImTextureRef(ImTextureID(portrait_->texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
         }
         const std::string& tid = types[size_t(type_)].id;
         for (const auto& w : ed.view().warnings())
@@ -196,6 +304,10 @@ public:
     }
 
     void update(Editor& ed, double dt) override {
+        // Dock-hidden and closed tabs do not need live 3D preview resources.
+        // Archive the complete previous Portrait until backend GPU completion.
+        if (portraitInit_ && (!open || !ed.isWindowInFront(this)))
+            retirePortrait();
         if (!opRegistered_) {
             opRegistered_ = true;
             ed.ws().registerOp({"model_info", "Contents of the model of a unit type (clips, nodes, materials, variants) and its view warnings.",
@@ -217,73 +329,24 @@ public:
                                     return r;
                                 }, true});
         }
-        // hot reload: model files of the open game changed on disk
-        sinceCheck_ += dt;
-        if (sinceCheck_ < 1.0) return;
-        sinceCheck_ = 0;
-        const std::string& dir = ed.ws().project.dir;
-        if (dir.empty()) return;
-        bool changed = false;
-        for (const auto& f : ed.view().modelFiles()) {
-            std::error_code ec;
-            const fs::path src = fs::path(dir) / f;
-            const auto t = fs::last_write_time(src, ec);
-            if (ec) continue;
-            if (!render::isNativeModelFormat(f)) {   // converted format: keep its sidecar up to date
-                const fs::path side = fs::path(src.string() + ".glb");
-                std::error_code e2;
-                if ((!fs::exists(side, e2) || fs::last_write_time(side, e2) < t) && convert(ed, src.string())) changed = true;
-            }
-            auto it = stamps_.find(f);
-            if (it == stamps_.end()) stamps_[f] = t;
-            else if (it->second != t) { it->second = t; changed = true; ed.ws().log("view", "модель изменена: " + f); }
-        }
-        if (changed) ed.reloadRules();
+        (void)dt; // visual asset polling is owned by Editor, not this window
     }
 
 private:
-    // modelconv sits next to aiversebuild; one attempt per file and modification (no retry loops)
-    bool convert(Editor& ed, const std::string& src) {
-        std::error_code ec;
-        const auto t = fs::last_write_time(src, ec);
-        auto& tried = tried_[src];
-        if (tried == t) return false;
-        tried = t;
-        fs::path tool = fs::path(ed.ws().buildTool).parent_path() /
-#if defined(_WIN32)
-                        "modelconv.exe";
-#else
-                        "modelconv";
-#endif
-        if (!fs::exists(tool, ec)) {
-            ed.ws().log("view", "нужна конвертация " + src + ", но modelconv не найден рядом с aiversebuild");
-            return false;
-        }
-        const std::string cmd = "\"" + tool.string() + "\" \"" + src + "\" 2>&1";
-#if defined(_WIN32)
-        FILE* p = _popen(cmd.c_str(), "r");
-#else
-        FILE* p = popen(cmd.c_str(), "r");
-#endif
-        if (!p) return false;
-        std::string out;
-        char buf[256];
-        while (std::fgets(buf, sizeof buf, p)) out += buf;
-#if defined(_WIN32)
-        const int rc = _pclose(p);
-#else
-        const int rc = pclose(p);
-#endif
-        ed.ws().log("view", (rc == 0 ? "сконвертирована модель " : "не удалось сконвертировать ") + src + (rc == 0 ? std::string() : ": " + out));
-        return rc == 0;
-    }
-
-    std::map<std::string, fs::file_time_type> tried_;
     int type_ = 0, owner_ = 1;
-    double time_ = 0, sinceCheck_ = 0;
+    double time_ = 0;
     bool portraitInit_ = false, opRegistered_ = false;
-    game::Portrait portrait_;
-    std::map<std::string, fs::file_time_type> stamps_;
+    std::shared_ptr<game::Portrait> portrait_ =
+        std::make_shared<game::Portrait>();
+    render::GpuResourceRetirement* gpuResourceOwner_ = nullptr;
+    gfx::Device* portraitDev_ = nullptr;
+    // Owned by the editor Model panel; the default type preview does not
+    // borrow from this independent native-source cache.
+    render::ModelAssetProvider rawModels_;
+    gfx::Device* rawDevice_=nullptr;
+    std::string rawProject_;
+    uint64_t rawRevision_=std::numeric_limits<uint64_t>::max();
+    bool rawMode_=false;
 };
 
 AIVERSE_EDITOR_WINDOW(ModelWindow);

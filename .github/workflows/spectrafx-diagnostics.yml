@@ -1,0 +1,106 @@
+# Standalone SpectraFX V2 diagnostic validation without full engine build.
+# Each runner compiles the actual repo headers and CLI, checks ZIP extraction,
+# malformed bytes, and default privacy redaction. Metal runtime is NOT tested.
+name: SpectraFX standalone diagnostic validation
+
+on:
+  push:
+    branches:
+      - feature/universal-entity-inspector-fps
+    paths:
+      - 'engine/fx/SpectraCheckpoint*.h'
+      - 'engine/fx/SpectraDiagnostic*.h'
+      - 'engine/fx/SpectraGpuCheckpoint.h'
+      - 'tools/spectrafx/**'
+      - 'tests/vfx_spfx_diagnostics_test.cpp'
+      - '.github/workflows/spectrafx-diagnostics.yml'
+  pull_request:
+    paths:
+      - 'engine/fx/SpectraCheckpoint*.h'
+      - 'engine/fx/SpectraDiagnostic*.h'
+      - 'engine/fx/SpectraGpuCheckpoint.h'
+      - 'tools/spectrafx/**'
+      - 'tests/vfx_spfx_diagnostics_test.cpp'
+      - '.github/workflows/spectrafx-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spfx-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    name: Compile and test offline SPFX on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile offline inspector (C++20)
+        run: c++ -std=c++20 -Wall -Wextra -Werror -O2 -I. tools/spectrafx/inspect_spfx.cpp -o inspect_spfx
+      - name: Compile standalone regression (C++20)
+        run: c++ -std=c++20 -Wall -Wextra -Werror -O2 -I. tests/vfx_spfx_diagnostics_test.cpp -o vfx_spfx_diagnostics_test
+      - name: Execute standalone regression and write explicit fixtures
+        run: ./vfx_spfx_diagnostics_test fixture.spfx fixture.zip
+      - name: Validate real ZIP extraction, privacy and offline CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./inspect_spfx --json --bundle support.zip --report report.json fixture.spfx > stdout.json
+          python3 - <<'PY'
+          import json, zipfile
+          for name in ("fixture.zip","support.zip"):
+              with zipfile.ZipFile(name) as z:
+                  assert z.namelist() == [
+                      "manifest.json","checkpoint_summary.json",
+                      "preview_timeline.json"]
+                  assert z.testzip() is None
+                  manifest=json.loads(z.read("manifest.json"))
+                  assert manifest["redacted"] is True
+                  assert manifest["containsRawCheckpoint"] is False
+                  assert manifest["containsWorldCoordinates"] is False
+                  assert manifest["containsVmScalars"] is False
+                  assert manifest["containsGpuIdentifiers"] is False
+                  summary=json.loads(z.read("checkpoint_summary.json"))
+                  assert summary["valid"] is True
+                  assert "worldBoundsMin" not in summary
+                  assert "gpuFrameSerial" not in summary
+                  assert "capturedRevision" not in summary
+                  assert "payloadCRC32" not in summary
+                  assert "12345" not in str(summary)
+          for name in ("stdout.json","report.json"):
+              data=json.load(open(name))
+              assert data["valid"] is True
+              assert data["liveSlots"] == 2
+              assert data["deadSlots"] == 1
+              assert "worldBoundsMin" not in data
+              assert "gpuFrameSerial" not in data
+          corrupted=bytearray(open("fixture.spfx","rb").read())
+          corrupted[-1] ^= 0x01
+          open("corrupt.spfx","wb").write(corrupted)
+          PY
+          if ./inspect_spfx corrupt.spfx >/dev/null 2>&1; then
+              echo "Corrupt SPFX unexpectedly accepted" >&2
+              exit 1
+          fi
+          ./inspect_spfx --json --include-coordinates --include-identifiers fixture.spfx > sensitive.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open("sensitive.json"))
+          assert data["valid"] is True
+          assert "worldBoundsMin" in data
+          assert "gpuFrameSerial" in data
+          PY
+      - name: Check bounded CLI argument and missing-file behavior
+        shell: bash
+        run: |
+          set +e
+          ./inspect_spfx --json definitely_missing_stage44.spfx >/dev/null 2>&1
+          status=$?
+          set -e
+          test "$status" -eq 2

@@ -209,3 +209,15 @@ Alpha сохраняется: у оттенка alpha равна 1. Граф в�
 валидации, GPU diagnostic и просмотренный screenshot. Разделяйте проверку
 preview и проверку сцены/игры. Проверенный Metal не означает проверенные
 OpenGL/WebGL/Android. Проверка этих примеров не требует изменения C++ движка.
+
+
+## Material ambient occlusion output (2026-11-21)
+
+Material graphs may also provide `outputs.occlusion`. The red channel replaces
+the ordinary PBR texture AO and is clamped to0..1. It affects the same ambient/
+indirect lighting paths as existing AO, without multiplying the albedo or direct
+light a second time. Old graphs keep their ordinary texture AO. Postfx/particle
+domains still expose color only. Native Renderer3D GLSL/MSL inject this after
+standard material sampling. The legacy ImGui output selector has not been
+extended; agent-authored graph snapshots can use the output through existing
+material assignment APIs. Do not claim editor GUI parity from compiler support.

@@ -3,6 +3,9 @@ name: aiverse-terraweave
 description: Implement, configure or extend AIVERSE genre-independent procedural terrain, biomes, trees, vegetation placement and ecosystem streaming without breaking existing terrain or deterministic ECS rules.
 ---
 
+For every game/world creation task, first follow `skills/workflow/aiverse-terra-first/SKILL.md`. Use native Terra capabilities before custom environment implementations; vegetation routing is `skills/world/aiverse-terra-vegetation/SKILL.md`.
+
+
 # TerraWeave — AIVERSE procedural world
 
 Read these in order:
@@ -1428,3 +1431,33 @@ See `docs/nereid/TERRAIN_EROSION.md` and handoff for exact status.
 - `TerraWeaveForestScene.h`: `setDeadTrees` independent of fallen/harvested filters; `setRecruitedPlants` renders sparse native saplings using the existing Arbor shared mesh/impostor and Flora LOD instead of per-tree GPU asset generation. `TerraWeaveNativeWorldBinding.h` reconstructs these on rollback/load. Tree-only age/light changes do not rebuild unrelated GPU grass, terrain meshes, colliders or navmesh.
 - `examples/world/terraweave_native/{Integration.h,README.md}` demonstrates opt-in species policies and authoritative ECS planting; see `docs/terrain/stage-65-rooted-forest-ecology-handoff.md` for exact commits and limitations. Hidden *harvested* trees must also be removed/flagged in authoritative game state; natural death does NOT itself remove physics colliders, produce fallen logs or decompose resources. Explicit gameplay owns those actions.
 - This stage is **source-implemented but not compiled or native-tested**. Expensive decisions are batched, but rebuilding the canopy index and staging ECS root snapshots remains O(N) per due ecology period; no proven million-entity runtime or true photometric light. Do not merge Draft PR #24 before native CMake/CTest, deterministic ECS replay, NEREID water stress and Arbor near/far/Metal validation.
+
+## Native decorative rocks (2026-11-20)
+
+Use `engine/world/TerraWeaveRocks.h` / `engine/render/TerraWeaveRockModel.h`
+for reusable seeded stones, boulders, slabs and shards. Read `docs/terrain/rocks.md`.
+Do not create a second Python geometry solver or use plant age/foliage components
+for rocks. Cache a bounded prototype pool; ordinary Renderer3D owns 1280/320/80
+triangle LOD and GPU resources. Integer placement accepts an immutable authored
+height snapshot and a road/water exclusion callback. Nine-point support is a
+conservative visual approximation, not collision or authority. Native source
+uses no new renderer. `aiverse_terraweave_rocks` exports the same generated models
+with existing glTF rtsLods and four shared PBR maps, refusing existing output dirs.
+Test `terraweave_rocks` and inspect real captures before visual acceptance.
+
+## Immutable exported terrain LOD
+
+For baked terrain assets use `engine/render/TerraWeaveTerrainLod.h` and
+`appendTerrainPatchLods` after smoothing shared source normals/UVs, before GPU
+upload. The landscape exporter already does this. It preserves exact LOD0 and
+all outer edge vertices while appending three error-budgeted alternatives.
+Keep the original TerrainPatch collision; live mutable patches and Horizon
+retain their existing owners. Read the immutable terrain LOD section of
+`docs/terrain/TERRAWEAVE.md` for input restrictions and storage costs.
+
+Inspect actual camera/shadow submitted triangle counters and captures.
+Renderer3D crossfade is spatial: a parked camera inside a transition band keeps
+both tiers, so choose outside-band views to measure one tier. Do not infer a
+broken LOD or FPS gain from summed asset triangles. Check `terraweave_model` and
+`tests/terrain/check_landscape_export.py`; backend and editor picking parity
+still need their own verification.

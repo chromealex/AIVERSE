@@ -578,25 +578,27 @@ namespace aiverse::render::shaders {
 // in x, sampled at the fragment's screen position with a ripple wobble). c: scene colour (linear in HDR, display-space in LDR).
 #define AIVERSE_GLSL_WATER_REFLECT(REFL) \
     "uniform mediump sampler2D " REFL ";\n" \
-    "vec3 waterReflect(vec3 c, vec3 wpos, vec3 n, vec3 V, float specK) {\n" \
+    "vec3 waterReflect(vec3 c, vec3 wpos, vec3 n, vec3 V, float specK, bool resolvedNormal) {\n" \
     "    if (specK < 0.85 || l_sky.y <= 0.0) return c;\n" \
     "    vec2 uv = gl_FragCoord.xy * l_sky.zw;\n" \
     "    uv.x = 1.0 - uv.x;\n" \
-    "    uv += vec2(sin(wpos.z * 3.0 + l_cloud.x * 11.0), sin(wpos.x * 2.6 - l_cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
+    "    uv += resolvedNormal ? n.xz*0.012 : vec2(sin(wpos.z * 3.0 + l_cloud.x * 11.0), sin(wpos.x * 2.6 - l_cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
     "    vec3 r = texture(" REFL ", uv).rgb;\n" \
-    "    float fres = (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
+    "    float fres = resolvedNormal ? 0.02+0.98*pow(1.0-max(dot(n,V),0.0),5.0) : (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
     "    return mix(c, r, fres * l_sky.y);\n" \
-    "}\n"
+    "}\n" \
+    "vec3 waterReflect(vec3 c, vec3 wpos, vec3 n, vec3 V, float specK) { return waterReflect(c,wpos,n,V,specK,false); }\n"
 #define AIVERSE_MSL_WATER_REFLECT \
-    "static float3 waterReflect(constant LightU& l, texture2d<float> rt, sampler rs, float2 fragCoord, float3 c, float3 wpos, float3 n, float3 V, float specK) {\n" \
+    "static float3 waterReflect(constant LightU& l, texture2d<float> rt, sampler rs, float2 fragCoord, float3 c, float3 wpos, float3 n, float3 V, float specK, bool resolvedNormal) {\n" \
     "    if (specK < 0.85 || l.sky.y <= 0.0) return c;\n" \
     "    float2 uv = fragCoord * l.sky.zw;\n" \
     "    uv.x = 1.0 - uv.x;\n" \
-    "    uv += float2(sin(wpos.z * 3.0 + l.cloud.x * 11.0), sin(wpos.x * 2.6 - l.cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
+    "    uv += resolvedNormal ? n.xz*0.012 : float2(sin(wpos.z * 3.0 + l.cloud.x * 11.0), sin(wpos.x * 2.6 - l.cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
     "    float3 r = rt.sample(rs, uv).rgb;\n" \
-    "    float fres = (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
+    "    float fres = resolvedNormal ? 0.02+0.98*pow(1.0-max(dot(n,V),0.0),5.0) : (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
     "    return mix(c, r, fres * l.sky.y);\n" \
-    "}\n"
+    "}\n" \
+    "static float3 waterReflect(constant LightU& l, texture2d<float> rt, sampler rs, float2 fragCoord, float3 c, float3 wpos, float3 n, float3 V, float specK) { return waterReflect(l,rt,rs,fragCoord,c,wpos,n,V,specK,false); }\n"
 
 // Light map splat: clip-space quads, radial falloff (1 - r^2)^2, additive. Spots are cut to their
 // cone: the ground point under the texel is seen from the light (height h above the ground).

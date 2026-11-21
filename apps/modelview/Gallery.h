@@ -14,6 +14,9 @@ public:
     // dir: game folder (contains rules.json). types: ids to show (empty = all).
     bool init(gfx::Device& dev, const std::string& dir, const std::vector<std::string>& types, std::string& err);
     void shutdown(gfx::Device& dev);
+    // Owner-frame hook. Call once before any new scene or portrait pass;
+    // never poll resource fences from inside Gallery::draw().
+    void collectRetiredGpuResources();
     void update(double time);
     void draw(render::Renderer3D& r, double time);
     render::float3 center() const { return center_; }

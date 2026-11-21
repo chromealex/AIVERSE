@@ -106,3 +106,76 @@ No comparative frame-time speedup is claimed; GPU/CPU profiling on weak devices 
 
 Static surface meshes use immutable buffers. Metal dynamic buffers rotate across frames in flight,
 so a once-uploaded cached mesh must not use that path (otherwise the layer disappears on other frames).
+
+## Stage 120 — GPU-fenced canvas resources (2026-11-19)
+
+Canvas GPU lifetime is now explicit and independent of game genre:
+
+- `engine/render/CanvasGpuRetirement.h` owns a device-bound
+  `AsyncResourceRetirementQueue` of GPU buffer, texture, pipeline and
+  shader handles. Each batch is released only after real GPU completion.
+  Unsupported async tokens require a successful full idle barrier.
+  Pending/Failed completion never authorizes destruction.
+- `RenderTexture::setRetirementOwner(owner)` lets a native host borrow
+  one shared queue before canvas `init`; `setGpuDeviceLease`
+  supports a host GPU epoch. Standalone canvases construct their own
+  owner, can call `collectRetiredResources` at a safe frame boundary,
+  and must call `shutdown` before destroying their Device.
+- `flush` and `blit` allocate per-batch vertex buffers *before*
+  opening a pass. Invalid GPU allocations do not submit the draw;
+  brushes remain queued for retry. Every transient buffer and
+  temporary upload image is retired by a real GPU fence, rather than
+  destroyed immediately after `endPass`.
+- `RtsPaintLayers` creates one shared retirement pool for all canvases,
+  meshes, coast textures and shader programs. Layer removal/resize/
+  source reset queues old resources; the pool survives until its
+  owner-host shutdown and drains after actual GPU idle. The existing
+  RtsView GPU lease is forwarded. Editor and GameClient poll the pool
+  once at their GPU owner frame boundary (outside render passes).
+- Paint mesh replacement is transactional: failed new GPU allocation
+  preserves the previous mesh. Editor Stats reports pending resources,
+  orphan counts, failed completion tokens and fallback idle failures.
+
+**Current Stage 120 source-only status:** no new native CMake build,
+CTest, GPU visual comparison, sanitizer or performance test was run.
+The macOS/Metal verification cited above is historical and **does
+not validate this Stage 120 refactor**. Keep Draft PR #22 unmerged.
+See [Stage 120 handoff](agent-handoffs/animation-stage120-canvas-gpu-retirement-2026-11-19.md).
+
+## Stage 121 — failed canvas uploads preserve authored input
+
+`RenderTexture::upload` returns bool (old void-style callers
+may ignore the result). Failure to create the staging texture or
+the GPU blit vertex buffer returns false without claiming the
+partial target update succeeded. The staging texture is still
+GPU-fence-retired through Stage 120's canvas owner.
+
+`RtsPaintLayers` now retries source image updates safely:
+categorical palette/cell changes retain dirty flags when staging
+fails; coastline texture allocation failure does not acknowledge
+the new sea-mask hash; territory coverage layers remember failed
+partial GPU uploads and retry the entire latest CPU image even
+when no further cell changed; manual `copy_from` is retained
+until its GPU blit actually submits, before later brush strokes.
+No Lua command or simulation checksum semantics were changed.
+
+This stage is **source-only and NOT COMPILED/TESTED**.
+See [Stage 121 handoff](agent-handoffs/animation-stage121-universal-lod-attachments-2026-11-19.md).
+
+## Stage 122 — checked canvas flush and failure diagnostics
+
+Native `render::RenderTexture` now provides
+`bool flushChecked()`. If the GPU cannot allocate temporary
+brush vertices it returns false and keeps queued strokes and
+clear intent for retry; legacy `void flush()` remains a thin
+source-compatible wrapper. `blit` and partial `upload` propagate
+a failed flush and do not report their own command as applied.
+`SubmissionStats` separately counts failed brush-buffer,
+blit-buffer and upload-texture allocations. Paint layers avoid
+rendering incomplete canvas passes and the Editor statistics
+reports these counters for currently live paint owners.
+All transient GPU handles still retire through Stage 120's
+CanvasGpuRetirement queue and genuine completion tokens.
+
+**NOT COMPILED, GPU-TESTED or benchmarked** for Stage 122.
+See [Stage 122 handoff](agent-handoffs/animation-stage122-rig-retarget-2026-11-19.md).

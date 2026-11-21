@@ -31,6 +31,7 @@ public:
     virtual bool captureGlobalShortcuts() const { return false; }
     virtual void draw(Editor& ed) = 0;               // inside ImGui::Begin/End of the window
     virtual void update(Editor&, double /*dt*/) {}   // every frame, even when closed or hidden
+    virtual void shutdownAfterGpuIdle(Editor&) {} // explicit LENS resources before device shutdown
     bool open = true;
     // ImGui window name: "<icon> <title>###<id>". The ###id part is the ImGui id, so docking, saved
     // layouts and focus lookups stay stable whatever the visible title is. Use this (not title())

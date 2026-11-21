@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveEarthworks.h"
 #include "engine/world/TerraWeaveRootEvents.h"
 #include "engine/world/TerraWeaveGrassCover.h"
+#include "engine/world/TerraWeaveErosionZones.h"
 #include <aiverselib/water/NereidErosion.h>
 #include <algorithm>
 #include <cstdint>
@@ -28,7 +29,24 @@ struct NereidBankProbe {
     uint32_t wetContactPermille=0;
     uint32_t slopePermille=0;
     uint32_t rootBindingPermille=0;
+    // Local erodibility (x1000) from authored erosion zones; multiplies the
+    // tick's ShoreErosionSettings::ratePermille (result clamped to 10000).
+    uint32_t ratePermille=1000;
 };
+
+// Authored zones -> probe soil + local coefficient (TerraWeaveErosionZones.h).
+// Earth vertices are grid indices: world cm = index * spacingCm.
+inline void applyErosionZones(std::vector<NereidBankProbe>& probes,
+                              const ErosionZoneSet& zones,int32_t spacingCm) {
+    if(zones.empty())return;
+    if(spacingCm<=0)throw std::invalid_argument("erosion zones: earth spacing");
+    for(auto& probe:probes){
+        const auto hit=zones.at(probe.vertex.x*spacingCm,probe.vertex.z*spacingCm);
+        if(!hit.inside)continue;
+        probe.ratePermille=hit.ratePermille;
+        if(hit.soil)probe.soil=*hit.soil;
+    }
+}
 
 struct NereidBankSampleState {
     EarthVertex vertex{};
@@ -136,7 +154,12 @@ public:
                 force.waveEnergyPermille=probe.waveEnergyPermille;
                 force.bankSlopePermille=probe.slopePermille;
             }
-            const auto outcome=lib::nereid::erodeShore(cell,force,dtMs,options);
+            if(probe.ratePermille>10000u)
+                throw std::invalid_argument("NEREID erosion probe rate");
+            auto local=options;
+            local.ratePermille=uint32_t(std::min<uint64_t>(10000u,
+                uint64_t(options.ratePermille)*probe.ratePermille/1000u));
+            const auto outcome=lib::nereid::erodeShore(cell,force,dtMs,local);
             next.insert_or_assign(key,outcome.cell);
             if(force.wetContactPermille>0)++output.activeBankSamples;
             output.removedCm+=outcome.removedCm;

@@ -5,7 +5,7 @@ description: Lay out spline roads in an AIVERSE game: road types (rules roadType
 
 # roads
 
-Format and behaviour: `docs/roads.md`; traffic on the network: `docs/traffic.md` § Spline roads. Code: `modules/rts/RtsRoadNet.*` (types, network, Fixed geometry), `RtsRoadTypes.cpp` (built-in library), `modules/rts/view/RtsRoadView.*` / `RtsRoadKit.*` (meshes, painted carriageways, decals), `apps/editor/core/RoadOps.*`, `apps/editor/windows/RoadsWindow.cpp`, `modules/rts/RtsTrafficRoads.*`.
+Format and behaviour: `docs/roads.md`; traffic on the network: `docs/traffic.md` § Spline roads. Code: `engine/roads/RoadNet.*` (types, network, Fixed geometry; old path `modules/rts/RtsRoadNet.h` is a compatibility header), `engine/roads/RoadTypes.cpp` (built-in library), `engine/roads/RoadView.*` / `RoadKit.*` (meshes, painted carriageways, decals; drawn by every client), `apps/editor/core/RoadOps.*`, `apps/editor/windows/RoadsWindow.cpp`, `modules/rts/RtsTrafficRoads.*`.
 
 ## 1. Road types (rules `roadTypes`)
 - Built-in library: street_2, street_2_parking, avenue_4/6, avenue_bus, boulevard, one_way_1..3, alley, cobble_street, pedestrian, highway_4/6 (+ ramps), rural_2/4, country_lane, gravel_road, dirt_road, farm_track, footpath, park_path, trail, rural_bridge.

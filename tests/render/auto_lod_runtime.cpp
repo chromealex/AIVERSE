@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
 #include <vector>
 
 using namespace aiverse::render;
@@ -65,6 +66,25 @@ static Model makeRigidVehicle() {
     m.finalize();
     return m;
 }
+
+static Model makeMorphFace() {
+    auto m=makeRigidVehicle();
+    MeshDef& face=m.meshes[0];
+    Primitive& p=face.primitives[0];
+    p.morphTargets=52;
+    p.morphDeltas.assign(size_t(p.morphTargets)*p.vertexCount*6u,0.f);
+    for(int ch=0;ch<p.morphTargets;++ch) {
+        face.morphTargetNames.push_back("expression_"+std::to_string(ch));
+        for(size_t v=0;v<p.vertexCount;++v) {
+            const auto& pos=m.vertices[size_t(p.firstVertex)+v].pos;
+            p.morphDeltas[(size_t(ch)*p.vertexCount+v)*6u+1u]=
+                float(ch+1)*1e-6f*(pos.x+pos.z);
+        }
+    }
+    m.finalize();
+    return m;
+}
+
 static void check(bool ok, const char* why) {
     if (!ok) {
         std::fprintf(stderr, "auto LOD regression: %s\n", why);
@@ -150,5 +170,56 @@ int main() {
     optOut.batching.autoLod = false;
     check(generateMissingModelLods(optOut) == 0,
           "per-asset autoLod=false must disable generation");
-    std::puts("auto LOD regression: rigid hierarchy, imported chains, triangles, opt-outs passed");
+
+    auto morph=makeMorphFace();
+    const auto sourceDeltas=morph.meshes[0].primitives[0].morphDeltas;
+    const size_t sourceVertices=morph.vertices.size();
+    const size_t sourceIndices=morph.indices.size();
+    check(generateMissingModelLods(morph)>0,"morph-aware index LOD generation");
+    check(!morph.meshes[0].lods.empty(),"missing morph chain");
+    check(morph.vertices.size()==sourceVertices &&
+          morph.meshes[0].primitives[0].morphDeltas==sourceDeltas,
+          "source morph geometry must be immutable");
+    check(morph.meshes[0].primitives[0].morphTargets==52,
+          "52 expression source lost");
+    for(const auto& lod:morph.meshes[0].lods) {
+        const auto& coarse=morph.meshes[size_t(lod.mesh)];
+        const auto& p=coarse.primitives[0];
+        check(coarse.morphTargetNames==morph.meshes[0].morphTargetNames,
+              "coarse semantic channel identity lost");
+        check(lod.morphSourceForTarget.size()==52 &&
+              lod.morphSourceForTarget[0]==0 &&
+              lod.morphSourceForTarget[51]==51,
+              "morph source-to-target mapping must be exact");
+        check(p.morphTargets==52 && p.morphAliasMesh==0 &&
+              p.morphAliasPrimitive==0 && p.morphDeltas.empty() &&
+              p.firstVertex==morph.meshes[0].primitives[0].firstVertex &&
+              p.vertexCount==morph.meshes[0].primitives[0].vertexCount,
+              "LOD may not duplicate or reindex 52 GPU morph channels");
+        check(p.boundsMax.y>=morph.meshes[0].primitives[0].boundsMax.y,
+              "coarse bounds must cover original morph envelope");
+        for(uint32_t k=0;k<p.indexCount;++k)
+            check(morph.indices[size_t(p.firstIndex)+k]<sourceVertices,
+                  "coarse index outside original vertex buffer");
+    }
+    check(morph.indices.size()>sourceIndices,"coarse indices not appended");
+    const size_t morphMeshes=morph.meshes.size();
+    generateMissingModelLods(morph);
+    check(morph.meshes.size()==morphMeshes,"morph generation not idempotent");
+
+    auto missingNames=makeMorphFace();
+    missingNames.meshes[0].morphTargetNames.clear();
+    generateMissingModelLods(missingNames);
+    check(missingNames.meshes[0].lods.empty(),
+          "anonymous morph channels must not get guessed LOD mapping");
+    auto badLayout=makeMorphFace();
+    badLayout.meshes[0].primitives[0].morphDeltas.pop_back();
+    // Other (valid) meshes of the fixture still get LODs; the closing
+    // Model::finalize() then rejects the malformed face layout. Either
+    // outcome is fine as long as the face never reaches the simplifier.
+    try {generateMissingModelLods(badLayout);}
+    catch(const std::runtime_error&) {}
+    check(badLayout.meshes[0].lods.empty(),
+          "malformed morph data must not enter simplifier");
+    std::puts("auto LOD regression: rigid/morph channels, aliases, envelopes, indices and opt-outs passed");
 }

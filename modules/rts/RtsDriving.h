@@ -15,18 +15,21 @@
 // snapshots. Games without the block keep their checksums and save layout.
 #pragma once
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
-#include "../../libraries/include/aiverselib/genre/VehicleControllers.h"
+#include "../../libraries/include/aiverselib/genre/RaceSession.h"
 
 namespace aiverse { class Simulation; class Hasher; class Archive; struct Command; }
 
 namespace aiverse::game {
 
 class RtsModule;
+struct DrivingRace;   // RtsRace.h: a race over the map's cars (rules "race" + map "race")
+
 
 enum class DriveControls : uint8_t { Tank, Stick };
 
@@ -117,6 +120,11 @@ public:
     int deckIndex(Simulation& sim, const std::string& id) const;
     Fixed height(Simulation& sim, Entity vehicle) const;
     bool setDeck(Simulation& sim, Entity vehicle, int deck);
+    // Races (rules "race" + map "race", the shared format of every project: docs/races.md): the map's cars race over
+    // the vehicle-controllers race session. racing(): this map has a race. raceView: what `player`'s HUD shows.
+    bool racing(Simulation& sim) const;
+    void loadRace(Simulation& sim, const Json& rules, const Json& map);   // after loadMap; throws readable errors
+    lib::genre::RaceView raceView(Simulation& sim, uint8_t player) const;
     // takes a just spawned vehicle unit now (instead of at its next tick), rolling forward at `speed` m/s (traffic)
     bool adopt(Simulation& sim, Entity vehicle, Fixed speed);
 
@@ -130,15 +138,23 @@ private:
     void adoptAndDrop(Simulation& sim, DrivingStore& st);
     void adoptOne(Simulation& sim, DrivingStore& st, Entity e);
     void enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity hero);
+    void seat(Simulation& sim, DrivingCar& car, uint8_t player, Entity hero);   // put the hero at the wheel (no checks)
     bool leave(Simulation& sim, DrivingCar& c, bool forced);
     void drive(Simulation& sim, DrivingStore& st, size_t index);
     bool collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& posCells);
     lib::genre::VehicleInput inputOf(Simulation& sim, const DrivingCar& c) const;
+    lib::genre::VehicleInput ownInput(Simulation& sim, const DrivingCar& c) const;   // hero / traffic / autopilot pedals
+    void raceStart(Simulation& sim, DrivingStore& st);
+    void raceBefore(Simulation& sim, DrivingStore& st);
+    void raceAfter(Simulation& sim, DrivingStore& st);
+    bool raceHoldsCar(Simulation& sim, Entity vehicle) const;                         // racers cannot get out
 
     RtsModule* m_ = nullptr;
     DrivingRules rules_;
     std::vector<int32_t> vehicleOf_;                // per unit type: index into rules_.vehicles, -1: not a vehicle (derived)
     std::vector<Fixed> reach_;                      // per unit type: the farthest its body gets from its centre (derived)
+    std::shared_ptr<DrivingRace> race_;             // rules + map course (derived); state: DrivingRaceState resource
+    std::vector<std::pair<uint32_t, lib::genre::VehicleInput>> raceInput_;   // this tick's race pedals by entity index (transient)
 };
 
 } // namespace aiverse::game

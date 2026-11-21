@@ -1,5 +1,6 @@
 #include "apps/editor/PhysisAuthoring.h"
 #include <cstdio>
+#include "apps/editor/core/Workspace.h"
 using namespace aiverse;
 using namespace aiverse::editor;
 using namespace aiverse::editor::physis_authoring;
@@ -7,6 +8,39 @@ namespace {
 int failed = 0;
 #define CHECK(c) do { if(!(c)) { std::printf("PHYSIS AUTHORING FAIL %s:%d %s\n",__FILE__,__LINE__,#c);++failed; } } while(0)
 
+void mcpAuthoring() {
+    Workspace w; w.map.reset(8,8);
+    const auto initial=w.map.revision;
+    auto get=w.call("physis_get",Json::object());
+    CHECK(get["config"].isNull()); CHECK(get["defaultConfig"].isObject());
+    Json p=Json::object(); p.set("config",get["defaultConfig"]);
+    CHECK(w.call("physis_validate",p).getBool("ok"));
+    CHECK(w.map.revision==initial);
+    CHECK(w.call("physis_set",p).has("error"));
+    p.set("expectedRevision",get["revision"]);
+    CHECK(w.call("physis_set",p).getBool("changed"));
+    CHECK(!w.call("physis_get",Json::object()).getBool("liveApplied",true));
+    CHECK(w.call("physis_set",p).has("error")); // stale replacement
+    p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
+    CHECK(!w.call("physis_set",p).getBool("changed",true));
+    const auto valid=read(w.map); const auto rev=w.map.revision;
+    for (auto bad : {Json::fromBool(true),Json::number(int64_t(2)),Json::array(),Json::object()}) {
+        Json cfg=valid; cfg.set("floodMode",bad); p.set("config",cfg);
+        CHECK(w.call("physis_validate",p).has("error"));
+        CHECK(w.call("physis_set",p).has("error"));
+        CHECK(w.map.revision==rev); CHECK(read(w.map)==valid);
+    }
+    w.map.undo(); CHECK(read(w.map).isNull());
+    w.map.redo(); CHECK(read(w.map)==valid);
+    p.set("config",Json{}); p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
+    CHECK(w.call("physis_set",p).getBool("changed")); CHECK(read(w.map).isNull());
+    w.map.undo(); CHECK(read(w.map)==valid);
+    CHECK(w.map.loadJson(Json::parse(R"({"name":"FPS","colliders":[],"spawns":[]})"),nullptr));
+    p.set("config",valid);p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
+    CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
+    int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
+    CHECK(count==3);
+}
 void plainMapAndUndo() {
     MapDoc map; map.reset(8,8);
     Json config = defaultConfig();
@@ -78,6 +112,7 @@ void fpsDocumentRoundtrip() {
 }
 }
 int main() {
+    mcpAuthoring();
     plainMapAndUndo();
     rejectionIsTransactional();
     fpsDocumentRoundtrip();

@@ -192,7 +192,7 @@ inline bool applyHorizonAtlasUpload(gfx::Device& device,
                                    const HorizonAtlasUploadPlan& plan) {
     if(resident.images.size()!=1||!resident.images[0].tex.valid()||
        resident.images[0].gpuCompressed||
-       resident.images[0].borrowedTexture||
+       resident.images[0].borrowedTexture||resident.images[0].alphaCoverageMipmaps||
        resident.images[0].width!=static_cast<int>(updated.atlasWidth)||
        resident.images[0].height!=static_cast<int>(updated.atlasHeight)||
        updated.atlasRgba.size()!=size_t(updated.atlasWidth)*

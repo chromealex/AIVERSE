@@ -102,6 +102,23 @@ inline std::string nodeExpression(const Json& n,const std::function<std::string(
     if(op=="srgbToLinear")return wrap(a(0)+".rgb*("+a(0)+".rgb*("+a(0)+".rgb*0.305306011+0.682171111)+0.012522878),"+a(0)+".a");
     if(op=="linearToSrgb")return wrap("mix("+a(0)+".rgb*12.92,1.055*pow(max("+a(0)+".rgb,"+v3+"(0.0)),"+v3+"(0.416666667))-0.055,step("+v3+"(0.0031308),"+a(0)+".rgb)),"+a(0)+".a");
     if(op=="normalUnpack")return wrap(norm("("+a(0)+".xyz*2.0-1.0)")+",0.0");
+    if(op=="normalFromHeight") {
+        // Screen derivatives recover a surface gradient without a UV tangent
+        // frame. Position and scalar height must use the same world units.
+        const auto dx=metal?"dfdx":"dFdx",dy=metal?"dfdy":"dFdy";
+        const auto p=id+"_p",q=id+"_q",nrm=id+"_n",r=id+"_r",t=id+"_t",d=id+"_d",g=id+"_g",scale=id+"_scale";
+        code+=v3+" "+p+"="+dx+"("+a(0)+".xyz), "+q+"="+dy+"("+a(0)+".xyz);\n";
+        code+="float "+d+"=length("+a(1)+".xyz);\n";
+        code+=v3+" "+nrm+"="+d+">0.000000000001?"+a(1)+".xyz/"+d+":"+v3+"(0.0,1.0,0.0);\n";
+        code+=v3+" "+r+"=cross("+q+","+nrm+"), "+t+"=cross("+nrm+","+p+");\n";
+        code+=d+"=dot("+p+","+r+");\n";
+        code+=v3+" "+g+"=abs("+d+")*"+nrm+"-sign("+d+")*("+dx+"("+a(2)+".r)*"+r+"+"+dy+"("+a(2)+".r)*"+t+");\n";
+        // Normalize after rescaling, so macro cameras do not trigger the
+        // ordinary graph's absolute epsilon and flatten the bump to black.
+        code+="float "+scale+"=max(abs("+g+".x),max(abs("+g+".y),abs("+g+".z)));\n";
+        code+=g+"/="+"max("+scale+",0.00000000000000000001);\n";
+        return wrap("("+scale+">0.00000000000000000001?"+norm(g)+":"+nrm+"),0.0");
+    }
     if(op=="normalStrength")return wrap(norm(v3+"("+a(0)+".xy*"+a(1)+".r,"+a(0)+".z)")+",0.0");
     if(op=="lessThan")return v+"(1.0)-step("+a(1)+","+a(0)+")";
     if(op=="greaterThan")return v+"(1.0)-step("+a(0)+","+a(1)+")";

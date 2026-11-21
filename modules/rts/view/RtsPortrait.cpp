@@ -8,6 +8,7 @@ namespace aiverse::game {
 using namespace render;
 
 bool Portrait::init(gfx::Device& dev, int size) {
+    previewModels_.bindResourceDevice(dev);
     dev_ = &dev;
     size_ = size;
     if (!r3d_.init(dev)) return false;
@@ -78,11 +79,20 @@ std::unique_ptr<Model> previewShape(int shape) {
 void Portrait::renderMaterial(RtsView& view, const Json& material, int shape, double time) {
     if (!dev_ || !color_.valid()) return;
     shape = shape == 1 ? 1 : 0;
-    if (!shapes_[shape]) {
-        shapes_[shape] = previewShape(shape);
-        uploadModel(*dev_, *shapes_[shape], true);
+    const std::string key = shape ? "shape:preview-box" : "shape:preview-sphere";
+    Model* resident = previewModels_.find(key);
+    if(!resident) {
+        auto generated=previewShape(shape);
+        if(!uploadModel(*dev_,*generated,true)) {
+            // Failed publication has no consumers; release any partially
+            // created GPU allocations before dropping this temporary Model.
+            releaseModel(*dev_,*generated);
+            return;
+        }
+        resident=previewModels_.insertIfAbsent(key,std::move(generated));
     }
-    Model& m = *shapes_[shape];
+    if(!resident)return;
+    Model& m=*resident;
     static UnitType previewType;   // warnings read "type 'material preview': ..."
     previewType.id = "material preview";
     mats_ = m.materials;
@@ -94,19 +104,55 @@ void Portrait::renderMaterial(RtsView& view, const Json& material, int shape, do
     cam.pitch = 0.42f;
     cam.yaw = 0.6f;
     cam.fovY = 0.6f;
-    r3d_.beginScene(cam, size_, size_);
-    ModelDraw d;
-    d.model = &m;
-    d.world = mat4::rotateY(float(time) * 0.4f);
-    d.materials = &mats_;
-    d.team = {0.8f, 0.1f, 0.08f};
-    r3d_.drawModel(d);
+    ModelDraw draw;
+    draw.model=&m;
+    draw.world=mat4::rotateY(float(time)*0.4f);
+    draw.materials=&mats_;
+    draw.team={0.8f,0.1f,0.08f};
+    // Material authoring remains with the old host, while the GPU
+    // submission and offscreen target live in one generic View path.
+    (void)renderAppearance(draw,cam);
+}
+
+// Canonical View portrait consumer for any native host's fully-authored,
+// already-resolved ModelDraw (including materials, variant, pose and tint).
+// All borrowed pointers are consumed synchronously before returning.
+bool Portrait::renderAppearance(const ModelDraw& draw,
+                                const RTSCamera& camera,float4 background) {
+    if(!dev_ || !color_.valid() || !draw.model)return false;
+    sceneView_.beginScene(r3d_,camera,size_,size_);
+    ::aiverse::View::submitModel(r3d_,draw);
     gfx::PassDesc pass;
-    pass.colorTarget = color_;
-    pass.depthTarget = depth_;
-    pass.clearColor[0] = 0.16f; pass.clearColor[1] = 0.18f; pass.clearColor[2] = 0.22f; pass.clearColor[3] = 1;
+    pass.colorTarget=color_;
+    pass.depthTarget=depth_;
+    pass.clearColor[0]=background.x;
+    pass.clearColor[1]=background.y;
+    pass.clearColor[2]=background.z;
+    pass.clearColor[3]=background.w;
     r3d_.render(pass);
     dev_->endPass();
+    return true;
+}
+
+bool Portrait::renderStaticModel(render::ModelAssetProvider& provider,
+                                const std::string& source,float yaw) {
+    if(!dev_ || !color_.valid())return false;
+    // The provider retains the Model; this portrait only borrows it for a
+    // synchronous packet and does not create a second animation World.
+    const Model* model=provider.load(*dev_,source);
+    if(!model)return false;
+    RTSCamera cam;
+    cam.target=(model->boundsMin+model->boundsMax)*0.5f;
+    const auto extent=model->boundsMax-model->boundsMin;
+    cam.distance=std::max({extent.x,extent.y,extent.z,0.3f})*2.1f;
+    cam.minDistance=0.01f;
+    cam.pitch=0.15f;
+    cam.yaw=yaw;
+    cam.fovY=0.6f;
+    ModelDraw draw;
+    draw.model=model;
+    draw.world=mat4::identity();
+    return renderAppearance(draw,cam,{0.12f,0.14f,0.18f,1.f});
 }
 
 void Portrait::renderPose(const Model& model,const Pose& pose,float yaw) {
@@ -116,15 +162,17 @@ void Portrait::renderPose(const Model& model,const Pose& pose,float yaw) {
     auto e=model.boundsMax-model.boundsMin;cam.distance=std::max({e.x,e.y,e.z,.3f})*2.1f;
     cam.minDistance=.01f;cam.pitch=.15f;cam.yaw=yaw;cam.fovY=.6f;
     r3d_.lighting.skyColor={.8f,.85f,.9f};r3d_.lighting.groundColor={.5f,.5f,.5f};
-    r3d_.beginScene(cam,size_,size_);ModelDraw d;d.model=&model;d.nodeWorld=&world;d.pose=&pose;d.team={.1f,.4f,.9f};r3d_.drawModel(d);
-    gfx::PassDesc pass;pass.colorTarget=color_;pass.depthTarget=depth_;
-    pass.clearColor[0]=.12f;pass.clearColor[1]=.14f;pass.clearColor[2]=.18f;pass.clearColor[3]=1;
-    r3d_.render(pass);dev_->endPass();
+    ModelDraw draw;
+    draw.model=&model;draw.nodeWorld=&world;
+    draw.pose=&pose;draw.team={.1f,.4f,.9f};
+    (void)renderAppearance(draw,cam,{.12f,.14f,.18f,1.f});
 }
 
 void Portrait::shutdown() {
     if (!dev_) return;
-    for (auto& s : shapes_) if (s) { releaseModel(*dev_, *s); s.reset(); }
+    // Generic per-host cache owns all preview mesh GPU handles, and its
+    // shutdown waits for prior submitted commands before releasing them.
+    previewModels_.shutdown(*dev_);
     r3d_.shutdown();
     if (color_.valid()) dev_->destroyTexture(color_);
     if (depth_.valid()) dev_->destroyTexture(depth_);
@@ -150,12 +198,28 @@ void Portrait::render(RtsView& view, uint16_t type, uint8_t owner, double time, 
     cam.pitch = 0.32f;
     cam.yaw = 0.5f;
     cam.fovY = 0.6f;
-    r3d_.beginScene(cam, size_, size_);
-    view.drawPreview(r3d_, type, owner, time, yaw < 0 ? float(time) * 0.6f : yaw);
+    const float previewYaw=yaw<0 ? float(time)*.6f : yaw;
+    // Preserve the full authored appearance (material overrides, variant,
+    // geometry policy and tint) without routing this static packet through
+    // any legacy animation evaluation or a second graph owner.
+    view_adapter::StaticPreviewModel resolved;
+    ::aiverse::view::Object packet;
+    if(view.resolveStatic(type,owner,resolved) &&
+       view_adapter::buildStaticPreviewPacket(resolved,previewYaw,packet)) {
+        (void)renderAppearance(packet.draw,cam);
+        return;
+    }
+    // Complex or animated models continue using the established host
+    // authoring path; do not double-evaluate their MotionWeave graphs.
+    sceneView_.beginScene(r3d_,cam,size_,size_);
+    view.drawPreview(r3d_,type,owner,time,previewYaw);
     gfx::PassDesc pass;
-    pass.colorTarget = color_;
-    pass.depthTarget = depth_;
-    pass.clearColor[0] = 0.16f; pass.clearColor[1] = 0.18f; pass.clearColor[2] = 0.22f; pass.clearColor[3] = 1;
+    pass.colorTarget=color_;
+    pass.depthTarget=depth_;
+    pass.clearColor[0]=.16f;
+    pass.clearColor[1]=.18f;
+    pass.clearColor[2]=.22f;
+    pass.clearColor[3]=1.f;
     r3d_.render(pass);
     dev_->endPass();
 }

@@ -30,6 +30,9 @@ public:
     }
     void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
+    // Recording-only backend: shaders, pipelines and draw calls are CPU
+    // records with no asynchronous GPU submissions to wait for.
+    bool waitForResourceIdle() override { return true; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
     void beginPass(const aiverse::gfx::PassDesc&) override {}

@@ -901,6 +901,11 @@ bool VulkanDevice::drawIndexedIndirect(BufferHandle commands, size_t offset,
     if (!cmd || cmd->type != BufferType::Indirect ||
         offset > cmd->size || size_t(drawCount - 1) * stride + sizeof(DrawIndexedIndirectCommand) > cmd->size - offset)
         return false;
+    return encodeIndexedIndirect(commands, offset, drawCount, stride);
+}
+
+bool VulkanDevice::encodeIndexedIndirect(BufferHandle commands, size_t offset,
+                                         uint32_t drawCount, uint32_t stride) {
     if (!prepareDraw()) return false;
     const VPipeline* p = pipelines_.get(pipelineId_);
     VkCommandBuffer cb = slots_[size_t(slot_)].main;
@@ -923,6 +928,27 @@ bool VulkanDevice::drawIndexedIndirect(BufferHandle commands, size_t offset,
         first += batch;
     }
     return true;
+}
+
+bool VulkanDevice::drawIndexedGpuIndirect(BufferHandle arguments,
+                                                 size_t offset) {
+    // The caller must already bind the correct shader pipeline, materials,
+    // instance uniforms and matching source VB/IB. This RHI API only consumes
+    // the one GPU-authored command; it NEVER bypasses Renderer3D decisions.
+    // One draw needs no multiDrawIndirect feature; the GPU-written
+    // firstInstance does need drawIndirectFirstInstance.
+    if(!supportsCompute() || !drawIndirectFirstInstance_ || !recording_ ||
+       !inPass_ || activeComputeId_ || !healthy_ || (offset & 3u))return false;
+    // Indirect and Storage buffers both carry INDIRECT usage (bufferUsage).
+    const VBuffer* args = buffers_.get(arguments.id);
+    if(!args || (args->type != BufferType::Indirect &&
+                 args->type != BufferType::Storage) ||
+       offset > args->size ||
+       sizeof(DrawIndexedIndirectCommand) > args->size - offset)return false;
+    // The earlier compute dispatch encodes its shader-write ->
+    // indirect-command barrier (VkCompute.cpp, global memory barrier).
+    return encodeIndexedIndirect(arguments,offset,1,
+                                 sizeof(DrawIndexedIndirectCommand));
 }
 
 bool VulkanDevice::copyColor(TextureHandle from, TextureHandle to) {

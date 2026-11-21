@@ -3,6 +3,20 @@ name: aiverse-nereid-water
 description: Use NEREID deterministic ECS water bodies and contact sampling in native projects of any AIVERSE game genre.
 ---
 
+## Mandatory TerraWeave + NEREID ownership
+
+User instruction: construct game environments through TerraWeave + NEREID first.
+Terrain/biomes/trees/grass/rocks belong to TerraWeave; all new rivers/lakes/oceans
+belong to NEREID. Never substitute a custom height/noise generator or a static PBR
+water plane and describe it as the engine feature. Read
+`skills/workflow/aiverse-terra-first/SKILL.md` and
+`skills/gameplay/aiverse-nereid-water/SKILL.md`. Existing legacy maps retain their
+compatibility until an explicit tested migration. For missing host integration,
+add the adapter to the shared subsystem; record a real capability gap before any
+custom fallback. Do not fake waves, flow, foam or buoyancy in project scripts.
+Sky stays with PRISMA, climate with PHYSIS, VFX with SpectraFX; compose owners.
+
+
 # NEREID: universal water system
 
 Read `AGENTS.md`, `docs/nereid/ARCHITECTURE.md`,
@@ -705,3 +719,56 @@ Use `bash tools/nereid/validate.sh --focused` for repeated CPU checks of NEREID,
 ## Stage 50 — confirmed CPU pass, Release check follow-up
 
 On Mac Studio, Stage 49 `--full` at commit `65346f91` passed all 118 CTest cases and 16 focused checks. A later test-only commit (`8f426376ecb095017cefdd313cca5dd6c2d70186`) replaced 44 `assert()` calls across six unrelated ECS tests with always-on checks, eliminating Release warning root cause and enabling previously skipped invariants. Re-run `bash tools/nereid/validate.sh --full` on new head before accepting the branch; do not assume the previous success covers the strengthened checks. Full handoff: `docs/nereid/stage-50-release-assertion-correctness.md`.
+
+## River grade and authoring
+
+For inclined rivers use optional `WaterRiverGradeComponent` and register
+`registerNereidRiverGradePersistence` (or native config enableRiverGrade=true).
+Never derive gameplay flow from shader time. Manual mode uses WaterBody.flow;
+automatic mode uses the downhill grade and bounded linear-resistance estimate.
+Read the current river-grade section of docs/nereid/ARCHITECTURE.md. Native
+sampling and presentation consume the same grade. Editor typed operations
+nereid_water_state / nereid_flow_set are Undoable; HTML5 controls belong to Studio.
+Rebuild Terra bank/vegetation masks when changing an exported river's grade.
+
+Native authoring may use `<aiverselib/water/NereidFootprintDistance.h>` for an
+optional signed horizontal clearance (invalid/disabled water => no value).
+Use it with local graded height for terrain sand/wetness/grass masks, as Terra's
+native exporter does. It does not change authoritative footprint membership,
+current sampling or persistence. Tapered-river margins are not an exact SDF;
+do not replace contact tests or claim a live erosion solver from this helper.
+
+
+For NEREID optics, read docs/water.md current/contact section. Refraction and
+contact foam must not depend on enabling traced shadows/SSR. Preserve the
+optics-only capture flag and independent SSR guard. Diagnose foam with a real
+foreground obstacle and both flow directions; do not accept repeated sine
+ellipses or detached copies as a wake. --freeze-time in renderbench fixes the
+shader clock as well as sky/animation; current velocity remains authored data.
+
+Resolved refraction includes background already: never apply ordinary
+background alpha blending a second time. Keep optical density controlled by
+authored opacity and final alpha controlled by contact coverage. Recheck
+minimum valid opacity against the same scene without water. Use the opt-in
+AIVERSE_NEREID_DIAGNOSTIC modes from docs/water.md in an owned review process
+when depth/coefficients/background dominance disagree; never publish their
+false-colour images as final scene screenshots.
+
+
+## Local current rendering
+
+Use NereidWaterScene's native flow-map preparation, not one scene-wide shader
+angle. Automatic river grade follows the canonical local spline tangent; manual
+WaterBody.flow remains manual. Current/vortex fields are sampled into bounded
+world-space RGBA16F data. Finite grids ignore cameras and mesh LOD. WorldScene
+preserves confluence/cascade/obstruction resolution through the prepare callback.
+Only supply a nonzero resolver revision when ALL its inputs are revisioned; zero
+revalidates bounded CPU grids and deduplicates equal GPU payloads.
+
+Capture/replay must retain NereidFlowBinding leases. Do not destroy textures on
+CPU replacement or allocate them inside a draw encoder. Explicitly shutdown the
+owner before Device destruction; preserve fence retirement and revoked replay
+guards. See docs/nereid/ARCHITECTURE.md. Native GPU regression:
+`python3 tests/render/verify_nereid_flow.py <renderbench> <KINGSTON-output>`; run
+Metal and desktop GL separately. Diagnostic flow images are technical evidence,
+not final beauty screenshots.

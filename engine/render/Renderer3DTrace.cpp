@@ -49,24 +49,30 @@ bool Renderer3D::initTrace() {
     p.depthTest = true; p.depthWrite = true;    // GL writes depth only with the test on: the main pass clears to 1, LEQUAL always passes
     p.label = "scene blit";
     blitPipe_ = dev_->createPipeline(p);
+    if (!blitPipe_.valid()) return false;
     const float tri[6] = {-1, -1, 3, -1, -1, 3};
     gfx::BufferDesc vb; vb.size = sizeof tri; vb.data = tri; vb.label = "scene blit";
     blitVB_ = dev_->createBuffer(vb);
+    if (!blitVB_.valid()) return false;
     // placeholders for the scene slots when nothing was captured (depth 1 = nothing hit) and for the
     // height field (range 0 in the uniforms keeps the march off anyway)
     gfx::TextureDesc dd; dd.width = dd.height = 4; dd.format = gfx::PixelFormat::Depth; dd.renderTarget = true;
     dd.filter = gfx::Filter::Nearest; dd.label = "trace dummy depth";
     dummyDepth_ = dev_->createTexture(dd);
+    if (!dummyDepth_.valid()) return false;
     const uint32_t px[16] = {};
     gfx::TextureDesc hd; hd.width = hd.height = 4; hd.data = px; hd.filter = gfx::Filter::Nearest; hd.label = "trace dummy height";
     dummyHeight_ = dev_->createTexture(hd);
     // (the dummy depth is never sampled: the shaders test trace2.w first; its contents may stay undefined)
-    return blitPipe_.valid() && blitVB_.valid() && dummyDepth_.valid() && dummyHeight_.valid();
+    // Renderer3D::init handles any failure by waiting for genuine GPU idle
+    // then calling shutdownTrace, including all resources created above.
+    return dummyHeight_.valid();
 }
 
 void Renderer3D::shutdownTrace() {
     if (!dev_) return;
-    for (auto& t : sceneTargets_) { dev_->destroyTexture(t.color); dev_->destroyTexture(t.depth); }
+    for(auto& t:sceneTargets_)
+        retireRenderTargets(t.color,t.depth);
     sceneTargets_.clear();
     for (auto t : {dummyDepth_, dummyHeight_}) if (t.valid()) dev_->destroyTexture(t);
     sceneColor_ = sceneDepth_ = dummyDepth_ = dummyHeight_ = {};
@@ -96,7 +102,8 @@ bool Renderer3D::beginSceneCapture(int w, int h) {
         // drop targets of sizes not used for a while (resized window); keep a few (editor views)
         for (size_t i = 0; i < sceneTargets_.size();) {
             if (traceFrame_ - sceneTargets_[i].lastUse > 120 || sceneTargets_.size() > 4) {
-                dev_->destroyTexture(sceneTargets_[i].color); dev_->destroyTexture(sceneTargets_[i].depth);
+                retireRenderTargets(sceneTargets_[i].color,
+                                    sceneTargets_[i].depth);
                 sceneTargets_.erase(sceneTargets_.begin() + long(i));
             } else ++i;
         }
@@ -105,7 +112,10 @@ bool Renderer3D::beginSceneCapture(int w, int h) {
         dd.filter = gfx::Filter::Nearest; dd.label = "scene depth";
         cd.format = hdrFrame_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
         SceneTarget n; n.hdr = hdrFrame_; n.w = w; n.h = h; n.color = dev_->createTexture(cd); n.depth = dev_->createTexture(dd);
-        if (!n.color.valid() || !n.depth.valid()) { if (n.color.valid()) dev_->destroyTexture(n.color); if (n.depth.valid()) dev_->destroyTexture(n.depth); return false; }
+        if(!n.color.valid() || !n.depth.valid()) {
+            retireRenderTargets(n.color,n.depth);
+            return false; // keep old scene captures alive until their fence
+        }
         sceneTargets_.push_back(n);
         t = &sceneTargets_.back();
     }

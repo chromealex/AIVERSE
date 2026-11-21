@@ -69,27 +69,55 @@ void spriteCorners(const SpriteLook& L, const Basis& B, float3 ground, float3 (&
 }
 } // namespace
 
-bool Rts2DView::init(gfx::Device& dev, const Rules& rules, const std::string& base, const SpriteDefaults& defaults, bool deferTypes) {
-    rules_ = &rules;
-    base_ = base;
-    defaults_ = defaults;
-    textures_.init(dev);
-    if (!batch_.init(dev)) { std::fprintf(stderr, "[sprites] pipeline: %s\n", dev.lastError().c_str()); return false; }
-    // soft round shadow blob, generated: no file needed
-    const int S = 32;
-    std::vector<uint32_t> px(size_t(S * S));
-    for (int y = 0; y < S; ++y)
-        for (int x = 0; x < S; ++x) {
-            float dx = (x + 0.5f) / S * 2 - 1, dy = (y + 0.5f) / S * 2 - 1;
-            float a = std::clamp(1.0f - std::sqrt(dx * dx + dy * dy), 0.0f, 1.0f);
-            px[size_t(y * S + x)] = rgba(255, 255, 255, uint8_t(std::min(1.0f, a * 1.6f) * 255));
+bool Rts2DView::init(gfx::Device& dev, const Rules& rules, const std::string& base,
+                     const SpriteDefaults& defaults, bool deferTypes) {
+    // A prior failed idle barrier leaves this instance owning its GPU handles.
+    // The host must call shutdownAfterGpuIdle() before retrying initialization.
+    if (ready_ || rules_ || resourceDevice_)
+        throw std::logic_error("Rts2DView init: already initialized or recovery pending");
+    // Set device ownership before the first allocation; even if init throws,
+    // the retained owner can later retry cleanup against the correct device.
+    resourceDevice_ = &dev;
+    try {
+        rules_ = &rules;
+        base_ = base;
+        defaults_ = defaults;
+        textures_.init(dev);
+        if (!batch_.init(dev)) {
+            std::fprintf(stderr, "[sprites] pipeline: %s\n", dev.lastError().c_str());
+            if (!shutdownAfterGpuIdle(dev))
+                throw std::runtime_error("Rts2DView init: GPU idle barrier failed");
+            return false;
         }
-    shadowTex_ = textures_.addGenerated("builtin:shadow", S, S, px, false);
-    looks_.assign(rules.types.size(), {});
-    loadedTypes_.assign(rules.types.size(), false);
-    if (!deferTypes) for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
-    ready_ = true;
-    return true;
+        if (!secondaryBatch_.init(dev)) {
+            if (!shutdownAfterGpuIdle(dev))
+                throw std::runtime_error("Rts2DView init: GPU idle barrier failed");
+            return false;
+        }
+        // Soft round shadow blob, generated: no file needed.
+        const int S = 32;
+        std::vector<uint32_t> px(size_t(S * S));
+        for (int y = 0; y < S; ++y)
+            for (int x = 0; x < S; ++x) {
+                float dx = (x + 0.5f) / S * 2 - 1, dy = (y + 0.5f) / S * 2 - 1;
+                float a = std::clamp(1.0f - std::sqrt(dx * dx + dy * dy), 0.0f, 1.0f);
+                px[size_t(y * S + x)] =
+                    rgba(255, 255, 255, uint8_t(std::min(1.0f, a * 1.6f) * 255));
+            }
+        shadowTex_ = textures_.addGenerated("builtin:shadow", S, S, px, false);
+        looks_.assign(rules.types.size(), {});
+        loadedTypes_.assign(rules.types.size(), false);
+        if (!deferTypes)
+            for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
+        ready_ = true;
+        return true;
+    } catch (...) {
+        // This also protects failures from the first batch or texture loader.
+        // A second idle attempt can succeed after a transient device stall.
+        if (!shutdownAfterGpuIdle(dev))
+            throw std::runtime_error("Rts2DView init rollback: GPU idle barrier failed; recovery pending");
+        throw;
+    }
 }
 
 void Rts2DView::loadType(uint16_t type) {
@@ -99,12 +127,115 @@ void Rts2DView::loadType(uint16_t type) {
     loadedTypes_[type] = true;
 }
 
+class Rts2DView::PreparedFrame final {
+    friend class Rts2DView;
+    Rts2DView* owner=nullptr;
+    render::SpriteMesh previousTiles;
+    std::shared_ptr<render::SpriteBatch::PreparedFrame> batch;
+    std::function<void()> restore;
+    bool committed=false;
+public:
+    ~PreparedFrame() noexcept {
+        if(committed || !owner)return;
+        if(owner->tileMesh_.vb!=previousTiles.vb && owner->tileMesh_.vb.valid())
+            try {owner->resourceDevice_->destroyBuffer(owner->tileMesh_.vb);}catch(...) {}
+        owner->tileMesh_=previousTiles;
+        restore();owner->preparingFrame_=owner->frameTilesReplaced_=false;
+    }
+};
+std::shared_ptr<Rts2DView::PreparedFrame> Rts2DView::beginFramePreparation() {
+    if(preparingFrame_)throw std::logic_error("nested sprite view frame preparation");
+    auto frame=std::make_shared<PreparedFrame>();
+    frame->restore=[this,
+        preparedSprites=preparedSprites_,
+        replayingPrepared=replayingPrepared_,
+        secondaryGeometryValid=secondaryGeometryValid_,
+        emittingBatch=emittingBatch_,
+        cam=cam_,
+        camRight=camRight_,
+        camUp=camUp_,
+        camFwd=camFwd_,
+        groundRight=groundRight_,
+        groundFront=groundFront_,
+        time=time_,
+        frame=frame_,
+        quality=quality_,
+        casterRight=casterRight_,
+        surface=surface_,
+        surfTris=surfTris_,
+        cpuMs=cpuMs_,
+        seen=seen_,
+        corpses=corpses_,
+        layer=layer_,
+        atlas=atlas_,
+        fieldCells=fieldCells_,
+        fieldState=fieldState_,
+        preparedGpuFrame=preparedGpuFrame_]() mutable noexcept {
+        using std::swap;
+        swap(preparedSprites_,preparedSprites);
+        swap(replayingPrepared_,replayingPrepared);
+        swap(secondaryGeometryValid_,secondaryGeometryValid);
+        swap(emittingBatch_,emittingBatch);
+        swap(cam_,cam);
+        swap(camRight_,camRight);
+        swap(camUp_,camUp);
+        swap(camFwd_,camFwd);
+        swap(groundRight_,groundRight);
+        swap(groundFront_,groundFront);
+        swap(time_,time);
+        swap(frame_,frame);
+        swap(quality_,quality);
+        swap(casterRight_,casterRight);
+        swap(surface_,surface);
+        swap(surfTris_,surfTris);
+        swap(cpuMs_,cpuMs);
+        swap(seen_,seen);
+        swap(corpses_,corpses);
+        swap(layer_,layer);
+        swap(atlas_,atlas);
+        swap(fieldCells_,fieldCells);
+        swap(fieldState_,fieldState);
+        swap(preparedGpuFrame_,preparedGpuFrame);
+    };
+    frame->batch=batch_.beginFramePreparation();
+    frame->owner=this;frame->previousTiles=tileMesh_;
+    preparingFrame_=true;frameTilesReplaced_=false;
+    return frame;
+}
+void Rts2DView::commitFramePreparation(const std::shared_ptr<PreparedFrame>& frame) noexcept {
+    if(!frame || frame->owner!=this || frame->committed)return;
+    batch_.commitFramePreparation(frame->batch);
+    if(tileMesh_.vb!=frame->previousTiles.vb)
+        tileRetirement_.retireBuffer(*resourceDevice_,frame->previousTiles.vb);
+    frame->committed=true;preparingFrame_=frameTilesReplaced_=false;
+}
+
+bool Rts2DView::shutdownAfterGpuIdle(gfx::Device& dev) {
+    if (resourceDevice_ && resourceDevice_ != &dev)
+        throw std::logic_error("Rts2DView shutdown: wrong GPU device");
+    if (!resourceDevice_) return true;
+    if (!dev.waitForResourceIdle()) return false;
+    shutdown(dev);
+    return true;
+}
+
 void Rts2DView::shutdown(gfx::Device& dev) {
-    if (!ready_) return;
+    if (resourceDevice_ && resourceDevice_ != &dev)
+        throw std::logic_error("Rts2DView shutdown: wrong GPU device");
+    if (!resourceDevice_) return;
+    if(!tileRetirement_.completeForShutdown(dev))
+        throw std::runtime_error("sprite tile retirement requires GPU idle");
+    // Also clean partially initialized resources after an init failure.
     batch_.destroyMesh(dev, tileMesh_);
     batch_.shutdown();
+    secondaryBatch_.shutdown();
+    preparedSprites_.clear();
+    secondaryGeometryValid_ = false;
+    emittingBatch_ = nullptr;
     textures_.shutdown();
-    looks_.clear(); seen_.clear(); corpses_.clear();
+    looks_.clear(); loadedTypes_.clear(); seen_.clear(); corpses_.clear();
+    shadowTex_={}; rules_=nullptr;
+    resourceDevice_=nullptr;
     ready_ = false;
 }
 
@@ -186,6 +317,11 @@ void Rts2DView::beginFrame(const RTSCamera& cam, double time, const Renderer3D& 
     time_ = time;
     ++frame_;
     batch_.begin();
+    preparedGpuFrame_=false;
+    preparedSprites_.clear();
+    secondaryGeometryValid_ = false;
+    emittingBatch_ = &batch_;
+    replayingPrepared_ = false;
 }
 
 void Rts2DView::corners(const SpriteLook& L, float3 ground, float3 (&c)[4], float& key) const {
@@ -207,7 +343,7 @@ void Rts2DView::decal(const TextureRef& tex, float4 uv, float3 o, float3 aU, flo
     float3 q[4] = {o, o + aU * lenU, o + aU * lenU + aV * lenV, o + aV * lenV};
     if (!surface_.grid) {   // no ground known: flat quad (as before)
         for (auto& p : q) p.y += 0.02f;
-        batch_.quad(tex, q, uv, color, team, layer, key);
+        emittingBatch_->quad(tex, q, uv, color, team, layer, key);
         return;
     }
     float minX = q[0].x, maxX = q[0].x, minZ = q[0].z, maxZ = q[0].z;
@@ -239,7 +375,7 @@ void Rts2DView::decal(const TextureRef& tex, float4 uv, float3 o, float3 aU, flo
                 p.y = p0.y - (n.x * (p.x - p0.x) + n.z * (p.z - p0.z)) / n.y;
                 v[k] = vert(p);
             }
-            batch_.quadEx(tex.tex, v, layer, key, flags | kSpriteDecal);
+            emittingBatch_->quadEx(tex.tex, v, layer, key, flags | kSpriteDecal);
             return;
         }
     }
@@ -250,7 +386,7 @@ void Rts2DView::decal(const TextureRef& tex, float4 uv, float3 o, float3 aU, flo
         for (int k = 1; k + 1 < n; ++k) {
             const SpriteVertex v0 = vert(poly[0]), v1 = vert(poly[k]), v2 = vert(poly[k + 1]);
             const SpriteVertex v[4] = {v0, v1, v2, v2};   // triangle = quad with a repeated corner
-            batch_.quadEx(tex.tex, v, layer, key, flags | kSpriteDecal);
+            emittingBatch_->quadEx(tex.tex, v, layer, key, flags | kSpriteDecal);
         }
     }
 }
@@ -277,7 +413,7 @@ void Rts2DView::decalShape(const TextureRef& tex, float4 uv, float3 o, float3 aU
                 p.y = planeY(p0, n, p.x, p.z);
                 v[k] = vert(p, sh.ab[k]);
             }
-            batch_.polygon(sh.tex, v, sh.count, layer, key, flags | kSpriteDecal);
+            emittingBatch_->polygon(sh.tex, v, sh.count, layer, key, flags | kSpriteDecal);
             return;
         }
     }
@@ -300,11 +436,13 @@ void Rts2DView::decalShape(const TextureRef& tex, float4 uv, float3 o, float3 aU
             p.y = planeY(tri[0], n, p.x, p.z);
             v[k] = vert(p, cut[k]);
         }
-        batch_.polygon(sh.tex, v, nc, layer, key, flags | kSpriteDecal);
+        emittingBatch_->polygon(sh.tex, v, nc, layer, key, flags | kSpriteDecal);
     }
 }
 
-void Rts2DView::emit(const SpriteLook& L, float3 ground, float3 facing, int act, double t0, uint32_t team, uint32_t tint, bool corpse, float fade) {
+void Rts2DView::emit(const SpriteLook& L, float3 ground, float3 facing, int act, double t0, uint32_t team, uint32_t tint, bool corpse, float fade, const SpriteLook* sourceLook) {
+    if (!replayingPrepared_)
+        preparedSprites_.push_back({sourceLook, L.width, L.height, ground, facing, act, t0, team, tint, corpse, fade});
     const SpriteLook::Anim& an = L.anims[act];
     int k = an.fps > 0 ? int(std::floor((time_ - t0) * an.fps)) : 0;
     k = an.loop ? ((k % an.count) + an.count) % an.count : std::clamp(k, 0, an.count - 1);
@@ -364,14 +502,14 @@ void Rts2DView::emit(const SpriteLook& L, float3 ground, float3 facing, int act,
             v[i] = {bilinear(c, sh.ab[i]), st[i], tint, team, {rp.x, rp.y, rp.z, 0.15f}};
             cp[i] = rp;
         }
-        batch_.polygon(sh.tex, v, sh.count, layer, key, litFlag);
+        emittingBatch_->polygon(sh.tex, v, sh.count, layer, key, litFlag);
         if (sd.cast && fade >= 1 && quality_ != ShadowQuality::Off) {
-            batch_.casterPolygon(sh.tex, cp, st, sh.count);
+            emittingBatch_->casterPolygon(sh.tex, cp, st, sh.count);
             if (L.shadow.castDepth > 0) {   // back plane: the footprint casts as a box
                 float3 cb[4];
                 casterAt(offF + lead - L.shadow.castDepth, cb);
                 for (int i = 0; i < sh.count; ++i) cp[i] = bilinear(cb, sh.ab[i]);
-                batch_.casterPolygon(sh.tex, cp, st, sh.count);
+                emittingBatch_->casterPolygon(sh.tex, cp, st, sh.count);
             }
         }
     }
@@ -415,13 +553,13 @@ void Rts2DView::addObject(const SceneObject& o, float groundY, const EntityFxVal
         if (fx->scale(0) != 1 || fx->scale(1) != 1) {
             SpriteLook S = L;
             S.width *= fx->scale(0); S.height *= fx->scale(1);
-            emit(S, ground, o.facing, act, t0, team, tint, false, a);
+            emit(S, ground, o.facing, act, t0, team, tint, false, a, &L);
             return;
         }
-        emit(L, ground, o.facing, act, t0, team, tint, false, a);
+        emit(L, ground, o.facing, act, t0, team, tint, false, a, &L);
         return;
     }
-    emit(L, ground, o.facing, act, t0, team, tint, false, std::clamp(o.fade, 0.0f, 1.0f));   // route end fade
+    emit(L, ground, o.facing, act, t0, team, tint, false, std::clamp(o.fade, 0.0f, 1.0f), &L);   // route end fade
 }
 
 void Rts2DView::endFrame(const MapGrid&) {
@@ -438,7 +576,7 @@ void Rts2DView::endFrame(const MapGrid&) {
         if (age > len + L.corpseTime + 1.0) { it = corpses_.erase(it); continue; }
         float fade = age < len + L.corpseTime ? 1.0f : float(1.0 - (age - len - L.corpseTime));
         float4 tc = RtsView::playerColor(it->owner);
-        emit(L, it->pos, it->facing, kActDie, it->start, L.team ? rgbaf({tc.x, tc.y, tc.z, 1}) : 0, rgba(255, 255, 255), true, fade);
+        emit(L, it->pos, it->facing, kActDie, it->start, L.team ? rgbaf({tc.x, tc.y, tc.z, 1}) : 0, rgba(255, 255, 255), true, fade, &L);
         ++it;
     }
     if (corpses_.size() > 256) corpses_.erase(corpses_.begin(), corpses_.begin() + 64);
@@ -456,6 +594,12 @@ static float3 referenceLight() {
 
 void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
     if (!ready_) return;
+    if(preparingFrame_) {
+        refreshTiles(*resourceDevice_,grid,lh);
+        batch_.prepareFrameUploads(*resourceDevice_);
+        preparedGpuFrame_=true;
+    }
+    const bool prepared=preparedGpuFrame_;
     // AIVERSE_SPRITE_STATS=1: quads / shadow casters / CPU time of the sprite queueing, every 60 frames
     static const bool printStats = std::getenv("AIVERSE_SPRITE_STATS") != nullptr;
     if (printStats && frame_ % 60 == 0) {
@@ -465,8 +609,8 @@ void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
     if (batch_.casterCount() > 0 && r.shadowQuality() != ShadowQuality::Off)
         r.drawCustomShadow([this, &r](gfx::Device& dev) { batch_.flushCasters(dev, r.lightViewProj()); });
     // Kingston tile ground precedes open water.
-    r.drawCustomOpaque([this, &r, &grid, lh](gfx::Device& dev) {
-        refreshTiles(dev, grid, lh);
+    r.drawCustomOpaque([this, &r, &grid, lh, prepared](gfx::Device& dev) {
+        if(!prepared)refreshTiles(dev, grid, lh);
         r.lights.bind(2,1);
         SpriteLighting lighting;
         lighting.bind=[&r]{ r.bindLitFrame(); };
@@ -474,8 +618,8 @@ void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
         lighting.receiveShadows=r.shadowQuality()>=ShadowQuality::Medium;
         if (tileMesh_.vb.valid() && atlas_.valid()) batch_.drawMesh(dev, tileMesh_, atlas_.tex, r.viewProj(), defaults_.lit ? &lighting : nullptr);
     });
-    r.drawCustom([this, &r, &grid, lh](gfx::Device& dev) {
-        refreshTiles(dev, grid, lh);
+    r.drawCustom([this, &r, &grid, lh, prepared](gfx::Device& dev) {
+        if(!prepared)refreshTiles(dev, grid, lh);
         r.lights.bind(2, 1);   // unlit sprites: day/night tint + light map (lighting agent); the lit path rebinds its frame
         SpriteLighting lighting;
         lighting.bind = [&r] { r.bindLitFrame(); };
@@ -484,6 +628,103 @@ void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
         lighting.receiveShadows = r.shadowQuality() >= ShadowQuality::Medium;
 
         batch_.flush(dev, r.viewProj(), &lighting);
+    });
+}
+
+// LENS: re-encode the current sprite batch for another camera.
+// This is a render-only path: no animated sprite state, corpse transitions,
+// terrain tile rebuilds or visibility updates run a second time.
+void Rts2DView::submitPrepared(Renderer3D& r) {
+    if(!ready_)return;
+    // Rebuild draw-only quads for this camera. No ECS state, corpse lifetime,
+    // animation clocks or producer callbacks are modified.
+    const Basis b=basisOf(r.camera());
+    const float3 casterAxis=casterRight(b.gRight,b.gFront,r.lighting.sunDir);
+    const auto equal3=[](float3 a,float3 b) {
+        return a.x==b.x && a.y==b.y && a.z==b.z;
+    };
+    const bool reusable=secondaryGeometryValid_ &&
+        secondaryQuality_==r.shadowQuality() &&
+        equal3(secondaryRight_,b.right) && equal3(secondaryUp_,b.up) &&
+        equal3(secondaryFwd_,b.fwd) &&
+        equal3(secondaryGroundRight_,b.gRight) &&
+        equal3(secondaryGroundFront_,b.gFront) &&
+        equal3(secondaryCasterRight_,casterAxis);
+    if (!reusable) {
+        secondaryBatch_.begin();
+        const auto previousCam=cam_;
+        const auto previousRight=camRight_,previousUp=camUp_,previousFwd=camFwd_;
+        const auto previousGroundRight=groundRight_,previousGroundFront=groundFront_;
+        const auto previousCasterRight=casterRight_;
+        const auto previousQuality=quality_;
+        // Restore primary camera state even if sprite geometry allocation or
+        // a texture/atlas callback throws. The temporary state is never
+        // allowed to leak into a subsequent primary or secondary view.
+        struct RestoreCamera {
+            Rts2DView& self;
+            RTSCamera cam;
+            float3 right, up, fwd, groundRight, groundFront, casterRight;
+            ShadowQuality quality;
+            ~RestoreCamera() noexcept {
+                self.emittingBatch_=&self.batch_;
+                self.replayingPrepared_=false;
+                self.cam_=cam;
+                self.camRight_=right; self.camUp_=up; self.camFwd_=fwd;
+                self.groundRight_=groundRight; self.groundFront_=groundFront;
+                self.casterRight_=casterRight; self.quality_=quality;
+            }
+        } restore{*this,previousCam,previousRight,previousUp,previousFwd,
+                  previousGroundRight,previousGroundFront,previousCasterRight,previousQuality};
+        cam_=r.camera();
+        // Use the already computed basis from this secondary camera.
+        camRight_=b.right; camUp_=b.up; camFwd_=b.fwd;
+        groundRight_=b.gRight; groundFront_=b.gFront;
+        casterRight_=casterAxis;
+        quality_=r.shadowQuality();
+        replayingPrepared_=true;
+        emittingBatch_=&secondaryBatch_;
+        for(const auto& packet:preparedSprites_) {
+            if(!packet.look)continue;
+            if(packet.width==packet.look->width && packet.height==packet.look->height) {
+                emit(*packet.look,packet.ground,packet.facing,packet.action,
+                     packet.startTime,packet.team,packet.tint,packet.corpse,packet.fade,packet.look);
+            } else {
+                // Scale is the only per-entity override to the canonical look.
+                // Construct this inexpensive temporary only when necessary.
+                SpriteLook scaled=*packet.look;
+                scaled.width=packet.width;
+                scaled.height=packet.height;
+                emit(scaled,packet.ground,packet.facing,packet.action,
+                     packet.startTime,packet.team,packet.tint,packet.corpse,packet.fade,packet.look);
+            }
+        }
+        // Primary state is restored by RestoreCamera at scope exit.
+        secondaryRight_=b.right; secondaryUp_=b.up; secondaryFwd_=b.fwd;
+        secondaryGroundRight_=b.gRight; secondaryGroundFront_=b.gFront;
+        secondaryCasterRight_=casterAxis; secondaryQuality_=r.shadowQuality();
+        secondaryGeometryValid_=true;
+    }
+    if(secondaryBatch_.casterCount()>0 && r.shadowQuality()!=ShadowQuality::Off)
+        r.drawCustomShadow([this,&r](gfx::Device& dev) {
+            secondaryBatch_.flushCasters(dev,r.lightViewProj());
+        });
+    r.drawCustomOpaque([this,&r](gfx::Device& dev) {
+        r.lights.bind(2,1);
+        SpriteLighting light;
+        light.bind=[&r]{r.bindLitFrame();};
+        light.ref=referenceLight();
+        light.receiveShadows=r.shadowQuality()>=ShadowQuality::Medium;
+        if(tileMesh_.vb.valid()&&atlas_.valid())
+            batch_.drawMesh(dev,tileMesh_,atlas_.tex,r.viewProj(),
+                            defaults_.lit?&light:nullptr);
+    });
+    r.drawCustom([this,&r](gfx::Device& dev) {
+        r.lights.bind(2,1);
+        SpriteLighting light;
+        light.bind=[&r]{r.bindLitFrame();};
+        light.ref=referenceLight();
+        light.receiveShadows=r.shadowQuality()>=ShadowQuality::Medium;
+        secondaryBatch_.flush(dev,r.viewProj(),&light);
     });
 }
 

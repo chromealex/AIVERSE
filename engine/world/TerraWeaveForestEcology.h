@@ -167,8 +167,13 @@ public:
             for(int64_t z=z0;z<=z1;++z)
                 for(int64_t x=x0;x<=x1;++x) {
                     auto& bucket=buckets_[{x,z}];
-                    if(bucket.size()>=2048u)
-                        throw std::length_error("TerraWeave overcrowded canopy bucket");
+                    // Never throw inside the authoritative tick: a bucket
+                    // that is already full is marked saturated and further
+                    // crowns are skipped in stable (species,key) order.
+                    if(bucket.size()>=kMaxCrownsPerBucket) {
+                        saturated_.insert({x,z});
+                        continue;
+                    }
                     bucket.push_back(index);
                 }
         }
@@ -212,9 +217,16 @@ public:
         }
         return uint32_t(uint64_t(baseSunPermille)*(1000-blocked)/1000);
     }
+    static constexpr size_t kMaxCrownsPerBucket=2048u;
+    bool saturated(int64_t x,int64_t z)const {
+        return saturated_.contains(std::pair{
+            detail::floorDiv(x,3200),detail::floorDiv(z,3200)});
+    }
     bool occupied(int64_t x,int64_t z,uint32_t spacingCm=120)const {
         const auto bin=std::pair{
             detail::floorDiv(x,3200),detail::floorDiv(z,3200)};
+        // An overcrowded bucket is treated as fully occupied (no recruits).
+        if(saturated_.contains(bin))return true;
         for(int64_t bz=bin.second-1;bz<=bin.second+1;++bz)
             for(int64_t bx=bin.first-1;bx<=bin.first+1;++bx) {
                 const auto it=buckets_.find({bx,bz});
@@ -237,6 +249,7 @@ private:
     };
     std::vector<Entry> entries_;
     std::map<std::pair<int64_t,int64_t>,std::vector<size_t>> buckets_;
+    std::set<std::pair<int64_t,int64_t>> saturated_;
 };
 
 struct ForestEcologyClimate {
@@ -306,11 +319,13 @@ inline ForestEcologyResult advanceForestEcology(
     next.lastStepTick=completedTick;
 
     std::vector<AnchoredPlant> plants=rooted;
-    std::sort(plants.begin(),plants.end(),
-        [](const auto& a,const auto& b){
-            return AnchoredPlantId{a.anchor.speciesId,a.anchor.plantKey}<
-                   AnchoredPlantId{b.anchor.speciesId,b.anchor.plantKey};
-        });
+    const auto byId=[](const auto& a,const auto& b){
+        return AnchoredPlantId{a.anchor.speciesId,a.anchor.plantKey}<
+               AnchoredPlantId{b.anchor.speciesId,b.anchor.plantKey};
+    };
+    // The committed population is kept sorted, so the common case is O(N).
+    if(!std::is_sorted(plants.begin(),plants.end(),byId))
+        std::sort(plants.begin(),plants.end(),byId);
     for(size_t i=0;i<plants.size();++i){
         const auto& p=plants[i];
         if(!p.anchor.speciesId || !p.anchor.plantKey ||
@@ -332,6 +347,14 @@ inline ForestEcologyResult advanceForestEcology(
     std::set<AnchoredPlantId> occupiedIds;
     for(const auto& p:plants)
         occupiedIds.insert({p.anchor.speciesId,p.anchor.plantKey});
+    // A plant without a history record has not been seen by a previous
+    // ecology step. Until the first step every plant counts from initialTick
+    // (it was present at initialization). Afterwards histories are created
+    // for the WHOLE population at each step (below), so a missing record
+    // means the plant was rooted after the previous step: it must not age
+    // or accumulate stress retroactively from initialTick.
+    const uint64_t firstSeenTick=
+        next.revision==0?next.initialTick:completedTick;
     const size_t start=size_t(next.cursor%plants.size());
     const size_t count=std::min<size_t>(cfg.maxPlantsPerStep,plants.size());
     result.processed=count;
@@ -345,7 +368,7 @@ inline ForestEcologyResult advanceForestEcology(
         const auto tr=traits.find(id.speciesId);
         if(tr==traits.end() || plant.fallen)continue;
         ForestEcologyPlantState& history=histories[id];
-        if(!history.id.key)history={id,next.initialTick,0,0,0,0,false,false};
+        if(!history.id.key)history={id,firstSeenTick,0,0,0,0,false,false};
         if(history.dead)continue;
         const uint64_t dt=completedTick-history.lastEvaluatedTick;
         history.lastEvaluatedTick=completedTick;
@@ -388,7 +411,7 @@ inline ForestEcologyResult advanceForestEcology(
                 history.shadeStressTicks-dt:0;
         }
         const auto stressStep=[dt,ageLimit](uint64_t previous,
-                                             bool stressed){
+                                             bool stressed)->uint64_t{
             if(stressed)
                 return std::min<uint64_t>(ageLimit,previous+
                     std::min<uint64_t>(dt,ageLimit-previous));
@@ -458,16 +481,30 @@ inline ForestEcologyResult advanceForestEcology(
         if(before!=plant.environment || history.dead)
             result.changed.push_back(id);
     }
+    // Remember WHICH plant is next; inserting sorted recruits shifts indices.
+    const AnchoredPlant& following=plants[(start+count)%plants.size()];
+    const AnchoredPlantId nextId{following.anchor.speciesId,
+                                 following.anchor.plantKey};
     next.cursor=(start+count)%plants.size();
     result.populationChanged=!seedlings.empty();
+    // Every tracked plant now has a history stamped no later than this
+    // step (see firstSeenTick above).
+    for(const auto& p:plants){
+        const AnchoredPlantId id{p.anchor.speciesId,p.anchor.plantKey};
+        if(!histories.contains(id))
+            histories.emplace(id,ForestEcologyPlantState{
+                id,firstSeenTick,0,0,0,0,false,false});
+    }
     for(auto& child:seedlings)
         plants.push_back(std::move(child));
-    if(!seedlings.empty())
-        std::sort(plants.begin(),plants.end(),
-            [](const auto& a,const auto& b){
-                return AnchoredPlantId{a.anchor.speciesId,a.anchor.plantKey}<
-                       AnchoredPlantId{b.anchor.speciesId,b.anchor.plantKey};
+    if(!seedlings.empty()){
+        std::sort(plants.begin(),plants.end(),byId);
+        const auto at=std::lower_bound(plants.begin(),plants.end(),nextId,
+            [](const AnchoredPlant& p,const AnchoredPlantId& id){
+                return AnchoredPlantId{p.anchor.speciesId,p.anchor.plantKey}<id;
             });
+        next.cursor=uint64_t(at-plants.begin())%plants.size();
+    }
     next.plants.clear();
     next.plants.reserve(histories.size()+seedlings.size());
     for(const auto& [id,record]:histories) {

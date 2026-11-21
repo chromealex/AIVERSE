@@ -310,6 +310,28 @@ void appliedReceiptAfterRollback() {
     CHECK(client.status()==ClientStatus::Conflict);
     CHECK(registry(*sim).revision==0);
 }
+// Review fix: a LATER legitimate edit (revision 1 -> 2) is not a rollback;
+// the historical Applied receipt of revision 1 must stay Applied.
+void appliedReceiptSurvivesLaterEdit() {
+    auto sim=make();
+    ServerGateway gateway;
+    RemoteClient client(22301);
+    CHECK(client.begin(edit(Fixed::fromInt(31)),kEdit,4));
+    auto [c1,s1]=net::makeLoopbackPair();
+    drive(client,gateway,*sim,*c1,*s1,0,2200);
+    CHECK(client.status()==ClientStatus::Applied);
+    CHECK(registry(*sim).revision==1);
+    Command later;
+    CHECK(encodeFieldEditCommand(edit(Fixed::fromInt(45),1),kEdit,later));
+    later.tick=sim->tick();
+    CHECK(applyFieldEditCommand(*sim,later,kEdit));
+    CHECK(registry(*sim).revision==2);
+    sim->step();
+    gateway.observe(*sim);
+    CHECK(gateway.entries().size()==1);
+    CHECK(gateway.entries().begin()->second.receipt.result==Result::Applied);
+    CHECK(gateway.entries().begin()->second.receipt.revision==1);
+}
 void queuedReceiptInvalidatedByRollback() {
     auto sim=make();
     SimSnapshot checkpoint;
@@ -726,6 +748,7 @@ int main() {
     manualRetryAfterJournalRecovery();
     ordinaryUnknownStillRetriesOriginal();
     appliedReceiptAfterRollback();
+    appliedReceiptSurvivesLaterEdit();
     queuedReceiptInvalidatedByRollback();
     denied();
     conflictAfterServerRestart();
