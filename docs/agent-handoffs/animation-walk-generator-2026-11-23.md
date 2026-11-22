@@ -42,3 +42,17 @@ foot slide and joint bounds, then add stance-aware IK and a proper asset
 writer. Publish the result in the catalog only after visual approval. At that
 point capture real engine frames, update the MotionWeave devlog and mark the
 roadmap item `done` after integration into `main`.
+
+## Preview follow-up
+
+The focused test now optionally writes a 60 Hz, two-cycle joint CSV from the
+actual generated clip through `bindPose`, `sampleClip` and `worldMatrices`.
+`tools/animation/walk_preview.py` converts this CSV into a standalone HTML
+player and an eight-phase PNG contact sheet using only the Python standard
+library. The artifacts are under
+`/Volumes/KINGSTON 1/AIVERSE-builds/motionweave-walk/preview/`.
+The PNG was visually inspected. It confirms leg alternation but also makes
+the mechanical motion and absent foot planting clear. The HTML browser player
+was generated but could not be opened through the current computer-use bridge;
+do not claim interactive browser validation. These are stick-figure pose
+visualizations, not native Metal viewport frames, so they are not site media.
