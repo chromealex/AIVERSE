@@ -3178,3 +3178,20 @@ binary was committed or changed. Full VIVID validation, interactive Studio
 and other GPU backends were not run. Next: improve foot contact and repeat
 visual/trajectory acceptance before integrating with catalog assets.
 
+## 2026-11-23 — Ada A-pose and head motion in generated walk
+
+Source commit `0865842d6` on `feature/motionweave-walk-generator-current`.
+The shared walk generator classifies the bind shoulder-to-elbow direction as
+Relaxed/A/T/Unknown, lowers A/T arms and writes separate neck/head yaw/pitch
+channels. `HumanWalkPreview.h` maps these joints across modular skins and
+reports classifications. The native `Ada-Groom-Bound` diagnostic found four
+complete rigs and eight A-pose arms, no T/relaxed/unknown arms, plus nine
+head/neck channels. The external asset was not changed.
+
+Actually run on macOS: native Creator and focused MotionWeave test built;
+CTest 1/1 PASS; Metal Creator captured 48/48 frames with no pipeline failures;
+AVFoundation encoded a 2-second video. Frames 0 and 6 were inspected and show
+lowered arms in the walking capture. Artifacts, commands, and remaining gait
+limitations are recorded in the MotionWeave walk handoff above. The head
+motion is intentionally small; gaze tracking and planted feet are not done.
+

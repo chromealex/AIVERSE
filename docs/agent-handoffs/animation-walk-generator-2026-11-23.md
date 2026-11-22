@@ -110,3 +110,36 @@ run. Next implement ground-aware foot targets and stride calibration on Ada,
 then repeat the native motion capture and compare foot drift on world-space
 ankle tracks. Keep this site roadmap item `in-progress`; add public devlog
 media only when the result passes visual review.
+
+## Ada A-pose and independent head motion, 2026-11-23
+
+Implementation commit: `0865842d6` on
+`feature/motionweave-walk-generator-current`.
+
+The shared `classifyWalkArmRestPose` compares bind shoulder-to-elbow direction
+with model down and reports Relaxed (within 30°), A (30–70°), T (above 70°),
+or Unknown for missing/degenerate joints. Generated shoulder channels lower
+A/T arms toward a relaxed downward direction before adding walk swing; already
+relaxed arms retain their bind direction. Optional neck and head receive
+separate phase-lagged yaw and pitch channels. The modular-human adapter maps
+lower arms, neck and head across all relevant skin roots and reports actual
+classification counts.
+
+Actually run: AppleClang 17 native walk-test and VIVID Creator builds PASS;
+`ctest -R '^motionweave_walk_generator$'` 1/1 PASS, now including relaxed,
+A and T classification, arm-lowering direction, head-channel change and
+clip seam. `python3.12 tools/site/build.py check`: 37 entries, 0 errors;
+`git diff --check` PASS. The corrected external `Ada-Groom-Bound` was captured
+on Metal: 48/48 frames, `pipelineFailures=0`, 43 colour and 43 shadow
+submissions per frame. System AVFoundation encoded 1500x920 H.264 at 24 fps
+to `/Volumes/KINGSTON 1/AIVERSE-builds/motionweave-walk/ada-pose-head-final/ada-walk-arms-head.mp4`.
+Frames 0 and 6 were inspected. A final one-frame diagnostic capture from the
+same asset and build reported `rigs=4`, `arms relaxed=0 A=8 T=0 unknown=0`,
+`headChannels=9`, showing Ada is recognized as an A-pose across the four
+complete modular rigs. No source Ada asset was edited or committed.
+
+Limits: the head motion is a small authored procedural variation rather than
+gaze tracking or physics; the gait still lacks planted-foot IK and natural
+weight transfer. The full VIVID suite, Studio UI and other GPU backends remain
+untested. Next stage should solve foot contact on Ada and review a full-body
+video side by side with this baseline before marking the roadmap item done.
