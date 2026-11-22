@@ -14,11 +14,11 @@ int main(int argc, char** argv) {
     WalkRig rig{bones.root, bones.thigh[0], bones.shin[0], bones.foot[0],
                 bones.thigh[1], bones.shin[1], bones.foot[1],
                 bones.upperArm[0], bones.upperArm[1],
-                bones.foreArm[0], bones.foreArm[1], bones.neck, bones.head};
+                bones.foreArm[0], bones.foreArm[1], bones.neck, bones.head, bones.upperChest};
     WalkCycleSettings settings;
     settings.rootSpeed = 1.2f;
     AnimClip clip = generateWalkCycle(model, rig, settings);
-    AIVERSE_TEST_CHECK(clip.channels.size() == 11);
+    AIVERSE_TEST_CHECK(clip.channels.size() == 14);
     AIVERSE_TEST_CHECK(clip.duration == 1.0f);
     for (const auto& channel : clip.channels) {
         AIVERSE_TEST_CHECK(channel.times.size() == 33);
@@ -34,7 +34,14 @@ int main(int argc, char** argv) {
     Pose pose;
     bindPose(model, pose);
     sampleClip(clip, 0.25f, pose);
-    AIVERSE_TEST_CHECK(std::abs(pose[size_t(bones.thigh[0])].r.x - pose[size_t(bones.thigh[1])].r.x) > 0.1f);
+    std::vector<mat4> stanceA, stanceB;
+    worldMatrices(model, pose, stanceB);
+    bindPose(model, pose);
+    sampleClip(clip, 0.0625f, pose);
+    worldMatrices(model, pose, stanceA);
+    const float3 footA = stanceA[size_t(bones.foot[0])].transformPoint({});
+    const float3 footB = stanceB[size_t(bones.foot[0])].transformPoint({});
+    AIVERSE_TEST_CHECK(length(footA - footB) < 0.05f);
     AIVERSE_TEST_CHECK(classifyWalkArmRestPose(model, bones.upperArm[0], bones.foreArm[0]) == WalkArmRestPose::Relaxed);
     Model aPose = model;
     aPose.nodes[size_t(bones.upperArm[0])].r = quat::axisAngle({0, 0, 1}, 0.8f);
@@ -58,8 +65,10 @@ int main(int argc, char** argv) {
     AIVERSE_TEST_CHECK(dot(normalize(loweredWorld[size_t(bones.foreArm[0])].transformPoint({}) -
                                    loweredWorld[size_t(bones.upperArm[0])].transformPoint({})),
                            float3{0, -1, 0}) > 0.90f);
-    AIVERSE_TEST_CHECK(clip.channels[9].node == rig.neck && clip.channels[10].node == rig.head);
-    AIVERSE_TEST_CHECK(std::abs(clip.channels[10].values[4 * 8 + 1] - clip.channels[10].values[1]) > 0.001f);
+    AIVERSE_TEST_CHECK(clip.channels[9].node == bones.hips);
+    AIVERSE_TEST_CHECK(clip.channels[11].node == rig.torso);
+    AIVERSE_TEST_CHECK(clip.channels[12].node == rig.neck && clip.channels[13].node == rig.head);
+    AIVERSE_TEST_CHECK(std::abs(clip.channels[13].values[4 * 8 + 1] - clip.channels[13].values[1]) > 0.0001f);
     bool rejected = false;
     try { WalkRig invalid = rig; invalid.leftKnee = invalid.rightKnee; (void)generateWalkCycle(model, invalid); }
     catch (const std::invalid_argument&) { rejected = true; }

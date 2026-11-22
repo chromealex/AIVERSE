@@ -8,28 +8,29 @@ without modifying the input model. `WalkRig` contains explicit node indices for
 the root, both hip-knee-ankle chains and both shoulders. The caller validates
 semantic joint mapping when importing a skeleton and then adds the returned
 clip to a model or asset publication transaction. The rig must use local +Z
-forward and local +X for joint pitch. Duration, swing angles, root bob and
+forward; joint pitch axes are derived from the bind pose. Duration, swing angles, pelvis bob and
 sample count and optional forward `rootSpeed` are bounded and validated.
 `rootSpeed=0` produces an in-place clip; a positive value writes local +Z
 translation into the root channel, with exactly `rootSpeed * duration` travel
-per cycle. This first version is a simple cyclic
-pose generator; it does not guarantee planted feet, collision-aware steps,
-automatic rig mapping or a catalog asset writer. A follow-up should add
-stance-aware IK and a visual review before exposing generated clips in the
-site catalog.
+per cycle. Stance targets hold ankle positions against root travel, and the
+shared two-bone IK solver bakes leg rotations into the clip. Pelvis translation
+and rotation carry the weight shift. This uses the bind-pose floor on a flat
+surface; terrain sampling, shoe-sole contact, automatic rig mapping and a
+catalog asset writer remain to be added.
 
 If elbow nodes are supplied, `classifyWalkArmRestPose` measures each bind
 shoulder-to-elbow direction and identifies relaxed, A or T rest poses. For A/T
 rigs, the generated shoulder track first lowers the arms toward a relaxed
 downward direction, then applies the walk swing. Optional neck and head nodes
-receive separate delayed yaw and pitch tracks, so the head is not rigidly
-locked to the torso. Missing optional joints leave those channels absent.
+receive small delayed yaw and pitch tracks after torso motion. Missing
+optional joints leave those channels absent.
 
 The diagnostic Creator command `--smoke --preview-walk --preview-sequence 48
 --asset <human-manifest>` maps complete modular human rigs by semantic joint
 names, samples this clip at 24 fps, and captures real native 3D frames.
 `HumanWalkPreview.h` mirrors the walk onto each complete body/clothing skin and
-keeps partial head/groom roots on the same travel. This is a preview adapter;
+copies matching pelvis, torso, neck and head tracks to partial head/groom
+roots, keeping the modular character together. This is a preview adapter;
 the generic generator itself has no dependency on VIVID or character assets.
 
 **MotionWeave** is the canonical name for AIVERSE's modular, genre-independent

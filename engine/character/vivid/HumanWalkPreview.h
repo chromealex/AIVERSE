@@ -24,6 +24,8 @@ inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
     combined.name = "vivid_generated_walk";
     combined.duration = settings.duration;
     HumanWalkPreviewStats stats;
+    AnimClip referenceRig;
+    std::vector<int> partialRoots;
     const auto countArm = [&](WalkArmRestPose pose) {
         switch(pose){
             case WalkArmRestPose::Relaxed: ++stats.relaxedArms; break;
@@ -40,12 +42,12 @@ inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
     for (size_t r = 0; r < model.nodes.size(); ++r) {
         const auto rootName = humanBoneSemantic(model.nodes[r].name);
         if (rootName != "root" && rootName.rfind("root.", 0) != 0) continue;
-        const std::array<const char*, 12> semantic = {
+        const std::array<const char*, 13> semantic = {
             "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r",
             "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r",
-            "neck_01", "head"
+            "neck_01", "head", "spine_03"
         };
-        std::array<int, 12> joints;
+        std::array<int, 13> joints;
         joints.fill(-1);
         for (size_t n = 0; n < model.nodes.size(); ++n) {
             if (!belongs(int(n), int(r))) continue;
@@ -58,31 +60,46 @@ inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
         if (ready) {
             const WalkRig rig{int(r), joints[0], joints[1], joints[2],
                               joints[3], joints[4], joints[5], joints[6], joints[7],
-                              joints[8], joints[9], joints[10], joints[11]};
+                              joints[8], joints[9], joints[10], joints[11], joints[12]};
             countArm(classifyWalkArmRestPose(model, rig.leftShoulder, rig.leftElbow));
             countArm(classifyWalkArmRestPose(model, rig.rightShoulder, rig.rightElbow));
             stats.headChannels += int(rig.neck >= 0) + int(rig.head >= 0);
             AnimClip part = generateWalkCycle(model, rig, settings);
+            if (referenceRig.channels.empty()) referenceRig = part;
             combined.channels.insert(combined.channels.end(),
                                      std::make_move_iterator(part.channels.begin()),
                                      std::make_move_iterator(part.channels.end()));
             ++stats.completeRigs;
         } else {
+            partialRoots.push_back(int(r));
+        }
+    }
+    for (int partialRoot : partialRoots) {
             AnimChannel root;
-            root.node = int(r);
+            root.node = partialRoot;
             root.path = AnimChannel::Translation;
             root.comps = 3;
             for (int i = 0; i < settings.samples; ++i) {
                 const float time = settings.duration * float(i) / float(settings.samples - 1);
-                const auto base = model.nodes[r].t;
+                const auto base = model.nodes[size_t(partialRoot)].t;
                 root.times.push_back(time);
                 root.values.insert(root.values.end(),
                                    {base.x, base.y, base.z + settings.rootSpeed * time});
             }
             combined.channels.push_back(std::move(root));
-            appendWalkHeadMotion(model, joints[10], joints[11], settings, combined);
-            stats.headChannels += int(joints[10] >= 0) + int(joints[11] >= 0);
-        }
+            for (const auto& source : referenceRig.channels) {
+                const std::string semantic = humanBoneSemantic(model.nodes[size_t(source.node)].name);
+                if (semantic == "root") continue;
+                for (size_t n = 0; n < model.nodes.size(); ++n) {
+                    if (!belongs(int(n), partialRoot) ||
+                        humanBoneSemantic(model.nodes[n].name) != semantic) continue;
+                    AnimChannel channel = source;
+                    channel.node = int(n);
+                    combined.channels.push_back(std::move(channel));
+                    if (semantic == "neck_01" || semantic == "head") ++stats.headChannels;
+                    break;
+                }
+            }
     }
     if (stats.completeRigs == 0) throw std::invalid_argument("walk preview: no complete rig");
     if(report)*report=stats;
