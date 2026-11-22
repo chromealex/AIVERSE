@@ -517,9 +517,12 @@ void Workspace::registerCoreOps() {
     // ---------------------------------------------------------------- games
     auto templatesJson = [this] {
         Json arr = Json::array();
-        for (auto& t : listTemplates(engineDir)) {
+        // official catalog templates (from the package cache) + engine templates the catalog does not replace
+        for (auto& t : hubTemplates(engineDir, true)) {
             Json j = Json::object();
             j.set("id", str(t.id)); j.set("name", str(t.name));j.set("genre",str(t.genre));
+            j.set("source", str(t.source));
+            if (!t.version.empty()) j.set("version", str(t.version));
             if (!t.description.empty()) j.set("description", str(t.description));
             if (!t.dir.empty()) j.set("dir", str(t.dir));
             j.set("maps", Json::number(int64_t(t.maps)));
@@ -578,7 +581,7 @@ void Workspace::registerCoreOps() {
         return r;
     };
     add("create_project", "Create a new game project in a folder of your choice from a template (list_projects shows them; "
-        "'empty' = minimal game) and open it. location: parent folder (default ~/AiverseProjects); folder: name of the new folder (default: from the name).",
+        "'empty' = minimal game; 'pkg:<id>' = a template package of the catalog, package_search {category: templates} finds more) and open it. location: parent folder (default ~/AiverseProjects); folder: name of the new folder (default: from the name).",
         R"({"properties": {"name": {"type": "string"}, "template": {"type": "string"}, "location": {"type": "string"}, "folder": {"type": "string"}}, "required": ["name"]})",
         create);
     add("create_game", "Same as create_project (older name; 'id' = folder).",

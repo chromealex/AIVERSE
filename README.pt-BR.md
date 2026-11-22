@@ -179,6 +179,8 @@ O relatório marca cada item como migrado com exatidão, de forma aproximada ou 
 
 Cada template é um jogo totalmente jogável com bots. Abra no editor e comece a modificar.
 
+Os templates são pacotes do [catálogo](https://chromealex.github.io/AIVERSE/catalog.html): a tela inicial mostra os oficiais e **More templates** busca os demais.
+
 | Gênero | Templates |
 |---|---|
 | RTS clássico com base | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, minério, barra lateral) · **Starfall Sectors** (StarCraft: três raças) · **Frost Crown** (Warcraft III: heróis, creeps, terreno) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: economia de fluxo, radar, reciclagem, aviões, mísseis nucleares) |

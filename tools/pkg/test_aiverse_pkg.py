@@ -52,8 +52,10 @@ def main():
         s1 = make_zip(dist / 's1.zip', src, {'raw.png': b'raw'})
         tpl = {'schema': 1, 'id': 'demo-tpl', 'version': '1.0.0', 'kind': 'template', 'category': 'templates',
                'title': 'Template', 'title-ru': 'Шаблон', 'license': 'MIT'}
-        t1 = make_zip(dist / 't1.zip', tpl, {'game.json': json.dumps({'name': 'Tpl', 'packages': {'demo-mats': '^1.0'}}),
-                                             'maps/start.json': '{}'})
+        t1 = make_zip(dist / 't1.zip', tpl, {'game.json': '// a sample game\n' + json.dumps(
+            {'name': 'Tpl', 'url': 'https://x//y', 'packages': {'demo-mats': '^1.0'}}), 'maps/start.json': '{}'})
+        tpl2 = dict(tpl, id='demo-tpl2', title='Community arena', provides={'maps': ['Arena']})
+        t2 = make_zip(dist / 't2.zip', tpl2, {'game.json': '{"name": "C"}'})
         mdl = {'schema': 1, 'id': 'demo-models', 'version': '1.0.0', 'kind': 'content', 'category': 'models',
                'title': 'Models', 'title-ru': 'Модели', 'license': 'MIT', 'dependencies': {'demo-mats': '^1.0'},
                'install': {'mount': 'models/demo'}}
@@ -61,7 +63,8 @@ def main():
         bad = make_zip(dist / 'bad.zip', dict(src, id='demo-bad'), {'x': 'y'})
         bad['sha256'] = '0' * 64
         published = [(mats, 'materials', {'1.0.0': v1, '1.1.0': v2, '2.0.0': v3}), (src, 'textures', {'1.0.0': s1}),
-                     (tpl, 'templates', {'1.0.0': t1}), (mdl, 'models', {'1.0.0': md1}),
+                     (tpl, 'templates', {'1.0.0': t1}), (tpl2, 'templates', {'1.0.0': t2}),
+                     (mdl, 'models', {'1.0.0': md1}),
                      (dict(src, id='demo-bad'), 'textures', {'1.0.0': bad})]
         cat = tmp / 'catalog'
         index = {'schema': 2, 'packages': []}
@@ -72,7 +75,8 @@ def main():
                                                                tags=['pbr'] if m['id'] == 'demo-mats' else [])))
             (folder / 'versions.json').write_text(json.dumps({'id': m['id'], 'versions': versions,
                                                               'latest': max(versions, key=pkg.parse_version)}))
-            index['packages'].append({'id': m['id'], 'category': category, 'path': f"{category}/{m['id']}"})
+            index['packages'].append({'id': m['id'], 'category': category, 'path': f"{category}/{m['id']}",
+                                      **({'official': True} if m['id'] == 'demo-tpl' else {})})
         (cat / 'index.json').write_text(json.dumps(index))
         os.environ['AIVERSE_PACKAGES_INDEX'] = str(cat / 'index.json')
 
@@ -141,11 +145,22 @@ def main():
         code, r, _ = run('add', 'demo-models', '--project', str(p3))
         assert code == 0 and 'dependencies' not in r['result'], r
 
+        # templates: official ones for the start screen, every one with --all, search, offline cache
+        code, r, _ = run('templates')
+        assert code == 0 and [e['id'] for e in r['result']] == ['demo-tpl'] and r['result'][0]['official'], r
+        code, r, _ = run('templates', '--all')
+        assert [e['id'] for e in r['result']] == ['demo-tpl', 'demo-tpl2'], r
+        code, r, _ = run('templates', '--all', 'arena')
+        assert [e['id'] for e in r['result']] == ['demo-tpl2'] and r['result'][0]['maps'] == ['Arena'], r
+        code, r, _ = run('templates', '--cached')
+        assert code == 0 and [e['id'] for e in r['result']] == ['demo-tpl'], r
+
         code, r, _ = run('create', 'demo-tpl', str(tmp / 'newgame'))
         assert code == 0, r
         ng = tmp / 'newgame'
         assert (ng / 'maps/start.json').is_file() and (ng / 'materials/demo/textures/a.png').is_file()
-        assert json.loads((ng / 'game.json').read_text())['template'] == 'demo-tpl'
+        g = json.loads((ng / 'game.json').read_text())
+        assert g['template'] == 'demo-tpl' and g['url'] == 'https://x//y', g
 
         # offline: cached packages still resolve, new downloads fail clearly
         os.environ['AIVERSE_PACKAGES_OFFLINE'] = '1'

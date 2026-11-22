@@ -181,8 +181,11 @@ void io(Archive&,CharacterSnapshot&);
 void ioMelee(Archive&,CharacterSnapshot&);
 
 namespace detail {
-template<class T> void copyField(T& to,const T& from){to=from;}
-template<class T,std::size_t N> void copyField(T (&to)[N],const T (&from)[N]){std::copy(from,from+N,to);}
+// One function: MSVC treats the array overload and `T = U[N]` as equally good.
+template<class T> void copyField(T& to,const T& from){
+    if constexpr(std::is_array_v<T>) std::copy_n(from,std::extent_v<T>,to);
+    else to=from;
+}
 }
 template<bool Const> CharacterSnapshot snapshot(const BasicCharacterRef<Const>& r) {
     CharacterSnapshot s;

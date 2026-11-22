@@ -17,6 +17,8 @@ attached to a GitHub release. This tool finds, downloads, verifies and installs 
   aiverse_pkg.py verify --project P            installed files against the lock (exit 1 on mismatch)
   aiverse_pkg.py skill <skill-id> [--project P]  packages a repository skill names (SKILL.md "packages:");
                                                  with --project installs them
+  aiverse_pkg.py templates [words] [--all] [--refresh|--cached]  project templates: official (AIVERSE)
+                                                 ones, with --all every template package of the catalog
   aiverse_pkg.py create <template-id> <folder>   new project folder from a template package
 
 Packages are added to the catalog by pull request to AIVERSE-PACKAGES (its tools/catalog.py builds,
@@ -42,6 +44,7 @@ import time
 import urllib.parse
 import urllib.request
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 SCHEMA = 1        # aiverse.lock
@@ -177,11 +180,16 @@ def index_source() -> str:
     return os.environ.get('AIVERSE_PACKAGES_INDEX', DEFAULT_INDEX)
 
 
-def load_index(refresh: bool = False) -> dict:
-    """The catalog index; cached copy when offline or the network fails."""
+def fresh(path: Path, max_age: float | None) -> bool:
+    """A cached file younger than max_age seconds (None: never fresh enough)."""
+    return max_age is not None and path.exists() and time.time() - path.stat().st_mtime < max_age
+
+
+def load_index(refresh: bool = False, max_age: float | None = None) -> dict:
+    """The catalog index; cached copy when offline, younger than max_age, or the network fails."""
     src = index_source()
     cached = home() / 'index-cache' / (hashlib.sha256(src.encode()).hexdigest()[:16] + '.json')
-    if not refresh and offline() and cached.exists():
+    if cached.exists() and ((not refresh and offline()) or fresh(cached, max_age)):
         return read_json(cached)
     try:
         data = json.loads(fetch_bytes(src).decode('utf-8'))
@@ -204,11 +212,11 @@ def catalog_url(path: str) -> str:
     return str(base / path)
 
 
-def package_entry(item: dict, refresh: bool = False) -> dict:
+def package_entry(item: dict, refresh: bool = False, max_age: float | None = None) -> dict:
     """One package: its index line + <path>/aiverse.package.json + <path>/versions.json (cached for offline use)."""
     cached = home() / 'index-cache' / (hashlib.sha256(index_source().encode()).hexdigest()[:16] + f"-{item['id']}.json")
-    if not refresh and offline() and cached.exists():
-        return read_json(cached)
+    if cached.exists() and ((not refresh and offline()) or fresh(cached, max_age)):
+        return dict(read_json(cached), **item)
     try:
         manifest = json.loads(fetch_bytes(catalog_url(f"{item['path']}/{MANIFEST}")).decode('utf-8'))
         published = json.loads(fetch_bytes(catalog_url(f"{item['path']}/versions.json")).decode('utf-8'))
@@ -467,6 +475,106 @@ def cmd_search(a):
     return out
 
 
+def strip_comments(text: str) -> str:
+    """JSON with // and /* */ comments (the engine's own reader allows them) -> plain JSON."""
+    out, i, n, in_str = [], 0, len(text), False
+    while i < n:
+        c = text[i]
+        if in_str:
+            out.append(c)
+            if c == '\\' and i + 1 < n:
+                out.append(text[i + 1]); i += 1
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True; out.append(c)
+        elif text.startswith('//', i):
+            while i < n and text[i] != '\n':
+                i += 1
+            continue
+        elif text.startswith('/*', i):
+            end = text.find('*/', i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+TEMPLATE_CACHE_AGE = 6 * 3600   # the start screen reads templates from the cache this long
+
+
+def cmd_templates(a):
+    """Project templates of the catalog for the editor's start screen. Official ones (the index marks them:
+    made by the AIVERSE authors) by default, every template package with --all. Titles and summaries come
+    with their translations (title-ru, ...); previews are URLs, the first one is also downloaded into the
+    cache (previewFile) so native screens can show it offline. --cached never touches the network (the
+    start screen opens instantly from what an earlier call saved; empty when nothing is cached yet)."""
+    if a.cached:
+        os.environ['AIVERSE_PACKAGES_OFFLINE'] = '1'
+        try:
+            index = load_index()
+        except PkgError:
+            return []
+        age = None
+    else:
+        age = None if a.refresh else TEMPLATE_CACHE_AGE
+        index = load_index(refresh=a.refresh, max_age=age)
+    items = [it for it in index.get('packages', [])
+             if it.get('category') == 'templates' and (a.all or it.get('official'))]
+
+    def entry(item):
+        try:
+            return package_entry(item, refresh=a.refresh, max_age=age)
+        except PkgError:
+            return None  # one unreachable package does not hide the others
+    with ThreadPoolExecutor(max_workers=8) as pool:   # one request per file: parallel on a cold cache
+        entries = list(pool.map(entry, items))
+    words = [w.lower() for w in a.words]
+    out = []
+    for item, e in zip(items, entries):
+        if not e or e.get('kind') != 'template' or not e.get('latest'):
+            continue
+        texts = [v for k, v in e.items() if k.split('-', 1)[0] in ('title', 'summary') and isinstance(v, str)]
+        hay = ' '.join([e['id'], *texts, ' '.join(e.get('tags', []))]).lower()
+        if not all(w in hay for w in words):
+            continue
+        latest = e['versions'][e['latest']]
+        provides = e.get('provides') or {}
+        row = {k: v for k, v in e.items() if k.split('-', 1)[0] in ('title', 'summary', 'description')}
+        row.update(id=e['id'], official=bool(item.get('official')), latest=e['latest'],
+                   minEngine=latest.get('minEngine'), size=latest.get('size'), authors=e.get('authors', []),
+                   tags=e.get('tags', []), previews=e.get('previews', []), readme=e.get('readme'),
+                   maps=provides.get('maps', []), module=provides.get('module', ''),
+                   engineTemplate=provides.get('engineTemplate'),
+                   cached=e['latest'] in installed_versions(e['id']))
+        if row['previews']:
+            row['previewFile'] = cached_preview(e['id'], e['latest'], row['previews'][0])
+        out.append(row)
+    out.sort(key=lambda r: (not r['official'], r.get('title', r['id']).lower()))
+    return out
+
+
+def cached_preview(pkg: str, version: str, url: str) -> str | None:
+    """Downloads a preview image once per package version; None when it cannot be fetched."""
+    ext = Path(urllib.parse.urlparse(url).path).suffix.lower() or '.jpg'
+    dest = home() / 'previews' / f'{pkg}-{version}{ext}'
+    if dest.exists():
+        return str(dest)
+    if offline():
+        return None
+    try:
+        data = fetch_bytes(url)
+    except Exception:
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + '.part')
+    tmp.write_bytes(data)
+    os.replace(tmp, dest)
+    return str(dest)
+
+
 def human(r, a):
     if isinstance(r, list):
         for e in r:
@@ -495,6 +603,8 @@ def main(argv=None) -> int:
     s = sub.add_parser('status'); s.add_argument('--project', type=Path, required=True)
     s = sub.add_parser('verify'); s.add_argument('--project', type=Path, required=True)
     s = sub.add_parser('skill'); s.add_argument('skill'); s.add_argument('--project', type=Path)
+    s = sub.add_parser('templates'); s.add_argument('words', nargs='*'); s.add_argument('--all', action='store_true')
+    s.add_argument('--refresh', action='store_true'); s.add_argument('--cached', action='store_true')
     s = sub.add_parser('create'); s.add_argument('ref'); s.add_argument('folder', type=Path)
     for k in sub.choices.values():
         k.add_argument('--json', action='store_true', default=argparse.SUPPRESS)
@@ -520,6 +630,8 @@ def main(argv=None) -> int:
 def run(a, log):
     if a.cmd == 'search':
         return cmd_search(a)
+    if a.cmd == 'templates':
+        return cmd_templates(a)
     if a.cmd == 'info':
         e = index_entry(load_index(refresh=True), a.id, refresh=True)
         return dict(e, cached=installed_versions(a.id))
@@ -598,7 +710,7 @@ def run(a, log):
         shutil.copytree(src, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns(MANIFEST))
         if not (dest / 'game.json').is_file():
             raise PkgError(f"template '{pkg}' has no game.json at its root")
-        game = read_json(dest / 'game.json')
+        game = json.loads(strip_comments((dest / 'game.json').read_text(encoding='utf-8')))  # game.json may have // comments
         game['template'] = pkg
         write_json(dest / 'game.json', game)
         for dep, dspec in (game.get('packages') or {}).items():

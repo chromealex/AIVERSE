@@ -177,6 +177,8 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 Каждый шаблон — полностью играбельная игра с ботами. Её можно открыть в редакторе и сразу менять.
 
+Шаблоны — пакеты [каталога](https://chromealex.github.io/AIVERSE/catalog.html): стартовый экран показывает официальные, **More templates** ищет остальные.
+
 | Жанр | Шаблоны |
 |---|---|
 | Классическая RTS с базой | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, руда, сайдбар) · **Starfall Sectors** (StarCraft: три расы) · **Frost Crown** (Warcraft III: герои, крипы, рельеф) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: потоковая экономика, радар, разбор, авиация, ядерные ракеты) |

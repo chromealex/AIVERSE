@@ -255,6 +255,20 @@ export function resizeDockSplit(tree: DockTree, id: string, ratio: number): Dock
   if(!Number.isFinite(ratio))return t;
   return {version:3,root:update(t.root,id,n=>n.kind==='split'?{...n,ratio:size(ratio,.5,MIN_RATIO,MAX_RATIO)}:n)};
 }
+/** Dock a panel against the whole workspace, so a bottom strip can become a full-height column. */
+export function splitDockRoot(tree: DockTree, panel: StudioPanel, side: DockEdge): DockTree {
+  const t=normalizeDockTree(tree);
+  if(!known(panel) || !panelStack(t,panel))return t;
+  if(t.root.kind==='stack' && t.root.tabs.length===1 && t.root.tabs[0]===panel)return t;
+  if(dockStacks(t).length>=24)return t;
+  const splitId=newId(t,'split'), stackIdNew=newId(t,'dock');
+  const next=compactDockTree({version:3,root:remove(t.root,panel)});
+  const axis:DockAxis=side==='left'||side==='right'?'horizontal':'vertical';
+  const early=side==='left'||side==='top';
+  const portion=axis==='horizontal'?.22:.28;
+  const fresh=stack(stackIdNew,[panel],panel);
+  return normalizeDockTree({version:3,root:split(splitId,axis,early?portion:1-portion,early?fresh:next.root,early?next.root:fresh)});
+}
 export function splitDockStack(tree: DockTree, panel: StudioPanel, stackId: string, side: DockEdge): DockTree {
   const t=normalizeDockTree(tree),target=findDockStack(t,stackId);
   if(!target || !known(panel))return t;

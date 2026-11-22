@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --host 127.0.0.1",
     "test:shell": "node --experimental-strip-types --test tests/workspaces.test.mjs tests/inspectorActions.test.mjs tests/hierarchyFilter.test.mjs tests/rulesSchema.test.mjs tests/floating.test.mjs tests/buildLogic.test.mjs tests/consoleLogic.test.mjs tests/toolSchema.test.mjs",
-    "test:dock": "node --experimental-strip-types --test tests/dock-layout.mjs tests/nested-dock.mjs",
+    "test:dock": "node --experimental-strip-types --test tests/dock-layout.mjs tests/nested-dock.mjs tests/layoutPresets.test.mjs tests/workspaceTabs.test.mjs",
     "test:fields": "node --experimental-strip-types --test tests/propertyLogic.test.mjs",
     "test:web": "npm run test:dock && npm run test:shell && npm run test:fields && npm run test:lighting && npm run test:materials && npm run test:graphs && npm run test:mock && npm run test:scene && npm run test:facial && npm run test:assets && npm run test:bridge && npm run test:human",
     "test:lighting": "node --experimental-strip-types --test tests/lightingSchema.test.mjs",

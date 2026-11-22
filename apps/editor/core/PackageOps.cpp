@@ -2,60 +2,12 @@
 // status / install / skill run tools/pkg/aiverse_pkg.py --json and return its result, so agents and the
 // Studio Catalog window install content into the open project without a shell.
 #include "PackageOps.h"
-#include <cstdio>
-#include <cstdlib>
+#include "PackageTool.h"
 #include <filesystem>
 #include <stdexcept>
 
 namespace aiverse::editor {
 namespace {
-std::string quote(const std::string& value) {
-    if (value.find_first_of("\r\n") != std::string::npos) throw std::runtime_error("newline in command argument");
-#if defined(_WIN32)
-    if (value.find_first_of("\"%!") != std::string::npos) throw std::runtime_error("unsupported shell characters in argument");
-    return "\"" + value + "\"";
-#else
-    std::string out = "'";
-    for (char c : value) out += c == '\'' ? "'\\''" : std::string(1, c);
-    return out + "'";
-#endif
-}
-
-// Runs aiverse_pkg.py --json <args>; returns its "result" or throws with its "error".
-Json runPkg(const std::string& engineDir, const std::vector<std::string>& args) {
-    const auto script = std::filesystem::path(engineDir) / "tools/pkg/aiverse_pkg.py";
-    if (!std::filesystem::exists(script)) throw std::runtime_error("tools/pkg/aiverse_pkg.py not found in the engine directory");
-    const char* python = std::getenv("AIVERSE_PYTHON");
-#if defined(_WIN32)
-    if (!python) python = "python";
-#else
-    if (!python) python = "python3";
-#endif
-    std::string cmd = quote(python) + " " + quote(script.string()) + " --json";
-    for (const auto& a : args) cmd += " " + quote(a);
-#if defined(_WIN32)
-    cmd = "\"" + cmd + " 2>NUL\"";
-    FILE* pipe = _popen(cmd.c_str(), "r");
-#else
-    cmd += " 2>/dev/null";
-    FILE* pipe = popen(cmd.c_str(), "r");
-#endif
-    if (!pipe) throw std::runtime_error("cannot launch Python (set AIVERSE_PYTHON)");
-    std::string output;
-    char buffer[4096];
-    while (size_t n = std::fread(buffer, 1, sizeof buffer, pipe)) output.append(buffer, n);
-#if defined(_WIN32)
-    _pclose(pipe);
-#else
-    pclose(pipe);
-#endif
-    Json r;
-    try { r = Json::parse(output); }
-    catch (const std::exception&) { throw std::runtime_error("aiverse_pkg.py: " + output.substr(0, 2000)); }
-    if (r.has("error")) throw std::runtime_error(r["error"].str("aiverse_pkg.py failed"));
-    return r["result"];
-}
-
 std::string requireId(const Json& p) {
     std::string id = p.getStr("id");
     if (id.empty()) throw std::runtime_error("id is required (package id, optionally id@range)");
@@ -90,12 +42,12 @@ void registerPackageOps(Workspace& ws) {
                 if (j > i) args.push_back(q.substr(i, j - i));
                 i = j + 1;
             }
-            return runPkg(ws.engineDir, args);
+            return runPackageTool(ws.engineDir, args);
         }, false});
     ws.registerOp({"package_info",
         "Full catalog entry of a package: manifest (title, summary, description and their -<lang> translations, licence, "
         "minEngine, provides, dependencies, install.mount), versions with sizes and SHA-256, previews, readme, viewer URL.",
-        idSchema, [&ws](const Json& p) { return runPkg(ws.engineDir, {"info", requireId(p)}); }, false});
+        idSchema, [&ws](const Json& p) { return runPackageTool(ws.engineDir, {"info", requireId(p)}); }, false});
     ws.registerOp({"package_add",
         "Install a content package into the open project (or project): copies it to install.mount, installs its content "
         "dependencies first, merges its material library, records it in game.json packages and aiverse.lock. "
@@ -103,7 +55,7 @@ void registerPackageOps(Workspace& ws) {
         idSchema, [&ws](const Json& p) {
             std::vector<std::string> args{"add", requireId(p), "--project", projectDir(ws, p)};
             if (p.getBool("force")) args.push_back("--force");
-            Json r = runPkg(ws.engineDir, args);
+            Json r = runPackageTool(ws.engineDir, args);
             ws.note({Change::Rules, 0, 0, -1, -1, -1, "Пакет: " + p.getStr("id")});   // materials and models reload
             return r;
         }, false});
@@ -111,18 +63,18 @@ void registerPackageOps(Workspace& ws) {
         "Remove an installed package from the open project: deletes its files and merged ids, drops it from game.json "
         "and aiverse.lock. Dependencies stay installed.",
         idSchema, [&ws](const Json& p) {
-            Json r = runPkg(ws.engineDir, {"remove", requireId(p), "--project", projectDir(ws, p)});
+            Json r = runPackageTool(ws.engineDir, {"remove", requireId(p), "--project", projectDir(ws, p)});
             ws.note({Change::Rules, 0, 0, -1, -1, -1, "Пакет удалён: " + p.getStr("id")});
             return r;
         }, false});
     ws.registerOp({"package_status",
         "Packages of the open project: wanted range (game.json), locked version (aiverse.lock), installed files, "
         "missing and changed files. mismatch > 0 means install or verify is needed.",
-        projSchema, [&ws](const Json& p) { return runPkg(ws.engineDir, {"verify", "--project", projectDir(ws, p)}); }, false});
+        projSchema, [&ws](const Json& p) { return runPackageTool(ws.engineDir, {"verify", "--project", projectDir(ws, p)}); }, false});
     ws.registerOp({"package_install",
         "Restore every package of the open project from aiverse.lock (after cloning the project).",
         projSchema, [&ws](const Json& p) {
-            Json r = runPkg(ws.engineDir, {"install", "--project", projectDir(ws, p)});
+            Json r = runPackageTool(ws.engineDir, {"install", "--project", projectDir(ws, p)});
             ws.note({Change::Rules, 0, 0, -1, -1, -1, "Пакеты восстановлены"});
             return r;
         }, false});
@@ -132,7 +84,7 @@ void registerPackageOps(Workspace& ws) {
         [&ws](const Json& p) {
             std::vector<std::string> args{"skill", p.getStr("skill")};
             if (p.getBool("install")) { args.push_back("--project"); args.push_back(projectDir(ws, p)); }
-            Json r = runPkg(ws.engineDir, args);
+            Json r = runPackageTool(ws.engineDir, args);
             if (p.getBool("install")) ws.note({Change::Rules, 0, 0, -1, -1, -1, "Пакеты навыка " + p.getStr("skill")});
             return r;
         }, false});

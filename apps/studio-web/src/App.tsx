@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { shortcutKey } from './keyboard';
 import { ChevronDown, Search, Settings2 } from 'lucide-react';
-import { invoke, nativeConnected, nativeWindowAction, onNativeEvent } from './bridge';
+import { invoke, nativeConnected, nativeWindowAction, nativeWindowResize, onNativeEvent } from './bridge';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, DOCK_PRESET_EVENT, closeTab, dockStacks, panelStack, reopenTab
 } from './nestedDock';
@@ -18,6 +18,7 @@ import WorkspaceTabs from './components/WorkspaceTabs';
 import type { StudioPanel } from './nestedDock';
 import type { StudioAsset, StudioEntity, StudioGameState, StudioInspector, StudioSnapshot } from './types';
 import HeaderGameControls from './components/HeaderGameControls';
+import LayoutMenu from './components/LayoutMenu';
 import engineLogo from '../../../engine/assets/branding/mark.png';
 import NestedDockWorkspace from './components/NestedDockWorkspace';
 import StudioMenuBar, { type StudioMenu } from './components/StudioMenuBar';
@@ -33,6 +34,10 @@ import {
   type FloatingWindow
 } from './floating';
 import './components/FloatingShell.css';
+
+/** Menu shortcut glyph. Windows shows Ctrl; macOS keeps the command mark. */
+const windowsHost = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform + navigator.userAgent);
+const menuShortcut = (key: string) => (windowsHost ? 'Ctrl+' : '⌘') + key;
 
 /** Set when this WebView is a floating window (`?window=…&panels=…`), null in the main window. */
 const FLOAT = floatingParams();
@@ -84,13 +89,60 @@ export default function App() {
     entity: StudioEntity; inspector: StudioInspector | null;
   } | null>(null);
   useEffect(() => {
-    // CSS zoom scales the entire web layout, including dialogs and dock tabs.
-    // The native viewport continues using getBoundingClientRect() screen pixels.
-    document.documentElement.style.zoom = String(uiScale);
-    window.dispatchEvent(new Event('resize'));
+    // Scale type, not the page. CSS zoom grew the layout past the monitor and
+    // moved the native scene view, which is placed from unzoomed CSS pixels.
+    document.documentElement.style.zoom = '';
+    document.documentElement.style.setProperty('--au-ui-scale', String(uiScale));
     window.localStorage.setItem('aiverse.studio.uiScale', String(uiScale));
-    return () => { document.documentElement.style.zoom = ''; };
+    return () => { document.documentElement.style.removeProperty('--au-ui-scale'); };
   }, [uiScale]);
+
+  // The web view covers the frame, so Windows never sees the edges. The outer pixels start the system resize.
+  useEffect(() => {
+    if (!windowsHost || FLOAT) return;
+    const border = 8;
+    type ResizeEdge = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    const edgeAt = (x: number, y: number): ResizeEdge | '' => {
+      const left = x <= border;
+      const right = x >= window.innerWidth - border;
+      const top = y <= border;
+      const bottom = y >= window.innerHeight - border;
+      if (top && left) return 'top-left';
+      if (top && right) return 'top-right';
+      if (bottom && left) return 'bottom-left';
+      if (bottom && right) return 'bottom-right';
+      if (left) return 'left';
+      if (right) return 'right';
+      if (top) return 'top';
+      if (bottom) return 'bottom';
+      return '';
+    };
+    const cursorClass = (edge: ResizeEdge) => edge === 'left' || edge === 'right' ? 'studio-edge-ew'
+      : edge === 'top' || edge === 'bottom' ? 'studio-edge-ns'
+      : edge === 'top-left' || edge === 'bottom-right' ? 'studio-edge-nwse' : 'studio-edge-nesw';
+    const paint = (edge: ResizeEdge | '') => {
+      const root = document.documentElement;
+      root.classList.remove('studio-edge-ew', 'studio-edge-ns', 'studio-edge-nwse', 'studio-edge-nesw');
+      if (edge) root.classList.add(cursorClass(edge));
+    };
+    const move = (event: PointerEvent) => { if (event.buttons === 0) paint(edgeAt(event.clientX, event.clientY)); };
+    const down = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      const edge = edgeAt(event.clientX, event.clientY);
+      if (!edge) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('button,a,input,select,textarea')) return;
+      event.preventDefault();
+      nativeWindowResize(edge);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerdown', down, true);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerdown', down, true);
+      paint('');
+    };
+  }, []);
 
   // Store browser-only layout (not engine state) with bounded write frequency.
   useEffect(() => {
@@ -420,25 +472,32 @@ export default function App() {
             .catch(e => setError(e instanceof Error ? e.message : String(e))) })),
       { id: 'prefs', label: 'Preferences…', separator: true, onSelect: () => setSettingsOpen(true) },
     ] },
-    { id: 'window', label: 'Window', items: () => [
-      ...STUDIO_PANELS.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel],
-        checked: panelStack(dock, panel) !== null || !!floatOwner(floating, panel),
-        onSelect: () => floatOwner(floating, panel) ? dockHere(panel)
-          : setDock(t => panelStack(t, panel) !== null ? closeTab(t, panel) : reopenTab(t, panel, STUDIO_PANEL_HOME[panel])) })),
-      ...(!FLOAT && floating.length ? [{ id: 'dock-floating', label: 'Dock All Floating Windows (' + floating.length + ')', separator: true,
-        onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
-      { id: 'ws', label: 'Workspaces', caption: true, separator: true, onSelect: () => {} },
-      ...WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: '⌘' + WORKSPACE_INFO[id].key,
+    { id: 'window', label: 'Window', items: () => {
+      const byTitle = (a: StudioPanel, b: StudioPanel) => STUDIO_PANEL_TITLES[a].localeCompare(STUDIO_PANEL_TITLES[b]);
+      const isOpen = (panel: StudioPanel) => panelStack(dock, panel) !== null || !!floatOwner(floating, panel);
+      const toggle = (panel: StudioPanel) => floatOwner(floating, panel) ? dockHere(panel)
+        : setDock(t => panelStack(t, panel) !== null ? closeTab(t, panel) : reopenTab(t, panel, STUDIO_PANEL_HOME[panel]));
+      const openPanels = STUDIO_PANELS.filter(isOpen).sort(byTitle);
+      const otherPanels = STUDIO_PANELS.filter(panel => !isOpen(panel)).sort(byTitle);
+      return [
+      { id: 'ws', label: 'Workspaces', caption: true, onSelect: () => {} },
+      ...WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
         checked: workspace === id, onSelect: () => switchWorkspace(id) })),
       { id: 'reset', label: 'Reset ' + WORKSPACE_INFO[workspace].title + ' Layout', separator: true, onSelect: () => setDock(workspaceDockTree(workspace)) },
-      { id: 'palette', label: 'Command Palette…', shortcut: '⌘K', onSelect: () => setPalette('') },
+      ...(!FLOAT && floating.length ? [{ id: 'dock-floating', label: 'Dock All Floating Windows (' + floating.length + ')',
+        onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
+      { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
       { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
+      { id: 'open-cap', label: 'Open', caption: true, separator: true, onSelect: () => {} },
+      ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], checked: true, onSelect: () => toggle(panel) })),
+      { id: 'more-cap', label: 'Panels', caption: true, separator: true, onSelect: () => {} },
+      ...otherPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], onSelect: () => toggle(panel) })),
       ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{ id: 'legacy', label: 'Legacy editor — not migrated yet', caption: true, separator: true, onSelect: () => {} }] : []),
       ...LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
         const area = legacyWorkspace(w.id);
         return { id: 'legacy-' + w.id, label: w.title + (area ? '  ·  ' + WORKSPACE_INFO[area].title : ''), disabled: true, onSelect: () => {} };
       }),
-    ] },
+    ]; } },
   ];
 
   useEffect(() => {
@@ -492,11 +551,13 @@ export default function App() {
     {palette !== null && <CommandPalette entries={paletteEntries} initial={palette} onClose={() => setPalette(null)}/>}
   </div>;
 
-  return <div className={'studio compact-shell'+(connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
+  return <div className={'studio compact-shell'+(windowsHost?' compact-shell--windows':connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
     <header className="titlebar"
       onMouseDown={event => {
-        // Empty title-bar areas move the native window (like the macOS title bar).
-        if (event.button !== 0 || (event.target as HTMLElement).closest('button,input,select,textarea,a,[role=button],[role=menu]')) return;
+        // Empty title-bar areas move the native window. The outer pixels resize it instead.
+        const target = event.target instanceof Element ? event.target : (event.target as Node).parentElement;
+        if (event.button !== 0 || !target || target.closest('button,input,select,textarea,a,[role=button],[role=menu]')) return;
+        if (windowsHost && (event.clientY <= 8 || event.clientX <= 8 || event.clientX >= window.innerWidth - 8)) return;
         if (event.detail === 2) nativeWindowAction('studio.windowZoom');
         else nativeWindowAction('studio.windowDrag');
       }}>
@@ -520,8 +581,14 @@ export default function App() {
       </button>
       <SceneLoadingStrip state={loading}/>
       <div className="title-actions">
+        <LayoutMenu workspace={workspace} dock={dock} onApply={setDock} onError={setError}/>
         <button className="icon-button" aria-label="Editor settings" title="Editor settings"
           aria-expanded={settingsOpen} onClick={() => setSettingsOpen(v => !v)}><Settings2 size={17}/></button>
+      {windowsHost && <div className="window-controls">
+        <button type="button" aria-label="Minimize" onClick={() => nativeWindowAction('studio.windowMinimize')}>–</button>
+        <button type="button" aria-label="Maximize" onClick={() => nativeWindowAction('studio.windowZoom')}>□</button>
+        <button type="button" className="is-close" aria-label="Close" onClick={() => nativeWindowAction('studio.windowClose')}>×</button>
+      </div>}
       </div>
       </div>
     </header>
@@ -532,7 +599,6 @@ export default function App() {
           onChange={e => setUiScale(Number(e.target.value) / 100)}/>
       </label>
       <button type="button" onClick={() => setUiScale(1)}>Reset scale to 100%</button>
-      <button type="button" onClick={() => setDock(workspaceDockTree(workspace))}>Reset panel layout</button>
     </section>}
     {!connected && <div className="demo-banner"><span>Preview mode:</span> interface and edits
       are demonstrated locally. Native C++ Workspace and GPU renderer are not connected yet.</div>}

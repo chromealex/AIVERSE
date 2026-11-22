@@ -180,6 +180,8 @@ Le rapport marque chaque élément comme transféré exactement, approximativeme
 
 Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l’éditeur et modifiez-le aussitôt.
 
+Les modèles sont des paquets du [catalogue](https://chromealex.github.io/AIVERSE/catalog.html) : l'écran d'accueil affiche les modèles officiels, **More templates** cherche les autres.
+
 | Genre | Modèles |
 |---|---|
 | RTS classique avec base | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert : MCV, minerai, barre latérale) · **Starfall Sectors** (StarCraft : trois races) · **Frost Crown** (Warcraft III : héros, creeps, terrain) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation : économie de flux, radar, récupération, avions, missiles nucléaires) |

@@ -1,6 +1,11 @@
 /* Approved single-header layout, 2026-11-20. */
 .compact-shell .titlebar {height:44px;padding:0 14px;gap:14px;justify-content:flex-start;background:var(--au-shell-header);box-shadow:none;position:relative;z-index:30}
 .compact-shell--native .titlebar {padding-left:84px}
+.compact-shell--windows .titlebar {padding-left:14px}
+.window-controls{display:flex;align-self:stretch;margin-left:8px}
+.window-controls button{width:46px;border:0;background:transparent;color:var(--au-text);font-size:16px;cursor:pointer}
+.window-controls button:hover{background:var(--au-hover)}
+.window-controls button.is-close:hover{background:#c42b1c;color:#fff}
 .compact-shell .wordmark {gap:9px;flex:none}
 .compact-shell .wordmark strong {font-size:14px;color:var(--au-text)}
 .engine-mark {width:21px;height:21px;object-fit:contain}
@@ -28,7 +33,10 @@
 .header-game-controls .icon-button {width:32px;height:26px;border-radius:6px}
 .header-game-controls .icon-button.is-on {background:var(--au-accent-strong);color:var(--au-accent-ink)}
 .header-game-controls.is-playing {border-color:var(--au-accent-strong)}
-.workspace-tabs {display:flex;gap:2px;padding:3px;border:1px solid var(--studio-border);border-radius:9px;background:var(--studio-surface);flex:none}
+.workspace-tabs-slot {flex:0 1 auto;min-width:0;display:flex;justify-content:flex-end}
+.workspace-tabs {display:flex;gap:2px;padding:3px;border:1px solid var(--studio-border);border-radius:9px;background:var(--studio-surface);flex:none;position:relative;max-width:100%}
+.workspace-tabs__probe {position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;display:flex;gap:2px;width:max-content}
+.workspace-tabs__more {display:grid;place-items:center;padding:0 6px}
 .workspace-tabs__tab {height:24px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--au-text-muted);font-size:11px;font-weight:600;cursor:pointer}
 .workspace-tabs__tab:hover {color:var(--au-text)}
 .workspace-tabs__tab.is-active {background:var(--studio-selection);color:var(--au-text)}
@@ -51,7 +59,14 @@
 .studio-statusbar__action {color:#ffd640;font-family:ui-monospace,Menlo,monospace;font-size:10px}
 /* Play / Pause / Step in the centre of the title bar (Unity): equal side columns keep them centred
    while both sides fit; a crowded side pushes them instead of overlapping. */
-.compact-shell .titlebar {display:grid;grid-template-columns:minmax(max-content,1fr) auto minmax(max-content,1fr);align-items:center}
-.compact-shell .titlebar__side {display:flex;align-items:center;gap:14px;min-width:0;height:100%}
+.compact-shell .titlebar {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;overflow:hidden}
+.compact-shell .titlebar__side {display:flex;align-items:center;gap:14px;min-width:0;height:100%;overflow:hidden}
 .compact-shell .titlebar__side--right {justify-content:flex-end}
+/* Restored window: keep minimize / maximize / close on the window edge. The rest of the header shrinks first. */
+.compact-shell--windows .titlebar {padding-right:138px}
+.compact-shell--windows .window-controls {position:absolute;top:0;right:0;bottom:0;margin:0;z-index:6;background:var(--au-shell-header)}
+html.studio-edge-ew, html.studio-edge-ew * {cursor:ew-resize !important}
+html.studio-edge-ns, html.studio-edge-ns * {cursor:ns-resize !important}
+html.studio-edge-nwse, html.studio-edge-nwse * {cursor:nwse-resize !important}
+html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 .header-game-controls{position:relative}.header-game-note{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;padding:4px 9px;border-radius:7px;background:var(--au-panel-raised);border:1px solid var(--au-line-strong);color:var(--au-text);font-size:var(--au-font-xs);z-index:50;pointer-events:none}

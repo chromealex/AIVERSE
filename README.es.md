@@ -179,6 +179,8 @@ El informe marca cada elemento como trasladado exactamente, de forma aproximada 
 
 Cada plantilla es un juego totalmente jugable con bots. Ábrela en el editor y empieza a modificarla.
 
+Las plantillas son paquetes del [catálogo](https://chromealex.github.io/AIVERSE/catalog.html): la pantalla de inicio muestra las oficiales y **More templates** busca el resto.
+
 | Género | Plantillas |
 |---|---|
 | RTS clásico con base | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, mineral, barra lateral) · **Starfall Sectors** (StarCraft: tres razas) · **Frost Crown** (Warcraft III: héroes, creeps, terreno) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: economía de flujo, radar, reciclaje, aviones, misiles nucleares) |

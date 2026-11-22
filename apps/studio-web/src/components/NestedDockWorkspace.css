@@ -9,19 +9,27 @@
 .nested-horizontal>.nested-divider{width:6px;cursor:col-resize}.nested-vertical>.nested-divider{height:6px;cursor:row-resize}
 .nested-stack{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:#111b2a;border:1px solid #2a3a50;overflow:hidden}
 .nested-tabs{display:flex;min-height:38px;height:38px;align-items:stretch;flex:none;border-bottom:1px solid #34435a;background:#192536;overflow-x:auto}
-.nested-tab{display:flex;flex:none;max-width:180px;align-items:stretch;color:#93a9c7;border-right:1px solid #304159}
+.nested-tab{display:flex;flex:none;max-width:180px;align-items:stretch;color:#93a9c7;border-right:1px solid #304159;touch-action:none}
 .nested-active{color:#e5efff;background:#263c58;box-shadow:inset 0 -2px var(--studio-accent)}
-.nested-tab>button:first-child{border:0;background:none;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 9px;font-size:11px}
+.nested-tab>span[role=tab]{border:0;background:none;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 9px;font-size:11px;display:flex;align-items:center;cursor:grab;user-select:none;-webkit-user-drag:none}
 .nested-tab-close{padding:0 7px;border:0;background:none;color:#8294ae;cursor:pointer}.nested-tab-close:hover{color:white;background:#394d6b}
-.nested-tab>button:focus-visible,.nested-panel-actions-button:focus-visible{outline:2px solid var(--studio-accent);outline-offset:-2px}
+.nested-tab>span[role=tab]:focus-visible,.nested-panel-actions-button:focus-visible{outline:2px solid var(--studio-accent);outline-offset:-2px}
 .nested-stack-body{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative}
 .nested-stack-body>.viewport{flex:1;min-height:0}.nested-stack-body>.log-list{flex:1;overflow:auto;min-height:0}
 .nested-empty{display:grid;place-items:center;flex:1;color:#7589a3;font-size:11px}
-.nested-drop-zones{position:absolute;inset:0;z-index:10;pointer-events:none}.nested-drop-edge,.nested-drop-center{position:absolute;background:#3c6ea244;color:#d9ecff;font-size:11px;text-align:center;display:grid;place-items:center;border:1px dashed #7fb0ee;pointer-events:auto}
-.nested-drop-edge.hovered,.nested-drop-center.hovered{background:#7baaf286;outline:2px solid #c6e1ff}
-.nested-drop-left{left:0;top:24%;width:23%;height:52%}.nested-drop-right{right:0;top:24%;width:23%;height:52%}
-.nested-drop-top{left:24%;top:0;width:52%;height:23%}.nested-drop-bottom{left:24%;bottom:0;width:52%;height:23%}
-.nested-drop-center{left:29%;top:29%;width:42%;height:42%;border-radius:12px}
+.nested-drop-zones{position:absolute;inset:0;z-index:10;pointer-events:none}.nested-drop-edge,.nested-drop-center{position:absolute;background:#3c6ea288;color:#fff;font-size:12px;font-weight:650;text-align:center;display:grid;place-items:center;border:1px dashed #d6e8ff;pointer-events:auto}
+.nested-drop-edge.hovered,.nested-drop-center.hovered,.nested-tab.hovered{background:#7baaf2e6;outline:2px solid #fff}
+.nested-workspace-body{flex:1;min-height:0;min-width:0;display:flex;position:relative}
+.nested-root-zones{position:absolute;inset:0;z-index:40;pointer-events:none}
+.nested-root-edge{position:absolute;pointer-events:auto;background:#3c6ea2aa;border:1px dashed #d6e8ff}
+.nested-root-edge.hovered{background:#7baaf2ee}
+.nested-root-left{left:0;top:0;bottom:0;width:36px}.nested-root-right{right:0;top:0;bottom:0;width:36px}
+.nested-root-top{left:36px;right:36px;top:0;height:36px}.nested-root-bottom{left:36px;right:36px;bottom:0;height:36px}
+.nested-drop-left{left:0;top:0;width:28%;height:100%;z-index:1}.nested-drop-right{right:0;top:0;width:28%;height:100%;z-index:1}
+.nested-drop-top{left:22%;top:0;width:56%;height:28%;z-index:2}.nested-drop-bottom{left:22%;bottom:0;width:56%;height:28%;z-index:2}
+.nested-drop-center{left:30%;top:30%;width:40%;height:40%;border-radius:12px;z-index:3}
+.nested-drag-ghost{position:fixed;left:0;top:0;z-index:90;pointer-events:none;padding:5px 10px;border-radius:7px;background:#1d4f8a;color:#fff;font-size:12px;font-weight:650;box-shadow:0 10px 28px #000a}
+.nested-tab>span[role=tab]{cursor:grab}
 @media(max-width:850px){.nested-toolbar>span{display:none}}
 /* HTML-over-Metal: do not paint an opaque parent behind the transparent scene. */
 html.native-composite .nested-stack:has(.viewport-native),

@@ -966,7 +966,7 @@ inline const char* kComposite = R"(
                 if(c2>coverage){
                     coverage=c2;
                     float nx=clamp(d/max(w,0.0001),-1.0,1.0);
-                    refractOffset=tube>head?vec2(nx*1.3*(1.0-0.5*nx*nx),0.0):hq*(1.0-clamp(hd,0.0,1.0));
+)" R"(                    refractOffset=tube>head?vec2(nx*1.3*(1.0-0.5*nx*nx),0.0):hq*(1.0-clamp(hd,0.0,1.0));
                     rim=tube>head?tube*smoothstep(0.35,1.0,abs(nx))*0.9:head*smoothstep(0.5,0.95,hd);
                     glint=max(glint,tube>head?tube*smoothstep(0.1,0.8,-nx)*0.9:head*smoothstep(0.2,0.8,max(0.0,-hq.x+hq.y)*0.6));
                 }

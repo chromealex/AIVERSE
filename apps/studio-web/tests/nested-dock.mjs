@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, defaultDockTree, dockStacks, findDockStack, panelStack,
   normalizeDockTree, moveTab, closeTab, reopenTab, activateTab,
-  resizeDockSplit, splitDockStack, migrateDockV2
+  resizeDockSplit, splitDockRoot, splitDockStack, migrateDockV2
 } from '../src/nestedDock.ts';
 
 test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
@@ -36,6 +36,27 @@ test('nested split adds a stack to left edge and preserves panels',()=>{
   assert.equal(dockStacks(t).length,5);
   assert.deepEqual(dockStacks(t).flatMap(s=>s.tabs).sort(),[...STUDIO_PANELS].sort());
   assert.equal(panelStack(base,'inspector'),'dock-right');
+});
+test('window edge dock lifts a bottom tab into a full-height column',()=>{
+  const t=splitDockRoot(defaultDockTree(),'assets','left');
+  assert.equal(t.root.kind,'split');
+  assert.equal(t.root.axis,'horizontal');
+  assert.equal(t.root.first.kind,'stack');
+  assert.deepEqual(t.root.first.tabs,['assets']);
+  assert.equal(panelStack(t,'assets'),t.root.first.id);
+  assert.equal(panelStack(t,'console'),'dock-bottom');
+  assert.equal(dockStacks(t).flatMap(s=>s.tabs).filter(x=>x==='assets').length,1);
+  assert.equal(dockStacks(t).flatMap(s=>s.tabs).length,dockStacks(defaultDockTree()).flatMap(s=>s.tabs).length);
+});
+test('window edge dock refuses the only remaining tab',()=>{
+  const only={version:3,root:{kind:'stack',id:'dock-center',tabs:['scene'],active:'scene'}};
+  assert.deepEqual(splitDockRoot(only,'scene','right'),normalizeDockTree(only));
+});
+test('sole tab can still dock onto another stack',()=>{
+  const base=closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources');
+  const t=splitDockStack(base,'console','dock-center','left');
+  assert.equal(panelStack(t,'console')!=='dock-bottom',true);
+  assert.equal(dockStacks(t).flatMap(s=>s.tabs).filter(x=>x==='console').length,1);
 });
 test('cannot split away sole tab from its own stack',()=>{
   const base=closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources');
@@ -129,6 +150,14 @@ test('old saved empty leaves are compacted upon restoration',()=>{
     first:{kind:'stack',id:'empty',tabs:[],active:null},
     second:{kind:'stack',id:'dock-center',tabs:['scene'],active:'scene'}}});
   assert.equal(t.root.id,'dock-center');
+});
+
+test('Add Tab drops a closed panel into the stack that was clicked',()=>{
+  const closed=closeTab(defaultDockTree(),'assets');
+  assert.equal(panelStack(closed,'assets'),null);
+  const added=moveTab(closed,'assets','dock-left');
+  assert.equal(panelStack(added,'assets'),'dock-left');
+  assert.equal(findDockStack(added,'dock-left')?.active,'assets');
 });
 
 test('character editor never stays over the Scene viewport',async()=>{

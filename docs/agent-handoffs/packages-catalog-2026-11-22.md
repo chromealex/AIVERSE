@@ -157,3 +157,30 @@ for large models (staging is synchronous).
   levels and STRATA (oak: 109 clusters, 68 ms) with textures taken from vegetation-pbr.
 - Not checked: native macOS Studio panel; STRATA wireframe overlay looked empty on the oak in the web build
   (cluster colours not tried there).
+
+## Stage 6 — project templates come from the catalog (2026-11-22)
+
+Branch `feature/aiv20261122_template_packages`. Catalog: PR #4 (`official` flag, merged), PR #5
+(36 official template packages, accepted with the label: releases `<id>@1.0.0`, main `b4fe2bf`).
+
+- Catalog `tools/catalog.py`: field `official` (bool; authors must be `["AIVERSE"]`; check/accept get
+  `CATALOG_PR_AUTHOR` / `CATALOG_OWNER` and refuse it from other authors' PRs); the index repeats
+  `official: true`. All 42 published packages are official.
+- Engine `tools/pkg/aiverse_pkg.py`: `templates [words] [--all] [--refresh|--cached]` (official by
+  default; 6 h cache; parallel fetch; `previewFile` downloaded once per version), `create` reads
+  game.json with comments (`strip_comments`). `tools/pkg/export_templates.py` exports engine templates
+  to packages (text table with en/ru summaries, real frames as previews, `provides.engineTemplate`).
+- `apps/editor/core/PackageTool.{h,cpp}`: shared `runPackageTool` (PackageOps uses it).
+  `Projects`: `catalogTemplates`, `hubTemplates` (empty + official catalog + engine templates not
+  replaced), `isCatalogTemplate`; `createProject("pkg:<id>")` runs `aiverse_pkg.py create` first.
+- Studio: `studio.hub` lists hubTemplates from the cache; new `studio.hubTemplates {all, query,
+  refresh}`; ProjectHub shows previews, refreshes in the background, "More templates from the
+  catalog…" with search; StudioHost accepts `pkg:` ids. MCP `list_projects` / `create_project` and the
+  ImGui hub use the same list.
+- Tested: `test_aiverse_pkg.py` ok; MCP `create_project {template: "pkg:mushrooms"}` created a project
+  that runs in the client (Linux GL, frame in the devlog); `npm run typecheck && build` ok;
+  editor_core and aiversemcp build without warnings. NOT RUN: native macOS Studio hub (no Mac here),
+  Studio web tests.
+- Not done: `templates/` still in the engine (tests, CI, determinism baselines use it); creating a
+  project from a big template blocks the Studio main thread during the download (runs in the
+  chooseFolder callback). History cleanup of the engine repo dropped by the owner.

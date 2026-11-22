@@ -126,7 +126,8 @@ if(EXISTS "${AIVERSE_PLUGINS_FILE}")
 endif()
 
 if(MSVC)
-    add_compile_options(/W4 /permissive- /fp:precise /utf-8 /wd4100 /wd4505)
+    # /bigobj: big translation units (tests.cpp, editor WorldInspect.cpp) exceed the default COFF section limit
+    add_compile_options(/W4 /permissive- /fp:precise /utf-8 /bigobj /wd4100 /wd4505)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
     add_compile_options(-Wall -Wextra -fno-fast-math)
@@ -1935,9 +1936,6 @@ if(AIVERSE_BUILD_TESTS)
     target_compile_definitions(aiverse_remote_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_remote_tests COMMAND aiverse_remote_tests)
     add_executable(aiverse_tests tests/tests.cpp)
-    if(MSVC)   # tests.cpp holds thousands of tests: more sections than a default COFF object allows
-        target_compile_options(aiverse_tests PRIVATE /bigobj)
-    endif()
     target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_i18n aiverse_pack_writer aiverse_models)
     target_link_libraries(aiverse_tests PRIVATE aiverse_postfx_data)   # postfx agent
     target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_game_audio aiverse_audiopack)
@@ -2461,7 +2459,8 @@ endif()
 
 # Project import (shared Python pipeline + editor/MCP bridge).
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PortOps.cpp apps/editor/core/PackageOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PortOps.cpp apps/editor/core/PackageOps.cpp
+        apps/editor/core/PackageTool.cpp)
 endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME project_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_port.py)

@@ -44,6 +44,16 @@ namespace aiverse::studio {
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
 Json num(int64_t n) { return Json::number(n); }
+Json templateJson(const editor::TemplateInfo& t) {
+    Json o=Json::object();
+    o.set("id",str(t.id));o.set("name",str(t.name));o.set("description",str(t.description));
+    o.set("genre",str(t.genre));o.set("maps",num(int64_t(t.maps)));o.set("source",str(t.source));
+    o.set("official",Json::fromBool(t.official));
+    if(!t.version.empty())o.set("version",str(t.version));
+    if(t.size)o.set("size",num(int64_t(t.size)));
+    if(!t.previewUrl.empty())o.set("preview",str(t.previewUrl));
+    return o;
+}
 Json prop(const char* key, const char* label, const char* type, Json value, bool editable = true) {
     Json r = Json::object();
     r.set("key", str(key)); r.set("label", str(label));
@@ -1073,6 +1083,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 }
             if(!found)throw std::runtime_error("Light entity no longer exists");
         }
+        if (method == "studio.hubTemplates") {   // StudioHost runs this off the UI thread; kept for other hosts
+            reply.set("result",hubTemplatesJson(ws_.engineDir,params));
+            return reply;
+        }
         if (method == "studio.hub") {
             // Project hub: recent projects (shared with the ImGui editor and aiversemcp) and the engine templates.
             Json out=Json::object(),recent=Json::array(),templates=Json::array();
@@ -1083,11 +1097,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 o.set("lastOpened",num(int64_t(p.lastOpened)));o.set("exists",Json::fromBool(p.exists));
                 recent.push(std::move(o));
             }
-            for (const auto& t:editor::listTemplates(ws_.engineDir)) {
-                Json o=Json::object();o.set("id",str(t.id));o.set("name",str(t.name));o.set("description",str(t.description));
-                o.set("genre",str(t.genre));o.set("maps",num(int64_t(t.maps)));
-                templates.push(std::move(o));
-            }
+            // official catalog templates from the package cache (instant); the hub then asks
+            // studio.hubTemplates for a fresh list and for the rest of the catalog
+            for (const auto& t:editor::hubTemplates(ws_.engineDir,true))templates.push(templateJson(t));
             out.set("recent",recent);out.set("templates",templates);out.set("defaultLocation",str(editor::defaultProjectsDir()));
             reply.set("result",std::move(out));
             return reply;
@@ -2688,5 +2700,18 @@ Json StudioSession::dispatchImpl(const Json& request) {
         reply.set("error", str(ex.what()));
     }
     return reply;
+}
+// Template packages of the catalog: {all, query, refresh}. all=false: the start-screen list (official catalog
+// templates + engine templates the catalog does not replace). Runs aiverse_pkg.py (network): call off the UI thread.
+Json hubTemplatesJson(const std::string& engineDir, const Json& params) {
+    std::string error;
+    Json list=Json::array();
+    const bool all=params.getBool("all");
+    const auto found=all ? editor::catalogTemplates(engineDir,true,params.getStr("query"),false,params.getBool("refresh"),&error)
+                         : editor::hubTemplates(engineDir,false,&error);
+    for(const auto& t:found)list.push(templateJson(t));
+    Json out=Json::object();out.set("templates",list);
+    if(!error.empty())out.set("error",str(error));
+    return out;
 }
 }

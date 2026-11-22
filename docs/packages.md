@@ -38,7 +38,9 @@ python3 tools/pkg/aiverse_pkg.py create <template-id> ~/Games/New    # new proje
 - **`source`** packages (bake inputs) and other tool data are never copied into projects: tools call
   `aiverse_pkg.package_dir('<id>')` (Python) and get the cached folder, downloading it once.
 - **`template`** packages are whole project folders: `create` copies one and installs the packages
-  its `game.json` lists.
+  its `game.json` lists. `templates` lists them: the official ones (made by the AIVERSE authors, marked
+  `official` in the catalog) by default, every template package with `--all`, filtered by words;
+  `--cached` answers from the cache without the network.
 - **Dependencies**: `add` installs the content packages a package depends on first (a model pack
   uses the textures of `terrain-pbr` / `vegetation-pbr` through a relative path instead of copies).
 - Version ranges: exact `1.2.3`, `^1.2` (same major), `~1.2.3` (same minor), `>=1.0.0`, `*`.
@@ -51,6 +53,25 @@ python3 tools/pkg/aiverse_pkg.py create <template-id> ~/Games/New    # new proje
   project's packages have missing or changed files and restores them from `aiverse.lock`. Agents use the
   same through MCP: `package_search`, `package_info`, `package_status`, `package_add`, `package_remove`,
   `package_install`, `package_skill` (they run `aiverse_pkg.py` on the open project).
+
+## Project templates come from the catalog
+
+The engine's sample games are official template packages (`templates/<id>` of AIVERSE-PACKAGES,
+`"official": true`, authors `["AIVERSE"]`), so a template can grow with its own textures, models and
+code without growing the engine. The start screen of AIVERSE Studio lists the official templates first
+(it opens from the package cache instantly and refreshes the list from the catalog in the background);
+**More templates from the catalog…** searches every template package, community ones included. A
+project made from a template package is downloaded, checked against its hash and unpacked into the
+folder you pick, then the packages its `game.json` lists are installed.
+
+- MCP and the ImGui hub: `list_projects` returns the same list (ids `pkg:<package>` for catalog
+  templates); `create_project {template: "pkg:skirmish"}` creates a project from a package.
+- The engine keeps `templates/` as the offline fallback and as test data (determinism baselines, CI).
+  The hub hides an engine template whose catalog package says `provides.engineTemplate: "<id>"`.
+- Publishing a template: `python3 tools/pkg/export_templates.py --catalog <AIVERSE-PACKAGES checkout>
+  --previews <frames>` turns engine templates into packages (English summary with `-ru`, a real
+  engine frame as the preview); content that only the catalog version should have goes into the
+  package, not into `templates/`. Other authors' templates are regular pull requests without `official`.
 
 ## Web viewer
 

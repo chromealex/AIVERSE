@@ -172,6 +172,8 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 每个模板都是带机器人的完整可玩游戏。在编辑器中打开即可开始修改。
 
+模板是[目录](https://chromealex.github.io/AIVERSE/catalog.html)中的包：启动界面列出官方模板，**More templates** 可搜索其余模板。
+
 | 类型 | 模板 |
 |---|---|
 | 经典基地建设 RTS | **Iron and Gold**（Warcraft / Red Alert）· **Iron Front**（Red Alert：MCV、矿石、侧边栏）· **Starfall Sectors**（StarCraft：三个种族）· **Frost Crown**（Warcraft III：英雄、野怪、地形）· **Four Ages**（Age of Empires II）· **Amber Sands**（Dune II）· **Metal Tide**（Total Annihilation：流式经济、雷达、回收、飞机、核导弹） |

@@ -23,7 +23,7 @@ struct HubState {
     char search[128] = "";
     char title[128] = "Моя игра";
     char location[1024] = "";
-    int templ = 1;                     // index into listTemplates (0 = empty)
+    int templ = 1;                     // index into hubTemplates (0 = empty)
     std::string error;
     // folder browser
     bool browsing = false;
@@ -143,7 +143,8 @@ void Editor::drawGamePicker() {
     ImGuiIO& io = ImGui::GetIO();
     HubState& H = g_hub;
     if (H.location[0] == 0) std::snprintf(H.location, sizeof H.location, "%s", defaultProjectsDir().c_str());
-    if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 10) { H.templates = listTemplates(ws_.engineDir); H.templatesAt = ImGui::GetTime(); }
+    // official catalog templates from the package cache (no network on the UI thread) + engine templates
+    if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 60) { H.templates = hubTemplates(ws_.engineDir, true); H.templatesAt = ImGui::GetTime(); }
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     const bool wide = H.tab == 2;   // the game wizard has many answers: a bigger hub
     ImGui::SetNextWindowSize(ImVec2(std::min(wide ? 1240.f : 1160.f, io.DisplaySize.x - 40), std::min(wide ? 880.f : 780.f, io.DisplaySize.y - 40)));
