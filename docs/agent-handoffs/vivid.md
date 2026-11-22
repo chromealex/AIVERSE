@@ -3158,3 +3158,23 @@ Still needs the Mac build + ctest + visual check. External clips need the same b
 `vivid_metahuman_adapter` against the real local Ada and Bruce-Full exports. Not supported (stated in the report):
 RigLogic correctives, FACIAL joint animation, strand groom, .dna at runtime, Draco GLB.
 
+## 2026-11-23 — Ada generated walk preview adapter
+
+Implementation commit `f1244cec3` on
+`feature/motionweave-walk-generator-current` (based on `7351e960b`, not the
+VIVID feature branch). `HumanWalkPreview.h` is a presentation-only mapping
+from modular human skin rigs to the shared MotionWeave walk generator; it
+does not own facial animation, simulation state or a second pose writer.
+Creator's `--preview-walk` offline capture path evaluates that clip on Ada.
+
+Actual checks: AppleClang 17 native Creator build PASS; generated-walk CTest
+1/1 PASS; 48/48 real Metal frames from the external corrected
+`Ada-Groom-Bound` manifest, `actor=MODEL_MORPH`, no pipeline failures,
+encoded as a 2-second 1500x920 H.264 MP4 with AVFoundation. Inspected frames
+6 and 36. Artifacts and exact limits are in
+`docs/agent-handoffs/animation-walk-generator-2026-11-23.md`. The earlier
+`Ada-Motion-Review` capture had detached groom and is rejected. No Ada
+binary was committed or changed. Full VIVID validation, interactive Studio
+and other GPU backends were not run. Next: improve foot contact and repeat
+visual/trajectory acceptance before integrating with catalog assets.
+

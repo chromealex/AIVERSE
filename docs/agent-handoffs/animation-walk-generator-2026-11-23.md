@@ -74,3 +74,39 @@ visualizations, not native Metal viewport frames, so they are not site media.
 - Rebuilt targeted native test and reran CTest: 1/1 PASS. `git diff --check`
   passed. This is still a stylized skeletal visualization, not a skinned
   character or native renderer capture. Foot sliding remains visible.
+
+## Ada native 3D follow-up, 2026-11-23
+
+Implementation: `f1244cec3` on `feature/motionweave-walk-generator-current`.
+The shared generator now derives each joint's local pitch axis from its bind
+rotation, rather than assuming local X is horizontal. On the MetaHuman rig,
+local X points nearly up, so the old preview barely bent its legs. The VIVID
+presentation adapter `HumanWalkPreview.h` maps five modular Ada roots: each
+complete body/clothing rig gets the same generated channels; partial roots
+get matching travel. Creator's offline `--preview-walk` path samples the
+published clip and accumulates its 120 cm/s source-root delta over each cycle.
+The outer 0.01 scale yields approximately 1.2 m/s in the scene. The clip
+index is committed only after successful model publication.
+
+Actual native verification on macOS AppleClang 17 and Metal: Creator target
+built; the focused walk test rebuilt and CTest 1/1 PASS; site check 37 entries,
+0 errors; `git diff --check` PASS. Creator captured 48/48 frames at 24 fps
+from the external `Ada-Groom-Bound` manifest, with `actor=MODEL_MORPH`,
+`pipelineFailures=0`, 43 colour and 43 shadow submissions per frame. System
+AVFoundation encoded the frames to a 2-second, 1500x920 H.264 MP4. Frames 6
+and 36 were inspected. Artifacts:
+`/Volumes/KINGSTON 1/AIVERSE-builds/motionweave-walk/ada-groom-bound-preview/`
+including `ada-generated-walk.mp4` and `frame-0006.png` / `frame-0036.png`.
+
+The initial capture used the older `Ada-Motion-Review` package. Its groom
+detached during root motion, matching the known source asset defect; that
+capture is not acceptance evidence. The final capture uses corrected
+`Ada-Groom-Bound`; no external asset was modified or committed.
+
+Remaining: the gait has no stance contact IK or foot planting, and visual
+quality is not yet suitable for the public catalog. No Studio interactive
+preview, non-Metal backend, full CTest, performance or release packaging was
+run. Next implement ground-aware foot targets and stride calibration on Ada,
+then repeat the native motion capture and compare foot drift on world-space
+ankle tracks. Keep this site roadmap item `in-progress`; add public devlog
+media only when the result passes visual review.
