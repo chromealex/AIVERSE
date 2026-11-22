@@ -18,6 +18,13 @@ automatic rig mapping or a catalog asset writer. A follow-up should add
 stance-aware IK and a visual review before exposing generated clips in the
 site catalog.
 
+The diagnostic Creator command `--smoke --preview-walk --preview-sequence 48
+--asset <human-manifest>` maps complete modular human rigs by semantic joint
+names, samples this clip at 24 fps, and captures real native 3D frames.
+`HumanWalkPreview.h` mirrors the walk onto each complete body/clothing skin and
+keeps partial head/groom roots on the same travel. This is a preview adapter;
+the generic generator itself has no dependency on VIVID or character assets.
+
 **MotionWeave** is the canonical name for AIVERSE's modular, genre-independent
 animation subsystem: AnimationGraph, clips, blend trees, IK, Motion Matching,
 Montages, root motion, ragdoll poses, inertialization and animation LOD/GPU crowds.

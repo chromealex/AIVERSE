@@ -26,8 +26,8 @@ struct WalkCycleSettings {
     int samples = 33;            // includes duplicate closing pose
 };
 
-// Generates a looping AnimClip with optional forward root motion. The rig must face local +Z with
-// local +X as the pitch axis; callers may retarget the resulting clip afterward.
+// Generates a looping AnimClip with optional forward root motion. The rig must
+// face model +Z; each joint's local pitch axis is derived from its bind rotation.
 inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
                                   const WalkCycleSettings& settings = {}) {
     const auto valid = [&](int bone) { return bone >= 0 && static_cast<size_t>(bone) < model.nodes.size(); };
@@ -46,8 +46,8 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         !std::isfinite(settings.hipSwing) || settings.hipSwing < 0 || settings.hipSwing > 1.2f ||
         !std::isfinite(settings.kneeLift) || settings.kneeLift < 0 || settings.kneeLift > 1.5f ||
         !std::isfinite(settings.armSwing) || settings.armSwing < 0 || settings.armSwing > 1.2f ||
-        !std::isfinite(settings.rootBob) || settings.rootBob < 0 || settings.rootBob > 1.0f ||
-        !std::isfinite(settings.rootSpeed) || settings.rootSpeed < 0 || settings.rootSpeed > 5.0f ||
+        !std::isfinite(settings.rootBob) || settings.rootBob < 0 || settings.rootBob > 100.0f ||
+        !std::isfinite(settings.rootSpeed) || settings.rootSpeed < 0 || settings.rootSpeed > 1000.0f ||
         settings.samples < 5 || settings.samples > 257)
         throw std::invalid_argument("walk cycle: invalid settings");
 
@@ -57,6 +57,20 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
     const int bones[] = {rig.leftHip, rig.leftKnee, rig.leftAnkle,
                          rig.rightHip, rig.rightKnee, rig.rightAnkle,
                          rig.leftShoulder, rig.rightShoulder};
+    float3 pitchAxes[8];
+    for (size_t j = 0; j < 8; ++j) {
+        quat world;
+        std::vector<int> chain;
+        for (int node = bones[j]; node >= 0; node = model.nodes[size_t(node)].parent) {
+            if (chain.size() >= model.nodes.size())
+                throw std::invalid_argument("walk cycle: cyclic rig hierarchy");
+            chain.push_back(node);
+        }
+        for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+            world = world * model.nodes[size_t(*it)].r;
+        const quat inverse{-world.x, -world.y, -world.z, world.w};
+        pitchAxes[j] = inverse.rotate({1, 0, 0});
+    }
     clip.channels.reserve(9);
     for (int bone : bones) {
         AnimChannel channel;
@@ -90,7 +104,7 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         const float time = settings.duration * float(i) / float(settings.samples - 1);
         for (size_t j = 0; j < 8; ++j) {
             auto& channel = clip.channels[j];
-            const quat rotation = model.nodes[size_t(bones[j])].r * quat::axisAngle({1, 0, 0}, angles[j]);
+            const quat rotation = model.nodes[size_t(bones[j])].r * quat::axisAngle(pitchAxes[j], angles[j]);
             channel.times.push_back(time);
             channel.values.insert(channel.values.end(), {rotation.x, rotation.y, rotation.z, rotation.w});
         }
