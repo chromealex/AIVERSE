@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-22T18:53:35+00:00",
+ "generated": "2026-11-22T20:06:16+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -1028,6 +1028,48 @@
     }
    ],
    "links": [],
+   "author": null
+  },
+  {
+   "id": "2026-11-22-build-catalog-templates",
+   "date": "2026-11-22",
+   "system": "build",
+   "title": "Шаблоны проектов из каталога пакетов",
+   "summary": "Все 36 примеров игр движка теперь — официальные пакеты-шаблоны в каталоге AIVERSE-PACKAGES. Стартовый экран Studio показывает их первыми, а кнопка «More templates» ищет по всем шаблонам каталога, включая шаблоны других авторов.",
+   "body": [
+    "Шаблон теперь может расти: свои текстуры, модели и код живут в его пакете, а не в репозитории движка. Каталог отмечает официальные пакеты флагом official — его ставят только авторы AIVERSE.",
+    "Проект из пакета-шаблона скачивается, проверяется по хэшу и распаковывается в выбранную папку, затем ставятся пакеты, которые указаны в его game.json. Стартовый экран открывается сразу из кэша и обновляет список в фоне. Агенты делают то же через MCP: create_project с шаблоном pkg:<пакет>.",
+    "У каждого шаблона в каталоге есть превью — настоящий кадр движка, снятый с этого шаблона."
+   ],
+   "status": "in-progress",
+   "verified": "Проект «Mushroom Clash» создан из пакета mushrooms через MCP create_project и запущен в клиенте (Linux, OpenGL): первый кадр. Остальные кадры — превью шаблонов, снятые клиентом движка для каталога.",
+   "limits": "Новый стартовый экран Studio собран и проверен типами, но не запускался в нативном Studio на macOS. Папка templates/ пока остаётся в движке для работы без сети и для тестов.",
+   "branch": "feature/aiv20261122_template_packages",
+   "commit": null,
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-build-catalog-templates/01.jpg",
+     "caption": "Проект, созданный из пакета-шаблона mushrooms, в клиенте движка"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-build-catalog-templates/02.jpg",
+     "caption": "Превью шаблона Hearth and Haul в каталоге"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-build-catalog-templates/03.jpg",
+     "caption": "Превью шаблона Oval Sprint (гонка на овале)"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-build-catalog-templates/04.jpg",
+     "caption": "Превью шаблона Breach Protocol (тактические раунды)"
+    }
+   ],
+   "links": [
+    {
+     "title": "docs/packages.md",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/packages.md"
+    }
+   ],
    "author": null
   },
   {
