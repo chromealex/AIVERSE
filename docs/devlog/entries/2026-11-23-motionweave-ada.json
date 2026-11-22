@@ -1,0 +1,38 @@
+{
+  "id": "2026-11-23-motionweave-ada",
+  "date": "2026-11-23",
+  "system": "motionweave",
+  "title": "Шаг Ada: опора стоп и движение корпуса",
+  "summary": "The generated walk now keeps an ankle in place during stance while the pelvis and upper torso move with each step.",
+  "body": [
+    "MotionWeave строит цикл по скелету: в опорной фазе цель стопы компенсирует движение персонажа, а двухзвенная кинематика задаёт положение колена. Таз переносит вес, корпус слегка поворачивается, голова движется с меньшей амплитудой.",
+    "В модульной модели Ada движение таза и корпуса передаётся также отдельным скелетам головы и волос. Предпросмотр доступен в диагностическом просмотре VIVID Creator."
+  ],
+  "status": "in-progress",
+  "verified": "Показано на Ada в нативном просмотре macOS с рендером Metal; записана двухсекундная последовательность с перемещением персонажа.",
+  "limits": "Пока используется ровная плоскость и высота стопы из исходной позы; адаптации к рельефу и точной опоры подошвы нет.",
+  "branch": "feature/motionweave-walk-generator-current",
+  "commit": "2c116ac7e",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-23-motionweave-ada/01.png",
+      "caption": "Ada во время шага: передняя стопа на плоскости, корпус следует за тазом.",
+      "captionEn": "Ada mid-step: front foot on the floor, torso following the pelvis."
+    }
+  ],
+  "links": [
+    {
+      "title": "MotionWeave handoff",
+      "href": "docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+  ],
+  "author": "motionweave",
+  "titleEn": "Ada walk: planted stance and body motion",
+  "summaryEn": "The generated walk now holds an ankle during stance and moves the pelvis and upper torso with each step.",
+  "bodyEn": [
+    "MotionWeave builds the walk from a skeleton. During stance, an ankle target offsets character travel, and two-bone IK positions the knee. The pelvis shifts weight, the torso turns slightly, and head motion is reduced.",
+    "Ada’s separate head and groom skeletons receive the same pelvis and torso tracks. The result is visible in the VIVID Creator diagnostic preview."
+  ],
+  "verifiedEn": "Shown on Ada in the native macOS preview with Metal rendering; a two-second root-motion sequence was captured.",
+  "limitsEn": "The current walk uses a flat plane and the bind-pose foot height; terrain adaptation and precise shoe-sole contact remain open."
+}

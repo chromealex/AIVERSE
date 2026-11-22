@@ -3195,3 +3195,18 @@ lowered arms in the walking capture. Artifacts, commands, and remaining gait
 limitations are recorded in the MotionWeave walk handoff above. The head
 motion is intentionally small; gaze tracking and planted feet are not done.
 
+
+## 2026-11-23 — modular Ada walk synchronization
+
+Source `2c116ac7e` on `feature/motionweave-walk-generator-current`.
+The VIVID presentation adapter now mirrors the complete rig's pelvis,
+torso, neck and head animation onto partial head/groom skeletons by semantic
+joint name. This closes the detached neck seam visible in the first grounded
+walk capture. The shared MotionWeave clip supplies stance IK and pelvis
+motion; VIVID does not maintain a separate gait solver.
+
+Actually run: native Creator build, corrected Ada-Groom-Bound Metal capture
+48/48 frames and frame inspection at 0, 12, 24. No pipeline failures.
+The two-second MP4 and precise limits are recorded in the MotionWeave walk
+handoff. Other modular humans, terrain, shoe soles and Studio integration
+remain unverified.

@@ -143,3 +143,35 @@ gaze tracking or physics; the gait still lacks planted-foot IK and natural
 weight transfer. The full VIVID suite, Studio UI and other GPU backends remain
 untested. Next stage should solve foot contact on Ada and review a full-body
 video side by side with this baseline before marking the roadmap item done.
+
+## Ada grounded walk revision, 2026-11-23
+
+Source commit `2c116ac7e` on `feature/motionweave-walk-generator-current`.
+The generator now writes pelvis translation/rotation and small torso motion,
+uses bind-pose ankle heights with a 60% stance phase, and bakes the shared
+two-bone IK result into both leg tracks. Root Y stays constant; the pelvis
+carries the bob and is lowered when needed for stance reach. Neck and head
+counter part of torso yaw with much smaller pitch/yaw than the previous clip.
+The VIVID adapter copies matching pelvis, torso, neck and head channels to
+partial head/groom rigs; the prior capture exposed a detached neck seam
+because those roots only followed root translation.
+
+Actually run: native AppleClang 17 builds of the focused MotionWeave test and
+VIVID Creator; focused CTest 1/1 PASS, including stance-ankle world displacement
+under 5 cm between 0.0625 and 0.25 seconds. Metal Creator captured 48/48 frames
+from the corrected external Ada-Groom-Bound manifest, with zero pipeline
+failures and 43 colour plus 43 shadow submissions per frame. Inspected frames
+0, 12 and 24. AVFoundation encoded 48 frames at 24 fps, 1500x920 to
+`/Volumes/KINGSTON 1/AIVERSE-builds/motionweave-walk/ada-grounded-v2/ada-walk-grounded.mp4`.
+The new screenshot is in `docs/devlog/media/2026-11-23-motionweave-ada/01.png`.
+The `footEndpointMaxDrift` Creator diagnostic compares against the bind pose
+across root travel and is not a stance-slide measurement.
+
+Limits: the flat-floor target uses bind ankle height, not collision queries or
+shoe sole geometry. Stance quality was checked numerically on the fixture and
+visually on Ada, not with an Ada world-space ankle trace. This is still a
+procedural prototype: no terrain adaptation, turn, speed blending, Studio
+interactive catalog flow, full VIVID suite or other GPU backend verification.
+Next: add contact/sole calibration and ankle traces on Ada, then support
+terrain and agent-facing catalog asset publication. Keep the walk roadmap
+in-progress until those are accepted.
