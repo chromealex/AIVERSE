@@ -13,6 +13,9 @@ capture the resulting full character on Metal. Ada's corrected Groom-Bound
 package was captured at 24 fps for two seconds with root motion; this is a
 rough prototype, with visible foot sliding and no contact-aware correction.
 The external Ada asset is not included in the repository.
+The walk adapter now passes the lower arms and neck/head joints to the shared
+generator. It detects Ada's A-pose and lowers her arms before swinging them;
+the neck and head receive their own subtle delayed motion during walking.
 Code ownership: `engine/character/vivid/`, `tests/vivid/`, `docs/vivid.md`, `skills/visuals/aiverse-vivid/`.
 Cross-cutting render, animation and build changes must be small and coordinated with their owners; avoid editing their in-progress features.
 

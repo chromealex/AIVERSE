@@ -13,11 +13,12 @@ int main(int argc, char** argv) {
     Model model = motionweave_fixture::makeHumanoidSkeleton(&bones);
     WalkRig rig{bones.root, bones.thigh[0], bones.shin[0], bones.foot[0],
                 bones.thigh[1], bones.shin[1], bones.foot[1],
-                bones.upperArm[0], bones.upperArm[1]};
+                bones.upperArm[0], bones.upperArm[1],
+                bones.foreArm[0], bones.foreArm[1], bones.neck, bones.head};
     WalkCycleSettings settings;
     settings.rootSpeed = 1.2f;
     AnimClip clip = generateWalkCycle(model, rig, settings);
-    AIVERSE_TEST_CHECK(clip.channels.size() == 9);
+    AIVERSE_TEST_CHECK(clip.channels.size() == 11);
     AIVERSE_TEST_CHECK(clip.duration == 1.0f);
     for (const auto& channel : clip.channels) {
         AIVERSE_TEST_CHECK(channel.times.size() == 33);
@@ -26,7 +27,7 @@ int main(int argc, char** argv) {
         const size_t width = channel.comps;
         for (size_t k = 0; k < width; ++k) {
             const float difference = channel.values[channel.values.size() - width + k] - channel.values[k];
-            const float expected = (&channel == &clip.channels.back() && k == 2) ? 1.2f : 0.0f;
+            const float expected = (channel.node == rig.root && channel.path == AnimChannel::Translation && k == 2) ? 1.2f : 0.0f;
             AIVERSE_TEST_CHECK(std::abs(difference - expected) < 1e-5f);
         }
     }
@@ -34,6 +35,31 @@ int main(int argc, char** argv) {
     bindPose(model, pose);
     sampleClip(clip, 0.25f, pose);
     AIVERSE_TEST_CHECK(std::abs(pose[size_t(bones.thigh[0])].r.x - pose[size_t(bones.thigh[1])].r.x) > 0.1f);
+    AIVERSE_TEST_CHECK(classifyWalkArmRestPose(model, bones.upperArm[0], bones.foreArm[0]) == WalkArmRestPose::Relaxed);
+    Model aPose = model;
+    aPose.nodes[size_t(bones.upperArm[0])].r = quat::axisAngle({0, 0, 1}, 0.8f);
+    aPose.nodes[size_t(bones.upperArm[1])].r = quat::axisAngle({0, 0, 1}, -0.8f);
+    AIVERSE_TEST_CHECK(classifyWalkArmRestPose(aPose, bones.upperArm[0], bones.foreArm[0]) == WalkArmRestPose::A);
+    AnimClip lowered = generateWalkCycle(aPose, rig, settings);
+    Pose loweredPose;
+    bindPose(aPose, loweredPose);
+    sampleClip(lowered, 0.0f, loweredPose);
+    std::vector<mat4> loweredWorld;
+    worldMatrices(aPose, loweredPose, loweredWorld);
+    const auto shoulder = loweredWorld[size_t(bones.upperArm[0])].transformPoint({});
+    const auto elbow = loweredWorld[size_t(bones.foreArm[0])].transformPoint({});
+    AIVERSE_TEST_CHECK(dot(normalize(elbow - shoulder), float3{0, -1, 0}) > 0.90f);
+    aPose.nodes[size_t(bones.upperArm[0])].r = quat::axisAngle({0, 0, 1}, 1.57f);
+    AIVERSE_TEST_CHECK(classifyWalkArmRestPose(aPose, bones.upperArm[0], bones.foreArm[0]) == WalkArmRestPose::T);
+    lowered = generateWalkCycle(aPose, rig, settings);
+    bindPose(aPose, loweredPose);
+    sampleClip(lowered, 0.0f, loweredPose);
+    worldMatrices(aPose, loweredPose, loweredWorld);
+    AIVERSE_TEST_CHECK(dot(normalize(loweredWorld[size_t(bones.foreArm[0])].transformPoint({}) -
+                                   loweredWorld[size_t(bones.upperArm[0])].transformPoint({})),
+                           float3{0, -1, 0}) > 0.90f);
+    AIVERSE_TEST_CHECK(clip.channels[9].node == rig.neck && clip.channels[10].node == rig.head);
+    AIVERSE_TEST_CHECK(std::abs(clip.channels[10].values[4 * 8 + 1] - clip.channels[10].values[1]) > 0.001f);
     bool rejected = false;
     try { WalkRig invalid = rig; invalid.leftKnee = invalid.rightKnee; (void)generateWalkCycle(model, invalid); }
     catch (const std::invalid_argument&) { rejected = true; }

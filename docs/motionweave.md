@@ -18,6 +18,13 @@ automatic rig mapping or a catalog asset writer. A follow-up should add
 stance-aware IK and a visual review before exposing generated clips in the
 site catalog.
 
+If elbow nodes are supplied, `classifyWalkArmRestPose` measures each bind
+shoulder-to-elbow direction and identifies relaxed, A or T rest poses. For A/T
+rigs, the generated shoulder track first lowers the arms toward a relaxed
+downward direction, then applies the walk swing. Optional neck and head nodes
+receive separate delayed yaw and pitch tracks, so the head is not rigidly
+locked to the torso. Missing optional joints leave those channels absent.
+
 The diagnostic Creator command `--smoke --preview-walk --preview-sequence 48
 --asset <human-manifest>` maps complete modular human rigs by semantic joint
 names, samples this clip at 24 fps, and captures real native 3D frames.

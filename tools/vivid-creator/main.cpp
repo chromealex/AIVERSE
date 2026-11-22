@@ -647,7 +647,11 @@ struct CreatorApp {
                 walk.rootSpeed=120.0f; // source MetaHuman joints are centimetres under a 0.01 scene scale
                 walk.rootBob=2.5f;
                 proposedWalkClip=int(proposed.head->clips.size());
-                proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk));
+                HumanWalkPreviewStats walkStats;
+                proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk,&walkStats));
+                std::printf("VIVID walk rigs=%d arms relaxed=%d A=%d T=%d unknown=%d headChannels=%d\n",
+                    walkStats.completeRigs,walkStats.relaxedArms,walkStats.aPoseArms,
+                    walkStats.tPoseArms,walkStats.unknownArms,walkStats.headChannels);
             }
             proposed.head->uploadPrepared=true;
             auto newGraph=AnimationGraph::compile(*proposed.head,Json::parse(
