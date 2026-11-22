@@ -1755,10 +1755,10 @@
    "roadmap": [
     {
      "status": "in-progress",
-     "title": "Стили зданий: сгенерированные дома в сеттинге (первый — sci-fi)",
-     "titleEn": "Building styles: generated houses in a setting (sci-fi first)",
-     "text": "Файл стиля одевает сгенерированное здание в облицовку, окна, свет и крышу, совпадающие с его коллизией.",
-     "textEn": "A style file dresses a generated building in cladding, windows, lights and a roof that match its collision."
+     "title": "Стили построек: здания в сеттинге из файла стиля (первый — sci-fi в духе RTS)",
+     "titleEn": "Building styles: structures in a setting from a style file (sci-fi RTS look first)",
+     "text": "Файл стиля задаёт облик построек: цельные бронированные корпуса с воротами, опорами и надстройками или фасады зданий с этажами.",
+     "textEn": "A style file sets how structures look: whole armoured hulls with gates, legs and towers, or facades on buildings with floors."
     }
    ],
    "core": true,

@@ -12,6 +12,7 @@
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -32,6 +33,8 @@ struct BuildingLayout{
     std::vector<std::pair<Vec3,Vec3>> stairs;   // bottom and top walking points of each flight
     std::vector<std::pair<Vec3,Vec3>> stairHalls;   // open floor beside each end of a flight, clear of the walls (nav goals)
     uint32_t doorSide=0;                        // 0 = -Z, 1 = +X, 2 = +Z, 3 = -X (before yaw)
+    struct Opening{BuildingBox hole;uint32_t floor=0,side=0;bool door=false;bool operator==(const Opening&)const=default;};
+    std::vector<Opening> openings;              // every window and the door: the empty volume through the outer wall
 };
 namespace buildingDetail {
 struct Opening{Fixed from,to,bottom,top;};
@@ -111,12 +114,14 @@ inline std::optional<BuildingLayout> generateBuilding(const BuildingDef& d,uint6
             bool alongX=side%2==0;auto len=alongX?W:D;std::vector<std::pair<Fixed,Fixed>> blocked;
             if(side==3)blocked=stairZ;
             if(side==0)blocked.push_back({sx0,sx1});
-            std::vector<Opening> open=windows(d,Fixed{},len,y,blocked);
+            std::vector<Opening> open=windows(d,Fixed{},len,y,blocked);size_t doorIndex=SIZE_MAX;
             if(!f&&side==L.doorSide){
                 Opening door{doorAt-d.doorWidth/2,doorAt+d.doorWidth/2,y0,y0+d.doorHeight};
-                std::vector<Opening> keep;for(auto o:open)if(o.to<=door.from-t||o.from>=door.to+t)keep.push_back(o);open=keep;open.push_back(door);
+                std::vector<Opening> keep;for(auto o:open)if(o.to<=door.from-t||o.from>=door.to+t)keep.push_back(o);open=keep;doorIndex=open.size();open.push_back(door);
             }
             Fixed a0=side==0||side==3?Fixed{}:(alongX?D:W)-t,a1=a0+t;
+            for(size_t i=0;i<open.size();++i){const auto& o=open[i];bool isDoor=i==doorIndex;
+                L.openings.push_back({alongX?BuildingBox{{o.from,o.bottom,a0},{o.to,o.top,a1}}:BuildingBox{{a0,o.bottom,o.from},{a1,o.top,o.to}},f,side,isDoor});}
             wall(b,alongX,Fixed{},len,a0,a1,y0,y1,open);
         }
         // Interior partition at x = W / 2 with a doorway at a seeded z clear of the outer walls.
@@ -144,6 +149,7 @@ inline std::optional<BuildingLayout> generateBuilding(const BuildingDef& d,uint6
         case 2:door={doorAt,d.slab,D-t/2};outside={doorAt,Fixed{},D+out};break;default:door={t/2,d.slab,doorAt};outside={-out,Fixed{},doorAt};}
     auto place=[&](Vec3 p){return turn(p,yaw,W,D)+origin;};
     for(auto& x:b){auto p=place(x.min),q=place(x.max);L.boxes.push_back({{fxMin(p.x,q.x),fxMin(p.y,q.y),fxMin(p.z,q.z)},{fxMax(p.x,q.x),fxMax(p.y,q.y),fxMax(p.z,q.z)}});}
+    for(auto& o:L.openings){auto p=place(o.hole.min),q=place(o.hole.max);o.hole={{fxMin(p.x,q.x),fxMin(p.y,q.y),fxMin(p.z,q.z)},{fxMax(p.x,q.x),fxMax(p.y,q.y),fxMax(p.z,q.z)}};}
     for(auto& s:L.lootSpots)s=place(s);for(auto& s:L.stairs){s.first=place(s.first);s.second=place(s.second);}
     for(auto& s:L.stairHalls){s.first=place(s.first);s.second=place(s.second);}
     L.door=place(door);L.doorOutside=place(outside);

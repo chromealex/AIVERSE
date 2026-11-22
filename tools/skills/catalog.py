@@ -79,6 +79,7 @@ ALIASES = {
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
  'aiverse-roads':'road roads spline street avenue junction crossing bridge tunnel parking bay highway rural дорог сплайн улиц проспект перекрест переход мост тоннел парковк карман шоссе грунтовк',
  'aiverse-building-gen':'building house procedural interior floors stairs stairwell door window room enterable здание дом процедурн этаж лестниц дверь окно комнат интерьер',
+ 'aiverse-building-style':'building style setting sci-fi scifi facade cladding mesh look glb city стиль сеттинг сайфай фасад облицовк здани застройк город вид',
  'aiverse-gear-tiers':'gear armor helmet vest backpack shield tier level durability wear absorb capacity broken броня шлем жилет рюкзак щит уровень прочность износ вместимость экипировк',
  'aiverse-snapshot-delta':'snapshot delta compression baseline ack bandwidth netcode replication diff дельта снапшот сжатие трафик канал репликац',
  'aiverse-battle-royale':'battle royale last standing shrinking zone circle storm safe zone phase red zone bombardment airdrop supply drop plane jump skydive parachute knockdown knock revive placement killfeed lobby countdown королевская битва зона сужающ круг фаз красн бомбардир аирдроп сброс самолет прыжок парашют нокдаун нокнут поднять место киллфид лобби отсчет',

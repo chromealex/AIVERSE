@@ -1,0 +1,48 @@
+{
+  "id": "2026-11-22-world-building-styles",
+  "date": "2026-11-22",
+  "system": "world",
+  "title": "Стили построек: sci-fi база из файла стиля",
+  "summary": "Постройки в сеттинге собираются из файла стиля: первый стиль — sci-fi в духе RTS с казармами, командным центром, заводом и складом.",
+  "body": [
+    "Каждая постройка — цельный бронированный корпус со скошенными углами и наклонными стенами, бронеплитами (часть в цвет команды), боковыми модулями, надстройкой с освещённой смотровой щелью, воротами с полосами опасности и пандусом, посадочными опорами, дюзами и машинерией на крыше: трубами, баками, радаром.",
+    "Облик задаёт файл engine/assets/building-styles/scifi.json: материалы, палитры и виды построек с размерами и набором деталей. Новый сеттинг — новый файл стиля, а сид даёт вариации одного вида. Вместе с сеткой постройка отдаёт коллизию и точки перед воротами; аиverse_building_export выгружает её в .glb."
+  ],
+  "status": "in-progress",
+  "verified": "Кадры сняты просмотрщиком моделей движка на Linux (OpenGL, тени high): казармы, командный центр и завод, сид 3.",
+  "limits": "Поверхности пока одноцветные, без текстур; стили ещё не подключены к картам и рендеру в игре; на Metal и телефонах не проверено.",
+  "branch": "feature/aiv20261122_building_styles",
+  "commit": null,
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-world-building-styles/scifi-barracks.png",
+      "caption": "Казармы: ворота с полосами опасности, опоры, надстройка",
+      "captionEn": "Barracks: gate with hazard stripes, legs, tower"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-world-building-styles/scifi-command.png",
+      "caption": "Командный центр: двое ворот, боковые модули, радар",
+      "captionEn": "Command centre: two gates, side modules, radar"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-world-building-styles/scifi-factory.png",
+      "caption": "Завод: широкий корпус, двое ворот, дымовые трубы",
+      "captionEn": "Factory: wide hull, two gates, stacks"
+    }
+  ],
+  "links": [
+    {
+      "title": "docs/building-style.md",
+      "href": "docs/building-style.md"
+    }
+  ],
+  "author": "world",
+  "titleEn": "Building styles: a sci-fi base from a style file",
+  "summaryEn": "Structures in a setting come from a style file: the first style is an RTS-like sci-fi set with barracks, command centre, factory and depot.",
+  "bodyEn": [
+    "Each structure is one armoured hull with cut corners and leaning walls, armour plates (some in the team colour), side modules, a tower with a lit slit, gates with hazard stripes and a ramp, landing legs, thrusters and roof machinery: stacks, tanks, a radar dish.",
+    "The look comes from engine/assets/building-styles/scifi.json: materials, palettes and structure kinds with sizes and parts. A new setting is a new style file, and the seed varies one kind. Besides the mesh a structure gives collision and points in front of its gates; aiverse_building_export writes it to .glb."
+  ],
+  "verifiedEn": "Frames captured with the engine's model viewer on Linux (OpenGL, high shadows): barracks, command centre and factory, seed 3.",
+  "limitsEn": "Surfaces are flat colours without textures; styles are not yet wired to maps and in-game rendering; Metal and phones not checked."
+}
