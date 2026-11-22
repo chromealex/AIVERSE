@@ -56,3 +56,21 @@ the mechanical motion and absent foot planting clear. The HTML browser player
 was generated but could not be opened through the current computer-use bridge;
 do not claim interactive browser validation. These are stick-figure pose
 visualizations, not native Metal viewport frames, so they are not site media.
+
+## 3D and root motion follow-up, 2026-11-23
+
+- `WalkCycleSettings::rootSpeed` is opt-in, default zero. A positive value
+  writes forward local +Z root translation into the clip. Bounds: 0–5 model
+  units/s. The rotation seam stays closed; the root channel advances exactly
+  speed times duration at the seam. Callers must preserve per-cycle root
+  displacement when looping the clip.
+- The focused test now uses 1.2 units/s, checks the root delta and exports
+  two continuous cycles at 60 Hz. `generated-root-motion.csv` has 121 rows;
+  root Z is 0, 1.2 and 2.4 at frames 0, 60 and 120 respectively.
+- `tools/animation/walk_preview_3d.py` converts actual evaluated joints to a
+  standalone 3D-projected canvas player with camera orbit and a PNG four-pose
+  sheet. Output is under the same KINGSTON preview directory. PNG inspected;
+  JavaScript syntax checked with Node. Browser interaction itself was not run.
+- Rebuilt targeted native test and reran CTest: 1/1 PASS. `git diff --check`
+  passed. This is still a stylized skeletal visualization, not a skinned
+  character or native renderer capture. Foot sliding remains visible.

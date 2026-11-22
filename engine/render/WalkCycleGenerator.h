@@ -22,10 +22,11 @@ struct WalkCycleSettings {
     float kneeLift = 0.55f;       // radians during swing
     float armSwing = 0.22f;       // radians, opposite the legs
     float rootBob = 0.025f;      // model units
+    float rootSpeed = 0.0f;      // model units/s along local +Z; 0 = in-place
     int samples = 33;            // includes duplicate closing pose
 };
 
-// Generates an in-place, looping AnimClip. The rig must face local +Z with
+// Generates a looping AnimClip with optional forward root motion. The rig must face local +Z with
 // local +X as the pitch axis; callers may retarget the resulting clip afterward.
 inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
                                   const WalkCycleSettings& settings = {}) {
@@ -46,6 +47,7 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         !std::isfinite(settings.kneeLift) || settings.kneeLift < 0 || settings.kneeLift > 1.5f ||
         !std::isfinite(settings.armSwing) || settings.armSwing < 0 || settings.armSwing > 1.2f ||
         !std::isfinite(settings.rootBob) || settings.rootBob < 0 || settings.rootBob > 1.0f ||
+        !std::isfinite(settings.rootSpeed) || settings.rootSpeed < 0 || settings.rootSpeed > 5.0f ||
         settings.samples < 5 || settings.samples > 257)
         throw std::invalid_argument("walk cycle: invalid settings");
 
@@ -96,7 +98,8 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         const float3 base = model.nodes[size_t(rig.root)].t;
         channel.times.push_back(time);
         channel.values.insert(channel.values.end(),
-                              {base.x, base.y + settings.rootBob * (1.0f - std::cos(2.0f * phase)) * 0.5f, base.z});
+                              {base.x, base.y + settings.rootBob * (1.0f - std::cos(2.0f * phase)) * 0.5f,
+                               base.z + settings.rootSpeed * time});
     }
     return clip;
 }

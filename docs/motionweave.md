@@ -3,13 +3,16 @@
 ## Generated walk cycle (prototype)
 
 `render::generateWalkCycle(model, rig, settings)` in
-`engine/render/WalkCycleGenerator.h` produces a looping, in-place `AnimClip`
+`engine/render/WalkCycleGenerator.h` produces a looping `AnimClip`
 without modifying the input model. `WalkRig` contains explicit node indices for
 the root, both hip-knee-ankle chains and both shoulders. The caller validates
 semantic joint mapping when importing a skeleton and then adds the returned
 clip to a model or asset publication transaction. The rig must use local +Z
 forward and local +X for joint pitch. Duration, swing angles, root bob and
-sample count are bounded and validated. This first version is a simple cyclic
+sample count and optional forward `rootSpeed` are bounded and validated.
+`rootSpeed=0` produces an in-place clip; a positive value writes local +Z
+translation into the root channel, with exactly `rootSpeed * duration` travel
+per cycle. This first version is a simple cyclic
 pose generator; it does not guarantee planted feet, collision-aware steps,
 automatic rig mapping or a catalog asset writer. A follow-up should add
 stance-aware IK and a visual review before exposing generated clips in the
