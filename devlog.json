@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-22T20:06:16+00:00",
+ "generated": "2026-11-22T21:33:44+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -968,6 +968,56 @@
     {
      "title": "Stage 10 handoff",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/handoffs/no-genre-split-stage-10.md"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-22-gameplay-mechanics-pack-2",
+   "date": "2026-11-22",
+   "system": "gameplay",
+   "title": "Ten more mechanics: city, transit, tactics, diplomacy, heroes, ships, secret cards, speech and touch",
+   "summary": "A city economy with elections, scheduled transport, multi-storey tactics, diplomacy with AI, a bot that explains its move, draft and shop for hero matches, block-built ships and aircraft, hidden cards without leaks, lips that follow speech, and accessible touch controls.",
+   "body": [
+    "The city grows with demand: residential, commercial and industrial lots level up when there are enough jobs and people, services cover districts, taxes and upkeep form a budget with loans, and factions vote in elections. Buses, trams and freight lines run on timetables, passengers plan trips with transfers, and overloaded stops show up at once.",
+    "Tactics went multi-storey: stairs and hatches join levels, floors block sight, height gives a hit bonus, and a move plan can be undone step by step. Powers run diplomacy: relations, treaties, truces, allies who join wars, and an AI that decides whether to make peace or arm. Any turn-based game gets a search bot that shows why it chose a move.",
+    "Hero matches get a draft with bans, a shop with recipes and a courier, recall, last hits, denies, assists and respawn timers. Ships are built from blocks, float on their hull points, steer with a rudder, capsize and sink; aircraft have lift and stalls.",
+    "An opponent's hand stays secret: the server sends each player only their own view, and cards cannot be tracked through a shuffle. Simultaneous decisions close with commit/reveal. Faces talk: lips move with recorded speech or the line's text. Phones get sticks, buttons and gestures, and settings offer colour-blind modes, text size, subtitles, less shake and button remapping."
+   ],
+   "status": "in-progress",
+   "verified": "Each mechanic has its own test: city growth, trips with a transfer, fights from above, peace and war between powers, the right bot move, draft and purchases, a floating and a sinking ship, card secrecy after a shuffle, speech and gestures.",
+   "limits": "These are rules without ready screens or sample levels; wiring into game hosts, network checks for hero matches and secret cards, and phone measurements are still ahead.",
+   "branch": "agent-mechanics-audit",
+   "commit": null,
+   "media": [],
+   "links": [
+    {
+     "title": "Mechanics packages",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/mechanics-packages.md"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-22-gameplay-mechanics-pack-1",
+   "date": "2026-11-22",
+   "system": "gameplay",
+   "title": "Thirteen new mechanics: parkour, destruction, portals, quests, diseases, trains",
+   "summary": "Wall-running, dashes, a grappling hook and gliding; a third-person camera that avoids walls; bot jumps, ladders and 3D flight; collapsing buildings, portals, time rewind; item affixes, quests, wounds and diseases, taming, colonist relationships, pipes, heat and railways.",
+   "body": [
+    "Characters can now run along walls, slide down them and jump off, dash with air charges, swing on a grappling hook, glide and drop through one-way platforms. The third-person camera sits over the shoulder, moves in when a wall is behind it and blends to another profile when aiming or driving.",
+    "Bots plan paths that include jumps, drops, ladders, doors and teleports, and cover spots around crates and walls are found automatically. Flyers and ships get paths through open 3D space, flock avoidance and three-dimensional formations.",
+    "Block buildings break for real: a large block splits into pieces, everything that loses support collapses, and debris falls the same way for every player. Portals carry a body through together with its speed, and rewind takes the game back a few seconds at the cost of an energy budget.",
+    "Role-playing games get items with prefixes and suffixes, gem sockets, elemental reactions and quests with stages, branches, time limits and a journal. Survival gets bleeding and infected wounds, diseases with incubation and immunity, herds with a leader and panic, and animal taming. Colonists form families, friendships and rivalries, and towns and colonies run pressurised pipes, room heating and trains with signals and stations."
+   ],
+   "status": "in-progress",
+   "verified": "Each mechanic has its own test: movement, collapse, path, quest and train scenarios, identical repeat runs and save/load.",
+   "limits": "These are rules without ready-made screens yet: the journal UI, animations for the new moves and sample levels are still ahead. macOS and Windows builds and phone performance were not checked.",
+   "branch": "agent-mechanics-audit",
+   "commit": null,
+   "media": [],
+   "links": [
+    {
+     "title": "Mechanics packages",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/mechanics-packages.md"
     }
    ]
   },
