@@ -145,3 +145,15 @@ Read `engine/render/TerraWeaveCavernsBatchGeometry.h`, `tests/terraweave_caverns
 - Do not double-submit the same batch through `CaveGeometrySceneResident`, `CutTerrainResident` and `CaveBatchGeometryResident`. Keep physical mesh/Box3D/NavMesh independent of STRATA visual LOD. Source revisions are part of the manifest identity but do not themselves constitute a live update notification.
 - No LOD seam repair is implemented by batching. Preserve identical world-space field sampling and add explicit multi-resolution seam transitions and GPU verification before production.
 - Run the stage-11 regression test in a full checkout with correct GeometryScene/Model/Json linking; test source exists but has not been executed in this stage.
+
+## Stage 12 — shard-local rebuild planning and same-LOD seam diagnostics
+
+Read `engine/world/TerraWeaveCavernsShards.h`,
+`engine/world/TerraWeaveCavernsSeamAudit.h` and
+`docs/agent-handoffs/caverns-stage12-2026-11-23.md`.
+
+- `CaveShardRegistry(CaveShardConfig)` partitions global signed cave chunk keys into 1–4 chunks-per-axis groups using mathematical floor division (correct for negatives). `upsert(chunk,sourceRevision)` and `erase(chunk)` invalidate only their shard. `pump(maxCount)` emits bounded `CaveShardBuild` requests with a unique generation, stable sorted chunk keys, and an empty key list for retire. `acknowledge(request)` only after successful geometry publication; `fail(request)` releases an unsuccessful stage for retry. Old/replaced worker generations cannot acknowledge a new one.
+- A shard corresponds to one `CaveBatchGeometryResident` owner. The host builds the request's chunk keys from an immutable source snapshot and stages that ONE GeometryScene replacement. Unchanged shards retain their current scenes. These APIs **do not yet** directly drive `gfx::Device` or GPU-fenced resource retirement. This is not fine-grained STRATA GPU incremental source replacement; each affected shard is still rebuilt wholesale.
+- `auditCaveSameLodSeam(left,right,resolution,spacingCm,axis)` compares shared world-space mesh boundary edges after quantization to integer centimetres. The result reports unmatched edges; only supported for SAME spacing/resolution, strictly adjacent signed keys. `matched()` means border edges coincide, not that topology is watertight or that normals/materials match.
+- In particular, **different LOD seam bridging is not implemented**. No automatic stitching, Transvoxel or geometric morphing here. Do not mark mixed-resolution neighbors crack-free.
+- Tests: `tests/terraweave_caverns_shard_seam_test.cpp`. Source authored, not yet executed in a complete AIVERSE checkout. Ensure that each regression is compiled/executed before claiming PASS.
