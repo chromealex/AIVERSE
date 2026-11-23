@@ -24,6 +24,8 @@ struct RegionDirtyQueue {
     uint64_t acknowledged=0;
 
     bool mark(Entity entity,RegionDirtyKind kind) {
+        if(kind!=RegionDirtyKind::Spawn && kind!=RegionDirtyKind::Move &&
+           kind!=RegionDirtyKind::Retire)return false;
         if(!entity.valid() || entity.packed()==UINT64_MAX)return false;
         const uint64_t key=entity.packed()+1;
         auto it=entries.find(key);
@@ -44,6 +46,8 @@ struct RegionDirtyQueue {
         return missing.size()<=kMaxEntries-entries.size();
     }
     bool markMany(std::span<const Entity> entities,RegionDirtyKind kind) {
+        if(kind!=RegionDirtyKind::Spawn && kind!=RegionDirtyKind::Move &&
+           kind!=RegionDirtyKind::Retire)return false;
         if(!canMarkMany(entities))return false;
         // Reserve only the missing group keys, NOT a copy of every queued
         // entity: work stays proportional to the moved occupant group.
