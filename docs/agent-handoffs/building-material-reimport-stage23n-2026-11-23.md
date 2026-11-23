@@ -39,11 +39,42 @@ User approved Stage 23N after Stage 23M. Investigated native StudioMaterialValid
 - `af0fde976f8ab3ff9989d6eb6e251133f1ddea59` — skill
 - This handoff is a separate documentation commit.
 
+## Follow-on Stage 23N texture transcoding
+
+- NEW `engine/buildings/BuildingPngEncoder.h` implements a bounded,
+  dependency-free, real RGBA8 PNG writer (filtered rows, zlib stored
+  blocks and PNG CRC32/Adler32), restricted to 2048x2048 images.
+- `apps/studio-native/StudioBuildingGeneration.h` detects input
+  PNG/JPEG and otherwise invokes the actual pre-existing
+  `render::decodeImage(bytes, Image&)` CPU decoder. For formats whose
+  decompressed RGBA payload is usable (supported DDS, BLP, TGA and
+  certain KTX2 variants), it encodes a genuine PNG for embedding.
+  ASTC/GPU-only compressed KTX2, unavailable codec formats and images
+  outside the PNG budget are rejected with an explicit error.
+- `engine/buildings/BuildingGlbWriter.h` now accepts a bounded
+  20 MiB encoded PNG/JPEG output, enough for max-sized uncompressed
+  2048x2048 RGBA PNG bytes. Source inputs still cap at 16 MiB.
+- Source dependency fingerprint and bytes continue to describe
+  ORIGINAL asset bytes; `textureDependencies[].embeddedFormat`
+  records PNG/JPEG after conversion. This preserves reimport detection.
+- Actual additional commits:
+  `460dff93bd10e1da0464cba215b5c97616032b71` PNG writer,
+  `b9d4f5565ba13fd8d5ee0b7c03bd8f2e2af198eb` Studio converter,
+  `32f4bd98097f91cf3a45ef2febd5afb2485b342c` encoded output budget,
+  `f35d3b0a472954760223fccd59b9998e82cf6c99` updated skill.
+
+This improves CPU-side supported image import, but there is still NO
+build, runtime encoder/decoder test, glTF validator, GPU upload or
+Metal/Vulkan/GLES proof. The decoder's concrete format coverage is
+defined by the engine's real implementation, not by filename alone.
+The PNG encoder uses uncompressed zlib blocks and prioritizes
+correctness over compressed output size.
+
 ## Explicit limitations
 
 The checker is a manual READ-ONLY reimport detection tool. No automatic regeneration or replacement of existing GLBs, no live GPU resource invalidation, no Material cache lease/revision update, and no filesystem watcher are claimed. Existing GLBs keep GUID identity and are not overwritten. Full automatic change handling requires existing renderer/asset owner lifetime and locking logic, and explicit save/conflict policy.
 
-The current GLB exporter supports direct embedded PNG/JPEG inputs only. Existing engine decodeImage paths can accept some other formats, but this does NOT establish a safe resulting image encoder or cross-backend compatibility; KTX2/DDS/TGA/WebP/EXR conversion remains future work. The new UV controls are two-component scale/offset strings parsed to arrays on native save; the existing schema does not yet expose UV rotation editing. The renderer still uses the Stage 23M native material UV settings after texture binding.
+The GLB exporter now uses direct PNG/JPEG images or an actual CPU-decoder-to-PNG path when supported. GPU-only ASTC KTX2, WebP/EXR and formats without a viable RGBA8 decoder remain unsupported. No cross-backend correctness is claimed before tests. The new UV controls are two-component scale/offset strings parsed to arrays on native save; the existing schema does not yet expose UV rotation editing. The renderer still uses the Stage 23M native material UV settings after texture binding.
 
 Tests explicitly deferred by user. No compiler/CMake/CTest, web TypeScript typecheck, native material patch execution, glTF validation, model renderer GPU upload or Metal/Vulkan/GLES screenshots were run. Source commits alone are NOT proof of working UI or reimport pipeline. Keep PR Draft and do not merge until actual build and compatibility checks run.
 
