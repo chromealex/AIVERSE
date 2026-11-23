@@ -91,18 +91,27 @@ public:
         return true;
     }
 
-    // Requires each member to have RegionStableIdentity + Transform and to
+    // Requires each member to have RegionStableIdentity + an authoritative position and to
     // belong to expected region. RegionEcsBridge validates ALL before changing
     // any owner; caller separately gates destination collision/nav readiness.
     static bool transfer(const World& world,RegionEntityLedger& ledger,
                          Entity vehicle,const SeatEntityResolver& resolveSeat,
                          Cell expected,Cell destination,
+                         const RegionPositionReader& position,
                          std::string* error=nullptr) {
         VehicleRegionGroup group;
         if(!gather(world,vehicle,resolveSeat,group,error))return false;
         return RegionEcsBridge::transferGroup(
             world,ledger,std::span<const Entity>(group.members),
-            expected,destination,error);
+            expected,destination,position,error);
+    }
+    // Existing Transform-only owners keep their source and simulation format.
+    static bool transfer(const World& world,RegionEntityLedger& ledger,
+                         Entity vehicle,const SeatEntityResolver& resolveSeat,
+                         Cell expected,Cell destination,
+                         std::string* error=nullptr) {
+        return transfer(world,ledger,vehicle,resolveSeat,expected,destination,
+                        regionTransformPosition,error);
     }
 };
 
