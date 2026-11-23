@@ -106,6 +106,18 @@ int main(int argc,char** argv){
         auto narrowRoof=recipe;
         narrowRoof.features[3].position=3.1f;
         CHECK(!buildFunctionalStructureGraph(narrowRoof)); // cannot retract off roof
+        auto invalidAuto=recipe;
+        invalidAuto.features[0].position=-0.5f;
+        CHECK(!buildFunctionalStructureGraph(invalidAuto)); // -1 is the only auto sentinel
+        auto outOfBoundsLeaf=recipe;
+        outOfBoundsLeaf.features[0].position=4.f;
+        outOfBoundsLeaf.features[0].open=0.9f;
+        CHECK(!buildFunctionalStructureGraph(outOfBoundsLeaf)); // panel cannot slide beyond outer wall
+        auto midOpen=recipe;
+        midOpen.features[0].open=0.5f;
+        auto midGraph=buildFunctionalStructureGraph(midOpen);
+        CHECK(midGraph);
+        CHECK(midGraph.solids.size()>graph.solids.size()); // two movable leaves at intermediate state
         auto again=generateFunctionalBuilding(scifi,recipe);
         CHECK(again&&sameGeometry(opened.building,again.building));
         CHECK(opened.building.boxes==again.building.boxes);
