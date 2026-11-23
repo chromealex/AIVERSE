@@ -5,6 +5,26 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — SpectraFX native Scene GPU preview (Stage 8; hardware acceptance pending)
+
+Mandatory handoff: `docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
+`apps/studio-native/StudioSpectraPreview.h` owns a single real
+`spectra::GraphRuntime` on Studio's existing Scene render thread and
+gfx::Device. `StudioScene::frame` performs actual GPU/CPU particle step
+at a device-safe point BEFORE render passes and draws into the open HDR
+Renderer3D scene pass BEFORE PRISMA resolve. `StudioHost` allowlists
+`studio.spectraPreview` commands and marshals them via `onScene`.
+HTML5 `SpectraNativePreview.tsx` controls Play/Pause/Step/Seek (60Hz,
+max 3600 ticks), Restart/Stop, actual backend status and named
+runtime scalar parameters. Click Open Scene to see real native pixels.
+This DOES NOT render an offscreen preview *within the Graph panel*;
+it does not draw fake HTML particles. A new macOS Metal CAMetalLayer
+acceptance test and CI are authored. **Current revision not yet
+build/Metal/UI verified**; the parent PR #113 must be accepted first.
+Do not route RHI handles, GPU simulation or non-immutable ECS data into
+React or the main StudioSession/UI thread.
+
+
 ## 2026-11-23 — SpectraFX Stage 7: typed Curve and Gradient authoring (QA pending)
 
 Mandatory handoff: `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
