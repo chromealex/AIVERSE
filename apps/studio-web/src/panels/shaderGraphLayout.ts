@@ -13,7 +13,7 @@ export function layoutShaderGraph(source:GraphSource):{nodes:PositionedNode[];ed
  const nodes=(source.nodes??[]).slice(0,128).map((node,index)=>{
   const p=node.position;
   return {id:node.id,op:node.op,x:clamp(p?.[0]??(index%5)*180),y:clamp(p?.[1]??Math.floor(index/5)*110),
-   inputs:Array.isArray(node.inputs)?node.inputs.slice(0,8).filter(x=>typeof x==='string'):[]};
+   inputs:Array.isArray(node.inputs)?node.inputs.slice(0,16).map(x=>typeof x==='string'?x:''):[]};
  });
  const byId=new Map(nodes.map(n=>[n.id,n]));
  const edges:GraphEdge[]=[];
