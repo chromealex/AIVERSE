@@ -71,7 +71,7 @@ bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
         } else {
             gpu_program::Payload candidate;
             vmCompatible=gpu_program::prepareForMetal(desc_.particleProgram,
-                                                       candidate,vmReason);
+                                                       candidate,vmReason,desc_.gpuBirthRandom);
         }
     }
     if(!desc_.shaderGraph.isNull() || !desc_.graphInputs.isNull()) {
@@ -156,7 +156,7 @@ bool ComputeParticles::initGpu() {
     if(!device_) {reason_="no RHI Device";return false;}
     const uint32_t cap=desc_.capacity;
     gpu_program::Payload vmPayload;
-    if(!gpu_program::prepareForMetal(desc_.particleProgram,vmPayload,reason_))
+    if(!gpu_program::prepareForMetal(desc_.particleProgram,vmPayload,reason_,desc_.gpuBirthRandom))
         return false;
     gpu_material::Material graphMaterial;
     const bool materialActive=desc_.gpuMaterial&&!desc_.shaderGraph.isNull();
