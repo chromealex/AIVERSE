@@ -128,6 +128,7 @@ public:
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
+    bool worldProcessDrag(int phase, double x, double y, double w, double h);
     bool terrainStroke(int phase, double x, double y, double w, double h);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
@@ -227,12 +228,22 @@ private:
     std::vector<StudioScene::OverlayShape> extShapes_;
     Json splineCache_;
     std::string splineDrag_, lastActionCaption_, hoverId_, pendingProject_;
+    // Scene-only drag scratch. Source of truth remains MapDoc; commit once
+    // on pointer release via the existing StudioSession Undoable RPC.
+    struct WorldProcessDrag {
+        bool active=false;
+        std::uint8_t mode=0;
+        std::string owner,component,key,targetType,previewTarget;
+        render::float3 previewPoint{};
+        float baseline=1.f,value=0.f;
+        bool valid=false;
+    } wpDrag_;
     unsigned lightingStatusTicks_ = 0;
     int lastLoadDone_ = -1, lastLoadTotal_ = -1;
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 
