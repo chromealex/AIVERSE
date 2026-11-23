@@ -122,6 +122,7 @@ bool usesMaterial(const Json& j, const std::string& name) {
 Json patternSchema() {
     return Json::parse(R"J({
         "path": {"type": "string", "description": "PNG inside the game folder (default textures/<pattern>_<seed>.png)"},
+        "overwrite": {"type":"boolean","description":"False refuses an existing destination; legacy default true"},
         "pattern": {"type": "string", "description": "solid, noise, stripes, checker, brick, tiles, panels, metal, wood, camo, gradient, dots, hex, scales (texture_patterns explains each)"},
         "size": {"type": "integer", "description": "pixels per side, 8..2048 (default 256)"},
         "colors": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "sRGB [r,g,b] 0..1 per colour (pattern defaults otherwise)"},
@@ -395,6 +396,7 @@ void registerMaterialOps(Workspace& ws) {
                                    (p.getStr("output", "color") == "color" ? "" : "_" + p.getStr("output")) + ".png";
             if (fs::path(rel).extension() != ".png") throw std::runtime_error("path must end with .png");
             const fs::path f = gameFile(*w, rel);
+            if (!p.getBool("overwrite", true) && fs::exists(f)) throw std::runtime_error("texture already exists; choose another name");
             std::error_code ec;
             fs::create_directories(f.parent_path(), ec);
             std::string png;
