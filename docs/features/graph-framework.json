@@ -67,7 +67,11 @@
     "engine/render/AnimationGraph.cpp",
     "apps/studio-web/src/graphs/GraphExecutionProfilePanel.tsx",
     "engine/render/graph/GraphGpuProfile.h",
-    "apps/studio-web/src/graphs/GraphGpuProfilePanel.tsx"
+    "apps/studio-web/src/graphs/GraphGpuProfilePanel.tsx",
+    "engine/render/TextureGen.h",
+    "engine/render/TextureGen.cpp",
+    "engine/render/graph/TextureGraph.h",
+    "apps/studio-web/src/graphs/TextureGraphPanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -216,7 +220,14 @@
       "graph_debug_session",
       "graph_live_watch",
       "graph_live_profile",
-      "graph_gpu_profile"
+      "graph_gpu_profile",
+      "texture_graph_catalog",
+      "texture_graph_list",
+      "texture_graph_get",
+      "texture_graph_validate",
+      "texture_graph_set",
+      "texture_graph_preview",
+      "texture_graph_bake"
     ],
     "studio_panels": [
       "shader_graph",
