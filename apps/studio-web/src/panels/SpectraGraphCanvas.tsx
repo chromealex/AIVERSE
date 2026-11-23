@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { GitBranch, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { invoke } from '../bridge';
 import { StudioButton, StudioField, StudioSelect } from '../ui';
@@ -71,7 +71,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
     if(!params){onError('Select two different existing graph nodes.');return;}
     void execute(params);
   };
-  const finishDrag=(e:React.PointerEvent<HTMLDivElement>)=>{
+  const finishDrag=(e:PointerEvent<HTMLDivElement>)=>{
     if(!drag.current)return;
     if(e.currentTarget.hasPointerCapture(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId);
