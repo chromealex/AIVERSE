@@ -140,6 +140,8 @@ public:
     bool captureGpuCheckpoint(GpuCheckpoint& out) {
         return useComputeWrapper_ && gpu_.captureGpuCheckpoint(out);
     }
+    bool exportRestoreCheckpoint(std::vector<uint8_t>& bytes) const {return !sharedWorld_&&useComputeWrapper_&&!restoreIdentity_.empty()&&gpu_.exportRestoreCheckpoint(restoreIdentity_,bytes);}
+    bool importRestoreCheckpoint(const std::vector<uint8_t>& bytes) {return !sharedWorld_&&useComputeWrapper_&&!restoreIdentity_.empty()&&gpu_.importRestoreCheckpoint(restoreIdentity_,bytes);}
     bool retainFreshGpuCheckpoint() {return useComputeWrapper_&&gpu_.retainFreshGpuCheckpoint();}
     std::vector<uint64_t> historicalGpuCheckpointIds() const {return useComputeWrapper_?gpu_.historicalGpuCheckpointIds():std::vector<uint64_t>{};}
     bool restoreHistoricalGpuCheckpoint(uint64_t id) {return useComputeWrapper_&&gpu_.restoreHistoricalGpuCheckpoint(id);}
@@ -155,6 +157,7 @@ private:
     bool applyDataInterfaces(fx::float3 position);
     bool initialized_ = false;
     bool useComputeWrapper_ = false;
+    std::string restoreIdentity_;
     BatchWorld* sharedWorld_ = nullptr;
     // Bounded history: on overflow an older handle is killed before reuse.
     // Use one GraphRuntime per logical effect source, not per burst.
