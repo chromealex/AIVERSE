@@ -239,10 +239,7 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
-      {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><label key="evolve-preset" className="ptp__row"><span>Ecology preset</span><select className="au-input" disabled={busy} value="" onChange={e=>{
-        const presets:Record<string,number[]>={healthy:[100,90,80,0],industrial:[70,20,20,80],recovering:[80,35,10,50],desert:[85,10,10,0],young_forest:[90,70,20,0],old_growth:[100,95,95,0]};
-        const p=presets[e.target.value];if(p)setMany(component,{durability:p[0]*1e7,fertility:p[1]*1e7,succession:p[2]*1e7,pollution:p[3]*1e7});
-      }}><option value="">Apply preset…</option>{['healthy','industrial','recovering','desert','young_forest','old_growth'].map(p=><option key={p} value={p}>{p}</option>)}</select></label>)}
+      {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><EcologyPresetEditor key="evolve-preset" busy={busy} apply={values=>setMany(component,values)}/>)}
       {inspector.components.map(component => <ComponentCard key={inspector.id + ':' + component.id}
         component={component} entityId={inspector.id} busy={busy}
         collapsed={!!collapsed[component.id]}
@@ -254,4 +251,37 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     </div>}
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label={menu.component.title} items={menuItems(menu.component)} onClose={() => setMenu(null)}/>}
   </div>;
+}
+
+const ECO_KEYS=['durability','fertility','succession','pollution'] as const;
+const ECO_BUILTINS:Record<string,number[]>={healthy:[100,90,80,0],industrial:[70,20,20,80],recovering:[80,35,10,50],desert:[85,10,10,0],young_forest:[90,70,20,0],old_growth:[100,95,95,0]};
+function validateEcoPresets(input:unknown):Record<string,number[]>{
+  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Invalid preset document');
+  const entries=Object.entries(input);
+  if(entries.length>128)throw new Error('Too many presets');
+  const out:Record<string,number[]>=Object.create(null);
+  for(const [name,values] of entries){
+    if(!/^[a-zA-Z0-9_-]{1,48}$/.test(name)||Object.prototype.hasOwnProperty.call(ECO_BUILTINS,name)||!Array.isArray(values)||values.length!==4||!values.every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=100))throw new Error('Invalid preset: '+name);
+    out[name]=values;
+  }
+  return out;
+}
+function EcologyPresetEditor({busy,apply}:{busy:boolean;apply:(values:Record<string,FieldValue>)=>void}){
+  const [custom,setCustom]=useState<Record<string,number[]>>(()=>{try{return validateEcoPresets(JSON.parse(localStorage.getItem('aiverse.evolve.presets')??'{}'));}catch{return {};}});
+  const [name,setName]=useState('');
+  const [values,setValues]=useState([100,50,0,0]);
+  const [error,setError]=useState('');
+  const save=(next:Record<string,number[]>)=>{try{const checked=validateEcoPresets(next);localStorage.setItem('aiverse.evolve.presets',JSON.stringify(checked));setCustom(checked);setError('');}catch(e){setError(String(e));}};
+  const all={...ECO_BUILTINS,...custom};
+  return <div className="insp-comp__hint"><label className="ptp__row"><span>Ecology preset</span><select className="au-input" disabled={busy} value="" onChange={e=>{
+    const p=all[e.target.value];if(p)apply(Object.fromEntries(ECO_KEYS.map((k,i)=>[k,Math.round(p[i]*1e7)])));
+  }}><option value="">Apply preset…</option>{Object.keys(all).map(p=><option key={p} value={p}>{p}</option>)}</select></label>
+  <details><summary>Custom presets</summary><input className="au-input" value={name} placeholder="Preset name" onChange={e=>setName(e.target.value)}/>
+    {ECO_KEYS.map((k,i)=><label key={k} className="ptp__row">{k}<input type="number" min={0} max={100} value={values[i]} onChange={e=>setValues(old=>old.map((v,j)=>j===i?Number(e.target.value):v))}/></label>)}
+    <button type="button" onClick={()=>save({...custom,[name]:values})}>Save locally</button>
+    <button type="button" onClick={()=>{const next={...custom};delete next[name];save(next);}}>Delete named preset</button>
+    <button type="button" onClick={()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(custom,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='evolve-presets.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>Export</button>
+    <label>Import JSON<input type="file" accept=".json,application/json" onChange={async e=>{try{const file=e.target.files?.[0];if(!file)return;if(file.size>65536)throw new Error('Preset file too large');save({...custom,...validateEcoPresets(JSON.parse(await file.text()))});}catch(err){setError(String(err));}}}/></label>
+    {error&&<span role="alert">{error}</span>}
+  </details></div>;
 }
