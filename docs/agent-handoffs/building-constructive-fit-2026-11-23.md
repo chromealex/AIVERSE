@@ -7,6 +7,11 @@
 - Roadmap first commit: `63eee1a4a1bb3cf3687180dd46a976b61390db32`.
 - Implementation: `5a7eea81c88d45527d4edebb4292ab8a79eb2950`.
 - Raw-geometry regression: `9253c1632ae958a046ecdd87d16c58f90eba6476`.
+- Diagnostics: `4516f2fa82397875be014eb027ede849a3a3827a`.
+- Fit stability: `b57d7078df519879523574071794262d06cd17b5` keeps
+  decoration RNG independent of major-module placement when body dimensions
+  change between solver iterations. Unsized legacy RNG stays unchanged.
+
 
 ## What changed and API contract
 
@@ -32,6 +37,10 @@
 
 - Stage-4 focused Linux C++ tests + four GLB export probes **PASSED** in
   GitHub Actions run `45210066318` at parent commit `97313625`.
+- Focused GitHub run `45211708303` compiled stage-5 tests but **FAILED**
+  at `tests/libraries/building_style_tests.cpp:237` (requested sized model
+  was empty). Diagnostics were introduced afterwards; no later solver PASS
+  has been observed yet.
 - New stage-5 focused GitHub workflows were queued at time of implementation.
   Do **not** claim the stage-5 solver passed until actual run results are
   observed and failures fixed.
