@@ -1831,3 +1831,7 @@ HTML5 native preview exposes GPU birth random checkbox applied on Load and subse
 ## Stage 59 — SPFX V3 RNG metadata
 
 Seeded checkpoints export diagnostic V3 with 12-byte seed/ordinal/enabled trailer covered by payload CRC32. Unseeded captures still emit V2. Validator and inspector accept V2/V3, decodeGpuCheckpointRng returns zero metadata for V2. This is read-only diagnostics, not a live GPU restore API. No tests run.
+
+## Stage 60 — checked fresh in-memory GPU restore
+
+GpuCheckpoint captures free slot order, source tokens, birth uniforms and RNG state. ComputeParticles::restoreFreshGpuCheckpoint reuploads particle/VM buffers only for a fresh same-emitter checkpoint with no pending work and a healthy render-owner frame. Validates allocator partition and finite values; partial upload leaves GPU reset dirty. This is not historical rollback or SPFX file restore. No tests run.
