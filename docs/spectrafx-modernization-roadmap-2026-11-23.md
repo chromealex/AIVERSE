@@ -9,6 +9,17 @@ Status: **planned multi-stage program, NOT fully implemented**. This document is
 - `SpectraGraphWindow` is native/editor-specific and cannot be assumed to be ported to the ongoing `feature/studio-html5` editor. Existing graph-v2 and module interfaces should be reused rather than forked.
 - SpectraFX owns particle simulation and scene HDR effects. PRISMA owns bloom/postprocess. LENS owns cameras. PHYSIS owns weather/wind. TerraWeave owns terrain. NEREID owns water. Box3D owns physics. MotionWeave owns animation/poses. No genre-specific copies.
 
+## Current implementation notes (feature branch)
+
+- SpectraScale queued-cue significance: implemented in source, focused Ubuntu
+  build and 2/2 CTests passed for a pre-fields revision. Other platforms and
+  complete engine acceptance are not yet confirmed.
+- Initial SpectraFields acceleration bridge: implemented in source for dedicated
+  GPU and CPU-twin emitters; generic provider registration, validation and
+  lifecycle tests added. Full environment Data Interfaces, shared-arena GPU
+  fields, physics collision, fluids and editor authoring remain future work.
+- Focused Linux/macOS PR workflow: `.github/workflows/spectrafx-significance.yml`.
+
 ## Stage matrix
 
 | Stage | Feature | Design/implementation requirements | Completion criteria |
