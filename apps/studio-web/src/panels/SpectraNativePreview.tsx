@@ -49,6 +49,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [replayPreset,setReplayPreset]=useState<SpectraReplayPreset|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
+  const [replaySeed,setReplaySeed]=useState('');
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -66,7 +67,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
-    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});setReplaySeed('');
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -183,7 +184,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
   const saveReplayPreset=()=>{
     if(!state?.ready||!state.camera)return;
-    setReplayPreset({format:'aiverse.spectrafx.replay',version:1,parameters:{...liveScalars},
+    if(replaySeed!==''&&(!Number.isInteger(Number(replaySeed))||Number(replaySeed)<0||Number(replaySeed)>2147483647)){
+      setError('CPU replay seed must be integer 0..2147483647');return;
+    }
+    setReplayPreset({format:'aiverse.spectrafx.replay',version:1,parameters:{...liveScalars},...(replaySeed!==''?{seed:Number(replaySeed)}:{}),
       camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
       graphSignature,projectPath});
@@ -207,7 +211,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if(!spec||value<spec.min||value>spec.max)
           throw new Error('Invalid scalar for current graph: '+name);
       }
-      setReplayPreset(preset);setError('');
+      setReplayPreset(preset);setReplaySeed(preset.seed===undefined?'':String(preset.seed));setError('');
     }catch(e){setError(message(e));}
   };
   const restoreReplayPreset=async()=>{
@@ -225,7 +229,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           grid:replayPreset.grid,axes:replayPreset.axes},
         {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
         {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters}
+        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters,...(replayPreset.seed===undefined?{}:{seed:replayPreset.seed})}
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
@@ -420,6 +424,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           <option value="side">Side by side</option>
           <option value="split">Interactive split</option>
         </StudioSelect>
+      </StudioField>
+      <StudioField label="CPU seed (optional)" htmlFor="spectra-replay-seed">
+        <StudioInput id="spectra-replay-seed" type="number" min={0} max={2147483647} step={1}
+          value={replaySeed} onChange={e=>setReplaySeed(e.target.value)}/>
       </StudioField>
       <StudioButton size="sm" disabled={!state?.ready||!state.camera||busy||capturePending}
         onClick={saveReplayPreset}>Save replay preset</StudioButton>
