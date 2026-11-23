@@ -1,5 +1,6 @@
 #pragma once
 #include "DurableComponentTransaction.h"
+#include "UnifiedCheckpointSections.h"
 #include <set>
 namespace aiverse::world {
 class UnifiedComponentSection {
@@ -35,6 +36,14 @@ public:
         if(!flush())return false;
         for(unsigned i=0;i<4;++i)bytes[4+i]=uint8_t(pages>>(8*i));
         out.swap(bytes);return true;
+    }
+    static UnifiedCheckpointSections::Adapter adapter(const DurableComponentCodecs& codecs,size_t budget){
+        return {1,[&codecs,budget](const UnifiedWorldReplay::State& s,std::vector<uint8_t>& out){
+            std::vector<Record> records;
+            return codecs.captureAll(s.world,s.ledger,budget,records)&&encode(records,budget,out);
+        },[&codecs,budget](UnifiedWorldReplay::State& s,uint32_t version,std::span<const uint8_t> bytes){
+            return version==1&&restore(bytes,budget,s.world,s.ledger,codecs);
+        }};
     }
     // Restore into private checkpoint state only. On failure discard it.
     static bool restore(std::span<const uint8_t> bytes,size_t budget,World& staged,
