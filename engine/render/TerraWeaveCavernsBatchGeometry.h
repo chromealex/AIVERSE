@@ -14,7 +14,8 @@ namespace aiverse::terraweave::caverns {
 struct CaveBatchChunk {
     CaveMesh mesh;
     uint64_t generatorVersion=1;
-    uint64_t revision=1;
+    uint64_t revision=1; // visual identity
+    uint64_t sourceRevision=0; // 0 means legacy unknown SDF epoch
     uint32_t resolution=16;
     int32_t spacingCm=100;
 };
