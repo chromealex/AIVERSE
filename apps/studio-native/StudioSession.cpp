@@ -272,7 +272,7 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
                           "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
                           "GranularField","EvolveRegion","SocietyPerson",
                           "MorphSpring","MorphForce","CrowdSlot","CrowdPreference",
-                          "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
+                          "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate",
                           "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
@@ -431,7 +431,8 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                 lib::worldprocess::linked::targetType(name);
                             for(const auto& candidate:ws_.map.data.entities){
                                 if(candidate.id.empty() ||
-                                   !candidate.extra["components"].has(std::string(target)))continue;
+                                   (target!="Entity" &&
+                                    !candidate.extra["components"].has(std::string(target))))continue;
                                 Json option=Json::object();
                                 const std::string label=candidate.extra.getStr("displayName",candidate.id);
                                 option.set("label",str(label+" · "+candidate.id));
@@ -2680,7 +2681,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         for(const char* kind:{"EchoPortal","EchoEmitter","EchoReceiver",
                                             "FractureBond","AetherDuct","AetherFlux",
                                             "MorphSpring","MorphForce","CrowdPreference",
-                                            "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
+                                            "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate",
                                             "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}){
                             const auto& linkedDoc=other.extra["components"][kind];
                             if(!linkedDoc.isObject())continue;
