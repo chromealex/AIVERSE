@@ -291,6 +291,33 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
     out.set("width",Json::number(double(model.mesh.boundsMax[0]-model.mesh.boundsMin[0]),3));
     out.set("height",Json::number(double(model.mesh.boundsMax[1]-model.mesh.boundsMin[1]),3));
     out.set("depth",Json::number(double(model.mesh.boundsMax[2]-model.mesh.boundsMin[2]),3));
+    // Inspect the exact functional structure graph and generated apertures,
+    // not a browser-invented approximation of door positions.
+    if(req.composeFeatures){
+        const auto style=load(engine,req.style);
+        const auto detailed=generateFunctionalBuilding(style,req.functionalRecipe);
+        if(!detailed)throw std::runtime_error(detailed.error);
+        Json sockets=Json::array();
+        for(const auto& a:detailed.anchors){
+            Json socket=Json::object();
+            socket.set("socketId",string(a.socketId));
+            socket.set("kind",string(buildingFeatureName(a.kind)));
+            socket.set("side",string(buildingFeatureSideName(a.side)));
+            socket.set("featureIndex",Json::number(int64_t(a.featureIndex)));
+            socket.set("width",Json::number(double(a.width),3));
+            socket.set("height",Json::number(double(a.height),3));
+            socket.set("open",Json::number(double(a.open),3));
+            Json point=Json::array();
+            point.push(Json::number(a.outside.x.toDouble(),3));
+            point.push(Json::number(a.outside.y.toDouble(),3));
+            point.push(Json::number(a.outside.z.toDouble(),3));
+            socket.set("outside",std::move(point));
+            sockets.push(std::move(socket));
+        }
+        out.set("sockets",std::move(sockets));
+        out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
+        out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
+    }
     return out;
 }
 // Writes a new GLB (never overwrites another asset) inside project/content,
