@@ -864,6 +864,50 @@ void StudioHost::rebuildOverlay() {
                                 255,195,90));
                         }
                     }
+                    // Numeric pivot/scale preview for the selected group.
+                    // Stage42 RPC owns the actual two-axis commit.
+                    if(wpDrag_.component=="EvolveArea" &&
+                       (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")){
+                        const auto selected=session_->selectedObjectIds();
+                        if(selected.size()>1){
+                            std::vector<worldprocess_edit::AreaPreview> scaled;
+                            const auto& area=owner.extra["components"]["EvolveArea"];
+                            worldprocess_edit::AreaPreview active;
+                            if(worldprocess_edit::previewArea(owner,
+                               static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                               double(wpDrag_.value),wpDrag_.symmetric,active)){
+                                const bool x=wpDrag_.key=="halfWidthCm";
+                                const auto oldHalf=area.getInt(wpDrag_.key.c_str(),0);
+                                const auto newHalf=std::llround(
+                                    (x?active.halfWidth:active.halfDepth)*100.);
+                                const auto scaleN=x?newHalf:100;
+                                const auto scaleD=x?oldHalf:100;
+                                const auto scaleNZ=x?100:newHalf;
+                                const auto scaleDZ=x?100:oldHalf;
+                                if(oldHalf>0 &&
+                                   worldprocess_edit::previewGroupScale2D(
+                                       session_->workspace().map,selected,
+                                       scaleN,scaleD,scaleNZ,scaleDZ,
+                                       std::llround(double(owner.x)*100.),
+                                       std::llround(double(owner.z)*100.),scaled) &&
+                                   shapes.size()+scaled.size()*4+2<1390){
+                                    const render::float3 pivot{owner.x,.75f,owner.z};
+                                    shapes.push_back(worldprocess_gizmos::makePoint(
+                                        pivot.x,pivot.y,pivot.z,100,195,255,12.f));
+                                    shapes.push_back(worldprocess_gizmos::makeLabel(
+                                        {pivot.x,pivot.y+.5f,pivot.z},
+                                        "Pivot X "+std::to_string(std::llround(double(owner.x)*100.))+
+                                        "cm Z "+std::to_string(std::llround(double(owner.z)*100.))+"cm",
+                                        100,195,255));
+                                    for(const auto& region:scaled)
+                                        worldprocess_gizmos::rectangle(shapes,
+                                            {float(region.centerX),.54f,float(region.centerZ)},
+                                            float(region.halfWidth*2.),
+                                            float(region.halfDepth*2.),100,195,255);
+                                }
+                            }
+                        }
+                    }
                     shapes.push_back(worldprocess_gizmos::makeLine(
                         origin,wpDrag_.previewPoint,245,245,245,3.f));
                     shapes.push_back(worldprocess_gizmos::makePoint(
