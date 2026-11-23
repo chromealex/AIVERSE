@@ -20,7 +20,8 @@ const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
 const makeFeature = (kind:StudioBuildingFeatureKind):StudioBuildingFeature => ({
   kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:1.2,
   height:kind==='large-gate'?4.5:kind==='small-gate'?2.9:kind==='sliding-roof'?0:2.35,
-  depth:kind==='sliding-roof'?5:0, open:0
+  depth:kind==='sliding-roof'?5:0, open:0,
+  position:-1, positionZ:-1, spacing:0.35
 });
 const propertyLabels:Record<StudioBuildingFeatureKind,string> = {
   'large-gate':'Large vehicle gates', 'small-gate':'Small gates',
@@ -100,9 +101,19 @@ export default function BuildingGeneratorPanel({
       for(const feature of features){
         if(!Number.isFinite(feature.open)||feature.open<0||feature.open>1)
           return 'Open fraction must be between 0 and 1.';
+        if(!Number.isFinite(feature.position)||!Number.isFinite(feature.positionZ)||
+           !Number.isFinite(feature.spacing)||feature.position < -1||
+           feature.positionZ < -1||feature.spacing<0.35||feature.spacing>8)
+          return 'Placement must be automatic (-1) or a positive metre offset; spacing 0.35–8m.';
         if(feature.kind==='sliding-roof'){
           if(feature.width<1||feature.depth<1||feature.width>asNumber(width)*0.48||feature.depth>asNumber(depth)*0.75)
             return 'Roof opening must fit within 48% of building width and 75% of depth.';
+          const cx=feature.position>=0?feature.position:asNumber(width)*0.5;
+          const cz=feature.positionZ>=0?feature.positionZ:asNumber(depth)*0.5;
+          const freeX=Math.min(cx-feature.width*0.5,asNumber(width)-(cx+feature.width*0.5));
+          const freeZ=Math.min(cz-feature.depth*0.5,asNumber(depth)-(cz+feature.depth*0.5));
+          if(freeX<Math.max(0.6,feature.width*feature.open*0.5)||freeZ<0.6)
+            return 'Roof aperture or sliding panels would leave the building envelope.';
         }else{
           if(!Number.isInteger(feature.count)||feature.count<1||feature.count>8)
             return 'Each entrance property requires 1 to 8 openings.';
@@ -111,6 +122,12 @@ export default function BuildingGeneratorPanel({
           const maxWidth=feature.kind==='large-gate'?20:feature.kind==='small-gate'?8:3;
           if(feature.width<0.85||feature.width>maxWidth||feature.height<2||feature.height>asNumber(height)-0.6)
             return 'Invalid gate or personnel door dimensions for the requested height.';
+          if(feature.position>=0){
+            const span=feature.width*feature.count+(feature.count-1)*feature.spacing;
+            const sideLength=(feature.side==='front'||feature.side==='back')?asNumber(width):asNumber(depth);
+            if(feature.position-span*0.5<0.72||feature.position+span*0.5>sideLength-0.72)
+              return 'Exact opening position is outside its usable wall.';
+          }
           const info=used[feature.side]??{width:0,count:0};
           info.width+=feature.width*feature.count;info.count+=feature.count;
           used[feature.side]=info;
@@ -301,6 +318,18 @@ export default function BuildingGeneratorPanel({
                 <StudioInput id={"abg-feature-"+i+"-height"} type="number" min={2} step={0.1} value={String(feature.height)} disabled={busy}
                   onChange={e=>setFeature(i,'height',Number(e.target.value))}/>
               </StudioField>}
+              <StudioField label={feature.kind==='sliding-roof'?'Roof centre X, m (-1 auto)':'Wall centre, m (-1 auto)'} htmlFor={"abg-feature-"+i+"-position"}>
+                <StudioInput id={"abg-feature-"+i+"-position"} type="number" min={-1} step={0.1} value={String(feature.position)} disabled={busy}
+                  onChange={e=>setFeature(i,'position',Number(e.target.value))}/>
+              </StudioField>
+              {feature.kind==='sliding-roof'?<StudioField label="Roof centre Z, m (-1 auto)" htmlFor={"abg-feature-"+i+"-position-z"}>
+                <StudioInput id={"abg-feature-"+i+"-position-z"} type="number" min={-1} step={0.1} value={String(feature.positionZ)} disabled={busy}
+                  onChange={e=>setFeature(i,'positionZ',Number(e.target.value))}/>
+              </StudioField>:feature.count>1?<StudioField label="Gap between openings, m" htmlFor={"abg-feature-"+i+"-spacing"}>
+                <StudioInput id={"abg-feature-"+i+"-spacing"} type="number" min={0.35} max={8} step={0.05}
+                  value={String(feature.spacing)} disabled={busy}
+                  onChange={e=>setFeature(i,'spacing',Number(e.target.value))}/>
+              </StudioField>:null}
               <StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
                 <StudioInput id={"abg-feature-"+i+"-open"} type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
                   onChange={e=>setFeature(i,'open',Number(e.target.value))}/>
