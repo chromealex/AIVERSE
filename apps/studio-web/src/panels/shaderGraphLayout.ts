@@ -160,3 +160,18 @@ export function arrangeShaderNodes(source:GraphSource):GraphSource {
  }
  return moveShaderNodes(source,positions);
 }
+
+/** Small reusable node-group templates; insertion never changes existing graph outputs. */
+export function shaderTintTemplate(domain:string,ops:readonly ShaderNodeOperation[]):ShaderClipboard|null {
+ const required=[['input',0],['constant',0],['multiply',2]] as const;
+ if(required.some(([id,inputs])=>!ops.some(o=>o.id===id&&o.inputs===inputs&&o.domains.includes(domain))))return null;
+ return {domain,nodes:[
+  {id:'source',op:'input',position:[20,20]},
+  {id:'tint',op:'constant',value:[1,1,1,1],position:[20,120]},
+  {id:'result',op:'multiply',inputs:['source','tint'],position:[220,40]}
+ ]};
+}
+export function setShaderOutput(source:GraphSource,key:string,node:string):GraphSource {
+ if(!Object.prototype.hasOwnProperty.call(source.outputs??{},key)||!source.nodes?.some(n=>n.id===node)||source.outputs?.[key]===node)return source;
+ return {...source,outputs:{...source.outputs,[key]:node}};
+}
