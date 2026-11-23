@@ -44,7 +44,9 @@
     "apps/editor/core/GraphPropertySchema.h",
     "apps/editor/core/GraphAssetDependencies.h",
     "apps/editor/core/GraphRuntimeProbe.h",
-    "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx"
+    "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx",
+    "engine/view/game/GameView.h",
+    "apps/editor/EditorPlayOps.cpp"
   ],
   "traits": {
     "editable": true,
@@ -188,7 +190,8 @@
       "graph_property_schema",
       "graph_asset_dependencies",
       "graph_runtime_capabilities",
-      "graph_runtime_probe"
+      "graph_runtime_probe",
+      "graph_live_snapshot"
     ],
     "studio_panels": [
       "shader_graph",
