@@ -14,3 +14,9 @@ python3 tools/agents/check_feature.py docs/features/<id>.json --ready
 ```
 
 The integrator must run this for each new/changed feature manifest before main, and reject feature PRs with no manifest. Existing main gate (Mac quick suite on merged tree) remains mandatory. No automatic waiver for unavailable platforms; explicitly document scope and blockers. See docs/agents/mcp-coverage.md, AGENTS.md, and skills/workflow/aiverse-new-feature/SKILL.md.
+
+## Pull request coverage
+
+Manifest `changed_paths` lists exact repository-relative changed paths, including deleted paths. Wildcards do not count. `traits` declares editable, simulation, visible and runtime applicability. The gate enforces corresponding non-excludable dimensions; reviewers must verify truthful classification. Every change under engine, libraries, modules, apps, tools, skills, platform, plugins, demos or root build/agent entry points must be covered by a changed manifest. This deliberately includes fixes and internal tooling. Docs-only changes outside these paths are exempt unless a manifest itself changes.
+
+Run `python3 tools/agents/audit_compliance.py --base origin/main` on a clean checkout. Use --allow-partial only for local development. The Feature gate GitHub Actions workflow runs strict coverage and unit tests on PRs to main. The repository administrator must make its feature-compliance check required in branch protection; the workflow alone does not prevent a merge. Existing Mac gate is independent. Review changes to the gate itself and classifications as trusted policy changes, not self-certified evidence.
