@@ -140,10 +140,12 @@ void registerRegionColdState(SimulationT& sim) {
             const auto* ledger=world.resourceConst<RegionEntityLedger>();
             bool valid=true;
             size_t dormantCount=0;
+            std::set<RegionEntityId> seen;
             world.eachExistingConst<RegionDormant>(
                 [&](Entity e,const RegionDormant& dormant) {
                     ++dormantCount;
                     const auto* tag=world.tryGetConst<RegionStableIdentity>(e);
+                    if(!tag || !seen.insert(tag->id).second)valid=false;
                     const auto* stored=cold && tag?cold->find(tag->id):nullptr;
                     const auto* record=ledger && tag?ledger->find(tag->id):nullptr;
                     if(!world.alive(e) || !world.has<Transform>(e) ||
