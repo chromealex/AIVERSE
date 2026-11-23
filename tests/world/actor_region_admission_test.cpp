@@ -351,6 +351,42 @@ void testTypedVehicleAdmissionAndRestore() {
 
 // Even after a car has driven back near players, the original map spawn
 // remains a possible round-reset destination and must be collision-resident.
+void testImpossibleCollisionBudgetReportsError() {
+    Json rules=Json::parse(R"({"actor":{"tickRate":60,
+        "maxPlayers":2,"mode":"deathmatch",
+        "weapon":{"range":20}},"regionOwnership":{}})");
+    Json map=Json::parse(R"({"players":[{"team":1},{"team":2}],
+        "spawns":[[4,2,4],[8,2,4]],"colliders":[]})");
+    auto manifest=worldManifest();
+    manifest.set("maxResidentChunks",Json::number(int64_t(1)));
+    map.set("world",manifest);
+    auto sim=std::make_unique<Simulation>(
+        SimConfig{99,60,0,true},std::make_unique<game::GameCore>());
+    sim->setup(rules,map);
+    const Entity entity=actor::host(*sim).characterEntity(*sim,1);
+    std::string error;
+    AIVERSE_TEST_CHECK(actor::host(*sim).requestRegionMove(
+        *sim,entity,{324_fx,2_fx,4_fx},&error));
+    std::atomic<bool> remote{true};
+    actor::host(*sim).setContentReader(reader(remote));
+    const auto baseline=sim->checksum();
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==0);
+    AIVERSE_TEST_CHECK(sim->checksum()==baseline);
+    AIVERSE_TEST_CHECK(actor::host(*sim).collisionAdmissionError()==
+                       "collision pin set exceeds maxResidentChunks");
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.size()==1);
+    // A budget failure is not a network/cache failure: changing the
+    // destination to a nearby cell eliminates the second demanded chunk.
+    AIVERSE_TEST_CHECK(actor::host(*sim).requestRegionMove(
+        *sim,entity,{9_fx,2_fx,4_fx},&error));
+    progressOne(*sim);
+    AIVERSE_TEST_CHECK(actor::host(*sim).collisionAdmissionError().empty());
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+}
+
 void testOriginalVehicleResetDestinationPreloaded() {
     Json rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,
         "mode":"deathmatch","mechanics":{"enabled":true},
@@ -418,6 +454,7 @@ int main() {
     testQueuedDestinationSurvivesSave();
     testStaticAndOccupiedMove();
     testOriginalVehicleResetDestinationPreloaded();
+    testImpossibleCollisionBudgetReportsError();
     testTypedSeatSafety();
     testTypedVehicleAdmissionAndRestore();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
