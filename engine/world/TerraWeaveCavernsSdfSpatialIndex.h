@@ -54,12 +54,18 @@ public:
            !config_.maxCellsPerInfluence||config_.maxCellsPerInfluence>65536||
            !config_.maxCellPostings||config_.maxCellPostings>4000000)
             throw std::invalid_argument("Caverns spatial SDF index settings");
+        validate(source_->settings);
         // Snapshot supplied by the authoritative owner is canonical/immutable.
         // The index records its revision and never dereferences mutable data.
         stampCount_=source_->stamps.size();
         entranceCount_=source_->entrances.size();
         for(uint32_t i=0;i<entranceCount_;++i) {
             const auto& e=source_->entrances[i];
+            validatePoint({e.xCm,e.caveYcm,e.zCm});
+            validatePoint({e.xCm,e.surfaceYcm,e.zCm});
+            if(e.radiusCm<=0||e.radiusCm>1000000||
+               e.surfaceYcm<e.caveYcm)
+                throw std::invalid_argument("Caverns indexed entrance bounds");
             const int64_t r=int64_t(e.radiusCm);
             // entranceFieldCm does NOT clamp its negative radial influence
             // at +/-radius. It can raise the base field as far as radial
@@ -72,6 +78,11 @@ public:
         }
         for(uint32_t i=0;i<stampCount_;++i) {
             const auto& stamp=source_->stamps[i];
+            validatePoint(stamp.center);
+            if(stamp.radiusCm<1||stamp.radiusCm>1000000||
+               (stamp.mode!=CaveStampMode::Carve &&
+                stamp.mode!=CaveStampMode::Fill))
+                throw std::invalid_argument("Caverns indexed stamp bounds");
             const int64_t r=stamp.radiusCm;
             // Beyond this closed AABB, caveSphereField returns -100000.
             // Carve max(-100000) and Fill min(+100000) are exact no-ops.
