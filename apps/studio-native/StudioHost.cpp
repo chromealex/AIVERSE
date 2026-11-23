@@ -1022,6 +1022,22 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                                selected.substr(8),"EvolveGroupPivot","pivotZcm",
                                {},{pivot.x,pivot.y+.25f,pivot.z},0});
         }
+        if(selection.size()>1){
+            const int ownerIndex=map.findEntity(selected.substr(8));
+            if(ownerIndex>=0){
+                const auto& entity=map.data.entities[std::size_t(ownerIndex)];
+                const auto& area=entity.extra["components"]["EvolveArea"];
+                if(area.isObject()&&
+                   worldprocess_edit::groupCentroid(map,selection,centroid)){
+                    const float cx=entity.x+float(area.getInt("offsetXcm",0))/100.f;
+                    const float cz=entity.z+float(area.getInt("offsetZcm",0))/100.f;
+                    handles.push_back({worldprocess_edit::Handle::Mode::GroupCornerXZ,
+                        entity.id,"EvolveArea","cornerXZ",{},
+                        {cx+float(area.getInt("halfWidthCm",0))/100.f,.35f,
+                         cz+float(area.getInt("halfDepthCm",0))/100.f},0});
+                }
+            }
+        }
         if(handles.empty())return false;
         const auto candidates=onScene([&]{
             return worldprocess_edit::hitCandidates(
