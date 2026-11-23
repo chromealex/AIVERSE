@@ -94,6 +94,7 @@ public:
             itemChunk.mesh=c.mesh;
             itemChunk.generatorVersion=generatorVersion;
             itemChunk.revision=c.renderRevision;
+            itemChunk.sourceRevision=c.sourceRevision;
             itemChunk.resolution=c.resolution;
             itemChunk.spacingCm=c.spacingCm;
             chunks.push_back(std::move(itemChunk));
