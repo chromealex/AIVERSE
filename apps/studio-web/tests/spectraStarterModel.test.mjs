@@ -49,7 +49,7 @@ test('new VFX names are safe, unique and bounded even after many drafts',()=>{
   const existing=[{name:'preview_fx'},{name:'preview_fx_2'},{name:'other'}];
   assert.equal(nextUnusedGraphName(existing),'preview_fx_3');
   assert.equal(nextUnusedGraphName(existing,'invalid/name'),'preview_fx_3');
-  assert.equal(nextUnusedGraphName([{name:'fx'}],'preview_fx');
+  assert.equal(nextUnusedGraphName([{name:'fx'}]),'preview_fx');
   const max='p'.repeat(48);
   assert.equal(nextUnusedGraphName([{name:max}],max),max.slice(0,46)+'_2');
   assert.equal(existing[0].name,'preview_fx');
