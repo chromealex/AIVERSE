@@ -5,6 +5,7 @@
 #include "WorldProcessesExtendedAuthoring.h"
 #include "ImprintTrails.h"
 #include "CircuitDevices.h"
+#include "SocietyNpcTriggers.h"
 #include "WorldProcessesLinkedAuthoring.h"
 #include <map>
 #include <string>
@@ -19,7 +20,7 @@ inline bool supports(std::string_view id){
            id=="CircuitWire"||id=="CircuitGate"||
            id=="CircuitSwitch"||id=="CircuitDevice"||
            id=="GranularSource"||id=="EvolvePressure"||
-           id=="SocietyContact"||id=="SocietyMessage";
+           id=="SocietyContact"||id=="SocietyMessage"||id=="SocietyNpcTrigger";
 }
 inline Json defaults(std::string_view id){
     if(id=="MorphSpring")return Json::parse(R"({"a":"","b":"","restDx":0,"restDy":0,"restDz":0,"stiffness":400,"enabled":false})");
@@ -37,6 +38,7 @@ inline Json defaults(std::string_view id){
     if(id=="EvolvePressure")return Json::parse(R"({"region":"","wear":0,"recovery":0,"enrichment":0,"consumption":0,"contamination":0,"purification":0,"growth":0,"regression":0,"enabled":false})");
     if(id=="SocietyContact")return Json::parse(R"({"source":"","target":"","trust":1000,"enabled":false})");
     if(id=="SocietyMessage")return Json::parse(R"({"source":"","topicsHex":"0000000000000000","enabled":false})");
+    if(id=="SocietyNpcTrigger")return Json::parse(R"({"person":"","topicsHex":"0000000000000001","actionId":1,"mode":0,"once":true,"enabled":false})");
     return Json{};
 }
 inline std::string_view referenceTarget(std::string_view id,std::string_view key){
@@ -57,6 +59,7 @@ inline std::string_view referenceTarget(std::string_view id,std::string_view key
     if(id=="EvolvePressure"&&key=="region")return "EvolveRegion";
     if(id=="SocietyContact"&&(key=="source"||key=="target"))return "SocietyPerson";
     if(id=="SocietyMessage"&&key=="source")return "SocietyPerson";
+    if(id=="SocietyNpcTrigger"&&key=="person")return "SocietyPerson";
     return {};
 }
 inline bool isReference(std::string_view id,std::string_view key){
@@ -104,6 +107,15 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
     }
     if(id=="SocietyContact")return key=="trust"&&authoring::integerExact(v,0,1000);
     if(id=="SocietyMessage")return key=="topicsHex"&&extended::hexKnowledge(v);
+    if(id=="SocietyNpcTrigger"){
+        if(key=="once")return v.type()==Json::Type::Bool;
+        if(key=="topicsHex"){
+            std::uint64_t mask=0;
+            return extended::hexKnowledge(v,&mask)&&mask!=0;
+        }
+        if(key=="actionId")return authoring::integerExact(v,1,UINT32_MAX);
+        return key=="mode"&&authoring::integerExact(v,0,2);
+    }
     return false;
 }
 inline bool validate(std::string_view id,const Json& doc,std::string* error=nullptr){
@@ -155,6 +167,7 @@ inline bool hasExisting(const World& w,Entity e,std::string_view id){
     if(id=="EvolvePressure")return w.has<evolve::Pressure>(e);
     if(id=="SocietyContact")return w.has<society::Contact>(e);
     if(id=="SocietyMessage")return w.has<society::Message>(e);
+    if(id=="SocietyNpcTrigger")return w.has<society::NpcTrigger>(e);
     return false;
 }
 inline bool hasCompatible(const World& w,Entity e,std::string_view type){
@@ -236,7 +249,15 @@ inline bool apply(World& w,Entity e,std::string_view id,const Json& doc,
     else if(id=="SocietyContact")
         w.add<society::Contact>(e,society::Contact{ref("source"),ref("target"),
             std::uint16_t(n("trust")),enabled});
-    else if(id=="SocietyMessage"){
+    else if(id=="SocietyNpcTrigger"){
+        society::NpcTrigger t;
+        t.person=ref("person");t.enabled=enabled;
+        t.actionId=std::uint32_t(n("actionId"));
+        t.mode=society::TriggerMode(std::uint8_t(n("mode")));
+        t.once=doc["once"].boolean();
+        if(!extended::hexKnowledge(doc["topicsHex"],&t.topics))return false;
+        w.add<society::NpcTrigger>(e,t);
+    }else if(id=="SocietyMessage"){
         society::Message m;
         m.source=ref("source");m.enabled=enabled;
         if(!extended::hexKnowledge(doc["topicsHex"],&m.topics))return false;
