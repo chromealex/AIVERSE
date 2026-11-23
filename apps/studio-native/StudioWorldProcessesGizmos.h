@@ -83,7 +83,7 @@ inline void worldRing(std::vector<Shape>& shapes,render::float3 center,
     }
 }
 inline std::vector<Shape> collect(const editor::MapDoc& document,
-                                  std::string_view selectedId={}){
+                                  std::string_view selectedId={},std::string_view ecologyLayer="combined"){
     std::vector<Shape> out;
     const auto& entities=document.data.entities;
     if(entities.size()>65536)return out;
@@ -189,13 +189,22 @@ inline std::vector<Shape> collect(const editor::MapDoc& document,
             const float fertility=capped(region["fertility"],500000000.f,0.f,1000000000.f)/1000000000.f;
             const float pollution=capped(region["pollution"],0.f,0.f,1000000000.f)/1000000000.f;
             const float succession=capped(region["succession"],0.f,0.f,1000000000.f)/1000000000.f;
-            const auto red=std::uint8_t(40+pollution*215);
-            const auto green=std::uint8_t(40+fertility*215);
-            rectangle(out,areaCenter,halfWidth*2.f,halfDepth*2.f,red,green,90);
+            auto red=std::uint8_t(40+pollution*215);
+            auto green=std::uint8_t(40+fertility*215);
+            std::uint8_t blue=90;
+            if(ecologyLayer=="fertility")red=40;
+            if(ecologyLayer=="pollution")green=40;
+            if(ecologyLayer=="succession"){red=40;green=std::uint8_t(40+succession*215);blue=220;}
+            if(ecologyLayer=="durability"){
+                const float d=capped(region["durability"],1000000000.f,0.f,1000000000.f)/1000000000.f;
+                red=std::uint8_t(40+(1-d)*215);green=std::uint8_t(40+d*215);
+            }
+            if(ecologyLayer=="off"){red=138;green=190;blue=255;}
+            rectangle(out,areaCenter,halfWidth*2.f,halfDepth*2.f,red,green,blue);
             add(out,makeLabel({areaCenter.x,.65f,areaCenter.z},
                 "EVOLVE authored F:"+std::to_string(int(fertility*100))+
                 "% P:"+std::to_string(int(pollution*100))+
-                "% S:"+std::to_string(int(succession*100))+"%",red,green,90));
+                "% S:"+std::to_string(int(succession*100))+"%",red,green,blue));
         }else if(const auto& c=components["EvolveRegion"];c.isObject()){
             // Back-compat visualization only; add EvolveArea for actual gameplay
             // TerraWeave forest climate bounds.
