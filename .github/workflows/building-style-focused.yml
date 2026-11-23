@@ -5,6 +5,9 @@ on:
     paths:
       - 'libraries/include/aiverselib/systems/Building*.h'
       - 'libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h'
+      - 'libraries/include/aiverselib/systems/BuildingFeatureGenerator.h'
+      - 'engine/assets/building-recipes/*.json'
+      - 'tests/libraries/building_feature_tests.cpp'
       - 'tests/render/runtime_building_model_compile.cpp'
       - 'engine/assets/building-styles/*.json'
       - 'tools/buildings/**'
@@ -48,6 +51,12 @@ jobs:
                 --structure "$kind" --seed "$seed" \
                 --out "build/building-preview/${kind}-seed${seed}.glb"
             done
+          done
+          # Functional property recipes are independent of architectural setting.
+          for style in scifi modern; do
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
+              --recipe engine/assets/building-recipes/multiuse-open.json \
+              --out "build/building-preview/${style}-multiuse-open.glb"
           done
           # Validate the new constructive W/H/D solver separately without
           # losing default-model screenshots if it still fails some settings.
@@ -100,6 +109,7 @@ jobs:
           g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
           g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
           g++ $FLAGS tests/libraries/building_runtime_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_runtime_tests
+          g++ $FLAGS tests/libraries/building_feature_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_feature_tests
           # Compile the Renderer3D adapter even without a live GPU in CI.
           g++ $FLAGS -fsyntax-only tests/render/runtime_building_model_compile.cpp
       - name: Run genre-neutral building regression tests
@@ -109,6 +119,7 @@ jobs:
           /tmp/aiverse_building_tests
           /tmp/aiverse_building_style_tests "$GITHUB_WORKSPACE"
           /tmp/aiverse_building_runtime_tests "$GITHUB_WORKSPACE"
+          /tmp/aiverse_building_feature_tests "$GITHUB_WORKSPACE"
       - name: Compile native Studio asset generation contract
         shell: bash
         run: |
