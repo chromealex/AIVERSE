@@ -1087,3 +1087,61 @@ persistent dirty ACK state after save/reload.
 This change is source-committed and CTest-registered only. Native
 C++ compilation and Mac/KINGSTON CTests were **not executed**;
 W1 remains partial and PR #116 remains Draft.
+
+
+## Stage 16 — boundary-sensitive notifications from live movement owners
+
+`ActorHost::reportRegionMoveIfCrossed(sim,entity)` is a common
+world-space owner adapter that reads the **canonical** current
+`CharacterBody.pos`, `Vehicle.pos`, `Loot.pos` (or an existing
+`Transform`), compares its 32-unit cell with the authoritative
+`RegionEntityLedger` owner, and queues `RegionDirtyKind::Move`
+only when the cell **actually changes**. An unchanged owner produces
+no dirty queue entry, no ACK increment and no extra persistent hash
+or COW mutation. Unopted maps remain a no-op. An opted-in live actor
+must have a matching stable region identity and materialization;
+otherwise the producer fails closed.
+
+This Stage16 adapter is now called at existing authoritative
+movement-owner boundaries:
+
+- `ActorHost::tick`: the normal motor and genre-independent
+  locomotion controllers.
+- `ActorHost::skydive`: airborne Royale position updates.
+- `ActorHost::tickSystems`: bomb round character respawn.
+- `ActorHost::resetLootAndVehicles`: original arcade car
+  reset positions.
+- `ActorHost::actorSystems`: arcade driver, car movement,
+  and enter/exit positions.
+- `VehicleWorld::placed`: real shared `VehicleDrive` controller
+  and its resolved seated characters.
+- `RaceSeats::respawned`: checkpoint respawn of the typed car
+  and seated characters.
+- `ActorHost::tickVehicles`: actual typed seat exit.
+
+These producers reuse existing gameplay/physics owners.
+`reportRegionMoveIfCrossed` does not move the car, bypass
+pre-tick collision admission, invent a second `Transform`,
+or change a regional owner immediately. The existing
+`actor.regionOwnership` fixed-tick system still performs
+atomic car+passenger group transfers and ACKs the coalesced
+dirty queue after its validation succeeds.
+
+The augmented `actor_region_lifecycle_test` checks movement
+inside the same region produces no dirty entry; crossing a cell
+queues one `Move` despite repeated reports; a successful
+reconciliation ACKs it; a second report in the new owner
+is a no-op; and native ECS/COW rollback restores the
+previous owner, checksum and queue.
+
+**Important coverage limit:** arbitrary native/script writes,
+unregistered project-specific ECS actors and gameplay logic
+outside these hooks still may change canonical positions directly
+without notifying W1. The legacy full tracked-pool scan remains
+mandatory until complete end-to-end change coverage and replay
+parity are proven. Stage16 is not a fully event-driven system,
+not a durable per-action disk journal and does not enable
+automatic hot/cold eviction.
+
+CTest was authored/extended but **not compiled or executed** on
+the required Mac/KINGSTON build. PR #116 remains Draft.
