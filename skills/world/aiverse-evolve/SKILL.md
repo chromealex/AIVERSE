@@ -103,3 +103,7 @@ Negative modes were appended to the mode enum to preserve existing values.
 The current center is still the canonical authored map entity `pos`.
 No build or runtime tests have been run for Stage31 (deferred by user).
 See `docs/handoffs/world-processes-stage31-bidirectional-handles-2026-11-23.md`.
+
+## Stage 32: authored EVOLVE center offsets
+
+`EvolveArea` supports `offsetXcm` and `offsetZcm` relative to the owning map entity `pos`. Both default to zero; Stage30 maps missing both remain valid. Native hydration writes the sum to persisted `evolve::Area.centerXcm/centerZcm`; TerraWeave consumes ECS `evolve::extents(world)` unchanged. Studio has separate X/Z center drag handles and persists offset fields through `studio.worldProcessAreaSet` / MapDoc Undo. All four extent handles use the offset center, but still resize symmetrically. Asymmetric resize is not yet implemented. Source-only, no compile/runtime QA (deferred). See `docs/handoffs/world-processes-stage32-evolve-center-offsets-2026-11-23.md`.
