@@ -56,6 +56,11 @@ The `--structure ... --size W H D` GLB exporter from stage 2 remains.
   from base; the other CI jobs were then cancelled / pending, so **this does
   not validate or invalidate the new building code**. Recheck latest CI
   job statuses and inspect logs before integration.
+- PR CI job "Genre libraries, native exports and local sessions" for run 45205932738
+  failed **before compilation** at `tools/libraries/catalog.py check`: an
+  `AssertionError` where the catalog contains a status not in the checker
+  allow-list (pre-existing `cpp-runtime` catalog debt noted by stage-1 handoff).
+  This is an integration blocker, not a building-test failure or a pass.
 - No real modelviewer screenshot, Metal GPU capture or web demo for stage 3;
   do not update public devlog without real visual evidence.
 
