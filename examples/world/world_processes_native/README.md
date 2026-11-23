@@ -272,3 +272,51 @@ a production-ready PBR/Box3D game or invent missing native asset types.
 **Tests deliberately deferred.** No macOS/Vulkan Studio visual capture,
 Python generator execution, native CMake build or playable-game acceptance
 has yet verified this Stage26/27 source.
+
+## Authoritative EVOLVE areas and overlapping Studio handles (Stage30)
+
+An EVOLVE region now has a gameplay-affecting rectangular spatial footprint:
+add `EvolveArea` on the **same authored map entity** as `EvolveRegion`:
+
+```json
+{
+  "EvolveRegion": {
+    "durability": 1000000000,
+    "fertility": 500000000,
+    "succession": 0,
+    "pollution": 0,
+    "enabled": true
+  },
+  "EvolveArea": {
+    "halfWidthCm": 800,
+    "halfDepthCm": 500,
+    "enabled": true
+  }
+}
+```
+
+The area's center comes from the map entity's `pos`; the extents
+are persisted as `evolve::Area` ECS on that same live Entity and
+participate in save/load and rollback. Native host usage:
+
+```cpp
+// After map hydration and the completed EVOLVE tick:
+auto ecology = bindings.forestClimate(
+    sim.world(), existingPhysisNereidClimateSampler);
+// Pass ecology to TerraWeave's normal advanceForestEcology(...).
+```
+
+The `forestClimate(World&,baseline)` overload **reads the actual**
+`evolve::Area` ECS bounds and uses the existing
+`TerraWeaveForestEcology.h` callback; no manually synchronized
+region list is needed. The older explicit zones overload remains
+available for projects owning external region maps.
+
+In Studio, `EvolveArea` draws a world-space rectangle. Its
+X/Z handles update `halfWidthCm`/`halfDepthCm` through one
+`studio.worldProcessAreaSet` Undoable edit on release. A map with
+only `worldProcessGizmo.radiusMetres` still draws a visual-only
+legacy circle and does **not** define ecology coverage.
+Overlapping handles can be selected by repeated clicking near the
+same screen location; the active component/field is labeled.
+No tests have been executed on this stage per user request.
