@@ -310,3 +310,27 @@ Sequence:
 
 This is an owner API: it has not been wired into an actual running
 game mode, and C++/native/Metal tests are explicitly deferred.
+
+
+## Stage 18: physical ECS actor entry/exit and network publication
+
+BuildingCirculationEcsScene<Body> binds a generated building to the existing
+ECS World, SpatialWorld and native nav::Mesh. It provides a live doorway
+obstruction probe using its existing Body component pool. BuildingLiftPassenger
+is a small marker on the actor's existing ECS Entity, not a second actor store.
+Boarding requires the physical cabin volume; disembark requires actor feet
+at the correct OUTSIDE landing with open doors. Actor carry happens only after
+the owning physics world successfully commits the lift platform AABB.
+If publishing any actor fails, the scene faults and invalidates navigation.
+
+After a successful owner-phase update, captureServerSnapshot(serverTick)
+may encode the already existing bounded versioned lift/rider frame for the
+game's authenticated server-to-client transport. No network socket or extra
+replication protocol was introduced. An alternative BuildingLiftGameSession
+owner requires an explicitly supplied authoritative obstruction callback in
+attachDoors; sensorless attachment fails immediately. Do not instantiate
+both scene owners for the same building. More details and limitations:
+docs/agent-handoffs/building-ecs-physical-doors-2026-11-23.md.
+
+User-requested tests remain deferred: no recent compilation or Metal visual
+verification has demonstrated this ECS integration in a running game.
