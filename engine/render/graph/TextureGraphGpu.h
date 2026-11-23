@@ -2,6 +2,7 @@
 // Fused pointwise DAG: no GPU-side recursive graph or per-node texture allocation.
 #pragma once
 #include "TextureGraph.h"
+#include "TextureGraphGpuPatterns.h"
 #include "engine/gfx/Gfx.h"
 #include <sstream>
 #include <iomanip>
@@ -15,7 +16,7 @@ inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());
     s<<std::scientific<<std::setprecision(std::numeric_limits<float>::max_digits10)<<v<<"f";return s.str();
 }
-inline Source compile(const Program& p,size_t target,int n){
+inline Source compile(const Program& p,size_t target,int n,bool floatHeight=false){
     require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxPreviewSize,"GPU preview resolution must be 8..128");
     std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto j:p.nodes[i].inputs)mark(j);};mark(target);
     std::string msl=R"MSL(
@@ -39,6 +40,8 @@ float cells(float2 uv,int p,uint seed){
  float2 d=point-xy;best=min(best,dot(d,d));}return clamp(sqrt(best),0.0f,1.0f);
 }
 )MSL";
+    msl+=patternShader;
+    if(floatHeight)require(p.nodes[target].info->output==Kind::Scalar,"height pass requires scalar target");
     // Normal is a terminal typed output. Re-evaluate its scalar DAG at four
     // wrapped neighbors, preserving float precision (no intermediate RGBA8).
     const bool normal=std::string(p.nodes[target].info->id)=="normal";
@@ -59,6 +62,12 @@ float cells(float2 uv,int p,uint seed){
             const auto random=std::to_string(seed(q["seed"]))+"u";
             if(id=="voronoi")expr="float3(cells(uv,"+period+","+random+"))";
             else expr="float3(fractal(uv,"+period+","+std::to_string(id=="fbm"?integer(q["octaves"],4,1,6):1)+","+random+"))";
+        }else if(id=="pattern"||id=="patternMask"){
+            const auto names=texturePatterns();const auto name=q.getStr("pattern");const auto it=std::find(names.begin(),names.end(),name);
+            if(it==names.end())return {"","unknown GPU pattern",{}};
+            const auto palette=texturePatternColors(name);
+            auto color=[&](size_t i){const auto& v=palette[std::min(i,palette.size()-1)];return "float3("+literal(float(v[size_t(0)].toDouble()))+","+literal(float(v[size_t(1)].toDouble()))+","+literal(float(v[size_t(2)].toDouble()))+")";};
+            expr="patternValue(uv,"+std::to_string(it-names.begin())+","+std::to_string(integer(q["scale"],8,1,64))+","+std::to_string(seed(q["seed"]))+"u,"+std::to_string(n)+","+(id=="patternMask"?"true":"false")+","+color(0)+","+color(1)+","+color(2)+")";
         }else if(id=="add")expr="float3("+a()+"+"+b()+")";
         else if(id=="subtract")expr="float3("+a()+"-"+b()+")";
         else if(id=="multiply")expr="float3("+a()+"*"+b()+")";
@@ -81,15 +90,36 @@ float cells(float2 uv,int p,uint seed){
               "float dy=(evaluatePoint((float2(x,(y+1u)%n)+0.5f)/float(n)).x-evaluatePoint((float2(x,(y+n-1u)%n)+0.5f)/float(n)).x)*k;\n"
               "float len=sqrt(dx*dx+dy*dy+1.0f);float3 result=float3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len);\n";
     }else body+="float3 result=evaluatePoint(uv);\n";
-    body+="uint3 rgb=uint3(floor(clamp(result,0.0f,1.0f)*255.0f+0.5f));output[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}\n";
+    if(floatHeight)body+="output[tid]=as_type<uint>(result.x);}\n";
+    else body+="uint3 rgb=uint3(floor(clamp(result,0.0f,1.0f)*255.0f+0.5f));output[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}\n";
     // Same validated numeric program, backend-specific vector spelling and entry ABI.
     // TextureResources uses storage buffer slot 0 => binding 12.
     auto glsl=msl.substr(msl.find("uint hash3"))+"layout(std430,set=0,binding=12) buffer Result { uint outputPixels[]; };\nvoid main(){uint tid=gl_GlobalInvocationID.x;\n"+body;
     auto replaceAll=[](std::string& s,const std::string& from,const std::string& to){
         size_t at=0;while((at=s.find(from,at))!=std::string::npos){s.replace(at,from.size(),to);at+=to.size();}
     };
-    replaceAll(glsl,"float2","vec2");replaceAll(glsl,"float3","vec3");replaceAll(glsl,"uint3","uvec3");replaceAll(glsl,"int2","ivec2");replaceAll(glsl,"output[tid]","outputPixels[tid]");
+    replaceAll(glsl,"float2","vec2");replaceAll(glsl,"float3","vec3");replaceAll(glsl,"uint3","uvec3");replaceAll(glsl,"int2","ivec2");replaceAll(glsl,"output[tid]","outputPixels[tid]");replaceAll(glsl,"as_type<uint>","floatBitsToUint");
     msl+="kernel void cs_main(device uint* output [[buffer(0)]],uint tid [[thread_position_in_grid]]){\n"+body;
     return {std::move(msl),{},std::move(glsl)};
+}
+// Explicit two-pass plan for a terminal neighborhood operation. Scratch
+// contains one float per pixel, reused by the second pass, never quantized.
+struct PassPlan {Source first,second;bool twoPass=false;size_t scratchBytes=0;};
+inline PassPlan plan(const Program& p,size_t target,int n){
+    require(target<p.nodes.size(),"invalid GPU target");
+    if(std::string(p.nodes[target].info->id)!="normal")return {compile(p,target,n),{},false,0};
+    auto first=compile(p,p.nodes[target].inputs[0],n,true);
+    if(first.msl.empty())return {std::move(first),{},false,0};
+    const auto strength=literal(scalar(p.nodes[target].parameters["strength"],2,0,16));
+    std::string body="const uint n="+std::to_string(n)+"u;if(tid>=n*n)return;uint x=tid%n,y=tid/n;float k="+strength+"*float(n)/256.0f;\n"
+        "float dx=(height[y*n+(x+1u)%n]-height[y*n+(x+n-1u)%n])*k;\n"
+        "float dy=(height[((y+1u)%n)*n+x]-height[((y+n-1u)%n)*n+x])*k;\n"
+        "float len=sqrt(dx*dx+dy*dy+1.0f);";
+    Source second;
+    second.msl="#include <metal_stdlib>\nusing namespace metal;\nkernel void cs_main(device uint* output [[buffer(0)]],device const float* height [[buffer(1)]],uint tid [[thread_position_in_grid]]){"+body+
+        "uint3 rgb=uint3(floor(clamp(float3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len),0.0f,1.0f)*255.0f+0.5f));output[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}";
+    second.glsl="layout(std430,set=0,binding=12) buffer Result { uint outputPixels[]; };\nlayout(std430,set=0,binding=13) readonly buffer Height { float height[]; };\nvoid main(){uint tid=gl_GlobalInvocationID.x;"+body+
+        "uvec3 rgb=uvec3(floor(clamp(vec3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len),0.0f,1.0f)*255.0f+0.5f));outputPixels[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}";
+    return {std::move(first),std::move(second),true,size_t(n)*n*sizeof(float)};
 }
 } // namespace aiverse::render::texture_graph::gpu
