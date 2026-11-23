@@ -1823,3 +1823,7 @@ Read-only expression `{ "var": "birthRandom" }` is supported by the CPU VM and b
 ## Stage 57 — GPU shader replay seed
 
 Native preview load accepts gpuBirthRandom:true to opt into Metal random graph routing. replayPrepare and MCP fx_replay_prepare accept gpuShaderSeed uint32, mutually exclusive with seed/gpuAllocationSeed. Reset runs in render-owner frame using existing retry/readiness gate. HTML5 replay preset supports import/export and shader seed field. UI graph load opt-in toggle is still pending; a seed alone cannot make an ineligible graph GPU eligible. No tests run.
+
+## Stage 58 — preview opt-in and checkpoint RNG metadata
+
+HTML5 native preview exposes GPU birth random checkbox applied on Load and subsequent graph reload. In-memory GpuCheckpoint snapshots shaderBirthSeed, shaderBirthOrdinal and shaderBirthSeedEnabled at request time, copied from the pending async readback record rather than callback-time live state. Binary diagnostic V2 export is unchanged; restoration of the RNG stream is not implemented yet. No tests run.
