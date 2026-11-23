@@ -274,3 +274,33 @@ with `BuildingCirculationEcsScene` for the same lift.
 Tests remain DEFERRED per user instruction. This is not a verified
 running game scene. Handoff:
 `docs/agent-handoffs/building-ecs-fixed-tick-stage20-2026-11-23.md`.
+
+
+## Stage 21 — physical stair traversal with existing ECS motor ownership
+
+`engine/buildings/BuildingStairMotor.h` supplies a genre-neutral
+`BuildingStairMotor<Body>`, exported by `BuildingRuntime.h`.
+Use `BuildingCirculationHost::route(mesh, fromRoom, toRoom)` to obtain
+`BuildingNavRoute` with resolved actual NavMesh endpoints and a stair
+corridor generated from physical StairTread/StairLanding solids.
+Use `BuildingRouteExecutor` for route phases. For a
+`BuildingNavRouteStep` with `ClimbStairs`, initialize the stair motor
+with `begin(entity, step, mesh, sweepCallback)`. The callback MUST invoke
+the existing PHYSIS/game actor motor to sweep the actor's real complete
+collision shape, check obstacle clearance and grounded support, and
+authorize the waypoint; false means no movement. Do not return true
+unconditionally in production. Run `advance(ecs,mesh)` in the exclusive
+authoritative world-owner phase; do not call on a rendering thread.
+Only when the final waypoint is reached may
+`acknowledgeLanding(routeExecutor)` advance its stair route action.
+
+If NavMesh is dirty, its revision changes, the ECS Body disappears, or
+collision blocks a waypoint, stop movement and replan/reconcile through
+the owning game systems. No direct PHYSIS implementation or generalized
+character step motor is fabricated in this module; it is an adapter over
+the game's trusted sweep callback. It does not create navmesh polygons,
+insert off-mesh links, or teleport through stairs.
+
+Tests remain deferred on user request. Stage 21 is source-only, without
+a compiled native game/PHYSIS integration pass.
+Handoff: `docs/agent-handoffs/building-stair-motor-stage21-2026-11-23.md`.
