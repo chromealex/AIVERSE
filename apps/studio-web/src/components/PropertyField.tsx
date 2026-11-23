@@ -82,6 +82,16 @@ export default function PropertyField({ property, disabled, onChange, variant = 
     </div>;
   }
 
+  if (property.type === 'text' && property.entityReference) {
+    return <div className="property-row">
+      <span>{property.label}</span>
+      <EntityReferencePicker label={property.label} value={String(property.value)}
+        options={property.options ?? []} disabled={locked}
+        onChange={value => { if (value !== property.value) onChange(value); }}/>
+      {property.description && <small className="property-description au-field__hint">{property.description}</small>}
+    </div>;
+  }
+
   if (property.type === 'boolean') {
     return <label className="property-row">
       <span>{property.label}</span>
