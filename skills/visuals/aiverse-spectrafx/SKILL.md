@@ -1815,3 +1815,7 @@ GraphRuntime::resetGpuShaderSeed delegates to dedicated active Metal ComputePart
 ## Stage 55 — explicit GPU material birth random
 
 Native GraphRuntimeOptions and ComputeEmitterDesc expose gpuBirthRandom (default false) and gpuBirthSeed. Material compiler permits graphInputs random lane only when opted in. Eligibility and emitter pipeline compilation receive the option; initialization seeds birth state. CPU fallback retains original UID random semantics, so cross-backend parity is not promised. VM random and Studio/MCP controls remain pending. No tests run.
+
+## Stage 56 — Particle VM birthRandom
+
+Read-only expression `{ "var": "birthRandom" }` is supported by the CPU VM and by the Metal VM with gpuBirthRandom enabled. Field ID 32, MSL stream 1, stable for the lifetime of each particle. CPU uses UID hash; GPU uses seed/ordinal hash, so no parity guarantee. Existing field IDs 0..31 remain unchanged. No tests run.
