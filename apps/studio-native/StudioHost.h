@@ -128,7 +128,7 @@ public:
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
-    bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false);
+    bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false, bool snap = false);
     bool terrainStroke(int phase, double x, double y, double w, double h);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
@@ -237,6 +237,7 @@ private:
         render::float3 previewPoint{};
         float baseline=1.f,value=0.f;
         bool symmetric=false;
+        bool snap=false;
         bool valid=false;
     } wpDrag_;
     // Repeated clicks at overlapping handles cycle through stable candidates.
