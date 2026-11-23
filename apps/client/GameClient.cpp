@@ -259,6 +259,7 @@ void GameClient::updateAudio(double dt) {
 void GameClient::toMenu() {
     hostPaused_ = hostStep_ = false;
     hostSpeed_=0;
+    hostCheckpoint_.clear();
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     sound_.detach();
     natureStop();
@@ -1110,6 +1111,19 @@ bool GameClient::hostPaused() const {
 }
 bool GameClient::hostCanStep() const {
     return hostCanControl() && hostPaused_ && screen_ == Screen::Playing && !topDownPaused();
+}
+bool GameClient::hostCheckpoint(bool restore) {
+    if(!hostCanStep())return false;
+    if(!restore){
+        auto bytes=sim_->serialize();
+        if(bytes.empty()||bytes.size()>64u*1024u*1024u)return false;
+        hostCheckpoint_=std::move(bytes);return true;
+    }
+    if(hostCheckpoint_.empty())return false;
+    std::string error;
+    if(!sim_->deserialize(hostCheckpoint_,&error))return false;
+    hostStep_=false;
+    return true;
 }
 bool GameClient::setHostSpeed(double speed) {
     if(!hostCanControl()||!(speed>=1&&speed<=100))return false;
