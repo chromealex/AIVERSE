@@ -19,6 +19,21 @@ bool ActorHost::reportRegionChange(Simulation& sim,Entity entity,
     return ecs.resource<world::RegionDirtyQueue>()->mark(entity,kind);
 }
 
+bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
+    const World& view=sim.world();
+    const auto* ledger=view.resourceConst<world::RegionEntityLedger>();
+    if(!ledger)return true; // no W1 opt-in
+    if(!view.alive(entity))return false;
+    const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
+    if(!tag || !tag->id)return false;
+    const auto* record=ledger->find(tag->id);
+    if(!record || !record->live)return false;
+    const auto pos=regionPositionReader()(view,entity);
+    if(!pos)return false;
+    if(world::SpatialWorld(32).cell(*pos)==record->owner)return true;
+    return reportRegionChange(sim,entity,world::RegionDirtyKind::Move);
+}
+
 void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     auto& ecs=sim.world();
     const World& view=ecs;
