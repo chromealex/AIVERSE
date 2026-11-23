@@ -28,7 +28,7 @@ public:
         const UnifiedCheckpointSections::Adapters& adapters,
         const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={},bool verify=false){
+        const UnifiedWorldReplay::Validator& validate={},bool verify=false,const DurableResourceTransaction::Policy& resources={}){
         UnifiedBackupCatalogResult result;
         if(!active.valid())return result;
         std::error_code ec;
@@ -73,7 +73,7 @@ public:
                     }else{
                         std::unique_ptr<UnifiedWorldReplay::State> recovered;
                         entry.status=UnifiedBackupRead::recover(dir,generation,active.identity.world,
-                            budget,adapters,factory,codecs,materialize,recovered,validate)
+                            budget,adapters,factory,codecs,materialize,recovered,validate,resources)
                             ?UnifiedBackupStatus::Recoverable:UnifiedBackupStatus::RecoveryFailed;
                         if(entry.status==UnifiedBackupStatus::Recoverable){
                             entry.lastSequence=recovered->sequence;
