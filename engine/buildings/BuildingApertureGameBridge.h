@@ -46,6 +46,21 @@ public:
         return true;
     }
 
+    // Enable only when the authoritative world has a real swept
+    // obstruction probe and graph consumers registered for each substep.
+    void setSteppedMotion(bool enabled,uint16_t stepPermille=100){
+        tick_.setSteppedMotion(enabled,stepPermille);
+    }
+    // Resolve PBR texture images/materials using the existing resource
+    // owner BEFORE GPU upload; no texture IO occurs on fixed-tick thread.
+    bool bindPbrTextures(const std::string& socketId,
+                         render::Material material,
+                         std::vector<render::Image> images,
+                         std::string* error=nullptr){
+        return presentation_.bindPbrTextures(
+            socketId,std::move(material),std::move(images),error);
+    }
+
     bool enqueue(const World& ecs,const BuildingApertureCommand& command,
                  std::string* error=nullptr){
         return attached_&&tick_.enqueue(ecs,command,error);
