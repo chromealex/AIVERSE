@@ -1,18 +1,19 @@
 ---
 name: aiverse-circuit
-description: Use AIVERSE CIRCUIT when implementing Детерминированное питание и логические устройства переключатели, провода, ворота ANDORXORNOT, двери и свет.
+description: Use AIVERSE CIRCUIT for Deterministic power routing, Boolean gates, switches and logical device outputs.
 ---
 # CIRCUIT — AIVERSE skill
 
 ## When to activate
-Детерминированное питание и логические устройства: переключатели, провода, ворота AND/OR/XOR/NOT, двери и свет.
+Deterministic power routing, Boolean gates, switches and logical device outputs.
 
-Typical request: выключатели, освещение, сеть питания, дверь по сигналу, электроника, насосы, тревога. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: electricity, switches, light controls, powered doors, motors, alarms. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/CircuitEcs.h`, `libraries/include/aiverselib/world/CircuitDevices.h`.
 - **Authoritative ECS:** `circuit::Node, Wire, Gate, Switch, Device`.
 - **Lifecycle:** `aiverse::lib::worldprocess::installSuite(sim,flags) with flags.circuit=true`; per-tick behavior: `circuit.switch_inputs -> circuit.power_logic -> circuit.device_outputs`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `CircuitNode, CircuitWire, CircuitGate, CircuitSwitch, CircuitDevice`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/CircuitDeviceHost.h`, `WorldProcessGameplayHost.h`, `WorldProcessesExtendedLinks.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
