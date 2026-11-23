@@ -545,6 +545,11 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 // A dedicated VFX render target is never a map editor. Mouse gestures can
 // only manipulate its isolated camera; no pick, brush or asset drop.
 - (void)mouseDown:(NSEvent*)event { (void)event; [self.window makeFirstResponder:self]; }
+- (void)mouseUp:(NSEvent*)event {(void)event;} // never select a map entity
+- (void)rightMouseDown:(NSEvent*)event {(void)event;}
+- (void)rightMouseUp:(NSEvent*)event {(void)event;}
+- (void)otherMouseDown:(NSEvent*)event {(void)event;}
+- (void)otherMouseUp:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
     if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
 }
@@ -570,6 +575,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     (void)sender;return NO;
 }
 - (void)keyDown:(NSEvent*)event {(void)event;}
+- (void)keyUp:(NSEvent*)event {(void)event;}
 @end
 
 @implementation StudioGameView
