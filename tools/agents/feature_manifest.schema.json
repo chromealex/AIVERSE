@@ -9,7 +9,8 @@
     "checks",
     "changed_paths",
     "traits",
-    "integrations"
+    "integrations",
+    "test_reports"
   ],
   "properties": {
     "schema": {
@@ -178,6 +179,14 @@
             "minLength": 1
           }
         }
+      }
+    },
+    "test_reports": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^docs/evidence/"
       }
     }
   },
