@@ -140,6 +140,9 @@ public:
     bool captureGpuCheckpoint(GpuCheckpoint& out) {
         return useComputeWrapper_ && gpu_.captureGpuCheckpoint(out);
     }
+    bool retainFreshGpuCheckpoint() {return useComputeWrapper_&&gpu_.retainFreshGpuCheckpoint();}
+    std::vector<uint64_t> historicalGpuCheckpointIds() const {return useComputeWrapper_?gpu_.historicalGpuCheckpointIds():std::vector<uint64_t>{};}
+    bool restoreHistoricalGpuCheckpoint(uint64_t id) {return useComputeWrapper_&&gpu_.restoreHistoricalGpuCheckpoint(id);}
     GpuCheckpointStatus checkpointStatus() const {
         return useComputeWrapper_ ? gpu_.checkpointStatus() : GpuCheckpointStatus{};
     }
