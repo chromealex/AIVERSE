@@ -287,6 +287,7 @@ bool ComputeParticles::initGpu() {
     return true;
 }
 void ComputeParticles::releaseGpu() {
+    checkpointHistory_.clear();
     readbackLifetime_.reset();
     asyncErrorPending_=false;
     asyncCheckpointPending_=false;
