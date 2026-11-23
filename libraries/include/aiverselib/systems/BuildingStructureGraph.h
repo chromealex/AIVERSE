@@ -248,11 +248,15 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         const auto wallSection=[&](BuildingGraphPart type,float a,float b,
                                     float bottom,float top,uint32_t owner=UINT32_MAX){
             if(b-a<0.0001f||top-bottom<0.0001f)return;
+            // Window panes are a thin separate solid, not an opaque
+            // full-thickness wall painted like glass.
+            const float t=type==BuildingGraphPart::WindowPane?0.05f:wall;
+            const float inset=(wall-t)*0.5f;
             switch(BuildingFeatureSide(side)){
-              case BuildingFeatureSide::Front:solid(type,a,bottom,0,b,top,wall,owner);break;
-              case BuildingFeatureSide::Back:solid(type,a,bottom,D-wall,b,top,D,owner);break;
-              case BuildingFeatureSide::Left:solid(type,0,bottom,a,wall,top,b,owner);break;
-              case BuildingFeatureSide::Right:solid(type,W-wall,bottom,a,W,top,b,owner);break;
+              case BuildingFeatureSide::Front:solid(type,a,bottom,inset,b,top,inset+t,owner);break;
+              case BuildingFeatureSide::Back:solid(type,a,bottom,D-inset-t,b,top,D-inset,owner);break;
+              case BuildingFeatureSide::Left:solid(type,inset,bottom,a,inset+t,top,b,owner);break;
+              case BuildingFeatureSide::Right:solid(type,W-inset-t,bottom,a,W-inset,top,b,owner);break;
             }
         };
         float cursor=0.f;
