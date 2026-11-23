@@ -265,6 +265,7 @@ void Editor::retirePreviewModel(std::unique_ptr<render::Model>& model) noexcept 
 }
 
 void Editor::shutdown() {
+    graphGpuProfile_.clear();
     if (!dev_) return;
     // Invalidate any captureNextFrame callbacks still owned by the RHI.
     captureLifetime_->store(false,std::memory_order_release);
@@ -1669,7 +1670,9 @@ void Editor::tickSpectraGpuPreview(const Camera& cam,int w,int h,bool game) {
         dt=1.f/60.f; // one simulation frame, no new bursts while frozen
         --spectraPreviewStepRequests_;
     }
+    graph_gpu_profile::Scope fxGpuScope(*dev_,graphGpuProfile_,"spectrafx-preview-step",game?2ULL:1ULL);
     const bool accepted=spectraPreviewGpu_->step(dt);
+    if(accepted)fxGpuScope.finish();
     if(!accepted) {
         spectraPreviewLastError_="Metal preview step: "+spectraPreviewGpu_->reason();
         ws_.log("spectrafx",spectraPreviewLastError_,true);
@@ -1924,7 +1927,8 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
         const char* value=std::getenv("AIVERSE_PRISMA_VIEWPORT_GPU_TIMING");
         return value && std::strcmp(value,"1")==0;
     }();
-    const bool sceneGpuScope=measurePrismaViews && dev_->beginGpuScope(1ULL);
+    graph_gpu_profile::Scope graphSceneScope(*dev_,graphGpuProfile_,"scene-viewport-render",1ULL,measurePrismaViews);
+    const bool sceneGpuScope=!graphSceneScope.active() && measurePrismaViews && dev_->beginGpuScope(1ULL);
     r3d_.render(pass, postEnabledForScene ? &prisma_ : nullptr);
     if (postActiveForScene) prismaSceneRendered_ = true;
     const auto afterRender = std::chrono::steady_clock::now();
@@ -1944,6 +1948,7 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
     prisma_.clearCameraVolumes();
     dev_->endPass();
     if (sceneGpuScope) dev_->endGpuScope();
+    graphSceneScope.finish();
     if(spectraPreviewFrameOpen_ && spectraPreviewGpu_) {
         spectraPreviewGpu_->endPresentationFrame();
         spectraPreviewFrameOpen_=false;
@@ -2045,7 +2050,8 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
         const char* value=std::getenv("AIVERSE_PRISMA_VIEWPORT_GPU_TIMING");
         return value && std::strcmp(value,"1")==0;
     }();
-    const bool gameGpuScope=measureGameGpu && dev_->beginGpuScope(prismaViewId);
+    graph_gpu_profile::Scope graphGameScope(*dev_,graphGpuProfile_,"play-viewport-render",prismaViewId,measureGameGpu);
+    const bool gameGpuScope=!graphGameScope.active() && measureGameGpu && dev_->beginGpuScope(prismaViewId);
     r3d_.render(pass, &prisma_);
     if (postActiveForGame && prismaViewId == 1ULL) prismaSceneRendered_ = true;
     if (postActiveForGame && prismaViewId == 2ULL) prismaGameRendered_ = true;
@@ -2061,6 +2067,7 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
     prisma_.clearCameraVolumes();
     dev_->endPass();
     if (gameGpuScope) dev_->endGpuScope();
+    graphGameScope.finish();
     if(spectraPreviewFrameOpen_ && spectraPreviewGpu_) {
         spectraPreviewGpu_->endPresentationFrame();
         spectraPreviewFrameOpen_=false;
@@ -2333,10 +2340,14 @@ void Editor::frame(gfx::Device& dev, double dt) {
     viewportRetirement_.setBudgetBytes(retirementBudgetBytes);
     // Only completed scoped GPU queries are returned. This is a distinct
     // queue from whole-frame timing/benchmark APIs; never consume those.
-    for (const auto& timing : dev.takeGpuScopeTimings())
+    graphGpuProfile_.checkProject(ws_.project.dir);
+    for (const auto& timing : dev.takeGpuScopeTimings()) {
         if (timing.valid && std::isfinite(timing.milliseconds) &&
             timing.milliseconds>0 && (timing.tag==1ULL || timing.tag==2ULL))
             prisma_.acceptViewGpuTiming(timing.tag,timing.milliseconds);
+        else if(const auto view=graphGpuProfile_.complete(timing,dev.frameSerial()))
+            prisma_.acceptViewGpuTiming(view,timing.milliseconds);
+    }
     viewportRetirement_.collect(dev);
     gpuResourceRetirement_.collect(dev);
     clientHost_.collectGpuRetirements();
@@ -2401,6 +2412,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
         r3d_.pollPendingModelPipelineJobs();
     pollAgentLink();
     applyChanges();
+    graphGpuProfile_.checkProject(ws_.project.dir);
     // Poll changed presentation assets before any new frame submissions.
     // This runs even when every editor property/model window is closed.
     pollVisualAssets(dt);
