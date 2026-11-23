@@ -10,10 +10,12 @@ public:
     using Point=typename Grid::Point;
 private:
     static constexpr size_t K=1u<<N;
-    struct Node {Bounds bounds;std::vector<Id> ids;std::array<size_t,K> children{};};
+    struct Node {Bounds bounds;std::vector<Id> ids;std::array<size_t,K> children{};size_t parent=0,slot=0;};
     std::vector<Node> nodes_;
     std::map<Id,Bounds> entries_;
     size_t depth_;
+    std::map<Id,size_t> locations_;
+    std::vector<size_t> free_;
     static bool contains(const Bounds&a,const Bounds&b){for(size_t i=0;i<N;++i)if(a.min[i]>b.min[i]||a.max[i]<b.max[i])return false;return true;}
     static bool overlaps(const Bounds&a,const Bounds&b){for(size_t i=0;i<N;++i)if(a.max[i]<b.min[i]||b.max[i]<a.min[i])return false;return true;}
     static void validate(const Bounds&b){for(size_t i=0;i<N;++i)if(b.min[i]>b.max[i])throw std::invalid_argument("invalid tree bounds");}
@@ -29,11 +31,11 @@ private:
             }
             if(fits&&(child.min!=parent.min||child.max!=parent.max)){
                 auto next=nodes_[index].children[slot];
-                if(!next){next=nodes_.size();nodes_.push_back(Node{child});nodes_[index].children[slot]=next;}
+                if(!next){Node fresh{child};fresh.parent=index;fresh.slot=slot;if(free_.empty()){next=nodes_.size();nodes_.push_back(std::move(fresh));}else{next=free_.back();free_.pop_back();nodes_[next]=std::move(fresh);}nodes_[index].children[slot]=next;}
                 insert(next,id,b,depth+1);return;
             }
         }
-        nodes_[index].ids.push_back(id);
+        nodes_[index].ids.push_back(id);locations_[id]=index;
     }
     void visit(size_t i,const Bounds& b,std::vector<Id>& out)const{
         const auto& n=nodes_[i];if(!overlaps(n.bounds,b))return;
@@ -48,11 +50,20 @@ public:
     }
     bool erase(Id id){
         if(!entries_.erase(id))return false;
-        for(auto& n:nodes_)n.ids.erase(std::remove(n.ids.begin(),n.ids.end(),id),n.ids.end());
+        auto index=locations_.at(id);locations_.erase(id);
+        auto& ids=nodes_[index].ids;ids.erase(std::remove(ids.begin(),ids.end(),id),ids.end());
+        while(index){
+            auto& n=nodes_[index];
+            if(!n.ids.empty()||std::any_of(n.children.begin(),n.children.end(),[](size_t c){return c!=0;}))break;
+            const auto parent=n.parent;nodes_[parent].children[n.slot]=0;
+            n=Node{};free_.push_back(index);index=parent;
+        }
         return true;
     }
     void query(Bounds b,std::vector<Id>& out)const{validate(b);out.clear();visit(0,b,out);std::sort(out.begin(),out.end());}
-    void clear(){auto root=nodes_[0].bounds;nodes_.clear();entries_.clear();nodes_.push_back(Node{root});}
+    void clear(){auto root=nodes_[0].bounds;nodes_.clear();entries_.clear();locations_.clear();free_.clear();nodes_.push_back(Node{root});}
+    size_t activeNodeCount()const{return nodes_.size()-free_.size();}
+    size_t allocatedNodeCount()const{return nodes_.size();}
     size_t size()const{return entries_.size();}
 };
 template<class Id=uint64_t> using Quadtree=SpatialTree<2,Id>;
