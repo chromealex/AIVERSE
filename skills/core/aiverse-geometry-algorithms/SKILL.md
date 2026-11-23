@@ -13,3 +13,5 @@ Voronoi.h: voronoiCells clips each site's cell to rectangular bounds (max 2048 s
 Geometry3D.h: rayBox/raySphere return forward parameter intervals; rayPlane and rayTriangle return forward hit parameters, triangle barycentric u/v. Direction need not be normalized. Box/sphere overlaps include touching. closestPoint requires valid box. Floating point, not lockstep. No tests yet.
 
 GeometryDistance.h: closestPoint for segment/triangle (including degenerate triangles), segmentDistanceSquared, capsule-sphere/capsule-capsule overlaps and 15-axis OBB SAT. OBB axes must be orthonormal. Closest point helpers require finite bounded input. Floating point, no lockstep guarantee. No tests yet.
+
+GeometryConvex.h: convexSupport, bounded convexIntersect (GJK, four-state result; tolerance contact), sweepSpheres constant velocity. Indeterminate must not be treated as separation. EPA not implemented. No build/tests.
