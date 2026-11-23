@@ -1,6 +1,7 @@
 #pragma once
 #include "RegionWorldSessionLock.h"
 #include "RegionCheckpointRetention.h"
+#include "RegionCheckpointBackup.h"
 #include "RegionCheckpointArchive.h"
 #include "RegionWalFinality.h"
 namespace aiverse::world {
@@ -74,6 +75,25 @@ public:
         auto next=manifest_;next.generation=generation;next.identity.sequence=wal_.sequence();
         ready_=false;wal_.close();
         return publish(next);
+    }
+    // Fork into an existing private empty destination directory. The new
+    // world has independent identity and WAL sequence, but preserves ledger revisions.
+    PersistentWorldResult forkGeneration(uint64_t generation,
+        const std::filesystem::path& destination,const std::array<uint8_t,16>& newWorld,
+        uint64_t maxBytes,bool acceptIncomplete=false)const {
+        if(!ready()||!lock_.held())return PersistentWorldResult::NeedsRecovery;
+        if(newWorld==manifest_.identity.world||
+           std::none_of(newWorld.begin(),newWorld.end(),[](auto b){return b!=0;}))
+            return PersistentWorldResult::Invalid;
+        std::error_code ec;
+        if(!std::filesystem::is_directory(destination,ec)||ec||
+           !std::filesystem::is_empty(destination,ec)||ec)return PersistentWorldResult::Invalid;
+        RegionEntityLedger recovered;
+        auto result=RegionCheckpointBackup::recover(dir_,generation,manifest_.identity.world,
+            maxBytes,recovered,acceptIncomplete);
+        if(result.status!=RegionCheckpointLoadStatus::Ok)return PersistentWorldResult::NeedsRecovery;
+        PersistentWorldSession fork;
+        return fork.create(destination,newWorld,recovered);
     }
     RegionRetentionPlan retentionPlan(RegionRetentionPolicy policy)const {
         if(!ready()||!lock_.held())return {};
