@@ -4,6 +4,7 @@
 // owner consumes lift movement commands and publishes transformed dynamic
 // colliders and render instance poses in its normal update phase.
 #include "engine/buildings/BuildingNavMeshBridge.h"
+#include <aiverselib/systems/BuildingRouteExecutor.h>
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <map>
 #include <set>
@@ -87,6 +88,40 @@ public:
     BuildingRoomRoute routeRooms(const std::string& start,const std::string& goal,
                                 BuildingRoutePolicy policy={})const{
         return planBuildingRoomRoute(graph_,start,goal,policy,&lifts_);
+    }
+    // A caller owns one executor per actor. Route creation is based on the
+    // current room graph and live lift availability, not on a fake navmesh
+    // vertical portal. The movement system must acknowledge each real
+    // staircase/corridor traversal and cabin boarding/disembarking.
+    bool createRouteExecutor(BuildingRouteExecutor& executor,
+                             const std::string& fromRoom,
+                             const std::string& toRoom,
+                             BuildingRoutePolicy policy={})const {
+        const auto planned=routeRooms(fromRoom,toRoom,policy);
+        return executor.begin(planned,graph_,fromRoom);
+    }
+    BuildingRouteCommand nextAgentCommand(BuildingRouteExecutor& executor){
+        return executor.command(graph_);
+    }
+    bool pumpAgent(BuildingRouteExecutor& executor){
+        return executor.pump(graph_,lifts_);
+    }
+    bool acknowledgeAgentBoarded(BuildingRouteExecutor& executor,
+                                 uint32_t liftFeature){
+        auto it=lifts_.find(liftFeature);
+        return it!=lifts_.end()&&executor.acknowledgeBoarded(it->second);
+    }
+    bool acknowledgeAgentDisembarked(BuildingRouteExecutor& executor,
+                                    uint32_t liftFeature,
+                                    const std::string& actualRoom){
+        auto it=lifts_.find(liftFeature);
+        return it!=lifts_.end()&&
+            executor.acknowledgeDisembarked(it->second,actualRoom);
+    }
+    bool cancelAgentRoute(BuildingRouteExecutor& executor,
+                          uint32_t liftFeature=UINT32_MAX){
+        auto it=lifts_.find(liftFeature);
+        return executor.cancel(it==lifts_.end()?nullptr:&it->second);
     }
     bool callLift(uint32_t feature,uint32_t targetFloor){
         auto it=lifts_.find(feature);
