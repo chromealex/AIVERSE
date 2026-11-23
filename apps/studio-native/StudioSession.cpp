@@ -2663,19 +2663,56 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 const auto& value=params["value"];
                 if(!value.isNumber())throw std::runtime_error("Expected EVOLVE integer centimetres");
                 const int64_t extent=value.integer(-1);
-                const bool offset=key=="offsetXcm"||key=="offsetZcm";
-                if(extent<(offset?-evolve::kAreaCoordinateCm:50)||
-                   extent>(offset?evolve::kAreaCoordinateCm:evolve::kAreaMaxHalfExtentCm)||
-                   value.numberLiteral()!=std::to_string(extent))
-                    throw std::runtime_error("Invalid EVOLVE half-extent");
-                if((original.has(key)?original[key].integer():0)!=extent){
-                    auto candidate=source;
-                    Json next=original;
-                    if(!next.has("offsetXcm"))next.set("offsetXcm",Json::number(int64_t(0)));
-                    if(!next.has("offsetZcm"))next.set("offsetZcm",Json::number(int64_t(0)));
+                if(value.numberLiteral()!=std::to_string(extent))
+                    throw std::runtime_error("Invalid EVOLVE integer value");
+                Json next=original;
+                if(!next.has("offsetXcm"))next.set("offsetXcm",Json::number(int64_t(0)));
+                if(!next.has("offsetZcm"))next.set("offsetZcm",Json::number(int64_t(0)));
+                const std::string side=params.getStr("edgeSide");
+                if(!side.empty()){
+                    if((key!="halfWidthCm"&&key!="halfDepthCm")||
+                       (side!="positive"&&side!="negative"))
+                        throw std::runtime_error("Invalid EVOLVE edge operation");
+                    const bool xAxis=key=="halfWidthCm";
+                    const char* centerKey=xAxis?"offsetXcm":"offsetZcm";
+                    const int64_t center=next[centerKey].integer();
+                    const int64_t half=next[key].integer();
+                    const int64_t opposite=side=="positive"?center-half:center+half;
+                    // Clamp edge while holding opposite side fixed. Both
+                    // center and half-width are exact integral centimetres.
+                    // Enforce even span by rounding the requested edge inward.
+                    const int64_t minSpan=100;
+                    const int64_t maxSpan=2*evolve::kAreaMaxHalfExtentCm;
+                    int64_t edge=extent;
+                    if(side=="positive"){
+                        edge=std::clamp(edge,opposite+minSpan,opposite+maxSpan);
+                        if((edge-opposite)%2!=0)--edge;
+                    }else{
+                        edge=std::clamp(edge,opposite-maxSpan,opposite-minSpan);
+                        if((opposite-edge)%2!=0)++edge;
+                    }
+                    const int64_t newCenter=(edge+opposite)/2;
+                    const int64_t newHalf=std::abs(edge-opposite)/2;
+                    if(newCenter < -evolve::kAreaCoordinateCm ||
+                       newCenter > evolve::kAreaCoordinateCm)
+                        throw std::runtime_error("EVOLVE edge exceeds coordinate budget");
+                    next.set(centerKey,Json::number(newCenter));
+                    next.set(key,Json::number(newHalf));
+                }else{
+                    const bool offset=key=="offsetXcm"||key=="offsetZcm";
+                    if(extent<(offset?-evolve::kAreaCoordinateCm:50)||
+                       extent>(offset?evolve::kAreaCoordinateCm:evolve::kAreaMaxHalfExtentCm))
+                        throw std::runtime_error("Invalid EVOLVE area value");
                     next.set(key,Json::number(extent));
-                    if(!lib::worldprocess::extended::validate("EvolveArea",next))
-                        throw std::runtime_error("Invalid EVOLVE area update");
+                }
+                if(!lib::worldprocess::extended::validate("EvolveArea",next))
+                    throw std::runtime_error("Invalid EVOLVE area update");
+                // Check ECS world limits against map position before mutation.
+                // Full authoritative quantization is repeated by hydration.
+                const auto& mapPos=source.extra["pos"];
+                (void)mapPos;
+                if(!(original==next)){
+                    auto candidate=source;
                     Json components=candidate.extra["components"];
                     components.set("EvolveArea",std::move(next));
                     candidate.extra.set("components",std::move(components));
