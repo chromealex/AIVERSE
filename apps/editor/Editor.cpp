@@ -2167,6 +2167,7 @@ void Editor::startPlay(int humanSlot) {
     if(graphPlayEpoch_!=~uint64_t{0})++graphPlayEpoch_; // saturated epoch disables further telemetry
     graphPlayHistory_.clear();
     graphWatch_.clear();
+    view_.clearSharedAnimationProfile();
     human_ = humanSlot;
     gameFx_.clear();
     fxPreview_ = {};
@@ -2197,6 +2198,8 @@ void Editor::startPlay(int humanSlot) {
 
 void Editor::stopPlay() {
     graphPlayHistory_.clear();
+    graphWatch_.clear();
+    view_.clearSharedAnimationProfile();
     gameFxBridge_.detach();
     gameFx_.clear();
     fxPreview_ = {};
