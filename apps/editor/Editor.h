@@ -5,6 +5,7 @@
 //
 // The public part of Editor is the API windows use; keep it small and stable.
 #pragma once
+#include "engine/render/graph/GraphWatch.h"
 #include "SceneRenderable.h"
 #include <array>
 #include <cmath>
@@ -670,6 +671,9 @@ private:
     std::unique_ptr<Simulation> sim_;
     uint64_t graphPlayEpoch_=0;
     graph_telemetry::History graphPlayHistory_;
+    graph_telemetry::Watch graphWatch_;
+    Json graphWatchSample(const std::string& domain,const std::string& entity) const;
+    void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;
     int human_ = 0;
     std::map<std::string, Entity> playIds_;   // map entity "id" -> live entity of the play-test (play_command names)
