@@ -5242,3 +5242,12 @@ if(AIVERSE_BUILD_TESTS)
         add_dependencies(aiverse_physis_tests aiversemcp)
     endif()
 endif()
+
+# Dynamic open-world ownership ledger: ECS v10 persistence, rollback, deterministic transfer.
+# This is an independent correctness test; no external game project required.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_region_entity_ledger_test tests/world/region_entity_ledger_test.cpp)
+    target_link_libraries(aiverse_region_entity_ledger_test PRIVATE aiverse_engine)
+    add_test(NAME region_entity_ledger_test COMMAND aiverse_region_entity_ledger_test)
+    set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
+endif()
