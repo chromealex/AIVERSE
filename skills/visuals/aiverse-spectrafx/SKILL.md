@@ -1795,3 +1795,7 @@ StudioSession's studio.assets now reports modelLoadableFormat for model entries 
 ## Stage 50 — asset diagnostics
 
 Graph resource inspector reports unavailable indexed paths and legacy paths separately. Explicit Check asset calls studio.spectraAssetCheck with an indexed GUID. Native CPU model/image decode uses a catalog-restricted reader with a 64 MiB cumulative input budget and reports gpuVerified:false. This is not a GPU upload test or a decoder memory/time bound. No tests executed; audit typed bridge registration and native compilation before release.
+
+## Stage 51 — typed diagnostics and MCP
+
+Use `fx_asset_check {guid}` in native Studio MCP or typed `studio.spectraAssetCheck`. Results carry code `ok`, `missing`, `unsupported_format`, or `decode_failed`, detail and gpuVerified:false. Headless Workspace has no handler and returns unavailable. Decode failure can include missing dependencies or input budget exhaustion, not necessarily corrupt bytes. No tests run.
