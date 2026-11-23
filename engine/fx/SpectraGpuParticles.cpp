@@ -167,7 +167,7 @@ bool ComputeParticles::initGpu() {
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
     compute_=device_->createCompute({shaders::kMetal,shaders::kGLSL,"SpectraFX Metal particle simulation"});
-    if(!compute_.valid(,desc_.gpuBirthRandom)) {reason_=device_->lastError();return false;}
+    if(!compute_.valid()) {reason_=device_->lastError();return false;}
 
     std::vector<ParticleState> reset(cap);
     for(auto& s:reset) {s.positionAge={0,0,0,-1};s.velocityLife={0,0,0,1};}
