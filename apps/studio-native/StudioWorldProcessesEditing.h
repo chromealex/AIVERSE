@@ -18,7 +18,7 @@
 namespace aiverse::studio::worldprocess_edit {
 
 struct Handle {
-    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight};
+    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth};
     Mode mode=Mode::Reference;
     std::string owner,component,key,targetType;
     render::float3 position{};
@@ -63,7 +63,20 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
             if(out.size()>=48)return out;
         }
     }
-    if(components["EvolveRegion"].isObject()){
+    // Native EVOLVE ecology now reads this exact ECS-persisted Area.
+    if(const auto& area=components["EvolveArea"];area.isObject()){
+        const auto width=area.getInt("halfWidthCm",1000);
+        const auto depth=area.getInt("halfDepthCm",1000);
+        if(width>=50&&width<=evolve::kAreaMaxHalfExtentCm&&
+           depth>=50&&depth<=evolve::kAreaMaxHalfExtentCm){
+            out.push_back({Handle::Mode::AreaWidth,owner.id,"EvolveArea","halfWidthCm",
+                           {},{owner.x+float(width)/100.f,.35f,owner.z},0});
+            out.push_back({Handle::Mode::AreaDepth,owner.id,"EvolveArea","halfDepthCm",
+                           {},{owner.x,.35f,owner.z+float(depth)/100.f},0});
+        }
+    }else if(components["EvolveRegion"].isObject()){
+        // Legacy visual-only rings remain editable for older maps until
+        // the author explicitly adds EvolveArea to become authoritative.
         const float r=float(owner.extra["worldProcessGizmo"]
                                 ["radiusMetres"].toDouble(10));
         if(std::isfinite(r))
@@ -131,6 +144,18 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
         const double radius=std::hypot(dx,dz);
         if(!std::isfinite(radius))return false;
         value=std::clamp(float(radius),.5f,500.f);return true;
+    }
+    if(handle.mode==Handle::Mode::AreaWidth){
+        value=std::clamp(float(std::lround(
+            std::abs(double(mouse.x-owner.x))*100.)),50.f,
+            float(evolve::kAreaMaxHalfExtentCm));
+        return true;
+    }
+    if(handle.mode==Handle::Mode::AreaDepth){
+        value=std::clamp(float(std::lround(
+            std::abs(double(mouse.z-owner.z))*100.)),50.f,
+            float(evolve::kAreaMaxHalfExtentCm));
+        return true;
     }
     if(handle.mode==Handle::Mode::GridWidth){
         value=std::clamp(float(std::lround(
