@@ -117,6 +117,11 @@ public:
     void setContentReader(world::AssetReader);
     bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
+    // Derived navigation generation for diagnostic/acceptance tests only.
+    // No mutable simulation state is affected by rebuilding a navmesh.
+    uint64_t navigationRebuilds()const{return navigationRebuilds_;}
+    uint64_t navigationCollisionRevision()const{return navigationCollisionRevision_;}
+
     // Match-level data (round, winner, nextObject, match, royale, history).
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
     const State& state(const Simulation& sim) const { return *sim.world().resourceConst<State>(); }
@@ -194,6 +199,7 @@ private:
     friend class RaceSeats;
     bool canFireFromVehicle(Simulation&,const CharacterRef&) const;
     void setupBots(Simulation&,const Json&);
+    bool rebuildBotNavigation(std::string* error=nullptr);
     bool thinkBot(Simulation&,CharacterRef);
     template<class T> std::vector<Entity> orderedById(const Simulation&) const;
     std::shared_ptr<BotHost> botHost_;
@@ -216,6 +222,9 @@ private:
     uint64_t contentHash_=0;
     Json streamManifest_;
     std::unique_ptr<world::CollisionStream> streamedCollision_;
+    uint64_t navigationCollisionRevision_=UINT64_MAX;
+    uint64_t navigationRebuilds_=0;
+
 };
 // The actor systems of a simulation run by game::GameCore (engine/game/GameCore.cpp); throws when the map is not world-space.
 ActorHost& host(Simulation&);
