@@ -166,6 +166,13 @@ inline void appendWorldProcessExtendedComponents(const World& world,Entity e,
             fields({{"durability",num(v->durability)},{"fertility",num(v->fertility)},
                     {"succession",num(v->succession)},{"pollution",num(v->pollution)},
                     {"enabled",boo(v->enabled)},{"sampledTick",num(v->sampledTick)}}));
+    if(const auto* v=world.tryGetConst<evolve::Area>(e))
+        appendAuto(components,schemas,"EvolveArea","EVOLVE · Spatial Area",
+            fields({{"centerXcm",num(v->centerXcm)},
+                    {"centerZcm",num(v->centerZcm)},
+                    {"halfWidthCm",num(v->halfWidthCm)},
+                    {"halfDepthCm",num(v->halfDepthCm)},
+                    {"enabled",boo(v->enabled)}}));
     if(const auto* v=world.tryGetConst<evolve::Pressure>(e))
         appendAuto(components,schemas,"EvolvePressure","EVOLVE · Pressure",
             fields({{"region",ent(v->region)},{"wear",num(v->wear)},
