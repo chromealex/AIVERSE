@@ -5351,3 +5351,13 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_vehicles)
         COMMAND aiverse_race_region_respawn_gate_test)
     set_tests_properties(race_region_respawn_gate_test PROPERTIES LABELS "World;Vehicles")
 endif()
+
+# W1.15: opt-in deterministic ECS lifecycle dirtiness and rollback-safe
+# coalescing. Gameplay actors still retain legacy correctness scans.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_engine)
+    add_executable(aiverse_region_dirty_queue_test
+        tests/world/region_dirty_queue_test.cpp)
+    target_link_libraries(aiverse_region_dirty_queue_test PRIVATE aiverse_engine)
+    add_test(NAME region_dirty_queue_test COMMAND aiverse_region_dirty_queue_test)
+    set_tests_properties(region_dirty_queue_test PROPERTIES LABELS "World;ECS")
+endif()
