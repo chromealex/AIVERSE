@@ -105,3 +105,43 @@ prints where the units ended up)
 See the table in the agent-flowfield report / `docs/planets.md`. On flat 256² / 1024² and a faceSize-128 planet the
 order tick drops from hundreds or thousands of ms (one search per unit) to a few ms; total path time falls by 2-40x;
 the remaining tick cost is local avoidance in the crowd, not pathing.
+
+## TerraWeave Caverns: shared navigation inputs (Stage41, 2026-11-24)
+
+The cave SDF is an **authoritative geometry source**, not another pathfinding
+algorithm. `CaveNavigationDataProvider` in
+`engine/world/TerraWeaveCavernsNavigationData.h` evaluates deterministic
+clearance, floor support, flooded state, area cost and directed transitions
+from one published immutable cave snapshot. The agent profile selects ground,
+flight, swimming, climbing or custom policies, with external same-epoch
+NEREID/PHYSIS/ECS callbacks where required.
+
+`CaveNavigationGridView` provides a bounded integer 3D graph (signed X/Y/Z,
+stable node IDs, six face neighbors and 3D HPA cluster portals). This graph
+can feed *existing* A*, HPA*, Flow Fields or Hybrid solvers through an engine
+adapter, or an independently registered custom solver. The goal is reuse:
+Caverns itself never contains a second A*/Dijkstra/flow-field implementation.
+
+`CaveSharedNavSource` directly exposes `nav::Source`'s multilevel spans and
+links for the existing `nav::Mesh` algorithm, from the SAME shared data
+provider. Free-flying or 3D-swimming agents must use a true 3D graph; a
+2.5D ground NavMesh should not silently represent free flight.
+
+`CaveNavigationPublication` announces revisioned half-open dirty SDF bounds
+*after* the real all-owner game commit. It has explicit consumer IDs for
+A*, HPA*, Flow Field, NavMesh, Hybrid and Custom. Stream-in/out notifications
+also invalidate derived graph topology at an unchanged SDF revision.
+`CaveNavigationInvalidation.h` converts those events into 3D grid ranges,
+HPA cluster ranges and the existing `nav::Mesh::markDirty` columns.
+`CavePathRouter` calls a registered engine/custom callback and rejects
+queries against the wrong SDF revision or pending invalidations.
+
+**Integration boundary:** the current `game::MapGrid::findPath`,
+`hybridPath`, `flowAcquire`, and HPA* implementations are bound to
+`MapGrid`'s 2D path-layer cells. Stage41 provides the 3D graph and
+registration API but does not yet refactor those exact implementations to
+accept a generic cave 3D graph. They should be adapted via shared engine
+pathfinding interfaces, not copied into Caverns, and only then described as
+fully native-wired. This feature has not been compiled or runtime-tested yet
+under the feature-first workflow; see
+`docs/agent-handoffs/caverns-stage41-2026-11-24.md`.
