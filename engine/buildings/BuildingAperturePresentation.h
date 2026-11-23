@@ -179,6 +179,44 @@ public:
         return frame;
     }
 
+    // Optional real PBR texture binding. Call only at resource creation
+    // BEFORE renderer upload. The existing asset/Renderer3D owner resolves
+    // and supplies Image resources (base colour, metallic/roughness,
+    // normal, AO, emissive); this module never opens files or decodes
+    // textures on the simulation thread. Indices are model-local.
+    bool bindPbrTextures(const std::string& socketId,
+                         render::Material material,
+                         std::vector<render::Image> images,
+                         std::string* error=nullptr){
+        auto it=entries_.find(socketId);
+        if(it==entries_.end()||!it->second.asset.leaf||
+           it->second.asset.leaf->materials.size()!=1){
+            if(error)*error="Unknown aperture material asset";
+            return false;
+        }
+        const auto valid=[&](int index){
+            return index==-1||(index>=0&&size_t(index)<images.size());
+        };
+        if(!valid(material.baseTex)||!valid(material.mrTex)||
+           !valid(material.normalTex)||!valid(material.occlusionTex)||
+           !valid(material.emissiveTex)||!valid(material.teamTex)){
+            if(error)*error="PBR texture index references missing model image";
+            return false;
+        }
+        for(int index:material.graphTextures)
+            if(!valid(index)){
+                if(error)*error="ShaderGraph references missing model image";
+                return false;
+            }
+        auto& model=*it->second.asset.leaf;
+        model.images=std::move(images);
+        model.materials[0]=std::move(material);
+        // Existing renderer must invalidate/reupload material resources
+        // if host modifies these assets after first GPU upload.
+        if(error)error->clear();
+        return true;
+    }
+
     // Read-only CPU geometry; render owner handles GPU leases and fences.
     const render::Model* model(const std::string& socketId)const{
         const auto it=entries_.find(socketId);
