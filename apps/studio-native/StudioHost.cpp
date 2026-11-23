@@ -1221,6 +1221,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             return respond(std::move(out));
         }
         std::string jpeg,error;
+        Json provenance=Json::object();
         int w=0,h=0;
         bool done=false;
         {
@@ -1229,6 +1230,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             if(done) {
                 jpeg=shot->jpeg;
                 error=shot->error;
+                provenance=shot->provenance;
                 w=shot->width;
                 h=shot->height;
             }
@@ -1251,6 +1253,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
         out.set("width",Json::number(int64_t(w)));
         out.set("height",Json::number(int64_t(h)));
         out.set("mime",Json::string("image/jpeg"));
+        out.set("provenance",std::move(provenance));
         if(!error.empty())out.set("error",Json::string(error));
         if(!jpeg.empty()&&error.empty())
             out.set("image",Json::string("data:image/jpeg;base64,"+
@@ -1277,6 +1280,17 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
     fxShotStartedAt_=platform_.now();
     try {
         onScene([&] {
+            // Sample provenance on the same native render-owner that schedules readback.
+            const Json nativeStatus=fxPreview_->spectraPreviewCommand(
+                Json::parse(R"({"action":"status"})"),session_->workspace().project.dir);
+            Json metadata=Json::object();
+            metadata.set("tick",nativeStatus["tick"]);
+            metadata.set("generation",nativeStatus["generation"]);
+            metadata.set("backend",nativeStatus["backend"]);
+            metadata.set("camera",nativeStatus["camera"]);
+            metadata.set("background",nativeStatus["background"]);
+            metadata.set("gpu",nativeStatus["gpu"]);
+            {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
             fxPreview_->captureNextFrame(
                 [shot,maxSide](int w,int h,std::vector<uint8_t> rgba) {
                     std::string jpeg,error;
