@@ -33,7 +33,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear"}},
-        {"models", {"asset_list", "model_info", "geometry_catalog", "geometry_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
+        {"models", {"asset_list", "model_info", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
         {"overlays", {"overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},
@@ -45,7 +45,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"fx_graph", {"fx_graph_list", "fx_graph_node_catalog", "fx_graph_get", "fx_graph_validate", "fx_graph_set", "fx_graph_edit",
                       "fx_graph_bake", "fx_graph_delete", "fx_graph_draft_list", "fx_graph_draft_get", "fx_graph_draft_set", "fx_graph_draft_publish"}},
         {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
-        {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "modeling_apply", "modeling_build",
+        {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
                       "texture_patterns", "texture_generate"}},
         {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
@@ -79,6 +79,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
+    if (op == "strata_capabilities") return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
                                      "_preview", "_analyze", "_state", "_export", "_run", "_scan", "_report", "_sample",
