@@ -2645,6 +2645,65 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.buildInfo" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
+        } else if(method=="studio.worldProcessAreaBatchMove"){
+            // One validated, all-or-nothing MapDoc edit for selected regions.
+            // The caller supplies stable map IDs, never transient ECS slots.
+            const auto& ids=params["entityIds"];
+            const std::string axis=params.getStr("axis");
+            const auto& amount=params["deltaCm"];
+            if(!ids.isArray()||ids.size()<2||ids.size()>256||
+               (axis!="x"&&axis!="z")||!amount.isNumber())
+                throw std::runtime_error("Invalid EVOLVE batch center request");
+            const int64_t delta=amount.integer();
+            if(amount.numberLiteral()!=std::to_string(delta)||
+               delta < -2*evolve::kAreaCoordinateCm||
+               delta > 2*evolve::kAreaCoordinateCm)
+                throw std::runtime_error("Invalid EVOLVE batch delta");
+            std::vector<std::pair<std::size_t,editor::DocEntity>> pending;
+            std::set<std::string> seen;
+            const std::string key=axis=="x"?"offsetXcm":"offsetZcm";
+            for(const auto& idValue:ids.items()){
+                if(!idValue.isString())throw std::runtime_error("Invalid EVOLVE batch ID");
+                const auto id=idValue.str();
+                if(id.rfind("entity:@",0)!=0||!seen.insert(id).second||
+                   locked_.contains(id)||hidden_.contains(id))
+                    throw std::runtime_error("Duplicate, hidden or locked EVOLVE batch entity");
+                const auto index=indexFor(id);
+                auto candidate=ws_.map.data.entities[std::size_t(index)];
+                Json area=candidate.extra["components"]["EvolveArea"];
+                if(!lib::worldprocess::extended::validate("EvolveArea",area)||
+                   !candidate.extra["components"]["EvolveRegion"].isObject())
+                    throw std::runtime_error("Batch entity lacks valid EVOLVE region area");
+                if(!area.has("offsetXcm"))area.set("offsetXcm",Json::number(int64_t(0)));
+                if(!area.has("offsetZcm"))area.set("offsetZcm",Json::number(int64_t(0)));
+                const auto old=area[key].integer();
+                if(delta>0&&old>evolve::kAreaCoordinateCm-delta||
+                   delta<0&&old< -evolve::kAreaCoordinateCm-delta)
+                    throw std::runtime_error("EVOLVE batch offset outside bounds");
+                area.set(key,Json::number(old+delta));
+                if(!lib::worldprocess::extended::validate("EvolveArea",area))
+                    throw std::runtime_error("Invalid EVOLVE batch area");
+                const auto cx=std::llround(double(candidate.x)*100.)+
+                              area["offsetXcm"].integer();
+                const auto cz=std::llround(double(candidate.z)*100.)+
+                              area["offsetZcm"].integer();
+                if(cx-area["halfWidthCm"].integer() < -evolve::kAreaCoordinateCm||
+                   cx+area["halfWidthCm"].integer() > evolve::kAreaCoordinateCm||
+                   cz-area["halfDepthCm"].integer() < -evolve::kAreaCoordinateCm||
+                   cz+area["halfDepthCm"].integer() > evolve::kAreaCoordinateCm)
+                    throw std::runtime_error("EVOLVE batch world bounds exceeded");
+                Json components=candidate.extra["components"];
+                components.set("EvolveArea",std::move(area));
+                candidate.extra.set("components",std::move(components));
+                pending.emplace_back(std::size_t(index),std::move(candidate));
+            }
+            if(delta!=0){
+                ws_.map.beginEdit();
+                for(auto& entry:pending)
+                    ws_.map.data.entities[entry.first]=std::move(entry.second);
+                ws_.map.touched();
+            }
+            reply.set("result",Json::number(int64_t(pending.size())));
         } else if(method=="studio.worldProcessAreaSet"){
             // Exactly one MapDoc Undo snapshot for one final gizmo release.
             // Runtime EVOLVE region bounds are not inferred from this visual radius.
