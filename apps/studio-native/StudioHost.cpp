@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioHost.h"
 #include "apps/studio-native/StudioWorldProcessesGizmos.h"
+#include "apps/studio-native/StudioWorldProcessesEditing.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
@@ -811,6 +812,120 @@ void StudioHost::rebuildOverlay() {
     }
     onScene([&] { preview_->setOverlayShapes(std::move(shapes)); });
 }
+// World Processes: drag authored stable-ID references or area handles.
+// Hit-testing and hover preview read ONLY the MapDoc. Commit is a single
+// validated StudioSession operation at mouse-up; never edit ECS/physics here.
+bool StudioHost::worldProcessDrag(int phase,double x,double y,
+                                  double w,double h){
+    if(projectLoading_||!preview_||!session_||
+       session_->workspace().project.dir.empty())return false;
+    const auto& map=session_->workspace().map;
+    if(phase==0){
+        wpDrag_={};
+        const auto& selected=session_->selectedObjectId();
+        if(selected.rfind("entity:@",0)!=0)return false;
+        if(session_->lockedIds().contains(selected)||
+           session_->hiddenIds().contains(selected))return false;
+        const auto handles=worldprocess_edit::handles(map,selected);
+        if(handles.empty())return false;
+        const int index=onScene([&]{
+            return worldprocess_edit::hit(handles,*preview_,x,y,w,h);
+        });
+        if(index<0)return false;
+        const auto& hit=handles[std::size_t(index)];
+        wpDrag_.active=true;
+        wpDrag_.mode=static_cast<std::uint8_t>(hit.mode);
+        wpDrag_.owner=hit.owner;
+        wpDrag_.component=hit.component;
+        wpDrag_.key=hit.key;
+        wpDrag_.targetType=hit.targetType;
+        wpDrag_.baseline=hit.baseline;
+        wpDrag_.previewPoint=hit.position;
+        wpDrag_.valid=false;
+        rebuildOverlay();
+        return true;
+    }
+    if(!wpDrag_.active)return false;
+    if(phase==1||phase==2){
+        if(wpDrag_.mode==static_cast<std::uint8_t>(
+                worldprocess_edit::Handle::Mode::Reference)){
+            // A dropped endpoint must be an actual stable authored map
+            // entity with the required compatible component.
+            worldprocess_edit::Handle handle;
+            handle.targetType=wpDrag_.targetType;
+            const auto* candidate=onScene([&]{
+                return worldprocess_edit::nearestTarget(
+                    map,handle,*preview_,x,y,w,h);
+            });
+            wpDrag_.previewTarget=candidate?candidate->id:std::string{};
+            wpDrag_.valid=candidate!=nullptr;
+            if(candidate)wpDrag_.previewPoint=
+                worldprocess_edit::point(*candidate);
+        }else{
+            const int ownerIndex=map.findEntity(wpDrag_.owner);
+            render::float3 ground{};
+            const bool groundOK=ownerIndex>=0&&onScene([&]{
+                return preview_->groundPoint(
+                    float(x),float(y),float(w),float(h),ground);
+            });
+            if(!groundOK)wpDrag_.valid=false;
+            else{
+                worldprocess_edit::Handle handle;
+                handle.mode=static_cast<worldprocess_edit::Handle::Mode>(
+                    wpDrag_.mode);
+                handle.baseline=wpDrag_.baseline;
+                float value=0;
+                wpDrag_.valid=worldprocess_edit::extent(
+                    map.data.entities[std::size_t(ownerIndex)],handle,
+                    ground,value);
+                if(wpDrag_.valid){
+                    wpDrag_.value=value;
+                    wpDrag_.previewPoint=ground;
+                }
+            }
+        }
+    }
+    if(phase==1){
+        rebuildOverlay();
+        return true;
+    }
+    // Pointer release: the preview is still the current drag result.
+    const auto current=wpDrag_;
+    wpDrag_={};
+    rebuildOverlay();
+    if(!current.valid)return true;
+    Json params=Json::object();
+    params.set("entityId",Json::string("entity:@"+current.owner));
+    params.set("componentId",Json::string(current.component));
+    params.set("key",Json::string(current.key));
+    if(current.mode==static_cast<std::uint8_t>(
+           worldprocess_edit::Handle::Mode::Reference)){
+        if(current.previewTarget.empty())return true;
+        params.set("value",Json::string(current.previewTarget));
+    }else{
+        if(current.mode==static_cast<std::uint8_t>(
+               worldprocess_edit::Handle::Mode::Radius))
+            params.set("value",Json::number(double(current.value),3));
+        else
+            params.set("value",Json::number(int64_t(std::lround(current.value))));
+    }
+    const char* method=current.mode==static_cast<std::uint8_t>(
+        worldprocess_edit::Handle::Mode::Reference)?
+        "studio.setProperty":"studio.worldProcessAreaSet";
+    const auto reply=request(method,std::move(params));
+    if(reply.has("error")){
+        Json error=Json::object();
+        error.set("message",Json::string(
+            "World Processes gizmo: "+reply.getStr("error")));
+        sendEventPayload("assets.importError",error);
+    }else{
+        sendEvent("document.changed","");
+        sendEvent("selection.changed","");
+        rebuildOverlay();
+    }
+    return true;
+}
+
 // phase 0 press (true when a handle was hit), 1 drag, 2 release (commits the move).
 bool StudioHost::splineDrag(int phase, double x, double y, double w, double h) {
     if (projectLoading_ || !preview_ || session_->splineEdit().empty()) return false;
@@ -988,6 +1103,10 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     if (phase == 0) {
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
+        // Explicit authored World Processes handles have priority only when
+        // the clicked point is within their small screen-space hit radius.
+        if(!mods.alt && !mods.command && !mods.ctrl && !mods.shift &&
+           worldProcessDrag(0,x,y,w,h)){m.worldProcess=true;return;}
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
@@ -1002,6 +1121,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
+        if(m.worldProcess){worldProcessDrag(1,x,y,w,h);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
         if (m.move) { m.dragged = true; moveUpdate(x, y, w, h, mods.ctrl || mods.command); return; }
@@ -1021,6 +1141,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
+    if(st.worldProcess){worldProcessDrag(2,x,y,w,h);return;}
     if (st.spline) { splineDrag(2, 0, 0, w, h); return; }
     if (st.stroke) { terrainStroke(2, 0, 0, w, h); return; }
     if (st.move) { moveEnd(); return; }
