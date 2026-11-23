@@ -25,6 +25,7 @@ inline CaveBatchPrepared prepareCaveEditPresentation(
         chunk.mesh=c.mesh;
         chunk.generatorVersion=generatorVersion;
         chunk.revision=c.renderRevision;
+        chunk.sourceRevision=c.sourceRevision;
         chunk.resolution=c.resolution;
         chunk.spacingCm=c.spacingCm;
         chunks.push_back(std::move(chunk));
