@@ -150,6 +150,28 @@ public:
         return true;
     }
 
+    // Typical game-owner frame hook, after an authored event, outside an
+    // active render pass: advance CPU jobs and stage the full matching
+    // geometry/collision/nav resources automatically once ready. It does not
+    // run or fake the later exclusive game-world commit.
+    CaveEditTick advance(gfx::Device& device,
+                         const world::SpatialWorld& spatial,
+                         CaveNavConfig navConfig,TerrainHeight terrainHeight,
+                         const ColliderIdAllocator& colliderIds,
+                         uint64_t nextVisualRevision,
+                         size_t cpuJobBudget=2,
+                         CaveBatchSpec graphicsOptions={}) {
+        auto tick=pumpCpu(cpuJobBudget);
+        if(!stagedRevision_ && !tick.inFlight && tick.pending &&
+           tick.ready==tick.pending) {
+            // stageReady is deliberately fail-closed; callers can inspect
+            // stats and retry if a GPU budget or a source validation fails.
+            (void)stageReady(device,spatial,navConfig,std::move(terrainHeight),
+                             colliderIds,nextVisualRevision,graphicsOptions);
+        }
+        return tick;
+    }
+
     // No implicit success callback: the host must actually own a quiescent,
     // rollback-safe physical/nav commit. In particular, the Stage26 Box3D
     // create+destroy procedure is not by itself a global atomic transaction.
@@ -223,6 +245,7 @@ public:
     }
     bool shutdownAfterGpuIdle(gfx::Device& device){
         cancelPending();
+        worker_.drain();
         return geometry_.shutdownAfterGpuIdle(device);
     }
     CaveGameplayEditStats stats()const {
