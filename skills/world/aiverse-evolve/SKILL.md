@@ -123,3 +123,7 @@ Plain LMB edge drag keeps the opposite EVOLVE area edge fixed. Hold Shift during
 ## Stage 36: Scene snapping and numeric size preview
 
 Hold Ctrl or Command while dragging EvolveArea center/edge handles to snap the local drag coordinate to a 1 metre grid. Shift still selects symmetric resize; plain drag keeps the opposite edge fixed. Native Scene overlay shows candidate full width/depth in centimetres and active mode. This is transient editor state; the only authored write remains `studio.worldProcessAreaSet` at release. Multi-selection, object snapping and editable numeric Scene fields are not implemented. Source-only; no native build or runtime tests yet. See `docs/handoffs/world-processes-stage36-evolve-grid-snap-dimensions-2026-11-23.md`.
+
+## Stage 37: atomic EVOLVE multi-region center move
+
+Native Scene center-handle drag on a multi-selection submits `studio.worldProcessAreaBatchMove` with stable `entityIds`, axis `x|z`, and integer `deltaCm`. The native session validates every selected EvolveRegion/EvolveArea and coordinate budget, then applies all center offsets with one MapDoc Undo entry. Mixed or locked selections fail atomically. Single-region edits retain the existing RPC. Group edge resize and group preview are not yet implemented. Source-only, no compilation/runtime QA. See `docs/handoffs/world-processes-stage37-evolve-batch-centers-2026-11-23.md`.
