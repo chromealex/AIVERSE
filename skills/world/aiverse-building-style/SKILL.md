@@ -719,3 +719,55 @@ swept actor/vehicle obstruction, rollback and synchronized nav
 invalidation before calling the physical animation complete.
 No tests were run per user instruction. Handoff:
 `docs/agent-handoffs/building-aperture-game-bridge-stage23h-2026-11-23.md`.
+
+
+## Stage 23I — opt-in stepped collider motion and PBR texture resources
+
+`BuildingApertureOwner::beginMotion(socket, targetOpen, domains)` and
+`advanceMotion(spatial, router, stepPermille)` add opt-in incremental
+physical translation of one conservative full-width sliding collider.
+The game-provided obstruction probe MUST inspect the complete swept
+volume for characters, vehicles and cargo; graph events are published
+after every successfully committed SpatialWorld step. Failed collider
+reinstallation attempts to restore the old collider, and failures
+leave the current step uncommitted. If rollback also fails, the
+aperture owner faults; the game must reconcile before resuming.
+
+Choose the stepped path through
+`BuildingApertureGameBridge::setSteppedMotion(true, 100)` (or through
+`BuildingApertureFixedTickOwner`) before processing commands.
+Pending graph acknowledgements block subsequent movement. A closing
+motion from an initially fully open door creates its first moving
+collider safely. Ordinary `setOpen` cannot race active motion.
+Gameplay passage permission remains false until the 1000/1000 open
+endpoint. Physical collider motion is FIXED-point and lives on the
+authoritative world-owner phase, not the render thread.
+
+**PBR/textures:** building style `StyleMaterial` currently contains
+colour/metallic/roughness/emissive parameters but has NO texture paths.
+The existing Renderer3D `render::Material` supports baseTex, mrTex,
+normalTex, occlusionTex, emissiveTex, shader graph textures and
+`Model::images`. Before GPU upload, the existing asset/resource owner
+may resolve actual model-local PBR image data and call
+`bridge.bindPbrTextures(socketId, render::Material,
+std::vector<render::Image>)`, which validates all image indices
+and installs them into the reusable CPU leaf Model. UVs are generated
+by the existing building Mesher; GPU images, texture upload, resource
+leases and async loading remain Renderer3D/asset owner responsibilities.
+This does NOT automatically generate or load texture files, nor imply
+building Style JSON now contains texture references. A later step may
+add explicit texture asset GUID slots with migration/validation.
+Do not call texture binding after GPU upload unless the render owner
+performs its proper material resource invalidation and reupload.
+
+**Physical scope:** a SINGLE translating barrier per aperture is an
+intermediate solution, not two independently colliding leaves or a
+hinged-door/roof motor. The visual side still draws two halves and is
+updated on fully acknowledged fixed-tick frames; further work must
+align actual leaf poses and intermediate physics updates exactly.
+NavMesh only sees updated closed colliders after callback sync and
+mesh.refresh; motion callbacks must use the exact impacted graph mask.
+
+Tests remain deferred at user request; no compiler/runtime/texture
+GPU evidence. See:
+`docs/agent-handoffs/building-stepped-physics-textures-stage23i-2026-11-23.md`.
