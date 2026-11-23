@@ -116,6 +116,8 @@ jobs:
           g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
           g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
           g++ $FLAGS tests/libraries/building_runtime_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_runtime_tests
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -Ilibraries/include \
+            tests/libraries/building_surface_pattern_tests.cpp -o /tmp/aiverse_building_surface_pattern_tests
           g++ $FLAGS tests/libraries/building_feature_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_feature_tests
           # Independent of any engine object/library linkage:
           g++ -std=c++20 -O1 -Wall -Wextra -Werror -Ilibraries/include \
@@ -131,6 +133,27 @@ jobs:
           /tmp/aiverse_building_runtime_tests "$GITHUB_WORKSPACE"
           /tmp/aiverse_building_feature_tests "$GITHUB_WORKSPACE"
           /tmp/aiverse_building_structure_graph_tests
+          /tmp/aiverse_building_surface_pattern_tests
+      - name: Export all twelve procedural architectural PBR styles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/building-settings-qa
+          for id in medieval-fantasy dark-fantasy steampunk cyberpunk scifi-space alien-civilization post-apocalypse modern ancient-civilizations asian-historical solarpunk underwater; do
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/$id.json" \
+              --structure residence --seed 17 \
+              --out "build/building-settings-qa/$id.glb"
+          done
+      - name: Verify actual GLB2 image buffers and embedded PBR PNG channels
+        shell: bash
+        run: python3 tools/buildings/verify_setting_glb.py build/building-settings-qa
+      - name: Preserve generated setting GLBs for offline renderer review
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-twelve-building-settings-pbr
+          path: build/building-settings-qa/*.glb
+          if-no-files-found: error
+          retention-days: 7
       - name: Compile native Studio asset generation contract
         shell: bash
         run: |
