@@ -3173,18 +3173,23 @@
     },
     {
       "id": "geometry-algorithms",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
       "skill": "skills/core/aiverse-geometry-algorithms/SKILL.md",
-      "summary": "Pure integer planar geometry predicates and convex hull",
+      "summary": "Planar geometry, triangulation, Voronoi and 3D primitive queries",
       "notes": "Coordinate bound ±1e9; no render dependencies.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_geometry_algorithms",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/GeometryClip.h",
+        "libraries/include/aiverselib/algorithms/Voronoi.h",
+        "libraries/include/aiverselib/algorithms/Geometry3D.h"
+      ]
     }
   ]
 }
