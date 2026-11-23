@@ -20,6 +20,23 @@ Status: **planned multi-stage program, NOT fully implemented**. This document is
   fields, physics collision, fluids and editor authoring remain future work.
 - Focused Linux/macOS PR workflow: `.github/workflows/spectrafx-significance.yml`.
 
+## Stage 4 (2026-11-23) — typed scalar Data Interfaces implemented in source
+
+- The Graph v2 authoring model now supports a bounded `dataInterfaces`
+  declaration, a runtime-only `DataInterface` value node, and a strict
+  name/slot/fallback validator. See
+  `docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
+- Existing CPU/Metal VM param0..param7 carries the values without creating
+  an incompatible second graph language. Data is sampled once at `burstAt`,
+  not continuously per particle. Shared CPU `BatchWorld` is covered by
+  source-level tests.
+- Only scalar host callbacks and shared authoring helpers are implemented;
+  full HTML5 Studio panel, texture/buffer GPU Data Interfaces, real PHYSIS
+  adapters, Vulkan compute and fluid/destruction systems remain unimplemented.
+- Test status is **pending**, not accepted: focused graph runtime/compiler
+  CTest additions and CI workflow were authored, but no native PASS has been
+  recorded for the latest Stage 4 commit.
+
 ## Stage matrix
 
 | Stage | Feature | Design/implementation requirements | Completion criteria |
