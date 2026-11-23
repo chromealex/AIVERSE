@@ -2,6 +2,7 @@
 #pragma once
 #include "Animation.h"
 #include "AnimationContacts.h"
+#include "graph/GraphExecutionProfile.h"
 #include "SurfaceLocomotion.h"
 #include "../data/Json.h"
 #include <map>
@@ -120,6 +121,11 @@ public:
     AnimationGraphInstance& operator=(AnimationGraphInstance&&) = default;
     void reset(std::shared_ptr<const AnimationGraph> graph);
     const AnimationGraph* graph() const { return graph_.get(); }
+    // Explicit owner-thread instrumentation, root program only. Never part of pose state.
+    void enableExecutionProfile(bool enabled);
+    void beginExecutionTrace() noexcept {if(executionProfile_)executionProfile_->beginTrace();}
+    void resetExecutionProfile() noexcept {if(executionProfile_)executionProfile_->reset();}
+    Json executionProfileReport() const;
     AnimationParameters& parameters() { return parameters_; }
     const AnimationParameters& parameters() const { return parameters_; }
     // One transition at most per update. Interrupted fades start from the last evaluated pose.
@@ -185,6 +191,7 @@ private:
     AnimationGraphInstance(const AnimationGraphInstance&) = default;
     void evaluateCurrent(Pose& result);
     std::shared_ptr<const AnimationGraph> graph_;
+    std::optional<graph_profile::Profile> executionProfile_;
     AnimationParameters parameters_;
     int state_ = 0;
     float time_ = 0, fadeTime_ = 0, fadeDuration_ = 0;
