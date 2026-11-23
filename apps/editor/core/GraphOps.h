@@ -157,6 +157,11 @@ inline void registerGraphOps(Workspace& ws) {
             for(const auto& op:ws.ops())if(op.name=="graph_live_owner_profile")return ws.call(op.name,p,"graph");
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native common presentation profile owner unavailable in this host"));return r;
         }});
+    ws.registerOp({"texture_graph_gpu_preview","Queue/read a native Metal texture preview; headless host unavailable.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"}},"required":["action"]})"),[&ws](const Json& p){
+            for(const auto& op:ws.ops())if(op.name=="texture_graph_gpu_owner_preview")return ws.call(op.name,p,"graph");
+            Json r=Json::object();r.set("ok",Json::fromBool(false));r.set("state",Json::string("unavailable"));r.set("reason",Json::string("Native texture GPU preview owner unavailable in this host; use texture_graph_preview for CPU"));return r;
+        }});
     ws.registerOp({"graph_gpu_profile","Opt-in completed native RHI scope timing capture. No authored-node GPU attribution.",
         Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","read","stop"]}},"required":["action"],"additionalProperties":false})"),[&ws](const Json& p){
             for(const auto& op:ws.ops())if(op.name=="graph_gpu_owner_profile")return ws.call(op.name,p,"graph");
