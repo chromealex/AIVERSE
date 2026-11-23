@@ -38,7 +38,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
- const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string}|null>(null),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false);
+ const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number}|null>(null),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
@@ -81,13 +81,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
    if(action==='gpuStart'||action==='gpuRead'){
-    const r=await op('texture_graph_gpu_preview',action==='gpuStart'?{action:'start',graph,overrides,output,requireGpu}:{action:'read'});if(token!==epoch.current)return;
+    const r=await op('texture_graph_gpu_preview',action==='gpuStart'?{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution}:{action:'read'});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
-    if(action==='gpuStart'){setGpuRequest({id:r.request,source:text,overrides:overrideText});setPreview(null);}
-    else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText)throw new Error('Preview belongs to a different request or draft');
+    if(action==='gpuStart'){setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution});setPreview(null);}
+    else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||gpuRequest.output!==output||gpuRequest.resolution!==gpuResolution)throw new Error('Preview belongs to a different request or draft');
     setGpuStatus(String(r.state)+' / '+String(r.backend)+' — '+String(r.reason??''));
     if(r.state==='ready'){
-      if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>32||r.height>32||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
+      if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
       setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});
     }return;
    }
@@ -189,7 +189,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
   <StudioSection title="Experimental GPU output preview">
-   <small>Native Metal compute, 32×32 maximum. CPU-reference checked; unsupported graphs fall back unless GPU is required. Bake remains CPU.</small>
+   <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; unsupported graphs fall back unless GPU is required. Bake remains CPU.</small>
+   <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
    <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU</label>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>Queue GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
    {gpuStatus&&<small>{gpuStatus}</small>}
