@@ -243,10 +243,10 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
         }});
     registerOp({"fx_checkpoint_file",
         "Transfer SPFT checkpoint in ordered 32 KiB hex chunks; import runs on render owner.",
-        Json::parse(R"({"properties":{"action":{"type":"string","enum":["checkpointFileBegin","checkpointFileAppend","checkpointFileExport","checkpointFileRead","checkpointFileImport"]},"offset":{"type":"integer","minimum":0,"maximum":1048600},"chunk":{"type":"string","maxLength":65536}},"required":["action"]})"),
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["checkpointFileBegin","checkpointFileAppend","checkpointFileExport","checkpointFileRead","checkpointFileImport","checkpointFileCancel"]},"offset":{"type":"integer","minimum":0,"maximum":1048600},"chunk":{"type":"string","maxLength":65536},"transferId":{"type":"integer","minimum":1}},"required":["action"]})"),
         [this](const Json& p)->Json {
             const auto action=p.getStr("action");
-            if(action!="checkpointFileBegin"&&action!="checkpointFileAppend"&&action!="checkpointFileExport"&&action!="checkpointFileRead"&&action!="checkpointFileImport")throw std::runtime_error("Invalid checkpoint file action");
+            if(action!="checkpointFileBegin"&&action!="checkpointFileAppend"&&action!="checkpointFileExport"&&action!="checkpointFileRead"&&action!="checkpointFileImport"&&action!="checkpointFileCancel")throw std::runtime_error("Invalid checkpoint file action");
             return spectraPreview(p);
         }});
     registerOp({"fx_checkpoint_timeline",
