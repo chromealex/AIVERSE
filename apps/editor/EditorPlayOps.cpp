@@ -34,7 +34,7 @@ void Editor::registerPlayOps() {
                     r.set("reason",Json::string("No running play-test or entity generation is no longer alive"));
                     return r;
                 }
-                auto snapshot=view_.sharedAnimationGraphDiagnostic(key,graphPlayEpoch_,p.getBool("captureHistory")?&graphPlayHistory_:nullptr);
+                auto snapshot=view_.sharedAnimationGraphDiagnostic(key,graphPlayEpoch_==~uint64_t{0}?0:graphPlayEpoch_,p.getBool("captureHistory")?&graphPlayHistory_:nullptr);
                 const bool shared=snapshot.getBool("available");
                 if(!shared)snapshot=view_.animationGraphDiagnostic(key);
                 snapshot.set("domain",Json::string(domain));if(!shared)snapshot.set("scope",Json::string("native-editor-play-view"));
