@@ -44,3 +44,5 @@ declared dependencies are selected. See `skills/catalog.json` for dependency and
 WeightedGraph/WeightedEdge, dijkstra, graphPath, dfs and weakComponents now live in engine/core/Graphs.h. Nonnegative uint64 costs; UINT64_MAX reserved; overflowing paths ignored. DFS follows declared adjacency order; weak components label by smallest vertex. No tests yet.
 
 Added aStar (admissible uint64 heuristic, only goal path guaranteed optimal), stronglyConnected (iterative Kosaraju, minimum vertex labels), minimumSpanningForest (Kruskal, checked cost). No build/tests. Next flow algorithms.
+
+Flow API: engine/core/GraphFlow.h, graphFlow with Maximum or MinimumCost, integral capacities, edgeFlow in input order, explicit augmentation budget and negative residual cycle rejection. Partial result when budget exhausted. No tests yet.
