@@ -162,6 +162,8 @@ export interface StudioSpectraPreviewState {
   generation:number;alive:number;error:string;
   speed:number;loop:boolean;
   bursts:number;queuedBursts:number;clearing:boolean;
+  checkpoints?:Array<{id:number;tick:number}>;
+  checkpointPending?:boolean;
   gpuSeedPending?:boolean;
   gpuSeedFailed?:boolean;
   gpuSeedRetries?:number;
@@ -180,7 +182,7 @@ export interface StudioSpectraPreviewState {
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -194,6 +196,7 @@ export interface StudioParams {
     parameters?:Record<string,number>;
     seed?:number;
     gpuShaderSeed?:number;
+    checkpointId?:number;
     gpuBirthRandom?:boolean;
     requireReplayReady?:boolean;
     gpuAllocationSeed?:number;
