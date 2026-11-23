@@ -186,3 +186,44 @@ props; no fixed gameplay behavior is tied to any form. The final explicit
   textures or authored GLB kit pieces yet.
 - Studio's generator window, Assets GUID/meta creation and GPU verification are
   **not implemented in this stage**. 
+
+
+## Curved structure grammar (stage 4, November 2026)
+
+In addition to `pod`, `silo`, `pylon`, `gantry`, the generic
+`structures.<function>.forms` array now supports three architectural curves:
+
+- `arch`: an open, elliptical curved portal (12 finite wedge segments) with
+  separate support and arc collision pieces. A visible opening is not filled by
+  one large collider. Use when the portal itself is freestanding; the main
+  structure hull remains a separate closed collider.
+- `dome`: an ellipsoidal hemispherical roof, with bounded 16×7 tessellation,
+  a closed bottom, and a conservative collision box for nonwalkable roof mass.
+- `swept-hull`: a longitudinally curved, elliptical mechanical body with
+  shaped station rings (12×8), closed ends and conservative collision box.
+
+All new forms share the same authored `at`, `size`, `level`, `material`,
+`chance`, `repeat` and `step` fields. They work in the existing sci-fi style
+and in future setting files without a function-specific C++ generator.
+Examples in `scifi.json` now include a freestanding barracks arch, command
+roof dome, factory swept service hull and a compact depot dome.
+
+### Minimum front-gate clearance
+
+When `StructureSize{width,height,depth}` is **explicit**, the generator checks
+its *resulting geometric* gate width and height after final envelope fitting:
+width must remain at least **1.6 m**, height at least **2.1 m**.
+If a requested envelope would crush a gate below these limits, an empty
+`StyledStructure` is returned (the editor should surface a clear input error).
+The unsized legacy generation API remains untouched. The check protects gate
+**visuals**, not real indoor navigation: sci-fi main hulls are still closed
+collision volumes. Existing small armour trims and prop dimensions still use
+the envelope fit, so complete invariant detail thickness is not yet guaranteed.
+
+### Focused CI
+
+`.github/workflows/building-style-focused.yml` compiles the two building test
+executables and GLB exporter directly with C++20 and `-Werror`, independently
+of the unrelated library-catalog gate. It generates four 28×15×24 m buildings,
+checks the GLB container and exact accessor bounds. Results must be read from
+GitHub Actions, not assumed from the existence of this workflow.

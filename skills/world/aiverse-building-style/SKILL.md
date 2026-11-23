@@ -74,3 +74,14 @@ All positions/dimensions are normalized to the building's dimensions.
 Parser caps entries, repeats, positions, dimensions and probabilities. Both
 mesh and coarse collision reflect the authored shapes. Reserve roof footprints
 before roof prop placement; do not claim a gantry pierces the closed main hull.
+
+
+Stage 4: `forms[].kind` additionally accepts `arch`, `dome` and
+`swept-hull`. The arch has segmented curved beam collision with an open
+middle; the other two forms are closed and receive conservative AABB collision.
+All forms are derived from the same dimensions and style data. Explicit
+`StructureSize` validates front gate visual clearance (minimum 1.6 m width,
+2.1 m height after final fit); a failure returns an empty structure. This does
+not make the whole sci-fi hull enterable or preserve every small detail thickness.
+Use the `Building Style Focused` GitHub workflow for dedicated C++/GLB tests;
+its status must be inspected before claiming a test pass.

@@ -161,6 +161,17 @@ int main(int argc,char** argv){
             auto plain=dressStructure(without,"depot",9);
             CHECK(withArch.mesh.triangles()>plain.mesh.triangles());
             CHECK(withArch.boxes.size()>plain.boxes.size()+4);
+            // The arch must not obstruct its geometric centre at human height.
+            // This isolates the module in front of the depot (beyond the pad).
+            const float zCenter=1.35f*8.f;
+            const float yClear=0.35f+0.8f;
+            const float xCenter=4.f;
+            for(const auto& collision:withArch.boxes){
+                const auto b=box(collision,0);
+                CHECK(!(xCenter>b.lo[0]&&xCenter<b.hi[0]&&
+                        yClear>b.lo[1]&&yClear<b.hi[1]&&
+                        zCenter>b.lo[2]&&zCenter<b.hi[2]));
+            }
             for(const auto& v:withArch.mesh.vertices)
                 for(int a=0;a<3;++a)CHECK(std::isfinite(v.pos[a])&&std::isfinite(v.nrm[a]));
         }
