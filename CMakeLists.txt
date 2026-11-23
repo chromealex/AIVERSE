@@ -2858,6 +2858,14 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_world_processes_authoring_test tests/world_processes_authoring_test.cpp)
     target_link_libraries(aiverse_world_processes_authoring_test PRIVATE aiverse_engine AIVERSE::libraries)
     add_test(NAME world_processes_authoring_test COMMAND aiverse_world_processes_authoring_test)
+    add_executable(aiverse_world_processes_map_hydration_test tests/world_processes_map_hydration_test.cpp)
+    target_link_libraries(aiverse_world_processes_map_hydration_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_map_hydration_test COMMAND aiverse_world_processes_map_hydration_test)
+    # Optional real native game host, using the same fixture as the existing native RTS tests.
+    add_executable(aiverse_world_processes_gamecore_native_test tests/world_processes_gamecore_native_test.cpp)
+    target_link_libraries(aiverse_world_processes_gamecore_native_test PRIVATE aiverse_game AIVERSE::libraries)
+    target_compile_definitions(aiverse_world_processes_gamecore_native_test PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME world_processes_gamecore_native_test COMMAND aiverse_world_processes_gamecore_native_test)
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
