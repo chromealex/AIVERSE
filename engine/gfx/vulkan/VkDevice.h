@@ -240,6 +240,9 @@ public:
 
     void beginFrame(int framebufferWidth, int framebufferHeight) override;
     void endFrame() override;
+    void captureNextFrameTagged(TaggedCaptureFn fn) override {
+        captureNextFrame([this,fn=std::move(fn)](int w,int h,std::vector<uint8_t> pixels){if(fn)fn(frameSerial(),w,h,std::move(pixels));});
+    }
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
     bool captureTexture(TextureHandle source,CaptureFn callback) override;
     bool readTexturePixelAsync(TextureHandle,int,int,PixelReadFn) override;
