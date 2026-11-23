@@ -1,3 +1,4 @@
+#include "aiverselib/world/EvolveVisualization.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
@@ -62,6 +63,24 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
     } catch (const std::exception& e) {
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
+}
+Json StudioGameSurface::ecologyState(){
+    Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    Json out=Json::object(),regions=Json::array();
+    out.set("active",Json::fromBool(sim!=nullptr));
+    if(sim){
+        out.set("tick",Json::number(int64_t(sim->tick())));
+        for(const auto& v:evolve::visualRegions(sim->world())){
+            Json r=Json::object();
+            r.set("id",Json::string(std::to_string(v.bounds.region.packed())));
+            r.set("minXcm",Json::number(v.bounds.minXcm));r.set("minZcm",Json::number(v.bounds.minZcm));
+            r.set("maxXcm",Json::number(v.bounds.maxXcm));r.set("maxZcm",Json::number(v.bounds.maxZcm));
+            r.set("fertility",Json::number(v.fertility));r.set("pollution",Json::number(v.pollution));
+            r.set("succession",Json::number(v.succession));r.set("durability",Json::number(v.durability));
+            regions.push(std::move(r));
+        }
+    }
+    out.set("regions",std::move(regions));return out;
 }
 Json StudioGameSurface::mapEntityStates() {
     Simulation* sim=host_ && host_->inMatch()?host_->simulation():nullptr;
