@@ -65,7 +65,7 @@ public:
                    !codecs.restoreStaged(staged,refs,r.chunk))return false;
             }
         }
-        return p==bytes.size();
+        return p==bytes.size()&&codecs.rebuildDerived(staged,ledger);
     }
 };
 }
