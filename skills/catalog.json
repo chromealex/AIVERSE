@@ -2493,7 +2493,7 @@
       "package": "graphs",
       "path": "skills/core/aiverse-graphs/SKILL.md",
       "domain": "gameplay",
-      "summary": "BFS and topological ordering",
+      "summary": "Graph traversal, weighted paths, connectivity, spanning forests and integral flows",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_graphs",
