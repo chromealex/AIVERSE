@@ -209,3 +209,13 @@ owner applies GPU instance transforms and retires resources via existing
 fences; visual animation never grants boarding permission.
 Handoff: docs/agent-handoffs/building-lift-presentation-2026-11-23.md.
 No new tests were run (user defers tests).
+
+
+Stage 16: authenticating lift commands is server-owned. See
+engine/buildings/BuildingLiftCommandWire.h for 44-byte bounded command
+payload and BuildingCirculationEcsScene::configureAuthenticatedCommands,
+handleAuthenticatedPacket. Caller MUST pass authenticated client identity
+from existing transport, verify ECS actor owner and physical landing.
+Never let browser/client packets mutate lift snapshots or bypass physical
+doors. No tests run by user request; inspect handoff under
+docs/agent-handoffs/building-authenticated-commands-2026-11-23.md.

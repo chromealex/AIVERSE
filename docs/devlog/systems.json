@@ -1861,6 +1861,13 @@
           "titleEn": "Building Stage 17: Renderer3D movable lift/door model presentation",
           "text": "CPU модели кабины и створок создаются один раз; renderer получает ревизионные world transforms только после commit physics/ECS. Тесты отложены.",
           "textEn": "Create reusable CPU cabin/door meshes once and publish world transforms only after physics/ECS commit; tests deferred."
+        },
+        {
+          "status": "in-progress",
+          "title": "Building runtime: аутентифицированные команды лифта и контроль доступа ECS",
+          "titleEn": "Building runtime: authenticated elevator commands and ECS access control",
+          "text": "Командный wire protocol с проверкой длины, версии, scene/actor/sequence, проверка владельца ECS актора и физической зоны посадки; без новой сетевой системы.",
+          "textEn": "Bounded command codec, server-owned ECS actor authentication and landing checks, reusing existing network/physics owners."
         }
       ],
       "core": true,

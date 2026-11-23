@@ -396,3 +396,38 @@ Cross-system invariants:
 This is the source/presentation API boundary, not proof of a running
 Metal screenshot or completed GPU scene integration. Tests were deferred
 by the user; no build, CTest, Studio QA or GPU render executed for Stage 17.
+
+
+## Stage 16: authenticated client interaction commands
+
+The building circulation ECS host now has a persistent authenticated
+command endpoint. This reuses existing World, SpatialWorld, nav::Mesh,
+BuildingLiftEcsBridge and BuildingLiftAuthority; it does not create a
+second networking or simulation backend. In a native game, use
+BuildingCirculationEcsScene<ExistingPositionComponent> from
+engine/buildings/BuildingCirculationEcsScene.h. Body must expose mutable
+Vec3 pos.
+
+Install the trusted owner callbacks at the exclusive server owner phase:
+
+- configureAuthenticatedCommands(ownsActor, atLanding), where ownsActor
+  checks an authenticated client connection against the already existing
+  actor Entity, and atLanding verifies collision-backed arrival at the
+  actual entrance/call zone.
+- The game's authenticated network channel provides the client ID out of
+  band; handleAuthenticatedPacket(clientId, byteSpan) parses a bounded
+  fixed-size command and passes it to persistent BuildingLiftAuthority.
+- Command wire is engine/buildings/BuildingLiftCommandWire.h, version 1,
+  exactly 44 bytes with magic/flags/scene/actor/sequence/feature/floor/kind
+  validation. Invalid/stale/replayed/wrong-owner commands reject.
+- Existing ECS scene direct board/exit are authoritative-owner APIs only,
+  and now refuse boarding or exit unless physical landing doors exist.
+
+This wire format does not authenticate packets or establish new sockets.
+Only the game's authenticated server transport may supply clientId.
+Do not send state frames as client commands. Authoritative world owner
+advances the scene and sends server state through existing transport only
+after physical platform collider and ECS actor position publication succeeds.
+
+No compile/runtime/network verification of this stage was performed
+at user request; treat all new interfaces as source-level integration pending.

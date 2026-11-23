@@ -178,3 +178,36 @@ Cross-system invariants:
 This is the source/presentation API boundary, not proof of a running
 Metal screenshot or completed GPU scene integration. Tests were deferred
 by the user; no build, CTest, Studio QA or GPU render executed for Stage 17.
+
+
+## Authenticated lift commands — authoritative game integration
+
+The existing game server receives an authenticated connection identity
+separately from a lift command's bytes. Never trust a client-supplied
+actor or scene ID without checking it against the authenticated session.
+
+    #include "engine/buildings/BuildingCirculationEcsScene.h"
+
+    // On authoritative world owner after attach(...) and attachLandingDoors(...):
+    scene.configureAuthenticatedCommands(
+        [&](uint64_t clientId, Entity actor) {
+            return gameSession.ownsActor(clientId, actor);
+        },
+        [&](Entity actor, uint32_t feature, uint32_t floor) {
+            return movementOwner.actorAtLiftLanding(actor, feature, floor);
+        });
+
+    // Existing authenticated network channel supplies clientId out-of-band.
+    // On world owner thread, not inside a browser/renderer callback:
+    auto accepted = scene.handleAuthenticatedPacket(clientId, packetBytes);
+
+The request codec is BuildingLiftCommandWire.h (fixed 44-byte packet).
+It is neither a network listener nor an authentication mechanism. It only
+validates the payload and passes it to the persistent server command
+authority, which owns monotonic per-actor sequence protection. ECS actors
+still require physical door/boarding checks and the existing authority's
+call, board, destination, exit state machine.
+
+For outbound server snapshots use captureServerSnapshot(serverTick, out)
+after successful owner-phase collision + ECS rider updates. Clients may
+accept only trusted server state frames through BuildingLiftReplica.
