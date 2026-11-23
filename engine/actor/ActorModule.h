@@ -249,6 +249,9 @@ private:
     uint64_t navigationCollisionRevision_=UINT64_MAX;
     uint64_t navigationRebuilds_=0;
     std::string navigationReadinessError_;
+    // Host-local derived admission from the most recent readyToStep.
+    // Never saved/hashed; refreshed before every tick and after rollback.
+    std::map<uint64_t,Vec3> admittedRegionMoves_;
 
 };
 // The actor systems of a simulation run by game::GameCore (engine/game/GameCore.cpp); throws when the map is not world-space.
