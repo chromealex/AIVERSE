@@ -30,6 +30,13 @@ struct BuildingActorLifecycleTick {
     std::vector<Entity> stale;
 };
 
+template<BuildingPositionBody Body>
+struct BuildingActorFixedTickResult {
+    typename BuildingCirculationEcsScene<Body>::Tick circulation;
+    BuildingActorLifecycleTick retirement;
+    bool complete=false;
+};
+
 // One owner-phase queue per authoritative ECS scene. A disconnect must first
 // revoke command/interaction authority in the EXISTING session/transport;
 // the ECS entity and Body remain live while the cabin moves.
@@ -70,6 +77,20 @@ public:
         return true;
     }
 
+    // One-entry-point order for the authoritative fixed tick: publish
+    // platform colliders, publish ECS rider movement, then retire only
+    // riders that have reached a physical landing. Caller owns ecs.flush().
+    BuildingActorFixedTickResult<Body> advanceFixedTick(
+        World& ecs,Scene& scene,world::SpatialWorld& spatial,
+        nav::Mesh* navmesh,uint32_t elapsedMs) {
+        BuildingActorFixedTickResult<Body> result;
+        result.circulation=scene.advance(spatial,navmesh,elapsedMs);
+        if(!result.circulation.complete)return result;
+        result.retirement=afterCommittedTick(ecs,scene);
+        result.complete=result.retirement.complete;
+        return result;
+    }
+
     // Call once after a SUCCESSFUL scene.advance() from the existing
     // authoritative fixed tick. The gameplay owner must call ecs.flush()
     // at its normal structural-change barrier, never during ECS iteration.
@@ -99,6 +120,11 @@ public:
             auto* marker=ecs.tryGet<BuildingLiftPassenger>(item.actor);
             if(marker&&marker->attached&&marker->sceneId!=item.sceneId){
                 result.error="Actor passenger marker changed scene during retirement";
+                return result;
+            }
+            const auto binding=scene.scene().host().riderBindings().find(item.actor.packed());
+            if(marker&&marker->attached&&binding==scene.scene().host().riderBindings().end()){
+                result.error="Passenger marker has no host rider binding";
                 return result;
             }
             std::string why;
