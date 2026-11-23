@@ -7,7 +7,7 @@ import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
 
-type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback';
+type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
 interface Props {
   graph:SpectraGraphV2;
@@ -32,6 +32,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const lastLoadedGraph=useRef('');
   const reloadBusy=useRef(false);
   const [seek,setSeek]=useState(0);
+  const [burstCount,setBurstCount]=useState(1);
   const [parameter,setParameter]=useState('');
   const [value,setValue]=useState('0');
   const active=nativeConnected();
@@ -93,7 +94,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
-    preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean
+    preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean;count:number
   }>={})=>{
     if(busy||disabled||!active)return;
     setBusy(true);setError('');
@@ -198,6 +199,21 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void command('restart',{play:false})}><RotateCcw size={14}/> Restart</StudioButton>
       <StudioButton size="sm" variant="danger" disabled={!active||!state?.ready||busy}
         onClick={()=>void command('stop')}><Square size={14}/> Stop</StudioButton>
+      <StudioField label="Bursts" htmlFor="spectra-burst-count">
+        <StudioSelect id="spectra-burst-count" value={String(burstCount)}
+          disabled={!active||!state?.ready||busy}
+          onChange={e=>setBurstCount(Number(e.target.value))}>
+          {[1,2,4,8].map(n=><option value={n} key={n}>{n}×</option>)}
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" variant="primary" disabled={!active||!state?.ready||busy}
+        onClick={()=>void command('burst',{count:burstCount})}>
+        Trigger Burst
+      </StudioButton>
+      <StudioButton size="sm" disabled={!active||!state?.ready||busy}
+        onClick={()=>void command('clear')}>
+        Clear Particles
+      </StudioButton>
     </div>
     <div className="spectra-native__status">
       <StudioBadge tone={state?.gpu?'success':state?.ready?'warning':'neutral'}>
@@ -205,6 +221,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       </StudioBadge>
       <span>{state?.ready?(state.playing?'Playing':'Paused'):'No active runtime'}</span>
       <span>Tick {state?.tick??0} / 3600</span>
+      <span>Bursts {state?.bursts??0}
+        {state?.queuedBursts?' · queued '+state.queuedBursts:''}
+      </span>
       <span>Time {(state?.timeSeconds??0).toFixed(2)}s</span>
     </div>
     <div className="spectra-native__timeline">
@@ -241,8 +260,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     </div>}
     <p className="spectra-native__hint">
       The native backend decides GPU eligibility; CPU fallback renders real particles into the same viewport.
-      Enable Auto-reload to compile the in-memory graph after edits (650 ms debounce);
-      invalid graphs keep the last-good native runtime. Publishing remains explicit.
+      Enable Auto-reload to compile the in-memory graph after edits (650 ms debounce).
+      Trigger Burst queues additional real native events (up to 8 at once); Clear Particles
+      schedules a safe reset inside the next GPU frame without unloading the graph.
+      Invalid compiler input keeps the last-good runtime. Publishing remains explicit.
       GPU/CPU numerical parity is a separate hardware test.
     </p>
   </StudioSection>;
