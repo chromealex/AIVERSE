@@ -54,6 +54,20 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         present.insert(stable);
     }
 
+    // Reject orphaned car backlinks before migrating anyone. World-space
+    // character seat references use Vehicle.id, not Entity::index.
+    std::set<uint32_t> carIds;
+    for(Entity car:vehicleEntities(sim)) {
+        const auto* v=view.tryGetConst<Vehicle>(car);
+        if(!v || !v->id || !carIds.insert(v->id).second)
+            throw std::logic_error("regionOwnership: invalid or duplicate car id");
+    }
+    view.eachExistingConst<CharacterBody>(
+        [&](Entity,const CharacterBody& body) {
+            if(body.vehicle && !carIds.contains(body.vehicle))
+                throw std::logic_error("regionOwnership: orphaned vehicle backlink");
+        });
+
     // Occupied vehicles are one atomic ownership graph. Legacy arcade seats
     // use CharacterBody.vehicle + Vehicle.driver; typed vehicles use the one
     // shared VehicleDrive/VehicleOccupant model and the existing seat adapter.
