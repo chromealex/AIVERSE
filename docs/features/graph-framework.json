@@ -93,7 +93,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 31B in progress: version-checked appearance publication through existing model image transaction; host and GPU validation pending.",
+      "note": "Stage 31B versioned native appearance registry publication and completed-set bridge implemented; actual live host wiring, zero-copy, MCP/Studio and verification pending.",
       "evidence": []
     },
     "architecture": {

@@ -6,6 +6,7 @@
 #include "ModelPublicationEpoch.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/ModelReadLease.h"
+#include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -519,6 +520,61 @@ public:
                 animationSerial_=std::max(animationSerial_,
                                           assets_.at(key)->generation);
             dirty_.erase(key);dirtyGraph_.erase(key);dirtyModel_.erase(key);
+            return true;
+        }catch(const std::exception& ex) {
+            if(error)*error=ex.what();
+            return false;
+        }
+    }
+
+    // Native host only: at a joined frame boundary, with the mutable Model
+    // still owned by the host and no readers touching its image vector.
+    // Existing snapshots keep their original image indices. New textures are
+    // append-only until the Model is retired by its existing resource owner.
+    // The per-model cap bounds repeated edits without invalidating old pins.
+    static constexpr size_t maxProceduralImages=24;
+    bool publishTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,
+            const std::vector<render::Image>& images,
+            std::string_view generation,std::string* error=nullptr) {
+        if(error)error->clear();
+        try {
+            const auto it=assets_.find(key);
+            if(it==assets_.end()||dirty(key))
+                throw std::invalid_argument("appearance missing or dirty");
+            const auto old=it->second;
+            if(!expectedVersion||old->version!=expectedVersion||
+               !expectedModelPublication||old->modelPublicationGeneration!=expectedModelPublication||
+               old->model!=&model||materialIndex>=old->materials.size())
+                throw std::invalid_argument("appearance publication identity changed");
+            if(!lease.validFor(device)||!device.gpuHealthy())
+                throw std::runtime_error("appearance graphics owner unavailable");
+            if(versionSerial_==std::numeric_limits<uint64_t>::max())
+                throw std::overflow_error("appearance version overflow");
+            auto plan=render::texture_graph::prepareMaterialImages(program,images,generation);
+            size_t retained=0;
+            for(const auto& image:model.images)
+                if(image.name.rfind("#texture-graph/",0)==0)++retained;
+            if(retained>maxProceduralImages||plan.entries.size()>maxProceduralImages-retained)
+                throw std::runtime_error("procedural image budget exhausted; retire/reload Model through owner");
+            // Preallocate the replacement snapshot before GPU allocation.
+            auto next=std::make_shared<Asset>(*old);
+            next->version=versionSerial_+1;
+            render::ModelImageUploadTransaction transaction(device,rollback,lease);
+            next->materials[materialIndex]=render::texture_graph::stageMaterialImages(
+                transaction,model,old->materials[materialIndex],std::move(plan));
+            if(!lease.validFor(device)||!device.gpuHealthy())
+                throw std::runtime_error("appearance graphics owner lost during staging");
+            // No external callbacks between the image commit and publishing
+            // the preallocated snapshot. Old indices and graph epoch survive.
+            transaction.commit();
+            model.markMaterialChanged();
+            it->second=std::move(next);
+            ++versionSerial_;
             return true;
         }catch(const std::exception& ex) {
             if(error)*error=ex.what();

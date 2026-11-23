@@ -2,6 +2,7 @@
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
+#include "engine/view/AppearanceAssetRegistry.h"
 #include "MaterialOps.h"
 #include <chrono>
 #include <memory>
@@ -149,6 +150,22 @@ public:
             throw std::runtime_error("no matching completed texture set for material staging");
         auto plan=render::texture_graph::prepareMaterialImages(*program_,setImages_,generation);
         return render::texture_graph::stageMaterialImages(transaction,model,base,std::move(plan));
+    }
+    // Native appearance owner entry point; the host supplies its actual
+    // registry, Model, graphics epoch and rollback pool. No raw-handle RPC.
+    bool publishCompletedMaterial(const std::string& project,const std::string& request,
+            std::string_view generation,view::AppearanceAssetRegistry& registry,
+            const std::string& key,uint64_t expectedVersion,uint64_t expectedModelPublication,
+            size_t materialIndex,render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::string* error=nullptr) const {
+        if(!setBake_||published_||state_!="ready"||active()||inFlight_||setIncomplete()||
+           !program_||project.empty()||project_!=project||request!=std::to_string(serial_)){
+            if(error)*error="no matching completed texture set";
+            return false;
+        }
+        return registry.publishTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
+            materialIndex,model,device,lease,rollback,*program_,setImages_,generation,error);
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
