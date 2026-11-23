@@ -138,7 +138,8 @@ export default function BuildingGeneratorPanel({
   const reveal=()=>{
     if(!saved)return;
     showPanel('assets');
-    window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path:saved.path}}));
+    // Reopening a dock may mount Assets only on the next React commit.
+    requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path:saved.path}})));
   };
   const place=async()=>{
     if(!saved||busy)return;
