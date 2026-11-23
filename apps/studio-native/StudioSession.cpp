@@ -1,3 +1,4 @@
+#include "aiverselib/world/EvolveAreaScaleMath.h"
 #include <regex>
 #include <fstream>
 #include "apps/editor/AuthoringWater.h"
@@ -2729,13 +2730,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     const auto scaleN=x?n:(axis=="both"?nz:n);
                     const auto scaleD=x?d:(axis=="both"?dz:d);
                     const auto half=area[halfKey].integer();
-                    const auto newHalf=std::llround((long double)half*scaleN/scaleD);
-                    if(newHalf<50||newHalf>evolve::kAreaMaxHalfExtentCm)
-                        throw std::runtime_error("EVOLVE group size outside bounds");
                     const auto oldCenter=x?centersX[i]:centersZ[i];
                     const auto pivotCenter=x?sharedX:sharedZ;
-                    const auto nextCenter=pivot=="individual"?oldCenter:
-                        pivotCenter+std::llround((long double)(oldCenter-pivotCenter)*scaleN/scaleD);
+                    evolve::scale_math::AxisResult transformed;
+                    if(!evolve::scale_math::transform(
+                           oldCenter,half,pivotCenter,scaleN,scaleD,
+                           pivot=="individual",transformed))
+                        throw std::runtime_error("Invalid EVOLVE group scale");
+                    const auto newHalf=transformed.half;
+                    const auto nextCenter=transformed.center;
+                    if(newHalf<50||newHalf>evolve::kAreaMaxHalfExtentCm)
+                        throw std::runtime_error("EVOLVE group size outside bounds");
                     const auto origin=std::llround(double(x?candidate.x:candidate.z)*100.);
                     area.set(halfKey,Json::number(newHalf));
                     area.set(offsetKey,Json::number(nextCenter-origin));
