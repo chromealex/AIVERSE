@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes } from './shaderGraphLayout';
+import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes, shaderTintTemplate, setShaderOutput } from './shaderGraphLayout';
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
@@ -80,6 +80,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   editDraft(result.graph);setSelection(result.ids);setError('');
  };
  const ports=Object.fromEntries((draft?.nodes??[]).map(n=>[n.id,{inputs:operations.find(o=>o.id===n.op&&o.domains.includes(draft?.domain??'material'))?.inputs??0,output:true}]));
+ const template=shaderTintTemplate(draft?.domain??'material',operations);
+ const insertTemplate=()=>{if(!draft||busy||!template)return;const result=pasteShaderNodes(draft,template,operations);if(result.graph===draft){setError('Template exceeds graph bounds.');return;}editDraft(result.graph);setSelection(result.ids);};
  const wire=(input:PortRef)=>{
   if(!draft||busy||!pendingOutput)return;
   const next=connectShaderInput(draft,operations,pendingOutput.node,input.node,Number(input.port));
@@ -178,6 +180,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        <StudioButton size="sm" disabled={!selectedIds.length||busy} onClick={copyNodes}>Copy</StudioButton>
        <StudioButton size="sm" disabled={!draft||!clipboard||busy} onClick={pasteNodes}>Paste</StudioButton>
        <StudioButton size="sm" disabled={!draft||busy} onClick={()=>{if(draft){const next=arrangeShaderNodes(draft);if(next===draft)setError('Layout unavailable: cyclic or exceeds canvas bounds.');else editDraft(next);}}}>Auto layout</StudioButton>
+       <StudioButton size="sm" disabled={!draft||!template||busy} onClick={insertTemplate}>Insert tint template</StudioButton>
        <span>{selectedIds.length} selected</span>
        <StudioButton size="sm" disabled={!history.current?.canUndo()||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput(null)}}>Undo</StudioButton>
        <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}}>Redo</StudioButton>
@@ -196,7 +199,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         {id:'duplicate',label:'Duplicate',shortcut:'mod+d',disabled:!activeNode,run:duplicate},
         {id:'undo',label:'Undo',shortcut:'mod+z',disabled:!history.current?.canUndo(),run:()=>{if(history.current)setDraft(history.current.undo());setPendingOutput(null)}},
         {id:'redo',label:'Redo',shortcut:'mod+shift+z',disabled:!history.current?.canRedo(),run:()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}},
-        {id:'all',label:'Select all',shortcut:'mod+a',run:()=>setSelection(view.nodes.map(n=>n.id))}
+        {id:'all',label:'Select all',shortcut:'mod+a',run:()=>setSelection(view.nodes.map(n=>n.id))},
+        {id:'template',label:'Insert tint template',disabled:!template,run:insertTemplate}
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
@@ -216,8 +220,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         </div>}
        </div>
       </StudioSection>}
-      <div className="graph-outputs">Outputs: {Object.entries(draft?.outputs??document.graph.outputs??{}).map(
-       ([k,v])=>k+' ← '+v).join(' · ')||'none'}</div>
+      <div className="graph-outputs">Outputs: {draft&&Object.keys(draft.outputs??{}).map(key=><label key={key} className="au-row">
+       <span>{key}</span><StudioSelect aria-label={'Graph output '+key} value={draft.outputs?.[key]??''}
+        onChange={e=>editDraft(setShaderOutput(draft,key,e.target.value))}>
+        {draft.nodes?.map(n=><option key={n.id} value={n.id}>{n.id}</option>)}
+       </StudioSelect></label>)}{!Object.keys(draft?.outputs??{}).length&&'none'}</div>
      </> : <div className="graph-empty">No graph loaded.</div>}
    </main>
   </div>
