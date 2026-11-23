@@ -117,6 +117,16 @@ public:
                 if(!runtime_.resetDeterministicSeed(uint32_t(seed.integer())))
                     return errorStatus(runtime_.reason());
             }
+            if(!input["gpuAllocationSeed"].isNull()) {
+                const Json& seed=input["gpuAllocationSeed"];
+                if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
+                   seed.integer(-1)<0 || seed.integer(-1)>2147483647)
+                    return errorStatus("GPU allocation seed must be integer 0..2147483647");
+                if(!runtime_.gpuActive())
+                    return errorStatus("GPU allocation seed requires Metal GPU backend");
+                if(!runtime_.resetGpuAllocationSeed(uint32_t(seed.integer())))
+                    return errorStatus(runtime_.reason());
+            }
             playing_=false;phase_=0;pendingRestart_=true;restartBurstPending_=true;
             pendingClear_=false;burstsPending_=0;triggeredBursts_=0;
             stepsPending_=0;timeTicks_=0;
