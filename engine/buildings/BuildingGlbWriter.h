@@ -43,8 +43,8 @@ struct Glb{
             bytes[6]==26&&bytes[7]==10;
         const bool jpg=bytes.size()>=4&&bytes[0]==255&&bytes[1]==216&&
             bytes[bytes.size()-2]==255&&bytes[bytes.size()-1]==217;
-        if((!png&&!jpg)||bytes.size()>16u*1024u*1024u)
-            throw std::runtime_error("GLB texture must be PNG/JPEG up to 16 MiB");
+        if((!png&&!jpg)||bytes.size()>20u*1024u*1024u)
+            throw std::runtime_error("GLB texture must be valid PNG/JPEG up to 20 MiB");
         while(bin.size()%4)bin.push_back(0);
         const size_t offset=bin.size();
         bin.insert(bin.end(),bytes.begin(),bytes.end());
