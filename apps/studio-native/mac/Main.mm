@@ -280,6 +280,7 @@ private:
     __unsafe_unretained StudioShell* shell_;
     void* sceneLayer_=nullptr;
     void* gameLayer_=nullptr;
+    void* fxLayer_=nullptr;
 };
 
 // Developer automation for scene-only wind-mask screenshots (no desktop or
