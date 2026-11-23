@@ -132,11 +132,39 @@ void testFailedDestinationPreservesAuthoritativeState() {
         AIVERSE_TEST_CHECK(a->checksum()==restored->checksum());
     }
 }
+// A request created *inside* the tick cannot use a readyToStep check from
+// earlier in that tick. It waits for the next admission decision instead.
+void testLateGameplayCommandWaitsForNextAdmission() {
+    auto sim=create(false);
+    auto& host=actor::host(*sim);
+    const Entity actor=host.characterEntity(*sim,1);
+    const Vec3 target{68_fx,2_fx,4_fx};
+    int commands=0;
+    sim->insertSystem(0,"test.stageLater",[&](Simulation& s){
+        if(commands++==0) {
+            std::string error;
+            AIVERSE_TEST_CHECK(host.requestRegionMove(s,actor,target,&error));
+        }
+    });
+    const auto original=sim->world().get<actor::CharacterBody>(actor).pos;
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==1);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::CharacterBody>(actor).pos.x==original.x);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.size()==1);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()->applied==0);
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==2);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::CharacterBody>(actor).pos.x>=64_fx);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()->applied==1);
+}
+
 void testStaticAndOccupiedMove() {
     auto sim=create(false);
     auto& host=actor::host(*sim);
     auto& ecs=sim->world();
-    auto cars=host.vehicleEntities(*sim);
     // No driving block: create a plain arcade car for the stage fixture.
     // It remains the existing actor::Vehicle, not a second vehicle model.
     Entity car=ecs.create();
@@ -168,6 +196,7 @@ void testStaticAndOccupiedMove() {
 }
 int main() {
     testFailedDestinationPreservesAuthoritativeState();
+    testLateGameplayCommandWaitsForNextAdmission();
     testStaticAndOccupiedMove();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
 }
