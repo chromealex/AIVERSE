@@ -125,6 +125,45 @@ static void checkLedger() {
     AIVERSE_TEST_CHECK(mixed.lastRevision()==beforeFailed);
     AIVERSE_TEST_CHECK(mixed.activeIn(c).size()==3);
 
+    // Incremental latest-state feed: paged reads must equal full since()
+    // output after mixed-origin moves and tombstones, in revision order.
+    RegionEntityLedger changes;
+    for(uint64_t id=100;id<180;++id)
+        AIVERSE_TEST_CHECK(changes.spawn(id,a));
+    for(uint64_t id=100;id<160;++id)
+        AIVERSE_TEST_CHECK(changes.transfer(id,a,b));
+    for(uint64_t id=160;id<175;++id)
+        AIVERSE_TEST_CHECK(changes.despawn(id,a));
+    auto expected=changes.since(0);
+    std::vector<std::pair<RegionEntityId,RegionEntityRecord>> pages;
+    uint64_t cursor=0;
+    int chunks=0;
+    while(true) {
+        auto page=changes.pageSince(cursor,7);
+        for(const auto& [id,record]:page.changes) {
+            AIVERSE_TEST_CHECK(record.revision>cursor);
+            pages.emplace_back(id,record);
+        }
+        AIVERSE_TEST_CHECK(page.nextRevision>=cursor);
+        cursor=page.nextRevision;
+        ++chunks;
+        AIVERSE_TEST_CHECK(chunks<30);
+        if(!page.more)break;
+        AIVERSE_TEST_CHECK(page.changes.size()==7);
+    }
+    AIVERSE_TEST_CHECK(pages==expected);
+    AIVERSE_TEST_CHECK(changes.pageSince(cursor,7).changes.empty());
+    AIVERSE_TEST_CHECK(changes.pageSince(0,0).changes.empty());
+    AIVERSE_TEST_CHECK(changes.pageSince(UINT64_MAX,7).changes.empty());
+    const auto encodedChanges=encode(changes);
+    Archive changeReader(encodedChanges);
+    RegionEntityLedger decodedChanges;
+    io(changeReader,decodedChanges);
+    AIVERSE_TEST_CHECK(changeReader.ok());
+    AIVERSE_TEST_CHECK(decodedChanges.since(0)==expected);
+    AIVERSE_TEST_CHECK(decodedChanges.pageSince(0,100).changes==expected);
+    AIVERSE_TEST_CHECK(encode(decodedChanges)==encodedChanges);
+
     // Persistent changes are authoritative even when an observer is far away.
     RegionEntityLedger roaming;
     AIVERSE_TEST_CHECK(roaming.spawn(500,a) && roaming.spawn(501,a));
