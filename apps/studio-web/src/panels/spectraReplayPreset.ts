@@ -6,6 +6,7 @@ export interface SpectraReplayPreset {
   camera:StudioSpectraCameraSnapshot;tick:number;speed:number;loop:boolean;
   background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
   parameters:Record<string,number>;
+  gpuBirthRandom?:boolean;
   seed?:number; // CPU backend only
   gpuShaderSeed?:number;
   gpuAllocationSeed?:number; // Metal slot ordering only
@@ -31,6 +32,7 @@ export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
      !bounded(c.distance,0.01,100000)||!bounded(c.targetX,-1000000,1000000)||
      !bounded(c.targetY,-1000000,1000000)||!bounded(c.targetZ,-1000000,1000000)||
      typeof c.ortho!=='boolean')throw new Error('Invalid replay camera');
+  if(v.gpuBirthRandom!==undefined&&typeof v.gpuBirthRandom!=='boolean')throw new Error('Invalid GPU random mode');
   if(v.seed!==undefined && (!bounded(v.seed,0,2147483647)||!Number.isInteger(v.seed)))
     throw new Error('Invalid CPU replay seed');
   if(v.gpuAllocationSeed!==undefined && (!bounded(v.gpuAllocationSeed,0,2147483647)||!Number.isInteger(v.gpuAllocationSeed)))
