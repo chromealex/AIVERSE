@@ -1,6 +1,8 @@
 #pragma once
 #include "GeometryDistance.h"
 #include <span>
+#include <vector>
+#include <initializer_list>
 namespace aiverse::lib::algorithms {
 inline Point3d convexSupport(std::span<const Point3d> points,Point3d d){
     // Precondition: nonempty finite point set.
@@ -11,7 +13,7 @@ inline Point3d convexSupport(std::span<const Point3d> points,Point3d d){
 enum class ConvexQuery {Separated,Intersecting,Indeterminate,Invalid};
 // GJK intersection via closest simplex reduction. Tolerance is in world units.
 // Indeterminate is deliberately distinct from separated.
-inline ConvexQuery convexIntersect(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-8,size_t budget=64){
+inline ConvexQuery convexIntersect(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-8,size_t budget=64,std::array<Point3d,4>* enclosing=nullptr){
     if(a.empty()||b.empty()||a.size()>1000000||b.size()>1000000||!std::isfinite(tolerance)||tolerance<=0||tolerance>1||!budget||budget>1024)return ConvexQuery::Invalid;
     for(auto p:a)if(!finite3(p))return ConvexQuery::Invalid;
     for(auto p:b)if(!finite3(p))return ConvexQuery::Invalid;
@@ -30,7 +32,10 @@ inline ConvexQuery convexIntersect(std::span<const Point3d> a,std::span<const Po
             double det=dot(u,cross(v,w));
             if(det!=0){
                 auto q=x*(-1);double i=dot(q,cross(v,w))/det,j=dot(u,cross(q,w))/det,k=dot(u,cross(v,q))/det;
-                if(i>=0&&j>=0&&k>=0&&i+j+k<=1)return ConvexQuery::Intersecting;
+                if(i>=0&&j>=0&&k>=0&&i+j+k<=1){
+                    if(enclosing&&i>0&&j>0&&k>0&&i+j+k<1)std::copy(simplex.begin(),simplex.end(),enclosing->begin());
+                    return ConvexQuery::Intersecting;
+                }
             }
         }
         double best=std::numeric_limits<double>::infinity();std::vector<Point3d> reduced;
