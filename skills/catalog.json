@@ -604,6 +604,35 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-dark-fantasy",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-dark-fantasy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Dark Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/dark-fantasy.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "dark-fantasy",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-gen",
       "package": "building-gen",
       "path": "skills/world/aiverse-building-gen/SKILL.md",
@@ -639,6 +668,64 @@
         "окно",
         "комнат",
         "интерьер"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-medieval-fantasy",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-medieval-fantasy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Medieval Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/medieval-fantasy.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "medieval-fantasy",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-steampunk",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-steampunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Steampunk building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/steampunk.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "steampunk",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
       ],
       "contentPackages": []
     },
