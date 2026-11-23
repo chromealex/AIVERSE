@@ -376,12 +376,16 @@ void VulkanDevice::endCompute() {
 
 bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,
                                    BufferReadFn callback) {
+    return readBufferRangeAsync(handle,0,size,std::move(callback));
+}
+
+bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t size,BufferReadFn callback) {
     if(!healthy_ || !recording_ || inPass_ || activeComputeId_ ||
-       !callback || !handle.valid() || !size || size>(64u*1024u) ||
+       !callback || !handle.valid() || !size || (offset&3u) || (size&3u) || size>(64u*1024u) ||
        computeReads_.size()>=64)
         return false;
     const auto* buffer=buffers_.get(handle.id);
-    if(!buffer || size>buffer->size)return false;
+    if(!buffer || offset>buffer->size || size>buffer->size-offset)return false;
     const VkBuffer source=resolveBuffer(handle.id,serial_);
     if(!source)return false;
     PendingComputeRead pending;
@@ -400,7 +404,7 @@ bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,0,
                          1,&before,0,nullptr,0,nullptr);
-    VkBufferCopy region{0,0,size};
+    VkBufferCopy region{VkDeviceSize(offset),0,VkDeviceSize(size)};
     vkCmdCopyBuffer(cb,source,pending.buffer,1,&region);
     auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
     after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
