@@ -3,6 +3,15 @@
 Branch: `feature/aiv20261123_building-grammar`. Parent: `feature/aiv20261122_building_styles` (base of draft PR #114).
 Stage 2 handoff: `docs/agent-handoffs/building-grammar-2026-11-23.md`.
 Current stage started with roadmap commit `642c9a84ff78f2be262c689e28592aa601788339`.
+Stage 3 code revisions: `5777260752790cb3dda1321df4f9a16e3662e2bc` (schema),
+`d4e7a399c2f24e6f9770b54ec311ce2c3198fd01` (mesh),
+`1e87fba085217dcfafb5f2d616a15339d6ac5290` (sci-fi style),
+`061ff827f25d039e013c9380d50fa3e142ff62f3` (pod material),
+`c6dff1e4c6a189adc277329fbad68c7740e5c065` (repeat bounds),
+`f4adece5025412c2e5dda3f830772d246675fc37` (tests);
+review docs committed at `8f3dc123eea9c76a9e1c906740f78b365d70cd21`.
+Review PR: https://github.com/chromealex/AIVERSE/pull/114.
+
 
 ## What changed
 
@@ -35,6 +44,11 @@ The `--structure ... --size W H D` GLB exporter from stage 2 remains.
 
 - Source-level anchor checks and GitHub write confirmations: yes.
 - JSON structure generated with `JSON.stringify` before GitHub update: yes.
+- Cross-check of committed `scifi.json` against expected four massing names,
+  allowed form kinds, and referenced material IDs via GitHub-linked data: PASS
+  (0 issues). This is a source-data check, **not a runtime parser/geometry test**.
+- CI run for handoff revision `8f3dc...`: https://github.com/chromealex/AIVERSE/actions/runs/45205932738
+  was queued at the time of this handoff; no pass may be claimed.
 - Added C++ tests **not yet compiled or executed here** (no local repository
   worktree in this environment). Do not mark them passed.
 - Previous PR CI (#114, run 45203138238) had a failed Web job reporting
