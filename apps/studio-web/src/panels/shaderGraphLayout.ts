@@ -58,3 +58,53 @@ export function removeShaderGraphNode(source:GraphSource,id:string):GraphSource 
     Object.values(source.outputs??{}).includes(id))return source;
  return {...source,nodes:source.nodes.filter(n=>n.id!==id)};
 }
+
+/** Authoring edits only. Native compiler remains authoritative. */
+export interface ShaderNodeOperation { id:string; inputs:number; domains:readonly string[] }
+export function shaderNodeCatalog(ops:readonly ShaderNodeOperation[],domain:string,query=''):ShaderNodeOperation[] {
+ const q=query.trim().toLowerCase();
+ return ops.filter(op=>op.domains.includes(domain)&&op.id.toLowerCase().includes(q)&&Number.isSafeInteger(op.inputs)&&op.inputs>=0&&op.inputs<=16)
+  .slice().sort((a,b)=>a.id.localeCompare(b.id));
+}
+export function connectShaderInput(source:GraphSource,ops:readonly ShaderNodeOperation[],from:string,to:string,index:number):GraphSource {
+ const nodes=source.nodes??[];
+ const target=nodes.find(n=>n.id===to);
+ const op=ops.find(o=>o.id===target?.op&&o.domains.includes(source.domain??'material'));
+ if(!target||!op||!nodes.some(n=>n.id===from)||!Number.isSafeInteger(index)||index<0||index>=op.inputs||op.inputs>16)return source;
+ // The new source may not depend on the destination. Other pre-existing invalid branches
+ // remain editable; the native compiler validates the complete graph before save.
+ const byId=new Map(nodes.map(n=>[n.id,n]));
+ const pending=[from],seen=new Set<string>();
+ while(pending.length){
+  const id=pending.pop()!;
+  if(id===to)return source;
+  if(seen.has(id))continue;
+  seen.add(id);
+  pending.push(...(byId.get(id)?.inputs??[]));
+ }
+ const inputs=Array.from({length:op.inputs},(_,i)=>target.inputs?.[i]??'');
+ if(inputs[index]===from)return source;
+ inputs[index]=from;
+ return {...source,nodes:nodes.map(n=>n.id===to?{...n,inputs}:n)};
+}
+export function disconnectShaderInput(source:GraphSource,to:string,index:number):GraphSource {
+ const node=source.nodes?.find(n=>n.id===to);
+ if(!node?.inputs||!Number.isSafeInteger(index)||index<0||index>=node.inputs.length||!node.inputs[index])return source;
+ const inputs=node.inputs.slice();inputs[index]='';
+ return {...source,nodes:source.nodes!.map(n=>n.id===to?{...n,inputs}:n)};
+}
+export function setShaderValue(source:GraphSource,id:string,value:readonly number[]):GraphSource {
+ const node=source.nodes?.find(n=>n.id===id);
+ if(!node||!['constant','parameter'].includes(node.op)||value.length!==4||!value.every(Number.isFinite))return source;
+ if(node.value?.length===4&&node.value.every((v,i)=>v===value[i]))return source;
+ return {...source,nodes:source.nodes!.map(n=>n.id===id?{...n,value:[...value]}:n)};
+}
+export function duplicateShaderNode(source:GraphSource,id:string):GraphSource {
+ const nodes=source.nodes??[],node=nodes.find(n=>n.id===id);
+ if(!node||nodes.length>=128)return source;
+ const ids=new Set(nodes.map(n=>n.id));
+ let copyId='';for(let i=1;i<=999;i++){copyId='node'+i;if(!ids.has(copyId))break;}
+ if(ids.has(copyId))return source;
+ const copy={...structuredClone(node),id:copyId,position:[clamp((node.position?.[0]??0)+25),clamp((node.position?.[1]??0)+25)]};
+ return {...source,nodes:[...nodes,copy]};
+}
