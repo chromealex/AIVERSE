@@ -1,3 +1,18 @@
+## Follow-up changes and exact CI provenance (2026-11-23)
+
+- Additional code/test commits after the initial Stage 7 handoff:
+  `f6ea2047e102e8cffe260ccab4f60ff65030c085` fixes CSS gradient preview for zero/one authored stop (CSS requires a valid two-stop fallback);
+  `3692d809852be6ee6703e086eee77f3eb10bc5fa` adds the corresponding pure-model regression tests.
+- Source HEAD immediately before updating this handoff:
+  `3692d809852be6ee6703e086eee77f3eb10bc5fa`.
+  The documentation commit advances that SHA; run acceptance on the *new*
+  exact branch head before claiming tests pass.
+- GitHub run IDs for that source SHA: general CI `45216592408` (queued),
+  HTML5 Studio `45216592324` (pending), focused SpectraFX editor
+  `45216592291` (queued). No current-source test result confirmed.
+- Draft PR #115 updated to include Curve/Gradient scope.
+  Parent PR #113 and main were not modified in Stage 7.
+
 # SpectraFX Stage 7 — HTML5 Curve and Gradient key authoring
 
 Date: 2026-11-23
