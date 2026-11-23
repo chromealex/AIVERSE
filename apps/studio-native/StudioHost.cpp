@@ -797,6 +797,25 @@ void StudioHost::rebuildOverlay() {
         shapes.reserve(shapes.size()+worldShapes.size());
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
         const auto selected=session_->selectedObjectId();
+        const auto pivotSelection=session_->selectedObjectIds();
+        if(pivotSelection!=wpPivotSelection_){
+            wpPivotSelection_=pivotSelection;
+            wpCustomPivot_=false;
+        }
+        render::float3 centroid{};
+        if(worldprocess_edit::groupCentroid(session_->workspace().map,
+                                            pivotSelection,centroid)){
+            const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+            if(shapes.size()+3<1390){
+                shapes.push_back(worldprocess_gizmos::makePoint(
+                    pivot.x,pivot.y,pivot.z,100,195,255,12.f));
+                shapes.push_back(worldprocess_gizmos::makeLabel(
+                    {pivot.x,pivot.y+.6f,pivot.z},
+                    "Group pivot X "+std::to_string(std::llround(double(pivot.x)*100.))+
+                    " Z "+std::to_string(std::llround(double(pivot.z)*100.))+" cm",
+                    100,195,255));
+            }
+        }
         if(selected.rfind("entity:@",0)==0){
             auto handles=worldprocess_edit::handles(
                 session_->workspace().map,selected);
@@ -967,7 +986,22 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         if(selected.rfind("entity:@",0)!=0)return false;
         if(session_->lockedIds().contains(selected)||
            session_->hiddenIds().contains(selected))return false;
-        const auto handles=worldprocess_edit::handles(map,selected);
+        auto handles=worldprocess_edit::handles(map,selected);
+        const auto selection=session_->selectedObjectIds();
+        if(selection!=wpPivotSelection_){
+            wpPivotSelection_=selection;
+            wpCustomPivot_=false;
+        }
+        render::float3 centroid{};
+        if(worldprocess_edit::groupCentroid(map,selection,centroid)){
+            const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+            handles.push_back({worldprocess_edit::Handle::Mode::GroupPivotX,
+                               selected.substr(8),"EvolveGroupPivot","pivotXcm",
+                               {},pivot,0});
+            handles.push_back({worldprocess_edit::Handle::Mode::GroupPivotZ,
+                               selected.substr(8),"EvolveGroupPivot","pivotZcm",
+                               {},{pivot.x,pivot.y+.25f,pivot.z},0});
+        }
         if(handles.empty())return false;
         const auto candidates=onScene([&]{
             return worldprocess_edit::hitCandidates(
@@ -1032,7 +1066,12 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                     wpDrag_.mode);
                 handle.baseline=wpDrag_.baseline;
                 float value=0;
-                wpDrag_.valid=worldprocess_edit::extent(
+                if(wpDrag_.component=="EvolveGroupPivot"){
+                    wpDrag_.valid=std::isfinite(ground.x)&&std::isfinite(ground.z);
+                    value=wpDrag_.key=="pivotXcm"?
+                        float(std::llround(double(ground.x)*100.)):
+                        float(std::llround(double(ground.z)*100.));
+                }else wpDrag_.valid=worldprocess_edit::extent(
                     map.data.entities[std::size_t(ownerIndex)],handle,
                     ground,value);
                 if(wpDrag_.valid){
@@ -1074,6 +1113,18 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
     wpDrag_={};
     rebuildOverlay();
     if(!current.valid)return true;
+    if(current.component=="EvolveGroupPivot"){
+        render::float3 centroid{};
+        if(!worldprocess_edit::groupCentroid(map,session_->selectedObjectIds(),centroid))
+            return true;
+        if(!wpCustomPivot_)wpGroupPivot_=centroid;
+        const float metres=current.value/100.f;
+        if(current.key=="pivotXcm")wpGroupPivot_.x=metres;
+        else wpGroupPivot_.z=metres;
+        wpCustomPivot_=true;
+        rebuildOverlay();
+        return true; // editor-only pivot; never write an ECS or MapDoc component
+    }
     Json params=Json::object();
     params.set("entityId",Json::string("entity:@"+current.owner));
     params.set("componentId",Json::string(current.component));
