@@ -959,3 +959,48 @@ Compile, export validation, native asset integration, cross-backend
 Metal/Vulkan/GLES previews and TypeScript tests are still DEFERRED
 per user request. A new handoff records these limitations:
 `docs/agent-handoffs/building-style-material-binding-stage23l-2026-11-23.md`.
+
+
+## Stage 23M — UV transforms, importer metadata and material reimport tracking
+
+`StyleMaterial` now owns optional `uvScale:[u,v]`,
+`uvOffset:[u,v]`, `uvRotation` (radians), `normalScale`
+and `occlusionStrength` alongside existing numeric PBR factors
+and texture GUIDs. The portable building style parser strictly bounds
+these parameters; older style JSON without them remains unchanged.
+`engine/buildings/BuildingMaterialAssets.h` carries these values
+into the existing Renderer3D `render::Material` UV, normal and AO
+properties when generating fully textured CPU Models.
+`engine/buildings/BuildingGlbWriter.h` exports glTF
+`KHR_texture_transform` (in `extensionsUsed` when needed)
+for every authored texture channel and standard `normalTexture.scale`
+and `occlusionTexture.strength` properties.
+`apps/studio-native/StudioBuildingGeneration.h` overlays shared
+`materials.json` UV scale/offset and Normal/AO strength onto the
+selected architecture style slots before GLB generation.
+
+A native GLB generation records a sorted `textureDependencies` list
+in adjacent `.recipe.json` with each embedded asset's original GUID,
+importer, length, content fingerprint (FNV-1a 64-bit decimal string)
+and imported `.meta` settings. These values are evidence of the
+exact source texture versions used by the generated model; consumers
+can use them to detect a later reimport and schedule regeneration.
+This is not an installed file watcher, not a hot GPU reload handler,
+and not a substitute for actual image-content validation.
+`StudioAssetCatalog::byGuid` and the current project/content
+sandbox remain the only asset ownership and safety mechanisms.
+
+Current GLB writer embeds PNG/JPEG only. For KTX2/DDS/TGA/WebP/EXR
+source assets the next integration must use the existing importer
+to decode/transcode to a glTF-compatible format or a supported
+compressed-texture extension. DO NOT simply label arbitrary bytes
+as PNG/JPEG. A render-owner must perform actual GPU resource
+reupload/retirement when texture or material generation changes;
+this stage does not upload textures or patch an already-live Model.
+
+The legacy AIVERSE path from `runtimeTexturedBuildingModel`
+to `render::Model` remains the canonical CPU-side Renderer3D bridge;
+no new graphics backend was created. Source-level support is not
+proof of Metal/Vulkan/GLES GPU results. As requested, no CMake, CTest,
+glTF validator or Studio web/native tests were run.
+See `docs/agent-handoffs/building-uv-import-revisions-stage23m-2026-11-23.md`.
