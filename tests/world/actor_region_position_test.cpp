@@ -1,6 +1,7 @@
 // W1.7: actual world-space GameCore positions and opt-in ECS region state.
 // No synthetic Transform is added to characters or vehicles.
 #include "engine/actor/ActorModule.h"
+#include "engine/world/RegionColdStore.h"
 #include "engine/game/GameCore.h"
 #include "tests/AlwaysCheck.h"
 #include <array>
@@ -11,6 +12,15 @@
 using namespace aiverse;
 namespace wd=aiverse::world;
 namespace vs=aiverse::vehicles;
+
+namespace fixture {
+struct Work {
+    int32_t progress=0;
+    std::string intent;
+};
+inline void io(Archive& a,Work& value) {a(value.progress,value.intent);}
+}
+
 
 static std::unique_ptr<Simulation> make(bool enabled) {
     auto rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,
@@ -82,6 +92,27 @@ static void canonicalOwnerAndRestore() {
     AIVERSE_TEST_CHECK(wd::RegionEcsBridge::crossings(
         world,*ledger,spatial,crossings,position,&error));
     AIVERSE_TEST_CHECK(crossings.empty());
+
+    // The same canonical reader is usable by the shared hot/cold controller:
+    // park only a synthetic optional component, never ActorHost's VehicleDrive,
+    // CharacterBody or combat data without their systems opting in.
+    world.add<fixture::Work>(car,fixture::Work{42,"delivery"});
+    wd::RegionColdStore cold;
+    wd::RegionDormancyController policy;
+    policy.setPositionReader(position);
+    AIVERSE_TEST_CHECK(policy.registerComponent<fixture::Work>("test.region_work",1));
+    std::array<Entity,1> parkedCar{car};
+    AIVERSE_TEST_CHECK(policy.parkGroup(
+        world,*ledger,cold,parkedCar,{1,0,0},&error));
+    AIVERSE_TEST_CHECK(world.has<wd::RegionDormant>(car));
+    AIVERSE_TEST_CHECK(!world.has<fixture::Work>(car));
+    AIVERSE_TEST_CHECK(!host.transferVehicleRegion(
+        *sim,car,{1,0,0},{2,0,0},&error));
+    AIVERSE_TEST_CHECK(policy.wakeGroup(
+        world,*ledger,cold,parkedCar,{1,0,0},&error));
+    AIVERSE_TEST_CHECK(world.get<fixture::Work>(car).progress==42);
+    AIVERSE_TEST_CHECK(world.get<fixture::Work>(car).intent=="delivery");
+    world.remove<fixture::Work>(car);
 
     // The host's old untyped map vehicle is still an untyped vehicle:
     // remove only the synthetic seat test fixture before actual disk IO.
