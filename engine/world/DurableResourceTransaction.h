@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/sim/PersistentEcs.h"
 #include "RegionWalFrame.h"
+#include "RegionEntityLedger.h"
 
 namespace aiverse::world {
 // Opt-in durable resource snapshots. Native codecs encode presence as well as
@@ -76,10 +77,24 @@ public:
         }
         out.swap(staged);return true;
     }
+    // Native resource validators may need the ledger. Supply it only to a
+    // private staged World, validate it, then discard the temporary view.
+    // The durable State::ledger remains the sole persistence authority.
+    static bool restoreWithLedger(const Registry& registry,World& world,
+        const RegionEntityLedger& ledger,const std::vector<Record>& records){
+        for(const auto& r:records)if(r.id=="aiverse.world.region_entity_ledger")return false;
+        World staged=world;
+        staged.setResource<RegionEntityLedger>(ledger);
+        if(!registry.restoreSchemas(staged,records))return false;
+        const auto* view=staged.resourceConst<RegionEntityLedger>();
+        if(!view||view->lastRevision()!=ledger.lastRevision()||view->records()!=ledger.records())return false;
+        staged.eraseResource<RegionEntityLedger>();
+        world=std::move(staged);return true;
+    }
     struct Policy {
         const Registry* registry=nullptr;
         std::vector<std::string> selected;
-        bool restore(World& world,const std::vector<Record>& records)const{
+        bool restore(World& world,const std::vector<Record>& records,const RegionEntityLedger* ledger=nullptr)const{
             if(records.empty())return true;
             if(!registry||selected.size()>Registry::kMaxSchemas)return false;
             auto ids=selected;std::sort(ids.begin(),ids.end());
@@ -91,7 +106,7 @@ public:
                 if(cost>MaxFrame-used)return false;
                 used+=cost;previous=r.id;
             }
-            return registry->restoreSchemas(world,records);
+            return ledger?restoreWithLedger(*registry,world,*ledger,records):registry->restoreSchemas(world,records);
         }
     };
 };
