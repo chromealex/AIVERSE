@@ -34,13 +34,14 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit}:{projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
+ const [overrideText,setOverrideText]=useState('{}'),[parameterName,setParameterName]=useState(''),[parameterField,setParameterField]=useState(''),[variantName,setVariantName]=useState(''),[baseMaterial,setBaseMaterial]=useState(''),[bakedSet,setBakedSet]=useState('');
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -62,24 +63,31 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
     setOriginal({name,graph:r.graph});edit(r.graph);setSelected('');setPending(null);return;
    }
+   if(action==='variant'){
+    if(!bakedSet)throw new Error('Bake a set and configure its importer first');
+    const r=await op('texture_graph_material_variant',{textureName:bakedSet,materialName:variantName,base:baseMaterial});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true)throw new Error('Native material variant creation failed');setStatus('Created inherited material '+variantName+'; refresh Materials.');return;
+   }
+   if(action==='cache'||action==='clearCache'){const r=await op('texture_graph_cache',{clear:action==='clearCache'});if(token===epoch.current)setStatus(JSON.stringify(r));return;}
    if(!graph)throw new Error('Invalid graph JSON');
+   const overrides=action==='save'?{}:JSON.parse(overrideText);if(!object(overrides))throw new Error('Overrides must be a JSON object');
    if(action==='save'){
     const r=await op('texture_graph_set',{name,graph,...(original?.name===name?{expected:original.graph}:{})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Native save rejected');
     setOriginal({name,graph:r.graph});setNames(old=>[...new Set([...old,name])].sort());setStatus('Graph saved');return;
    }
    if(action==='validate'){
-    const r=await op('texture_graph_validate',{graph});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
+    const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
    if(action==='previewNode'||action==='previewOutput'){
     setPreview(null);
-    const r=await op('texture_graph_preview',{graph,...(action==='previewNode'?{node:selected}:{output})});if(token!==epoch.current)return;
+    const r=await op('texture_graph_preview',{graph,overrides,...(action==='previewNode'?{node:selected}:{output})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>32||r.height>32||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid native preview');
     setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});return;
    }
    if(action==='bakeSet'){
-    setAssets([]);setAsset(null);
-    const r=await op('texture_graph_bake_set',{graph,textureName});if(token!==epoch.current)return;
+    setAssets([]);setAsset(null);setBakedSet('');
+    const r=await op('texture_graph_bake_set',{graph,textureName,overrides});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!Array.isArray(r.files))throw new Error('Native set bake failed');
     setStatus('Baked '+r.files.length+' PNGs. Resolving GUIDs and configuring color space…');
     const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
@@ -91,10 +99,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
       if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
       configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
     }
-    setAssets(mapped);setStatus('Baked '+r.files.length+' PNGs; configured '+configured+' importer color spaces. Assign explicitly; unmatched files remain in Assets.');return;
+    setAssets(mapped);if(configured===r.files.length)setBakedSet(textureName);setStatus('Baked '+r.files.length+' PNGs; configured '+configured+' importer color spaces. Assign explicitly; unmatched files remain in Assets.');return;
    }
    if(action==='bake'){
-    setAsset(null);const r=await op('texture_graph_bake',{graph,output,textureName});if(token!==epoch.current)return;
+    setAsset(null);const r=await op('texture_graph_bake',{graph,output,textureName,overrides});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.path!=='string')throw new Error('Native bake failed');
     setStatus('Baked '+r.path);
     const key=channels[output];
@@ -132,6 +140,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  };
  const setProp=(key:string,value:unknown)=>{if(current&&typeof current.id==='string')patchNode(current.id,{properties:{...(object(current.properties)?current.properties:{}),[key]:value}})};
  const fieldRows=object(spec?.properties)?Object.entries(spec.properties):[];
+ const declareParameter=()=>{
+  if(!graph||!current||!spec||!object(spec.properties)||! /^[A-Za-z0-9_-]{1,64}$/.test(parameterName)||!parameterField)return;
+  const field=spec.properties[parameterField];if(!object(field))return;
+  const defs=object(graph.parameters)?graph.parameters:{};if(Object.keys(defs).length>=32||Object.prototype.hasOwnProperty.call(defs,parameterName)){setError('Parameter exists or declaration limit reached');return;}
+  const value=object(current.properties)?current.properties[parameterField]??field.default:field.default;
+  edit({...graph,parameters:{...defs,[parameterName]:{default:value,bindings:[{node:current.id,property:parameterField}]}}});setParameterName('');
+ };
 
  return <StudioSection title="Procedural Texture Graph">
   <small>Native CPU DAG. Source graph and baked PNG are separate. Color is sRGB; normal/data outputs require correct importer settings.</small>
@@ -151,6 +166,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    })}
   </StudioSection>}
   {graph&&<StudioSection title="Bind outputs">{Object.entries(outputTypes).map(([key,kind])=><label key={key} className="au-row"><span>{key}</span><StudioSelect value={object(graph?.outputs)?String(graph.outputs[key]??''):''} disabled={busy||disabled} onChange={e=>{if(!graph)return;const next={...(object(graph.outputs)?graph.outputs:{})};if(e.target.value)next[key]=e.target.value;else delete next[key];edit({...graph,outputs:next})}}><option value="">Unassigned</option>{view.nodes.filter(n=>n.outputs[0]?.type===kind).map(n=><option key={n.id}>{n.id}</option>)}</StudioSelect></label>)}</StudioSection>}
+  <StudioSection title="Texture graph instance parameters">
+   <small>Bindings are stored in the source; overrides affect validation, preview and bake only.</small>
+   {current&&fieldRows.length>0&&<div className="au-row"><StudioInput aria-label="Parameter name" placeholder="Parameter name" disabled={busy||disabled} value={parameterName} onChange={e=>setParameterName(e.target.value)}/><StudioSelect aria-label="Bound property" value={parameterField} onChange={e=>setParameterField(e.target.value)} disabled={busy||disabled}><option value="">Property</option>{fieldRows.map(([k])=><option key={k}>{k}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||!parameterName||!parameterField} onClick={declareParameter}>Expose</StudioButton></div>}
+   {graph&&object(graph.parameters)&&Object.entries(graph.parameters).map(([k,v])=><div className="au-row" key={k}><small>{k}: {JSON.stringify(object(v)?v.default:v)}</small><StudioButton size="sm" disabled={busy||disabled} onClick={()=>{if(!graph)return;const next={...(object(graph.parameters)?graph.parameters:{})};delete next[k];edit({...graph,parameters:next})}}>Remove</StudioButton></div>)}
+   <textarea aria-label="Instance overrides JSON" rows={4} value={overrideText} disabled={busy||disabled} onChange={e=>{setOverrideText(e.target.value);setPreview(null);setAssets([]);setAsset(null);setBakedSet('')}}/>
+   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('cache')}>Cache status</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('clearCache')}>Clear cache</StudioButton></div>
+  </StudioSection>
   <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null);setAssets([]);setPending(null)}}/>
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
@@ -158,6 +180,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.includes(output)} onClick={()=>void run('bake')}>Bake selected output to new PNG</StudioButton>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.length} onClick={()=>void run('bakeSet')}>Bake all outputs</StudioButton>
+  {bakedSet&&<StudioSection title="Create baked material variant"><small>Inherit an existing material; override only baked channels. No runtime regeneration.</small><StudioInput aria-label="Base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!baseMaterial||!variantName} onClick={()=>void run('variant')}>Create variant from {bakedSet}</StudioButton></StudioSection>}
   {assets.map(a=><StudioButton key={a.guid} disabled={busy||disabled} onClick={()=>onEdit(a.key,a.guid)}>Assign {a.path} to {a.key}</StudioButton>)}
   {asset&&<StudioButton disabled={busy||disabled} onClick={()=>onEdit(asset.key,asset.guid)}>Assign {asset.path} to material draft</StudioButton>}
   {status&&<StudioAlert>{status}</StudioAlert>}{error&&<StudioAlert tone="danger">{error}</StudioAlert>}
