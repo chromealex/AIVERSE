@@ -131,6 +131,8 @@ public:
     // Checked whole-emitter reset. Metal must have an OPEN graphics frame,
     // outside encoders. Never alters CPU slot bookkeeping on upload failure.
     bool tryClear();
+    // Reproducible GPU particle-slot allocation, not cross-backend RNG parity.
+    bool resetGpuAllocationSeed(uint32_t seed);
     bool burstAt(fx::float3 position, fx::float3 direction = {0,1,0},
                  fx::float4 tint = {1,1,1,1},uint64_t sourceToken=0);
     // Renderer-only source token. 0 means unowned one-shot particles.
