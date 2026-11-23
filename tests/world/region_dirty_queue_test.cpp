@@ -53,6 +53,40 @@ static void testDirtyCoalescingAndArchive() {
     AIVERSE_TEST_CHECK(!corrupted.ok());
     AIVERSE_TEST_CHECK(save(preserved)==original);
 }
+static void testAtomicGroupCapacityAndCoalescing() {
+    RegionDirtyQueue q;
+    // Fill all but one pending slot, then attempt an occupied vehicle
+    // batch with two new actors: no partial car/passenger notification.
+    for(uint32_t i=0;i<RegionDirtyQueue::kMaxEntries-1;++i) {
+        const Entity e{i,0};
+        AIVERSE_TEST_CHECK(q.mark(e,RegionDirtyKind::Spawn));
+    }
+    AIVERSE_TEST_CHECK(q.entries.size()==RegionDirtyQueue::kMaxEntries-1);
+    const std::vector<Entity> tooMany{
+        {uint32_t(RegionDirtyQueue::kMaxEntries+4),0},
+        {uint32_t(RegionDirtyQueue::kMaxEntries+5),0}
+    };
+    const auto before=q.entries;
+    AIVERSE_TEST_CHECK(!q.canMarkMany(tooMany));
+    AIVERSE_TEST_CHECK(!q.markMany(tooMany,RegionDirtyKind::Move));
+    AIVERSE_TEST_CHECK(q.entries==before);
+
+    // Repeated group members and already-marked actors consume no new slots.
+    const std::vector<Entity> fits{
+        {0,0},{0,0},{uint32_t(RegionDirtyQueue::kMaxEntries+4),0}
+    };
+    AIVERSE_TEST_CHECK(q.canMarkMany(fits));
+    AIVERSE_TEST_CHECK(q.markMany(fits,RegionDirtyKind::Move));
+    AIVERSE_TEST_CHECK(q.entries.size()==RegionDirtyQueue::kMaxEntries);
+    AIVERSE_TEST_CHECK(q.entries.at(1)==
+                       (uint8_t(RegionDirtyKind::Spawn)|uint8_t(RegionDirtyKind::Move)));
+    AIVERSE_TEST_CHECK(q.entries.at(uint64_t(RegionDirtyQueue::kMaxEntries+5))==
+                       uint8_t(RegionDirtyKind::Move));
+    AIVERSE_TEST_CHECK(q.markMany(fits,RegionDirtyKind::Retire));
+    AIVERSE_TEST_CHECK(q.entries.size()==RegionDirtyQueue::kMaxEntries);
+    AIVERSE_TEST_CHECK(q.entries.at(1)==7);
+}
+
 static void testCowAndRecycledEntityKeys() {
     World world;
     world.enableCowSnapshots();
@@ -77,6 +111,7 @@ static void testCowAndRecycledEntityKeys() {
 }
 int main() {
     testDirtyCoalescingAndArchive();
+    testAtomicGroupCapacityAndCoalescing();
     testCowAndRecycledEntityKeys();
     std::cout<<"PASS region dirty queue coalescing/archive/COW rollback\n";
 }
