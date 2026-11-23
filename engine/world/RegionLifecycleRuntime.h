@@ -79,7 +79,7 @@ public:
             throw std::logic_error("region lifecycle already installed or region resources pre-owned");
         registerRegionEntityLedger(sim);
         registerRegionStableIdentity(sim);
-        registerRegionColdState(sim);
+        registerRegionColdState(sim,controller.positionReader());
         sim.registerPersistentResource<RegionActivationQueue>(
             "aiverse.world.region_activation_queue",RegionActivationQueue::kSchema);
         auto& world=sim.world();
