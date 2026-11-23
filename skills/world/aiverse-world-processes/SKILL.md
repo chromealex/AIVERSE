@@ -585,3 +585,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 39: physical neighbor snap and guide
 
 `worldprocess_edit::snapNeighborEdge` requires positive overlap between the owner and neighbor intervals perpendicular to the dragged X/Z edge; corner-only contact cannot snap. Closest enabled EvolveArea boundary wins, ties resolved by stable map ID. The native Scene draws the overlap segment as a highlighted guide with target stable ID during Ctrl/Command snapping; otherwise 1m grid fallback applies. Drag state is transient and the authored change remains one MapDoc RPC. Source-only, uncompiled and untested. Handoff: `docs/handoffs/world-processes-stage39-overlap-snap-guide-2026-11-23.md`.
+
+## Stage 40: atomic EVOLVE group resize
+
+`studio.worldProcessAreaBatchResize` accepts stable `entityIds` (2–256), axis `x|z`, pivot `shared|individual`, and integer scale numerator/denominator. It validates all members and bounds before one MapDoc Undo mutation. In native Scene, multi-selected EvolveArea edge drag scales on one axis; plain drag uses the shared mean center pivot, Shift uses individual region centers. Single-region operations remain unchanged. Only authored offsets and half-extents change; ECS Area/TerraWeave remain authoritative at runtime. Group preview is not yet implemented. Source-only, no build or runtime tests. See `docs/handoffs/world-processes-stage40-group-resize-2026-11-23.md`.
