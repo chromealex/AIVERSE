@@ -48,6 +48,58 @@ inline std::filesystem::path studioBuildingRecipeFile(
     return resolved;
 }
 
+
+inline Json studioBuildingReadRecipe(
+    const std::filesystem::path& engine,
+    const std::filesystem::path& project,
+    const std::string& relativeRecipe){
+    const auto path=studioBuildingRecipeFile(project,relativeRecipe);
+    const Json recipe=Json::parseFile(path.string());
+    if(!recipe.isObject()||recipe.getInt("schema",-1)!=1)
+        throw std::runtime_error("Generated building recipe schema unsupported");
+    Json params=Json::object();
+    for(const char* field:{"style","mode","function","seed",
+                           "width","height","depth","floors","roomsX",
+                           "roomsZ","features","materialBindings"})
+        if(recipe.has(field))params.set(field,recipe[field]);
+    params.set("setting",Json::string(
+        buildingStudioDetail::settingId(recipe.getStr("style"))));
+    (void)buildingStudioDetail::load(engine,recipe.getStr("style"));
+    (void)buildingStudioDetail::request(params); // same native validation
+    Json result=Json::object();
+    result.set("recipe",Json::string(relativeRecipe));
+    result.set("request",std::move(params));
+    return result;
+}
+
+// The browser receives catalog-relative paths only; no user-supplied
+// directory scan. Listing never follows links or loads arbitrary JSON.
+inline Json studioBuildingRecipes(const std::filesystem::path& project){
+    namespace fs=std::filesystem;
+    const fs::path folder=studioContentRoot(project)/"GeneratedBuildings";
+    Json result=Json::object(),list=Json::array();
+    std::error_code ec;
+    if(!fs::is_directory(folder,ec)){
+        result.set("recipes",std::move(list));return result;
+    }
+    size_t scanned=0;
+    for(const auto& entry:fs::directory_iterator(folder)){
+        if(++scanned>2000)
+            throw std::runtime_error("Too many generated building assets");
+        if(entry.path().extension()!=".json" ||
+           entry.path().filename().string().find(".glb.recipe.json")==std::string::npos)
+            continue;
+        const auto status=entry.symlink_status(ec);
+        if(ec||fs::is_symlink(status)||!fs::is_regular_file(status))
+            continue;
+        if(entry.file_size(ec)>256u*1024u||ec)continue;
+        list.push(Json::string(
+            "GeneratedBuildings/"+entry.path().filename().string()));
+    }
+    result.set("recipes",std::move(list));
+    return result;
+}
+
 inline Json studioBuildingRegenerate(
     const std::filesystem::path& engine,
     const std::filesystem::path& project,
