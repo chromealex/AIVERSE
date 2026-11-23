@@ -83,3 +83,42 @@ native `apps/studio-native/tests/StudioSessionTests.cpp` fixture
 and CMake/Studio test targets. Source added does not prove CI green
 until real logs are recorded. Follow handoff
 `docs/handoffs/world-processes-stage07-authoring-2026-11-23.md`.
+
+## Stage 08: real map-to-native ECS hydration
+
+Use `aiverselib/world/WorldProcessesMapHydration.h`:
+`authoring::hydrateMap(Simulation&, map, placedEntities)` inside an owning
+native `GameModule::setup` **after map Entity creation** and before the
+persistence registry seals. The `placedEntities` vector is the host's
+exact index-order mapping of `map["entities"]` to actual generation-safe
+ECS Entity handles. A mismatched count, dead/unspawned Entity, invalid
+value or budget exceed fails before registration/mutation. Only categories
+actually present are registered; a map without World Processes leaves the
+legacy v9 schema alone.
+
+For the existing GameCore host use the standard native module adapter
+`aiverselib/world/WorldProcessesNativeModule.h`. The native module's
+`setup(GameCore&,Simulation&,NativeState&,Json)` reads
+`host.matchMap()` (post-generation map) and `host.mapPlaced()`.
+It is invoked at the established `NativeModules::load` lifecycle. No
+modification to engine/GameCore sources or second simulation is required.
+
+**Ready-to-copy CMake/project template**:
+`examples/native/world_processes/`. Register
+`aiverse_native_module(ID world_processes VERSION 1 ENTRY
+createWorldProcessesModule SOURCES WorldProcessesModule.cpp)`, link the
+native OBJECT target to `AIVERSE::libraries`, and enable
+`{"id":"world_processes"}` in the project `rules.json`
+`nativeModules` list. This is explicitly opt-in, not automatic for
+unmodified games. Built-in generic real-GameCore test:
+`tests/world_processes_gamecore_native_test.cpp`; lightweight
+two-GameModule map/save/rollback test:
+`tests/world_processes_map_hydration_test.cpp`.
+They are staged and **must be built/run before being reported green**.
+
+Current automatic hydration supports only three standalone editor-authorable
+types: EchoZone, FractureMember, AetherGasCell. Generational links to ECHO
+Portal/Receiver/Emitter, FRACTURE Bond, AETHER Duct/Flux require a separate
+validated map-ref resolution stage and a Studio picker. No numeric index
+fallback. See
+`docs/handoffs/world-processes-stage08-native-hydration-2026-11-23.md`.
