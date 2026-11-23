@@ -425,6 +425,17 @@ void GraphRuntime::draw(const fx::FxFog& fog) {
     if(useComputeWrapper_)gpu_.draw(fog);
     else cpu_.render(fog);
 }
+bool GraphRuntime::resetGpuAllocationSeed(uint32_t seed) {
+    if(!initialized_ || sharedWorld_ || !useComputeWrapper_ || !gpu_.gpuActive()) {
+        reason_="GPU allocation seed requires dedicated active Metal emitter";
+        return false;
+    }
+    if(!gpu_.resetGpuAllocationSeed(seed)) {
+        reason_=gpu_.reason();return false;
+    }
+    reason_.clear();return true;
+}
+
 bool GraphRuntime::resetDeterministicSeed(uint32_t seed) {
     if(!initialized_ || sharedWorld_ || useComputeWrapper_) {
         reason_="Deterministic replay seed requires a dedicated CPU ParticleSystem";
