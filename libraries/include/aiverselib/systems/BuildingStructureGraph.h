@@ -443,10 +443,12 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
                 core.kind,BuildingFeatureSide::Front,core.feature,floor,cx,bottom,cz,
                 core.x1-core.x0,climb,core.z1-core.z0,0.f});
             if(core.kind==BuildingFeatureKind::Elevator){
-                // Stationary platform at its initial level. Motion/control
-                // are the responsibility of an actor/elevator runtime owner.
-                solid(BuildingGraphPart::ElevatorPlatform,core.x0,bottom,core.z0,
-                      core.x1,bottom+0.18f,core.z1,core.feature);
+                // ONE cabin floor at the initial station. It must not make
+                // a fixed blocking slab on EVERY upper storey. Moving the
+                // platform and doors is a separate authoritative runtime
+                // mechanism, not simulated by the static geometry recipe.
+                if(floor==0)solid(BuildingGraphPart::ElevatorPlatform,
+                    core.x0,bottom,core.z0,core.x1,bottom+0.18f,core.z1,core.feature);
                 continue;
             }
             const float mid=bottom+climb*0.5f;
