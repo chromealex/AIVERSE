@@ -1269,19 +1269,10 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
        (!raw.isNumber()||raw.numberLiteral().find_first_of(".eE-")!=std::string::npos||
         raw.integer(0)<128||raw.integer(0)>768))
         throw std::runtime_error("FX snapshot maxSide must be an integer in 128..768");
-    if(!params["requireReplayReady"].isNull()) {
-        if(params["requireReplayReady"].type()!=Json::Type::Bool)
-            throw std::runtime_error("requireReplayReady must be boolean");
-        if(params.getBool("requireReplayReady")) {
-            const Json snapshot=onScene([&] {
-                return fxPreview_->spectraPreviewCommand(
-                    Json::parse(R"({"action":"status"})"),
-                    session_->workspace().project.dir);
-            });
-            if(!snapshot.getBool("replayReady"))
-                throw std::runtime_error("FX replay has not reached its requested frame");
-        }
-    }
+    if(!params["requireReplayReady"].isNull() &&
+       params["requireReplayReady"].type()!=Json::Type::Bool)
+        throw std::runtime_error("requireReplayReady must be boolean");
+    const bool requireReplayReady=params.getBool("requireReplayReady");
     const int maxSide=int(raw.isNull()?512:raw.integer());
     if(fxShot_) {
         std::lock_guard<std::mutex> lock(fxShot_->mutex);
@@ -1296,6 +1287,10 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             // Sample provenance on the same native render-owner that schedules readback.
             const Json nativeStatus=fxPreview_->spectraPreviewCommand(
                 Json::parse(R"({"action":"status"})"),session_->workspace().project.dir);
+            // Check and register capture in one render-owner dispatch. No
+            // second IPC hop can interleave a simulation update here.
+            if(requireReplayReady && !nativeStatus.getBool("replayReady"))
+                throw std::runtime_error("FX replay has not reached its requested frame");
             Json metadata=Json::object();
             metadata.set("sampling",Json::string("render-owner-readback-request"));
             metadata.set("tick",nativeStatus["tick"]);
@@ -1304,6 +1299,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             metadata.set("camera",nativeStatus["camera"]);
             metadata.set("background",nativeStatus["background"]);
             metadata.set("gpu",nativeStatus["gpu"]);
+            metadata.set("replayReady",nativeStatus["replayReady"]);
             {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
             fxPreview_->captureNextFrame(
                 [shot,maxSide](int w,int h,std::vector<uint8_t> rgba) {
