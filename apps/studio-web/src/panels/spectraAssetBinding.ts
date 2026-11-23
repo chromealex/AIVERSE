@@ -52,3 +52,29 @@ export function readSpectraNodeAsset(
   if(asset.path!==undefined&&(typeof asset.path!=='string'||!validPath(asset.path)))return null;
   return {guid:asset.guid,...(typeof asset.path==='string'?{path:asset.path}:{})};
 }
+
+/** Convert a picker-selected GUID into a compiler-compatible string property.
+ * The native VFX graph compiler expects strings (e.g. SpriteOutput.texture),
+ * not the browser-only {guid,path} authoring object. The authoritative index
+ * must contain the GUID; callers decide the expected asset kind.
+ */
+export function bindResolvedSpectraAsset(
+  graph:SpectraGraphV2,nodeId:string,property:string,
+  asset:SpectraAssetReference,
+  indexed:readonly {guid:string;path?:string;kind:string}[],
+  expectedKinds?:readonly string[],
+):SpectraAssetEdit {
+  if(!validProperty(property))return failure(graph,'Invalid asset property name.');
+  if(!validGuid(asset.guid))return failure(graph,'Invalid indexed asset GUID.');
+  const resolved=indexed.find(item=>item.guid.toLowerCase()===asset.guid.toLowerCase());
+  if(!resolved||!resolved.path||!validPath(resolved.path))
+    return failure(graph,'Asset GUID is not resolvable to a safe content path.');
+  if(expectedKinds&&!expectedKinds.includes(resolved.kind))
+    return failure(graph,'Asset importer type is incompatible with this property.');
+  const index=graph.nodes.findIndex(node=>node.id===nodeId);
+  if(index<0)return failure(graph,'Target graph node not found.');
+  const nodes=graph.nodes.map((node,i)=>i===index?{
+    ...node,properties:{...(node.properties??{}),[property]:resolved.path},
+  }:node);
+  return {graph:{...graph,nodes},error:''};
+}
