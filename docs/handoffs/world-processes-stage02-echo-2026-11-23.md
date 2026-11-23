@@ -10,7 +10,7 @@
 - Other 9 systems still have Stage 01 experimental pure policies only. No claim of production readiness.
 
 ## Exact changes and API
-- `engine/world/echo/EchoAcoustics.h` adds data-only ECS components:
+- `libraries/include/aiverselib/world/EchoEcs.h` adds data-only ECS components:
   - `echo::AcousticZone`: attach to a zone Entity.
   - `echo::AcousticPortal`: Entity refs `from/to`, integer attenuation, optional reverse direction, enable flag.
   - `echo::AcousticEmitter`: owner Entity, referenced active zone, positive integer intensity, enable flag.
@@ -26,7 +26,7 @@
 
 ## Minimal native setup
 ```cpp
-#include "engine/world/echo/EchoAcoustics.h"
+#include "libraries/include/aiverselib/world/EchoEcs.h"
 void Game::setup(aiverse::Simulation& sim, const aiverse::Json&, const aiverse::Json&) {
     aiverse::echo::install(sim);
     auto& world=sim.world();
@@ -61,3 +61,6 @@ Consumers read the hearing component after the registered ECHO pass. Do not hash
 3. Add generic editor component field metadata and a tiny 2-room/3-room demo with authorable portals, sound source and visualized reception levels. Link to AI perception via a typed read interface, not a parallel sensing state.
 4. Integrate occlusion and sound zone mapping from world geometry and dynamic doors while preserving ECS read/write barriers and replay hashes.
 5. After ECHO reaches verified core, begin the next chosen area (FRACTURE if PHYSIS damage owner can be reused), respecting the <=5 WIP rule; the remaining eight policies are only prototypes.
+
+## CI architecture correction
+The initial PR CI layer check failed on the ECHO engine -> library include edge. Corrected by adding library-layer `EchoEcs.h` (commit `90b4c6cc1b1545a4e846b9b59cb34660cd97c947`), updating the consumer (commit `62a6460f0d2b5578186d69501bb3f4db5266bf0b`), and deleting the offending engine header (commit `c060341afa9286cc6921e712c250e23a4029d4f7`). The same CI log lists 13 independent `engine/voxel` layer violations, present in the merge checkout and not introduced by this ECHO change; record as an external blocking owner rather than marking the layer test green. The post-correction CI has not yet been confirmed.
