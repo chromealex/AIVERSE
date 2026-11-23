@@ -85,6 +85,7 @@ public:
             stepsPending_=0;
             requestedParameters_.clear();
             hasPendingGpuAllocationSeed_=false;
+            gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             backend_=runtime_.gpuActive()?"Metal GPU":"CPU (full effect)";
             error_.clear();
             ++generation_;
@@ -162,6 +163,7 @@ public:
             burstsPending_=0;triggeredBursts_=0;
             pendingRestart_=false;restartBurstPending_=false;
             hasPendingGpuAllocationSeed_=false;
+            gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             pendingClear_=true;
             error_.clear();
             return status();
@@ -176,6 +178,7 @@ public:
             playing_=input.getBool("play",false);
             pendingRestart_=true;restartBurstPending_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
             hasPendingGpuAllocationSeed_=false;
+            gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             phase_=0;
             pendingClear_=false;
             burstsPending_=0;triggeredBursts_=0;
