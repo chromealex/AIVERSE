@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import sys
+from check_integrations import validate_integrations
 
 ROOT = Path(__file__).resolve().parents[2]
 DIMENSIONS = ("implementation", "architecture", "native_api", "skill", "mcp",
@@ -16,7 +17,7 @@ def validate(data, root=ROOT, ready=False):
     errors = []
     if not isinstance(data, dict):
         return ["manifest must be an object"]
-    if set(data) != {"schema", "id", "owner", "checks", "changed_paths", "traits"}:
+    if set(data) != {"schema", "id", "owner", "checks", "changed_paths", "traits", "integrations"}:
         errors.append("unexpected or missing manifest fields")
     if type(data.get("schema")) is not int or data["schema"] != 1:
         errors.append("schema must be 1")
@@ -71,6 +72,7 @@ def validate(data, root=ROOT, ready=False):
             target = (root / item).resolve()
             if not target.is_relative_to(root.resolve()) or not target.is_file():
                 errors.append(f"{name}: missing or external evidence {item}")
+    errors.extend(validate_integrations(data, root, ready))
     return errors
 
 def main():
