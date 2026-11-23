@@ -1,0 +1,122 @@
+{
+  "exampleOnly": true,
+  "notes": "Map entity fragments; concrete game must supply type/owner and register EVOLVE, PHYSIS, NEREID and TerraWeave. Rooted trees must be planted by the existing TerraWeave authority.",
+  "entities": [
+    {
+      "id": "eco_healthy",
+      "pos": [
+        -30,
+        0,
+        0
+      ],
+      "components": {
+        "EvolveRegion": {
+          "durability": 1000000000,
+          "fertility": 900000000,
+          "pollution": 0,
+          "succession": 100000000,
+          "enabled": true
+        },
+        "EvolveArea": {
+          "halfWidthCm": 1500,
+          "halfDepthCm": 1500,
+          "offsetXcm": 0,
+          "offsetZcm": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "eco_polluted",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "components": {
+        "EvolveRegion": {
+          "durability": 1000000000,
+          "fertility": 200000000,
+          "pollution": 800000000,
+          "succession": 300000000,
+          "enabled": true
+        },
+        "EvolveArea": {
+          "halfWidthCm": 1500,
+          "halfDepthCm": 1500,
+          "offsetXcm": 0,
+          "offsetZcm": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "eco_recovery",
+      "pos": [
+        30,
+        0,
+        0
+      ],
+      "components": {
+        "EvolveRegion": {
+          "durability": 1000000000,
+          "fertility": 350000000,
+          "pollution": 500000000,
+          "succession": 100000000,
+          "enabled": true
+        },
+        "EvolveArea": {
+          "halfWidthCm": 1500,
+          "halfDepthCm": 1500,
+          "offsetXcm": 0,
+          "offsetZcm": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "pressure_industrial",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "components": {
+        "EvolvePressure": {
+          "region": "eco_polluted",
+          "wear": 0,
+          "recovery": 0,
+          "enrichment": 0,
+          "consumption": 0,
+          "contamination": 100000,
+          "purification": 0,
+          "growth": 0,
+          "regression": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "pressure_restoration",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "components": {
+        "EvolvePressure": {
+          "region": "eco_recovery",
+          "wear": 0,
+          "recovery": 0,
+          "enrichment": 100000,
+          "consumption": 0,
+          "contamination": 0,
+          "purification": 100000,
+          "growth": 0,
+          "regression": 0,
+          "enabled": true
+        }
+      }
+    }
+  ]
+}
