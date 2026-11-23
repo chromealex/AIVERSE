@@ -92,6 +92,42 @@ inline bool bindBuildingStyleMaterials(
             images.push_back(std::move(image));
             *slots[i]=index;
         }
+        // A data-only style can provide its own PBR maps even without
+        // externally imported GUID assets. Imported GUIDs always win per
+        // channel; generated surfaces never reach the filesystem/GPU here.
+        if(!source.surfacePattern.empty()){
+            using lib::systems::BuildingSurfaceChannel;
+            const std::array<BuildingSurfaceChannel,3> channels{
+                BuildingSurfaceChannel::BaseColor,
+                BuildingSurfaceChannel::MetallicRoughness,
+                BuildingSurfaceChannel::Normal
+            };
+            for(size_t i=0;i<channels.size();++i){
+                if(!guids[i].empty())continue;
+                const std::string key="surface:"+source.id+":"+
+                    source.surfacePattern+":"+
+                    std::to_string(source.surfaceSeed)+":"+
+                    std::to_string(i);
+                if(const auto it=indices.find(key);it!=indices.end()){
+                    *slots[i]=it->second;continue;
+                }
+                auto pixels=lib::systems::generateBuildingSurface(
+                    source.surfacePattern,source.id,source.surfaceSeed,
+                    channels[i]);
+                if(pixels.rgba.empty()){
+                    if(error)*error="Invalid procedural PBR surface in "+source.id;
+                    return false;
+                }
+                render::Image image;
+                image.name=key;
+                image.width=pixels.width;image.height=pixels.height;
+                image.rgba=std::move(pixels.rgba);
+                const int index=int(images.size());
+                indices.emplace(key,index);
+                images.push_back(std::move(image));
+                *slots[i]=index;
+            }
+        }
         materials.push_back(std::move(m));
     }
     // The CPU model is authored before upload; the renderer owns subsequent
