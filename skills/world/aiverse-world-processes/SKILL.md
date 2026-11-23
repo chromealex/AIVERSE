@@ -229,3 +229,66 @@ Box3D impact/collapse, global RVO/NavMesh, full SPH granular physics,
 real sound HRTF, terrain re-meshing, and game-specific NPC social
 behavior remain consuming integration responsibilities, not promises
 fulfilled by the ECS policy layer.
+
+
+## Stages 17–19: actual MORPH + GRANULAR Box3D / RHI / TerraWeave host
+
+For optional physical 3D scenes, DO NOT import physics or renderer into the
+genre-neutral libraries header layer. Use the native project integration in
+examples/world/world_processes_native/ instead:
+
+- MorphModelStream.h: real per-instance ModelVertex GPU stream override;
+  supplies weighted ECS MorphNode vertex displacements through the existing
+  Renderer3D ModelDraw on Metal/Vulkan/GLES backends. Set Model::batching
+  .allowGeometryPool=false **before** model upload and retain the immutable
+  source vertex/index arrays. Never overwrite shared global GPU geometry.
+  The separate instance stream owns its buffers and must retire them at a
+  completed Device idle/lifetime fence.
+- MorphBox3DContactBridge.h: authoritative Box3D Scene begin contacts and
+  body velocities to quantized integer MorphContactInput records. Only the
+  authoritative host samples float physics; replay clients use recorded
+  integer inputs. MORPH now owns morph::Impact, persistent version-1
+  morph.impact, applied **once** at the intended ECS tick. Do not reuse the
+  continuous MorphForce component for one-shot contacts.
+- GranularTerraWeaveBinding.h: sample canonical granular::Field + the
+  existing TerraWeave EarthworksLayer ground height, bake granular slabs
+  into render::MeshBuilder and the matching Box3D static top collision
+  surface. Each optional native publisher has its own revision and resource
+  lifetime; a failed collider creation retains the previous ground.
+- GranularWorldIntegration.h: choose complete physics+visible 16x16 grid
+  tiles, prepare immutable chunks on a completed ECS/soil revision,
+  publish on the Box3D owner thread between Scene::step calls and the
+  graphics owner thread outside rendered frames. Gate simulation/render
+  when any batch patch rejects; individual tile replacement is safe but
+  full multi-tile publication is not one atomic cross-device transaction.
+- GranularTerraWeaveTransfer.h: real Dig/Fill via the canonical
+  TerraWeave ECS excavigateAuthoritativeEcs operation. A host explicitly
+  defines one granular mass unit = one cubic centimetre for this transfer,
+  preflights the actual EarthworksLayer::sculpt movedVolumeCm3, checks
+  capacity/mass, then credits/debits the one authoritative granular pool.
+  Ground renderer, collider and NavMesh remain TerraWeave owner outputs,
+  never mutated by the gameplay policy itself.
+- PhysicalSceneHost.h: convenient native C++ facade for MORPH instance
+  streams, recorded contacts, GRANULAR frame prepare/publish/draw,
+  rollback invalidation and safe shutdown.
+- Full lifecycle integration source code and dependency boundaries:
+  examples/world/world_processes_native/README.md.
+
+The adapters are **opt-in to the concrete native project** and must be
+linked only when that project already owns a renderer/gfx Device, a Box3D
+Scene and a TerraWeave authoritative World. The minimal
+examples/native/world_processes/ module remains independent from Box3D.
+A MORPH visual 3D shape is not automatically an exact deformable Box3D
+collision shape; the optional kinematic proxy stays coarse. GRANULAR is
+a bounded 2D projected loose-solid layer, not SPH fluid, per-grain rigid
+bodies or a second terrain engine. None of these are default engine
+system replacements.
+
+The user explicitly requested tests later. **No CMake/CTest/ASan, backend
+GPU frame, actual Box3D scene or Mac screenshot has been verified** for
+Stages17–19; do not claim green. Every further stage must add its own
+docs/handoffs/ stage file with actual source SHA, design, tests (or
+unverified status), limitations and next step. Follow:
+- docs/handoffs/world-processes-stage17-morph-render-box3d-2026-11-23.md
+- docs/handoffs/world-processes-stage18-granular-terra-box3d-2026-11-23.md
+- docs/handoffs/world-processes-stage19-physical-native-host-2026-11-23.md
