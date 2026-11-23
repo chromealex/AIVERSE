@@ -47,8 +47,31 @@ public:
     }
     bool attachDoors(world::SpatialWorld& spatial,nav::Mesh* nav,
                      const std::map<BuildingLiftDoorKey,BuildingLiftDoorIds>& ids,
+                     BuildingCirculationScene::ObstructionProbe sensor,
                      std::string* error=nullptr){
-        return attached_&&scene_.attachDoors(spatial,nav,ids,error);
+        // The game session has no ECS World pointer at attach() time. A
+        // live authoritative sensor must therefore be explicitly supplied
+        // by the caller (characters, vehicles and cargo), never inferred
+        // from client network messages or omitted silently.
+        if(!attached_||!sensor){
+            if(error)*error="Physical lift doors require an authoritative obstruction sensor";
+            return false;
+        }
+        scene_.setDoorObstructionProbe(std::move(sensor));
+        if(!scene_.attachDoors(spatial,nav,ids,error)){
+            scene_.setDoorObstructionProbe({});
+            return false;
+        }
+        if(error)error->clear();
+        return true;
+    }
+    // Legacy call sites without a sensor reject early instead of attaching
+    // doors and failing a later world tick without explanation.
+    bool attachDoors(world::SpatialWorld&,nav::Mesh*,
+                     const std::map<BuildingLiftDoorKey,BuildingLiftDoorIds>&,
+                     std::string* error=nullptr){
+        if(error)*error="Supply the authoritative door obstruction callback";
+        return false;
     }
     bool board(World& ecs,Entity actor,uint32_t feature,
                std::string* error=nullptr){
