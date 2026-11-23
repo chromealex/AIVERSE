@@ -150,6 +150,14 @@ public:
     size_t pendingCpu()const noexcept{return workers_.inFlight();}
     bool opened()const noexcept{return index_!=nullptr;}
     uint64_t sourceRevision()const noexcept{return index_?index_->revision():0;}
+    int64_t suggestedFocusYcm()const noexcept{
+        if(!index_)return -1000;
+        const auto& c=index_->snapshot().settings;
+        // Follow the authored cave vertical range, not a fixed Y=-10 m
+        // assumption that would make deeper generated caves invisible.
+        return std::clamp<int64_t>(c.maxYcm-800,
+                                   c.minYcm+1,c.maxYcm-1);
+    }
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
     CaveWorldResidency residency_;
