@@ -183,6 +183,10 @@ export interface StudioBuildingRequest {
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
+  solids?:number; connections?:number;
+  sockets?:Array<{socketId:string;kind:StudioBuildingFeatureKind;
+    side:string;featureIndex:number;width:number;height:number;
+    open:number;outside:[number,number,number]}>;
 }
 export interface StudioBuildingGenerated { path: string; recipePath?: string; guid: string; bytes: number; triangles: number }
 export interface StudioParams {
