@@ -247,6 +247,9 @@ private:
     std::string wpHitOwner_;
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
+    bool wpCustomPivot_=false;
+    render::float3 wpGroupPivot_{};
+    std::vector<std::string> wpPivotSelection_;
     unsigned lightingStatusTicks_ = 0;
     int lastLoadDone_ = -1, lastLoadTotal_ = -1;
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
