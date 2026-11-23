@@ -69,7 +69,8 @@ inline GranularSurfacePatch bakeGranularSurface(
         GranularSurfaceSettings settings={}) {
     const auto* granules=ecs.tryGetConst<granular::Field>(field);
     if(!granules||!granules->enabled||!granular::valid(*granules)||
-       !valid(settings)||!columns||!rows||columns>32||rows>32||
+       !valid(settings)||granules->sampledTick==UINT32_MAX||
+       !columns||!rows||columns>32||rows>32||
        firstX>=granules->width||firstRow>=granules->height||
        std::uint32_t(firstX)+columns>granules->width||
        std::uint32_t(firstRow)+rows>granules->height)
@@ -180,8 +181,10 @@ public:
         const auto it=resident_.find(key);
         if(it!=resident_.end() && patch.fieldTick<it->second.tick)
             return false; // stale simulated field snapshot
-        if(it!=resident_.end() && patch.geometrySignature==it->second.signature)
+        if(it!=resident_.end() && patch.geometrySignature==it->second.signature){
+            it->second.tick=patch.fieldTick;
             return true;
+        }
         if(patch.empty()){
             unload(scene,key);return true;
         }
@@ -232,8 +235,10 @@ public:
         const auto key=granularPatchKey(patch);
         const auto it=resident_.find(key);
         if(it!=resident_.end()&&patch.fieldTick<it->second.tick)return false;
-        if(it!=resident_.end()&&patch.geometrySignature==it->second.signature)
+        if(it!=resident_.end()&&patch.geometrySignature==it->second.signature){
+            it->second.tick=patch.fieldTick;
             return true;
+        }
         if(patch.empty()){
             return unload(device,key);
         }
