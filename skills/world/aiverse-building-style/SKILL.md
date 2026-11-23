@@ -114,3 +114,11 @@ BuildingGeneratorPanel defaults to functional properties, native bridge saves
 GLB + canonical .glb.recipe.json. CLI exports with --recipe JSON. Tests:
 library_building_features, native BuildingGenerationTests, focused CI. Do not
 claim verified Metal or playable hinge animation without actual testing.
+
+
+Stage 11: use BuildingStructureGraph.h as source of truth for exact
+functional opening layout; position/positionZ default -1 = automatic,
+spacing min 0.35m. Graph solids drive BOTH CPU mesh and collision; graph
+sockets have stable entrance/<feature>/<copy> and roof/<feature> IDs.
+Studio writes positions to canonical recipe sidecar. Tests and Mac QA
+must be run; no claim of verified GPU-actuated doors or multi-floor rooms.

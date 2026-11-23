@@ -91,3 +91,11 @@ mesh/collision state; smooth real-time animation needs moving GPU-owned
 subnodes and safe physics/navmesh publication rather than regeneration
 every frame. Next add windows, loading ramps, hinged/roller shutters,
 roof landing pads, service hatches and positional placement per face.
+
+
+## Exact location and StructureGraph
+
+See docs/building-structure-graph.md. Wall property `position` (metres along wall; -1 auto),
+`spacing` (clear gap for repeated opening count) and roof `position` (X) /
+`positionZ` (Z) are authoritative. Graph computes structural solids,
+collision and stable named sockets from the same layout.

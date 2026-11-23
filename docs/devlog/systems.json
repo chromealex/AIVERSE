@@ -1819,6 +1819,13 @@
           "titleEn": "Independent building functional modules (gates, doors, retractable roof)",
           "text": "Функциональные свойства определяются рецептом отдельно от сеттинга; реальные стеновые и кровельные проёмы, коллизии, runtime API и Studio UI.",
           "textEn": "Functional recipe independent of setting; real wall and roof openings, collision, runtime API and Studio authoring."
+        },
+        {
+          "status": "in-progress",
+          "title": "Building StructureGraph: точные координаты проёмов, опоры и стабильные сокеты",
+          "titleEn": "Building StructureGraph: explicit opening positions and stable sockets",
+          "text": "Единый граф для меша и коллизий с фиксированными и автоматическими элементами. Координаты проёмов редактируются и сохраняются в Studio.",
+          "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data."
         }
       ],
       "core": true,
