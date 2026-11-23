@@ -98,10 +98,10 @@ private:
         for(auto it=installed.rbegin();it!=installed.rend();++it) {
             // Box first: if a new body was created, release it while reader
             // barrier remains closed. Existing active bodies remain intact.
-            if(it->box->stagedRevision()==revision)
-                okay=it->box->revertCandidate(boxScene,revision) || okay;
-            if(it->spatial->stagedRevision()==revision)
-                (void)it->spatial->revertCandidate(spatial,revision);
+            if(it->box->candidateInstalled() &&
+               !it->box->revertCandidate(boxScene,revision))okay=false;
+            if(it->spatial->candidateInstalled() &&
+               !it->spatial->revertCandidate(spatial,revision))okay=false;
         }
         if(!okay) {
             status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
