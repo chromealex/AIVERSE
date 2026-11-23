@@ -5,6 +5,8 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/buildings/BuildingGlbWriter.h"
+#include "engine/buildings/BuildingPngEncoder.h"
+#include "engine/render/Model.h"
 #include <aiverselib/systems/BuildingFeatureGenerator.h>
 #include "engine/data/Json.h"
 #include <algorithm>
@@ -368,6 +370,31 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             dependency.set("sourceBytes",Json::number(int64_t(bytes.size())));
             dependency.set("contentFingerprint",string(std::to_string(digest)));
             dependency.set("settings",entry->settings);
+            // glTF 2.0 core images are PNG/JPEG. Reuse the engine's
+            // actual CPU texture decoder for supported TGA/DDS/BLP and
+            // CPU-decodable KTX2; pack valid RGBA8 PNG output. Do NOT
+            // relabel unsupported compressed/ASTC or HDR bytes as PNG.
+            const bool png=bytes.size()>=8&&bytes[0]==137&&
+                bytes[1]==80&&bytes[2]==78&&bytes[3]==71;
+            const bool jpg=bytes.size()>=4&&bytes[0]==255&&
+                bytes[1]==216&&bytes[bytes.size()-2]==255&&
+                bytes[bytes.size()-1]==217;
+            if(!png&&!jpg){
+                render::Image decoded;
+                const std::string source(
+                    reinterpret_cast<const char*>(bytes.data()),bytes.size());
+                if(!render::decodeImage(source,decoded)||decoded.rgba.empty()){
+                    issue="Texture importer cannot CPU-decode this format for GLB";
+                    return false;
+                }
+                try{
+                    bytes=building::encodeBuildingPngRgba(
+                        decoded.rgba,decoded.width,decoded.height);
+                }catch(const std::exception& e){
+                    issue=e.what();return false;
+                }
+                dependency.set("embeddedFormat",string("image/png"));
+            }else dependency.set("embeddedFormat",string(png?"image/png":"image/jpeg"));
             textureDependencies.emplace(guid,std::move(dependency));
             return true;
         };
