@@ -477,6 +477,67 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("textureDependencies",std::move(dependencies));
         }
         if(req.composeFeatures){
+            // Actual function graph sockets, not browser estimated
+            // coordinates. Each closedBounds array is the authoritative
+            // LOCAL generated aperture shape at origin (yaw=0). Runtime
+            // scene owners transform it and allocate unique collision IDs.
+            const auto style=load(engine,req.style);
+            const auto geometry=generateFunctionalBuilding(
+                style,req.functionalRecipe);
+            if(!geometry)throw std::runtime_error(geometry.error);
+            Json sockets=Json::array();
+            const float W=req.functionalRecipe.width;
+            const float H=req.functionalRecipe.height;
+            const float D=req.functionalRecipe.depth;
+            for(const auto& aperture:geometry.graph.sockets){
+                if(aperture.kind==BuildingFeatureKind::Window ||
+                   aperture.kind==BuildingFeatureKind::Stairs ||
+                   aperture.kind==BuildingFeatureKind::Elevator)continue;
+                float x0=0.f,y0=0.f,z0=0.f,x1=0.f,y1=0.f,z1=0.f;
+                if(aperture.kind==BuildingFeatureKind::SlidingRoof){
+                    x0=aperture.x-aperture.width*.5f;
+                    x1=aperture.x+aperture.width*.5f;
+                    z0=aperture.z-aperture.depth*.5f;
+                    z1=aperture.z+aperture.depth*.5f;
+                    y0=H-.28f;y1=H;
+                }else{
+                    y0=.24f;y1=y0+aperture.height;
+                    switch(aperture.side){
+                        case BuildingFeatureSide::Front:
+                            x0=aperture.x-aperture.width*.5f;
+                            x1=aperture.x+aperture.width*.5f;
+                            z0=0.f;z1=.36f;break;
+                        case BuildingFeatureSide::Back:
+                            x0=aperture.x-aperture.width*.5f;
+                            x1=aperture.x+aperture.width*.5f;
+                            z0=D-.36f;z1=D;break;
+                        case BuildingFeatureSide::Left:
+                            x0=0.f;x1=.36f;
+                            z0=aperture.z-aperture.width*.5f;
+                            z1=aperture.z+aperture.width*.5f;break;
+                        case BuildingFeatureSide::Right:
+                            x0=W-.36f;x1=W;
+                            z0=aperture.z-aperture.width*.5f;
+                            z1=aperture.z+aperture.width*.5f;break;
+                    }
+                }
+                Json socket=Json::object(),minimum=Json::array(),
+                    maximum=Json::array();
+                for(float v:{x0,y0,z0})
+                    minimum.push(Json::number(double(v),4));
+                for(float v:{x1,y1,z1})
+                    maximum.push(Json::number(double(v),4));
+                socket.set("id",string(aperture.id));
+                socket.set("kind",string(buildingFeatureName(aperture.kind)));
+                socket.set("featureIndex",Json::number(int64_t(aperture.featureIndex)));
+                socket.set("initialOpen",Json::number(double(aperture.open),4));
+                socket.set("closedBoundsMin",std::move(minimum));
+                socket.set("closedBoundsMax",std::move(maximum));
+                sockets.push(std::move(socket));
+            }
+            saved.set("physicalSockets",std::move(sockets));
+        }
+        if(req.composeFeatures){
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
