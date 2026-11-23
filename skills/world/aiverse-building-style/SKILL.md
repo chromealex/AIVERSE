@@ -1496,3 +1496,55 @@ be implemented by the established StudioScene/GPU owner if needed.
 No TS/C++ build, GLB, native GPU or scene QA was run because the user
 deferred tests. Handoff:
 docs/agent-handoffs/building-studio-recipes-layout-stage23t6-2026-11-24.md.
+
+## Stage 23T.7 — real ephemeral Studio Renderer3D building preview
+
+Native Studio now has an opt-in ZERO-PROJECT-WRITE interactive 3D preview
+for generated building requests, using the existing StudioScene and its
+RenderDeviceLifetime / GPU Renderer3D. It does NOT create GLBs,
+recipes, .meta files or asset GUIDs.
+
+- apps/studio-native/StudioBuildingGeneration.h adds
+  studioBuildingPreviewCpuModel(engine,project,params). It uses the same
+  strict buildingStudioDetail::request/produce and applyProjectMaterials
+  owners as generation; binds the existing portable runtime
+  BuildingMaterialAssets generated 128x128 PBR albedo/MR/normal maps and
+  resolves real project texture GUIDs from StudioAssetCatalog. It
+  validates every path component, disallows symlinks and source files
+  over 16 MiB, and decodes the image with render::decodeImage. No
+  filesystem output is emitted.
+- apps/studio-native/StudioHost.cpp answers studio.buildingPreview with
+  a temporary CPU model on the host side, then moves it to StudioScene
+  via the EXISTING onScene render-thread dispatch. It answers
+  studio.buildingPreviewStop with setBuildingPreview({}). Commands
+  require an open native Scene viewport and project, never a WebGL
+  renderer or another native device.
+- apps/studio-native/StudioScene.h/.cpp holds one preview
+  unique_ptr<render::Model> with a separate GPU-residency flag. Its
+  setBuildingPreview() runs ONLY on the graphics owner thread between
+  frames. Before replacing/removing the old Model it requires the
+  existing gfx::Device::waitForResourceIdle barrier, invalidates
+  Renderer3D caches, and releases render::Model. A failed idle barrier
+  retains all old pointers and returns an error; a partially uploaded
+  new Model is NEVER presented as GPU-ready.
+- StudioScene::frame takes an isolated native RenderDeviceLifetime-owned
+  GPU path while preview is active, using its existing camera_
+  controls (orbit/pan/zoom), renderer_.beginScene, renderer_.drawModel,
+  lighting, FXAA and normal frame scope. The model is framed from real
+  boundsMin/Max. This is a real GPU 3D preview, not a browser 3D
+  approximation, a thumbnail or an SVG layout chart.
+- apps/studio-web/src/types.ts and mock.ts declare the native-only
+  commands, with explicit rejection from browser demo. The
+  BuildingGeneratorPanel has Preview 3D in Scene and Close 3D preview
+  buttons; it opens the common Scene panel BEFORE sending preview RPC
+  and requests teardown when the project changes. Repeated button
+  activation rebuilds the preview from current form values.
+
+Architectural contract: generation and ECS/PHYSIS authority never
+render directly. StudioScene owns GPU upload and safe deletion; project
+GLB exporter remains a separate create-only workflow. Although the
+code now routes an actual temporary Model through StudioScene, native
+Metal/Vulkan/GLES view acceptance and PBR screenshots have NOT been
+run. Deferred full Studio C++/TypeScript, GLB, image import and GPU
+tests may uncover issues. Do not claim real executed verification.
+Handoff: docs/agent-handoffs/building-studio-native-preview-stage23t7-2026-11-24.md.
