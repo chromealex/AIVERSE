@@ -1,5 +1,6 @@
 // Focused native Studio building generator acceptance: no browser-side asset writes.
 #include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingRegeneration.h"
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -26,6 +27,22 @@ int main(int argc,char** argv){
                 CHECK(style["functions"].size()>=4);
             }
         CHECK(found);
+        // Twelve brand-new setting IDs must be enumerated by the native
+        // loader, not accidentally grouped by a hard-coded prefix.
+        for(const char* id:{"medieval-fantasy","dark-fantasy","steampunk",
+            "cyberpunk","scifi-space","alien-civilization",
+            "post-apocalypse","modern","ancient-civilizations",
+            "asian-historical","solarpunk","underwater"}){
+            bool present=false;
+            for(const auto& entry:catalog["styles"].items())
+                if(entry.getStr("id")==id){
+                    CHECK(entry.getStr("setting")==id);
+                    CHECK(entry["functions"].size()==4);
+                    CHECK(entry["materials"].size()>=16);
+                    present=true;break;
+                }
+            CHECK(present);
+        }
         const auto req=Json::parse(R"({"setting":"scifi","style":"scifi","function":"factory","width":28,"height":15,"depth":24,"seed":42})");
         auto a=studioBuildingInspect(engine,req),b=studioBuildingInspect(engine,req);
         CHECK(a==b);
@@ -65,6 +82,24 @@ int main(int argc,char** argv){
         const auto savedRecipe=Json::parseFile((content/recipeAsset.getStr("recipePath")).string());
         CHECK(savedRecipe.getStr("mode")=="features");
         CHECK(savedRecipe["features"].size()==4);
+        CHECK(savedRecipe["physicalSockets"].isArray());
+        CHECK(savedRecipe["physicalSockets"].size()>0);
+        for(const auto& socket:savedRecipe["physicalSockets"].items()){
+            CHECK(!socket.getStr("id").empty());
+            CHECK(socket["closedBoundsMin"].isArray());
+            CHECK(socket["closedBoundsMax"].isArray());
+            CHECK(socket["closedBoundsMin"].size()==3);
+            CHECK(socket["closedBoundsMax"].size()==3);
+        }
+        const auto allSaved=studioBuildingRecipes(temp);
+        CHECK(allSaved["recipes"].size()>=3);
+        const auto reopened=studioBuildingReadRecipe(
+            engine,temp,recipeAsset.getStr("recipePath"));
+        CHECK(reopened["request"].getStr("style")=="scifi");
+        CHECK(reopened["request"].getStr("mode")=="features");
+        CHECK(reopened["request"]["features"].size()==4);
+        CHECK(reopened["request"]["materialBindings"].isObject() ||
+              reopened["request"]["materialBindings"].isNull());
         CHECK(savedRecipe["features"][1].getStr("kind")=="small-gate");
         CHECK(savedRecipe["features"][1]["count"].integer()==2);
         CHECK(std::abs(savedRecipe["features"][0]["position"].toDouble()-7.)<0.01);
