@@ -41,6 +41,43 @@ public:
     // Explicit transaction wrapper; callers must use its mutation methods.
     class Transaction;
 
+    // Host-owned, thread-confined observation of actual mutation order.
+    // No state is embedded in the ledger, copied into ECS snapshots or archived.
+    // The caller must hold a quiescent tick boundary and verify the resulting
+    // stream against the final ledger (replacement/COW/other lanes can bypass it).
+    using Mutation=std::pair<RegionEntityId,RegionEntityRecord>;
+    class MutationCapture {
+        const RegionEntityLedger* owner_;
+        uint64_t initial_;
+        size_t limit_;
+        bool failed_=false;
+        std::vector<Mutation> records_;
+        inline static thread_local MutationCapture* active_=nullptr;
+        friend class RegionEntityLedger;
+        void append(RegionEntityId id,const RegionEntityRecord& record)noexcept{
+            if(failed_)return;
+            if(records_.size()>=limit_){failed_=true;return;}
+            try{records_.emplace_back(id,record);}catch(...){failed_=true;}
+        }
+        void truncate(uint64_t revision)noexcept{
+            while(!records_.empty()&&records_.back().second.revision>revision)records_.pop_back();
+        }
+    public:
+        static constexpr size_t MaxRecords=(16u*1024u*1024u-16)/29;
+        explicit MutationCapture(const RegionEntityLedger& owner,size_t limit=MaxRecords)
+            :owner_(&owner),initial_(owner.lastRevision()),limit_(std::min(limit,MaxRecords)){
+            if(active_){failed_=true;return;}
+            active_=this;
+        }
+        MutationCapture(const MutationCapture&)=delete;
+        MutationCapture& operator=(const MutationCapture&)=delete;
+        ~MutationCapture(){stop();}
+        void stop()noexcept{if(active_==this)active_=nullptr;}
+        bool ok()const{return !failed_;}
+        uint64_t initialRevision()const{return initial_;}
+        const std::vector<Mutation>& records()const{return records_;}
+    };
+
     bool spawn(RegionEntityId id,Cell owner) {
         if(!id || records_.contains(id) || records_.size()>=kMaxEntities ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
@@ -57,6 +94,7 @@ public:
             throw;
         }
         lastRevision_=next;
+        recordMutation(id,entry->second);
         return true;
     }
     // Two-phase validation prevents half-moving an occupied car and its passengers.
@@ -81,6 +119,7 @@ public:
             entry.revision=++lastRevision_;
             node.key()=entry.revision;
             revisionIndex_.insert(std::move(node));
+            recordMutation(id,entry);
         }
         return true;
     }
@@ -115,6 +154,7 @@ public:
             entry.revision=++lastRevision_;
             node.key()=entry.revision;
             revisionIndex_.insert(std::move(node));
+            recordMutation(id,entry);
         }
         return true;
     }
@@ -132,6 +172,7 @@ public:
         liveIds_.erase(id);
         node.key()=it->second.revision;
         revisionIndex_.insert(std::move(node));
+        recordMutation(id,it->second);
         return true;
     }
     const RegionEntityRecord* find(RegionEntityId id) const {
@@ -188,6 +229,14 @@ public:
     }
 
 private:
+    void recordMutation(RegionEntityId id,const RegionEntityRecord& record)noexcept{
+        auto* capture=MutationCapture::active_;
+        if(capture&&capture->owner_==this)capture->append(id,record);
+    }
+    void rollbackCapture(uint64_t revision)noexcept{
+        auto* capture=MutationCapture::active_;
+        if(capture&&capture->owner_==this)capture->truncate(revision);
+    }
     uint64_t lastRevision_=0;
     std::map<RegionEntityId,RegionEntityRecord> records_;
     std::set<RegionEntityId> liveIds_; // never separately saved/hashed
@@ -249,6 +298,7 @@ public:
             if(!old.record.live)ledger_.liveIds_.erase(id);
         }
         ledger_.lastRevision_=initialRevision_;
+        ledger_.rollbackCapture(initialRevision_);
     }
     bool spawn(RegionEntityId id,Cell owner) {
         remember(id);const auto rev=ledger_.lastRevision();
