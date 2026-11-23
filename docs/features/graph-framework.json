@@ -49,7 +49,8 @@
     "apps/editor/EditorPlayOps.cpp",
     "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx",
     "engine/render/graph/GraphTelemetry.h",
-    "apps/editor/core/GraphDebugSession.h"
+    "apps/editor/core/GraphDebugSession.h",
+    "apps/studio-web/src/graphs/GraphDebugSessionPanel.tsx"
   ],
   "traits": {
     "editable": true,
