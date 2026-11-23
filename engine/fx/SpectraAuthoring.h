@@ -239,6 +239,51 @@ inline bool addNode(Json& graph,const std::string& type,std::string& newId,
     error.clear();
     return true;
 }
+// Strict typed authoring for the v2 dataInterfaces root. Editor/HTML5/MCP
+// clients can modify an individual provider binding without rewriting the
+// entire graph or changing unrelated node metadata. Invalid edits are atomic.
+inline bool setDataInterfaceBinding(Json& graph,const std::string& parameter,
+                                    const Json& spec,std::string& error) {
+    if(graph.getInt("version")!=2) {
+        error="dataInterfaces require a version-2 graph";
+        return false;
+    }
+    InstanceParameterTable definitions;
+    std::vector<std::string> errors;
+    if(!loadInstanceParameterTable(graph["instanceParameters"],definitions,errors)) {
+        error=errors.empty()?"invalid instanceParameters":errors.front();
+        return false;
+    }
+    Json updated=graph["dataInterfaces"];
+    if(updated.isNull())updated=Json::object();
+    if(!updated.isObject()) {
+        error="dataInterfaces must be an object";
+        return false;
+    }
+    updated.set(parameter,spec);
+    DataInterfaceBindings validated;
+    if(!loadDataInterfaceBindings(updated,definitions,validated,errors)) {
+        error=errors.empty()?"invalid dataInterfaces declaration":errors.front();
+        return false;
+    }
+    graph.set("dataInterfaces",std::move(updated));
+    error.clear();
+    return true;
+}
+inline bool removeDataInterfaceBinding(Json& graph,const std::string& parameter,
+                                       std::string& error) {
+    if(graph.getInt("version")!=2 ||
+       !graph["dataInterfaces"].isObject() ||
+       !graph["dataInterfaces"].has(parameter)) {
+        error="no matching Data Interface binding in graph v2";
+        return false;
+    }
+    Json updated=graph["dataInterfaces"];
+    if(!updated.erase(parameter))return false;
+    graph.set("dataInterfaces",std::move(updated));
+    error.clear();
+    return true;
+}
 inline Json newGraphV2() {
     return Json::parse(R"GRAPH({
       "version":2,"parameters":{},"nodes":[
