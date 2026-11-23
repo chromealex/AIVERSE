@@ -1,3 +1,53 @@
+## 2026-11-23 — HTML5 Studio embedded GPU preview and MCP control (Stage 11/12, QA pending)
+
+The SpectraFX Graph HTML5 dock now hosts a real native particle preview
+directly inside the graph authoring surface. Its HTML rectangle repositions
+Studio's **existing render-thread-owned Scene GPU surface**, switching to
+an isolated FX stage/camera with a neutral dark grid and no game-map
+objects. The renderer, `spectra::GraphRuntime`, GPU fences and device
+retirement remain native. Scene camera is restored when the FX pane
+closes. This is NOT a fake React canvas, second graphics context, or
+browser video stream. When Scene and Graph are both visible, Graph
+temporarily takes priority for the shared native surface.
+
+The existing `aiversemcp` Workspace registry already supports graph
+list/get/node_catalog/edit/validate/set/delete/bake and draft
+list/get/set/publish. The new `fx_graph_preview` MCP tool controls
+the same real Studio runtime as the Graph tab:
+
+```json
+{"action":"load","graphName":"preview_fx"}
+{"action":"play"}
+{"action":"pause"}
+{"action":"step"}
+{"action":"seek","tick":120}
+{"action":"restart","play":false}
+{"action":"parameter","name":"wind_lift","value":3}
+{"action":"cameraOrbit","dx":12,"dy":-4}
+{"action":"cameraZoom","amount":15}
+{"action":"cameraReset"}
+{"action":"status"}
+{"action":"stop"}
+```
+
+`load` also accepts `graph` (inline JSON object) or
+`graphName` with `draft:true`. Only the active project's sanitized
+graph/draft paths are resolved. Standalone/headless MCP advertises this
+tool but returns a clear `requires an open native Studio GPU viewport`
+error; it never simulates or claims a fake GPU frame.
+Preview actions have no authoritative gameplay/ECS writes. Native
+camera gestures do not pick, delete, sculpt or alter map objects
+when the FX pane owns the surface.
+
+**QA:** source and regression tests are committed, but exact-SHA
+Node/Vite/Apple Metal/Windows/interactive UI tests have not passed as
+of this update. The older user's Metal 2/2 CTest PASS predates embedded
+preview. Read the detailed handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+and
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 # AIVERSE SpectraFX
 
 **SpectraFX** is the official name of the universal, genre-independent visual-effects system in AIVERSE. Its design is inspired by the authoring and event-driven workflow of Unreal Niagara, but it is **not** a copy of Unreal code, asset formats, or editor. `aiverse::spectra` is the public C++ API namespace.
