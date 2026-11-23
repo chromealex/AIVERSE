@@ -120,21 +120,41 @@ inline const editor::DocEntity* nearestTarget(
     }
     return selected;
 }
-inline int hit(const std::vector<Handle>& choices,
+// All nearby handles are returned in stable distance/identity order. The
+// native host can cycle overlapping sockets by repeated clicks without
+// ambiguity or relying on ECS slot order.
+inline std::vector<int> hitCandidates(const std::vector<Handle>& choices,
                const StudioScene& scene,
                double x,double y,double width,double height,
                float maxDistancePx=11.f){
-    int found=-1;
-    double best=double(maxDistancePx*maxDistancePx);
+    std::vector<std::pair<double,int>> near;
+    const double threshold=double(maxDistancePx)*maxDistancePx;
     for(std::size_t i=0;i<choices.size();++i){
         render::float2 screen{};
         if(!scene.projectPoint(choices[i].position,float(width),float(height),screen))
             continue;
         const double dx=screen.x-x,dy=screen.y-y;
         const double distance=dx*dx+dy*dy;
-        if(distance<best){best=distance;found=int(i);}
+        if(distance<=threshold)near.push_back({distance,int(i)});
     }
-    return found;
+    std::sort(near.begin(),near.end(),[](const auto& lhs,const auto& rhs){
+        if(lhs.first!=rhs.first)return lhs.first<rhs.first;
+        return lhs.second<rhs.second;
+    });
+    std::vector<int> out;
+    out.reserve(near.size());
+    for(const auto& [distance,index]:near){
+        (void)distance;
+        out.push_back(index);
+    }
+    return out;
+}
+inline int hit(const std::vector<Handle>& choices,
+               const StudioScene& scene,
+               double x,double y,double width,double height,
+               float maxDistancePx=11.f){
+    auto near=hitCandidates(choices,scene,x,y,width,height,maxDistancePx);
+    return near.empty()?-1:near.front();
 }
 inline bool extent(const editor::DocEntity& owner,const Handle& handle,
                    render::float3 mouse,float& value) {
