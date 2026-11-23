@@ -33,10 +33,9 @@ struct CaveFaceResolution {
     int32_t commonSpacingCm=0;
     unsigned axis=0;
 };
-// first and second can be supplied in either order, on any of six adjacent
-// face directions. Only the coarse-on-negative-side case can currently use
-// the stage-14 conservative collinear transition; all other non-exact mixed
-// surfaces are regenerated on one lattice (no unsupported invented triangles).
+// Both directions of each X/Y/Z face support the same conservative
+// collinear subdivision. Divergent contours still require a common lattice;
+// no unsupported bridge geometry is invented.
 inline CaveFaceResolution resolveCaveFaceLod(const CaveFaceSpec& input) {
     if(!input.first||!input.second||!input.firstResolution||
        !input.secondResolution||input.firstResolution>64||
@@ -78,10 +77,20 @@ inline CaveFaceResolution resolveCaveFaceLod(const CaveFaceSpec& input) {
     const auto le=caveBoundaryEdges(*low,lr,ls,axis,plane);
     const auto he=caveBoundaryEdges(*high,hr,hs,axis,plane);
     if(le==he) {result.decision=CaveFaceDecision::ExactMatch;return result;}
-    if(ls>hs) {
-        const auto transition=stitchCaveCollinearBoundary(*low,lr,ls,*high,hr,hs,axis);
-        if(transition.supported) {
-            if(direction>0)result.firstMesh=transition.coarseStitched;
+    if(ls!=hs) {
+        const bool lowCoarse=ls>hs;
+        const CaveMesh& coarse=lowCoarse?*low:*high;
+        const CaveMesh& fine=lowCoarse?*high:*low;
+        const uint32_t coarseRes=lowCoarse?lr:hr;
+        const uint32_t fineRes=lowCoarse?hr:lr;
+        const int32_t coarseSpacing=lowCoarse?ls:hs;
+        const int32_t fineSpacing=lowCoarse?hs:ls;
+        const auto transition=stitchCaveCollinearBoundary(
+            coarse,coarseRes,coarseSpacing,
+            fine,fineRes,fineSpacing,axis);
+        if(transition.supported){
+            const bool firstCoarse=(direction>0)==lowCoarse;
+            if(firstCoarse)result.firstMesh=transition.coarseStitched;
             else result.secondMesh=transition.coarseStitched;
             result.decision=CaveFaceDecision::Subdivided;
             return result;
