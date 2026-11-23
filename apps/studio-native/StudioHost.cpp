@@ -1935,6 +1935,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
                (pivot=="custom"&&(!params["pivotXcm"].isNumber()||
                                    !params["pivotZcm"].isNumber())))
                 throw std::runtime_error("Invalid numeric EVOLVE preview");
+            if(pivot=="custom"){
+                wpGroupPivot_={
+                    float(params["pivotXcm"].integer())/100.f,.65f,
+                    float(params["pivotZcm"].integer())/100.f};
+                wpCustomPivot_=true;
+                wpPivotSelection_=selected;
+            }
             wpNumericPreview_=params;
         }
         rebuildOverlay();
