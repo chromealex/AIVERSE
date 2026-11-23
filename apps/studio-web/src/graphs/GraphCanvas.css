@@ -7,3 +7,5 @@
 .au-graph-workspace>.au-row{flex:none;padding:var(--au-space-1)}
 .au-graph-node circle{cursor:crosshair}
 .au-graph-node circle:focus-visible{stroke:var(--au-accent-ink);stroke-width:2}
+
+.au-graph-actions{flex-wrap:wrap;padding:var(--au-space-1)}
