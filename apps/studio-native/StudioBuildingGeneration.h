@@ -189,7 +189,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
     if(fs::exists(temp))throw std::runtime_error("A building export is already in progress");
     try {
         aiverse::lib::systems::buildingExport::Glb glb;
-        glb.add(model.mesh,req.kind);
+        glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
             throw std::runtime_error("Building GLB export produced an invalid file");
