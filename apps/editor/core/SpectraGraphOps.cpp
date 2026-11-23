@@ -420,6 +420,44 @@ void registerSpectraGraphOps(Workspace& ws) {
         response.set("next", strGraph("fx_preview {\"effect\":\"" + effect + "\"}"));
         return response;
     });
+    // The same GPU preview used by SpectraStudio is available through MCP
+    // when the tool call is forwarded to a running native Studio. Standalone
+    // MCP keeps full graph authoring but reports the absent graphics device.
+    // No RHI pointer, arbitrary file path or source code crosses this API.
+    add("fx_graph_preview",
+        "Control the *real native Studio* SpectraFX GPU/CPU particle preview. "
+        "Actions: status, load, play, pause, step, seek (0..3600 ticks), "
+        "restart, parameter (named scalar), stop. "
+        "For load use a graph object or graphName with draft=true for a private draft. "
+        "The preview is presentation only; no game ECS writes or offscreen fake renders. "
+        "Requires the native Studio GPU viewport to be visible; standalone MCP "
+        "returns a clear unavailable error.",
+        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop"]},
+            "graph":{"type":"object"},"graphName":{"type":"string"},
+            "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
+            "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"}},
+            "required":["action"]})",
+        [&ws](const Json& p) {
+            requireGame(ws);
+            const std::string action=p.getStr("action");
+            if(action!="status"&&action!="load"&&action!="play"&&
+               action!="pause"&&action!="step"&&action!="seek"&&
+               action!="restart"&&action!="parameter"&&action!="stop")
+                throw std::runtime_error("unknown SpectraFX preview action");
+            Json command=p;
+            if(action=="load") {
+                if(p.has("graph")&&p.has("graphName"))
+                    throw std::runtime_error("use either graph or graphName, not both");
+                if(!p.has("graph")) {
+                    const std::string graphName=requireGraphName(p,"graphName");
+                    command.set("graph",Json::parse(readFile(p.getBool("draft")
+                        ?draftFile(ws,graphName):graphFile(ws,graphName))));
+                }
+                if(!command["graph"].isObject())
+                    throw std::runtime_error("preview requires a Graph v2 JSON object");
+            }
+            return ws.spectraPreview(command);
+        });
     registerSpectraFunctionOps(ws);
 }
 
