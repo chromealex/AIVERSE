@@ -71,6 +71,36 @@ std::vector<RacePedals> VehicleRace::pedals(World& w, RaceHost& host, uint32_t t
     return out;
 }
 
+std::vector<Vec3> VehicleRace::possibleRespawnPositions(const World& w) const {
+    const RaceState* state=VehicleRace::state(w);
+    if(!state || !state->started || state->racers.empty())return {};
+    lm::RaceCourse c=course;
+    c.grid=state->grid;
+    if(!lm::valid(c) || !lm::valid(state->session.race))return {};
+    std::vector<Vec3> positions;
+    const auto& race=state->session.race;
+    positions.reserve(state->racers.size()*2);
+    for(size_t i=0;i<state->racers.size();++i) {
+        const int64_t id=int64_t(i+1);
+        const auto progress=race.route.racers.find(id);
+        if(progress==race.route.racers.end() || progress->second.finished)continue;
+        // Current respawn target (last passed checkpoint, or grid). This is
+        // what stepRaceSession will select if respawn is requested now.
+        positions.push_back(lm::raceRespawnPoint(c,race,id).position);
+        // This same tick might cross the next gate and then request a
+        // respawn; include that checkpoint as a possible new last gate.
+        if(progress->second.nextGate<c.checkpoints.size())
+            positions.push_back(c.checkpoints[progress->second.nextGate].respawn);
+    }
+    std::sort(positions.begin(),positions.end(),[](Vec3 a,Vec3 b){
+        if(a.x!=b.x)return a.x<b.x;
+        if(a.y!=b.y)return a.y<b.y;
+        return a.z<b.z;
+    });
+    positions.erase(std::unique(positions.begin(),positions.end()),positions.end());
+    return positions;
+}
+
 void VehicleRace::after(World& w, RaceHost& host, const DriveRules& drive, uint32_t tick) const {
     RaceState* rs = state(w);
     if (!rs || rs->racers.empty()) return;
