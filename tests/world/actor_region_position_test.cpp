@@ -24,7 +24,7 @@ inline void io(Archive& a,Work& value) {a(value.progress,value.intent);}
 
 static std::unique_ptr<Simulation> make(bool enabled) {
     auto rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,
-        "mode":"deathmatch"}})");
+        "mode":"deathmatch","mechanics":{"enabled":true}}})");
     if(enabled)rules.set("regionOwnership",Json::object());
     auto map=Json::parse(R"({"players":[{"team":1},{"team":2}],
         "spawns":[[4,2,0],[8,2,0]],"colliders":[],
