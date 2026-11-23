@@ -27,6 +27,9 @@ public:
     // Must be called before advancing a simulation tick. False means wait, never simulate holes.
     bool prepareRegions(std::span<const Bounds> regions,size_t requests=4,size_t publications=4);
     bool covers(Bounds region)const;
+    // Derived collision geometry epoch: increments only when chunk collision is
+    // published or retired. Never put this host-local value in a game checksum.
+    uint64_t revision() const { return revision_; }
     const AsyncChunkStream::Status& status()const{return stream_->status();}
     const WorldAssets& assets()const{return assets_;}
 private:
@@ -35,6 +38,7 @@ private:
     SpatialWorld& target_;
     std::map<Cell,std::vector<uint32_t>> ids_;
     std::map<Cell,TerrainTile> terrain_;
+    uint64_t revision_=0;
     std::unique_ptr<AsyncChunkStream> stream_;
     bool publish(Cell,const AsyncChunkStream::Payload&);
     void retire(Cell);
