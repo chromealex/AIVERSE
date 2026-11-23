@@ -198,6 +198,54 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
 }
 void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; drag_ = TransformDrag{}; }
 void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
+bool StudioScene::setBuildingPreview(
+    std::unique_ptr<render::Model> next,std::string* error){
+    // Called only by StudioHost::onScene outside GPU passes.
+    if(!device_ || !deviceLifetime_ ||
+       !deviceLifetime_->lease().validFor(*device_)){
+        if(error)*error="Studio building preview GPU device unavailable";
+        return false;
+    }
+    if(buildingPreview_){
+        // Never invalidate a Model still retained in in-flight draw packets.
+        if(!device_->waitForResourceIdle()){
+            if(error)*error="Building preview GPU retirement barrier failed";
+            return false;
+        }
+        releasePreviewModel(*buildingPreview_);
+        buildingPreview_.reset();
+    }
+    if(next){
+        next->batching.mergeRigid=false;
+        next->batching.autoLod=false;
+        next->batching.geometryPoolPolicy=
+            render::Model::Batching::GeometryPoolPolicy::Dedicated;
+        render::prepareModelUpload(*next);
+        if(!render::uploadModel(*device_,*next,true,false)){
+            if(!device_->waitForResourceIdle()){
+                // Keep a failed partial upload alive until another verified
+                // GPU-safe cleanup call; no CPU Model can dangle on failure.
+                buildingPreview_=std::move(next);
+                if(error)*error="Building preview upload failed and GPU retirement is pending";
+                return false;
+            }
+            releasePreviewModel(*next);
+            if(error)*error="Building preview model GPU upload failed";
+            return false;
+        }
+        const auto min=next->boundsMin,max=next->boundsMax;
+        camera_.target={(min.x+max.x)*.5f,(min.y+max.y)*.5f,
+                        (min.z+max.z)*.5f};
+        const auto extent=max-min;
+        camera_.distance=std::max({extent.x,extent.y,extent.z,1.f})*1.9f;
+        camera_.yaw=.55f;camera_.pitch=.45f;camera_.ortho=false;
+        tween_.active=false;cameraInitialized_=true;
+        buildingPreview_=std::move(next);
+    }
+    lastFrameSignature_=0;
+    if(error)error->clear();
+    return true;
+}
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -576,6 +624,7 @@ StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
         clearDocumentModels();
+        if(buildingPreview_){releasePreviewModel(*buildingPreview_);buildingPreview_.reset();}
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
@@ -1331,6 +1380,29 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (renderer_.pendingProgramRetirements()) renderer_.collectRetiredPrograms();
     if (renderer_.pendingTargetRetirements()) renderer_.collectRetiredTargets();
     if (renderer_.hasPendingModelPipelineJobs()) renderer_.pollPendingModelPipelineJobs();
+    // This is a native isolated 3D preview. Existing Scene viewport
+    // orbit/zoom/pan operate on camera_ and never mutate the project.
+    if(buildingPreview_){
+        lastFrameSignature_=0; // redraw while interactive camera is active
+        device_->beginFrame(framebufferWidth,framebufferHeight);
+        StudioFrameScope scope{*device_};
+        renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
+        renderer_.clearDynamicGiOverlay();
+        renderer_.lighting=render::Lighting{};
+        renderer_.lighting.sunIntensity=1.25f;
+        renderer_.lighting.skyColor={.43f,.5f,.61f};
+        renderer_.lighting.groundColor={.25f,.27f,.29f};
+        renderer_.lighting.fogDensity=0;
+        render::ModelDraw draw;
+        draw.model=buildingPreview_.get();
+        renderer_.drawModel(draw);
+        gfx::PassDesc pass;
+        pass.clearColor[0]=.065f;pass.clearColor[1]=.08f;
+        pass.clearColor[2]=.11f;pass.clearColor[3]=1.f;
+        renderer_.render(pass,&antialiasing_);
+        renderer_.resolvePostFx();
+        return;
+    }
     const bool materialRequested = !previewName.empty() && previewFactors.isObject();
     const bool facialRequested = facialBinding.bound() && !materialRequested;
     // Those previews draw every frame; the map view redraws once they end.
