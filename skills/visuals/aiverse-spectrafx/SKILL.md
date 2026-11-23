@@ -1811,3 +1811,7 @@ MSL materialSource code 2 now computes birthRandom01(p,71u). The existing GPU ma
 ## Stage 54 — GraphRuntime shader seed lifecycle
 
 GraphRuntime::resetGpuShaderSeed delegates to dedicated active Metal ComputeParticles and rejects shared/CPU paths. ComputeParticles::shutdown clears shader seed and ordinal. Existing authored random eligibility remains unchanged; VM/compiler opt-in and Studio replay plumbing are pending. No tests run.
+
+## Stage 55 — explicit GPU material birth random
+
+Native GraphRuntimeOptions and ComputeEmitterDesc expose gpuBirthRandom (default false) and gpuBirthSeed. Material compiler permits graphInputs random lane only when opted in. Eligibility and emitter pipeline compilation receive the option; initialization seeds birth state. CPU fallback retains original UID random semantics, so cross-backend parity is not promised. VM random and Studio/MCP controls remain pending. No tests run.
