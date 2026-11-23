@@ -397,7 +397,11 @@ export default function BuildingGeneratorPanel({
         <small className="abg__note">Checks embedded texture source bytes and .meta importer settings. Existing GLBs are not overwritten; regenerate explicitly to create a new asset after reimport.</small>
       </StudioSection>
       <StudioSection title="PBR materials & textures">
-        <BuildingMaterialEditor projectLoaded={projectLoaded}/>
+        <BuildingMaterialEditor projectLoaded={projectLoaded} onSaved={()=>{
+          void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));
+          setStaleMaterials([]);
+          clearGenerated();
+        }}/>
       </StudioSection>
       {mode==='features'&&<StudioSection title="Functional properties">
         <div className="abg__property-list">
