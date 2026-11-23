@@ -93,6 +93,14 @@ public:
         gate_.analyze();
     }
 
+    // Streaming retirement: remove committed neighbor certification only
+    // AFTER its native visual/collision/nav source has been safely released.
+    bool forgetResident(ChunkKey3 key) {
+        const bool removed=gate_.erase(key);
+        if(removed)gate_.analyze();
+        return removed;
+    }
+
     // Prepare at most maxJobs CPU jobs; collect all ready futures without
     // waiting. Generation always uses the latest canonical snapshot.
     CaveEditTick tick(size_t maxJobs=8) {
