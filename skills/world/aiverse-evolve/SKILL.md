@@ -159,3 +159,7 @@ Native Scene now exposes GroupPivotX/GroupPivotZ drag handles for multi-selected
 ## Stage 45: unified group preview
 
 Native Scene now uses one group preview path for individual centers (Shift), shared centroid, and transient custom group pivot. It draws one group of candidate rectangles and one pivot marker; actual commits remain through `studio.worldProcessAreaBatchResize`. Editable numeric Studio Scene controls and a two-axis corner drag are still outstanding; exact numeric RPCs already exist. Source-only, no compile/runtime QA. Handoff: `docs/handoffs/world-processes-stage45-unified-group-preview-2026-11-23.md`.
+
+## Stage 46: numeric group authoring UI
+
+The HTML5 Studio shell now mounts `apps/studio-web/src/components/EvolveGroupNumeric.tsx` for multi-selection. It exposes exact integer X/Z scale percentages, pivot mode (shared, individual, custom) and optional world-centimetre pivot X/Z, calling `studio.worldProcessAreaBatchResize` with `axis:"both"` in one transaction. Native validates every selected EVOLVE region. UI is a compact overlay; numeric typing does not yet drive live Scene preview and no two-axis corner gizmo exists. No TS/C++ compilation or runtime QA performed (deferred). Handoff: `docs/handoffs/world-processes-stage46-numeric-studio-controls-2026-11-23.md`.
