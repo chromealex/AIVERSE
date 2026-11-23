@@ -163,3 +163,69 @@ Tests: `tests/world_processes_linked_test.cpp` and extended
 Until latest CI/native Mac builds and screenshots pass, label this stage
 **source implemented, not verified**. Handoff:
 `docs/handoffs/world-processes-stage09-linked-authoring-2026-11-23.md`.
+
+## Stages 11–16: complete genre-neutral ECS core and opt-in Studio authoring
+
+All ten initially requested world-process mechanic areas now have authored
+native ECS source code: ECHO, FRACTURE, AETHER, MORPH, CROWD, IMPRINT,
+CIRCUIT, GRANULAR, EVOLVE and SOCIETY. In addition to the earlier three,
+the seven opt-in headers and their persistent v1 schemas are:
+
+- `MorphEcs.h`: Node/Spring/Force (deformation and shape-memory constraints).
+- `CrowdEcs.h`: Agent/Slot/Preference (deterministic placement/avoidance).
+- `ImprintEcs.h`: Cell/Link/Deposit (footprints, scent and trace diffusion).
+- `CircuitEcs.h`: Node/Wire/Gate (generator/load routing, AND/OR/XOR/NOT).
+- `GranularEcs.h`: Field/Source (bounded 2D granular settling).
+- `EvolveEcs.h`: Region/Pressure (time-dependent world succession).
+- `SocietyEcs.h`: Person/Contact/Message (trusted information spread).
+
+Every system has a bounded, deterministic `advance(World&,tick)`,
+`registerPersistence(Simulation&)` and `install(Simulation&)`. Ownership
+stays with existing world/physics/economy/narrative systems; these modules
+do not create a second rigid-body, NavMesh, terrain, water, fire or UI engine.
+
+`WorldProcessesSuite.h` provides strict boolean flags to install any
+combination through the existing `world_processes` native module. The
+`WorldProcessesExtendedAuthoring.h` and `WorldProcessesExtendedLinks.h`
+schemas cover all 19 component types from the seven areas, including
+generation-safe references to real project map objects. Map setup uses
+`WorldProcessesMapHydration.h` to validate/resolve stable IDs, create the
+real ECS pools and register schemas, not a JSON mirror of runtime state.
+
+Studio now supports Add Component, typed parameter bounds, the searchable
+map object picker, drag/drop from Hierarchy, atomic field changes and
+MapDoc Undo/Redo for the seven systems as well as the original three.
+`WorldProcessesExtendedInspector.h` appends read-only current ECS values to
+the existing WorldInspect/Live Inspector route.
+
+`GranularDocument.h` supports up to 128x128 2D maps, per-cell mass and
+obstacles, resizing and brush painting; the Scene Inspector mounts the
+shared-theme `GranularGridEditor.tsx`. One completed user paint action
+commits one validated full-grid JSON document through the existing
+`studio.setProperty({componentId:"GranularField",key:"grid",value:JSON})`
+RPC. Native `GranularDocument::apply` creates real ECS field cells.
+The simple 1x1 `initialMass/capacity` form remains backward compatible.
+
+Game/audio/AI/render consumers should use
+`WorldProcessesQueries.h` (`morphPose/morphPoses`, `crowdPose`,
+`imprintLevels`, `circuitState`, `granularCell`, `evolution`,
+`societyPerson/knowsTopic`) to read the one authoritative ECS World.
+These read-only projections are not secondary physics/NPC state.
+
+A full native template fragment of stable IDs and authored component data
+for all seven mechanisms is available in
+`examples/native/world_processes/authoring-examples.json`; merge its
+components into a *real* project's map entities with valid entity types,
+owners and positions. The normal opt-in native project example and
+`rules.json` flags are documented in its README.
+
+**Test policy:** The user explicitly deferred testing for these stages.
+Do not claim the new headers/Studio components compile or pass CTest,
+sanitizers, Mac GUI or merged-tree `./run-tests.sh --quick`: they have
+not been verified yet. See the complete stage handoffs in
+`docs/handoffs/world-processes-stage11-*-` through Stage16.
+Functional limitations: graphical soft-body mesh skinning, actual
+Box3D impact/collapse, global RVO/NavMesh, full SPH granular physics,
+real sound HRTF, terrain re-meshing, and game-specific NPC social
+behavior remain consuming integration responsibilities, not promises
+fulfilled by the ECS policy layer.
