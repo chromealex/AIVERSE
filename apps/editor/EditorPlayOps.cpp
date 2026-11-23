@@ -88,6 +88,18 @@ void Editor::registerPlayOps() {
             r.set("note",Json::string("Aggregate owner counters, not per-graph or per-entity; GPU preview history contains estimates, not GPU timings."));
             return r;
         });
+    add("graph_live_owner_profile","Opt-in CPU profiling of one current common presentation instance; no gameplay controls.",
+        R"({"type":"object","properties":{"action":{"type":"string","enum":["enable","read","reset","disable"]},"entity":{"type":"string"}},"required":["action","entity"]})",
+        [this](const Json& p){
+            const auto action=p.getStr("action"),id=p.getStr("entity");
+            if(action!="enable"&&action!="read"&&action!="reset"&&action!="disable")throw std::invalid_argument("unknown profile action");
+            uint64_t key=0;const auto parsed=std::from_chars(id.data(),id.data()+id.size(),key);
+            if(id.empty()||parsed.ec!=std::errc{}||parsed.ptr!=id.data()+id.size())throw std::invalid_argument("exact packed entity ID required");
+            if(!sim_||!graphPlayEpoch_||graphPlayEpoch_==~uint64_t{0}||!sim_->world().alive(Entity::fromPacked(key))){
+                Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Live entity unavailable"));return r;
+            }
+            return view_.sharedAnimationProfile(key,graphPlayEpoch_,action);
+        });
     add("graph_live_owner_watch","Subscribe to one current published play-view instance. CPU diagnostics only.",
         R"({"type":"object","properties":{"action":{"type":"string","enum":["start","status","stop"]},"domain":{"type":"string","enum":["motionweave","spectrafx"]},"entity":{"type":"string"}},"required":["action"]})",
         [this](const Json& p){
