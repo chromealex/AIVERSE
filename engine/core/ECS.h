@@ -356,6 +356,9 @@ public:
         if(batch.overflow) {it->second.overflow=true;it->second.entities.clear();return;}
         for(auto id:batch.entities)it->second.record(Entity::fromPacked(id));
     }
+    template<class T> void resetComponentChanges() {
+        trackedChanges_.erase(detail::componentTypeId<T>());
+    }
     template<class T> bool componentChangesTracked() const {
         return trackedChanges_.contains(detail::componentTypeId<T>());
     }
