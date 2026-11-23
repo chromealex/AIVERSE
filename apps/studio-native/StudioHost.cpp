@@ -1284,6 +1284,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             const Json nativeStatus=fxPreview_->spectraPreviewCommand(
                 Json::parse(R"({"action":"status"})"),session_->workspace().project.dir);
             Json metadata=Json::object();
+            metadata.set("sampling",Json::string("render-owner-readback-request"));
             metadata.set("tick",nativeStatus["tick"]);
             metadata.set("generation",nativeStatus["generation"]);
             metadata.set("backend",nativeStatus["backend"]);
