@@ -18,7 +18,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>{
   const token=++epoch.current;lock.current=false;setBusy(false);setGenerated(null);setPatterns([]);setError('');setStatus('');
-  if(projectPath&&!disabled)void op('texture_patterns').then(r=>{
+  if(projectPath)void op('texture_patterns').then(r=>{
    if(epoch.current!==token)return;
    if(!object(r)||!Array.isArray(r.patterns))throw new Error('Native pattern catalog unavailable');
    const list=r.patterns.filter((p):p is string=>typeof p==='string');setPatterns(list);setRecipe(old=>({...old,pattern:list.includes(old.pattern)?old.pattern:list[0]??''}));
@@ -44,10 +44,10 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
  };
  const view=materialGraph(name,material,draft);
- const fields=materialFields(material,draft).filter(f=>selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
+ const fields=materialFields(material,draft).filter(f=>selected==='material'||selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
  return <StudioSection title="Material dependencies / procedural texture">
   <div style={{height:300,display:'flex',flexDirection:'column'}}>
-   <GraphCanvas view={view} selected={selected} label="Material dependency graph" onSelect={setSelected} onMove={()=>{}}/>
+   <GraphCanvas view={view} selected={selected} label="Material dependency graph" readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
