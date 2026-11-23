@@ -155,3 +155,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 44: draggable editor-only group pivot
 
 Native Scene now exposes GroupPivotX/GroupPivotZ drag handles for multi-selected EVOLVE areas, derived from the group centroid. Dragged custom pivot is transient Studio state, reset on selection change; subsequent group resize passes `pivot:"custom"` and integer world-centimetre X/Z coordinates to the Stage42 atomic batch RPC. Numeric pivot labels are read-only. Editable numeric Scene controls, simultaneous two-axis drag and consolidated custom-pivot preview remain unfinished. Source-only, no build/runtime QA. Handoff: `docs/handoffs/world-processes-stage44-draggable-group-pivot-2026-11-23.md`.
+
+## Stage 45: unified group preview
+
+Native Scene now uses one group preview path for individual centers (Shift), shared centroid, and transient custom group pivot. It draws one group of candidate rectangles and one pivot marker; actual commits remain through `studio.worldProcessAreaBatchResize`. Editable numeric Studio Scene controls and a two-axis corner drag are still outstanding; exact numeric RPCs already exist. Source-only, no compile/runtime QA. Handoff: `docs/handoffs/world-processes-stage45-unified-group-preview-2026-11-23.md`.
