@@ -3,6 +3,7 @@
 #include "UnifiedCheckpointLoader.h"
 #include "RegionWalWriter.h"
 #include "RegionWorldSessionLock.h"
+#include "UnifiedCheckpointRetention.h"
 namespace aiverse::world {
 class UnifiedWalSession {
     RegionWorldSessionLock lock_;
@@ -108,6 +109,46 @@ public:
         auto result=writer_.append(frame);
         if(result!=RegionWalWrite::Ok){ready_=false;return result;}
         state_.swap(staged);return RegionWalWrite::Ok;
+    }
+    // Managed sessions only; caller serializes these operations at a finalized
+    // barrier. Read-only operations do not publish their temporary ECS worlds.
+    bool managedReady()const{return ready_&&managed_&&lock_.held();}
+    const RegionCheckpointManifest* manifest()const{return managedReady()?&manifest_:nullptr;}
+    UnifiedBackupCatalogResult backups(size_t budget,const UnifiedCheckpointSections::Adapters& adapters,
+        const UnifiedCheckpointSections::Factory& factory,const DurableComponentCodecs& codecs,
+        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},
+        bool verify=false)const{
+        if(!managedReady())return {};
+        return UnifiedBackupCatalog::list(dir_,manifest_,budget,adapters,factory,codecs,materialize,validate,verify);
+    }
+    RegionRetentionPlan retentionPlan(RegionRetentionPolicy policy,size_t budget,
+        const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
+        const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
+        const UnifiedWorldReplay::Validator& validate={})const{
+        if(!managedReady())return {};
+        return UnifiedCheckpointRetention::plan(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate);
+    }
+    RegionRetentionCleanup cleanupRetention(RegionRetentionPolicy policy,size_t budget,
+        const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
+        const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
+        const UnifiedWorldReplay::Validator& validate={}){
+        if(!managedReady())return {};
+        return UnifiedCheckpointRetention::cleanup(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate);
+    }
+    RegionWalWrite forkGeneration(uint64_t generation,const std::filesystem::path& destination,
+        const std::array<uint8_t,16>& newWorld,size_t budget,
+        const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
+        const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
+        const UnifiedWorldReplay::Validator& validate={})const{
+        if(!managedReady())return RegionWalWrite::NeedsRecovery;
+        if(!generation||generation>manifest_.generation||newWorld==manifest_.identity.world||
+           std::none_of(newWorld.begin(),newWorld.end(),[](auto b){return b!=0;}))
+            return RegionWalWrite::InvalidFrame;
+        std::unique_ptr<State> recovered;
+        if(!UnifiedBackupRead::recover(dir_,generation,manifest_.identity.world,budget,
+            adapters,factory,codecs,materialize,recovered,validate))return RegionWalWrite::NeedsRecovery;
+        UnifiedWalSession destinationSession;
+        return destinationSession.create(destination,newWorld,*recovered,adapters,budget);
     }
     const State* state()const{return ready_?state_.get():nullptr;}
     void close(){ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
