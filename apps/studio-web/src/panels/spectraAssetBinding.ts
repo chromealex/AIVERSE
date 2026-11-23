@@ -75,8 +75,18 @@ export function bindResolvedSpectraAsset(
     return failure(graph,'Sprite textures require PNG, JPEG or TGA assets.');
   const index=graph.nodes.findIndex(node=>node.id===nodeId);
   if(index<0)return failure(graph,'Target graph node not found.');
-  const nodes=graph.nodes.map((node,i)=>i===index?{
-    ...node,properties:{...(node.properties??{}),[property]:'content/'+resolved.path},
-  }:node);
+  const node=graph.nodes[index];
+  if(property==='meshes'&&node.type!=='MeshOutput')
+    return failure(graph,'meshes is only supported on MeshOutput.');
+  if(property==='meshes'&&resolved.kind!=='model')
+    return failure(graph,'MeshOutput requires a model asset.');
+  const previous=node.properties?.meshes;
+  const meshList=Array.isArray(previous)?previous.filter(v=>typeof v==='string'):[];
+  const value=property==='meshes'
+    ? ['content/'+resolved.path,...meshList.slice(1)]
+    : 'content/'+resolved.path;
+  const nodes=graph.nodes.map((item,i)=>i===index?{
+    ...item,properties:{...(item.properties??{}),[property]:value},
+  }:item);
   return {graph:{...graph,nodes},error:''};
 }
