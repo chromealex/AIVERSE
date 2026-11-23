@@ -226,6 +226,21 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    // A temporary building Model belongs to the previous project's
+    // renderer epoch. Retire it BEFORE the Workspace changes, even
+    // when the generator panel is not mounted and cannot send Stop.
+    if(preview_){
+        std::string issue;
+        const bool retired=onScene([&]{
+            return preview_->setBuildingPreview({},&issue);
+        });
+        if(!retired){
+            if(requestId>=0)
+                sendError(Json::number(requestId),issue);
+            else platform_.log("Building preview retirement blocks project switch: "+issue);
+            return;
+        }
+    }
     projectLoading_ = true;
     if (game_) game_->stop();
     sendProjectSplash(path);
