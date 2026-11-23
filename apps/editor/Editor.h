@@ -7,6 +7,7 @@
 #pragma once
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
+#include "core/TextureGraphGpuPreview.h"
 #include "SceneRenderable.h"
 #include <array>
 #include <cmath>
@@ -674,6 +675,7 @@ private:
     graph_telemetry::History graphPlayHistory_;
     graph_telemetry::Watch graphWatch_;
     graph_gpu_profile::Capture graphGpuProfile_;
+    TextureGraphGpuPreview textureGraphGpuPreview_;
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;
