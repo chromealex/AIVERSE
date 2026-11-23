@@ -464,7 +464,7 @@ public:
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
     bool exportTimelineCheckpoint(std::vector<uint8_t>& out) const {
-        if(!ready_||playing_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
+        if(!ready_||playing_||fileImportPending_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
            pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
            targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
         std::vector<uint8_t> payload;
@@ -515,6 +515,9 @@ public:
         device.waitForResourceIdle();
         runtime_.shutdown();
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
+        fileImportPending_=false;fileImport_.clear();fileExport_.clear();importTransferId_=exportTransferId_=0;
+        checkpointWaitFrames_=0;hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
+        gpuSeedFailed_=false;gpuSeedRetryCount_=0;replayPrepared_=false;restartBurstPending_=false;
         ready_=false;playing_=false;pendingRestart_=false;
         stepsPending_=timeTicks_=targetTicks_=phase_=0;
         pendingClear_=false;
