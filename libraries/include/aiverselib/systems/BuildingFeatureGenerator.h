@@ -144,7 +144,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     auto graph=buildFunctionalStructureGraph(recipe);
     if(!graph)return reject(graph.error);
 
-    const float W=recipe.width,D=recipe.depth;
+    const float W=recipe.width,H=recipe.height,D=recipe.depth;
     const auto& sm=style.structure;
     const int hull=sm.hull>=0?sm.hull:style.shell;
     const int trim=sm.plate>=0?sm.plate:hull;
