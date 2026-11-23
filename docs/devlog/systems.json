@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-authority-runtime-persistence",
+     "title": "Сохранение в авторитетном серверном цикле",
+     "titleEn": "Authoritative server persistence",
+     "text": "Создание и восстановление мира до сетевого запуска, запись подтверждённых тиков и блокировка публикации при ошибках.",
+     "textEn": "Create and recover worlds before network startup, persist finalized ticks and refuse publication on failure.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-portable-projectile-race-state",
      "title": "Сохранение активных объектов и гонок",
      "titleEn": "Active objects and race persistence",
