@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode } from './shaderGraphLayout';
+import { layoutShaderGraph, addShaderGraphNode, removeShaderGraphNode } from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
+import {shaderAdapters} from '../graphs/shaderAdapter';
 import './ShaderGraphPanel.css';
 
 export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
@@ -139,7 +140,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
       </div>
       <GraphCanvas diagram={diagram} selected={selectedNode} label={'Editable node layout for '+selected}
        disabled={!draft||busy} onSelect={setSelectedNode}
-       onMove={(id,x,y)=>setDraft(previous=>previous?moveShaderGraphNode(previous,id,x,y):previous)}/>
+       onMove={(id,x,y)=>setDraft(previous=>previous?(shaderAdapters.get(previous.domain??'material')?.move(previous,id,x,y)??previous):previous)}/>
       <div className="graph-outputs">Outputs: {Object.entries(document.graph.outputs??{}).map(
        ([k,v])=>k+' ← '+v).join(' · ')||'none'}</div>
      </> : <div className="graph-empty">No graph loaded.</div>}
