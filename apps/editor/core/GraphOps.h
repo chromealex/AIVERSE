@@ -5,6 +5,7 @@
 #include "GraphAssetDependencies.h"
 #include "GraphRuntimeProbe.h"
 #include "GraphDebugSession.h"
+#include "engine/render/graph/TextureGraph.h"
 #include <array>
 #include <stdexcept>
 
@@ -21,11 +22,12 @@ struct Domain {
     const char* payload;
     const char* concurrency;
 };
-inline constexpr std::array<Domain,4> domains{{
+inline constexpr std::array<Domain,5> domains{{
     {"shader","shader_graph_list","shader_graph_get","shader_graph_validate","shader_graph_catalog","","shader_graph_set","graph","explicit-unversioned"},
     {"spectrafx","fx_graph_list","fx_graph_get","fx_graph_validate","fx_graph_node_catalog","fx_graph_edit","fx_graph_set","graph","explicit-unversioned"},
     {"motionweave","animation_graph_list","animation_graph_get","animation_graph_validate","","","animation_graph_set","graph","expected-document"},
-    {"modeling","modeling_list","modeling_get","modeling_validate","modeling_catalog","","modeling_edit","document","expected-revision"}
+    {"modeling","modeling_list","modeling_get","modeling_validate","modeling_catalog","","modeling_edit","document","expected-revision"},
+    {"texture","texture_graph_list","texture_graph_get","texture_graph_validate","texture_graph_catalog","","texture_graph_set","graph","expected-document"}
 }};
 inline const Domain& domain(const Json& p) {
     for(const auto& d:domains)if(p.getStr("domain")==d.id)return d;
@@ -73,9 +75,9 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
     const auto id=std::string(d.id);
     if(id=="spectrafx"){
         for(const auto& e:source["links"].items())add(e.getStr("from"),e.getStr("to"),e.has("toPort")?"data":"execution");
-    }else if(id=="shader"){
-        for(const auto& n:source["nodes"].items())for(const auto& input:n["inputs"].items())add(input.str(),n.getStr("id"),"shader-input");
-        for(const auto& [key,value]:source["outputs"].members())add(value.str(),"output:"+key,"shader-output");
+    }else if(id=="shader"||id=="texture"){
+        for(const auto& n:source["nodes"].items())for(const auto& input:n["inputs"].items())add(input.str(),n.getStr("id"),id=="texture"?"texture-input":"shader-input");
+        for(const auto& [key,value]:source["outputs"].members())add(value.str(),"output:"+key,id=="texture"?"texture-output":"shader-output");
     }else if(id=="motionweave"){
         for(const auto& n:source["nodes"].items())for(auto key:{"a","b","input"})add(n.getStr(key),n.getStr("id"),"pose-input");
         for(const auto& s:source["states"].items()){
@@ -98,7 +100,7 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
 inline void registerGraphOps(Workspace& ws) {
     using namespace graph_ops;
     auto debugger=std::make_shared<graph_debug::Session>();
-    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling","texture"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
     ws.registerOp({"graph_catalog","Discover actual registered graph domain operations, payload formats and save constraints.",Json::object(),[&ws](const Json&){
         Json r=Json::object(),items=Json::array();
         for(const auto& d:domains){
@@ -107,12 +109,13 @@ inline void registerGraphOps(Workspace& ws) {
             for(const auto& pair:std::array<std::pair<const char*,const char*>,6>{{{"list",d.list},{"get",d.get},{"validate",d.validate},{"nodeCatalog",d.catalog},{"edit",d.edit},{"save",d.save}}})
                 if(registered(ws,pair.second))ops.set(pair.first,Json::string(pair.second));
             const auto id=std::string(d.id);
-            const char* actions=id=="shader"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput","setProperty"])":
+            const char* actions=id=="texture"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput"])":id=="shader"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput","setProperty"])":
                 id=="motionweave"?R"(["add","replaceNode","deleteNode","rename","connect","move","addState","replaceState","setInitial","setOutput","addTransition","removeTransition","replaceTransition","setProperty"])":
                 id=="modeling"?R"(["put","remove","parameters","graph","replace","setProperty"])":R"(["new","upgrade","add","connect","disconnect","deleteNode","setProperty"])";
             const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
             if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
-            ops.set("propertySchema",Json::string("graph_property_schema"));ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
+            if(id!="texture")ops.set("propertySchema",Json::string("graph_property_schema"));
+            else{ops.set("preview",Json::string("texture_graph_preview"));ops.set("bake",Json::string("texture_graph_bake"));}ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
             if(id=="motionweave"||id=="spectrafx")ops.set("runtimeProbe",Json::string("graph_runtime_probe"));
             row.set("operations",ops);items.push(row);
         }
@@ -126,6 +129,7 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_dependencies","List explicit schema references from a candidate. No filesystem writes or runtime inference.",schema,[](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_dependencies",inspectDependencies(d,q[d.payload]));}});
     ws.registerOp({"graph_property_schema","Describe supported typed node properties; SpectraFX returns native catalog defaults, not inferred constraints.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);auto source=q[d.payload];
+        if(std::string(d.id)=="texture")throw std::invalid_argument("use texture_graph_catalog and native properties; typed property subset unavailable");
         const auto& node=graph_draft::entry(source,"nodes",p.getStr("node"));
         Json result=Json::object();result.set("node",Json::string(node.getStr("id")));
         if(std::string(d.id)=="spectrafx"){result.set("catalog",invoke(ws,d.catalog,Json::object()));result.set("note",Json::string("Native defaults and ports; property validation belongs to fx_graph_edit and compiler."));}
@@ -191,7 +195,10 @@ inline void registerGraphOps(Workspace& ws) {
                 else{Json one=Json::array();one.push(e);source=modeling::edit(source,one);}
             }
         }else for(const auto& e:edits.items()){
-            if(id=="shader")graph_draft::shader(source,e);
+            if(id=="shader"||id=="texture"){
+                if(id=="texture"&&e.getStr("action")=="setProperty")throw std::invalid_argument("replace texture node properties as a complete node");
+                graph_draft::shader(source,e);
+            }
             else if(id=="motionweave")graph_draft::motion(source,e);
             else{
                 Json args=Json::object();args.set("graph",source);
@@ -220,7 +227,7 @@ inline void registerGraphOps(Workspace& ws) {
         if(guard=="explicit-unversioned"){
             if(!p.getBool("allowUnversionedWrite"))throw std::invalid_argument("owner lacks revision lock; explicit allowUnversionedWrite required");
         }else if(guard=="expected-document"){
-            if(!p["expected"].isObject())throw std::invalid_argument("expected original graph required");
+            if(!p["expected"].isObject()&&std::string(d.id)!="texture")throw std::invalid_argument("expected original graph required");
             q.set("expected",p["expected"]);
         }else{
             if(!p["expectedRevision"].isNumber()||p.getInt("expectedRevision")<1||p["expectedRevision"].toDouble()!=double(p.getInt("expectedRevision")))throw std::invalid_argument("positive expectedRevision required");
