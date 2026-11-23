@@ -57,12 +57,13 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     constexpr std::array<std::string_view,7> extendedTypes{
         "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
         "GranularField","EvolveRegion","SocietyPerson"};
-    constexpr std::array<std::string_view,12> extendedEdgeTypes{
+    constexpr std::array<std::string_view,13> extendedEdgeTypes{
         "CrowdSlot", // slot targets exist before CrowdPreference is installed
         "MorphSpring","MorphForce","CrowdPreference",
         "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
-        "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"};
-    std::array<std::size_t,12> extendedEdgeCounts{};
+        "GranularSource","EvolvePressure","SocietyContact","SocietyMessage",
+        "ImprintTracker"};
+    std::array<std::size_t,13> extendedEdgeCounts{};
 
     for(std::size_t i=0;i<entities.size();++i){
         const auto id=entities[i].getStr("id");
@@ -120,7 +121,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             ++extendedEdgeCounts[edgeIndex];
             if(kind=="MorphSpring"||kind=="MorphForce")totals.extra.morph=true;
             else if(kind=="CrowdSlot"||kind=="CrowdPreference")totals.extra.crowd=true;
-            else if(kind=="ImprintLink"||kind=="ImprintDeposit")totals.extra.imprint=true;
+            else if(kind=="ImprintLink"||kind=="ImprintDeposit"||kind=="ImprintTracker")totals.extra.imprint=true;
             else if(kind=="CircuitWire"||kind=="CircuitGate")totals.extra.circuit=true;
             else if(kind=="GranularSource")totals.extra.granular=true;
             else if(kind=="EvolvePressure")totals.extra.evolve=true;
@@ -169,7 +170,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
        extendedEdgeCounts[8]>granular::kMaxSources ||
        extendedEdgeCounts[9]>evolve::kMaxPressures ||
        extendedEdgeCounts[10]>society::kMaxContacts ||
-       extendedEdgeCounts[11]>society::kMaxMessages)
+       extendedEdgeCounts[11]>society::kMaxMessages ||
+       extendedEdgeCounts[12]>imprint::kMaxTrackers)
         throw std::invalid_argument("World Processes: map component budget exceeded");
     if(totals.extra.morph&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
         [](const Pending& v){return v.component=="MorphNode";}))>morph::kMaxNodes)
@@ -228,7 +230,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             const auto it=ids.find(value.str());
             if(it==ids.end()||!sim.world().alive(it->second))
                 throw std::invalid_argument("World Processes: stale extended map link "+value.str());
-            bool compatible=extendedLinks::hasCompatible(sim.world(),it->second,targetType);
+            bool compatible=targetType=="Entity"?sim.world().alive(it->second):
+                extendedLinks::hasCompatible(sim.world(),it->second,targetType);
             if(!compatible){
                 for(const auto& basicPart:extendedParts)
                     if(basicPart.entity==it->second&&basicPart.component==targetType)
