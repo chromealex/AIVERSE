@@ -170,7 +170,7 @@ export interface StudioSpectraPreviewState {
   gpuSeedRetries?:number;
   replayReady?:boolean;
   capture?:{
-    pending:boolean;ready:boolean;
+    pending:boolean;ready:boolean;captureId?:number;cancelled?:boolean;
     width?:number;height?:number;mime?:'image/jpeg';
     image?:string;error?:string;
     provenance?:{tick?:number;generation?:number;backend?:string;camera?:StudioSpectraCameraSnapshot;background?:string;gpu?:boolean;sampling?:string;replayReady?:boolean;
