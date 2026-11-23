@@ -1662,6 +1662,18 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         validatedPatch.set(key,std::move(color));
                         continue;
                     }
+                    if (key=="uvScale"||key=="uvOffset"){
+                        if(!value.isString())
+                            throw std::runtime_error("UV transform requires 'u,v' values");
+                        const auto pair=parseStudioUvPair(value.str());
+                        if(!pair)
+                            throw std::runtime_error("UV transform requires two bounded finite numbers");
+                        Json uv=Json::array();
+                        for(double component:*pair)
+                            uv.push(Json::number(component,6));
+                        validatedPatch.set(key,std::move(uv));
+                        continue;
+                    }
                     if (studioMaterialTextureKey(key)) {
                         if (!value.isString())
                             throw std::runtime_error("Texture reference must be an asset GUID");
