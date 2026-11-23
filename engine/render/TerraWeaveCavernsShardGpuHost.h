@@ -6,9 +6,11 @@
 #include "engine/render/TerraWeaveCavernsGpuSwap.h"
 #include "engine/render/TerraWeaveCavernsShardCatalog.h"
 #include "engine/render/TerraWeaveCavernsMixedLodShardBatch.h"
+#include "engine/render/TerraWeaveCavernsGpuUploadBudget.h"
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -23,6 +25,25 @@ public:
     CaveShardGpuHost(const CaveShardGpuHost&)=delete;
     CaveShardGpuHost& operator=(const CaveShardGpuHost&)=delete;
 
+    // Stage38 optional GPU upload budget. Editor enables it for at most
+    // one bounded whole-shard upload per frame. A game owner performing
+    // atomic multi-shard staging should schedule its shards across frames
+    // via stagePlannedShard before enabling this limit.
+    void setUploadLimits(CaveGpuUploadLimits limits){
+        uploadBudget_.emplace(limits);
+    }
+    void disableUploadLimits(){uploadBudget_.reset();}
+    CaveGpuUploadStats uploadStats()const noexcept{
+        return uploadBudget_?uploadBudget_->stats():CaveGpuUploadStats{};
+    }
+    size_t collectCompletedWithoutIdle(gfx::Device& device){
+        size_t released=0;
+        for(auto& [key,gpu]:owners_){
+            (void)key;
+            if(gpu)released+=gpu->collectCompletedWithoutIdle(device);
+        }
+        return released;
+    }
     // Register existing committed source geometry only for initial loaded
     // world bootstrapping. Never call to acknowledge an unpublished edit.
     bool registerCommittedSource(const CaveBatchChunk& chunk){
@@ -279,7 +300,7 @@ public:
     }
     struct GpuPreviewStats {
         size_t activeShards=0,pendingShards=0;
-        size_t retiredScenes=0,pendingGpuOwners=0;
+        size_t retiredScenes=0,pendingGpuOwners=0,retainedStrata=0;
         uint64_t maxActiveRevision=0;
     };
     GpuPreviewStats stats()const noexcept{
@@ -290,6 +311,7 @@ public:
             if(!owner)continue;
             out.activeShards+=owner->resident();
             out.retiredScenes+=owner->retiredCount();
+            out.retainedStrata+=owner->retainedStrataOwners();
             out.pendingGpuOwners+=owner->pendingGpuOwners();
             out.maxActiveRevision=std::max(out.maxActiveRevision,
                                            owner->activeRevision());
@@ -310,7 +332,24 @@ private:
                        const CaveMixedLodPlan& visual,CaveBatchSpec spec){
         if(!snapshot.revision||pending_.contains(snapshot.shard)||
            snapshot.chunks.size()>spec.maxChunks)return false;
+        // Recover already completed model-only GPU owners at this safe
+        // staging boundary without waiting for device idle.
+        (void)collectCompletedWithoutIdle(device);
         auto prepared=prepareFullCaveShardPresentation(snapshot,spec,&visual);
+        size_t retained=0;
+        for(const auto& [key,owner]:owners_){
+            (void)key;
+            if(owner)retained+=owner->retiredCount();
+        }
+        if(uploadBudget_){
+            const uint64_t bytes=
+                uint64_t(prepared.vertexCount)*sizeof(MeshVertex)+
+                uint64_t(prepared.triangleCount)*3u*sizeof(uint32_t);
+            const bool allowed=prepared.models.empty()
+                ? uploadBudget_->admitEmpty(device.frameSerial(),retained)
+                : uploadBudget_->admit(device.frameSerial(),bytes,retained);
+            if(!allowed)return false;
+        }
         auto& gpu=owners_[snapshot.shard];
         if(!gpu)gpu=std::make_unique<CaveGeometrySwapOwner>();
         const bool ok=prepared.models.empty()
@@ -325,6 +364,7 @@ private:
     std::map<ChunkKey3,CaveRebuildRequest,KeyLess> lastLodRebuilds_;
     bool lastLodSourceConflict_=false;
     CaveShardCatalog catalog_;
+    std::optional<CaveGpuUploadBudget> uploadBudget_;
     std::map<CaveShardKey,std::unique_ptr<CaveGeometrySwapOwner>,CaveShardLess> owners_;
     std::map<CaveShardKey,CaveShardSnapshot,CaveShardLess> pending_;
 };
