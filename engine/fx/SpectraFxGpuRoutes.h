@@ -91,9 +91,9 @@ public:
             const auto numeric=[&](const char* key,float& field) {
                 if(!authoredPriority.has(key))return true;
                 const Json& j=authoredPriority[key];
+                if(!j.isNumber())return false;
                 const double d=j.toDouble();
-                if(!j.isNumber() || !std::isfinite(d) ||
-                   std::abs(d)>1000000)return false;
+                if(!std::isfinite(d) || std::abs(d)>1000000)return false;
                 field=float(d);
                 return true;
             };
@@ -148,9 +148,9 @@ public:
             }
             if(value.has("importance")) {
                 const Json& val=value["importance"];
+                if(!val.isNumber())return fail("importance must be numeric");
                 const double d=val.toDouble();
-                if(!val.isNumber() || !std::isfinite(d) ||
-                   d<0.01 || d>100)
+                if(!std::isfinite(d) || d<0.01 || d>100)
                     return fail("importance must be a number in [0.01,100]");
                 entry.importance=float(d);
             }
