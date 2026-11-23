@@ -3,7 +3,10 @@
 ## Scope and provenance
 
 Parent feature: `feature/aiv20261122_building_styles` @ `ffef5ce0a1af42332a8eb8b47bb222d3eb07208e`.
-Working branch: `feature/aiv20261123_building-grammar`. Implementation commit: `853a51ab9203543310e5b5a0f4312a2b37cb8d43`.
+Working branch: `feature/aiv20261123_building-grammar`. Implementation commits: `853a51ab9203543310e5b5a0f4312a2b37cb8d43` (grammar),
+`3327e09524b3cdbe4eec56223e5d28ef467be8cd` (tests, docs, exporter),
+`f41bc2756d249d16ea702423468bd53cc8b57215` (roof-prop exclusion),
+`fc19b07c80bbc33d7f7c2a9e5c41aa458395b70f` (explicit-size CLI validation).
 Do not merge directly into main: parent branch predates many main commits and should be
 rebased/merged by the integration owner after checking other worktrees.
 
@@ -17,6 +20,8 @@ rebased/merged by the integration owner after checking other worktrees.
   vectors transformed by inverse scale; collision boxes/gate anchors transformed too.
 - `scifi.json`: barracks=bastion, command=spire, factory=twin-bay, depot=terraced.
 - `aiverse_building_export`: `--size W H D` with `--structure KIND`.
+- Roof footprints of all new architectural features are reserved from random prop placement.
+- Explicit `--size` flags reject zero, partial, duplicate, and nonfinite values.
 - Tests extended to check grammar parsing, four yaw orientations, exact envelope,
   deterministic collision and invalid requests.
 - Updated `docs/building-style.md` and `aiverse-building-style` skill.
