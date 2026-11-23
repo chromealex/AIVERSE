@@ -4,6 +4,7 @@
 // that TerraWeave already accepts. No second forest, terrain or plant store.
 #pragma once
 #include "aiverselib/world/EvolveEcs.h"
+#include "aiverselib/world/EvolveArea.h"
 #include "engine/world/TerraWeaveForestEcology.h"
 #include <algorithm>
 #include <cstdint>
@@ -68,5 +69,18 @@ makeEvolveForestClimateSampler(const World& world,
         }
         return climate;
     };
+}
+// Canonical, preferred path: derives the TerraWeave sampling rectangles
+// directly from persisted EvolveArea ECS. No parallel host-configured region
+// rectangles or editor-only radii are needed.
+inline terraweave::ForestEcologyClimateSampler
+makeEvolveForestClimateSampler(const World& world,
+    terraweave::ForestEcologyClimateSampler baseline={}) {
+    std::vector<EvolvePlantRegion> zones;
+    for(const auto& area:evolve::extents(world))
+        zones.push_back({area.region,area.minXcm,area.minZcm,
+                         area.maxXcm,area.maxZcm,true});
+    return makeEvolveForestClimateSampler(world,std::move(zones),
+                                           std::move(baseline));
 }
 } // namespace aiverse::examples::world_processes_native
