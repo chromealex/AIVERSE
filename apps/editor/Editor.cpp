@@ -109,7 +109,8 @@ public:
     }
     // Editor ONLY: visual presentation; never ACK gameplay dirtiness.
     void stageVisualPreview(Editor& editor) {
-        if(!editor.cavernsVisualPreviewEnabled || !bridge)return;
+        if(!editor.cavernsVisualPreviewEnabled || !bridge ||
+           projectDir!=editor.ws().project.dir)return;
         if(visualAttemptedEpoch==epoch)return;
         const auto candidates=bridge->visualPreviewCandidates();
         if(candidates.empty())return;
@@ -2000,8 +2001,9 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
         if(draw.nodeMaterial)out.nodeMaterials=*draw.nodeMaterial;else out.nodeMaterials.clear();
     });
     // GPU preparation only at the Scene pre-render boundary, never in pass.
-    if(cavernsEditHost_ && editOverlays && !planets &&
-       !ws_.map.data.worldSpace && cavernsVisualPreviewEnabled) {
+    if(cavernsEditHost_ && cavernsEditHost_->projectDir==ws_.project.dir &&
+       editOverlays && !planets && !ws_.map.data.worldSpace &&
+       cavernsVisualPreviewEnabled) {
         try{cavernsEditHost_->stageVisualPreview(*this);}
         catch(const std::exception& e){cavernsBuildStats.diagnostic=e.what();}
     }
@@ -2020,8 +2022,9 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
         view_.setSelectionOutline(false);
     }
     // Only the committed cave visual shard owners render; no gameplay claim.
-    if(cavernsEditHost_ && editOverlays && !planets &&
-       !ws_.map.data.worldSpace && cavernsVisualPreviewEnabled)
+    if(cavernsEditHost_ && cavernsEditHost_->projectDir==ws_.project.dir &&
+       editOverlays && !planets && !ws_.map.data.worldSpace &&
+       cavernsVisualPreviewEnabled)
         cavernsEditHost_->drawVisualPreview(r3d_);
     nereidPreview_.draw(r3d_);
     visualPickCacheGeneration_=view_.modelResources().generation();
