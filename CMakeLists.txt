@@ -5340,3 +5340,14 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
         COMMAND aiverse_actor_region_admission_test)
     set_tests_properties(actor_region_admission_test PROPERTIES LABELS "World;ECS;NETWORK")
 endif()
+
+# W1.11: shared VehicleRace race-grid and checkpoint respawn targets,
+# consumed by the existing ActorHost pre-tick streamed collision gate.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_vehicles)
+    add_executable(aiverse_race_region_respawn_gate_test
+        tests/world/race_region_respawn_gate_test.cpp)
+    target_link_libraries(aiverse_race_region_respawn_gate_test PRIVATE aiverse_vehicles)
+    add_test(NAME race_region_respawn_gate_test
+        COMMAND aiverse_race_region_respawn_gate_test)
+    set_tests_properties(race_region_respawn_gate_test PROPERTIES LABELS "World;Vehicles")
+endif()
