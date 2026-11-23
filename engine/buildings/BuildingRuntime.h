@@ -6,6 +6,7 @@
 // aiverselib/systems/BuildingCirculationRuntime.h.
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <aiverselib/systems/BuildingRouteExecutor.h>
 #include "engine/buildings/RuntimeBuildingModel.h"
 #include "engine/buildings/BuildingCirculationHost.h"
 #include "engine/buildings/BuildingLiftColliderOwner.h"
