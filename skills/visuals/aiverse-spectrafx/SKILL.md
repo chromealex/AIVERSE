@@ -3,6 +3,50 @@ name: aiverse-spectrafx
 description: Author and integrate AIVERSE SpectraFX visual effects: versioned graphs, asset variants, ECS source components, event bindings, CPU fallback, editor previews and eventual GPU backends.
 ---
 
+## 2026-11-23 — Studio Replay/Capture Stages 19–37 (features only; QA deferred)
+
+**Use the native FX viewport, not fake HTML particles.** The HTML5
+`SpectraNativePreview` panel supports two JPEG capture slots, split/side-by-side
+comparison, pixel heatmap, JSON comparison report, native camera snapshot,
+versioned Replay Preset import/export, and optional CPU or Metal allocation seed.
+
+**Native API** via `studio.spectraPreview`:
+- `{action:"cameraRestore",camera:{yaw,pitch,distance,targetX,targetY,targetZ,ortho}}`
+  restores the *isolated FX camera*, not the game camera.
+- `{action:"replayPrepare",tick:120,parameters:{intensity:0.5},seed:1234}`
+  validates bounded tick/scalars and prepares dedicated CPU replay. CPU seed
+  clears particles and resets xorshift32/UID history.
+- For Metal GPU only, replace `seed` with `gpuAllocationSeed`. This
+  controls **slot allocation order**, not shader RNG or CPU/GPU parity.
+  Both seed modes are mutually exclusive. GPU reset is deferred to the
+  native frame and retries at most eight times; monitor
+  `gpuSeedPending`, `gpuSeedFailed`, `gpuSeedRetries`.
+- Poll `{action:"status"}` until `replayReady:true` before requesting
+  `{action:"capture",maxSide:512,requireReplayReady:true}`, then poll
+  `{action:"captureStatus"}`. A ready replay does **not** prove GPU
+  pixels came from the exact status frame.
+- Capture provenance contains render-owner request-time tick, generation,
+  backend, camera, and RHI frame/fence observations. Zero tokens mean
+  unsupported. `frameExact:false` is intentional: callback does not
+  carry exact captured-frame identity.
+
+**MCP:** Native Studio's authenticated FX preview bridge may expose the same
+actions through `fx_graph_preview` when routed to Studio. The legacy
+`apps/editor/EditorFxOps.cpp` `fx_graph_preview` is a separate graph-v1
+editor operation; do NOT assume it implements replay/capture commands.
+Verify the actual MCP tool registry and its schema before invoking. Never
+claim GPU capture works from standalone/headless MCP.
+
+**A/B analysis:** Native capture provenance may differ from browser-side
+request metadata. Inspect the report's `nativeCaptureMismatch` and
+`frameExact:false` before interpreting pixel differences. JPEG sRGB
+heatmaps are diagnostic, not HDR parity.
+
+**Tests:** user explicitly deferred all exact-source C++/Metal/Vulkan,
+TypeScript/Vite, CTest and visual QA. No PASS may be claimed for these stages.
+Handoffs: `docs/agent-handoffs/spectrafx-studio-stage19-ab-capture-2026-11-23.md`
+through `docs/agent-handoffs/spectrafx-studio-stage36-rhi-capture-observations-2026-11-23.md`.
+
 ## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
 
 Added production-native preview-authoring controls to the independent
