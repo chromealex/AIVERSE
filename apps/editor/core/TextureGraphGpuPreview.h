@@ -2,6 +2,7 @@
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
 #include <memory>
+#include <optional>
 
 namespace aiverse::editor {
 class TextureGraphGpuPreview {
