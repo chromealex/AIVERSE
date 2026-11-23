@@ -4,6 +4,10 @@ Read this file completely before changing anything. It is short on purpose. `REA
 short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
 `docs/overview.md` the detailed overview; this file is the engineering contract.
 
+## Mandatory feature delivery gate
+
+Before implementing any new or expanded capability, read `docs/agents/feature-contract.md` and `skills/workflow/aiverse-new-feature/SKILL.md`. Create and maintain its feature manifest; the integrator checks it with `tools/agents/check_feature.py --ready` before main. Existing area rules and real Mac test gate remain mandatory. Do not claim feature readiness from structural validation alone.
+
 ## Current release: 3.0.0 released, 3.1.0 in preparation (2026-11-22)
 
 - **3.0.0** is out (tag `v3.0.0`, GitHub release, site `releases.html`). Do not change its
