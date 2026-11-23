@@ -1,3 +1,28 @@
+## 2026-11-23 — HTML5 SpectraStudio Graph authoring Stage 7 (draft PR #115)
+
+The `fx_graph` dock tab now includes three new authoring surfaces:
+(1) typed Data Interface param/provider inspector with native Assets picker,
+(2) Graph v2 topology canvas with native Add/Delete/Connect/Disconnect, and
+(3) Curve/Gradient key editor for existing v2 data nodes with normalized
+times, scalar keys, RGBA opacity and static visual plots. These are
+**editor authoring interfaces, NOT actual GPU particle preview frames**.
+All graph Validate/Save Draft/Publish actions still route via whitelisted
+Studio Workspace operations. No direct JS filesystem write or renderer
+ownership. Source lives on `feature/spectrafx-html5-data-interfaces-20261123`,
+stacked on parent draft PR #113. Main and `feature/studio-html5` unchanged.
+
+Handoff chain:
+- `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md`
+- `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`
+- `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`
+
+**Acceptance:** prior Stage 5 early Ubuntu Node22 suite PASS 14/14 plus Vite;
+that evidence predates Graph Canvas and Curve/Gradient. New Node/Vite
+checks are queued; real macOS/Windows UI, hardware RHI and full SpectraFX
+GPU preview remain unverified. Next: resolve exact-SHA CI first, then
+design native render-owned preview mailbox/timeline with safe fences and
+real image capture. Do not merge either draft PR until real validation.
+
 ## 2026-11-23 — Graph v2 Data Interfaces, Stage 4 (PR #113, QA pending)
 
 New typed `dataInterfaces` bindings + runtime-only DataInterface node map
