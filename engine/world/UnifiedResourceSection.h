@@ -17,7 +17,7 @@ public:
         std::vector<std::string> selected,size_t budget){
         std::sort(selected.begin(),selected.end());
         return {1,[&registry,selected,budget](const State& state,std::vector<uint8_t>& out){
-            if(selected.size()>Registry::kMaxSchemas||
+            if(std::binary_search(selected.begin(),selected.end(),"aiverse.world.region_entity_ledger")||selected.size()>Registry::kMaxSchemas||
                std::adjacent_find(selected.begin(),selected.end())!=selected.end())return false;
             std::string bytes;Archive a(&bytes);
             uint32_t count=uint32_t(selected.size());a(count);
@@ -45,7 +45,7 @@ public:
                 if(!a.ok())return false;
                 chunks.push_back(std::move(c));
             }
-            return a.remaining()==0&&registry.restoreSchemas(state.world,chunks);
+            return a.remaining()==0&&DurableResourceTransaction::restoreWithLedger(registry,state.world,state.ledger,chunks);
         }};
     }
 };
