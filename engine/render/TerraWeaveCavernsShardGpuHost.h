@@ -249,6 +249,25 @@ public:
         owners_.clear();
         return true;
     }
+    struct GpuPreviewStats {
+        size_t activeShards=0,pendingShards=0;
+        size_t retiredScenes=0,pendingGpuOwners=0;
+        uint64_t maxActiveRevision=0;
+    };
+    GpuPreviewStats stats()const noexcept{
+        GpuPreviewStats out;
+        out.pendingShards=pending_.size();
+        for(const auto& [key,owner]:owners_){
+            (void)key;
+            if(!owner)continue;
+            out.activeShards+=owner->resident();
+            out.retiredScenes+=owner->retiredCount();
+            out.pendingGpuOwners+=owner->pendingGpuOwners();
+            out.maxActiveRevision=std::max(out.maxActiveRevision,
+                                           owner->activeRevision());
+        }
+        return out;
+    }
     size_t pendingCount()const noexcept{return pending_.size();}
     size_t ownerCount()const noexcept{return owners_.size();}
     const CaveShardCatalog& catalog()const noexcept{return catalog_;}
