@@ -166,6 +166,9 @@ export interface StudioBuildingFeature {
   height: number;
   depth: number;
   open: number;
+  position: number; // <0 auto; wall axis or roof X in metres
+  positionZ: number; // roof Z; <0 auto
+  spacing: number; // minimum clear gap between grouped openings, metres
 }
 export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
