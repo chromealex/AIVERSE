@@ -40,9 +40,15 @@ inline void io(Archive& a,Node& n){
       n.drag,n.anchored,n.enabled,n.sampledTick);
     if(!a.writing() &&
        (n.drag<0||n.drag>1000||
-        std::max({n.x<0?-n.x:n.x,n.y<0?-n.y:n.y,n.z<0?-n.z:n.z})>kPositionLimit ||
-        std::max({n.vx<0?-n.vx:n.vx,n.vy<0?-n.vy:n.vy,n.vz<0?-n.vz:n.vz})>kForceLimit ||
-        std::max({n.restX<0?-n.restX:n.restX,n.restY<0?-n.restY:n.restY,n.restZ<0?-n.restZ:n.restZ})>kPositionLimit))a.fail();
+        n.x< -kPositionLimit||n.x>kPositionLimit||
+        n.y< -kPositionLimit||n.y>kPositionLimit||
+        n.z< -kPositionLimit||n.z>kPositionLimit||
+        n.vx< -kForceLimit||n.vx>kForceLimit||
+        n.vy< -kForceLimit||n.vy>kForceLimit||
+        n.vz< -kForceLimit||n.vz>kForceLimit||
+        n.restX< -kPositionLimit||n.restX>kPositionLimit||
+        n.restY< -kPositionLimit||n.restY>kPositionLimit||
+        n.restZ< -kPositionLimit||n.restZ>kPositionLimit))a.fail();
 }
 inline void io(Archive& a,Spring& s){
     a(s.a,s.b,s.restDx,s.restDy,s.restDz,s.stiffness,s.enabled);
