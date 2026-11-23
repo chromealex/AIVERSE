@@ -39,11 +39,15 @@ public:
     bool attach(const std::vector<BuildingAperturePose>& poses,
                 const std::map<std::string,BuildingDualLeafIds>& ids,
                 world::SpatialWorld& spatial,uint64_t sceneId,
-                SweptObstruction obstruction,std::string* error=nullptr){
+                SweptObstruction obstruction,std::string* error=nullptr,
+                const std::map<std::string,uint16_t>* restoredPositions=nullptr,
+                uint64_t restoredRevision=0){
         auto fail=[&](const std::string& why){
             if(error)*error=why;
             return false;
         };
+        if(restoredPositions&&restoredPositions->size()!=poses.size())
+            return fail("Restored leaf positions must exactly match sockets");
         if(attached_||!sceneId||!obstruction||poses.size()!=ids.size())
             return fail("Invalid dual-leaf scene, collider IDs or sweep probe");
         std::map<std::string,Entry> next;
@@ -60,6 +64,17 @@ public:
             Entry e;
             e.state.pose=pose;
             e.state.position=pose.open?1000:0;
+            if(restoredPositions){
+                const auto it=restoredPositions->find(pose.socketId);
+                if(it==restoredPositions->end()||it->second>1000)
+                    return fail("Missing/invalid restored leaf progress");
+                e.state.position=it->second;
+                // A partial restored leaf is physically blocked and
+                // stationary until the command owner reauthorizes motion.
+                e.state.pose.open=e.state.position==1000;
+                e.state.pose.moving=false;
+                e.state.pose.revision=restoredRevision;
+            }
             e.state.pose.physicalPermille=e.state.position;
             e.state.ids=found->second;
             if(!next.emplace(pose.socketId,std::move(e)).second)
@@ -88,9 +103,29 @@ public:
         }
         entries_=std::move(next);
         probe_=std::move(obstruction);
-        sceneId_=sceneId;revision_=0;attached_=true;faulted_=false;
+        sceneId_=sceneId;revision_=restoredRevision;
+        attached_=true;faulted_=false;
         if(error)error->clear();
         return true;
+    }
+
+    // Restore a brand-new physical owner from the persisted ECS
+    // canonical positions. Never operate on an attached instance: first
+    // retire the old renderer/graph/Spatial owners and their ID leases.
+    // Caller MUST invalidate and rebuild graph overlays before commands.
+    bool attachRestored(
+        const std::vector<BuildingAperturePose>& generated,
+        const std::map<std::string,BuildingDualLeafIds>& ids,
+        const std::map<std::string,uint16_t>& positions,
+        uint64_t savedRevision,
+        world::SpatialWorld& spatial,uint64_t sceneId,
+        SweptObstruction probe,std::string* error=nullptr){
+        if(attached_||!savedRevision){
+            if(error)*error="Restored dual leaf owner needs detached state and revision";
+            return false;
+        }
+        return attach(generated,ids,spatial,sceneId,std::move(probe),
+                      error,&positions,savedRevision);
     }
 
     bool begin(const std::string& socketId,bool targetOpen,uint32_t domains,
