@@ -78,6 +78,39 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-aether",
+      "package": null,
+      "path": "skills/world/aiverse-aether/SKILL.md",
+      "domain": "gameplay",
+      "summary": "AETHER gas diffusion, smoke, ventilation and PHYSIS fire coupling",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/AetherEcs.h",
+      "keywords": [
+        "aether",
+        "gas",
+        "ventilation",
+        "smoke",
+        "toxin",
+        "oxygen",
+        "diffusion",
+        "leak",
+        "airflow",
+        "газ",
+        "вентиляция",
+        "дым",
+        "кислород",
+        "токсин",
+        "утечка"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-agent-branch",
       "package": null,
       "path": "skills/workflow/aiverse-agent-branch/SKILL.md",
@@ -1051,6 +1084,40 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-circuit",
+      "package": null,
+      "path": "skills/world/aiverse-circuit/SKILL.md",
+      "domain": "gameplay",
+      "summary": "CIRCUIT powered logic gates, switches and real game devices",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/CircuitEcs.h",
+      "keywords": [
+        "circuit",
+        "power",
+        "electric",
+        "wires",
+        "switches",
+        "gates",
+        "light",
+        "doors",
+        "motor",
+        "pump",
+        "сеть",
+        "питание",
+        "электричество",
+        "провода",
+        "выключатель",
+        "двери"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-city-blocks",
       "package": null,
       "path": "skills/world/aiverse-city-blocks/SKILL.md",
@@ -1475,6 +1542,40 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-crowd",
+      "package": null,
+      "path": "skills/world/aiverse-crowd/SKILL.md",
+      "domain": "gameplay",
+      "summary": "CROWD slot assignment, local avoidance and native NavMesh routes",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/CrowdEcs.h",
+      "keywords": [
+        "crowd",
+        "navmesh",
+        "routes",
+        "formation",
+        "agents",
+        "slots",
+        "path",
+        "finding",
+        "avoidance",
+        "queue",
+        "толпа",
+        "маршруты",
+        "путь",
+        "навмеш",
+        "очередь",
+        "npc"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-decision-explanations",
       "package": "decision-explanations",
       "path": "skills/ai/aiverse-decision-explanations/SKILL.md",
@@ -1690,6 +1791,40 @@
         "туннел",
         "мост",
         "авари"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-echo",
+      "package": null,
+      "path": "skills/world/aiverse-echo/SKILL.md",
+      "domain": "gameplay",
+      "summary": "ECHO hearing zones, portals and gameplay acoustic perception",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/EchoEcs.h",
+      "keywords": [
+        "echo",
+        "acoustics",
+        "hearing",
+        "sound",
+        "portal",
+        "zone",
+        "acoustic",
+        "npc",
+        "ear",
+        "noise",
+        "звук",
+        "слышимость",
+        "шум",
+        "акустика",
+        "порталы",
+        "зоны"
       ],
       "contentPackages": []
     },
@@ -1965,6 +2100,38 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-evolve",
+      "package": null,
+      "path": "skills/world/aiverse-evolve/SKILL.md",
+      "domain": "gameplay",
+      "summary": "EVOLVE long-term regions, PHYSIS climate and TerraWeave ecology",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/EvolveEcs.h",
+      "keywords": [
+        "evolve",
+        "ecology",
+        "region",
+        "fertility",
+        "succession",
+        "pollution",
+        "climate",
+        "forest",
+        "growth",
+        "эволюция",
+        "регион",
+        "природа",
+        "лес",
+        "плодородие"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-feedback",
       "package": "feedback",
       "path": "skills/ui/aiverse-feedback/SKILL.md",
@@ -2071,6 +2238,37 @@
         "плечо",
         "камера",
         "препятствия"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-fracture",
+      "package": null,
+      "path": "skills/world/aiverse-fracture/SKILL.md",
+      "domain": "gameplay",
+      "summary": "FRACTURE support bonds, collapse events and PHYSIS bridge",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/FractureEcs.h",
+      "keywords": [
+        "fracture",
+        "structural",
+        "support",
+        "collapse",
+        "bond",
+        "breaking",
+        "destruction",
+        "damage",
+        "разрушение",
+        "обрушение",
+        "опоры",
+        "балки",
+        "связи"
       ],
       "contentPackages": []
     },
@@ -2221,6 +2419,39 @@
       "requiresOwner": null,
       "source": "engine/render/Geometry.h",
       "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-granular",
+      "package": null,
+      "path": "skills/world/aiverse-granular/SKILL.md",
+      "domain": "gameplay",
+      "summary": "GRANULAR loose solids, Studio grid authoring and TerraWeave transfer",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/GranularEcs.h",
+      "keywords": [
+        "granular",
+        "sand",
+        "loose",
+        "material",
+        "grains",
+        "sediment",
+        "terrain",
+        "dig",
+        "fill",
+        "brush",
+        "песок",
+        "осыпание",
+        "грунт",
+        "сыпучие",
+        "земля"
+      ],
       "contentPackages": []
     },
     {
@@ -2410,6 +2641,37 @@
         "волосы",
         "причёска",
         "цифровой"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-imprint",
+      "package": null,
+      "path": "skills/world/aiverse-imprint/SKILL.md",
+      "domain": "gameplay",
+      "summary": "IMPRINT persistent trails, scent and movement-driven trace cells",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/ImprintEcs.h",
+      "keywords": [
+        "imprint",
+        "tracks",
+        "footprint",
+        "scent",
+        "residue",
+        "trace",
+        "trail",
+        "decay",
+        "diffusion",
+        "следы",
+        "запах",
+        "отпечатки",
+        "диффузия"
       ],
       "contentPackages": []
     },
@@ -2982,6 +3244,39 @@
         "модел",
         "риг",
         "анимац"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-morph",
+      "package": null,
+      "path": "skills/world/aiverse-morph/SKILL.md",
+      "domain": "gameplay",
+      "summary": "MORPH deformable nodes, springs and Box3D/Renderer3D adapters",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/MorphEcs.h",
+      "keywords": [
+        "morph",
+        "deform",
+        "softbody",
+        "spring",
+        "vertex",
+        "bend",
+        "skin",
+        "shape",
+        "impact",
+        "деформация",
+        "мягкое",
+        "тело",
+        "пружина",
+        "вершины",
+        "импульс"
       ],
       "contentPackages": []
     },
@@ -4825,6 +5120,40 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-society",
+      "package": null,
+      "path": "skills/world/aiverse-society/SKILL.md",
+      "domain": "gameplay",
+      "summary": "SOCIETY trusted NPC knowledge, rumors and quest event triggers",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-world-processes"
+      ],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/SocietyEcs.h",
+      "keywords": [
+        "society",
+        "npc",
+        "knowledge",
+        "rumors",
+        "trust",
+        "contact",
+        "messages",
+        "dialogue",
+        "quest",
+        "relations",
+        "общество",
+        "память",
+        "слухи",
+        "npc",
+        "доверие",
+        "отношения"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-spatial-queries",
       "package": "spatial",
       "path": "skills/world/aiverse-spatial-queries/SKILL.md",
@@ -6515,6 +6844,37 @@
         "распорядок",
         "потребност",
         "поручен"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-world-processes",
+      "package": null,
+      "path": "skills/world/aiverse-world-processes/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Route ten genre-neutral ECS world mechanics to existing owners",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "libraries/include/aiverselib/world/WorldProcesses.h",
+      "keywords": [
+        "world",
+        "processes",
+        "deterministic",
+        "ecs",
+        "world",
+        "systems",
+        "mechanics",
+        "universal",
+        "processes",
+        "игровые",
+        "мир",
+        "процессы",
+        "экосистем",
+        "общие",
+        "механики"
       ],
       "contentPackages": []
     },
