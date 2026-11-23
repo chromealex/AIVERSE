@@ -406,10 +406,26 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     // 8. Roof props on the main deck (and module roofs for small ones).
     auto freeAt=[&](float x0,float z0,float x1,float z1){for(const auto& r:taken)if(x0<r[2]&&r[0]<x1&&z0<r[3]&&r[1]<z1)return false;return true;};
     auto place=[&](const Top& t,float sx,float sz,std::array<float,4>& at){
-        if(sx>t.x1-t.x0||sz>t.z1-t.z0)return false;
-        for(int tries=0;tries<14;++tries){float x=t.x0+(t.x1-t.x0-sx)*u(),z=t.z0+(t.z1-t.z0-sz)*u();
-            if(freeAt(x-0.2f,z-0.2f,x+sx+0.2f,z+sz+0.2f)){at={x,z,x+sx,z+sz};taken.push_back(at);return true;}}
-        return false;};
+        const bool fits=sx<=t.x1-t.x0&&sz<=t.z1-t.z0;
+        if(!custom&&!fits)return false;
+        bool accepted=false;
+        for(int tries=0;tries<14;++tries){
+            // For explicitly sized models, consume the complete deterministic
+            // candidate stream regardless of which try first fits. Otherwise
+            // a one-centimetre body adjustment changes *all later* props and
+            // destabilizes exact W/H/D fitting. Preserve the old fast path
+            // for unsized legacy models.
+            const float x=t.x0+(t.x1-t.x0-sx)*u();
+            const float z=t.z0+(t.z1-t.z0-sz)*u();
+            if(fits&&!accepted&&freeAt(x-0.2f,z-0.2f,x+sx+0.2f,z+sz+0.2f)){
+                at={x,z,x+sx,z+sz};
+                accepted=true;
+                if(!custom){taken.push_back(at);return true;}
+            }
+        }
+        if(accepted)taken.push_back(at);
+        return accepted;
+    };
     for(const auto& p:k.props){
         uint32_t n=p.min+(p.max>p.min?g.below(p.max-p.min+1):0);
         for(uint32_t i=0;i<n;++i){
