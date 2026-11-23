@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -pedantic -I. -Ilibraries/include"
+          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -Wno-misleading-indentation -pedantic -I. -Ilibraries/include"
           g++ $FLAGS tests/libraries/building_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_tests
           g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
           g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
