@@ -84,6 +84,7 @@ public:
             targetTicks_=0;
             stepsPending_=0;
             requestedParameters_.clear();
+            hasPendingGpuAllocationSeed_=false;
             backend_=runtime_.gpuActive()?"Metal GPU":"CPU (full effect)";
             error_.clear();
             ++generation_;
@@ -108,6 +109,8 @@ public:
                     return errorStatus("Replay parameter outside authored range: "+name);
                 validated[name]=float(n);
             }
+            if(!input["seed"].isNull() && !input["gpuAllocationSeed"].isNull())
+                return errorStatus("CPU seed and GPU allocation seed cannot be combined");
             if(!input["seed"].isNull()) {
                 const Json& seed=input["seed"];
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
@@ -170,6 +173,7 @@ public:
             error_.clear();
             playing_=input.getBool("play",false);
             pendingRestart_=true;restartBurstPending_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
+            hasPendingGpuAllocationSeed_=false;
             phase_=0;
             pendingClear_=false;
             burstsPending_=0;triggeredBursts_=0;
@@ -222,6 +226,7 @@ public:
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
         if(pendingClear_) {
+            hasPendingGpuAllocationSeed_=false;
             runtime_.clear();
             pendingClear_=false;
         }
