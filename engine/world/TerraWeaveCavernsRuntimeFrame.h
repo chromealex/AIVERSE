@@ -9,6 +9,7 @@
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
 #include "engine/world/TerraWeaveCavernsStreamJobs.h"
 #include "engine/world/TerraWeaveCavernsNavigationPublication.h"
+#include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -139,6 +140,17 @@ public:
     bool retryNavigationInvalidations(){
         return navigationBus_.dispatchPending();
     }
+    bool registerPathSolver(std::string name,CavePathBackend kind,
+                            CavePathRouter::Solver solver){
+        return pathRouter_.registerSolver(std::move(name),kind,std::move(solver));
+    }
+    bool unregisterPathSolver(const std::string& name){
+        return pathRouter_.unregisterSolver(name);
+    }
+    CavePathResult findPath(const std::string& name,
+                            const CavePathQuery& query)const {
+        return pathRouter_.query(name,query,navigationBus_);
+    }
     // The host drives interest once per world frame using the camera/player
     // center in CHUNK coordinates. Build tickets may be scheduled on worker
     // threads; retire tickets must go through the actual physics/GPU/nav
@@ -255,12 +267,12 @@ public:
         }
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming build ACK refused after native commit");
+        const auto navigationBounds=navigationChunkBounds(
+            ticket.key,publishedMesh.resolution,publishedMesh.spacingCm);
         readyStreamBuilds_.erase(it);
         // Streaming may alter passable topology at the SAME authored SDF
         // revision. Consumers rebuild local routes/flow seeds/cluster borders.
-        (void)navigationBus_.invalidateResidency(
-            navigationChunkBounds(ticket.key,publishedMesh.resolution,
-                                  publishedMesh.spacingCm));
+        (void)navigationBus_.invalidateResidency(navigationBounds);
         return true;
     }
     bool publishStreamRetire(
@@ -393,6 +405,7 @@ private:
                 editPins_.emplace(key,residency_.pin(key,CaveLeasePurpose::Edit));
     }
     CaveNavigationPublication navigationBus_{nullptr};
+    CavePathRouter pathRouter_;
     CaveDirtyBounds navDirtyBounds_{};
     bool navDirty_=false;
     uint32_t chunkResolution_=16;
