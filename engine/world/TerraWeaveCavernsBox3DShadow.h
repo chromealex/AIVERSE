@@ -15,7 +15,7 @@ public:
     bool prepare(const CaveCollisionPrepared& source) {
         if(!source.revision||source.revision<=activeRevision_||
            (staged_&&source.revision<=stagedRevision_)||
-           source.body.indices.empty()||source.body.vertices.empty())
+           (source.body.indices.empty()!=source.body.vertices.empty()))
             return false;
         staged_=source.body;
         stagedRevision_=source.revision;
@@ -27,6 +27,16 @@ public:
     // Creating a new body briefly overlaps old one inside this call.
     bool commit(physics::Scene& scene,uint64_t revision){
         if(!staged_||revision!=stagedRevision_)return false;
+        // A fully filled/no-surface chunk has NO active body. Retiring
+        // the previous body is itself a versioned commit.
+        if(staged_->indices.empty()) {
+            if(activeBody_!=physics::kNoBody && scene.valid(activeBody_) &&
+               !scene.destroy(activeBody_))return false;
+            activeBody_=physics::kNoBody;
+            activeRevision_=stagedRevision_;
+            staged_.reset();stagedRevision_=0;
+            return true;
+        }
         const auto created=scene.create(*staged_);
         if(created==physics::kNoBody)return false;
         if(activeBody_!=physics::kNoBody && scene.valid(activeBody_)) {
