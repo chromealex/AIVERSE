@@ -1,3 +1,4 @@
+#include "engine/world/RegionOwnershipDiagnostics.h"
 // Agent link: the editor serves MCP tool calls forwarded by aiversemcp over localhost, implements the
 // editor-only tools (screenshots, camera, play-test, device simulator, windows), and launches the
 // game client on a simulated device.
@@ -498,6 +499,23 @@ void Editor::registerGuiOps() {
             return okSummary("Тест запущен");
         });
     add("play_stop", "Stop the play-test (or the game running as in the client).", "{}", [this, okSummary](const Json&) { stopClientPlay(); stopPlay(); return okSummary("Тест остановлен"); });
+    add("region_ownership_diagnostics", "Read last successful live region ownership reconciliation.", "{}", [this](const Json&) {
+        Json r=Json::object();
+        const Simulation* live=clientPlaying()?clientHost_.simulation():sim_.get();
+        const auto* d=live?live->world().resourceConst<world::RegionOwnershipDiagnostics>():nullptr;
+        r.set("available",Json::fromBool(d!=nullptr));
+        if(!d) {r.set("reason",Json::string("No live region ownership diagnostics"));return r;}
+        r.set("trackedEntities",Json::number(int64_t(d->trackedEntities)));
+        r.set("scannedCars",Json::number(int64_t(d->scannedCars)));
+        r.set("candidateCars",Json::number(int64_t(d->candidateCars)));
+        r.set("pendingGroups",Json::number(int64_t(d->pendingGroups)));
+        r.set("uncoveredSolo",Json::number(int64_t(d->uncoveredSolo)));
+        r.set("uncoveredGroups",Json::number(int64_t(d->uncoveredGroups)));
+        r.set("uncoveredLifecycle",Json::number(int64_t(d->uncoveredLifecycle)));
+        r.set("journalOverflow",Json::fromBool(d->journalOverflow));
+        r.set("soloCandidateMode",Json::fromBool(d->soloCandidateMode));
+        return r;
+    });
     add("play_status", "State of the play-test: time, result, per-player units/structures/resources.", "{}", [this](const Json&) {
         Json r = Json::object();
         r.set("playing", Json::fromBool(playing()));
