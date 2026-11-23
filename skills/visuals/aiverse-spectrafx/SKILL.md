@@ -1867,3 +1867,7 @@ Single-flight host capture returns captureId. Poll/cancel may supply ID to rejec
 ## Stage 68 — cross-platform tagged capture
 
 GL/GLES shared backend and Vulkan tag synchronous capture callbacks with current frame serial. GL checks readback error; Vulkan checks submission and fence result. Studio polls/cancels with captureId. No builds/tests; allocation failure, Vulkan failed-submit slot recovery and cross-platform serial matching require audit.
+
+## Stage 69 — restore checkpoint byte codec
+
+SpectraCheckpointFile.h defines bounded SPFR V1 same-build presentation restore format with explicit caller-provided identity, CRC, allocator order, uniforms and RNG. ComputeParticles export/import restore bytes uses checked upload and rejects nonzero process-local source tokens. Caller must derive trusted graph/build identity. File IO, Studio clock and GraphRuntime integration remain. No tests run.
