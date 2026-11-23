@@ -1,4 +1,4 @@
-/* Native gfx Scene surface paints directly over this placeholder rectangle.
+/* Native independent FX swapchain paints over this placeholder rectangle.
  * The parent scroll pane defines clipping and visibility; never place DOM
  * controls inside this rectangle because the native view is above WebView.
  */
