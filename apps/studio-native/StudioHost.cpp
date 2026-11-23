@@ -857,6 +857,45 @@ void StudioHost::rebuildOverlay() {
                             float(areaPreview.halfWidth*2.),
                             float(areaPreview.halfDepth*2.),100,255,160);
                     }
+                    if(wpDrag_.component=="EvolveArea" &&
+                       wpDrag_.key=="cornerXZ"){
+                        const auto selected=session_->selectedObjectIds();
+                        const auto& authored=owner.extra["components"]["EvolveArea"];
+                        const auto oldX=authored.getInt("halfWidthCm",0);
+                        const auto oldZ=authored.getInt("halfDepthCm",0);
+                        const auto newX=std::llround(std::abs(
+                            double(wpDrag_.value)-authored.getInt("offsetXcm",0)));
+                        const auto newZ=std::llround(std::abs(
+                            double(wpDrag_.valueZ)-authored.getInt("offsetZcm",0)));
+                        render::float3 centroid{};
+                        if(selected.size()>1 && oldX>=50 && oldZ>=50 &&
+                           newX>=50 && newZ>=50 &&
+                           worldprocess_edit::groupCentroid(
+                               session_->workspace().map,selected,centroid)){
+                            const auto pivot=wpCustomPivot_&&!wpDrag_.symmetric?
+                                wpGroupPivot_:centroid;
+                            std::vector<worldprocess_edit::AreaPreview> group;
+                            if(worldprocess_edit::previewGroupScale2D(
+                                session_->workspace().map,selected,
+                                newX,oldX,newZ,oldZ,
+                                std::llround(double(pivot.x)*100.),
+                                std::llround(double(pivot.z)*100.),group) &&
+                               shapes.size()+group.size()*4+2<1390){
+                                for(const auto& region:group)
+                                    worldprocess_gizmos::rectangle(shapes,
+                                        {float(region.centerX),.5f,float(region.centerZ)},
+                                        float(region.halfWidth*2.),
+                                        float(region.halfDepth*2.),255,195,90);
+                                shapes.push_back(worldprocess_gizmos::makePoint(
+                                    pivot.x,pivot.y,pivot.z,255,195,90,11.f));
+                                shapes.push_back(worldprocess_gizmos::makeLabel(
+                                    {pivot.x,pivot.y+.6f,pivot.z},
+                                    "Scale X "+std::to_string(newX*100/oldX)+
+                                    "% Z "+std::to_string(newZ*100/oldZ)+"%",
+                                    255,195,90));
+                            }
+                        }
+                    }
                     // One group preview: individual, shared centroid or
                     // explicit custom pivot. Never draw conflicting overlays.
                     if(wpDrag_.component=="EvolveArea" &&
