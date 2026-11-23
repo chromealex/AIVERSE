@@ -206,3 +206,6 @@ Canonical forest climate sampler rechecks live ECS Area and Region and current h
 
 ## Stage 58: paired ecology checkpoint
 `WorldProcessGameplayHost::captureEcology` and `restoreEcology` provide caller-owned in-memory checkpoints of forest resource and rooted plants, guarded by completed tick. Automatic production tick and disk persistence wiring remain pending. No tests. See `docs/handoffs/world-processes-stage58-ecology-checkpoint-2026-11-23.md`.
+
+## Stage 59: authoritative persistent ecology
+Prefer `WorldProcessGameplayHost::advanceEcologyEcs` / `addEcologyEcsSystem` over standalone checkpoints. Delegates to existing TerraWeave World COW resources and persistence; register after EVOLVE and terrain/water prerequisites, not alongside a second forest update. Production registration and QA pending. See `docs/handoffs/world-processes-stage59-persistent-ecology-ecs-2026-11-23.md`.
