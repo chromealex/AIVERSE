@@ -152,7 +152,7 @@ int main(int argc,char** argv){
                 kind.forms.clear();
                 StructureForm arch;arch.kind=StructureForm::Kind::Arch;
                 arch.material=archStyle.shell;arch.x=0.5f;arch.z=1.35f;
-                arch.width=0.60f;arch.height=0.8f;arch.depth=0.18f;
+                arch.width=0.60f;arch.height=1.3f;arch.depth=0.18f;
                 arch.level=0.0f;kind.forms.push_back(arch);
             }
             auto withArch=dressStructure(archStyle,"depot",9);
