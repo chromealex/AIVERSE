@@ -12,6 +12,7 @@ export interface SpectraAssetEdit {
   graph: SpectraGraphV2;
   error: string;
 }
+const failure=(graph:SpectraGraphV2,error:string):SpectraAssetEdit=>({graph,error});
 const validGuid=(guid:string):boolean =>
   /^[a-fA-F0-9]{32}$/.test(guid) ||
   /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(guid);
@@ -71,7 +72,7 @@ export function bindResolvedSpectraAsset(
     return failure(graph,'Asset GUID is not resolvable to a safe content path.');
   if(expectedKinds&&!expectedKinds.includes(resolved.kind))
     return failure(graph,'Asset importer type is incompatible with this property.');
-  if(property==='texture'&&!/\\.(png|jpe?g|tga)$/i.test(resolved.path))
+  if(property==='texture'&&!/\.(png|jpe?g|tga)$/i.test(resolved.path))
     return failure(graph,'Sprite textures require PNG, JPEG or TGA assets.');
   const index=graph.nodes.findIndex(node=>node.id===nodeId);
   if(index<0)return failure(graph,'Target graph node not found.');
