@@ -6,6 +6,7 @@ import {
 import type { StudioComponentCatalogItem, StudioInspectorComponent, StudioProperty } from '../types';
 import { invoke } from '../bridge';
 import PropertyField from '../components/PropertyField';
+import GranularGridEditor from '../components/GranularGridEditor';
 import { StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
 import { canRemove, canReset, copyValues, mergeInspectors, missingOption, pasteValues, resetValues, type CopiedComponent, type FieldValue } from './inspectorActions';
 import type { StudioInspector } from '../types';
@@ -71,6 +72,9 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
             window.dispatchEvent(new CustomEvent('studio:show-panel', { detail: 'rules' }));
             window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:rules-type', { detail: type })), 0); }}>
           Edit type “{String(component.properties.find(p => p.key === 'type')?.value)}” in Rules →</button>}
+      {component.id === 'GranularField' && <GranularGridEditor
+        properties={component.properties} disabled={busy}
+        onCommit={serialized => onChange('grid', serialized)}/>}
       {rows.map(row => <div key={row.label} className="insp-row insp-row--vector"
         title={row.fields.map(({field}) => field.description).filter(Boolean).join('\n') || undefined}>
         <span className="insp-row__label">{row.label}</span>
@@ -81,7 +85,8 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
             disabled={busy || field.editable === false} onChange={value => onChange(field.key, value)}/>)}
         </div>
       </div>)}
-      {rest.map(property => {
+      {rest.filter(property => component.id !== 'GranularField' ||
+        !['width','height','mass','solid'].includes(property.key)).map(property => {
         const missing = missingOption(property);
         const shown = missing ? { ...property, options: [...(property.options ?? []), { label: String(property.value) + ' (missing)', value: String(property.value) }] } : property;
         return <div key={entityId + component.id + property.key} className={missing ? 'insp-field is-missing' : 'insp-field'}>
