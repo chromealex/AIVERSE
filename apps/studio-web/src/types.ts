@@ -261,7 +261,7 @@ export interface StudioParams {
   /** Agent panel: transcript lines from `from`, change list, link status. */
   'studio.agentInfo': { from?: number };
   'studio.evolveState': Record<string, never>;
-  'studio.evolveLayer': {layer?: EvolveLayer};
+  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean};
   'studio.sceneBrush': Partial<StudioSceneBrush>;
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
@@ -427,7 +427,7 @@ export interface StudioResult {
   'studio.inputSet': StudioInputInfo;
   'studio.agentInfo': StudioAgentInfo;
   'studio.evolveState': EvolveLiveState;
-  'studio.evolveLayer': {layer: EvolveLayer};
+  'studio.evolveLayer': {layer: EvolveLayer;live:boolean};
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
