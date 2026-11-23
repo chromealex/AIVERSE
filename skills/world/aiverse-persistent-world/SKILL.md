@@ -18,6 +18,16 @@ Use engine/world/PersistentWorldSession.h for genre-independent durable region o
 - retentionPlan(policy) previews deletion; cleanupRetention(policy) removes eligible older pairs. keepPrevious is a minimum; maxBytes is a soft budget. Active and orphan files are protected.
 - forkGeneration(generation,destination,newUuid,maxBytes) copies recovered ledger into an existing empty private directory. Original remains unchanged.
 
+## Unified ECS checkpoint and WAL (experimental)
+
+Use `engine/world/UnifiedWalSession.h` for the managed UWT1 session, not the ledger-only session above. Supply a private existing empty directory, unique nonzero UUID, checkpoint budget, three explicit section adapters (entities, components, resources), a private-state factory, durable component codecs and a materializer. Register stable entity IDs and contextual codecs; never persist raw runtime Entity handles. The factory, readers, materializer and validator must not publish side effects.
+
+- `create` starts a new world at generation 1 and sequence 0; `openCheckpoint` restores the active checkpoint and replays WAL. Check every return code. Use `commit` only at finalized barriers, then `checkpoint` with an unused increasing generation.
+- `backups(budget, adapters, factory, codecs, materializer, validator, verify)` lists UWT1 generations. MetadataOnly means no full replay was performed; Recoverable means checkpoint plus complete WAL restored privately. Listing future or orphan candidates is not authorization to activate them.
+- `retentionPlan(policy, budget, adapters, factory, codecs, materializer, validator)` previews deletion; `cleanupRetention` revalidates independently before removal. Invoke explicitly at a quiescent barrier after a successful checkpoint; never clean on an ambiguous result. Only fully recoverable older same-world pairs with sequence/revision no newer than the active checkpoint are eligible. Active, foreign, damaged, future, symlink and orphan files stay protected. keepPrevious is the retained eligible backup count; maxBytes is a soft target and protected files may exceed it. Byte accounting is for canonical regular checkpoint/WAL files, not total directory disk usage.
+- `forkGeneration` recovers a selected current or older generation and creates an independent world in a separate private empty directory with a new UUID. The new WAL starts at sequence 0. It does not mutate the original.
+- Resource sections persist at checkpoint time only; resource WAL deltas, production ActorHost finality wiring, crash injection and native acceptance remain outstanding. No assertion that arbitrary game state is durable.
+
 ## Implementation
 
 RegionWalFrame/Reader/Writer/Transaction/Commit/Finality provide bounded CRC frames, contiguous sequences, durable append and atomic ledger replay. RegionCheckpointManifest/Publish/Load/Archive bind generation and SHA256 to checkpoint and WAL prefix. RegionWorldSessionLock provides local cooperating-process exclusivity, not distributed consensus.
@@ -26,4 +36,4 @@ Native Archive and pack SHA256 are reused; link the existing SHA256 implementati
 
 ## Acceptance
 
-PR #116 remains Draft. W1.21–22 native builds and crash-injection tests have not run. Full ECS component persistence, actual ActorHost finality integration, async writes, editor and MCP remain outstanding. Read stage21/22 handoffs. Keep per-stage handoffs and report actual validation only.
+PR #116 remains Draft. W1.21–22 native builds and crash-injection tests have not run. Unified ECS checkpoint/component WAL source exists but native compilation and verification are outstanding, as are resource WAL, actual ActorHost finality integration, async writes, editor and MCP. Read stage21–23 handoffs. Keep per-stage handoffs and report actual validation only.
