@@ -192,6 +192,11 @@ public:
     World& world() { return world_; }
     const World& world() const { return world_; }
     Random& rng() { return rng_; }
+    const Random& rng() const { return rng_; }
+    // Read-only restart metadata at a quiescent authoritative boundary.
+    // Durable adapters must translate Entity handles in pending commands.
+    const std::map<uint32_t,std::vector<Command>>& pendingCommands()const{return pending_;}
+    const std::map<uint8_t,uint32_t>& commandSequences()const{return seqByPlayer_;}
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
@@ -199,6 +204,7 @@ public:
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
     std::vector<PlayerInfo>& players() { return players_; }
+    const std::vector<PlayerInfo>& players() const { return players_; }
     PlayerInfo* player(uint8_t slot);
     bool allied(uint8_t a, uint8_t b);
     const std::vector<SimEvent>& events() const { return events_; }       // events of the last tick
