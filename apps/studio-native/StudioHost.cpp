@@ -798,7 +798,13 @@ void StudioHost::rebuildOverlay() {
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
         const auto selected=session_->selectedObjectId();
         const auto pivotSelection=session_->selectedObjectIds();
-        if(wpNumericPreview_.isObject()&&pivotSelection.size()>1){
+        std::string currentPreviewSelection;
+        for(const auto& id:pivotSelection){
+            currentPreviewSelection+=id;
+            currentPreviewSelection.push_back('|');
+        }
+        if(wpNumericPreview_.isObject()&&pivotSelection.size()>1&&
+           currentPreviewSelection==wpPreviewSelection_){
             render::float3 center{};
             if(worldprocess_edit::groupCentroid(session_->workspace().map,
                                                 pivotSelection,center)){
@@ -1195,6 +1201,12 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         if(current.key=="pivotXcm")wpGroupPivot_.x=metres;
         else wpGroupPivot_.z=metres;
         wpCustomPivot_=true;
+        Json payload=Json::object();
+        payload.set("pivotXcm",Json::number(
+            std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+        payload.set("pivotZcm",Json::number(
+            std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+        sendEventPayload("worldProcess.pivotChanged",payload);
         rebuildOverlay();
         return true; // editor-only pivot; never write an ECS or MapDoc component
     }
@@ -1877,8 +1889,40 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.worldProcessGroupPivot")return answer([&]{
+        Json result=Json::object();
+        const auto selection=session_->selectedObjectIds();
+        render::float3 centroid{};
+        if(!worldprocess_edit::groupCentroid(session_->workspace().map,
+                                             selection,centroid))
+            throw std::runtime_error("Select at least two EVOLVE regions");
+        if(selection!=wpPivotSelection_){
+            wpPivotSelection_=selection;
+            wpCustomPivot_=false;
+        }
+        const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+        result.set("pivotXcm",Json::number(
+            std::int64_t(std::llround(double(pivot.x)*100.))));
+        result.set("pivotZcm",Json::number(
+            std::int64_t(std::llround(double(pivot.z)*100.))));
+        result.set("custom",Json::fromBool(wpCustomPivot_));
+        return result;
+    });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{
         const auto selected=session_->selectedObjectIds();
+        std::string selectionKey;
+        for(const auto& id:selected){selectionKey+=id;selectionKey.push_back('|');}
+        const auto revision=params["revision"].integer(-1);
+        if(revision<0)throw std::runtime_error("Missing EVOLVE preview revision");
+        if(params.getStr("selectionKey")!=selectionKey)
+            throw std::runtime_error("EVOLVE preview selection changed");
+        if(revision<wpPreviewRevision_){
+            Json ignored=Json::object();
+            ignored.set("stale",Json::fromBool(true));
+            return ignored;
+        }
+        wpPreviewRevision_=revision;
+        wpPreviewSelection_=selectionKey;
         if(params.getBool("clear")||selected.size()<2)wpNumericPreview_=Json();
         else{
             const auto& sx=params["scaleNumerator"];
