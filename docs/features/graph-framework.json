@@ -57,7 +57,11 @@
     "engine/view/game/GameView.cpp",
     "apps/editor/Editor.h",
     "apps/editor/Editor.cpp",
-    "tests/view/view.cpp"
+    "tests/view/view.cpp",
+    "engine/render/graph/GraphWatch.h",
+    "engine/fx/FxInternal.h",
+    "engine/fx/ParticleSystem.h",
+    "engine/fx/ParticleSystem.cpp"
   ],
   "traits": {
     "editable": true,
@@ -203,7 +207,8 @@
       "graph_runtime_capabilities",
       "graph_runtime_probe",
       "graph_live_snapshot",
-      "graph_debug_session"
+      "graph_debug_session",
+      "graph_live_watch"
     ],
     "studio_panels": [
       "shader_graph",
