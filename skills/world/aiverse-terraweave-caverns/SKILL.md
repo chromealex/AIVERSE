@@ -191,3 +191,17 @@ Read `engine/world/TerraWeaveCavernsLodPolicy.h`, `tests/terraweave_caverns_lod_
 - This policy is NOT general Transvoxel, not real incremental GPU streaming, not a physics or navigation modification, and not proof of seam-normal continuity or absence of internal nonmanifold triangles.
 - Source changes must not bypass `CavePublicationCoordinator` and presentation lease gates. Any fallback regeneration should update visual revisions and STRATA source leases, leaving original collision data authoritative.
 - Stage-15 test source covers X/Y/Z planes, negative coordinates, both argument orientations, divergent contour fallback, and revision guards. No compiler/CTest or GPU verification of this stage has been run yet.
+
+## Stage 16 — revision-safe regeneration / seam visibility gate
+
+Read `engine/world/TerraWeaveCavernsSeamGate.h`,
+`tests/terraweave_caverns_seam_gate_test.cpp`, and
+`docs/agent-handoffs/caverns-stage16-2026-11-23.md`.
+
+- `CaveSeamPublicationGate(maxChunks)` tracks immutable `CaveCertifiedChunk` values: mesh, resolution, spacingCm, sourceRevision, renderRevision. Call `upsert` when an actual completed geometry revision arrives, `erase` at unload. Each update invalidates all neighboring face certificates.
+- `analyze()` processes loaded +X/+Y/+Z neighbors (six directions covered via both ends), calls `resolveCaveFaceLod`, caches only **exact matching edge** certificates, and queues current `CaveRebuildRequest` for coarse neighbors that require the finest common lattice. A supported stage-14 subdivision still needs a changed mesh to be **published**, so stage 16 conservatively regenerates coarse meshes instead of claiming a stitch already resident.
+- `requests(budget)` emits deterministic, bounded work. `accept(request,rebuilt)` rejects stale serial, wrong mesh key, wrong source revision or LOD mismatches. After acceptance call `analyze()` AGAIN: accepting one job is never enough to certify a face. `canPublish(key,renderRevision)` rejects a stale revision, any pending rebuild or any uncertified loaded neighbor.
+- `CaveFaceLease` is valid only for the actual current render revisions of both chunks. The host must gate `CaveBatchGeometryResident` / STRATA source adoption using `canPublish` for all involved chunks, stage a cohesive shard or neighbor group, then commit at its real GPU/physics owner barrier. The gate does not directly perform mesh generation, STRATA insertion, RHI commits or Box3D/NavMesh rollback.
+- When same-resolution generated borders still differ, the gate **fails closed**: no unsafe geometry is published, and it cannot automatically repair inconsistent density/mesh topology. Diagnose origin, field, quantization, or meshing errors instead of retrying infinitely.
+- The gate supports faces only between currently loaded chunks. Neighbor streaming/unload must trigger re-analysis; no claims about unseen future neighbors.
+- The Stage 16 regression exists but has NOT been compiled or run as part of this work. Add the appropriate native CMake/CTest target and confirm real runtime behavior before main merge. Continue skill and dated handoff updates after every stage.
