@@ -61,17 +61,15 @@ bool ActorHost::requestRegionMoveByStableId(Simulation& sim,
                                             world::RegionEntityId stableId,
                                             Vec3 destination,
                                             std::string* error) {
-    // ActorHost W1 IDs are generation-aware Entity::packed()+1. A
-    // scripting/native owner never needs to retain a transient Entity.
-    // Refuse tombstones and recycled handles before staging any request.
+    // Resolve durable identities against the current ECS materialization.
     if(!stableId)return reject(error,"zero region stable ID");
     const auto* ledger=sim.world().resourceConst<world::RegionEntityLedger>();
     const auto* record=ledger?ledger->find(stableId):nullptr;
     if(!record || !record->live)
         return reject(error,"stable ID is missing or tombstoned");
-    const Entity entity=Entity::fromPacked(stableId-1);
-    const auto* tag=sim.world().tryGetConst<world::RegionStableIdentity>(entity);
-    if(!sim.world().alive(entity) || !tag || tag->id!=stableId)
+    world::PersistentEntityReferences refs;
+    Entity entity;
+    if(!refs.rebuild(sim.world(),*ledger)||!refs.resolve(sim.world(),stableId,entity))
         return reject(error,"stable ID has no matching materialized ECS actor");
     return requestRegionMove(sim,entity,destination,error);
 }
@@ -97,9 +95,11 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
         if(!tag || !ledger->find(tag->id) || !ledger->find(tag->id)->live)
             return reject(error,"unregistered region move member");
     }
-    if(entity.packed()==UINT64_MAX)return reject(error,"region move identity exhausted");
-    // +1 allows the first ECS Entity (packed handle 0) to be encoded.
-    const uint64_t id=entity.packed()+1;
+    const auto* identity=ecs.tryGetConst<world::RegionStableIdentity>(entity);
+    if(!identity||!identity->id)return reject(error,"region move identity missing");
+    const auto id=identity->id;
+    world::PersistentEntityReferences refs;
+    if(!refs.rebuild(ecs,*ledger))return reject(error,"invalid region identity index");
     const auto it=queued->destinations.find(id);
     if(it==queued->destinations.end() &&
        queued->destinations.size()>=world::RegionMoveRequests::kMaxRequests)
@@ -113,8 +113,9 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
         (void)point;
         if(otherId==id)continue;
         std::vector<Entity> others;
-        if(!moveGroup(*this,sim,Entity::fromPacked(otherId-1),others,error))
-            return false;
+        Entity other;
+        if(!refs.resolve(ecs,otherId,other))return reject(error,"unresolved pending region move");
+        if(!moveGroup(*this,sim,other,others,error))return false;
         for(Entity e:group)
             if(std::find(others.begin(),others.end(),e)!=others.end())
                 return reject(error,"overlapping pending vehicle/occupant moves");
@@ -127,6 +128,10 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     auto& ecs=sim.world();
     const auto* requests=ecs.resourceConst<world::RegionMoveRequests>();
     if(!requests || requests->destinations.empty() || admittedRegionMoves_.empty())return;
+    const auto* ledger=ecs.resourceConst<world::RegionEntityLedger>();
+    world::PersistentEntityReferences refs;
+    if(!ledger||!refs.rebuild(ecs,*ledger))
+        throw std::logic_error("region move identity index invalid");
     const auto position=regionPositionReader();
     struct Commit {
         Entity entity;
@@ -143,7 +148,8 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
         // Never execute a destination that was not admitted with these bytes.
         if(pending==requests->destinations.end() ||
            pending->second!=destination)continue;
-        Entity e=Entity::fromPacked(id-1);
+        Entity e;
+        if(!refs.resolve(ecs,id,e))throw std::logic_error("region move identity unresolved");
         std::vector<Entity> members;
         std::string error;
         if(!moveGroup(*this,sim,e,members,&error))
