@@ -403,12 +403,16 @@ export default function BuildingGeneratorPanel({
     if(parameterError||busy||previewBusy||!nativeConnected())return;
     setPreviewBusy(true);setError('');
     try{
+      // Opening the shared Scene panel mounts the native viewport. Give
+      // its layout/viewport registration an opportunity to complete.
+      showPanel('scene');
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>
+        requestAnimationFrame(()=>resolve())));
       const chosen=selectedSeed??asNumber(seed);
       const reply=await invoke('studio.buildingPreview',request(chosen));
       if(!reply.active)throw Error('Native 3D preview was not activated');
       setLivePreview(true);
       setStatus('Temporary 3D model displayed in native Scene. Orbit, pan and zoom there; no GLB or GUID was created.');
-      showPanel('scene');
     }catch(e){setError(explain(e));}
     finally{setPreviewBusy(false);}
   };
