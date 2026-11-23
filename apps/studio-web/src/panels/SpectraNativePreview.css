@@ -12,3 +12,17 @@
   flex-wrap:wrap;padding:var(--au-space-2) 0;}
 .spectra-native__camera span {font-size:var(--au-font-xs);color:var(--au-text-muted);
   margin-right:auto;}
+
+/* Native Stage controls are outside the CAMetalLayer overlap rectangle.
+ * Keep input controls fully clickable even with native child views on top. */
+.spectra-native__stage-controls {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));
+  align-items:end;
+  gap:var(--au-space-3);
+  padding:var(--au-space-3) 0;
+}
+.spectra-native__stage-controls .au-checkbox {
+  min-height:30px;
+  align-self:center;
+}
