@@ -464,6 +464,8 @@ void ActorHost::tick(Simulation& sim) {
                 fresh.armor=config_.systems.startArmor;fresh.money=config_.systems.startMoney;
                 fresh.life=a.life+1;fresh.pos=spawns_[a.slot-1];equipInitial(fresh);
                 assign(a,fresh);
+                if(!reportRegionMoveIfCrossed(sim,a.entity))
+                    throw std::logic_error("regionOwnership: deathmatch respawn boundary dirty report failed");
             } else {skydive(sim,a);continue;}   // a body in the air keeps falling (battle royale)
         }
         if(skydive(sim,a))continue;
