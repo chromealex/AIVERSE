@@ -191,6 +191,29 @@ public:
         return true;
     }
 
+    // Editor-only VISUAL preview: read a complete current CPU mesh batch
+    // without acknowledging gameplay dirty markers. Native owner must not
+    // publish it as physics-ready or NavMesh-ready.
+    std::vector<CavePreparedEdit> visualPreviewCandidates()const {
+        if(!running_.empty()||prepared_.empty()||
+           prepared_.size()!=dirty_.size())return {};
+        std::vector<CavePreparedEdit> result;
+        result.reserve(prepared_.size());
+        for(const auto& [key,item]:prepared_) {
+            (void)key;
+            if(!isCurrent(item.dirty))return {};
+            result.push_back(item);
+        }
+        CaveSeamPublicationGate gate=gate_;
+        for(const auto& item:result)gate.upsert(item.candidate);
+        const auto stats=gate.analyze();
+        if(stats.fallbackFaces||stats.pendingChunks)return {};
+        for(const auto& item:result)
+            if(!gate.canPublish(item.dirty.key,item.candidate.renderRevision))
+                return {};
+        return result;
+    }
+
     size_t dirtyCount()const{return dirty_.size();}
     size_t preparedCount()const{return prepared_.size();}
     size_t inFlight()const{return running_.size();}
