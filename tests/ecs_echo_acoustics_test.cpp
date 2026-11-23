@@ -1,5 +1,5 @@
 // ECHO: native ECS propagation, two independent module types, rollback and save proof.
-#include "engine/world/echo/EchoAcoustics.h"
+#include "aiverselib/world/EchoEcs.h"
 #include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
