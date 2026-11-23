@@ -2,10 +2,10 @@
 // This is presentation only: no new component pools, state writes or editors.
 // Existing runtime Studio.gameInspect consumes this same WorldInspect JSON path.
 #pragma once
-#include "aiverselib/world/EchoEcs.h"
-#include "aiverselib/world/FractureEcs.h"
-#include "aiverselib/world/AetherEcs.h"
-#include "aiverselib/world/AetherPhysisBridge.h"
+#include "EchoEcs.h"
+#include "FractureEcs.h"
+#include "AetherEcs.h"
+#include "AetherPhysisBridge.h"
 #include "engine/data/Json.h"
 #include <cstdint>
 #include <initializer_list>
