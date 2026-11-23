@@ -58,6 +58,7 @@ public:
         r.set("bake",Json::fromBool(bake_));r.set("published",Json::fromBool(published_));
         r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(size_t(size_)*size_*4)));
         r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));
+        r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
             // Full-size images never cross the JSON bridge.
@@ -132,7 +133,7 @@ public:
             gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.size=bytes;desc.label="TextureGraph output";
             buffer_=dev.createBuffer(desc);
             if(plan.twoPass){desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
-            if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){fallback("GPU plan allocation rejected");return;}
+            if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){if(!ownsResources())inFlight_=false;fallback("GPU plan allocation rejected");return;}
             capacity_=bytes;firstKey_=first;secondKey_=second;
         }
         fence_=dev.gpuSubmissionFence();inFlight_=true;
