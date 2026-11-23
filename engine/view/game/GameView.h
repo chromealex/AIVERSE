@@ -198,6 +198,8 @@ public:
     // diagnostic values; never returns an instance, graph or model pointer.
     // The caller must establish the current world/entity generation.
     Json sharedAnimationGraphDiagnostic(uint64_t entityKey,uint64_t worldEpoch,graph_telemetry::History* history=nullptr) const;
+    Json sharedAnimationProfile(uint64_t entityKey,uint64_t worldEpoch,const std::string& action);
+    void clearSharedAnimationProfile();
     Json animationGraphDiagnostic(uint64_t entityKey) const {
         Json out=Json::object();
         out.set("entity",Json::string(std::to_string(entityKey)));
