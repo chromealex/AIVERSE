@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '../bridge';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
 import { bindResolvedSpectraAsset, editSpectraMeshSlot } from './spectraAssetBinding';
@@ -24,6 +25,16 @@ export default function SpectraGraphAssetInspector({
   const [locked,setLocked]=useState(false);
   const [targetNodeId,setTargetNodeId]=useState<string|null>(selectedNodeId);
   const [error,setError]=useState('');
+  const [checks,setChecks]=useState<Record<string,string>>({});
+  const [checking,setChecking]=useState(false);
+  const checkAsset=async(guid:string)=>{
+    setChecking(true);
+    try {
+      const result=await invoke('studio.spectraAssetCheck' as never,{guid} as never) as unknown as {ok:boolean;detail:string};
+      setChecks(old=>({...old,[guid]:(result.ok?'PASS: ':'FAIL: ')+result.detail+' (CPU only)'}));
+    }catch(e){setChecks(old=>({...old,[guid]:String(e)}));}
+    finally{setChecking(false);}
+  };
   const [pendingInsertAfter,setPendingInsertAfter]=useState<number|null>(null);
   useEffect(()=>{
     if(!locked)setTargetNodeId(selectedNodeId);
@@ -61,6 +72,7 @@ export default function SpectraGraphAssetInspector({
           <small style={{minWidth:36}}>#{slot+1}</small>
           <small title={path}>{path}</small>
           {diagnostic(path)&&<small role="status">{diagnostic(path)}</small>}
+          {entry&&<><button type="button" disabled={disabled||checking} onClick={()=>void checkAsset(entry.guid)}>Check asset</button><small>{checks[entry.guid]}</small></>}
           <div style={{flex:1}}>
             <SpectraAssetPicker assets={assets}
               value={entry?{guid:entry.guid,path:entry.path}:null} kinds={kinds}
@@ -94,6 +106,7 @@ export default function SpectraGraphAssetInspector({
         if(!node)return;
         commit(bindResolvedSpectraAsset(graph,node.id,property,asset,assets,kinds));
       }}/>}
+    {property!=='meshes'&&selected&&<><button type="button" disabled={disabled||checking} onClick={()=>void checkAsset(selected.guid)}>Check asset</button><small>{checks[selected.guid]}</small></>}
     {property!=='meshes'&&currentPath&&diagnostic(currentPath)&&<small role="status">{diagnostic(currentPath)}</small>}
     {locked&&<small>Selection locked to this graph node</small>}
     {error&&<small role="alert">{error}</small>}
