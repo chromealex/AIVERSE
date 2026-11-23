@@ -8,6 +8,7 @@ import {
   type SpectraGraphV2, type FxDataInterface, type FxInstanceScalar, type GraphEdit
 } from './spectraDataInterfaceModel';
 import SpectraGraphCanvas from './SpectraGraphCanvas';
+import SpectraCurveEditor from './SpectraCurveEditor';
 import './SpectraDataInterfacesPanel.css';
 
 type AssetEntry = { name: string; draft: boolean; valid: boolean };
@@ -246,6 +247,9 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
               onEdit={next=>{setGraph(next);setValidation(null);setError('');
                 setStatus('Graph topology changed locally. Validate and save before publishing.');}}/>
           </StudioSection>
+          <SpectraCurveEditor graph={graph} disabled={busy} onError={setError}
+            onEdit={next=>{setGraph(next);setValidation(null);setError('');
+              setStatus('Curve/Gradient changed in local draft. Validate and save before publishing.');}}/>
           <StudioSection title="Instance parameters">
             <div className="spectra-di__items">
               {names.map(([name,p])=><button key={name} type="button" disabled={busy}
