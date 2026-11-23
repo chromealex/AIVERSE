@@ -72,15 +72,28 @@ struct ForestDemo final:GameModule {
 };
 int main(int argc,char** argv){
     try{
-        if(argc<2){std::cerr<<"Usage: aiverse_evolve_forest_demo MAP_JSON [ticks]\n";return 2;}
+        if(argc<2){std::cerr<<"Usage: aiverse_evolve_forest_demo MAP_JSON [ticks] [--replay]\n";return 2;}
         std::ifstream file(argv[1]);if(!file)throw std::runtime_error("Cannot open demo map");
         std::ostringstream data;data<<file.rdbuf();
         auto map=Json::parse(data.str());
         Simulation sim(SimConfig{12,20,0,true},std::make_unique<ForestDemo>());
         sim.setup(Json::object(),map);
         const auto ticks=argc>2?std::stoul(argv[2]):1024ul;
+        // Optional in-memory rollback demonstration. PHYSIS persistence must
+        // be registered by its owner before enabling disk save/load.
+        const bool replay=argc>3&&std::string(argv[3])=="--replay";
+        SimSnapshot checkpoint;
+        if(replay)sim.saveState(checkpoint);
         if(ticks>1000000)throw std::invalid_argument("Tick budget exceeded");
         for(unsigned long i=0;i<ticks;++i)sim.step();
+        if(replay){
+            const auto expected=sim.checksum();
+            sim.loadState(checkpoint);
+            for(unsigned long i=0;i<ticks;++i)sim.step();
+            if(sim.checksum()!=expected)
+                throw std::runtime_error("Ecology rollback replay checksum mismatch");
+            std::cout<<"rollback replay checksum matched\n";
+        }
         sim.world().eachExistingConst<evolve::Region>([](Entity e,const evolve::Region& r){
             std::cout<<e.packed()<<" fertility="<<r.fertility<<" pollution="<<r.pollution<<"\n";
         });
