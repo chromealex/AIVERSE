@@ -22,6 +22,8 @@ private:
     UnifiedWorldReplay::Validator validate_;
     size_t captureBudget_;
     uint32_t lastTick_;
+    const std::string restartContent_;
+    const NativeRestartState::CommandPolicy restartCommands_;
     bool failed_=false;
     bool running_=false;
 
@@ -89,14 +91,27 @@ private:
         }
         out.swap(staged);return true;
     }
+    bool restartBaseline(const State& durable,const RegionEntityLedger& ledger,std::string& before)const{
+        if(restartContent_.empty())return durable.restart.empty();
+        if(durable.restart.empty()||!NativeRestartState::capture(sim_,ledger,restartContent_,restartCommands_,before))return false;
+        NativeRestartState::Data old,live;
+        if(!NativeRestartState::decode(durable.restart,old)||!NativeRestartState::decode(before,live))return false;
+        // New authoritative commands may be queued between ticks. Persist the
+        // complete accepted queue and sequence counters at the next commit.
+        old.pending.clear();live.pending.clear();old.sequences.clear();live.sequences.clear();
+        std::string a,b;
+        return NativeRestartState::encode(old,a)&&NativeRestartState::encode(live,b)&&a==b;
+    }
     Result fail()noexcept{failed_=true;return Result::NeedsRecovery;}
 public:
     NativeWorldFinality(Simulation& sim,UnifiedWalSession& session,const DurableComponentCodecs& codecs,
         Resources::Policy resources,UnifiedWorldReplay::Materializer materialize,
-        UnifiedWorldReplay::Validator validate={},size_t captureBudget=64u*1024u*1024u)
+        UnifiedWorldReplay::Validator validate={},size_t captureBudget=64u*1024u*1024u,
+        std::string restartContent={},NativeRestartState::CommandPolicy restartCommands={})
         :sim_(sim),session_(session),codecs_(codecs),resources_(std::move(resources)),
          materialize_(std::move(materialize)),validate_(std::move(validate)),
-         captureBudget_(captureBudget),lastTick_(sim.tick()){}
+         captureBudget_(captureBudget),lastTick_(sim.tick()),restartContent_(std::move(restartContent)),
+         restartCommands_(std::move(restartCommands)){}
     NativeWorldFinality(const NativeWorldFinality&)=delete;
     NativeWorldFinality& operator=(const NativeWorldFinality&)=delete;
     bool failed()const{return failed_;}
@@ -114,6 +129,8 @@ public:
             const State* durable=session_.state();
             const auto* live=sim_.world().resourceConst<RegionEntityLedger>();
             if(!durable||!live||!equalProjection(durable->world,durable->ledger,sim_.world(),*live))return fail();
+            std::string restartBefore,restartAfter;
+            if(!restartBaseline(*durable,*live,restartBefore))return fail();
             // Detach the COW resource before starting the capture. Mutations on
             // another copy/thread or resource replacement are checked by exact replay.
             auto* writable=sim_.world().resource<RegionEntityLedger>();
@@ -125,7 +142,9 @@ public:
             if(failed_)return fail();
             live=sim_.world().resourceConst<RegionEntityLedger>();
             if(!live||!capture.ok())return fail();
+            if(!restartContent_.empty()&&!NativeRestartState::capture(sim_,*live,restartContent_,restartCommands_,restartAfter))return fail();
             if(sim_.tick()==lastTick_){
+                if(restartBefore!=restartAfter)return fail();
                 if(!capture.records().empty()||!equalProjection(durable->world,durable->ledger,sim_.world(),*live))return fail();
                 return Result::WaitingForContent;
             }
@@ -135,19 +154,19 @@ public:
             std::vector<Record> components;
             std::vector<Resources::Record> resources;
             if(!componentChanges(before,after,components)||!resourceChanges(durable->world,sim_.world(),resources))return fail();
-            if(capture.records().empty()&&components.empty()&&resources.empty()){
+            if(capture.records().empty()&&components.empty()&&resources.empty()&&restartAfter.empty()){
                 if(!equalProjection(durable->world,durable->ledger,sim_.world(),*live))return fail();
                 lastTick_=sim_.tick();return Result::NoChanges;
             }
             if(durable->sequence==UINT64_MAX)return fail();
             RegionWalFrame frame;
             if(!UnifiedWorldTransaction::encodeCaptured(capture.initialRevision(),live->lastRevision(),
-                capture.records(),components,resources,durable->sequence+1,frame))return fail();
+                capture.records(),components,resources,durable->sequence+1,frame,restartAfter))return fail();
             // Session validates the privately replayed candidate BEFORE durable
             // append. Missing mutation capture, unsupported residency changes,
             // bad codecs or a divergent host materializer therefore fail closed.
             auto check=[&](const State& candidate){
-                return equalProjection(candidate.world,candidate.ledger,sim_.world(),*live)&&
+                return candidate.restart==restartAfter&&equalProjection(candidate.world,candidate.ledger,sim_.world(),*live)&&
                     (!validate_||validate_(candidate));
             };
             if(session_.commit(frame,codecs_,materialize_,check,resources_)!=RegionWalWrite::Ok)return fail();
