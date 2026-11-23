@@ -37,6 +37,26 @@ Status: **planned multi-stage program, NOT fully implemented**. This document is
   CTest additions and CI workflow were authored, but no native PASS has been
   recorded for the latest Stage 4 commit.
 
+## Stage 5–6 — HTML5 SpectraStudio authoring (2026-11-23; draft PR #115)
+
+Source in `feature/spectrafx-html5-data-interfaces-20261123`, based on draft
+PR #113. The `fx_graph` HTML5 dock tab now uses a dedicated Graph v2
+Data Interface inspector, native graph/draft operations and real project
+Assets texture picker. Stage 6 adds a topology canvas with node drag, zoom,
+native catalog, Add/Delete and execution/typed-port Connect/Disconnect through
+`studio.op` → `fx_graph_edit`; the front end does not implement a second
+graph compiler. Changes save only after native Validate or into explicit
+unpublished drafts. Test models are in `apps/studio-web/tests/` and linked
+by `npm run test:graphs`. Separate handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md`
+and `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`.
+
+**Not accepted yet:** current feature SHA has no confirmed Node TypeScript
+or Vite PASS, WebView interaction QA or real particle GPU preview. Full GPU
+preview/time controls, complex graph function/program editors, advanced
+curves/gradient widgets, external PHYSIS adapter, Vulkan compute and
+fluid/destruction systems remain separate work.
+
 ## Stage matrix
 
 | Stage | Feature | Design/implementation requirements | Completion criteria |
