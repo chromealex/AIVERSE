@@ -12,7 +12,8 @@
       "count": 1,
       "width": 5,
       "height": 4.5,
-      "open": 1
+      "open": 1,
+      "position": 7
     },
     {
       "kind": "small-gate",
@@ -20,7 +21,9 @@
       "count": 2,
       "width": 2.7,
       "height": 2.9,
-      "open": 1
+      "open": 1,
+      "position": 12,
+      "spacing": 1
     },
     {
       "kind": "personnel-door",
@@ -28,14 +31,17 @@
       "count": 1,
       "width": 1.2,
       "height": 2.35,
-      "open": 1
+      "open": 1,
+      "position": 18
     },
     {
       "kind": "sliding-roof",
       "count": 1,
       "width": 5,
       "depth": 5,
-      "open": 1
+      "open": 1,
+      "position": 13,
+      "positionZ": 10
     }
   ]
 }
