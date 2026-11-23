@@ -145,7 +145,8 @@ private:
         const uint64_t nz=uint64_t(last.z-first.z+1);
         const uint64_t cap=config_.maxCellsPerInfluence;
         if(nx>cap||ny>cap||nz>cap||nx*ny>cap||
-           nx*ny*nz>cap||postings>config_.maxCellPostings-nx*ny*nz){
+           nx*ny*nz>cap||nx*ny*nz>config_.maxCellPostings||
+           postings>config_.maxCellPostings-nx*ny*nz){
             overflow.push_back(id);return;
         }
         for(int64_t z=first.z;z<=last.z;++z)
