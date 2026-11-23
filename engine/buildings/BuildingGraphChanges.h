@@ -2,7 +2,7 @@
 // Genre-neutral committed-state invalidations for procedural buildings.
 // Graph owners subscribe explicitly; this module never mutates an unrelated
 // graph's topology or impersonates its authoritative writer.
-#include "engine/buildings/BuildingNavMeshBridge.h"
+#include "engine/buildings/BuildingLiftColliderOwner.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
