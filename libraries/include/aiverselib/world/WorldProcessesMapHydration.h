@@ -171,26 +171,26 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
        extendedEdgeCounts[10]>society::kMaxContacts ||
        extendedEdgeCounts[11]>society::kMaxMessages)
         throw std::invalid_argument("World Processes: map component budget exceeded");
-    if(totals.extra.morph&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="MorphNode";})>morph::kMaxNodes)
+    if(totals.extra.morph&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="MorphNode";}))>morph::kMaxNodes)
         throw std::invalid_argument("World Processes: too many MORPH nodes");
-    if(totals.extra.crowd&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="CrowdAgent";})>crowd::kMaxAgents)
+    if(totals.extra.crowd&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="CrowdAgent";}))>crowd::kMaxAgents)
         throw std::invalid_argument("World Processes: too many CROWD agents");
-    if(totals.extra.imprint&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="ImprintCell";})>imprint::kMaxCells)
+    if(totals.extra.imprint&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="ImprintCell";}))>imprint::kMaxCells)
         throw std::invalid_argument("World Processes: too many IMPRINT cells");
-    if(totals.extra.circuit&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="CircuitNode";})>circuit::kMaxNodes)
+    if(totals.extra.circuit&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="CircuitNode";}))>circuit::kMaxNodes)
         throw std::invalid_argument("World Processes: too many CIRCUIT nodes");
-    if(totals.extra.granular&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="GranularField";})>granular::kMaxFields)
+    if(totals.extra.granular&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="GranularField";}))>granular::kMaxFields)
         throw std::invalid_argument("World Processes: too many GRANULAR fields");
-    if(totals.extra.evolve&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="EvolveRegion";})>evolve::kMaxRegions)
+    if(totals.extra.evolve&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="EvolveRegion";}))>evolve::kMaxRegions)
         throw std::invalid_argument("World Processes: too many EVOLVE regions");
-    if(totals.extra.society&&std::count_if(extendedParts.begin(),extendedParts.end(),
-        [](const Pending& v){return v.component=="SocietyPerson";})>society::kMaxPeople)
+    if(totals.extra.society&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="SocietyPerson";}))>society::kMaxPeople)
         throw std::invalid_argument("World Processes: too many SOCIETY people");
 
     if((!linkedParts.empty()||!extendedEdges.empty())&&repeatedId)
