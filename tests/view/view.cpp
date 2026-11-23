@@ -23,6 +23,28 @@ int main() {
         "parameters":{"intensity":0.0},
         "nodes":[{"id":"base","kind":"bind"}],
         "output":"base"})"));
+    // Actual evaluator instrumentation: disabled by default, counts scoped
+    // node visits, independent of copied presentation candidates.
+    AnimationGraphInstance probe;
+    probe.reset(graph);
+    AIVERSE_TEST_CHECK(!probe.executionProfileReport().getBool("available"));
+    probe.enableExecutionProfile(true);
+    probe.beginExecutionTrace();
+    Pose probePose;
+    probe.update(.016f);probe.evaluate(probePose);
+    auto measured=probe.executionProfileReport();
+    AIVERSE_TEST_CHECK(measured.getBool("available"));
+    AIVERSE_TEST_CHECK(measured["nodes"][size_t(0)]["update"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(measured["nodes"][size_t(0)]["evaluate"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(measured["events"].size()==2);
+    AIVERSE_TEST_CHECK(!probe.cloneForPreparation()->executionProfileReport().getBool("available"));
+    probe.beginExecutionTrace();probe.update(.016f);probe.evaluate(probePose);
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["nodes"][size_t(0)]["evaluate"].getStr("calls")=="2");
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["events"].size()==2);
+    probe.resetExecutionProfile();
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    probe.reset(graph);
+    AIVERSE_TEST_CHECK(!probe.executionProfileReport().getBool("available"));
     View view(0);
     view::Object animated;
     animated.id=101;animated.generation=7;animated.draw.model=&m;
