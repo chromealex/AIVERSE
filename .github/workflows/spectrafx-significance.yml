@@ -47,9 +47,12 @@ jobs:
       - name: Compile native SpectraFX contracts and header ABI
         run: |
           cmake --build build/spectrafx-importance --parallel 4 --target \
-            aiverse_spectrafx_contract_tests aiverse_spectrafx_header_smoke
+            aiverse_spectrafx_contract_tests aiverse_spectrafx_header_smoke \
+            aiverse_vfx_graph_tests aiverse_vfx_graph_runtime_tests
       - name: Test focused contracts and dependency boundary
         run: |
           ctest --test-dir build/spectrafx-importance \
-            -R '^(spectrafx_contract|spectrafx_architecture)$' \
+            -R '^(spectrafx_contract|spectrafx_architecture|vfx_graph_compiler|vfx_graph_runtime) \
+            --output-on-failure --no-tests=error
+ \
             --output-on-failure --no-tests=error
