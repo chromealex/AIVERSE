@@ -53,3 +53,13 @@ LOD / merged far meshes, interiors furniture.
 
 Build selection: `AIVERSE::lib_building_style` (depends on `building-gen`); native OBJECT modules call
 `aiverse_native_use_libraries(target building-style)`.
+
+
+Stage 2: `structures.<kind>.massing` accepts `bastion`, `spire`, `twin-bay`,
+`terraced` (generic shape grammars). Pass `StructureSize{width,height,depth}` as
+the sixth argument to `dressStructure` or export with `--structure factory --size 24 12 18`.
+All three dimensions are required for a sized request; they include the complete visible
+envelope, and generated colliders and gate points are transformed with the mesh.
+Omit the size to retain legacy output. The editor should implement Setting → Style →
+Function → W/H/D → Seed → Generate, saving a generated model as a project Asset;
+that UI and asset integration have NOT been implemented in this stage.

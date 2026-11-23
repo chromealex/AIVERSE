@@ -96,3 +96,37 @@ Several buildings that share a style share its materials, so a street batches we
 - Non-rectangular footprints and setbacks (building-gen is a rectangle with quarter-turn yaw).
 - A map block that builds the Model at load: the actor map `buildings` block still draws collision boxes.
 - LOD and merged far meshes; interior furniture.
+
+
+## Parametric structures and silhouette grammar (stage 2)
+
+The editor-facing contract is **Setting → Style → Function → Width/Height/Depth → Seed → Generate**.
+The function is a `structures.<kind>` entry in the chosen style. The shape grammar is independent of
+that kind's gameplay behavior: `massing` selects `bastion` (fortified), `spire` (tower),
+`twin-bay` (parallel industrial roof bays) or `terraced` (stepped levels). Style JSON sets these
+values for barracks, command, factory and depot respectively; custom styles can use any grammar.
+
+```cpp
+StructureSize dims{24.f, 12.f, 18.f}; // width, height, depth in metres
+StyledStructure model = dressStructure(style, "factory", seed, origin, yaw, dims);
+```
+
+```sh
+aiverse_building_export --style engine/assets/building-styles/scifi.json \\
+  --structure factory --size 24 12 18 --seed 482733 --out factory.glb
+```
+
+The existing five-argument `dressStructure` API is unchanged. Omit `--size` (or use
+`StructureSize{}`) to keep the original style-defined dimensions. If sizing explicitly,
+**all three dimensions are required**. The complete rendered envelope is fitted to the
+requested extent, including external modules and antennae; after 90° or 270° yaw, world X
+and Z extents swap. The same mapping applies to collision boxes and gate anchors. Explicit
+requests require width/depth in 8–160 m, height in 5–80 m, and enough width for the gates.
+The generator recomposes architecture from the requested proportions *before* the final
+bounds fit — it does not rescale a cached GLB. Fine structural members may still be
+non-uniformly scaled by the final fit; physical-size preservation is future grammar work.
+
+This stage adds the CPU generation and GLB export contract only. The **HTML5 Studio panel,
+asset persistence, runtime render model bridge, trim textures, LOD and preview of variants**
+are separate unimplemented steps. Core collision is still coarse closed AABB boxes for
+non-enterable sci-fi structures; doors are visual gates, not real accessible openings.

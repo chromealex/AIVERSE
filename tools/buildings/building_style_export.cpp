@@ -66,24 +66,27 @@ StyledMesh ground(float x0,float z0,float x1,float z1){
 }
 int main(int argc,char** argv){
     try{
-        std::string style,out,def,structure;uint64_t seed=1;uint32_t yaw=0,street=0;bool withGround=false;
+        std::string style,out,def,structure;uint64_t seed=1;uint32_t yaw=0,street=0;bool withGround=false;StructureSize size{};
         for(int i=1;i<argc;++i){std::string a=argv[i];auto next=[&]{if(i+1>=argc)throw std::runtime_error(a+": value expected");return std::string(argv[++i]);};
             if(a=="--style")style=next();else if(a=="--out")out=next();else if(a=="--building")def=next();else if(a=="--seed")seed=std::stoull(next());
             else if(a=="--yaw")yaw=uint32_t(std::stoul(next()));else if(a=="--street")street=uint32_t(std::stoul(next()));else if(a=="--ground")withGround=true;else if(a=="--structure")structure=next();
+            else if(a=="--size"){size.width=std::stof(next());size.height=std::stof(next());size.depth=std::stof(next());}
             else throw std::runtime_error("unknown argument "+a);}
-        if(style.empty()||out.empty())throw std::runtime_error("usage: aiverse_building_export --style <style.json> --out <file.glb> [--building def.json] [--seed N] [--yaw 0..3] [--street N] [--ground]");
+        if(style.empty()||out.empty())throw std::runtime_error("usage: aiverse_building_export --style <style.json> --out <file.glb> [--building def.json] [--seed N] [--yaw 0..3] [--street N] [--ground] [--structure KIND --size W H D]");
         auto st=readBuildingStyle(Json::parse(readFile(style)),style);
         Glb glb;size_t tris=0;
         if(!structure.empty()){
-            auto r=dressStructure(st,structure,seed,{},yaw);if(r.mesh.vertices.empty())throw std::runtime_error("style '"+st.id+"' has no structure '"+structure+"'");
+            auto r=dressStructure(st,structure,seed,{},yaw,size);if(r.mesh.vertices.empty())throw std::runtime_error("style '"+st.id+"' has no structure '"+structure+"'");
             tris+=r.mesh.triangles();glb.add(r.mesh,structure);
             if(withGround)glb.add(ground(r.mesh.boundsMin[0]-8,r.mesh.boundsMin[2]-8,r.mesh.boundsMax[0]+8,r.mesh.boundsMax[2]+8),"ground");
         }else if(!street){
+            if(size.width!=0||size.height!=0||size.depth!=0)throw std::runtime_error("--size requires --structure; enterable houses use --building");
             BuildingDef d;if(!def.empty())d=readBuildingDef(Json::parse(readFile(def)),def);else applyBuildingStyle(d,st);
             auto m=dressBuilding(d,st,seed,{},yaw);if(m.vertices.empty())throw std::runtime_error("the building does not fit its definition");
             tris+=m.triangles();glb.add(m,"building");
             if(withGround){auto w=float(d.width.toDouble()),dd=float(d.depth.toDouble());glb.add(ground(-6,-6,w+6,dd+6),"ground");}
         }else{
+            if(size.width!=0||size.height!=0||size.depth!=0)throw std::runtime_error("--size requires --structure");
             // Two rows facing a 10 m street along +X: the near row (z < -5) and the far row (z > 5).
             Random g(seed,0x57ee7);float cursor[2]={0,0};
             for(uint32_t i=0;i<street;++i){

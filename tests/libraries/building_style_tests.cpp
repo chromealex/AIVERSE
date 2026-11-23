@@ -113,6 +113,42 @@ int main(int argc,char** argv){
             }
         }
         CHECK(dressStructure(st,"nope",1).mesh.vertices.empty());
+        // Data-driven silhouettes distinguish functions without hardcoded game genres.
+        CHECK(st.structureKind("barracks")->massing==StructureMassing::Bastion);
+        CHECK(st.structureKind("command")->massing==StructureMassing::Spire);
+        CHECK(st.structureKind("factory")->massing==StructureMassing::TwinBay);
+        CHECK(st.structureKind("depot")->massing==StructureMassing::Terraced);
+        const StructureSize dims{24.f,12.f,18.f}; // W, H, D in metres
+        for(const auto& kind:st.structures)for(uint32_t turn=0;turn<4;++turn){
+            const Vec3 at{10_fx,2_fx,-5_fx};
+            auto a=dressStructure(st,kind.id,42,at,turn,dims);
+            auto b=dressStructure(st,kind.id,42,at,turn,dims);
+            CHECK(!a.mesh.vertices.empty()&&a.mesh.triangles()==b.mesh.triangles());
+            CHECK(a.boxes==b.boxes&&a.gates==b.gates);
+            const float want[3]={turn%2?18.f:24.f,12.f,turn%2?24.f:18.f};
+            const float base[3]={10.f,2.f,-5.f};
+            for(int axis=0;axis<3;++axis){
+                CHECK(std::abs(a.mesh.boundsMin[axis]-base[axis])<0.002f);
+                CHECK(std::abs(a.mesh.boundsMax[axis]-base[axis]-want[axis])<0.002f);
+            }
+            for(const auto& vertex:a.mesh.vertices)for(int axis=0;axis<3;++axis)
+                CHECK(vertex.pos[axis]>=base[axis]-0.002f&&vertex.pos[axis]<=base[axis]+want[axis]+0.002f);
+            for(const auto& bx:a.boxes){
+                auto bb=box(bx,0.f);
+                for(int axis=0;axis<3;++axis)
+                    CHECK(bb.lo[axis]>=base[axis]-0.002f&&bb.hi[axis]<=base[axis]+want[axis]+0.002f);
+            }
+        }
+        auto small=dressStructure(st,"factory",42,{},0,StructureSize{12.f,10.f,12.f});
+        auto large=dressStructure(st,"factory",42,{},0,StructureSize{40.f,12.f,30.f});
+        CHECK(!small.mesh.vertices.empty()&&!large.mesh.vertices.empty());
+        CHECK(small.mesh.boundsMax[0]!=large.mesh.boundsMax[0]);
+        for(const auto bad:{StructureSize{3,10,12},StructureSize{12,3,12},
+                            StructureSize{12,10,3},StructureSize{12,10,0},
+                            StructureSize{12,10,999}})
+            CHECK(dressStructure(st,"factory",1,{},0,bad).mesh.vertices.empty());
+        CHECK(fails(R"({"id":"x","materials":{"m":{}},"shell":"m","interior":"m","roof":"m","structure":{"hull":"m","dark":"m"},"structures":{"x":{"massing":"orb"}}})","style.structures.x.massing: expected"));
+
         CHECK(fails(R"({"id":"x","materials":{"m":{}},"shell":"m","interior":"m","roof":"m","structures":{"a":{}}})","style.structures: needs the structure materials block"));
         std::printf("building-style: sci-fi house %zu triangles, %zu materials\n",a.triangles(),a.parts.size());
     }catch(const std::exception& e){std::fprintf(stderr,"building style tests failed: %s\n",e.what());return 1;}
