@@ -28,10 +28,19 @@ jobs:
     name: W1 real C++ and CTest (macOS 15)
     runs-on: macos-15
     timeout-minutes: 80
+    env:
+      AIVERSE_TEMPLATES_DIR: ${{ github.workspace }}/.aiverse-templates
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Install real mushrooms template for grid GameCore integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/pkg/fetch_templates.py --out "$AIVERSE_TEMPLATES_DIR" --only mushrooms
+          test -f "$AIVERSE_TEMPLATES_DIR/mushrooms/rules.json"
+          test -f "$AIVERSE_TEMPLATES_DIR/mushrooms/maps/duel.json"
       - name: Configure W1 native feature targets
         shell: bash
         run: |
