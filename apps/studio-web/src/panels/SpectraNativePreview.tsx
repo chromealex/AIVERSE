@@ -48,6 +48,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [lockedCamera,setLockedCamera]=useState<StudioSpectraCameraSnapshot|null>(null);
   const [replayPreset,setReplayPreset]=useState<SpectraReplayPreset|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
+  const [replayRestoring,setReplayRestoring]=useState(false);
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -215,7 +216,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
        replayPreset.graphSignature!==graphSignature){
       setError('Replay preset belongs to a different project or graph revision.');return;
     }
-    setBusy(true);setError('');
+    setBusy(true);setReplayRestoring(true);setError('');
     try{
       // All commands are serialized. Stop playback before restoring tick/camera.
       const actions=[
@@ -224,18 +225,29 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           grid:replayPreset.grid,axes:replayPreset.axes},
         {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
         {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'seek' as const,tick:replayPreset.tick},
-        ...Object.entries(replayPreset.parameters).map(([name,value])=>({action:'parameter' as const,name,value}))
+        {action:'restart' as const,play:false},
+        ...Object.entries(replayPreset.parameters).map(([name,value])=>({action:'parameter' as const,name,value})),
+        {action:'seek' as const,tick:replayPreset.tick}
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
         result=await invoke('studio.spectraPreview',action);
         if(result.error||!result.ready)throw new Error(result.error||'Native replay restore failed');
       }
-      setState(result);setSeek(replayPreset.tick);
+      let settled=false;
+      for(let attempt=0;attempt<160;++attempt){
+        const next=await invoke('studio.spectraPreview',{action:'status'});
+        if(next.error||!next.ready)throw new Error(next.error||'Replay backend unavailable');
+        setState(next);
+        if(next.tick===replayPreset.tick){settled=true;break;}
+        if(next.tick>replayPreset.tick)throw new Error('Replay overshot requested tick');
+        await new Promise<void>(resolve=>window.setTimeout(resolve,100));
+      }
+      if(!settled)throw new Error('Replay seek did not settle within 16 seconds');
+      setSeek(replayPreset.tick);
       setLiveScalars({...replayPreset.parameters});
     }catch(e){setError(message(e));}
-    finally{setBusy(false);}
+    finally{setBusy(false);setReplayRestoring(false);}
   };
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
@@ -281,8 +293,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     if(!parameter || !Number.isFinite(numeric)){
       setError('Select a named parameter and enter a finite value.');return;
     }
-    await command('parameter',{name:parameter,value:numeric});
-    setLiveScalars(previous=>({...previous,[parameter]:numeric}));
+    if(busy||disabled||!active)return;
+    setBusy(true);setError('');
+    try{
+      const next=await invoke('studio.spectraPreview',{action:'parameter',name:parameter,value:numeric});
+      setState(next);
+      if(!next.ready||next.error)throw new Error(next.error||'Native scalar rejected');
+      setLiveScalars(previous=>({...previous,[parameter]:numeric}));
+    }catch(e){setError(message(e));}finally{setBusy(false);}
   };
   return <StudioSection title="Particle Preview">
     <SpectraDockViewport/>
@@ -414,6 +432,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         disabled={busy||capturePending} onChange={e=>{
           void importReplayPreset(e.target.files?.[0]);e.target.value='';
         }}/></label>
+      {replayRestoring&&<small>Restoring native replay; waiting for simulation tick…</small>}
       {replayPreset&&<small>Preset tick {replayPreset.tick} · {replayPreset.speed}× ·
         camera and stage stored in memory</small>}
       <StudioButton size="sm" disabled={!state?.camera||busy}
