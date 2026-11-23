@@ -46,7 +46,8 @@ public:
     bool attach(uint64_t sceneId,const BuildingDualLeafOwner& physics,
                 const BuildingStyle& style,Authorize authorize,
                 InteractionRange range,std::string* error=nullptr){
-        if(sceneId_||!sceneId||!physics.attached()||physics.faulted()||
+        if(sceneId_||!sceneId||!physics.attached()||
+           physics.sceneId()!=sceneId||physics.faulted()||
            !authorize||!range){
             if(error)*error="Invalid dual leaf scene or missing authoritative guards";
             return false;
@@ -104,12 +105,14 @@ public:
         BuildingDualLeafTickFrame frame;
         frame.tick=tick;
         if(!sceneId_||tick<=lastTick_||!physics.attached()||
+           physics.sceneId()!=sceneId_||
            physics.faulted()||stepPermille==0||stepPermille>250){
             frame.error="Dual leaf fixed tick invalid or physics faulted";
             return frame;
         }
         lastTick_=tick;
-        if(physics.pendingGraphs()){
+        const bool recovering=physics.pendingGraphs();
+        if(recovering){
             const auto ack=physics.retry(router);
             if(!ack.graphsAcknowledged){
                 frame.error=ack.error;
@@ -117,7 +120,10 @@ public:
                 return frame;
             }
         }
-        if(physics.moving()){
+        if(recovering){
+            // Publish exactly the prior committed revision first. Do not
+            // skip it by moving a second step in the ACK-recovery tick.
+        }else if(physics.moving()){
             const auto step=physics.advance(spatial,router,stepPermille);
             if(!step.committed||!step.graphsAcknowledged){
                 frame.error=step.error.empty()?
