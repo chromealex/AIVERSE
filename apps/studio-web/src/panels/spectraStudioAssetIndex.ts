@@ -4,7 +4,7 @@
  */
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
 
-interface AssetRow {path?:unknown;guid?:unknown;importer?:unknown;bytes?:unknown}
+interface AssetRow {path?:unknown;guid?:unknown;importer?:unknown;bytes?:unknown;modelLoadableFormat?:unknown}
 const isObject=(v:unknown):v is Record<string,unknown> =>
   v!==null&&typeof v==='object'&&!Array.isArray(v);
 const guidValid=(v:string):boolean => /^[a-f0-9]{32}$/i.test(v);
@@ -22,6 +22,7 @@ export function indexedSpectraAssets(payload:unknown):SpectraIndexedAsset[]{
     const row=raw as AssetRow;
     if(typeof row.guid!=='string'||!guidValid(row.guid)||
        typeof row.path!=='string'||!pathValid(row.path))continue;
+    if(row.importer==='model'&&row.modelLoadableFormat===false)continue;
     const guid=row.guid.toLowerCase();
     if(seen.has(guid))continue;
     seen.add(guid);
