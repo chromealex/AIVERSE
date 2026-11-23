@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, FilePlus2, GitBranch, GripVertical, Lock, LockOpen, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, FilePlus2, GitBranch, GripVertical, Lock, LockOpen, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
+import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection } from '../ui';
 import {
   graphV2, providerNames, scalarParameters, validateInterfaces, putInterface,
   dropInterface, putParameter, dropParameter, putNode, dropNode, safeGraphName,
@@ -189,7 +189,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           </StudioField>
           <div className="spectra-di__assets" role="list" aria-label="SpectraFX graph assets">
             {available.map(asset=><button key={asset.name+String(asset.draft)}
-              className={'spectra-di__asset '+(selected?.name===asset.name&&selected.draft===asset.draft?'is-selected':'')}
+              className={'spectra-di__asset '+(selected!==null&&selected.name===asset.name&&selected.draft===asset.draft?'is-selected':'')}
               disabled={busy} type="button" draggable
               onDragStart={e=>e.dataTransfer.setData('application/x-aiverse-spectra-graph',JSON.stringify(asset))}
               onClick={()=>void openAsset(asset)}>
@@ -227,7 +227,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             <div className="spectra-di__items">
               {names.map(([name,p])=><button key={name} type="button" disabled={busy}
                 className={'spectra-di__item '+(selectedName===name?'is-selected':'')}
-                onClick={()=>{if(!pinned||selectedName===name)chooseParameter(name);}}>
+                onClick={()=>chooseParameter(name)}>
                 <span>{name}</span><small>param{p.slot} · {p.min}…{p.max}</small>
                 {graph.dataInterfaces?.[name]&&<StudioBadge tone="accent">Bound</StudioBadge>}
               </button>)}
