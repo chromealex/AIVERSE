@@ -5319,3 +5319,13 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiv
     add_test(NAME actor_region_position_test COMMAND aiverse_actor_region_position_test)
     set_tests_properties(actor_region_position_test PROPERTIES LABELS "World;ECS;Vehicles")
 endif()
+
+# W1.8: post-tick world-space actor region ownership, occupied car group
+# migration and dynamic loot tombstones. No external game content.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_region_lifecycle_test
+        tests/world/actor_region_lifecycle_test.cpp)
+    target_link_libraries(aiverse_actor_region_lifecycle_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_region_lifecycle_test COMMAND aiverse_actor_region_lifecycle_test)
+    set_tests_properties(actor_region_lifecycle_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
