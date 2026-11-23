@@ -1199,3 +1199,52 @@ real compiled, tested writer audit has been executed.
 All tests here were authored and committed in source; none
 were executed on the user's Mac/KINGSTON build. W1 remains
 partial and PR #116 Draft.
+
+
+## Stage 18 — W1 native acceptance gate and dirty-queue archive correction
+
+The open-world branch has accumulated source-level stages W1.1–17, with
+several C++ integration tests that have never run in the owner's Mac
+environment. A narrow **macOS native GitHub Actions validation**
+workflow is now committed at
+`.github/workflows/open-world-w1.yml`:
+
+- On pull-request changes to world, ActorHost, shared vehicles, simulation
+  or W1 test sources, and manually via `workflow_dispatch`, it checks out
+  the exact branch and downloads the real `mushrooms` sample template
+  for the grid `GameCore` fixture.
+- Configures a Debug CMake build with tests enabled and editor/tools
+  disabled; compiles **all 11 W1 test targets**, not merely a source
+  lint or a mock build.
+- Runs their named CTests with `--no-tests=error`,
+  `--output-on-failure` and captures configure/build/CTest logs
+  as artifacts even on failure.
+- The workflow uses a GitHub-hosted **macos-15** runner, not the
+  owner's `/Volumes/KINGSTON` worktree. A green hosted CI, once
+  available, will be valuable compile/functional evidence but not
+  proof of the owner's local full suite or native hardware GPU parity.
+- At this stage, **no W1 workflow run has been observed** on
+  the current commit; the workflow file is committed but has not
+  delivered an actual passing or failing result.
+
+### Corrected native ECS dirty queue decoding
+
+Source review found a concrete serialization bug:
+`RegionDirtyQueue::io` used
+`Archive::count(count,17)`, while each dirty record is exactly
+a 64-bit key plus an 8-bit mask — **9 bytes**. `Archive::count`
+uses this as the minimum payload stride to reject malformed
+buffers, so the 17-byte value incorrectly rejected valid
+multi-entry snapshots. It is now `Archive::count(count,9)`;
+the on-disk schema and actual bytes written are unchanged.
+
+`region_dirty_queue_test` now includes an explicit **1,024-entry
+portable-archive round trip**, checks the exact expected byte length,
+then verifies that a truncated many-entry payload fails without
+mutating an existing queue. This catches the former false corruption
+failure and protects native ECS saves with busy actor groups.
+
+No local compile/CTest has been performed. The workflow is an
+acceptance gate, not a claim that W1's complete gameplay systems
+are production-ready. Keep the PR Draft until real tests pass and
+concurrent `main` changes are reconciled.
