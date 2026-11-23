@@ -51,6 +51,22 @@ public:
     void setSteppedMotion(bool enabled,uint16_t stepPermille=100){
         tick_.setSteppedMotion(enabled,stepPermille);
     }
+    // Preferred single material+textures assignment from the building
+    // style. No parallel material/texture configurations to keep in sync.
+    bool bindStyleMaterial(const std::string& socketId,
+                           const BuildingStyle& style,
+                           int materialIndex,
+                           const BuildingImageByGuid& resolve,
+                           std::string* error=nullptr){
+        if(materialIndex<0||
+           size_t(materialIndex)>=style.materials.size()){
+            if(error)*error="Unknown authored style material";
+            return false;
+        }
+        return presentation_.bindStyleMaterial(socketId,
+            style.materials[size_t(materialIndex)],resolve,error);
+    }
+
     // Resolve PBR texture images/materials using the existing resource
     // owner BEFORE GPU upload; no texture IO occurs on fixed-tick thread.
     bool bindPbrTextures(const std::string& socketId,
