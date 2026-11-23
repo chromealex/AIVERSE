@@ -2709,8 +2709,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Invalid EVOLVE area update");
                 // Check ECS world limits against map position before mutation.
                 // Full authoritative quantization is repeated by hydration.
-                const auto& mapPos=source.extra["pos"];
-                (void)mapPos;
+                const auto worldX=std::llround(double(source.x)*100.);
+                const auto worldZ=std::llround(double(source.z)*100.);
+                const auto centerX=worldX+next["offsetXcm"].integer();
+                const auto centerZ=worldZ+next["offsetZcm"].integer();
+                const auto halfX=next["halfWidthCm"].integer();
+                const auto halfZ=next["halfDepthCm"].integer();
+                if(centerX-halfX < -evolve::kAreaCoordinateCm ||
+                   centerX+halfX > evolve::kAreaCoordinateCm ||
+                   centerZ-halfZ < -evolve::kAreaCoordinateCm ||
+                   centerZ+halfZ > evolve::kAreaCoordinateCm)
+                    throw std::runtime_error("EVOLVE area exceeds world coordinate budget");
                 if(!(original==next)){
                     auto candidate=source;
                     Json components=candidate.extra["components"];
