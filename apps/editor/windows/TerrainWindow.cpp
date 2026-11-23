@@ -124,8 +124,9 @@ public:
 
         if (!ed.planetMap()) {
             ui::section(ICON_TERRAIN, "TerraWeave · открытый мир / Sparse");
-            if(ui::checkbox("Кисть с автоматическим созданием чанков", &sparse_) &&
-               sparse_)setActive(ed,true);
+            if(ui::checkbox("Кисть с автоматическим созданием чанков", &sparse_) && sparse_) {
+                caverns_=false;setActive(ed,true);
+            }
             ui::hint("Можно нажимать за пределами старой карты. Созданные чанки и высоты сохраняются в map.terraweaveSparse, доступны агентам и Undo.");
             if(sparse_) {
                 static const char* sparseActions[] = {
@@ -154,9 +155,40 @@ public:
             }
         }
 
+        if (!ed.planetMap()) {
+            ui::section(ICON_TERRAIN, "TerraWeave · Caverns / SDF");
+            if(ui::checkbox("Кисть пещер в 3D-сцене", &caverns_)) {
+                if(caverns_) { sparse_=false;setActive(ed,true); }
+            }
+            if(caverns_) {
+                static const char* caveModes[]={"Вырезать (Carve)","Заполнить (Fill)"};
+                ImGui::Combo("Операция##caverns", &caveAction_, caveModes,2);
+                ImGui::SliderInt("Радиус (см)##caverns", &caveRadiusCm_,50,10000);
+                ImGui::SliderInt("Глубина под плоскостью сцены (см)##caverns",
+                                 &caveDepthCm_,0,50000);
+                ui::hint("ЛКМ на сцене: XYЗ-позиция кисти берётся из клика по плоскости "
+                         "с глубиной из настроек. Shift меняет Carve ↔ Fill. "
+                         "Правки сохраняются в MapDoc и поддерживают Undo/Redo.");
+                const Json& saved=ed.doc().data.extra["terraweaveCaverns"];
+                ui::hint(("SDF-операций: "+std::to_string(saved["stamps"].size())).c_str());
+                if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
+                    Json p=Json::object();
+                    p.set("mode",Json::string(caveAction_==0?"carve":"fill"));
+                    p.set("xCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.x)*100.))));
+                    p.set("yCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.y)*100.))-caveDepthCm_));
+                    p.set("zCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.z)*100.))));
+                    p.set("radiusCm",Json::number(int64_t(caveRadiusCm_)));
+                    report(ed,ed.ws().call("terraweave_caverns_paint",p));
+                }
+            }
+        }
+
         bool active = ed.tool == Tool::Count && owner_;
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
-        if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
+        if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) {
+            if(active){caverns_=false;sparse_=false;}
+            setActive(ed, active);
+        }
         ImGui::PopStyleColor();
         if (!ed.planetMap()) {
             ui::checkbox("Детальная карта высот", &detail_);
@@ -243,6 +275,26 @@ public:
         if (ed.planetMap()) { planetStroke(ed, vp, io); return; }
         float x, z;
         if (!ed.groundAt(vp, ed.sceneCam, io.MousePos.x, io.MousePos.y, x, z)) return;
+        if(caverns_) {
+            if(!std::isfinite(x)||!std::isfinite(z))return;
+            const double now=ed.time();
+            if(painting_ && std::hypot(x-lastX_,z-lastZ_)<
+                double(caveRadiusCm_)*0.0025 && now-lastT_<0.033)return;
+            const int action=io.KeyShift?1-caveAction_:caveAction_;
+            Json p=Json::object();
+            p.set("mode",Json::string(action==0?"carve":"fill"));
+            p.set("xCm",Json::number(int64_t(std::llround(double(x)*100.))));
+            p.set("yCm",Json::number(int64_t(-caveDepthCm_)));
+            p.set("zCm",Json::number(int64_t(std::llround(double(z)*100.))));
+            p.set("radiusCm",Json::number(int64_t(caveRadiusCm_)));
+            p.set("withinStroke",Json::fromBool(painting_));
+            const Json result=ed.ws().call("terraweave_caverns_paint",p);
+            report(ed,result);
+            if(!result.has("error")){
+                painting_=true;lastX_=x;lastZ_=z;lastT_=now;
+            }
+            return;
+        }
         if(sparse_) {
             // Camera ray/plane projection is world-wide; unlike MapDoc
             // fixed corners, this tool never clamps to the old RTS map size.
@@ -363,6 +415,8 @@ private:
     int mode_ = 0, layer_ = 0, stamp_ = 0;
     // Shared Workspace sparse authoring API, independent of RTS/FPS map sizes.
     bool sparse_=false;
+    bool caverns_=false;
+    int caveAction_=0,caveRadiusCm_=400,caveDepthCm_=1000;
     int sparseAction_=0,sparseChunkMetres_=256;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
     bool detail_ = true, pngDetail_ = false, stamped_ = false;
