@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import type { StudioSceneBrush } from '../types';
+import type { StudioSceneBrush, EvolveLayer } from '../types';
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
@@ -34,6 +34,15 @@ function Slider({ label, value, min, max, step, onCommit }: { label: string; val
  * Scene brush for a World panel: arm it, then drag in the Scene. Dab tools (Sculpt, Paint, Objects, Tiles, Field) apply live;
  * Draw road / Draw river collect the path and build it on release. Each stroke is one History step. [ ] resize, Esc puts it down.
  */
+export function EcologyLayerPicker(){
+  const [layer,setLayer]=useState<EvolveLayer>('combined');
+  const [error,setError]=useState('');
+  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active)setLayer(r.layer);}).catch(e=>{if(active)setError(message(e));});return()=>{active=false;};},[]);
+  return <label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} onChange={e=>{
+    const next=e.target.value as EvolveLayer;
+    void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e)));
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label>;
+}
 export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
   const [error, setError] = useState('');
