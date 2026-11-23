@@ -1,3 +1,50 @@
+## 2026-11-23 — встроенный GPU-просмотр в HTML5 Studio и управление через MCP (этапы 11–12)
+
+Вкладка **SpectraFX Graph** теперь содержит собственную область настоящего
+нативного рендера частиц. Существующий render-thread GPU viewport Studio
+перемещается в HTML5-панель и переключается на изолированную сцену
+эффекта с собственной камерой и сеткой. Карта игры не рисуется и не
+изменяется, при закрытии вкладки прежняя камера Scene восстанавливается.
+Это не эмуляция в React и не второй графический контекст. При
+одновременном открытии Scene и Graph последний временно владеет
+общим viewport.
+
+В `aiversemcp` сохранены все инструменты графа `fx_graph_*`:
+поиск/чтение, node_catalog/edit, validate/set/delete/bake,
+draft_list/get/set/publish. Новый инструмент **`fx_graph_preview`**
+использует тот же native-runtime:
+
+```json
+{"action":"load","graphName":"preview_fx"}
+{"action":"play"}
+{"action":"pause"}
+{"action":"step"}
+{"action":"seek","tick":120}
+{"action":"parameter","name":"wind_lift","value":3}
+{"action":"cameraOrbit","dx":12,"dy":-4}
+{"action":"cameraZoom","amount":15}
+{"action":"cameraReset"}
+{"action":"status"}
+{"action":"stop"}
+```
+
+Загрузка также принимает `graph` (объект Graph v2) либо
+`graphName` + `draft:true`. Пути строго ограничены проектом.
+MCP без запущенного нативного Studio явно сообщает об отсутствии
+GPU-viewport; фальшивых частиц нет. Изолированная камера не
+даёт менять сущности карты через клики в FX-превью.
+
+**Результаты новых тестов пока не подтверждены:** предыдущее
+успешное CTest 2/2 на Mac относилось к старому предпросмотру в Scene.
+Перед слиянием нужны сборка AppleClang, Node/Vite, реальные кадры и
+проверка Windows/Vulkan.
+
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+и
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 # AIVERSE SpectraFX
 
 **SpectraFX** — официальное название универсальной, не зависящей от жанра системы визуальных эффектов в AIVERSE. Её устройство вдохновлено процессом авторинга и событийной моделью Unreal Niagara, но это **не** копия кода, форматов ассетов или редактора Unreal. `aiverse::spectra` — пространство имён публичного C++ API.
