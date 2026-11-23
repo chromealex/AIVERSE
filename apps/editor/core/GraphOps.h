@@ -2,6 +2,7 @@
 #pragma once
 #include "Workspace.h"
 #include "GraphDraftEdits.h"
+#include "GraphAssetDependencies.h"
 #include <array>
 #include <stdexcept>
 
@@ -94,7 +95,7 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
 
 inline void registerGraphOps(Workspace& ws) {
     using namespace graph_ops;
-    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
     ws.registerOp({"graph_catalog","Discover actual registered graph domain operations, payload formats and save constraints.",Json::object(),[&ws](const Json&){
         Json r=Json::object(),items=Json::array();
         for(const auto& d:domains){
@@ -103,11 +104,12 @@ inline void registerGraphOps(Workspace& ws) {
             for(const auto& pair:std::array<std::pair<const char*,const char*>,6>{{{"list",d.list},{"get",d.get},{"validate",d.validate},{"nodeCatalog",d.catalog},{"edit",d.edit},{"save",d.save}}})
                 if(registered(ws,pair.second))ops.set(pair.first,Json::string(pair.second));
             const auto id=std::string(d.id);
-            const char* actions=id=="shader"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput"])":
-                id=="motionweave"?R"(["add","replaceNode","deleteNode","rename","connect","move","addState","replaceState","setInitial","setOutput","addTransition","removeTransition","replaceTransition"])":
-                id=="modeling"?R"(["put","remove","parameters","graph","replace"])":R"(["new","upgrade","add","connect","disconnect","deleteNode","setProperty"])";
+            const char* actions=id=="shader"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput","setProperty"])":
+                id=="motionweave"?R"(["add","replaceNode","deleteNode","rename","connect","move","addState","replaceState","setInitial","setOutput","addTransition","removeTransition","replaceTransition","setProperty"])":
+                id=="modeling"?R"(["put","remove","parameters","graph","replace","setProperty"])":R"(["new","upgrade","add","connect","disconnect","deleteNode","setProperty"])";
             const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
             if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
+            ops.set("propertySchema",Json::string("graph_property_schema"));ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
             row.set("operations",ops);items.push(row);
         }
         r.set("ok",Json::fromBool(true));r.set("domains",items);return r;
@@ -118,6 +120,15 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_validate","Validate a candidate using the native domain compiler. No write.",schema,[&ws](const Json& p){const auto& d=domain(p);return envelope(d,d.validate,invoke(ws,d.validate,candidate(d,p)));}});
     ws.registerOp({"graph_diagnostics","Run native validation and return domain diagnostics; not runtime telemetry.",schema,[&ws](const Json& p){const auto& d=domain(p);return envelope(d,d.validate,invoke(ws,d.validate,candidate(d,p)));}});
     ws.registerOp({"graph_dependencies","List explicit schema references from a candidate. No filesystem writes or runtime inference.",schema,[](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_dependencies",inspectDependencies(d,q[d.payload]));}});
+    ws.registerOp({"graph_property_schema","Describe supported typed node properties; SpectraFX returns native catalog defaults, not inferred constraints.",schema,[&ws](const Json& p){
+        const auto& d=domain(p);auto q=candidate(d,p);auto source=q[d.payload];
+        const auto& node=graph_draft::entry(source,"nodes",p.getStr("node"));
+        Json result=Json::object();result.set("node",Json::string(node.getStr("id")));
+        if(std::string(d.id)=="spectrafx"){result.set("catalog",invoke(ws,d.catalog,Json::object()));result.set("note",Json::string("Native defaults and ports; property validation belongs to fx_graph_edit and compiler."));}
+        else result.set("fields",graph_properties::schema(d.id,node));
+        return envelope(d,"graph_property_schema",result);
+    }});
+    ws.registerOp({"graph_asset_dependencies","Inspect literal asset references and embedded animation subgraph recursion; no writes.",schema,[&ws](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_asset_dependencies",graph_dependencies::resolve(d.id,q[d.payload],ws.project.dir));}});
     ws.registerOp({"graph_edit","Apply 1..64 native-schema draft edits atomically in memory. Returns candidate and native diagnostics; never saves.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);
         auto source=q[d.payload];const auto edits=graph_draft::actions(p);
@@ -127,7 +138,10 @@ inline void registerGraphOps(Workspace& ws) {
         for(const auto& e:edits.items())if(!e.isObject())throw std::invalid_argument("every draft command must be an object");
         if(id=="modeling"){
             // Reuse native model document transaction; build/validate separately below.
-            source=modeling::edit(source,edits);
+            for(const auto& e:edits.items()){
+                if(e.getStr("op")=="setProperty")graph_properties::set("modeling",graph_draft::entry(source,"nodes",e.getStr("node")),e);
+                else{Json one=Json::array();one.push(e);source=modeling::edit(source,one);}
+            }
         }else for(const auto& e:edits.items()){
             if(id=="shader")graph_draft::shader(source,e);
             else if(id=="motionweave")graph_draft::motion(source,e);
