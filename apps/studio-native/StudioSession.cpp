@@ -10,6 +10,7 @@
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -1082,6 +1083,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     params.set("index",num(int64_t(node.ref.index)));found=true;break;
                 }
             if(!found)throw std::runtime_error("Light entity no longer exists");
+        }
+        // Procedural building assets: native-only computation and bounded project writes.
+        // Browser requests supply data, never executable commands or filesystem paths.
+        if(method=="studio.buildingCatalog") {
+            reply.set("result",studioBuildingCatalog(ws_.engineDir));
+            return reply;
+        }
+        if(method=="studio.buildingInspect") {
+            reply.set("result",studioBuildingInspect(ws_.engineDir,params));
+            return reply;
+        }
+        if(method=="studio.buildingGenerate") {
+            reply.set("result",studioBuildingGenerate(ws_.engineDir,ws_.project.dir,params));
+            return reply;
         }
         if (method == "studio.hubTemplates") {   // StudioHost runs this off the UI thread; kept for other hosts
             reply.set("result",hubTemplatesJson(ws_.engineDir,params));
