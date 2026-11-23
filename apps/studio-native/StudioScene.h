@@ -110,9 +110,9 @@ public:
             if(c.type()!=Json::Type::Object)throw std::runtime_error("FX camera must be object");
             auto read=[&](const char* key,double limit)->float {
                 const Json& v=c[key];
-                if(v.type()!=Json::Type::Number || !std::isfinite(v.num()) || std::abs(v.num())>limit)
+                if(v.type()!=Json::Type::Number || !std::isfinite(v.toDouble()) || std::abs(v.toDouble())>limit)
                     throw std::runtime_error(std::string("Invalid FX camera field: ")+key);
-                return static_cast<float>(v.num());
+                return static_cast<float>(v.toDouble());
             };
             const float yaw=read("yaw",1000),pitch=read("pitch",1.56),distance=read("distance",100000);
             const float x=read("targetX",1000000),y=read("targetY",1000000),z=read("targetZ",1000000);
