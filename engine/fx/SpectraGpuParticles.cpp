@@ -349,6 +349,14 @@ bool ComputeParticles::resetGpuAllocationSeed(uint32_t seed) {
     }
     return true;
 }
+bool ComputeParticles::resetGpuShaderSeed(uint32_t seed) {
+    if(!initialized_||backend_!=ComputeBackend::Metal)return false;
+    if(!tryClear())return false;
+    shaderBirthSeed_=seed;
+    shaderBirthOrdinal_=0;
+    shaderBirthSeedEnabled_=true;
+    return true;
+}
 void ComputeParticles::clear() {
     (void)tryClear(); // preserve legacy ABI; status is available via reason()
 }
@@ -483,6 +491,12 @@ bool ComputeParticles::burstAt(fx::float3 position,fx::float3 direction,fx::floa
         particle.velocityLife={normal.x*desc_.speed,normal.y*desc_.speed,normal.z*desc_.speed,desc_.lifetime};
         particle.tint={tint.x,tint.y,tint.z,tint.w};
         particle.size={desc_.size,0,0,0};
+        if(shaderBirthSeedEnabled_) {
+            // Exact 16-bit float components carry the full 32-bit seed.
+            particle.size.y=float(shaderBirthSeed_&0xffffu);
+            particle.size.z=float(shaderBirthSeed_>>16);
+            particle.size.w=float(shaderBirthOrdinal_++ & 0xffffffu);
+        }
         pendingStates_.push_back(particle);pendingSlots_.push_back(slot);
         ProgramParams parameters{};
         parameters.p0={programParams_[0],programParams_[1],
