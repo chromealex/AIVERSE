@@ -167,7 +167,11 @@ inline constexpr std::array<FieldSpec,1> kInheritVelocityFields{{
     {"amount","Inherited velocity",FieldKind::Number,-10,10,"1"}
 }};
 
+inline constexpr std::array<FieldSpec,1> kDataInterfaceFields{{
+    {"name","Bound instance parameter",FieldKind::String,0,0,"\"wind_lift\""}
+}};
 inline std::span<const FieldSpec> fieldsForNode(std::string_view type) {
+    if (type == "DataInterface" || type == "InstanceParameter") return kDataInterfaceFields;
     if (type == "Spawn") return kSpawnFields;
     if (type == "Initialize") return kInitializeFields;
     if (type == "Update") return kUpdateFields;
