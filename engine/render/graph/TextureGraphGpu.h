@@ -11,13 +11,14 @@
 
 namespace aiverse::render::texture_graph::gpu {
 struct Source {std::string msl,reason,glsl;};
-inline constexpr int maxPreviewSize=128;
+inline constexpr int maxPreviewSize=128,maxBakeSize=1024;
+inline constexpr size_t readbackBlockBytes=64*1024;
 inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());
     s<<std::scientific<<std::setprecision(std::numeric_limits<float>::max_digits10)<<v<<"f";return s.str();
 }
 inline Source compile(const Program& p,size_t target,int n,bool floatHeight=false){
-    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxPreviewSize,"GPU preview resolution must be 8..128");
+    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxBakeSize,"GPU texture resolution must be 8..1024");
     std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto j:p.nodes[i].inputs)mark(j);};mark(target);
     std::string msl=R"MSL(
 #include <metal_stdlib>
