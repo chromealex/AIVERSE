@@ -13,3 +13,12 @@
 .abg__thumbnail{width:100%;height:auto;max-height:150px;object-fit:contain}
 @media (min-width:440px){.abg__candidates{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:280px){.abg__dimensions{grid-template-columns:1fr}}
+
+.abg__property-list{display:grid;grid-template-columns:1fr;gap:var(--au-space-3)}
+.abg__property{border:1px solid var(--au-line);background:var(--au-panel-raised);border-radius:var(--au-radius-md);padding:var(--au-space-3);min-width:0}
+.abg__property-header{display:flex;justify-content:space-between;gap:var(--au-space-2);align-items:center;margin-bottom:var(--au-space-3)}
+.abg__property-header strong{overflow-wrap:anywhere}
+.abg__property-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--au-space-2)}
+.abg__property-controls>*{min-width:0}
+.abg__property-add{display:flex;flex-wrap:wrap;gap:var(--au-space-2);margin-top:var(--au-space-3)}
+@media(max-width:300px){.abg__property-controls{grid-template-columns:1fr}}
