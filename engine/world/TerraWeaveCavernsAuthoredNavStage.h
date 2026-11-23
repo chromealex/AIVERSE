@@ -27,6 +27,21 @@ public:
         stagedSnapshot_=std::move(snapshot);
         return true;
     }
+    // Reuse the same source index already built for CaveMesh workers.
+    bool prepare(std::shared_ptr<const CaveSnapshotSpatialIndex> indexed,
+                 const CaveNavConfig& cfg,CaveNavSource::Height terrainHeight,
+                 std::string* error=nullptr) {
+        if(!indexed||!indexed->revision()||!terrainHeight)
+            throw std::invalid_argument("Caverns nav indexed snapshot");
+        if(shadow_.prepared())return false;
+        auto source=makeCaveAuthoredNavSource(indexed,cfg,
+                                              std::move(terrainHeight));
+        const auto revision=indexed->revision();
+        if(!shadow_.prepare(source,caveNavMeshConfig(cfg),revision,error))
+            return false;
+        stagedSnapshot_=indexed->frozenSnapshot();
+        return true;
+    }
     bool staged(uint64_t revision)const noexcept {
         return stagedSnapshot_ &&
                stagedSnapshot_->sourceRevision==revision &&
