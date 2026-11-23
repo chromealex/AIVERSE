@@ -85,7 +85,9 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         if(!finite(f.width)||!finite(f.height)||!finite(f.depth)||!finite(f.open)||
            !finite(f.position)||!finite(f.positionZ)||!finite(f.spacing)||
            f.open<0||f.open>1||f.count<1||f.count>8||
-           f.position < -1.f||f.positionZ < -1.f||f.spacing<0.35f||f.spacing>8.f)
+           (f.position<0.f&&f.position!=-1.f)||
+           (f.positionZ<0.f&&f.positionZ!=-1.f)||
+           f.spacing<0.35f||f.spacing>8.f)
             return "Invalid feature count, placement, spacing or open fraction";
         if(f.kind==BuildingFeatureKind::SlidingRoof){
             if(++roofs>1||f.count!=1||f.width<1||f.depth<1||
@@ -212,6 +214,16 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             }
         }
         std::sort(row.begin(),row.end(),byStart);
+        // A partially open door leaf must retract into the usable side wall,
+        // never protrude beyond the recipe's exact final model envelope.
+        for(const auto& hole:row){
+            if(hole.value.open>=0.9999f)continue; // leaves are fully retracted
+            const float retract=hole.value.width*0.5f*hole.value.open;
+            if(hole.start-retract<0.f||hole.end+retract>length){
+                graph.error="Door leaves cannot retract within the requested wall span";
+                return graph;
+            }
+        }
         const auto wallSection=[&](BuildingGraphPart type,float a,float b,
                                     float bottom,float top,uint32_t owner=UINT32_MAX){
             if(b-a<0.0001f||top-bottom<0.0001f)return;
