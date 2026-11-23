@@ -14,7 +14,10 @@ inline bool sampleCrowdFootprints(World& world,std::uint32_t tick){
     std::vector<std::pair<Entity,imprint::Tracker>> trackers;
     read.eachExistingConst<imprint::Tracker>(
         [&](Entity entity,const imprint::Tracker& tracker){
-            if(read.alive(entity)&&tracker.enabled)
+            // Trackers may also be driven by Box3D, ActorMotor or game
+            // scripting. This automatic adapter only owns CROWD sources.
+            if(read.alive(entity)&&tracker.enabled&&
+               read.tryGetConst<crowd::Agent>(tracker.source))
                 trackers.push_back({entity,tracker});
         });
     std::sort(trackers.begin(),trackers.end(),
