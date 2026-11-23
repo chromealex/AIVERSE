@@ -7,6 +7,12 @@ public:
     using State=UnifiedWorldReplay::State;
     using Registry=PersistentEcsRegistry;
     using Chunk=Registry::LoadedHash::Chunk;
+    // Use the same explicit selection for checkpoint and WAL. Registry must
+    // outlive the adapter and every synchronous replay using this policy.
+    static UnifiedCheckpointSections::Adapter adapter(const DurableResourceTransaction::Policy& policy,size_t budget){
+        if(!policy.registry)return {};
+        return adapter(*policy.registry,policy.selected,budget);
+    }
     static UnifiedCheckpointSections::Adapter adapter(const Registry& registry,
         std::vector<std::string> selected,size_t budget){
         std::sort(selected.begin(),selected.end());
