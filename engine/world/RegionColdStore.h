@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <any>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <set>
@@ -73,7 +74,7 @@ inline void io(Archive& a,RegionColdStore& store) {
     if(!a.ok() || count>RegionColdStore::kMaxEntities){a.fail();return;}
     std::map<RegionEntityId,RegionColdRecord> decoded;
     size_t totalBytes=0;
-    auto readOne=[&](RegionEntityId id,RegionColdRecord& record){
+    auto readOne=[&](RegionEntityId& id,RegionColdRecord& record){
         a(id,record.owner.x,record.owner.y,record.owner.z,record.ownerRevision);
         if(!a.ok() || !id || !record.ownerRevision){a.fail();return;}
         uint32_t components=0;
