@@ -73,6 +73,27 @@ public:
             std::move(resolve),error);
     }
 
+    // Uses the validated texture GUID slots in a BuildingStyle material.
+    // The existing game AssetCatalog/packaged asset system resolves bytes;
+    // this adapter performs no filesystem IO or GPU upload.
+    bool bindStyleTextureGuids(
+        const std::string& socketId,
+        const BuildingStyle& style,
+        int styleMaterialIndex,
+        render::Material material,
+        BuildingApertureTextureResolver::Resolve resolve,
+        std::string* error=nullptr){
+        if(styleMaterialIndex<0||
+           size_t(styleMaterialIndex)>=style.materials.size()){
+            if(error)*error="Invalid building style material index";
+            return false;
+        }
+        return bindTextureGuids(
+            socketId,buildingStyleTextureGuids(
+                style.materials[size_t(styleMaterialIndex)]),
+            std::move(material),std::move(resolve),error);
+    }
+
     bool enqueue(const World& ecs,const BuildingApertureCommand& command,
                  std::string* error=nullptr){
         return attached_&&tick_.enqueue(ecs,command,error);
