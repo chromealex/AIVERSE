@@ -771,3 +771,71 @@ mesh.refresh; motion callbacks must use the exact impacted graph mask.
 Tests remain deferred at user request; no compiler/runtime/texture
 GPU evidence. See:
 `docs/agent-handoffs/building-stepped-physics-textures-stage23i-2026-11-23.md`.
+
+
+## Stage 23J — independent sliding leaves + style PBR GUIDs
+
+For a newly spawned procedural building, opt into
+`engine/buildings/BuildingDualLeafOwner.h` INSTEAD OF the legacy
+`BuildingApertureOwner` for the same operable sockets. Provide validated
+`BuildingAperturePose` metadata from the generator/scene and TWO unique
+game-owned collider IDs (`BuildingDualLeafIds`) per socket; do not
+attach the legacy and dual owners simultaneously.
+`BuildingDualLeafOwner::attach` refuses IDs already registered in
+SpatialWorld and installs two independently registered closed AABBs,
+with complete registration rollback on failure.
+
+`begin(socketId,targetOpen,domainMask)` starts a single motion; call
+`advance(spatial,router,stepPermille)` in the authoritative fixed tick.
+Each step builds a separate swept volume for EACH leaf and requires a
+game/PHYSIS obstruction probe checking both against actors, vehicles,
+cargo and other dynamic blockers. It replaces both existing
+SpatialWorld colliders as a paired publication; on failure it attempts
+to restore BOTH old bounds and faults the scene if rollback fails.
+A physically opened endpoint has no collider; closing recreates both.
+Each committed step publishes one revisioned `BuildingGraphChange`
+covering both swept regions. Retry pending graph ACK with `retry`
+before moving another step. Use
+`buildingDualLeafNavInvalidator(dynamicSource,dualOwner,spatial,mesh)`
+for Navigation, which validates both real physical AABBs before
+dirtying current native nav tiles. Do not enable gameplay access on
+a partly open aperture: the game motor/interaction owner must enforce
+the `pose.open` endpoint gate, not rely solely on the shrinking physical
+gap. This is sliding X/Z geometry, not hinges or arbitrarily shaped
+collision meshes.
+
+After both collision publication and all relevant graph notifications
+are accepted, the existing Renderer3D presentation owner can call
+`BuildingAperturePresentation::acceptPhysicalStep(
+dualOwner.poses(),tick,dualOwner.revision())`, then interpolate/submit
+its two instance transforms. This avoids frame interpolation drifting
+from the physically committed substep; it is not a GPU uploader.
+
+**PBR material GUIDs:** architectural style JSON
+`materials.<name>.textures` now accepts optional `baseColor`,
+`metallicRoughness`, `normal`, `occlusion`, `emissive` keys.
+Values MUST be 32 lowercase hex GUIDs from the existing project
+`content/*.meta` asset catalog, not filenames. Old styles remain
+valid without `textures`. The portable
+`BuildingApertureTextureResolver::bind` resolves these channels to
+model-local `render::Image` indices with deduplicated GUIDs. The
+`BuildingApertureGameBridge::bindStyleTextureGuids` convenience
+method reads validated slots from `StyleMaterial` and supplies them
+to the caller's existing asset loader callback BEFORE GPU upload.
+Studio's `apps/studio-native/StudioBuildingTextureResolver.h`
+adapts `StudioAssetCatalog::byGuid` and checks importer=`texture`,
+then delegates actual safe loading/decode to the existing importer
+provided by the host. Do NOT add a second GUID DB or decode/render
+textures on ECS threads. The callback alone does not prove real
+rendered texture upload; it must be supplied by an existing renderer/
+import pipeline.
+
+**Stage 23J limitations:** the previous Stage 23F/23H bridge still
+owns the LEGACY aperture owner; the dual owner is an alternative
+source-level pathway, not yet registered in a real game scheduler.
+Both physical leaves use conservative translated AABBs and the motor
+must enforce a full-open interlock. Add real game-world registration,
+full PHYSIS sweep checks, cross-backend texture/UV verification,
+and C++/CTest/GPU QA before declaring these systems production-ready.
+Tests remain DEFERRED per user. Handoff:
+`docs/agent-handoffs/building-dual-leaf-pbr-stage23j-2026-11-23.md`.
