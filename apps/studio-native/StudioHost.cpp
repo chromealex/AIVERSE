@@ -798,6 +798,35 @@ void StudioHost::rebuildOverlay() {
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
         const auto selected=session_->selectedObjectId();
         const auto pivotSelection=session_->selectedObjectIds();
+        if(wpNumericPreview_.isObject()&&pivotSelection.size()>1){
+            render::float3 center{};
+            if(worldprocess_edit::groupCentroid(session_->workspace().map,
+                                                pivotSelection,center)){
+                std::int64_t pivotX=std::llround(double(center.x)*100.);
+                std::int64_t pivotZ=std::llround(double(center.z)*100.);
+                if(wpNumericPreview_.getStr("pivot")=="custom"){
+                    pivotX=wpNumericPreview_["pivotXcm"].integer();
+                    pivotZ=wpNumericPreview_["pivotZcm"].integer();
+                }
+                std::vector<worldprocess_edit::AreaPreview> numeric;
+                if(worldprocess_edit::previewGroupScale2D(
+                       session_->workspace().map,pivotSelection,
+                       wpNumericPreview_["scaleNumerator"].integer(),100,
+                       wpNumericPreview_["scaleNumeratorZ"].integer(),100,
+                       pivotX,pivotZ,numeric) &&
+                   shapes.size()+numeric.size()*4+2<1390){
+                    for(const auto& region:numeric)
+                        worldprocess_gizmos::rectangle(shapes,
+                            {float(region.centerX),.62f,float(region.centerZ)},
+                            float(region.halfWidth*2.),
+                            float(region.halfDepth*2.),90,210,255);
+                    shapes.push_back(worldprocess_gizmos::makePoint(
+                        float(pivotX)/100.f,.8f,float(pivotZ)/100.f,
+                        90,210,255,11.f));
+                }
+            }
+        }
+
         if(pivotSelection!=wpPivotSelection_){
             wpPivotSelection_=pivotSelection;
             wpCustomPivot_=false;
@@ -1846,6 +1875,27 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.worldProcessAreaPreview")return answer([&]{
+        const auto selected=session_->selectedObjectIds();
+        if(params.getBool("clear")||selected.size()<2)wpNumericPreview_=Json();
+        else{
+            const auto& sx=params["scaleNumerator"];
+            const auto& sz=params["scaleNumeratorZ"];
+            const auto pivot=params.getStr("pivot");
+            if(!sx.isNumber()||!sz.isNumber()||
+               sx.integer()<1||sx.integer()>1000000||
+               sz.integer()<1||sz.integer()>1000000||
+               (pivot!="shared"&&pivot!="individual"&&pivot!="custom")||
+               (pivot=="custom"&&(!params["pivotXcm"].isNumber()||
+                                   !params["pivotZcm"].isNumber())))
+                throw std::runtime_error("Invalid numeric EVOLVE preview");
+            wpNumericPreview_=params;
+        }
+        rebuildOverlay();
+        Json result=Json::object();
+        result.set("ok",Json::fromBool(true));
+        return result;
+    });
     if (!hasId) return false;
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")
         return answer([&] { return platform_.windowRequest(method, params); });
