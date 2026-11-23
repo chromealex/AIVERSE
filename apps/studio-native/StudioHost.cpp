@@ -15,27 +15,7 @@
 #include <regex>
 #include <set>
 
-// Studio embeds private stb implementations for image previews. The
-// generated STB API intentionally contains codecs this TU does not call.
-// Keep symbols TU-local (other engine modules also embed stb), and mark
-// those optional entry points as intentionally unused instead of muting
-// -Wunused-function for first-party Studio code or exporting duplicate STB
-// symbols into the linker.
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_STATIC
-#define STBIDEF [[maybe_unused]] static
-#include "third_party/stb/stb_image.h"
-#undef STBIDEF
-#undef STB_IMAGE_STATIC
-#undef STB_IMAGE_IMPLEMENTATION
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_STATIC
-#define STBIWDEF [[maybe_unused]] static
-#include "third_party/stb_image_write/stb_image_write.h"
-#undef STBIWDEF
-#undef STB_IMAGE_WRITE_STATIC
-#undef STB_IMAGE_WRITE_IMPLEMENTATION
+#include "apps/studio-native/StudioStbCodecs.h"
 
 namespace aiverse::studio {
 namespace fs = std::filesystem;
