@@ -104,12 +104,38 @@ public:
             else if(preset=="side"){camera_.yaw=1.5707963f;camera_.pitch=0;camera_.ortho=true;}
             else if(preset=="top"){camera_.yaw=0;camera_.pitch=1.54f;camera_.ortho=true;}
         }
-        if(action=="stage"||action=="cameraPreset"||action=="status") {
+        if(action=="cameraRestore") {
+            if(!spectraDockMode_)throw std::runtime_error("FX camera restore requires FX stage");
+            const Json& c=input["camera"];
+            if(c.type()!=Json::Type::Object)throw std::runtime_error("FX camera must be object");
+            auto read=[&](const char* key,double limit)->float {
+                const Json& v=c[key];
+                if(v.type()!=Json::Type::Number || !std::isfinite(v.num()) || std::abs(v.num())>limit)
+                    throw std::runtime_error(std::string("Invalid FX camera field: ")+key);
+                return static_cast<float>(v.num());
+            };
+            const float yaw=read("yaw",1000),pitch=read("pitch",1.56),distance=read("distance",100000);
+            const float x=read("targetX",1000000),y=read("targetY",1000000),z=read("targetZ",1000000);
+            if(distance<0.01f || c["ortho"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid FX camera distance/projection");
+            camera_.yaw=yaw;camera_.pitch=pitch;camera_.distance=distance;
+            camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
+        }
+        if(action=="stage"||action=="cameraPreset"||action=="cameraRestore"||action=="status") {
             const Json state=spectraPreview_.status();
             Json out=state;
             out.set("background",Json::string(fxBackground_));
             out.set("grid",Json::fromBool(fxGrid_));
             out.set("axes",Json::fromBool(fxAxes_));
+            Json camera=Json::object();
+            camera.set("yaw",Json::number(camera_.yaw));
+            camera.set("pitch",Json::number(camera_.pitch));
+            camera.set("distance",Json::number(camera_.distance));
+            camera.set("targetX",Json::number(camera_.target.x));
+            camera.set("targetY",Json::number(camera_.target.y));
+            camera.set("targetZ",Json::number(camera_.target.z));
+            camera.set("ortho",Json::fromBool(camera_.ortho));
+            out.set("camera",std::move(camera));
             if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
             return out;
         }
