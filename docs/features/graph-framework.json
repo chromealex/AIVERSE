@@ -39,7 +39,8 @@
     "apps/editor/core/GraphOps.h",
     "apps/editor/core/Workspace.cpp",
     "tools/mcp/audit_registry.py",
-    "tests/vfx_graph_ops_test.cpp"
+    "tests/vfx_graph_ops_test.cpp",
+    "apps/editor/core/GraphDraftEdits.h"
   ],
   "traits": {
     "editable": true,
