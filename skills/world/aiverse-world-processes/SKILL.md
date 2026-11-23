@@ -239,8 +239,7 @@ examples/world/world_processes_native/ instead:
 
 - MorphModelStream.h: real per-instance ModelVertex GPU stream override;
   supplies weighted ECS MorphNode vertex displacements through the existing
-  Renderer3D ModelDraw on Metal/Vulkan/GLES backends. Set Model::batching
-  .allowGeometryPool=false **before** model upload and retain the immutable
+  Renderer3D ModelDraw on Metal/Vulkan/GLES backends. Set Model::batching.allowGeometryPool=false **before** model upload and retain the immutable
   source vertex/index arrays. Never overwrite shared global GPU geometry.
   The separate instance stream owns its buffers and must retire them at a
   completed Device idle/lifetime fence.
@@ -262,7 +261,7 @@ examples/world/world_processes_native/ instead:
   when any batch patch rejects; individual tile replacement is safe but
   full multi-tile publication is not one atomic cross-device transaction.
 - GranularTerraWeaveTransfer.h: real Dig/Fill via the canonical
-  TerraWeave ECS excavigateAuthoritativeEcs operation. A host explicitly
+  TerraWeave ECS excavateAuthoritativeEcs operation. A host explicitly
   defines one granular mass unit = one cubic centimetre for this transfer,
   preflights the actual EarthworksLayer::sculpt movedVolumeCm3, checks
   capacity/mass, then credits/debits the one authoritative granular pool.
