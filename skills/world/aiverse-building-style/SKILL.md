@@ -914,3 +914,48 @@ real material/texture upload pipeline.
 No browser build/typecheck/native importer/GLB rendering tests were
 run at this stage (user asked to defer tests). Follow handoff at
 `docs/agent-handoffs/building-studio-pbr-materials-stage23k-2026-11-23.md`.
+
+
+## Stage 23L — bind shared project PBR materials to generated buildings
+
+`apps/studio-native/StudioBuildingGeneration.h` is the real native
+producer behind `studio.buildingCatalog`, `studio.buildingInspect` and
+`studio.buildingGenerate`. The catalog now exposes each architectural
+style's actual `materials` slot IDs; no guesswork from material part
+indexes. `BuildingGeneratorPanel.tsx` has a selector per slot to bind
+that ID to an existing project material from `studio.materials`.
+The request has an optional `materialBindings` object of
+`{ styleMaterialId: sharedProjectMaterialName }`; these are authoritative
+names, NOT filesystem paths. Style changes reset bindings to prevent
+applying slots from the previous style.
+
+On Generate, Studio loads the real project `materials.json` through
+its native project owner, validates numeric PBR properties and image
+GUID channels (including `texture`, `normalMap`,
+`metallicRoughnessMap`, `occlusionMap`, `emissiveMap`),
+and applies them to the corresponding generated `StyledStructure`
+material before GLB writing. The original style slot identity is
+retained. Unknown slot/library names fail instead of silently dropping
+an override. `Glb` now embeds PNG and JPEG image bytes resolved from
+the real `StudioAssetCatalog::byGuid` through sandboxed
+`project/content` paths, and writes glTF PBR texture indices for
+base color, metallic/roughness, normal, AO and emission. Images are
+deduplicated by GUID and limited to 16 MiB each. The generator
+serializes the selected library names in the adjacent
+`.glb.recipe.json` `materialBindings` map; no separate material
+registry is created.
+
+`studio.buildingInspect` is a geometry-only preview and does not
+claim to display project PBR textures. The GLB exporter currently
+accepts only uncompressed PNG/JPEG, not KTX2/DDS/TGA; those need the
+existing importer to transcode them or a supported glTF extension.
+GPU upload remains the normal existing Renderer3D model owner
+responsibility, not the generator's C++/Studio thread. The runtime
+native `runtimeTexturedBuildingModel` can also consume authored
+`StyleMaterial` PBR GUIDs via an asset resolver but is a separate
+runtime entry point, not a direct Studio RPC.
+
+Compile, export validation, native asset integration, cross-backend
+Metal/Vulkan/GLES previews and TypeScript tests are still DEFERRED
+per user request. A new handoff records these limitations:
+`docs/agent-handoffs/building-style-material-binding-stage23l-2026-11-23.md`.
