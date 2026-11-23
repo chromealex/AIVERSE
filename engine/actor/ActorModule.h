@@ -121,6 +121,7 @@ public:
     // No mutable simulation state is affected by rebuilding a navmesh.
     uint64_t navigationRebuilds()const{return navigationRebuilds_;}
     uint64_t navigationCollisionRevision()const{return navigationCollisionRevision_;}
+    const std::string& navigationReadinessError()const{return navigationReadinessError_;}
 
     // Match-level data (round, winner, nextObject, match, royale, history).
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
@@ -224,6 +225,7 @@ private:
     std::unique_ptr<world::CollisionStream> streamedCollision_;
     uint64_t navigationCollisionRevision_=UINT64_MAX;
     uint64_t navigationRebuilds_=0;
+    std::string navigationReadinessError_;
 
 };
 // The actor systems of a simulation run by game::GameCore (engine/game/GameCore.cpp); throws when the map is not world-space.
