@@ -61,9 +61,8 @@ export default function SpectraDockViewport(){
       void invoke('studio.viewportRect',{id:'fx',x:0,y:0,
         width:0,height:0,dpr:1,visible:false})
         .catch(()=>{});
-      // Scene may be visible in a different dock at the same time. It must
-      // re-report its last DOM rect after the FX surface is released.
-      window.dispatchEvent(new Event('studio:viewport-reflow'));
+      // Scene uses its own independent native surface and remains untouched
+      // when this FX panel closes or moves to another window.
     };
   },[native]);
   return <div ref={ref} className="spectra-native__surface"
