@@ -87,12 +87,21 @@ public:
     // the authoritative physics/nav revision before it calls adoptSnapshot.
     // This only mutates catalog bookkeeping, never a GPU/physics object.
     bool adoptSnapshot(const CaveShardSnapshot& snap) {
-        if(!snap.revision || snap.chunks.size()>64)return false;
-        if(lastShardRevision_[snap.shard]>=snap.revision)return false;
+        const size_t capacity=size_t(config_.chunksPerAxis)*
+            config_.chunksPerAxis*config_.chunksPerAxis;
+        if(!snap.revision||snap.chunks.size()>capacity)return false;
+        const auto previous=lastShardRevision_.find(snap.shard);
+        if(previous!=lastShardRevision_.end()&&
+           previous->second>=snap.revision)return false;
         std::set<ChunkKey3,KeyLess> seen;
         for(const auto& chunk:snap.chunks) {
             if(!(caveShardFor(chunk.mesh.key,config_)==snap.shard)||
-               !seen.insert(chunk.mesh.key).second)return false;
+               !seen.insert(chunk.mesh.key).second||
+               !chunk.generatorVersion||!chunk.revision||
+               !chunk.resolution||chunk.resolution>64||
+               chunk.spacingCm<=0||chunk.spacingCm>10000||
+               (chunk.mesh.indices.empty()!=chunk.mesh.vertices.empty()))
+                return false;
             auto it=source_.find(chunk.mesh.key);
             if(it!=source_.end()&&chunk.revision<it->second.revision)
                 return false;
