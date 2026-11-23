@@ -134,6 +134,57 @@ public:
             commandAuthority_->clearActor(actor.packed());
     }
 
+    // Authoritative entity-lifecycle gate. Call BEFORE destroying or
+    // disconnecting an ECS actor. A rider in transit must remain owned by
+    // the simulation until a real landing is open; do not silently subtract
+    // its cabin occupancy or leave an invalid packed Entity in host.riders_.
+    // Returns false to defer actor retirement (the game may mark it pending).
+    bool prepareActorRetirement(Entity actor,std::string* error=nullptr){
+        auto fail=[&](const char* why){
+            if(error)*error=why;
+            return false;
+        };
+        if(!ecs_||!scene_.attached()||scene_.faulted()||
+           !actor.valid()||!ecs_->alive(actor))
+            return fail("Actor retirement requires a live authoritative ECS scene");
+        const uint64_t key=actor.packed();
+        const auto binding=scene_.host().riderBindings().find(key);
+        if(binding!=scene_.host().riderBindings().end()){
+            const uint32_t feature=binding->second;
+            const auto it=scene_.host().lifts().find(feature);
+            if(it==scene_.host().lifts().end()||!scene_.doors().enabled()||
+               !scene_.doorsOpenAt(feature,it->second.snapshot().currentFloor))
+                return fail("Rider is in transit: defer actor retirement until an open landing");
+            const auto* marker=ecs_->tryGet<BuildingLiftPassenger>(actor);
+            if(!marker||!marker->attached||marker->sceneId!=sceneId_||
+               marker->liftFeature!=feature)
+                return fail("ECS passenger marker and lift owner are inconsistent");
+            if(!ecsBridge_.releaseAtLanding(*ecs_,scene_.host(),actor,feature))
+                return fail("Authoritative lift declined rider release");
+        }
+        // A recycled entity generation must never retain an authenticated
+        // command sequence. The existing transport still owns client logout.
+        clearActorCommandSequence(actor);
+        if(error)error->clear();
+        return true;
+    }
+    // Ordinary streaming/unload must not invalidate live passenger markers.
+    // Forced detach() below is reserved for authoritative world destruction
+    // after the game has explicitly reconciled every passenger.
+    bool canUnload()const noexcept{
+        return ecs_&&scene_.attached()&&!scene_.faulted()&&
+               scene_.host().riderBindings().empty();
+    }
+    bool detachIfVacant(world::SpatialWorld& spatial,nav::Mesh* navmesh,
+                        std::string* error=nullptr){
+        if(!canUnload()){
+            if(error)*error="Cannot unload a faulted or occupied building scene";
+            return false;
+        }
+        detach(spatial,navmesh);
+        if(error)error->clear();
+        return true;
+    }
     Tick advance(world::SpatialWorld& spatial,nav::Mesh* navmesh,
                  uint32_t milliseconds){
         Tick out;
