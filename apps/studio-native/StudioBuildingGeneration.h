@@ -12,6 +12,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <vector>
+#include <set>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -59,6 +63,7 @@ struct Request {
     StructureSize dimensions{};
     bool composeFeatures=false;
     FunctionalBuildingRecipe functionalRecipe{};
+    std::map<std::string,std::string> materialBindings; // style material ID -> project library name
 };
 inline Request request(const Json& params) {
     if(!params.isObject())throw std::runtime_error("Building request must be an object");
@@ -86,10 +91,88 @@ inline Request request(const Json& params) {
     if(req.composeFeatures){
         req.functionalRecipe=readFunctionalBuildingRecipe(params,"building-recipe");
     }
+    if(params.has("materialBindings")){
+        const Json& bindings=params["materialBindings"];
+        if(!bindings.isObject()||bindings.members().size()>64)
+            throw std::runtime_error("Material overrides must be an object of at most 64 slots");
+        for(const auto& [slot,name]:bindings.members()){
+            if(!safeId(slot)||!name.isString()||!safeId(name.str()))
+                throw std::runtime_error("Invalid style material slot or project material identifier");
+            req.materialBindings.emplace(slot,name.str());
+        }
+    }
     if(params.has("setting") && params.getStr("setting")!=settingId(req.style))
         throw std::runtime_error("Style does not belong to the selected setting");
     return req;
 }
+
+inline void applyProjectMaterials(const fs::path& project,const Request& req,
+                                  StyledStructure& generated){
+    if(req.materialBindings.empty())return;
+    if(project.empty())throw std::runtime_error("Material overrides require an open project");
+    std::error_code ec;
+    const fs::path path=project/"materials.json";
+    const auto status=fs::symlink_status(path,ec);
+    if(ec||!fs::is_regular_file(status)||fs::is_symlink(status))
+        throw std::runtime_error("Project materials.json unavailable or unsafe");
+    const Json doc=Json::parseFile(path.string());
+    const Json& library=doc["materials"];
+    if(!library.isObject())
+        throw std::runtime_error("Project materials.json lacks materials object");
+    std::set<std::string> used;
+    for(auto& styleMaterial:generated.mesh.materials){
+        auto chosen=req.materialBindings.find(styleMaterial.id);
+        if(chosen==req.materialBindings.end())continue;
+        used.insert(styleMaterial.id);
+        const Json& material=library[chosen->second];
+        if(!material.isObject())
+            throw std::runtime_error("Unknown project material: "+chosen->second);
+        const auto number=[&](const char* name,float& target,float min,float max){
+            if(!material.has(name))return;
+            const Json& value=material[name];
+            if(!value.isNumber()||!std::isfinite(value.toDouble())||
+               value.toDouble()<min||value.toDouble()>max)
+                throw std::runtime_error("Invalid PBR "+std::string(name)+" on "+chosen->second);
+            target=float(value.toDouble());
+        };
+        number("metallic",styleMaterial.metallic,0.f,1.f);
+        number("roughness",styleMaterial.roughness,0.f,1.f);
+        number("emissiveStrength",styleMaterial.emissiveStrength,0.f,100.f);
+        const auto color=[&](const char* name,StyleRgb& target){
+            if(!material.has(name))return;
+            const Json& value=material[name];
+            if(!value.isArray()||value.size()<3)
+                throw std::runtime_error("Invalid PBR colour array in "+chosen->second);
+            for(size_t i=0;i<3;++i){
+                if(!value[i].isNumber()||!std::isfinite(value[i].toDouble())||
+                   value[i].toDouble()<0||value[i].toDouble()>1)
+                    throw std::runtime_error("Invalid PBR colour channel in "+chosen->second);
+                target[i]=float(value[i].toDouble());
+            }
+        };
+        color("color",styleMaterial.color);
+        color("emissive",styleMaterial.emissive);
+        const auto guid=[&](const char* name,std::string& target){
+            if(!material.has(name))return;
+            if(!material[name].isString())
+                throw std::runtime_error("Texture must be an Assets GUID, not a path");
+            const auto value=material[name].str();
+            if(value.empty()){target.clear();return;}
+            if(value.size()!=32||!std::all_of(value.begin(),value.end(),[](char ch){
+                return (ch>='0'&&ch<='9')||(ch>='a'&&ch<='f');
+            }))throw std::runtime_error("Texture must be 32-character lowercase Assets GUID");
+            target=value;
+        };
+        guid("texture",styleMaterial.textures.baseColor);
+        guid("metallicRoughnessMap",styleMaterial.textures.metallicRoughness);
+        guid("normalMap",styleMaterial.textures.normal);
+        guid("occlusionMap",styleMaterial.textures.occlusion);
+        guid("emissiveMap",styleMaterial.textures.emissive);
+    }
+    if(used.size()!=req.materialBindings.size())
+        throw std::runtime_error("Material binding references a missing architecture style slot");
+}
+
 inline StyledStructure produce(const fs::path& engine,const Request& req) {
     const auto style=load(engine,req.style);
     StyledStructure generated;
@@ -146,6 +229,8 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
 inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json& params) {
     using namespace buildingStudioDetail;
     auto req=request(params);
+    if(!req.materialBindings.empty())
+        throw std::runtime_error("Material-binding preview requires the project-aware generator");
     const auto model=produce(engine,req);
     Json out=Json::object();
     out.set("seed",Json::number(int64_t(req.seed)));
@@ -165,7 +250,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
     using namespace buildingStudioDetail;
     if(project.empty())throw std::runtime_error("Open an AIVERSE project before generating buildings");
     const auto req=request(params);
-    const auto model=produce(engine,req);
+    auto model=produce(engine,req);
+    applyProjectMaterials(project,req,model);
     const fs::path root=studioContentRoot(project);
     const fs::path folder=root/"GeneratedBuildings";
     std::error_code ec;
@@ -196,6 +282,33 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         throw std::runtime_error("A building export is already in progress");
     try {
         aiverse::lib::systems::buildingExport::Glb glb;
+        StudioAssetCatalog textureCatalog(project);
+        textureCatalog.rebuild();
+        glb.textureReader=[&](const std::string& guid,
+                              std::vector<uint8_t>& bytes,std::string& issue){
+            const auto entry=textureCatalog.byGuid(guid);
+            if(!entry||entry->importer!="texture"||entry->directory){
+                issue="GLB texture GUID missing from project Assets";return false;
+            }
+            const fs::path rel(entry->path);
+            if(rel.empty()||rel.is_absolute())return false;
+            fs::path file=root;
+            for(const auto& part:rel){
+                if(part=="."||part==".."||part.empty())return false;
+                file/=part;
+                const auto state=fs::symlink_status(file);
+                if(fs::is_symlink(state))return false;
+            }
+            if(!fs::is_regular_file(file))return false;
+            if(fs::file_size(file)>16u*1024u*1024u){
+                issue="Building texture exceeds 16 MiB limit";return false;
+            }
+            std::ifstream in(file,std::ios::binary);
+            if(!in)return false;
+            bytes.assign(std::istreambuf_iterator<char>(in),
+                         std::istreambuf_iterator<char>());
+            return in.good()||in.eof();
+        };
         glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
@@ -208,6 +321,12 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("mode",string(req.composeFeatures?"features":"preset"));
         saved.set("function",string(req.composeFeatures?"":req.kind));
         saved.set("seed",Json::number(int64_t(req.seed)));
+        if(!req.materialBindings.empty()){
+            Json bindings=Json::object();
+            for(const auto& [slot,name]:req.materialBindings)
+                bindings.set(slot,string(name));
+            saved.set("materialBindings",std::move(bindings));
+        }
         saved.set("width",Json::number(double(req.dimensions.width),3));
         saved.set("height",Json::number(double(req.dimensions.height),3));
         saved.set("depth",Json::number(double(req.dimensions.depth),3));
