@@ -370,6 +370,7 @@ export default function BuildingGeneratorPanel({
         <div className="abg__saved">
           {thumbnail&&<img src={thumbnail} alt="Native model asset thumbnail" className="abg__thumbnail"/>}
           <strong>{saved.path}</strong>
+          {saved.recipePath&&<small>Editable recipe: {saved.recipePath}</small>}
           <small>GUID: {saved.guid}</small>
           <small>{saved.triangles.toLocaleString()} triangles · {(saved.bytes/1024).toFixed(1)} KiB</small>
           <div className="abg__actions">
