@@ -83,6 +83,8 @@ static void testAtomicGroupCapacityAndCoalescing() {
     AIVERSE_TEST_CHECK(q.entries.at(uint64_t(RegionDirtyQueue::kMaxEntries+5))==
                        uint8_t(RegionDirtyKind::Move));
     AIVERSE_TEST_CHECK(q.markMany(fits,RegionDirtyKind::Retire));
+    AIVERSE_TEST_CHECK(!q.mark(fits[0],RegionDirtyKind(8)));
+    AIVERSE_TEST_CHECK(!q.markMany(fits,RegionDirtyKind(8)));
     AIVERSE_TEST_CHECK(q.entries.size()==RegionDirtyQueue::kMaxEntries);
     AIVERSE_TEST_CHECK(q.entries.at(1)==7);
 }
