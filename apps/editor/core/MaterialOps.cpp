@@ -231,6 +231,39 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
 }
 
+Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
+    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides);
+    if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
+    for(size_t i=0;i<images.size();++i){
+        const auto& image=images[i];const auto& backend=backends[i];
+        if(image.width!=program.size||image.height!=program.size||image.rgba.size()!=size_t(program.size)*program.size*4||
+           (backend!="cpu"&&backend!="metal"&&backend!="vulkan"))throw std::invalid_argument("invalid completed texture set image");
+    }
+        if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
+        const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+        if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
+        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
+        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
+        struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+        Json files=Json::array();size_t i=0;
+        for(const auto& [output,index]:program.outputs){
+            (void)index;const auto& img=images[i];const auto& backend=backends[i++];std::string png;
+            if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,img.width,img.height,4,img.rgba.data(),img.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
+            std::ofstream stream(stage/(output+".png"),std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG stage write failed");
+            Json row=Json::object();row.set("output",Json::string(output));row.set("path",Json::string("content/textures/"+name+"/"+output+".png"));
+            row.set("backend",Json::string(backend));row.set("sRGB",Json::fromBool(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Color));files.push(row);
+        }
+        Json manifest=Json::object();manifest.set("version",Json::number(int64_t(1)));manifest.set("graph",graph);manifest.set("overrides",overrides);manifest.set("files",files);manifest.set("size",Json::number(int64_t(program.size)));
+        {std::ofstream stream(stage/"texture-set.json",std::ios::binary);stream<<manifest.dump(2)<<"\n";stream.close();if(!stream)throw std::runtime_error("texture set manifest write failed");}
+        // Cooperating publishers share the exclusive stage directory.
+        // No promise against an external process creating an empty destination.
+        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
+        fs::rename(stage,dest);
+        ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
+        Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
+
+}
+
 void registerMaterialOps(Workspace& ws) {
     Workspace* w = &ws;
     auto add = [&ws](const char* name, const std::string& desc, const std::string& schema, Workspace::OpFn fn) {
@@ -474,31 +507,11 @@ void registerMaterialOps(Workspace& ws) {
 
     add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){
         needProject(*w);const auto overrides=p.has("overrides")?p["overrides"]:Json::object();const auto program=render::texture_graph::compile(p["graph"],overrides);
-        const auto name=p.getStr("textureName");if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
-        const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures";
-        if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
-        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
-        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
-        struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
         std::vector<size_t> targets;for(const auto& [output,index]:program.outputs)targets.push_back(index);
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto images=textureCache->evaluate(program,targets,0,cacheHit);
-        Json files=Json::array();size_t i=0;
-        for(const auto& [output,index]:program.outputs){
-            (void)index;auto& img=images[i++];std::string png;
-            if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,img.width,img.height,4,img.rgba.data(),img.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
-            std::ofstream stream(stage/(output+".png"),std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG stage write failed");
-            Json row=Json::object();row.set("output",Json::string(output));row.set("path",Json::string("content/textures/"+name+"/"+output+".png"));
-            row.set("sRGB",Json::fromBool(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Color));files.push(row);
-        }
-        Json manifest=Json::object();manifest.set("version",Json::number(int64_t(1)));manifest.set("graph",p["graph"]);manifest.set("overrides",overrides);manifest.set("files",files);manifest.set("size",Json::number(int64_t(program.size)));
-        {std::ofstream stream(stage/"texture-set.json",std::ios::binary);stream<<manifest.dump(2)<<"\n";stream.close();if(!stream)throw std::runtime_error("texture set manifest write failed");}
-        // Cooperating publishers share the exclusive stage directory.
-        // No promise against an external process creating an empty destination.
-        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
-        fs::rename(stage,dest);
-        w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
-        Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("cacheHit",Json::fromBool(cacheHit));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
+        auto r=publishTextureGraphSet(*w,p.getStr("textureName"),p["graph"],overrides,images,std::vector<std::string>(images.size(),"cpu"));
+        r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
 
     add("texture_graph_material_variant","Create a new inherited library material from a baked set manifest. Requires explicit new material and base names; no regeneration or overwrite.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"}},"required":["textureName","materialName","base"]})",[w](const Json& p){
