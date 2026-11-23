@@ -10,4 +10,5 @@
 #include "engine/buildings/RuntimeBuildingModel.h"
 #include "engine/buildings/BuildingCirculationHost.h"
 #include "engine/buildings/BuildingLiftColliderOwner.h"
+#include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftPlatformModel.h"
