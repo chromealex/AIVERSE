@@ -366,6 +366,54 @@ void StudioHost::pollAgentRequests() {
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
 }
+void StudioHost::tickFx() {
+    if(!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx))return;
+    try {
+        if(!renderThread_) {
+            const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+            renderThread_=std::make_unique<StudioRenderThread>(
+                [this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+        }
+        if(!fxPreview_) {
+            onScene([&] {
+                auto created=std::make_unique<StudioScene>(
+                    platform_.createDevice(StudioSurface::Fx));
+                created->setOrientationGizmo(false);
+                created->setContinuousRedraw(true);
+                created->setSpectraDockMode(true);
+                fxPreview_=std::move(created);
+            });
+        }
+        const auto& ws=session_->workspace();
+        const auto width=fxPlacement_.pixelsW,height=fxPlacement_.pixelsH;
+        // Only one native render owner; the independent FX drawable does not
+        // advance, block or copy Scene's simulation, selection or GPU device.
+        onScene([&] {
+            platform_.sceneThreadScope([&] {
+                fxPreview_->frame(width,height,ws.map,ws.map.data.worldSpace,
+                    "","",Json::object(),0,
+                    float(ws.project.rules.levelHeight.toDouble()),
+                    ws.project.dir,ws.project.rulesJson);
+            });
+        });
+    } catch(const std::exception& ex) {
+        platform_.log(std::string("AIVERSE independent FX GPU view: ")+ex.what());
+        ViewportRect hidden;NativeViewportPlacement none;
+        (void)platform_.placeSurface(StudioSurface::Fx,hidden,none);
+        fxPlacement_={};spectraDockActive_=false;
+        try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
+    }
+}
+void StudioHost::fxCameraOrbit(double dx,double dy) {
+    if(!fxPreview_ || !fxPlacement_.visible)return;
+    if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
+    onScene([&]{fxPreview_->orbit(float(dx),float(dy));});
+}
+void StudioHost::fxCameraZoom(double wheel) {
+    if(!fxPreview_ || !fxPlacement_.visible)return;
+    if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
+    onScene([&]{fxPreview_->zoom(float(wheel));});
+}
 void StudioHost::tick() {
     if (projectLoading_) return; // the background thread owns the session right now
     tickGame();
@@ -880,7 +928,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
-    if(spectraDockActive_)return false; // VFX viewport never edits the game map
+
     if (projectLoading_ || !preview_) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -900,7 +948,7 @@ bool StudioHost::placeAsset(const std::string& asset, double x, double y, double
     return true;
 }
 bool StudioHost::placeType(const std::string& type, double x, double y, double w, double h) {
-    if(spectraDockActive_)return false; // VFX viewport never edits the game map
+
     if (projectLoading_ || !preview_ || type.empty() || type.size() > 128) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -980,15 +1028,6 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     // Embedded VFX preview is *not* the game map. Its pointer input controls
     // its isolated camera only; never pick, sculpt, paint, select, drag or
     // delete an authored entity while this native layer belongs to FX.
-    if(spectraDockActive_) {
-        (void)x;(void)y;(void)w;(void)h;
-        if(phase==1) {
-            if(button==2)pan(dx,dy);
-            else if(button==1) {if(mods.alt)zoom((dx+dy)*.6);else look(dx,dy);}
-            else if(button==0) {if(mods.command)pan(dx,dy);else orbit(dx,dy);}
-        }
-        return;
-    }
     auto& m = mouse_;
     if (button == 1) { // right: look, Alt zooms
         if (phase == 1) { if (mods.alt) zoom((dx + dy) * 0.6); else look(dx, dy); }
@@ -1044,20 +1083,6 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
 void StudioHost::sceneWheel(double amount) { zoom(amount); }
 bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, bool rightHeld) {
     using K = StudioSceneKey;
-    if(spectraDockActive_) {
-        // In VFX preview never run map entity or brush keyboard shortcuts.
-        (void)mods;(void)rightHeld;
-        if(!down)return true;
-        if(key==K::Home) {
-            if(preview_)onScene([&]{preview_->resetSpectraDockCamera();});
-            return true;
-        }
-        if(key==K::Left)moveCamera(-1,0,0);
-        else if(key==K::Right)moveCamera(1,0,0);
-        else if(key==K::Up)moveCamera(0,0,1);
-        else if(key==K::Down)moveCamera(0,0,-1);
-        return true;
-    }
     if (!down) {
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
@@ -1232,20 +1257,6 @@ void StudioHost::applyViewport(const Json& params) {
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
-    if(spectraDockActive_) {
-        // The Scene view may remain mounted in another dock while the FX
-        // surface has priority. Reject stale edit/brush/pick commands rather
-        // than accidentally changing the authored map behind the preview.
-        const bool viewOnly=kind=="orbit"||kind=="look"||kind=="pan"||
-            kind=="zoom"||kind=="move";
-        if(kind=="reset"||kind=="focus") {
-            if(preview_)onScene([&]{preview_->resetSpectraDockCamera();});
-            Json result=Json::object();result.set("ok",Json::fromBool(true));
-            return result;
-        }
-        if(!viewOnly)throw std::runtime_error(
-            "Scene editing input disabled while SpectraFX owns the native viewport");
-    }
     Json result = Json::object();
     // Pointer/keyboard navigation comes from HTML only in composite mode (the native view handles it
     // otherwise); toolbar commands work in both.
