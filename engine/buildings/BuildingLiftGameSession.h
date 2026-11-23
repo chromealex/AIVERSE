@@ -28,7 +28,7 @@ public:
                 const std::map<uint32_t,uint32_t>& colliderIds,
                 uint64_t sceneId,Vec3 origin,uint32_t yaw,
                 Authorize authorize={},std::string* error=nullptr){
-        if(attached_||sceneId==0||yaw>3){
+        if(attached_||sceneId==0||yaw>3||!authorize){
             if(error)*error="Invalid scene identity or session already attached";
             return false;
         }
@@ -52,7 +52,7 @@ public:
     }
     bool board(World& ecs,Entity actor,uint32_t feature,
                std::string* error=nullptr){
-        if(!allowed(ecs,actor)||scene_.faulted()){
+        if(!allowed(ecs,actor)||scene_.faulted()||!scene_.doors().enabled()){
             if(error)*error="Actor unauthorized or scene faulted";
             return false;
         }
@@ -78,7 +78,7 @@ public:
     }
     bool exit(World& ecs,Entity actor,uint32_t feature,uint32_t floor){
         if(!allowed(ecs,actor)||scene_.faulted()||
-           !scene_.doorsOpenAt(feature,floor))return false;
+           !scene_.doors().enabled()||!scene_.doorsOpenAt(feature,floor))return false;
         const auto lift=scene_.host().lifts().find(feature);
         if(lift==scene_.host().lifts().end())return false;
         auto* body=ecs.tryGet<Body>(actor);
@@ -136,7 +136,7 @@ public:
 private:
     bool allowed(World& ecs,Entity actor)const {
         return attached_&&actor.valid()&&ecs.alive(actor)&&
-               (!authorize_||authorize_(actor));
+               authorize_&&authorize_(actor);
     }
     bool insidePlatform(Vec3 feet,const BuildingLiftPlatformPose& pose)const {
         const auto a=buildingLocalToWorld(pose.x0,0,pose.z0,
