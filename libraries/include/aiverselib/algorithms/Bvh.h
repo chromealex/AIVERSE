@@ -55,6 +55,19 @@ public:
         validate(b);out.clear();if(!nodes_.empty())queryNode(0,b,out);std::sort(out.begin(),out.end());
     }
     void queryPoint(const Point& p,std::vector<Id>& out)const{query({p,p},out);}
+    // Refit existing topology; input must contain exactly the original IDs.
+    void refit(std::span<const Entry> entries){
+        if(entries.size()!=entries_.size())throw std::invalid_argument("BVH refit size");
+        std::map<Id,Bounds> byId;
+        for(const auto& e:entries){validate(e.bounds);if(!byId.emplace(e.id,e.bounds).second)throw std::invalid_argument("duplicate BVH id");}
+        for(const auto& e:entries_)if(!byId.contains(e.id))throw std::invalid_argument("unknown BVH id");
+        for(auto& e:entries_)e.bounds=byId.at(e.id);
+        for(size_t i=nodes_.size();i>0;--i){
+            auto& n=nodes_[i-1];
+            if(n.leaf){n.bounds=entries_[n.begin].bounds;for(size_t j=n.begin+1;j<n.end;++j)n.bounds=merge(n.bounds,entries_[j].bounds);}
+            else n.bounds=merge(nodes_[n.left].bounds,nodes_[n.right].bounds);
+        }
+    }
     size_t size()const{return entries_.size();}
     size_t nodeCount()const{return nodes_.size();}
 };
