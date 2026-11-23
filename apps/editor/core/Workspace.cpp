@@ -487,6 +487,30 @@ void Workspace::registerCoreOps() {
     auto add = [this](const char* name, const char* desc, const char* sch, OpFn fn) {
         registerOp({name, desc, schema(sch), std::move(fn)});
     };
+    // MCP registry introspection: agents can distinguish registered operations from live/GUI-only support.
+    // This is a source-of-truth snapshot of the Workspace, NOT proof that GPU features are operational.
+    add("mcp_registry", "Inspect registered MCP operations and GUI-only restrictions; filter by prefix. Registration does not prove runtime support.",
+        R"({"type":"object","properties":{"prefix":{"type":"string"}},"additionalProperties":false})",
+        [this](const Json& p) {
+            const std::string prefix = p.getStr("prefix");
+            Json result = Json::object(), entries = Json::array();
+            int total = 0, guiOnly = 0;
+            for (const auto& op : ops_) {
+                if (!prefix.empty() && op.name.rfind(prefix, 0) != 0) continue;
+                Json entry = Json::object();
+                entry.set("name", str(op.name));
+                entry.set("guiOnly", Json::fromBool(op.guiOnly));
+                entry.set("inputSchema", op.schema.isObject() ? op.schema : Json::object());
+                entries.push(entry);
+                ++total;
+                if (op.guiOnly) ++guiOnly;
+            }
+            result.set("tools", entries);
+            result.set("count", Json::number(int64_t(total)));
+            result.set("guiOnlyCount", Json::number(int64_t(guiOnly)));
+            result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
+            return result;
+        });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
         int i = -1;

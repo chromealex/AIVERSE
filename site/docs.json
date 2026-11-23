@@ -63,6 +63,8 @@
           "lead": "Эффекты частиц и графы эффектов.", "leadEn": "Particle effects and effect graphs." },
         { "id": "motionweave", "source": "docs/motionweave.md", "title": "MotionWeave", "titleEn": "MotionWeave",
           "lead": "Анимация персонажей.", "leadEn": "Character animation." },
+        { "id": "ui-model-view", "source": "docs/ui-model-view.md", "title": "3D-модели в UI", "titleEn": "3D models in UI",
+          "lead": "Объекты сцены и отдельная анимация в элементах интерфейса.", "leadEn": "Scene objects and independent animation in UI elements." },
         { "id": "vivid-creator", "source": "docs/vivid-creator.md", "title": "VIVID: Character Creator и MetaHuman", "titleEn": "VIVID: Character Creator and MetaHuman",
           "lead": "Редактор внешности цифровых людей в Studio и адаптер экспорта MetaHuman.", "leadEn": "The digital-human appearance editor in Studio and the MetaHuman export adapter." },
         { "id": "dynamic-gi", "source": "docs/dynamic-gi.md", "title": "LUMA: динамический непрямой свет", "titleEn": "LUMA: dynamic indirect light",

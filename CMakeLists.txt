@@ -2126,7 +2126,7 @@ if(NOT MSVC)
 endif()
 
 add_library(aiverse_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui/UiFont.cpp engine/ui/UiStb.cpp engine/ui/UiKeyboard.cpp engine/ui/UiLua.cpp
-    engine/ui/UiLinear.cpp)   # linear UI blending (ui-linear)
+    engine/ui/UiLinear.cpp engine/ui/UiModelView.cpp)   # linear UI blending (ui-linear)
 target_include_directories(aiverse_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
 target_link_libraries(aiverse_ui PUBLIC aiverse_rmlui aiverse_rmlui_lua aiverse_lua aiverse_engine)
 option(AIVERSE_CLIENT_WITH_FX "Include SpectraFX particles in packaged clients" ON)
@@ -5271,5 +5271,19 @@ if(AIVERSE_BUILD_TESTS)
     # physis_mcp drives the MCP server binary.
     if(TARGET aiversemcp)
         add_dependencies(aiverse_physis_tests aiversemcp)
+    endif()
+endif()
+
+# Warcraft III source importer: no game data or StormLib is required for these
+# synthetic format/parser/map-writer acceptance cases. Native integration is a
+# separate acceptance gate when a licensed Warcraft III map is available.
+if(AIVERSE_BUILD_TESTS)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME warcraft3_importer_python
+            COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_CURRENT_SOURCE_DIR}/tests/tools
+                -p "test_warcraft3*.py" -v)
+        set_tests_properties(warcraft3_importer_python PROPERTIES LABELS "TOOLS;IMPORT")
     endif()
 endif()

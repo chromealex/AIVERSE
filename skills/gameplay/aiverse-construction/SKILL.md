@@ -1,6 +1,6 @@
 ---
 name: aiverse-construction
-description: Reuse AIVERSE construction for placement checks, resource explanations, refunds and native construction commands in C++ native game projects.
+description: Reuse AIVERSE construction grids, placement checks, resource explanations, refunds and native construction commands.
 ---
 
 # construction
@@ -12,6 +12,7 @@ Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys
 
 1. Identify whether the existing engine mechanic already owns this behavior. Configure it first.
 2. Call checkPlacement with authoritative map/territory/slope queries. Render its Decision as preview, then submit buildCommand. The engine must revalidate the command at execution time; previews never reserve or debit resources.
+   For grid placement, set `ConstructionGrid::cellSize` in integral world units, call `gridPlacement(worldX, worldZ, grid, footprint)` to get the cell anchor, and use that same anchor for preview and command validation. `gridCell` floors negative coordinates; `gridWorldMin` converts a cell back to its world-space lower edge. Footprint width/height are cells; odd quarter-turn rotations swap them. Use `checkPlacement` against authoritative occupancy, territory and slope queries. A rendered grid is presentation only and must not own occupancy.
 3. Link `AIVERSE::lib_construction` (native OBJECT modules: `aiverse_native_use_libraries(aiverse_native_ID construction)`); do not link the aggregate AIVERSE::libraries. Add AIVERSE::gameplay_native only when you include NativeCommands.h: `target_link_libraries(aiverse_native_ID PRIVATE AIVERSE::gameplay_native)`.
 4. Load project-native settings from config using readGameplaySettings; copy validated persistent parameters into NativeState at setup. Presentation state stays separate.
 5. Use `examples/native/libraries` and `tests/libraries/gameplay_tests.cpp` as compiling examples.
@@ -24,6 +25,7 @@ Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys
 - Commands must check ownership/targets/resources at execution time. UI previews are advisory.
 - Never call low-level mutation from presentation, bypass Command replication, or fork an existing engine mechanic.
 - This package exposes host integration points; it does not silently install a new editor window or replace game UI.
+- Grid positions use signed integer world units and positive cell size. Keep occupancy in the host's ECS/world query; the grid helpers do not create an independent building store.
 
 ## Validation
 
