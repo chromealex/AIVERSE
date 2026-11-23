@@ -62,6 +62,7 @@ float vmRead(uint field,Particle p,VmParams params,VmAttributes attrs,float dt) 
     case 0u:return p.positionAge.w; // age
     case 1u:return clamp(p.positionAge.w/max(p.velocityLife.w,0.01f),0.0f,1.0f);
     case 2u:return dt;
+    case 32u:return birthRandom01(p,1u);
     case 4u:return p.positionAge.x;
     case 5u:return p.positionAge.y;
     case 6u:return p.positionAge.z;
