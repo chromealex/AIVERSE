@@ -14,6 +14,17 @@
 #include <vector>
 
 namespace aiverse::terraweave::caverns {
+// World-to-chunk conversion for gameplay camera/player positions in cm.
+// Use the same resolution and spacing as the active authoritative cave world.
+inline ChunkKey3 caveStreamingChunkAt(PointCm worldCm,
+                                     uint32_t resolution,int32_t spacingCm){
+    if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000)
+        throw std::invalid_argument("Caverns streaming chunk dimensions");
+    validatePoint(worldCm);
+    const int64_t span=int64_t(resolution)*spacingCm;
+    return {floorDiv(worldCm.x,span),floorDiv(worldCm.y,span),
+            floorDiv(worldCm.z,span)};
+}
 enum class CaveResidencyAction : uint8_t { Build, Retire };
 enum class CaveLeasePurpose : uint8_t { Edit, Worker, Reader, Publication };
 struct CaveResidencyTicket {
@@ -37,7 +48,13 @@ public:
            !settings_.maxRetiresPerPump || settings_.maxRetiresPerPump>1024)
             throw std::invalid_argument("Caverns residency settings");
     }
-    void center(ChunkKey3 key){center_=key;}
+    void center(ChunkKey3 key){
+        if(key.x< -kLimitCm||key.x>kLimitCm||
+           key.y< -kLimitCm||key.y>kLimitCm||
+           key.z< -kLimitCm||key.z>kLimitCm)
+            throw std::out_of_range("Caverns streaming center outside world");
+        center_=key;
+    }
     void sourceRevision(uint64_t revision){
         if(!revision)throw std::invalid_argument("Caverns residency revision");
         if(revision==revision_)return;
@@ -67,6 +84,10 @@ public:
     // A lease is a numbered owner reference. It cannot silently disappear
     // on camera movement; unpin must match both key and exact lease ID.
     uint64_t pin(ChunkKey3 key,CaveLeasePurpose purpose){
+        if(key.x< -kLimitCm||key.x>kLimitCm||
+           key.y< -kLimitCm||key.y>kLimitCm||
+           key.z< -kLimitCm||key.z>kLimitCm)
+            throw std::out_of_range("Caverns residency pin bounds");
         if(!revision_)throw std::logic_error("Caverns pin before revision");
         if(nextLease_==UINT64_MAX)
             throw std::overflow_error("Caverns lease identity");
