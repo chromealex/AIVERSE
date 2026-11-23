@@ -1333,3 +1333,8 @@ Ambient fill stays separate. Keep zero-default compatibility, HDR depth clipping
 и `docs/agent-handoffs/client-binary-module-selection-2026-11-21.md`.
 
 
+
+
+## MCP coverage checks (2026-11-23)
+
+Before using or adding editor/MCP operations, follow `docs/agents/mcp-coverage.md`. Check the built `tools/list` and `mcp_registry` first, run `python3 tools/mcp/audit_registry.py <aiversemcp-binary> --engine <checkout>`, and never confuse registered tools with verified runtime feature parity. Every development stage requires its own `docs/agent-handoffs/` report with actual test evidence and known gaps.
