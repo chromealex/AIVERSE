@@ -2,7 +2,9 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import {validateTopology} from './graphFramework';
 import type {GraphView,NodeView,Link} from './graphFramework';
+import type {PortRef} from './graphGeometry';
 import type {MaterialKey,FieldValue} from '../panels/materialSchema';
 import {object} from './nativeGraphAdapters';
 type Obj=Record<string,unknown>;
@@ -32,26 +34,28 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit}:{projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
+ const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
+ const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
  c.getContext('2d')?.putImageData(new ImageData(bytes,preview.width,preview.height),0,0);
  },[preview,text]);
  let graph:Obj|null=null;try{const value=JSON.parse(text);if(object(value))graph=value}catch{}
- const edit=(value:Obj)=>{setText(JSON.stringify(value,null,2));setPreview(null);setAsset(null);};
+ const edit=(value:Obj)=>{setText(JSON.stringify(value,null,2));setPreview(null);setAsset(null);setAssets([]);};
  const run=async(action:string)=>{
   if(lock.current||disabled||!projectPath)return;lock.current=true;setBusy(true);setError('');setStatus('');const token=epoch.current;
   try{
    if(action==='catalog'){
-    const [c,l]=await Promise.all([op('texture_graph_catalog'),op('texture_graph_list')]);
+    const [c,l,t]=await Promise.all([op('texture_graph_catalog'),op('texture_graph_list'),op('texture_graph_templates')]);
     if(token!==epoch.current)return;
     if(!object(c)||!Array.isArray(c.nodes)||!object(l)||!Array.isArray(l.graphs))throw new Error('Catalog unavailable');
-    setCatalog(c.nodes.filter(object));setNames(l.graphs.filter((x):x is string=>typeof x==='string'));return;
+    setCatalog(c.nodes.filter(object));setOutputTypes(object(c.outputTypes)?c.outputTypes:{});setTemplates(object(t)&&Array.isArray(t.templates)?t.templates.filter(object):[]);setNames(l.graphs.filter((x):x is string=>typeof x==='string'));return;
    }
    if(action==='load'){
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
@@ -73,6 +77,22 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!object(r)||r.ok!==true||typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>32||r.height>32||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid native preview');
     setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});return;
    }
+   if(action==='bakeSet'){
+    setAssets([]);setAsset(null);
+    const r=await op('texture_graph_bake_set',{graph,textureName});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||!Array.isArray(r.files))throw new Error('Native set bake failed');
+    setStatus('Baked '+r.files.length+' PNGs. Resolving GUIDs and configuring color space…');
+    const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
+    const mapped:{guid:string;path:string;key:MaterialKey}[]=[];let configured=0;
+    for(const row of r.files.filter(object)){
+      const a=index.files.find(a=>'content/'+a.path===row.path&&a.importer==='texture'&&a.guid);
+      if(!a?.guid||typeof row.sRGB!=='boolean'||typeof row.output!=='string')continue;
+      const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB});if(token!==epoch.current)return;
+      if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
+      configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
+    }
+    setAssets(mapped);setStatus('Baked '+r.files.length+' PNGs; configured '+configured+' importer color spaces. Assign explicitly; unmatched files remain in Assets.');return;
+   }
    if(action==='bake'){
     setAsset(null);const r=await op('texture_graph_bake',{graph,output,textureName});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.path!=='string')throw new Error('Native bake failed');
@@ -80,26 +100,65 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     const key=channels[output];if(!key)return;
     const assets=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=assets.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid)setAsset({guid:a.guid,path:a.path,key});else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
    }
   }catch(e){if(epoch.current===token)setError(e instanceof Error?e.message:String(e))}
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
  };
  const view=graph?projection(graph,catalog):{nodes:[],links:[]};
  const outputs=graph&&object(graph.outputs)?Object.keys(graph.outputs):[];
+ const rows=graph&&Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
+ const current=rows.find(n=>n.id===selected);
+ const spec=catalog.find(n=>n.id===current?.op);
+ const patchNode=(id:string,patch:Obj)=>{if(graph)edit({...graph,nodes:rows.map(n=>n.id===id?{...n,...patch}:n)});};
+ const connect=(from:string,to:string,slot:number)=>{
+  if(!graph)return;
+  const source=view.nodes.find(n=>n.id===from),target=view.nodes.find(n=>n.id===to);
+  if(!target||!target.inputs[slot]||from&&(!source||source.outputs[0]?.type!==target.inputs[slot].type)){setError('Incompatible texture ports');return;}
+  const next={...graph,nodes:rows.map(n=>n.id===to&&Array.isArray(n.inputs)?{...n,inputs:n.inputs.map((v,i)=>i===slot?from:v)}:n)};
+  if(validateTopology(projection(next,catalog),{cycles:'reject'}).some(x=>x.code==='cycle')){setError('Texture graph cannot contain cycles');return;}
+  edit(next);setPending(null);setError('');
+ };
+ const addNode=()=>{
+  if(!graph||rows.length>=32)return;const t=catalog.find(n=>n.id===newOp);if(!t)return;
+  let i=1;while(rows.some(n=>n.id===newOp+'_'+i))i++;
+  const id=newOp+'_'+i,props:Obj={};
+  if(object(t.properties))for(const [key,value] of Object.entries(t.properties))if(object(value))props[key]=value.default;
+  edit({...graph,nodes:[...rows,{id,op:newOp,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
+ };
+ const removeNode=()=>{
+  if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};
+  edit({...graph,outputs:nextOutputs,nodes:rows.filter(n=>n.id!==selected).map(n=>({...n,inputs:Array.isArray(n.inputs)?n.inputs.map(v=>v===selected?'':v):[]}))});setSelected('');setPending(null);
+ };
+ const setProp=(key:string,value:unknown)=>{if(current&&typeof current.id==='string')patchNode(current.id,{properties:{...(object(current.properties)?current.properties:{}),[key]:value}})};
+ const fieldRows=object(spec?.properties)?Object.entries(spec.properties):[];
+
  return <StudioSection title="Procedural Texture Graph">
   <small>Native CPU DAG. Source graph and baked PNG are separate. Color is sRGB; normal/data outputs require correct importer settings.</small>
   <StudioButton size="sm" disabled={disabled||busy} onClick={()=>void run('catalog')}>Refresh graph / node catalog</StudioButton>
   <StudioSelect aria-label="Saved texture graph" value={names.includes(name)?name:''} disabled={busy||disabled} onChange={e=>{setName(e.target.value);setOriginal(null)}}><option value="">Select saved graph</option>{names.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <StudioInput aria-label="Graph name" placeholder="Graph name" value={name} disabled={busy||disabled} onChange={e=>setName(e.target.value)}/>
   <div className="au-row" style={{flexWrap:'wrap'}}>{['load','save','validate'].map(action=><StudioButton key={action} size="sm" disabled={busy||disabled||(action!=='validate'&&!name)} onClick={()=>void run(action)}>{action}</StudioButton>)}<StudioButton size="sm" disabled={busy||disabled} onClick={()=>{edit(template);setOriginal(null);setName('')}}>New PBR template</StudioButton></div>
-  {catalog.length>0&&<div style={{height:300,display:'flex',flexDirection:'column'}}><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} onMove={(id,x,y)=>{if(graph&&Array.isArray(graph.nodes))edit({...graph,nodes:graph.nodes.map(n=>object(n)&&n.id===id?{...n,position:[x,y]}:n)})}}/></div>}
+  {templates.length>0&&<StudioSelect aria-label="Native PBR template" value="" disabled={busy||disabled} onChange={e=>{const t=templates.find(t=>t.name===e.target.value);if(t&&object(t.graph)){edit(t.graph);setOriginal(null);setName('');setSelected('');setPending(null)}}}><option value="">Load native PBR template</option>{templates.map(t=><option key={String(t.name)}>{String(t.name)}</option>)}</StudioSelect>}
+  {graph&&catalog.length>0&&<div className="au-row"><StudioSelect aria-label="Node type" value={newOp} disabled={busy||disabled} onChange={e=>setNewOp(e.target.value)}>{catalog.map(n=><option key={String(n.id)}>{String(n.id)}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={addNode}>Add node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={removeNode}>Remove node</StudioButton></div>}
+  {catalog.length>0&&<div style={{height:300,display:'flex',flexDirection:'column'}}><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} onMove={(id,x,y)=>{if(graph&&Array.isArray(graph.nodes))edit({...graph,nodes:graph.nodes.map(n=>object(n)&&n.id===id?{...n,position:[x,y]}:n)})}}/></div>}
+  {current&&spec&&<StudioSection title={'Node: '+selected}>
+   {Array.isArray(spec.inputs)&&spec.inputs.map((kind,i)=><label key={i} className="au-row"><span>Input {i+1} ({String(kind)})</span><StudioSelect aria-label={'Input '+i} value={Array.isArray(current.inputs)?String(current.inputs[i]??''):''} disabled={busy||disabled} onChange={e=>connect(e.target.value,selected,i)}><option value="">Disconnected</option>{view.nodes.filter(n=>n.id!==selected&&n.outputs[0]?.type===kind).map(n=><option key={n.id}>{n.id}</option>)}</StudioSelect></label>)}
+   {fieldRows.map(([key,field])=>{if(!object(field))return null;const value=object(current.properties)?current.properties[key]??field.default:field.default;
+    if(field.type==='enum'&&Array.isArray(field.options))return <label key={key} className="au-row"><span>{key}</span><StudioSelect value={String(value)} disabled={busy||disabled} onChange={e=>setProp(key,e.target.value)}>{field.options.map(v=><option key={String(v)}>{String(v)}</option>)}</StudioSelect></label>;
+    if(field.type==='rgb')return <div key={key} className="au-row"><span>{key}</span>{[0,1,2].map(i=><StudioInput key={i} type="number" min={0} max={1} step={.01} disabled={busy||disabled} value={Array.isArray(value)?Number(value[i]):0} onChange={e=>{if(!e.target.value.trim())return;const v=Array.isArray(value)?value.slice(0,3):[0,0,0];v[i]=Number(e.target.value);setProp(key,v)}}/>)}</div>;
+    return <label key={key} className="au-row"><span>{key}</span><StudioInput type="number" min={Number(field.min)} max={Number(field.max)} step={field.type==='integer'?1:.01} value={Number(value)} disabled={busy||disabled} onChange={e=>{if(e.target.value.trim())setProp(key,Number(e.target.value))}}/></label>;
+   })}
+  </StudioSection>}
+  {graph&&<StudioSection title="Bind outputs">{Object.entries(outputTypes).map(([key,kind])=><label key={key} className="au-row"><span>{key}</span><StudioSelect value={object(graph?.outputs)?String(graph.outputs[key]??''):''} disabled={busy||disabled} onChange={e=>{if(!graph)return;const next={...(object(graph.outputs)?graph.outputs:{})};if(e.target.value)next[key]=e.target.value;else delete next[key];edit({...graph,outputs:next})}}><option value="">Unassigned</option>{view.nodes.filter(n=>n.outputs[0]?.type===kind).map(n=><option key={n.id}>{n.id}</option>)}</StudioSelect></label>)}</StudioSection>}
   <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null)}}/>
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
   {preview&&preview.source===text&&<canvas ref={canvas} width={preview.width} height={preview.height} style={{width:128,height:128,imageRendering:'pixelated'}} aria-label="Native texture preview"/>}
   <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.includes(output)} onClick={()=>void run('bake')}>Bake selected output to new PNG</StudioButton>
+  <StudioButton disabled={busy||disabled||!textureName||!outputs.length} onClick={()=>void run('bakeSet')}>Bake all outputs</StudioButton>
+  {assets.map(a=><StudioButton key={a.guid} disabled={busy||disabled} onClick={()=>onEdit(a.key,a.guid)}>Assign {a.path} to {a.key}</StudioButton>)}
   {asset&&<StudioButton disabled={busy||disabled} onClick={()=>onEdit(asset.key,asset.guid)}>Assign {asset.path} to material draft</StudioButton>}
   {status&&<StudioAlert>{status}</StudioAlert>}{error&&<StudioAlert tone="danger">{error}</StudioAlert>}
  </StudioSection>;
