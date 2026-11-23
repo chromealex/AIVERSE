@@ -6,6 +6,14 @@ Handoff log: [docs/agent-handoffs/vivid.md](agent-handoffs/vivid.md).
 
 ## Generated walk preview on modular humans — 2026-11-23
 
+Creator can preview an external BVH walk with `--preview-bvh <path>`.
+The Ada capture uses CMU `02_01`: the legs and torso come from the recording,
+while the shoulder/elbow tracks are adapted from the existing A-pose-aware
+generator. The lower foot sets pelvis height on a flat surface and its shoe
+is aligned to Ada's bind orientation during stance. The source recording is
+stored outside the repository; see `docs/motionweave.md` for provenance and
+usage terms. This is a native preview, not a published catalog animation.
+
 `HumanWalkPreview.h` maps semantic leg and shoulder joints in each complete
 skin rig to MotionWeave's shared walk generator. Partial head/groom roots copy
 the matching pelvis, torso and head tracks as well as forward travel. Creator's diagnostic `--preview-walk` sequence can

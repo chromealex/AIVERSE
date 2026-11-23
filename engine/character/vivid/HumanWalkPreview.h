@@ -4,6 +4,7 @@
 // Each complete rig receives the shared MotionWeave walk generator output;
 // partial head/groom roots receive matching pose tracks and root travel.
 #include "HumanPreviewAnimation.h"
+#include "engine/render/BvhWalkRetarget.h"
 #include "engine/render/WalkCycleGenerator.h"
 #include <array>
 #include <iterator>
@@ -18,11 +19,12 @@ struct HumanWalkPreviewStats {
 
 inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
                                              const render::WalkCycleSettings& settings,
-                                             HumanWalkPreviewStats* report=nullptr) {
+                                             HumanWalkPreviewStats* report=nullptr,
+                                             const render::BvhMotion* motion=nullptr) {
     using namespace render;
     AnimClip combined;
     combined.name = "vivid_generated_walk";
-    combined.duration = settings.duration;
+    combined.duration = motion ? motion->duration() : settings.duration;
     HumanWalkPreviewStats stats;
     AnimClip referenceRig;
     std::vector<int> partialRoots;
@@ -64,7 +66,50 @@ inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
             countArm(classifyWalkArmRestPose(model, rig.leftShoulder, rig.leftElbow));
             countArm(classifyWalkArmRestPose(model, rig.rightShoulder, rig.rightElbow));
             stats.headChannels += int(rig.neck >= 0) + int(rig.head >= 0);
-            AnimClip part = generateWalkCycle(model, rig, settings);
+            AnimClip part;
+            if (motion) {
+                const auto findSemantic = [&](const char* semanticName) {
+                    for (size_t n = 0; n < model.nodes.size(); ++n)
+                        if (belongs(int(n), int(r)) && humanBoneSemantic(model.nodes[n].name) == semanticName)
+                            return int(n);
+                    return -1;
+                };
+                std::map<std::string, int> mapping;
+                for (const auto& [source, target] : {
+                         std::pair{"Hips", "pelvis"}, {"LeftUpLeg", "thigh_l"},
+                         {"LeftLeg", "calf_l"}, {"LeftFoot", "foot_l"},
+                         {"RightUpLeg", "thigh_r"}, {"RightLeg", "calf_r"},
+                         {"RightFoot", "foot_r"}, {"LowerBack", "spine_01"},
+                         {"Spine", "spine_02"}, {"Spine1", "spine_03"},
+                         {"Neck", "neck_01"}, {"Head", "head"}}) {
+                    const int targetNode = findSemantic(target);
+                    if (targetNode >= 0) mapping.emplace(source, targetNode);
+                }
+                part = retargetBvhMotion(*motion, model, int(r), mapping);
+                const AnimClip arms = generateWalkCycle(model, rig, settings);
+                for (const AnimChannel& source : arms.channels) {
+                    if (source.path != AnimChannel::Rotation ||
+                        (source.node != rig.leftShoulder && source.node != rig.rightShoulder &&
+                         source.node != rig.leftElbow && source.node != rig.rightElbow)) continue;
+                    AnimChannel channel;
+                    channel.node = source.node;
+                    channel.path = AnimChannel::Rotation;
+                    channel.comps = 4;
+                    AnimClip one;
+                    one.duration = arms.duration;
+                    one.channels.push_back(source);
+                    for (size_t i = 0; i < motion->frames.size(); ++i) {
+                        Pose pose;
+                        bindPose(model, pose);
+                        const float time = float(i) * motion->frameTime;
+                        sampleClip(one, std::fmod(time + 0.25f, arms.duration), pose);
+                        const quat q = pose[size_t(source.node)].r;
+                        channel.times.push_back(time);
+                        channel.values.insert(channel.values.end(), {q.x, q.y, q.z, q.w});
+                    }
+                    part.channels.push_back(std::move(channel));
+                }
+            } else part = generateWalkCycle(model, rig, settings);
             if (referenceRig.channels.empty()) referenceRig = part;
             combined.channels.insert(combined.channels.end(),
                                      std::make_move_iterator(part.channels.begin()),
@@ -76,16 +121,21 @@ inline render::AnimClip humanWalkPreviewClip(const render::Model& model,
     }
     for (int partialRoot : partialRoots) {
             AnimChannel root;
+            for (const auto& source : referenceRig.channels)
+                if (source.path == AnimChannel::Translation &&
+                    humanBoneSemantic(model.nodes[size_t(source.node)].name) == "root") {
+                    root = source;
+                    const float3 sourceBase = model.nodes[size_t(source.node)].t;
+                    const float3 base = model.nodes[size_t(partialRoot)].t;
+                    for (size_t k = 0; k < root.times.size(); ++k) {
+                        root.values[k * 3] += base.x - sourceBase.x;
+                        root.values[k * 3 + 1] += base.y - sourceBase.y;
+                        root.values[k * 3 + 2] += base.z - sourceBase.z;
+                    }
+                    break;
+                }
+            if (root.times.empty()) throw std::invalid_argument("walk preview: complete rig has no root motion");
             root.node = partialRoot;
-            root.path = AnimChannel::Translation;
-            root.comps = 3;
-            for (int i = 0; i < settings.samples; ++i) {
-                const float time = settings.duration * float(i) / float(settings.samples - 1);
-                const auto base = model.nodes[size_t(partialRoot)].t;
-                root.times.push_back(time);
-                root.values.insert(root.values.end(),
-                                   {base.x, base.y, base.z + settings.rootSpeed * time});
-            }
             combined.channels.push_back(std::move(root));
             for (const auto& source : referenceRig.channels) {
                 const std::string semantic = humanBoneSemantic(model.nodes[size_t(source.node)].name);

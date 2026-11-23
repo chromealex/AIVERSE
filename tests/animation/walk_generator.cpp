@@ -1,5 +1,6 @@
 #include "HumanoidLocomotionFixture.h"
 #include "engine/render/WalkCycleGenerator.h"
+#include "engine/render/BvhWalkRetarget.h"
 #include "../AlwaysCheck.h"
 #include <cmath>
 #include <fstream>
@@ -73,6 +74,58 @@ int main(int argc, char** argv) {
     AIVERSE_TEST_CHECK(std::abs(clip.channels[13].values[4 * 8 + 1] - clip.channels[13].values[1]) > 0.0001f);
     bool rejected = false;
     try { WalkRig invalid = rig; invalid.leftKnee = invalid.rightKnee; (void)generateWalkCycle(model, invalid); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    AIVERSE_TEST_CHECK(rejected);
+    const std::string tinyBvh = R"(HIERARCHY
+ROOT Hips
+{
+ OFFSET 0 0 0
+ CHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation Xrotation
+ JOINT LeftUpLeg
+ {
+  OFFSET 0 -1 0
+  CHANNELS 3 Zrotation Yrotation Xrotation
+  JOINT LeftLeg
+  {
+   OFFSET 0 -1 0
+   CHANNELS 3 Zrotation Yrotation Xrotation
+   JOINT LeftFoot
+   {
+    OFFSET 0 -1 0
+    CHANNELS 3 Zrotation Yrotation Xrotation
+    End Site
+    {
+     OFFSET 0 0 1
+    }
+   }
+  }
+ }
+}
+MOTION
+Frames: 2
+Frame Time: 0.5
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 1 0 0 0 0 0 10 0 0 0 0 0 0
+)";
+    const BvhMotion bvh = parseBvhMotion(tinyBvh);
+    AIVERSE_TEST_CHECK(bvh.frames.size() == 2 && bvh.find("LeftLeg") >= 0);
+    const AnimClip captured = retargetBvhMotion(bvh, model, bones.root,
+        {{"Hips", bones.hips}, {"LeftUpLeg", bones.thigh[0]},
+         {"LeftLeg", bones.shin[0]}, {"LeftFoot", bones.foot[0]}});
+    AIVERSE_TEST_CHECK(captured.channels.size() == 6);
+    AIVERSE_TEST_CHECK(captured.duration == 0.5f);
+    AIVERSE_TEST_CHECK(captured.channels[4].values.back() > captured.channels[4].values[2]);
+    Pose capturePose;
+    bindPose(model, capturePose);
+    sampleClip(captured, 0.499f, capturePose);
+    std::vector<mat4> captureWorld, captureBind;
+    worldMatrices(model, capturePose, captureWorld);
+    bindPose(model, capturePose);
+    worldMatrices(model, capturePose, captureBind);
+    AIVERSE_TEST_CHECK(std::abs(captureWorld[size_t(bones.foot[0])].transformPoint({}).y -
+                                captureBind[size_t(bones.foot[0])].transformPoint({}).y) < 0.03f);
+    rejected = false;
+    try { (void)parseBvhMotion(tinyBvh.substr(0, tinyBvh.size() - 20)); }
     catch (const std::invalid_argument&) { rejected = true; }
     AIVERSE_TEST_CHECK(rejected);
     if (argc > 1) {

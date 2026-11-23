@@ -98,6 +98,7 @@ struct CreatorApp {
     bool smoke=false, smokeCaptureRequested=false, smokeCompleted=false;
     bool portraitCapture=false,closeupCapture=false,eyeDetailCapture=false;
     bool previewMotion=false,previewWalk=false;int previewPose=0;float previewTime=-1;
+    std::string previewBvhPath;
     motionweave::AnimationPoseComponent previewCapturePose;
     int sequenceFrames=0,sequenceFrame=0,sequenceSampled=-1,sequenceBase=-1,walkClip=-1;
     bool automaticLod=true;
@@ -648,7 +649,15 @@ struct CreatorApp {
                 walk.rootBob=0.018f; // fraction of leg length, independent of source scale
                 proposedWalkClip=int(proposed.head->clips.size());
                 HumanWalkPreviewStats walkStats;
-                proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk,&walkStats));
+                BvhMotion sourceMotion;
+                const BvhMotion* motion=nullptr;
+                if(!previewBvhPath.empty()) {
+                    std::ifstream source(previewBvhPath);
+                    if(!source)throw std::runtime_error("Could not open BVH walk source");
+                    sourceMotion=parseBvhMotion(std::string(std::istreambuf_iterator<char>(source),{}));
+                    motion=&sourceMotion;
+                }
+                proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk,&walkStats,motion));
                 std::printf("VIVID walk rigs=%d arms relaxed=%d A=%d T=%d unknown=%d headChannels=%d\n",
                     walkStats.completeRigs,walkStats.relaxedArms,walkStats.aPoseArms,
                     walkStats.tPoseArms,walkStats.unknownArms,walkStats.headChannels);
@@ -1828,13 +1837,19 @@ struct CreatorApp {
                 previewCapturePose=sourcePose;
                 if(previewWalk){
                     const float time=float(sequenceFrame)/24.f;
-                    const float cycle=std::floor(time);
+                    const auto& clip=human.head->clips[size_t(walkClip)];
+                    const float cycle=std::floor(time/clip.duration);
                     bindPose(*human.head,previewCapturePose.local);
-                    sampleClip(human.head->clips[size_t(walkClip)],time-cycle,previewCapturePose.local);
-                    for(size_t node=0;node<human.head->nodes.size();++node){
-                        const auto name=humanBoneSemantic(human.head->nodes[node].name);
-                        if(name=="root"||name.rfind("root.",0)==0)
-                            previewCapturePose.local[node].t.z+=120.f*cycle;
+                    sampleClip(clip,time-cycle*clip.duration,previewCapturePose.local);
+                    for(const auto& channel:clip.channels){
+                        if(channel.path!=AnimChannel::Translation||channel.times.size()<2)continue;
+                        const auto name=humanBoneSemantic(human.head->nodes[size_t(channel.node)].name);
+                        if(name!="root"&&name.rfind("root.",0)!=0)continue;
+                        const size_t end=channel.values.size()-3;
+                        previewCapturePose.local[size_t(channel.node)].t.x+=
+                            (channel.values[end]-channel.values[0])*cycle;
+                        previewCapturePose.local[size_t(channel.node)].t.z+=
+                            (channel.values[end+2]-channel.values[2])*cycle;
                     }
                 }else{
                     const int poses[]={0,1,2,3,0};
@@ -2407,6 +2422,9 @@ int aiverseMain(int argc,char** argv) {
         }else if(std::strcmp(argv[i],"--preview-head-sweep")==0) {
             application->previewHeadSweep=true;
         }else if(std::strcmp(argv[i],"--preview-walk")==0) {
+            application->previewWalk=true;application->previewMotion=true;
+        }else if(std::strcmp(argv[i],"--preview-bvh")==0 && i+1<argc) {
+            application->previewBvhPath=argv[++i];
             application->previewWalk=true;application->previewMotion=true;
         }else if(std::strcmp(argv[i],"--preview-sequence")==0 && i+1<argc) {
             try{application->sequenceFrames=std::stoi(argv[++i]);if(application->sequenceFrames<1||application->sequenceFrames>720)return 2;}catch(...){return 2;}

@@ -1,5 +1,26 @@
 # AIVERSE MotionWeave
 
+## BVH walk capture import
+
+`render::parseBvhMotion(text)` reads a BVH hierarchy and sampled motion;
+`render::retargetBvhMotion(motion, model, rootNode, jointMap)` transfers named
+joint rotations and root travel to another skeleton. The target leg length
+sets the translation scale. The lower foot determines a flat-ground pelvis
+height per frame, and its ankle orientation is aligned to the target bind
+pose. A caller supplies the source BVH text; no recording is embedded in the
+engine. The VIVID Creator diagnostic accepts `--preview-bvh <path>` alongside
+`--asset <manifest>` and `--preview-sequence <frames>`.
+
+The Ada demonstration uses CMU Graphics Lab motion `02_01` (344 frames at
+120 fps), mirrored at
+`https://github.com/una-dinosauria/cmu-mocap/blob/master/data/002/02_01.bvh`.
+The CMU terms at `https://mocap.cs.cmu.edu/` allow product use while
+disallowing direct resale of the motion data, including converted forms.
+The raw BVH stays outside this repository. Ada's legs and torso follow the
+capture; arms use the existing A-pose-aware procedural tracks to avoid
+incompatible shoulder/wrist orientations. This preview is not yet a polished
+loop or a terrain-aware foot-contact solution.
+
 ## Generated walk cycle (prototype)
 
 `render::generateWalkCycle(model, rig, settings)` in
