@@ -1,18 +1,19 @@
 ---
 name: aiverse-evolve
-description: Use AIVERSE EVOLVE when implementing Эволюция регионов по нагрузкам, влиянию PHYSIS и состоянию леса TerraWeave.
+description: Use AIVERSE EVOLVE for Long-term ecological region changes driven by PHYSIS and consumed through TerraWeave forest ecology.
 ---
 # EVOLVE — AIVERSE skill
 
 ## When to activate
-Эволюция регионов по нагрузкам, влиянию PHYSIS и состоянию леса TerraWeave.
+Long-term ecological region changes driven by PHYSIS and consumed through TerraWeave forest ecology.
 
-Typical request: рост леса, загрязнение, плодородие, долговременный износ, природная сукцессия. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: fertility, contamination, forest growth, environmental aging, succession. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/EvolveEcs.h`, `libraries/include/aiverselib/world/EvolvePhysisBridge.h`.
 - **Authoritative ECS:** `evolve::Region, Pressure, ClimateLink`.
 - **Lifecycle:** `aiverse::lib::worldprocess::installSuite(sim,flags) with flags.evolve=true`; per-tick behavior: `evolve.physis_climate -> evolve.succession`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `EvolveRegion, EvolvePressure`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/EvolvePhysisHost.h`, `EvolveTerraEcologyBridge.h`, `WorldProcessGameplayHost.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
