@@ -20,6 +20,7 @@ private:
     struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;Remover remove;std::function<bool(const World&,Entity)> present;};
     std::map<std::string,Codec> codecs_;
     std::vector<std::function<bool(World&,const RegionEntityLedger&)>> rebuilders_;
+    std::vector<std::function<bool(const World&,const RegionEntityLedger&)>> captureValidators_;
 public:
     bool add(std::string id,uint32_t version,Writer writer,Reader reader){
         if(id.empty()||id.size()>128||!version||!writer||!reader)return false;
@@ -55,6 +56,10 @@ public:
     }
     // Rebuild host-derived indices only after the entire component stream,
     // including all referenced entities, has been restored privately.
+    bool addCaptureValidator(std::function<bool(const World&,const RegionEntityLedger&)> fn){
+        if(!fn)return false;
+        captureValidators_.push_back(std::move(fn));return true;
+    }
     bool addRebuilder(std::function<bool(World&,const RegionEntityLedger&)> fn){
         if(!fn)return false;
         rebuilders_.push_back(std::move(fn));return true;
@@ -102,6 +107,7 @@ public:
     }
     bool captureAll(const World& world,const RegionEntityLedger& ledger,
         size_t budget,std::vector<Record>& out)const{
+        for(const auto& validate:captureValidators_)if(!validate(world,ledger))return false;
         Context refs;if(!refs.rebuild(world,ledger))return false;
         for(const auto& [id,codec]:codecs_)if(!codec.present)return false;
         std::vector<Record> staged;size_t used=0;
