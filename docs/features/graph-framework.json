@@ -212,7 +212,8 @@
       "graph_runtime_probe",
       "graph_live_snapshot",
       "graph_debug_session",
-      "graph_live_watch"
+      "graph_live_watch",
+      "graph_live_profile"
     ],
     "studio_panels": [
       "shader_graph",
