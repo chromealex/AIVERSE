@@ -70,7 +70,7 @@ public:
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
         if(action=="play") {error_.clear();playing_=true;return status();}
-        if(action=="pause") {playing_=false;return status();}
+        if(action=="pause") {playing_=false;targetTicks_=timeTicks_;stepsPending_=0;return status();}
         if(action=="restart") {
             error_.clear();
             playing_=input.getBool("play",false);
