@@ -11,6 +11,7 @@
 #include "CircuitDevices.h"
 #include "GranularEcs.h"
 #include "EvolveEcs.h"
+#include "EvolvePhysisBridge.h"
 #include "SocietyEcs.h"
 #include "engine/data/Json.h"
 #include <stdexcept>
@@ -59,7 +60,11 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
         circuit::installDevices(sim);
     }
     if(flags.granular)granular::install(sim);
-    if(flags.evolve)evolve::install(sim);
+    if(flags.evolve){
+        evolve::registerClimatePersistence(sim);
+        evolve::installClimateBridge(sim);
+        evolve::install(sim);
+    }
     if(flags.society)society::install(sim);
 }
 inline void installSuite(Simulation& sim,const Json& config){
