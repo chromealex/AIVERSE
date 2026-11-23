@@ -85,10 +85,6 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
                            {},{centerX-float(width)/100.f,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaDepthNegative,owner.id,"EvolveArea","halfDepthCm",
                            {},{centerX,.35f,centerZ-float(depth)/100.f},0});
-            out.push_back({Handle::Mode::GroupCornerXZ,owner.id,
-                           "EvolveArea","cornerXZ",{},
-                           {centerX+float(width)/100.f,.35f,
-                            centerZ+float(depth)/100.f},0});
             out.push_back({Handle::Mode::AreaCenterX,owner.id,"EvolveArea","offsetXcm",
                            {},{centerX,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaCenterZ,owner.id,"EvolveArea","offsetZcm",
