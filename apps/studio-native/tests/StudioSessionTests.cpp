@@ -213,6 +213,12 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(doc.undoDepth()==depth+1 && entity().extra.dump()==before);
        AIVERSE_TEST_CHECK(call("studio.componentRemove",
            R"({"entityId":"entity:@first","componentId":"EchoZone"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.select",R"({"id":"entity:@first"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.entityDelete",
+           R"({"entityId":"entity:@first"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.entitiesDelete",
+           R"({"entityIds":["entity:@first"]})").has("error"));
+       AIVERSE_TEST_CHECK(doc.findEntity("first")>=0);
        const auto insp=call("studio.select",R"({"id":"entity:@second"})");
        AIVERSE_TEST_CHECK(!insp.has("error"));
        const auto snap=call("studio.snapshot");
