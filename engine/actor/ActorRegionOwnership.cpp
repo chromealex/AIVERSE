@@ -3,6 +3,7 @@
 #include "ActorModule.h"
 #include <algorithm>
 #include <set>
+#include <map>
 #include <stdexcept>
 
 namespace aiverse::actor {
@@ -120,22 +121,27 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // Reject orphaned car backlinks before migrating anyone. World-space
     // character seat references use Vehicle.id, not Entity::index.
     std::set<uint32_t> carIds;
-    for(Entity car:vehicleEntities(sim)) {
+    const auto cars=vehicleEntities(sim);
+    for(Entity car:cars) {
         const auto* v=view.tryGetConst<Vehicle>(car);
         if(!v || !v->id || !carIds.insert(v->id).second)
             throw std::logic_error("regionOwnership: invalid or duplicate car id");
     }
+    // Index legacy backlinks once, rather than scanning every character per car.
+    std::map<uint32_t,std::vector<Entity>> passengersByCar;
     view.eachExistingConst<CharacterBody>(
-        [&](Entity,const CharacterBody& body) {
-            if(body.vehicle && !carIds.contains(body.vehicle))
+        [&](Entity passenger,const CharacterBody& body) {
+            if(!body.vehicle)return;
+            if(!carIds.contains(body.vehicle))
                 throw std::logic_error("regionOwnership: orphaned vehicle backlink");
+            if(view.alive(passenger))passengersByCar[body.vehicle].push_back(passenger);
         });
 
     // Occupied vehicles are one atomic ownership graph. Legacy arcade seats
     // use CharacterBody.vehicle + Vehicle.driver; typed vehicles use the one
     // shared VehicleDrive/VehicleOccupant model and the existing seat adapter.
     std::set<uint64_t> handled;
-    for(Entity car:vehicleEntities(sim)) {
+    for(Entity car:cars) {
         ledger=view.resourceConst<world::RegionEntityLedger>();
         const auto* carState=view.tryGetConst<Vehicle>(car);
         if(!carState)continue;
@@ -148,12 +154,9 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             group=std::move(gathered.members);
         }else{
             group.push_back(car);
-            view.eachExistingConst<CharacterBody>(
-                [&](Entity passenger,const CharacterBody& body) {
-                    if(view.alive(passenger) && carState->id &&
-                       body.vehicle==carState->id)
-                        group.push_back(passenger);
-                });
+            if(const auto it=passengersByCar.find(carState->id);
+               it!=passengersByCar.end())
+                group.insert(group.end(),it->second.begin(),it->second.end());
             if(carState->driver) {
                 if(carState->driver>characterCount(sim))
                     throw std::logic_error("regionOwnership: bad driver slot");
