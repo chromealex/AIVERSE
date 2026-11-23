@@ -10,13 +10,13 @@ import './GraphCanvas.css';
 
 export interface GraphCommand {id:string;label:string;shortcut?:string;disabled?:boolean;run:()=>void}
 export interface GraphCanvasProps {
- view:GraphView; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
+ view:GraphView; highlighted?:readonly string[]; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
  commands?:readonly GraphCommand[]; onCancel?:()=>void;
  selection?:readonly string[]; onSelection?:(ids:string[])=>void; onMoveGroup?:(positions:Positioned[])=>void;
  onSelect:(id:string)=>void; onMove:(id:string,x:number,y:number)=>void;
 }
-export default function GraphCanvas({view,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
+export default function GraphCanvas({view,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
  const svg=useRef<SVGSVGElement>(null);
  const scroll=useRef<HTMLDivElement>(null);
  const drag=useRef<{pointer:number;origin:Point;nodes:Positioned[]}|null>(null);
@@ -114,7 +114,8 @@ export default function GraphCanvas({view,selected,label,disabled,readOnly,pendi
      event.currentTarget.setPointerCapture(event.pointerId);
     }}>
     <rect width="130" height={height} rx="7" fill={ids.includes(node.id)?'var(--au-accent-strong)':'var(--au-panel-raised)'}
-     stroke={ids.includes(node.id)?'var(--au-accent-ink)':'var(--au-accent)'}/>
+     stroke={ids.includes(node.id)?'var(--au-accent-ink)':'var(--au-accent)'} strokeWidth={highlighted?.includes(node.id)?3:1}/>
+    {highlighted?.includes(node.id)&&<text x="118" y="15" textAnchor="end" fill="var(--au-text)" fontSize="10">●</text>}
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
     <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
     {geometry.ports.filter(p=>p.node===node.id).map(p=><circle key={p.direction+':'+p.port}
