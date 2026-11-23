@@ -1,3 +1,19 @@
+## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
+
+The independent SpectraFX Graph GPU preview has a one-shot **Capture
+Frame** action with native RHI readback, bounded 256/512/768px JPEG
+thumbnail, Save JPEG and async capture status. There is no continuous
+GPU-to-browser bitmap streaming. The existing authenticated MCP tool
+`fx_graph_preview` supports `{"action":"capture","maxSide":512}`
+and `{"action":"captureStatus"}`, with results under
+`capture:{pending,ready,width,height,mime,image?,error?}`.
+The native host enforces 128–768px max dimension, 600 KiB JPEG,
+one in-flight capture, ten-second timeout and callback-safe
+project-switch/close behavior. No gameplay ECS writes or untrusted
+disk path. **Current source intentionally not built or tested per
+user request; previous 2/2 CTest applies to older source only.**
+Agent handoff: `docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
 ## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
 
 Added production-native preview-authoring controls to the independent
