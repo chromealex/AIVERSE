@@ -411,9 +411,9 @@ static void checkResourceWal(){
     Delta::Policy policy{&registry,{"test.world.resource"}};
     auto current=std::make_unique<Replay::State>();
     AIVERSE_TEST_CHECK(current->ledger.spawn(1,a));
-    current->world.setResource<WalFixtureResource>({10});
+    current->world.setResource<WalFixtureResource>(WalFixtureResource{10});
     World after=current->world;
-    after.setResource<WalFixtureResource>({20});
+    after.setResource<WalFixtureResource>(WalFixtureResource{20});
     std::vector<Delta::Record> changes;
     AIVERSE_TEST_CHECK(Delta::captureChanges(registry,policy.selected,current->world,after,changes));
     AIVERSE_TEST_CHECK(changes.size()==1);
@@ -462,6 +462,55 @@ static void checkResourceWal(){
     }
     AIVERSE_TEST_CHECK(frame.payload[4]==1&&Replay::apply(current,frame,codecs,materialize));
     AIVERSE_TEST_CHECK(current->sequence==3&&current->ledger.find(1)->owner==c);
+
+#if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
+    namespace fs=std::filesystem;
+    struct Temp {
+        fs::path dir;
+        ~Temp(){std::error_code ec;if(!dir.empty())fs::remove_all(dir,ec);}
+    } temp;
+    for(unsigned i=0;i<100;++i){
+        auto p=fs::temp_directory_path()/("aiverse-resource-wal-"+
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+"-"+std::to_string(i));
+        std::error_code ec;
+        if(fs::create_directory(p,ec)){temp.dir=std::move(p);break;}
+    }
+    AIVERSE_TEST_CHECK(!temp.dir.empty());
+    auto source=temp.dir/"source",fork=temp.dir/"fork";
+    AIVERSE_TEST_CHECK(fs::create_directory(source)&&fs::create_directory(fork));
+    UnifiedCheckpointSections::Adapters adapters{};
+    for(auto& adapter:adapters){
+        adapter.write=[](const Replay::State&,std::vector<uint8_t>& out){out.clear();return true;};
+        adapter.read=[](Replay::State&,uint32_t ver,std::span<const uint8_t> in){return ver==1&&in.empty();};
+    }
+    constexpr size_t budget=64*1024;
+    adapters[2]=UnifiedResourceSection::adapter(policy,budget);
+    UnifiedCheckpointSections::Factory factory=[](){return std::make_unique<Replay::State>();};
+    Replay::State initial;initial.world.setResource<WalFixtureResource>(WalFixtureResource{10});
+    std::array<uint8_t,16> uuid{};uuid[0]=7;
+    UnifiedWalSession session;
+    AIVERSE_TEST_CHECK(session.create(source,uuid,initial,adapters,budget)==RegionWalWrite::Ok);
+    after=initial.world;after.setResource<WalFixtureResource>(WalFixtureResource{42});
+    AIVERSE_TEST_CHECK(Delta::captureChanges(registry,policy.selected,initial.world,after,changes));
+    ledger=initial.ledger;
+    {
+        RegionEntityLedger::Transaction tx(ledger,true);
+        AIVERSE_TEST_CHECK(UnifiedWorldTransaction::encode(tx,{},changes,1,frame));
+    }
+    AIVERSE_TEST_CHECK(session.commit(frame,codecs,materialize,{},policy)==RegionWalWrite::Ok);
+    session.close();
+    AIVERSE_TEST_CHECK(session.openCheckpoint(source,uuid,budget,adapters,factory,codecs,materialize)==RegionWalWrite::NeedsRecovery);
+    AIVERSE_TEST_CHECK(session.openCheckpoint(source,uuid,budget,adapters,factory,codecs,materialize,{},false,policy)==RegionWalWrite::Ok);
+    AIVERSE_TEST_CHECK(session.state()->sequence==1&&session.state()->world.resourceConst<WalFixtureResource>()->value==42);
+    auto catalog=session.backups(budget,adapters,factory,codecs,materialize,{},true,policy);
+    AIVERSE_TEST_CHECK(catalog.complete&&catalog.entries.size()==1&&catalog.entries[0].status==UnifiedBackupStatus::Recoverable);
+    auto forkId=uuid;forkId[0]=8;
+    AIVERSE_TEST_CHECK(session.forkGeneration(1,fork,forkId,budget,adapters,factory,codecs,materialize,{},policy)==RegionWalWrite::Ok);
+    UnifiedWalSession copy;
+    AIVERSE_TEST_CHECK(copy.openCheckpoint(fork,forkId,budget,adapters,factory,codecs,materialize,{},false,policy)==RegionWalWrite::Ok);
+    AIVERSE_TEST_CHECK(copy.state()->sequence==0&&copy.state()->world.resourceConst<WalFixtureResource>()->value==42);
+    copy.close();session.close();
+#endif
 }
 
 int main() {
