@@ -116,9 +116,11 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
     if(json.has("height"))recipe.height=number(json["height"],path+".height");
     if(json.has("depth"))recipe.depth=number(json["depth"],path+".depth");
     if(json.has("seed")){
-        const float f=number(json["seed"],path+".seed");
-        if(f<0.f||std::floor(f)!=f||f>16777215.f)
-            throw JsonError(path+".seed: expected integer from 0 to 16777215");
+        const auto& value=json["seed"];
+        if(!value.isNumber())throw JsonError(path+".seed: expected integer");
+        const double f=value.toDouble(-1);
+        if(!std::isfinite(f)||f<0.||std::floor(f)!=f||f>2147483647.)
+            throw JsonError(path+".seed: expected integer from 0 to 2147483647");
         recipe.seed=uint64_t(f);
     }
     if(json.has("features")){
