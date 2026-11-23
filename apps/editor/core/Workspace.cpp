@@ -235,8 +235,8 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
         Json::parse(R"({"properties":{"guid":{"type":"string"}},"required":["guid"]})"),
         [this](const Json& p)->Json {return spectraAssetCheck(p);}});
     registerOp({"fx_replay_prepare",
-        "Prepare a native SpectraFX replay at an exact tick with optional CPU RNG seed or Metal allocation seed. Poll fx_replay_status until replayReady.",
-        Json::parse(R"({"properties":{"tick":{"type":"integer","minimum":0,"maximum":3600},"parameters":{"type":"object"},"seed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuAllocationSeed":{"type":"integer","minimum":0,"maximum":2147483647}},"required":["tick"]})"),
+        "Prepare a native SpectraFX replay at an exact tick with optional CPU RNG seed, Metal allocation seed or Metal shader seed. Poll fx_replay_status until replayReady.",
+        Json::parse(R"({"properties":{"tick":{"type":"integer","minimum":0,"maximum":3600},"parameters":{"type":"object"},"seed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuAllocationSeed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuShaderSeed":{"type":"integer","minimum":0,"maximum":4294967295}},"required":["tick"]})"),
         [this](const Json& p)->Json {
             Json request=p;request.set("action",Json::string("replayPrepare"));
             return spectraPreview(request);
