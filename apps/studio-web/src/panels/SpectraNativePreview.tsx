@@ -164,6 +164,19 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     return()=>{cancelled=true;};
   },[compareA,compareB,diffThreshold]);
 
+  const nativeCaptureMismatch=useMemo(()=>{
+    if(!captureMetaA||!captureMetaB)return [];
+    const a=captureMetaA.native as Record<string,unknown>|null|undefined;
+    const b=captureMetaB.native as Record<string,unknown>|null|undefined;
+    if(!a||!b)return ['missing native provenance'];
+    const mismatches:string[]=[];
+    for(const key of ['tick','generation','backend','gpu','background']){
+      if(a[key]!==b[key])mismatches.push(key);
+    }
+    if(JSON.stringify(a.camera)!==JSON.stringify(b.camera))mismatches.push('native camera');
+    if(a.frameExact!==true||b.frameExact!==true)mismatches.push('frame identity not verified');
+    return mismatches;
+  },[captureMetaA,captureMetaB]);
   const exportComparison=()=>{
     if(!pixelDiff||!compareA||!compareB)return;
     const report={kind:'spectrafx-native-jpeg-ab',formatVersion:1,
@@ -171,6 +184,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       changed:pixelDiff.changed,total:pixelDiff.total,
       changedPercent:pixelDiff.changedPercent,meanAbsoluteError:pixelDiff.meanAbsoluteError,
       captureA:captureMetaA,captureB:captureMetaB,
+      nativeCaptureMismatch,frameExact:false,
       caveat:'8-bit decoded JPEG sRGB comparison; not HDR/alpha or backend parity'};
     const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -499,6 +513,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
          JSON.stringify(captureMetaA.camera)!==JSON.stringify(captureMetaB.camera))&&
         <StudioAlert tone="warning">A/B capture settings differ (graph revision, tick, backend or snapshot size).
           Pixel differences may reflect these settings rather than an effect change.</StudioAlert>}
+      {nativeCaptureMismatch.length>0&&<StudioAlert tone="warning">
+        Native A/B comparison caveats: {nativeCaptureMismatch.join(', ')}.
+      </StudioAlert>}
       <small>Native metadata is sampled when GPU readback is requested, not at fence completion.</small>
       <small>Two native JPEG frames; alignment assumes the same camera pose and dimensions.
         Captures are not synchronized automatically.</small>
