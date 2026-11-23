@@ -23,7 +23,8 @@ public:
                                       int32_t spacingCm=100,
                                       CaveShardConfig shards={},
                                       size_t pending=1024,size_t workers=2)
-        :host_(resolution,spacingCm,shards,pending,workers) {}
+        :host_(resolution,spacingCm,shards,pending,workers),
+         streamJobs_(workers) {}
     void onEditedVolume(CaveDirtyBounds bounds,
                         std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
         if(physicsBarrier_.status().recoveryRequired)
@@ -125,7 +126,12 @@ public:
         auto results=streamJobs_.poll(telemetry);
         results.erase(std::remove_if(results.begin(),results.end(),
             [this](const CaveStreamCpuResult& r){
-                return !residency_.current(r.ticket);
+                if(!residency_.current(r.ticket))return true;
+                if(!r.success){
+                    (void)residency_.fail(r.ticket);
+                    return true;
+                }
+                return false;
             }),results.end());
         return results;
     }
