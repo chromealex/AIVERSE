@@ -159,6 +159,14 @@ public:
     bool vehicleRegionGroup(const Simulation& sim,Entity vehicle,
                             world::VehicleRegionGroup& out,
                             std::string* error=nullptr) const;
+    // Resolves the actual world-space components; no duplicate Transform.
+    static world::RegionPositionReader regionPositionReader();
+    // Requires opt-in regionOwnership in rules and destination collision/nav
+    // readiness, then transfers the complete shared-vehicle occupant group.
+    bool transferVehicleRegion(Simulation& sim,Entity vehicle,
+                               world::Cell from,world::Cell to,
+                               std::string* error=nullptr);
+
     RoyaleView royaleView(Simulation&,uint8_t slot) const;
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
     bool racing() const { return race_!=nullptr; }   // this map has a race (map "race": vehicles::RaceState resource)
