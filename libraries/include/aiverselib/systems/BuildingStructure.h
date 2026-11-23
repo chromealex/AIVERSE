@@ -229,8 +229,10 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
             // Cut-corner wing, possibly protruding past the main hull.
             if(fw<1.5f||fd<1.5f)break;
             const float chamfer=std::min({cut*0.45f,fw*0.15f,fd*0.15f});
-            block(x0,z0,x1,z1,y0,fh,chamfer,
-                  std::min(fw,fd)*form.taper,2,k.roofRise*0.25f);
+            const float inset=std::min(fw,fd)*form.taper;
+            m.prism(material,cutRect(x0,z0,x1,z1,chamfer,y0),
+                    cutRect(x0+inset,z0+inset,x1-inset,z1-inset,chamfer*0.8f,y1));
+            addBox(x0,y0,z0,x1,y1,z1);
             break;}
         case StructureForm::Kind::Silo:{
             // Round reactor, storage silo or coolant vessel.
