@@ -58,7 +58,11 @@ inline void io(Archive& a,Collapse& v){
         (v.delivery!=Delivery::Empty&&v.eventKey==0)))a.fail();
 }
 inline std::uint64_t collapseEventKey(Entity e,std::uint32_t tick){
-    std::uint64_t key=mix64(e.packed()^mix64(tick)^0x4652414354555245ull);
+    Hasher hasher;
+    hasher.u64(0x4652414354555245ull); // "FRACTURE"
+    hasher.u64(e.packed());
+    hasher.u32(tick);
+    const std::uint64_t key=hasher.value();
     return key?key:1;
 }
 inline bool validBond(const Bond& bond){
