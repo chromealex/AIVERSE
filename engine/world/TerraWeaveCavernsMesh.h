@@ -35,7 +35,8 @@ inline int64_t caveFieldCmUnchecked(const Settings& s, PointCm p) {
 inline int64_t caveFieldCm(const Settings& s,PointCm p) {
     validate(s);validatePoint(p);return caveFieldCmUnchecked(s,p);
 }
-inline CaveMesh generateCaveMesh(const Settings& s,ChunkKey3 key,uint32_t resolution=16,int32_t spacingCm=100) {
+template<class Field>
+inline CaveMesh generateCaveMeshSampled(const Settings& s,ChunkKey3 key,uint32_t resolution,int32_t spacingCm,Field field) {
     validate(s);
     if(resolution==0||resolution>64||spacingCm<=0||spacingCm>10000)
         throw std::invalid_argument("TerraWeave Caverns mesh settings");
@@ -50,7 +51,7 @@ inline CaveMesh generateCaveMesh(const Settings& s,ChunkKey3 key,uint32_t resolu
     for(uint32_t z=0;z<=resolution;++z)
     for(uint32_t y=0;y<=resolution;++y)
     for(uint32_t x=0;x<=resolution;++x)
-        samples[idx(x,y,z)]=caveFieldCmUnchecked(s,{origin.x+int64_t(x)*spacingCm,
+        samples[idx(x,y,z)]=field({origin.x+int64_t(x)*spacingCm,
             origin.y+int64_t(y)*spacingCm,origin.z+int64_t(z)*spacingCm});
     struct Node{PointCm p;int64_t v;};
     constexpr int corners[8][3]={{0,0,0},{1,0,0},{1,1,0},{0,1,0},
@@ -64,9 +65,9 @@ inline CaveMesh generateCaveMesh(const Settings& s,ChunkKey3 key,uint32_t resolu
             int64_t(std::llround(double(a.p.y)+double(b.p.y-a.p.y)*t)),
             int64_t(std::llround(double(a.p.z)+double(b.p.z-a.p.z)*t))};
         const int64_t d=std::max<int64_t>(1,spacingCm/2);
-        const double gx=double(caveFieldCmUnchecked(s,{p.x+d,p.y,p.z})-caveFieldCmUnchecked(s,{p.x-d,p.y,p.z}));
-        const double gy=double(caveFieldCmUnchecked(s,{p.x,p.y+d,p.z})-caveFieldCmUnchecked(s,{p.x,p.y-d,p.z}));
-        const double gz=double(caveFieldCmUnchecked(s,{p.x,p.y,p.z+d})-caveFieldCmUnchecked(s,{p.x,p.y,p.z-d}));
+        const double gx=double(field({p.x+d,p.y,p.z})-field({p.x-d,p.y,p.z}));
+        const double gy=double(field({p.x,p.y+d,p.z})-field({p.x,p.y-d,p.z}));
+        const double gz=double(field({p.x,p.y,p.z+d})-field({p.x,p.y,p.z-d}));
         const double len=std::sqrt(gx*gx+gy*gy+gz*gz);
         return {float(double(p.x-origin.x)/100),float(double(p.y-origin.y)/100),
             float(double(p.z-origin.z)/100),float(len?-gx/len:0),
@@ -107,5 +108,9 @@ inline CaveMesh generateCaveMesh(const Settings& s,ChunkKey3 key,uint32_t resolu
         }
     }
     return out;
+}
+inline CaveMesh generateCaveMesh(const Settings& s,ChunkKey3 key,uint32_t resolution=16,int32_t spacingCm=100) {
+    return generateCaveMeshSampled(s,key,resolution,spacingCm,
+        [&](PointCm p){return caveFieldCmUnchecked(s,p);});
 }
 } // namespace aiverse::terraweave::caverns
