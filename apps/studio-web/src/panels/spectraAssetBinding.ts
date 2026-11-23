@@ -74,7 +74,7 @@ export function bindResolvedSpectraAsset(
   const index=graph.nodes.findIndex(node=>node.id===nodeId);
   if(index<0)return failure(graph,'Target graph node not found.');
   const nodes=graph.nodes.map((node,i)=>i===index?{
-    ...node,properties:{...(node.properties??{}),[property]:resolved.path},
+    ...node,properties:{...(node.properties??{}),[property]:'content/'+resolved.path},
   }:node);
   return {graph:{...graph,nodes},error:''};
 }
