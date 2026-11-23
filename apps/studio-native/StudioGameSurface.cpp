@@ -35,6 +35,10 @@ void StudioGameSurface::control(const std::string& action) {
         if (!host_->active()) throw std::runtime_error("Start a game before restarting");
         start(launch_,assets_);return;
     }
+    if(action=="speed1"||action=="speed2"||action=="speed5"||action=="speed10"||action=="speed25"||action=="speed50"||action=="speed100"){
+        if(!host_->setSpeed(std::stoi(action.substr(5))))throw std::runtime_error("Speed requires a local match");
+        return;
+    }
     const bool ok=action=="pause"?host_->setPaused(true):action=="resume"?host_->setPaused(false):
         action=="step"?host_->stepOnce():false;
     if (!ok) throw std::runtime_error("Control unavailable: use a loaded local match; Step requires editor Pause and a closed game menu");
