@@ -194,7 +194,8 @@ public:
         const auto it=resident_.find(key);
         if(it!=resident_.end() && patch.fieldTick<it->second.tick)
             return false; // stale simulated field snapshot
-        if(it!=resident_.end() && patch.geometrySignature==it->second.signature){
+        if(it!=resident_.end() && patch.geometrySignature==it->second.signature &&
+           scene.valid(it->second.body)){
             it->second.tick=patch.fieldTick;
             return true;
         }
