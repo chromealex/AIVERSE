@@ -113,6 +113,49 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
     }
     return out;
 }
+// Stable-ID neighbor edge snap, in map-local centimetres of the active
+// owner. Compare all authored EVOLVE rectangles without touching live ECS.
+// At equal distances choose lexicographically smaller stable map ID.
+struct EdgeSnap {
+    bool found=false;
+    float valueCm=0;
+    std::string targetId;
+};
+inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
+                                const editor::DocEntity& owner,
+                                Handle::Mode mode,float proposedCm,
+                                float thresholdCm=100.f){
+    const bool x=mode==Handle::Mode::AreaWidth||
+        mode==Handle::Mode::AreaWidthNegative;
+    const bool z=mode==Handle::Mode::AreaDepth||
+        mode==Handle::Mode::AreaDepthNegative;
+    if((!x&&!z)||!std::isfinite(proposedCm)||thresholdCm<0)return {};
+    EdgeSnap best;
+    double bestDistance=double(thresholdCm)+1.;
+    for(const auto& other:map.data.entities){
+        if(other.id==owner.id||other.id.empty())continue;
+        const auto& components=other.extra["components"];
+        if(!components["EvolveRegion"].isObject())continue;
+        const auto& area=components["EvolveArea"];
+        if(!area.isObject()||!area.getBool("enabled",true))continue;
+        const auto half=area.getInt(x?"halfWidthCm":"halfDepthCm",0);
+        if(half<50||half>evolve::kAreaMaxHalfExtentCm)continue;
+        const double origin=x?double(owner.x):double(owner.z);
+        const double center=(x?double(other.x):double(other.z))*100.+
+            double(area.getInt(x?"offsetXcm":"offsetZcm",0));
+        for(const int sign:{-1,1}){
+            const double edge=center+double(sign)*double(half)-origin*100.;
+            const double distance=std::abs(edge-double(proposedCm));
+            if(distance>double(thresholdCm))continue;
+            if(distance<bestDistance||
+               (distance==bestDistance&&(!best.found||other.id<best.targetId))){
+                bestDistance=distance;
+                best={true,float(edge),other.id};
+            }
+        }
+    }
+    return best;
+}
 inline bool compatible(const editor::DocEntity& target,
                        std::string_view required){
     if(required=="Entity")return !target.id.empty();
