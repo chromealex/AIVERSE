@@ -1714,3 +1714,12 @@ Use the Studio native FX bridge (`studio.spectraPreview`) for deterministic **CP
 - The HTML5 A/B tool compares decoded 8-bit JPEG pixels, not HDR or alpha. Warn when graph generation, native tick, camera or backend differs. Keep provenance attached to comparison reports.
 
 Read handoffs `docs/agent-handoffs/spectrafx-studio-stage30-cpu-replay-seed-2026-11-23.md` through `spectrafx-studio-stage36-rhi-capture-observations-2026-11-23.md` before changing this flow. The current feature branch has **not** undergone the deferred native/TypeScript/Metal QA; do not report source-only features as tested.
+
+## Stage 38 — discoverable MCP native replay tools
+
+The Workspace tool registry now advertises these genre-independent operations through `Workspace::toolList()` and the existing aiversemcp bridge:
+- `fx_replay_prepare {tick:120,parameters:{},seed:1234}`: CPU-only deterministic reset and seek. For Metal slot allocation only, use `gpuAllocationSeed` instead of `seed`.
+- `fx_replay_status {}`: poll until `replayReady` is true; inspect `gpuSeedPending`, `gpuSeedFailed`, `gpuSeedRetries`.
+- `fx_replay_capture {action:"capture",maxSide:512,requireReplayReady:true}`: request native JPEG; poll `fx_replay_capture {action:"captureStatus"}` for result and provenance.
+
+These operations require an attached native Studio FX viewport and an open project. A standalone headless MCP server may list them but cannot execute GPU capture; it returns an explicit unavailable error. The JPEG provenance includes request-time frame serial/fence observations with `frameExact:false`. Do not interpret them as verified capture-completion fence IDs. Tests are deferred, so the new schemas have not been runtime-validated.
