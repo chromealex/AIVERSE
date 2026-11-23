@@ -1,0 +1,12 @@
+# Shared Graph Framework — stage 19 — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Implementation HEAD: 101396192c3b1dcf0cb9f87c131bd9cab14e3132
+
+Added opt-in native MotionWeave CPU node profiling. GraphExecutionProfile.h contains bounded RAII scopes and per-node sync/update/evaluate counters. Instrumentation is inserted in actual AnimationGraphInstance loops, with no clock reads or allocation when disabled and no allocation in scope destruction. Up to 128 node records, 512 completed intervals per explicit trace; counters cumulative until reset. Child graph/rig work is inclusive in parent scope. Reset/rebind and prepared View clones discard instrumentation. No GPU timing or live gameplay attachment; not all outer animation work is attributed. Isolated debugger actions profileEnable/profileRead/profileReset/profileDisable use exact session ID, start a new trace each step, return separate report rather than inflate per-frame history. Studio adds phase ranking, relative heatmap, last-step trace and read-only report JSON on captured session source. SpectraFX original graph nodes compile into effect definitions; no per-node execution mapping claimed.
+
+Changed paths: engine/render/graph/GraphExecutionProfile.h, engine/render/{AnimationGraph.h,AnimationGraph.cpp}, apps/editor/core/{GraphDebugSession.h,GraphOps.h}, apps/studio-web/src/graphs/{GraphExecutionProfilePanel.tsx,GraphDebugSessionPanel.tsx,GraphCanvas.tsx}, tests/view/view.cpp, docs/features/graph-framework.json, docs/agents/graph-framework.md, skills/workflow/aiverse-graph-authoring/SKILL.md.
+
+Verification: NOT RUN. GitHub writes confirmed; actual native execution loops and clone/reset contracts inspected. Added regression fixture for disabled default, actual update/evaluate call counts, trace clearing, counter reset and disabled preparation clone/reset. No C++/TS compile, CTest, measured profiling result, native Studio QA, CI, GPU or Mac merged-tree gate. No publication/main merge. Main policy PR #122 still requires reconciliation; coordinate MotionWeave owner.
+
+Next: audit shared Graph feature compilation and interfaces; implement optional live selected-owner instrumentation only with owner-approved publication/clone contracts and bounded overhead. Connect actual GPU scope queries only to measured runtime scopes, not authored shader/FX node estimates. Coordinate separate Building/Caverns/texture domains and complete executable graph contracts before declaring feature complete.
