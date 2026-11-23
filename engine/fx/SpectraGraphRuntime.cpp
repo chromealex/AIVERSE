@@ -164,6 +164,9 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     if(!schema.empty() && !canServeNamedOnGpu)
         actual.preference=ComputePreference::CpuOnly;
     if(!initEffect(dev,compiled,actual))return false;
+    // Exact authored identity, including overrides and GPU compilation options.
+    restoreIdentity_="SPFR1|"+std::to_string(actual.capacity)+"|"+std::to_string(int(actual.quality))+"|"+std::to_string(actual.gpuProgram)+"|"+std::to_string(actual.gpuMaterial)+"|"+std::to_string(actual.gpuBirthRandom)+"|"+graph.dump(-1)+"\n"+overrides.dump(-1);
+    if(restoreIdentity_.size()>4096)restoreIdentity_.clear();
     namedParams_=std::move(schema);
     dataBindings_=std::move(bindings);
     for(const auto& [name,definition]:namedParams_) {
@@ -279,6 +282,7 @@ bool GraphRuntime::initCpu(gfx::Device* device,const fx::EffectDef& effect,
 }
 
 void GraphRuntime::shutdown() {
+    restoreIdentity_.clear();
     if (sharedWorld_) {
         for (const auto h : sharedHandles_) sharedWorld_->kill(h);
     }
