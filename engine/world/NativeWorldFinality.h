@@ -52,7 +52,9 @@ private:
     }
     bool resourceChanges(const World& before,const World& after,std::vector<Resources::Record>& out)const{
         if(resources_.selected.empty()){out.clear();return true;}
-        return resources_.registry==&sim_.persistentEcs()&&
+        // The explicit host-owned codec registry may be separate from native
+        // rollback registration; neither registry owns gameplay state.
+        return resources_.registry&&
             std::find(resources_.selected.begin(),resources_.selected.end(),"aiverse.world.region_entity_ledger")==resources_.selected.end()&&
             Resources::captureChanges(*resources_.registry,resources_.selected,before,after,out);
     }
