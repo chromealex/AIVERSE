@@ -81,6 +81,7 @@ public:
     }
 
     const nav::Config& config()const noexcept{return config_;}
+    Fixed standingHeight()const noexcept{return options_.actorHeight;}
     void spans(int32_t x,int32_t z,std::vector<nav::Span>& out)const override {
         if(!inside(x,z))return;
         const auto& col=columns_[size_t(z)*size_t(config_.width)+size_t(x)];
@@ -131,6 +132,11 @@ private:
     bool blocked(Fixed x,Fixed z,Fixed y)const {
         const Fixed skin=Fixed::fromRatio(1,100);
         for(const auto& s:solids_) {
+            // Movable leaves/panels are exclusively owned by the runtime
+            // aperture collider layer, never by the static nav source.
+            if(s.part==BuildingGraphPart::DoorLeaf||
+               s.part==BuildingGraphPart::RoofPanel||
+               s.part==BuildingGraphPart::ElevatorPlatform)continue;
             if(x<s.x0||x>=s.x1||z<s.z0||z>=s.z1)continue;
             // Only geometry actually intersecting the actor's standing
             // headroom obstructs this surface. A higher floor slab must
