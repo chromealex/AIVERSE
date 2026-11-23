@@ -2652,7 +2652,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const std::string key = params.getStr("key");
             const Json& value = params["value"];
             const std::string componentId=params.getStr("componentId");
-            if(lib::worldprocess::authoring::supports(componentId)) {
+            if(lib::worldprocess::authoring::supports(componentId) ||
+               lib::worldprocess::linked::supports(componentId)) {
                 if(entityId.compare(0,7,"entity:")!=0)
                     throw std::runtime_error("Authoring applies only to map entities");
                 const int index=indexFor(entityId);
@@ -2661,7 +2662,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(!existing.isObject())throw std::runtime_error("Component is not authored on this object");
                 Json staged=existing;
                 std::string error;
-                if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
+                if(lib::worldprocess::linked::supports(componentId)) {
+                    if(!validWorldProcessDocumentRef(ws_.map,componentId,key,value))
+                        throw std::runtime_error("Unknown or incompatible linked map object");
+                    if(!lib::worldprocess::linked::edit(componentId,key,value,staged,&error))
+                        throw std::runtime_error(error);
+                } else if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
                     throw std::runtime_error(error);
                 if(staged!=existing) {
                     auto candidate=source;
