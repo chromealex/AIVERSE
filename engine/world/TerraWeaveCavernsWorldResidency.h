@@ -119,6 +119,7 @@ public:
         if(!revision_)return {};
         std::vector<CaveResidencyTicket> requests;
         std::set<ChunkKey3,KeyLess> desired;
+        std::vector<ChunkKey3> buildOrder;
         struct Candidate{ChunkKey3 key{};uint64_t distance=0;};
         std::vector<Candidate> nearby;
         for(int64_t z=-int64_t(settings_.radiusXZ);z<=int64_t(settings_.radiusXZ);++z)
@@ -137,12 +138,16 @@ public:
         // Leases have priority over camera demand and cannot be discarded
         // even if the resulting desired set exceeds the camera budget.
         for(const auto& [key,item]:items_)
-            if(!item.leases.empty())desired.insert(key);
+            if(!item.leases.empty()){
+                desired.insert(key);
+                buildOrder.push_back(key);
+            }
         if(desired.size()>settings_.maxResident)
             throw std::length_error("Caverns pinned residency budget");
         for(const auto& candidate:nearby){
             if(desired.size()>=settings_.maxResident)break;
-            desired.insert(candidate.key);
+            if(desired.insert(candidate.key).second)
+                buildOrder.push_back(candidate.key);
         }
         size_t retires=0;
         for(auto& [key,item]:items_){
@@ -163,7 +168,7 @@ public:
             ++retires;
         }
         size_t builds=0;
-        for(const auto& key:desired){
+        for(const auto& key:buildOrder){
             // Wait until native retirement is acknowledged before occupying
             // its scarce resident slot with another distant cave chunk.
             if(!items_.contains(key)&&items_.size()>=settings_.maxResident)
@@ -230,6 +235,10 @@ public:
         return out;
     }
     bool tracked(ChunkKey3 key)const{return items_.contains(key);}
+    bool ready(ChunkKey3 key)const {
+        const auto it=items_.find(key);
+        return it!=items_.end()&&it->second.ready;
+    }
 private:
     struct Entry {
         uint64_t generation=0;
