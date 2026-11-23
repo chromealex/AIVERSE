@@ -242,3 +242,35 @@ responsibility; no automatic despawn or background ticking is added.
 
 This is a source-only stage: tests remain deferred on user instruction.
 Handoff: `docs/agent-handoffs/building-ecs-actor-lifecycle-stage19-2026-11-23.md`.
+
+
+## Stage 20 — deterministic ECS retirement fixed-tick queue
+
+Use `engine/buildings/BuildingActorLifecycleTick.h`, available through
+`BuildingRuntime.h`. Own one `BuildingActorLifecycleTickOwner<Body>`
+per existing `BuildingCirculationEcsScene<Body>`. On authenticated
+disconnect, owner-authorized despawn or scene transfer, revoke commands
+in the existing game transport/session and enqueue
+`requestRetirement(ecs, scene, actor, reason)` BEFORE any ECS destroy.
+
+In the exclusive authoritative owner tick call
+`advanceFixedTick(ecs,scene,spatial,navmesh,dtMs)`. The adapter invokes
+the real circulation scene's collision-and-passenger publish first;
+only after a successful publish does it attempt pending retirements.
+Actors in transit remain alive and are retried after an actual open
+landing. The successful path calls `prepareActorRetirement`, then
+`ecs.destroyLater(actor)`. Game ECS still owns the structural-change
+barrier `ecs.flush()`; invoke it only when all ECS iterations have ended.
+Do not directly call `ecs.destroy` on an attached lift passenger,
+and do not create a second physics, entity, or network registry.
+
+If using manually integrated `scene.advance`, call
+`afterCommittedTick(ecs, scene)` only when its `Tick.complete` is true.
+Never run both entrypoints in one simulation tick. Drain and reset the
+owner only during explicitly reconciled total world teardown.
+`BuildingLiftGameSession` is an alternative owner, not to be composed
+with `BuildingCirculationEcsScene` for the same lift.
+
+Tests remain DEFERRED per user instruction. This is not a verified
+running game scene. Handoff:
+`docs/agent-handoffs/building-ecs-fixed-tick-stage20-2026-11-23.md`.
