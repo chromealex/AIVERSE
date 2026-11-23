@@ -75,6 +75,18 @@ int main() {
     require(fxEdited.getBool("ok")&&fxEdited["result"].getBool("valid")&&fxEdited["result"].getInt("applied")==2,"native FX batch failed");
     require(!fs::exists(root/"fx"/"graphs"/"generic_spark.vfx.json"),"FX draft wrote files");
 
+    auto typed=shaderDraft;typed.erase("edits");typed.set("node",Json::string("input"));
+    require(call("graph_property_schema",typed)["result"]["fields"].has("position"),"property schema missing position");
+    typed.set("edit",Json::parse(R"({"action":"setProperty","node":"input","property":"position","value":[10,20]})"));
+    require(call("graph_edit",typed)["result"]["graph"]["nodes"][size_t(0)]["position"].size()==2,"typed move failed");
+    typed.member("edit").set("property",Json::string("id"));
+    require(call("graph_edit",typed).has("error"),"typed edit changed immutable ID");
+    auto dependencies=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"sub","kind":"subgraph","graph":"a"}],"graphs":{"a":{"nodes":[{"id":"loop","kind":"subgraph","graph":"a"}]}}}})");
+    const auto resolved=call("graph_asset_dependencies",dependencies);
+    require(resolved.getBool("ok")&&resolved["result"]["issues"].size()==1,"embedded recursion not detected");
+    auto textureRef=Json::parse(R"({"domain":"shader","graph":{"nodes":[{"id":"tex","op":"sampleTexture","texture":"../outside.png"}]}})");
+    require(call("graph_asset_dependencies",textureRef)["result"]["references"][size_t(0)].getStr("status")=="invalid-path","unsafe path not flagged");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
