@@ -1065,6 +1065,19 @@ bool ComputeParticles::exportFreshCheckpoint(
     return true;
 }
 
+bool ComputeParticles::exportRestoreCheckpoint(const std::string& identity,std::vector<uint8_t>& bytes) const {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!device_||!device_->gpuHealthy())return false;
+    // External source tokens are process-local and cannot be imported safely.
+    for(auto token:lastCheckpoint_.sourceTokens)if(token!=0)return false;
+    return encodeRestoreCheckpoint(lastCheckpoint_,identity,bytes);
+}
+bool ComputeParticles::importRestoreCheckpoint(const std::string& expectedIdentity,const std::vector<uint8_t>& bytes) {
+    GpuCheckpoint snapshot;
+    if(!decodeRestoreCheckpoint(bytes,expectedIdentity,snapshot))return false;
+    for(auto token:snapshot.sourceTokens)if(token!=0)return false;
+    return restoreGpuSnapshot(snapshot);
+}
 bool ComputeParticles::restoreFreshGpuCheckpoint() {
     const auto status=checkpointStatus();
     if(!status.restoreEligible||status.pending||!device_||
