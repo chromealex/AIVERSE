@@ -72,6 +72,32 @@ public:
             forest,rooted,completedTick,species,soilHeight,
             forestClimate(ecs,std::move(baseline)),settings);
     }
+    // Caller-owned checkpoint: forest state and roots must travel together.
+    struct EcologyCheckpoint {
+        std::uint64_t completedTick=0;
+        terraweave::ForestEcologyResource forest;
+        std::vector<terraweave::AnchoredPlant> rooted;
+    };
+    static EcologyCheckpoint captureEcology(
+            std::uint64_t completedTick,
+            const terraweave::ForestEcologyResource& forest,
+            const std::vector<terraweave::AnchoredPlant>& rooted){
+        terraweave::validateForestEcologyResource(forest);
+        if(forest.initialized&&forest.lastStepTick>completedTick)
+            throw std::invalid_argument("EVOLVE ecology checkpoint tick mismatch");
+        return {completedTick,forest,rooted};
+    }
+    void restoreEcology(const EcologyCheckpoint& checkpoint,
+            std::uint64_t restoredTick,
+            terraweave::ForestEcologyResource& forest,
+            std::vector<terraweave::AnchoredPlant>& rooted){
+        if(checkpoint.completedTick!=restoredTick)
+            throw std::invalid_argument("EVOLVE ecology rollback tick mismatch");
+        auto staged=captureEcology(restoredTick,checkpoint.forest,checkpoint.rooted);
+        forest=std::move(staged.forest);
+        rooted=std::move(staged.rooted);
+        resetAfterRollback();
+    }
     // Rollback invalidates only transient host deduplication, not ECS.
     void resetAfterRollback(){
         circuits_.resetAfterRollback();
