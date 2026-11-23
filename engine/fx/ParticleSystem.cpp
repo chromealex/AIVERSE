@@ -972,6 +972,8 @@ FxHandle ParticleSystem::playWithProgramParameters(
     uint16_t gen = uint16_t(in.gen + 1 == 0 ? 1 : in.gen + 1);
     in = {};
     in.gen = gen;
+    if(telemetryInstanceSerial_!=std::numeric_limits<uint64_t>::max())++telemetryInstanceSerial_;
+    in.telemetrySerial=telemetryInstanceSerial_;
     in.used = true;
     in.effect = effect;
     in.pos = in.prev = pos;
@@ -1049,6 +1051,12 @@ void ParticleSystem::kill(FxHandle h) {
         for (size_t i = I.particles.size(); i-- > 0;) if (I.particles[i].owner == h.id) I.die(i, false);
         I.freeInstance((h.id & 0xffff) - 1);
     }
+}
+ParticleSystem::InstanceTelemetry ParticleSystem::instanceTelemetry(FxHandle h) const {
+    if(!impl_)return {};
+    const auto* in=findInstance(*impl_,h);
+    if(!in||!in->telemetrySerial||in->telemetrySerial==std::numeric_limits<uint64_t>::max())return {};
+    return {in->telemetrySerial,in->effect,in->live,in->emitting&&!in->stopped,in->time};
 }
 bool ParticleSystem::alive(FxHandle h) const {
     return findInstance(*impl_, h) != nullptr;
@@ -1223,6 +1231,7 @@ void ParticleSystem::update(float dt) {
     int live = 0;
     for (auto& in : I.instances) live += in.used ? 1 : 0;
     stats_.instances = live;
+    if(telemetryUpdateSerial_!=std::numeric_limits<uint64_t>::max())++telemetryUpdateSerial_;
 }
 
 } // namespace aiverse::fx
