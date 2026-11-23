@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { onNativeEvent } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
 let previewRevision = 0;
 const previewOwner = `evolve-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-import { invoke } from '../bridge';
 
 type Props = { ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
 const integer = (value: string): number | null => {
@@ -48,15 +47,12 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
       void clear();
       return;
     }
-      void clear();
-      return;
-    }
     const x = integer(scaleX), z = integer(scaleZ);
     const px = integer(pivotX), pz = integer(pivotZ);
     if (x === null || z === null || x < 1 || z < 1 ||
         x > 1000000 || z > 1000000 ||
         (pivot === 'custom' && (px === null || pz === null))) {
-      void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {});
+      void clear();
       return;
     }
     void invoke('studio.worldProcessAreaPreview', {
