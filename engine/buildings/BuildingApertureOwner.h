@@ -23,7 +23,9 @@ struct BuildingAperturePose {
     BuildingFeatureKind kind=BuildingFeatureKind::PersonnelDoor;
     bool open=false;
     uint64_t revision=0;
-    world::Bounds bounds{};
+    world::Bounds bounds{}; // original fully closed bounds
+    uint16_t physicalPermille=0; // committed sliding position, 0..1000
+    bool moving=false;
 };
 struct BuildingApertureUpdate {
     bool collisionCommitted=false;
@@ -119,7 +121,7 @@ public:
         entries_=std::move(staged);
         sceneId_=sceneId;
         obstruction_=std::move(obstruction);
-        revision_=0;pendingChange_={};attached_=true;
+        revision_=0;pendingChange_={};attached_=true;faulted_=false;
         if(error)error->clear();
         return true;
     }
@@ -133,7 +135,7 @@ public:
         world::SpatialWorld& spatial,BuildingGraphChangeRouter& router,
         uint32_t domains) {
         BuildingApertureUpdate out;
-        if(!attached_||pendingChange_){
+        if(!attached_||faulted_||pendingChange_||motionActive()){
             out.error="Scene inactive or prior graph event awaiting acknowledgement";
             return out;
         }
@@ -185,6 +187,92 @@ public:
         return out;
     }
 
+    // Opt-in stepped physical motion. The single conservative full-width
+    // barrier slides out of the opening; this is NOT a two-leaf collider.
+    // No gameplay passage authorization is granted until fully opened.
+    bool beginMotion(const std::string& socketId,bool open,
+                     uint32_t domains,std::string* error=nullptr){
+        if(!attached_||faulted_||pendingChange_||motionActive()||
+           !domains||(domains&~kBuildingGraphAll)){
+            if(error)*error="Motion requires idle scene and valid graph consumers";
+            return false;
+        }
+        auto it=entries_.find(socketId);
+        if(it==entries_.end()||it->second.pose.open==open){
+            if(error)*error="Invalid aperture or already at requested endpoint";
+            return false;
+        }
+        it->second.pose.moving=true;
+        it->second.targetOpen=open;
+        it->second.motionDomains=domains;
+        if(error)error->clear();
+        return true;
+    }
+
+    // One bounded deterministic movement step per authoritative owner tick.
+    // Authoritative actor/cargo sensor must inspect the entire swept AABB.
+    // Real collision/nav ownership stays in SpatialWorld + graph router.
+    BuildingApertureUpdate advanceMotion(world::SpatialWorld& spatial,
+                       BuildingGraphChangeRouter& router,uint16_t stepPermille=100){
+        BuildingApertureUpdate out;
+        if(!attached_||faulted_||pendingChange_||stepPermille==0||stepPermille>250){
+            out.error="Motion unavailable, pending graph ACK or invalid step";return out;
+        }
+        auto it=std::find_if(entries_.begin(),entries_.end(),
+            [](const auto& pair){return pair.second.pose.moving;});
+        if(it==entries_.end()){out.error="No moving aperture";return out;}
+        auto& e=it->second;
+        const auto prev=e.pose.physicalPermille;
+        const uint16_t next=e.targetOpen?
+            uint16_t(std::min<int>(1000,int(prev)+stepPermille)):
+            uint16_t(std::max<int>(0,int(prev)-stepPermille));
+        const auto before=physicalBounds(e.pose.bounds,prev);
+        const auto after=physicalBounds(e.pose.bounds,next);
+        const auto swept=unionBounds(before,after);
+        if(obstruction_(swept)){
+            out.error="Actor/vehicle/cargo obstructs swept aperture trajectory";
+            return out;
+        }
+        const auto found=spatial.colliders().find(e.colliderId);
+        // The existing owner must still own the previous published AABB.
+        if(found==spatial.colliders().end()||
+           !sameBounds(found->second.bounds,before)){
+            out.error="Moving aperture collider ownership lost";return out;
+        }
+        spatial.remove(e.colliderId);
+        const bool finished=e.targetOpen?next==1000:next==0;
+        // At a fully open endpoint, release the physical barrier. Otherwise
+        // keep exactly one dynamic collider at the next committed position.
+        if(!(finished&&e.targetOpen)&&
+           !spatial.add({e.colliderId,after})){
+            if(!spatial.add({e.colliderId,before})){
+                faulted_=true;
+                out.error="Motion failed and collider rollback failed; scene faulted";
+            }else out.error="Motion collider publication rejected and rolled back";
+            return out;
+        }
+        e.pose.physicalPermille=next;
+        e.pose.open=finished&&e.targetOpen;
+        e.pose.moving=!finished;
+        e.pose.revision=++revision_;
+        pendingChange_=BuildingGraphChange{sceneId_,revision_,
+            e.pose.featureIndex,BuildingGraphChangeKind::Moved,
+            e.motionDomains,swept,e.pose.open};
+        out.collisionCommitted=true;
+        out.revision=revision_;
+        const auto dispatched=router.publish(*pendingChange_);
+        out.graphsAcknowledged=dispatched.complete;
+        out.error=dispatched.error;
+        if(dispatched.complete)pendingChange_.reset();
+        return out;
+    }
+
+    bool motionActive()const noexcept{
+        for(const auto& [id,e]:entries_){(void)id;if(e.pose.moving)return true;}
+        return false;
+    }
+    bool faulted()const noexcept{return faulted_;}
+
     std::vector<BuildingAperturePose> poses()const{
         std::vector<BuildingAperturePose> out;
         for(const auto& [id,e]:entries_){(void)id;out.push_back(e.pose);}
@@ -196,7 +284,8 @@ public:
         std::map<uint32_t,world::Bounds> result;
         for(const auto& [id,e]:entries_){
             (void)id;
-            if(!e.pose.open)result.emplace(e.colliderId,e.pose.bounds);
+            if(!e.pose.open)result.emplace(e.colliderId,
+                physicalBounds(e.pose.bounds,e.pose.physicalPermille));
         }
         return result;
     }
@@ -216,7 +305,7 @@ public:
             if(!e.pose.open)spatial.remove(e.colliderId);
         }
         entries_.clear();obstruction_={};pendingChange_.reset();
-        sceneId_=revision_=0;attached_=false;
+        sceneId_=revision_=0;attached_=false;faulted_=false;
     }
 private:
     static bool operable(BuildingFeatureKind kind){
@@ -225,14 +314,40 @@ private:
                kind==BuildingFeatureKind::SmallGate||
                kind==BuildingFeatureKind::SlidingRoof;
     }
+    static bool sameBounds(const world::Bounds& a,const world::Bounds& b){
+        return a.min.x==b.min.x&&a.min.y==b.min.y&&a.min.z==b.min.z&&
+               a.max.x==b.max.x&&a.max.y==b.max.y&&a.max.z==b.max.z;
+    }
+    static world::Bounds unionBounds(const world::Bounds& a,
+                                      const world::Bounds& b){
+        return {{fxMin(a.min.x,b.min.x),fxMin(a.min.y,b.min.y),
+                 fxMin(a.min.z,b.min.z)},
+                {fxMax(a.max.x,b.max.x),fxMax(a.max.y,b.max.y),
+                 fxMax(a.max.z,b.max.z)}};
+    }
+    // Full-width conservative slab translates by its own horizontal span.
+    // All calculations are Fixed: no frame-dependent floating-point drift.
+    static world::Bounds physicalBounds(const world::Bounds& original,
+                                         uint16_t permille){
+        auto result=original;
+        const Fixed dx=original.max.x-original.min.x;
+        const Fixed dz=original.max.z-original.min.z;
+        const Fixed distance=(dx>=dz?dx:dz)*
+            Fixed::fromRatio(permille,1000);
+        if(dx>=dz){result.min.x+=distance;result.max.x+=distance;}
+        else{result.min.z+=distance;result.max.z+=distance;}
+        return result;
+    }
     struct Entry{
         BuildingAperturePose pose;
         uint32_t colliderId=0;
+        bool targetOpen=false;
+        uint32_t motionDomains=0;
     };
     std::map<std::string,Entry> entries_;
     ObstructionProbe obstruction_;
     std::optional<BuildingGraphChange> pendingChange_;
     uint64_t sceneId_=0,revision_=0;
-    bool attached_=false;
+    bool attached_=false,faulted_=false;
 };
 } // namespace aiverse::building
