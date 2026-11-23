@@ -157,6 +157,55 @@ void testOrphanedVehicleReference() {
     AIVERSE_TEST_CHECK(sim->checksum()==before);
 }
 
+void testBoundaryOnlyDirtyMotionProducer() {
+    auto sim=make(true);
+    auto& ecs=sim->world();
+    auto& host=actor::host(*sim);
+    const Entity actor=host.characterEntity(*sim,1);
+    const auto* dirty=ecs.resourceConst<wd::RegionDirtyQueue>();
+    AIVERSE_TEST_CHECK(dirty && dirty->entries.empty());
+    const auto ackBefore=dirty->acknowledged;
+
+    // A large amount of movement within the same 32-unit owner cell
+    // produces no structural event or queue writes.
+    ecs.get<actor::CharacterBody>(actor).pos={30_fx,2_fx,4_fx};
+    AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.empty());
+
+    ecs.get<actor::CharacterBody>(actor).pos={33_fx,2_fx,4_fx};
+    AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
+    AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
+    const auto* pending=ecs.resourceConst<wd::RegionDirtyQueue>();
+    AIVERSE_TEST_CHECK(pending && pending->entries.size()==1);
+    AIVERSE_TEST_CHECK(pending->entries.at(stable(actor))==
+                       uint8_t(wd::RegionDirtyKind::Move));
+
+    host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(owner(*sim,actor)==wd::Cell(1,0,0));
+    const auto* applied=ecs.resourceConst<wd::RegionDirtyQueue>();
+    AIVERSE_TEST_CHECK(applied->entries.empty());
+    AIVERSE_TEST_CHECK(applied->acknowledged==ackBefore+1);
+    AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.empty());
+
+    // Native ECS persistent queues, a fixed-pool snapshot and the ledger
+    // must roll back the same authoritative region ownership together.
+    ecs.enableCowSnapshots();
+    SimSnapshot snapshot;
+    sim->saveState(snapshot);
+    const auto checksum=sim->checksum();
+    ecs.get<actor::CharacterBody>(actor).pos={66_fx,2_fx,4_fx};
+    AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
+    host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(owner(*sim,actor)==wd::Cell(2,0,0));
+    AIVERSE_TEST_CHECK(sim->checksum()!=checksum);
+    sim->loadState(snapshot);
+    AIVERSE_TEST_CHECK(sim->checksum()==checksum);
+    AIVERSE_TEST_CHECK(owner(*sim,actor)==wd::Cell(1,0,0));
+}
+
 void testDynamicSpawnRetireAndRecycledIds() {
     auto sim=make(true);
     auto& ecs=sim->world();
@@ -221,6 +270,7 @@ int main() {
     testAutomaticTickAndLegacy();
     testVehicleGroupAndCrossings();
     testOrphanedVehicleReference();
+    testBoundaryOnlyDirtyMotionProducer();
     testDynamicSpawnRetireAndRecycledIds();
     std::cout<<"PASS world-space authoritative region reconciliation and tombstones\n";
 }
