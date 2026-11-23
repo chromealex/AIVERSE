@@ -38,3 +38,27 @@ test('delete is refused when graph links or output still depend on node',()=>{
  assert.equal(out.nodes.length,1);
  assert.equal(changed.nodes.length,2);
 });
+
+import {shaderNodeCatalog,connectShaderInput,disconnectShaderInput,setShaderValue,duplicateShaderNode} from '../src/panels/shaderGraphLayout.ts';
+const ops=[{id:'constant',inputs:0,domains:['material']},{id:'add',inputs:2,domains:['material']},{id:'particle',inputs:0,domains:['particle']}];
+test('catalog filters native domain and search',()=>{
+ assert.deepEqual(shaderNodeCatalog(ops,'material','ADD').map(x=>x.id),['add']);
+});
+test('connection preserves input slot and refuses a cycle',()=>{
+ const src={domain:'material',nodes:[{id:'a',op:'constant'},{id:'b',op:'add',inputs:['a','']},{id:'c',op:'add',inputs:['b','a']}]};
+ const next=connectShaderInput(src,ops,'a','b',1);
+ assert.deepEqual(next.nodes[1].inputs,['a','a']);
+ assert.equal(connectShaderInput(next,ops,'c','b',0),next);
+ assert.equal(connectShaderInput(next,ops,'a','b',2),next);
+ assert.deepEqual(disconnectShaderInput(next,'b',0).nodes[1].inputs,['','a']);
+ assert.deepEqual(src.nodes[1].inputs,['a','']);
+});
+test('value editing and duplication preserve source',()=>{
+ const src={nodes:[{id:'a',op:'constant',value:[1,2,3,4]}]};
+ assert.equal(setShaderValue(src,'a',[1,2,NaN,4]),src);
+ const next=setShaderValue(src,'a',[4,3,2,1]);
+ const copy=duplicateShaderNode(next,'a');
+ assert.equal(copy.nodes.length,2);assert.notEqual(copy.nodes[1].id,'a');
+ assert.deepEqual(copy.nodes[1].value,[4,3,2,1]);
+ assert.deepEqual(src.nodes[0].value,[1,2,3,4]);
+});
