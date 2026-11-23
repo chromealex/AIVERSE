@@ -66,6 +66,38 @@ public:
     bool transfer(RegionEntityId id,Cell expected,Cell destination) {
         return transfer(std::span<const RegionEntityId>(&id,1),expected,destination);
     }
+    // Atomic relocation of one graph whose members may come from different
+    // cells (e.g. a driver boards a car at the border). Verify ALL expected
+    // owners before changing a single entry, in stable id order.
+    bool transferGroup(std::span<const std::pair<RegionEntityId,Cell>> members,
+                       Cell destination) {
+        if(members.empty() || members.size()>kMaxEntities)return false;
+        std::vector<std::pair<RegionEntityId,Cell>> sorted(members.begin(),members.end());
+        std::sort(sorted.begin(),sorted.end(),[](const auto& a,const auto& b){
+            return a.first<b.first;
+        });
+        size_t moving=0;
+        for(size_t i=0;i<sorted.size();++i) {
+            const auto [id,expected]=sorted[i];
+            if(!id || (i && sorted[i-1].first==id))return false;
+            const auto it=records_.find(id);
+            if(it==records_.end() || !it->second.live || it->second.owner!=expected)
+                return false;
+            if(expected!=destination)++moving;
+        }
+        if(moving>std::numeric_limits<uint64_t>::max()-lastRevision_)return false;
+        for(const auto& [id,expected]:sorted) {
+            if(expected==destination)continue;
+            auto& entry=records_.at(id);
+            entry.owner=destination;
+            entry.revision=++lastRevision_;
+        }
+        return true;
+    }
+    const std::map<RegionEntityId,RegionEntityRecord>& records()const{
+        return records_;
+    }
+
     bool despawn(RegionEntityId id,Cell expected) {
         const auto it=records_.find(id);
         if(it==records_.end() || !it->second.live || it->second.owner!=expected ||
