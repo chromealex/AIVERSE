@@ -14,6 +14,8 @@ std::unique_ptr<AnimationGraphInstance> AnimationGraphInstance::cloneForPreparat
     // state span, notify queue and diagnostic. Detach all mutable shared owners
     // before exposing the candidate; allocation failure leaves this untouched.
     auto next=std::unique_ptr<AnimationGraphInstance>(new AnimationGraphInstance(*this));
+    // Explicit debug instrumentation must never migrate into prepared View candidates.
+    next->executionProfile_.reset();
     for(auto& traits:next->traitState_)
         for(auto& trait:traits)
             if(trait.rig)trait.rig=std::make_shared<AnimationRigState>(*trait.rig);
@@ -263,6 +265,7 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
     return g;
 }
 void AnimationGraphInstance::reset(std::shared_ptr<const AnimationGraph> g) {
+    executionProfile_.reset();
     graph_=std::move(g); parameters_={}; healthy_=true; error_.clear(); state_=0; time_=fadeTime_=fadeDuration_=0;
     source_.clear();last_.clear();bind_.clear();poses_.clear();nativeState_.clear();world_.clear();clocks_.clear();unwrappedClocks_.clear();clipStarted_.clear();notifies_.clear();
     children_.clear();motions_.clear();controllers_.clear();traitState_.clear();rigs_.clear();
@@ -490,6 +493,38 @@ bool AnimationGraphInstance::seekClipNode(const std::string& node,float seconds)
     }
     return false;
 }
+void AnimationGraphInstance::enableExecutionProfile(bool enabled) {
+    if(!enabled){executionProfile_.reset();return;}
+    if(!graph_)throw std::logic_error("execution profile requires a compiled graph");
+    executionProfile_.emplace(graph_->nodes().size());
+}
+Json AnimationGraphInstance::executionProfileReport() const {
+    Json r=Json::object();r.set("available",Json::fromBool(bool(executionProfile_)));
+    if(!executionProfile_||!graph_)return r;
+    r.set("scope",Json::string("root-node-inclusive-cpu-scopes"));
+    const char* phases[]={"sync","update","evaluate"};
+    Json rows=Json::array(),events=Json::array();
+    for(size_t i=0;i<executionProfile_->nodes().size();++i){
+        Json row=Json::object();row.set("node",Json::string(graph_->nodes()[i].id));
+        for(size_t p=0;p<3;++p){
+            const auto& c=executionProfile_->nodes()[i][p];Json value=Json::object();
+            value.set("calls",Json::string(std::to_string(c.calls)));
+            value.set("totalUs",Json::number(c.totalUs,3));value.set("maxUs",Json::number(c.maxUs,3));
+            row.set(phases[p],value);
+        }
+        rows.push(row);
+    }
+    for(const auto& e:executionProfile_->events()){
+        Json row=Json::object();row.set("node",Json::string(graph_->nodes()[e.node].id));
+        row.set("phase",Json::string(phases[size_t(e.phase)]));
+        row.set("startUs",Json::number(e.startUs,3));row.set("durationUs",Json::number(e.durationUs,3));
+        events.push(row);
+    }
+    r.set("nodes",rows);r.set("events",events);
+    r.set("droppedEvents",Json::string(std::to_string(executionProfile_->droppedEvents())));
+    r.set("note",Json::string("Inclusive CPU wall-clock scopes. Subgraphs/rigs are included in parent node time; sync, transition and final pose work outside scopes is not fully attributed. Trace stores only the latest explicitly begun interval; instrumentation overhead is included."));
+    return r;
+}
 void AnimationGraphInstance::update(float dt) {
     notifies_.clear();
     if(!graph_||!std::isfinite(dt)||dt<0) return;
@@ -502,6 +537,7 @@ void AnimationGraphInstance::update(float dt) {
     for(int instruction:graph_->states()[size_t(state_)].program) {
         const auto& n=graph_->nodes()[size_t(instruction)];
         if(!n.sync) continue;
+        graph_profile::Scope timing(executionProfile_?&*executionProfile_:nullptr,size_t(instruction),graph_profile::Phase::Sync);
         const auto& a=graph_->nodes()[size_t(n.a)];const auto& b=graph_->nodes()[size_t(n.b)];
         const double da=graph_->model()->clips[size_t(a.clip)].duration,db=graph_->model()->clips[size_t(b.clip)].duration;
         const double ra=std::clamp(value(parameters_,a.parameter,a.speed),0.f,1000000.f)/da;
@@ -514,6 +550,7 @@ void AnimationGraphInstance::update(float dt) {
     for(int instruction:graph_->states()[size_t(state_)].program) {
         const size_t i=size_t(instruction);
         const auto& n=graph_->nodes()[i];
+        graph_profile::Scope timing(executionProfile_?&*executionProfile_:nullptr,i,graph_profile::Phase::Update);
         if(rigs_[i])rigs_[i]->pendingTime=std::min(.1f,rigs_[i]->pendingTime+dt);
         for(auto& t:traitState_[i])if(t.enabled&&t.rig)t.rig->pendingTime=std::min(.1f,t.rig->pendingTime+dt);
         for(size_t t=n.traits.size();t-->0;){auto& st=traitState_[i][t];const auto& op=n.traits[t].implementation;
@@ -601,6 +638,7 @@ void AnimationGraphInstance::evaluateCurrent(Pose& result) {
     for(int instruction:state.program) {
         const size_t i=size_t(instruction);
         const auto& n=nodes[i]; auto& p=poses_[i];
+        graph_profile::Scope timing(executionProfile_?&*executionProfile_:nullptr,i,graph_profile::Phase::Evaluate);
         float w=std::clamp(value(parameters_,n.parameter,n.weight),0.f,1.f);
         if(n.kind==AnimationGraph::Kind::Subgraph){bindChild(i);children_[i]->evaluate(p);if(!children_[i]->healthy()){healthy_=false;error_=children_[i]->error();}}
         else if(n.kind==AnimationGraph::Kind::MotionMatching)motions_[i]->evaluate(p);
