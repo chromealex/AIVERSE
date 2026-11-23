@@ -101,6 +101,57 @@ std::vector<Vec3> VehicleRace::possibleRespawnPositions(const World& w) const {
     return positions;
 }
 
+// The old query remains available to other hosts. This narrower,
+ // tick-scoped query may prune only the *next* checkpoint, never the
+ // current/grid respawn target. A missing or inconsistent controller falls
+ // back to the full conservative set rather than guessing at its movement.
+std::vector<Vec3> VehicleRace::imminentRespawnPositions(const World& w,
+                                                        Fixed maxTravel)const {
+    if(maxTravel<=Fixed{})return possibleRespawnPositions(w);
+    const auto* state=VehicleRace::state(w);
+    if(!state || !state->started || state->racers.empty())return {};
+    lm::RaceCourse c=course;
+    c.grid=state->grid;
+    if(!lm::valid(c) || !lm::valid(state->session.race))return {};
+    const auto& race=state->session.race;
+    std::vector<Vec3> positions;
+    positions.reserve(state->racers.size()*2);
+    for(size_t i=0;i<state->racers.size();++i) {
+        const int64_t id=int64_t(i+1);
+        const auto progress=race.route.racers.find(id);
+        if(progress==race.route.racers.end() || progress->second.finished)continue;
+        positions.push_back(lm::raceRespawnPoint(c,race,id).position);
+        if(progress->second.nextGate>=c.checkpoints.size())continue;
+        const auto& checkpoint=c.checkpoints[progress->second.nextGate];
+        const auto* drive=driveOf(w,state->racers[i]);
+        if(!drive || !lm::valid(drive->controller)) {
+            positions.push_back(checkpoint.respawn);
+            continue;
+        }
+        // A crossing inside the coming step must reach the next gate
+        // plane. Its signed distance cannot be more than maxTravel away
+        // unless the previous race sample is stale due to external pose
+        // mutation, in which case retain this checkpoint conservatively.
+        const auto last=race.racers.find(id);
+        if(last==race.racers.end() || !last->second.seen ||
+           last->second.last!=drive->controller.position) {
+            positions.push_back(checkpoint.respawn);
+            continue;
+        }
+        const Fixed plane=(drive->controller.position-checkpoint.gate.center)
+                              .dot(checkpoint.gate.normal);
+        if(fxAbs(plane)<=maxTravel)
+            positions.push_back(checkpoint.respawn);
+    }
+    std::sort(positions.begin(),positions.end(),[](Vec3 a,Vec3 b){
+        if(a.x!=b.x)return a.x<b.x;
+        if(a.y!=b.y)return a.y<b.y;
+        return a.z<b.z;
+    });
+    positions.erase(std::unique(positions.begin(),positions.end()),positions.end());
+    return positions;
+}
+
 void VehicleRace::after(World& w, RaceHost& host, const DriveRules& drive, uint32_t tick) const {
     RaceState* rs = state(w);
     if (!rs || rs->racers.empty()) return;
