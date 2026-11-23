@@ -5,7 +5,6 @@
 // colliders and render instance poses in its normal update phase.
 #include "engine/buildings/BuildingNavMeshBridge.h"
 #include <aiverselib/systems/BuildingRouteExecutor.h>
-#include <aiverselib/systems/BuildingRouteExecutor.h>
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <map>
 #include <set>
@@ -14,8 +13,15 @@
 #include <vector>
 
 namespace aiverse::building {
+struct BuildingRiderDisplacement {
+    uint64_t actorId=0; // existing game/ECS actor identifier, never a new entity
+    uint32_t liftFeature=0;
+    int64_t fromYmm=0,toYmm=0;
+    uint64_t revision=0;
+};
 struct BuildingCirculationTick {
     std::vector<BuildingLiftEvent> events;
+    std::vector<BuildingRiderDisplacement> riderMovements;
     std::vector<BuildingLiftPlatformMotion> platformMovements;
     uint64_t graphRevision=0;
 };
@@ -50,13 +56,14 @@ public:
         lifts_=std::move(lifts);
         width_=width;depth_=depth;origin_=origin;yaw_=yaw;
         navLinks_={};
+        riders_.clear();
         ++graphRevision_;
         if(error)error->clear();
         return true;
     }
 
     void clear(){
-        graph_={};lifts_.clear();navLinks_={};
+        graph_={};lifts_.clear();navLinks_={};riders_.clear();
         ++graphRevision_;
     }
     const BuildingStructureGraph& graph()const noexcept{return graph_;}
@@ -147,6 +154,49 @@ public:
         auto it=lifts_.find(feature);
         return agent.cancel(it==lifts_.end()?nullptr:&it->second);
     }
+    // The host retains no actor movement/transform data: only identifiers
+    // already owned by the game. Rider deltas are published in the same
+    // circulation tick as the cabin platform and must be applied by the
+    // existing ECS/physics actor owner after collider publication succeeds.
+    bool boardRider(uint64_t actorId,uint32_t feature,uint32_t floor){
+        if(actorId==0||riders_.count(actorId))return false;
+        auto it=lifts_.find(feature);
+        if(it==lifts_.end()||!it->second.board(floor))return false;
+        riders_[actorId]=feature;return true;
+    }
+    bool exitRider(uint64_t actorId,uint32_t feature,uint32_t floor){
+        auto it=riders_.find(actorId);
+        if(it==riders_.end()||it->second!=feature)return false;
+        auto lift=lifts_.find(feature);
+        if(lift==lifts_.end()||!lift->second.disembark(floor))return false;
+        riders_.erase(it);return true;
+    }
+    bool isRider(uint64_t actorId,uint32_t feature)const {
+        auto it=riders_.find(actorId);
+        return it!=riders_.end()&&it->second==feature;
+    }
+    // Actor-aware variants prevent two route executors from silently
+    // counting one actor twice. Old count-based APIs remain for scripted
+    // non-actor cargo/passenger interactions.
+    bool acknowledgeAgentBoarded(BuildingRouteExecutor& executor,
+                                 uint64_t actorId,uint32_t feature){
+        if(!actorId||riders_.count(actorId))return false;
+        auto it=lifts_.find(feature);
+        if(it==lifts_.end()||!executor.acknowledgeBoarded(it->second))
+            return false;
+        riders_[actorId]=feature;
+        return true;
+    }
+    bool acknowledgeAgentDisembarked(BuildingRouteExecutor& executor,
+                                    uint64_t actorId,uint32_t feature,
+                                    const std::string& actualRoom){
+        if(!isRider(actorId,feature))return false;
+        auto it=lifts_.find(feature);
+        if(it==lifts_.end()||
+           !executor.acknowledgeDisembarked(it->second,actualRoom))
+            return false;
+        riders_.erase(actorId);return true;
+    }
     bool callLift(uint32_t feature,uint32_t targetFloor){
         auto it=lifts_.find(feature);
         return it!=lifts_.end()&&it->second.call(targetFloor);
@@ -179,8 +229,14 @@ public:
         for(auto& [feature,controller]:lifts_){
             (void)feature;
             controller.advance(elapsedMs,&out.events);
-            if(auto movement=controller.takePlatformMotion())
+            if(auto movement=controller.takePlatformMotion()){
                 out.platformMovements.push_back(*movement);
+                for(const auto& [actorId,riderFeature]:riders_)
+                    if(riderFeature==feature)
+                        out.riderMovements.push_back({
+                            actorId,feature,movement->oldYmm,
+                            movement->newYmm,movement->revision});
+            }
         }
         return out;
     }
@@ -196,6 +252,7 @@ public:
 private:
     BuildingStructureGraph graph_;
     std::map<uint32_t,BuildingLiftController> lifts_;
+    std::map<uint64_t,uint32_t> riders_; // authoritative actor IDs => lift features
     BuildingNavLinkBatch navLinks_;
     Vec3 origin_{};
     float width_=0,depth_=0;
