@@ -676,3 +676,46 @@ Tests stay deferred at user request. No Clang/CMake, actual renderer,
 in-game gameplay or GPU capture has been executed for this stage.
 Handoff:
 `docs/agent-handoffs/building-aperture-presentation-stage23g-2026-11-23.md`.
+
+
+## Stage 23H — concrete native command/tick/render owner bridge
+
+`engine/buildings/BuildingApertureGameBridge.h`, exported via
+`BuildingRuntime.h`, composes the existing
+`BuildingApertureFixedTickOwner` and
+`BuildingAperturePresentation` into one scene-facing API.
+Game owner first creates the generated runtime building and attaches
+`BuildingApertureOwner` with actual SpatialWorld collider IDs,
+a live obstruction sensor and registered graph consumers. Then call
+`bridge.attach(sceneId, authorize, reachable, apertures, style)`.
+Use the game's existing authenticated command transport to map
+requester identity onto an ECS Entity and call
+`bridge.enqueue(ecs,command)`. No network packet is trusted without
+the real owner policy.
+
+During the *existing* authoritative fixed-tick phase call
+`bridge.fixedTick(ecs,apertures,spatial,router,serverTick)` only
+after actor movement and obstruction information have been refreshed.
+It commits real collision, publishes graph events and only forwards
+completed frames to the CPU presentation owner. Rendering happens
+separately: the existing Renderer3D owner calls
+`bridge.render(dtMs,submitLeaf)`; the supplied callback receives a
+const `render::Model&` plus one `BuildingApertureLeafPose`, maps
+these into its usual `ModelDraw` submission/instance-transforms and
+owns all GPU upload, graphics lifetime and retirement fences.
+Keep CPU Models alive through graphics retirement; release GPU leases
+before `bridge.detach()`. Call `bridge.retireActor(entity)` from
+the game's existing authoritative actor lifecycle handler before ECS
+generation recycling.
+
+The bridge DOES NOT register itself into an application main loop
+or renderer, create a new scheduler, write a transport or upload GPU
+models. The source-level callback is an explicit integration seam,
+not proof that all game examples invoke it. Existing gate/roof
+collision remains instantaneous and binary while visual leaf animation
+is interpolated, so this is NOT a physically swept moving-leaf
+implementation. The next stage must add substep collider movement,
+swept actor/vehicle obstruction, rollback and synchronized nav
+invalidation before calling the physical animation complete.
+No tests were run per user instruction. Handoff:
+`docs/agent-handoffs/building-aperture-game-bridge-stage23h-2026-11-23.md`.
