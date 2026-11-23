@@ -76,6 +76,9 @@ public:
             playing_=false;
             pendingRestart_=true;
             phase_=0;
+            pendingClear_=false;
+            burstsPending_=0;
+            triggeredBursts_=0;
             timeTicks_=0;
             targetTicks_=0;
             stepsPending_=0;
@@ -86,6 +89,30 @@ public:
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
+        if(action=="burst") {
+            const auto& raw=input["count"];
+            if(!raw.isNull() &&
+               (!raw.isNumber() || raw.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
+                raw.integer(0)<1 || raw.integer(0)>8))
+                return errorStatus("Burst count must be an integer from 1 to 8");
+            const auto requested=uint32_t(raw.isNull()?1:raw.integer());
+            if(burstsPending_+requested>32)
+                return errorStatus("SpectraFX preview burst queue is full");
+            burstsPending_+=requested;
+            error_.clear();
+            return status();
+        }
+        if(action=="clear") {
+            // GPU pool reset happens next frame after beginFrame, not in an
+            // arbitrary Studio IPC callback or an open graphics encoder.
+            playing_=false;phase_=0;
+            timeTicks_=targetTicks_=stepsPending_=0;
+            burstsPending_=0;triggeredBursts_=0;
+            pendingRestart_=false;
+            pendingClear_=true;
+            error_.clear();
+            return status();
+        }
         if(action=="play") {error_.clear();playing_=true;return status();}
         if(action=="pause") {
             playing_=false;targetTicks_=timeTicks_;stepsPending_=0;
@@ -96,6 +123,8 @@ public:
             playing_=input.getBool("play",false);
             pendingRestart_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
             phase_=0;
+            pendingClear_=false;
+            burstsPending_=0;triggeredBursts_=0;
             return status();
         }
         if(action=="step") {
@@ -144,6 +173,10 @@ public:
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
+        if(pendingClear_) {
+            runtime_.clear();
+            pendingClear_=false;
+        }
         if(pendingRestart_) {
             runtime_.clear();
             timeTicks_=0;
@@ -155,6 +188,7 @@ public:
                     "SpectraFX preview burst rejected":runtime_.reason();
                 return;
             }
+            ++triggeredBursts_;
         }
         for(const auto& [name,value]:requestedParameters_) {
             if(!runtime_.setNamedProgramParameter(name,value,true)) {
@@ -163,6 +197,19 @@ public:
         }
         requestedParameters_.clear();
         if(!error_.empty())return;
+        // Repeated one-shot triggers use the same validated emitter graph,
+        // but create additional real particle bursts without recompilation.
+        // The queue is bounded and consumed only inside the device frame.
+        const uint32_t count=std::exchange(burstsPending_,0u);
+        for(uint32_t i=0;i<count;++i) {
+            if(!runtime_.burstAt({origin.x,origin.y+1.0f,origin.z})) {
+                playing_=false;phase_=0;
+                error_=runtime_.reason().empty()?
+                    "SpectraFX one-shot burst rejected":runtime_.reason();
+                return;
+            }
+            ++triggeredBursts_;
+        }
         // Fixed 60 Hz physics regardless of UI speed: speed affects only
         // the number of entire simulation ticks executed per native frame.
         // A bounded accumulator supports 1/4 and 1/2 rate without dt drift.
@@ -210,8 +257,8 @@ public:
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
-        return ready_ && (playing_ || pendingRestart_ ||
-                          targetTicks_>timeTicks_ || stepsPending_>0);
+        return ready_ && (playing_ || pendingRestart_ || pendingClear_ ||
+                          burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
     uint32_t timeTicks() const {return timeTicks_;}
     Json status() const {
@@ -224,6 +271,9 @@ public:
         result.set("timeSeconds",Json::number(double(timeTicks_)/60.0,3));
         result.set("speed",Json::number(double(speed_),2));
         result.set("loop",Json::fromBool(loop_));
+        result.set("bursts",Json::number(int64_t(triggeredBursts_)));
+        result.set("queuedBursts",Json::number(int64_t(burstsPending_)));
+        result.set("clearing",Json::fromBool(pendingClear_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -235,6 +285,8 @@ public:
         runtime_.shutdown();
         ready_=false;playing_=false;pendingRestart_=false;
         stepsPending_=timeTicks_=targetTicks_=phase_=0;
+        pendingClear_=false;
+        burstsPending_=triggeredBursts_=0;
         requestedParameters_.clear();
         backend_.clear();error_.clear();
         ++generation_;
@@ -248,8 +300,9 @@ private:
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false;
     bool loop_=true;
+    bool pendingClear_=false;
     float speed_=1.0f;
-    uint32_t phase_=0;
+    uint32_t phase_=0,burstsPending_=0,triggeredBursts_=0;
     uint32_t timeTicks_=0,targetTicks_=0,stepsPending_=0;
     uint64_t generation_=1;
     std::string backend_,error_;
