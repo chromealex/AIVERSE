@@ -25,6 +25,7 @@
 #include "engine/world/TerraWeaveHorizonPresentationQuality.h"
 #include "engine/world/TerraWeaveHorizonAdaptiveQuality.h"
 
+namespace aiverse::building { class BuildingRenderer3DScene; }
 namespace aiverse::terraweave { class TerraWeaveForestScene; class TerraWeaveHorizonScene;
     class AuthoredWorldHeightSnapshot; class FoliageExclusionMask; }
 namespace aiverse::world {
@@ -41,6 +42,20 @@ public:
     ~WorldScene();
     void update(gfx::Device&,std::span<const Vec3> observers,int radius=2);
     void draw(render::Renderer3D&,Cell renderOrigin,int originCellSize);
+    // Optional universal procedural-building draw owner. Weak ownership
+    // ensures WorldScene does not control the authoritative ECS, session
+    // or GPU-model lifetime. Attach only after Renderer3D GPU upload.
+    void setBuildingRenderOwner(
+        const std::shared_ptr<building::BuildingRenderer3DScene>& owner){
+        buildingRenderOwner_=owner;
+    }
+    void setBuildingRenderElapsedMs(uint32_t elapsedMs){
+        buildingRenderElapsedMs_=std::min<uint32_t>(elapsedMs,350u);
+    }
+    const std::string& buildingDrawError() const noexcept{
+        return buildingDrawError_;
+    }
+
     void shutdown(gfx::Device&);
     int worldCellSizeMetres()const{return assets_.cellSize;}
     // Owned resident chunk models only. ModelTextureCache is potentially
@@ -310,6 +325,9 @@ private:
     size_t uploadBytes_=16*1024*1024;
     std::map<Cell,std::shared_ptr<Prepared>> resident_;
     std::unique_ptr<AsyncChunkStream> stream_;
+    std::weak_ptr<building::BuildingRenderer3DScene> buildingRenderOwner_;
+    uint32_t buildingRenderElapsedMs_=16;
+    std::string buildingDrawError_;
     NereidWaterScene nereidWater_;
     NereidFloodVisualScene floodVisual_;
     std::vector<NereidSceneFlowObstruction> nereidFlowObstructions_;
