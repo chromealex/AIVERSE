@@ -38,6 +38,81 @@ See handoffs:
 `docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
 Full plan: `docs/spectrafx-modernization-roadmap-2026-11-23.md`.
 
+## Graph v2 — read-only Data Interfaces (Stage 4, 2026-11-23)
+
+Graph v2 can now declare scalar **Data Interfaces** next to existing named
+`instanceParameters`. Every binding maps an existing, unique param slot
+(`param0`…`param7`) to a host-injected provider and channel; no new
+per-particle VM opcode or separate gameplay simulation is introduced.
+`DataInterface` nodes are runtime-only value nodes and must be consumed
+inside `ParticleProgramModule` expressions using `{"$runtime":"node_id"}`.
+Binding validation occurs during graph compilation (including editor/MCP
+`fx_graph_validate`) and again during runtime initialization.
+
+Example in `examples/spectrafx/data_interface_weather_v2.vfx.json`:
+
+```json
+{
+  "instanceParameters": {
+    "wind_lift": {"slot":0,"default":2,"min":0,"max":25}
+  },
+  "dataInterfaces": {
+    "wind_lift": {
+      "provider":"weather",
+      "channel":"vertical_acceleration",
+      "scale":1,
+      "offset":0,
+      "fallback":2,
+      "required":false
+    }
+  }
+}
+```
+
+For any native project, after `GraphRuntime::initGraph`:
+
+```cpp
+aiverse::spectra::DataInterfaceRegistry registry;
+registry.bind("weather",
+    [&stableWeather](std::string_view channel,aiverse::render::float3 point,
+                     float& sample) {
+        // stableWeather is YOUR immutable presentation snapshot, not an
+        // AIVERSE engine type; do not capture an updating ECS world.
+        if (channel != "vertical_acceleration") return false;
+        sample = stableWeather.accelerationAt(point).y;
+        return true;
+    });
+runtime.setDataInterfaceRegistry(&registry); // non-owning, after initGraph
+runtime.burstAt({0,2,0}); // sample once at this burst origin
+runtime.setDataInterfaceRegistry(nullptr); // detach before registry teardown
+```
+
+Bindings with `required:true` reject a burst if the provider/channel or
+transformed value is unavailable or out of declared bounds; optional bindings
+use the finite `fallback`. Every batch is validated before any runtime
+uniform is changed. Samples are taken **once per burst**, not per particle
+and not on every simulation frame. New bursts can read updated snapshot
+values while already-live particles retain their original values unless
+updated via the older explicit VM parameter APIs. CPU `ParticleSystem`,
+shared `BatchWorld`, and opt-in GPU VM paths reuse the same parameter slots;
+unsupported GPU programs still follow the conservative existing CPU
+fallback policy.
+
+`SpectraFxDataInterfaceRegistry` is deliberately **not** introduced: use
+`aiverse::spectra::DataInterfaceRegistry` from
+`engine/fx/SpectraDataInterfaces.h`. Provider names/channel names are
+bounded safe identifiers; providers are read-only and must be nonthrowing.
+There are at most 16 providers, 8 bindings per graph, and 8 scalar parameter
+slots. The editor authoring model offers a `DataInterface` node and
+`setDataInterfaceBinding` / `removeDataInterfaceBinding` transactional
+helpers. A complete HTML5 Studio panel for these bindings is **not yet
+implemented**; projects can use the validated JSON/MCP graph workflow.
+
+**Verification:** native graph-v2 compiler/runtime tests were added and the
+Linux/macOS focused CI workflow extended, but the current Stage 4 revision
+has not yet passed CI or GPU-device validation. See the exact handoff:
+`docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
+
 ## Integration boundary with PRISMA
 
 **SpectraFX is NOT the post-processing engine.** It owns emitters, particle simulation, FX graphs (VFX `fx/graphs/*.vfx.json`), ECS FX sources and transient visual events. **PRISMA** in `engine/render/Prisma.{h,cpp}` owns HDR composite/tone mapping, bloom, depth of field, motion blur, temporal AA, screen-space lighting and post-process camera volumes. FX sprites/meshes write scene HDR before PRISMA; the full-screen `postfx` Shader Graph domain belongs to PRISMA. The common Shader Graph compiler/RHI is shared infrastructure, not a second VFX or postprocess implementation.
