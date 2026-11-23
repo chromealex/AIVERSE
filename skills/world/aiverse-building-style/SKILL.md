@@ -219,3 +219,26 @@ from existing transport, verify ECS actor owner and physical landing.
 Never let browser/client packets mutate lift snapshots or bypass physical
 doors. No tests run by user request; inspect handoff under
 docs/agent-handoffs/building-authenticated-commands-2026-11-23.md.
+
+
+## Stage 19 — ECS actor retirement and scene streaming guard (2026-11-23)
+
+For the existing `BuildingCirculationEcsScene<Body>`, call
+`prepareActorRetirement(actor, &error)` on the authoritative ECS owner
+**before** removing an actor or reusing its entity generation. If the actor
+rides a moving cabin or the doors are not physically open at the real
+landing, this returns false: defer actual actor destruction until the lift
+arrives and releases the passenger. On a valid landing it calls the
+existing `BuildingLiftEcsBridge::releaseAtLanding` and clears the
+authenticated command nonce. Never decrement rider counts by deleting ECS
+markers or inventing a new physics owner.
+
+For ordinary building streaming, use `detachIfVacant(spatial, navmesh,
+&error)`. `canUnload()` checks the authoritative host rider bindings;
+ordinary unload rejects occupied/faulted scenes. Existing `detach()`
+is forced teardown only for world destruction and requires external
+passenger reconciliation. An actor-pending-destruction queue is the game's
+responsibility; no automatic despawn or background ticking is added.
+
+This is a source-only stage: tests remain deferred on user instruction.
+Handoff: `docs/agent-handoffs/building-ecs-actor-lifecycle-stage19-2026-11-23.md`.
