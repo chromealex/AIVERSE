@@ -63,3 +63,14 @@ envelope, and generated colliders and gate points are transformed with the mesh.
 Omit the size to retain legacy output. The editor should implement Setting → Style →
 Function → W/H/D → Seed → Generate, saving a generated model as a project Asset;
 that UI and asset integration have NOT been implemented in this stage.
+
+
+Stage 3: `structures.<kind>.forms` adds data-authored major volumes:
+`pod` (armoured wing), `silo` (cylindrical tank/reactor),
+`pylon` (tapered tower) and `gantry` (raised open portal).
+Schema per entry: `kind`, `material`, `at:[x,z]`, `size:[width,height,depth]`,
+optional `level`, `taper`, `chance`, `repeat` and `step:[dx,dz]`.
+All positions/dimensions are normalized to the building's dimensions.
+Parser caps entries, repeats, positions, dimensions and probabilities. Both
+mesh and coarse collision reflect the authored shapes. Reserve roof footprints
+before roof prop placement; do not claim a gantry pierces the closed main hull.

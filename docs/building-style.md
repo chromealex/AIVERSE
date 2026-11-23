@@ -130,3 +130,59 @@ This stage adds the CPU generation and GLB export contract only. The **HTML5 Stu
 asset persistence, runtime render model bridge, trim textures, LOD and preview of variants**
 are separate unimplemented steps. Core collision is still coarse closed AABB boxes for
 non-enterable sci-fi structures; doors are visual gates, not real accessible openings.
+
+
+## Authored composition modules (stage 3)
+
+`structures.<function>.forms` is a bounded list of large architectural pieces, built
+**before** small props. Coordinates are fractions of the structure's unrotated
+footprint and body height; `at` gives the centre in X/Z and `size` the
+relative width/height/depth. A form's `level` is its base elevation
+(relative to body height), and `material` names an existing style PBR
+material. Each form can be repeated with `repeat` and `step` offsets,
+or enabled with seeded `chance`.
+
+```json
+{
+  "kind": "silo",
+  "material": "plate",
+  "at": [1.02, 0.82],
+  "size": [0.30, 0.78, 0.32],
+  "level": 0.38,
+  "chance": 1
+}
+```
+
+Supported kinds:
+
+| kind | generated mesh | collision |
+|---|---|---|
+| `pod` | cut-corner sloped armour wing | coarse enclosing box |
+| `silo` | smooth cylindrical reactor/storage vessel with collar | enclosing box |
+| `pylon` | tall tapered prism and optional beacon | enclosing box |
+| `gantry` | two posts and a raised beam, with open centre | three separate boxes |
+
+Per structure: at most 24 entries; each may have 1–8 copies. `at` is
+within [-0.5, 1.5] in each direction, `size` fractions are positive
+and bounded, the final repeated centre must remain in [-0.75, 1.75], and
+`chance` lies within [0,1]. Invalid fields produce path-specific
+`JsonError` rather than silently generating unbounded geometry.
+
+The examples in `scifi.json` use these operations to distinguish:
+barracks = armoured side pod + paired pylons; command = pylons + elevated
+gantry; factory = coolant silo + service gantry + rear machinery pod;
+depot = off-centre storage pod + tapered pylon.
+
+Authored masses reserve rooftop space before the seeded placement of smaller
+props; no fixed gameplay behavior is tied to any form. The final explicit
+`StructureSize` still bounds the visible mesh, including these additions.
+
+### Limitations
+- Generated sci-fi hulls remain **non-enterable**; the gantry itself has an
+  open center, but the original armoured hull behind it remains closed.
+- Colliders on sloped/cylindrical forms are conservative AABBs, not exact mesh
+  collision; navigation, interior shells and functional sockets are future work.
+- Geometry uses material factors and metres-based UVs, not trim-sheet
+  textures or authored GLB kit pieces yet.
+- Studio's generator window, Assets GUID/meta creation and GPU verification are
+  **not implemented in this stage**. 
