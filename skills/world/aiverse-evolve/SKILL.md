@@ -233,3 +233,6 @@ Native PHYSIS install registers persistence; demo supports `--load FILE`, `--sav
 
 ## Stage 67: SVG ecology report
 Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dead/fallen plant markers. Fixed demo viewport, no live renderer. No build/run. See `docs/handoffs/world-processes-stage67-svg-report-2026-11-23.md`.
+
+## Stage 68: Studio ecology layers
+`studio.evolveLayer` controls authored Scene colors; `studio.evolveState` supplies live ECS minimap regions, rooted/fallen vegetation and PHYSIS weather. HTML5 controls visibility and opacity. No runtime verification. See `docs/handoffs/world-processes-stage68-studio-ecology-2026-11-23.md`.
