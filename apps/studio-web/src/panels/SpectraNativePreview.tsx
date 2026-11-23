@@ -468,6 +468,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           value={gpuAllocationSeed} onChange={e=>setGpuAllocationSeed(e.target.value)}/>
       </StudioField>
       <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointSave'}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
+      {state?.checkpointPending&&<><small>Checkpoint pending ({state.checkpointWaitFrames??0}/240 frames)</small><StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointCancel'}).then(setState).catch(e=>setError(message(e)))}>Cancel checkpoint</StudioButton></>}
       {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointRestore',checkpointId:cp.id}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
       <StudioField label="Metal shader seed (optional)" htmlFor="spectra-shader-seed">
         <StudioInput id="spectra-shader-seed" type="number" min={0} max={4294967295} step={1} value={gpuShaderSeed} onChange={e=>setGpuShaderSeed(e.target.value)}/>
