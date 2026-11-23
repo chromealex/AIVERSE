@@ -77,7 +77,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
       })}
       {climate&&(state.weather??[]).map(c=><rect key={`${c.x}:${c.z}`} x={c.x} y={c.z} width={c.size} height={c.size}
         fill="royalblue" fillOpacity={Math.min(.8,Math.max(0,c.wetness))*opacity}><title>Rain {c.rain}; temperature {c.temperature} °C; wetness {c.wetness}</title></rect>)}
-      {vegetation&&(state.plants??[]).map((p,i)=><circle key={i} cx={p.x} cy={p.z} r={Math.max(w,h)/180} fill={p.fallen?'orange':'lightgreen'} fillOpacity={opacity}><title>{p.fallen?'Fallen':'Rooted'}</title></circle>)}
+      {vegetation&&(state.plants??[]).map((p,i)=><circle key={p.id??i} cx={p.x} cy={p.z} r={Math.max(w,h)/180} fill={p.dead?'#a36c55':p.fallen?'orange':p.mature===false?'#8ee9ef':'lightgreen'} fillOpacity={opacity}><title>{p.dead?'Dead':p.fallen?'Fallen':p.mature===false?'Juvenile':'Mature'} · age {p.ageTicks??'unknown'} · shade {p.shadeStress??'—'} · flood {p.floodStress??'—'} · drought {p.droughtStress??'—'}</title></circle>)}
     </svg>{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
 }
 export function EcologyLayerPicker(){
