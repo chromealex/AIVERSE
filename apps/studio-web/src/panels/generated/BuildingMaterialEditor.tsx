@@ -62,7 +62,7 @@ const same = (a:MaterialPatch,b:MaterialPatch) =>
 /** Edits a single existing Studio materials.json PBR resource.
  *  The same material holds all scalar properties AND texture GUIDs.
  *  Does not silently mutate the generator's bundled architecture style. */
-export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:boolean}) {
+export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projectLoaded:boolean;onSaved?:()=>void}) {
   const [library,setLibrary] = useState<MaterialLibrary>({library:{}});
   const [name,setName] = useState('');
   const [draft,setDraft] = useState<MaterialPatch>({});
@@ -126,6 +126,7 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
       setDraft(next);setBaseline(next);
       setMessage('Material and textures saved together in materials.json.');
       window.dispatchEvent(new Event('studio:assets-changed'));
+      onSaved?.();
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
