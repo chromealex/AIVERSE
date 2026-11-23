@@ -2,3 +2,8 @@
 .au-graph-canvas .au-graph-node{cursor:grab;touch-action:none}
 .au-graph-canvas .au-graph-node:active{cursor:grabbing}
 .au-graph-canvas .au-graph-node:focus-visible rect{stroke:var(--au-accent-ink);stroke-width:2}
+
+.au-graph-workspace{display:flex;flex-direction:column;flex:1;min-height:120px;min-width:0}
+.au-graph-workspace>.au-row{flex:none;padding:var(--au-space-1)}
+.au-graph-node circle{cursor:crosshair}
+.au-graph-node circle:focus-visible{stroke:var(--au-accent-ink);stroke-width:2}
