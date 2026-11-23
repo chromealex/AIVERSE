@@ -1171,6 +1171,32 @@ Json StudioHost::runSpectraPreview(const Json& params) {
        (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)))
         throw std::runtime_error("Open the embedded SpectraFX or Scene native viewport");
     const std::string project=session_->workspace().project.dir;
+    if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
+        if(!spectraDockActive_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
+        if(action=="cameraReset") {
+            return onScene([&] {
+                preview_->resetSpectraDockCamera();
+                return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            });
+        }
+        if(action=="cameraOrbit") {
+            const double dx=params["dx"].toDouble(),dy=params["dy"].toDouble();
+            if(!params["dx"].isNumber()||!params["dy"].isNumber()||
+               !finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)
+                throw std::runtime_error("FX cameraOrbit requires finite dx/dy within +/-250");
+            return onScene([&] {
+                preview_->orbit(float(dx),float(dy));
+                return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            });
+        }
+        const double amount=params["amount"].toDouble();
+        if(!params["amount"].isNumber()||!finite({amount})||std::abs(amount)>250)
+            throw std::runtime_error("FX cameraZoom amount must be finite within +/-250");
+        return onScene([&] {
+            preview_->zoom(float(amount));
+            return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+        });
+    }
     return onScene([&]{return preview_->spectraPreviewCommand(params,project);});
 }
 void StudioHost::applyViewport(const Json& params) {
