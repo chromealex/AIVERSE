@@ -50,6 +50,7 @@ public:
             std::move(normalized));
         index_=std::move(indexed);
         residency_.sourceRevision(index_->revision());
+        cancelPendingVisualBatch();
         ready_.clear();
         pendingRetire_.clear();
     }
@@ -112,37 +113,91 @@ public:
             // Keep a single whole-shard GPU publication per frame.
             return;
         }
-        // Exactly one GPU upload per frame (Stage38 source-size admission).
-        for(auto it=ready_.begin();it!=ready_.end();){
-            if(!residency_.current(it->second.ticket)) {
-                it=ready_.erase(it);continue;
+        // Stage ONE connected mixed-LOD plan across frames and publish ALL
+        // affected shards together. A single-key immediate commit here would
+        // expose cracks while neighboring authored revisions are still old.
+        if(visualBatch_){
+            bool current=true;
+            for(const auto& item:batchTickets_){
+                if(!residency_.current(item)) {current=false;break;}
             }
-            CaveBatchChunk chunk;
-            chunk.mesh=it->second.mesh; // visual LOD; never used for physics
-            chunk.resolution=caveVisualLodMeshSpec(
-                resolution,spacingCm,it->second.ticket.lod).resolution;
-            chunk.spacingCm=caveVisualLodMeshSpec(
-                resolution,spacingCm,it->second.ticket.lod).spacingCm;
-            chunk.sourceRevision=it->second.ticket.sourceRevision;
-            chunk.generatorVersion=index_->snapshot().generatorVersion;
-            chunk.revision=++visualRevision_;
-            const auto shard=caveShardFor(chunk.mesh.key,geometry_.catalog().config());
-            // Cross-shard stitching may demand rebuilding neighbors on one
-            // common lattice. The owner refuses that upload rather than
-            // exposing a crack.
-            if(!geometry_.stage(device,shard,{chunk},visualRevision_))
-                break;
-            if(!geometry_.activateVisualOnly({shard}))
-                throw std::runtime_error("Caverns client visual shard activation");
-            if(!residency_.acknowledge(it->second.ticket))
-                throw std::logic_error("Caverns client visual ACK mismatch");
-            it=ready_.erase(it);
-            break;
+            if(!current)cancelPendingVisualBatch();
         }
+        if(!visualBatch_ && !ready_.empty()){
+            std::vector<CaveBatchChunk> candidates;
+            std::vector<CaveResidencyTicket> tickets;
+            for(const auto& [key,result]:ready_){
+                (void)key;
+                if(!residency_.current(result.ticket))continue;
+                const auto visual=caveVisualLodMeshSpec(
+                    resolution,spacingCm,result.ticket.lod);
+                CaveBatchChunk chunk;
+                chunk.mesh=result.mesh;
+                chunk.resolution=visual.resolution;
+                chunk.spacingCm=visual.spacingCm;
+                chunk.sourceRevision=result.ticket.sourceRevision;
+                chunk.generatorVersion=index_->snapshot().generatorVersion;
+                chunk.revision=visualRevision_+1;
+                candidates.push_back(std::move(chunk));
+                tickets.push_back(result.ticket);
+            }
+            if(!candidates.empty()){
+                auto grouped=groupCaveEditsByShard(candidates,
+                                                  geometry_.catalog().config());
+                auto plan=planCaveMixedLodShardBatch(
+                    geometry_.catalog(),grouped,visualRevision_+1);
+                if(plan.ready()){
+                    ++visualRevision_;
+                    batchTickets_=std::move(tickets);
+                    visualBatch_=std::make_unique<CaveMixedLodShardBatch>(
+                        std::move(plan));
+                }
+                // If a neighbor has an incompatible old SDF border, wait
+                // for its new streamed mesh; never force-publish a crack.
+            }
+        }
+        if(visualBatch_ &&
+           batchCursor_<visualBatch_->snapshots.size()){
+            const auto& shard=visualBatch_->snapshots[batchCursor_];
+            if(geometry_.stagePlannedShard(
+                    device,shard,visualBatch_->visual)){
+                stagedShards_.push_back(shard.shard);
+                ++batchCursor_;
+            }
+        }
+        if(visualBatch_ &&
+           batchCursor_==visualBatch_->snapshots.size()){
+            for(const auto& ticket:batchTickets_)
+                if(!residency_.current(ticket)){
+                    cancelPendingVisualBatch();return;
+                }
+            if(!geometry_.activateVisualOnly(stagedShards_))
+                throw std::runtime_error(
+                    "Caverns client multi-shard visual activation");
+            for(const auto& ticket:batchTickets_){
+                if(!residency_.acknowledge(ticket))
+                    throw std::logic_error(
+                        "Caverns client batch visual ACK mismatch");
+                ready_.erase(ticket.key);
+            }
+            visualBatch_.reset();
+            batchTickets_.clear();
+            stagedShards_.clear();
+            batchCursor_=0;
+        }
+    }
+    void cancelPendingVisualBatch(){
+        for(const auto& shard:stagedShards_)
+            (void)geometry_.cancel(shard);
+        visualBatch_.reset();
+        batchTickets_.clear();
+        stagedShards_.clear();
+        batchCursor_=0;
     }
     void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
     bool closeAfterGpuIdle(gfx::Device& dev){
         workers_.drain();
+        cancelPendingVisualBatch();
         if(!geometry_.shutdownAfterGpuIdle(dev))return false;
         index_.reset();ready_.clear();pendingRetire_.clear();
         return true;
@@ -166,6 +221,10 @@ private:
     std::shared_ptr<const CaveSnapshotSpatialIndex> index_;
     std::map<ChunkKey3,CaveStreamCpuResult,KeyLess> ready_;
     std::map<ChunkKey3,CaveResidencyTicket,KeyLess> pendingRetire_;
+    std::unique_ptr<CaveMixedLodShardBatch> visualBatch_;
+    std::vector<CaveResidencyTicket> batchTickets_;
+    std::vector<CaveShardKey> stagedShards_;
+    size_t batchCursor_=0;
     uint64_t visualRevision_=0;
 };
 } // namespace aiverse::terraweave::caverns
