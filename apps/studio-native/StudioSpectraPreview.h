@@ -51,7 +51,7 @@ public:
             Json out=status();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
         }
         if(action=="checkpointFileBegin"){
-            if(checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint busy");
+            if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint requires settled paused preview");
             if(importTransferId_)return errorStatus("Import transfer already active");
             fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;error_.clear();
             Json out=status();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
@@ -69,6 +69,7 @@ public:
         }
         if(action=="checkpointFileExport"){
             if(exportTransferId_)return errorStatus("Export transfer already active");
+            if(importTransferId_)return errorStatus("Import transfer active");
             if(!exportTimelineCheckpoint(fileExport_))return errorStatus("Save a fresh paused checkpoint first");
             exportTransferId_=nextTransferId_++;exportTouched_=now;error_.clear();
             Json out=status();out.set("transferId",Json::number(int64_t(exportTransferId_)));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
@@ -79,10 +80,10 @@ public:
             fileImportPending_=true;error_.clear();return status();
         }
         if(action=="checkpointCancel"){
-            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;fileImport_.clear();
+            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;fileImport_.clear();importTransferId_=0;
             error_.clear();return status();
         }
-        if((checkpointRequest_||rollbackId_||fileImportPending_)&&action!="stop")
+        if((checkpointRequest_||rollbackId_||fileImportPending_||importTransferId_)&&action!="stop")
             return errorStatus("Checkpoint operation pending; cancel or wait");
 
         if(action=="playback") {
