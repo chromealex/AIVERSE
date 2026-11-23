@@ -6,6 +6,7 @@
 // motion commands and moves a dedicated platform instance (no CPU remesh).
 #include "engine/buildings/BuildingCirculationHost.h"
 #include "engine/buildings/BuildingLiftColliderOwner.h"
+#include "engine/buildings/BuildingLiftDoorOwner.h"
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <map>
 #include <string>
@@ -28,6 +29,7 @@ public:
     BuildingCirculationHost& host()noexcept{return host_;}
     const BuildingCirculationHost& host()const noexcept{return host_;}
     const BuildingLiftColliderOwner& colliders()const noexcept{return colliders_;}
+    const BuildingLiftDoorOwner& doors()const noexcept{return doors_;}
 
     // All collider IDs come from the calling game's normal ECS/physics owner.
     // Invalid/duplicate IDs are rejected by SpatialWorld::add. Do not
@@ -64,9 +66,31 @@ public:
             registered.push_back(feature);
         }
         host_=std::move(staged);
+        width_=W;depth_=D;origin_=origin;yaw_=yaw;
         attached_=true;faulted_=false;
         if(error)error->clear();
         return true;
+    }
+
+    // Optional physical landing doors: game supplies collision IDs from its
+    // own allocation pool. Open landings contain no door leaf AABBs.
+    // The scene remains usable without doors for headless/server prototypes,
+    // but runtime boarding must also use physical actor volume validation.
+    bool attachDoors(world::SpatialWorld& spatial,nav::Mesh* navmesh,
+                     const std::map<BuildingLiftDoorKey,BuildingLiftDoorIds>& ids,
+                     std::string* error=nullptr){
+        if(!attached_||faulted_||doors_.enabled()){
+            if(error)*error="Scene unavailable or doors already attached";
+            return false;
+        }
+        return doors_.attach(spatial,navmesh,host_.graph(),host_.lifts(),
+                             ids,width_,depth_,origin_,yaw_,error);
+    }
+    bool doorsOpenAt(uint32_t feature,uint32_t floor)const {
+        if(!attached_||faulted_)return false;
+        const auto it=host_.lifts().find(feature);
+        return it!=host_.lifts().end()&&it->second.readyAt(floor)&&
+               (!doors_.enabled()||doors_.openAt(feature,floor));
     }
 
     // Authoritative world update: after advancing one bounded tick, publish
@@ -84,6 +108,17 @@ public:
             return result;
         }
         result.tick=host_.advance(elapsedMs);
+        // Before publishing new cabin/rider poses, commit landing-door
+        // transitions to the same SpatialWorld. A door collision failure
+        // invalidates navigation and suppresses this tick's actor poses.
+        if(doors_.enabled()&&
+           !doors_.synchronize(spatial,navmesh,host_.lifts())){
+            result.published=false;
+            result.error="Could not synchronize lift landing door collision";
+            faulted_=true;
+            if(navmesh)navmesh->markAllDirty();
+            return result;
+        }
         for(const auto& motion:result.tick.platformMovements){
             if(!colliders_.applyMovement(spatial,navmesh,motion)){
                 result.published=false;
@@ -121,6 +156,7 @@ public:
     // building collision, assets and ECS entities remain owned by the game.
     void detach(world::SpatialWorld& spatial,nav::Mesh* navmesh){
         if(!attached_)return;
+        doors_.detach(spatial,navmesh);
         std::vector<uint32_t> ids;
         for(const auto& [feature,lift]:host_.lifts()){
             (void)lift;ids.push_back(feature);
@@ -136,6 +172,10 @@ public:
 private:
     BuildingCirculationHost host_;
     BuildingLiftColliderOwner colliders_;
+    BuildingLiftDoorOwner doors_;
+    Vec3 origin_{};
+    float width_=0,depth_=0;
+    uint32_t yaw_=0;
     bool attached_=false,faulted_=false;
 };
 } // namespace aiverse::building
