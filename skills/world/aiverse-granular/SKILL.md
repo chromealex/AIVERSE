@@ -1,0 +1,52 @@
+---
+name: aiverse-granular
+description: Use AIVERSE GRANULAR when implementing Авторитетный 2D слой сыпучего материала с осыпанием, кистью Studio и передачей объёма в TerraWeave.
+---
+# GRANULAR — AIVERSE skill
+
+## When to activate
+Авторитетный 2D слой сыпучего материала с осыпанием, кистью Studio и передачей объёма в TerraWeave.
+
+Typical request: песок, щебень, осыпание грунта, выемка/засыпка, холмы из сыпучих частиц. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+
+## Canonical code and API
+- **Gameplay headers:** `libraries/include/aiverselib/world/GranularEcs.h`, `libraries/include/aiverselib/world/GranularDocument.h`.
+- **Authoritative ECS:** `granular::Field, Source`.
+- **Lifecycle:** `aiverse::granular::install(sim)`; per-tick behavior: `granular::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **Studio-authored components:** `GranularField, GranularSource`. These are map authoring fields, not a writable duplicate of live ECS output.
+- **Adjacent adapters:** `examples/world/world_processes_native/GranularTerraWeaveBinding.h`, `GranularWorldIntegration.h`, `GranularTerraWeaveTransfer.h`, `PhysicalSceneHost.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
+
+## Minimal C++20 usage pattern
+```cpp
+#include "aiverselib/world/GranularEcs.h"
+aiverse::granular::install(sim);
+// For 2D authored grids:
+auto doc=granular::authoring::create(8,8,1000);
+granular::authoring::paint(doc,2,3,200,false);
+// Game host later calls granular::authoring::apply(world,entity,doc).
+```
+
+If using normal GameCore map projects instead of a custom module, prefer the compiled opt-in `world_processes` native module and Studio. Example fragments: `examples/native/world_processes/authoring-examples.json`; native setup/lifecycle: `examples/native/world_processes/README.md`.
+
+## Do not cross these ownership boundaries
+TerraWeave is sole canonical soil authority; NEREID water and Box3D rigid collisions are not replaced. Editor brush operates on authored MapDoc; render/collider are derived tiles. Not full 3D SPH/DEM.
+
+## Acceptance checklist (execute when user lifts test deferral)
+- Grid ≤128×128, conservation except Source and explicit Terra transfers, blocked cells empty, world revision/cache invalidation, GPU fence and rollback.
+- Verify C++ compilation, CTest source and actual run outcome; include GCC/Clang, ASan/UBSan where supported.
+- Check authoritative tick order, World snapshot/COW, persistent schema IDs, clean reload, rollback/replay checksums, malformed input rejection, and expired Entity generation references.
+- If the feature is visually observable, capture **real** native Studio/game screenshots with source SHA and platform/backend provenance; do not use fabricated renders as QA proof.
+- Stage13/18/19 GPU, Box3D, TerraWeave and CTest not yet run.
+
+## Handoffs and current verification
+- Read matching `docs/handoffs/world-processes-stage13-granular-evolve-society-2026-11-23.md`, `docs/handoffs/world-processes-stage18-granular-terra-box3d-2026-11-23.md`, `docs/handoffs/world-processes-stage19-physical-native-host-2026-11-23.md` (some stage handoff names contain extra suffixes; search `docs/handoffs/world-processes-stageNN-*` when needed).
+- The PR is **DRAFT**; latest source changes have **not** been verified by a completed full native build or end-to-end scene test. Do not infer production readiness from the presence of API/docs.
+
+## Cross-cutting contract
+- Read `AGENTS.md`, `docs/agents/ecs.md`, `docs/ecs-mechanic-composition.md`, and `skills/world/aiverse-world-processes/SKILL.md` only as necessary for system boundaries.
+- All live game state must be ECS-owned: `World` + `Simulation`. C++20, stable packed-generation `Entity` links in memory; map authoring stores only stable document ID strings. Never serialize ephemeral ECS slot numbers.
+- Integration is opt-in. For regular GameCore maps, compile `examples/native/world_processes/WorldProcessesModule.cpp`, enable `{"id":"world_processes"}` in the project's `rules.json` `nativeModules`, and use the existing `StudioSession` map component authoring. Actual adapter: `aiverselib/world/WorldProcessesNativeModule.h` consumes `GameCore::matchMap()` + `mapPlaced()`.
+- Shared standalone/linked map schemas: `aiverselib/world/WorldProcessesAuthoring.h`, `WorldProcessesLinkedAuthoring.h`, `WorldProcessesExtendedAuthoring.h`, `WorldProcessesExtendedLinks.h`. `WorldProcessesMapHydration.h` resolves live ECS owners with strict validation before installing/creating components.
+- In Studio use existing Add Component, reference picker, Scene gizmos and native `MapDoc` Undo/Redo. For live observation use `WorldProcessesInspector.h`/`WorldProcessesExtendedInspector.h`, never writable runtime clones.
+- After each implementation step add a new `docs/handoffs/world-processes-stageNN-*.md` describing code paths, API, ownership, branch/commit, actual tests/results, missing features and exact next action. Update agent guidance; do not merge unverified code into main.
+- Current source is in draft PR #112 on `feature/world-processes-experimental`. New Stage11+ features are **source-only, not confirmed compiling or passing runtime tests**. The user deferred testing; do not describe old Stage05 successful tests as proof of these newer files.
