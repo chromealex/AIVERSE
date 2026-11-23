@@ -632,6 +632,7 @@ void VulkanDevice::abandonRetirementTokenAfterIdle(uint64_t token) {
 }
 
 void VulkanDevice::prepareSlot() {
+    if(!healthy_)return;
     FrameSlot& s = slots_[size_t(slot_)];
     const VkResult waited=vkWaitForFences(device_,1,&s.fence,VK_TRUE,UINT64_MAX);
     if(waited!=VK_SUCCESS){healthy_=false;return;}
@@ -879,6 +880,7 @@ bool VulkanDevice::readTexturePixelAsync(TextureHandle texture,
 }
 
 void VulkanDevice::beginFrame(int w, int h) {
+    if(!healthy_)return;
     fbW_ = w; fbH_ = h;
     deliverTextureReads();
     deliverPixelReads(); // previous frame-slot fence proved completion
@@ -1068,8 +1070,10 @@ void VulkanDevice::endFrame() {
     VkBuffer readback = VK_NULL_HANDLE;
     Allocation readAlloc;
     const int cw = back_.width, ch = back_.height;
-    if (capture_) {
+    if (capture_ && cw>0 && ch>0 && back_.image) {
         createBufferObject(size_t(cw) * size_t(ch) * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true, readback, readAlloc);
+    }
+    if (capture_ && readback && readAlloc.mapped) {
         barrierImage(s.main, back_.image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         VkBufferImageCopy c{};
         c.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -1095,7 +1099,13 @@ void VulkanDevice::endFrame() {
     si.pCommandBuffers = cbs;
     vkResetFences(device_, 1, &s.fence);
     const VkResult submitResult=vkQueueSubmit(queue_, 1, &si, s.fence);
-    if(submitResult!=VK_SUCCESS)healthy_=false;
+    if(submitResult!=VK_SUCCESS){
+        healthy_=false;swapAcquired_=false;
+        if(readback)vkDestroyBuffer(device_,readback,nullptr);
+        memory_.release(readAlloc);
+        if(capture_){auto fn=std::move(capture_);capture_=nullptr;fn(0,0,{});}
+        return; // Fence was reset but no submission can signal it.
+    }
     s.serial = serial_;
     if (swapAcquired_) {
         auto pi = vkStruct<VkPresentInfoKHR>(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
@@ -1111,7 +1121,7 @@ void VulkanDevice::endFrame() {
         const size_t row = size_t(cw) * 4;
         const auto* src = static_cast<const uint8_t*>(readAlloc.mapped);
         if(captureOk)for (int y = 0; y < ch; ++y) std::memcpy(px.data() + size_t(y) * row, src + size_t(ch - 1 - y) * row, row);   // top-down
-        vkDestroyBuffer(device_, readback, nullptr);
+        if(readback)vkDestroyBuffer(device_, readback, nullptr);
         memory_.release(readAlloc);
         auto fn = std::move(capture_);
         capture_ = nullptr;
