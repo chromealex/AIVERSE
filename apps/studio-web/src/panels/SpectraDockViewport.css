@@ -1,0 +1,23 @@
+/* Native gfx Scene surface paints directly over this placeholder rectangle.
+ * The parent scroll pane defines clipping and visibility; never place DOM
+ * controls inside this rectangle because the native view is above WebView.
+ */
+.spectra-native__surface {
+  width:100%;
+  min-height:260px;
+  height:clamp(260px,38vh,460px);
+  border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-md);
+  background:var(--au-canvas);
+  position:relative;
+  overflow:hidden;
+  flex:none;
+}
+.spectra-native__surface-hint {
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:var(--au-space-4);color:var(--au-text-muted);
+  font-size:var(--au-font-sm);height:100%;width:100%;
+}
+@container (max-width:570px) {
+  .spectra-native__surface {min-height:190px;height:220px;}
+}
