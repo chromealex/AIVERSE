@@ -7,7 +7,7 @@
 //
 // IMPORTANT: register/clear only before concurrent worker generation; do not
 // mutate the registry while other threads use it.
-#include "BuildingStructure.h"
+#include "BuildingFeatureGenerator.h"
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -27,6 +27,9 @@ struct RuntimeBuildingRequest {
     StructureSize size{};                 // metres; all-zero = authored style size
     Vec3 origin{};                        // position of visible minimum corner
     uint32_t yaw=0;                       // quarter turns: 0,1,2,3
+    // New genre-free functionality. When composed, 'function' is not needed.
+    bool composeFeatures=false;
+    std::vector<BuildingFeature> features;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -113,7 +116,7 @@ public:
             result.error=code;result.message=message;
             return result;
         };
-        if(request.yaw>3||request.function.empty())
+        if(request.yaw>3||(!request.composeFeatures&&request.function.empty()))
             return fail(RuntimeBuildingError::InvalidInput,"Invalid building orientation or function");
         const bool sized=request.size.width!=0||request.size.height!=0||request.size.depth!=0;
         if(sized&&(!std::isfinite(request.size.width)||!std::isfinite(request.size.height)||
@@ -123,6 +126,17 @@ public:
         auto it=styles_.find(request.style);
         if(it==styles_.end())
             return fail(RuntimeBuildingError::UnknownStyle,"Unknown building style: "+request.style);
+        if(request.composeFeatures){
+            if(!sized)return fail(RuntimeBuildingError::InvalidInput,
+                "Feature-based buildings require explicit width, height and depth");
+            FunctionalBuildingRecipe recipe;
+            recipe.width=request.size.width;
+            recipe.height=request.size.height;
+            recipe.depth=request.size.depth;
+            recipe.seed=request.seed;
+            recipe.features=request.features;
+            return generateRecipe(request.style,recipe,request.origin,request.yaw);
+        }
         const auto* kind=it->second.structureKind(request.function);
         if(!kind)
             return fail(RuntimeBuildingError::UnknownFunction,"Unknown building function: "+request.function);
@@ -145,6 +159,34 @@ public:
         } catch(const std::exception& e) {
             return fail(RuntimeBuildingError::FitFailed,e.what());
         }
+    }
+
+// A recipe has no required role and can be reused with any registered
+    // architectural style. Mesh/colliders and semantic anchors share the
+    // same shape features, independent of appearance and genre.
+    RuntimeBuildingResult generateRecipe(const std::string& styleId,
+                                         const FunctionalBuildingRecipe& recipe,
+                                         Vec3 origin={},uint32_t yaw=0) const {
+        RuntimeBuildingResult result;
+        auto it=styles_.find(styleId);
+        if(it==styles_.end()){
+            result.error=RuntimeBuildingError::UnknownStyle;
+            result.message="Unknown building style: "+styleId;
+            return result;
+        }
+        auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw);
+        result.building=std::move(built.building);
+        if(!built){
+            result.error=RuntimeBuildingError::InvalidInput;
+            result.message=built.error;
+            return result;
+        }
+        if(result.building.mesh.vertices.size()>kMaximumVertices||
+           result.building.mesh.triangles()>kMaximumTriangles){
+            result.error=RuntimeBuildingError::BudgetExceeded;
+            result.message="Generated recipe exceeds runtime geometry budget";
+        }
+        return result;
     }
 
 private:
