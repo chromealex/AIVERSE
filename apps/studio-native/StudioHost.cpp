@@ -1920,6 +1920,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
         result.set("custom",Json::fromBool(wpCustomPivot_));
         return result;
     });
+    if(method=="studio.evolveState")return answer([&]{
+        if(game_)return game_->ecologyState();
+        Json out=Json::object();out.set("active",Json::fromBool(false));
+        out.set("regions",Json::array());return out;
+    });
     if(method=="studio.evolveLayer")return answer([&]{
         const auto layer=params.getStr("layer");
         if(!layer.empty()){
