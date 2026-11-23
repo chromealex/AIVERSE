@@ -216,6 +216,9 @@ private:
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
     NativeViewportPlacement placement_{}, gamePlacement_{};
+    // One render-owned Scene GPU surface moves between the Scene dock and
+    // the SpectraFX Graph embedded preview. Never allocate a second Device.
+    bool spectraDockActive_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
