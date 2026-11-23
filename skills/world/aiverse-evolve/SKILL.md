@@ -212,3 +212,6 @@ Prefer `WorldProcessGameplayHost::advanceEcologyEcs` / `addEcologyEcsSystem` ove
 
 ## Stage 60: TerraWeave registration opt-in
 `terraweave_native::registerSystems` accepts trailing `enableEvolveForestClimate=false`; when enabled with authored forest species, replaces the normal forest tick with EVOLVE-aware ECS update, retaining persistence and callbacks. Register PHYSIS/EVOLVE first. Do not register a second forest system. Source-only, no tests. See `docs/handoffs/world-processes-stage60-forest-registration-2026-11-23.md`.
+
+## Stage 61: dependency preflight
+EVOLVE-aware TerraWeave registration requires nonempty species, exactly one preceding `evolve.succession` and no prior `terraweave.forest_ecology`. README documents composition. PHYSIS order is caller responsibility; standalone demo and QA pending. See `docs/handoffs/world-processes-stage61-dependency-preflight-2026-11-23.md`.
