@@ -57,6 +57,25 @@ bool moveGroup(const ActorHost& host,const Simulation& sim,Entity target,
 }
 } // namespace
 
+bool ActorHost::requestRegionMoveByStableId(Simulation& sim,
+                                            world::RegionEntityId stableId,
+                                            Vec3 destination,
+                                            std::string* error) {
+    // ActorHost W1 IDs are generation-aware Entity::packed()+1. A
+    // scripting/native owner never needs to retain a transient Entity.
+    // Refuse tombstones and recycled handles before staging any request.
+    if(!stableId)return reject(error,"zero region stable ID");
+    const auto* ledger=sim.world().resourceConst<world::RegionEntityLedger>();
+    const auto* record=ledger?ledger->find(stableId):nullptr;
+    if(!record || !record->live)
+        return reject(error,"stable ID is missing or tombstoned");
+    const Entity entity=Entity::fromPacked(stableId-1);
+    const auto* tag=sim.world().tryGetConst<world::RegionStableIdentity>(entity);
+    if(!sim.world().alive(entity) || !tag || tag->id!=stableId)
+        return reject(error,"stable ID has no matching materialized ECS actor");
+    return requestRegionMove(sim,entity,destination,error);
+}
+
 bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
                                   std::string* error) {
     auto& ecs=sim.world();
