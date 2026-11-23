@@ -182,7 +182,6 @@ private:
     std::unique_ptr<render::Model> materialSphere_;
     std::unique_ptr<render::Model> buildingPreview_;
     bool buildingPreviewGpuReady_=false;
-    bool buildingPreviewReady_=false; // false for incomplete GPU uploads awaiting safe retirement
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
     std::unique_ptr<render::Model> builtinCube_, builtinSphere_;
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
