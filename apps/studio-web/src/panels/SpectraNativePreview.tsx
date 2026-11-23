@@ -320,20 +320,22 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     finally{setBusy(false);}
   };
   const exportCheckpointFile=async()=>{
+    let transferId:number|undefined;
     setBusy(true);setError('');
     try{
       const first=await invoke('studio.spectraPreview',{action:'checkpointFileExport'});
       if(first.error||!first.fileSize||first.fileSize>1048600)throw new Error(first.error||'Invalid checkpoint size');
+      transferId=first.transferId;if(!transferId)throw new Error('Missing transfer ID');
       const bytes=new Uint8Array(first.fileSize);
       for(let offset=0;offset<bytes.length;offset+=32768){
-        const next=await invoke('studio.spectraPreview',{action:'checkpointFileRead',offset});
+        const next=await invoke('studio.spectraPreview',{action:'checkpointFileRead',offset,transferId});
         const hex=next.fileChunk??'';
         if(next.error||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
         for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
       }
       const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
       const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();URL.revokeObjectURL(url);
-    }catch(e){setError(message(e));}finally{setBusy(false);}
+    }catch(e){setError(message(e));}finally{if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
   };
   const importCheckpointFile=async(file:File)=>{
     setBusy(true);setError('');
@@ -341,13 +343,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       if(!file.size||file.size>1048600)throw new Error('Checkpoint exceeds size limit');
       const bytes=new Uint8Array(await file.arrayBuffer());
       const begin=await invoke('studio.spectraPreview',{action:'checkpointFileBegin'});
-      if(begin.error)throw new Error(begin.error);
+      if(begin.error||!begin.transferId)throw new Error(begin.error||'Missing transfer ID');
+      const transferId=begin.transferId;
       for(let offset=0;offset<bytes.length;offset+=32768){
         const chunk=Array.from(bytes.subarray(offset,offset+32768),b=>b.toString(16).padStart(2,'0')).join('');
-        const next=await invoke('studio.spectraPreview',{action:'checkpointFileAppend',offset,chunk});
+        const next=await invoke('studio.spectraPreview',{action:'checkpointFileAppend',offset,chunk,transferId});
         if(next.error)throw new Error(next.error);
       }
-      const result=await invoke('studio.spectraPreview',{action:'checkpointFileImport'});
+      const result=await invoke('studio.spectraPreview',{action:'checkpointFileImport',transferId});
       setState(result);if(result.error)throw new Error(result.error);
     }catch(e){setError(message(e));}finally{setBusy(false);}
   };
