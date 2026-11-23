@@ -10,6 +10,7 @@
 #include "engine/world/TerraWeaveFloodShorelineSystem.h"
 #include "engine/world/TerraWeaveShoreRecoveryEcs.h"
 #include "engine/world/TerraWeaveForestEcologyEcs.h"
+#include "../world_processes_native/WorldProcessGameplayHost.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "engine/world/TerraWeaveForestDeadwoodEcs.h"
 #include "engine/world/TerraWeaveForestNutrientEcs.h"
@@ -62,7 +63,8 @@ inline void registerSystems(
         terraweave::ForestMicroSettings microSettings={},
         terraweave::ForestNereidMicroJunctionSettings microJunctionSettings={},
         std::function<void(const terraweave::ForestMicroOutcome&)>
-            onMicroNutrients={}) {
+            onMicroNutrients={},
+        bool enableEvolveForestClimate=false) {
     // Stage68 cannot run without the versioned organic ledger. Reject
     // invalid setup BEFORE registering any ECS system or persistence type.
     if(enableForestNutrientCycle && !enableForestDeadwood)
@@ -166,11 +168,25 @@ inline void registerSystems(
     // Rooted-plant mortality and recruitment are independent of grass
     // restoration; create this fixed-period ECS stage only when species
     // policies are explicitly authored by the game.
-    if(!rootedForestSpecies.empty())
-        terraweave::addTerraWeaveForestEcologySystem(
+    if(!rootedForestSpecies.empty()){
+        if(enableEvolveForestClimate){
+            // Replace the ordinary forest stage, never register both.
+            sim.addSystem("terraweave.forest_ecology",
+                [cfg,species=std::move(rootedForestSpecies),
+                 settings=rootedForestSettings,
+                 onChanged=std::move(onForestEcology)](Simulation& current){
+                    const auto result=world_processes_native::WorldProcessGameplayHost::
+                        advanceEcologyEcs(current.world(),cfg,current.tick(),species,settings);
+                    if(onChanged&&(!result.ecology.changed.empty()||
+                                   !result.ecology.died.empty()||
+                                   !result.ecology.born.empty()))
+                        onChanged(result);
+                });
+        }else terraweave::addTerraWeaveForestEcologySystem(
             sim,"terraweave.forest_ecology",cfg,
             std::move(rootedForestSpecies),rootedForestSettings,{},
             std::move(onForestEcology));
+    }
     // Stage67: natural deaths from Stage65 are seeded first, then this
     // lower-frequency bounded decomposer returns nutrients and asks the
     // external physics owner to remove fully rotted fallen bodies.
