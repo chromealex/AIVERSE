@@ -212,6 +212,9 @@ class RegionEntityLedger::Transaction {
     void captureSince(uint64_t revision) {
         if(!capture_)return;
         auto changes=ledger_.since(revision);
+        constexpr size_t maxCaptured=(16*1024*1024-16)/29;
+        if(changes.size()>maxCaptured-mutations_.size())
+            throw std::length_error("region WAL transaction exceeds frame budget");
         mutations_.insert(mutations_.end(),changes.begin(),changes.end());
     }
     void remember(RegionEntityId id) {
