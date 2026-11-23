@@ -21,9 +21,9 @@ class UnifiedCheckpointRetention {
         const RegionCheckpointManifest& active,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate,std::set<uint64_t>& out){
+        const UnifiedWorldReplay::Validator& validate,const DurableResourceTransaction::Policy& resources,std::set<uint64_t>& out){
         if(!matchesActive(dir,active))return false;
-        const auto catalog=UnifiedBackupCatalog::list(dir,active,budget,adapters,factory,codecs,materialize,validate,true);
+        const auto catalog=UnifiedBackupCatalog::list(dir,active,budget,adapters,factory,codecs,materialize,validate,true,resources);
         if(!catalog.complete)return false;
         bool activeRecoverable=false;
         std::set<uint64_t> staged;
@@ -44,17 +44,17 @@ public:
     static RegionRetentionPlan plan(const std::filesystem::path& dir,const RegionCheckpointManifest& active,
         RegionRetentionPolicy policy,size_t budget,const UnifiedCheckpointSections::Adapters& adapters,
         const UnifiedCheckpointSections::Factory& factory,const DurableComponentCodecs& codecs,
-        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={}){
+        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         std::set<uint64_t> eligible;
-        if(!eligibleGenerations(dir,active,budget,adapters,factory,codecs,materialize,validate,eligible))return {};
+        if(!eligibleGenerations(dir,active,budget,adapters,factory,codecs,materialize,validate,resources,eligible))return {};
         return RegionCheckpointRetention::plan(dir,active,policy,[&](uint64_t gen){return eligible.contains(gen);});
     }
     static RegionRetentionCleanup cleanup(const std::filesystem::path& dir,const RegionCheckpointManifest& active,
         RegionRetentionPolicy policy,size_t budget,const UnifiedCheckpointSections::Adapters& adapters,
         const UnifiedCheckpointSections::Factory& factory,const DurableComponentCodecs& codecs,
-        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={}){
+        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         std::set<uint64_t> eligible;
-        if(!eligibleGenerations(dir,active,budget,adapters,factory,codecs,materialize,validate,eligible))return {};
+        if(!eligibleGenerations(dir,active,budget,adapters,factory,codecs,materialize,validate,resources,eligible))return {};
         return RegionCheckpointRetention::cleanup(dir,active,policy,[&](uint64_t gen){return eligible.contains(gen);});
     }
 };
