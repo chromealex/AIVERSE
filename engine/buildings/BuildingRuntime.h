@@ -29,3 +29,4 @@
 #include "engine/buildings/BuildingTransportZoneGraphAdapters.h"
 #include "engine/buildings/BuildingApertureFixedTick.h"
 #include "engine/buildings/BuildingAperturePresentation.h"
+#include "engine/buildings/BuildingApertureGameBridge.h"
