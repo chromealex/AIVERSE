@@ -28,6 +28,9 @@ struct StyleMaterial{
     std::string id;StyleRgb color{0.5f,0.5f,0.5f};float metallic=0,roughness=0.8f;
     StyleRgb emissive{0,0,0};float emissiveStrength=1;
     StyleTextureGuidSlots textures;
+    std::array<float,2> uvScale{1.f,1.f},uvOffset{0.f,0.f};
+    float uvRotation=0.f; // radians, shared by all PBR texture channels
+    float normalScale=1.f,occlusionStrength=1.f;
     bool operator==(const StyleMaterial&)const=default;
 };
 struct StyleRange{float lo=0,hi=0;float pick(Random& g)const{return lo+(hi-lo)*float(g.unit().toDouble());}};
@@ -518,10 +521,38 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(!j["materials"].isObject()||j["materials"].members().empty())throw JsonError(path+".materials: expected object of materials");
     std::map<std::string,int> ids;
     for(const auto& [k,v]:j["materials"].members()){
-        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures"});
+        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures","uvScale","uvOffset","uvRotation","normalScale","occlusionStrength"});
         StyleMaterial mt;mt.id=k;if(v.has("color"))mt.color=rgb(v["color"],p+".color");if(v.has("metallic"))mt.metallic=num(v["metallic"],p+".metallic");
         if(v.has("roughness")){mt.roughness=num(v["roughness"],p+".roughness");}if(v.has("emissive"))mt.emissive=rgb(v["emissive"],p+".emissive");
         if(v.has("emissiveStrength"))mt.emissiveStrength=num(v["emissiveStrength"],p+".emissiveStrength");
+        auto uvPair=[&](const char* name,std::array<float,2>& dest){
+            if(!v.has(name))return;
+            const auto& value=v[name];
+            if(!value.isArray()||value.size()!=2)
+                throw JsonError(p+"."+name+": expected [u,v]");
+            for(size_t index=0;index<2;++index){
+                if(!value[index].isNumber()||
+                   !std::isfinite(value[index].toDouble())||
+                   std::abs(value[index].toDouble())>1024.)
+                    throw JsonError(p+"."+name+": UV component out of range");
+                dest[index]=float(value[index].toDouble());
+            }
+        };
+        uvPair("uvScale",mt.uvScale);
+        uvPair("uvOffset",mt.uvOffset);
+        for(const char* key:{"uvRotation","normalScale","occlusionStrength"})
+            if(v.has(key)){
+                if(!v[key].isNumber()||!std::isfinite(v[key].toDouble()))
+                    throw JsonError(p+"."+key+": expected finite number");
+                const double n=v[key].toDouble();
+                const double low=std::string(key)=="uvRotation"?-6.283186:0.;
+                const double high=std::string(key)=="uvRotation"?6.283186:
+                                  std::string(key)=="normalScale"?16.:1.;
+                if(n<low||n>high)throw JsonError(p+"."+key+": outside valid range");
+                if(std::string(key)=="uvRotation")mt.uvRotation=float(n);
+                else if(std::string(key)=="normalScale")mt.normalScale=float(n);
+                else mt.occlusionStrength=float(n);
+            }
         if(v.has("textures")){
             const auto& tex=v["textures"];
             const std::string tp=p+".textures";
