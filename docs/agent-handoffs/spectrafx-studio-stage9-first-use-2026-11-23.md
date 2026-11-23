@@ -1,3 +1,30 @@
+## Stage 9 test correction — 2026-11-23
+
+A Mac tester ran Node.js v22.23.4 and reported `tests: 24, pass: 23, fail: 1`
+with the sole failing *file* `tests/spectraStarterModel.test.mjs` and
+`ERR_TEST_FAILURE: test failed`, i.e. the test module failed at load time.
+
+**Root cause:** the final `assert.equal(nextUnusedGraphName([{name:'fx'}],'preview_fx');`
+statement was missing a closing parenthesis after the function call. This is
+a syntax error, not a GraphRuntime or Metal failure.
+
+Code fix commit `892232b641e9c8da87929ba48d8bd5c4248bc2bb`
+changed it to `assert.equal(nextUnusedGraphName([{name:'fx'}]),'preview_fx');`.
+
+Actual reproduction/validation on a separate Linux Node.js 22.16.0 environment:
+recreated the relevant source model, dependency export and test file;
+`node --check tests/spectraStarterModel.test.mjs` PASS;
+`node --experimental-strip-types --test tests/spectraStarterModel.test.mjs`
+PASS, **4/4 subtests** (native starter passthrough, blank graph immutability,
+invalid source guard, safe unique names). Original pre-fix test file reproduced
+`SyntaxError: missing ) after argument list`, matching the Mac top-level
+test file failure.
+
+This is a focused synthetic reproduction, **not** confirmation of the full
+AIVERSE `npm run test:graphs`, TypeScript/Vite, or native Metal CI after this
+commit. Re-run exact source HEAD in the Mac test worktree; use GitHub Actions
+exact-SHA status for full acceptance.
+
 # SpectraStudio Stage 9 — discoverable first-use Graph v2 flow (2026-11-23)
 
 ## Provenance
