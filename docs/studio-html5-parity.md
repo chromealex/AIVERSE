@@ -14,6 +14,18 @@ Workspace-backed topology canvas. Static curve/gradient visualization is
 interaction QA for the latest code remain pending on stacked draft PR #115.
 See `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
 
+## SpectraFX Stage 8 update — real native Scene preview (source only)
+
+The `fx_graph` panel now has typed Play/Pause/Step/Seek controls
+for native `studio.spectraPreview`. It loads an unsaved v2 Graph through
+native compilation, steps a real `GraphRuntime` on StudioScene's
+render thread and draws particles before PRISMA resolves the native
+Scene pass. The browser renders only controls, never fake particles.
+This does not yet create an independent embedded preview viewport or
+prove Metal/GPU image parity. Stage 8 macOS native, Windows, WebView
+and frontend checks are pending. Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
+
 ## Window inventory
 
 Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. Forwarding files without registrations are excluded. Each source remains the detailed behavior reference, including context menus, shortcuts and native-only workflows.
