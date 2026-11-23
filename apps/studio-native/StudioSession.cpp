@@ -2574,6 +2574,23 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 const char* id=componentId=="MeshRenderer"?"StaticModel":componentId.c_str();
                 if(componentId=="Transform"||componentId=="Unit"||componentId=="NereidWater")
                     throw std::runtime_error(componentId+" cannot be removed");
+                // Deleting a target component must not silently leave a
+                // linked World Process referencing the same stable map ID.
+                if(lib::worldprocess::authoring::supports(componentId) && !source.id.empty()){
+                    for(const auto& other:ws_.map.data.entities)
+                        for(const char* kind:{"EchoPortal","EchoEmitter","EchoReceiver",
+                                            "FractureBond","AetherDuct","AetherFlux"}){
+                            if(lib::worldprocess::linked::targetType(kind)!=componentId)continue;
+                            const auto& linkedDoc=other.extra["components"][kind];
+                            if(!linkedDoc.isObject())continue;
+                            for(const auto& [key,value]:linkedDoc.members())
+                                if(lib::worldprocess::linked::isReference(kind,key) &&
+                                   value.str()==source.id)
+                                    throw std::runtime_error(
+                                        "This component is referenced by "+std::string(kind)+
+                                        "; clear its link before removal");
+                        }
+                }
                 if(!source.extra["components"].has(id))throw std::runtime_error("Component is not on this entity");
                 auto components=candidate.extra["components"];components.erase(id);candidate.extra.set("components",components);
             }
