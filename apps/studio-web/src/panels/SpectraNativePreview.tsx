@@ -137,8 +137,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
            capture.image.startsWith('data:image/jpeg;base64,') &&
            capture.image.length<=900000) {
           setCaptureImage(capture.image);
-          if(captureSlot==='A'){setCompareA(capture.image);setCaptureMetaA(pendingMeta.current);}
-          if(captureSlot==='B'){setCompareB(capture.image);setCaptureMetaB(pendingMeta.current);}
+          if(captureSlot==='A'){setCompareA(capture.image);setCaptureMetaA({...pendingMeta.current,native:capture.provenance??null});}
+          if(captureSlot==='B'){setCompareB(capture.image);setCaptureMetaB({...pendingMeta.current,native:capture.provenance??null});}
           setCaptureSlot(null);
           setCaptureError('');
         } else {
@@ -477,6 +477,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
          JSON.stringify(captureMetaA.camera)!==JSON.stringify(captureMetaB.camera))&&
         <StudioAlert tone="warning">A/B capture settings differ (graph revision, tick, backend or snapshot size).
           Pixel differences may reflect these settings rather than an effect change.</StudioAlert>}
+      <small>Native metadata is sampled when GPU readback is requested, not at fence completion.</small>
       <small>Two native JPEG frames; alignment assumes the same camera pose and dimensions.
         Captures are not synchronized automatically.</small>
     </div>}
