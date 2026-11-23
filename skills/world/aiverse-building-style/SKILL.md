@@ -1169,3 +1169,43 @@ it in an actual game host with real motor callbacks and transport
 identity, run full CMake/CTest + GPU/PHYSIS acceptance, then resolve
 the feature branch vs main before merging Draft PR #114. Follow
 `docs/agent-handoffs/building-dual-leaf-game-session-stage23p-2026-11-23.md`.
+
+
+## Architecture correction after Stage 23Q — NO legacy FPS/ActorHost coupling
+
+The current engine is genre independent. The user explicitly rejected
+integrating new procedural buildings into the legacy FPS module or
+`ActorHost`. Stage 23Q attempted that and the coupling was reverted
+in the branch. **Do not add building-system hooks to**
+`apps/fps/`, `engine/actor/ActorModule.*`, or
+`engine/net/authority/Session.h`. Do not use a genre-specific
+network snapshot, collision copy, or game client as a building system
+owner. Those are obsolete integrations for this task.
+
+Canonical native building integration is through existing shared
+ECS `World`, `Simulation` and world collision/graph and rendering
+owners, independent of genre:
+`engine/buildings/BuildingDualLeafOwner.h`,
+`engine/buildings/BuildingDualLeafGameSession.h`,
+`engine/buildings/BuildingDynamicNavSource.h`,
+`engine/buildings/BuildingGraphChanges.h`, and
+`engine/buildings/BuildingAperturePresentation.h`.
+For packaged-game resource preparation, use
+`BuildingMaterialAssets.h` + `RuntimeBuildingModel.h`.
+Game-neutral systems register in a shared ECS simulation/lifecycle
+owner, not any FPS/RTS-specific module. The connection layer maps an
+authenticated actor to the existing ECS Entity using generic game
+authority callbacks; do not invent a second character registry or
+special FPS command protocol. Renderer3D owns all GPU/model leases.
+
+The existing `BuildingDualLeafGameSession` already gives a
+genre-neutral API for command queue, authoritative fixed tick,
+paired collider mutation, graph acknowledgement, and CPU visual
+publication. What remains is integration with a common ECS
+simulation/world scene owner, including registration in real engine
+tick/render stages; a header alone is not evidence of integration.
+
+Stage 23Q game-specific source attempt was reversed in separate
+GitHub commits before compiling or testing. Never reinstate it.
+Correction handoff:
+`docs/agent-handoffs/building-stage23q-architecture-correction-2026-11-23.md`.
