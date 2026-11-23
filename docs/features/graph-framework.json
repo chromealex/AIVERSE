@@ -76,7 +76,10 @@
     "engine/render/graph/TextureGraphCache.h",
     "engine/render/graph/TextureGraphGpu.h",
     "apps/editor/core/TextureGraphGpuPreview.h",
-    "engine/render/graph/TextureGraphGpuPatterns.h"
+    "engine/render/graph/TextureGraphGpuPatterns.h",
+    "apps/editor/core/MaterialOps.h",
+    "engine/gfx/vulkan/VkDevice.h",
+    "engine/gfx/vulkan/VkCompute.cpp"
   ],
   "traits": {
     "editable": true,
