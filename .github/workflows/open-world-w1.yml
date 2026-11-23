@@ -4,6 +4,17 @@
 name: Open world W1 native acceptance
 
 on:
+  push:
+    branches: [feature/aiv20261123_open_world_audit]
+    paths:
+      - 'engine/world/**'
+      - 'engine/actor/**'
+      - 'engine/vehicles/**'
+      - 'engine/sim/**'
+      - 'tests/world/**'
+      - 'CMakeLists.txt'
+      - 'engine/actor/CMakeLists.txt'
+      - '.github/workflows/open-world-w1.yml'
   pull_request:
     paths:
       - 'engine/world/**'
