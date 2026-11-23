@@ -1497,7 +1497,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         if(cavernsVisual_ && !planet()) {
             const auto eyecm=terraweave::caverns::PointCm{
                 int64_t(std::llround(double(cam_.target.x)*100.)),
-                -1000,
+                cavernsVisual_->suggestedFocusYcm(),
                 int64_t(std::llround(double(cam_.target.z)*100.))};
             try {cavernsVisual_->beforeRender(dev,eyecm);}
             catch(const std::exception& e) {
