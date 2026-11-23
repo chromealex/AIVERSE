@@ -43,3 +43,12 @@ Read `engine/world/TerraWeaveCavernsEntrances.h` and
 - A found cave connection is a pointwise density hit, not a proved traversable opening for a character; collision, minimum clearance and connectivity proof remain integration tasks.
 - Persist cave, terrain and entrance seeds/config versions and authored overrides. Never treat generated entrances as mutable global singletons.
 - Run standalone tests `tests/terraweave_caverns_entrances_test.cpp` in a real checkout before claiming verified functionality.
+
+## Stage 4: cutting native TerraWeave terrain triangles
+- Source: `engine/world/TerraWeaveCavernsSurfaceCut.h`. Handoff: `docs/agent-handoffs/caverns-stage4-2026-11-23.md`.
+- `cutTerrainEntrances(const terraweave::TerrainPatch&, const std::vector<Entrance>&, sides=16, maxTriangles=200000)` accepts **authoritative** TerraWeave TerrainPatch (not camera LOD) and produces `CutSurface` with world-centimetre double XYZ triangles and dirty-region bounds.
+- The cutter subtracts a regular polygon aperture per shaft from existing `TerrainPatch::collision` triangles, preserving winding and interpolating Y on each ORIGINAL terrain triangle plane. It uses a globally ordered id list and a strict triangle budget.
+- For integration, **do not pass resulting variable-count triangle lists** to existing `TerrainCollisionPublisher::publish` or `makeEarthworksTerrainModel`: both expect fixed heightfield topology. Adapt the native publisher's topology contract so the same clipped triangle soup feeds both render::Model and SpatialWorld. Do not publish one without the other.
+- `dirtyRegions` are merely planning metadata. They do not rebuild collision/navmesh/vegetation until the owner-thread publish barrier actually commits matching revisions. No new collision or navmesh owner has been implemented.
+- Near aperture is an inscribed regular polygon; shaft field remains round. Ensure matching shaft aperture/transition rim in future stage to avoid polygonal collision lips.
+- Missing: actual published runtime adapter, complete render+collision transaction, navmesh invalidation delivery, cave portal rim mesh, terrain material/UV seam, CTest registration, live GPU proof.
