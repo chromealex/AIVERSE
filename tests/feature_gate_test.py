@@ -7,6 +7,8 @@ import hashlib
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
 from audit_compliance import covered_paths
+from feature_registry import regressions, matrix, load_registry
+from new_feature import scaffold
 
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
 gate = importlib.util.module_from_spec(spec)
@@ -60,6 +62,27 @@ class GateTest(unittest.TestCase):
         self.assertEqual(len(covered_paths(changed, {})), 2)
         self.assertEqual(covered_paths(changed, {"manifest": {"changed_paths": ["engine/a.cpp", "apps/studio-web/a.ts"], "traits": {"runtime": True}}}), [])
         self.assertTrue(covered_paths(changed, {"manifest": {"changed_paths": ["engine/*"]}}))
+    def test_registry_regression(self):
+        old = {"a": {"checks": {"tests": {"status": "pass"}}, "integrations": {"skills": ["a"]}, "traits": {"runtime": True}}}
+        self.assertEqual(regressions(old, old), [])
+        self.assertTrue(regressions(old, {}))
+        after = {"a": {"checks": {"tests": {"status": "not_run"}}, "integrations": {"skills": []}, "traits": {"runtime": False}}}
+        self.assertEqual(len(regressions(old, after)), 3)
+        self.assertEqual(matrix(old)["count"], 1)
+
+    def test_scaffold(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            traits = dict(editable=False, simulation=False, visible=False, runtime=True)
+            scaffold(root, "sample", "test", ["engine/a.cpp"], traits, True)
+            manifest = load_registry(root)["sample"]
+            self.assertEqual(gate.validate(manifest, root), [])
+            self.assertTrue(gate.validate(manifest, root, True))
+            with self.assertRaises(ValueError):
+                scaffold(root, "sample", "test", ["engine/a.cpp"], traits)
+            with self.assertRaises(ValueError):
+                scaffold(root, "../outside", "test", ["engine/a.cpp"], traits)
+
     def test_bad_shape(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate({"schema": True}))
