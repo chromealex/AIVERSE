@@ -290,3 +290,18 @@ Read `apps/editor/Editor.h`, `apps/editor/Editor.cpp`, `apps/editor/windows/Terr
 - A real future host must call `bridge.publishReady` on the editor/graphics owner thread, perform **all-owner** staged graphics/physics/nav publication with verified GPU lifetimes, and return true only after the actual commit. It must never automatically return true after CPU model preparation.
 - Source-only test `tests/terraweave_caverns_edit_presentation_test.cpp` checks deterministic negative signed chunk ordering, staging model counts, STRATA manifest flag, rejects stale/malformed versions and duplicates. Not yet compiled in the complete AIVERSE checkout.
 - Full native editor CMake/CTest, Studio web, GPU and Box3D/NavMesh QA remain outstanding, and no main merge is approved. Update a dated handoff and this skill for each stage.
+
+## Stage 24 — staged GeometryScene/STRATA GPU ownership and safe retirement
+
+Read `engine/render/TerraWeaveCavernsGpuSwap.h`,
+`engine/render/TerraWeaveCavernsSwapPolicy.h`,
+`tests/terraweave_caverns_swap_policy_test.cpp` and
+`docs/agent-handoffs/caverns-stage24-2026-11-23.md`.
+
+- `CaveGeometrySwapOwner` (graphics-owner thread only) owns at most eight `GeometryScene` GPU resource containers split into active, staged and retired. `stage(gfx::Device&,CaveBatchPrepared,renderRevision,strataEnabled,vertexBudget)` calls the REAL `GeometryScene::loadPrepared`; old active geometry remains visible during upload. A partial-stage exception retains the failed GPU owner for later safe teardown.
+- `activate(hostCommit)` switches the draw owner **only when the caller proves** full graphics/collision/navmesh compatibility and successful owner-barrier visibility. An unsuccessful callback leaves the old active draw. `draw(renderer)` submits **one** active GeometryScene, using its existing STRATA/fallback logic. Never also render those chunks through the older per-chunk path.
+- `cancelStage()` moves a discarded GPU source to a retained retirement list. `collectAfterGpuIdle(device)` requires real `device.waitForResourceIdle()` success and subsequently `GeometryScene::shutdown` for each retired owner. This is intentionally conservative; **not yet nonblocking GPU-fenced retirement**. `shutdownAfterGpuIdle(device)` is required before owner destruction. Do not drop a failed pending owner merely because a CPU frame ended.
+- `caveCanStageScene(activeRevision,stagedRevision,proposedRevision,liveOwnerCount,maxOwners)` and `caveCanActivateScene(activeRevision,stagedRevision)` are pure testable policy guards. They reject stale source revisions and retain bounded GPU owner count. The same policy is called by the real swap owner.
+- This is **real GPU staging API code** but the native Editor has NOT yet been connected to `CaveGeometrySwapOwner`. Stage23 editor still prepares CPU meshes only, without a physics owner commit. Do NOT mark `visualCommitConnected` true or acknowledge a dirty region until real Render/Box3D/SpatialWorld/NavMesh ownership barriers succeed.
+- On resource exhaustion, failed idle barriers, or incompatible mixed-LOD seam certification, fail closed. STRATA still decides whether its GPU cluster route is supported; requesting STRATA does not prove it selected.
+- **Verification:** a local C++20 `-Wall -Wextra -Werror` compile + execution of a faithful copy of `tests/terraweave_caverns_swap_policy_test.cpp` passed (console: `caverns stage24 swap policy PASS`). This validates ONLY the pure policy; full `GeometryScene` build, GPU upload, STRATA selection, editor, Box3D/NavMesh and GPU-idle behavior remain NOT RUN.
