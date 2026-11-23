@@ -63,6 +63,7 @@ public:
             // preview. GPU resources are retired while NO pass is open.
             device.waitForResourceIdle();
             runtime_.shutdown();
+            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
@@ -95,6 +96,19 @@ public:
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
+        if(action=="checkpointSave"||action=="checkpointRestore") {
+            if(!runtime_.gpuActive()||playing_||pendingRestart_||restartBurstPending_||
+               pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
+               targetTicks_!=timeTicks_||!requestedParameters_.empty()||checkpointRequest_||rollbackId_)
+                return errorStatus("Checkpoint operation requires settled paused Metal preview");
+            if(action=="checkpointSave")checkpointRequest_=true;
+            else {
+                const auto id=input["checkpointId"].integer(-1);
+                if(id<=0||!checkpointTicks_.count(uint64_t(id)))return errorStatus("Unknown checkpoint ID");
+                rollbackId_=uint64_t(id);
+            }
+            error_.clear();replayPrepared_=false;return status();
+        }
         if(action=="replayPrepare") {
             // Validate every input before changing live preview state.
             if(!input["tick"].isNumber() ||
@@ -250,6 +264,26 @@ public:
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
+        if(rollbackId_){
+            const auto id=std::exchange(rollbackId_,uint64_t(0));
+            if(!runtime_.restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
+            timeTicks_=targetTicks_=checkpointTicks_.at(id).first;
+            triggeredBursts_=checkpointTicks_.at(id).second;
+            phase_=0;error_.clear();
+        }
+        if(checkpointRequest_){
+            const auto state=runtime_.checkpointStatus();
+            if(state.pending)return;
+            if(state.restoreEligible&&runtime_.retainFreshGpuCheckpoint()){
+                const auto ids=runtime_.historicalGpuCheckpointIds();
+                checkpointTicks_[ids.back()]={timeTicks_,triggeredBursts_};
+                for(auto it=checkpointTicks_.begin();it!=checkpointTicks_.end();){
+                    if(std::find(ids.begin(),ids.end(),it->first)==ids.end())it=checkpointTicks_.erase(it);else ++it;
+                }
+                checkpointRequest_=false;error_.clear();
+            }else if(!runtime_.requestGpuCheckpoint()){checkpointRequest_=false;error_="GPU checkpoint request rejected";}
+            return;
+        }
         if(pendingClear_) {
             hasPendingGpuAllocationSeed_=false;
             runtime_.clear();
@@ -362,7 +396,7 @@ public:
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
-        return ready_ && (playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
+        return ready_ && (checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
                           restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
@@ -387,6 +421,10 @@ public:
             !playing_ && !pendingRestart_ && !restartBurstPending_ &&
             !hasPendingGpuAllocationSeed_ && !pendingClear_ &&
             requestedParameters_.empty() && targetTicks_==timeTicks_));
+        Json checkpoints=Json::array();
+        for(const auto& [id,clock]:checkpointTicks_){Json item=Json::object();item.set("id",Json::number(int64_t(id)));item.set("tick",Json::number(int64_t(clock.first)));checkpoints.push(std::move(item));}
+        result.set("checkpoints",std::move(checkpoints));
+        result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -396,6 +434,7 @@ public:
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
         runtime_.shutdown();
+        checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
         ready_=false;playing_=false;pendingRestart_=false;
         stepsPending_=timeTicks_=targetTicks_=phase_=0;
         pendingClear_=false;
@@ -422,6 +461,9 @@ private:
     bool gpuSeedFailed_=false,replayPrepared_=false;
     bool hasPendingGpuAllocationSeed_=false;
     bool pendingShaderSeedMode_=false;
+    std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
+    bool checkpointRequest_=false;
+    uint64_t rollbackId_=0;
     uint64_t generation_=1;
     std::string backend_,error_;
 };
