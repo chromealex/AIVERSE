@@ -191,3 +191,6 @@ Numeric EVOLVE preview now releases its owner-scoped native overlay on HTML5 pag
 ## Stage 53: single-area validation and native host shutdown
 
 Single-area and group-move commits use shared `evolve::scale_math::withinBounds`; single-area edits reject hidden/locked entities. Single-area and one-axis group previews use authored limits and shared geometry checks. Native `StudioHost::shutdown` releases host-local numeric preview and pivot/drag state even without web pagehide. Cross-host forwarding and complete validation parity still require integration audit. No build or runtime tests performed. See `docs/handoffs/world-processes-stage53-single-area-native-shutdown-2026-11-23.md`.
+
+## Stage 54: typed Studio bridge audit
+EVOLVE preview, pivot and batch resize RPCs are registered in the HTML5 typed bridge; browser mock rejects native-only authoring. No build or tests. See `docs/handoffs/world-processes-stage54-typed-bridge-audit-2026-11-23.md`.
