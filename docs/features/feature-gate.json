@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "id": "feature-gate",
+  "owner": "agents",
+  "changed_paths": [
+    "AGENTS.md",
+    "tools/agents/check_feature.py",
+    "tools/agents/audit_compliance.py",
+    "tools/agents/feature_manifest.schema.json",
+    "tools/skills/catalog.py",
+    "skills/catalog.json",
+    "skills/workflow/aiverse-new-feature/SKILL.md",
+    "tests/feature_gate_test.py",
+    "tests/extra-test-suites.txt",
+    ".github/workflows/feature-gate.yml",
+    "docs/agents/feature-contract.md",
+    "docs/devlog/systems.json"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    }
+  }
+}
