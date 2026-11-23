@@ -100,8 +100,10 @@ public:
                         throw std::invalid_argument("Caverns fallback LOD budget");
                     for(const auto& [k,c]:std::array<std::pair<ChunkKey3,const CaveCertifiedChunk*>,2>{{
                         {key,&first},{next,&second}}}){
-                        if(c->spacingCm==spacing&&c->resolution==uint32_t(span/spacing))
-                            continue; // already fine: wait for its neighbor rebuild
+                        // Both sides must be rebuilt from ONE immutable SDF
+                        // when the actual contours diverge. Even a chunk
+                        // already at the finest lattice may be from an older
+                        // authored revision. Skipping it can deadlock repair.
                         auto [target,inserted]=desired.try_emplace(k,CaveRebuildRequest{
                             k,uint32_t(span/spacing),spacing,c->sourceRevision,0});
                         if(!inserted&&target->second.spacingCm>spacing){
