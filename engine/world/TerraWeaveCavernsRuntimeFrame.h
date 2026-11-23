@@ -128,7 +128,8 @@ public:
         if(physicsBarrier_.status().recoveryRequired)return {};
         setStreamCenter(cameraChunk);
         auto source=host_.sourceSnapshot();
-        if(!source)return {};
+        auto indexed=host_.indexedSnapshot();
+        if(!source||!indexed)return {};
         syncStreamingEditPins();
         std::vector<CaveResidencyTicket> retire;
         for(const auto& request:residency_.pump()) {
@@ -137,7 +138,7 @@ public:
                 retire.push_back(request);
             }else{
                 try {
-                    if(!streamJobs_.dispatch(request,source,resolution,spacingCm))
+                    if(!streamJobs_.dispatch(request,source,resolution,spacingCm,indexed))
                         (void)residency_.fail(request);
                 } catch(...) {
                     (void)residency_.fail(request);
