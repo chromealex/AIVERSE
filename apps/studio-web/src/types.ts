@@ -153,6 +153,9 @@ export interface HumanStudioLightingSettings {preset:string;rotation:number;gain
 export interface HumanStudioLightingInfo {settings:HumanStudioLightingSettings;presets:{id:string;label:string;sources:number}[]}
 export interface HumanFaceShape {version:1;meshes:string[];values:Record<string,number>;landmarks:{from:[number,number,number];to:[number,number,number];radius:number;weight:number}[]}
 export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;label:string;min:number;max:number}[];schema:HumanLookField[];look:HumanLook;preview:StudioFacialPreviewBinding}
+export interface StudioSpectraCameraSnapshot {
+  yaw:number;pitch:number;distance:number;targetX:number;targetY:number;targetZ:number;ortho:boolean;
+}
 export interface StudioSpectraPreviewState {
   ready:boolean;playing:boolean;gpu:boolean;backend:string;
   tick:number;targetTick:number;timeSeconds:number;
@@ -166,10 +169,11 @@ export interface StudioSpectraPreviewState {
   };
   background:'dark'|'neutral'|'light'|'black';
   grid:boolean;axes:boolean;
+  camera?:StudioSpectraCameraSnapshot;
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -179,6 +183,7 @@ export interface StudioParams {
     background?:'dark'|'neutral'|'light'|'black';
     grid?:boolean;axes?:boolean;
     preset?:'perspective'|'front'|'side'|'top';
+    camera?:StudioSpectraCameraSnapshot;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
   'studio.wind':Record<string,never>;
