@@ -135,7 +135,8 @@ public:
             if(error)*error="Dual-leaf motion busy or invalid domains";return false;
         }
         auto it=entries_.find(socketId);
-        if(it==entries_.end()||it->second.state.pose.open==targetOpen){
+        if(it==entries_.end()||
+           it->second.state.position==(targetOpen?1000:0)){
             if(error)*error="Unknown aperture or already at target";return false;
         }
         it->second.state.targetOpen=targetOpen;
