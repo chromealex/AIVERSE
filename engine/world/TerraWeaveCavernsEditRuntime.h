@@ -56,6 +56,10 @@ public:
         // A new source revision supersedes every not-yet-committed chunk,
         // not just the latest brush footprint. Otherwise earlier jobs would
         // retain an obsolete snapshot and block this batch forever.
+        // Validate/build the immutable index BEFORE altering dirty queue,
+        // so an allocation or malformed authoring source cannot strand
+        // pending chunks with a snapshot that was never installed.
+        auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
         const auto old=dirty_.pending(maxQueued_);
         dirty_.enqueue(bounds,resolution_,spacingCm_,snapshot->sourceRevision);
         for(const auto& item:old) {
@@ -66,9 +70,6 @@ public:
         }
         prepared_.clear();
         lodOverrides_.clear();
-        // Build one immutable index per authoring revision on the owner
-        // thread. Every worker for this epoch shares exactly this source.
-        auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
         snapshot_=std::move(snapshot);
         index_=std::move(index);
     }
