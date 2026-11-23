@@ -1,18 +1,19 @@
 ---
 name: aiverse-fracture
-description: Use AIVERSE FRACTURE when implementing Детерминированная модель несущих элементов, связей, потери опоры и устойчивых к replay событий обрушения.
+description: Use AIVERSE FRACTURE for Structural support bonds, deterministic collapse and durable destruction events using the existing PHYSIS/Box3D owners.
 ---
 # FRACTURE — AIVERSE skill
 
 ## When to activate
-Детерминированная модель несущих элементов, связей, потери опоры и устойчивых к replay событий обрушения.
+Structural support bonds, deterministic collapse and durable destruction events using the existing PHYSIS/Box3D owners.
 
-Typical request: разрушение конструкций, опоры зданий, повреждения соединений, каскадные обрушения, восстановление. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: building collapse, structural damage, broken supports, cascade failure, repair. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/FractureEcs.h`.
 - **Authoritative ECS:** `fracture::Member, Bond, Collapse, Event`.
 - **Lifecycle:** `aiverse::fracture::install(sim)`; per-tick behavior: `fracture::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `FractureMember, FractureBond`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `FracturePhysisBridge.h`, `WorldProcessesLinkedAuthoring.h`, `WorldProcessesMapHydration.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
