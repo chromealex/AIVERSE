@@ -23,10 +23,15 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       preserveAspectRatio="xMidYMid meet">
       <rect x={0} y={0} width={width} height={depth}
         fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>
-      {Array.from({length:Math.max(0,Math.min(5,(preview as StudioBuildingPreview & {roomsX?:number}).roomsX??1)-1)},(_,i)=>
-        <line key={'x'+i} x1={width*(i+1)/((preview as StudioBuildingPreview & {roomsX?:number}).roomsX??1)}
-          x2={width*(i+1)/((preview as StudioBuildingPreview & {roomsX?:number}).roomsX??1)}
+      {Array.from({length:Math.max(0,Math.min(5,preview.roomsX??1)-1)},(_,i)=>
+        <line key={'x'+i} x1={width*(i+1)/(preview.roomsX??1)}
+          x2={width*(i+1)/(preview.roomsX??1)}
           y1={0} y2={depth} stroke="var(--au-line)" strokeDasharray=".35 .25" strokeWidth={.07}/>)}
+      {Array.from({length:Math.max(0,Math.min(5,(preview.roomsZ??1)-1))},(_,i)=>
+        <line key={'z'+i} x1={0} x2={width}
+          y1={depth*(i+1)/(preview.roomsZ??1)}
+          y2={depth*(i+1)/(preview.roomsZ??1)}
+          stroke="var(--au-line)" strokeDasharray=".35 .25" strokeWidth={.07}/>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -49,7 +54,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     </svg>
     <div className="abg__plan-caption">
       <strong>Native structure plan</strong>
-      <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
+      <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {preview.floors??1} floors · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
       {selectedSocket&&<small>Selected: {selectedSocket.socketId} ({selectedSocket.kind}) · opening {selectedSocket.width.toFixed(1)}m, {Math.round(selectedSocket.open*100)}% initial open</small>}
       <small>Click an opening marker to edit its functional property. This is a top-down inspector; the real textured 3D asset appears in the native model thumbnail and Scene viewport after generation.</small>
     </div>
