@@ -5,8 +5,10 @@
 using namespace aiverse::terraweave::caverns;
 int main(){
     CaveShardRegistry registry({2,8});
-    assert(caveShardFor({-1,-1,-1},{2,8})==CaveShardKey{-1,-1,-1});
-    assert(caveShardFor({-2,-2,-2},{2,8})==CaveShardKey{-1,-1,-1});
+    const CaveShardKey negative{-1,-1,-1};
+    const CaveShardConfig config{2,8};
+    assert(caveShardFor({-1,-1,-1},config)==negative);
+    assert(caveShardFor({-2,-2,-2},config)==negative);
     registry.upsert({0,0,0},10);
     registry.upsert({1,0,0},11);
     registry.upsert({2,0,0},9);
