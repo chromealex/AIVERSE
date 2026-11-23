@@ -36,12 +36,22 @@ public:
     // ticket generation becomes invalid and cannot enter the draw catalog.
     void replaceSnapshot(std::shared_ptr<const CaveVolumeSnapshot> source) {
         if(!index_)throw std::logic_error("Caverns visual world not open");
-        auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(source);
-        if(indexed->revision()<=index_->revision())
-            throw std::invalid_argument("Caverns client visual stale revision");
+        if(!source||!source->sourceRevision)
+            throw std::invalid_argument("Caverns client visual snapshot");
+        // Undo/Redo can restore a lower MapDoc revision. The live client
+        // uses a strictly increasing runtime epoch for worker tickets.
+        auto normalized=std::make_shared<CaveVolumeSnapshot>(*source);
+        canonicalizeCaveSnapshot(*normalized);
+        if(index_->revision()==UINT64_MAX)
+            throw std::overflow_error("Caverns client visual revision overflow");
+        normalized->sourceRevision=std::max(
+            normalized->sourceRevision,index_->revision()+1);
+        auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(
+            std::move(normalized));
         index_=std::move(indexed);
         residency_.sourceRevision(index_->revision());
         ready_.clear();
+        pendingRetire_.clear();
     }
     // CPU jobs may finish in any order. GPU publication stays owner-thread
     // and is frame-admitted by the complete-shard geometry host.
@@ -139,6 +149,7 @@ public:
     }
     size_t pendingCpu()const noexcept{return workers_.inFlight();}
     bool opened()const noexcept{return index_!=nullptr;}
+    uint64_t sourceRevision()const noexcept{return index_?index_->revision():0;}
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
     CaveWorldResidency residency_;
