@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "description": "Genre-independent two-storey circulation: U-return stairs and lift shaft cut through real floor slabs, plus windows and gates.",
+  "width": 24,
+  "height": 14,
+  "depth": 18,
+  "seed": 23,
+  "floors": 2,
+  "roomsX": 2,
+  "roomsZ": 2,
+  "features": [
+    {
+      "kind": "large-gate",
+      "side": "front",
+      "count": 1,
+      "width": 4.5,
+      "height": 3.7,
+      "open": 1,
+      "position": 7
+    },
+    {
+      "kind": "personnel-door",
+      "side": "front",
+      "count": 1,
+      "width": 1.2,
+      "height": 2.2,
+      "open": 1,
+      "position": 18
+    },
+    {
+      "kind": "window",
+      "side": "back",
+      "count": 2,
+      "width": 1.6,
+      "height": 1.1,
+      "sill": 1.1,
+      "floor": 1,
+      "position": 12,
+      "spacing": 1
+    },
+    {
+      "kind": "stairs",
+      "count": 1,
+      "width": 2.6,
+      "depth": 6.6,
+      "position": 6,
+      "positionZ": 4.5
+    },
+    {
+      "kind": "elevator",
+      "count": 1,
+      "width": 2,
+      "depth": 2.2,
+      "position": 18,
+      "positionZ": 4.5
+    }
+  ]
+}
