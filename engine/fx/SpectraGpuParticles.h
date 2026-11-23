@@ -8,6 +8,7 @@
 #include "ParticleSystem.h"
 #include "SpectraGpuCheckpoint.h"
 #include "SpectraCheckpointExport.h"
+#include "SpectraCheckpointFile.h"
 #include "SpectraCheckpointReadbackBudget.h"
 #include "SpectraAdaptiveCheckpoint.h"
 #include <array>
@@ -168,6 +169,8 @@ public:
     // rejects open command buffers). This is not CPU ParticleSystem import.
     bool captureGpuCheckpoint(GpuCheckpoint& out);
     bool restoreFreshGpuCheckpoint();
+    bool exportRestoreCheckpoint(const std::string& identity,std::vector<uint8_t>& bytes) const;
+    bool importRestoreCheckpoint(const std::string& expectedIdentity,const std::vector<uint8_t>& bytes);
     bool retainFreshGpuCheckpoint();
     bool restoreHistoricalGpuCheckpoint(uint64_t id);
     std::vector<uint64_t> historicalGpuCheckpointIds() const;
