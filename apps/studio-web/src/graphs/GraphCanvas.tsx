@@ -10,13 +10,13 @@ import './GraphCanvas.css';
 
 export interface GraphCommand {id:string;label:string;shortcut?:string;disabled?:boolean;run:()=>void}
 export interface GraphCanvasProps {
- view:GraphView; highlighted?:readonly string[]; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
+ view:GraphView; heat?:Readonly<Record<string,number>>; highlighted?:readonly string[]; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
  commands?:readonly GraphCommand[]; onCancel?:()=>void;
  selection?:readonly string[]; onSelection?:(ids:string[])=>void; onMoveGroup?:(positions:Positioned[])=>void;
  onSelect:(id:string)=>void; onMove:(id:string,x:number,y:number)=>void;
 }
-export default function GraphCanvas({view,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
+export default function GraphCanvas({view,heat,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
  const svg=useRef<SVGSVGElement>(null);
  const scroll=useRef<HTMLDivElement>(null);
  const drag=useRef<{pointer:number;origin:Point;nodes:Positioned[]}|null>(null);
@@ -115,6 +115,7 @@ export default function GraphCanvas({view,highlighted,selected,label,disabled,re
     }}>
     <rect width="130" height={height} rx="7" fill={ids.includes(node.id)?'var(--au-accent-strong)':'var(--au-panel-raised)'}
      stroke={ids.includes(node.id)?'var(--au-accent-ink)':'var(--au-accent)'} strokeWidth={highlighted?.includes(node.id)?3:1}/>
+    {heat&&Number.isFinite(heat[node.id])&&heat[node.id]>0&&<rect x="1.5" y="1.5" width="127" height={height-3} rx="6" fill="var(--au-accent)" opacity={0.1+0.55*Math.min(1,heat[node.id])} pointerEvents="none"/>}
     {highlighted?.includes(node.id)&&<text x="118" y="15" textAnchor="end" fill="var(--au-text)" fontSize="10">●</text>}
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
     <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
