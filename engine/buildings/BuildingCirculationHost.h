@@ -68,6 +68,7 @@ public:
     }
     const BuildingStructureGraph& graph()const noexcept{return graph_;}
     const std::map<uint32_t,BuildingLiftController>& lifts()const noexcept{return lifts_;}
+    const std::map<uint64_t,uint32_t>& riderBindings()const noexcept{return riders_;}
     const BuildingNavLinkBatch& navLinks()const noexcept{return navLinks_;}
     uint64_t graphRevision()const noexcept{return graphRevision_;}
     bool rebuildNavigation(const nav::Mesh& mesh,std::string* error=nullptr){
