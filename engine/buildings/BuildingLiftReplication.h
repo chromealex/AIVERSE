@@ -8,6 +8,7 @@
 // Requests to interact with lifts must go through the game's established
 // actor-ownership/permission path and authoritative circulation owner.
 #include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include "engine/buildings/BuildingCirculationHost.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -188,6 +189,23 @@ inline bool decodeBuildingLiftStateFrame(std::span<const uint8_t> data,
     frame=std::move(candidate);
     if(error)error->clear();
     return true;
+}
+
+// Collect immutable value-copies for the game's existing server snapshot
+// channel. Networking owner serializes this using encodeBuildingLiftStateFrame.
+// The physics/ECS owner calls this only AFTER publishing cabin and rider
+// transforms on the same authoritative simulation tick.
+inline BuildingLiftStateFrame captureBuildingLiftServerFrame(
+    const BuildingCirculationHost& host,uint64_t sceneId,uint64_t serverTick){
+    BuildingLiftStateFrame frame;
+    frame.sceneId=sceneId;frame.serverTick=serverTick;
+    for(const auto& [feature,lift]:host.lifts()){
+        (void)feature;
+        frame.lifts.push_back(lift.snapshot());
+    }
+    for(const auto& [actorId,feature]:host.riderBindings())
+        frame.passengers.push_back({actorId,feature});
+    return frame;
 }
 
 class BuildingLiftReplica {
