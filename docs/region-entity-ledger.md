@@ -937,3 +937,67 @@ move staging in a real world-space GameCore.
 
 **Tests authored, not run** on the required Mac/KINGSTON build; the
 feature remains W1 partial and PR #116 Draft.
+
+
+## Stage 14 — revision-indexed bounded change delivery
+
+The native ECS `RegionEntityLedger` now maintains an additional
+**derived** `revisionIndex_` mapping each record's *latest* revision
+to its stable entity ID. It is updated when IDs are spawned, transferred
+(including mixed-origin car/occupant groups) or tombstoned, and rebuilt
+transactionally when decoding a saved ledger. The persistent schema
+remains v1 and the serializer still writes only `records_` and
+`lastRevision_`; no derived index changes the saved bytes or
+authoritative checksum.
+
+`since(revision)` now uses
+`revisionIndex_.upper_bound(revision)` instead of scanning every
+historical record and sorting them. New
+`pageSince(revision,limit)` returns a
+`RegionEntityLedger::ChangePage` with
+`changes`, `nextRevision` and `more`, ordered by current record
+revision. Memory use and delivery effort per request are bounded by
+the requested page size. The index itself scales with the number of
+all retained records, including tombstones.
+
+`RegionChangeCursor` provides a small host-side acknowledged observer
+that calls a callback for each changed record, advances only after
+the callback returns true and allows explicit `reset()` after a
+game load/rollback:
+
+```cpp
+world::RegionChangeCursor observer;
+const bool caughtUp = observer.consume(
+    *ledger, 128,
+    [&](world::RegionEntityId id,
+        const world::RegionEntityRecord& latest) {
+        return publishRegionChange(id, latest); // bool ACK
+    });
+```
+
+The example's `publishRegionChange` is a game/provider callback
+supplied by its owner, not an engine disk writer.
+
+**Important latest-state semantics:** Each ID appears at most once
+in the index with its **current/latest record**. If one actor moves
+through A→B→C before an observer polls, the observer sees the latest
+C record, not two discrete movement events. This is suitable for
+convergent snapshots, index updates and region invalidation, but is
+**not a lossless event log or crash-safe per-region disk journal**.
+A persisted journal must record each transaction before committing it
+and correctly handle fsync/checkpoint recovery.
+
+The existing `ActorHost` still scans live CharacterBody/Vehicle/Loot
+pools for direct field changes because core ECS has no generic
+`onChanged` callbacks for arbitrary mutable component fields.
+Stage 14 makes **ledger change consumption incremental**, not
+general gameplay movement detection. Do not replace the actor
+reconciliation with `pageSince` alone; that would miss new
+positions that never reached the ledger.
+
+The `region_entity_ledger_test` source now checks
+pagenation over repeated transfers, mixed owners, tombstones,
+transactional archive reconstitution, acknowledged callback failure
+and retry, and cursor reset. No Mac/KINGSTON native build/CTest
+was run here, so these are authored assertions rather than
+passing-test evidence.
