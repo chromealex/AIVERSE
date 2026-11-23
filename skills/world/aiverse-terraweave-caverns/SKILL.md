@@ -52,3 +52,12 @@ Read `engine/world/TerraWeaveCavernsEntrances.h` and
 - `dirtyRegions` are merely planning metadata. They do not rebuild collision/navmesh/vegetation until the owner-thread publish barrier actually commits matching revisions. No new collision or navmesh owner has been implemented.
 - Near aperture is an inscribed regular polygon; shaft field remains round. Ensure matching shaft aperture/transition rim in future stage to avoid polygonal collision lips.
 - Missing: actual published runtime adapter, complete render+collision transaction, navmesh invalidation delivery, cave portal rim mesh, terrain material/UV seam, CTest registration, live GPU proof.
+
+## Stage 5: native shared render/collision resident
+- Read `engine/render/TerraWeaveCavernsResident.h` and `docs/agent-handoffs/caverns-stage5-2026-11-23.md`.
+- `buildCutNativePayload(cut, cellSizeMetres, materialSource, uvScale)` converts **one** `CutSurface` triangle list to `CutNativePayload`: collision triangles in `Vec3/Fixed` and the matching `render::Model`; reject invalid geometry. `Model` uses same borrowed-texture policy as existing dynamic terrain.
+- `CutTerrainResident::publish(device, spatial, std::move(payload), firstColliderId, cellSizeMetres)`: owner-thread opt-in publication. It uploads a new GPU model and adds its new collision range before removing old collision/model. **Caller MUST reserve a fresh, nonoverlapping global collider ID range** on each republish, and hide the replaced original terrain tile in BOTH render and collision owners. Cannot reuse the existing range on a republish.
+- `CutTerrainResident::submit(renderer, origin)` follows existing Renderer3D model submission. `shutdown(device,spatial)` removes owned collision and releases GPU model before device destruction.
+- `takeDirty()` yields candidate dirty rectangles **only after a successful publish**. At the host barrier, use these to invalidate existing native NavMesh, vegetation and Horizon derived state. This stage does not call native NavMesh APIs or guarantee navigable walk paths.
+- No direct Box3D bridge yet. SpatialWorld triangle publications are real, but Box3D owners need a separate authoritative geometry replacement strategy.
+- GPU model lifetime and publication failure paths need real Metal/GL/Vulkan and collider-ID exhaustion tests before main merge. The unmodified ordinary `TerrainPatchResident` remains owner of normal (unclipped) tiles.
