@@ -48,8 +48,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     const auto position=regionPositionReader();
     const world::SpatialWorld grid(32);
     const auto* dirty=view.resourceConst<world::RegionDirtyQueue>();
-    // Explicit authoritative notifications can reconcile independent loot
-    // immediately; the compatibility scan still validates untracked writers.
+    // Keep transfers in canonical order after group validation, even for
+    // explicitly notified loot.
     // Process known structural changes before the compatibility scan.
     // Position changes remain handled by the full scan until every
     // authoritative canonical-position writer emits a dirty event.
@@ -79,24 +79,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             }else if(!record->live) {
                 throw std::logic_error("regionOwnership: tombstoned dirty ID");
             }
-            // Loot has no vehicle group. Reconcile its notified movement now.
-            // Characters and cars must wait for atomic group validation.
-            ledger=view.resourceConst<world::RegionEntityLedger>();
-            if(view.has<Loot>(entity) && !view.has<CharacterBody>(entity) &&
-               !view.has<Vehicle>(entity)) {
-                const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
-                const auto* current=ledger->find(id);
-                if(!tag || tag->id!=id || !current || !current->live)
-                    throw std::logic_error("regionOwnership: invalid dirty loot identity");
-                const auto destination=grid.cell(*location);
-                if(current->owner!=destination) {
-                    if(view.has<world::RegionDormant>(entity))
-                        throw std::logic_error("regionOwnership: dormant loot crossing");
-                    const auto origin=current->owner;
-                    if(!ecs.resource<world::RegionEntityLedger>()->transfer(id,origin,destination))
-                        throw std::logic_error("regionOwnership: dirty loot transfer failed");
-                }
-            }
+
         }
     }
     ledger=view.resourceConst<world::RegionEntityLedger>();
@@ -163,6 +146,11 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // Occupied vehicles are one atomic ownership graph. Legacy arcade seats
     // use CharacterBody.vehicle + Vehicle.driver; typed vehicles use the one
     // shared VehicleDrive/VehicleOccupant model and the existing seat adapter.
+    struct PendingGroupTransfer {
+        std::vector<Entity> members;
+        decltype(grid.cell(Vec3{})) destination;
+    };
+    std::vector<PendingGroupTransfer> pendingGroups;
     std::set<uint64_t> handled;
     for(Entity car:cars) {
         ledger=view.resourceConst<world::RegionEntityLedger>();
@@ -215,10 +203,14 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             if(!streamedCollision_ || !streamedCollision_->covers(required))
                 throw std::logic_error("regionOwnership: car destination collision unready");
         }
+        pendingGroups.push_back({std::move(group),destination});
+    }
+    // Validate all seat graphs and collision admission before any group moves.
+    for(const auto& pending:pendingGroups) {
         std::string error;
         if(!world::RegionEcsBridge::transferGroupMixed(
-                view,*ecs.resource<world::RegionEntityLedger>(),group,
-                destination,position,&error))
+                view,*ecs.resource<world::RegionEntityLedger>(),pending.members,
+                pending.destination,position,&error))
             throw std::logic_error("regionOwnership: car transfer: "+error);
     }
 
