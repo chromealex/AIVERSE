@@ -52,6 +52,29 @@ int main() {
     require(call("graph_node_catalog",generic)["result"]["nodes"].isArray(),"generic native node catalog missing");
     require(call("fx_graph_delete",generic).getBool("ok"),"generic fixture cleanup failed");
 
+    const auto shaderDraft=Json::parse(R"({"domain":"shader","graph":{"version":1,"domain":"material","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}},"edits":[{"action":"add","value":{"id":"tint","op":"constant","value":[1,1,1,1]}},{"action":"setOutput","output":"color","node":"tint"}]})");
+    const auto shaderEdited=call("graph_edit",shaderDraft);
+    require(shaderEdited.getBool("ok")&&shaderEdited["result"].getBool("valid"),"shader batch validation failed");
+    require(shaderEdited["result"].getInt("applied")==2&&!shaderEdited["result"].getBool("saved"),"shader batch metadata wrong");
+    require(shaderEdited["result"]["graph"]["outputs"].getStr("color")=="tint","shader output not changed");
+    require(shaderDraft["graph"]["nodes"].size()==1,"input draft mutated");
+    require(!fs::exists(root/"shaders"),"shader draft wrote files");
+    auto badBatch=shaderDraft;badBatch.member("edits").push(Json::parse(R"({"action":"add","value":{"id":"tint","op":"constant"}})"));
+    require(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
+    const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind","transitions":[]}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
+    const auto motionEdited=call("graph_edit",motionDraft);
+    require(motionEdited.getBool("ok")&&motionEdited["result"]["graph"]["states"][size_t(0)]["transitions"].size()==1,"animation state draft failed");
+    require(!motionEdited["result"].getBool("valid"),"model-less motion graph unexpectedly validated");
+    require(!fs::exists(root/"animations"),"animation draft wrote files");
+    const auto modelDraft=Json::parse(R"({"domain":"modeling","document":{"version":1,"parameters":{},"materials":[],"nodes":[{"id":"root"}],"clips":[],"skins":[],"graph":null},"edits":[{"op":"put","collection":"nodes","id":"body","value":{"parent":"root"}},{"op":"parameters","values":{"size":1}}]})");
+    const auto modelEdited=call("graph_edit",modelDraft);
+    require(modelEdited.getBool("ok")&&modelEdited["result"]["document"]["nodes"].size()==2,"native model draft batch failed");
+    require(!fs::exists(root/"models"),"model draft wrote files");
+    auto fxBatch=generic;fxBatch.set("edits",Json::parse(R"([{"action":"setProperty","node":"spawn","property":"burst","value":12},{"action":"setProperty","node":"init","property":"life","value":2}])"));
+    const auto fxEdited=call("graph_edit",fxBatch);
+    require(fxEdited.getBool("ok")&&fxEdited["result"].getBool("valid")&&fxEdited["result"].getInt("applied")==2,"native FX batch failed");
+    require(!fs::exists(root/"fx"/"graphs"/"generic_spark.vfx.json"),"FX draft wrote files");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
