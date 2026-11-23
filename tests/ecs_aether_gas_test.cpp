@@ -1,0 +1,137 @@
+// AETHER ECS: conservation, diffusion, flux, PHYSIS fire, native save and rollback.
+#include "aiverselib/world/AetherEcs.h"
+#include "aiverselib/world/AetherPhysisBridge.h"
+#include "tests/AlwaysCheck.h"
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <string>
+using namespace aiverse;
+namespace ae=aiverse::aether;
+
+template<int N>struct GasHost final:GameModule{
+    Entity source=kNullEntity,target=kNullEntity,duct=kNullEntity,flux=kNullEntity;
+    std::string name()const override{return "gas-native";}
+    void setup(Simulation& sim,const Json&,const Json&)override{
+        ae::install(sim);
+        auto& w=sim.world();
+        source=w.create();
+        w.add<ae::GasCell>(source,ae::GasCell{300,200,0});
+        target=w.create();
+        w.add<ae::GasCell>(target,ae::GasCell{0,0,200});
+        duct=w.create();
+        w.add<ae::GasDuct>(duct,ae::GasDuct{source,target,100,false,true});
+        flux=w.create();
+        w.add<ae::GasFlux>(flux,ae::GasFlux{source,10,0,0,true});
+    }
+    void applyCommand(Simulation&,const Command&)override{}
+    void hashState(Simulation&,Hasher&)override{}
+    int result(Simulation&)override{return 0;}
+    bool serializeState(Simulation&,Archive& a)override{return a.ok();}
+};
+template<int N>std::unique_ptr<Simulation> make(bool cow=false){
+    auto s=std::make_unique<Simulation>(SimConfig{81,20,0,true},
+                                        std::make_unique<GasHost<N>>());
+    s->setup(Json::object(),Json::object());
+    if(cow)s->world().enableCowSnapshots();
+    return s;
+}
+template<int N>ae::GasCell gas(const Simulation& sim,bool source){
+    const auto& host=static_cast<const GasHost<N>&>(sim.module());
+    const auto* cell=sim.world().tryGetConst<ae::GasCell>(
+        source?host.source:host.target);
+    AIVERSE_TEST_CHECK(cell!=nullptr);
+    return *cell;
+}
+int main(){
+    auto a=make<1>(),b=make<2>(true);
+    a->step();b->step();
+    AIVERSE_TEST_CHECK(a->checksum()==b->checksum());
+    auto src=gas<1>(*a,true),dst=gas<1>(*a,false);
+    AIVERSE_TEST_CHECK(src.smoke==210&&dst.smoke==100);
+    AIVERSE_TEST_CHECK(src.toxin==100&&dst.toxin==100);
+    AIVERSE_TEST_CHECK(src.oxygen==100&&dst.oxygen==100);
+    AIVERSE_TEST_CHECK(src.smoke+dst.smoke==310);
+    AIVERSE_TEST_CHECK(src.toxin+dst.toxin==200);
+    AIVERSE_TEST_CHECK(src.oxygen+dst.oxygen==200);
+    const auto sameTick=a->checksum();
+    AIVERSE_TEST_CHECK(ae::advance(a->world(),src.sampledTick));
+    AIVERSE_TEST_CHECK(a->checksum()==sameTick);
+    std::string saved=a->serialize();
+    auto load=make<1>();
+    std::string error;
+    AIVERSE_TEST_CHECK(load->deserialize(saved,&error));
+    AIVERSE_TEST_CHECK(load->checksum()==a->checksum());
+    // Corrupt/truncated native saves must fail without altering live state.
+    AIVERSE_TEST_CHECK(!load->deserialize(saved.substr(0,saved.size()-3),&error));
+    AIVERSE_TEST_CHECK(load->checksum()==a->checksum());
+    SimSnapshot base;b->saveState(base);
+    auto& ah=static_cast<GasHost<1>&>(a->module());
+    auto& bh=static_cast<GasHost<2>&>(b->module());
+    a->world().get<ae::GasDuct>(ah.duct).enabled=false;
+    b->world().get<ae::GasDuct>(bh.duct).enabled=false;
+    a->step();b->step();
+    AIVERSE_TEST_CHECK(a->checksum()==b->checksum());
+    AIVERSE_TEST_CHECK(gas<1>(*a,false).smoke==100);
+    AIVERSE_TEST_CHECK(gas<1>(*a,true).smoke==220);
+    b->loadState(base);
+    AIVERSE_TEST_CHECK(b->world().get<ae::GasDuct>(bh.duct).enabled);
+    b->world().get<ae::GasDuct>(bh.duct).enabled=false;
+    b->step();
+    AIVERSE_TEST_CHECK(a->checksum()==b->checksum());
+
+    // An invalid source must not partially apply fluxes or diffusion.
+    auto invalid=make<3>();
+    auto& ih=static_cast<GasHost<3>&>(invalid->module());
+    invalid->world().get<ae::GasFlux>(ih.flux).smoke=ae::kMaxDuctRate+1;
+    const auto before=gas<3>(*invalid,true);
+    AIVERSE_TEST_CHECK(!ae::advance(invalid->world(),19));
+    const auto after=gas<3>(*invalid,true);
+    AIVERSE_TEST_CHECK(before.smoke==after.smoke&&before.sampledTick==after.sampledTick);
+    invalid->world().get<ae::GasFlux>(ih.flux).smoke=10;
+    invalid->world().get<ae::GasDuct>(ih.duct).maximumPerTick=-1;
+    AIVERSE_TEST_CHECK(!ae::advance(invalid->world(),20));
+
+    // Dead/recycled cell IDs never reconnect old ducts or sources.
+    auto stale=make<4>();
+    auto& sh=static_cast<GasHost<4>&>(stale->module());
+    const Entity old=sh.target;
+    stale->world().destroy(old);
+    const Entity replacement=stale->world().create();
+    AIVERSE_TEST_CHECK(replacement.index==old.index&&replacement.gen!=old.gen);
+    stale->world().add<ae::GasCell>(replacement,ae::GasCell{0,0,200});
+    stale->step();
+    AIVERSE_TEST_CHECK(gas<4>(*stale,true).smoke==310);
+    const auto* replacementCell=stale->world().tryGetConst<ae::GasCell>(replacement);
+    AIVERSE_TEST_CHECK(replacementCell&&replacementCell->smoke==0);
+
+    // Budget is checked before writing any cell and returns failure.
+    auto budget=make<5>();
+    for(std::size_t i=0;i<ae::kMaxCells;++i){
+        Entity e=budget->world().create();
+        budget->world().add<ae::GasCell>(e);
+    }
+    AIVERSE_TEST_CHECK(!ae::advance(budget->world(),33));
+
+    // Read-only PHYSIS hazard field drives opt-in chemical heuristic.
+    World world;
+    const Entity cell=world.create();
+    world.add<ae::GasCell>(cell,ae::GasCell{10,0,100});
+    world.add<ae::FireCoupling>(cell,ae::FireCoupling{20,30});
+    physis::HazardCell fire;fire.fire=Fixed::fromInt(1);
+    world.add<physis::HazardCell>(cell,fire);
+    physis::State climate;climate.tick=100;
+    world.setResource<physis::State>(climate);
+    AIVERSE_TEST_CHECK(ae::applyPhysisFire(world));
+    AIVERSE_TEST_CHECK(world.get<ae::GasCell>(cell).oxygen==80);
+    AIVERSE_TEST_CHECK(world.get<ae::GasCell>(cell).smoke==40);
+    AIVERSE_TEST_CHECK(ae::applyPhysisFire(world)); // same climate tick: no duplicate
+    AIVERSE_TEST_CHECK(world.get<ae::GasCell>(cell).oxygen==80);
+    world.resource<physis::State>()->tick=101;
+    world.get<physis::HazardCell>(cell).fire=Fixed::fromRatio(1,2);
+    AIVERSE_TEST_CHECK(ae::applyPhysisFire(world));
+    AIVERSE_TEST_CHECK(world.get<ae::GasCell>(cell).oxygen==70);
+    AIVERSE_TEST_CHECK(world.get<ae::GasCell>(cell).smoke==55);
+
+    std::cout<<"PASS AETHER ECS diffusion, mass, flux, PHYSIS, budgets, generation and COW persistence\n";
+}
