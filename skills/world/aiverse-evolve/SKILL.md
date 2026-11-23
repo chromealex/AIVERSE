@@ -91,3 +91,15 @@ modifying MapDoc.
 **Status:** Stage30 authored source, not compiled or
 hardware-accepted. The user's test deferral remains active.
 See `docs/handoffs/world-processes-stage30-evolve-area-handle-cycling-2026-11-23.md`.
+
+## Stage 31: bidirectional EVOLVE rectangle authoring
+
+`StudioWorldProcessesEditing.h` exposes four symmetric EvolveArea edges:
+`AreaWidth`, `AreaWidthNegative`, `AreaDepth`, `AreaDepthNegative`.
+All four write the existing typed `halfWidthCm`/`halfDepthCm` fields
+through `studio.worldProcessAreaSet` on mouse release; they never change
+ECS Area center or map entity position. The opposite side moves equally.
+Negative modes were appended to the mode enum to preserve existing values.
+The current center is still the canonical authored map entity `pos`.
+No build or runtime tests have been run for Stage31 (deferred by user).
+See `docs/handoffs/world-processes-stage31-bidirectional-handles-2026-11-23.md`.
