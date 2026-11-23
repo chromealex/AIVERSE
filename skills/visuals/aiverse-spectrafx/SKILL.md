@@ -5,6 +5,32 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — Stage 4: Graph v2 typed Data Interfaces (native QA pending)
+
+Required handoff:
+`docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
+Graph-v2 root `dataInterfaces` maps named `instanceParameters` (slot 0..7)
+to `{provider,channel,scale,offset,fallback,required}`. A typed
+`DataInterface` graph node lowers `{"$runtime":"nodeId"}` to an existing
+ParticleProgram VM `paramN` read. `DataInterfaceRegistry` injects up to
+16 read-only, nonthrowing, owner-thread providers. `GraphRuntime` samples
+them once per burst at its world position, not per particle/per tick.
+Required missing data rejects the burst; optional missing data uses a
+validated fallback. This reuses existing CPU/shared BatchWorld and opt-in
+GPU VM selection; it is not a new GPU execution backend. The editor's
+shared node catalog, typed `name` field and atomic
+`setDataInterfaceBinding` / `removeDataInterfaceBinding` helpers are
+available. Full HTML5 Studio UI, PHYSIS-specific adapter and hardware
+parity are not yet provided.
+
+**New revision's tests are committed but have not been observed passing.**
+The workflow now builds graph/compiler/runtime CTests on Ubuntu and macOS.
+Keep the PR draft and do not merge without actual test logs and graphics QA.
+`examples/spectrafx/data_interface_weather_v2.vfx.json` demonstrates the
+format. Use `docs/spectrafx-modernization-roadmap-2026-11-23.md` for what
+remains. Preserve strict presentation-only ECS ownership and CPU fallback.
+
+
 ## 2026-11-23 — Stage 3: read-only visual acceleration fields (native QA pending)
 
 Handoff: `docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
