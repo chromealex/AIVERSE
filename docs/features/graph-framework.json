@@ -27,7 +27,11 @@
     "apps/studio-native/StudioTools.h",
     "apps/studio-web/src/graphs/AnimationConditions.tsx",
     "apps/studio-web/src/graphs/generatorProjections.ts",
-    "apps/studio-web/src/panels/generated/TerraweaveGeneratorPanel.tsx"
+    "apps/studio-web/src/panels/generated/TerraweaveGeneratorPanel.tsx",
+    "apps/studio-web/src/graphs/materialGraph.ts",
+    "apps/studio-web/src/graphs/MaterialGraphPanel.tsx",
+    "apps/studio-web/src/panels/MaterialsPanel.tsx",
+    "apps/editor/core/MaterialOps.cpp"
   ],
   "traits": {
     "editable": true,
@@ -153,21 +157,28 @@
       "terraweave_preview",
       "terraweave_generate",
       "terraweave_forest_get",
-      "terraweave_forest_set"
+      "terraweave_forest_set",
+      "texture_patterns",
+      "texture_generate",
+      "material_set"
     ],
     "studio_panels": [
       "shader_graph",
       "fx_graph",
       "anim_graph",
       "modeling",
-      "terraweave_generator"
+      "terraweave_generator",
+      "materials"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",
       "studio.shaderGraphGet",
       "studio.shaderGraphValidate",
       "studio.shaderGraphSave",
-      "studio.op"
+      "studio.op",
+      "studio.assets",
+      "studio.materials",
+      "studio.materialPatch"
     ]
   },
   "test_reports": []
