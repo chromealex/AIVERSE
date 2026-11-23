@@ -1853,12 +1853,18 @@ public:
 
     // ---------- frame ----------
     // ---------- capture (tools) ----------
+    TaggedCaptureFn taggedCapture_;
     CaptureFn capture_;              // requested, waiting for a readable drawable
     int captureDelay_ = 0;
     struct Captured { int w = 0, h = 0; std::vector<uint8_t> px; std::atomic<bool> ready{false}; CaptureFn fn; };
     std::shared_ptr<Captured> captured_;
     std::vector<std::shared_ptr<Captured>> capturedTextures_;
+    void captureNextFrameTagged(TaggedCaptureFn fn) override {
+        captureNextFrame([](int,int,std::vector<uint8_t>){});
+        taggedCapture_=std::move(fn);
+    }
     void captureNextFrame(CaptureFn fn) override {
+        taggedCapture_={};
         capture_ = std::move(fn);
         layer_.framebufferOnly = NO; // drawables acquired from now on can be blitted
         captureDelay_ = drawable_ && !drawable_.texture.framebufferOnly ? 0 : 1;
@@ -2312,8 +2318,14 @@ public:
             auto c = std::make_shared<Captured>();
             c->w = int(w); c->h = int(h); c->fn = std::move(capture_);
             capture_ = nullptr;
+            if(taggedCapture_){
+                auto tagged=std::move(taggedCapture_);
+                const uint64_t serial=frame_;
+                c->fn=[tagged=std::move(tagged),serial](int w,int h,std::vector<uint8_t> pixels){tagged(serial,w,h,std::move(pixels));};
+            }
             captured_ = c;
-            [cmd_ addCompletedHandler:^(id<MTLCommandBuffer>) {
+            [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
+                if(completed.status!=MTLCommandBufferStatusCompleted||!buf){c->w=0;c->h=0;c->ready=true;return;}
                 const uint8_t* src = static_cast<const uint8_t*>(buf.contents);
                 c->px.resize(size_t(row * h));
                 for (size_t i = 0; i < size_t(w * h); ++i) { // BGRA -> RGBA
