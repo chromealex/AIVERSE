@@ -651,3 +651,85 @@ rollback or an outdoor streamed NavMesh. It also does not remove
 W1.8's full-scan ownership reconciliation cost. Actual Mac/KINGSTON
 CMake+CTest execution **has not been completed** as part of this
 source stage; W1 remains partial and PR #116 Draft.
+
+
+## Stage 10 — typed VehicleDrive pre-admitted teleport and seat placement
+
+The same `ActorHost::requestRegionMove` + pre-tick
+`readyToStep` admission protocol from W1.9 now supports
+**typed vehicles** driven by the existing
+`vehicles::VehicleDrive` controller, in addition to
+on-foot `CharacterBody` and legacy arcade `Vehicle`.
+
+No second vehicle model is created. The implementation reuses:
+
+- `vehicles::VehicleDrive::controller` as the authoritative typed
+  physical state and `lib::mechanics::respawnVehicle` to move it
+  while zeroing motion and preserving supported controller/gear state.
+- `ActorHost::drive_` and the existing `VehicleType::seats`
+  definitions, `lib::mechanics::vehicleWorldPoint` for exact
+  passenger placement, and `actor::CharacterBody` as each
+  passenger's canonical position/velocity.
+- `vehicles::VehicleOccupant` reverse links and
+  `ActorHost::vehicleRegionGroup` for seat membership, together
+  with `RegionEntityLedger` mixed-owner atomic group migration.
+
+### Validation and movement
+
+`ActorHost::typedRegionMoveGroup` is a read-only preflight
+used by `requestRegionMove` and again by the commit system. It
+requires a live typed controller and its matching registered type
+definition; valid seat slots; exact slot→ECS mapping; no missing
+driver from the seat map, extra reverse-linked occupant, or
+`CharacterBody.vehicle` referring to the wrong car. It also
+inherits stable-ID/dormant/overlapping group checks from W1.9.
+
+A typed-vehicle request waits for collision and derived navigation
+to be ready **before Simulation::step consumes commands or RNG**.
+A new request added during the tick cannot inherit stale admission.
+On a verified tick, `ActorHost::placeTypedRegionMove` applies the
+shared `respawnVehicle`, synchronizes `actor::Vehicle.pos/yaw/velocity`
+with the controller, places occupied characters at the new seat
+world positions, and synchronizes existing
+`vehicles::VehicleOccupant` reverse component poses.
+`ActorHost::tickVehicles` remains the *single* normal
+physics/seat simulation. The post-tick `actor.regionOwnership`
+then changes the car and occupant ledger owners together.
+
+Controller motion is deliberately reset as part of a teleport;
+this is **not** a physics-preserving cross-cell movement for a
+car already driving at speed. Ordinary driving remains in
+`vehicles::stepVehicles`, guarded by the existing collision
+stream admission. External direct writes by other subsystems
+are still outside W1.9/10's staged teleport API.
+
+### Authored regression coverage
+
+The existing `actor_region_admission_test` CTest now adds a
+**real** `GameCore` map with `actor.vehicleTypes` and a
+`VehicleDrive`-typed car, driver and passenger seats. It tests
+failed remote collision loading with unchanged tick/RNG/checksum/
+typed controller pose; eventual successful admission for two
+independent peers; seat and controller consistency; one region
+owner for the car+occupants; v10 save and checksum restore;
+COW rollback; refused independent passenger teleport; and
+refusal of mismatched seat/backlink relationships.
+
+The fixture and production code are committed, but this stage's
+native C++ test **has not been built or executed on Mac/KINGSTON**.
+Its source assertions cannot be treated as passing test results.
+
+### Still incomplete
+
+- All arbitrary direct position or teleport writes from game logic
+  must eventually pass through a shared admission/transaction
+  protocol, not only `ActorHost::requestRegionMove`.
+- Runtime physics cross-region travel may need larger swept
+  collision/NavMesh envelopes at extreme speeds.
+- This stage does not park the complete live vehicle/driver
+  component graph or make every actor system dormant-aware.
+- Outside-world disk region journal, cold population clocks,
+  memory paging, cross-host net replay and benchmarking remain.
+- C++ allocation failures during a multi-component commit are
+  not guaranteed exception-atomic. Use the staged prevalidation
+  at a safe ECS structural boundary.
