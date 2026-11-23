@@ -180,13 +180,18 @@ inline std::vector<Shape> collect(const editor::MapDoc& document,
         }
         if(const auto& c=components["GranularSource"];c.isObject())
             single(e,c,"field",220,164,96);
-        if(const auto& c=components["EvolveRegion"];c.isObject()){
-            // Scope is *visual aid* only. Authoritative region bounds are
-            // supplied by the native EvolvePlantRegion host, not this circle.
+        if(const auto& c=components["EvolveArea"];c.isObject()){
+            const float halfWidth=capped(c["halfWidthCm"],1000,50,50000)/100.f;
+            const float halfDepth=capped(c["halfDepthCm"],1000,50,50000)/100.f;
+            rectangle(out,pos,halfWidth*2.f,halfDepth*2.f,138,190,255);
+            add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE AREA",138,190,255));
+        }else if(const auto& c=components["EvolveRegion"];c.isObject()){
+            // Back-compat visualization only; add EvolveArea for actual gameplay
+            // TerraWeave forest climate bounds.
             const float radius=capped(
                 e.extra["worldProcessGizmo"]["radiusMetres"],10,.5f,500.f);
             worldRing(out,pos,radius,138,190,255);
-            add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE",138,190,255));
+            add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE PREVIEW",138,190,255));
         }
         if(const auto& c=components["EvolvePressure"];c.isObject())
             single(e,c,"region",138,190,255);
