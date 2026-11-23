@@ -1,3 +1,28 @@
+## Local Apple Metal acceptance reported by tester (2026-11-23)
+
+Tester provided the full final CTest output from
+`/Users/aleksandrfeer/Projects/AIVERSE-spectrafx-test/build/spectrafx-preview`:
+
+```text
+Start 451: studio_spectrafx_preview
+1/1 Test #451: studio_spectrafx_preview ......... Passed 8.19 sec
+100% tests passed, 0 tests failed out of 1
+EDITOR = 8.19 sec*proc
+GPU = 8.19 sec*proc
+SpectraFX = 8.19 sec*proc
+Total Test time (real) = 8.21 sec
+```
+
+This is **user-observed native macOS GPU CTest PASS (1/1)**, not a CI run.
+The pasted result does not include `git rev-parse HEAD` or compiler identity,
+so exact source SHA and device details are not independently established.
+It confirms the fixture completed, including its playback/seek/capture/lifetime
+assertions; it does not prove visually distinguishable particle pixels,
+GPU-vs-CPU numerical parity, Vulkan support, or absence of nonfatal warnings.
+Next request: launch `AiverseStudioHTML5.app`, test the actual Graph v2
+panel and visible Scene rendering, then capture a screenshot; record SHA and
+additional diagnostics before claiming full acceptance.
+
 ## Additional Stage 8 fixes (2026-11-23)
 
 - `c54a39ab508fe695d3d02fa659be772dc3edaa91`: native Pause now also cancels outstanding bounded seek replay/single-step work, so Pause cannot advance visual time after returning.
