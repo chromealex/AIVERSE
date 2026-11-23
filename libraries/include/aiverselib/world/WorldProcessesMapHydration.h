@@ -4,6 +4,7 @@
 #pragma once
 #include "WorldProcessesLinkedAuthoring.h"
 #include "WorldProcessesExtendedAuthoring.h"
+#include "WorldProcessesExtendedLinks.h"
 #include <array>
 #include <cstddef>
 #include <map>
@@ -44,7 +45,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
         const Json* settings=nullptr;
         std::string_view component;
     };
-    std::vector<Pending> basic,linkedParts,extendedParts;
+    std::vector<Pending> basic,linkedParts,extendedParts,extendedEdges;
     std::map<std::string,Entity> ids;
     bool repeatedId=false;
     MapHydration totals;
@@ -56,6 +57,12 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     constexpr std::array<std::string_view,7> extendedTypes{
         "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
         "GranularField","EvolveRegion","SocietyPerson"};
+    constexpr std::array<std::string_view,12> extendedEdgeTypes{
+        "CrowdSlot", // slot targets exist before CrowdPreference is installed
+        "MorphSpring","MorphForce","CrowdPreference",
+        "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
+        "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"};
+    std::array<std::size_t,12> extendedEdgeCounts{};
 
     for(std::size_t i=0;i<entities.size();++i){
         const auto id=entities[i].getStr("id");
@@ -98,6 +105,27 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             else if(kind=="EvolveRegion")totals.extra.evolve=true;
             else if(kind=="SocietyPerson")totals.extra.society=true;
         }
+        for(std::size_t edgeIndex=0;edgeIndex<extendedEdgeTypes.size();++edgeIndex){
+            const auto kind=extendedEdgeTypes[edgeIndex];
+            const auto name=std::string(kind);
+            if(!components.has(name))continue;
+            if(!sim.world().alive(placed[i]))
+                throw std::invalid_argument("World Processes: linked feature on unspawned entity");
+            std::string error;
+            if(!extendedLinks::validate(kind,components[name],&error))
+                throw std::invalid_argument("World Processes "+name+": "+error);
+            if(extendedLinks::hasExisting(sim.world(),placed[i],kind))
+                throw std::invalid_argument("World Processes: duplicate linked ECS owner");
+            extendedEdges.push_back({placed[i],&components[name],kind});
+            ++extendedEdgeCounts[edgeIndex];
+            if(kind=="MorphSpring"||kind=="MorphForce")totals.extra.morph=true;
+            else if(kind=="CrowdSlot"||kind=="CrowdPreference")totals.extra.crowd=true;
+            else if(kind=="ImprintLink"||kind=="ImprintDeposit")totals.extra.imprint=true;
+            else if(kind=="CircuitWire"||kind=="CircuitGate")totals.extra.circuit=true;
+            else if(kind=="GranularSource")totals.extra.granular=true;
+            else if(kind=="EvolvePressure")totals.extra.evolve=true;
+            else if(kind=="SocietyContact"||kind=="SocietyMessage")totals.extra.society=true;
+        }
         for(const auto kind:linkedTypes){
             const auto name=std::string(kind);
             if(!components.has(name))continue;
@@ -129,10 +157,43 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
        totals.bonds>fracture::kMaxBonds ||
        totals.gasCells>aether::kMaxCells ||
        totals.ducts>aether::kMaxDucts ||
-       totals.fluxes>aether::kMaxFluxes)
+       totals.fluxes>aether::kMaxFluxes ||
+       extendedEdgeCounts[0]>crowd::kMaxSlots ||
+       extendedEdgeCounts[1]>morph::kMaxSprings ||
+       extendedEdgeCounts[2]>morph::kMaxForces ||
+       extendedEdgeCounts[3]>crowd::kMaxPreferences ||
+       extendedEdgeCounts[4]>imprint::kMaxLinks ||
+       extendedEdgeCounts[5]>imprint::kMaxSources ||
+       extendedEdgeCounts[6]>circuit::kMaxWires ||
+       extendedEdgeCounts[7]>circuit::kMaxGates ||
+       extendedEdgeCounts[8]>granular::kMaxSources ||
+       extendedEdgeCounts[9]>evolve::kMaxPressures ||
+       extendedEdgeCounts[10]>society::kMaxContacts ||
+       extendedEdgeCounts[11]>society::kMaxMessages)
         throw std::invalid_argument("World Processes: map component budget exceeded");
+    if(totals.extra.morph&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="MorphNode";})>morph::kMaxNodes)
+        throw std::invalid_argument("World Processes: too many MORPH nodes");
+    if(totals.extra.crowd&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="CrowdAgent";})>crowd::kMaxAgents)
+        throw std::invalid_argument("World Processes: too many CROWD agents");
+    if(totals.extra.imprint&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="ImprintCell";})>imprint::kMaxCells)
+        throw std::invalid_argument("World Processes: too many IMPRINT cells");
+    if(totals.extra.circuit&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="CircuitNode";})>circuit::kMaxNodes)
+        throw std::invalid_argument("World Processes: too many CIRCUIT nodes");
+    if(totals.extra.granular&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="GranularField";})>granular::kMaxFields)
+        throw std::invalid_argument("World Processes: too many GRANULAR fields");
+    if(totals.extra.evolve&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="EvolveRegion";})>evolve::kMaxRegions)
+        throw std::invalid_argument("World Processes: too many EVOLVE regions");
+    if(totals.extra.society&&std::count_if(extendedParts.begin(),extendedParts.end(),
+        [](const Pending& v){return v.component=="SocietyPerson";})>society::kMaxPeople)
+        throw std::invalid_argument("World Processes: too many SOCIETY people");
 
-    if(!linkedParts.empty()&&repeatedId)
+    if((!linkedParts.empty()||!extendedEdges.empty())&&repeatedId)
         throw std::invalid_argument("World Processes: ambiguous duplicate map entity ID");
     // Preflight every nonempty stable ID, even when a link is disabled:
     // disabling a stale link does not magically rebind it to a recycled ECS id.
@@ -158,6 +219,28 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             }
             if(!ready)throw std::invalid_argument(
                 "World Processes: incompatible target for "+std::string(item.component));
+        }
+    }
+    for(const auto& item:extendedEdges){
+        for(const auto& [key,value]:item.settings->members()){
+            const auto targetType=extendedLinks::referenceTarget(item.component,key);
+            if(targetType.empty()||value.str().empty())continue;
+            const auto it=ids.find(value.str());
+            if(it==ids.end()||!sim.world().alive(it->second))
+                throw std::invalid_argument("World Processes: stale extended map link "+value.str());
+            bool compatible=extendedLinks::hasCompatible(sim.world(),it->second,targetType);
+            if(!compatible){
+                for(const auto& basicPart:extendedParts)
+                    if(basicPart.entity==it->second&&basicPart.component==targetType)
+                        compatible=true;
+            }
+            if(!compatible&&targetType=="CrowdSlot"){
+                for(const auto& slot:extendedEdges)
+                    if(slot.entity==it->second&&slot.component=="CrowdSlot")
+                        compatible=true;
+            }
+            if(!compatible)throw std::invalid_argument(
+                "World Processes: incompatible extended target "+value.str());
         }
     }
     // Explicit native-module flags may also enable an empty category: its
@@ -191,6 +274,23 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
         if(!extended::apply(sim.world(),part.entity,part.component,*part.settings,&error))
             throw std::invalid_argument(
                 "World Processes: failed extended component "+std::string(part.component)+" "+error);
+    }
+    // All extended root components now exist. CrowdSlot is staged first so
+    // any authored CrowdPreference has a live, generation-checked target.
+    for(const auto& part:extendedEdges){
+        if(part.component!="CrowdSlot")continue;
+        std::string error;
+        if(!extendedLinks::apply(sim.world(),part.entity,part.component,
+                                 *part.settings,ids,&error))
+            throw std::invalid_argument("World Processes: slot hydration "+error);
+    }
+    for(const auto& part:extendedEdges){
+        if(part.component=="CrowdSlot")continue;
+        std::string error;
+        if(!extendedLinks::apply(sim.world(),part.entity,part.component,
+                                 *part.settings,ids,&error))
+            throw std::invalid_argument(
+                "World Processes: extended link "+std::string(part.component)+" "+error);
     }
     for(const auto& part:linkedParts){
         std::string error;
