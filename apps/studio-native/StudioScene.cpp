@@ -1378,8 +1378,8 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     Json provenance=spectraPreviewCommand(Json::parse(R"({"action":"status"})"),spectraProject_);
     provenance.set("projectPath",Json::string(spectraProject_));
     provenance.set("frameSerial",Json::number(int64_t(device_->frameSerial())));
-    fxFrameProvenance_.emplace_back(device_->frameSerial(),std::move(provenance));
-    while(fxFrameProvenance_.size()>64)fxFrameProvenance_.pop_front();
+    fxFrameProvenance_->emplace_back(device_->frameSerial(),std::move(provenance));
+    while(fxFrameProvenance_->size()>64)fxFrameProvenance_->pop_front();
     // StudioFrameScope closes the native pass and frame on owner thread.
 }
 
