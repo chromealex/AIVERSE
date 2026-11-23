@@ -10,6 +10,8 @@
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include <aiverselib/systems/BuildingCirculationRuntime.h>
 #include <algorithm>
+#include <cmath>
+#include <compare>
 #include <cstdint>
 #include <map>
 #include <set>
