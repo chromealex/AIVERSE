@@ -131,3 +131,7 @@ Native Scene center-handle drag on a multi-selection submits `studio.worldProces
 ## Stage 38: EVOLVE neighbor boundary snapping
 
 Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closest enabled neighboring authored EvolveArea ±X/±Z edge within 100 cm; stable map ID breaks distance ties. If no neighbor is close, the existing 1m grid snap applies. Center handles remain grid-only. The helper `worldprocess_edit::snapNeighborEdge` is read-only; only the owning area is edited on release through the existing MapDoc RPC. This is axis-only snapping, without perpendicular overlap filtering yet. Source-only, not compiled or runtime tested. See `docs/handoffs/world-processes-stage38-neighbor-edge-snap-2026-11-23.md`.
+
+## Stage 39: physical neighbor snap and guide
+
+`worldprocess_edit::snapNeighborEdge` requires positive overlap between the owner and neighbor intervals perpendicular to the dragged X/Z edge; corner-only contact cannot snap. Closest enabled EvolveArea boundary wins, ties resolved by stable map ID. The native Scene draws the overlap segment as a highlighted guide with target stable ID during Ctrl/Command snapping; otherwise 1m grid fallback applies. Drag state is transient and the authored change remains one MapDoc RPC. Source-only, uncompiled and untested. Handoff: `docs/handoffs/world-processes-stage39-overlap-snap-guide-2026-11-23.md`.
