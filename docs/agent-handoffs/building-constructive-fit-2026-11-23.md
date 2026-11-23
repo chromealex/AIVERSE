@@ -7,6 +7,10 @@
 - Roadmap first commit: `63eee1a4a1bb3cf3687180dd46a976b61390db32`.
 - Implementation: `5a7eea81c88d45527d4edebb4292ab8a79eb2950`.
 - Raw-geometry regression: `9253c1632ae958a046ecdd87d16c58f90eba6476`.
+- Solver trace diagnostics: `4516f2fa82397875be014eb027ede849a3a3827a`.
+- Deterministic geometry RNG separation: `b57d7078df519879523574071794262d06cd17b5`.
+- Stable rooftop placement candidate stream: `eada86188c2732e5b6b13a40e62838af5c538275` (sized builds only).
+
 - Diagnostics: `4516f2fa82397875be014eb027ede849a3a3827a`.
 - Fit stability: `b57d7078df519879523574071794262d06cd17b5` keeps
   decoration RNG independent of major-module placement when body dimensions
@@ -41,6 +45,13 @@
   at `tests/libraries/building_style_tests.cpp:237` (requested sized model
   was empty). Diagnostics were introduced afterwards; no later solver PASS
   has been observed yet.
+- Original stage-5 focused run `45211708303` **FAILED** after compiling:
+  `building_style_tests.cpp:237`, sized model empty. Subsequent solver work
+  added fit-error/residual diagnostics, a separate seeded stream for armour
+  details and a constant 14-attempt rooftop placement stream in explicitly
+  sized models. This prevents small body-size changes from consuming a
+  different number of RNG values and arbitrarily moving later modules.
+  Unsized models retain the original stream and early-return placement.
 - New stage-5 focused GitHub workflows were queued at time of implementation.
   Do **not** claim the stage-5 solver passed until actual run results are
   observed and failures fixed.
