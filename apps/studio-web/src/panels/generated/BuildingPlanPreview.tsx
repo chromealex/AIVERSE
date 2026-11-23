@@ -35,7 +35,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
           <circle cx={x} cy={z} r={radius} role="button" tabIndex={0}
             aria-label={`${socket.kind} ${socket.socketId}`}
             stroke={isSelected?'var(--au-accent)':'var(--au-text)'}
-            strokeWidth={isSelected?.17:.09}
+            strokeWidth={isSelected ? .17 : .09}
             fill={isSelected?'var(--au-accent)':'var(--au-panel-raised)'}
             onClick={()=>{setSelected(socket.socketId);onSelectFeature(socket.featureIndex);}}
             onKeyDown={e=>{
