@@ -5,6 +5,7 @@
 #include "SpectraValueGraph.h"
 #include "SpectraRuntimeCodegen.h"
 #include "SpectraInstanceParameters.h"
+#include "SpectraDataInterfaces.h"
 #include "VfxGraph.h"
 #include <cmath>
 #include <functional>
@@ -132,7 +133,7 @@ inline bool compileSpectraGraphV2(const Json& graph,const Json& overrides,
         if(key!="version" && key!="parameters" && key!="nodes" &&
            key!="links" && key!="outputs" && key!="forceFields" &&
            key!="metadata" && key!="description" && key!="functions" &&
-           key!="instanceParameters")
+           key!="instanceParameters" && key!="dataInterfaces")
             return fail("unknown root key '"+key+"'");
     }
     // Named instance parameters have an independent bounded namespace from
@@ -140,6 +141,9 @@ inline bool compileSpectraGraphV2(const Json& graph,const Json& overrides,
     spectra::InstanceParameterTable instanceParameters;
     if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],
                                             instanceParameters,errors))return false;
+    spectra::DataInterfaceBindings dataBindings;
+    if(!spectra::loadDataInterfaceBindings(graph["dataInterfaces"],
+                                          instanceParameters,dataBindings,errors))return false;
     const Json& nodes=graph["nodes"],&links=graph["links"],&outputs=graph["outputs"];
     const Json& functions=graph["functions"];
     if(!nodes.isArray()||nodes.size()==0||nodes.size()>256)
@@ -225,12 +229,14 @@ inline bool compileSpectraGraphV2(const Json& graph,const Json& overrides,
                 return fail("invalid node position at '"+id+"'");
         }
         Json normalized=original;
-        if(type=="InstanceParameter") {
+        if(type=="InstanceParameter" || type=="DataInterface") {
             const Json& props=original["properties"];
             const std::string name=props.getStr("name",original.getStr("name"));
             const auto found=instanceParameters.find(name);
             if(found==instanceParameters.end())
                 return fail("unknown runtime instance parameter '"+name+"'");
+            if(type=="DataInterface" && !dataBindings.count(name))
+                return fail("DataInterface node '"+id+"' needs declared dataInterfaces binding for '"+name+"'");
             if(props.has("slot") && (!props["slot"].isNumber() ||
                props.getInt("slot",-1)!=int64_t(found->second.slot)))
                 return fail("slot mismatch for runtime instance parameter '"+name+"'");
