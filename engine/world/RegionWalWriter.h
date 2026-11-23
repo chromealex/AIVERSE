@@ -1,3 +1,4 @@
+#include <algorithm>
 #pragma once
 #include "RegionWalReader.h"
 #include <filesystem>
@@ -22,7 +23,7 @@ public:
     RegionWalWriter(const RegionWalWriter&)=delete;
     RegionWalWriter& operator=(const RegionWalWriter&)=delete;
     ~RegionWalWriter(){close();}
-    RegionWalWrite open(const std::filesystem::path& path,uint64_t previous=0,bool repairIncompleteTail=false) {
+    RegionWalWrite open(const std::filesystem::path& path,uint64_t previous=0,bool repairIncompleteTail=false,std::span<const uint8_t> identity={}) {
         close();
 #if defined(__unix__) || defined(__APPLE__)
         fd_=::open(path.c_str(),O_RDWR|O_APPEND|O_CREAT|O_CLOEXEC,0600);
@@ -30,10 +31,15 @@ public:
         if(::flock(fd_,LOCK_EX|LOCK_NB)!=0){auto e=errno;close();return e==EWOULDBLOCK?RegionWalWrite::Busy:RegionWalWrite::IoError;}
         std::ifstream input(path,std::ios::binary);
         if(!input){close();return RegionWalWrite::IoError;}
+        if(!identity.empty()) {
+            std::vector<uint8_t> actual(identity.size());
+            input.read(reinterpret_cast<char*>(actual.data()),actual.size());
+            if(!input||!std::equal(actual.begin(),actual.end(),identity.begin())){close();return RegionWalWrite::NeedsRecovery;}
+        }
         auto scan=RegionWalReader::scan(input,previous,[](const RegionWalFrame&){return true;});
         if(scan.status==RegionWalScan::Incomplete && repairIncompleteTail) {
-            if(scan.validBytes>uint64_t(std::numeric_limits<off_t>::max()) ||
-               ::ftruncate(fd_,static_cast<off_t>(scan.validBytes))!=0 || !syncFd(fd_)) {
+            if((scan.validBytes+identity.size())>uint64_t(std::numeric_limits<off_t>::max()) ||
+               ::ftruncate(fd_,static_cast<off_t>((scan.validBytes+identity.size())))!=0 || !syncFd(fd_)) {
                 close();return RegionWalWrite::IoError;
             }
         } else if(scan.status!=RegionWalScan::End){close();return RegionWalWrite::NeedsRecovery;}
@@ -50,18 +56,23 @@ public:
         if(handle_==INVALID_HANDLE_VALUE)return ::GetLastError()==ERROR_SHARING_VIOLATION?RegionWalWrite::Busy:RegionWalWrite::IoError;
         std::ifstream input(path,std::ios::binary);
         if(!input){close();return RegionWalWrite::IoError;}
+        if(!identity.empty()) {
+            std::vector<uint8_t> actual(identity.size());
+            input.read(reinterpret_cast<char*>(actual.data()),actual.size());
+            if(!input||!std::equal(actual.begin(),actual.end(),identity.begin())){close();return RegionWalWrite::NeedsRecovery;}
+        }
         auto scan=RegionWalReader::scan(input,previous,[](const RegionWalFrame&){return true;});
         input.close();
         if(scan.status==RegionWalScan::Incomplete && repairIncompleteTail){
-            LARGE_INTEGER pos;pos.QuadPart=static_cast<LONGLONG>(scan.validBytes);
-            if(scan.validBytes>uint64_t(INT64_MAX)||!::SetFilePointerEx(handle_,pos,nullptr,FILE_BEGIN)||
+            LARGE_INTEGER pos;pos.QuadPart=static_cast<LONGLONG>((scan.validBytes+identity.size()));
+            if((scan.validBytes+identity.size())>uint64_t(INT64_MAX)||!::SetFilePointerEx(handle_,pos,nullptr,FILE_BEGIN)||
                !::SetEndOfFile(handle_)||!::FlushFileBuffers(handle_)){close();return RegionWalWrite::IoError;}
         }else if(scan.status!=RegionWalScan::End){close();return RegionWalWrite::NeedsRecovery;}
         LARGE_INTEGER zero{};
         if(!::SetFilePointerEx(handle_,zero,nullptr,FILE_END)){close();return RegionWalWrite::IoError;}
         last_=scan.lastSequence;return RegionWalWrite::Ok;
 #else
-        (void)path;(void)previous;(void)repairIncompleteTail;return RegionWalWrite::Unsupported;
+        (void)path;(void)previous;(void)repairIncompleteTail;(void)identity;return RegionWalWrite::Unsupported;
 #endif
     }
     RegionWalWrite append(const RegionWalFrame& frame) {
