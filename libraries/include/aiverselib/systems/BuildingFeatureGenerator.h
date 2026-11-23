@@ -313,10 +313,11 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         addBox(trim,x0,roofBase,z1,x1,H,D);
         // Two real movable panel bodies slide outward across the roof ring.
         const float half=roof->width*0.5f,slide=half*roof->open;
-        if(roof->open<0.9999f){
-            addBox(dark,x0-slide,roofBase,z0,x0+half-slide,H,z1);
-            addBox(dark,x0+half+slide,roofBase,z0,x1+slide,H,z1);
-        }
+        // Panels are not destroyed at fully open: they remain visible and
+        // collide where they retract over the solid side roof. Their positions
+        // can be recomputed at any animation fraction without filling the void.
+        addBox(dark,x0-slide,roofBase,z0,x0+half-slide,H,z1);
+        addBox(dark,x0+half+slide,roofBase,z0,x1+slide,H,z1);
         BuildingFeatureAnchor a;
         a.kind=BuildingFeatureKind::SlidingRoof;a.width=roof->width;
         a.depth=roof->depth;a.open=roof->open;
