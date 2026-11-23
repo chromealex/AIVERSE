@@ -30,7 +30,7 @@ export default function SpectraGraphAssetInspector({
   // A node deleted by a graph edit is never resurrected by a stale lock.
   const node=graph.nodes.find(n=>n.id===targetNodeId);
   const raw=node?.properties?.[property];
-  const selected=typeof raw==='string'?assets.find(a=>a.path===raw):undefined;
+  const selected=typeof raw==='string'?assets.find(a=>a.path&&'content/'+a.path===raw):undefined;
   const current=selected?{guid:selected.guid,path:selected.path}:null;
   return <section aria-label="SpectraFX node asset reference">
     <header style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
