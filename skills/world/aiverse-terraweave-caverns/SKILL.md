@@ -133,3 +133,15 @@ Read `engine/render/TerraWeaveCavernsGeometryScene.h` and `docs/agent-handoffs/c
 - This is an opt-in proof-of-integration for ONE cave chunk per GeometryScene; DO NOT launch hundreds of these per frame. Production must batch scene sources and add incremental updates with bounded GPU lifetime and staging budgets.
 - Current `publish` calls `GeometryScene::shutdown` for previous source after stage. This requires GPU idle, is not a nonblocking retirement strategy, and does not create a cross-system render/Box3D/SpatialWorld/NavMesh atomic transaction. Never claim complete gameplay-ready cave streaming.
 - Check real engine compilation and the new `tests/terraweave_caverns_geometry_scene_test.cpp`, then run Metal/GLES/Vulkan raster parity before enabling by default.
+
+## Stage 11 — batched GeometryScene ingestion (2026-11-23)
+
+Read `engine/render/TerraWeaveCavernsBatchGeometry.h`, `tests/terraweave_caverns_batch_geometry_test.cpp` and `docs/agent-handoffs/caverns-stage11-2026-11-23.md`.
+
+- `CaveBatchChunk` owns one `CaveMesh` plus generator version, source revision, mesh resolution and spacing. `CaveBatchSpec` defines max chunk count (<=1024), max vertex count (<=16 million), and STRATA opt-in.
+- `prepareCaveBatch(vector<CaveBatchChunk>, CaveBatchSpec)` sorts by signed XYZ chunk key to make source and instance order independent of worker completion order, rejects duplicate keys and invalid inputs, enforces a global vertex budget, skips entirely empty chunks, and returns one `Json` manifest with a map of unuploaded `render::Model` objects. GeometryScene source keys embed chunk position/version/revision. World translations are in metres; source vertices stay chunk-local metres.
+- `CaveBatchGeometryResident::publish(device,chunks,batchRevision,options)` stages ONE actual `render::GeometryScene` via `loadPrepared` and swaps the previous batch only after staged load succeeds. `draw(renderer)` invokes GeometryScene's own draw path, including its STRATA selection/fallback, not an extra Renderer3D draw. `shutdown(device)` performs normal GeometryScene shutdown.
+- **Important:** this rebuilds the entire batch even for one changed chunk. `GeometryScene::shutdown` of an older batch still requires a device idle/lifetime barrier. This is not incremental streaming or frame-time-safe live update. Integrate bounded scheduling and GPU-fenced deferred retirement next; do not promise zero hitches.
+- Do not double-submit the same batch through `CaveGeometrySceneResident`, `CutTerrainResident` and `CaveBatchGeometryResident`. Keep physical mesh/Box3D/NavMesh independent of STRATA visual LOD. Source revisions are part of the manifest identity but do not themselves constitute a live update notification.
+- No LOD seam repair is implemented by batching. Preserve identical world-space field sampling and add explicit multi-resolution seam transitions and GPU verification before production.
+- Run the stage-11 regression test in a full checkout with correct GeometryScene/Model/Json linking; test source exists but has not been executed in this stage.
