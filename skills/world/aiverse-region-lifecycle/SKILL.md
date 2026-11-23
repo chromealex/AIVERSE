@@ -17,6 +17,16 @@ Use this skill when modifying or consuming real-world ECS regional ownership, st
 - `engine/actor/ActorRegionOwnership.cpp`, `ActorRegionAdmission.cpp`, `ActorStreaming.cpp` — actual world-space host opt-in via `rules.regionOwnership={}`. Existing CharacterBody/Vehicle component data remains canonical.
 - `docs/region-entity-ledger.md`, `docs/open-world-framework.md` and the stage-specific handoffs under `docs/agent-handoffs/open-world-stage*.md`.
 
+## Persistent identity allocation (W1.24c)
+
+Use `RegionEntityLedger::nextIdentity()` to allocate a nonzero monotonic ID at the authoritative spawn/bind barrier. It derives the high-water mark from ledger records including tombstones, so no second allocator resource or archive field is needed. Zero means exhausted. Never derive a stable ID from Entity::packed(), index or generation; old stored stable tags remain valid.
+
+ActorHost assigns new identities in semantic order (character slot, vehicle/loot object ID), keeps existing tags and maintains a derived bidirectional runtime-handle/identity index for destruction notifications. Clear the index on restoration; full reconciliation remains the default. The experimental candidate-only path requires a valid prior index and complete notifications.
+
+Use `PersistentEntityReferences::rebuild` and `resolve` to translate stable IDs to current live handles. RegionMoveRequests v2 persists stable IDs; v1 ActorHost keys equal the historic stored tags and migrate through the registry with binding validation. DirtyQueue keys are runtime observation handles plus one, NOT persistent IDs; drain them before portable restart and never interpret them as ledger identity.
+
+Production portable actor restoration still requires explicit component/resource codecs and materialization policy; do not enable it solely because region ownership and movement addressing now use stable IDs.
+
 ## Consume changed region state incrementally
 
 ```cpp
@@ -62,7 +72,7 @@ actor::host(sim).reportRegionChange(
 ```
 
 The queue is opt-in with `rules.regionOwnership={}`, has a maximum
-of 65,536 distinct pending IDs and is acknowledged only after a
+of 65,536 distinct pending runtime handles and is acknowledged only after a
 successful `ActorHost::synchronizeRegionOwnership`. Its bits
 coalesce: **it is not a lossless event log**. The host still performs
 a full tracked-pool scan because older systems directly write
