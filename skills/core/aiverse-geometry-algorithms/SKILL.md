@@ -23,3 +23,5 @@ convexIntersect optionally exports a strict enclosing tetrahedron; convexPenetra
 convexPenetrationExpanded attempts a strict tetrahedron from 26 sampled directions on Indeterminate. This is incomplete and can still fail. convexSupportPair returns extreme points, not contact witnesses. No tests.
 
 convexContact uses sampled enclosing seed with support provenance and EPA barycentric witness interpolation. Check hasWitness independently of status; fallback may return penetration without witnesses. Witness pair is not a manifold. No build/tests.
+
+GeometryManifold.h: clipContactFaces clips caller-supplied convex planar incident face against reference side planes, projects witnesses and reduces to deepest plus farthest-spread contacts (default four). Incident convexity/planarity is caller precondition. No automatic face selection or persistent cache. No tests.
