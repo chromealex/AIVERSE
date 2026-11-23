@@ -31,12 +31,24 @@ struct BuildingStyleProp{enum Kind{Box,Mast,Tank,Stack,Dish}kind=Box;int materia
 // A whole structure (RTS-style building: one armoured hull, not floors): sizes in metres, fractions of the hull.
 // Shared geometric grammar, orthogonal to setting and gameplay role.
 enum class StructureMassing : uint8_t { Bastion, Spire, TwinBay, Terraced };
+// Large authored shapes, in footprint-relative units. Materials come from the
+// style palette; no engine/gameplay function name appears in this geometry API.
+struct StructureForm {
+    enum class Kind : uint8_t { Pod, Silo, Pylon, Gantry };
+    Kind kind=Kind::Pod;
+    float x=0.5f,z=0.5f,width=0.25f,height=0.25f,depth=0.25f;
+    float level=0.8f,taper=0.1f,chance=1.f;
+    float stepX=0.f,stepZ=0.f;
+    uint32_t repeat=1;
+    int material=-1;
+};
 struct StructureKind{
     std::string id;StructureMassing massing=StructureMassing::Bastion;float width=12,depth=12;StyleRange height{6,8};float taper=0.15f,chamfer=1.6f,roofRise=0.7f,teamChance=0.25f;uint32_t bands=3;
     uint32_t modulesMin=0,modulesMax=0;StyleRange moduleWidth{0.25f,0.4f},moduleDepth{0.4f,0.7f},moduleHeight{0.45f,0.7f};
     float towerChance=0;StyleRange towerWidth{0.25f,0.4f},towerDepth{0.25f,0.4f},towerHeight{2,3.5f};
     float doorWidth=0.4f,doorHeight=0.55f;uint32_t doors=1;bool legs=false;uint32_t thrusters=0;float pad=1.2f;
     std::vector<BuildingStyleProp> props;
+    std::vector<StructureForm> forms; // major structure composition, before small props
 };
 struct BuildingStyle{
     std::string id,name;
@@ -562,7 +574,7 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(j.has("structures")){const auto& all=j["structures"];if(!all.isObject())throw JsonError(path+".structures: expected object");
         if(s.structure.hull<0)throw JsonError(path+".structures: needs the structure materials block");
         for(const auto& [id,o]:all.members()){auto p=path+".structures."+id;
-            allow(o,p,{"size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props"});
+            allow(o,p,{"size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props","forms"});
             StructureKind k;k.id=id;
             if(o.has("massing")){
                 if(!o["massing"].isString())throw JsonError(p+".massing: expected string");
@@ -586,6 +598,53 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
             if(o.has("thrusters")){StyleRange r{0,0};auto q=p+".thrusters";if(!o["thrusters"].isNumber())throw JsonError(q+": expected number");r.lo=num(o["thrusters"],q);k.thrusters=uint32_t(std::clamp(r.lo,0.f,6.f));}
             get(o,"pad",k.pad,p);
             if(o.has("props"))propsOf(o["props"],p+".props",k.props);
+            if(o.has("forms")){
+                const auto& a=o["forms"];const auto at=p+".forms";
+                if(!a.isArray()||a.size()>24)throw JsonError(at+": expected array of up to 24 forms");
+                for(size_t fi=0;fi<a.size();++fi){
+                    const std::string q=at+"["+std::to_string(fi)+"]";
+                    const auto& v=a[fi];allow(v,q,{"kind","at","size","level","taper","chance","material","repeat","step"});
+                    StructureForm form;
+                    if(!v["kind"].isString())throw JsonError(q+".kind: expected pod, silo, pylon or gantry");
+                    const auto type=v["kind"].str();
+                    if(type=="pod")form.kind=StructureForm::Kind::Pod;
+                    else if(type=="silo")form.kind=StructureForm::Kind::Silo;
+                    else if(type=="pylon")form.kind=StructureForm::Kind::Pylon;
+                    else if(type=="gantry")form.kind=StructureForm::Kind::Gantry;
+                    else throw JsonError(q+".kind: expected pod, silo, pylon or gantry");
+                    form.material=mat(v,"material",q);
+                    if(form.material<0)throw JsonError(q+".material: expected material");
+                    auto pair=[&](const char* key,float* values,size_t length){
+                        const auto& list=v[key];
+                        if(!list.isArray()||list.size()!=length)throw JsonError(q+"."+key+": expected array of "+std::to_string(length)+" numbers");
+                        for(size_t c=0;c<length;++c)values[c]=num(list[c],q+"."+key+"["+std::to_string(c)+"]");
+                    };
+                    float centre[2]{},dimensions[3]{},step[2]{};
+                    pair("at",centre,2);pair("size",dimensions,3);
+                    if(v.has("step"))pair("step",step,2);
+                    form.x=centre[0];form.z=centre[1];
+                    form.width=dimensions[0];form.height=dimensions[1];form.depth=dimensions[2];
+                    form.stepX=step[0];form.stepZ=step[1];
+                    get(v,"level",form.level,q);get(v,"taper",form.taper,q);get(v,"chance",form.chance,q);
+                    if(v.has("repeat")){
+                        if(!v["repeat"].isNumber())throw JsonError(q+".repeat: expected integer 1..8");
+                        const Fixed val=v["repeat"].fx();
+                        if(val<1_fx||val>8_fx||val.raw%Fixed::kOne)
+                            throw JsonError(q+".repeat: expected integer 1..8");
+                        form.repeat=uint32_t(val.toInt());
+                    }
+                    const auto within=[](float v,float a,float b){return std::isfinite(v)&&v>=a&&v<=b;};
+                    if(!within(form.x,-0.5f,1.5f)||!within(form.z,-0.5f,1.5f)||
+                       !within(form.width,0.04f,1.5f)||!within(form.depth,0.04f,1.5f)||
+                       !within(form.height,0.04f,1.5f)||!within(form.level,0.f,1.2f)||
+                       !within(form.taper,0.f,0.4f)||!within(form.chance,0.f,1.f)||
+                       !within(form.stepX,-1.f,1.f)||!within(form.stepZ,-1.f,1.f))
+                       throw JsonError(q+": form parameters outside supported bounds");
+                    if((form.width*form.depth)>1.5f)
+                       throw JsonError(q+": form footprint too large");
+                    k.forms.push_back(form);
+                }
+            }
             s.structures.push_back(k);}}
     if(j.has("skirt")){auto p=path+".skirt";const auto& o=j["skirt"];allow(o,p,{"material","height","out","plate","gap"});s.skirt.material=mat(o,"material",p);
         get(o,"height",s.skirt.height,p);get(o,"out",s.skirt.out,p);get(o,"plate",s.skirt.plate,p);get(o,"gap",s.skirt.gap,p);}
