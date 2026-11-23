@@ -8,6 +8,7 @@
 #include "engine/world/TerraWeaveCavernsVolumePhysicsStage.h"
 #include "engine/world/TerraWeaveCavernsAuthoredNavStage.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -62,13 +63,20 @@ public:
                 std::shared_ptr<const CaveVolumeSnapshot> source) {
         if(!source||!source->sourceRevision)
             throw std::invalid_argument("Caverns missing game edit snapshot");
-        if(snapshot_&&source->sourceRevision<=snapshot_->sourceRevision)
-            throw std::invalid_argument("Caverns game edit requires newer revision");
+        // Saved MapDoc Undo may restore an older sourceRevision. Native jobs
+        // need a strictly increasing runtime epoch independent of saved JSON.
+        if(runtimeEpoch_==UINT64_MAX)
+            throw std::overflow_error("Caverns game edit epoch overflow");
         auto copy=std::make_shared<CaveVolumeSnapshot>(*source);
         canonicalizeCaveSnapshot(*copy);
+        const uint64_t next=std::max(runtimeEpoch_,copy->sourceRevision);
+        if(next==UINT64_MAX)
+            throw std::overflow_error("Caverns game edit revision overflow");
+        copy->sourceRevision=next+1;
         cancelPending();
         worker_.invalidate(bounds,copy);
         snapshot_=std::move(copy);
+        runtimeEpoch_=snapshot_->sourceRevision;
     }
 
     bool consumeAuthoringOperation(const Json& result,
@@ -238,5 +246,6 @@ private:
     std::vector<CaveShardKey> stagedShards_;
     std::vector<ChunkKey3> preparedPhysics_;
     uint64_t stagedRevision_=0,stagedVisualRevision_=0,committedRevision_=0;
+    uint64_t runtimeEpoch_=0;
 };
 } // namespace aiverse::terraweave::caverns
