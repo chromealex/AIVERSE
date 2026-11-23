@@ -117,3 +117,16 @@ running character traversal in an actual Mac game scene. Keep PR Draft.
 - Tests remain deferred by user request. No runtime/motor/physics/graphics
   verification was performed; all code is subject to later compilation
   and integration QA.
+
+## Additional actor-owner boundary
+
+Recent commit 042a3030f99497c5a0f7d018ec03e66c671908fb
+introduced per-actor rider identity bookkeeping in
+engine/buildings/BuildingCirculationHost.h. It adds
+boardRider, exitRider, isRider and actor-aware route acknowledgements,
+plus BuildingRiderDisplacement commands alongside cabin motions in the
+circulation tick. IDs belong to the existing game/ECS actor owner; this
+class neither creates new game entities nor directly updates actors.
+The authoritative game owner must apply rider motion only after
+dynamic cabin collision publication succeeds. No actual ECS motor or
+network simulation was exercised. Tests are explicitly deferred.
