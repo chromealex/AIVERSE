@@ -99,3 +99,54 @@ See docs/building-structure-graph.md. Wall property `position` (metres along wal
 `spacing` (clear gap for repeated opening count) and roof `position` (X) /
 `positionZ` (Z) are authoritative. Graph computes structural solids,
 collision and stable named sockets from the same layout.
+
+
+## Stage 12: Windows, room grid and multiple floors
+
+The core FunctionalBuildingRecipe now supports floors (1..8), roomsX and roomsZ
+(1..6 per axis, with at most 128 total cells). A floor requires at least 2.8m
+nominal vertical clearance and each room cell at least 2.5m width/depth.
+
+New feature kind window is a real exterior wall aperture with a separate 5cm
+glazing solid, not a texture on a full wall. Specify feature.floor as the
+zero-indexed storey and feature.sill in metres relative to that storey.
+Windows have a clear width and height, count, side and exact position.
+Glazing gets its own physical collider; windows are not walkable entrances.
+
+BuildingStructureGraph includes room rectangles and horizontal connections.
+Room IDs follow room/<floor>/<column>/<row>. Horizontal internal passage IDs
+follow passage/x/... and passage/z/...; partition geometry and collision
+contain true 1.2m wide door cutouts. The graph is plain C++20 with no
+material/renderer/game/editor dependency. RuntimeBuildingResult.structureGraph
+exposes this topology from a packaged game build.
+
+Example: engine/assets/building-recipes/two-floor-workshop.json:
+24x14x18m, 2 floors, 2x2 rooms per floor, upper- and lower-floor windows,
+a vehicle gate, personnel door and sliding roof. The same recipe can be
+exported with scifi or modern material style.
+
+Run in the isolated Mac worktree after fetch/switch:
+
+    mkdir -p build/buildings-qa
+    clang++ -std=c++20 -Wall -Wextra -Werror -Ilibraries/include \
+      tests/libraries/building_structure_graph_tests.cpp \
+      -o build/buildings-qa/building_structure_graph_tests
+    ./build/buildings-qa/building_structure_graph_tests
+    clang++ -std=c++20 -O1 -Wno-misleading-indentation -I. -Ilibraries/include \
+      tests/libraries/building_feature_tests.cpp \
+      engine/core/Fixed.cpp engine/data/Json.cpp \
+      -o build/buildings-qa/building_feature_tests
+    ./build/buildings-qa/building_feature_tests .
+    python3 tools/buildings/qa_batch_20.py --compile --allow-failures
+    ./build/buildings-qa/aiverse_building_export \
+      --style engine/assets/building-styles/scifi.json \
+      --recipe engine/assets/building-recipes/two-floor-workshop.json \
+      --out build/buildings-qa/two-floor-workshop.glb
+
+LIMITS: Floors remain DISCONNECTED vertically. No stairs, elevators, floor-slab
+openings, vertically connected navmesh or live physics updates exist yet.
+Horizontal window wall-span reservation is shared across floor elevations, so
+windows cannot stack at the same wall coordinate on different floors yet.
+The room layout is a rectangular grid, not arbitrary floor-plan geometry.
+Window glass is static. No engine GPU render screenshots have been verified
+for this stage. GitHub focused CI was queued at implementation time.

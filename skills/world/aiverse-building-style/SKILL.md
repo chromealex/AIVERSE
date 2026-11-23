@@ -122,3 +122,9 @@ spacing min 0.35m. Graph solids drive BOTH CPU mesh and collision; graph
 sockets have stable entrance/<feature>/<copy> and roof/<feature> IDs.
 Studio writes positions to canonical recipe sidecar. Tests and Mac QA
 must be run; no claim of verified GPU-actuated doors or multi-floor rooms.
+
+
+Stage 12: floors, roomsX, roomsZ, window, sill and floor in BuildingStructureGraph.
+The graph itself compiles standalone C++20 and emits rooms/connections. Window
+panes are thin and collidable. No vertical navmesh, stairs or lifts. Handoff:
+docs/agent-handoffs/building-floors-rooms-windows-2026-11-23.md.

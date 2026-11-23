@@ -1826,6 +1826,13 @@
           "titleEn": "Building StructureGraph: explicit opening positions and stable sockets",
           "text": "Единый граф для меша и коллизий с фиксированными и автоматическими элементами. Координаты проёмов редактируются и сохраняются в Studio.",
           "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data."
+        },
+        {
+          "status": "in-progress",
+          "title": "Жанронезависимые окна, помещения и этажи в Building StructureGraph",
+          "titleEn": "Genre-independent windows, room grids and floors in Building StructureGraph",
+          "text": "Реальные окна и стекло, межэтажные перекрытия, внутренние перегородки с проходами. Вертикальная навигация — отдельный следующий этап.",
+          "textEn": "Real glazed apertures, floor slabs and room partitions with horizontal passages. Vertical navigation next."
         }
       ],
       "core": true,

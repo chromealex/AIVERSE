@@ -105,3 +105,6 @@ clang++ -std=c++20 -O1 -Wno-misleading-indentation \
 C++/Metal/macOS test results on this revision are not yet verified by
 completed CI. A prior user-run of legacy 20 sized presets was 19/20:
 factory 16×9×11 seed 3 failed; **not** proof of failure in the new graph path.
+
+
+Stage 12: see docs/building-functional-recipes.md for multi-floor room grid, window aperture and collider semantics.

@@ -66,3 +66,9 @@ the API returns an explicit FitFailed instead of deforming/faking a model.
 Generation on a worker, caching, ECS placement and GPU resource retirement
 are integration responsibilities of the game. Native GPU and platform
 release builds have not been validated at this commit.
+
+
+Stage 12: RuntimeBuildingResult.structureGraph contains rooms and horizontal
+connections. Multi-floor properties: floors, roomsX, roomsZ and window
+features with floor/sill. Example: engine/assets/building-recipes/two-floor-workshop.json.
+No vertical floor connections yet.
