@@ -66,6 +66,20 @@ public:
             return status();
         }catch(...){stop();throw;}
     }
+    Json profile(const Json& p){
+        requireSession(p);
+        if(identity_.domain!="motionweave"){
+            Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("FX graphs compile to effect definitions; no authored-node CPU execution mapping"));return r;
+        }
+        const auto action=p.getStr("action");
+        if(action=="profileEnable")motion_.enableExecutionProfile(true);
+        else if(action=="profileDisable")motion_.enableExecutionProfile(false);
+        else if(action=="profileReset")motion_.resetExecutionProfile();
+        auto r=motion_.executionProfileReport();
+        r.set("session",Json::string(identity_.entity));r.set("program",Json::string(identity_.program));
+        r.set("step",Json::number(int64_t(step_)));r.set("gpuMeasured",Json::fromBool(false));
+        return r;
+    }
     Json breakpoints(const Json& p){
         requireSession(p);
         if(identity_.domain!="motionweave")throw std::invalid_argument("state/program breakpoints require MotionWeave");
@@ -93,6 +107,7 @@ public:
             Json f=Json::object();const auto start=std::chrono::steady_clock::now();
             bool hit=false;
             if(identity_.domain=="motionweave"){
+                motion_.beginExecutionTrace();
                 motion_.update(1.f/60.f);const double update=graph_probe::ms(start);
                 render::Pose pose;const auto eval=std::chrono::steady_clock::now();motion_.evaluate(pose);
                 f.set("updateMs",graph_probe::num(update));f.set("evaluateMs",graph_probe::num(graph_probe::ms(eval)));
