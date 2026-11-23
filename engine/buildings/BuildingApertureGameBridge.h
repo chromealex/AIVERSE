@@ -2,7 +2,7 @@
 // AIVERSE procedural building command-to-render boundary. This is a native
 // owner-phase adapter, not a new game scheduler, graphics device or network
 // transport. Host supplies existing ECS, SpatialWorld and graph router.
-#include "engine/buildings/BuildingAperturePresentation.h"
+#include "engine/buildings/BuildingApertureTextureAssets.h"
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -59,6 +59,18 @@ public:
                          std::string* error=nullptr){
         return presentation_.bindPbrTextures(
             socketId,std::move(material),std::move(images),error);
+    }
+
+    // Resolve texture GUIDs using the existing content catalog/asset
+    // loader callback before Renderer3D uploads the CPU Model.
+    bool bindTextureGuids(const std::string& socketId,
+                          const BuildingApertureTextureGuids& guids,
+                          render::Material material,
+                          BuildingApertureTextureResolver::Resolve resolve,
+                          std::string* error=nullptr){
+        return BuildingApertureTextureResolver::bind(
+            presentation_,socketId,guids,std::move(material),
+            std::move(resolve),error);
     }
 
     bool enqueue(const World& ecs,const BuildingApertureCommand& command,
