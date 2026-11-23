@@ -231,6 +231,45 @@ void testQueuedDestinationSurvivesSave() {
     AIVERSE_TEST_CHECK(recovered->world().get<actor::CharacterBody>(actor).pos.x>=96_fx);
 }
 
+void testTypedSeatSafety() {
+    auto sim=createTyped(false);
+    auto group=seatTyped(*sim);
+    auto& ecs=sim->world();
+    auto& host=actor::host(*sim);
+    const auto hash=sim->checksum();
+    const auto queueBefore=ecs.resourceConst<wd::RegionMoveRequests>()
+                               ->destinations.size();
+    std::string error;
+
+    // Inconsistent occupied passenger is refused before any request is
+    // stored or any controller/character position is changed.
+    ecs.get<actor::CharacterBody>(group.passenger).vehicle=0;
+    const auto broken=sim->checksum();
+    AIVERSE_TEST_CHECK(!host.requestRegionMove(
+        *sim,group.car,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(sim->checksum()==broken);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.size()==queueBefore);
+    ecs.get<actor::CharacterBody>(group.passenger).vehicle=
+        ecs.get<actor::Vehicle>(group.car).id;
+    AIVERSE_TEST_CHECK(sim->checksum()==hash);
+
+    // An extra reverse-only occupant must not be left behind.
+    const Entity extra=ecs.create();
+    vehicles::VehicleOccupant orphan;
+    orphan.vehicle=group.car;
+    ecs.add<vehicles::VehicleOccupant>(extra,orphan);
+    AIVERSE_TEST_CHECK(!host.requestRegionMove(
+        *sim,group.car,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+    ecs.destroy(extra);
+    AIVERSE_TEST_CHECK(host.requestRegionMove(
+        *sim,group.car,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.size()==1);
+}
+
 void testTypedVehicleAdmissionAndRestore() {
     std::atomic<bool> remote{false};
     auto a=createTyped(),b=createTyped();
@@ -348,6 +387,7 @@ int main() {
     testLateGameplayCommandWaitsForNextAdmission();
     testQueuedDestinationSurvivesSave();
     testStaticAndOccupiedMove();
+    testTypedSeatSafety();
     testTypedVehicleAdmissionAndRestore();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
 }
