@@ -78,16 +78,16 @@ struct Glb{
         const size_t off=bin.size();
         bin.insert(bin.end(),bytes.begin(),bytes.end());
         sep(views);
-        views+="{\\"buffer\\":0,\\"byteOffset\\":"+
-            std::to_string(off)+",\\"byteLength\\":"+
+        views+="{\"buffer\":0,\"byteOffset\":"+
+            std::to_string(off)+",\"byteLength\":"+
             std::to_string(bytes.size())+"}";
         const int viewId=nView++;
         const int id=int(cachedTextures.size());
         sep(images);
-        images+="{\\"bufferView\\":"+std::to_string(viewId)+
-                ",\\"mimeType\\":\\"image/png\\"}";
+        images+="{\"bufferView\":"+std::to_string(viewId)+
+                ",\"mimeType\":\"image/png\"}";
         sep(textures);
-        textures+="{\\"source\\":"+std::to_string(id)+"}";
+        textures+="{\"source\":"+std::to_string(id)+"}";
         cachedTextures.emplace(key,id);
         return id;
     }
