@@ -197,6 +197,61 @@ int main(int argc,char** argv){
                 Json::parse(R"({"features":[{"kind":"magic-gate"}]})"));
         }catch(const JsonError&){parserRejected=true;}
         CHECK(parserRejected);
+        // Stage 12: two real storeys, rooms, interior passages and windows.
+        // Glazing must replace wall material at its opening; glass collision
+        // is allowed but no solid Wall graph piece may pass through the pane.
+        const auto multi=readFunctionalBuildingRecipe(Json::parse(readFile(
+            root+"/engine/assets/building-recipes/two-floor-workshop.json")));
+        CHECK(multi.floors==2&&multi.roomsX==2&&multi.roomsZ==2);
+        const auto multiGraph=buildFunctionalStructureGraph(multi);
+        CHECK(multiGraph);
+        CHECK(multiGraph.rooms.size()==8);
+        CHECK(multiGraph.connections.size()==8);
+        size_t floors=0,glass=0,partition=0,windowSockets=0;
+        for(const auto& solid:multiGraph.solids){
+            if(solid.part==BuildingGraphPart::Floor)++floors;
+            if(solid.part==BuildingGraphPart::WindowPane)++glass;
+            if(solid.part==BuildingGraphPart::Partition)++partition;
+        }
+        for(const auto& socket:multiGraph.sockets)
+            if(socket.kind==BuildingFeatureKind::Window)++windowSockets;
+        CHECK(floors==2);
+        CHECK(glass==4&&windowSockets==4&&partition>0);
+        auto upper=generateFunctionalBuilding(scifi,multi);
+        CHECK(upper);
+        CHECK(upper.building.boxes.size()==upper.graph.solids.size());
+        CHECK(upper.building.mesh.triangles()>opened.building.mesh.triangles());
+        CHECK(upper.building.gates.size()==2);
+        CHECK(upper.graph.rooms.size()==8);
+        CHECK(upper.graph.connections.size()==8);
+        for(const auto& socket:upper.graph.sockets){
+            if(socket.kind!=BuildingFeatureKind::Window)continue;
+            const float local=socket.side==BuildingFeatureSide::Left?
+                socket.z:socket.x;
+            CHECK(local>=0&&local<=24);
+            CHECK(socket.y>=0.9f);
+        }
+        // The exact centre of a room-to-room doorway must be free of
+        // physical partition collision at standing pedestrian height.
+        for(const auto& edge:upper.graph.connections){
+            const float y=edge.y+1.05f;
+            CHECK(!collisionAt(upper.building,edge.x,y,edge.z));
+            CHECK(edge.width>=1.2f-0.001f);
+        }
+        // The upper-floor slab is present at its correct elevation, but
+        // floors are NOT yet connected by stairs or lifts.
+        const float storey=(multi.height-0.52f)/2.f;
+        CHECK(collisionAt(upper.building,7.f,0.24f+storey+0.04f,7.f));
+        const auto modernUpper=generateFunctionalBuilding(modern,multi);
+        CHECK(modernUpper);
+        CHECK(sameGeometry(upper.building,modernUpper.building));
+        CHECK(upper.building.boxes==modernUpper.building.boxes);
+        auto invalidUpper=multi;
+        for(auto& property:invalidUpper.features)
+            if(property.kind==BuildingFeatureKind::Window){property.floor=2;break;}
+        CHECK(!buildFunctionalStructureGraph(invalidUpper));
+        invalidUpper=multi;invalidUpper.floors=7;
+        CHECK(!buildFunctionalStructureGraph(invalidUpper));
         std::puts("building functional-feature tests passed");
         return 0;
     }catch(const std::exception& e){
