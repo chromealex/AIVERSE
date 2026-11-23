@@ -1,18 +1,19 @@
 ---
 name: aiverse-echo
-description: Use AIVERSE ECHO when implementing Акустическое распространение через зоныпорталы, слух NPC и игровые сигналы, независимые от аудиорендера.
+description: Use AIVERSE ECHO for Acoustic gameplay hearing through zones, portals, emitters and receivers without owning audio playback.
 ---
 # ECHO — AIVERSE skill
 
 ## When to activate
-Акустическое распространение через зоны/порталы, слух NPC и игровые сигналы, независимые от аудиорендера.
+Acoustic gameplay hearing through zones, portals, emitters and receivers without owning audio playback.
 
-Typical request: звук сквозь комнаты, слышимость охраной/NPC, акустические двери, игровая аудиоперцепция, шум. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: sound through rooms, NPC hearing, acoustic doors, sound alerts and perception. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/EchoEcs.h`.
 - **Authoritative ECS:** `echo::AcousticZone, AcousticPortal, AcousticEmitter, AcousticReceiver, AcousticHearing`.
 - **Lifecycle:** `aiverse::echo::install(sim)`; per-tick behavior: `echo::propagate(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `EchoZone, EchoPortal, EchoEmitter, EchoReceiver`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `WorldProcessesLinkedAuthoring.h`, `WorldProcessesMapHydration.h`, `WorldProcessesInspector.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
