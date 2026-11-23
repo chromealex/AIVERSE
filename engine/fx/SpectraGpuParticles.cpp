@@ -1127,8 +1127,10 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
         for(float v:p.attributes)if(!finite(v))return false;
         states[i].positionAge=p.positionAge;states[i].velocityLife=p.velocityLife;
         states[i].tint=p.tint;states[i].size=p.size;
-        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
-        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+        params[i].p0={p.programParams[0],p.programParams[1],p.programParams[2],p.programParams[3]};
+        params[i].p1={p.programParams[4],p.programParams[5],p.programParams[6],p.programParams[7]};
+        attrs[i].a0={p.attributes[0],p.attributes[1],p.attributes[2],p.attributes[3]};
+        attrs[i].a1={p.attributes[4],p.attributes[5],p.attributes[6],p.attributes[7]};
     }
     for(float v:snapshot.birthParameters)if(!finite(v))return false;
     gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
@@ -1188,8 +1190,10 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
         d.velocityLife=state[i].velocityLife;
         d.tint=state[i].tint;
         d.size=state[i].size;
-        std::memcpy(d.programParams.data(),&params[i],sizeof(ProgramParams));
-        std::memcpy(d.attributes.data(),&attributes[i],sizeof(ProgramAttributes));
+        d.programParams={params[i].p0.x,params[i].p0.y,params[i].p0.z,params[i].p0.w,
+                         params[i].p1.x,params[i].p1.y,params[i].p1.z,params[i].p1.w};
+        d.attributes={attributes[i].a0.x,attributes[i].a0.y,attributes[i].a0.z,attributes[i].a0.w,
+                      attributes[i].a1.x,attributes[i].a1.y,attributes[i].a1.z,attributes[i].a1.w};
     }
     next.complete=true;
     out=next;
