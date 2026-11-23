@@ -21,12 +21,13 @@ public:
     // writer. Directory must already exist and be private to this world.
     // Digest must have been computed by the save owner over checkpoint bytes.
     static RegionCheckpointPublishResult publish(const std::filesystem::path& dir,
-        const RegionCheckpointManifest& m,std::span<const uint8_t> checkpoint) {
+        const RegionCheckpointManifest& m,std::span<const uint8_t> checkpoint,bool unified=false) {
 #if defined(__unix__) || defined(__APPLE__)
         using R=RegionCheckpointPublishResult;
         if(!m.valid()||m.checkpointBytes!=checkpoint.size())return R::Invalid;
         std::vector<uint8_t> manifest;
         if(!RegionCheckpointManifestCodec::encode(m,manifest))return R::Invalid;
+        auto walPrefix=manifest;if(unified)walPrefix.insert(walPrefix.begin(),{'U','W','T','1'});
         struct Fd {int n;~Fd(){if(n>=0)::close(n);}};
         Fd lock{::open((dir/"publish.lock").c_str(),O_CREAT|O_RDWR|O_CLOEXEC,0600)};
         if(lock.n<0)return R::IoError;
@@ -47,7 +48,7 @@ public:
         }else if(ec)return R::IoError;
         // Exclusive creation: never overwrite an old or orphan generation.
         if(!writeNew(dir/m.checkpointName(),checkpoint))return R::IoError;
-        if(!writeNew(dir/m.walName(),manifest))return R::IoError;
+        if(!writeNew(dir/m.walName(),walPrefix))return R::IoError;
         if(!sync(directory.n))return R::IoError;
         const auto temp=dir/("manifest-"+std::to_string(m.generation)+".tmp");
         if(!writeNew(temp,manifest))return R::IoError;
@@ -59,6 +60,7 @@ public:
         if(!m.valid()||m.checkpointBytes!=checkpoint.size())return R::Invalid;
         std::vector<uint8_t> manifest;
         if(!RegionCheckpointManifestCodec::encode(m,manifest))return R::Invalid;
+        auto walPrefix=manifest;if(unified)walPrefix.insert(walPrefix.begin(),{'U','W','T','1'});
         struct Handle {HANDLE h;~Handle(){if(h!=INVALID_HANDLE_VALUE)::CloseHandle(h);}};
         Handle lock{::CreateFileW((dir/"publish.lock").c_str(),GENERIC_READ|GENERIC_WRITE,
             0,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr)};
@@ -75,7 +77,7 @@ public:
                old.identity.world!=m.identity.world||old.generation>=m.generation||
                old.identity.sequence>m.identity.sequence||old.identity.revision>m.identity.revision)return R::Invalid;
         }else if(ec)return R::IoError;
-        if(!writeNew(dir/m.checkpointName(),checkpoint)||!writeNew(dir/m.walName(),manifest))return R::IoError;
+        if(!writeNew(dir/m.checkpointName(),checkpoint)||!writeNew(dir/m.walName(),walPrefix))return R::IoError;
         const auto temp=dir/("manifest-"+std::to_string(m.generation)+".tmp");
         if(!writeNew(temp,manifest))return R::IoError;
         if(!::MoveFileExW(temp.c_str(),current.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
