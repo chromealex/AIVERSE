@@ -23,6 +23,30 @@ public:
         codec.readers.emplace(version,std::move(reader));
         return codecs_.emplace(std::move(id),std::move(codec)).second;
     }
+    // Opt-in only: T's Archive codec must not contain raw runtime Entity
+    // handles. Use PersistentDeferredReference or an explicit contextual codec.
+    template<class T> bool addTyped(std::string id,uint32_t version=1){
+        return add(std::move(id),version,
+            [](Archive& a,const World& world,Entity entity,const Context&){
+                const T* source=world.tryGetConst<T>(entity);
+                if(!source)return false;
+                T value=*source;io(a,value);return a.ok();
+            },
+            [](Archive& a,World& world,Entity entity,const Context&){
+                T value{};io(a,value);
+                if(!a.ok()||a.remaining()!=0)return false;
+                if(world.has<T>(entity))world.remove<T>(entity);
+                world.add<T>(entity,std::move(value));return true;
+            });
+    }
+    template<class T,class Fn> bool addTypedMigration(const std::string& id,uint32_t version,Fn reader){
+        return addMigration(id,version,[reader=std::move(reader)](Archive& a,World& world,Entity entity,const Context& refs){
+            T value{};
+            if(!reader(a,value,refs)||!a.ok()||a.remaining()!=0)return false;
+            if(world.has<T>(entity))world.remove<T>(entity);
+            world.add<T>(entity,std::move(value));return true;
+        });
+    }
     bool addMigration(const std::string& id,uint32_t version,Reader reader){
         auto it=codecs_.find(id);
         if(it==codecs_.end()||!version||version>=it->second.version||!reader)return false;
