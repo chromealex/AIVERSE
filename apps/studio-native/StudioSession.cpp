@@ -5,6 +5,7 @@
 #include "StudioSession.h"
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
+#include "libraries/include/aiverselib/world/WorldProcessesExtendedAuthoring.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -261,7 +262,9 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
     item("Unit","Unit","Gameplay","Type, owner and stats come from rules.json","native",false,"Defined by the entity type");
     for(const auto& name:{"EchoZone","FractureMember","AetherGasCell",
                           "EchoPortal","EchoEmitter","EchoReceiver",
-                          "FractureBond","AetherDuct","AetherFlux"}) {
+                          "FractureBond","AetherDuct","AetherFlux",
+                          "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
+                          "GranularField","EvolveRegion","SocietyPerson"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
              "Authoring data; native game setup must install the ECS component",
@@ -396,7 +399,9 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     lib::worldprocess::authoring::validate(name,value);
                 const bool linked=lib::worldprocess::linked::supports(name) &&
                     lib::worldprocess::linked::validate(name,value);
-                const bool authorable=standalone||linked;
+                const bool extended=lib::worldprocess::extended::supports(name) &&
+                    lib::worldprocess::extended::validate(name,value);
+                const bool authorable=standalone||linked||extended;
                 if(value.isObject())for(const auto& [key,item]:value.members()) {
                     Json field=genericField(key,item);
                     if(authorable) {
@@ -2594,7 +2599,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     auto components=candidate.extra["components"];components.set("StaticModel",Json::object());
                     candidate.extra.set("components",components);
                 } else if(lib::worldprocess::authoring::supports(componentId) ||
-                          lib::worldprocess::linked::supports(componentId)) {
+                          lib::worldprocess::linked::supports(componentId) ||
+                          lib::worldprocess::extended::supports(componentId)) {
                     if(source.extra["components"].has(componentId))
                         throw std::runtime_error("World-process component is already present");
                     candidate=promotedAuthored(index);
@@ -2602,7 +2608,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     components.set(componentId,
                         lib::worldprocess::authoring::supports(componentId) ?
                         lib::worldprocess::authoring::defaults(componentId) :
-                        lib::worldprocess::linked::defaults(componentId));
+                        lib::worldprocess::linked::supports(componentId) ?
+                        lib::worldprocess::linked::defaults(componentId) :
+                        lib::worldprocess::extended::defaults(componentId));
                     candidate.extra.set("components",components);
                 } else throw std::runtime_error("This component cannot be added here");
             } else {
@@ -2749,7 +2757,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json& value = params["value"];
             const std::string componentId=params.getStr("componentId");
             if(lib::worldprocess::authoring::supports(componentId) ||
-               lib::worldprocess::linked::supports(componentId)) {
+               lib::worldprocess::linked::supports(componentId) ||
+               lib::worldprocess::extended::supports(componentId)) {
                 if(entityId.compare(0,7,"entity:")!=0)
                     throw std::runtime_error("Authoring applies only to map entities");
                 const int index=indexFor(entityId);
@@ -2762,6 +2771,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     if(!validWorldProcessDocumentRef(ws_.map,componentId,key,value))
                         throw std::runtime_error("Unknown or incompatible linked map object");
                     if(!lib::worldprocess::linked::edit(componentId,key,value,staged,&error))
+                        throw std::runtime_error(error);
+                } else if(lib::worldprocess::extended::supports(componentId)) {
+                    if(!lib::worldprocess::extended::edit(componentId,key,value,staged,&error))
                         throw std::runtime_error(error);
                 } else if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
                     throw std::runtime_error(error);
