@@ -60,6 +60,19 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
             throw JsonError(path+".seed: expected integer from 0 to 2147483647");
         recipe.seed=uint64_t(f);
     }
+    if(json.has("floors")){
+        const double n=json["floors"].toDouble(-1);
+        if(!json["floors"].isNumber()||n<1||n>8||std::floor(n)!=n)
+            throw JsonError(path+".floors: expected integer 1..8");
+        recipe.floors=uint32_t(n);
+    }
+    for(const char* key:{"roomsX","roomsZ"})if(json.has(key)){
+        const double n=json[key].toDouble(-1);
+        if(!json[key].isNumber()||n<1||n>6||std::floor(n)!=n)
+            throw JsonError(path+"."+key+": expected integer 1..6");
+        if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
+        else recipe.roomsZ=uint32_t(n);
+    }
     if(json.has("features")){
         const auto& list=json["features"];
         if(!list.isArray())throw JsonError(path+".features: expected array");
@@ -74,10 +87,12 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
             else if(kind=="small-gate")f.kind=BuildingFeatureKind::SmallGate;
             else if(kind=="personnel-door")f.kind=BuildingFeatureKind::PersonnelDoor;
             else if(kind=="sliding-roof")f.kind=BuildingFeatureKind::SlidingRoof;
+            else if(kind=="window")f.kind=BuildingFeatureKind::Window;
             else throw JsonError(label+".kind: unknown building property '"+kind+"'");
             if(f.kind==BuildingFeatureKind::LargeGate){f.width=5.f;f.height=4.5f;}
             else if(f.kind==BuildingFeatureKind::SmallGate){f.width=2.6f;f.height=2.8f;}
             else if(f.kind==BuildingFeatureKind::SlidingRoof){f.width=4.f;f.depth=4.f;}
+            else if(f.kind==BuildingFeatureKind::Window){f.width=1.6f;f.height=1.1f;f.sill=0.9f;}
             if(j.has("side")){
                 if(!j["side"].isString())throw JsonError(label+".side: expected string");
                 const auto side=j["side"].str();
@@ -100,6 +115,13 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
             if(j.has("position"))f.position=number(j["position"],label+".position");
             if(j.has("positionZ"))f.positionZ=number(j["positionZ"],label+".positionZ");
             if(j.has("spacing"))f.spacing=number(j["spacing"],label+".spacing");
+            if(j.has("sill"))f.sill=number(j["sill"],label+".sill");
+            if(j.has("floor")){
+                const double n=j["floor"].toDouble(-1);
+                if(!j["floor"].isNumber()||n<0||n>7||std::floor(n)!=n)
+                    throw JsonError(label+".floor: expected integer 0..7");
+                f.floor=uint32_t(n);
+            }
             recipe.features.push_back(f);
         }
     }
@@ -165,6 +187,8 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::DoorLeaf:material=dark;break;
           case BuildingGraphPart::Roof:material=trim;break;
           case BuildingGraphPart::RoofPanel:material=dark;break;
+          case BuildingGraphPart::WindowPane:material=style.window.glass>=0?style.window.glass:trim;break;
+          case BuildingGraphPart::Partition:material=style.interior>=0?style.interior:hull;break;
         }
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1);
@@ -178,7 +202,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         anchor.open=socket.open;
         anchor.outside={fcoord(socket.x),fcoord(socket.y),fcoord(socket.z)};
         result.anchors.push_back(anchor);
-        if(anchor.kind!=BuildingFeatureKind::SlidingRoof)
+        if(anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window)
             result.building.gates.push_back(anchor.outside);
     }
     result.graph=std::move(graph);
