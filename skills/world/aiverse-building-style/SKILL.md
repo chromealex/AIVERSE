@@ -587,3 +587,48 @@ views reference source graphs, which must outlive the adapters.
 No tests were run per user instruction; this code is NOT verified
 as compiling or running in a live game.
 Handoff: `docs/agent-handoffs/building-transport-zone-stage23e-2026-11-23.md`.
+
+
+## Stage 23F — authoritative fixed-tick interactive building commands
+
+`engine/buildings/BuildingApertureFixedTick.h` defines
+`BuildingApertureFixedTickOwner` and is exported via `BuildingRuntime.h`.
+One instance belongs to the existing authoritative game/world-owner scene.
+Call `attach(sceneId, authorize, reachable)` with mandatory callbacks:
+`authorize(actor,socketId,open)` checks current server-side actor access,
+and `reachable(actor,worldAABB)` checks actual game actor contact/range
+against a physically committed interaction volume. Both are invoked in
+the fixed tick, not trusted from client-provided coordinates. Authenticate
+packets in the EXISTING transport, map them to the existing ECS Entity
+with a generation, and `enqueue(ecs, BuildingApertureCommand)`.
+The command contains scene, actor, monotonically increasing actor nonce,
+socket ID, binary target and the exact affected graph-domain mask.
+
+Call `advance(ecs,apertures,spatial,router,serverTick)` on the exclusive
+server simulation owner phase after movement/obstruction information is
+current. It retries a pending committed graph event before new commands.
+Up to 64 queued commands per tick are processed in arrival order. Each
+is revalidated for ECS liveness/nonce, current permission and actual
+interaction position. Existing `BuildingApertureOwner::setOpen` commits
+real SpatialWorld collision first; its graph notification is processed
+before the frame exposes `committedPoses` as authoritative read-only
+data for the game's existing renderer/network snapshot owner. A graph
+failure keeps physical state committed and stalls new aperture changes
+until graph consumers acknowledge; **do not replay the original action**
+because its nonce has already been accepted.
+
+The renderer owns movable meshes, animation and GPU upload; consume
+`frame.committedPoses` after `frame.complete`. This adapter does not
+create shader/VFX graphs or animate leaf geometry. The game must still
+wire its existing network authenticated dispatch, entity retirement
+(`retireActor` before ECS entity index reuse), nav::Mesh refresh,
+and any separate authoritative snapshot serialization. Do not claim
+this is already in an example game main loop.
+
+Do not use `detach()` until game scene teardown has reconciled
+pending graphics/graph/actor owners. Revision/nonce state resets only
+at a new unique scene lifetime. An ACK from graph consumers means they
+accepted an invalidation, not that all graphics/navigation caches are
+already refreshed. User defers tests: no compile, native runtime,
+Metal/GL or multiplayer verification performed.
+Handoff: `docs/agent-handoffs/building-aperture-fixed-tick-stage23f-2026-11-23.md`.
