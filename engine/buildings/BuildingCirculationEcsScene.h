@@ -5,6 +5,7 @@
 // entity registry. This runs only at the authoritative simulation owner.
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftEcsBridge.h"
+#include "engine/buildings/BuildingLiftReplication.h"
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -44,6 +45,7 @@ public:
         origin_=origin;yaw_=yaw;
         width_=generated.building.constructionSize.width;
         depth_=generated.building.constructionSize.depth;
+        lastPublishComplete_=true;
         scene_.setDoorObstructionProbe([this](uint32_t feature,uint32_t floor){
             return this->doorwayOccupied(feature,floor);
         });
@@ -92,6 +94,7 @@ public:
         out.actors=ecsBridge_.applyPublished(
             *ecs_,scene_.host(),out.world,sceneId_);
         out.complete=out.world.published&&out.actors.complete;
+        lastPublishComplete_=out.complete;
         if(!out.complete){
             out.error=!out.world.published?out.world.error:out.actors.error;
             if(out.error.empty())
@@ -100,6 +103,22 @@ public:
         }
         return out;
     }
+    // Server only: capture after the ECS and collision owner have committed
+    // the tick. Transport the encoded bytes through the EXISTING authorized
+    // network snapshot channel; never accept this as a client command.
+    bool captureServerSnapshot(uint64_t serverTick,
+                               std::vector<uint8_t>& out,
+                               std::string* error=nullptr)const{
+        if(!ecs_||!scene_.attached()||scene_.faulted()||
+           !lastPublishComplete_||sceneId_==0){
+            if(error)*error="Cannot publish lift frame before owner commit";
+            return false;
+        }
+        const auto frame=captureBuildingLiftServerFrame(
+            scene_.host(),sceneId_,serverTick);
+        return encodeBuildingLiftStateFrame(frame,out,error);
+    }
+
     bool rebuildNavigation(const nav::Mesh& mesh,std::string* error=nullptr){
         return scene_.rebuildNavigation(mesh,error);
     }
@@ -114,7 +133,7 @@ public:
                 });
         }
         scene_.detach(spatial,navmesh);
-        ecs_=nullptr;sceneId_=0;
+        ecs_=nullptr;sceneId_=0;lastPublishComplete_=false;
     }
     BuildingCirculationScene& scene()noexcept{return scene_;}
     const BuildingCirculationScene& scene()const noexcept{return scene_;}
@@ -147,6 +166,7 @@ private:
     BuildingCirculationScene scene_;
     BuildingLiftEcsBridge<Body> ecsBridge_;
     uint64_t sceneId_=0;
+    bool lastPublishComplete_=false;
     float width_=0,depth_=0;
     uint32_t yaw_=0;
     Vec3 origin_{};
