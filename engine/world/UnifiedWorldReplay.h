@@ -22,7 +22,7 @@ public:
         // Host reconciles spawns/despawns and region residency in private state.
         if(!materialize(staged->world,current->ledger,staged->ledger))return false;
         if(!codecs.restoreBatch(staged->world,staged->ledger,decoded.components))return false;
-        if(!resources.restore(staged->world,decoded.resources))return false;
+        if(!resources.restore(staged->world,decoded.resources,&staged->ledger))return false;
         // Restart-aware worlds must carry metadata on every committed tick.
         if(current->restart.empty()!=decoded.restart.empty())return false;
         if(!decoded.restart.empty()){
