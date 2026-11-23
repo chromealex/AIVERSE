@@ -247,6 +247,7 @@ private:
     std::string wpHitOwner_;
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
+    Json wpNumericPreview_;
     bool wpCustomPivot_=false;
     render::float3 wpGroupPivot_{};
     std::vector<std::string> wpPivotSelection_;
