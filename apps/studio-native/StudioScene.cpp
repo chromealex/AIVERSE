@@ -676,7 +676,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     float3 origin{}, direction{};
     // Facial preview is an imported Model, not an object in the active map.
     // Never route its clicks to unrelated MapDoc entities underneath.
-    if (materialMode_ || facialMode_ || !cameraInitialized_ ||
+    if (materialMode_ || facialMode_ || buildingPreview_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
