@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <optional>
@@ -48,6 +49,12 @@ struct BuildingLiftEvent {
     uint32_t featureIndex=0,floor=0;
     uint64_t revision=0;
 };
+struct BuildingLiftPlatformMotion {
+    uint32_t featureIndex=0;
+    int64_t oldYmm=0,newYmm=0;
+    float x0=0,z0=0,x1=0,z1=0,thickness=0.18f;
+    uint64_t revision=0;
+};
 struct BuildingLiftPlatformPose {
     uint32_t featureIndex=0;
     int64_t yMm=0;
@@ -80,7 +87,8 @@ public:
         }
         if(floors.empty()||floors.begin()->first!=0)
             return fail("Lift has no ground floor socket");
-        if(floors.size()>8)return fail("Too many lift landings");
+        if(floors.size()>8||floors.rbegin()->first>=8)
+            return fail("Too many lift landings");
         std::vector<int64_t> heights;
         heights.reserve(floors.size()+1);
         for(uint32_t i=0;i<=floors.rbegin()->first;++i){
@@ -119,6 +127,8 @@ public:
         }
         if(!platform)return fail("Lift platform is missing");
         floorsMm_=std::move(heights);
+        pendingMotion_.reset();
+        travelRemainder_=0;
         state_={featureIndex,BuildingLiftPhase::Open,0,0,
                 floorsMm_[0],0,1};
         pose_=pose;
@@ -129,6 +139,31 @@ public:
     const BuildingLiftSnapshot& snapshot()const noexcept{return state_;}
     const BuildingLiftPlatformPose& platformPose()const noexcept{return pose_;}
     uint32_t floorCount()const{return uint32_t(floorsMm_.size());}
+    // Consumed by the existing ECS/physics owner, after one or more ticks.
+    // A continuous series of movements coalesces to old -> newest pose.
+    std::optional<BuildingLiftPlatformMotion> takePlatformMotion(){
+        auto movement=std::move(pendingMotion_);
+        pendingMotion_.reset();
+        return movement;
+    }
+    // Client-side replication accepts only a validated newer snapshot.
+    // Authoritative simulation must never use remote snapshots.
+    bool applyReplicatedSnapshot(const BuildingLiftSnapshot& snapshot){
+        if(!online()||snapshot.revision<=state_.revision||
+           snapshot.featureIndex!=state_.featureIndex||
+           snapshot.currentFloor>=floorsMm_.size()||
+           snapshot.targetFloor>=floorsMm_.size()||
+           snapshot.phase==BuildingLiftPhase::Offline||
+           snapshot.phaseElapsedMs>kDoorTimeMs||
+           snapshot.platformYmm<floorsMm_.front()||
+           snapshot.platformYmm>floorsMm_.back())return false;
+        const int64_t old=state_.platformYmm;
+        state_=snapshot;
+        pose_.yMm=snapshot.platformYmm;
+        pose_.revision=snapshot.revision;
+        queueMotion(old,state_.platformYmm);
+        return true;
+    }
     bool online()const noexcept{
         return !floorsMm_.empty()&&state_.phase!=BuildingLiftPhase::Offline;
     }
@@ -207,9 +242,11 @@ public:
                 const int64_t step=std::max<int64_t>(1,advanceNumerator/1000);
                 travelRemainder_=advanceNumerator%1000;
                 const int64_t move=std::min(std::llabs(delta),step);
+                const int64_t previous=state_.platformYmm;
                 state_.platformYmm+=delta<0?-move:move;
                 pose_.yMm=state_.platformYmm;
                 touch();changed=true;
+                queueMotion(previous,state_.platformYmm);
                 remaining=0;
                 if(state_.platformYmm==target){
                     state_.currentFloor=state_.targetFloor;
@@ -223,6 +260,17 @@ public:
         return changed;
     }
 private:
+    void queueMotion(int64_t before,int64_t after){
+        if(before==after)return;
+        if(pendingMotion_){
+            pendingMotion_->newYmm=after;
+            pendingMotion_->revision=state_.revision;
+            return;
+        }
+        pendingMotion_=BuildingLiftPlatformMotion{
+            state_.featureIndex,before,after,pose_.x0,pose_.z0,
+            pose_.x1,pose_.z1,pose_.thickness,state_.revision};
+    }
     void touch(){
         ++state_.revision;
         pose_.revision=state_.revision;
@@ -231,6 +279,7 @@ private:
     BuildingLiftSnapshot state_{};
     BuildingLiftPlatformPose pose_{};
     int64_t travelRemainder_=0;
+    std::optional<BuildingLiftPlatformMotion> pendingMotion_;
 };
 
 struct BuildingRoutePolicy {
