@@ -77,3 +77,16 @@ After each stage commit a new handoff with tested evidence and branch SHA.
   explicitly includes the feature generator it consumes (no transitive include).
 - Current verification still requires the queued focused C++/Studio CI checks,
   then a Mac run with the exact pinned recipe and GPU screenshot.
+
+## Actual test status / handoff update
+
+As of source head `3034c79fdac33483a5e0a2896bf622a3943169ea`:
+- GitHub source readback confirmed the StructureGraph planner, independent
+  feature types, runtime mesh/collider consumption and semantic socket IDs.
+- Sample JSON was parsed and explicitly positioned centres were confirmed
+  at front X=7, back group X=12, personnel X=18, roof X=13/Z=10.
+- **C++ compile, test binary, Studio TypeScript compile and Metal visual
+  verification have NOT executed successfully on this revision in this chat**.
+- The user-provided 19/20 result was from the old named-preset generator,
+  not from this new StructureGraph layout.
+- Focused GitHub CI may remain queued; do not turn this into a PASS claim.
