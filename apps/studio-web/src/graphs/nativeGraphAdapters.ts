@@ -60,7 +60,7 @@ export function connectAnimationPose(doc:GraphObject,from:PortRef,to:PortRef):Gr
 }
 export function replaceAnimationEntry(doc:GraphObject,mode:'pose'|'states',id:string,next:GraphObject):GraphObject {
  const field=mode==='pose'?'nodes':'states',rows=records(doc[field]);
- if(next.id!==id||!rows.some(n=>n.id===id)||rows.length!==(doc[field] as unknown[]).length)return doc;
+ if(!Array.isArray(doc[field])||next.id!==id||!rows.some(n=>n.id===id)||rows.length!==doc[field].length)return doc;
  return {...doc,[field]:rows.map(n=>n.id===id?next:n)};
 }
 export function graphReply(result:unknown):GraphObject {
@@ -89,7 +89,7 @@ export function editAnimationTransition(doc:GraphObject,stateId:string,index:num
  const transitions=records(state.transitions);
  if(transitions.length!==state.transitions.length)return doc;
  if(patch){
-  const next={...transitions[index],...patch};
+  const next={fade:.2,after:0,...transitions[index],...patch};
   if(!records(doc.states).some(s=>s.id===next.to)||!['fade','after'].every(k=>typeof next[k]==='number'&&Number.isFinite(next[k])&&Number(next[k])>=0))return doc;
   transitions[index]=next;
  }else transitions.splice(index,1);
