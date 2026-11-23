@@ -286,3 +286,7 @@ Flow: **Setting → Style → Function → Width/Height/Depth → Seed → Gener
 No live 3D viewport preview yet. Current constructive size fitting can reject
 feasible sizes; new Studio acceptance tests must pass before this is called
 production-ready.
+
+
+See docs/building-functional-recipes.md for the new independent functionality
+recipe path. Legacy structure kinds are silhouette presets, not game roles.

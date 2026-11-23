@@ -104,3 +104,13 @@ seeds; choosing Generate creates an Asset GLB under
 `content/GeneratedBuildings/`, with GUID/.meta via existing StudioAssetCatalog.
 Never write files from browser JS or fake a 3D preview. Native tests:
 `tests/studio/BuildingGenerationTests.cpp` in Building Style Focused CI.
+
+
+Stage 10 functional recipes: BuildingFeatureGenerator.h defines setting-
+independent properties large-gate, small-gate, personnel-door and sliding-roof.
+Style controls appearance, recipe controls actual geometry holes and collisions.
+Use RuntimeBuildingGenerator::generateRecipe in packaged games; Studio
+BuildingGeneratorPanel defaults to functional properties, native bridge saves
+GLB + canonical .glb.recipe.json. CLI exports with --recipe JSON. Tests:
+library_building_features, native BuildingGenerationTests, focused CI. Do not
+claim verified Metal or playable hinge animation without actual testing.

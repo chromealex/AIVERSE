@@ -36,3 +36,12 @@ GitHub focused CI includes the 20-case batch report/artifact, but no actual
 20/20 result has been observed in this conversation. Do not fabricate a gallery
 or assert success. Real screenshots require the Mac ModelView or an actual
 render of the produced GLB files.
+
+
+## User Mac result, Nov 23 2026
+
+The 20 legacy preset/size GLB run completed **19 PASS / 1 FAIL**. Failed:
+factory 16x9x11, seed 3. Exporter said style scifi has no structure factory;
+that was a misleading error when the constructive fitter returned empty.
+The legacy size-fitting failure is not proved resolved. New functional recipe
+mode uses a separate structural shell generator and requires independent QA.

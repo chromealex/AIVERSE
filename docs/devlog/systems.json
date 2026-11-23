@@ -1812,6 +1812,13 @@
           "titleEn": "Constructive fitting to requested building dimensions without stretching parts",
           "text": "Подбирать габариты исходной архитектуры повторной генерацией; сохранять мировые размеры ворот, толщины мелких элементов и радиусы деталей, отклонять несовместимые габариты.",
           "textEn": "Fit the underlying construction dimensions through bounded regeneration; preserve doorways, detail thickness and radii, rejecting infeasible envelopes."
+        },
+        {
+          "status": "in-progress",
+          "title": "Независимые функциональные модули здания (ворота, входы, раскрываемая крыша)",
+          "titleEn": "Independent building functional modules (gates, doors, retractable roof)",
+          "text": "Функциональные свойства определяются рецептом отдельно от сеттинга; реальные стеновые и кровельные проёмы, коллизии, runtime API и Studio UI.",
+          "textEn": "Functional recipe independent of setting; real wall and roof openings, collision, runtime API and Studio authoring."
         }
       ],
       "core": true,
