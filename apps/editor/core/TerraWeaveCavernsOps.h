@@ -58,6 +58,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 terraweave::caverns::validatePoint(xyz);
                 if(volume.stamps.size()>=16384)
                     throw std::length_error("Caverns stamp limit");
+                stampId=volume.sourceRevision;
                 for(const auto& stamp:volume.stamps)
                     stampId=std::max(stampId,stamp.id);
                 if(stampId>=uint64_t(INT64_MAX))
