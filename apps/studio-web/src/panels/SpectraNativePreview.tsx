@@ -343,13 +343,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     }catch(e){setError(message(e));}finally{if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
   };
   const importCheckpointFile=async(file:File)=>{
+    let transferId:number|undefined;
     setBusy(true);setError('');
     try{
       if(!file.size||file.size>1048600)throw new Error('Checkpoint exceeds size limit');
       const bytes=new Uint8Array(await file.arrayBuffer());
       const begin=await invoke('studio.spectraPreview',{action:'checkpointFileBegin'});
       if(begin.error||!begin.transferId)throw new Error(begin.error||'Missing transfer ID');
-      const transferId=begin.transferId;
+      transferId=begin.transferId;
       for(let offset=0;offset<bytes.length;offset+=32768){
         const chunk=Array.from(bytes.subarray(offset,offset+32768),b=>b.toString(16).padStart(2,'0')).join('');
         const next=await invoke('studio.spectraPreview',{action:'checkpointFileAppend',offset,chunk,transferId});
@@ -357,7 +358,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       }
       const result=await invoke('studio.spectraPreview',{action:'checkpointFileImport',transferId});
       setState(result);if(result.error)throw new Error(result.error);
-    }catch(e){setError(message(e));}finally{setBusy(false);}
+      transferId=undefined; // Native queue owns the uploaded bytes.
+    }catch(e){if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
   };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.
