@@ -5309,3 +5309,13 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiv
     add_test(NAME actor_vehicle_region_group_test COMMAND aiverse_actor_vehicle_region_group_test)
     set_tests_properties(actor_vehicle_region_group_test PROPERTIES LABELS "World;ECS;Vehicles")
 endif()
+
+# W1.7: actual world-space ActorHost positions (CharacterBody, Vehicle)
+# share the generic W1 ledger without adding duplicate Transform components.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_region_position_test
+        tests/world/actor_region_position_test.cpp)
+    target_link_libraries(aiverse_actor_region_position_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_region_position_test COMMAND aiverse_actor_region_position_test)
+    set_tests_properties(actor_region_position_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
