@@ -246,3 +246,81 @@ production-game integration, persistent disk-backed regional payload
 ownership, NavMesh/collision barriers, event/timer policy for cold
 regions, performance checks, and a green Mac/KINGSTON merged-tree suite.
 Keep `W1` partial and the PR draft.
+
+
+## Stage 04 — authoritative Simulation lifecycle in real GameCore
+
+`engine/world/RegionLifecycleRuntime.h` exposes a shared, opt-in
+**gameplay-facing** activation controller. Unlike `ChunkStreamer`, it is
+installed during `Simulation::setup` and consumes explicit validated
+gameplay requests on simulation ticks. The user-facing game enables it
+through a native C++ module configured in the existing `nativeModules`
+data block (or another shared game host's setup); there is no new genre
+host, renderer callback or camera-derived activation policy.
+
+### Native gameplay integration
+
+```cpp
+// In NativeModule::setup, during the main Simulation setup:
+RegionDormancyController codecs;
+codecs.registerComponent<MyBehaviour>("game.behaviour",1);
+RegionLifecycleRuntime::install(sim,std::move(codecs),2);
+// Register MyBehaviour with the normal persistent ECS registry as well.
+// Select real ECS actors and attach RegionStableIdentity with
+// RegionEcsBridge::bindNew(...) after creating their Transform/components.
+
+// In NativeModule::command, *after* validating the player and action:
+RegionLifecycleRuntime::request(sim,Cell{x,0,z},false); // park region
+RegionLifecycleRuntime::request(sim,Cell{x,0,z},true);  // wake region
+```
+
+`RegionLifecycleRuntime::install` registers the region ledger, stable
+identity, dormant marker, cold store, activation queue, load validators,
+and a named `world.regionLifecycle` system. The caller owns the
+parkable-component codecs and must register their independent persistent
+ECS schemas if they can remain hot. The controller is immutable after
+installation and is captured safely by the system; its mutable
+authoritative state is entirely in ECS resources.
+
+`RegionActivationQueue` is a versioned persistent resource
+(`aiverse.world.region_activation_queue`), with at most 1024 pending
+region targets, sorted by `Cell`. Each value is 0 (cold) or 1 (hot).
+A `request` for the same region replaces that region's pending
+target. `RegionLifecycleRuntime::step` processes at most
+`maxTransitionsPerTick` (1–16) on each authoritative simulation tick.
+A successful region transition consumes the pending entry and increments
+its persisted applied counter. If the first pending region cannot
+transition (for instance a ledger entity has no live binding), processing
+stops and the request remains queued. No later region changes in that
+tick. A new validated command may replace the pending target.
+
+**The region activity request is an authoritative gameplay decision.**
+AI, missions or verified server commands may issue it; render observers,
+camera distance and asynchronous loading should only influence visual
+residency. This stage deliberately does not automatically decide which
+region should be cold. A production scheduler must supply simulation-
+deterministic interest, occupancy, timing and safe collision/NavMesh
+readiness rules.
+
+### Real GameCore acceptance fixture
+
+`tests/world/region_gamecore_integration_test.cpp` uses an actual
+`game::GameCore` and C++ `game::NativeModule` through the existing
+`nativeModules` registration path. It attaches a stable region identity
+to a real map-spawned `game::Unit` with `Transform`, parks a
+fixture-only `RegionWork` ECS component and preserves the real
+gameplay entity, validates the native command's player, then uses
+the engine's actual save, load and COW rollback paths.
+
+The test demonstrates the shared integration hook, **not** the automatic
+parking of GameCore's `Unit`, `Mobile`, `VehicleDrive` or
+`VehicleOccupant`. Those production components must not be removed
+until their owning gameplay systems explicitly skip `RegionDormant`
+and preserve their invariants. It also does not prove that a city remains
+safe when collision/navmesh chunks are unready.
+
+CTest target: `aiverse_region_gamecore_integration_test`, name
+`region_gamecore_integration_test`, links `aiverse_game`, uses the
+normal external test template package. It is source-registered, but
+actual Mac/KINGSTON compilation and runtime checks have **not** been
+performed yet. The PR remains Draft and W1 remains partial.
