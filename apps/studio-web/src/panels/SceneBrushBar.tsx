@@ -77,6 +77,7 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   if (!brush) return null;
   const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
+    <EcologyLayerPicker/>
     <div className="tbrush__row">
       <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed}
         onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
