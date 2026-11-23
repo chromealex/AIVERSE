@@ -123,6 +123,8 @@ public:
     const AnimationGraph* graph() const { return graph_.get(); }
     // Explicit owner-thread instrumentation, root program only. Never part of pose state.
     void enableExecutionProfile(bool enabled);
+    // Explicit selected-owner transfer only; default preparation cloning still disables profiling.
+    bool copyExecutionProfileFrom(const AnimationGraphInstance& published);
     void beginExecutionTrace() noexcept {if(executionProfile_)executionProfile_->beginTrace();}
     void resetExecutionProfile() noexcept {if(executionProfile_)executionProfile_->reset();}
     Json executionProfileReport() const;
