@@ -88,6 +88,19 @@ void Editor::registerPlayOps() {
             r.set("note",Json::string("Aggregate owner counters, not per-graph or per-entity; GPU preview history contains estimates, not GPU timings."));
             return r;
         });
+    add("graph_gpu_owner_profile","Start, read or stop optional native RHI scope capture.",
+        R"({"type":"object","properties":{"action":{"type":"string","enum":["start","read","stop"]}},"required":["action"]})",
+        [this](const Json& p){
+            const auto action=p.getStr("action");
+            if(!dev_||ws_.project.dir.empty()){
+                Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native editor graphics owner unavailable"));return r;
+            }
+            graphGpuProfile_.checkProject(ws_.project.dir);
+            if(action=="start")graphGpuProfile_.start(dev_->info(),ws_.project.dir);
+            else if(action=="stop")graphGpuProfile_.stop();
+            else if(action!="read")throw std::invalid_argument("unknown GPU profile action");
+            return graphGpuProfile_.report();
+        });
     add("graph_live_owner_profile","Opt-in CPU profiling of one current common presentation instance; no gameplay controls.",
         R"({"type":"object","properties":{"action":{"type":"string","enum":["enable","read","reset","disable"]},"entity":{"type":"string"}},"required":["action","entity"]})",
         [this](const Json& p){
