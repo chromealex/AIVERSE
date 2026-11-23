@@ -92,25 +92,25 @@ public:
     int modeLevel(Simulation& sim, uint8_t player, int16_t res) const;     // level index of a resource with levels (-1)
     Fixed modesLevelStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, Fixed& mul) const;
 
-    const Rules& rules() const { return rules_; }
+    const Rules& rules() const override { return rules_; }
     // map players[i].ai of slot p (preset / knobs for ComputerPlayer), nullptr when out of range
     const AIPlayerRules* aiPlayer(uint8_t p) const { return p < aiPlayers_.size() ? &aiPlayers_[p] : nullptr; }
     const TriggerSet& triggers() const { return triggers_; }
-    ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
-    GridFields* gridFields() const { return fields_.get(); }  // grid fields (GridFields.h); null before setup
-    Raid* raid() const { return raid_.get(); }                // extraction raids (Raid.h); inactive without rules "raid"
-    Prompts* prompts() const { return prompts_.get(); }        // script choice menus (Prompts.h); null before setup
-    Sensors* sensors() const { return sensors_ && sensors_->active() ? sensors_.get() : nullptr; }      // radar / sonar / jammers (Sensors.h)
-    FieldOps* fieldOps() const { return fieldOps_ && fieldOps_->active() ? fieldOps_.get() : nullptr; }  // repair, reclaim, stockpiles... (FieldOps.h)
-    Career* career() const { return career_.get(); }           // career ladders and perks (Career.h); null before setup
-    Commerce* commerce() const { return commerce_.get(); }     // premises, businesses, the bank (Commerce.h); null before setup
-    Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (Arsenal.h); null before setup
-    Traffic* traffic() const { return traffic_.get(); }        // city traffic: AI cars, signals, pedestrians (Traffic.h); null before setup
-    Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (Driving.h); null before setup
-    TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (TopDown.h); null before setup
-    Progression* progression() const { return progression_.get(); }   // in-match progression (Progression.h); inactive without rules "progression"
-    Encounters* encounters() const { return encounters_.get(); }   // boss encounters (Encounters.h); null before setup
-    Environment* environment() const { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (Environment.h); null without one
+    ScriptEngine* scripts() const override { return script_.get(); }   // the Lua VM (standard library + game scripts)
+    GridFields* gridFields() const override { return fields_.get(); }  // grid fields (GridFields.h); null before setup
+    Raid* raid() const override { return raid_.get(); }                // extraction raids (Raid.h); inactive without rules "raid"
+    Prompts* prompts() const override { return prompts_.get(); }        // script choice menus (Prompts.h); null before setup
+    Sensors* sensors() const override { return sensors_ && sensors_->active() ? sensors_.get() : nullptr; }      // radar / sonar / jammers (Sensors.h)
+    FieldOps* fieldOps() const override { return fieldOps_ && fieldOps_->active() ? fieldOps_.get() : nullptr; }  // repair, reclaim, stockpiles... (FieldOps.h)
+    Career* career() const override { return career_.get(); }           // career ladders and perks (Career.h); null before setup
+    Commerce* commerce() const override { return commerce_.get(); }     // premises, businesses, the bank (Commerce.h); null before setup
+    Arsenal* arsenal() const override { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (Arsenal.h); null before setup
+    Traffic* traffic() const override { return traffic_.get(); }        // city traffic: AI cars, signals, pedestrians (Traffic.h); null before setup
+    Driving* driving() const override { return driving_.get(); }        // vehicles the hero drives (Driving.h); null before setup
+    TopDown* topDown() const override { return topDown_.get(); }        // top-down heroes (TopDown.h); null before setup
+    Progression* progression() const override { return progression_.get(); }   // in-match progression (Progression.h); inactive without rules "progression"
+    Encounters* encounters() const override { return encounters_.get(); }   // boss encounters (Encounters.h); null before setup
+    Environment* environment() const override { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (Environment.h); null without one
     const NativeModules& native() const { return native_; }   // native modules of this game (hooks: docs/native-modules.md)
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
@@ -118,7 +118,7 @@ public:
     using GameHost::state;
 
     // ---- queries shared with AI, client and editor
-    Entity spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, bool underConstruction = false);
+    Entity spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, bool underConstruction = false) override;
     // Full placement check for `player` (terrain, blocking, radius, regions, creep, placeOn...).
     bool canPlace(Simulation& sim, uint8_t player, uint16_t type, Vec3 centre, Entity ignore = kNullEntity, std::string* why = nullptr);
     // Footprint cells of a structure centred near `centre` (grid coordinates). On planets (surface given) the
@@ -128,11 +128,11 @@ public:
     bool requirementsMet(Simulation& sim, uint8_t player, const std::vector<Requirement>& req) const;
     bool canTrain(Simulation& sim, uint8_t player, uint16_t type) const; // requirements + unique
     bool canAfford(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed supply = {}, int* missing = nullptr) const;
-    bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const;
+    bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const override;
     // Tests / tools: run the brute-force reference vision instead of the cached one (results are identical;
     // AIVERSE_VISION=ref does the same, AIVERSE_VISION=check runs both and aborts on a difference).
     void setVisionReference(bool on);
-    bool hostile(Simulation& sim, uint8_t a, uint8_t b) const;
+    bool hostile(Simulation& sim, uint8_t a, uint8_t b) const override;
     // Authored routes (map "routes"): true when the map has them. Then units are sent only between
     // garrisons with an open route (canSend); routeLength = length of line 0, -1 when there is none.
     bool routesAuthored() const { return !routeDefs_.empty(); }
@@ -159,11 +159,11 @@ public:
     // Multiscreen (map "screen"): the current screen and whether a point is on it (always true
     // without a screen). Garrisons off the screen do not grow. setScreenCenter clamps to the screen bounds.
     const ScreenDef& screen() const { return screen_; }
-    bool onScreen(Simulation& sim, Vec3 p) const;            // map "screen", else the env map scroller screen
+    bool onScreen(Simulation& sim, Vec3 p) const override;            // map "screen", else the env map scroller screen
     bool screenView(Simulation& sim, Vec3& center, Vec2& size) const;   // current screen (either source); false: none
     Vec3 screenCenter(Simulation& sim) const;
     void setScreenCenter(Simulation& sim, Vec3 c);
-    Fixed stat(Simulation& sim, Entity e, Stat s) const;          // effective stat with techs/levels/buffs
+    Fixed stat(Simulation& sim, Entity e, Stat s) const override;          // effective stat with techs/levels/buffs
     // stat of a type for a player without an entity (GameCore::stat without per-entity parts), + moraleDelta perUnit levels
     Fixed typeStatWithMorale(Simulation& sim, uint8_t player, uint16_t type, Stat s, int moraleDelta) const;
     // settings of the computer player controller of rules ai.controller (null for builtin / scripted), AIControllers.h
@@ -181,7 +181,7 @@ public:
     Fixed heightAdvantage(Simulation& sim, Vec3 a, Vec3 b) const;
     Fixed slopeSpeed(Simulation& sim, Vec3 p, Vec2 dir) const;   // uphill / downhill speed factor (1 off heightfields)
     // p lifted to `h` above the ground (flat: y = ground height + h; planets: along the local up)
-    Vec3 lift(Simulation& sim, Vec3 p, Fixed h) const;
+    Vec3 lift(Simulation& sim, Vec3 p, Fixed h) const override;
     // ---- planets: what the view / editor / AI call (all no-ops / flat answers on flat maps)
     const Surface* surface(Simulation& sim) const;                // null on flat maps
     int bodyOf(Simulation& sim, Vec3 p) const;                     // 0 on flat maps
@@ -196,26 +196,26 @@ public:
     int regionAt(Simulation& sim, Vec3 p) const;
     bool canClaim(Simulation& sim, uint8_t player, int region, std::vector<Amount>* cost = nullptr) const;
     Entity findNearestFieldCell(Simulation& sim, Vec3 p, int res, Vec3& out, int maxRadius = 24) const;
-    uint8_t teamOf(Simulation& sim, uint8_t player) const;
+    uint8_t teamOf(Simulation& sim, uint8_t player) const override;
 
     // ---- internals (used across implementation files)
-    void issue(Simulation& sim, Entity e, const Order& o, bool queue);
-    void moveTo(Simulation& sim, Entity e, Vec3 goal, Fixed radius);
+    void issue(Simulation& sim, Entity e, const Order& o, bool queue) override;
+    void moveTo(Simulation& sim, Entity e, Vec3 goal, Fixed radius) override;
     // Shared flow field toward a goal area of `radius` world units (falls back to moveTo when no field applies).
     void moveToFlow(Simulation& sim, Entity e, Vec3 goal, Fixed radius);
     void sysFlowFields(Simulation& sim);   // refreshes the waypoints of units following fields (start of movement)
-    void stopMoving(Simulation& sim, Entity e);
-    void dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner, const WeaponDef* wd = nullptr);
-    Fixed contactDistance(Simulation& sim, Entity a, Entity b);
+    void stopMoving(Simulation& sim, Entity e) override;
+    void dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner, const WeaponDef* wd = nullptr) override;
+    Fixed contactDistance(Simulation& sim, Entity a, Entity b) override;
     bool pay(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed supply, bool emitFail = true);
     void refund(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed fraction);
     // free cell around a structure; with `toward` (a rally point) the free cell of the first ring closest to it
-    Vec3 freeSpotNear(Simulation& sim, Entity structure, uint8_t layer, const Vec3* toward = nullptr);
+    Vec3 freeSpotNear(Simulation& sim, Entity structure, uint8_t layer, const Vec3* toward = nullptr) override;
     void recomputeMods(Simulation& sim, uint8_t player);
-    void castAbility(Simulation& sim, Entity caster, int index, Entity target, Vec3 point);
-    bool canCast(Simulation& sim, Entity caster, int index) const;
+    void castAbility(Simulation& sim, Entity caster, int index, Entity target, Vec3 point) override;
+    bool canCast(Simulation& sim, Entity caster, int index) const override;
     Entity placeStructure(Simulation& sim, uint8_t player, uint16_t type, Vec3 centre, Entity builder, bool complete);
-    void addResource(Simulation& sim, uint8_t player, uint16_t res, Fixed amount);
+    void addResource(Simulation& sim, uint8_t player, uint16_t res, Fixed amount) override;
     // Deterministic spot for an auto-placed structure (nearest valid to the player's key/first structure).
     bool findAutoSpot(Simulation& sim, uint8_t player, uint16_t type, Vec3& out);
     std::vector<Amount> autoBuildCost(Simulation& sim, uint8_t player, uint16_t type) const;
@@ -229,12 +229,12 @@ public:
     void applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint16_t sourceType, const std::vector<EffectDef>& effects, Entity target, Vec3 point);
     void addHeroXp(Simulation& sim, Entity hero, Fixed xp, uint8_t player);
     // ---- abilities and effects (Effects.cpp, Skills.cpp)
-    void applyPayload(Simulation& sim, int payload, const EffectCtx& ctx);
-    const AbilityDef& abilityFor(Simulation& sim, Entity e, int index) const;   // level variant of the unit's ability
+    void applyPayload(Simulation& sim, int payload, const EffectCtx& ctx) override;
+    const AbilityDef& abilityFor(Simulation& sim, Entity e, int index) const override;   // level variant of the unit's ability
     const PlayerAbilityDef& playerAbilityFor(Simulation& sim, uint8_t player, int index) const;
-    uint32_t statusFlags(Simulation& sim, Entity e) const;                       // union of active status flags
+    uint32_t statusFlags(Simulation& sim, Entity e) const override;                       // union of active status flags
     bool isStunned(Simulation& sim, Entity e) const;
-    void addStatus(Simulation& sim, Entity target, int def, Fixed duration, const EffectCtx& ctx);
+    void addStatus(Simulation& sim, Entity target, int def, Fixed duration, const EffectCtx& ctx) override;
     void addPlayerStatus(Simulation& sim, uint8_t player, int def, Fixed duration, const EffectCtx& ctx);
     int dispel(Simulation& sim, Entity target, uint64_t tags, uint8_t from);    // removed count
     bool castPlayerAbility(Simulation& sim, uint8_t player, int index, Vec3 point, Entity target);
@@ -289,7 +289,7 @@ public:
     bool accepts(Simulation& sim, Entity carrier, Entity passenger) const;
     Entity nearestRetreatPoint(Simulation& sim, uint8_t owner, Vec3 from) const;
     bool detected(Simulation& sim, Entity e, uint8_t viewer) const;      // an allied detector reveals it
-    bool canSee(Simulation& sim, Entity e, uint8_t viewer) const;        // not invisible to viewer (statuses + detectors)
+    bool canSee(Simulation& sim, Entity e, uint8_t viewer) const override;        // not invisible to viewer (statuses + detectors)
     bool mechToggle(Simulation& sim, Entity caster, int ability);        // true: a toggle ability, handled
     void mechOnHit(Simulation& sim, Entity target, Entity source, Fixed dmg);       // veterancy: who hit last
     void mechOnSpawn(Simulation& sim, Entity e, Entity producer);        // rally waypoints
@@ -436,7 +436,7 @@ private:
     void impactProjectile(Simulation& sim, Entity p);
     const ProjectileFlight* projectileFlight(const Projectile& p) const;
     const WeaponDef* projectileWeapon(const Projectile& p) const;   // the weapon a shot came from (also bullet perk variants)
-    void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
+    void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const override;
     int liveResult(Simulation& sim);                 // the result the state shows now (result(): frozen once decided)
     void freezeOutcome(Simulation& sim);             // "outcome" system: latches the first result + its report blob
     friend class Arsenal;   // free fire launches weapon projectile programs at a point (Arsenal.cpp)
