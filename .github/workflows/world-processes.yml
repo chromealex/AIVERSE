@@ -7,6 +7,8 @@ on:
       - 'tests/ecs_echo_acoustics_test.cpp'
       - 'tests/ecs_fracture_structure_test.cpp'
       - 'tests/ecs_aether_gas_test.cpp'
+      - 'tests/world_processes_inspector_test.cpp'
+      - 'apps/editor/core/WorldInspect.cpp'
       - 'tests/world_processes_verify.sh'
       - 'tests/libraries/world_processes_test.cpp'
       - '.github/workflows/world-processes.yml'
