@@ -1119,3 +1119,53 @@ publication. No compiler, browser TypeScript, native Studio,
 glTF validator, GPU/PHYSIS or release tests were run (user deferred).
 Handoff:
 `docs/agent-handoffs/building-safe-reimport-stage23o-2026-11-23.md`.
+
+
+## Stage 23P — two-leaf authoritative ECS fixed tick and render session
+
+`engine/buildings/BuildingDualLeafGameSession.h` now connects
+the opt-in two-collider `BuildingDualLeafOwner` to existing
+`World`, `SpatialWorld` and `BuildingGraphChangeRouter` phases.
+Exported via `BuildingRuntime.h`. It is one scene-owned entry point,
+**not** a new engine scheduler, networking transport or GPU backend.
+Attach with the EXACT same `sceneId` as the physical owner and with
+mandatory live `Authorize(Entity,socket,targetOpen)` and
+`InteractionRange(Entity,closedWorldBounds)` guards. The transport
+must authenticate a peer and resolve the actor's real ECS generation
+before calling `session.enqueue(ecs, BuildingApertureCommand)`.
+A bounded queue rejects duplicate/reordered actor nonces, invalid
+scene/masks and dead actors.
+
+The authoritative owner invokes
+`session.fixedTick(ecs,dualOwner,spatial,graphRouter,serverTick,stepPermille)`
+AFTER movement and PHYSIS occupancy sensors update. It revalidates
+actor liveness/access/range; permits only one motor at once; commits
+one paired collider step on a tick, then sends revisioned graph
+invalidations. Graph ACK failures stall any new commands. On successful
+retry the prior committed revision is presented before the next motor
+step. `frame.presentationAccepted` marks a read-only snapshot
+synchronized to physics and graph consumers, not a finished NavMesh
+refresh. Only `pose.open` on a FULLY OPEN endpoint grants permission
+for game motors/actor traversal.
+
+`session.submit(renderDtMs, SubmitLeaf)` on the actual Renderer3D owner
+passes each borrowed `render::Model` and world-space
+`BuildingApertureLeafPose` into the existing game's ModelDraw
+submission / lease ownership. No GPU resources are uploaded in ECS.
+`session.bindMaterial(socket,StyleMaterial,resolver)` assigns the
+complete numeric PBR+GUID image set before GPU upload.
+Presentation access from the world and renderer phases is
+mutex-serialized to protect model/pose state; do not recursively call
+session methods from within `SubmitLeaf`. Existing renderer must own
+upload, retirement fences and cache invalidation.
+`retireActor(entity)` is required before ECS generation reuse.
+Reconcile the renderer's GPU leases before `detach()`, and detach
+the physical owner separately.
+
+This is a concrete reusable game scene integration API, **not** yet
+a registered concrete game's main-loop invocation or real GPU test.
+Source-only C++ changes are untested per user request. Next insert
+it in an actual game host with real motor callbacks and transport
+identity, run full CMake/CTest + GPU/PHYSIS acceptance, then resolve
+the feature branch vs main before merging Draft PR #114. Follow
+`docs/agent-handoffs/building-dual-leaf-game-session-stage23p-2026-11-23.md`.
