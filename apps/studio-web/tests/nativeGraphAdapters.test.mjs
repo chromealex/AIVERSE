@@ -109,3 +109,24 @@ test('owner recipe projections are bounded and never mutate source',()=>{
  assert.equal(view.nodes.length,66);assert.equal(snapshot.stamps.length,100);
  assert.throws(()=>caveSnapshotProjection({version:2}));
 });
+
+import {materialGraph,textureRecipeParams,textureChannelForOutput} from '../src/graphs/materialGraph.ts';
+test('material projection preserves distinct texture channels and draft override',()=>{
+ const source={texture:'content/textures/a.png',normalMap:'content/textures/n.png',base:'parent',shaderGraph:{version:1}};
+ const view=materialGraph('wall',source,{texture:''});
+ assert.equal(view.links.some(l=>l.input==='texture'),false);
+ assert.equal(view.links.some(l=>l.input==='normalMap'),true);
+ assert.equal(view.links.some(l=>l.input==='shader'),true);
+ assert.equal(view.links.some(l=>l.input==='base'),true);
+ assert.equal(source.texture,'content/textures/a.png');
+});
+test('texture recipe is bounded and requests native no-overwrite generation',()=>{
+ const recipe={name:'wall',pattern:'brick',output:'normal',seed:7,size:256,scale:8};
+ const params=textureRecipeParams(recipe,['brick']);
+ assert.equal(params.path,'content/textures/wall.png');
+ assert.equal(params.overwrite,false);
+ assert.equal(textureChannelForOutput('normal'),'normalMap');
+ assert.throws(()=>textureRecipeParams({...recipe,name:'../wall'},['brick']));
+ assert.throws(()=>textureRecipeParams({...recipe,size:4096},['brick']));
+ assert.throws(()=>textureRecipeParams({...recipe,pattern:'unknown'},['brick']));
+});
