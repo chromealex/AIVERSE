@@ -9,6 +9,7 @@ enum class UnifiedBackupStatus { MetadataOnly, Recoverable, InvalidMetadata, Wro
 struct UnifiedBackupEntry {
     uint64_t generation=0;
     bool active=false;
+    uint64_t lastSequence=0,lastRevision=0; // valid only when Recoverable
     RegionCheckpointManifest manifest;
     UnifiedBackupStatus status=UnifiedBackupStatus::InvalidMetadata;
 };
@@ -74,6 +75,10 @@ public:
                         entry.status=UnifiedBackupRead::recover(dir,generation,active.identity.world,
                             budget,adapters,factory,codecs,materialize,recovered,validate)
                             ?UnifiedBackupStatus::Recoverable:UnifiedBackupStatus::RecoveryFailed;
+                        if(entry.status==UnifiedBackupStatus::Recoverable){
+                            entry.lastSequence=recovered->sequence;
+                            entry.lastRevision=recovered->ledger.lastRevision();
+                        }
                     }
                 }
             }
