@@ -1,0 +1,60 @@
+name: SpectraFX Studio native preview acceptance
+
+on:
+  push:
+    branches:
+      - feature/spectrafx-html5-data-interfaces-20261123
+    paths:
+      - 'apps/studio-native/**'
+      - 'engine/fx/**'
+      - 'apps/studio-web/**'
+      - '.github/workflows/spectrafx-native-preview.yml'
+  pull_request:
+    paths:
+      - 'apps/studio-native/**'
+      - 'engine/fx/**'
+      - 'apps/studio-web/**'
+      - '.github/workflows/spectrafx-native-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  metal-scene-preview:
+    name: Real Apple Metal Scene VFX preview
+    runs-on: macos-15
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Studio HTML5 UI
+        working-directory: apps/studio-web
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run test:graphs
+          npm run build
+      - name: Configure Studio native scene tests
+        run: |
+          cmake -S . -B build/spectrafx-studio-preview \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF \
+            -DAIVERSE_BUILD_STUDIO_HTML5=ON
+      - name: Compile real Scene GPU fixture
+        run: |
+          cmake --build build/spectrafx-studio-preview --parallel 4 \
+            --target aiverse_studio_spectrafx_preview_tests
+      - name: Execute hardware GPU preview contract
+        run: |
+          ctest --test-dir build/spectrafx-studio-preview \
+            -R '^studio_spectrafx_preview$' --output-on-failure --no-tests=error
