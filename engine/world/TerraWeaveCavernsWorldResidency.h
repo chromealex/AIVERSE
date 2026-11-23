@@ -4,6 +4,7 @@
 // until the actual native owner confirms publication/retirement.
 // Dirty edits, worker jobs and gameplay readers are held by explicit leases.
 #include "engine/world/TerraWeaveCavernsStreaming.h"
+#include "engine/world/TerraWeaveCavernsDistanceLod.h"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -68,6 +69,13 @@ public:
             item.ready=false;
         }
     }
+    void enableDistanceLod(CaveDistanceLodSettings settings={}) {
+        validateCaveDistanceLod(settings);
+        distanceLod_=settings;
+        adaptiveLod_=true;
+    }
+    void disableDistanceLod(){adaptiveLod_=false;}
+    bool adaptiveLodEnabled()const noexcept{return adaptiveLod_;}
     void visualLod(uint32_t lod){
         if(lod>8)throw std::invalid_argument("Caverns stream LOD");
         if(lod_==lod)return;
@@ -174,10 +182,25 @@ public:
             if(!items_.contains(key)&&items_.size()>=settings_.maxResident)
                 continue;
             auto& item=ensure(key);
+            const uint64_t dx=uint64_t(key.x>=center_.x?
+                key.x-center_.x:center_.x-key.x);
+            const uint64_t dy=uint64_t(key.y>=center_.y?
+                key.y-center_.y:center_.y-key.y);
+            const uint64_t dz=uint64_t(key.z>=center_.z?
+                key.z-center_.z:center_.z-key.z);
+            const uint64_t distance=std::max({dx,dy,dz});
+            const uint32_t desiredLod=adaptiveLod_
+                ?caveDistanceLod(distance,item.lod,distanceLod_):lod_;
+            if(item.lod!=desiredLod){
+                item.generation=nextGeneration();
+                item.building=false;
+                item.retiring=false;
+                item.ready=false;
+                item.lod=desiredLod;
+            }
             if(item.ready||item.building||item.retiring||
                builds>=settings_.maxBuildsPerPump)continue;
             item.building=true;
-            item.lod=lod_;
             item.generation=nextGeneration();
             requests.push_back({CaveResidencyAction::Build,key,
                                 item.generation,revision_,item.lod});
@@ -263,6 +286,8 @@ private:
     ChunkKey3 center_{};
     uint64_t revision_=0,nextGeneration_=0,nextLease_=0;
     uint32_t lod_=0;
+    CaveDistanceLodSettings distanceLod_{};
+    bool adaptiveLod_=false;
     std::map<ChunkKey3,Entry,KeyLess> items_;
 };
 } // namespace aiverse::terraweave::caverns
