@@ -328,6 +328,7 @@ void ComputeParticles::releaseGpu() {
     drawCount_=0;
 }
 void ComputeParticles::shutdown() {
+    checkpointHistory_.clear();
     shaderBirthSeed_=0;shaderBirthOrdinal_=0;shaderBirthSeedEnabled_=false;
     cpu_.shutdown();cpuEffect_=-1;releaseGpu();device_=nullptr;
     initialized_=false;viewReady_=false;verticesReady_=false;
@@ -1068,8 +1069,32 @@ bool ComputeParticles::restoreFreshGpuCheckpoint() {
     if(!status.restoreEligible||status.pending||!device_||
        !device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
        !lastCheckpoint_.hostStateComplete)return false;
-    const auto snapshot=lastCheckpoint_;
+    return restoreGpuSnapshot(lastCheckpoint_);
+}
+bool ComputeParticles::retainFreshGpuCheckpoint() {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!lastCheckpoint_.hostStateComplete)return false;
+    if(checkpointHistory_.size()>=8)checkpointHistory_.pop_front();
+    checkpointHistory_.push_back({nextHistoricalCheckpointId_++,lastCheckpoint_});
+    return true;
+}
+std::vector<uint64_t> ComputeParticles::historicalGpuCheckpointIds() const {
+    std::vector<uint64_t> ids;
+    for(const auto& entry:checkpointHistory_)ids.push_back(entry.id);
+    return ids;
+}
+bool ComputeParticles::restoreHistoricalGpuCheckpoint(uint64_t id) {
+    for(const auto& entry:checkpointHistory_)if(entry.id==id)return restoreGpuSnapshot(entry.snapshot);
+    reason_="Unknown or evicted historical checkpoint";return false;
+}
+bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
+    if(!gpuActive()||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       gpuResetDirty_||gpuStagingDirty_||asyncCheckpointPending_||programParamsDirty_||
+       !pendingStates_.empty()||!pendingKillSlots_.empty()||!killedSlotsAwaitingFrame_.empty()||
+       !source.complete||!source.hostStateComplete)return false;
+    const auto snapshot=source;
     const size_t n=ages_.size();
+    if(snapshot.slots.size()!=n||snapshot.remainingLifetime.size()!=n)return false;
     if(snapshot.sourceTokens.size()!=n||snapshot.freeSlotOrder.size()>n)return false;
     std::vector<bool> free(n,false);
     for(uint32_t slot:snapshot.freeSlotOrder){
