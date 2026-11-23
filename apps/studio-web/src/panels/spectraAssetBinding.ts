@@ -90,3 +90,41 @@ export function bindResolvedSpectraAsset(
   }:item);
   return {graph:{...graph,nodes},error:''};
 }
+
+/** MeshOutput array operations preserve unknown graph fields and unrelated nodes.
+ * Never leave an empty meshes array: native MeshOutput requires at least one mesh.
+ */
+export function editSpectraMeshSlot(
+  graph:SpectraGraphV2,nodeId:string,action:'add'|'remove'|'up'|'down'|'replace',
+  slot:number,asset?:SpectraAssetReference,
+  indexed:readonly {guid:string;path?:string;kind:string}[]=[],
+):SpectraAssetEdit {
+  const node=graph.nodes.find(n=>n.id===nodeId&&n.type==='MeshOutput');
+  if(!node)return failure(graph,'Select an existing MeshOutput node.');
+  const raw=node.properties?.meshes;
+  if(!Array.isArray(raw)||raw.length===0||raw.some(v=>typeof v!=='string'))
+    return failure(graph,'MeshOutput meshes must be a nonempty array of strings.');
+  if(!Number.isInteger(slot)||slot<0||slot>=raw.length)
+    return failure(graph,'Invalid mesh slot.');
+  const meshes=[...raw] as string[];
+  if(action==='remove'){
+    if(meshes.length===1)return failure(graph,'MeshOutput requires at least one mesh.');
+    meshes.splice(slot,1);
+  }else if(action==='up'||action==='down'){
+    const target=slot+(action==='up'?-1:1);
+    if(target<0||target>=meshes.length)return failure(graph,'Cannot move mesh beyond array bounds.');
+    [meshes[slot],meshes[target]]=[meshes[target],meshes[slot]];
+  }else if(action==='add'||action==='replace'){
+    if(!asset||!validGuid(asset.guid))return failure(graph,'Select a valid indexed model GUID.');
+    const resolved=indexed.find(a=>a.guid.toLowerCase()===asset.guid.toLowerCase());
+    if(!resolved||resolved.kind!=='model'||!resolved.path||!validPath(resolved.path))
+      return failure(graph,'Model GUID is not present in the current project catalog.');
+    const path='content/'+resolved.path;
+    if(action==='add'){
+      if(meshes.length>=32)return failure(graph,'Maximum 32 mesh slots.');
+      meshes.splice(slot+1,0,path);
+    }else meshes[slot]=path;
+  }else return failure(graph,'Unknown mesh edit action.');
+  return {graph:{...graph,nodes:graph.nodes.map(n=>n.id===nodeId?
+    {...n,properties:{...(n.properties??{}),meshes}}:n)},error:''};
+}
