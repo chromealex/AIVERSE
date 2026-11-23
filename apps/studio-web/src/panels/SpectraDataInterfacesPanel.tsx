@@ -34,13 +34,12 @@ const blankBinding = ():FxDataInterface => ({provider:'weather',channel:'vertica
 interface Props {
   projectPath:string;
   onSaved?:()=>void;
-  showScene?:()=>void;
 }
 
 /** Real project authoring through Workspace fx_graph_* operations.
  * Never mutates files directly, and never pretends to render a GPU preview.
  */
-export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScene}:Props) {
+export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) {
   const [assets,setAssets]=useState<AssetEntry[]>([]);
   const [selected,setSelected]=useState<AssetEntry|null>(null);
   const [saved,setSaved]=useState<SpectraGraphV2|null>(null);
@@ -281,7 +280,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
             {diagnostics(validation)} {validation.emitters!==undefined&&' · '+String(validation.emitters)+' emitter(s)'}
           </StudioAlert>}
           <SpectraNativePreview graph={graph} projectPath={projectPath}
-            disabled={busy} showScene={showScene??(()=>{})}/>
+            disabled={busy}/>
           <StudioSection title="Graph Nodes & Links">
             <SpectraGraphCanvas graph={graph} disabled={busy}
               onError={setError}
