@@ -28,6 +28,11 @@ bool ActorHost::readyToStep(Simulation& sim) {
     auto region=[&](Vec3 p,Fixed r){Vec3 extent{r,r,r};regions.push_back({p-extent,p+extent});};
     // Includes respawn and round reset destinations before any actions can consume the tick.
     for(auto p:spawns_)region(p,radius);
+    // Bomb/round reset can restore a car to its original map spawn even if
+    // that cell is now far from every player and vehicle. Pin the host-owned
+    // reset poses before tickSystems can change the car's authoritative pose.
+    if(sim.world().resourceConst<world::RegionEntityLedger>())
+        for(const auto& car:initialVehicles_)region(car.pos,4_fx);
     // A race may reset a wrecked/stuck car to a distant grid/checkpoint in
     // VehicleRace::after, inside the current gameplay tick. Before admitting
     // that tick, pin both possible checkpoint outcomes through the existing
