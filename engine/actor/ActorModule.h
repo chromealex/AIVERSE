@@ -7,6 +7,7 @@
 #include "ActorSystems.h"
 #include "ActorComponents.h"
 #include "engine/world/CollisionStream.h"
+#include "engine/world/VehicleRegionTransfer.h"
 #include "engine/mechanics/Melee.h"
 #include "engine/mechanics/royale/BattleRoyale.h"
 #include "engine/systems/Gear.h"
@@ -153,6 +154,11 @@ public:
     std::vector<Loot> loot(const Simulation& sim) const;
     std::vector<Vehicle> vehicles(const Simulation& sim) const;
     Entity vehicleEntity(const Simulation& sim,uint32_t id) const;   // kNullEntity when absent
+    // Thin world-space host adapter: resolve integer seat slots to real
+    // CharacterIndex ECS entities, then use shared vehicle group validation.
+    bool vehicleRegionGroup(const Simulation& sim,Entity vehicle,
+                            world::VehicleRegionGroup& out,
+                            std::string* error=nullptr) const;
     RoyaleView royaleView(Simulation&,uint8_t slot) const;
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
     bool racing() const { return race_!=nullptr; }   // this map has a race (map "race": vehicles::RaceState resource)
