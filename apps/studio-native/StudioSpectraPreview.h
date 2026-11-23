@@ -289,7 +289,7 @@ public:
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
-        return ready_ && (playing_ || pendingRestart_ || pendingClear_ ||
+        return ready_ && (playing_ || pendingRestart_ || restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
     uint32_t timeTicks() const {return timeTicks_;}
