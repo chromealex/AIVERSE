@@ -393,3 +393,69 @@ invalidation, NOT proof the NavMesh refresh already completed.
 This API is intentionally genre-neutral. No native build, PHYSIS,
 rollback or GPU test has been performed for the stage.
 See `docs/agent-handoffs/building-ecs-physis-reconcile-stage23r-2026-11-23.md`.
+
+## Stage 23S — Renderer3D GPU ownership and WorldScene publication
+
+The visual instance uploader belongs ONLY to the common graphics device
+owner. No legacy genre module and no GPU calls in Simulation systems.
+
+The shared BuildingDualLeafGameSession retains CPU leaf Models, while
+BuildingRenderer3DScene leases those models for their GPU residency.
+Bind the complete PBR style material and image GUIDs on CPU first
+(using a real packaged-asset resolver) and keep the session alive
+until GPU owner retirement.
+
+~~~cpp
+#include "engine/buildings/BuildingRuntime.h"
+
+// Existing host owns deviceLifetime, device, renderer, WorldScene,
+// ECS scene and buildingSession. No duplicate GPU device/texture registry.
+auto buildingRender=std::make_shared<building::BuildingRenderer3DScene>();
+std::string issue;
+
+// On graphics device owner thread, before a rendering pass:
+if(!buildingRender->initialize(
+       device,renderer,deviceLifetime.lease(),
+       buildingSession,stableSceneInstanceId,&issue)) {
+    // If cleanup could not complete, retain the session and retry
+    // buildingRender->shutdown at a safe frame boundary.
+}
+worldScene.setBuildingRenderOwner(buildingRender);
+
+// Every render frame:
+worldScene.setBuildingRenderElapsedMs(renderElapsedMs);
+worldScene.draw(renderer,renderOrigin,worldCellMetres);
+// The optional building owner now sends real ModelDraw packets.
+
+// On world unload, outside an active graphics pass:
+worldScene.setBuildingRenderOwner({});
+if(!buildingRender->shutdown(&issue)) {
+    // Still GPU resident. Do not destroy session/device/models.
+} else {
+    buildingSession.detach();
+    dualPhysics.detach(spatialWorld);
+}
+~~~
+
+BuildingRenderer3DScene::initialize uses the existing
+render::prepareModelUpload, render::uploadModel, dedicated geometry,
+and RenderDeviceLifetime::Lease. A socket shares one CPU leaf model
+between two independent Renderer3D ModelDraw instances. Per-frame
+physical snapshots only affect ModelDraw.world translation, not
+CPU mesh regeneration or GPU texture reupload. Render IDs are stable
+per scene instance/socket/leaf, independent of floating camera origin.
+Different concurrent scenes need distinct render namespaces.
+
+BuildingRenderer3DScene::shutdown is synchronous and conservative.
+The renderer-owned thread must confirm the SAME device lease and a
+successful waitForResourceIdle barrier, then invalidate all model
+caches and releaseModel. On a failed barrier, models and session
+remain live and shutdown must be retried. This avoids unsafe CPU/GPU
+destruction but may incur full-device stall on scene unload. The
+existing async retirement system can be integrated later if it
+maintains equivalent completion guarantees.
+
+This is an actual common WorldScene::draw integration path,
+but no specific packaged game executable has attached it yet.
+No C++, CTest, GPU visual or Metal/Vulkan/GLES tests were run.
+Handoff: docs/agent-handoffs/building-renderer3d-stage23s-2026-11-24.md.
