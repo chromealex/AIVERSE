@@ -20,3 +20,4 @@
 #include "engine/buildings/BuildingLiftReplication.h"
 #include "engine/buildings/BuildingLiftCommands.h"
 #include "engine/buildings/BuildingActorLifecycleTick.h"
+#include "engine/buildings/BuildingStairMotor.h"
