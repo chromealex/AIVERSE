@@ -4,7 +4,7 @@
 // snapshot, then publish certified groups at its graphics/physics barrier.
 #include "engine/world/TerraWeaveCavernsLodPolicy.h"
 #include "engine/world/TerraWeaveCavernsShards.h"
-#include <cstdint>
+#include <cstdint>\n#include <array>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -87,7 +87,7 @@ public:
                     &first.mesh,first.resolution,first.spacingCm,
                     &second.mesh,second.resolution,second.spacingCm});
                 const CaveFaceKey face{key,next};
-                if(decision.decision==CaveFaceDecision::RegenerateAtCommonLod) {
+                // Subdivision also needs a newly published modified coarse mesh. Until\n                // that mesh is staged, favor regeneration at common LOD.\n                if(decision.decision!=CaveFaceDecision::ExactMatch) {
                     ++fallbackFaces_;
                     const uint64_t span=int64_t(first.resolution)*first.spacingCm;
                     const int32_t spacing=decision.commonSpacingCm;
