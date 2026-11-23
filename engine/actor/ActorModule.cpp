@@ -340,8 +340,11 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
             throw JsonError("regionOwnership: expected an empty object");
         world::registerRegionEntityLedger(sim);
         world::registerRegionStableIdentity(sim);
+        world::registerRegionMoveRequests(sim);
         sim.world().setResource<world::RegionEntityLedger>(
             world::RegionEntityLedger{});
+        sim.world().setResource<world::RegionMoveRequests>(
+            world::RegionMoveRequests{});
     }
     setupRace(sim,rules,map);
     setupBots(sim,map);
@@ -356,6 +359,12 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         if(!lib::mechanics::valid(meleeAttacks_))throw JsonError("actor.melee: invalid attack timing");
     }
     Hasher hash;hash.str(rules.dump(-1));hash.str(map.dump(-1));if(streamManifest_.getBool("async"))hash.str("world-stream-v1");contentHash_=hash.value();
+    // Destination admission has already completed in readyToStep. Commit
+    // authorized region moves ahead of every movement/projectile system.
+    if(sim.world().resourceConst<world::RegionMoveRequests>())
+        sim.addSystem("actor.regionMoves",[this](Simulation& s){
+            applyRegionMoves(s);
+        });
     // Stage order: programmed projectiles, ordinary projectiles (bullets, grenades, smoke), then the
     // match / royale / character tick. Immediate hits of the projectile stages precede everything else.
     sim.addSystem("actor.projectilePrograms",[this](Simulation& s) {
