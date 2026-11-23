@@ -20,6 +20,8 @@
 #include "SpectraCueScheduler.h"
 #include "SpectraGpuPoolWorld.h"
 #include "SpectraGpuCueBridge.h"
+#include "SpectraFxSignificance.h"
+#include "SpectraFxCuePriority.h"
 
 namespace aiverse::spectra {
 
