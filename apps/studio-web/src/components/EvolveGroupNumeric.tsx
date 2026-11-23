@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '../bridge';
 
 type Props = { ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
@@ -17,6 +17,25 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
   const [pivotX, setPivotX] = useState('0');
   const [pivotZ, setPivotZ] = useState('0');
   const [pending, setPending] = useState(false);
+  useEffect(() => {
+    if (!open || ids.length < 2) {
+      void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {});
+      return;
+    }
+    const x = integer(scaleX), z = integer(scaleZ);
+    const px = integer(pivotX), pz = integer(pivotZ);
+    if (x === null || z === null || x < 1 || z < 1 ||
+        x > 1000000 || z > 1000000 ||
+        (pivot === 'custom' && (px === null || pz === null))) {
+      void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {});
+      return;
+    }
+    void invoke('studio.worldProcessAreaPreview', {
+      scaleNumerator: x, scaleNumeratorZ: z, pivot,
+      ...(pivot === 'custom' ? { pivotXcm: px, pivotZcm: pz } : {})
+    }).catch(() => {});
+    return () => { void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {}); };
+  }, [open, ids.join('|'), scaleX, scaleZ, pivot, pivotX, pivotZ]);
   if (ids.length < 2) return null;
   const submit = async () => {
     const x = integer(scaleX), z = integer(scaleZ);
