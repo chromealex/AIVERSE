@@ -52,14 +52,21 @@ public:
     // is delivered on owner thread; never capture the editor or device in callback.
     void tick(gfx::Device& dev,const std::string& project){
         checkProject(project);
+        if((buffer_.valid()||compute_.valid())&&!dev.gpuHealthy()){
+            // Device-loss handles are abandoned to device teardown, never destroyed here.
+            buffer_={};compute_={};read_.reset();fence_=0;
+            if(state_=="pending")fallback("GPU device unhealthy");
+        }
         if(read_&&read_->done){
             if(state_=="pending"){
                 auto& data=read_->bytes;bool valid=data.size()==size_t(size_)*size_*4;
                 if(valid)for(size_t i=3;i<data.size();i+=4)if(data[i]!=255){valid=false;break;}
                 if(valid){
                     // A small CPU reference is an explicit acceptance check, not a speed benchmark.
-                    const auto reference=render::texture_graph::evaluate(*program_,target_,size_);
-                    for(size_t i=0;i<data.size();++i)if(std::abs(int(data[i])-int(reference.rgba[i]))>1){valid=false;break;}
+                    try{
+                        const auto reference=render::texture_graph::evaluate(*program_,target_,size_);
+                        for(size_t i=0;i<data.size();++i)if(std::abs(int(data[i])-int(reference.rgba[i]))>1){valid=false;break;}
+                    }catch(...){valid=false;}
                 }
                 if(valid){pixels_=std::move(data);state_="ready";backend_="metal";reason_="completed native readback; CPU reference within one RGBA8 unit";}
                 else fallback("GPU readback or CPU parity check failed");
