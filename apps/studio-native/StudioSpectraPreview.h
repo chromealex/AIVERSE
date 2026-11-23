@@ -129,6 +129,8 @@ public:
                 if(!runtime_.gpuActive())
                     return errorStatus("GPU allocation seed requires Metal GPU backend");
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
+                gpuSeedRetryCount_=0;
+                gpuSeedFailed_=false;
                 hasPendingGpuAllocationSeed_=true;
             }
             playing_=false;phase_=0;pendingRestart_=true;restartBurstPending_=true;
@@ -235,11 +237,18 @@ public:
             // Keep the request pending after failure for explicit retry.
             if(!runtime_.resetGpuAllocationSeed(pendingGpuAllocationSeed_)) {
                 playing_=false;
+                ++gpuSeedRetryCount_;
                 error_=runtime_.reason().empty()?
                     "SpectraFX GPU allocation seed reset failed":runtime_.reason();
+                if(gpuSeedRetryCount_>=kMaxGpuSeedRetries) {
+                    hasPendingGpuAllocationSeed_=false;
+                    gpuSeedFailed_=true;
+                }
                 return;
             }
             hasPendingGpuAllocationSeed_=false;
+            gpuSeedRetryCount_=0;
+            gpuSeedFailed_=false;
             error_.clear();
             pendingRestart_=false; // seeded reset already cleared the GPU pool
             timeTicks_=0;
@@ -349,6 +358,8 @@ public:
         result.set("queuedBursts",Json::number(int64_t(burstsPending_)));
         result.set("clearing",Json::fromBool(pendingClear_));
         result.set("gpuSeedPending",Json::fromBool(hasPendingGpuAllocationSeed_));
+        result.set("gpuSeedFailed",Json::fromBool(gpuSeedFailed_));
+        result.set("gpuSeedRetries",Json::number(int64_t(gpuSeedRetryCount_)));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -379,7 +390,9 @@ private:
     float speed_=1.0f;
     uint32_t phase_=0,burstsPending_=0,triggeredBursts_=0;
     uint32_t timeTicks_=0,targetTicks_=0,stepsPending_=0;
-    uint32_t pendingGpuAllocationSeed_=0;
+    static constexpr uint32_t kMaxGpuSeedRetries=8;
+    uint32_t pendingGpuAllocationSeed_=0,gpuSeedRetryCount_=0;
+    bool gpuSeedFailed_=false;
     bool hasPendingGpuAllocationSeed_=false;
     uint64_t generation_=1;
     std::string backend_,error_;
