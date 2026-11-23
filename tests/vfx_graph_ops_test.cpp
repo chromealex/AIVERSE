@@ -40,7 +40,7 @@ int main() {
     })JSON");
 
     const auto catalog = call("graph_catalog", Json::object());
-    require(catalog.getBool("ok") && catalog["domains"].size()==4, "generic graph catalog missing domains");
+    require(catalog.getBool("ok") && catalog["domains"].size()==5, "generic graph catalog missing domains");
     require(call("graph_list", Json::parse(R"({"domain":"unknown"})")).has("error"), "unknown graph domain accepted");
     Json generic = Json::object();
     generic.set("domain",Json::string("spectrafx"));
@@ -158,6 +158,23 @@ int main() {
     fakeScope.allow=false;
     require(gpuProfile.begin(fakeScope,"fx",1,false)==0,"unsupported timing accepted");
     require(!call("graph_gpu_profile",Json::parse(R"({"action":"read"})")).getBool("available"),"headless GPU owner fabricated");
+
+    auto tex=Json::parse(R"({"domain":"texture","name":"fixture","graph":{"version":1,"size":8,"nodes":[{"id":"rough","op":"constant","inputs":[],"properties":{"value":0.5}},{"id":"metal","op":"constant","inputs":[],"properties":{"value":1}},{"id":"packed","op":"metallicRoughness","inputs":["rough","metal"]},{"id":"normal","op":"normal","inputs":["rough"]}],"outputs":{"metallicRoughness":"packed","normal":"normal"}},"output":"metallicRoughness","textureName":"fixture"})");
+    require(call("graph_validate",tex).getBool("ok"),"native texture DAG validation failed");
+    auto pixels=call("texture_graph_preview",tex);
+    require(pixels.getBool("ok")&&pixels.getStr("rgbaHex").size()==8*8*8&&pixels.getStr("rgbaHex").substr(0,8)=="ff80ffff","packed PBR channel layout wrong");
+    tex.set("output",Json::string("normal"));
+    require(call("texture_graph_preview",tex).getStr("rgbaHex").substr(0,8)=="8080ffff","flat height normal wrong");
+    require(call("graph_save",tex).getBool("ok"),"new texture graph save failed");
+    require(call("graph_save",tex)["result"].has("error")||!call("graph_save",tex).getBool("ok"),"texture graph overwrite without expected accepted");
+    tex.set("expected",tex["graph"]);
+    require(call("graph_save",tex).getBool("ok"),"expected texture document save failed");
+    require(call("texture_graph_bake",tex).getBool("ok"),"texture graph PNG bake failed");
+    require(fs::is_regular_file(root/"content"/"textures"/"fixture_normal.png"),"texture bake missing file");
+    require(call("texture_graph_bake",tex).has("error"),"texture bake overwrite accepted");
+    auto brokenTexture=tex;
+    brokenTexture.member("graph").member("nodes").at(2).member("inputs").at(0)=Json::string("normal");
+    require(!call("graph_validate",brokenTexture).getBool("ok"),"texture type mismatch accepted");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
