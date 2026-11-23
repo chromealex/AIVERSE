@@ -99,6 +99,8 @@ public:
             if(cost>MaxBytes-used)return false;
             used+=cost;
         }
+        if(data.contentIdentity.size()>256||data.players.size()>255||data.sequences.size()>256)return false;
+        for(const auto& p:data.players)if(p.name.size()>1024)return false;
         auto staged=data;std::string bytes;Archive a(&bytes);
         if(!dataIo(a,staged)||bytes.size()>MaxBytes)return false;
         out.swap(bytes);return true;
@@ -108,6 +110,15 @@ public:
         Archive a(bytes);Data staged;
         if(!dataIo(a,staged)||a.remaining()!=0)return false;
         out=std::move(staged);return true;
+    }
+    static bool referencesValid(const Data& data,const World& world,const RegionEntityLedger& ledger){
+        PersistentEntityReferences refs;if(!refs.rebuild(world,ledger))return false;
+        for(const auto& c:data.pending){
+            Entity e;
+            if(!refs.resolve(world,c.target,e))return false;
+            for(auto id:c.units)if(!id||!refs.resolve(world,id,e))return false;
+        }
+        return true;
     }
     static bool capture(const Simulation& sim,const RegionEntityLedger& ledger,
         const std::string& contentIdentity,const CommandPolicy& policy,std::string& out){
