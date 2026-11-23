@@ -62,3 +62,24 @@ test('value editing and duplication preserve source',()=>{
  assert.deepEqual(copy.nodes[1].value,[4,3,2,1]);
  assert.deepEqual(src.nodes[0].value,[1,2,3,4]);
 });
+
+import {copyShaderNodes,pasteShaderNodes,arrangeShaderNodes} from '../src/panels/shaderGraphLayout.ts';
+test('paste remaps internal edges and clears external links without modifying source',()=>{
+ const source={domain:'material',nodes:[{id:'a',op:'constant'},{id:'b',op:'add',inputs:['a','outside']}]};
+ const clip=copyShaderNodes(source,['a','b']);
+ const dest={domain:'material',nodes:[{id:'node1',op:'constant'}]};
+ const result=pasteShaderNodes(dest,clip,ops);
+ assert.deepEqual(result.ids,['node2','node3']);
+ assert.deepEqual(result.graph.nodes[2].inputs,['node2','']);
+ assert.equal(dest.nodes.length,1);
+ const other={domain:'particle',nodes:[]};
+ assert.equal(pasteShaderNodes(other,clip,ops).graph,other);
+});
+test('auto layout preserves dependencies and refuses cycles',()=>{
+ const graph={nodes:[{id:'a',op:'constant'},{id:'b',op:'add',inputs:['a','a']}]};
+ const next=arrangeShaderNodes(graph);
+ assert.ok(next.nodes[1].position[0]>next.nodes[0].position[0]);
+ assert.deepEqual(next.nodes[1].inputs,['a','a']);
+ const cyclic={nodes:[{id:'a',op:'add',inputs:['a']}]};
+ assert.equal(arrangeShaderNodes(cyclic),cyclic);
+});
