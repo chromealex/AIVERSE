@@ -6,7 +6,7 @@ import subprocess
 import sys
 from check_feature import ROOT, validate
 
-PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/")
+PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/", "docs/agents/contracts/")
 EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh"}
 MANIFEST = "docs/features/"
 
