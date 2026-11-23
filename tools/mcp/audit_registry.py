@@ -8,6 +8,7 @@ import argparse
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 # Stable, already-implemented families; expand this as new universal authoring areas land.
 REQUIRED = {
@@ -29,7 +30,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary")
     parser.add_argument("--engine")
+    parser.add_argument("--feature-manifest", action="append", type=Path, default=[])
     args = parser.parse_args()
+    feature_tools = set()
+    for path in args.feature_manifest:
+        try:
+            names = json.loads(path.read_text(encoding="utf-8"))["integrations"]["mcp_tools"]
+            if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
+                raise ValueError("invalid mcp_tools")
+            feature_tools.update(names)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            parser.error(f"{path}: {exc}")
     cmd = [args.binary, "--no-editor", "--port", "0"]
     if args.engine:
         cmd += ["--engine", args.engine]
@@ -63,6 +74,8 @@ def main():
     print(f"registered={len(listed)}, required_families={len(REQUIRED)}")
     for group, names in REQUIRED.items():
         print(f"{'FAIL' if group in missing else 'PASS'} {group}: {', '.join(names)}")
+    if feature_tools - listed:
+        missing["feature_manifest"] = sorted(feature_tools - listed)
     if missing:
         print("MISSING:", json.dumps(missing, sort_keys=True))
     # This is a real tools/call smoke check, not merely static source matching.
