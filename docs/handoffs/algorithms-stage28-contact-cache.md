@@ -1,0 +1,2 @@
+# Stage 28
+GeometryContactCache.h adds normal-aligned face selection and reference-A clipping wrapper, plus per-pair persistent contact IDs with greedy witness matching. Caller supplies convex planar face topology and stable coordinate frame. No edge-edge manifold, solver warm-start, or build/tests. Next convex casting and triangle queries. Branch feature/world-processes-stage31-bidirectional-handles
