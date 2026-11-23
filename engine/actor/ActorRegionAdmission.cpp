@@ -108,7 +108,7 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
 void ActorHost::applyRegionMoves(Simulation& sim) {
     auto& ecs=sim.world();
     const auto* requests=ecs.resourceConst<world::RegionMoveRequests>();
-    if(!requests || requests->destinations.empty())return;
+    if(!requests || requests->destinations.empty() || admittedRegionMoves_.empty())return;
     const auto position=regionPositionReader();
     struct Commit {
         Entity entity;
@@ -117,7 +117,12 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     };
     std::vector<Commit> changes;
     std::set<uint64_t> checked;
-    for(const auto& [id,destination]:requests->destinations) {
+    for(const auto& [id,destination]:admittedRegionMoves_) {
+        const auto pending=requests->destinations.find(id);
+        // A new gameplay command can supersede a request after preflight.
+        // Never execute a destination that was not admitted with these bytes.
+        if(pending==requests->destinations.end() ||
+           pending->second!=destination)continue;
         Entity e=Entity::fromPacked(id-1);
         std::vector<Entity> members;
         std::string error;
@@ -151,8 +156,14 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
                 vehicle->pos+=change.delta;
         }
     }
+    if(changes.empty())return;
     auto* mutableQueue=ecs.resource<world::RegionMoveRequests>();
     mutableQueue->applied+=changes.size();
-    mutableQueue->destinations.clear();
+    for(const auto& [id,destination]:admittedRegionMoves_) {
+        const auto it=mutableQueue->destinations.find(id);
+        if(it!=mutableQueue->destinations.end() &&
+           it->second==destination)
+            mutableQueue->destinations.erase(it);
+    }
 }
 } // namespace aiverse::actor
