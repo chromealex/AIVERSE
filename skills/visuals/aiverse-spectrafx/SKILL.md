@@ -1773,3 +1773,9 @@ The production Assets Browser (`apps/studio-web/src/components/AssetsPanel.tsx`)
 The production HTML5 graph panel now has a **Graph resource assets** selector for `SpriteOutput`, `TrailModule`, `MaterialModule`, and `MeshOutput`. The first three bind `properties.texture` as a `content/`-prefixed string using indexed texture assets. `MeshOutput` binds `properties.meshes` as a string array, replacing the first entry while retaining later mesh slots; it accepts indexed `model` importer assets. The asset sub-inspector reads the first mesh slot back for picker display.
 
 Native `SpectraAuthoring.h` declares `MeshOutput` default `{"meshes":["builtin:cube"]}` and `VfxGraph.h` requires a meshes property. This stage does **not** prove every model file is supported by the runtime mesh loader. Always validate through native `fx_graph_validate` before publishing. Tests are deferred.
+
+## Stage 47 — MeshOutput multi-slot editing
+
+The production `SpectraGraphAssetInspector` renders a per-slot indexed model picker when `property="meshes"`, with Add (after slot), Remove, Move Up, and Move Down. All operations call `editSpectraMeshSlot` in `spectraAssetBinding.ts`, which preserves graph immutability, requires a nonempty string array, forbids removing the final mesh, caps the list at 32, and validates added/replaced GUIDs against the authoritative Studio model index. Existing `content/`-prefixed paths remain intact. Add initially duplicates the current indexed slot (or first available indexed model), then users choose a replacement. Invalid/unresolved slots are shown but not automatically rewritten.
+
+The production panel's `onGraphChange` still routes through `apply()` and existing native Validate/Save Draft/Publish operations. No compile, UI or GPU tests have been executed.
