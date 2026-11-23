@@ -5,6 +5,9 @@
 #include "engine/sim/Simulation.h"
 #include <cstdint>
 #include <map>
+#include <set>
+#include <span>
+#include <vector>
 
 namespace aiverse::world {
 
@@ -27,6 +30,27 @@ struct RegionDirtyQueue {
         if(it==entries.end() && entries.size()>=kMaxEntries)return false;
         if(it==entries.end())entries.emplace(key,uint8_t(kind));
         else it->second|=uint8_t(kind);
+        return true;
+    }
+    // Validate a whole car/occupant batch before committing any flag.
+    // Ordinary same-tick repeats consume no additional queue slots.
+    bool canMarkMany(std::span<const Entity> entities)const {
+        std::set<uint64_t> missing;
+        for(const Entity e:entities) {
+            if(!e.valid() || e.packed()==UINT64_MAX)return false;
+            const uint64_t key=e.packed()+1;
+            if(!entries.contains(key))missing.insert(key);
+        }
+        return missing.size()<=kMaxEntries-entries.size();
+    }
+    bool markMany(std::span<const Entity> entities,RegionDirtyKind kind) {
+        if(!canMarkMany(entities))return false;
+        // All logical checks happened above. Build a complete next map to
+        // make allocation failure atomic as well, then swap it into place.
+        auto staged=entries;
+        for(const Entity e:entities)
+            staged[e.packed()+1]|=uint8_t(kind);
+        entries.swap(staged);
         return true;
     }
     bool marked(Entity entity)const {
