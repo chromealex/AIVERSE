@@ -176,6 +176,24 @@ int main() {
     brokenTexture.member("graph").member("nodes").at(2).member("inputs").at(0)=Json::string("normal");
     require(!call("graph_validate",brokenTexture).getBool("ok"),"texture type mismatch accepted");
 
+    const auto textureCatalog=call("texture_graph_catalog",Json::object());
+    require(textureCatalog.getBool("ok")&&textureCatalog["outputTypes"].getStr("normal")=="normal","texture output catalog missing types");
+    const auto textureTemplates=call("texture_graph_templates",Json::object());
+    require(textureTemplates.getBool("ok")&&textureTemplates["templates"].size()==6,"texture starter library missing");
+    for(const auto& row:textureTemplates["templates"].items()){
+        Json args=Json::object();args.set("graph",row["graph"]);
+        require(call("texture_graph_validate",args).getBool("ok"),"invalid texture template");
+    }
+    tex.set("textureName",Json::string("fixture_set"));
+    const auto bakedSet=call("texture_graph_bake_set",tex);
+    require(bakedSet.getBool("ok")&&bakedSet["files"].size()==2,"PBR set bake failed");
+    for(const auto& row:bakedSet["files"].items()){
+        require(!row.getBool("sRGB"),"numeric texture marked sRGB");
+        require(fs::is_regular_file(root/row.getStr("path")),"PBR set file missing");
+    }
+    require(call("texture_graph_bake_set",tex).has("error"),"PBR set overwrite accepted");
+    require(!fs::exists(root/"content"/"textures"/".fixture_set.stage"),"PBR staging leaked");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
