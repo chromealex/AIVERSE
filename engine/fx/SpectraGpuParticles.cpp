@@ -1144,7 +1144,9 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
     programStateCache_=std::move(params);programParamsDirty_=false;
     shaderBirthSeed_=snapshot.shaderBirthSeed;shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;
     shaderBirthSeedEnabled_=snapshot.shaderBirthSeedEnabled;
-    aliveSlots_.clear();stats_.alive=uint32_t(n-freeSlots_.size());
+    aliveSlots_.clear();
+    if(!gpuIndirectActive_)for(size_t i=0;i<n;++i)if(!free[i])aliveSlots_.push_back(uint32_t(i));
+    stats_.alive=uint32_t(n-freeSlots_.size());
     gpuResetDirty_=false;gpuStagingDirty_=false;reason_.clear();
     return true;
 }
