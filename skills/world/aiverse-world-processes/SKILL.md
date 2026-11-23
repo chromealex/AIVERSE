@@ -671,3 +671,6 @@ EVOLVE-aware TerraWeave registration requires nonempty species, exactly one prec
 
 ## Stage 63: native demo setup
 `EvolveForestDemo.h` stages real PHYSIS climate links and caller-authored rooted plants in existing World authority. Caller supplies resolved entities and anchors. No executable demo or tests yet. See `docs/handoffs/world-processes-stage63-demo-setup-2026-11-23.md`.
+
+## Stage 64: headless demo target
+`aiverse_evolve_forest_demo` CMake target hydrates the demo fixture, plants 27 trees through TerraWeave authority and advances ECS ecology. Source only; PHYSIS/NEREID setup, disk CLI and QA pending. See `docs/handoffs/world-processes-stage64-headless-demo-2026-11-23.md`.
