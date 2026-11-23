@@ -265,6 +265,17 @@ public:
         return true;
     }
 
+    // Renderer-resource owner hook, only at spawn/retirement barriers.
+    // Never call while active GPU draw packets still borrow these Models.
+    template<class Callback>
+    bool forEachCpuModel(Callback&& callback){
+        for(auto& [id,e]:entries_){
+            (void)id;
+            if(!e.asset.leaf||!callback(*e.asset.leaf))return false;
+        }
+        return true;
+    }
+
     // Read-only CPU geometry; render owner handles GPU leases and fences.
     const render::Model* model(const std::string& socketId)const{
         const auto it=entries_.find(socketId);
