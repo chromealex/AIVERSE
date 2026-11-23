@@ -1061,3 +1061,61 @@ No C++/TypeScript compilation, CTest, native Studio invocation, actual
 import/decode, glTF parser, Metal/Vulkan/GLES graphics acceptance or
 runtime hot-reload QA was executed, per user deferral. See handoff
 `docs/agent-handoffs/building-material-reimport-stage23n-2026-11-23.md`.
+
+
+## Stage 23O — safe material/texture revisions and controlled scene promotion
+
+`apps/studio-native/StudioBuildingRegeneration.h` reconstructs
+a validated building generation request from a preexisting
+`GeneratedBuildings/*.glb.recipe.json` file. The path MUST be
+project/content-relative, directly inside GeneratedBuildings, with
+no `..`, symlinks or arbitrarily large input. It invokes the same
+`studioBuildingGenerate` native owner to create a fresh GLB + recipe
+with a fresh AssetCatalog GUID; it does NOT overwrite the old GLB,
+recipe, sidecar or currently resident Model. The existing
+`studio.buildingRegenerate({recipe})` bridge returns the new asset
+and source recipe linkage. Never treat an arbitrary WebView-provided
+path as a source or perform a game-world write from the renderer.
+
+`StudioBuildingGeneration.h` records
+`materialDependencies:[{name,fingerprint}]` for bound shared
+`materials.json` PBR definitions, alongside earlier
+`textureDependencies`. `StudioBuildingDependencies.h` now
+compares those material definition fingerprints in addition to
+original image bytes, GUIDs and importer settings. This also detects
+a numeric PBR edit when no texture was assigned. Old recipes with
+no tracked dependencies remain legacy/unknown (not proof that all
+materials are current).
+
+HTML5 `BuildingGeneratorPanel.tsx` subscribes to native Studio
+asset change events and performs read-only stale scans. The operator
+can choose **Create updated copy** per stale recipe, or opt in to
+**Auto-create updated copies when Assets change**. Auto mode
+deduplicates previously regenerated source recipes within this
+mounted project session to prevent an infinite loop caused by an
+immutable old recipe remaining stale. It is not a daemon or persistent
+file watcher, and it processes a bounded one new copy per event scan.
+The browser mock explicitly refuses regeneration.
+
+An updated copy is NOT automatically installed over every existing
+scene object or GPU resource. To promote a generated GLB, select an
+authored scene entity and click **Use on Selected Object**. This calls
+the already-supported `studio.setProperty` with
+`componentId=MeshRenderer,key=asset,value=newGuid`, so
+`StudioSession::setMeshRenderer` validates the real asset,
+modifies the existing MapDoc with Undo, and the existing StudioScene
+resource owner loads/updates the Model via its own
+`render::uploadModel`, cache invalidation and
+`render::releaseModel` lifecycle. NEVER upload/release GPU
+resources on the simulation thread or while in-flight renderer
+draw packets still borrow the old Model pointer.
+
+This stage wires Studio-native create-only regeneration plus an
+explicit scene promotion workflow. It does NOT perform hot-swapping
+every live instance in a shipped game, promise identical old and new
+GUIDs, or auto-retire GPU resources by itself. Shipping runtime
+revisions need their own owner-bound GPU lease/fence and world-scene
+publication. No compiler, browser TypeScript, native Studio,
+glTF validator, GPU/PHYSIS or release tests were run (user deferred).
+Handoff:
+`docs/agent-handoffs/building-safe-reimport-stage23o-2026-11-23.md`.
