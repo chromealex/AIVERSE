@@ -27,3 +27,4 @@
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
 #include "engine/buildings/BuildingTransportZoneGraphAdapters.h"
+#include "engine/buildings/BuildingApertureFixedTick.h"
