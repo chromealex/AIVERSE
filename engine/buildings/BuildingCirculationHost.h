@@ -214,6 +214,10 @@ public:
         auto it=lifts_.find(feature);
         return it!=lifts_.end()&&it->second.disembark(floor,passengers);
     }
+    bool interruptLiftDoorClosing(uint32_t feature){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&it->second.interruptClosing();
+    }
     bool takeLiftOffline(uint32_t feature,bool offline){
         auto it=lifts_.find(feature);
         if(it==lifts_.end())return false;
