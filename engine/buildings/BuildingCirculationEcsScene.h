@@ -6,9 +6,12 @@
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftEcsBridge.h"
 #include "engine/buildings/BuildingLiftReplication.h"
+#include "engine/buildings/BuildingLiftCommandWire.h"
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -46,6 +49,7 @@ public:
         width_=generated.building.constructionSize.width;
         depth_=generated.building.constructionSize.depth;
         lastPublishComplete_=true;
+        commandAuthority_.reset();
         scene_.setDoorObstructionProbe([this](uint32_t feature,uint32_t floor){
             return this->doorwayOccupied(feature,floor);
         });
@@ -56,8 +60,11 @@ public:
                             std::string* error=nullptr){
         return scene_.attachDoors(spatial,navmesh,ids,error);
     }
+    // Native/authoritative owner-only action. Network clients MUST use
+    // handleAuthenticatedCommand with a configured ownership policy.
     bool board(Entity actor,uint32_t feature,std::string* error=nullptr){
-        if(!ecs_||!scene_.attached()||scene_.faulted()){
+        if(!ecs_||!scene_.attached()||scene_.faulted()||
+           !scene_.doors().enabled()){
             if(error)*error="Building circulation scene is unavailable";
             return false;
         }
@@ -75,11 +82,56 @@ public:
                                  width_,depth_,origin_,yaw_,error);
     }
     bool exit(Entity actor,uint32_t feature,uint32_t floor){
-        if(!ecs_||!scene_.doorsOpenAt(feature,floor))return false;
+        if(!ecs_||!scene_.doors().enabled()||
+           !scene_.doorsOpenAt(feature,floor))return false;
         // Actor movement/boarding volume validation should have run in
         // the game's motor/interaction owner before invoking exit().
         return ecsBridge_.exit(*ecs_,scene_.host(),sceneId_,actor,feature,floor,
                                width_,depth_,origin_,yaw_);
+    }
+
+    // Install only on the authoritative ECS/world owner thread. The
+    // callback maps an authenticated existing connection to an ECS Entity;
+    // never accept client-supplied Entity ids without the mapping check.
+    using OwnsActor=typename BuildingLiftAuthority<Body>::OwnsActor;
+    using AtLanding=typename BuildingLiftAuthority<Body>::AtLanding;
+    bool configureAuthenticatedCommands(OwnsActor owns,AtLanding landing,
+                                        std::string* error=nullptr){
+        if(!ecs_||!scene_.attached()||scene_.faulted()||
+           !owns||!landing){
+            if(error)*error="ECS lift command policy requires a live scene and both guards";
+            return false;
+        }
+        commandAuthority_=std::make_unique<BuildingLiftAuthority<Body>>(
+            *ecs_,scene_,ecsBridge_,sceneId_,width_,depth_,origin_,yaw_,
+            std::move(owns),std::move(landing));
+        if(error)error->clear();
+        return true;
+    }
+    // The transport must have authenticated the client before invoking.
+    // The server-authority handler checks actor ownership, replay nonce,
+    // physical landing/boarding and scene ID; no packet drives state
+    // directly and client-authored server snapshots are never accepted.
+    BuildingLiftCommandResult handleAuthenticatedCommand(
+        uint64_t clientId,const BuildingLiftCommand& cmd){
+        if(!commandAuthority_)
+            return {false,cmd.sequence,"Lift command authority is not configured"};
+        return commandAuthority_->execute(clientId,cmd);
+    }
+    BuildingLiftCommandResult handleAuthenticatedPacket(
+        uint64_t clientId,std::span<const uint8_t> packet){
+        BuildingLiftCommand command;
+        std::string error;
+        if(!decodeBuildingLiftCommand(packet,command,&error))
+            return {false,0,std::move(error)};
+        return handleAuthenticatedCommand(clientId,command);
+    }
+    // Administrative owner-only reset after an actor's authenticated
+    // lifecycle ends. A recycled Entity generation must never inherit a
+    // prior actor's nonce counter or building passenger marker.
+    void clearActorCommandSequence(Entity actor){
+        if(commandAuthority_&&actor.valid())
+            commandAuthority_->clearActor(actor.packed());
     }
 
     Tick advance(world::SpatialWorld& spatial,nav::Mesh* navmesh,
@@ -123,6 +175,7 @@ public:
         return scene_.rebuildNavigation(mesh,error);
     }
     void detach(world::SpatialWorld& spatial,nav::Mesh* navmesh){
+        commandAuthority_.reset(); // drops authenticated callbacks before detaching their world
         // Clear only the caller's old ECS attachment markers. Game owner
         // remains responsible for safe despawn/relocation at unload.
         if(ecs_){
@@ -165,6 +218,7 @@ private:
     World* ecs_=nullptr;
     BuildingCirculationScene scene_;
     BuildingLiftEcsBridge<Body> ecsBridge_;
+    std::unique_ptr<BuildingLiftAuthority<Body>> commandAuthority_;
     uint64_t sceneId_=0;
     bool lastPublishComplete_=false;
     float width_=0,depth_=0;
