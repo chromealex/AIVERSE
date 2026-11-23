@@ -10,9 +10,9 @@ class RegionWalFinality {
 public:
     RegionWalWrite openFinalized(const std::filesystem::path& path,
         uint64_t checkpointSequence,uint64_t recoveredSequence,
-        const RegionEntityLedger& recovered,bool repair=false){
+        const RegionEntityLedger& recovered,bool repair=false,std::span<const uint8_t> identity={}){
         ready_=false;
-        auto result=writer_.open(path,checkpointSequence,repair);
+        auto result=writer_.open(path,checkpointSequence,repair,identity);
         if(result!=RegionWalWrite::Ok)return result;
         if(writer_.lastSequence()!=recoveredSequence){
             writer_.close();return RegionWalWrite::NeedsRecovery;
