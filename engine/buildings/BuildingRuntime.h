@@ -12,6 +12,7 @@
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftPlatformModel.h"
+#include "engine/buildings/BuildingLiftPresentation.h"
 #include "engine/buildings/BuildingLiftGameSession.h"
 #include "engine/buildings/BuildingLiftDoorOwner.h"
 #include "engine/buildings/BuildingLiftEcsBridge.h"

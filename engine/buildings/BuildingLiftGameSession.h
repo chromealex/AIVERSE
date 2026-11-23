@@ -4,6 +4,7 @@
 // There is no alternate entity, physics or networking backend.
 #include "engine/buildings/BuildingLiftEcsBridge.h"
 #include "engine/buildings/BuildingLiftReplication.h"
+#include "engine/buildings/BuildingLiftPresentation.h"
 #include <functional>
 #include <optional>
 #include <string>
@@ -171,6 +172,24 @@ public:
     bool rebuildNavigation(const nav::Mesh& mesh,std::string* error=nullptr){
         return attached_&&!scene_.faulted()&&
                scene_.rebuildNavigation(mesh,error);
+    }
+    // Rendering owner creates the reusable CPU assets once at spawn, then
+    // uploads/leases them through Renderer3D. This method does not touch GPU.
+    BuildingLiftVisualAssets makeVisualAssets(const BuildingStyle& style)const{
+        if(!attached_||scene_.faulted())return {};
+        return makeBuildingLiftVisualAssets(scene_.host(),style);
+    }
+    // Only committed authoritative cabin state can drive presentation.
+    // If collision/actor publication faults this session, suppress the
+    // frame until the world owner reconciles and reattaches it.
+    BuildingLiftPresentationFrame visualFrame()const{
+        if(!attached_||scene_.faulted()){
+            BuildingLiftPresentationFrame failed;
+            failed.error="Lift scene is not attached or needs reconciliation";
+            return failed;
+        }
+        return buildingLiftVisualFrame(scene_.host(),scene_.doors(),
+                                       width_,depth_,origin_,yaw_);
     }
     const BuildingCirculationScene& scene()const noexcept{return scene_;}
     BuildingCirculationScene& scene()noexcept{return scene_;}
