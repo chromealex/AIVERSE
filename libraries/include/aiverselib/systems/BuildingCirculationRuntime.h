@@ -192,6 +192,18 @@ public:
         if(state_.passengerCount==0)return false;
         return beginTrip(destination);
     }
+    // Authoritative door safety sensor: if a landing or cabin doorway
+    // becomes obstructed while Closing, return to Open. The physics owner
+    // must provide the actual occupant/proximity check; no geometry
+    // generator can infer a live actor from the static StructureGraph.
+    bool interruptClosing(){
+        if(!online()||state_.phase!=BuildingLiftPhase::Closing)return false;
+        state_.phase=BuildingLiftPhase::Open;
+        state_.targetFloor=state_.currentFloor;
+        state_.phaseElapsedMs=0;
+        travelRemainder_=0;
+        touch();return true;
+    }
     bool call(uint32_t floor){
         // A building actor may summon the empty lift to a pickup floor,
         // but cannot redirect a cabin currently occupied by other actors.
