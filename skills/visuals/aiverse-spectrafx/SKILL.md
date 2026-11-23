@@ -5,6 +5,28 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — SpectraFX Graph v2 Data Interfaces (Stage 5, draft PR #115)
+
+Read `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md` before
+changing this area. `apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx`
+now renders the existing `fx_graph` tab using the shared Studio UI kit.
+It accesses native project graph assets ONLY through `studio.op` with
+`fx_graph_list/get/validate/set/draft_*`, and uses `studio.assets` to
+choose real SpriteOutput image references from `content/`. Do not write
+the project's files directly from React. The pure
+`spectraDataInterfaceModel.ts` owns atomic Graph v2 parameter/binding
+edits, safe provider IDs, node refs and image path validation; tests live
+in `apps/studio-web/tests/spectraDataInterfaces.test.mjs`.
+Provider names refer to host callbacks, not file paths. Browser-only
+validation does not substitute native `fx_graph_validate`.
+Live GPU preview/full wiring are NOT finished; never fake the renderer.
+
+This stage is stacked on `feature/spectrafx-significance-data-20261123`
+(parent draft PR #113); `main` and `feature/studio-html5` are unchanged.
+Native Studio WebView and new CI tests have not yet passed as of this
+handoff. Read the exact test logs and preserve per-stage handoffs.
+
+
 ## 2026-11-23 — Stage 4: Graph v2 typed Data Interfaces (native QA pending)
 
 Required handoff:
