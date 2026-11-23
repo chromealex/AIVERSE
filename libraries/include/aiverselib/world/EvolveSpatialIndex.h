@@ -1,40 +1,30 @@
 #pragma once
 #include "EvolveArea.h"
-#include <map>
+#include "aiverselib/algorithms/Bvh.h"
 namespace aiverse::evolve {
-// Immutable derived index; rebuild at the authoritative tick barrier.
-// Large regions use a bounded overflow list instead of exploding grid memory.
+// Immutable derived index; rebuild at authoritative tick barrier.
+// Convert half-open integer ECS extents to inclusive library bounds.
 class SpatialIndex {
-    static constexpr I cellCm=3200;
-    static constexpr I maxCellsPerRegion=64;
-    using Cell=std::pair<I,I>;
+    using Index=lib::algorithms::Bvh2D<size_t>;
     std::vector<Extent> zones_;
-    std::map<Cell,std::vector<size_t>> cells_;
-    std::vector<size_t> overflow_;
-    static I cell(I x){return x/cellCm-(x%cellCm<0?1:0);}
+    Index index_;
 public:
     explicit SpatialIndex(const World& world):zones_(extents(world)){
+        std::vector<Index::Entry> entries;
+        entries.reserve(zones_.size());
         for(size_t i=0;i<zones_.size();++i){
             const auto& z=zones_[i];
-            const I x0=cell(z.minXcm),x1=cell(z.maxXcm-1);
-            const I z0=cell(z.minZcm),z1=cell(z.maxZcm-1);
-            if((x1-x0+1)*(z1-z0+1)>maxCellsPerRegion){overflow_.push_back(i);continue;}
-            for(I x=x0;x<=x1;++x)for(I y=z0;y<=z1;++y)cells_[{x,y}].push_back(i);
+            entries.push_back({i,{{z.minXcm,z.minZcm},{z.maxXcm-1,z.maxZcm-1}}});
         }
+        index_.build(entries);
     }
     template<class Fn> void query(I x,I z,Fn&& fn)const{
-        const auto it=cells_.find({cell(x),cell(z)});
-        const auto visit=[&](size_t i){
-            const auto& a=zones_[i];
-            if(x>=a.minXcm&&x<a.maxXcm&&z>=a.minZcm&&z<a.maxZcm)fn(a);
-        };
-        if(it==cells_.end()){for(auto i:overflow_)visit(i);return;}
-        const auto& local=it->second;
-        size_t a=0,b=0;
-        while(a<local.size()||b<overflow_.size()){
-            if(b==overflow_.size()||(a<local.size()&&local[a]<overflow_[b]))visit(local[a++]);
-            else visit(overflow_[b++]);
-        }
+        std::vector<size_t> scratch;
+        query(x,z,scratch,std::forward<Fn>(fn));
+    }
+    template<class Fn> void query(I x,I z,std::vector<size_t>& scratch,Fn&& fn)const{
+        index_.queryPoint({x,z},scratch);
+        for(auto i:scratch)fn(zones_[i]);
     }
 };
 }
