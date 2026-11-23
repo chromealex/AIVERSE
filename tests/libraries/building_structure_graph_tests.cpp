@@ -66,6 +66,55 @@ int main(){
         auto bad=r;bad.floors=7;CHECK(!buildFunctionalStructureGraph(bad));
         bad=r;bad.features[1].floor=2;CHECK(!buildFunctionalStructureGraph(bad));
         bad=r;bad.features[0].position=-0.25f;CHECK(!buildFunctionalStructureGraph(bad));
+        // Vertical circulation: both shafts remove REAL upper floor slab
+        // collision, stairs have bounded physical steps and landings,
+        // and graph edges connect only adjacent storeys.
+        FunctionalBuildingRecipe vertical=r;
+        vertical.features.clear();
+        BuildingFeature stairs;
+        stairs.kind=BuildingFeatureKind::Stairs;
+        stairs.width=2.6f;stairs.depth=6.6f;
+        stairs.position=6.f;stairs.positionZ=4.5f;
+        BuildingFeature lift;
+        lift.kind=BuildingFeatureKind::Elevator;
+        lift.width=2.f;lift.depth=2.2f;
+        lift.position=18.f;lift.positionZ=4.5f;
+        vertical.features={stairs,lift};
+        const auto shaft=buildFunctionalStructureGraph(vertical);
+        CHECK(shaft);
+        CHECK(shaft.rooms.size()==8);
+        CHECK(shaft.connections.size()==10); // 8 horizontal + 2 vertical
+        CHECK(!intersects(shaft,6.f,7.f,4.5f,BuildingGraphPart::Floor));
+        CHECK(!intersects(shaft,18.f,7.f,4.5f,BuildingGraphPart::Floor));
+        CHECK(intersects(shaft,12.f,7.f,9.f,BuildingGraphPart::Floor));
+        int steps=0,landings=0,platforms=0,verticalEdges=0;
+        for(const auto& solid:shaft.solids){
+            if(solid.part==BuildingGraphPart::StairTread){
+                ++steps;
+                CHECK(solid.featureIndex==0);
+                CHECK(solid.y1-solid.y0<=0.181f);
+                CHECK(solid.z1-solid.z0>=0.24f);
+            }
+            if(solid.part==BuildingGraphPart::StairLanding)++landings;
+            if(solid.part==BuildingGraphPart::ElevatorPlatform)++platforms;
+        }
+        for(const auto& edge:shaft.connections){
+            if(edge.kind==BuildingConnectionKind::Passage)continue;
+            ++verticalEdges;
+            CHECK(edge.from=="room/0/"+std::string(edge.kind==BuildingConnectionKind::Stair?"0":"1")+"/0");
+            CHECK(edge.to=="room/1/"+std::string(edge.kind==BuildingConnectionKind::Stair?"0":"1")+"/0");
+            CHECK(edge.height>6.0f);
+        }
+        CHECK(steps>=36&&landings==1&&platforms==1&&verticalEdges==2);
+        CHECK(shaft.sockets.size()==2);
+        CHECK(shaft.sockets[0].id=="stairs/0/0");
+        CHECK(shaft.sockets[1].id=="lift/1/0");
+        auto collision=vertical;collision.features[1].position=6.f;
+        CHECK(!buildFunctionalStructureGraph(collision)); // overlapping cores
+        collision=vertical;collision.features[0].depth=5.0f;
+        CHECK(!buildFunctionalStructureGraph(collision)); // unsafe stair pitch
+        collision=vertical;collision.floors=1;
+        CHECK(!buildFunctionalStructureGraph(collision)); // no vertical links
         std::puts("building structure graph standalone PASS");
         return 0;
     }catch(const std::exception& e){
