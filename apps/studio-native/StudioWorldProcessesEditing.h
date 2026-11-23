@@ -18,7 +18,7 @@
 namespace aiverse::studio::worldprocess_edit {
 
 struct Handle {
-    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth};
+    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative};
     Mode mode=Mode::Reference;
     std::string owner,component,key,targetType;
     render::float3 position{};
@@ -73,6 +73,13 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
                            {},{owner.x+float(width)/100.f,.35f,owner.z},0});
             out.push_back({Handle::Mode::AreaDepth,owner.id,"EvolveArea","halfDepthCm",
                            {},{owner.x,.35f,owner.z+float(depth)/100.f},0});
+            // Each opposing edge is draggable independently. The area stays
+            // centered on its map entity; either edge edits the same persisted
+            // half-extent and creates one MapDoc Undo entry on mouse release.
+            out.push_back({Handle::Mode::AreaWidthNegative,owner.id,"EvolveArea","halfWidthCm",
+                           {},{owner.x-float(width)/100.f,.35f,owner.z},0});
+            out.push_back({Handle::Mode::AreaDepthNegative,owner.id,"EvolveArea","halfDepthCm",
+                           {},{owner.x,.35f,owner.z-float(depth)/100.f},0});
         }
     }else if(components["EvolveRegion"].isObject()){
         // Legacy visual-only rings remain editable for older maps until
@@ -165,13 +172,15 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
         if(!std::isfinite(radius))return false;
         value=std::clamp(float(radius),.5f,500.f);return true;
     }
-    if(handle.mode==Handle::Mode::AreaWidth){
+    if(handle.mode==Handle::Mode::AreaWidth||
+       handle.mode==Handle::Mode::AreaWidthNegative){
         value=std::clamp(float(std::lround(
             std::abs(double(mouse.x-owner.x))*100.)),50.f,
             float(evolve::kAreaMaxHalfExtentCm));
         return true;
     }
-    if(handle.mode==Handle::Mode::AreaDepth){
+    if(handle.mode==Handle::Mode::AreaDepth||
+       handle.mode==Handle::Mode::AreaDepthNegative){
         value=std::clamp(float(std::lround(
             std::abs(double(mouse.z-owner.z))*100.)),50.f,
             float(evolve::kAreaMaxHalfExtentCm));
