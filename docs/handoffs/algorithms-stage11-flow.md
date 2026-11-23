@@ -1,0 +1,2 @@
+# Stage 11
+GraphFlow.h adds Edmonds-Karp maximum flow and Bellman-Ford successive shortest augmenting path min-cost flow. Rejects reachable negative residual cycles, self loops, out-of-range capacities/costs, arithmetic overflow. Augmentation budget yields partial result; not a wall-time bound. No build/tests. Next standalone Bellman-Ford/Floyd-Warshall and catalog dependencies. Branch feature/world-processes-stage31-bidirectional-handles
