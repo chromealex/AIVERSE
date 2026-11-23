@@ -2,6 +2,26 @@
 name: aiverse-spectrafx
 description: Author and integrate AIVERSE SpectraFX visual effects: versioned graphs, asset variants, ECS source components, event bindings, CPU fallback, editor previews and eventual GPU backends.
 ---
+## 2026-11-23 — HTML5 embedded VFX preview and shared MCP tools
+
+When authoring effects, use the `fx_graph_*` tools exposed by
+`aiversemcp`. Published and draft assets use existing Workspace
+validation. To preview in running native Studio, call
+`fx_graph_preview` with `{"action":"load","graphName":"preview_fx"}`,
+then `{"action":"play"}` (or seek/step/status/stop).
+`{"action":"cameraReset"}`, `{"action":"cameraOrbit","dx":12,"dy":-4}`
+and `{"action":"cameraZoom","amount":15}` navigate the independent
+embedded FX camera. `load` also accepts inline graph or `draft:true`
+for saved draft. Standalone MCP has no GPU: report the native-view
+requirement rather than inventing particles. The HTML5 Graph tab hosts
+the **same native renderer**, not a React/WebGL reproduction.
+Never mutate map entities or ECS from FX preview.
+No current-source Metal hardware acceptance yet. Handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+and
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 
 # SpectraFX — universal AIVERSE visual effects
 
