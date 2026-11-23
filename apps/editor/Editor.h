@@ -275,6 +275,9 @@ public:
     } cavernsBrushPreview;
     struct CavernsBuildStats {
         size_t pending=0,prepared=0,inFlight=0;
+        size_t gpuActive=0,gpuStaged=0,gpuRetired=0,gpuRemaining=0;
+        uint64_t gpuPreviewRevision=0,gpuRetryAfterFrame=0;
+        size_t gpuUploadFailures=0;
         uint64_t authorEpoch=0;
         bool visualCommitConnected=false;
         std::string diagnostic;
