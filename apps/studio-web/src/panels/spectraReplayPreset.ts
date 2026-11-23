@@ -7,6 +7,7 @@ export interface SpectraReplayPreset {
   background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
   parameters:Record<string,number>;
   seed?:number; // CPU backend only
+  gpuShaderSeed?:number;
   gpuAllocationSeed?:number; // Metal slot ordering only
 }
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -34,6 +35,8 @@ export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
     throw new Error('Invalid CPU replay seed');
   if(v.gpuAllocationSeed!==undefined && (!bounded(v.gpuAllocationSeed,0,2147483647)||!Number.isInteger(v.gpuAllocationSeed)))
     throw new Error('Invalid GPU allocation seed');
+  if(v.gpuShaderSeed!==undefined&&(!bounded(v.gpuShaderSeed,0,4294967295)||!Number.isInteger(v.gpuShaderSeed)))throw new Error('Invalid GPU shader seed');
+  if(v.gpuShaderSeed!==undefined&&(v.seed!==undefined||v.gpuAllocationSeed!==undefined))throw new Error('GPU shader seed mode is independent');
   if(v.seed!==undefined&&v.gpuAllocationSeed!==undefined)
     throw new Error('CPU and GPU allocation seed modes are mutually exclusive');
   if(!record(v.parameters)||Object.keys(v.parameters).length>8)
