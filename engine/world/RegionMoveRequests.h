@@ -56,6 +56,22 @@ template<class SimulationT>
 void registerRegionMoveRequests(SimulationT& sim) {
     sim.template registerPersistentResource<RegionMoveRequests>(
         "aiverse.world.region_move_requests",RegionMoveRequests::kSchema);
+    // Save/load is an atomic staged-World operation. Reject a request that
+    // targets a destroyed or recycled ECS handle, before the running
+    // simulation is overwritten by the decoded state.
+    sim.addPersistentLoadValidator("aiverse.world.region_move_requests",
+        [](const World& world,std::string& error)->bool {
+            const auto* moves=world.resourceConst<RegionMoveRequests>();
+            if(!moves)return true;
+            for(const auto& [id,destination]:moves->destinations) {
+                (void)destination;
+                if(!id || !world.alive(Entity::fromPacked(id-1))) {
+                    error="staged region move references a dead entity";
+                    return false;
+                }
+            }
+            return true;
+        });
 }
 
 } // namespace aiverse::world
