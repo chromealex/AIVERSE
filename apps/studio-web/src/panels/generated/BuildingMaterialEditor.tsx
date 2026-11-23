@@ -6,6 +6,8 @@ import { materialNames } from '../materialSchema';
 import './BuildingMaterialEditor.css';
 
 type NumericKey = 'metallic' | 'roughness' | 'emissiveStrength' | 'normalScale' | 'occlusionStrength';
+type UvKey = 'uvScale' | 'uvOffset';
+const uvFields: ReadonlyArray<{ key: UvKey; label: string }> = [{key:'uvScale',label:'UV scale (U,V)'},{key:'uvOffset',label:'UV offset (U,V)'}];
 type TextureKey = 'texture' | 'normalMap' | 'metallicRoughnessMap' | 'occlusionMap' | 'emissiveMap';
 const numeric: ReadonlyArray<{ key: NumericKey; label: string; max: number }> = [
   { key:'metallic', label:'Metallic', max:1 },
@@ -28,12 +30,17 @@ const initial = (source: MaterialData): MaterialPatch => {
     const raw = source[key];
     copy[key] = typeof raw === 'number' && Number.isFinite(raw) ? raw : key === 'roughness' ? 1 : 0;
   }
+  for (const {key} of uvFields) {
+    const raw=source[key];
+    copy[key]=Array.isArray(raw)&&raw.length===2
+      ? raw.join(',') : typeof raw==='string' ? raw : key==='uvScale'?'1,1':'0,0';
+  }
   for (const {key} of textures) copy[key] = typeof source[key] === 'string' ? source[key] : '';
   return copy;
 };
 
 const same = (a:MaterialPatch,b:MaterialPatch) =>
-  [...numeric.map(f=>f.key),...textures.map(f=>f.key)].every(key => a[key]===b[key]);
+  [...numeric.map(f=>f.key),...textures.map(f=>f.key),...uvFields.map(f=>f.key)].every(key => a[key]===b[key]);
 
 /** Edits a single existing Studio materials.json PBR resource.
  *  The same material holds all scalar properties AND texture GUIDs.
@@ -88,6 +95,14 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
   };
   const save=async()=>{
     if(!nativeConnected()||!name||!dirty||busy)return;
+    for(const {key} of uvFields){
+      const source=String(draft[key]??'');
+      const parts=source.split(',').map(x=>Number(x.trim()));
+      if(parts.length!==2||parts.some(x=>!Number.isFinite(x)||Math.abs(x)>1024)){
+        setError('UV scale/offset must contain two finite values between -1024 and 1024.');
+        return;
+      }
+    }
     setBusy(true);setError('');setMessage('');
     try{
       // One native patch persists the scalar material values AND all image
@@ -123,12 +138,17 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
               setDraft(previous=>({...previous,[key]:Math.max(0,Math.min(max,number))}));
           }}/>
       </label>)}
+      {uvFields.map(({key,label})=><label className="abg-material__field" key={key}>{label}
+        <input className="au-input" type="text" placeholder="1,1"
+          disabled={busy} value={String(draft[key]??'')}
+          onChange={event=>setDraft(previous=>({...previous,[key]:event.target.value}))}/>
+      </label>)}
       {textures.map(({key,label})=><label className="abg-material__field" key={key}>{label}
         <AssetReferencePicker label={label} kinds={['image']} value={String(draft[key]??'')}
           disabled={busy} onChange={guid=>setDraft(previous=>({...previous,[key]:guid}))}/>
       </label>)}
     </div>}
-    <p className="abg-material__note">Choose or drag textures from Assets. References are stored as asset GUIDs alongside the material parameters. The procedural building style has a separate material definition; applying project materials to its generated geometry still requires a native style binding.</p>
+    <p className="abg-material__note">Choose or drag textures from Assets. References are stored as asset GUIDs alongside the material parameters. Assign this project material to a building style slot above; its factors, UV transform and textures are applied together when generating GLB.</p>
     {error&&<p role="alert" className="abg-material__error">{error}</p>}
     {message&&<p role="status">{message}</p>}
     <div className="abg-material__actions">
