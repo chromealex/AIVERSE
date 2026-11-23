@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-native-restart-state",
+     "title": "Состояние перезапуска симуляции",
+     "titleEn": "Simulation restart state",
+     "text": "Сохранение номера тика, генератора случайных чисел и очереди команд со стабильными ссылками.",
+     "textEn": "Persist simulation tick, random generator and queued commands using stable references.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-native-finalized-wal",
      "title": "Сохранение подтверждённых тиков мира",
      "titleEn": "Finalized world tick persistence",
