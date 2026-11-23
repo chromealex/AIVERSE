@@ -100,10 +100,11 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
+    fxPreview_.reset();
     preview_.reset(); // GPU resources before the native view
 }
 
@@ -286,13 +287,9 @@ void StudioHost::gameEvent(const platform::Event& event) {
     if (game_ && platform_.surfaceDrawable(StudioSurface::Game)) game_->event(event);
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
-    if (surface == StudioSurface::Scene) {
-        placement_ = {}; readyEmitted_ = false;
-        if(spectraDockActive_) {
-            spectraDockActive_=false;
-            if(preview_)onScene([&]{preview_->setSpectraDockMode(false);});
-        }
-    } else { gamePlacement_ = {}; if (game_) game_->suspend(); }
+    if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    else if(surface == StudioSurface::Fx) { fxPlacement_={}; spectraDockActive_=false; }
+    else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
@@ -410,6 +407,7 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    tickFx(); // dedicated native FX drawable continues even if Scene is hidden
     if (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)) {
         session_->setFacialPreviewGpuStatus(false, "Native Scene viewport hidden or not drawable");
         return;
@@ -434,7 +432,6 @@ void StudioHost::tick() {
                 // Interactive viewport: redraw on change only, debounce lighting rebuilds.
                 // AIVERSE_STUDIO_CONTINUOUS_REDRAW=1 restores drawing every tick.
                 created->setContinuousRedraw(always);
-                created->setSpectraDockMode(spectraDockActive_);
                 preview_ = std::move(created);
             });
         }
@@ -1169,21 +1166,21 @@ Json StudioHost::assetThumbnail(const std::string& path) {
 Json StudioHost::runSpectraPreview(const Json& params) {
     if(projectLoading_ || session_->workspace().project.dir.empty())
         throw std::runtime_error("Open a project before SpectraFX preview");
-    if(!preview_)
+    if(!fxPreview_)
         throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
     const std::string action=params.getStr("action");
     // Stopping and inspecting a ready runtime never require the view to
     // remain on screen. Load/play/step/seek need a drawable to advance.
     if(action!="status" && action!="stop" &&
-       (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)))
-        throw std::runtime_error("Open the embedded SpectraFX or Scene native viewport");
+       (!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx)))
+        throw std::runtime_error("Open the dedicated SpectraFX native preview viewport");
     const std::string project=session_->workspace().project.dir;
     if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
         if(!spectraDockActive_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
         if(action=="cameraReset") {
             return onScene([&] {
-                preview_->resetSpectraDockCamera();
-                return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+                fxPreview_->resetSpectraDockCamera();
+                return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
             });
         }
         if(action=="cameraOrbit") {
@@ -1192,19 +1189,19 @@ Json StudioHost::runSpectraPreview(const Json& params) {
                !finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)
                 throw std::runtime_error("FX cameraOrbit requires finite dx/dy within +/-250");
             return onScene([&] {
-                preview_->orbit(float(dx),float(dy));
-                return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+                fxPreview_->orbit(float(dx),float(dy));
+                return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
             });
         }
         const double amount=params["amount"].toDouble();
         if(!params["amount"].isNumber()||!finite({amount})||std::abs(amount)>250)
             throw std::runtime_error("FX cameraZoom amount must be finite within +/-250");
         return onScene([&] {
-            preview_->zoom(float(amount));
-            return preview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            fxPreview_->zoom(float(amount));
+            return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
         });
     }
-    return onScene([&]{return preview_->spectraPreviewCommand(params,project);});
+    return onScene([&]{return fxPreview_->spectraPreviewCommand(params,project);});
 }
 void StudioHost::applyViewport(const Json& params) {
     const std::string id = params.getStr("id");
@@ -1220,23 +1217,14 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if (id == "fx") {
-        // The SpectraFX Graph dock reuses the actual native Scene GPU
-        // surface; no extra graphics device, no bitmap-over-bridge path.
-        // When FX and Scene tabs are both visible, FX takes priority.
+    if(id=="fx") {
         NativeViewportPlacement placed;
-        if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
-        placement_=placed;
-        const bool mode=placed.visible;
-        if(spectraDockActive_!=mode) {
-            spectraDockActive_=mode;
-            if(preview_) onScene([&]{preview_->setSpectraDockMode(mode);});
-        }
-        if(!placement_.visible)readyEmitted_=false;
+        if(!platform_.placeSurface(StudioSurface::Fx,rect,placed))return;
+        fxPlacement_=placed;
+        spectraDockActive_=placed.visible;
         return;
     }
-    if (id != "scene") return;
-    if(spectraDockActive_)return; // native FX pane currently owns this view.
+    if(id!="scene")return;
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
