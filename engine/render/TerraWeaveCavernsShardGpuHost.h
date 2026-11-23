@@ -64,6 +64,18 @@ public:
                              plan.visual,spec);
     }
 
+    // Stage one shard of a precomputed cross-shard visual LOD publication
+    // plan. Enables Stage32's one-shard-per-frame GPU pacing while retaining
+    // the SAME signed-six-face stitches across every affected shard.
+    // The caller MUST subsequently activate all batch shard keys together.
+    bool stagePlannedShard(gfx::Device& device,
+                           const CaveShardSnapshot& snapshot,
+                           const CaveMixedLodPlan& visual,
+                           CaveBatchSpec spec={}) {
+        if(!visual.ready())return false;
+        return stageSnapshot(device,snapshot,visual,spec);
+    }
+
     // Bridge adapter: group prepared CPU edits by spatial shard, then GPU
     // stage each full shard (including unchanged sources). On any rejection,
     // cancel the stages created by THIS invocation; failed GPU allocations
