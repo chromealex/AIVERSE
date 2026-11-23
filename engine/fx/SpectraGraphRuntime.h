@@ -112,6 +112,7 @@ public:
     bool resetDeterministicSeed(uint32_t seed);
     // Metal-only allocation seed. Not equivalent to CPU RNG seed.
     bool resetGpuAllocationSeed(uint32_t seed);
+    bool resetGpuShaderSeed(uint32_t seed);
 
     ComputeBackend backend() const { return backend_; }
     bool gpuActive() const { return initialized_ && backend_ == ComputeBackend::Metal && gpu_.gpuActive(); }
