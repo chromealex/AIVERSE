@@ -3,6 +3,7 @@
 // Full-scene rebuild is deliberately explicit; no claim of incremental STRATA
 // upload/retirement or atomic physics publication.
 #include "engine/render/TerraWeaveCavernsGeometryScene.h"
+#include "engine/world/TerraWeaveCavernsStreaming.h"
 #include <algorithm>
 #include <map>
 #include <memory>
