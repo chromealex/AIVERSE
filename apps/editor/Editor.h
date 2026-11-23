@@ -279,6 +279,8 @@ public:
         bool visualCommitConnected=false;
         std::string diagnostic;
     } cavernsBuildStats;
+    // Visual-only GPU cave preview. Gameplay colliders/nav remain unchanged.
+    bool cavernsVisualPreviewEnabled=false;
 
 
     void focusScene(float x, float z, float distance = -1);
