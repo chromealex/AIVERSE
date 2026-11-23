@@ -5281,3 +5281,14 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)
         COMMAND aiverse_region_gamecore_integration_test)
     set_tests_properties(region_gamecore_integration_test PROPERTIES LABELS "World;ECS")
 endif()
+
+# W1.5: real GameCore world-space admission waits for published collision and
+# rebuilds derived bot navigation before the first authoritative simulation tick.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
+    add_executable(aiverse_actor_navigation_stream_gate_test
+        tests/world/actor_navigation_stream_gate_test.cpp)
+    target_link_libraries(aiverse_actor_navigation_stream_gate_test PRIVATE aiverse_authority)
+    add_test(NAME actor_navigation_stream_gate_test
+        COMMAND aiverse_actor_navigation_stream_gate_test)
+    set_tests_properties(actor_navigation_stream_gate_test PROPERTIES LABELS "World;ECS;NETWORK")
+endif()
