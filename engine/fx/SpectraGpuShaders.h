@@ -47,6 +47,16 @@ struct VmPayload {
     VmStatement statements[64];
     VmInstruction instructions[512];
 };
+uint birthRandomBits(Particle p,uint stream) {
+    uint seed=uint(p.size.y)|(uint(p.size.z)<<16u);
+    uint x=seed^(uint(p.size.w)*0x9e3779b9u)^(stream*0x85ebca6bu);
+    x^=x>>16u;x*=0x7feb352du;
+    x^=x>>15u;x*=0x846ca68bu;
+    return x^(x>>16u);
+}
+float birthRandom01(Particle p,uint stream) {
+    return float(birthRandomBits(p,stream)>>8u)*(1.0f/16777216.0f);
+}
 float vmRead(uint field,Particle p,VmParams params,VmAttributes attrs,float dt) {
     switch(field) {
     case 0u:return p.positionAge.w; // age
@@ -167,20 +177,11 @@ void vmRun(device const VmPayload& vm,uint stage,thread Particle& p,
 // Vertex shaderGraph sources are compile-time-validated on the CPU.
 // The dynamic GPU kernel only gathers sources; no authored source code here.
 // Stateless integer hash of the authored seed, birth ordinal and stream.
-uint birthRandomBits(Particle p,uint stream) {
-    uint seed=uint(p.size.y)|(uint(p.size.z)<<16u);
-    uint x=seed^(uint(p.size.w)*0x9e3779b9u)^(stream*0x85ebca6bu);
-    x^=x>>16u;x*=0x7feb352du;
-    x^=x>>15u;x*=0x846ca68bu;
-    return x^(x>>16u);
-}
-float birthRandom01(Particle p,uint stream) {
-    return float(birthRandomBits(p,stream)>>8u)*(1.0f/16777216.0f);
-}
 float materialSource(uint code,Particle p,VmParams params,VmAttributes attrs) {
     switch(code) {
     case 0u:return p.positionAge.w;
     case 1u:return p.velocityLife.w;
+    case 2u:return birthRandom01(p,71u);
     case 3u:return 0.0f;
     default:
         if(code>=4u && code<8u)return attrs.a0[code-4u];
