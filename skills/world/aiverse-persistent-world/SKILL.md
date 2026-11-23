@@ -30,6 +30,15 @@ Use `engine/world/UnifiedWalSession.h` for the managed UWT1 session, not the led
 - Encode resource records with `UnifiedWorldTransaction::encode(tx, componentRecords, resourceRecords, sequence, frame)`. Resource-only frames are supported. Version 1 remains byte-identical for resource-free frames; version 2 adds a bounded resource section. Pass the same policy as the final argument to commit, open/openCheckpoint, backups (when verifying), retentionPlan, cleanupRetention and forkGeneration. Resource-bearing replay without a matching policy fails closed. Older binaries cannot replay version 2.
 - Production ActorHost finality wiring, crash injection and native acceptance remain outstanding. No assertion that arbitrary game state is durable.
 
+## Native finalized tick boundary (experimental)
+
+Use `engine/world/NativeWorldFinality.h` only from an explicitly authoritative non-rollback native tick owner. Construct it with the live Simulation, managed UnifiedWalSession, selected durable component codecs, resource policy from the same Simulation registry, and a private-state materializer. The initial durable projection must match the live world. Call its `step()` instead of the owner's ordinary Simulation::step(). Never install it as a gameplay system or use it for predicted/replayed ticks.
+
+- Committed: selected changes are durably appended. NoChanges: tick completed without selected changes; no WAL frame. WaitingForContent: native readiness refused the tick without selected changes. NeedsRecovery: stop the owner; never blindly step again or publish the tick. Live Simulation is not rewound automatically.
+- RegionEntityLedger::MutationCapture observes chronological mutators, including repeated changes to one ID; aborted ledger transactions remove their captured suffix. The capture is thread-confined, bounded, host-only, and not copied or serialized. Missing capture due to resource replacement/COW/worker mutation is rejected by private replay and exact ledger comparison.
+- The coordinator compares stable entity materialization and selected component/resource bytes before and after replay. It is a correctness-first full projection, not a dirty-only performance solution. Cold/wake changes with no corresponding replayable operation fail closed. Resource selection must exclude the region ledger itself.
+- This does not save Simulation tick, RNG, pending commands, unselected components or arbitrary module state. A production host must define those policies and its restore/republication barrier before enabling durable sessions. The generic native API is available; existing server/client loops are not automatically wired.
+
 ## Implementation
 
 RegionWalFrame/Reader/Writer/Transaction/Commit/Finality provide bounded CRC frames, contiguous sequences, durable append and atomic ledger replay. RegionCheckpointManifest/Publish/Load/Archive bind generation and SHA256 to checkpoint and WAL prefix. RegionWorldSessionLock provides local cooperating-process exclusivity, not distributed consensus.
