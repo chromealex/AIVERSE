@@ -13,6 +13,7 @@
 #include "EvolveEcs.h"
 #include "EvolvePhysisBridge.h"
 #include "SocietyEcs.h"
+#include "SocietyNpcTriggers.h"
 #include "engine/data/Json.h"
 #include <stdexcept>
 #include <string>
@@ -65,7 +66,11 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
         evolve::installClimateBridge(sim);
         evolve::install(sim);
     }
-    if(flags.society)society::install(sim);
+    if(flags.society){
+        society::registerNpcTriggerPersistence(sim);
+        society::install(sim);
+        society::installNpcTriggers(sim);
+    }
 }
 inline void installSuite(Simulation& sim,const Json& config){
     installSuite(sim,suiteFlags(config));
