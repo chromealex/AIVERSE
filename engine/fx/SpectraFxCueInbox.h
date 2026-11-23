@@ -12,6 +12,8 @@
 #include <deque>
 #include <utility>
 #include "SpectraFxCueBridge.h"
+#include "SpectraFxCuePriority.h"
+#include <vector>
 
 namespace aiverse::fx {
 
@@ -23,6 +25,7 @@ public:
         uint64_t dropped=0,hidden=0,invalid=0,stale=0,evicted=0;
         uint64_t drained=0,dispatchFailed=0,resets=0;
         uint64_t coalescedStops=0,reservedLifecycle=0;
+        uint64_t priorityDrained=0;
     };
 
     explicit SpectraFxCueInbox(size_t capacity=kDefaultCapacity)
@@ -121,6 +124,35 @@ public:
             pending_.pop_front();
             ++stats_.drained;
             if(!dispatch(cue)) ++stats_.dispatchFailed;
+        }
+    }
+
+    // Opt-in importance ordering. Keeps per-key FIFO, including Play before
+    // Move/Stop/Kill; promotes entire groups containing pending lifecycle
+    // commands so clean-up cannot starve behind cosmetic one-shots.
+    // Snapshot indices are selected BEFORE callbacks, so callback-enqueued
+    // cues are considered only on the following presentation frame.
+    // No cue is discarded or transformed. An invalid score ranks as zero.
+    template<class Score,class Dispatch>
+    void drainPrioritized(Score&& score,Dispatch&& dispatch,size_t limit=256) {
+        const auto chosen=rankPresentationCues(
+            pending_,limit,std::forward<Score>(score));
+        if(chosen.empty())return;
+        std::vector<unsigned char> marked(pending_.size(),0);
+        std::vector<SpectraFxCue> dispatched;
+        dispatched.reserve(chosen.size());
+        for(const size_t i:chosen) {
+            marked[i]=1;
+            dispatched.emplace_back(std::move(pending_[i]));
+        }
+        std::deque<SpectraFxCue> remaining;
+        for(size_t i=0;i<pending_.size();++i)
+            if(!marked[i])remaining.push_back(std::move(pending_[i]));
+        pending_.swap(remaining);
+        for(const auto& cue:dispatched) {
+            ++stats_.drained;
+            ++stats_.priorityDrained;
+            if(!dispatch(cue))++stats_.dispatchFailed;
         }
     }
 
