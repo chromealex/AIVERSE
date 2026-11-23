@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -349,6 +350,54 @@ inline bool previewGroupResize(const editor::MapDoc& map,
            preview.centerZ*100.+preview.halfDepth*100.>double(evolve::kAreaCoordinateCm))
             return false;
         output.push_back(preview);
+    }
+    return true;
+}
+// Stage43 numeric two-axis preview. The same rational inputs and custom
+// world-space pivot are accepted by studio.worldProcessAreaBatchResize.
+inline bool previewGroupScale2D(
+    const editor::MapDoc& map,const std::vector<std::string>& selected,
+    std::int64_t numeratorX,std::int64_t denominatorX,
+    std::int64_t numeratorZ,std::int64_t denominatorZ,
+    std::int64_t pivotXcm,std::int64_t pivotZcm,
+    std::vector<AreaPreview>& output){
+    output.clear();
+    if(selected.size()<2||selected.size()>256||
+       numeratorX<1||denominatorX<1||numeratorZ<1||denominatorZ<1||
+       numeratorX>1000000||denominatorX>1000000||
+       numeratorZ>1000000||denominatorZ>1000000)return false;
+    std::set<std::string> unique;
+    for(const auto& stable:selected){
+        if(!unique.insert(stable).second)return false;
+        const std::string id=stable.rfind("entity:@",0)==0?
+            stable.substr(8):stable;
+        const int index=map.findEntity(id);
+        if(index<0)return false;
+        const auto& entity=map.data.entities[std::size_t(index)];
+        const auto& components=entity.extra["components"];
+        const auto& area=components["EvolveArea"];
+        if(!components["EvolveRegion"].isObject()||
+           !area.isObject()||!area["enabled"].boolean())return false;
+        const auto cx=std::llround(double(entity.x)*100.)+
+            area.getInt("offsetXcm",0);
+        const auto cz=std::llround(double(entity.z)*100.)+
+            area.getInt("offsetZcm",0);
+        const auto hx=std::llround((long double)area.getInt("halfWidthCm",0)*
+                                    numeratorX/denominatorX);
+        const auto hz=std::llround((long double)area.getInt("halfDepthCm",0)*
+                                    numeratorZ/denominatorZ);
+        const auto nx=pivotXcm+std::llround((long double)(cx-pivotXcm)*
+                                            numeratorX/denominatorX);
+        const auto nz=pivotZcm+std::llround((long double)(cz-pivotZcm)*
+                                            numeratorZ/denominatorZ);
+        if(hx<50||hx>evolve::kAreaMaxHalfExtentCm||
+           hz<50||hz>evolve::kAreaMaxHalfExtentCm||
+           nx-hx < -evolve::kAreaCoordinateCm||
+           nx+hx > evolve::kAreaCoordinateCm||
+           nz-hz < -evolve::kAreaCoordinateCm||
+           nz+hz > evolve::kAreaCoordinateCm)return false;
+        output.push_back({double(nx)/100.,double(nz)/100.,
+                          double(hx)/100.,double(hz)/100.});
     }
     return true;
 }
