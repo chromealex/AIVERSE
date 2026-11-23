@@ -26,6 +26,12 @@ public:
     ~CollisionStream();
     // Must be called before advancing a simulation tick. False means wait, never simulate holes.
     bool prepareRegions(std::span<const Bounds> regions,size_t requests=4,size_t publications=4);
+    // Pure preflight for simultaneously pinned gameplay collision regions.
+    // Returns false immediately when their reservations cannot fit at once;
+    // waiting/retrying async I/O cannot resolve an impossible budget.
+    bool canFitRegions(std::span<const Bounds> regions,
+                       std::string* error=nullptr)const;
+
     bool covers(Bounds region)const;
     // Derived collision geometry epoch: increments only when chunk collision is
     // published or retired. Never put this host-local value in a game checksum.
