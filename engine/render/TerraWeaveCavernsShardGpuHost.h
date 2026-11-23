@@ -5,6 +5,7 @@
 // reports an atomic Box3D/SpatialWorld/NavMesh transaction by itself.
 #include "engine/render/TerraWeaveCavernsGpuSwap.h"
 #include "engine/render/TerraWeaveCavernsShardCatalog.h"
+#include "engine/render/TerraWeaveCavernsMixedLodShardBatch.h"
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -45,27 +46,22 @@ public:
     // the CPU catalog and never switches active visuals.
     bool stage(gfx::Device& device,CaveShardKey shard,
                const std::vector<CaveBatchChunk>& edits,
-               uint64_t batchRenderRevision,
-               CaveBatchSpec spec={}) {
-        if(edits.empty()||!batchRenderRevision||pending_.contains(shard))
+               uint64_t batchRenderRevision,CaveBatchSpec spec={}) {
+        if(edits.empty()||!batchRenderRevision)return false;
+        const std::map<CaveShardKey,std::vector<CaveBatchChunk>,CaveShardLess>
+            grouped{{shard,edits}};
+        auto plan=planCaveMixedLodShardBatch(catalog_,grouped,
+                                            batchRenderRevision);
+        if(!plan.ready()){
+            lastLodRebuilds_=plan.visual.rebuild;
+            lastLodSourceConflict_=plan.visual.sourceConflict;
             return false;
-        auto preview=catalog_.preview(shard,edits,batchRenderRevision);
-        if(preview.chunks.size()>spec.maxChunks)return false;
-        auto prepared=prepareFullCaveShardPresentation(preview,spec);
-        auto& gpu=owners_[shard];
-        if(!gpu)gpu=std::make_unique<CaveGeometrySwapOwner>();
-        const bool ok=prepared.models.empty()
-            ? gpu->stageEmpty(batchRenderRevision)
-            : gpu->stage(device,std::move(prepared),batchRenderRevision,
-                         spec.enableStrata,spec.maxVertices);
-        if(!ok)return false;
-        try{
-            pending_.emplace(shard,std::move(preview));
-        }catch(...){
-            (void)gpu->cancelStage();
-            throw;
         }
-        return true;
+        // A single-shard call cannot atomically publish stitched patches
+        // to a different shard. The grouped API is required in that case.
+        if(plan.snapshots.size()!=1)return false;
+        return stageSnapshot(device,plan.snapshots.front(),
+                             plan.visual,spec);
     }
 
     // Bridge adapter: group prepared CPU edits by spatial shard, then GPU
@@ -100,15 +96,26 @@ public:
             chunks.push_back(std::move(itemChunk));
         }
         const auto grouped=groupCaveEditsByShard(chunks,catalog_.config());
+        // A complete connected face plan includes stitched neighboring
+        // shards even when no edited chunk originated inside those shards.
+        auto plan=planCaveMixedLodShardBatch(catalog_,grouped,
+                                            batchRenderRevision);
+        if(!plan.ready()){
+            lastLodRebuilds_=plan.visual.rebuild;
+            lastLodSourceConflict_=plan.visual.sourceConflict;
+            return false;
+        }
+        lastLodRebuilds_.clear();
+        lastLodSourceConflict_=false;
         std::vector<CaveShardKey> local;
-        local.reserve(grouped.size());
+        local.reserve(plan.snapshots.size());
         try{
-            for(const auto& [shard,group]:grouped){
-                if(!stage(device,shard,group,batchRenderRevision,spec)){
+            for(const auto& snapshot:plan.snapshots){
+                if(!stageSnapshot(device,snapshot,plan.visual,spec)){
                     for(auto key:local)(void)cancel(key);
                     return false;
                 }
-                local.push_back(shard);
+                local.push_back(snapshot.shard);
             }
         }catch(...){
             for(auto key:local)(void)cancel(key);
@@ -277,10 +284,34 @@ public:
         }
         return out;
     }
+    // On incompatible contours the game/editor host must regenerate these
+    // chunks from ONE immutable snapshot at each requested common LOD.
+    // Do not silently bypass the seam gate.
+    const std::map<ChunkKey3,CaveRebuildRequest,KeyLess>&
+    lodRebuilds()const noexcept{return lastLodRebuilds_;}
+    bool lodSourceConflict()const noexcept{return lastLodSourceConflict_;}
     size_t pendingCount()const noexcept{return pending_.size();}
     size_t ownerCount()const noexcept{return owners_.size();}
     const CaveShardCatalog& catalog()const noexcept{return catalog_;}
 private:
+    bool stageSnapshot(gfx::Device& device,const CaveShardSnapshot& snapshot,
+                       const CaveMixedLodPlan& visual,CaveBatchSpec spec){
+        if(!snapshot.revision||pending_.contains(snapshot.shard)||
+           snapshot.chunks.size()>spec.maxChunks)return false;
+        auto prepared=prepareFullCaveShardPresentation(snapshot,spec,&visual);
+        auto& gpu=owners_[snapshot.shard];
+        if(!gpu)gpu=std::make_unique<CaveGeometrySwapOwner>();
+        const bool ok=prepared.models.empty()
+            ? gpu->stageEmpty(snapshot.revision)
+            : gpu->stage(device,std::move(prepared),snapshot.revision,
+                         spec.enableStrata,spec.maxVertices);
+        if(!ok)return false;
+        try{pending_.emplace(snapshot.shard,snapshot);}
+        catch(...){(void)gpu->cancelStage();throw;}
+        return true;
+    }
+    std::map<ChunkKey3,CaveRebuildRequest,KeyLess> lastLodRebuilds_;
+    bool lastLodSourceConflict_=false;
     CaveShardCatalog catalog_;
     std::map<CaveShardKey,std::unique_ptr<CaveGeometrySwapOwner>,CaveShardLess> owners_;
     std::map<CaveShardKey,CaveShardSnapshot,CaveShardLess> pending_;
