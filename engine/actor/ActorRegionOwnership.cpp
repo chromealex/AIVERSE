@@ -40,6 +40,11 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     const World& view=ecs;
     const auto* ledger=view.resourceConst<world::RegionEntityLedger>();
     if(!ledger)return;
+    // Enable lazily, including after native restore. The compatibility scan
+    // below bootstraps ownership even when no journal history exists.
+    ecs.trackComponentChanges<CharacterBody>();
+    ecs.trackComponentChanges<Vehicle>();
+    ecs.trackComponentChanges<Loot>();
     const auto position=regionPositionReader();
     const world::SpatialWorld grid(32);
     const auto* dirty=view.resourceConst<world::RegionDirtyQueue>();
@@ -231,6 +236,10 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
            !ecs.resource<world::RegionEntityLedger>()->despawn(id,entry->owner))
             throw std::logic_error("regionOwnership: tombstone failed");
     }
+    // The full reconciliation covered all canonical writers, including raw
+    // pools and overflow. Drain only after successful reconciliation.
+    // Do not convert conservative mutable accesses into persisted dirty flags:
+    // that would change checksums based on non-authoritative access patterns.
     // ACK after successful authoritative reconciliation; failures keep
     // pending observations for retry/rollback.
     if(dirty && !dirty->entries.empty()) {
@@ -241,5 +250,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         queue->acknowledged+=count;
         queue->entries.clear();
     }
+    (void)ecs.drainComponentChanges<CharacterBody>();
+    (void)ecs.drainComponentChanges<Vehicle>();
+    (void)ecs.drainComponentChanges<Loot>();
 }
 } // namespace aiverse::actor
