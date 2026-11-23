@@ -50,3 +50,16 @@ GPU cleanup uses a synchronous verified full-device idle wait (may stall UI on r
 ## Next steps
 
 Stage 23U: run actual complete native CMake and browser TS builds, CTest + strict style JSON parser for all twelve settings, glTF PNG/PBR/UV validator, preview start/replace/stop GPU captures, and PHYSIS two-leaf rollback under Metal/Vulkan/GLES. Repair failures and inspect PR #114 for divergence from main; keep Draft until tests and integration review pass. Only publish devblog with genuine successful engine screenshots. Continue separate handoff after any fixes.
+
+
+## Post-handoff concurrent integration reconciliation (2026-11-24)
+
+Two agents simultaneously implemented the same native preview CPU preparation. The canonical single implementation remains in `apps/studio-native/StudioBuildingGeneration.h`; the extra `apps/studio-native/StudioBuildingPreview.h` was deleted and its include removed from StudioHost to prevent C++ ODR/redefinition failures.
+
+- `de1fb3fd2cc83e4f7ada3c83d19d06cbaa655914`: StudioHost now includes only the canonical preview generator.
+- `f2e26db6a74e4a3e1ccf367a0a13cbdfaf97fc66`: deleted duplicate helper header.
+- `a92527cb5b56ec3632ffca06c57631ea2a3bb3a6`: StudioHost::openProject explicitly retires temporary preview GPU resources BEFORE asynchronous workspace project switching; an unretirable preview blocks the project swap instead of leaving a borrowed model from the old workspace.
+- `88936e229070dec4585f10eed55180bc29eece4d`: removed an accidentally introduced duplicate GPU-resident boolean; the already existing buildingPreviewGpuReady_ is canonical.
+- `a4ea9d7db189bff498a6aa392d7c94e18e2ae6f8`: hidden MapDoc objects cannot be picked while isolated building 3D preview is active.
+
+These follow-on changes were source edits only. No compile, screenshots, GPU execution or tests were run. In particular, do not reintroduce a second studioBuildingPreviewCpuModel definition or a second GPU-ready flag. The full device idle/Scene lifetime constraints still apply.
