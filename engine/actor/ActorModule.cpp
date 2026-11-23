@@ -608,6 +608,79 @@ void ActorHost::hashState(Simulation& sim,Hasher& hash) {
 // FPS save version 10: written from the components (characters in slot order, dynamic objects in id order,
 // each with its entity handle); older versions are not readable. Typed vehicles write the shared VehicleDrive record
 // (engine/vehicles); maps with a race (map "race") append the shared RaceState; other maps write no race bytes.
+// Validate the content-specific invariants before a reconstructed ECS world
+// is exposed to the authoritative host. The normal native serializer remains
+// the owner of its existing wire format.
+bool ActorHost::validatePortableWorld(const World& w,uint32_t tick)const{
+    const auto* index=w.resourceConst<CharacterIndex>();
+    const auto* state=w.resourceConst<State>();
+    const size_t n=spawns_.size();
+    if(!index||!state||index->bySlot.size()!=n||!state->round||!state->nextObject||
+       state->royale.enabled!=bool(config_.royale)||state->history.size()>121)return false;
+    auto position=[&](Vec3 p){
+        return fxAbs(p.x)<=config_.worldLimit&&fxAbs(p.y)<=config_.worldLimit&&fxAbs(p.z)<=config_.worldLimit;
+    };
+    auto characterValid=[&](const CharacterSnapshot& v){
+        if(!v.slot||v.slot>n||!v.life||!v.team||!position(v.pos)||
+           v.weaponIndex>=config_.weapons.size()||v.bag.size()>24||v.actionTarget>n||
+           uint32_t(v.activeAction)>uint32_t(Action::Vault)||v.owned>15||
+           v.armor<0||v.armor>100||v.health<0||v.health>100||v.money<0||v.money>16000)return false;
+        for(const auto& item:v.bag)if(item.type<1||item.type>9||item.count<1||item.count>20)return false;
+        const auto& m=v.melee;
+        return v.lockTarget<=n&&m.attack>=0&&m.attack<=1&&m.queued>=0&&m.queued<=1&&
+            m.started<=m.lastTick&&m.queuedAt<=m.lastTick&&m.hitTargets.size()<=n&&
+            std::is_sorted(m.hitTargets.begin(),m.hitTargets.end())&&
+            std::adjacent_find(m.hitTargets.begin(),m.hitTargets.end())==m.hitTargets.end()&&
+            (m.hitTargets.empty()||(m.hitTargets.front()>=1&&m.hitTargets.back()<=int64_t(n)));
+    };
+    for(size_t i=0;i<n;++i){
+        const auto e=index->bySlot[i];
+        if(!w.alive(e))return false;
+        auto v=actor::snapshot(makeCharacterRef<true>(w,e));
+        if(v.slot!=i+1||!characterValid(v)||v.lastInputTick>tick)return false;
+        const auto* gear=w.tryGetConst<lib::systems::GearLoadout>(e);
+        const auto* loco=w.tryGetConst<LocomotionBody>(e);
+        if(bool(gear)!=!config_.gear.empty()||(gear&&!lib::systems::valid(config_.gear,*gear))||
+           bool(loco)!=bool(config_.locomotion)||(loco&&!valid(*loco))||
+           w.has<BotMemory>(e)!=bool(botHost_))return false;
+    }
+    for(const auto& frame:state->history){
+        if(frame.tick>tick||frame.characters.size()!=n)return false;
+        for(size_t i=0;i<n;++i)
+            if(frame.characters[i].slot!=i+1||!characterValid(frame.characters[i]))return false;
+    }
+    if(state->royale.enabled){
+        using lib::mechanics::valid;
+        const auto& v=state->royale;
+        if(!valid(v.zone)||!valid(v.bombardment)||!valid(v.drops)||!valid(v.flight)||!valid(v.standings)||
+           v.lastAttacker.size()!=n||v.lastWeapon.size()!=n||v.standings.players.size()!=n||
+           (v.divers.size()!=n&&!(v.divers.empty()&&!config_.royale->flight)))return false;
+        for(const auto& d:v.divers)if(!valid(d))return false;
+        for(auto attacker:v.lastAttacker)if(attacker>n)return false;
+    }
+    if(w.countExisting<Projectile>()>kMaxProjectiles||w.countExisting<Loot>()>kMaxLoot||
+       w.countExisting<Vehicle>()>kMaxVehicles)return false;
+    bool ok=true;
+    w.eachExistingConst<Projectile>([&](Entity,const Projectile& p){
+        if(!p.id||p.id>=state->nextObject||!p.owner||p.owner>n||p.kind>4||p.piercedCount>8||
+           p.weapon>=config_.weapons.size()||!position(p.pos)||
+           !projectile::valid(p.program,p.programSpeed,config_.weapons[p.weapon].flight))ok=false;
+    });
+    w.eachExistingConst<Loot>([&](Entity,const Loot& v){
+        if(!v.id||v.id>=state->nextObject||!position(v.pos))ok=false;
+    });
+    std::vector<Entity> typed;
+    w.eachExistingConst<Vehicle>([&](Entity e,const Vehicle& v){
+        if(!v.id||v.id>=state->nextObject||!position(v.pos)||v.driver>n||v.health<0||v.health>500)ok=false;
+        if(const auto* d=w.tryGetConst<vehicles::VehicleDrive>(e)){
+            typed.push_back(e);
+            if(!config_.vehicleTypes||!config_.vehicleTypes->vehicles.contains(d->type)||!vehicles::valid(*d))ok=false;
+        }
+    });
+    const auto* race=w.resourceConst<vehicles::RaceState>();
+    return ok&&bool(race)==bool(race_)&&(!race||validRace(*race,typed));
+}
+
 bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
     uint32_t version=10;uint64_t content=contentHash_;archive(version,content);
     if(version!=10||content!=contentHash_)return false;
