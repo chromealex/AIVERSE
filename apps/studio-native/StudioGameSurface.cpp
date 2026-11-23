@@ -1,4 +1,6 @@
 #include "aiverselib/world/EvolveVisualization.h"
+#include "engine/world/TerraWeaveEcsAuthority.h"
+#include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
@@ -80,6 +82,36 @@ Json StudioGameSurface::ecologyState(){
             regions.push(std::move(r));
         }
     }
+    Json plants=Json::array(),weather=Json::array();
+    if(sim){
+        const auto& world=sim->world();
+        if(const auto* authority=world.resourceConst<terraweave::TerraWeaveAuthorityResource>()){
+            for(const auto& p:authority->rooted){
+                if(plants.size()>=4096)break;
+                Json row=Json::object();
+                row.set("x",Json::number(p.anchor.xCm));row.set("z",Json::number(p.anchor.zCm));
+                row.set("fallen",Json::fromBool(p.fallen));plants.push(std::move(row));
+            }
+            out.set("plantCount",Json::number(int64_t(authority->rooted.size())));
+        }
+        if(const auto* state=world.resourceConst<physis::State>()){
+            for(int z=0;z<state->settings.height&&weather.size()<4096;++z)
+                for(int x=0;x<state->settings.width&&weather.size()<4096;++x){
+                    physis::Sample sample;
+                    const int gx=x+state->settings.originX,gz=z+state->settings.originZ;
+                    if(!physis::sample(world,gx,gz,sample))continue;
+                    const int64_t size=int64_t(state->settings.cellSizeMeters)*100;
+                    Json row=Json::object();
+                    row.set("x",Json::number(gx*size));row.set("z",Json::number(gz*size));
+                    row.set("size",Json::number(size));
+                    row.set("rain",Json::number(sample.atmosphere.rain.toDouble(),3));
+                    row.set("temperature",Json::number(sample.atmosphere.temperature.toDouble(),2));
+                    row.set("wetness",Json::number(sample.surface.wetness.toDouble(),3));
+                    weather.push(std::move(row));
+                }
+        }
+    }
+    out.set("plants",std::move(plants));out.set("weather",std::move(weather));
     out.set("regions",std::move(regions));return out;
 }
 Json StudioGameSurface::mapEntityStates() {
