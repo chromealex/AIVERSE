@@ -1,0 +1,124 @@
+#pragma once
+#include "ActorDurableComponents.h"
+#include "engine/world/NativeWorldFinality.h"
+#include "engine/world/UnifiedComponentSection.h"
+#include "engine/world/UnifiedResourceSection.h"
+
+namespace aiverse::actor {
+// Owner-scoped synchronous persistence for the explicitly supported actor
+// projection. All callbacks operate on private ECS state until publication.
+class ActorPersistentSession {
+    using Finality=world::NativeWorldFinality;
+    using State=world::UnifiedWorldReplay::State;
+    Simulation& sim_;
+    ActorHost& host_;
+    world::DurableComponentCodecs codecs_;
+    PersistentEcsRegistry registry_;
+    world::UnifiedWalSession session_;
+    std::unique_ptr<Finality> finality_;
+    std::string identity_;
+    size_t budget_;
+    bool failed_=false;
+    static bool coverage(const World& w,const world::RegionEntityLedger& ledger){
+        using namespace aiverse::detail;
+        const std::set<uint32_t> components{
+            componentTypeId<CharacterId>(),componentTypeId<CharacterBody>(),componentTypeId<CharacterHealth>(),
+            componentTypeId<CharacterWeapons>(),componentTypeId<CharacterInventory>(),componentTypeId<CharacterControl>(),
+            componentTypeId<CharacterAction>(),componentTypeId<CharacterMelee>(),componentTypeId<BotMemory>(),
+            componentTypeId<LocomotionBody>(),componentTypeId<lib::systems::GearLoadout>(),
+            componentTypeId<Vehicle>(),componentTypeId<Loot>(),componentTypeId<Projectile>(),
+            componentTypeId<vehicles::VehicleDrive>(),componentTypeId<vehicles::VehicleOccupant>(),
+            componentTypeId<world::RegionStableIdentity>()
+        };
+        auto derived=ActorHost::portableDerivedResourceTypes();
+        std::set<uint32_t> resources(derived.begin(),derived.end());
+        for(auto id:{componentTypeId<StateResource>(),componentTypeId<vehicles::RaceState>(),
+            componentTypeId<world::RegionMoveRequests>(),componentTypeId<world::RegionDirtyQueue>(),
+            componentTypeId<world::RegionEntityLedger>()})resources.insert(id);
+        for(auto id:w.activeComponentTypes())if(!components.contains(id))return false;
+        for(auto id:w.activeResourceTypes())if(!resources.contains(id))return false;
+        const auto entities=w.entityState();
+        return entities.pendingDestroy.empty()&&
+            size_t(std::count(entities.alive.begin(),entities.alive.end(),uint8_t(1)))==ledger.liveCount();
+    }
+    using StateResource=actor::State;
+    world::NativeRestartState::CommandPolicy commandPolicy()const{
+        const auto slots=sim_.players().size();
+        return [slots](const Command& c){
+            Input input;
+            return c.player&&c.player<=slots&&c.seq&&c.flags==0&&c.param==0&&
+                c.point==Vec3{}&&c.target==kNullEntity&&decodeInput(c,input);
+        };
+    }
+    bool validate(const State& s)const{
+        world::NativeRestartState::Data meta;
+        if(!coverage(s.world,s.ledger)||!ActorDurableComponents::supportedWorld(s.world)||
+           !world::NativeRestartState::decode(s.restart,meta)||meta.contentIdentity!=identity_||
+           meta.seed!=sim_.config().seed||meta.tickRate!=sim_.tickRate()||
+           meta.players.size()!=sim_.players().size())return false;
+        for(size_t i=0;i<meta.players.size();++i)
+            if(meta.players[i].slot!=sim_.players()[i].slot||meta.players[i].team!=sim_.players()[i].team)return false;
+        SimSnapshot staged;
+        return host_.validatePortableWorld(s.world,meta.tick)&&
+            world::NativeRestartState::stage(sim_,s.world,s.ledger,s.restart,identity_,commandPolicy(),staged);
+    }
+    auto validator(){return [this](const State& s){return validate(s);};}
+    world::UnifiedCheckpointSections::Adapters adapters()const{
+        return {world::UnifiedEntitySection::adapter(ActorDurableComponents::spawnShell),
+            world::UnifiedComponentSection::adapter(codecs_,budget_),
+            world::UnifiedResourceSection::adapter(ActorDurableComponents::resourcePolicy(registry_),budget_)};
+    }
+public:
+    ActorPersistentSession(Simulation& sim,ActorHost& host,std::string identity,size_t budget)
+        :sim_(sim),host_(host),identity_(std::move(identity)),budget_(budget){}
+    ActorPersistentSession(const ActorPersistentSession&)=delete;
+    ActorPersistentSession& operator=(const ActorPersistentSession&)=delete;
+    bool start(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume){
+        if(failed_||finality_||!budget_||identity_.empty()||sim_.tick()!=0||sim_.hasCommandSink())return false;
+        const auto* ledger=sim_.world().resourceConst<world::RegionEntityLedger>();
+        if(!ledger||!coverage(sim_.world(),*ledger)||!ActorDurableComponents::registerCodecs(codecs_)||
+           !codecs_.addCaptureValidator(coverage)){failed_=true;return false;}
+        ActorDurableComponents::registerResources(registry_);registry_.seal();
+        const auto policy=ActorDurableComponents::resourcePolicy(registry_);
+        if(resume){
+            if(session_.openCheckpoint(directory,uuid,budget_,adapters(),
+                [](){return std::make_unique<State>();},codecs_,ActorDurableComponents::materialize,
+                validator(),false,policy)!=world::RegionWalWrite::Ok){failed_=true;return false;}
+            const auto* recovered=session_.state();
+            SimSnapshot staged;
+            if(!recovered||!validate(*recovered)||!world::NativeRestartState::stage(sim_,recovered->world,
+                recovered->ledger,recovered->restart,identity_,commandPolicy(),staged)){
+                failed_=true;session_.close();return false;
+            }
+            sim_.loadState(staged);
+        }else{
+            State initial;initial.ledger=*ledger;initial.world=sim_.world();
+            initial.world.eraseResource<world::RegionEntityLedger>();
+            if(!world::NativeRestartState::capture(sim_,*ledger,identity_,commandPolicy(),initial.restart)||
+               !validate(initial)||session_.create(directory,uuid,initial,adapters(),budget_)!=world::RegionWalWrite::Ok){
+                failed_=true;session_.close();return false;
+            }
+        }
+        finality_=std::make_unique<Finality>(sim_,session_,codecs_,policy,ActorDurableComponents::materialize,
+            validator(),budget_,identity_,commandPolicy());
+        return true;
+    }
+    Finality::Result step(){
+        if(!finality_||failed_)return Finality::Result::NeedsRecovery;
+        auto result=finality_->step();
+        if(result==Finality::Result::NeedsRecovery)failed_=true;
+        return result;
+    }
+    bool checkpoint(){
+        if(failed_||!finality_||sim_.tick()!=finality_->lastFinalizedTick())return false;
+        const auto* m=session_.manifest();
+        if(!m||m->generation==UINT64_MAX||
+           session_.checkpoint(m->generation+1,adapters(),budget_)!=world::RegionCheckpointPublishResult::Ok){
+            failed_=true;return false;
+        }
+        return true;
+    }
+    bool failed()const{return failed_;}
+    uint32_t finalizedTick()const{return finality_?finality_->lastFinalizedTick():0;}
+};
+}
