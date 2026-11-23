@@ -23,7 +23,7 @@ struct Material {
 // 0 age, 1 lifetime, 2 Metal birth RNG (reserved until explicit routing opt-in),
 // 3 zero, 4..11 custom attribute0..7, 12..19 instance param0..7.
 inline bool decodeSources(const Json& inputs, std::array<uint32_t,4>& out,
-                          std::string& reason) {
+                          std::string& reason,bool allowBirthRandom=false) {
     out={0,1,3,3};
     if(inputs.isNull()) {reason.clear();return true;}
     if(!inputs.isArray() || inputs.size()!=4) {
@@ -39,6 +39,7 @@ inline bool decodeSources(const Json& inputs, std::array<uint32_t,4>& out,
         if(name=="age")out[i]=0;
         else if(name=="lifetime")out[i]=1;
         else if(name=="zero")out[i]=3;
+        else if(name=="random"&&allowBirthRandom)out[i]=2;
         else if(name=="random") {
             // CPU's stable prand(uid) has no equivalent in the fixed Metal
             // particle state. Refuse instead of drawing a different effect.
@@ -61,7 +62,7 @@ inline bool decodeSources(const Json& inputs, std::array<uint32_t,4>& out,
 }
 
 inline bool compile(const Json& graph, const Json& inputs, Material& output,
-                    std::string& reason) {
+                    std::string& reason,bool allowBirthRandom=false) {
     output={};
     if(!graph.isObject() || graph.getInt("version")!=1 ||
        graph.getStr("domain")!="particle") {
@@ -98,7 +99,7 @@ inline bool compile(const Json& graph, const Json& inputs, Material& output,
         }
     }
     std::array<uint32_t,4> mapping{};
-    if(!decodeSources(inputs,mapping,reason))return false;
+    if(!decodeSources(inputs,mapping,reason,allowBirthRandom))return false;
     try {
         render::graph::Program compiled=render::graph::compile(graph,"particle");
         if(!compiled.textures.empty() || !compiled.vertexMsl.empty() ||
