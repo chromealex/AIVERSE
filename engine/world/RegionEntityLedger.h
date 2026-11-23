@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <stdexcept>
 #include <set>
 #include <span>
 #include <utility>
@@ -36,6 +37,9 @@ class RegionEntityLedger {
 public:
     static constexpr size_t kMaxEntities=1000000;
     static constexpr uint32_t kSchema=1;
+
+    // Explicit transaction wrapper; callers must use its mutation methods.
+    class Transaction;
 
     bool spawn(RegionEntityId id,Cell owner) {
         if(!id || records_.contains(id) || records_.size()>=kMaxEntities ||
@@ -106,10 +110,11 @@ public:
         for(const auto& [id,expected]:sorted) {
             if(expected==destination)continue;
             auto& entry=records_.at(id);
-            revisionIndex_.erase(entry.revision);
+            auto node=revisionIndex_.extract(entry.revision);
             entry.owner=destination;
             entry.revision=++lastRevision_;
-            revisionIndex_.emplace(entry.revision,id);
+            node.key()=entry.revision;
+            revisionIndex_.insert(std::move(node));
         }
         return true;
     }
@@ -188,6 +193,69 @@ private:
     std::set<RegionEntityId> liveIds_; // never separately saved/hashed
     std::map<uint64_t,RegionEntityId> revisionIndex_; // current revision -> id
     friend void io(Archive&,RegionEntityLedger&);
+};
+
+// Exclusive ledger transaction. No snapshots, observers or external mutations
+// may run while active. Rollback reuses revision nodes and preallocated live nodes.
+class RegionEntityLedger::Transaction {
+    RegionEntityLedger& ledger_;
+    uint64_t initialRevision_;
+    struct Before {
+        bool existed=false;
+        RegionEntityRecord record{};
+    };
+    std::map<RegionEntityId,Before> before_;
+    std::set<RegionEntityId> restoreLive_;
+    bool committed_=false;
+    void remember(RegionEntityId id) {
+        if(before_.contains(id))return;
+        const auto* old=ledger_.find(id);
+        if(old && old->live)restoreLive_.insert(id);
+        before_.emplace(id,old?Before{true,*old}:Before{});
+    }
+public:
+    explicit Transaction(RegionEntityLedger& ledger)
+        :ledger_(ledger),initialRevision_(ledger.lastRevision_) {}
+    Transaction(const Transaction&)=delete;
+    Transaction& operator=(const Transaction&)=delete;
+    ~Transaction() noexcept {
+        if(committed_)return;
+        for(const auto& [id,old]:before_) {
+            auto it=ledger_.records_.find(id);
+            if(!old.existed) {
+                if(it!=ledger_.records_.end()) {
+                    ledger_.revisionIndex_.erase(it->second.revision);
+                    ledger_.liveIds_.erase(id);
+                    ledger_.records_.erase(it);
+                }
+                continue;
+            }
+            auto node=ledger_.revisionIndex_.extract(it->second.revision);
+            it->second=old.record;
+            node.key()=old.record.revision;
+            ledger_.revisionIndex_.insert(std::move(node));
+            if(old.record.live && !ledger_.liveIds_.contains(id))
+                ledger_.liveIds_.insert(restoreLive_.extract(id));
+            if(!old.record.live)ledger_.liveIds_.erase(id);
+        }
+        ledger_.lastRevision_=initialRevision_;
+    }
+    bool spawn(RegionEntityId id,Cell owner) {
+        remember(id);return ledger_.spawn(id,owner);
+    }
+    bool despawn(RegionEntityId id,Cell expected) {
+        remember(id);return ledger_.despawn(id,expected);
+    }
+    bool transfer(RegionEntityId id,Cell expected,Cell destination) {
+        remember(id);return ledger_.transfer(id,expected,destination);
+    }
+    bool transferGroup(std::span<const std::pair<RegionEntityId,Cell>> members,
+                       Cell destination) {
+        for(const auto& [id,owner]:members)if(owner!=destination)remember(id);
+        return ledger_.transferGroup(members,destination);
+    }
+    const RegionEntityLedger& view()const{return ledger_;}
+    void commit() noexcept {committed_=true;}
 };
 
 // Host-side incremental observer. Use it to dispatch the ledger's latest
