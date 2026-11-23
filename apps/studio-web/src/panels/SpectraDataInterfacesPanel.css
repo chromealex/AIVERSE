@@ -1,0 +1,30 @@
+/* SpectraFX Graph v2 inspector — semantic Studio tokens only.
+ * Responsive to 240 px dock width and respects global --au-ui-scale.
+ */
+.spectra-di {min-width:0;min-height:0;}
+.spectra-di .au-panel__body {display:flex;flex-direction:column;min-height:0;}
+.spectra-di__layout {display:grid;grid-template-columns:minmax(160px,25%) minmax(0,1fr);gap:var(--au-space-3);flex:1;min-height:0;min-width:0;}
+.spectra-di__library {display:flex;flex-direction:column;gap:var(--au-space-3);min-height:0;min-width:0;overflow:auto;padding:var(--au-space-2);border-right:1px solid var(--au-line);background:var(--au-panel);}
+.spectra-di__assets {display:flex;flex-direction:column;gap:var(--au-space-1);max-height:36vh;min-height:70px;overflow:auto;scrollbar-gutter:stable;}
+.spectra-di__asset {display:flex;gap:var(--au-space-2);align-items:center;width:100%;min-width:0;border:1px solid transparent;background:transparent;border-radius:var(--au-radius-sm);padding:var(--au-space-2);color:var(--au-text);font-size:var(--au-font-sm);text-align:left;cursor:pointer;}
+.spectra-di__asset span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.spectra-di__asset:is(:hover,.is-selected) {background:var(--au-active);border-color:var(--au-line-strong);}
+.spectra-di__asset:focus-visible,.spectra-di__item:focus-visible,.spectra-di__providers button:focus-visible {outline:2px solid var(--au-accent);outline-offset:2px;}
+.spectra-di__editor {overflow:auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:var(--au-space-3);padding:var(--au-space-2);scrollbar-gutter:stable;}
+.spectra-di__toolbar {display:flex;gap:var(--au-space-2);align-items:center;flex-wrap:wrap;}
+.spectra-di__toolbar strong {color:var(--au-text);font-size:var(--au-font-lg);margin-right:auto;min-width:0;overflow-wrap:anywhere;}
+.spectra-di__items {display:flex;flex-wrap:wrap;align-items:stretch;gap:var(--au-space-2);}
+.spectra-di__item {display:flex;gap:var(--au-space-2);align-items:center;text-align:left;border-radius:var(--au-radius-sm);padding:var(--au-space-2);color:var(--au-text);border:1px solid var(--au-line);background:var(--au-field);cursor:pointer;max-width:100%;}
+.spectra-di__item small {color:var(--au-text-muted);font-size:var(--au-font-xs);}
+.spectra-di__item.is-selected {background:var(--au-active);border-color:var(--au-accent);}
+.spectra-di__form {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:var(--au-space-3);align-items:end;margin-top:var(--au-space-3);}
+.spectra-di__form--binding {padding:var(--au-space-3);background:var(--au-panel-raised);border:1px solid var(--au-line);border-radius:var(--au-radius-md);}
+.spectra-di__form .au-checkbox {grid-column:1/-1;}
+.spectra-di__actions {display:flex;align-items:center;gap:var(--au-space-2);flex-wrap:wrap;grid-column:1/-1;}
+.spectra-di__providers {display:flex;gap:var(--au-space-2);flex-wrap:wrap;}
+.spectra-di__providers button {display:flex;align-items:center;gap:var(--au-space-1);border-radius:var(--au-radius-sm);padding:var(--au-space-2);border:1px solid var(--au-line);background:var(--au-field);font-size:var(--au-font-sm);color:var(--au-text);cursor:grab;}
+.spectra-di__providers button:hover {background:var(--au-hover);}
+.spectra-di__hint {color:var(--au-text-muted);font-size:var(--au-font-sm);line-height:var(--au-line-height);margin:var(--au-space-2) 0;}
+.spectra-di__node {display:flex;align-items:center;gap:var(--au-space-2);flex:1;min-width:min(100%,190px);justify-content:space-between;border:1px solid var(--au-line);background:var(--au-panel-raised);border-radius:var(--au-radius-sm);padding:var(--au-space-2);font-size:var(--au-font-sm);overflow-wrap:anywhere;}
+@container (max-width: 570px) {.spectra-di__layout {grid-template-columns:minmax(0,1fr);} .spectra-di__library {border-right:0;border-bottom:1px solid var(--au-line);max-height:230px;}}
+@media (max-width:680px) {.spectra-di__layout {grid-template-columns:minmax(0,1fr);} .spectra-di__library {border-right:0;border-bottom:1px solid var(--au-line);max-height:230px;}}
