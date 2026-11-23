@@ -146,3 +146,12 @@ with genuine nav polygon anchors, not fake portals. Existing SpatialWorld
 owns dynamic cabin colliders and dirty navmesh tile publication. Dynamic
 platforms are omitted from STATIC runtime meshes. Tests explicitly deferred
 by user; never claim Mac/Metal or gameplay path pass.
+
+
+Stages 14-15: BuildingCirculationRuntime.h and BuildingRouteExecutor.h own
+portable lift/room execution; BuildingNavMeshBridge.h uses EXISTING
+engine/nav/NavMesh.h, cannot insert offmesh portals. BuildingCirculationScene.h
+publishes only successful platform collider moves and corresponding rider
+deltas through SpatialWorld. Game ECS must acknowledge actual actor movement,
+boarding and exit; no teleport. Do not regenerate meshes each tick. No tests
+run by user request. Handoff: docs/agent-handoffs/building-route-executor-2026-11-23.md.

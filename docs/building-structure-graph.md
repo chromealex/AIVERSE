@@ -112,3 +112,7 @@ Stage 12: see docs/building-functional-recipes.md for multi-floor room grid, win
 
 Stage 13: see docs/building-functional-recipes.md for stairs/elevator
 shaft voids, vertical room edges and the runtime/navmesh integration limits.
+
+
+Stages 14-15: see docs/building-functional-recipes.md for native nav::Mesh bridge,
+off-mesh stair/lift owner actions, collider publication and route executor.

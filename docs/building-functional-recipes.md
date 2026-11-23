@@ -215,3 +215,66 @@ the existing PHYSIS/Navmesh/gameplay owners are integrated and visual QA passes.
 Stage 14: runtime navigation/lift control and dynamic collision:
 see docs/building-runtime-circulation.md. Static building geometry excludes
 the moveable cabin in game runtime; Studio previews include it.
+
+
+
+## Stages 14–15 — native navigation, lift ownership and AI route execution
+
+The functional building graph provides horizontal Passage edges and vertical
+Stair/Elevator edges, but the existing engine/nav/NavMesh.h does not expose
+off-mesh links. Do not patch synthetic portals into the mesh. The adapter
+engine/buildings/BuildingNavMeshBridge.h resolves real endpoints on native
+nav polygons, finds same-floor native corridor paths, and returns explicit
+vertical actions. Nav links are revisioned and invalid when navmesh becomes
+dirty. Games must refresh native nav::Mesh from authoritative collision before
+routing again.
+
+The portable libraries/include/aiverselib/systems/BuildingCirculationRuntime.h
+contains deterministic lift state (integer mm/ms), pickup/boarding/destination/
+disembark actions, passenger capacity, replicated revisioned snapshots,
+and integer platform movements. It is NOT a separate physics or ECS engine.
+A single lift platform is authored as a dedicated dynamic Model rather than
+included in the game's immutable static building geometry. Studio's GLB still
+includes it to make a complete model for offline viewing.
+
+libraries/include/aiverselib/systems/BuildingRouteExecutor.h is a portable
+per-agent action state machine with steps Walk, TraverseStairs, CallLift,
+WaitLift, BoardLift, SelectDestination, RidingLift, DisembarkLift. The owning
+agent/Motor system must explicitly acknowledge reaching a real room, boarding
+volume and destination room; a connection in the graph is NOT permission to
+teleport or move through a collider.
+
+engine/buildings/BuildingCirculationHost.h owns lift controllers and tracks
+actor IDs already owned by ECS. It returns rider movement deltas alongside
+platform movements. engine/buildings/BuildingCirculationScene.h publishes
+dynamic elevator AABBs through existing world::SpatialWorld and marks native
+navmesh tiles dirty. The returned publishedPlatforms/publishedRiders arrays
+contain ONLY successfully applied platform collider updates; attempted
+tick.platformMovements are diagnostic and MUST NOT be applied directly to
+actors or rendered platforms. Collider publication failure faults the
+scene and requires owner reconciliation; it cannot be hidden as success.
+
+### Gameplay integration sketch (native client/server)
+
+    #include "engine/buildings/BuildingRuntime.h"
+    // 1. generated = runtimeGenerator.generateRecipe(...).
+    // 2. Spawn static model/colliders via existing owning ECS/renderer.
+    // 3. scene.attach(generated, spatialWorld, &navMesh, gameColliderIds,
+    //                 origin, yaw, &error).
+    // 4. Refresh native nav mesh from collision-backed Source.
+    // 5. scene.rebuildNavigation(navMesh).
+    // 6. For each agent, host.createRouteExecutor(executor, from, to).
+    // 7. Each game tick:
+    //      command = host.nextAgentCommand(executor);
+    //      owner drives agent movement/boarding acknowledgements;
+    //      host.pumpAgent(executor);
+    //      result = scene.update(spatialWorld, &navMesh, deltaMs);
+    //      owner publishes result.publishedPlatforms + publishedRiders.
+    // 8. Rebuild native nav Source after dirty colliders and re-resolve links.
+
+No stage-14 or stage-15 code has been compiled or run in this session:
+user explicitly deferred tests. No claim of working ECS actor movement,
+multiplayer, lift doors or completed GPU scene may be made from source alone.
+Next: explicit ECS actor components, render/physics owner wiring, safe boarding
+volume checks, door interlocks, rider replication, end-to-end Mac/Metal
+demonstration and compiler/CI validation.

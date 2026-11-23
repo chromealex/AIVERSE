@@ -1847,6 +1847,13 @@
           "titleEn": "Runtime BuildingCirculation: NavMesh links, lift control and dynamic collision",
           "text": "Комнатный маршрут, off-mesh точки, физические ступени, лифтовый контроллер с integer state, переносимое GPU представление и публикация платформы в существующий SpatialWorld.",
           "textEn": "Room routes, off-mesh anchors, physical stair waypoints, integer-state lift control, reusable GPU visual and dynamic platform publishing to existing SpatialWorld."
+        },
+        {
+          "status": "in-progress",
+          "title": "Building circulation: native NavMesh переходы, лифтовые коллизии и перенос акторов",
+          "titleEn": "Building circulation: native NavMesh links, elevator collision and actor carry",
+          "text": "Путь по комнатам через существующий nav::Mesh; лестницы и лифты как off-mesh действия; scene-owner управление движущимися платформами и пассажирами.",
+          "textEn": "Room routing on existing nav mesh with explicit stair/lift actions, native collider publishing and rider delta commands."
         }
       ],
       "core": true,

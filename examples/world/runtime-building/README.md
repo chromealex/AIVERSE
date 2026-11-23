@@ -93,3 +93,17 @@ Lift sequence: callLift(pickup), boardLift, requestLiftDestination,
 advance(deltaMs), publish platform movement in SpatialWorld owner phase,
 refresh navmesh and update the render instance transform, disembarkLift.
 Graph links alone are not actor traversal. See docs/building-runtime-circulation.md.
+
+
+## Runtime navigation and elevator owner
+
+Use BuildingRuntime.h for native game clients. Generate the building recipe,
+spawn static mesh/colliders, then attach BuildingCirculationScene with
+independently allocated dynamic collider IDs. Rebuild existing nav::Mesh from
+its authoritative collision-backed Source before scene.rebuildNavigation().
+One BuildingRouteExecutor per actor receives Walk/Stair/CallLift/Wait/Board/
+Ride/Exit commands; game ECS motor must acknowledge physical movements.
+After world tick, apply only scene.update().publishedPlatforms and
+publishedRiders. Never apply uncommitted attempted motions.
+Navigation/physics owner integration is present at API level but untested,
+not a completed gameplay elevator demo.
