@@ -166,7 +166,10 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     if(!initEffect(dev,compiled,actual))return false;
     // Exact authored identity, including overrides and GPU compilation options.
     restoreIdentity_="SPFR1|"+std::to_string(actual.capacity)+"|"+std::to_string(int(actual.quality))+"|"+std::to_string(actual.gpuProgram)+"|"+std::to_string(actual.gpuMaterial)+"|"+std::to_string(actual.gpuBirthRandom)+"|"+graph.dump(-1)+"\n"+overrides.dump(-1);
-    if(restoreIdentity_.size()>4096)restoreIdentity_.clear();
+    // Compact deterministic fingerprint; two independently seeded 64-bit lanes.
+    uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
+    for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
+    restoreIdentity_="SPFR1-fingerprint|"+std::to_string(a)+"|"+std::to_string(b);
     namedParams_=std::move(schema);
     dataBindings_=std::move(bindings);
     for(const auto& [name,definition]:namedParams_) {
