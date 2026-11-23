@@ -46,6 +46,8 @@
 #include "engine/game/Tiles.h"
 #include "engine/render/CameraBehavior.h"
 #include "engine/view/game/GameOverlayData.h"
+#include "engine/world/TerraWeaveCavernsClientVisualHost.h"
+#include "engine/world/TerraWeaveCavernsArchive.h"
 
 using namespace aiverse;
 using platform::Event;
@@ -54,6 +56,8 @@ using platform::Key;
 using i18n::Args;
 
 namespace aiverse::client {
+
+GameClient::~GameClient() = default;
 
 // ------------------------------------------------------------------ setup
 
@@ -321,6 +325,16 @@ void GameClient::shutdown() {
     sound_.detach();
     audio_.shutdown();
     horizonFrameTiming_.detach(*dev_);
+    if (cavernsVisual_) {
+        // Shutdown of a GPU owner requires genuine device-idle proof.
+        // If unavailable, keep that owner inert instead of destructing live
+        // Model GPU references on a borrowed Editor-hosted Device.
+        if (!dev_ || !cavernsVisual_->closeAfterGpuIdle(*dev_)) {
+            std::fprintf(stderr,
+                "[caverns] GPU cave shutdown idle proof unavailable; owner quarantined\n");
+            (void)cavernsVisual_.release();
+        } else cavernsVisual_.reset();
+    }
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
     prisma_.shutdown();
@@ -426,7 +440,24 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         sim_->setup(rules, map);
         cityAttach();
         horizonFrameTiming_.detach(*dev_);
+        if (cavernsVisual_) {
+            if(!cavernsVisual_->closeAfterGpuIdle(*dev_))
+                throw std::runtime_error(
+                    "Caverns previous game visual GPU owner still in flight");
+            cavernsVisual_.reset();
+        }
         if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
+        // Optional authored cave volume for BOTH standalone GameClient and
+        // the Editor Play Game window. This is visual-only; no Box3D/nav ACK.
+        const Json& caves=map["terraweaveCaverns"].isObject()
+            ? map["terraweaveCaverns"] : map["extra"]["terraweaveCaverns"];
+        if(caves.isObject()) {
+            auto frozen=std::make_shared<terraweave::caverns::CaveVolumeSnapshot>(
+                terraweave::caverns::caveSnapshotFromJson(caves));
+            cavernsVisual_=std::make_unique<
+                terraweave::caverns::CaveClientVisualHost>();
+            cavernsVisual_->open(std::move(frozen));
+        }
         // static scenery streamed around the camera instead of being loaded whole. The key is "streamedWorld" here:
         // in these maps "world" is the planet system (FPS maps keep the same block under "world")
         if (const Json& sw = map["streamedWorld"]; sw.getBool("async")) {
@@ -1444,8 +1475,22 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                 view_.setStrataInsetTexture(insetColor_.id, dev.info().renderTargetFlipY);
             }
         }
+        // Game and Editor Play use the SAME GameClient visual cave owner.
+        // GPU preparation occurs outside the renderer pass and never runs
+        // from a deterministic Simulation tick or worker thread.
+        if(cavernsVisual_ && !planet()) {
+            const auto eyecm=terraweave::caverns::PointCm{
+                int64_t(std::llround(double(cam_.target.x)*100.)),
+                -1000,
+                int64_t(std::llround(double(cam_.target.z)*100.))};
+            try {cavernsVisual_->beforeRender(dev,eyecm);}
+            catch(const std::exception& e) {
+                std::fprintf(stderr,"[caverns] visual streaming: %s\n",e.what());
+            }
+        }
         r3d_.beginScene(renderCam,renderW,renderH);
         if (worldScene_ && !planet()) worldScene_->draw(r3d_, world::Cell{0, 0, 0}, 1);
+        if (cavernsVisual_ && !planet()) cavernsVisual_->draw(r3d_);
         auto& gs = mod().state(*sim_);
         {   // input state for the overlays (placement footprint / build grids, held keys, modes, cursor)
             static const char* kModes[] = {"normal", "attack", "patrol", "place", "rally", "ability", "claim"};
@@ -1587,6 +1632,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                 const render::EcsCameraView& camera,render::Renderer3D& renderer){
                 if(worldScene_ && !planet())
                     worldScene_->draw(renderer,world::Cell{0,0,0},1);
+                if(cavernsVisual_ && !planet())cavernsVisual_->draw(renderer);
                 // Separate per-camera terrain culling and view projection,
                 // but reuse the primary frame's already uploaded GPU state.
                 if(!planet()) {
