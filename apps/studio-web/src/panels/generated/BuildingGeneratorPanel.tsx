@@ -17,7 +17,21 @@ import './BuildingGeneratorPanel.css';
 
 type Candidate = { seed:number; data?:StudioBuildingPreview; error?:string };
 const explain = (error:unknown) => error instanceof Error ? error.message : String(error);
-const settingLabel = (id:string) => ({scifi:'Sci-fi',modern:'Modern'} as Record<string,string>)[id] ?? id;
+const settingLabel = (id:string) => ({
+  'medieval-fantasy':'Medieval Fantasy',
+  'dark-fantasy':'Dark Fantasy',
+  steampunk:'Steampunk',
+  cyberpunk:'Cyberpunk',
+  'scifi-space':'Sci-Fi / Space',
+  scifi:'Sci-Fi (original)',
+  'alien-civilization':'Alien Civilization',
+  'post-apocalypse':'Post-Apocalypse',
+  modern:'Modern / Contemporary',
+  'ancient-civilizations':'Ancient Civilizations',
+  'asian-historical':'Asian Historical',
+  solarpunk:'Solarpunk',
+  underwater:'Underwater',
+} as Record<string,string>)[id] ?? id;
 const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
 const makeFeature = (kind:StudioBuildingFeatureKind):StudioBuildingFeature => ({
   kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:kind==='window'?1.6:kind==='stairs'?2.6:kind==='elevator'?2:1.2,
@@ -424,6 +438,7 @@ export default function BuildingGeneratorPanel({
       {loading&&<StudioAlert>Loading available building styles…</StudioAlert>}
       {!loading&&styles.length===0&&<StudioEmptyState title="No building styles"
         icon={<Building2 size={22}/>} description="Install engine/assets/building-styles or open native AIVERSE Studio."/>}
+      <p className="abg__note">Twelve built-in architecture settings share the same rooms, stairs, lifts, doors, physical openings and ECS runtime. PBR texture patterns are generated for each style; project texture GUIDs override them per channel.</p>
       <StudioSection title="Building recipe">
         <div className="abg__fields">
           <StudioField label="Setting" htmlFor="abg-setting">
@@ -600,7 +615,7 @@ export default function BuildingGeneratorPanel({
               onChange={setDimension(setRoomsZ)} disabled={busy}/>
           </StudioField>
         </div>
-        <small className="abg__note">Internal partition passages are generated on every floor. Stairs, lifts and inter-floor navmesh are not yet generated.</small>
+        <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
       <StudioSection title="Dimensions">
         <div className="abg__dimensions">
