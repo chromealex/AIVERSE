@@ -1,0 +1,298 @@
+{
+  "exampleOnly": true,
+  "notes": "Merge entities[*].components into real existing game map entities with valid type, owner, pos and stable IDs. This is not a complete map.",
+  "entities": [
+    {
+      "id": "morph_anchor",
+      "components": {
+        "MorphNode": {
+          "restX": 0,
+          "restY": 0,
+          "restZ": 0,
+          "drag": 100,
+          "anchored": true,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "morph_leaf",
+      "components": {
+        "MorphNode": {
+          "restX": 150,
+          "restY": 0,
+          "restZ": 0,
+          "drag": 100,
+          "anchored": false,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "morph_spring",
+      "components": {
+        "MorphSpring": {
+          "a": "morph_anchor",
+          "b": "morph_leaf",
+          "restDx": 150,
+          "restDy": 0,
+          "restDz": 0,
+          "stiffness": 400,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "morph_force",
+      "components": {
+        "MorphForce": {
+          "node": "morph_leaf",
+          "x": 10,
+          "y": 0,
+          "z": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "crowd_actor",
+      "components": {
+        "CrowdAgent": {
+          "x": 0,
+          "z": 0,
+          "goalX": 200,
+          "goalZ": 0,
+          "radius": 20,
+          "speed": 10,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "crowd_destination",
+      "components": {
+        "CrowdSlot": {
+          "x": 250,
+          "z": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "crowd_preference",
+      "components": {
+        "CrowdPreference": {
+          "agent": "crowd_actor",
+          "slot0": "crowd_destination",
+          "slot1": "",
+          "slot2": "",
+          "slot3": "",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "trace_a",
+      "components": {
+        "ImprintCell": {
+          "footprint": 100,
+          "scent": 100,
+          "residue": 0,
+          "footprintFade": 10,
+          "scentFade": 10,
+          "residueFade": 1,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "trace_b",
+      "components": {
+        "ImprintCell": {
+          "footprint": 0,
+          "scent": 0,
+          "residue": 0,
+          "footprintFade": 10,
+          "scentFade": 10,
+          "residueFade": 1,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "trace_path",
+      "components": {
+        "ImprintLink": {
+          "a": "trace_a",
+          "b": "trace_b",
+          "transfer": 20,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "trace_source",
+      "components": {
+        "ImprintDeposit": {
+          "cell": "trace_a",
+          "footprint": 30,
+          "scent": 10,
+          "residue": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "power_generator",
+      "components": {
+        "CircuitNode": {
+          "supply": 200,
+          "demand": 0,
+          "drive": true,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "power_receiver",
+      "components": {
+        "CircuitNode": {
+          "supply": 0,
+          "demand": 30,
+          "drive": false,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "power_wire",
+      "components": {
+        "CircuitWire": {
+          "from": "power_generator",
+          "to": "power_receiver",
+          "bidirectional": true,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "power_gate",
+      "components": {
+        "CircuitGate": {
+          "inputA": "power_generator",
+          "inputB": "",
+          "output": "power_receiver",
+          "op": 3,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "sand_field",
+      "components": {
+        "GranularField": {
+          "width": 2,
+          "height": 2,
+          "capacity": 1000,
+          "mass": [
+            400,
+            0,
+            0,
+            0
+          ],
+          "solid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "sand_source",
+      "components": {
+        "GranularSource": {
+          "field": "sand_field",
+          "x": 1,
+          "y": 0,
+          "delta": 25,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "eco_region",
+      "components": {
+        "EvolveRegion": {
+          "durability": 1000000000,
+          "fertility": 500000000,
+          "succession": 0,
+          "pollution": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "eco_pressure",
+      "components": {
+        "EvolvePressure": {
+          "region": "eco_region",
+          "wear": 0,
+          "recovery": 0,
+          "enrichment": 50,
+          "consumption": 5,
+          "contamination": 10,
+          "purification": 1,
+          "growth": 10,
+          "regression": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "npc_alice",
+      "components": {
+        "SocietyPerson": {
+          "knowledgeHex": "0000000000000001",
+          "credibility": 1000,
+          "acceptance": 250000,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "npc_bob",
+      "components": {
+        "SocietyPerson": {
+          "knowledgeHex": "0000000000000000",
+          "credibility": 1000,
+          "acceptance": 250000,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "npc_contact",
+      "components": {
+        "SocietyContact": {
+          "source": "npc_alice",
+          "target": "npc_bob",
+          "trust": 800,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "npc_message",
+      "components": {
+        "SocietyMessage": {
+          "source": "npc_alice",
+          "topicsHex": "0000000000000002",
+          "enabled": true
+        }
+      }
+    }
+  ]
+}
