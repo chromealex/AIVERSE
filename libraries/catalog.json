@@ -83,18 +83,23 @@
     },
     {
       "id": "grid",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "libraries/include/aiverselib/Grid.h",
       "skill": "skills/core/aiverse-grid/SKILL.md",
-      "summary": "Four-neighbor multi-source distance fields",
+      "summary": "2D/3D grid traversal, components, morphology, distance fields and seeded watershed",
       "notes": "Use row-major IDs. Zero cells are blocked. Bound work and cache under NativeState. Test borders and unreachable cells.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_grid",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/GridFields.h",
+        "libraries/include/aiverselib/algorithms/GridVolume.h",
+        "libraries/include/aiverselib/algorithms/GridWatershed.h"
+      ]
     },
     {
       "id": "navigation",
