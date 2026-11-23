@@ -266,7 +266,9 @@ struct AreaPreview {
 inline bool previewArea(const editor::DocEntity& owner,Handle::Mode mode,
                         double valueCm,bool symmetric,AreaPreview& result){
     const auto& area=owner.extra["components"]["EvolveArea"];
-    if(!area.isObject()||!std::isfinite(valueCm))return false;
+    if(!lib::worldprocess::extended::validate("EvolveArea",area)||
+       !std::isfinite(valueCm)||std::abs(valueCm)>2.*evolve::kAreaCoordinateCm)return false;
+    valueCm=std::round(valueCm);
     const double ox=double(area.getInt("offsetXcm",0));
     const double oz=double(area.getInt("offsetZcm",0));
     const double hx=double(area.getInt("halfWidthCm",1000));
@@ -284,13 +286,13 @@ inline bool previewArea(const editor::DocEntity& owner,Handle::Mode mode,
             mode==Handle::Mode::AreaDepth;
         const double center=x?cx:cz,half=x?wx:wz;
         if(symmetric){
-            const double extent=std::clamp(std::abs(valueCm-center),50.,50000.);
+            const double extent=std::clamp(std::abs(valueCm-center),50.,double(evolve::kAreaMaxHalfExtentCm));
             if(x)wx=extent;else wz=extent;
         }else{
             const double opposite=center+(positive?-half:half);
             double edge=positive?
-                std::clamp(valueCm,opposite+100.,opposite+100000.):
-                std::clamp(valueCm,opposite-100000.,opposite-100.);
+                std::clamp(valueCm,opposite+100.,opposite+2.*evolve::kAreaMaxHalfExtentCm):
+                std::clamp(valueCm,opposite-2.*evolve::kAreaMaxHalfExtentCm,opposite-100.);
             // Match the integer-centimetre even-span rounding of StudioSession.
             edge=std::round(edge);
             if(std::fmod(std::abs(edge-opposite),2.)!=0.)
@@ -299,12 +301,12 @@ inline bool previewArea(const editor::DocEntity& owner,Handle::Mode mode,
             else {cz=(edge+opposite)/2.;wz=std::abs(edge-opposite)/2.;}
         }
     }
-    const double worldX=double(owner.x)*100.+cx;
-    const double worldZ=double(owner.z)*100.+cz;
-    if(worldX-wx < -double(evolve::kAreaCoordinateCm)||
-       worldX+wx > double(evolve::kAreaCoordinateCm)||
-       worldZ-wz < -double(evolve::kAreaCoordinateCm)||
-       worldZ+wz > double(evolve::kAreaCoordinateCm))return false;
+    const auto worldX=std::llround(double(owner.x)*100.)+std::llround(cx);
+    const auto worldZ=std::llround(double(owner.z)*100.)+std::llround(cz);
+    if(!evolve::scale_math::withinBounds(worldX,std::llround(wx),
+           evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm)||
+       !evolve::scale_math::withinBounds(worldZ,std::llround(wz),
+           evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm))return false;
     result={worldX/100.,worldZ/100.,wx/100.,wz/100.};
     return true;
 }
@@ -356,10 +358,11 @@ inline bool previewGroupResize(const editor::MapDoc& map,
         const auto& e=*entities[i];
         const auto& area=e.extra["components"]["EvolveArea"];
         const auto half=area.getInt(x?"halfWidthCm":"halfDepthCm",0);
-        const auto scaled=std::llround((long double)half*n/d);
-        if(scaled<50||scaled>evolve::kAreaMaxHalfExtentCm)return false;
-        const auto center=individual?centers[i]:
-            shared+std::llround((long double)(centers[i]-shared)*n/d);
+        evolve::scale_math::AxisResult transformed;
+        if(!evolve::scale_math::transform(centers[i],half,shared,n,d,
+                                          individual,transformed))return false;
+        const auto scaled=transformed.half;
+        const auto center=transformed.center;
         AreaPreview preview;
         preview.centerX=double(e.x)+double(area.getInt("offsetXcm",0))/100.;
         preview.centerZ=double(e.z)+double(area.getInt("offsetZcm",0))/100.;
@@ -367,11 +370,12 @@ inline bool previewGroupResize(const editor::MapDoc& map,
         preview.halfDepth=double(area.getInt("halfDepthCm",0))/100.;
         if(x){preview.centerX=double(center)/100.;preview.halfWidth=double(scaled)/100.;}
         else {preview.centerZ=double(center)/100.;preview.halfDepth=double(scaled)/100.;}
-        if(preview.centerX*100.-preview.halfWidth*100.<-double(evolve::kAreaCoordinateCm)||
-           preview.centerX*100.+preview.halfWidth*100.>double(evolve::kAreaCoordinateCm)||
-           preview.centerZ*100.-preview.halfDepth*100.<-double(evolve::kAreaCoordinateCm)||
-           preview.centerZ*100.+preview.halfDepth*100.>double(evolve::kAreaCoordinateCm))
-            return false;
+        if(!evolve::scale_math::withinBounds(std::llround(preview.centerX*100.),
+               std::llround(preview.halfWidth*100.),evolve::kAreaCoordinateCm,
+               50,evolve::kAreaMaxHalfExtentCm)||
+           !evolve::scale_math::withinBounds(std::llround(preview.centerZ*100.),
+               std::llround(preview.halfDepth*100.),evolve::kAreaCoordinateCm,
+               50,evolve::kAreaMaxHalfExtentCm))return false;
         output.push_back(preview);
     }
     return true;
