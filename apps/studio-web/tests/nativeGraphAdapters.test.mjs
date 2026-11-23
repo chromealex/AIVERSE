@@ -34,3 +34,28 @@ test('native result parsing handles both actual graph list formats',()=>{
  assert.throws(()=>graphReply({ok:false,error:'invalid'}));
  assert.throws(()=>graphNames({}));
 });
+
+import {addAnimationTransition,editAnimationTransition,setAnimationInitial,modelProjection,connectModelParent,modelingReply} from '../src/graphs/nativeGraphAdapters.ts';
+test('state transitions preserve priority, allow loops and reject invalid times',()=>{
+ const doc={states:[{id:'idle',output:'pose',transitions:[{to:'walk',when:[]}]},{id:'walk',output:'pose',transitions:[]}],initial:'idle'};
+ const next=addAnimationTransition(doc,{node:'walk',port:'transition'},{node:'idle',port:'enter'});
+ assert.deepEqual(next.states[1].transitions,[{to:'idle',fade:.2,after:0,when:[]}]);
+ assert.equal(addAnimationTransition(next,{node:'walk',port:'transition'},{node:'idle',port:'enter'}),next);
+ assert.equal(editAnimationTransition(next,'walk',0,{fade:-1}),next);
+ const changed=editAnimationTransition(next,'walk',0,{fade:.5});
+ assert.equal(changed.states[1].transitions[0].fade,.5);
+ assert.equal(editAnimationTransition(changed,'walk',0,null).states[1].transitions.length,0);
+ assert.equal(setAnimationInitial(doc,'walk').initial,'walk');
+ assert.equal(doc.initial,'idle');
+});
+test('model parent graph preserves geometry and rejects hierarchy cycles',()=>{
+ const doc={nodes:[{id:'root'},{id:'body',parent:'root',geometry:{kind:'box',size:[1,2,3]}},{id:'other'}],materials:[{id:'mat'}]};
+ assert.equal(modelProjection(doc).links[0].from,'root');
+ assert.equal(connectModelParent(doc,{node:'body',port:'children'},{node:'root',port:'parent'}),doc);
+ const next=connectModelParent(doc,{node:'other',port:'children'},{node:'body',port:'parent'});
+ assert.equal(next.nodes[1].parent,'other');assert.equal(doc.nodes[1].parent,'root');
+ assert.deepEqual(next.nodes[1].geometry,doc.nodes[1].geometry);
+ assert.deepEqual(next.materials,doc.materials);
+ assert.deepEqual(modelingReply({ok:true,document:doc,revision:7}),{document:doc,revision:7});
+ assert.throws(()=>modelingReply({ok:true,document:doc,revision:0}));
+});
