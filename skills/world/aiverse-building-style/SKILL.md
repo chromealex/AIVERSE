@@ -1548,3 +1548,45 @@ Metal/Vulkan/GLES view acceptance and PBR screenshots have NOT been
 run. Deferred full Studio C++/TypeScript, GLB, image import and GPU
 tests may uncover issues. Do not claim real executed verification.
 Handoff: docs/agent-handoffs/building-studio-native-preview-stage23t7-2026-11-24.md.
+
+## Stage 23U — verification coverage and known gates (2026-11-24)
+
+The user has now explicitly authorized testing. First focused QA changes:
+
+1. New tests/libraries/building_surface_pattern_tests.cpp checks ALL
+   16 portable surface patterns, deterministic RGBA8, 128x128 dimensions,
+   generated albedo + glTF packed metallic/roughness + normal channel
+   contracts, changed seeds, and rejection of unknown patterns.
+2. New tools/buildings/verify_setting_glb.py reads ACTUAL GLB2
+   exporter output for all 12 styles, checks magic/size and JSON/BIN
+   buffer chunks, 128x128 embedded PNG image bytes, image buffer view
+   bounds and baseColor/metallicRoughness/normal texture bindings.
+3. .github/workflows/building-style-focused.yml now compiles/runs
+   the PBR C++ contract and generates all 12 GLB assets using the
+   existing aiverse_building_export, then verifies their real PNG
+   PBR images and publishes a CI artifact for renderer review.
+4. tests/studio/BuildingGenerationTests.cpp checks native catalog
+   discovery of all 12 styles, material/preset inventory, source
+   recipe reading and list, exact generated physical socket bounds.
+5. Static authored-source validation in the connected GitHub branch:
+   parsed all 12 JSON files; checked 623 material keys, strict visual
+   setting identity, 0..1 PBR ranges, supported surface patterns,
+   architecture massing, major form kinds, valid material references
+   and palette counts; no issues detected by those static checks.
+6. Source bugs fixed in Stage 23U: optional studio preview no longer
+   unconditionally rebuilds the SQLite Assets index; imported GUID
+   resolution still uses the existing StudioAssetCatalog lazily.
+   The generated GLB thumbnail URI must carry the content/ prefix
+   required by StudioHost.assetThumbnail.
+
+IMPORTANT: GitHub Actions workflow jobs were observed QUEUED,
+not passed. This model's container has no cloned AIVERSE source
+tree and cannot reach github.com via local git/network; do not
+fabricate a local CMake/TypeScript/Metal run. Confirm actual job
+conclusions and logs before saying C++/Vite/GLB/PHYSIS/GPU pass.
+The original 12 authored JSON style static checks do NOT establish
+native C++ parser compliance or visual quality. Do not merge the
+Draft PR #114; its base is currently feature/aiv20261122_building_styles,
+not main. The integrator must reconcile main and then run the full
+platform and GPU acceptance before merging. Handoff:
+docs/agent-handoffs/building-verification-stage23u-2026-11-24.md.
