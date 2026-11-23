@@ -86,10 +86,17 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
+    // Workspace::toolList is the common aiversemcp discovery surface.
+    // Authenticated agent calls and HTML5 buttons use the same runtime
+    // commands, compiled graph validation and render-thread ownership.
+    session_->workspace().setSpectraPreviewHandler([this](const Json& p) {
+        return runSpectraPreview(p);
+    });
 }
 StudioHost::~StudioHost() { shutdown(); }
 void StudioHost::shutdown() {
     *alive_ = false;
+    if(session_)session_->workspace().setSpectraPreviewHandler({});
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
@@ -1126,6 +1133,20 @@ Json StudioHost::assetThumbnail(const std::string& path) {
     out.set("none", Json::fromBool(true));
     return out;
 }
+Json StudioHost::runSpectraPreview(const Json& params) {
+    if(projectLoading_ || session_->workspace().project.dir.empty())
+        throw std::runtime_error("Open a project before SpectraFX preview");
+    if(!preview_)
+        throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
+    const std::string action=params.getStr("action");
+    // Stopping and inspecting a ready runtime never require the view to
+    // remain on screen. Load/play/step/seek need a drawable to advance.
+    if(action!="status" && action!="stop" &&
+       (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)))
+        throw std::runtime_error("Open the embedded SpectraFX or Scene native viewport");
+    const std::string project=session_->workspace().project.dir;
+    return onScene([&]{return preview_->spectraPreviewCommand(params,project);});
+}
 void StudioHost::applyViewport(const Json& params) {
     const std::string id = params.getStr("id");
     ViewportRect rect;
@@ -1328,17 +1349,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         onScene([&] { preview_->captureFacialThumbnail(path.string()); });
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
-    if (method == "studio.spectraPreview") return answer([&] {
-        // All GPU actions are run on the Scene's render-owner thread BETWEEN
-        // frames. The HTML UI never obtains gfx handles or submits compute.
-        if (projectLoading_ || session_->workspace().project.dir.empty())
-            throw std::runtime_error("Open a project before SpectraFX preview");
-        if (!preview_ || !placement_.visible ||
-            !platform_.surfaceDrawable(StudioSurface::Scene))
-            throw std::runtime_error("Open the embedded SpectraFX or native Scene viewport first");
-        const std::string project=session_->workspace().project.dir;
-        return onScene([&] { return preview_->spectraPreviewCommand(params,project); });
-    });
+    if (method == "studio.spectraPreview")
+        return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
         if (method == "studio.gameEntities") {
