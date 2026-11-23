@@ -1,6 +1,6 @@
 {
   "exampleOnly": true,
-  "notes": "These are component configuration fragments for real authored map entities; GameCore gameplay type/owner/pos must be supplied by the concrete game. CIRCUIT lights/doors/motors use host callbacks; SOCIETY actionId is routed by the existing NPC/quest owner. EVOLVE Pressure can optionally be driven from PHYSIS ClimateLink after project host resolves weather cells.",
+  "notes": "These are component configuration fragments for real authored map entities; GameCore gameplay type/owner/pos must be supplied by the concrete game. CIRCUIT lights/doors/motors use host callbacks; SOCIETY actionId is routed by the existing NPC/quest owner. EVOLVE Pressure can optionally be driven from PHYSIS ClimateLink after project host resolves weather cells. EVOLVE gameplay forest bounds are authored by the EvolveArea component on the same entity as EvolveRegion, centered at that entity's real map position; legacy worldProcessGizmo.radiusMetres is preview-only.",
   "entities": [
     {
       "id": "morph_anchor",
@@ -230,6 +230,11 @@
           "fertility": 500000000,
           "succession": 0,
           "pollution": 0,
+          "enabled": true
+        },
+        "EvolveArea": {
+          "halfWidthCm": 800,
+          "halfDepthCm": 500,
           "enabled": true
         }
       }
