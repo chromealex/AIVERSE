@@ -304,3 +304,42 @@ insert off-mesh links, or teleport through stairs.
 Tests remain deferred on user request. Stage 21 is source-only, without
 a compiled native game/PHYSIS integration pass.
 Handoff: `docs/agent-handoffs/building-stair-motor-stage21-2026-11-23.md`.
+
+
+## Stage 22 — building solids to existing native NavMesh
+
+Use `engine/buildings/BuildingNavSource.h` (exported from
+`BuildingRuntime.h`) to construct a `nav::Source` from an existing
+`BuildingStructureGraph` and its transformed building width/depth,
+origin and quadrant yaw. This is not an alternate navmesh engine. Call
+`source.initialize(graph, width, depth, origin, yaw, options, &error)`,
+then let the existing navigation owner call
+`nav::Mesh::build(source, source.config(), &error)`, or refresh dirty
+tiles against the same long-lived source. A successful mesh build can
+be published to `BuildingCirculationScene::rebuildNavigation(mesh)` to
+resolve actual room polygons and vertical landing endpoints.
+
+`BuildingNavSource` rasterizes static `Floor` solids into stacked
+walkable span columns and tests standing headroom against non-floor
+solids at each sample. This respects inter-storey slab holes cut by the
+generator, structural partitions, door leaf solids and roof headroom.
+Only adjacent columns with supported compatible heights and no wall at
+their shared midpoint are linked. Native `nav::Mesh` continues to
+own rectangles, portals, A*, dirty tiles and revision tracking.
+Vertical stairs/lifts intentionally remain explicit off-mesh actions
+via `BuildingNavMeshBridge`, `BuildingStairMotor` and the lift runtime.
+Do not claim the mesh alone provides stair climbs.
+
+The sampling uses a column centre and a link midpoint, not full actor
+capsule erosion or collision-world baking. Generated `Floor` spans do
+not cover floating objects, dynamic cabin platforms, arbitrary terrain,
+or external colliders. The game owner must compose other world geometry
+with this source using its existing nav ownership and invalidate tiles
+when doors or world obstacles move. Use a suitably fine cell size and
+recheck with the real PHYSIS motor sweep before moving an actor.
+Never use this as the sole runtime collision gate.
+
+Tests are deferred. Stage 22 is source-only and not validated by
+compiler, native NavMesh tests, Mac/Metal/GL33 or in-game navigation.
+Handoff:
+`docs/agent-handoffs/building-native-nav-source-stage22-2026-11-23.md`.
