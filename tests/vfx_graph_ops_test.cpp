@@ -23,7 +23,7 @@ static void require(bool yes, const char* reason) {
 int main() {
     {
         using namespace render::texture_graph;
-        const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","properties":{"value":[1,0,0]}},{"id":"s","op":"constant","properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
+        const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[1,0,0]}},{"id":"s","op":"constant","inputs":[],"properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
         std::vector<size_t> targets;for(const auto& pair:p.outputs)targets.push_back(pair.second);
         auto images=evaluateMany(p,targets);
         auto plan=prepareMaterialImages(p,images,"fixture_1");
