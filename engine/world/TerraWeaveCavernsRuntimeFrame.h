@@ -277,6 +277,9 @@ public:
     void drawCommitted(render::Renderer3D& renderer){
         if(!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
     }
+    size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
+        return host_.collectGpuCompletedWithoutIdle(device);
+    }
     bool collectAfterGpuIdle(gfx::Device& device){
         return host_.collectAfterGpuIdle(device);
     }
