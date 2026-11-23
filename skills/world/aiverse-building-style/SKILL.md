@@ -164,3 +164,24 @@ network frames only from complete authoritative ticks; normal unload via
 detachIfVacant and safe rider releaseAtLanding. Do not claim production
 verified until compiler/physics/Metal/multiplayer tests are run. Handoff:
 docs/agent-handoffs/building-authoritative-game-session-2026-11-23.md.
+
+
+## Stage 16: lift network + door safety
+
+The generated building's ECS passenger and world collision systems are
+owned by existing AIVERSE runtime modules, not by this style generator.
+engine/buildings/BuildingLiftReplication.h defines a bounded server-origin
+lift snapshot codec, monotonically ordered by scene ID/server tick/lift
+revision; BuildingLiftCommands.h validates client actions using existing
+ECS actor ownership, authorized caller ID, nonces and actual landing zones.
+Never accept client-authored server snapshots.
+
+When physical landing doors are attached, the world owner MUST provide
+BuildingCirculationScene::setDoorObstructionProbe using live PHYSIS/ECS
+collision information. Without a sensor, advancing lift simulation
+refuses to proceed; obstructed doors interrupt Closing. Only publish
+ECS riders and dynamic cabin transforms after successful collider commit.
+Dynamic model should be uploaded once, never regenerated every tick.
+
+Handoff: docs/agent-handoffs/building-lift-safety-network-2026-11-23.md.
+No C++/TS/GPU/network tests were run (explicitly deferred by user).
