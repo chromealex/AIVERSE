@@ -236,3 +236,6 @@ Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dea
 
 ## Stage 68: Studio ecology layers
 `studio.evolveLayer` controls authored Scene colors; `studio.evolveState` supplies live ECS minimap regions, rooted/fallen vegetation and PHYSIS weather. HTML5 controls visibility and opacity. No runtime verification. See `docs/handoffs/world-processes-stage68-studio-ecology-2026-11-23.md`.
+
+## Stage 69: source audit and acceptance
+`tools/evolve-demo-acceptance.py` checks rollback, disk roundtrip, continuation and SVG after native build. No execution yet. See `docs/handoffs/world-processes-stage69-source-audit-2026-11-24.md`.
