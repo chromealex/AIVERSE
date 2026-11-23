@@ -89,11 +89,15 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
             else if(kind=="personnel-door")f.kind=BuildingFeatureKind::PersonnelDoor;
             else if(kind=="sliding-roof")f.kind=BuildingFeatureKind::SlidingRoof;
             else if(kind=="window")f.kind=BuildingFeatureKind::Window;
+            else if(kind=="stairs")f.kind=BuildingFeatureKind::Stairs;
+            else if(kind=="elevator")f.kind=BuildingFeatureKind::Elevator;
             else throw JsonError(label+".kind: unknown building property '"+kind+"'");
             if(f.kind==BuildingFeatureKind::LargeGate){f.width=5.f;f.height=4.5f;}
             else if(f.kind==BuildingFeatureKind::SmallGate){f.width=2.6f;f.height=2.8f;}
             else if(f.kind==BuildingFeatureKind::SlidingRoof){f.width=4.f;f.depth=4.f;}
             else if(f.kind==BuildingFeatureKind::Window){f.width=1.6f;f.height=1.1f;f.sill=0.9f;}
+            else if(f.kind==BuildingFeatureKind::Stairs){f.width=2.6f;f.depth=6.6f;f.height=0.f;}
+            else if(f.kind==BuildingFeatureKind::Elevator){f.width=2.f;f.depth=2.f;f.height=0.f;}
             if(j.has("side")){
                 if(!j["side"].isString())throw JsonError(label+".side: expected string");
                 const auto side=j["side"].str();
@@ -190,6 +194,9 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::RoofPanel:material=dark;break;
           case BuildingGraphPart::WindowPane:material=style.window.glass>=0?style.window.glass:trim;break;
           case BuildingGraphPart::Partition:material=style.interior>=0?style.interior:hull;break;
+          case BuildingGraphPart::StairTread:material=sm.plate>=0?sm.plate:hull;break;
+          case BuildingGraphPart::StairLanding:material=sm.pad>=0?sm.pad:trim;break;
+          case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
         }
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1);
@@ -203,7 +210,8 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         anchor.open=socket.open;
         anchor.outside={fcoord(socket.x),fcoord(socket.y),fcoord(socket.z)};
         result.anchors.push_back(anchor);
-        if(anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window)
+        if(anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window&&
+           anchor.kind!=BuildingFeatureKind::Stairs&&anchor.kind!=BuildingFeatureKind::Elevator)
             result.building.gates.push_back(anchor.outside);
     }
     result.graph=std::move(graph);
