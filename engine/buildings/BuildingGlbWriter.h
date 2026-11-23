@@ -30,6 +30,7 @@ struct Glb{
         const std::string&,std::vector<uint8_t>&,std::string&)>;
     TextureReader textureReader;
     std::map<std::string,int> cachedTextures;
+    bool usesUvTransform=false;
     int texture(const std::string& guid){
         if(guid.empty())return -1;
         if(auto it=cachedTextures.find(guid);it!=cachedTextures.end())
@@ -67,9 +68,27 @@ struct Glb{
         pbr.set("baseColorFactor",std::move(rgb));
         pbr.set("metallicFactor",aiverse::Json::number(double(m.metallic),6));
         pbr.set("roughnessFactor",aiverse::Json::number(double(m.roughness),6));
-        const auto texInfo=[](int index){
+        const auto texInfo=[&](int index){
             aiverse::Json o=aiverse::Json::object();
             o.set("index",aiverse::Json::number(int64_t(index)));
+            if(m.uvScale[0]!=1.f||m.uvScale[1]!=1.f||
+               m.uvOffset[0]!=0.f||m.uvOffset[1]!=0.f||
+               m.uvRotation!=0.f){
+                aiverse::Json transform=aiverse::Json::object();
+                aiverse::Json scale=aiverse::Json::array();
+                scale.push(aiverse::Json::number(double(m.uvScale[0]),6));
+                scale.push(aiverse::Json::number(double(m.uvScale[1]),6));
+                aiverse::Json offset=aiverse::Json::array();
+                offset.push(aiverse::Json::number(double(m.uvOffset[0]),6));
+                offset.push(aiverse::Json::number(double(m.uvOffset[1]),6));
+                transform.set("scale",std::move(scale));
+                transform.set("offset",std::move(offset));
+                transform.set("rotation",aiverse::Json::number(double(m.uvRotation),6));
+                aiverse::Json ext=aiverse::Json::object();
+                ext.set("KHR_texture_transform",std::move(transform));
+                o.set("extensions",std::move(ext));
+                usesUvTransform=true;
+            }
             return o;
         };
         const int base=texture(m.textures.baseColor);
@@ -80,8 +99,16 @@ struct Glb{
         if(base>=0)pbr.set("baseColorTexture",texInfo(base));
         if(mr>=0)pbr.set("metallicRoughnessTexture",texInfo(mr));
         root.set("pbrMetallicRoughness",std::move(pbr));
-        if(normal>=0)root.set("normalTexture",texInfo(normal));
-        if(ao>=0)root.set("occlusionTexture",texInfo(ao));
+        if(normal>=0){
+            auto info=texInfo(normal);
+            info.set("scale",aiverse::Json::number(double(m.normalScale),6));
+            root.set("normalTexture",std::move(info));
+        }
+        if(ao>=0){
+            auto info=texInfo(ao);
+            info.set("strength",aiverse::Json::number(double(m.occlusionStrength),6));
+            root.set("occlusionTexture",std::move(info));
+        }
         if(emissive>=0)root.set("emissiveTexture",texInfo(emissive));
         if(m.emissive[0]+m.emissive[1]+m.emissive[2]>0||emissive>=0){
             aiverse::Json factor=aiverse::Json::array();
@@ -113,7 +140,7 @@ struct Glb{
     void write(const std::string& path){
         while(bin.size()%4)bin.push_back(0);
         std::string scene;for(int i=0;i<nNode;++i){if(i)scene+=",";scene+=std::to_string(i);}
-        std::string json="{\"asset\":{\"version\":\"2.0\",\"generator\":\"aiverse_building_export\"},\"extensionsUsed\":[\"KHR_materials_emissive_strength\"],\"scene\":0,\"scenes\":[{\"nodes\":["+scene+"]}],"
+        std::string json="{\"asset\":{\"version\":\"2.0\",\"generator\":\"aiverse_building_export\"},\"extensionsUsed\":[\"KHR_materials_emissive_strength\""+std::string(usesUvTransform?",\"KHR_texture_transform\"":"")+"],\"scene\":0,\"scenes\":[{\"nodes\":["+scene+"]}],"
             "\"nodes\":["+nodes+"],\"meshes\":["+meshes+"],\"materials\":["+materials+"],\"images\":["+images+"],\"textures\":["+textures+"],\"accessors\":["+accessors+"],\"bufferViews\":["+views+"],\"buffers\":[{\"byteLength\":"+std::to_string(bin.size())+"}]}";
         while(json.size()%4)json+=' ';
         std::ofstream f(path,std::ios::binary);if(!f)throw std::runtime_error("cannot write "+path);
