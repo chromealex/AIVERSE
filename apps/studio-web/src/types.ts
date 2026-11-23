@@ -156,7 +156,7 @@ export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;
 export interface StudioBuildingFunction { id: string; name: string; width: number; height: number; depth: number }
 export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[] }
 export interface StudioBuildingCatalog { styles: StudioBuildingStyle[] }
-export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof';
+export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof' | 'window';
 export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
 export interface StudioBuildingFeature {
   kind: StudioBuildingFeatureKind;
@@ -169,10 +169,13 @@ export interface StudioBuildingFeature {
   position: number; // <0 auto; wall axis or roof X in metres
   positionZ: number; // roof Z; <0 auto
   spacing: number; // minimum clear gap between grouped openings, metres
+  floor: number; // zero-indexed storey for windows
+  sill: number; // window sill above its storey's floor
 }
 export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
   width: number; height: number; depth: number; seed: number;
+  floors?: number; roomsX?: number; roomsZ?: number;
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
 }
