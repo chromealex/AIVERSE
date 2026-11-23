@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
 import type { StudioSpectraPreviewState } from '../types';
@@ -21,6 +21,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [state,setState]=useState<StudioSpectraPreviewState|null>(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [autoReload,setAutoReload]=useState(false);
+  const graphSignature=useMemo(()=>JSON.stringify(graph),[graph]);
+  const lastLoadedGraph=useRef('');
+  const reloadBusy=useRef(false);
   const [seek,setSeek]=useState(0);
   const [parameter,setParameter]=useState('');
   const [value,setValue]=useState('0');
@@ -28,6 +32,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const params=Object.entries(graph.instanceParameters??{});
   useEffect(()=>{
     setState(null);setSeek(0);setError('');setParameter('');
+    setAutoReload(false);
+    lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
     if(!active || !state?.ready)return;
@@ -39,6 +45,40 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     return()=>clearInterval(timer);
   },[active,state?.ready]);
 
+  // Opt-in, bounded authoring-only live reload. It recompiles the current
+  // in-memory graph through native StudioScene; it never saves or publishes
+  // asset files, and it preserves the last-good runtime on validation error.
+  // The existing Play state is restored only after successful validation.
+  useEffect(()=>{
+    if(!active || !autoReload || !state?.ready || !lastLoadedGraph.current ||
+       graphSignature===lastLoadedGraph.current || busy || disabled)return;
+    let closed=false;
+    const handle=window.setTimeout(()=>{
+      if(closed || reloadBusy.current)return;
+      reloadBusy.current=true;
+      setBusy(true);setError('');
+      const wasPlaying=!!state?.playing;
+      // Remember an attempted invalid revision so it does not enter an
+      // infinite loop while the user edits another node.
+      lastLoadedGraph.current=graphSignature;
+      void invoke('studio.spectraPreview',{action:'load',graph}).then(async next=>{
+        if(closed)return;
+        if(!next.ready || next.error) {
+          setState(next);
+          setError(next.error||'Native graph reload rejected');
+          return;
+        }
+        let result=next;
+        if(wasPlaying)result=await invoke('studio.spectraPreview',{action:'play'});
+        if(!closed){setState(result);setSeek(result.tick);}
+      }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{
+        reloadBusy.current=false;
+        if(!closed)setBusy(false);
+      });
+    },650);
+    return()=>{closed=true;window.clearTimeout(handle);};
+  },[active,autoReload,state?.ready,state?.playing,graphSignature,graph,busy,disabled]);
+
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
@@ -48,6 +88,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setBusy(true);setError('');
     try{
       const result=await invoke('studio.spectraPreview',{action,...options});
+      if(action==='load'&&result.ready&&!result.error)
+        lastLoadedGraph.current=graphSignature;
+      if(action==='stop')lastLoadedGraph.current='';
       setState(result);
       setSeek(result.tick);
       if(result.error)setError(result.error);
@@ -131,6 +174,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" variant="primary" disabled={!active||busy||disabled}
         onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
+      <StudioCheckbox label="Auto-reload graph" checked={autoReload} disabled={!active||busy}
+        onChange={e=>setAutoReload(e.target.checked)}/>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
         onClick={()=>void command(state?.playing?'pause':'play')}>
         {state?.playing?<Pause size={14}/>:<Play size={14}/>}
@@ -185,7 +230,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     </div>}
     <p className="spectra-native__hint">
       The native backend decides GPU eligibility; CPU fallback renders real particles into the same viewport.
-      Graph edits require Load graph again. GPU/CPU numerical parity is a separate hardware test.
+      Enable Auto-reload to compile the in-memory graph after edits (650 ms debounce);
+      invalid graphs keep the last-good native runtime. Publishing remains explicit.
+      GPU/CPU numerical parity is a separate hardware test.
     </p>
   </StudioSection>;
 }
