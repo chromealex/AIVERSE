@@ -1275,3 +1275,65 @@ by calling the two setup phases and supplying their existing
 world collision and render owners. No tests were run per user request.
 Handoff:
 `docs/agent-handoffs/building-common-ecs-stage23q-2026-11-23.md`.
+
+
+## Stage 23R — genre-neutral ECS/PHYSIS sweep + deterministic rollback reconstruction
+
+The old FPS/ActorHost engine is NOT a building integration target.
+
+- `engine/buildings/BuildingEcsObstruction.h` is completely
+  Box3D-independent. ECS entities with existing
+  `aiverse::Transform` plus `BuildingPhysicalExtent` (positive
+  authoritative half-size, `blocksBuildingMotion=true`) are checked
+  in deterministic ECS iteration order against the swept AABB of EACH
+  physical door leaf. Register `registerBuildingPhysicalExtentPersistence(sim)`
+  inside common `GameModule::setup` before the persistent registry is
+  sealed. This is opt-in: bodies without the extent component are not
+  magically inferred, and gameplay must register extents for relevant
+  actors, cargo, vehicles and movable obstacles.
+- `engine/buildings/BuildingPhysisObstruction.h` is OPTIONAL for
+  projects with real `physics::Scene`/Box3D. It calls the existing
+  PHYSIS `Scene::overlapBox` on each leaf's swept AABB. PHYSIS query
+  categories must exclude leaf bodies if they are ALSO registered in
+  Box3D; the SpatialWorld leaf IDs are NOT PHYSIS BodyHandles.
+  The caller guarantees ECS and PHYSIS are in one completed fixed-tick
+  owner phase. It is not a second physics database.
+- `BuildingDualLeafOwner::attachRestored(...)` restores the exact
+  0..1000 physical leaf travel from the SAVED
+  `BuildingEcsWorldState`, using two pre-reserved unique collider IDs
+  per socket. Partial leaves are conservatively stationary/blocked
+  pending a fresh authenticated command; no old network action is
+  replayed. Owner can attach only into a fresh SpatialWorld slot, and
+  never overwrite foreign colliders.
+- `engine/buildings/BuildingEcsReconcile.h` is the transaction
+  boundary after restoring a shared ECS World: it validates the source
+  sockets and physical progress, builds the NEW physical owner,
+  publishes an explicitly selected graph-domain invalidation on a
+  NEW router using the union of complete leaf travel extents (not
+  merely the initial aperture), requires ACK from ALL registered
+  selected consumers, attaches a new presentation session, and
+  invokes `BuildingEcsRuntime::rebindAfterRestore`.
+  Invalid/missing domain owners or collision problems leave the
+  runtime suspended; successful recovery never blindly reuses old
+  graph router nonces or stale command queue entries. The owner must
+  rebuild its native NavMesh source from the restored SpatialWorld
+  and refresh dirty tiles in the normal nav owner phase after ACK.
+- `rebindAfterRestore` checks actual collider ID presence/bounds,
+  socket order, progress, revision and graph ACK against the
+  restored authoritative ECS record before allowing the existing
+  Simulation system callback to advance. It does not register a
+  duplicate fixed-tick system. Resetting an internal suspended flag
+  without this verified reconstruction is prohibited.
+- Scene collision namespaces and leases remain owned by
+  `SceneCollisionNamespaces`; allocate and retain distinct
+  leaf collider IDs before any owner attach. The class does not
+  invent a new allocation space.
+
+IMPORTANT: a source-level generic ECS/PHYSIS obstacle adapter does
+not prove all projects have authored their collidable extents, nor
+does successful invalidation ACK prove a full NavMesh refresh.
+External player/network authority, snapshot transport and GPU
+retirement remain their existing owners. No compiler, CTest,
+Box3D contact test, real nav refresh or GPU test has been run,
+per user's feature-first testing deferral. Handoff:
+`docs/agent-handoffs/building-ecs-physis-reconcile-stage23r-2026-11-23.md`.
