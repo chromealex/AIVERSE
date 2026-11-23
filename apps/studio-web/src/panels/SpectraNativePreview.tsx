@@ -14,8 +14,8 @@ interface Props {
   projectPath:string;
   disabled?:boolean;
 }
-/** The only particle GPU preview is the actual render-thread-owned native
- * Scene. This UI never claims that its DOM contains GPU particles.
+/** Independent native FX swapchain on the shared Studio render-owner thread.
+ * The map Scene renders separately; React does not generate GPU particles.
  */
 export default function SpectraNativePreview({graph,projectPath,disabled=false}:Props){
   const [state,setState]=useState<StudioSpectraPreviewState|null>(null);
