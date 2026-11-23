@@ -18,7 +18,7 @@ void Editor::registerPlayOps() {
     };
     add("graph_live_owner_snapshot",
         "Read-only snapshot from the current native editor presentation owner; no gameplay mutation.",
-        R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"entity":{"type":"string","description":"Exact unsigned decimal packed entity ID"}},"required":["domain"]})",
+        R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"entity":{"type":"string","description":"Exact unsigned decimal packed entity ID"},"captureHistory":{"type":"boolean"}},"required":["domain"]})",
         [this](const Json& p){
             Json r=Json::object();
             const auto domain=p.getStr("domain");r.set("domain",Json::string(domain));
@@ -34,8 +34,10 @@ void Editor::registerPlayOps() {
                     r.set("reason",Json::string("No running play-test or entity generation is no longer alive"));
                     return r;
                 }
-                auto snapshot=view_.animationGraphDiagnostic(key);
-                snapshot.set("domain",Json::string(domain));snapshot.set("scope",Json::string("native-editor-play-view"));
+                auto snapshot=view_.sharedAnimationGraphDiagnostic(key,graphPlayEpoch_,p.getBool("captureHistory")?&graphPlayHistory_:nullptr);
+                const bool shared=snapshot.getBool("available");
+                if(!shared)snapshot=view_.animationGraphDiagnostic(key);
+                snapshot.set("domain",Json::string(domain));if(!shared)snapshot.set("scope",Json::string("native-editor-play-view"));
                 snapshot.set("gpuTimingAvailable",Json::fromBool(false));
                 return snapshot;
             }
