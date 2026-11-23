@@ -9,6 +9,9 @@ on:
       - 'engine/assets/building-styles/*.json'
       - 'tools/buildings/**'
       - 'tests/libraries/building*'
+      - 'engine/buildings/**'
+      - 'apps/studio-native/StudioBuildingGeneration.h'
+      - 'tests/studio/BuildingGenerationTests.cpp'
       - '.github/workflows/building-style-focused.yml'
   pull_request:
     paths:
@@ -16,6 +19,9 @@ on:
       - 'engine/assets/building-styles/*.json'
       - 'tools/buildings/**'
       - 'tests/libraries/building*'
+      - 'engine/buildings/**'
+      - 'apps/studio-native/StudioBuildingGeneration.h'
+      - 'tests/studio/BuildingGenerationTests.cpp'
   workflow_dispatch:
 
 permissions:
@@ -42,6 +48,17 @@ jobs:
           set -euo pipefail
           /tmp/aiverse_building_tests
           /tmp/aiverse_building_style_tests "$GITHUB_WORKSPACE"
+      - name: Compile native Studio asset generation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -Wno-misleading-indentation -pedantic -I. -Ilibraries/include"
+          g++ $FLAGS tests/studio/BuildingGenerationTests.cpp apps/studio-native/StudioAssetCatalog.cpp \
+            engine/core/Fixed.cpp engine/data/Json.cpp -lsqlite3 \
+            -o /tmp/aiverse_studio_building_tests
+      - name: Run native Studio content/GUID acceptance
+        shell: bash
+        run: /tmp/aiverse_studio_building_tests "$GITHUB_WORKSPACE"
       - name: Export four sci-fi functions at the requested exact envelope
         shell: bash
         run: |
