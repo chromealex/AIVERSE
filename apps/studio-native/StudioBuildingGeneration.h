@@ -221,6 +221,10 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
             f.set("depth",Json::number(double(k.depth)));
             functions.push(std::move(f));
         }
+        Json slots=Json::array();
+        for(const auto& material:style.materials)
+            slots.push(string(material.id));
+        s.set("materials",std::move(slots));
         s.set("functions",std::move(functions));styles.push(std::move(s));
     }
     out.set("styles",std::move(styles));
@@ -229,8 +233,8 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
 inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json& params) {
     using namespace buildingStudioDetail;
     auto req=request(params);
-    if(!req.materialBindings.empty())
-        throw std::runtime_error("Material-binding preview requires the project-aware generator");
+    // Preview intentionally reports geometry only. Project material
+    // overrides are resolved by the project-aware generate path.
     const auto model=produce(engine,req);
     Json out=Json::object();
     out.set("seed",Json::number(int64_t(req.seed)));
