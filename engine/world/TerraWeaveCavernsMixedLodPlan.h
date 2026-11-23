@@ -77,6 +77,14 @@ inline CaveMixedLodPlan planCaveMixedLodVisual(
                 // rebuild from ONE snapshot; never stitch different fields.
                 plan.sourceConflict=true;
                 face.decision=CaveFaceDecision::RegenerateAtCommonLod;
+                for(const CaveCertifiedChunk* c:{&first,&second}){
+                    const auto old=plan.rebuild.find(c->mesh.key);
+                    if(old==plan.rebuild.end() ||
+                       old->second.spacingCm>face.targetSpacingCm)
+                        plan.rebuild[c->mesh.key]=CaveRebuildRequest{
+                            c->mesh.key,face.targetResolution,
+                            face.targetSpacingCm,c->sourceRevision,0};
+                }
                 plan.faces.push_back(face);
                 continue;
             }
