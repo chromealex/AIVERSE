@@ -52,10 +52,21 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive) {
         if(!exclusive || !exclusive()||
            physicsBarrier_.status().recoveryRequired)return false;
-        return host_.commitAtOwnerBarrier([&](const CaveGameplayCommitView& view){
-            if(!exclusive())return false;
-            return physicsBarrier_.apply(view,box3D,spatial,exclusive);
-        });
+        bool physicsFinalized=false;
+        bool published=false;
+        try {
+            published=host_.commitAtOwnerBarrier([&](const CaveGameplayCommitView& view){
+                if(!exclusive())return false;
+                physicsFinalized=physicsBarrier_.apply(view,box3D,spatial,exclusive);
+                return physicsFinalized;
+            });
+        }catch(...) {
+            if(physicsFinalized)physicsBarrier_.requireRecovery();
+            throw;
+        }
+        if(!published&&physicsFinalized)
+            physicsBarrier_.requireRecovery();
+        return published;
     }
     void drawCommitted(render::Renderer3D& renderer){
         if(!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
