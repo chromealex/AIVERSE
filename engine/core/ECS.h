@@ -356,6 +356,14 @@ public:
         if(batch.overflow) {it->second.overflow=true;it->second.entities.clear();return;}
         for(auto id:batch.entities)it->second.record(Entity::fromPacked(id));
     }
+    template<class T> bool componentChangesTracked() const {
+        return trackedChanges_.contains(detail::componentTypeId<T>());
+    }
+    // Read without consuming: reconciliation may fail and must retain candidates.
+    template<class T> ComponentChangeBatch peekComponentChanges() const {
+        const auto it=trackedChanges_.find(detail::componentTypeId<T>());
+        return it==trackedChanges_.end()?ComponentChangeBatch{}:it->second;
+    }
     template<class T> ComponentChangeBatch drainComponentChanges() {
         auto it=trackedChanges_.find(detail::componentTypeId<T>());
         if(it==trackedChanges_.end())return {};
