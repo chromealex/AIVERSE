@@ -382,14 +382,23 @@ void ActorHost::tickVehicles(Simulation& sim,std::span<const vs::RacePedals> rac
         if(auto report=stepVehicleSeats(seats,run.seats,now,run.controller,std::span<const VehicleSeatRequest>(requests),clear)){
             for(const auto& e:report->events){
                 if(e.actor<=0||e.actor>count)continue;auto a=character(sim,uint8_t(e.actor));
-                if(e.kind==VehicleEventKind::SeatEntered){a.vehicle=v->id;a.velocity={};}
+                if(e.kind==VehicleEventKind::SeatEntered){
+                    w.notifyComponentChange<CharacterBody>(a.entity);
+                    w.notifyComponentChange<Vehicle>(entity);
+                    a.vehicle=v->id;a.velocity={};
+                }
             }
-            for(const auto& x:report->exits){auto a=character(sim,uint8_t(x.actor));a.vehicle=0;a.pos=x.position;a.velocity=run.controller.velocity;
+            for(const auto& x:report->exits){auto a=character(sim,uint8_t(x.actor));
+                w.notifyComponentChange<CharacterBody>(a.entity);
+                w.notifyComponentChange<Vehicle>(entity);
+                a.vehicle=0;a.pos=x.position;a.velocity=run.controller.velocity;
                 if(!reportRegionMoveIfCrossed(sim,a.entity))
                     throw std::logic_error("regionOwnership: typed seat exit dirty report failed");
                 if(v->health<=0)damage(sim,0,a,1000);}
         }
-        auto driver=vehicleDriver(seats,run.seats);v->driver=uint8_t(driver);
+        auto driver=vehicleDriver(seats,run.seats);
+        if(v->driver!=uint8_t(driver))w.notifyComponentChange<Vehicle>(entity);
+        v->driver=uint8_t(driver);
         run.player=uint8_t(driver);run.driver=driver?characterEntity(sim,uint8_t(driver)):kNullEntity;
     }
     VehicleWorld host(*this,sim);
