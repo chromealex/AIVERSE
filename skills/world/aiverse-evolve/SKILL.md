@@ -239,3 +239,6 @@ Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dea
 
 ## Stage 69: source audit and acceptance
 `tools/evolve-demo-acceptance.py` checks rollback, disk roundtrip, continuation and SVG after native build. No execution yet. See `docs/handoffs/world-processes-stage69-source-audit-2026-11-24.md`.
+
+### Studio ecology stages 71–75
+Use studio.evolveState for read-only live region, plant, deadwood and soil diagnostics. History is editor-local, bounded to 240 samples. Presets use EvolvePresets.h and Inspector setProperties; custom presets currently localStorage plus JSON exchange. Time controls reuse studio.gameControl pause/resume/step for the whole local match, not a separate ecology clock. No builds/tests run yet.
