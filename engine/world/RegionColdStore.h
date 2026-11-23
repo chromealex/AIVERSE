@@ -368,6 +368,48 @@ public:
         return true;
     }
 
+    // Deterministic region-wide transition, called by the authoritative game
+    // tick when gameplay decides which regions run hot. It is intentionally
+    // independent of visual observers/ChunkStreamer budgets.
+    // The first W1 implementation retains Entity and Transform in both states;
+    // if a ledger ID has no materialized Entity, fail rather than silently lose it.
+    // A mixed hot/cold region is rejected instead of partially mutating it.
+    bool setRegionActive(World& world,const RegionEntityLedger& ledger,
+                         RegionColdStore& store,Cell region,bool active,
+                         std::string* error=nullptr)const {
+        std::map<RegionEntityId,Entity> live;
+        if(!RegionEcsBridge::rebuild(world,ledger,live,error))return false;
+        const auto ids=ledger.activeIn(region);
+        if(ids.empty())return true;
+        std::vector<Entity> entities;
+        entities.reserve(ids.size());
+        size_t dormant=0;
+        for(RegionEntityId id:ids) {
+            const auto it=live.find(id);
+            if(it==live.end())
+                return reject(error,"region entity is not materialized");
+            const bool isDormant=world.has<RegionDormant>(it->second);
+            const auto* record=store.find(id);
+            if(isDormant) {
+                ++dormant;
+                if(!record || record->owner!=region ||
+                   record->ownerRevision!=ledger.find(id)->revision)
+                    return reject(error,"dormant region record is missing or stale");
+            }else if(record) {
+                return reject(error,"hot entity unexpectedly has a cold payload");
+            }
+            entities.push_back(it->second);
+        }
+        if(dormant && dormant!=ids.size())
+            return reject(error,"mixed active and dormant entities in one region");
+        if(active) {
+            if(!dormant)return true; // already hot, no writes
+            return wakeGroup(world,ledger,store,entities,region,error);
+        }
+        if(dormant==ids.size())return true; // already cold, no writes
+        return parkGroup(world,ledger,store,entities,region,error);
+    }
+
     // A dormant entity cannot pass through RegionEcsBridge::retire because its
     // payload must be removed together with the permanent ledger tombstone.
     bool retireDormant(World& world,RegionEntityLedger& ledger,
