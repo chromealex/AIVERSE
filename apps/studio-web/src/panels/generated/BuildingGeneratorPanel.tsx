@@ -318,6 +318,13 @@ export default function BuildingGeneratorPanel({
     finally{setCheckingMaterials(false);}
   };
 
+  const refreshGeneratedThumbnail=(path:string)=>{
+    setThumbnail('');
+    void invoke('studio.assetThumbnail',{path}).then(thumb=>{
+      if(thumb.url)setThumbnail(thumb.url);
+    }).catch(()=>{});
+  };
+
   const regenerateRecipe=async (recipe:string)=>{
     if(!projectLoaded||!nativeConnected()||busy||regeneratingRecipe)return;
     setRegeneratingRecipe(recipe);setError('');setStatus('');
@@ -325,6 +332,7 @@ export default function BuildingGeneratorPanel({
       const generated=await invoke('studio.buildingRegenerate',{recipe});
       regeneratedThisSession.current.add(recipe);
       setSaved(generated);
+      refreshGeneratedThumbnail(generated.path);
       setStatus('Updated copy created: '+generated.path+'. Original building and GUID were preserved.');
       window.dispatchEvent(new Event('studio:assets-changed'));
       void invoke('studio.windowBroadcast',{
@@ -362,6 +370,7 @@ export default function BuildingGeneratorPanel({
               });
               if(!active)return;
               setSaved(generated);
+              refreshGeneratedThumbnail(generated.path);
               setStatus('Auto-generated new copy: '+generated.path+'. Existing GLB unchanged.');
               window.dispatchEvent(new Event('studio:assets-changed'));
               void invoke('studio.windowBroadcast',{
@@ -418,9 +427,7 @@ export default function BuildingGeneratorPanel({
       // Existing browser windows can refresh their Assets lists on demand.
       window.dispatchEvent(new Event('studio:assets-changed'));
       void invoke('studio.windowBroadcast',{event:'ui.assetsChanged',payload:{path:result.path}}).catch(()=>{});
-      void invoke('studio.assetThumbnail',{path:result.path}).then(thumb=>{
-        if(thumb.url)setThumbnail(thumb.url);
-      }).catch(()=>{});
+      refreshGeneratedThumbnail(result.path);
     }catch(e){setError(explain(e));}
     finally{setBusy(false);}
   };
