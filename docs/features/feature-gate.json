@@ -27,7 +27,8 @@
     "docs/agents/contracts/build-testing.md",
     "docs/agents/contracts/reuse-skills.md",
     "docs/agents/contracts/mcp-contract.md",
-    "docs/agents/contracts/index.json"
+    "docs/agents/contracts/index.json",
+    "tools/agents/evidence.py"
   ],
   "traits": {
     "editable": false,
@@ -134,5 +135,6 @@
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
-  }
+  },
+  "test_reports": []
 }
