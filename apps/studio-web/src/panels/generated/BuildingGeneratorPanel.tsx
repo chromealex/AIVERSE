@@ -18,15 +18,16 @@ const explain = (error:unknown) => error instanceof Error ? error.message : Stri
 const settingLabel = (id:string) => ({scifi:'Sci-fi',modern:'Modern'} as Record<string,string>)[id] ?? id;
 const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
 const makeFeature = (kind:StudioBuildingFeatureKind):StudioBuildingFeature => ({
-  kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:kind==='window'?1.6:1.2,
+  kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:kind==='window'?1.6:kind==='stairs'?2.6:kind==='elevator'?2:1.2,
   height:kind==='large-gate'?4.5:kind==='small-gate'?2.9:kind==='sliding-roof'?0:kind==='window'?1.1:2.35,
-  depth:kind==='sliding-roof'?5:0, open:0,
+  depth:kind==='sliding-roof'?5:kind==='stairs'?6.6:kind==='elevator'?2.2:0, open:0,
   position:-1, positionZ:-1, spacing:0.35, floor:0, sill:0.9
 });
 const propertyLabels:Record<StudioBuildingFeatureKind,string> = {
   'large-gate':'Large vehicle gates', 'small-gate':'Small gates',
   'personnel-door':'Personnel entrances', 'sliding-roof':'Retractable roof',
-  'window':'Windows / glazing'
+  'window':'Windows / glazing',
+  'stairs':'Switchback stairs', 'elevator':'Lift shaft / platform'
 };
 
 export default function BuildingGeneratorPanel({
@@ -117,6 +118,22 @@ export default function BuildingGeneratorPanel({
            !Number.isFinite(feature.spacing)||feature.position < -1||
            feature.positionZ < -1||feature.spacing<0.35||feature.spacing>8)
           return 'Placement must be automatic (-1) or a positive metre offset; spacing 0.35–8m.';
+        const vertical=feature.kind==='stairs'||feature.kind==='elevator';
+        if(vertical){
+          if(asNumber(floors)<2||feature.count!==1||feature.floor!==0)
+            return 'Stairs/lifts need at least two floors and one vertical shaft.';
+          const roomW=asNumber(width)/asNumber(roomsX),roomD=asNumber(depth)/asNumber(roomsZ);
+          if(feature.width>roomW-0.7||feature.depth>roomD-0.7)
+            return 'Vertical core must fit inside one room cell.';
+          const storey=(asNumber(height)-0.52)/asNumber(floors);
+          if(feature.kind==='stairs'){
+            const minRun=0.9+Math.ceil((storey+0.24)/0.18/2)*0.24;
+            if(feature.width<2.4||feature.depth<Math.max(5.6,minRun))
+              return 'Stair well must support <=18cm risers and >=24cm treads.';
+          }else if(feature.width<1.4||feature.depth<1.4)
+            return 'Lift needs at least a 1.4x1.4m shaft.';
+          continue;
+        }
         if(feature.kind==='sliding-roof'){
           if(feature.width<1||feature.depth<1||feature.width>asNumber(width)*0.48||feature.depth>asNumber(depth)*0.75)
             return 'Roof opening must fit within 48% of building width and 75% of depth.';
@@ -192,7 +209,8 @@ export default function BuildingGeneratorPanel({
     clearGenerated();
   };
   const addFeature=(kind:StudioBuildingFeatureKind)=>{
-    if(features.length>=24||(kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof')))return;
+    if(features.length>=24||(kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof'))||
+       (['stairs','elevator'].includes(kind)&&asNumber(floors)<2))return;
     setFeatures(old=>[...old,makeFeature(kind)]);clearGenerated();
   };
   const removeFeature=(index:number)=>{
@@ -321,32 +339,32 @@ export default function BuildingGeneratorPanel({
                   {Object.entries(propertyLabels).map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}
                 </StudioSelect>
               </StudioField>
-              {feature.kind!=='sliding-roof'&&<StudioField label="Wall" htmlFor={"abg-feature-"+i+"-side"}>
+              {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Wall" htmlFor={"abg-feature-"+i+"-side"}>
                 <StudioSelect id={"abg-feature-"+i+"-side"} value={feature.side} disabled={busy}
                   onChange={e=>setFeature(i,'side',e.target.value)}>
                   {['front','back','left','right'].map(side=><option key={side} value={side}>{side}</option>)}
                 </StudioSelect>
               </StudioField>}
-              {feature.kind!=='sliding-roof'&&<StudioField label="Count" htmlFor={"abg-feature-"+i+"-count"}>
+              {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Count" htmlFor={"abg-feature-"+i+"-count"}>
                 <StudioInput id={"abg-feature-"+i+"-count"} type="number" min={1} max={8} step={1} value={String(feature.count)} disabled={busy}
                   onChange={e=>setFeature(i,'count',Number(e.target.value))}/>
               </StudioField>}
-              <StudioField label={feature.kind==='sliding-roof'?'Aperture width, m':'Clear width, m'} htmlFor={"abg-feature-"+i+"-width"}>
+              <StudioField label={['stairs','elevator'].includes(feature.kind)?'Shaft width, m':feature.kind==='sliding-roof'?'Aperture width, m':'Clear width, m'} htmlFor={"abg-feature-"+i+"-width"}>
                 <StudioInput id={"abg-feature-"+i+"-width"} type="number" min={0.85} step={0.1} value={String(feature.width)} disabled={busy}
                   onChange={e=>setFeature(i,'width',Number(e.target.value))}/>
               </StudioField>
-              {feature.kind==='sliding-roof'?<StudioField label="Aperture depth, m" htmlFor={"abg-feature-"+i+"-depth"}>
+              {['sliding-roof','stairs','elevator'].includes(feature.kind)?<StudioField label={feature.kind==='sliding-roof'?'Aperture depth, m':'Shaft depth, m'} htmlFor={"abg-feature-"+i+"-depth"}>
                 <StudioInput id={"abg-feature-"+i+"-depth"} type="number" min={1} step={0.1} value={String(feature.depth)} disabled={busy}
                   onChange={e=>setFeature(i,'depth',Number(e.target.value))}/>
               </StudioField>:<StudioField label="Clear height, m" htmlFor={"abg-feature-"+i+"-height"}>
                 <StudioInput id={"abg-feature-"+i+"-height"} type="number" min={feature.kind==='window'?0.4:2} step={0.1} value={String(feature.height)} disabled={busy}
                   onChange={e=>setFeature(i,'height',Number(e.target.value))}/>
               </StudioField>}
-              <StudioField label={feature.kind==='sliding-roof'?'Roof centre X, m (-1 auto)':'Wall centre, m (-1 auto)'} htmlFor={"abg-feature-"+i+"-position"}>
+              <StudioField label={['sliding-roof','stairs','elevator'].includes(feature.kind)?'Plan centre X, m (-1 auto)':'Wall centre, m (-1 auto)'} htmlFor={"abg-feature-"+i+"-position"}>
                 <StudioInput id={"abg-feature-"+i+"-position"} type="number" min={-1} step={0.1} value={String(feature.position)} disabled={busy}
                   onChange={e=>setFeature(i,'position',Number(e.target.value))}/>
               </StudioField>
-              {feature.kind==='sliding-roof'?<StudioField label="Roof centre Z, m (-1 auto)" htmlFor={"abg-feature-"+i+"-position-z"}>
+              {['sliding-roof','stairs','elevator'].includes(feature.kind)?<StudioField label="Plan centre Z, m (-1 auto)" htmlFor={"abg-feature-"+i+"-position-z"}>
                 <StudioInput id={"abg-feature-"+i+"-position-z"} type="number" min={-1} step={0.1} value={String(feature.positionZ)} disabled={busy}
                   onChange={e=>setFeature(i,'positionZ',Number(e.target.value))}/>
               </StudioField>:feature.count>1?<StudioField label="Gap between openings, m" htmlFor={"abg-feature-"+i+"-spacing"}>
@@ -364,7 +382,7 @@ export default function BuildingGeneratorPanel({
                   value={String(feature.sill)} disabled={busy}
                   onChange={e=>setFeature(i,'sill',Number(e.target.value))}/>
               </StudioField>}
-              {feature.kind!=='window'&&<StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
+              {!['window','stairs','elevator'].includes(feature.kind)&&<StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
                 <StudioInput id={"abg-feature-"+i+"-open"} type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
                   onChange={e=>setFeature(i,'open',Number(e.target.value))}/>
               </StudioField>}
@@ -374,7 +392,8 @@ export default function BuildingGeneratorPanel({
         <div className="abg__property-add">
           {Object.entries(propertyLabels).map(([kind,label])=><StudioButton key={kind}
             variant="secondary" disabled={busy||features.length>=24||
-              (kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof'))}
+              (kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof'))||
+              (['stairs','elevator'].includes(kind)&&asNumber(floors)<2)}
             onClick={()=>addFeature(kind as StudioBuildingFeatureKind)}>+ {label}</StudioButton>)}
         </div>
         <small className="abg__note">Functionality is independent of setting. Entrances cut real wall openings;
