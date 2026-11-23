@@ -163,6 +163,37 @@ static void checkLedger() {
     AIVERSE_TEST_CHECK(decodedChanges.since(0)==expected);
     AIVERSE_TEST_CHECK(decodedChanges.pageSince(0,100).changes==expected);
     AIVERSE_TEST_CHECK(encode(decodedChanges)==encodedChanges);
+    // Bounded acknowledged consumer: failed delivery can retry exactly the
+    // failed entry, without replaying successful records or losing cursor.
+    RegionChangeCursor cursorConsumer;
+    std::vector<std::pair<RegionEntityId,RegionEntityRecord>> delivered;
+    bool failOnce=true;
+    bool complete=false;
+    int batches=0;
+    while(!complete) {
+        complete=cursorConsumer.consume(decodedChanges,5,
+            [&](RegionEntityId id,const RegionEntityRecord& rec) {
+                if(failOnce && delivered.size()==3) {
+                    failOnce=false;
+                    return false;
+                }
+                delivered.emplace_back(id,rec);
+                return true;
+            });
+        AIVERSE_TEST_CHECK(++batches<30);
+    }
+    AIVERSE_TEST_CHECK(delivered==expected);
+    AIVERSE_TEST_CHECK(cursorConsumer.lastRevision()==
+                       decodedChanges.lastRevision());
+    AIVERSE_TEST_CHECK(cursorConsumer.consume(decodedChanges,5,
+        [](RegionEntityId,const RegionEntityRecord&){return true;}));
+    cursorConsumer.reset();
+    AIVERSE_TEST_CHECK(cursorConsumer.lastRevision()==0);
+    AIVERSE_TEST_CHECK(!cursorConsumer.consume(decodedChanges,0,
+        [](RegionEntityId,const RegionEntityRecord&){return true;}));
+    AIVERSE_TEST_CHECK(cursorConsumer.consume(decodedChanges,200,
+        [](RegionEntityId,const RegionEntityRecord&){return true;}));
+
 
     // Persistent changes are authoritative even when an observer is far away.
     RegionEntityLedger roaming;
