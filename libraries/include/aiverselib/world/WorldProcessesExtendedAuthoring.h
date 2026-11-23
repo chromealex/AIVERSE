@@ -3,6 +3,7 @@
 #pragma once
 #include "WorldProcessesAuthoring.h"
 #include "WorldProcessesSuite.h"
+#include "GranularDocument.h"
 #include <charconv>
 #include <cstdint>
 #include <limits>
@@ -63,7 +64,11 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
     }
     if(id=="GranularField"){
         if(key=="capacity")return authoring::integerExact(v,1,granular::kMaxCellMass);
-        return key=="initialMass"&&authoring::integerExact(v,0,granular::kMaxCellMass);
+        if(key=="initialMass")return authoring::integerExact(v,0,granular::kMaxCellMass);
+        if(key=="width"||key=="height")
+            return authoring::integerExact(v,1,granular::kMaxDimension);
+        if(key=="mass"||key=="solid")return v.isArray();
+        return false;
     }
     if(id=="EvolveRegion"){
         return (key=="durability"||key=="fertility"||key=="succession"||
@@ -79,6 +84,8 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
 inline bool validate(std::string_view id,const Json& doc,std::string* error=nullptr){
     const auto fail=[&](std::string s){if(error)*error=std::move(s);return false;};
     if(!supports(id)||!doc.isObject())return fail("Unknown World Processes authoring component");
+    if(id=="GranularField"&&doc.has("width"))
+        return granular::authoring::validate(doc,error);
     const Json schema=defaults(id);
     if(doc.size()!=schema.size())return fail("Missing or extra authoring fields");
     for(const auto& [key,v]:doc.members())
@@ -137,6 +144,8 @@ inline bool apply(World& world,Entity e,std::string_view id,const Json& doc,
         v.drive=flag("drive");v.enabled=flag("enabled");
         world.add<circuit::Node>(e,v);
     }else if(id=="GranularField"){
+        if(doc.has("width"))
+            return granular::authoring::apply(world,e,doc,error);
         granular::Field v;
         v.capacity=n("capacity");v.mass[0]=n("initialMass");
         v.enabled=flag("enabled");
