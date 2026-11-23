@@ -633,3 +633,7 @@ Native host RPC `studio.worldProcessGroupPivot` returns current group pivot X/Z 
 ## Stage 51: preview lifecycle and typed validation
 
 Repaired the malformed Stage49 React numeric preview effect and ensured invalid input sends revisioned, owner-scoped clear requests. Native host now lets the active owner clear even after selection changes, rejects other owners' clears, and invalidates numeric preview on selection change. Numeric preview validates authored `EvolveArea` through `lib::worldprocess::extended::validate`, matching the Stage42 commit eligibility better. Multi-window lifecycle and full transaction parity still require work. Source-only; no TS/C++ build or runtime QA. Handoff: `docs/handoffs/world-processes-stage51-preview-lifecycle-validation-2026-11-23.md`.
+
+## Stage 52: window lifecycle and shared bounds validation
+
+Numeric EVOLVE preview now releases its owner-scoped native overlay on HTML5 pagehide/unmount and suspends while document visibility is hidden; visible windows refresh with revisioned updates. Shared `evolve::scale_math::withinBounds` validates world-coordinate half-extent constraints in both two-axis group preview and atomic batch commit, alongside Stage50 shared transform. Unfocused-but-visible floating windows and legacy single-edge parity remain to be addressed. Source-only, no TS/C++ compile or runtime QA. Handoff: `docs/handoffs/world-processes-stage52-window-lifecycle-bounds-2026-11-23.md`.
