@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -50,7 +51,10 @@ public:
             if(error)*error="Invalid dual leaf scene or missing authoritative guards";
             return false;
         }
-        if(!presentation_.initialize(physics.poses(),style,error))return false;
+        {
+            std::lock_guard<std::mutex> lock(presentationMutex_);
+            if(!presentation_.initialize(physics.poses(),style,error))return false;
+        }
         sceneId_=sceneId;
         authorize_=std::move(authorize);
         range_=std::move(range);
@@ -168,8 +172,11 @@ public:
         }
         // This is a committed physics + graph snapshot. Presentation uses
         // exactly the authoritative physical permille, not a client clock.
-        frame.presentationAccepted=presentation_.acceptPhysicalStep(
-            physics.poses(),tick,frame.revision,&frame.error);
+        {
+            std::lock_guard<std::mutex> lock(presentationMutex_);
+            frame.presentationAccepted=presentation_.acceptPhysicalStep(
+                physics.poses(),tick,frame.revision,&frame.error);
+        }
         if(frame.presentationAccepted){
             const auto poses=physics.poses();
             frame.fullyOpen=!frame.moving&&!poses.empty()&&
@@ -188,6 +195,10 @@ public:
             if(error)*error="Dual leaf renderer owner unavailable";
             return false;
         }
+        // CPU visual state may be accepted on a distinct world thread.
+        // Keep its immutable Model pointers and mutable pose interpolation
+        // stable until the existing Renderer3D has copied this draw batch.
+        std::lock_guard<std::mutex> lock(presentationMutex_);
         const auto frame=presentation_.interpolate(dtMs);
         if(!frame.valid){
             if(error)*error=frame.error;
@@ -209,6 +220,7 @@ public:
                       const StyleMaterial& style,
                       const BuildingImageByGuid& resolve,
                       std::string* error=nullptr){
+        std::lock_guard<std::mutex> lock(presentationMutex_);
         return presentation_.bindStyleMaterial(socketId,style,resolve,error);
     }
 
@@ -221,7 +233,10 @@ public:
     }
     void detach(){
         // Caller retires GPU leases FIRST, then detaches physical owner.
-        presentation_.clear();
+        {
+            std::lock_guard<std::mutex> lock(presentationMutex_);
+            presentation_.clear();
+        }
         accepted_.clear();queue_.clear();
         authorize_={};range_={};
         sceneId_=lastTick_=0;
@@ -230,6 +245,7 @@ public:
     size_t queued()const noexcept{return queue_.size();}
 private:
     BuildingAperturePresentation presentation_;
+    mutable std::mutex presentationMutex_;
     Authorize authorize_;
     InteractionRange range_;
     uint64_t sceneId_=0,lastTick_=0;
