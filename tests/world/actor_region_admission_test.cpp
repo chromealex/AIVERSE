@@ -349,6 +349,36 @@ void testTypedVehicleAdmissionAndRestore() {
                         ->controller.position==originalControllerPosition);
 }
 
+// Even after a car has driven back near players, the original map spawn
+// remains a possible round-reset destination and must be collision-resident.
+void testOriginalVehicleResetDestinationPreloaded() {
+    Json rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,
+        "mode":"deathmatch","mechanics":{"enabled":true},
+        "weapon":{"range":20}},"regionOwnership":{}})");
+    Json map=Json::parse(R"({"players":[{"team":1},{"team":2}],
+        "spawns":[[4,2,4],[8,2,4]],"colliders":[],
+        "vehicles":[{"pos":[324,2,4],"speed":15}]})");
+    map.set("world",worldManifest());
+    auto sim=std::make_unique<Simulation>(
+        SimConfig{91,60,0,true},std::make_unique<game::GameCore>());
+    sim->setup(rules,map);
+    auto cars=actor::host(*sim).vehicleEntities(*sim);
+    AIVERSE_TEST_CHECK(cars.size()==1);
+    // The live car is now nearby. No camera, live vehicle, player, projectile
+    // or queued teleport requires the distant original spawn.
+    sim->world().get<actor::Vehicle>(cars[0]).pos={12_fx,2_fx,4_fx};
+    std::atomic<bool> remote{false};
+    actor::host(*sim).setContentReader(reader(remote));
+    const auto hash=sim->checksum();
+    const auto rng=sim->rng().state();
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==0 && sim->checksum()==hash);
+    AIVERSE_TEST_CHECK(sim->rng().state()==rng);
+    remote=true;
+    progressOne(*sim);
+    AIVERSE_TEST_CHECK(sim->tick()==1);
+}
+
 void testStaticAndOccupiedMove() {
     auto sim=create(false);
     auto& host=actor::host(*sim);
@@ -387,6 +417,7 @@ int main() {
     testLateGameplayCommandWaitsForNextAdmission();
     testQueuedDestinationSurvivesSave();
     testStaticAndOccupiedMove();
+    testOriginalVehicleResetDestinationPreloaded();
     testTypedSeatSafety();
     testTypedVehicleAdmissionAndRestore();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
