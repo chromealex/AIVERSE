@@ -1,5 +1,8 @@
 #include "engine/world/RegionEntityLedger.h"
 #include "engine/world/UnifiedWalSession.h"
+#include "engine/world/NativeWorldFinality.h"
+#include "engine/world/UnifiedEntitySection.h"
+#include "engine/world/UnifiedComponentSection.h"
 #include "engine/world/UnifiedResourceSection.h"
 #include <chrono>
 #include <fstream>
@@ -513,7 +516,101 @@ static void checkResourceWal(){
 #endif
 }
 
+
+static void checkExactMutationCapture(){
+    RegionEntityLedger ledger;
+    AIVERSE_TEST_CHECK(ledger.spawn(11,a));
+    auto baseline=ledger;
+    RegionEntityLedger::MutationCapture capture(ledger);
+    AIVERSE_TEST_CHECK(ledger.transfer(11,a,b));
+    {
+        RegionEntityLedger::Transaction tx(ledger);
+        AIVERSE_TEST_CHECK(tx.transfer(11,b,c));
+    }
+    AIVERSE_TEST_CHECK(ledger.transfer(11,b,a));
+    AIVERSE_TEST_CHECK(ledger.spawn(12,b));
+    AIVERSE_TEST_CHECK(ledger.despawn(12,b));
+    capture.stop();
+    AIVERSE_TEST_CHECK(capture.ok()&&capture.records().size()==4);
+    RegionWalFrame frame;
+    AIVERSE_TEST_CHECK(RegionWalTransaction::encodeCaptured(capture.initialRevision(),
+        ledger.lastRevision(),capture.records(),1,frame));
+    AIVERSE_TEST_CHECK(RegionWalTransaction::replay(baseline,frame));
+    AIVERSE_TEST_CHECK(baseline.records()==ledger.records()&&baseline.lastRevision()==ledger.lastRevision());
+    RegionEntityLedger::MutationCapture limited(ledger,1);
+    AIVERSE_TEST_CHECK(ledger.transfer(11,a,b)&&ledger.transfer(11,b,c));
+    AIVERSE_TEST_CHECK(!limited.ok());
+}
+
+struct FinalityFixtureComponent {uint32_t value=0;};
+inline void io(Archive& ar,FinalityFixtureComponent& value){ar(value.value);}
+static void checkNativeFinality(){
+#if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
+    namespace fs=std::filesystem;
+    struct Temp {
+        fs::path dir;
+        ~Temp(){std::error_code ec;if(!dir.empty())fs::remove_all(dir,ec);}
+    } temp;
+    for(unsigned i=0;i<100;++i){
+        auto p=fs::temp_directory_path()/("aiverse-finality-"+
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+"-"+std::to_string(i));
+        std::error_code ec;
+        if(fs::create_directory(p,ec)){temp.dir=std::move(p);break;}
+    }
+    AIVERSE_TEST_CHECK(!temp.dir.empty());
+    auto sim=makeSim();
+    auto e=sim->world().create();
+    sim->world().add<RegionStableIdentity>(e,RegionStableIdentity{101});
+    sim->world().add<FinalityFixtureComponent>(e,FinalityFixtureComponent{10});
+    auto* ledger=sim->world().resource<RegionEntityLedger>();
+    AIVERSE_TEST_CHECK(ledger->spawn(101,a));
+    sim->addSystem("finality.fixture",[e](Simulation& s){
+        if(s.tick()!=0)return;
+        auto* l=s.world().resource<RegionEntityLedger>();
+        AIVERSE_TEST_CHECK(l->transfer(101,a,b)&&l->transfer(101,b,c));
+        s.world().remove<FinalityFixtureComponent>(e);
+        s.world().add<FinalityFixtureComponent>(e,FinalityFixtureComponent{25});
+    });
+    DurableComponentCodecs codecs;
+    AIVERSE_TEST_CHECK(codecs.addTyped<FinalityFixtureComponent>("test.finality.component"));
+    UnifiedCheckpointSections::Adapters adapters{};
+    constexpr size_t budget=64*1024;
+    adapters[0]=UnifiedEntitySection::adapter([](World& w,RegionEntityId id,const RegionEntityRecord&){
+        auto e=w.create();w.add<RegionStableIdentity>(e,RegionStableIdentity{id});return true;
+    });
+    adapters[1]=UnifiedComponentSection::adapter(codecs,budget);
+    adapters[2]={1,[](const UnifiedWorldReplay::State&,std::vector<uint8_t>& out){out.clear();return true;},
+        [](UnifiedWorldReplay::State&,uint32_t version,std::span<const uint8_t> in){return version==1&&in.empty();}};
+    UnifiedWorldReplay::State initial;
+    initial.ledger=*ledger;initial.world=sim->world();
+    initial.world.eraseResource<RegionEntityLedger>();
+    UnifiedWalSession session;
+    std::array<uint8_t,16> uuid{};uuid[0]=9;
+    AIVERSE_TEST_CHECK(session.create(temp.dir,uuid,initial,adapters,budget)==RegionWalWrite::Ok);
+    auto materialize=[](World&,const RegionEntityLedger&,const RegionEntityLedger&){return true;};
+    NativeWorldFinality finality(*sim,session,codecs,{},materialize);
+    using Result=NativeWorldFinality::Result;
+    AIVERSE_TEST_CHECK(finality.step()==Result::Committed);
+    AIVERSE_TEST_CHECK(session.state()->sequence==1&&session.state()->ledger.find(101)->owner==c);
+    AIVERSE_TEST_CHECK(finality.step()==Result::NoChanges&&finality.lastFinalizedTick()==2);
+    // A normal speculative/unowned step is never written to WAL.
+    sim->step();
+    AIVERSE_TEST_CHECK(finality.step()==Result::NeedsRecovery&&finality.failed());
+    AIVERSE_TEST_CHECK(session.state()->sequence==1);
+    session.close();
+    AIVERSE_TEST_CHECK(session.openCheckpoint(temp.dir,uuid,budget,adapters,
+        [](){return std::make_unique<UnifiedWorldReplay::State>();},codecs,materialize)==RegionWalWrite::Ok);
+    PersistentEntityReferences refs;Entity restored;
+    AIVERSE_TEST_CHECK(refs.rebuild(session.state()->world,session.state()->ledger));
+    AIVERSE_TEST_CHECK(refs.resolve(session.state()->world,101,restored));
+    AIVERSE_TEST_CHECK(session.state()->world.tryGetConst<FinalityFixtureComponent>(restored)->value==25);
+    session.close();
+#endif
+}
+
 int main() {
+    checkExactMutationCapture();
+    checkNativeFinality();
     checkResourceWal();
     checkUnifiedBackupCatalog();
     checkLedger();
