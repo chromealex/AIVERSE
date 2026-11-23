@@ -23,7 +23,7 @@ REQUIRED = {
     "postfx": ("postfx_get",),
     "geometry": ("geometry_catalog", "strata_capabilities"),
     "human": ("human_schema", "human_create"),
-    "graphs": ("graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_edit", "graph_save", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies"),
+    "graphs": ("graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_edit", "graph_save", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe"),
     "mcp": ("mcp_registry",),
 }
 
