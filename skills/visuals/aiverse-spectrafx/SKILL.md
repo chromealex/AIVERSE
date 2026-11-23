@@ -1887,3 +1887,7 @@ SPFT V1 wraps SPFR payload with tick and burst count, CRC covers header and payl
 ## Stage 72 — SPFT file transfer
 
 Studio checkpointFileBegin/Append/Import and Export/Read transfer ordered 32 KiB hex chunks with bounded size; import queues render-owner restore. HTML5 file picker/download and MCP fx_checkpoint_file registered. Export requires fresh paused checkpoint. No tests run. Transfer ownership IDs, command exclusion and native dispatch/catalog audit remain.
+
+## Stage 73 — transfer IDs and replay mode
+
+File transfers require transferId for append/read/import/cancel; idle buffers expire after 30 seconds on command processing. Replay preset optional gpuBirthRandom validated and restored via graph reload before replay. IDs correlate operations, not authentication. No tests run; audit import cleanup on error, native dispatch and loaded-versus-checkbox mode.
