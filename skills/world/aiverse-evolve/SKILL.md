@@ -107,3 +107,7 @@ See `docs/handoffs/world-processes-stage31-bidirectional-handles-2026-11-23.md`.
 ## Stage 32: authored EVOLVE center offsets
 
 `EvolveArea` supports `offsetXcm` and `offsetZcm` relative to the owning map entity `pos`. Both default to zero; Stage30 maps missing both remain valid. Native hydration writes the sum to persisted `evolve::Area.centerXcm/centerZcm`; TerraWeave consumes ECS `evolve::extents(world)` unchanged. Studio has separate X/Z center drag handles and persists offset fields through `studio.worldProcessAreaSet` / MapDoc Undo. All four extent handles use the offset center, but still resize symmetrically. Asymmetric resize is not yet implemented. Source-only, no compile/runtime QA (deferred). See `docs/handoffs/world-processes-stage32-evolve-center-offsets-2026-11-23.md`.
+
+## Stage 33: asymmetric EVOLVE edge resize
+
+Four native Scene handles now keep the opposite edge fixed. Dragging an edge sends `edgeSide: positive|negative` and the desired edge coordinate in centimetres relative to the map entity through `studio.worldProcessAreaSet`. The session atomically derives the center offset and half-extent in one MapDoc Undo operation; direct field edits without edgeSide preserve their existing semantics. The ECS area schema remains unchanged. Even-centimetre spans are enforced so center and half-extents remain integral. Tests deferred; see `docs/handoffs/world-processes-stage33-asymmetric-area-resize-2026-11-23.md`.
