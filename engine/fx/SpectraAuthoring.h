@@ -60,6 +60,7 @@ inline const std::vector<NodeInfo>& nodeCatalog() {
         {"FunctionCall","Functions",R"({"function":"identity","arguments":{"x":1}})","arguments.x",true},
         {"ParticleRead","Values",R"({"field":"ageNormalized"})","",true},
         {"InstanceParameter","Values",R"({"name":"lift"})","",true},
+        {"DataInterface","Data Interfaces",R"({"name":"wind_lift"})","",true},
         {"AgeNormalized","Values",R"({})","",true},
         {"Curve","Values",R"({"value":[[0,1],[1,0]]})","",true},
         {"Gradient","Values",R"({"value":[[0,"#ffffffff"],[1,"#ffffff00"]]})","",true},
