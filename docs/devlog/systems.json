@@ -1833,6 +1833,13 @@
           "titleEn": "Genre-independent windows, room grids and floors in Building StructureGraph",
           "text": "Реальные окна и стекло, межэтажные перекрытия, внутренние перегородки с проходами. Вертикальная навигация — отдельный следующий этап.",
           "textEn": "Real glazed apertures, floor slabs and room partitions with horizontal passages. Vertical navigation next."
+        },
+        {
+          "status": "in-progress",
+          "title": "Building StructureGraph: лестницы, лифтовые шахты и настоящие проёмы перекрытий",
+          "titleEn": "Building StructureGraph: staircases, elevator shafts and real floor openings",
+          "text": "Лестничные марши, площадки, шахты без перекрытий и вертикальные связи комнат, полностью жанронезависимо. Требуется runtime/navmesh интеграция.",
+          "textEn": "Bounded stair flights, lift shaft with floor voids, and vertical room links; runtime/navmesh integration remains."
         }
       ],
       "core": true,

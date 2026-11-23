@@ -108,3 +108,7 @@ factory 16×9×11 seed 3 failed; **not** proof of failure in the new graph path.
 
 
 Stage 12: see docs/building-functional-recipes.md for multi-floor room grid, window aperture and collider semantics.
+
+
+Stage 13: see docs/building-functional-recipes.md for stairs/elevator
+shaft voids, vertical room edges and the runtime/navmesh integration limits.

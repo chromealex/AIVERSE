@@ -128,3 +128,10 @@ Stage 12: floors, roomsX, roomsZ, window, sill and floor in BuildingStructureGra
 The graph itself compiles standalone C++20 and emits rooms/connections. Window
 panes are thin and collidable. No vertical navmesh, stairs or lifts. Handoff:
 docs/agent-handoffs/building-floors-rooms-windows-2026-11-23.md.
+
+
+Stage 13: stairs and elevator properties with centre X/Z + width/depth,
+room-cell containment and real slab apertures in BuildingStructureGraph.
+Vertical links are graph metadata, NOT automatically published navmesh.
+Static lift rails and starting platform only; runtime motion later.
+Handoff: docs/agent-handoffs/building-vertical-circulation-2026-11-23.md.

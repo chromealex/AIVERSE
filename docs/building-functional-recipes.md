@@ -150,3 +150,63 @@ windows cannot stack at the same wall coordinate on different floors yet.
 The room layout is a rectangular grid, not arbitrary floor-plan geometry.
 Window glass is static. No engine GPU render screenshots have been verified
 for this stage. GitHub focused CI was queued at implementation time.
+
+
+## Stage 13: Real floor shafts and vertical circulation
+
+The functional recipe now supports two additional style-neutral property kinds:
+**stairs** and **elevator**. These are independent of a building's gameplay
+role or style. A sample is located at
+engine/assets/building-recipes/vertical-circulation.json.
+
+Stairs and lifts have width and depth (metres), optionally X/Z centre
+(position and positionZ; -1 means automatic), count exactly 1 and floor 0.
+They require at least two storeys. The generated shaft stays inside a single
+room cell, with 0.35m structural margin, avoiding exterior/perimeter walls and
+internal partitions. At most two vertical cores may be authored per recipe;
+intersecting cores or cores that would cross partition walls are rejected.
+
+The StructureGraph produces **real empty holes** in all upper-storey floor
+slabs, not merely visible hatches. The slab mesh and conservative physics
+colliders both come from the same rectangular partition of the surface.
+For stairs, two opposed flights of box treads and a turning landing are
+generated per storey; rise is capped at 0.18m and tread depth is at least
+0.24m. The stairwell must be large enough for these constraints. For lifts,
+four thin fixed guide rails and a **single starting platform** are generated.
+The lift platform is NOT animated automatically.
+
+Graph connections have BuildingConnectionKind:
+Passage (same-storey), Stair (between adjacent storeys), Elevator (between
+adjacent storeys). Vertical connection IDs are vertical/<feature>/<floor>,
+with source/target room IDs. Stable semantic sockets include
+stairs/<feature>/<floor> and lift/<feature>/<floor>. These are data and
+geometry for a future gameplay/navmesh owner, not a claim that an existing
+AI agent already walks the stairs or calls an elevator.
+
+Studio Building Generator exposes Stairs and Lift properties, including
+shaft W/D and X/Z position, and persists them through the existing native
+GLB + canonical recipe JSON asset path. RuntimeBuildingGenerator returns
+all graph connections/sockets without depending on Studio/renderer/genre.
+
+### On the Mac
+
+    cd ~/Projects/AIVERSE-buildings-qa
+    git fetch origin feature/aiv20261123_building-grammar
+    git status --short
+    git switch --detach origin/feature/aiv20261123_building-grammar
+    mkdir -p build/buildings-qa
+    clang++ -std=c++20 -Wall -Wextra -Werror -Ilibraries/include \
+      tests/libraries/building_structure_graph_tests.cpp \
+      -o build/buildings-qa/building_structure_graph_tests
+    ./build/buildings-qa/building_structure_graph_tests
+    python3 tools/buildings/qa_batch_20.py --compile --allow-failures
+    ./build/buildings-qa/aiverse_building_export \
+      --style engine/assets/building-styles/scifi.json \
+      --recipe engine/assets/building-recipes/vertical-circulation.json \
+      --out build/buildings-qa/vertical-circulation.glb
+
+The focused workflow also exports the same recipe under modern materials
+and runs native/cross-style tests. These changes have been committed but
+Stage 13 C++/TS/native/GPU test results have NOT been verified at the time
+of documentation. Do not merge or claim playable vertical navmesh until
+the existing PHYSIS/Navmesh/gameplay owners are integrated and visual QA passes.

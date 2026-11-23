@@ -72,3 +72,11 @@ Stage 12: RuntimeBuildingResult.structureGraph contains rooms and horizontal
 connections. Multi-floor properties: floors, roomsX, roomsZ and window
 features with floor/sill. Example: engine/assets/building-recipes/two-floor-workshop.json.
 No vertical floor connections yet.
+
+
+Stage 13: stairs/lift recipe support. See
+engine/assets/building-recipes/vertical-circulation.json.
+RuntimeBuildingResult.structureGraph.connections now includes
+BuildingConnectionKind::Stair/Elevator across adjacent floors, and solids
+have physically absent upper slab sections. A gameplay owner must publish
+navmesh links and implement actual elevator platform motion separately.
