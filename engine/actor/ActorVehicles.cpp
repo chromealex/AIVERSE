@@ -126,6 +126,21 @@ void ActorHost::setupVehicles(Simulation& sim,const Json& map) {
         vs::addVehicle(w,entities[i],*t,v.pos,v.yaw);
     }
 }
+bool ActorHost::vehicleRegionGroup(const Simulation& sim,Entity vehicle,
+                                   world::VehicleRegionGroup& out,
+                                   std::string* error) const {
+    const auto& ecs=sim.world();
+    return world::VehicleRegionTransfer::gather(
+        ecs,vehicle,
+        [this,&sim](int64_t seatActor)->Entity {
+            // World-space seat manifests use player slot numbers. Resolve
+            // through CharacterIndex; never cast seat slots to Entity handles.
+            if(seatActor<=0 || seatActor>int64_t(characterCount(sim)) ||
+               seatActor>UINT8_MAX)return kNullEntity;
+            return characterEntity(sim,uint8_t(seatActor));
+        },out,error);
+}
+
 bool ActorHost::canFireFromVehicle(Simulation& sim,const CharacterRef& a) const {
     auto* run=vehicleDrive(sim,a.vehicle);if(!run)return false;
     const auto* type=drive_.type(run->type);if(!type)return false;auto seat=vehicleSeatOf(run->seats,a.slot);
