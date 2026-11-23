@@ -20,6 +20,17 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-world-processes':'world processes deterministic ecs world systems mechanics universal processes игровые мир процессы экосистем общие механики',
+ 'aiverse-echo':'echo acoustics hearing sound portal zone acoustic npc ear noise звук слышимость шум акустика порталы зоны',
+ 'aiverse-fracture':'fracture structural support collapse bond breaking destruction damage разрушение обрушение опоры балки связи',
+ 'aiverse-aether':'aether gas ventilation smoke toxin oxygen diffusion leak airflow газ вентиляция дым кислород токсин утечка',
+ 'aiverse-morph':'morph deform softbody spring vertex bend skin shape impact деформация мягкое тело пружина вершины импульс',
+ 'aiverse-crowd':'crowd navmesh routes formation agents slots path finding avoidance queue толпа маршруты путь навмеш очередь npc',
+ 'aiverse-imprint':'imprint tracks footprint scent residue trace trail decay diffusion следы запах отпечатки диффузия',
+ 'aiverse-circuit':'circuit power electric wires switches gates light doors motor pump сеть питание электричество провода выключатель двери',
+ 'aiverse-granular':'granular sand loose material grains sediment terrain dig fill brush песок осыпание грунт сыпучие земля',
+ 'aiverse-evolve':'evolve ecology region fertility succession pollution climate forest growth эволюция регион природа лес плодородие',
+ 'aiverse-society':'society npc knowledge rumors trust contact messages dialogue quest relations общество память слухи npc доверие отношения',
  'aiverse-character-locomotion':'wallrun wall-run wall slide walljump dash air dash grapple hook glide glider one-way platform drop through parkour паркур бег по стене рывок крюк кошка планирование односторонн платформ locomotion movement jump coyote slope ledge ladder swim climb mantle vault движение прыжок склон уступ лестница плавание лазание',
  'aiverse-ecs-shared-static':'ecs shared static immutable configuration prefab interned dedup memory snapshot rollback staticref sharedref scene read-only component component storage game editor общие статические компоненты префаб память конфиг дедупликация снапшот откат',
  'aiverse-voxel-world':'voxel voxels block blocks chunk chunks minecraft dig mine place raycast region save воксел блок чанк майнкрафт копат ставит регион',
@@ -304,6 +315,27 @@ def generate():
         summary='Immutable SharedRef and StaticRef ECS configs, prefab dedup, snapshots and multi-world scene integration',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],
         source='engine/sim/SharedStaticComponents.h'))
+    # Native World Processes are opt-in ECS capabilities, not library packages.
+    # Gameplay recipes have runtime=none: do NOT invent a CMake library per
+    # skill or pull Box3D/PHYSIS/TerraWeave into unrelated games.
+    world_process_skills=[
+        ('aiverse-world-processes','Route ten genre-neutral ECS world mechanics to existing owners','WorldProcesses.h',[]),
+        ('aiverse-echo','ECHO hearing zones, portals and gameplay acoustic perception','EchoEcs.h',['aiverse-world-processes']),
+        ('aiverse-fracture','FRACTURE support bonds, collapse events and PHYSIS bridge','FractureEcs.h',['aiverse-world-processes']),
+        ('aiverse-aether','AETHER gas diffusion, smoke, ventilation and PHYSIS fire coupling','AetherEcs.h',['aiverse-world-processes']),
+        ('aiverse-morph','MORPH deformable nodes, springs and Box3D/Renderer3D adapters','MorphEcs.h',['aiverse-world-processes']),
+        ('aiverse-crowd','CROWD slot assignment, local avoidance and native NavMesh routes','CrowdEcs.h',['aiverse-world-processes']),
+        ('aiverse-imprint','IMPRINT persistent trails, scent and movement-driven trace cells','ImprintEcs.h',['aiverse-world-processes']),
+        ('aiverse-circuit','CIRCUIT powered logic gates, switches and real game devices','CircuitEcs.h',['aiverse-world-processes']),
+        ('aiverse-granular','GRANULAR loose solids, Studio grid authoring and TerraWeave transfer','GranularEcs.h',['aiverse-world-processes']),
+        ('aiverse-evolve','EVOLVE long-term regions, PHYSIS climate and TerraWeave ecology','EvolveEcs.h',['aiverse-world-processes']),
+        ('aiverse-society','SOCIETY trusted NPC knowledge, rumors and quest event triggers','SocietyEcs.h',['aiverse-world-processes']),
+    ]
+    for name,summary,source,deps in world_process_skills:
+        entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
+            summary=summary,side='tools',runtime='none',target=None,
+            dependencies=deps,backendDependencies=[],
+            source='libraries/include/aiverselib/world/'+source))
     for name,summary,source in WORKFLOWS:
         entries.append(dict(id=name,package=None,path=skill_path(name),domain='workflow',summary=summary,
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source=source))
