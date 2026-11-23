@@ -5329,3 +5329,14 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiv
     add_test(NAME actor_region_lifecycle_test COMMAND aiverse_actor_region_lifecycle_test)
     set_tests_properties(actor_region_lifecycle_test PROPERTIES LABELS "World;ECS;Vehicles")
 endif()
+
+# W1.9: staged movement admission. Real ActorHost/CollisionStream must refuse
+# a tick until all requested destination collision is resident.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
+    add_executable(aiverse_actor_region_admission_test
+        tests/world/actor_region_admission_test.cpp)
+    target_link_libraries(aiverse_actor_region_admission_test PRIVATE aiverse_authority)
+    add_test(NAME actor_region_admission_test
+        COMMAND aiverse_actor_region_admission_test)
+    set_tests_properties(actor_region_admission_test PROPERTIES LABELS "World;ECS;NETWORK")
+endif()
