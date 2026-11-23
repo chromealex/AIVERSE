@@ -31,7 +31,11 @@
     "apps/studio-web/src/graphs/materialGraph.ts",
     "apps/studio-web/src/graphs/MaterialGraphPanel.tsx",
     "apps/studio-web/src/panels/MaterialsPanel.tsx",
-    "apps/editor/core/MaterialOps.cpp"
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-web/src/graphs/strataAnalysis.ts",
+    "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
+    "apps/studio-web/src/graphs/graphDiagnostics.ts",
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx"
   ],
   "traits": {
     "editable": true,
@@ -160,7 +164,9 @@
       "terraweave_forest_set",
       "texture_patterns",
       "texture_generate",
-      "material_set"
+      "material_set",
+      "strata_capabilities",
+      "strata_model_analyze"
     ],
     "studio_panels": [
       "shader_graph",
@@ -168,7 +174,8 @@
       "anim_graph",
       "modeling",
       "terraweave_generator",
-      "materials"
+      "materials",
+      "models"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",
@@ -178,7 +185,8 @@
       "studio.op",
       "studio.assets",
       "studio.materials",
-      "studio.materialPatch"
+      "studio.materialPatch",
+      "studio.assetByGuid"
     ]
   },
   "test_reports": []
