@@ -1,18 +1,19 @@
 ---
 name: aiverse-society
-description: Use AIVERSE SOCIETY when implementing Распространение знанийслухов по доверительным связям и события NPC для существующих AI, диалогов и квестов.
+description: Use AIVERSE SOCIETY for Trust-based NPC knowledge propagation and replay-safe triggers for existing AI, quests and dialogue.
 ---
 # SOCIETY — AIVERSE skill
 
 ## When to activate
-Распространение знаний/слухов по доверительным связям и события NPC для существующих AI, диалогов и квестов.
+Trust-based NPC knowledge propagation and replay-safe triggers for existing AI, quests and dialogue.
 
-Typical request: память NPC, информация о событиях, доверие, слухи, реакции квестов и поведений. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: NPC memories, rumors, trust, information, quest triggers. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/SocietyEcs.h`, `libraries/include/aiverselib/world/SocietyNpcTriggers.h`.
 - **Authoritative ECS:** `society::Person, Contact, Message, NpcTrigger`.
 - **Lifecycle:** `aiverse::lib::worldprocess::installSuite(sim,flags) with flags.society=true`; per-tick behavior: `society.knowledge -> society.npc_reactions`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `SocietyPerson, SocietyContact, SocietyMessage, SocietyNpcTrigger`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/SocietyNpcHost.h`, `WorldProcessGameplayHost.h`, `WorldProcessesExtendedLinks.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
