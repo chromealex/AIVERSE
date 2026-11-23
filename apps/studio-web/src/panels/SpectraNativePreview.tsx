@@ -40,6 +40,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [burstCount,setBurstCount]=useState(1);
   const [captureSide,setCaptureSide]=useState(512);
   const [capturePending,setCapturePending]=useState(false);
+  const [captureId,setCaptureId]=useState<number|undefined>(undefined);
   const [captureImage,setCaptureImage]=useState('');
   const [compareA,setCompareA]=useState('');
   const [compareB,setCompareB]=useState('');
@@ -131,7 +132,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     const timer=window.setInterval(()=>{
       if(inFlight || closed)return;
       inFlight=true;
-      void invoke('studio.spectraPreview',{action:'captureStatus'}).then(result=>{
+      void invoke('studio.spectraPreview',{action:'captureStatus',captureId}).then(result=>{
         if(closed)return;
         setState(result);
         const capture=result.capture;
@@ -154,7 +155,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       }).finally(()=>{inFlight=false;});
     },350);
     return()=>{closed=true;window.clearInterval(timer);};
-  },[active,capturePending,captureSlot]);
+  },[active,capturePending,captureSlot,captureId]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -295,7 +296,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       });
       setState(result);
       if(result.capture?.error){setCaptureSlot(null);setCaptureError(result.capture.error);}
-      else setCapturePending(!!result.capture?.pending);
+      else {setCaptureId(result.capture?.captureId);setCapturePending(!!result.capture?.pending);}
     }catch(e){setCaptureSlot(null);setCaptureError(message(e));}
     finally{setBusy(false);}
   };
@@ -446,7 +447,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void captureFrame()}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
-      {capturePending&&<StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'captureCancel'}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
+      {capturePending&&<StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'captureCancel',captureId}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
     </div>
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" disabled={!active||!state?.ready||busy||capturePending}
