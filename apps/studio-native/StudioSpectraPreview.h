@@ -4,6 +4,7 @@
 // No ImGui, no game/ECS mutation and no second GPU device.
 #pragma once
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
 #include <algorithm>
 #include <cmath>
@@ -409,6 +410,22 @@ public:
         return ready_ && (checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
                           restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
+    }
+    bool exportTimelineCheckpoint(std::vector<uint8_t>& out) const {
+        if(!ready_||playing_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
+           pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
+           targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
+        std::vector<uint8_t> payload;
+        return runtime_.exportRestoreCheckpoint(payload)&&spectra::encodeTimelineCheckpoint(payload,timeTicks_,triggeredBursts_,out);
+    }
+    // Render-owner frame only; callers must not invoke this inside a pass.
+    bool importTimelineCheckpoint(const std::vector<uint8_t>& bytes) {
+        if(!ready_||playing_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
+           pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
+           targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
+        uint32_t tick=0,bursts=0;std::vector<uint8_t> payload;
+        if(!spectra::decodeTimelineCheckpoint(bytes,tick,bursts,payload)||!runtime_.importRestoreCheckpoint(payload))return false;
+        timeTicks_=targetTicks_=tick;triggeredBursts_=bursts;phase_=0;replayPrepared_=false;error_.clear();return true;
     }
     uint32_t timeTicks() const {return timeTicks_;}
     Json status() const {
