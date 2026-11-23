@@ -205,3 +205,46 @@ numerical Ada-world ankle trace was checked. The legacy Creator
 `footEndpointMaxDrift` spans root travel and must not be treated as foot-slide
 measurement. Next: calibrated sole contact, Ada ankle trace, speed-dependent
 stride and authoring/publication path.
+
+## External CMU BVH walk on Ada, 2026-11-23
+
+Source commit `6956a70ad` on `feature/motionweave-walk-generator-current`.
+`engine/render/BvhWalkRetarget.h` parses external BVH hierarchy/frames and
+retargets named joint rotations plus root displacement by leg-length ratio.
+The lower ankle sets a flat-floor pelvis height, and the support ankle is
+oriented to the target bind pose. VIVID Creator accepts `--preview-bvh <path>`;
+its modular Ada adapter copies pose tracks to partial head/groom rigs. Legs,
+pelvis, torso, neck and head come from the capture. Shoulder and elbow tracks
+come from the existing A-pose-aware generator because direct BVH arm transfer
+turned Ada's hands upward and folded her shoulders unnaturally. The first
+world-rotation transfer produced a broken pose; local delta retarget fixed it.
+An intermediate capture left both shoes visibly elevated, so pelvis height
+and stance ankle orientation were corrected before the final capture.
+
+Provenance: CMU Graphics Lab motion `02_01`, 344 frames at 120 fps, retrieved
+from `https://raw.githubusercontent.com/una-dinosauria/cmu-mocap/master/data/002/02_01.bvh`.
+SHA-256 `cf56db43157acc3d200b3d4215523f54d354a8926bea67e1f6c8031bd335ba7e`.
+CMU's site states product use is allowed and direct data resale, including
+converted data, is prohibited. The BVH remains outside the repository at
+`/Volumes/KINGSTON/AIVERSE-builds/motionweave-walk-natural/mocap-source/02_01.bvh`.
+The repo contains the importer and a tiny synthetic test fixture, not CMU
+motion frames. Attribution: “The data used in this project was obtained from
+mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.”
+
+Actually run on macOS AppleClang 17: native Creator and focused test built;
+`ctest -R '^motionweave_walk_generator$'` 1/1 PASS with BVH parse, retarget,
+truncated-file rejection, root travel and target ankle-height assertions.
+Creator captured 48/48 real Metal frames from external Ada-Groom-Bound, with
+`pipelineFailures=0`, 43 colour and 43 shadow submissions per frame. Frames
+0, 12, 24 and 36 inspected. AVFoundation encoded 1500x920/24 fps video at
+`/Volumes/KINGSTON/AIVERSE-builds/motionweave-walk-natural/ada-cmu-0201-v3/ada-cmu-walk.mp4`.
+`footEndpointMaxDrift` remains a bind-relative root-travel metric, not a
+stance-slide acceptance metric.
+
+Limits: this is a two-second excerpt from the 2.86-second motion and not a
+seamless loop. Support-foot selection uses the lower ankle, not contact
+velocity or shoe sole geometry. Slight visible clearance may remain. The
+preview only targets flat ground and Ada; arbitrary BVH skeleton layouts,
+other characters, Studio catalog publishing and non-Metal rendering were not
+verified. Next: foot-contact classification with shoe geometry, smooth loop
+crop, and an agent-facing asset import/publish flow.

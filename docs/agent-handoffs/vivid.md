@@ -3224,3 +3224,17 @@ pipeline failures. Inspected frames 0/12/24/36 and encoded the sequence to
 `/Volumes/KINGSTON/AIVERSE-builds/motionweave-walk-natural/ada-natural-v1/ada-walk-natural.mp4`.
 The asset remains external; other modular humans and Studio catalog publishing
 are not verified. See the MotionWeave handoff for tests and gait limits.
+
+## 2026-11-23 — external CMU walk preview on Ada
+
+Source `6956a70ad` on `feature/motionweave-walk-generator-current`.
+Creator `--preview-bvh <path>` loads the external CMU 02_01 recording through
+the shared MotionWeave BVH parser and retargeter. Ada's legs, pelvis, torso,
+neck and head follow the capture; A-pose-aware shoulder/elbow tracks replace
+the incompatible direct BVH arm rotations. Partial skin/groom roots copy the
+same pose tracks. The raw capture is not committed. Native Creator built and
+captured 48/48 Metal frames with no pipeline failures; frames 0/12/24/36 were
+inspected and encoded to the video path recorded in the MotionWeave handoff.
+The current contact rule is flat-ground and ankle-based, not shoe-accurate.
+This is a preview only; Studio catalog publishing and other characters remain
+open.
