@@ -22,6 +22,12 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [autoReload,setAutoReload]=useState(false);
+  const [reloadCycle,setReloadCycle]=useState(0);
+  const mounted=useRef(false);
+  useEffect(()=>{
+    mounted.current=true;
+    return()=>{mounted.current=false;};
+  },[]);
   const graphSignature=useMemo(()=>JSON.stringify(graph),[graph]);
   const lastLoadedGraph=useRef('');
   const reloadBusy=useRef(false);
@@ -73,11 +79,16 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if(!closed){setState(result);setSeek(result.tick);}
       }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{
         reloadBusy.current=false;
-        if(!closed)setBusy(false);
+        if(mounted.current) {
+          setBusy(false);
+          // A second graph edit may have arrived while a native compile
+          // was in flight. Reevaluate the newest source after it settles.
+          setReloadCycle(c=>c+1);
+        }
       });
     },650);
     return()=>{closed=true;window.clearTimeout(handle);};
-  },[active,autoReload,state?.ready,graphSignature,graph,disabled]);
+  },[active,autoReload,state?.ready,graphSignature,graph,disabled,reloadCycle]);
 
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
