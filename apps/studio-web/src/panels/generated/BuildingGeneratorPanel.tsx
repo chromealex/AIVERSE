@@ -69,6 +69,10 @@ export default function BuildingGeneratorPanel({
   const [regeneratingRecipe,setRegeneratingRecipe]=useState('');
   const [autoRegenerate,setAutoRegenerate]=useState(false);
   const regeneratedThisSession=useRef(new Set<string>());
+  useEffect(()=>{
+    regeneratedThisSession.current.clear();
+    setStaleMaterials([]);
+  },[snapshot?.project.path]);
 
 
   useEffect(() => {
