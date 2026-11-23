@@ -222,6 +222,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
     const blob=new Blob([JSON.stringify(replayPreset,null,2)],{type:'application/json'});
+    if(blob.size>65536){setError('Replay preset exceeds 64 KiB');return;}
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a');link.href=url;link.download='spectrafx-replay.json';
     link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -339,7 +340,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
       }
       const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
-      const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();URL.revokeObjectURL(url);
+      const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(e){setError(message(e));}finally{if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
   };
   const importCheckpointFile=async(file:File)=>{
