@@ -94,6 +94,53 @@ public:
         return true;
     }
 
+    // One host barrier can coordinate ALL shards changed by a single brush
+    // edit, preventing partially committed neighboring GeometryScene shards.
+    // Call only with Scene draws and all physics/nav readers paused. The
+    // callback MUST truly commit physics+nav for the whole batch atomically.
+    // The host must guarantee no exceptions or concurrent mutation after
+    // that success; this is NOT a substitute for native physics rollback.
+    template<class OwnerBatchCommit>
+    bool activateGroup(const std::vector<CaveShardKey>& shardKeys,
+                       OwnerBatchCommit&& commitOwners) {
+        if(shardKeys.empty())return false;
+        std::set<CaveShardKey,CaveShardLess> unique;
+        std::vector<CaveShardSnapshot> snapshots;
+        snapshots.reserve(shardKeys.size());
+        for(auto key:shardKeys){
+            if(!unique.insert(key).second)return false;
+            const auto pendingIt=pending_.find(key);
+            const auto ownerIt=owners_.find(key);
+            if(pendingIt==pending_.end()||
+               ownerIt==owners_.end()||!ownerIt->second||
+               !ownerIt->second->hasStaged()||
+               ownerIt->second->stagedRevision()!=pendingIt->second.revision)
+                return false;
+            snapshots.push_back(pendingIt->second);
+        }
+        bool committed=false;
+        try {committed=commitOwners(snapshots);}
+        catch(...) {return false;}
+        if(!committed)return false;
+        // Every GPU candidate and revision was verified before invoking
+        // the callback. With owner-exclusive access, these activate calls
+        // are noexcept-in-practice except for an engine invariant failure.
+        for(size_t i=0;i<shardKeys.size();++i){
+            auto& owner=*owners_.at(shardKeys[i]);
+            if(!owner.activate([&](uint64_t revision){
+                    return revision==snapshots[i].revision;
+                }))
+                throw std::logic_error(
+                    "Caverns GPU shard activation failed after committed host barrier");
+        }
+        for(const auto& snapshot:snapshots)
+            if(!catalog_.adoptSnapshot(snapshot))
+                throw std::logic_error(
+                    "Caverns shard catalog failed after committed host barrier");
+        for(auto key:shardKeys)pending_.erase(key);
+        return true;
+    }
+
     bool cancel(CaveShardKey shard) {
         auto it=pending_.find(shard);
         if(it==pending_.end())return false;
