@@ -348,3 +348,24 @@ Read `engine/world/TerraWeaveCavernsVolumeCollision.h`, `engine/world/TerraWeave
 - The CPU collision payload is directly suitable for Stage26 `CaveSpatialShadow::prepare` and `CaveBox3DShadow::prepare`; these owners still have visibility/atomicity limitations. Box3D body creation instantly enters physics and may briefly overlap the old body. Stage25 owner barrier is bookkeeping rather than an actual rollback.
 - STRATA remains a presentation geometry LOD owner; gameplay physics and nav are based on the versioned authored snapshot. Nonblocking GPU retirement, native Scene auto-commit and rollback-safe multi-owner swaps are still not complete.
 - Stage27 regression source includes a floor/wall/ceiling mesh, signed-origin conversion, deduplication, invalid geometry and budget refusal, plus Carve/Fill native nav span differences. **Test source has not been compiled/executed in a full AIVERSE checkout.** Run CMake/CTest and Box3D gameplay acceptance before marking pass.
+
+## Stage 28 — fully-filled cave tile retirement, physics co-staging (2026-11-23)
+
+Read `engine/world/TerraWeaveCavernsVolumeCollision.h`,
+`engine/world/TerraWeaveCavernsSpatialShadow.h`,
+`engine/world/TerraWeaveCavernsBox3DShadow.h`,
+`engine/world/TerraWeaveCavernsVolumePhysicsStage.h`,
+`engine/render/TerraWeaveCavernsGpuSwap.h`,
+`engine/render/TerraWeaveCavernsEditedSceneTransaction.h`,
+`tests/terraweave_caverns_empty_tile_test.cpp`, and
+`docs/agent-handoffs/caverns-stage28-2026-11-23.md`.
+
+- `prepareCaveVolumeCollision` now accepts a **fully empty** indexed `CaveMesh` (both vertices and indices empty) with valid version/physical tile parameters, returning a zero-triangle `CaveCollisionPrepared` and zero-body-geometry `BodyDesc`. Half-empty sources (vertices without indices) are rejected. This is a retirement request, not a failed generation.
+- `CaveSpatialShadow::prepare` accepts empty triangles with colliderId 0; `commit` then removes the previous dedicated collision-ID range and records the new revision/count=0. It still requires exclusive owner access; partial insertion rollback remains for nonempty updates.
+- `CaveBox3DShadow::prepare` accepts an empty `BodyDesc`; `commit` destroys the old body and records the new revision without creating a fake new body. This needs a real exclusive non-simulating Box3D owner barrier; **global multi-owner atomicity still not guaranteed**.
+- `CaveGeometrySwapOwner::stageEmpty(renderRevision)` stages removal of the current visual GeometryScene without uploading a dummy scene. `activate(hostCommit)` draws nothing only after the external owner callback confirms its global visibility barrier. Old GPU scene remains in bounded retirement until a real idle/shutdown proof. `CaveEditedSceneTransaction::prepareVisual` routes all-empty prepared batches through `stageEmpty` automatically.
+- `CaveVolumePhysicsStage::prepare(surface,resolution,spacing,sourceRevision,firstColliderId,spatial,userData)` derives authoritative collision once from the actual edited CaveMesh and prepares both SpatialWorld and Box3D CPU shadow states, with rollback of staged CPU data on partial preparation failure. `prepared(revision)` and `abort(revision)` manage the paired stage. `spatialOwner()` and `boxOwner()` expose the existing owner commit primitives; **do not sequentially call them as if this guaranteed an atomic four-owner commit**.
+- `tests/terraweave_caverns_empty_tile_test.cpp` covers physical zero-triangle payload, invalid half-empty input, SpatialWorld retirement from one active collider, Box3D empty descriptor stage/abort, and paired prepare/abort for nonempty and empty versions. It requires the normal AIVERSE Box3D/SpatialWorld linked test target; it has NOT RUN in the complete engine checkout.
+- **Major remaining gap:** when a batch has *some* empty and *some* nonempty chunks, their model source list omits only the empties, but the host must also retire their previous per-shard visual instances. Never use the all-empty path to accidentally clear unrelated chunks, and never silently retain deleted cave geometry in a combined resident scene.
+- NavMesh still needs an authored-SDF rebuild for a now-filled chunk, prepared via Stage27 `makeCaveAuthoredNavSource` and Stage26 `CaveNavShadow`. This is a host responsibility, not automatically invoked by Stage28.
+- Full C++ compiler/CMake/CTest/GPU/Box3D runtime and native editor tests are NOT RUN this stage. Update skill and independent dated handoff on every subsequent implementation stage.
