@@ -57,13 +57,13 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     constexpr std::array<std::string_view,7> extendedTypes{
         "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
         "GranularField","EvolveRegion","SocietyPerson"};
-    constexpr std::array<std::string_view,13> extendedEdgeTypes{
+    constexpr std::array<std::string_view,15> extendedEdgeTypes{
         "CrowdSlot", // slot targets exist before CrowdPreference is installed
         "MorphSpring","MorphForce","CrowdPreference",
         "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
         "GranularSource","EvolvePressure","SocietyContact","SocietyMessage",
-        "ImprintTracker"};
-    std::array<std::size_t,13> extendedEdgeCounts{};
+        "ImprintTracker","CircuitSwitch","CircuitDevice"};
+    std::array<std::size_t,15> extendedEdgeCounts{};
 
     for(std::size_t i=0;i<entities.size();++i){
         const auto id=entities[i].getStr("id");
@@ -122,7 +122,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             if(kind=="MorphSpring"||kind=="MorphForce")totals.extra.morph=true;
             else if(kind=="CrowdSlot"||kind=="CrowdPreference")totals.extra.crowd=true;
             else if(kind=="ImprintLink"||kind=="ImprintDeposit"||kind=="ImprintTracker")totals.extra.imprint=true;
-            else if(kind=="CircuitWire"||kind=="CircuitGate")totals.extra.circuit=true;
+            else if(kind=="CircuitWire"||kind=="CircuitGate"||
+                    kind=="CircuitSwitch"||kind=="CircuitDevice")totals.extra.circuit=true;
             else if(kind=="GranularSource")totals.extra.granular=true;
             else if(kind=="EvolvePressure")totals.extra.evolve=true;
             else if(kind=="SocietyContact"||kind=="SocietyMessage")totals.extra.society=true;
@@ -171,7 +172,9 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
        extendedEdgeCounts[9]>evolve::kMaxPressures ||
        extendedEdgeCounts[10]>society::kMaxContacts ||
        extendedEdgeCounts[11]>society::kMaxMessages ||
-       extendedEdgeCounts[12]>imprint::kMaxTrackers)
+       extendedEdgeCounts[12]>imprint::kMaxTrackers ||
+       extendedEdgeCounts[13]>circuit::kMaxSwitches ||
+       extendedEdgeCounts[14]>circuit::kMaxDevices)
         throw std::invalid_argument("World Processes: map component budget exceeded");
     if(totals.extra.morph&&std::size_t(std::count_if(extendedParts.begin(),extendedParts.end(),
         [](const Pending& v){return v.component=="MorphNode";}))>morph::kMaxNodes)
