@@ -116,3 +116,65 @@ then advance exclusively in authoritative tick order. Actor boarding checks
 actual cabin position and landing-door state; exit is permitted only at
 an open landing. releaseAtLanding and detachIfVacant prevent casual unload
 while passengers are riding. No game mode is wired or tested yet.
+
+
+## Stage 17: Lift presentation from the authoritative scene
+
+CPU models and renderer commands are owned by
+engine/buildings/BuildingLiftPresentation.h. The code uses the *existing*
+Renderer3D render::Model and instance/node transform APIs; it does not open
+a new GPU backend, build GLB files or regenerate meshes during simulation.
+
+**Spawn phase**: after BuildingLiftGameSession<Body>::attach() and the
+existing SpatialWorld collider/door registration, call
+session.makeVisualAssets(style). This constructs one dedicated
+render::Model for each lift platform and one reusable half-width door leaf
+mesh per lift feature (shared by its two doors on every floor).
+Models have runtimeMutable nodes and disable rigid merge. The renderer
+resource owner uploads each model once; it retains GPU leases until the
+usual completion/fence retirement. The building runtime does not hold any
+GPU handles.
+
+**Committed world/render phase**: BuildingLiftGameSession::advance() first
+commits collision, then actor rider movement, then releases an authoritative
+server snapshot. After success the renderer reads session.visualFrame().
+It reports a world-position per platform and per door leaf, yaw quarter-turn,
+fraction open and snapshot revision. Renderer3D applies those positions to
+its own existing instances; no CPU geometry rebuild and no GPU upload on
+each frame. On scene fault, visualFrame() is invalid and must not be
+published as a new transform (render owner retains its last committed pose
+until authoritative recovery).
+
+Doors animate with phases Open=fully open, Closing moves 1->0,
+Traveling=closed, Opening moves 0->1. Only current-floor landing doors
+move; remote destination doors remain closed until arrival. Door visuals
+are **not** authority for collision or boarding: BuildingLiftDoorOwner
+decides physical collision and BuildingLiftGameSession gates passenger
+commands on actual landing-door state.
+
+Minimal owner-phase usage (existing renderer API deliberately omitted):
+
+    auto assets = session.makeVisualAssets(registeredStyle);
+    // rendererOwner.upload/lease assets.platforms and assets.leaves exactly once
+    auto tick = session.advance(ecs, spatial, &navmesh, dtMs, serverTick);
+    if (tick.complete) {
+        const auto visual = session.visualFrame();
+        if (visual.valid) {
+            // rendererOwner applies each platform/leaf worldPosition + yaw
+            // to existing scene instances; no mesh regeneration.
+        }
+        // send tick.frame only via existing authenticated snapshot transport
+    }
+
+Cross-system invariants:
+- graphics never updates authority or mutates a SpatialWorld collider.
+- the game only publishes a new pose after physics+ECS commit succeeds.
+- a lift platform is NOT part of the static runtime building Model; it
+  is a dedicated instance, moved by its pose.
+- clients can interpolate received server poses for rendering but never
+  infer lift boarding/permissions from those interpolated positions.
+- model lifetimes and GPU retirement belong to Renderer3D, not this API.
+
+This is the source/presentation API boundary, not proof of a running
+Metal screenshot or completed GPU scene integration. Tests were deferred
+by the user; no build, CTest, Studio QA or GPU render executed for Stage 17.

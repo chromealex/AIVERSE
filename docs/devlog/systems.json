@@ -1854,6 +1854,13 @@
           "titleEn": "Building circulation: native NavMesh links, elevator collision and actor carry",
           "text": "Путь по комнатам через существующий nav::Mesh; лестницы и лифты как off-mesh действия; scene-owner управление движущимися платформами и пассажирами.",
           "textEn": "Room routing on existing nav mesh with explicit stair/lift actions, native collider publishing and rider delta commands."
+        },
+        {
+          "status": "in-progress",
+          "title": "Building Stage 17: Renderer3D визуализация подвижных лифтов и створок",
+          "titleEn": "Building Stage 17: Renderer3D movable lift/door model presentation",
+          "text": "CPU модели кабины и створок создаются один раз; renderer получает ревизионные world transforms только после commit physics/ECS. Тесты отложены.",
+          "textEn": "Create reusable CPU cabin/door meshes once and publish world transforms only after physics/ECS commit; tests deferred."
         }
       ],
       "core": true,

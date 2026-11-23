@@ -197,3 +197,15 @@ kinds. Apply only publishedRiders after successful SpatialWorld platform
 collider publication, then send the EXISTING BuildingLiftReplication.h server
 frame. No tests run at user request; do not claim verified gameplay.
 Handoff: docs/agent-handoffs/building-ecs-physical-doors-2026-11-23.md.
+
+
+Stage 17: BuildingLiftPresentation.h owns render::Model CPU construction
+of reusable cabin/door leaf meshes and authoritative transform commands.
+Do not rebuild geometry per tick, upload on ECS thread, or merge dynamic
+models with static scenery. After successful BuildingLiftGameSession
+authoritative world/collider/ECS commit, use visualFrame(). Only current
+landing doors animate. On fault visualFrame is invalid. Game renderer
+owner applies GPU instance transforms and retires resources via existing
+fences; visual animation never grants boarding permission.
+Handoff: docs/agent-handoffs/building-lift-presentation-2026-11-23.md.
+No new tests were run (user defers tests).
