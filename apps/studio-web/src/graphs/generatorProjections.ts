@@ -1,5 +1,5 @@
 import type {GraphView,NodeView,Link} from './graphFramework';
-import {object} from './nativeGraphAdapters';
+import {object} from './nativeGraphAdapters.ts';
 import type {GraphObject} from './nativeGraphAdapters';
 
 /** Read-only dependency projections of existing owner recipes. Never an evaluator. */
