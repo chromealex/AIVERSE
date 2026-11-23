@@ -483,3 +483,87 @@ source/destination load retry integration, actual hot/cold guards
 for production character/car systems, offscreen simulation, disk
 region journal and performance validation. Branch needs integrating
 with the more recent `main` before acceptance.
+
+
+## Stage 08 — automatic world-space actor region reconciliation
+
+When a real world-space `GameCore` is configured with
+`"regionOwnership": {}`, `ActorHost` now registers an
+`actor.regionOwnership` ECS system **after its normal actor system**.
+The system calls `ActorHost::synchronizeRegionOwnership(sim)` at the
+end of each authoritative fixed tick; it also runs once at setup
+after any race or bot initial placement. Projects without the
+rules block do not install the system, resource or component schema.
+
+The existing `CharacterBody.pos`, `Vehicle.pos`, and `Loot.pos`
+are canonical and read through `RegionPositionReader`. They are
+not copied into synthetic `Transform` components. The first
+W1 ledger schema continues to use 32-unit region cells.
+
+### Reconciliation policy
+
+1. Read live characters, map vehicles and durable loot into one
+   sorted ECS list. For a newly observed entity, assign a
+   nonzero stable ID from `Entity::packed()+1`, including the
+   generation counter, and create its ledger record. Reused ECS
+   indices have different generations, so they get new durable
+   IDs and cannot revive an old tombstone.
+2. Resolve `vehicles::VehicleDrive` occupied seat groups using
+   the existing shared `VehicleRegionTransfer`. The arcade
+   `actor::Vehicle` path instead resolves its own
+   `Vehicle.driver` player slot and `CharacterBody.vehicle`
+   backlinks, without another vehicle simulation.
+3. Relocate a complete car group to the car's canonical region
+   in one ledger operation. Newly boarded passengers may
+   arrive with different previous owners: the ledger
+   `transferGroup` overload validates each expected source
+   independently, then changes all necessary owners in stable
+   ID order. An invalid/stale/dormant member causes the group
+   to be rejected rather than partially changed.
+4. Independently migrate on-foot actors and loot whose region
+   changed. Those already handled as car occupants are skipped,
+   preventing the same tick from moving one passenger twice.
+5. Compare still-live ledger records to observed actor identities
+   and create permanent tombstones for removed ECS entities.
+   Fast, short-lived `Projectile` entities are deliberately
+   excluded from this persistent ID ledger: retaining every
+   spent bullet would exhaust the bounded ledger.
+
+The host's existing `readyToStep` is still the collision/nav
+gate before a simulation tick. For a car whose post-tick
+destination somehow escapes that preloaded movement envelope,
+the reconciliation detects that collision is not covered and
+fails loudly instead of publishing an unsafe new owner.
+**This is not yet a fully recoverable transactional movement
+barrier**: a true teleport/deferred movement policy must stage
+the destination *before* committing gameplay movement, so
+no partially advanced game tick can ever result.
+
+The automatic reconciliation does not park ActorHost's gameplay
+components and does not make `RegionLifecycleRuntime` active
+without a separate explicit setup. It is a W1 source-of-truth
+ownership slice, not an open-world offscreen simulation or disk
+region pager.
+
+### Tests, status and performance limits
+
+`tests/world/actor_region_lifecycle_test.cpp`, CTest
+`actor_region_lifecycle_test`, covers a real GameCore
+end-of-tick automatic car transition, independent peers and
+checksums, a 100-region occupied-car trace, a passenger from a
+different source region, native ECS save/load, COW rollback,
+a dynamically spawned/removed loot entity, tombstone survival
+across entity recycling, and no-opt-in legacy saves.
+
+`region_entity_ledger_test` also tests all-or-nothing mixed
+previous owners, sorted revisions, no-op relocation and a stale
+source-owner rejection.
+
+**Not yet run:** these CTests and the Mac/KINGSTON full suite.
+Every-tick scanning of the registered actor pools and all
+ledger tombstones is an intentionally simple correctness policy;
+the production large-world system must replace it with
+event-driven region ownership indexes and bounded disk-backed
+journals. Gameplay spawn hooks, collision admission for
+teleports, lifecycle of all actor pools, offscreen clock,
+large-world memory and performance measurements remain W1 work.
