@@ -872,3 +872,68 @@ positions by arbitrary distances; those require explicit staged admission.
 A race with several *mandatory* distant respawns exceeding capacity
 still blocks; next-stage policy needs deterministic residency partition
 or larger manifest budget, not unsafe eviction.
+
+
+## Stage 13 — live-ID index and trusted movement requests by stable identity
+
+The persistent `RegionEntityLedger` now maintains a **derived sorted
+`liveIds_` index** alongside its authoritative `records_` map. The index
+is updated when an identity is spawned or tombstoned and is rebuilt
+transactionally from live records after an Archive/native ECS load. It is
+not written as an independent schema, not hashed separately and does not
+change existing on-disk bytes or ledger revision order.
+
+```cpp
+const auto* ledger=sim.world().resourceConst<world::RegionEntityLedger>();
+for(world::RegionEntityId id:ledger->liveIds()) {
+    // Historical tombstones no longer appear in this loop.
+}
+```
+
+The world-space `ActorHost::synchronizeRegionOwnership` removal pass
+now iterates a snapshot of `liveIds()` rather than **every** historical
+ledger record. This makes the retirement scan proportional to the current
+live W1 population instead of the total number of objects that have
+ever existed. A test explicitly adds/removes 2000 IDs and verifies
+`liveCount()==0`, then adds a new ID and round-trips the archive.
+
+This does **not** yet make region updates fully event-driven:
+`CharacterBody`, `Vehicle` and `Loot` active ECS pools are still
+scanned to identify new actors and changed positions, and the live-ID
+retirement pass still touches every active tracked identity. A
+production million-actor framework needs stable ECS spawn/destroy and
+movement dirty notifications, plus an indexed on-disk region journal.
+
+### Trusted script/native movement boundary
+
+`ActorHost::requestRegionMoveByStableId(sim,id,destination,error)`
+is a host-facing entry point for **trusted, already authorized**
+gameplay script/native logic. It resolves a W1 durable ID from the
+`RegionEntityLedger`, requires a currently live ledger record and
+matching `RegionStableIdentity` on its materialized ECS Entity,
+and then delegates to the *existing* W1.9–12
+`requestRegionMove` staging, collision/nav admission and
+authoritative fixed-tick movement pipeline.
+
+```cpp
+// After verifying script/player/mission authority:
+actor::host(sim).requestRegionMoveByStableId(
+    sim,stableId,{160_fx,2_fx,48_fx},&error);
+```
+
+A zero ID, tombstoned ID, recycled ECS handle, missing live binding,
+bad target region or overlapping occupied-vehicle request fails
+before adding any queued movement. This API does **not** install a
+new network opcode or automatically grant untrusted clients teleport
+authority. The world-space host does not currently load grid-native
+modules or a common embedded Lua script engine, so an individual game
+must connect its script callback to this validated C++ boundary.
+It does not intercept unrelated direct writes to actor/car positions.
+
+Tests extended: `region_entity_ledger_test` validates live-index
+maintenance, thousands of tombstones and archive rebuild;
+`actor_region_admission_test` validates valid and invalid stable-ID
+move staging in a real world-space GameCore.
+
+**Tests authored, not run** on the required Mac/KINGSTON build; the
+feature remains W1 partial and PR #116 Draft.
