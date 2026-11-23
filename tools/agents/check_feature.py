@@ -16,7 +16,7 @@ def validate(data, root=ROOT, ready=False):
     errors = []
     if not isinstance(data, dict):
         return ["manifest must be an object"]
-    if set(data) != {"schema", "id", "owner", "checks"}:
+    if set(data) != {"schema", "id", "owner", "checks", "changed_paths", "traits"}:
         errors.append("unexpected or missing manifest fields")
     if type(data.get("schema")) is not int or data["schema"] != 1:
         errors.append("schema must be 1")
@@ -24,6 +24,23 @@ def validate(data, root=ROOT, ready=False):
         errors.append("invalid id")
     if not isinstance(data.get("owner"), str) or not data["owner"].strip():
         errors.append("missing owner")
+    scope = data.get("changed_paths")
+    if not isinstance(scope, list) or not scope or not all(isinstance(p, str) and p and not Path(p).is_absolute() and ".." not in Path(p).parts and p == Path(p).as_posix() for p in scope):
+        errors.append("changed_paths must contain exact repository-relative paths")
+    traits = data.get("traits")
+    expected_traits = {"editable", "simulation", "visible", "runtime"}
+    required = set(ALWAYS)
+    if not isinstance(traits, dict) or set(traits) != expected_traits or any(type(v) is not bool for v in traits.values()):
+        errors.append("traits must explicitly describe editable, simulation, visible and runtime")
+    else:
+        if traits["editable"]:
+            required.update(("mcp", "studio", "inspector"))
+        if traits["simulation"]:
+            required.update(("native_api", "persistence", "headless"))
+        if traits["visible"]:
+            required.add("publishing")
+        if traits["runtime"]:
+            required.update(("performance", "platforms", "native_api"))
     checks = data.get("checks")
     if not isinstance(checks, dict):
         return errors + ["checks must be an object"]
@@ -38,7 +55,7 @@ def validate(data, root=ROOT, ready=False):
             errors.append(f"{name}: invalid status")
         if not isinstance(note, str) or not note.strip():
             errors.append(f"{name}: missing verification note or exclusion reason")
-        if name in ALWAYS and status == "not_applicable":
+        if name in required and status == "not_applicable":
             errors.append(f"{name}: cannot be excluded")
         if ready and status not in ("pass", "not_applicable"):
             errors.append(f"{name}: not ready ({status})")
