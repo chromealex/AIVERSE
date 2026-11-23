@@ -96,3 +96,11 @@ vertex normals/UVs. Existing unsized calls remain single-pass and compatible.
 Impossible envelopes fail instead of shrinking fixed-dimension gates below
 1.6 × 2.1 m. Solver is capped at 32 attempts; the editor should distinguish
 unsatisfied bounds from unknown function or malformed input in future stages.
+
+Stage 6 Studio authoring: panel id `building_generator`, native methods
+`studio.buildingCatalog`, `studio.buildingInspect` and `studio.buildingGenerate`.
+Select setting/style/function/W/H/D/seed. The CPU evaluates three candidate
+seeds; choosing Generate creates an Asset GLB under
+`content/GeneratedBuildings/`, with GUID/.meta via existing StudioAssetCatalog.
+Never write files from browser JS or fake a 3D preview. Native tests:
+`tests/studio/BuildingGenerationTests.cpp` in Building Style Focused CI.

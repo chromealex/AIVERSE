@@ -265,3 +265,24 @@ the library tests, and checks the exported GLBs. A regression compares every
 vertex normal and UV of a sized structure to a fresh raw-generation instance,
 permitting positions to differ only by one translation. Only claim passing
 results when the workflow completes successfully on the current commit.
+
+## HTML5 Studio authoring (stage 6)
+
+Dock panel **Building Generator** is registered in the native HTML5 Studio.
+Flow: **Setting → Style → Function → Width/Height/Depth → Seed → Generate GLB**.
+
+- `studio.buildingCatalog` loads real style files from `engine/assets/building-styles`.
+- `studio.buildingInspect` evaluates three successive seeds with the CPU generator,
+  reporting polygon/material counts and exact bounds. These are NOT GPU images.
+- `studio.buildingGenerate` safely creates a NEW GLB in
+  `project/content/GeneratedBuildings/`; the existing StudioAssetCatalog
+  creates/reconciles persistent GUID + .meta, and Assets refreshes.
+- The native C++ implementation is `apps/studio-native/StudioBuildingGeneration.h`;
+  the typed bridge and panel live in `apps/studio-web/src/types.ts` and
+  `apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx`.
+- Browser-only preview cannot generate files. A native GPU thumbnail appears only
+  if the existing thumbnail service provides a real image.
+
+No live 3D viewport preview yet. Current constructive size fitting can reject
+feasible sizes; new Studio acceptance tests must pass before this is called
+production-ready.
