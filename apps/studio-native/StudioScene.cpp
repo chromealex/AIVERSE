@@ -575,6 +575,7 @@ void StudioScene::syncDocumentModels(
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
+        spectraPreview_.stop(*device_); // before gfx Device and renderer are destroyed
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
@@ -1324,6 +1325,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     static const StudioFacialPreviewBinding kNoFacialBinding{};
     const StudioFacialPreviewBinding& facialBinding=facialBindingIn?*facialBindingIn:kNoFacialBinding;
     const std::string& projectRoot=projectPath;
+    // Project changes invalidate runtime particle buffers and preview input
+    // so a previous project's effect can never render in the new Scene.
+    if(spectraPreview_.active() && spectraProject_!=projectRoot)
+        spectraPreview_.stop(*device_);
     facialReady_=false;
     facialError_.clear();
     if (!device_ || framebufferWidth < 2 || framebufferHeight < 2) return;
@@ -1659,7 +1664,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
-            !thumbJobs_.empty(); // Assets thumbnails render inside drawn frames
+            !thumbJobs_.empty() || spectraPreview_.needsFrame(); // native FX playback forces draw
         if(animated || signature!=lastFrameSignature_) settleFrames_=kSettleFrames;
         lastFrameSignature_=signature;
         if(settleFrames_>0) --settleFrames_;
@@ -1669,6 +1674,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
+    if(spectraPreview_.active()) {
+        // Device-safe point: GPU simulation update before any encoder/pass.
+        const float aspect=float(framebufferWidth)/float(framebufferHeight);
+        const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
+        spectraPreview_.prepare(fx::SpectraFxView::fromCamera(
+            view,viewProj,framebufferWidth,framebufferHeight));
+    }
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
@@ -1842,6 +1854,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.sunColor=skyShot_->sunColor;renderer_.lighting.sunIntensity=1.3f;
     }
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
+    // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
+    // before PRISMA resolves it and before the frame/pass are retired.
+    if(spectraPreview_.active())spectraPreview_.draw();
     renderer_.resolvePrisma();
     lightingRuntime_.presented();
 
