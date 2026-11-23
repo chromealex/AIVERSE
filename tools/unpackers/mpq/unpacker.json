@@ -1,0 +1,17 @@
+{
+  "protocol": 1,
+  "name": "mpq",
+  "title": "Blizzard MPQ archive (Warcraft III maps and classic game data)",
+  "version": "1.0.0",
+  "extensions": [".mpq", ".w3m", ".w3x", ".w3n"],
+  "magic": [
+    {"offset": 0, "hex": "4D50511A"},
+    {"offset": 0, "hex": "4D50511B"},
+    {"offset": 512, "hex": "4D50511A"}
+  ],
+  "capabilities": ["probe", "list", "extract"],
+  "external": true,
+  "license": "MIT",
+  "command": ["python3", "unpack.py"],
+  "command_windows": ["py", "-3", "unpack.py"]
+}

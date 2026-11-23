@@ -32,7 +32,7 @@ target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::gameplay_native)
 |---|---|---|
 | input | Контексты/приоритеты/модификаторы, deadzone, выделение, группы, drag threshold | Нормализовать platform events; результат передать командному слою |
 | camera | Pan/follow/orbit target, ограничения, сглаживание, стратегический порог | Применять Pose к существующей камере в presentation-коде |
-| construction | Footprint с поворотом, препятствия, территория, уклон, стоимость, refund; build/cancel/upgrade/sell команды | Передать map-query callback; отрисовать Decision; отправить Command |
+| construction | Сетка с размером ячейки в целых единицах мира, привязка позиции, footprint с поворотом, препятствия, территория, уклон, стоимость, refund; build/cancel/upgrade/sell команды | `gridPlacement` даёт якорную ячейку; передать авторитетный map-query callback в `checkPlacement`, отрисовать Decision и отправить Command |
 | abilities | Проверка цели/дальности/энергии; custom cast/cooldown/cancel state; built-in ability команда | Built-in lifecycle остаётся в движке; custom поля хранить в NativeState |
 | inventory | Стеки, лимиты веса/слотов, транзакционный transfer/craft, equip/unequip | Собственные native-инвентари; built-in items обслуживать штатной системой |
 | squads | Выбор лидера, роли, line/box/wedge/loose offsets, штатная formation команда | Отдать позиции навигации; не менять Transform напрямую |

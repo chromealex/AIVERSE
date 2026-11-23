@@ -88,6 +88,9 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-mcp-coverage','Audit real MCP tools/list, GUI-only restrictions and verified capability calls','docs/agents/mcp-coverage.md'),
+ ('aiverse-warcraft3-import','Import licensed Warcraft III map archives and assets using the bounded MPQ/Studio pipeline','docs/warcraft3-import.md'),
+ ('aiverse-gpu-batching','Profile renderer instance/material batching, Metal GPU counters and A/B capture parity','docs/geometry-performance.md'),
  ('aiverse-lens','LENS camera scene authoring, MCP validation and native Studio PNG capture','apps/editor/core/LensOps.cpp'),
  ('aiverse-lens-native','LENS native multi-camera scheduling, prepared-frame replay and GPU capture ownership','docs/camera-system.md'),
 
@@ -169,6 +172,9 @@ WORKFLOWS=[
  ('aiverse-autolod','Static model LOD generation with meshoptimizer and LOD transitions in the renderer','docs/autolod.md'),
 ]
 WORKFLOW_ALIASES={
+ 'aiverse-mcp-coverage':'mcp protocol server tools registry capabilities coverage audit tools/list tools/call introspection registration agents проверка скиллы инструменты мсп',
+ 'aiverse-warcraft3-import':'warcraft warcraft3 wc3 wc3x mpq w3x w3m mdx mdl blp map importer stormlib reforged варкрафт импорт карта архив',
+ 'aiverse-gpu-batching':'gpu batching material batches instancing metal icb draw calls performance profiling counters renderer батчинг батчи инстансинг производительность отрисовка',
  'aiverse-packages':'package packages catalog plugins download install asset store marketplace pbr textures materials template пакет пакеты каталог плагины скачать установить магазин ассетов материалы текстуры шаблон',
  'aiverse-lens':'lens camera cameras capture offscreen minimap камер захват линз',
  'aiverse-lens-native':'lens native camera replay snapshot gpu capture натив камер захват',
