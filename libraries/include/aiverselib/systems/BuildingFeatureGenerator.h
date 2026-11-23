@@ -137,7 +137,8 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
 
 inline FunctionalBuildingResult generateFunctionalBuilding(
     const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
-    Vec3 origin={},uint32_t yaw=0){
+    Vec3 origin={},uint32_t yaw=0,
+    bool includeInitialLiftPlatform=true){
     using namespace buildingStyleDetail;
     FunctionalBuildingResult result;
     const auto reject=[&](const std::string& why){
@@ -184,6 +185,13 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     auto fcoord=[](float n){return Fixed::fromRatio(
         int64_t(std::llround(double(n)*1000.)),1000);};
     for(const auto& solid:graph.solids){
+        // Dynamic gameplay spawn: do not bake the movable elevator platform
+        // into the static mesh or static AABB collision. Studio/GLB preview
+        // defaults to including the initial platform. The runtime owner
+        // creates a separate movable model and collider using the pose
+        // exported by BuildingLiftController.
+        if(!includeInitialLiftPlatform&&
+           solid.part==BuildingGraphPart::ElevatorPlatform)continue;
         int material=hull;
         switch(solid.part){
           case BuildingGraphPart::Floor:material=ground;break;
