@@ -48,9 +48,10 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     const auto position=regionPositionReader();
     const world::SpatialWorld grid(32);
     const auto* dirty=view.resourceConst<world::RegionDirtyQueue>();
-    // Stage all ownership changes, including structural bindings and ACK.
-    auto stagedLedger=*ledger;
-    ledger=&stagedLedger;
+    // Exclusive simulation-thread transaction; only changed records are saved.
+    auto* target=ecs.resource<world::RegionEntityLedger>();
+    world::RegionEntityLedger::Transaction stagedLedger(*target);
+    ledger=target;
     struct NewIdentityRollback {
         World& ecs;
         std::vector<Entity> entities;
@@ -74,7 +75,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // authoritative canonical-position writer emits a dirty event.
     if(dirty) {
         for(const auto& [id,flags]:dirty->entries) {
-            ledger=&stagedLedger;
+            ledger=target;
             (void)flags;
             const Entity entity=Entity::fromPacked(id-1);
             const bool tracked=view.alive(entity) &&
@@ -99,7 +100,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
         }
     }
-    ledger=&stagedLedger;
+    ledger=target;
 
     // Snapshot before adding ECS tags. Stable order ignores sparse pool order.
     std::vector<Entity> tracked;
@@ -119,7 +120,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
     std::set<world::RegionEntityId> present;
     for(Entity entity:tracked) {
-        ledger=&stagedLedger;
+        ledger=target;
         if(entity.packed()==UINT64_MAX)
             throw std::logic_error("regionOwnership: stable ID exhausted");
         const auto stable=entity.packed()+1;
@@ -168,7 +169,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     std::vector<PendingGroupTransfer> pendingGroups;
     std::set<uint64_t> handled;
     for(Entity car:cars) {
-        ledger=&stagedLedger;
+        ledger=target;
         const auto* carState=view.tryGetConst<Vehicle>(car);
         if(!carState)continue;
         std::vector<Entity> group;
@@ -220,8 +221,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         }
         pendingGroups.push_back({std::move(group),destination});
     }
-    // Stage ledger-only migrations in a private copy. No ownership revision
-    // is published until every group and independent transfer succeeds.
+    // Apply migrations under the exclusive undo transaction.
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
         std::string error;
@@ -251,11 +251,11 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // distinct generation bits, so stable IDs cannot be reused.
     // Iterate ONLY live IDs; historical tombstones may outnumber the hot
     // population by orders of magnitude in a long-running city.
-    ledger=&stagedLedger;
+    ledger=target;
     const std::vector<world::RegionEntityId> live(
         ledger->liveIds().begin(),ledger->liveIds().end());
     for(const auto id:live) {
-        ledger=&stagedLedger;
+        ledger=target;
         if(present.contains(id))continue;
         const auto* entry=ledger->find(id);
         if(!entry || !entry->live ||
@@ -273,13 +273,12 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         if(count>UINT64_MAX-dirty->acknowledged)
             throw std::logic_error("regionOwnership: dirty ACK overflow");
         auto* queue=ecs.resource<world::RegionDirtyQueue>();
-        auto* target=ecs.resource<world::RegionEntityLedger>();
-        *target=std::move(stagedLedger);
+        stagedLedger.commit();
         rollback.committed=true;
         queue->acknowledged+=count;
         queue->entries.clear();
     } else {
-        *ecs.resource<world::RegionEntityLedger>()=std::move(stagedLedger);
+        stagedLedger.commit();
         rollback.committed=true;
     }
     (void)ecs.drainComponentChanges<CharacterBody>();
