@@ -1,18 +1,19 @@
 ---
 name: aiverse-morph
-description: Use AIVERSE MORPH when implementing ECS-деформации узлов, пружин и одноразовых физических импульсов с реальным графическим выводом.
+description: Use AIVERSE MORPH for Quantized deformable nodes, springs and physics impacts presented through the existing Renderer3D and Box3D adapters.
 ---
 # MORPH — AIVERSE skill
 
 ## When to activate
-ECS-деформации узлов, пружин и одноразовых физических импульсов с реальным графическим выводом.
+Quantized deformable nodes, springs and physics impacts presented through the existing Renderer3D and Box3D adapters.
 
-Typical request: мягкие деформации, сгибание, упругая геометрия, разрушение формы, контакт с Box3D. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: soft-body deformation, springs, model bending, contact-driven shape changes. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/MorphEcs.h`.
 - **Authoritative ECS:** `morph::Node, Spring, Force, Impact`.
 - **Lifecycle:** `aiverse::morph::install(sim)`; per-tick behavior: `morph::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `MorphNode, MorphSpring, MorphForce`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/MorphModelStream.h`, `MorphBox3DContactBridge.h`, `PhysicalSceneHost.h`, `WorldProcessesQueries.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
