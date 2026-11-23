@@ -51,3 +51,43 @@ PHYSIS owns weather, TerraWeave owns real ecology/tree population, NEREID water.
 - In Studio use existing Add Component, reference picker, Scene gizmos and native `MapDoc` Undo/Redo. For live observation use `WorldProcessesInspector.h`/`WorldProcessesExtendedInspector.h`, never writable runtime clones.
 - After each implementation step add a new `docs/handoffs/world-processes-stageNN-*.md` describing code paths, API, ownership, branch/commit, actual tests/results, missing features and exact next action. Update agent guidance; do not merge unverified code into main.
 - Current source is in draft PR #112 on `feature/world-processes-experimental`. New Stage11+ features are **source-only, not confirmed compiling or passing runtime tests**. The user deferred testing; do not describe old Stage05 successful tests as proof of these newer files.
+
+## Stage 30: authoritative region bounds, not visual-only gizmos
+
+The real simulation footprint is `evolve::Area` in
+`libraries/include/aiverselib/world/EvolveArea.h`.
+It is a persistent `evolve.area` v1 ECS component with
+`centerXcm, centerZcm, halfWidthCm, halfDepthCm, enabled`.
+The centre is derived from the owning authored map entity's real
+`pos` at `WorldProcessesMapHydration.h` setup; the half-extents
+come from that entity's `EvolveArea` map component. The same entity
+MUST also author `EvolveRegion`. Bounds are half-open rectangles
+in centimetres, valid half-extents 50–50000 cm.
+
+**Add in Studio:** Add Component -> `EvolveArea`, then set
+`halfWidthCm`/`halfDepthCm`, or drag its X/Z bounds directly in
+native Scene. These edits use existing native
+`studio.worldProcessAreaSet`, one MapDoc Undo/Redo step.
+The read-only Live Inspector shows the real ECS Area.
+
+**Consume in TerraWeave:** `evolve::extents(world)` returns
+generation-safe bounded rectangles from authoritative Area ECS.
+The preferred native `makeEvolveForestClimateSampler(world,baseline)`
+and `WorldProcessGameplayHost::forestClimate(world,baseline)`
+use precisely these rectangles to modify the existing
+`ForestEcologyClimateSampler`. TerraWeave retains the actual forest,
+PHYSIS/NEREID the baseline, and EVOLVE the region state and extents.
+
+Legacy `worldProcessGizmo.radiusMetres` remains a visual-only
+circle on maps without an `EvolveArea` component. It does NOT
+modify the actual TerraWeave ecology region; do not mistake it for
+gameplay bounds. Prefer the typed Area from now on.
+
+For overlapping handles, repeated LMB clicks in the same small
+screen-space area cycle stable hit candidates. The active field label
+shows component/key and ordinal; Escape cancels a drag without
+modifying MapDoc.
+
+**Status:** Stage30 authored source, not compiled or
+hardware-accepted. The user's test deferral remains active.
+See `docs/handoffs/world-processes-stage30-evolve-area-handle-cycling-2026-11-23.md`.
