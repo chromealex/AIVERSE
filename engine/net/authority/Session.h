@@ -35,9 +35,12 @@ public:
     ~Server();
     // Enable before attaching any connection; create and resume are explicit.
     bool enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,
-                           bool resume,size_t budget=64u*1024u*1024u);
+                           bool resume,size_t budget=64u*1024u*1024u,bool async=false);
     bool persistenceFailed()const{return persistenceFailed_;}
     bool checkpointWorld();
+    bool pollWorldCheckpoint();
+    bool persistencePending()const;
+    uint32_t finalizedTick()const;
     bool attach(uint8_t slot,std::unique_ptr<Conn> connection);
     void poll(uint64_t now);
     bool step();
