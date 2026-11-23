@@ -1785,3 +1785,9 @@ The production panel's `onGraphChange` still routes through `apply()` and existi
 `SpectraGraphAssetInspector.tsx` now opens a per-slot model picker when Add is clicked, and calls `editSpectraMeshSlot(...,'add',...)` **only after** the user chooses an indexed model. Cancel leaves the graph untouched. Pending insertion is cleared when the selected node or property changes. Existing reorder/remove/replace behavior remains.
 
 Native `engine/fx/FxEffect.h` declares `meshes` as `std::vector<std::string>` and documents built-in mesh names and model paths; this proves the data representation, **not** the availability of every importer format in the runtime renderer. Inspect the actual runtime mesh resource resolver before claiming FBX/glTF support. Do not infer that an indexed model is loadable solely from its importer category. No build/tests executed.
+
+## Stage 49 — build-aware model format discovery
+
+SpectraFxSceneHost wires the CPU ParticleSystem mesh loader to meshFromModelFile (FxModelMesh.h), which calls render::loadModel. Model.cpp registers GLTF/GLB unconditionally, OBJ/FBX and legacy formats conditionally, and supports a neighboring source-path + ".glb" fallback when no native loader exists.
+
+StudioSession's studio.assets now reports modelLoadableFormat for model entries using render::isNativeModelFormat and an indexed converted .glb sibling. spectraStudioAssetIndex excludes explicitly false entries. Missing metadata is tolerated for older hosts. This flag describes format availability, not successful decoding, geometry validity, or GPU execution. No tests run.
