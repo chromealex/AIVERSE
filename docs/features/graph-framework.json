@@ -72,7 +72,8 @@
     "engine/render/TextureGen.cpp",
     "engine/render/graph/TextureGraph.h",
     "apps/studio-web/src/graphs/TextureGraphPanel.tsx",
-    "engine/render/graph/TextureGraphTemplates.h"
+    "engine/render/graph/TextureGraphTemplates.h",
+    "engine/render/graph/TextureGraphCache.h"
   ],
   "traits": {
     "editable": true,
@@ -230,7 +231,9 @@
       "texture_graph_preview",
       "texture_graph_bake",
       "texture_graph_templates",
-      "texture_graph_bake_set"
+      "texture_graph_bake_set",
+      "texture_graph_cache",
+      "texture_graph_material_variant"
     ],
     "studio_panels": [
       "shader_graph",
