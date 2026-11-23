@@ -260,6 +260,9 @@ public:
     }
 
     void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
+    size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
+        return geometry_.collectCompletedWithoutIdle(device);
+    }
     bool collectAfterGpuIdle(gfx::Device& device){
         return geometry_.collectAfterGpuIdle(device);
     }
