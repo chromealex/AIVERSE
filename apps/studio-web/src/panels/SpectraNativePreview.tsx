@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
 import type { StudioSpectraPreviewState } from '../types';
-import { StudioAlert, StudioBadge, StudioButton, StudioField, StudioInput, StudioSection } from '../ui';
+import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSection, StudioSelect } from '../ui';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
 
-type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom';
+type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
 interface Props {
   graph:SpectraGraphV2;
@@ -40,7 +40,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   },[active,state?.ready]);
 
   const command=async(action:Action,options:Partial<{
-    graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number
+    graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
+    background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
+    preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean
   }>={})=>{
     if(busy||disabled||!active)return;
     setBusy(true);setError('');
@@ -73,6 +75,52 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void command('cameraZoom',{amount:-30})}><ZoomOut size={14}/> Zoom out</StudioButton>
       <StudioButton size="sm" variant="ghost" disabled={!active||busy}
         onClick={()=>void command('cameraReset')}><Focus size={14}/> Reset camera</StudioButton>
+    </div>
+    <div className="spectra-native__stage-controls">
+      <StudioField label="Background" htmlFor="spectra-stage-background">
+        <StudioSelect id="spectra-stage-background" value={state?.background??'dark'}
+          disabled={!active||busy} onChange={e=>void command('stage',{
+            background:e.target.value as 'dark'|'neutral'|'light'|'black',
+            grid:state?.grid??true,axes:state?.axes??true
+          })}>
+          <option value="dark">Dark studio</option>
+          <option value="neutral">Neutral grey</option>
+          <option value="light">Light studio</option>
+          <option value="black">Pure black</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioField label="Camera view" htmlFor="spectra-camera-preset">
+        <StudioSelect id="spectra-camera-preset" defaultValue="perspective"
+          disabled={!active||busy} onChange={e=>void command('cameraPreset',{
+            preset:e.target.value as 'perspective'|'front'|'side'|'top'
+          })}>
+          <option value="perspective">Perspective</option>
+          <option value="front">Front</option>
+          <option value="side">Side</option>
+          <option value="top">Top</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioCheckbox label="Grid" checked={state?.grid??true} disabled={!active||busy}
+        onChange={e=>void command('stage',{background:state?.background??'dark',
+          grid:e.target.checked,axes:state?.axes??true})}/>
+      <StudioCheckbox label="Axes" checked={state?.axes??true} disabled={!active||busy}
+        onChange={e=>void command('stage',{background:state?.background??'dark',
+          grid:state?.grid??true,axes:e.target.checked})}/>
+      <StudioField label="Playback speed" htmlFor="spectra-preview-speed">
+        <StudioSelect id="spectra-preview-speed" value={String(state?.speed??1)}
+          disabled={!active||busy} onChange={e=>void command('playback',{
+            speed:Number(e.target.value),loop:state?.loop??true
+          })}>
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioCheckbox label="Loop playback" checked={state?.loop??true}
+        disabled={!active||busy} onChange={e=>void command('playback',{
+          speed:state?.speed??1,loop:e.target.checked})}/>
     </div>
     {!active&&<StudioAlert tone="warning">Use the native AIVERSE Studio application for actual Metal/Vulkan Scene rendering. Browser demo cannot access a GPU Device.</StudioAlert>}
     <p className="spectra-native__hint">
