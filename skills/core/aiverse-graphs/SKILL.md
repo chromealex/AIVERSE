@@ -46,3 +46,5 @@ WeightedGraph/WeightedEdge, dijkstra, graphPath, dfs and weakComponents now live
 Added aStar (admissible uint64 heuristic, only goal path guaranteed optimal), stronglyConnected (iterative Kosaraju, minimum vertex labels), minimumSpanningForest (Kruskal, checked cost). No build/tests. Next flow algorithms.
 
 Flow API: engine/core/GraphFlow.h, graphFlow with Maximum or MinimumCost, integral capacities, edgeFlow in input order, explicit augmentation budget and negative residual cycle rejection. Partial result when budget exhausted. No tests yet.
+
+GraphAnalysis.h: bellmanFord, floydWarshall (max 1024 vertices), graphCuts (iterative undirected multigraph bridges/articulation). Signed paths with negativeCycle=true must not be treated as valid shortest paths. Arithmetic overflow returns nullopt. No tests yet.
