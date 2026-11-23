@@ -217,7 +217,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       ...(gpuAllocationSeed!==''?{gpuAllocationSeed:Number(gpuAllocationSeed)}:{}),
       camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
-      graphSignature,projectPath});
+      graphSignature,projectPath,gpuBirthRandom});
   };
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
