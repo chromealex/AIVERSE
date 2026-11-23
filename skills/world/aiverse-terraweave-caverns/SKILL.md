@@ -71,3 +71,29 @@ Read `engine/world/TerraWeaveCavernsBox3D.h`, `engine/world/TerraWeaveCavernsNav
 - Never route collision or NavMesh through STRATA's approximate visual LOD mesh. STRATA may simplify static cave walls and decorations, but authoritative collision remains sourced from stable immutable cave geometry revisions.
 - GPU / Box3D / NavMesh / STRATA per-tile integration into a live scene is **not certified** until host barrier sequencing, source lease expiry, removal of original tile bodies, and hardware proof. Keep Renderer3D fallback.
 - For stage-6 tests see `tests/terraweave_caverns_stage6_test.cpp` and `tests/terraweave_caverns_box3d_test.cpp`; tests have not been run yet.
+
+## Stage 7 — bounded streaming, multi-span cave nav and shaft walls (2026-11-23)
+
+Mandatory files: `engine/world/TerraWeaveCavernsStreaming.h`, `engine/world/TerraWeaveCavernsMultiNav.h`, `engine/world/TerraWeaveCavernsShaftMesh.h`, `docs/agent-handoffs/caverns-stage7-2026-11-23.md`.
+
+### Streaming
+- `CaveStreamPlanner(StreamSettings)` accepts `setCenter(ChunkKey3)`, `setSourceRevision(revision)`, `setVisualLod(lod)`, then `pump()` emits bounded `Build` and `Retire` requests, nearest keys first with stable tie breaks. `accept(request,revision)` rejects stale or retired worker results. Do not use `accept` to imply GPU/model/Box3D publication succeeded; mark ready only after a separate atomic host publication or extend planner with explicit ready/commit states.
+- `StreamRequest::lod` is visual-only; cave collision, Box3D, and native NavMesh remain independent from STRATA selection.
+- Caller must not use uncommitted or stale mesh assets after a revision update. The host owns worker scheduling, GPU resource retirement and physics barriers, not the planner.
+
+### Native multi-level navigation
+- `CaveNavSource(Settings,CaveNavConfig,vector<Entrance>,terrainHeight)` extends the existing genre-independent `nav::Source`. `spans` samples vertical cave floor candidates that have sufficient head clearance and are below sampled terrain; `link` allows adjacent columns by max step/slope. `caveNavMeshConfig` returns matching `nav::Config`.
+- This is a coarse raster walkability hypothesis; height sampling can miss narrow ledges, agent radius and shaft traversability are NOT guaranteed. No off-mesh ladder/climb links. Test real paths and floors before enabling gameplay routing.
+
+### Shaft transition
+- `makeEntranceShaftSurface(Entrance,heightAt,sides,verticalSections)` produces an explicit cylindrical mesh wall between terrain height around entrance and cave target depth. Output vertices are **world centimetres as double**, triangles are indexed. Use the same polygon side count as `cutTerrainEntrances` and use an immutable terrain snapshot when supplying heightAt.
+- The cutter clips against the original terrain triangle plane. Height source lookup at the rim may NOT perfectly match piecewise interpolation on a deformed tile; sample the actual authoritative terrain triangle surface in production or reconcile lip vertices to avoid cracks.
+- Generated walls are only geometry. Host must convert to the shared `render::Model` and collision mesh and publish at the same owner-thread revision barrier.
+
+### STRATA
+- STRATA is presentation-side clustered geometry/LOD, not collision/navmesh. The existing GeometryScene must explicitly acquire live immutable chunk geometry, verify its revisions, manage residency leases and exclusive render routing. `planCaveStrataLease` is metadata only.
+- Do not claim active STRATA streaming merely because this planner emits mesh requests. Continue ordinary Renderer3D until parity/ownership tests pass.
+
+### Verification
+- Stage 7 adds `tests/terraweave_caverns_streaming_test.cpp` and `tests/terraweave_caverns_multinav_test.cpp`. These have not been compiled or run in this turn. Do not mark them PASS without real build logs.
+- After EVERY implementation stage append an exact handoff with changed files, commits, API, tests actually run, limitations and next actions; update this skill too.
