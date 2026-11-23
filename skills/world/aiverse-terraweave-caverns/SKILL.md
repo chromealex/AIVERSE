@@ -180,3 +180,14 @@ Read `engine/world/TerraWeaveCavernsLodTransition.h`,
 - This is **not general Transvoxel**. Do not claim arbitrary mixed LODs are seamless. Geometry is only changed on the coarse visual source; Box3D / SpatialWorld / native NavMesh remain unchanged. Do not stitch across different world spans, source revisions or incompatible density snapshots.
 - Host must publish updated meshes to GeometryScene/STRATA with a new render revision; preserve Renderer3D fallback while STRATA residency updates.
 - C++ tests for all three positive face axes and divergent fallback are authored, NOT executed in the full AIVERSE checkout yet.
+
+## Stage 15 — six-direction LOD face policy and revision leases
+
+Read `engine/world/TerraWeaveCavernsLodPolicy.h`, `tests/terraweave_caverns_lod_policy_test.cpp`, and `docs/agent-handoffs/caverns-stage15-2026-11-23.md`.
+
+- `resolveCaveFaceLod(CaveFaceSpec)` validates two adjacent chunks in **either argument order** and on any of six cardinal directions. It verifies equal physical chunk span and audits the common world-coordinate face.
+- `CaveFaceDecision::ExactMatch`: the actual boundary-edge sets match at integer-centimetre precision. `Subdivided`: stage-14 collinear coarse-low/fine-high edge subdivision succeeded and was re-audited. `RegenerateAtCommonLod`: unsafe or unsupported transition; do NOT render the unmatched pair. Rebuild both chunks at returned `commonResolution/commonSpacingCm` and run the stage-12 same-LOD seam audit before exposure.
+- `CaveFaceLease` and `caveFaceLeaseCurrent` provide externally supplied revision checks. The host MUST certify each face against the actual immutable meshes and invalidate certification after either side changes; mismatched revisions may not enter STRATA visibility.
+- This policy is NOT general Transvoxel, not real incremental GPU streaming, not a physics or navigation modification, and not proof of seam-normal continuity or absence of internal nonmanifold triangles.
+- Source changes must not bypass `CavePublicationCoordinator` and presentation lease gates. Any fallback regeneration should update visual revisions and STRATA source leases, leaving original collision data authoritative.
+- Stage-15 test source covers X/Y/Z planes, negative coordinates, both argument orientations, divergent contour fallback, and revision guards. No compiler/CTest or GPU verification of this stage has been run yet.
