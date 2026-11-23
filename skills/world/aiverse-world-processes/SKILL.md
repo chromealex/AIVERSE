@@ -665,3 +665,6 @@ Prefer `WorldProcessGameplayHost::advanceEcologyEcs` / `addEcologyEcsSystem` ove
 
 ## Stage 61: dependency preflight
 EVOLVE-aware TerraWeave registration requires nonempty species, exactly one preceding `evolve.succession` and no prior `terraweave.forest_ecology`. README documents composition. PHYSIS order is caller responsibility; standalone demo and QA pending. See `docs/handoffs/world-processes-stage61-dependency-preflight-2026-11-23.md`.
+
+## Stage 62: forest demo fixture
+`examples/native/world_processes/evolve-forest-demo.json` provides healthy, polluted and recovery regions with typed areas and pressure sources. Concrete game must supply entity types, plant population and real PHYSIS links; not a runnable demo. No tests. See `docs/handoffs/world-processes-stage62-forest-demo-fixture-2026-11-23.md`.
