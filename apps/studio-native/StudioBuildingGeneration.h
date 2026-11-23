@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -181,19 +182,56 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
     for(int index=0;index<=99;++index){
         const std::string suffix=index?"-"+std::to_string(index):"";
         auto candidate=folder/(stem+suffix+".glb");
-        if(!fs::exists(candidate,ec)){file=candidate;break;}
+        if(!fs::exists(candidate,ec)&&!fs::exists(fs::path(candidate.string()+".recipe.json"),ec)){
+            file=candidate;break;
+        }
         if(ec)throw std::runtime_error("Cannot inspect existing building assets");
     }
     if(file.empty())throw std::runtime_error("Too many generated assets with this seed");
     const auto temp=fs::path(file.string()+".aiverse-tmp");
-    if(fs::exists(temp))throw std::runtime_error("A building export is already in progress");
+    const auto recipeFile=fs::path(file.string()+".recipe.json");
+    const auto recipeTemp=fs::path(recipeFile.string()+".aiverse-tmp");
+    if(fs::exists(temp)||fs::exists(recipeTemp))
+        throw std::runtime_error("A building export is already in progress");
     try {
         aiverse::lib::systems::buildingExport::Glb glb;
         glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
             throw std::runtime_error("Building GLB export produced an invalid file");
+        // Persist a canonical generation recipe alongside the visual Asset.
+        // Never copy arbitrary browser payload keys into project files.
+        Json saved=Json::object();
+        saved.set("schema",Json::number(int64_t(1)));
+        saved.set("style",string(req.style));
+        saved.set("mode",string(req.composeFeatures?"features":"preset"));
+        saved.set("function",string(req.composeFeatures?"":req.kind));
+        saved.set("seed",Json::number(int64_t(req.seed)));
+        saved.set("width",Json::number(double(req.dimensions.width),3));
+        saved.set("height",Json::number(double(req.dimensions.height),3));
+        saved.set("depth",Json::number(double(req.dimensions.depth),3));
+        if(req.composeFeatures){
+            Json features=Json::array();
+            for(const auto& feature:req.functionalRecipe.features){
+                Json spec=Json::object();
+                spec.set("kind",string(buildingFeatureName(feature.kind)));
+                spec.set("side",string(buildingFeatureSideName(feature.side)));
+                spec.set("count",Json::number(int64_t(feature.count)));
+                spec.set("width",Json::number(double(feature.width),3));
+                spec.set("height",Json::number(double(feature.height),3));
+                spec.set("depth",Json::number(double(feature.depth),3));
+                spec.set("open",Json::number(double(feature.open),3));
+                features.push(std::move(spec));
+            }
+            saved.set("features",std::move(features));
+        }
+        {
+            std::ofstream stream(recipeTemp,std::ios::binary|std::ios::trunc);
+            if(!stream||!(stream<<saved.dump(2)<<"\n"))
+                throw std::runtime_error("Cannot persist generated building recipe");
+        }
         fs::rename(temp,file);
+        fs::rename(recipeTemp,recipeFile);
         StudioAssetCatalog catalog(project);
         catalog.rebuild();
         const std::string relative=file.lexically_relative(root).generic_string();
@@ -202,12 +240,14 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             throw std::runtime_error("Building GLB was created but asset GUID registration failed");
         Json result=Json::object();
         result.set("path",string(relative));
+        result.set("recipePath",string(recipeFile.lexically_relative(root).generic_string()));
         result.set("guid",string(entry->guid));
         result.set("bytes",Json::number(entry->bytes));
         result.set("triangles",Json::number(int64_t(model.mesh.triangles())));
         return result;
     }catch(...){
         ec.clear();fs::remove(temp,ec);
+        ec.clear();fs::remove(recipeTemp,ec);
         throw;
     }
 }
