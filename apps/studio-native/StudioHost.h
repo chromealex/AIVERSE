@@ -233,11 +233,15 @@ private:
     struct WorldProcessDrag {
         bool active=false;
         std::uint8_t mode=0;
-        std::string owner,component,key,targetType,previewTarget;
+        std::string owner,component,key,targetType,previewTarget,label;
         render::float3 previewPoint{};
         float baseline=1.f,value=0.f;
         bool valid=false;
     } wpDrag_;
+    // Repeated clicks at overlapping handles cycle through stable candidates.
+    std::string wpHitOwner_;
+    double wpHitX_=0,wpHitY_=0;
+    std::size_t wpHitOrdinal_=0;
     unsigned lightingStatusTicks_ = 0;
     int lastLoadDone_ = -1, lastLoadTotal_ = -1;
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
