@@ -109,6 +109,29 @@ int main(){
     nature->step();
     AIVERSE_TEST_CHECK(fr::pending(nature->world()).size()==3);
 
+    auto repaired=make<7>();
+    auto& rh=static_cast<StructureHost<7>&>(repaired->module());
+    repaired->step();
+    repaired->world().get<fr::Bond>(rh.bridgeA).damage=100;
+    repaired->step();
+    const auto toRepair=fr::pending(repaired->world());
+    AIVERSE_TEST_CHECK(toRepair.size()==2);
+    for(const auto& event:toRepair)
+        AIVERSE_TEST_CHECK(fr::acknowledge(repaired->world(),event));
+    AIVERSE_TEST_CHECK(!fr::rearmAfterRepair(repaired->world(),toRepair[0],
+                                           toRepair[0].tick));
+    repaired->step(); // host has durably repaired physical bodies by this barrier
+    repaired->world().get<fr::Bond>(rh.bridgeA).damage=0;
+    for(const auto& event:toRepair){
+        AIVERSE_TEST_CHECK(fr::rearmAfterRepair(repaired->world(),event,
+                                               repaired->tick()+1));
+        AIVERSE_TEST_CHECK(!fr::acknowledge(repaired->world(),event));
+    }
+    repaired->step();
+    AIVERSE_TEST_CHECK(fr::pending(repaired->world()).empty());
+    AIVERSE_TEST_CHECK(!repaired->world().get<fr::Member>(rh.mid).detached);
+    AIVERSE_TEST_CHECK(!repaired->world().get<fr::Member>(rh.tip).detached);
+
     auto large=make<5>();
     auto& lh=static_cast<StructureHost<5>&>(large->module());
     for(std::size_t i=0;i<fr::kMaxMembers;++i){
