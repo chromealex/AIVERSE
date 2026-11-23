@@ -837,6 +837,10 @@ void StudioHost::rebuildOverlay() {
         if(pivotSelection!=wpPivotSelection_){
             wpPivotSelection_=pivotSelection;
             wpCustomPivot_=false;
+            // Never retain an old numeric overlay across a new selection.
+            wpNumericPreview_=Json();
+            wpPreviewOwner_.clear();
+            wpPreviewSelection_.clear();
         }
         render::float3 centroid{};
         if(worldprocess_edit::groupCentroid(session_->workspace().map,
@@ -1917,7 +1921,9 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(owner.empty()||owner.size()>128)
             throw std::runtime_error("Invalid EVOLVE preview owner");
         if(revision<0)throw std::runtime_error("Missing EVOLVE preview revision");
-        if(params.getStr("selectionKey")!=selectionKey)
+        // A release is allowed even after the selection changed, but
+        // cannot release another window's active preview.
+        if(params.getStr("selectionKey")!=selectionKey && !params.getBool("clear"))
             throw std::runtime_error("EVOLVE preview selection changed");
         if(owner!=wpPreviewOwner_ && params.getBool("clear")){
             Json ignored=Json::object();
@@ -1932,8 +1938,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
         wpPreviewOwner_=owner;
         wpPreviewRevision_=revision;
         wpPreviewSelection_=selectionKey;
-        if(params.getBool("clear")||selected.size()<2)wpNumericPreview_=Json();
-        else{
+        if(params.getBool("clear")||selected.size()<2){
+            wpNumericPreview_=Json();
+            wpPreviewOwner_.clear();
+            wpPreviewSelection_.clear();
+        }else{
             const auto& sx=params["scaleNumerator"];
             const auto& sz=params["scaleNumeratorZ"];
             const auto pivot=params.getStr("pivot");
