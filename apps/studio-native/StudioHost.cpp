@@ -883,6 +883,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
+    if(spectraDockActive_)return false; // VFX viewport never edits the game map
     if (projectLoading_ || !preview_) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -902,6 +903,7 @@ bool StudioHost::placeAsset(const std::string& asset, double x, double y, double
     return true;
 }
 bool StudioHost::placeType(const std::string& type, double x, double y, double w, double h) {
+    if(spectraDockActive_)return false; // VFX viewport never edits the game map
     if (projectLoading_ || !preview_ || type.empty() || type.size() > 128) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -1242,6 +1244,20 @@ void StudioHost::applyViewport(const Json& params) {
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
+    if(spectraDockActive_) {
+        // The Scene view may remain mounted in another dock while the FX
+        // surface has priority. Reject stale edit/brush/pick commands rather
+        // than accidentally changing the authored map behind the preview.
+        const bool viewOnly=kind=="orbit"||kind=="look"||kind=="pan"||
+            kind=="zoom"||kind=="move";
+        if(kind=="reset"||kind=="focus") {
+            if(preview_)onScene([&]{preview_->resetSpectraDockCamera();});
+            Json result=Json::object();result.set("ok",Json::fromBool(true));
+            return result;
+        }
+        if(!viewOnly)throw std::runtime_error(
+            "Scene editing input disabled while SpectraFX owns the native viewport");
+    }
     Json result = Json::object();
     // Pointer/keyboard navigation comes from HTML only in composite mode (the native view handles it
     // otherwise); toolbar commands work in both.
