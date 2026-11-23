@@ -167,6 +167,20 @@ Json genericField(const std::string& key,const Json& value) {
     else {r.set("type",str("text"));r.set("value",str(value.dump(-1)));}
     return r;
 }
+// Validate map-object references against current authored components, not a
+// runtime entity index or an untrusted browser list. Duplicate target IDs fail.
+bool validWorldProcessDocumentRef(const editor::MapDoc& map,std::string_view componentId,
+                                  std::string_view field,const Json& value) {
+    if(!lib::worldprocess::linked::isReference(componentId,field))return true;
+    if(!value.isString())return false;
+    if(value.str().empty())return true; // allowed while the component is disabled
+    const auto target=lib::worldprocess::linked::targetType(componentId);
+    size_t found=0;
+    for(const auto& entity:map.data.entities)
+        if(entity.id==value.str() &&
+           entity.extra["components"].has(std::string(target)))++found;
+    return found==1;
+}
 // Map "facing" is clockwise degrees seen from above; Transform rotation Y is
 // right-handed (counter-clockwise). Both normalized to [0,360).
 double studioFacingToYaw(double facing){double y=std::fmod(360.0-std::fmod(facing,360.0),360.0);return y<0?y+360.0:y;}
@@ -345,15 +359,46 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             for(const auto& [name,value]:comps.members()) {
                 if(name=="Transform"||name=="StaticModel")continue;
                 Json fields=Json::array();
-                const bool authorable=lib::worldprocess::authoring::supports(name) &&
+                const bool standalone=lib::worldprocess::authoring::supports(name) &&
                     lib::worldprocess::authoring::validate(name,value);
+                const bool linked=lib::worldprocess::linked::supports(name) &&
+                    lib::worldprocess::linked::validate(name,value);
+                const bool authorable=standalone||linked;
                 if(value.isObject())for(const auto& [key,item]:value.members()) {
                     Json field=genericField(key,item);
                     if(authorable) {
                         field.set("editable",Json::fromBool(true));
+                        if(linked&&lib::worldprocess::linked::isReference(name,key)) {
+                            Json options=Json::array();
+                            Json empty=Json::object();
+                            empty.set("label",str("Unassigned"));empty.set("value",str(""));
+                            options.push(std::move(empty));
+                            const auto target=lib::worldprocess::linked::targetType(name);
+                            for(const auto& candidate:ws_.map.data.entities){
+                                if(candidate.id.empty() ||
+                                   !candidate.extra["components"].has(std::string(target)))continue;
+                                Json option=Json::object();
+                                const std::string label=candidate.extra.getStr("displayName",candidate.id);
+                                option.set("label",str(label+" · "+candidate.id));
+                                option.set("value",str(candidate.id));
+                                options.push(std::move(option));
+                            }
+                            field.set("options",std::move(options));
+                            field.set("entityReference",Json::fromBool(true));
+                            field.set("description",str("Stable map object ID; resolved to a real ECS Entity on native game setup."));
+                        }
                         if(item.isNumber()) {
-                            field.set("min",Json::number(int64_t(0)));
-                            field.set("max",Json::number(aether::kMaxCellMass));
+                            int64_t minimum=0,maximum=aether::kMaxCellMass;
+                            if(linked){
+                                maximum=lib::worldprocess::linked::targetType(name)=="EchoZone"?
+                                    echo::kMaxIntensity:
+                                    lib::worldprocess::linked::targetType(name)=="FractureMember"?
+                                    fracture::kMaxBondStrength:aether::kMaxDuctRate;
+                                if(name=="AetherFlux")minimum=-aether::kMaxDuctRate;
+                                if(key=="strength"||key=="intensity")minimum=1;
+                            }
+                            field.set("min",Json::number(minimum));
+                            field.set("max",Json::number(maximum));
                             field.set("step",Json::number(int64_t(1)));
                             field.set("integer",Json::fromBool(true));
                         }
