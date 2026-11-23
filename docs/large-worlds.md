@@ -1,5 +1,15 @@
 # Large worlds: chunks and a memory budget
 
+## Dynamic entities: authoritative ownership vs chunk residency
+
+The opt-in [RegionEntityLedger](region-entity-ledger.md) records authoritative stable
+entity ownership by region, group transfers, tombstones and portable ECS v10 save/rollback.
+This is a **first policy slice**, not an ECS region streaming host. In particular, the
+resource-residency decisions below must never change deterministic gameplay state.
+Moving a camera or evicting a visual chunk does not despawn or transfer an ECS actor.
+Live component deactivation/reification and collision/navmesh barriers remain W1 work.
+
+
 `AIVERSE::world` provides a shared loader, `world::ChunkStreamer`, for the game host. It does not depend on FPS, the GPU,
 threads or the file system. The host defines the chunk catalog, observers, pinned chunks and the functions that load and
 unload resources. The existing FPS client uses it through `ChunkScene` for the earlier box scenes. For terrain, models and
