@@ -26,3 +26,4 @@
 #include "engine/buildings/BuildingApertureOwner.h"
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
+#include "engine/buildings/BuildingTransportZoneGraphAdapters.h"
