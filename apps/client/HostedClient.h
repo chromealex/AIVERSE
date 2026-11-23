@@ -15,7 +15,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/platform/Platform.h"
 
-namespace aiverse { class Simulation; }
+namespace aiverse { class Simulation; class Json; }
 namespace aiverse::client { class GameClient; }
 
 namespace aiverse::client {
@@ -58,6 +58,10 @@ public:
     bool capturing() const { return captured_; }
     Simulation* simulation();
     bool inMatch() const;
+    // Forward editor-authored cave SDF into the SAME GameClient used by Play.
+    // Visual only; game collision and navigation are separate owners.
+    bool updateCavernsVisual(const Json& authored);
+
     std::string errorText() const;
     bool canControl() const;
     bool paused() const;
