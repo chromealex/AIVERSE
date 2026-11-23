@@ -88,6 +88,37 @@ std::string storeBytes(const RegionColdStore& original) {
     AIVERSE_TEST_CHECK(a.ok());
     return serialized;
 }
+void rejectPartialAndInvalidSave() {
+    auto sim=makeSim();
+    auto& w=sim->world();
+    auto actors=members(*sim);
+    auto* ledger=w.resource<RegionEntityLedger>();
+    auto* cold=w.resource<RegionColdStore>();
+    auto policy=controller();
+    std::string error;
+
+    // A group containing an unbound third party must reject the entire
+    // operation: actor[0] must remain hot and the store empty.
+    auto unbound=w.create();
+    w.add<Transform>(unbound,Transform{placed,placed,Fixed{}});
+    const std::array<Entity,2> invalidGroup{actors[0],unbound};
+    const auto before=sim->checksum();
+    AIVERSE_TEST_CHECK(!policy.parkGroup(w,*ledger,*cold,invalidGroup,home,&error));
+    AIVERSE_TEST_CHECK(w.has<Brain>(actors[0]) && w.has<Engine>(actors[0]));
+    AIVERSE_TEST_CHECK(!w.has<RegionDormant>(actors[0]) && cold->size()==0);
+    AIVERSE_TEST_CHECK(sim->checksum()==before);
+
+    // Native persistence must reject a valid-checksum save that contains
+    // mismatched parked records and dormant ECS tags.
+    AIVERSE_TEST_CHECK(policy.parkGroup(w,*ledger,*cold,actors,home,&error));
+    w.remove<RegionDormant>(actors[0]);
+    const auto inconsistent=sim->serialize();
+    auto clean=makeSim();
+    const auto originalHash=clean->checksum();
+    AIVERSE_TEST_CHECK(!clean->deserialize(inconsistent,&error));
+    AIVERSE_TEST_CHECK(clean->checksum()==originalHash);
+}
+
 void basicRoundtrip() {
     auto sim=makeSim();
     auto& w=sim->world();
@@ -207,6 +238,7 @@ void rollbackAndRetirement() {
 } // namespace
 
 int main() {
+    rejectPartialAndInvalidSave();
     basicRoundtrip();
     rollbackAndRetirement();
     std::cout<<"PASS region_cold_store (real component parking, restore, rollback, retirement)\n";
