@@ -1,3 +1,26 @@
+## 2026-11-23 — embedded SpectraFX native viewport / MCP (Stages 11–12)
+
+`SpectraDockViewport.tsx` owns the **HTML rectangle only**, uses
+`studio.viewportRect {id:"fx"}`, and releases it on unmount.
+The actual render, particles, isolated camera, resource fences and
+GPU Device belong to the existing `StudioScene` native render thread.
+Do not render fake particle DOM/canvas frames or create another WebGL/
+Metal device in React. Graph and Scene share a native surface with FX
+priority and reflow after it closes. Browser code never edits the
+game map from VFX.
+`fx_graph_preview` is a shared Workspace op listed by `aiversemcp`
+and delegates to the same `StudioHost::runSpectraPreview` as
+`studio.spectraPreview`. Standalone MCP returns a clear unavailable
+error; all asset authoring tools remain usable.
+Tests: `test:graphs` includes `spectraViewportModel.test.mjs`,
+native `studio_spectrafx_preview` includes isolated camera/restore,
+`vfx_graph_ops` includes MCP discovery, host callback and safety.
+**Current exact-SHA hardware/UI QA NOT yet run.** Handoffs: Stage 11
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+and Stage 12
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 ## Stage 9 — SpectraFX Graph first-use UX (2026-11-23)
 
 User screenshot showed the `New Graph` form hidden below a scrolling asset list
