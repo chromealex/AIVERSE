@@ -95,7 +95,7 @@ export function addCurveKey(graph:SpectraGraphV2,id:string):GraphEdit {
   if(!node)return fail(graph,'Missing curve node.');
   const keys=readCurve(node);
   if(!keys||keys.length>=32)return fail(graph,'Curve has too many keys or invalid data.');
-  let gap=1,center=0.5;
+  let gap=0,center=0.5;
   const points=[0,...keys.map(k=>k.t),1].sort((a,b)=>a-b);
   for(let i=1;i<points.length;i++) {
     const g=points[i]-points[i-1];
