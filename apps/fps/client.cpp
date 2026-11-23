@@ -15,7 +15,6 @@
 #include "engine/world/TerraWeaveHorizonFrameTimingBridge.h"
 #include "engine/platform/ContentReader.h"
 #include "engine/render/Renderer3D.h"
-#include "apps/fps/FpsBuildingDoorScene.h"
 #include "engine/fx/SpectraFxSceneHost.h"
 #include "libraries/include/aiverselib/motionweave/MotionWeave.h"
 #include "libraries/include/aiverselib/animation/AnimationCrowdSystems.h"
@@ -67,7 +66,6 @@ struct App {
     render::GeometryScene staticGeometry;
     roads::RoadView roads;bool hasRoads=false;   // map "roadNetwork": the shared spline road view (engine/roads, docs/roads.md)
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
-    client::FpsBuildingDoorScene buildingDoors;
     fx::SpectraFxSceneHost fxScene;
     // Shared data-driven entity effects: rule per selector set, and the last
     // shot/hit counters per character life to turn them into cues.
@@ -324,19 +322,6 @@ struct App {
         look.settings=render::cameraLookFrom(cameraBlock("firstPerson"));
         chase=render::cameraChaseFrom(cameraBlock("chase"));
         renderer.init(device);renderer.setShadowQuality(render::ShadowQuality::Low);
-        // Opt-in REAL local-loopback FPS demo. Remote multiplayer needs a
-        // door snapshot wire protocol; never enable unsynchronized physics
-        // for listen/remote clients. Existing map collision remains owner.
-        if(server && !listen && map["buildingDoors"].isObject()) {
-            const auto read=[this](const std::string& file,std::string& bytes){
-                return platform::readContentFile(projectRoot+"/"+file,bytes)||
-                       platform::readContentFile(file,bytes);
-            };
-            std::string issue;
-            if(!buildingDoors.attach(*server,*client,map["buildingDoors"],
-                                     read,device,&issue))
-                throw std::runtime_error("FPS building doors: "+issue);
-        }
         if(!fxScene.init(device,
              [this](const std::string& p,std::string& out) {
                  return platform::readContentFile(projectRoot+"/"+p,out);
@@ -941,7 +926,7 @@ struct App {
                 input.action=actor::Action::None;
                 input.buttons&=~uint32_t(actor::Jump|actor::WeaponMask);
             }
-            if(server){server->poll(now);if(!server->step()){accumulated=0;break;}buildingDoors.syncPrediction();client->poll(now);}
+            if(server){server->poll(now);if(!server->step()){accumulated=0;break;}client->poll(now);}
             accumulated-=1.0/config.tickRate;
         }
         // Streamed WorldScene GPU ownership is retired only at this
@@ -1037,15 +1022,6 @@ struct App {
                                device.framebufferWidth(),device.framebufferHeight());
         if(streamedScene)streamedScene->draw(renderer,origin,32);
         staticGeometry.draw(renderer);
-        // Use the same Renderer3D ModelDraw queue and camera-relative
-        // origin as other FPS world objects. The two physical leaves
-        // have already advanced in ActorHost's ECS fixed-tick system.
-        if(buildingDoors.active()){
-            std::string issue;
-            if(!buildingDoors.submit(renderer,origin,
-                   uint32_t(std::clamp(dt*1000.,0.,250.)),&issue))
-                std::fprintf(stderr,"FPS building render: %s\\n",issue.c_str());
-        }
         if(hasRoads){roads.collectRetired(device);roads.setWorldShift(visual(world::relativeTo(Vec3{},origin,32)));roads.draw(renderer,[](float,float){return 0.f;});}
         chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot+"/"+file,data);});
         for(const auto& [cell,boxes]:chunks.chunks())for(const auto& b:boxes) {
@@ -1294,7 +1270,6 @@ struct App {
             characterModel.reset();
         }
         if(streamedScene)streamedScene->shutdown(device);
-        buildingDoors.detach(server.get(),device,renderer);
         server.reset();client.reset();
         staticGeometry.shutdown(device);
         if(hasRoads)roads.shutdown(device);
