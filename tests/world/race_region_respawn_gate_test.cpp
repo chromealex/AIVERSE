@@ -5,6 +5,7 @@
 #include <array>
 #include <iostream>
 #include <utility>
+#include <vector>
 
 using namespace aiverse;
 namespace lm=aiverse::lib::mechanics;
@@ -59,6 +60,7 @@ int main() {
     AIVERSE_TEST_CHECK(race.possibleRespawnPositions(world)==last);
     state->session.race.route.racers.at(1).finished=true;
     state->session.race.route.racers.at(1).place=1;
+    state->session.race.route.finishers=1;
     AIVERSE_TEST_CHECK(race.possibleRespawnPositions(world).empty());
     std::cout<<"PASS race respawn pre-tick grid/last/next checkpoint candidates\n";
 }
