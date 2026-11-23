@@ -1899,3 +1899,7 @@ StudioTools fx_graph group now lists asset check, replay and checkpoint operatio
 ## Stage 75 — restore and transfer lifecycle
 
 Active upload excludes simulation commands; cancel clears transfer ID; browser cancels failed uploads, successful import transfers ownership to render queue. Restore rebuilds host live slot mirror for non-indirect mode. No builds/tests; RHI failure handling and compile audit remain.
+
+## Stage 76 — RHI capture error handling
+
+Vulkan rejects invalid readback copies and stops frame submission/present progression on failed submit. Metal guards allocation/blit failure and strips aligned row padding. Shared GL/GLES capture rejects empty framebuffer and restores framebuffer/pack state. No builds/tests. Device-loss teardown and pending asynchronous readbacks still require verification.
