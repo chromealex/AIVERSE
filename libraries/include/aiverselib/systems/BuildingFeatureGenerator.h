@@ -138,7 +138,8 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
 inline FunctionalBuildingResult generateFunctionalBuilding(
     const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
     Vec3 origin={},uint32_t yaw=0,
-    bool includeInitialLiftPlatform=true){
+    bool includeInitialLiftPlatform=true,
+    bool includeDynamicPanels=true){
     using namespace buildingStyleDetail;
     FunctionalBuildingResult result;
     const auto reject=[&](const std::string& why){
@@ -192,6 +193,11 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         // exported by BuildingLiftController.
         if(!includeInitialLiftPlatform&&
            solid.part==BuildingGraphPart::ElevatorPlatform)continue;
+        // Runtime uses a dedicated authoritative SpatialWorld owner for
+        // movable gates and roof panels. Studio preview still bakes them.
+        if(!includeDynamicPanels&&
+           (solid.part==BuildingGraphPart::DoorLeaf||
+            solid.part==BuildingGraphPart::RoofPanel))continue;
         int material=hull;
         switch(solid.part){
           case BuildingGraphPart::Floor:material=ground;break;
