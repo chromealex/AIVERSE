@@ -5,6 +5,7 @@
 // Box3D, SpatialWorld and NavMesh, then ACK the exact residency ticket.
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
 #include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
+#include "engine/world/TerraWeaveCavernsDistanceLod.h"
 #include <chrono>
 #include <future>
 #include <map>
@@ -16,7 +17,8 @@
 namespace aiverse::terraweave::caverns {
 struct CaveStreamCpuResult {
     CaveResidencyTicket ticket{};
-    CaveMesh mesh{};
+    CaveMesh mesh{}; // distance-LOD visual mesh
+    CaveMesh collisionMesh{}; // authoritative full-resolution surface
     bool success=true;
 };
 struct CaveStreamJobStats {
@@ -45,8 +47,13 @@ public:
             [snapshot,request,resolution,spacingCm](){
                 CaveStreamCpuResult out;
                 out.ticket=request;
-                out.mesh=generateCaveSnapshotMesh(*snapshot,request.key,
-                                                    resolution,spacingCm);
+                out.collisionMesh=generateCaveSnapshotMesh(
+                    *snapshot,request.key,resolution,spacingCm);
+                const auto visual=caveVisualLodMeshSpec(
+                    resolution,spacingCm,request.lod);
+                if(request.lod==0)out.mesh=out.collisionMesh;
+                else out.mesh=generateCaveSnapshotMesh(
+                    *snapshot,request.key,visual.resolution,visual.spacingCm);
                 return out;
             });
         jobs_.emplace(request.key,Job{request,std::move(work)});
