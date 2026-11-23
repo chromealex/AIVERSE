@@ -183,7 +183,7 @@ export interface StudioSpectraPreviewState {
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'playback'|'burst'|'clear'|'capture'|'captureStatus'|'captureCancel';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -198,6 +198,7 @@ export interface StudioParams {
     seed?:number;
     gpuShaderSeed?:number;
     checkpointId?:number;
+    captureId?:number;
     gpuBirthRandom?:boolean;
     requireReplayReady?:boolean;
     gpuAllocationSeed?:number;
