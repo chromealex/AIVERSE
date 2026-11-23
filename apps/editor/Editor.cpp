@@ -93,6 +93,7 @@ public:
     std::string projectDir;
     Json previousJson;
     std::vector<Stamp> previousStamps;
+    std::vector<terraweave::caverns::Entrance> previousEntrances;
     uint64_t epoch=0;
     bool initialized=false;
 
@@ -108,13 +109,20 @@ public:
             bridge.reset();
             projectDir=project;initialized=false;
             previousJson=Json{};
-            previousStamps.clear();epoch=0;
+            previousStamps.clear();previousEntrances.clear();epoch=0;
             editor.cavernsBuildStats={};
         }
         const Json& json=editor.doc().data.extra["terraweaveCaverns"];
         if(!initialized || json!=previousJson) {
             Volume newVolume=terraweave::caverns::caveSnapshotFromJson(json);
             const auto newStamps=newVolume.stamps;
+            const auto newEntrances=newVolume.entrances;
+            // Generator settings modify the entire world, not just stamps.
+            // This bounded local preview cannot safely enumerate the entire
+            // resident world; refuse rather than silently show stale chunks.
+            if(initialized && json["settings"]!=previousJson["settings"])
+                throw std::runtime_error(
+                    "Caverns generator settings changed: full-world reload required");
             // MapDoc Undo/Redo can restore a lower persisted revision. The
             // runtime epoch remains strictly monotonic across that history.
             if(epoch==UINT64_MAX)throw std::overflow_error("Caverns author epoch");
@@ -136,6 +144,22 @@ public:
             };
             for(const auto& stamp:previousStamps)include(stamp);
             for(const auto& stamp:newStamps)include(stamp);
+            const auto includeEntrance=[&](const terraweave::caverns::Entrance& e){
+                // Vertical entrance shaft has its own influence bounds.
+                // Include a 100 cm meshing/normal-gradient sampling halo.
+                const int64_t r=int64_t(e.radiusCm)+100;
+                const Bounds b{e.xCm-r,e.caveYcm-r,e.zCm-r,
+                               e.xCm+r+1,e.surfaceYcm+r+1,e.zCm+r+1};
+                if(!any){bounds=b;any=true;return;}
+                bounds.minX=std::min(bounds.minX,b.minX);
+                bounds.minY=std::min(bounds.minY,b.minY);
+                bounds.minZ=std::min(bounds.minZ,b.minZ);
+                bounds.maxX=std::max(bounds.maxX,b.maxX);
+                bounds.maxY=std::max(bounds.maxY,b.maxY);
+                bounds.maxZ=std::max(bounds.maxZ,b.maxZ);
+            };
+            for(const auto& entrance:previousEntrances)includeEntrance(entrance);
+            for(const auto& entrance:newEntrances)includeEntrance(entrance);
             if(any){
                 if(!bridge)
                     bridge=std::make_unique<terraweave::caverns::CaveEditRuntimeBridge>(
@@ -144,6 +168,7 @@ public:
             }
             previousJson=json;
             previousStamps=newStamps;
+            previousEntrances=newEntrances;
             initialized=true;
         }
         if(bridge){
