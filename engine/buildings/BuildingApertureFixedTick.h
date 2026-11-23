@@ -60,6 +60,12 @@ public:
         if(error)error->clear();
         return true;
     }
+    // Opt in before accepting commands. Legacy binary commit remains the
+    // default until the host provides real swept collision and graph owners.
+    void setSteppedMotion(bool enabled,uint16_t stepPermille=100){
+        steppedMotion_=enabled;
+        stepPermille_=uint16_t(std::clamp<int>(stepPermille,1,250));
+    }
     // Queue only; never mutate collision in a network handler or on the
     // renderer thread. ECS World owns actor generation and its lifetime.
     bool enqueue(const World& ecs,const BuildingApertureCommand& command,
@@ -115,6 +121,21 @@ public:
                 return frame;
             }
         }
+        if(steppedMotion_&&apertures.motionActive()){
+            const auto move=apertures.advanceMotion(
+                spatial,router,stepPermille_);
+            frame.revision=apertures.revision();
+            if(!move.collisionCommitted||!move.graphsAcknowledged){
+                frame.error=move.error.empty()?
+                    "Moving aperture awaiting physics or graph commit":move.error;
+                return frame;
+            }
+            // Do not accept a new command during a moving physical leaf.
+            if(apertures.motionActive()){
+                frame.error="Physical aperture traversal is still in progress";
+                return frame;
+            }
+        }
         // Preserves authoritative arrival order and places a strict
         // budget on per-tick collision/graph mutations.
         size_t handled=0;
@@ -155,6 +176,20 @@ public:
                 reject("Actor not authorized or not at the physical interaction zone");
                 continue;
             }
+            if(steppedMotion_){
+                std::string issue;
+                if(!apertures.beginMotion(
+                       cmd.socketId,cmd.open,cmd.graphDomains,&issue)){
+                    outcome.reason=issue;
+                    frame.commands.push_back(std::move(outcome));
+                    continue;
+                }
+                lastAccepted_[id]=cmd.sequence;
+                outcome.accepted=true;
+                frame.commands.push_back(std::move(outcome));
+                frame.error="Physical aperture motion queued for subsequent ticks";
+                break;
+            }
             const auto result=apertures.setOpen(
                 cmd.socketId,cmd.open,spatial,router,cmd.graphDomains);
             outcome.physicsCommitted=result.collisionCommitted;
@@ -174,7 +209,8 @@ public:
             }
         }
         frame.revision=apertures.revision();
-        if(!apertures.hasPendingGraphs()){
+        if(!apertures.hasPendingGraphs()&&!apertures.motionActive()&&
+           frame.error.empty()){
             frame.committedPoses=apertures.poses();
             frame.complete=true;
         }else if(frame.error.empty())
@@ -204,6 +240,8 @@ private:
     InteractionRange reachable_;
     std::map<uint64_t,uint64_t> lastAccepted_;
     std::vector<BuildingApertureCommand> queue_;
+    bool steppedMotion_=false;
+    uint16_t stepPermille_=100;
 };
 
 } // namespace aiverse::building
