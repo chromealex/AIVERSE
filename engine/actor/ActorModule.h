@@ -175,6 +175,12 @@ public:
     // BEFORE a simulation tick; collision/nav admission runs in readyToStep.
     bool requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
                            std::string* error=nullptr);
+    // Trusted native/script gameplay entry point: stable W1 identity rather
+    // than a transient Entity. Callers must authorize the action first.
+    bool requestRegionMoveByStableId(Simulation& sim,
+                                     world::RegionEntityId stableId,
+                                     Vec3 destination,
+                                     std::string* error=nullptr);
     // Validate a typed vehicle's seat/controller schema before staging.
     // No mutation; uses the shared VehicleRegionTransfer group.
     bool typedRegionMoveGroup(const Simulation&,Entity,
