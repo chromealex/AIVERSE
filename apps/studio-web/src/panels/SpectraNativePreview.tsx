@@ -446,6 +446,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void captureFrame()}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
+      {capturePending&&<StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'captureCancel'}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
     </div>
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" disabled={!active||!state?.ready||busy||capturePending}
