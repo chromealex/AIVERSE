@@ -191,6 +191,7 @@ public:
         return result;
     }
 
+    uint64_t sceneId()const noexcept{return sceneId_;}
     bool attached()const noexcept{return attached_;}
     bool moving()const{
         for(const auto& [id,e]:entries_){
