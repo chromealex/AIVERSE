@@ -286,8 +286,13 @@ void StudioHost::gameEvent(const platform::Event& event) {
     if (game_ && platform_.surfaceDrawable(StudioSurface::Game)) game_->event(event);
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
-    if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
-    else { gamePlacement_ = {}; if (game_) game_->suspend(); }
+    if (surface == StudioSurface::Scene) {
+        placement_ = {}; readyEmitted_ = false;
+        if(spectraDockActive_) {
+            spectraDockActive_=false;
+            if(preview_)onScene([&]{preview_->setSpectraDockMode(false);});
+        }
+    } else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
