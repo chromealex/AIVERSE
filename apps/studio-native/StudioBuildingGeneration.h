@@ -120,6 +120,11 @@ inline void applyProjectMaterials(const fs::path& project,const Request& req,
     const Json& library=doc["materials"];
     if(!library.isObject())
         throw std::runtime_error("Project materials.json lacks materials object");
+    // Studio's existing material editor persists project-relative texture
+    // paths after resolving GUIDs at the trust boundary. Convert those
+    // paths back to stable GUIDs for the procedural GLB emitter.
+    StudioAssetCatalog assetCatalog(project);
+    assetCatalog.rebuild();
     std::set<std::string> used;
     for(auto& styleMaterial:generated.mesh.materials){
         auto chosen=req.materialBindings.find(styleMaterial.id);
@@ -175,10 +180,27 @@ inline void applyProjectMaterials(const fs::path& project,const Request& req,
                 throw std::runtime_error("Texture must be an Assets GUID, not a path");
             const auto value=material[name].str();
             if(value.empty()){target.clear();return;}
-            if(value.size()!=32||!std::all_of(value.begin(),value.end(),[](char ch){
+            if(value.size()==32&&std::all_of(value.begin(),value.end(),[](char ch){
                 return (ch>='0'&&ch<='9')||(ch>='a'&&ch<='f');
-            }))throw std::runtime_error("Texture must be 32-character lowercase Assets GUID");
-            target=value;
+            })){
+                auto entry=assetCatalog.byGuid(value);
+                if(!entry||entry->directory||entry->importer!="texture")
+                    throw std::runtime_error("Material texture GUID not found in Assets");
+                target=value;return;
+            }
+            // Existing material_set stores content-relative paths, not
+            // GUIDs. Resolve only safely normalized catalog entries.
+            const std::string prefix="content/";
+            if(value.rfind(prefix,0)!=0)
+                throw std::runtime_error("Material texture must be an Assets GUID or content path");
+            const std::string relative=value.substr(prefix.size());
+            if(relative.empty()||relative.find("..")!=std::string::npos||
+               relative[0]=='/'||relative.find('\\')!=std::string::npos)
+                throw std::runtime_error("Unsafe material texture reference");
+            const auto entry=assetCatalog.byPath(relative);
+            if(!entry||entry->directory||entry->importer!="texture")
+                throw std::runtime_error("Material texture missing from Assets");
+            target=entry->guid;
         };
         guid("texture",styleMaterial.textures.baseColor);
         guid("metallicRoughnessMap",styleMaterial.textures.metallicRoughness);
