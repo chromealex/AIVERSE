@@ -42,6 +42,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     if(!ledger)return;
     // Enable lazily, including after native restore. The compatibility scan
     // below bootstraps ownership even when no journal history exists.
+    const bool journalReady=view.componentChangesTracked<CharacterBody>() &&
+        view.componentChangesTracked<Vehicle>() && view.componentChangesTracked<Loot>();
     ecs.trackComponentChanges<CharacterBody>();
     ecs.trackComponentChanges<Vehicle>();
     ecs.trackComponentChanges<Loot>();
@@ -52,6 +54,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     const auto vehicleChanges=view.peekComponentChanges<Vehicle>();
     const auto lootChanges=view.peekComponentChanges<Loot>();
     const bool journalOverflow=bodyChanges.overflow || vehicleChanges.overflow || lootChanges.overflow;
+    size_t uncoveredCrossings=0, uncoveredGroups=0, uncoveredLifecycle=0;
     auto notified=[&](Entity e) {
         return bodyChanges.entities.contains(e.packed()) ||
                vehicleChanges.entities.contains(e.packed()) ||
@@ -138,6 +141,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         if(!pos)throw std::logic_error("regionOwnership: missing actor position");
         const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
         if(!tag) {
+            if(!notified(entity))++uncoveredLifecycle;
             if(!bind(entity,stable,grid.cell(*pos)))
                 throw std::logic_error("regionOwnership: cannot bind new actor");
         }else if(tag->id!=stable) {
@@ -222,6 +226,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
                 throw std::logic_error("regionOwnership: duplicate car occupant");
         }
         if(!changed)continue;
+        if(std::none_of(group.begin(),group.end(),notified))++uncoveredGroups;
         if(streamManifest_.getBool("async")) {
             const world::Bounds required{
                 carState->pos-Vec3{2_fx,2_fx,2_fx},
@@ -243,7 +248,6 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
     // On-foot characters and loose durable objects move independently.
     // Audit candidate coverage without changing authoritative revision order.
-    size_t uncoveredCrossings=0;
     for(Entity entity:tracked) {
         if(handled.contains(entity.packed()))continue;
         const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
@@ -270,14 +274,18 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     for(const auto id:live) {
         ledger=target;
         if(present.contains(id))continue;
+        if(!notified(Entity::fromPacked(id-1)))++uncoveredLifecycle;
         const auto* entry=ledger->find(id);
         if(!entry || !entry->live ||
            !stagedLedger.despawn(id,entry->owner))
             throw std::logic_error("regionOwnership: tombstone failed");
     }
     // Optional strict audit is a development gate, never a default fast path.
-    if(uncoveredCrossings && streamManifest_.getBool("strictRegionJournalAudit"))
-        throw std::logic_error("regionOwnership: unreported solo crossing");
+    if(journalReady && !journalOverflow && streamManifest_.getBool("strictRegionJournalAudit")) {
+        if(uncoveredCrossings)throw std::logic_error("regionOwnership: unreported solo crossing");
+        if(uncoveredGroups)throw std::logic_error("regionOwnership: unreported group crossing");
+        if(uncoveredLifecycle)throw std::logic_error("regionOwnership: unreported lifecycle change");
+    }
     // The full reconciliation covered all canonical writers, including raw
     // pools and overflow. Drain only after successful reconciliation.
     // Do not convert conservative mutable accesses into persisted dirty flags:
