@@ -40,7 +40,8 @@ public:
     bool prepared(CaveOwnerBatchTicket ticket,CaveOwnerPart owner) {
         const auto part=caveOwnerBit(owner);
         if(ticket!=active_||state_!=CaveOwnerBarrierState::Preparing||
-           !(part&kCaveRequiredOwnerMask))return false;
+           !(part&kCaveRequiredOwnerMask) ||
+           (part&(part-1))!=0)return false;
         prepared_|=part;
         if(prepared_==kCaveRequiredOwnerMask)
             state_=CaveOwnerBarrierState::Ready;
