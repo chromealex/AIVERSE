@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import sys
 from check_integrations import validate_integrations
+from evidence import validate_report
 
 ROOT = Path(__file__).resolve().parents[2]
 DIMENSIONS = ("implementation", "architecture", "native_api", "skill", "mcp",
@@ -13,11 +14,11 @@ DIMENSIONS = ("implementation", "architecture", "native_api", "skill", "mcp",
               "handoff", "documentation", "publishing")
 ALWAYS = {"implementation", "architecture", "dependencies", "tests", "handoff", "documentation"}
 
-def validate(data, root=ROOT, ready=False):
+def validate(data, root=ROOT, ready=False, verify_git=False):
     errors = []
     if not isinstance(data, dict):
         return ["manifest must be an object"]
-    if set(data) != {"schema", "id", "owner", "checks", "changed_paths", "traits", "integrations"}:
+    if set(data) != {"schema", "id", "owner", "checks", "changed_paths", "traits", "integrations", "test_reports"}:
         errors.append("unexpected or missing manifest fields")
     if type(data.get("schema")) is not int or data["schema"] != 1:
         errors.append("schema must be 1")
@@ -72,6 +73,20 @@ def validate(data, root=ROOT, ready=False):
             target = (root / item).resolve()
             if not target.is_relative_to(root.resolve()) or not target.is_file():
                 errors.append(f"{name}: missing or external evidence {item}")
+    reports = data.get("test_reports")
+    if not isinstance(reports, list) or not all(isinstance(p, str) and p.startswith("docs/evidence/") and ".." not in Path(p).parts for p in reports):
+        errors.append("test_reports must contain repository evidence paths")
+    else:
+        if isinstance(checks.get("tests"), dict) and checks["tests"].get("status") == "pass" and not reports:
+            errors.append("tests: pass requires recorded test report")
+        for report in reports:
+            try:
+                target = (root / report).resolve()
+                if not target.is_relative_to(root.resolve()):
+                    raise ValueError("external report")
+                errors.extend(f"{report}: {e}" for e in validate_report(json.loads(target.read_text(encoding="utf-8")), root, verify_git))
+            except (OSError, ValueError) as exc:
+                errors.append(f"{report}: {exc}")
     errors.extend(validate_integrations(data, root, ready))
     return errors
 
