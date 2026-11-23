@@ -105,6 +105,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'anim_assets': case 'anim_graph': case 'anim_rig': case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
+        showScene={()=>ctx.showPanel('scene')}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
       case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'scripts': return <ScriptsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
