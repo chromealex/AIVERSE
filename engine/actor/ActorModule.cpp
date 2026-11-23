@@ -330,6 +330,32 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     setupRoyale(sim,map);
     if(!config_.gear.empty())for(const Entity e:world.resourceConst<CharacterIndex>()->bySlot)world.add<lib::systems::GearLoadout>(e);
     setupVehicles(sim,map);
+    // Explicit, genre-independent world capability. No change in the ECS
+    // schema or save checksum unless rules.regionOwnership is present.
+    // World-space characters and vehicles retain their canonical positions
+    // in CharacterBody/Vehicle rather than duplicating them in Transform.
+    if(rules.has("regionOwnership")) {
+        if(!rules["regionOwnership"].isObject() ||
+           !rules["regionOwnership"].members().empty())
+            throw JsonError("regionOwnership: expected an empty object");
+        world::registerRegionEntityLedger(sim);
+        world::registerRegionStableIdentity(sim);
+        auto& ledger=sim.world().setResource<world::RegionEntityLedger>(
+            world::RegionEntityLedger{});
+        const auto position=regionPositionReader();
+        const world::SpatialWorld cells(32);
+        auto track=[&](Entity entity) {
+            const auto pos=position(sim.world(),entity);
+            if(!pos || entity.packed()==UINT64_MAX ||
+               !world::RegionEcsBridge::bindNew(
+                   sim.world(),ledger,entity,entity.packed()+1,
+                   cells.cell(*pos),position))
+                throw JsonError("regionOwnership: cannot register a live entity");
+        };
+        for(const Entity entity:sim.world().resourceConst<CharacterIndex>()->bySlot)
+            track(entity);
+        for(const Entity entity:vehicleEntities(sim))track(entity);
+    }
     setupRace(sim,rules,map);
     setupBots(sim,map);
     meleeAttacks_.clear();
