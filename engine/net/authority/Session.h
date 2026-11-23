@@ -54,12 +54,6 @@ public:
     const actor::CharacterSnapshot& predicted()const{return predicted_;}
     bool ready()const{return ready_;}
     bool connected()const{return conn_->state()!=ConnState::Closed;}
-    // Optional loopback-only building demo: copy colliders from the SAME
-    // local authoritative Server after its fixed tick. Remote network
-    // clients MUST receive a replicated committed snapshot instead.
-    world::SpatialWorld& localBuildingPredictionCollision(){
-        return collision_;
-    }
     uint32_t nextSequence()const{return sequence_+1;}
     size_t pending()const{return pending_.size();}
 private:
