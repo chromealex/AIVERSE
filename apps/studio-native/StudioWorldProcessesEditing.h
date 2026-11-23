@@ -400,7 +400,8 @@ inline bool previewGroupScale2D(
         const auto& components=entity.extra["components"];
         const auto& area=components["EvolveArea"];
         if(!components["EvolveRegion"].isObject()||
-           !area.isObject()||!area["enabled"].boolean())return false;
+           !area.isObject()||
+           !lib::worldprocess::extended::validate("EvolveArea",area))return false;
         const auto cx=std::llround(double(entity.x)*100.)+
             area.getInt("offsetXcm",0);
         const auto cz=std::llround(double(entity.z)*100.)+
