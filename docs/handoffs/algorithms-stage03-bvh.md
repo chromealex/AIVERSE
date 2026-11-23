@@ -1,0 +1,2 @@
+# Stage 3 BVH
+Bvh.h adds generic static median split hierarchy with integer inclusive AABB and point queries, stable sorted IDs, transactional rebuild, duplicate validation and configurable leaf size. Read-only concurrent queries are supported with independent output buffers and no writer. No refit, SAH or ray traversal yet. No compilation/tests executed. Next integrate EVOLVE half-open extents and add hierarchy queries. Branch feature/world-processes-stage31-bidirectional-handles
