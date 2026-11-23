@@ -5,6 +5,7 @@
 // colliders and render instance poses in its normal update phase.
 #include "engine/buildings/BuildingNavMeshBridge.h"
 #include <aiverselib/systems/BuildingRouteExecutor.h>
+#include <aiverselib/systems/BuildingRouteExecutor.h>
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <map>
 #include <set>
@@ -122,6 +123,29 @@ public:
                           uint32_t liftFeature=UINT32_MAX){
         auto it=lifts_.find(liftFeature);
         return executor.cancel(it==lifts_.end()?nullptr:&it->second);
+    }
+    // Portable actor route executor: requires explicit movement ack for
+    // stairs and actor-confirmed boarding/disembarking for cabin rides.
+    // This host owns the lift controllers; no mutable map leaks into ECS.
+    BuildingRouteCommand routeCommand(BuildingRouteExecutor& agent){
+        return agent.command(graph_);
+    }
+    bool advanceRouteExecutor(BuildingRouteExecutor& agent){
+        return agent.pump(graph_,lifts_);
+    }
+    bool acknowledgeRouteBoarding(BuildingRouteExecutor& agent,uint32_t feature){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&agent.acknowledgeBoarded(it->second);
+    }
+    bool acknowledgeRouteExit(BuildingRouteExecutor& agent,uint32_t feature,
+                              const std::string& actualRoom){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&agent.acknowledgeDisembarked(
+            it->second,actualRoom);
+    }
+    bool cancelRoute(BuildingRouteExecutor& agent,uint32_t feature){
+        auto it=lifts_.find(feature);
+        return agent.cancel(it==lifts_.end()?nullptr:&it->second);
     }
     bool callLift(uint32_t feature,uint32_t targetFloor){
         auto it=lifts_.find(feature);
