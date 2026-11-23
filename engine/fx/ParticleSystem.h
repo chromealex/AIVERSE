@@ -173,6 +173,10 @@ public:
     void stop(FxHandle h);                             // stops emitting; live particles fade out
     void kill(FxHandle h);                             // stops and removes its particles at once
     bool playing(FxHandle h) const;                    // still emitting (its particles may outlive it)
+    struct InstanceTelemetry { uint64_t serial=0; int effect=-1; uint32_t particles=0; bool emitting=false; float time=0; };
+    // Owner-thread snapshot of a single actual CPU instance, no particle traversal.
+    InstanceTelemetry instanceTelemetry(FxHandle h) const;
+    uint64_t telemetryUpdateSerial() const {return telemetryUpdateSerial_;}
     bool alive(FxHandle h) const;                      // instance exists: emitting or still owns live particles
     void emitManual(FxHandle h);                       // fires the "manual" sub-emitters of its live particles
     void clear();                                      // everything (new match)
@@ -228,6 +232,7 @@ private:
     FileReader reader_;
     std::vector<std::string> errors_;
     FxStats stats_;
+    uint64_t telemetryInstanceSerial_=0,telemetryUpdateSerial_=0;
     std::string error_;
 };
 
