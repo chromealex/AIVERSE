@@ -82,24 +82,43 @@ int main() {
     SpectraFxGpuRouteAsset::Routes routes;
     std::optional<FxQuality> sceneQuality;
     SpectraFxGpuBudgetGovernor::Config budget;
+    SpectraFxSignificance::Config authoredPriority;
+    authoredPriority.enabled=true;
     expect(SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"sceneQuality":"low",
                  "gpuFrameBudgetMs":12,"minGpuSpawnScale":0.25,
                  "routes":[{"eventType":7,"asset":"smoke",
                             "sharedPool":"fire","sharedPoolCapacity":1024}]})JSON",
-        routes,&error,&budget,&sceneQuality), "valid project routes");
+        routes,&error,&budget,&sceneQuality,&authoredPriority), "valid project routes");
     expect(routes.count(7)==1 && routes.at(7).playback.sharedPool=="fire",
            "route pool resolved");
     expect(sceneQuality && *sceneQuality==FxQuality::Low,
            "scene quality parsed");
     expect(budget.targetFrameMs==12.0f,"GPU budget parsed");
+    expect(!authoredPriority.enabled,"legacy route asset defaults to FIFO");
+    expect(SpectraFxGpuRouteAsset::readText(
+        R"JSON({"version":1,"cuePriority":{"nearDistance":8,
+                "farDistance":150,"targetRadiusPixels":32},
+                "routes":[{"eventType":9,"asset":"spark","importance":5.5}]})JSON",
+        routes,&error,nullptr,nullptr,&authoredPriority),
+        "authored cue ranking parsed");
+    expect(authoredPriority.enabled && authoredPriority.nearDistance==8 &&
+           routes.at(9).importance==5.5f,
+           "camera priority and per-event importance loaded");
     const auto preserved=routes;
+    const auto previousImportance=authoredPriority;
     expect(!SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"routes":[{"eventType":7,"asset":"smoke"},
                   {"eventType":7,"asset":"smoke2"}]})JSON",
         routes,&error), "duplicate cue rejected");
-    expect(routes.size()==preserved.size() && routes.count(7)==1,
+    expect(routes.size()==preserved.size() && routes.count(9)==1,
            "failed route edit preserves old map");
+    expect(!SpectraFxGpuRouteAsset::readText(
+        R"JSON({"version":1,"cuePriority":{"nearDistance":200,
+                "farDistance":10},"routes":[]})JSON",
+        routes,&error,nullptr,nullptr,&authoredPriority) &&
+        authoredPriority.nearDistance==previousImportance.nearDistance,
+        "invalid cue policy rejected without changing previous config");
     expect(!SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"routes":[{"eventType":1,"asset":"smoke",
                  "ownPlayerOnly":false}]})JSON",routes,&error),
