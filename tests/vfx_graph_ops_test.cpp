@@ -87,7 +87,10 @@ int main() {
     auto textureRef=Json::parse(R"({"domain":"shader","graph":{"nodes":[{"id":"tex","op":"sampleTexture","texture":"../outside.png"}]}})");
     require(call("graph_asset_dependencies",textureRef)["result"]["references"][size_t(0)].getStr("status")=="invalid-path","unsafe path not flagged");
 
+    const auto live=call("graph_live_snapshot",Json::parse(R"({"domain":"spectrafx"})"));
+    require(live.has("available")&&!live.getBool("available"),"headless host must not fabricate live owner");
     const auto caps=call("graph_runtime_capabilities",Json::object());
+    require(!caps.getBool("nativeEditorSnapshotOwner"),"headless host claims GUI owner");
     require(caps.getBool("ok")&&!caps.getBool("liveAttached"),"runtime capability misreported");
     Json probe=Json::object();probe.set("domain",Json::string("spectrafx"));probe.set("graph",graph);probe.set("steps",Json::number(int64_t(6)));
     const auto sampled=call("graph_runtime_probe",probe);
