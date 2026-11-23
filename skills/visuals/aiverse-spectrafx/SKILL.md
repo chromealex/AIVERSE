@@ -1871,3 +1871,7 @@ GL/GLES shared backend and Vulkan tag synchronous capture callbacks with current
 ## Stage 69 — restore checkpoint byte codec
 
 SpectraCheckpointFile.h defines bounded SPFR V1 same-build presentation restore format with explicit caller-provided identity, CRC, allocator order, uniforms and RNG. ComputeParticles export/import restore bytes uses checked upload and rejects nonzero process-local source tokens. Caller must derive trusted graph/build identity. File IO, Studio clock and GraphRuntime integration remain. No tests run.
+
+## Stage 70 — runtime identity and native file IO
+
+GraphRuntime derives exact serialized graph/overrides/options identity for SPFR byte import/export. Identity above 4096 bytes disables restore rather than truncating. SpectraCheckpointFileIO.h provides bounded trusted-native path IO; no unrestricted IPC path access. Build fingerprint, asset identity, large graphs, Studio/MCP integration and atomic writes remain. No tests run.
