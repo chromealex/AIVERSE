@@ -58,7 +58,7 @@ public:
             pose,width,depth,origin,yaw);
         if(!spatial.add({colliderId,bounds}))return false;
         registered_.emplace(feature,State{colliderId,bounds,
-            width,depth,origin,yaw,pose.revision});
+            width,depth,origin,yaw,pose.revision,pose.yMm});
         if(navmesh)markBuildingNavCollisionChanged(*navmesh,bounds);
         return true;
     }
@@ -66,7 +66,8 @@ public:
     bool applyMovement(world::SpatialWorld& spatial,nav::Mesh* navmesh,
                        const BuildingLiftPlatformMotion& motion){
         auto found=registered_.find(motion.featureIndex);
-        if(found==registered_.end()||motion.revision<=found->second.revision)
+        if(found==registered_.end()||motion.revision<=found->second.revision||
+           motion.oldYmm!=found->second.yMm)
             return false;
         auto& entry=found->second;
         BuildingLiftPlatformPose pose;
@@ -88,6 +89,7 @@ public:
             return false;
         }
         entry.bounds=next;entry.revision=motion.revision;
+        entry.yMm=motion.newYmm;
         if(navmesh){
             markBuildingNavCollisionChanged(*navmesh,previous);
             markBuildingNavCollisionChanged(*navmesh,next);
@@ -112,6 +114,7 @@ private:
         uint32_t id=0;world::Bounds bounds{};
         float width=0,depth=0;Vec3 origin{};uint32_t yaw=0;
         uint64_t revision=0;
+        int64_t yMm=0;
     };
     std::map<uint32_t,State> registered_;
 };
