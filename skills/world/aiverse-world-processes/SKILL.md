@@ -644,3 +644,6 @@ Single-area and group-move commits use shared `evolve::scale_math::withinBounds`
 
 ## Stage 54: typed Studio bridge audit
 EVOLVE preview, pivot and batch resize RPCs are registered in the HTML5 typed bridge; browser mock rejects native-only authoring. No build or tests. See `docs/handoffs/world-processes-stage54-typed-bridge-audit-2026-11-23.md`.
+
+## Stage 55: hydration and native RPC audit
+Map hydration rounds Fixed positions to nearest cm instead of truncating; numeric preview rejects locked/hidden entities and invalid custom pivot coordinates. TerraWeave consumer audit and runtime parity remain pending. No builds/tests. See `docs/handoffs/world-processes-stage55-hydration-rpc-audit-2026-11-23.md`.
