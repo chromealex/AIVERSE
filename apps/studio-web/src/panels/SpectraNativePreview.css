@@ -1,0 +1,9 @@
+/* Native SpectraFX playback controls. GPU particles are rendered in Scene,
+   not by this DOM. All UI colors/metrics use shared Studio tokens. */
+.spectra-native__toolbar {display:flex;align-items:center;flex-wrap:wrap;gap:var(--au-space-2);margin:var(--au-space-3) 0;}
+.spectra-native__status {display:flex;flex-wrap:wrap;gap:var(--au-space-3);align-items:center;font-size:var(--au-font-sm);color:var(--au-text-soft);}
+.spectra-native__timeline {display:flex;gap:var(--au-space-3);align-items:end;flex-wrap:wrap;margin:var(--au-space-3) 0;}
+.spectra-native__timeline .au-field {flex:1;min-width:min(100%,180px);}
+.spectra-native__timeline span {color:var(--au-text-muted);font-size:var(--au-font-xs);}
+.spectra-native__params {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:var(--au-space-3);align-items:end;}
+.spectra-native__hint {color:var(--au-text-muted);font-size:var(--au-font-sm);line-height:var(--au-line-height);}
