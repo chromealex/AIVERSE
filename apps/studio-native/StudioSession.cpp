@@ -1100,6 +1100,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",studioBuildingStaleMaterials(ws_.project.dir));
             return reply;
         }
+        if(method=="studio.buildingRecipes") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            reply.set("result",studioBuildingRecipes(ws_.project.dir));
+            return reply;
+        }
+        if(method=="studio.buildingReadRecipe") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            reply.set("result",studioBuildingReadRecipe(
+                ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
+            return reply;
+        }
         if(method=="studio.buildingRegenerate") {
             if(ws_.project.dir.empty())
                 throw std::runtime_error("Open a project before regeneration");
