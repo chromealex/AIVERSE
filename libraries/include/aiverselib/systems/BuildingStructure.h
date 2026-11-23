@@ -317,7 +317,23 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         const float x0=cx-fw*0.5f,x1=cx+fw*0.5f,z0=cz-fd*0.5f,z1=cz+fd*0.5f;
         const float y0=padH+form.level*Hh,y1=y0+fh;
         if(fw<0.35f||fd<0.35f||fh<0.3f)continue;
+        // Validate the shape *before* adding any supports. An omitted primitive
+        // must not leave a phantom leg or collision box in the scene.
+        const bool validShape=
+            (form.kind==StructureForm::Kind::Pod && fw>=1.5f&&fd>=1.5f)||
+            (form.kind==StructureForm::Kind::Silo)||
+            (form.kind==StructureForm::Kind::Pylon)||
+            (form.kind==StructureForm::Kind::Arch && fw>=3.5f&&fh>=2.8f)||
+            (form.kind==StructureForm::Kind::Dome && fw>=1.5f&&fd>=1.5f&&fh>=0.8f)||
+            (form.kind==StructureForm::Kind::SweptHull && fw>=1.5f&&fd>=2.5f&&fh>=1.2f)||
+            (form.kind==StructureForm::Kind::Gantry &&
+                fw>2.8f*std::max(0.15f,std::min(fw*0.16f,0.75f)) &&
+                fh>2.f*std::max(0.18f,std::min(fh*0.20f,0.85f)));
+        if(!validShape)continue;
         const int material=form.material;
+        // Freeze the previously existing architectural solids. The form's own
+        // AABB cannot act as evidence that its *underside* is supported.
+        const size_t bearingBoxes=out.boxes.size();
         switch(form.kind){
         case StructureForm::Kind::Pod:{
             // Cut-corner wing, possibly protruding past the main hull.
@@ -397,6 +413,57 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
                 m.box(sm.glow,x0+leg,y1-beam-0.10f,z0-0.08f,
                       x1-leg,y1-beam,z0+0.02f);
             break;}
+        }
+        // Structural bearing for exterior/elevated modules. Relative 'level'
+        // can place a silo, pod, portal or curved hull outside the roof/footprint
+        // with no connection to the ground. For each load point, stop at the
+        // highest pre-existing solid below it, otherwise build a grounded leg.
+        // This also adds a coarse collider so physics agrees with the mesh.
+        auto bearing=[&](float px,float pz){
+            float supportY=0.f;
+            for(size_t bi=0;bi<bearingBoxes;++bi){
+                const auto& b=out.boxes[bi];
+                const float ax=float(b.min.x.toDouble()),bx=float(b.max.x.toDouble());
+                const float az=float(b.min.z.toDouble()),bz=float(b.max.z.toDouble());
+                if(px<ax+0.02f||px>bx-0.02f||pz<az+0.02f||pz>bz-0.02f)continue;
+                const float low=float(b.min.y.toDouble()),high=float(b.max.y.toDouble());
+                // Already intersecting an existing hull/module at this level.
+                if(y0>=low-0.025f&&y0<=high+0.025f)return;
+                if(high<y0)supportY=std::max(supportY,high);
+            }
+            if(y0-supportY<0.075f)return;
+            const float radius=std::clamp(std::min(fw,fd)*0.075f,0.15f,0.48f);
+            m.box(material,px-radius,supportY,pz-radius,
+                  px+radius,y0+0.035f,pz+radius);
+            addBox(px-radius,supportY,pz-radius,
+                   px+radius,y0+0.035f,pz+radius);
+        };
+        // Never block a portal's centre: support only the two uprights.
+        // Side attachments receive corner/edge support without filling
+        // the open space beneath them with an oversized rectangular slab.
+        const float halfX=fw*0.30f,halfZ=fd*0.30f;
+        switch(form.kind){
+          case StructureForm::Kind::Arch:
+          case StructureForm::Kind::Gantry:
+            bearing(x0+fw*0.09f,cz);
+            bearing(x1-fw*0.09f,cz);
+            break;
+          case StructureForm::Kind::Silo:{
+            const float r=std::min(fw,fd)*0.27f;
+            bearing(cx-r,cz);bearing(cx+r,cz);
+            bearing(cx,cz-r);bearing(cx,cz+r);
+            break;}
+          case StructureForm::Kind::Pylon:
+            bearing(cx,cz);
+            break;
+          case StructureForm::Kind::Pod:
+          case StructureForm::Kind::Dome:
+          case StructureForm::Kind::SweptHull:
+            bearing(cx-halfX,cz-halfZ);
+            bearing(cx+halfX,cz-halfZ);
+            bearing(cx-halfX,cz+halfZ);
+            bearing(cx+halfX,cz+halfZ);
+            break;
         }
         // Large authored modules keep random roof props clear of their
         // footprint whenever they intersect the rooftop elevation.
