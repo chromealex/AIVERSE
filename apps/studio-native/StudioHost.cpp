@@ -288,7 +288,7 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
-    else if(surface == StudioSurface::Fx) { fxPlacement_={}; spectraDockActive_=false; }
+    else if(surface == StudioSurface::Fx) { fxPlacement_={}; fxSurfaceVisible_=false; }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
@@ -400,7 +400,7 @@ void StudioHost::tickFx() {
         platform_.log(std::string("AIVERSE independent FX GPU view: ")+ex.what());
         ViewportRect hidden;NativeViewportPlacement none;
         (void)platform_.placeSurface(StudioSurface::Fx,hidden,none);
-        fxPlacement_={};spectraDockActive_=false;
+        fxPlacement_={};fxSurfaceVisible_=false;
         try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
     }
 }
@@ -1201,7 +1201,7 @@ Json StudioHost::runSpectraPreview(const Json& params) {
         throw std::runtime_error("Open the dedicated SpectraFX native preview viewport");
     const std::string project=session_->workspace().project.dir;
     if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
-        if(!spectraDockActive_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
+        if(!fxSurfaceVisible_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
         if(action=="cameraReset") {
             return onScene([&] {
                 fxPreview_->resetSpectraDockCamera();
@@ -1246,7 +1246,7 @@ void StudioHost::applyViewport(const Json& params) {
         NativeViewportPlacement placed;
         if(!platform_.placeSurface(StudioSurface::Fx,rect,placed))return;
         fxPlacement_=placed;
-        spectraDockActive_=placed.visible;
+        fxSurfaceVisible_=placed.visible;
         return;
     }
     if(id!="scene")return;
