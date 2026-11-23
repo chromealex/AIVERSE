@@ -2289,6 +2289,13 @@
           "target": null,
           "title": "Режим без Vulkan на Windows",
           "titleEn": "A mode without Vulkan on Windows"
+        },
+        {
+          "status": "in-progress",
+          "title": "Генератор зданий: панель сеттинга, стиля, функции, размеров и seed",
+          "titleEn": "Building generator panel: setting, style, function, size and seed",
+          "text": "Генерация реальных GLB-моделей через нативный bridge с GUID в Assets; предпросмотр вариантов пока даёт параметры геометрии, 3D-вьюпорт на следующем этапе.",
+          "textEn": "Generate real GLB models through the native bridge into Assets with GUIDs; variant evaluation currently reports geometry stats, full 3D viewport preview follows."
         }
       ],
       "enablesEn": [
