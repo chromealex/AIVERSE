@@ -55,7 +55,7 @@ public:
         if(revision==sourceRevision_)return;
         sourceRevision_=revision;
         for(auto& [key,item]:items_){
-            (void)key; ++item.generation;
+            (void)key; item.generation=++nextGeneration_;
             item.inFlight=false;item.ready=false;item.sourceRevision=revision;
         }
     }
@@ -64,7 +64,7 @@ public:
         lod_=lod;
         for(auto& [key,item]:items_){
             (void)key;
-            if(item.lod!=lod){++item.generation;item.inFlight=false;item.ready=false;item.lod=lod;}
+            if(item.lod!=lod){item.generation=++nextGeneration_;item.inFlight=false;item.ready=false;item.lod=lod;}
         }
     }
     // A completed worker result is accepted only if it still belongs to the
