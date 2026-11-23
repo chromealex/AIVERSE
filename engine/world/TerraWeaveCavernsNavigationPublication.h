@@ -74,6 +74,22 @@ public:
         active_=pending_.back().provider;
         return dispatchPending();
     }
+    // A streamed chunk may appear/disappear WITHOUT changing authored SDF
+    // sourceRevision. Emit a separate serial for the derived graph/cache
+    // topology, but preserve the same immutable density provider.
+    bool invalidateResidency(CaveDirtyBounds bounds) {
+        if(!active_)return false;
+        if(bounds.maxX<=bounds.minX||bounds.maxY<=bounds.minY||
+           bounds.maxZ<=bounds.minZ)
+            throw std::invalid_argument("Caverns nav stream invalidation bounds");
+        pending_.push_back({
+            CaveNavigationChange{active_->revision(),active_->revision(),
+                                 bounds,false},active_,0
+        });
+        return dispatchPending();
+    }
+    // A solver that missed a callback due to an exception must not silently
+    // use a stale derived cache. Call at a safe owner frame boundary.
     bool dispatchPending(){
         while(!pending_.empty()){
             auto& event=pending_.front();
