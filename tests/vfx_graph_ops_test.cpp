@@ -190,6 +190,7 @@ int main() {
     require(bakedSet.getBool("ok")&&bakedSet["files"].size()==2,"PBR set bake failed");
     for(const auto& row:bakedSet["files"].items()){
         require(!row.getBool("sRGB"),"numeric texture marked sRGB");
+        require(row.getStr("backend")=="cpu","CPU set provenance mislabeled");
         require(fs::is_regular_file(root/row.getStr("path")),"PBR set file missing");
     }
     require(call("texture_graph_bake_set",tex).has("error"),"PBR set overwrite accepted");
@@ -237,6 +238,11 @@ int main() {
     require(fullPlan.first.msl.find("1024u")!=std::string::npos&&fullPlan.second.glsl.find("1024u")!=std::string::npos,"full-size GPU shader resolution mismatch");
     require(fullPlan.scratchBytes/render::texture_graph::gpu::readbackBlockBytes==64,"full-size readback chunk count wrong");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"publish","request":"1","textureName":"forbidden_headless"})")).getBool("ok"),"headless GPU publication accepted");
+
+    auto setStart=Json::object();setStart.set("action",Json::string("start"));setStart.set("graph",tex["graph"]);setStart.set("bakeSet",Json::fromBool(true));
+    require(call("texture_graph_gpu_preview",setStart).getStr("state")=="unavailable","headless GPU set owner fabricated");
+    const auto manifest=Json::parseFile((root/"content"/"textures"/"fixture_set"/"texture-set.json").string());
+    require(manifest["files"].size()==2&&manifest["files"][size_t(0)].getStr("backend")=="cpu","shared texture set provenance missing");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
