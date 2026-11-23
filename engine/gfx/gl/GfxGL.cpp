@@ -1302,12 +1302,19 @@ public:
             frameActive_ = false;
         }
         if (!capture_) return;
+        if(fbW_<=0||fbH_<=0){auto fn=std::move(capture_);capture_=nullptr;fn(0,0,{});return;}
         std::vector<uint8_t> px(size_t(fbW_) * size_t(fbH_) * 4);
+        drainPendingGlErrors();
+        GLint oldFbo=0,oldPack=4;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING,&oldFbo);
+        glGetIntegerv(GL_PACK_ALIGNMENT,&oldPack);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        drainPendingGlErrors();
         glReadPixels(0, 0, fbW_, fbH_, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-        if(glGetError()!=GL_NO_ERROR){auto fn=std::move(capture_);capture_=nullptr;fn(0,0,{});return;}
+        const GLenum captureError=glGetError();
+        glPixelStorei(GL_PACK_ALIGNMENT,oldPack);
+        glBindFramebuffer(GL_FRAMEBUFFER,GLuint(oldFbo));
+        if(captureError!=GL_NO_ERROR){auto fn=std::move(capture_);capture_=nullptr;fn(0,0,{});return;}
         const size_t row = size_t(fbW_) * 4;
         std::vector<uint8_t> tmp(row);
         for (int y = 0; y < fbH_ / 2; ++y) { // GL is bottom-up
