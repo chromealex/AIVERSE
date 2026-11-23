@@ -214,6 +214,7 @@ bool StudioScene::setBuildingPreview(
         }
         releasePreviewModel(*buildingPreview_);
         buildingPreview_.reset();
+        buildingPreviewGpuReady_=false;
     }
     if(next){
         next->batching.mergeRigid=false;
@@ -226,6 +227,7 @@ bool StudioScene::setBuildingPreview(
                 // Keep a failed partial upload alive until another verified
                 // GPU-safe cleanup call; no CPU Model can dangle on failure.
                 buildingPreview_=std::move(next);
+                buildingPreviewGpuReady_=false;
                 if(error)*error="Building preview upload failed and GPU retirement is pending";
                 return false;
             }
@@ -241,6 +243,7 @@ bool StudioScene::setBuildingPreview(
         camera_.yaw=.55f;camera_.pitch=.45f;camera_.ortho=false;
         tween_.active=false;cameraInitialized_=true;
         buildingPreview_=std::move(next);
+        buildingPreviewGpuReady_=true;
     }
     lastFrameSignature_=0;
     if(error)error->clear();
@@ -1382,7 +1385,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (renderer_.hasPendingModelPipelineJobs()) renderer_.pollPendingModelPipelineJobs();
     // This is a native isolated 3D preview. Existing Scene viewport
     // orbit/zoom/pan operate on camera_ and never mutate the project.
-    if(buildingPreview_){
+    if(buildingPreview_ && buildingPreviewGpuReady_){
         lastFrameSignature_=0; // redraw while interactive camera is active
         device_->beginFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
