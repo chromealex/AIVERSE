@@ -1807,3 +1807,7 @@ ComputeParticles::resetGpuShaderSeed(seed) performs checked reset and initialize
 ## Stage 53 — reserved Metal material random lane
 
 MSL materialSource code 2 now computes birthRandom01(p,71u). The existing GPU material eligibility gate still rejects authored `random`, because CPU prand(uid) semantics differ. This is internal shader wiring only; no authored graph can yet select this lane through the normal compiler. GPU VM random remains outstanding. Add explicit opt-in semantics and seed lifecycle before enabling routing. No tests run.
+
+## Stage 54 — GraphRuntime shader seed lifecycle
+
+GraphRuntime::resetGpuShaderSeed delegates to dedicated active Metal ComputeParticles and rejects shared/CPU paths. ComputeParticles::shutdown clears shader seed and ordinal. Existing authored random eligibility remains unchanged; VM/compiler opt-in and Studio replay plumbing are pending. No tests run.
