@@ -54,7 +54,7 @@ private:
     SnapshotStats stats_;
     std::vector<Peer> peers_;
     std::unique_ptr<actor::ActorPersistentSession> persistence_;
-    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false;
+    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false,publishingFinalized_=false;
 };
 class Client {
 public:
