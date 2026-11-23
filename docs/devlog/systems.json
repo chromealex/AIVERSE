@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-unified-resource-wal",
+     "title": "Журнал изменений ресурсов мира",
+     "titleEn": "World resource change log",
+     "text": "Сохранение изменений выбранных ECS-ресурсов вместе с сущностями и компонентами.",
+     "textEn": "Persist changes to selected ECS resources alongside entities and components.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-unified-backup-retention",
      "title": "Безопасное хранение поколений мира",
      "titleEn": "Safe world generation retention",
