@@ -170,6 +170,35 @@ static void portableActorProjection(){
     w.get<actor::CharacterBody>(host.characterEntity(*sim,2)).vehicle=w.get<actor::Vehicle>(car).id;
     w.get<actor::CharacterHealth>(driver).health=73;
     w.resource<actor::State>()->round=3;
+    // Projectile program targets use semantic (slot, life) keys rather
+    // than ECS handles. Preserve history even if a target's life has ended.
+    actor::Projectile shot;
+    shot.id=w.resource<actor::State>()->nextObject++;
+    shot.owner=1;shot.expires=120;shot.pos={36_fx,2_fx,0_fx};
+    shot.program.enabled=true;shot.program.direction={1_fx,0_fx,0_fx};
+    shot.program.distanceLeft=20_fx;shot.program.lifetimeLeft=2_fx;
+    shot.program.gravity=10_fx;shot.program.verticalSpeed=3_fx;
+    shot.program.ballistic=true;shot.programSpeed=15_fx;
+    shot.program.hit={{2,1}};shot.programTarget={201u+w.get<actor::Vehicle>(car).id,0};
+    auto shotEntity=w.create();w.add<actor::Projectile>(shotEntity,shot);
+    host.synchronizeRegionOwnership(*sim);
+    const auto shotId=w.tryGetConst<wd::RegionStableIdentity>(shotEntity)->id;
+    AIVERSE_TEST_CHECK(w.resourceConst<wd::RegionEntityLedger>()->find(shotId)->owner==wd::Cell(1,0,0));
+
+    namespace lm=aiverse::lib::mechanics;
+    vs::RaceState race;race.started=true;race.racers={car};
+    race.grid.push_back({{4_fx,1_fx,0_fx},Fixed{}});
+    lm::RaceCourse course;course.grid=race.grid;
+    lm::RaceCheckpoint first;first.gate={1,{64_fx,0_fx,0_fx},{0_fx,0_fx,1_fx},4_fx};
+    first.respawn={60_fx,1_fx,0_fx};
+    lm::RaceCheckpoint second;second.gate={2,{124_fx,0_fx,0_fx},{0_fx,0_fx,1_fx},4_fx};
+    second.respawn={120_fx,1_fx,0_fx};course.checkpoints={first,second};
+    const std::array<std::pair<int64_t,int64_t>,1> racers{{{1,1}}};
+    const auto initialRace=lm::makeRace(course,racers);
+    AIVERSE_TEST_CHECK(initialRace.has_value());
+    race.session.race=*initialRace;
+    race.session.race.route.racers.at(1).nextGate=1;
+    w.setResource<vs::RaceState>(race);
     w.resource<wd::RegionMoveRequests>()->destinations[carId]={64_fx,2_fx,0_fx};
     wd::DurableComponentCodecs codecs;
     using Portable=actor::ActorDurableComponents;
@@ -210,6 +239,23 @@ static void portableActorProjection(){
     AIVERSE_TEST_CHECK(rw.resourceConst<actor::State>()->round==3);
     AIVERSE_TEST_CHECK(rw.resourceConst<wd::RegionMoveRequests>()->destinations.contains(carId));
     AIVERSE_TEST_CHECK(!rw.resourceConst<wd::RegionEntityLedger>());
+    Entity newShot;
+    AIVERSE_TEST_CHECK(refs.resolve(rw,shotId,newShot)&&newShot!=shotEntity);
+    const auto* recoveredShot=rw.tryGetConst<actor::Projectile>(newShot);
+    AIVERSE_TEST_CHECK(recoveredShot&&recoveredShot->program.hit==shot.program.hit);
+    AIVERSE_TEST_CHECK(recoveredShot->programTarget==shot.programTarget);
+    AIVERSE_TEST_CHECK(recoveredShot->program.gravity==10_fx&&recoveredShot->program.verticalSpeed==3_fx);
+    AIVERSE_TEST_CHECK(recoveredShot->programSpeed==15_fx&&recoveredShot->program.ballistic);
+    const auto* recoveredRace=rw.resourceConst<vs::RaceState>();
+    AIVERSE_TEST_CHECK(recoveredRace&&recoveredRace->racers.size()==1&&recoveredRace->racers.front()==newCar);
+    AIVERSE_TEST_CHECK(recoveredRace->session.race.route.racers.at(1).nextGate==1);
+    std::vector<wd::DurableResourceTransaction::Record> unchanged;
+    AIVERSE_TEST_CHECK(wd::DurableResourceTransaction::captureChanges(registry,policy.selected,
+        state.world,rw,unchanged)&&unchanged.empty());
+    // Retire the projectile and preserve its tombstone through the same ledger.
+    w.destroy(shotEntity);w.flush();host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(!w.resourceConst<wd::RegionEntityLedger>()->find(shotId)->live);
+
     // A missing stable reference is a hard failure, not a stale-handle fallback.
     state.world.get<vs::VehicleDrive>(car).driver=state.world.create();
     AIVERSE_TEST_CHECK(!wd::UnifiedCheckpointSections::capture(state,uuid,adapters,budget,bytes));
