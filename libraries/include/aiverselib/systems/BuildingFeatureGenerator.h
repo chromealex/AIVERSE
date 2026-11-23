@@ -197,6 +197,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::StairTread:material=sm.plate>=0?sm.plate:hull;break;
           case BuildingGraphPart::StairLanding:material=sm.pad>=0?sm.pad:trim;break;
           case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
+          case BuildingGraphPart::ElevatorGuide:material=sm.dark>=0?sm.dark:hull;break;
         }
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1);
