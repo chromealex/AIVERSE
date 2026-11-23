@@ -3,7 +3,7 @@
 // Renderer3D owner. No GPU upload and no gameplay/physics authority.
 // Geometry is built once; each frame only instance transforms change.
 #include "engine/buildings/BuildingApertureFixedTick.h"
-#include "engine/buildings/RuntimeBuildingModel.h"
+#include "engine/buildings/BuildingMaterialAssets.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -210,6 +210,21 @@ public:
         }
         frame.valid=true;
         return frame;
+    }
+
+    // One authored material includes numeric PBR parameters and its
+    // matching texture GUIDs. Use this before the render owner uploads.
+    bool bindStyleMaterial(const std::string& socketId,
+                           const StyleMaterial& style,
+                           const BuildingImageByGuid& resolve,
+                           std::string* error=nullptr){
+        auto it=entries_.find(socketId);
+        if(it==entries_.end()||!it->second.asset.leaf){
+            if(error)*error="Unknown aperture asset";
+            return false;
+        }
+        return bindBuildingStyleMaterials(*it->second.asset.leaf,
+                                          {style},resolve,error);
     }
 
     // Optional real PBR texture binding. Call only at resource creation
