@@ -45,4 +45,14 @@ inline PenetrationResult convexEPA(std::span<const Point3d> a,std::span<const Po
         faces.swap(kept);
     }return {ConvexQuery::Indeterminate};
 }
+
+ // Automatic pipeline: lower-dimensional GJK contacts may lack an EPA seed.
+inline PenetrationResult convexPenetration(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-7,size_t gjkBudget=64,size_t epaBudget=128){
+    std::array<Point3d,4> seed{};
+    auto status=convexIntersect(a,b,tolerance,gjkBudget,&seed);
+    if(status!=ConvexQuery::Intersecting)return {status};
+    auto result=convexEPA(a,b,seed,tolerance,epaBudget);
+    if(result.status==ConvexQuery::Invalid)return {ConvexQuery::Indeterminate};
+    return result;
+}
 }
