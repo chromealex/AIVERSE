@@ -1,0 +1,3 @@
+# W1.21e — durable commit and staged recovery
+
+Commit `7187b358`, PR #116 Draft. RegionWalCommit.h adds commitRegionWal: encode captured ledger transaction, append with next sequence, commit memory only after durable writer success. Empty unchanged transaction needs no frame. Failure requires abandoning transaction; ambiguous I/O requires stopping authoritative host and recovery, not retrying blindly. recoverRegionWal stages a copy and publishes only clean EOF or explicitly accepted incomplete tail; no file repair, ECS restoration or checkpoint identity binding. Host must ensure writer/ledger baseline match and exclusive stable path. No native tests run. Next host integration with rollback/finality policy and checkpoint identity. No main merge.
