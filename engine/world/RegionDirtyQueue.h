@@ -18,8 +18,10 @@ enum class RegionDirtyKind : uint8_t {
 struct RegionDirtyQueue {
     static constexpr uint32_t kSchema=1;
     static constexpr size_t kMaxEntries=65536;
-    // Stable packed Entity + 1 -> bitmask of pending lifecycle observations.
-    // A single ID can appear many times during a tick; flags are coalesced.
+    // Runtime packed Entity + 1 -> bitmask of pending lifecycle observations.
+    // These are transient observation keys, NOT RegionStableIdentity IDs.
+    // Native snapshots retain the allocator; portable restart must drain this queue.
+    // A single handle can appear many times during a tick; flags are coalesced.
     std::map<uint64_t,uint8_t> entries;
     uint64_t acknowledged=0;
 
