@@ -85,7 +85,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
     if(action==='gpuStart'){setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution});setPreview(null);}
     else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||gpuRequest.output!==output||gpuRequest.resolution!==gpuResolution)throw new Error('Preview belongs to a different request or draft');
-    setGpuStatus(String(r.state)+' / '+String(r.backend)+' — '+String(r.reason??''));
+    setGpuStatus(String(r.state)+' / '+String(r.backend)+' · encoded passes '+String(r.encodedPasses??0)+' · planned scratch '+String(r.plannedScratchBytes??0)+' bytes — '+String(r.reason??''));
     if(r.state==='ready'){
       if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
       setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});
@@ -189,7 +189,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
   <StudioSection title="Experimental GPU output preview">
-   <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; unsupported graphs fall back unless GPU is required. Bake remains CPU.</small>
+   <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; pattern and two-pass normal source supported. Rejected work falls back unless GPU is required. Bake remains CPU.</small>
    <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
    <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU</label>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>Queue GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
