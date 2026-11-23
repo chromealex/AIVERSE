@@ -205,3 +205,16 @@ Read `engine/world/TerraWeaveCavernsSeamGate.h`,
 - When same-resolution generated borders still differ, the gate **fails closed**: no unsafe geometry is published, and it cannot automatically repair inconsistent density/mesh topology. Diagnose origin, field, quantization, or meshing errors instead of retrying infinitely.
 - The gate supports faces only between currently loaded chunks. Neighbor streaming/unload must trigger re-analysis; no claims about unseen future neighbors.
 - The Stage 16 regression exists but has NOT been compiled or run as part of this work. Add the appropriate native CMake/CTest target and confirm real runtime behavior before main merge. Continue skill and dated handoff updates after every stage.
+
+## Stage 17 — asynchronous seam regeneration CPU workers
+
+Read `engine/world/TerraWeaveCavernsAsyncRebuild.h`, `tests/terraweave_caverns_async_rebuild_test.cpp`, and `docs/agent-handoffs/caverns-stage17-2026-11-23.md`.
+
+- `CaveAsyncRegenerator(maxWorkers)` is a bounded C++20 `std::async` CPU worker dispatcher. Call `CaveSeamPublicationGate::analyze()` before initial dispatch. `pump(gate, immutableSettingsSnapshot, budget)` consumes `gate.requests()`, launches at most `maxWorkers` work items, captures settings and request by value, and suppresses duplicate jobs for one chunk. `poll(gate)` consumes completed futures on the scene owner thread; successful results go through `gate.accept` and `gate.analyze` before any presentation. `drain()` waits for current workers before world teardown.
+- Worker code invokes `generateCaveMesh(settings,key,resolution,spacing)` only. It must NEVER touch ECS, `gfx::Device`, `GeometryScene`, STRATA, Box3D, SpatialWorld, NavMesh or live settings.
+- The host must associate one immutable **world snapshot / generator version** with every sourceRevision and must increment that revision if settings, terrain entrances, authored edits or density fields change. `CaveRebuildRequest` carries sourceRevision but the dispatcher does not independently validate its relation to the passed Settings snapshot.
+- `CaveRebuildPumpStats` exposes launched/completed/accepted/stale/failed/inFlight counters. On worker exception the gate remains not-ready; no unverified geometry becomes visible. Caller handles diagnostics, retry policy and backpressure.
+- The stage-17 gate rebuilds only procedural base cave mesh, NOT combined entrance field, hand-authored edits, geological stamps, or material payloads. Do not use its output in worlds with those modifications until a versioned field-sampler callback is integrated.
+- `CaveSeamPublicationGate::canPublish` must be checked before proposing any stage-11/12 GeometryScene shard swap. The host still needs to stage and atomically commit matching render + collision + Box3D + NavMesh. This dispatcher is NOT such a transaction.
+- `std::async` is a portability baseline rather than AIVERSE's final shared job-system integration. Later connect to the engine executor without increasing simultaneous job budgets and without blocking frame-critical teardown.
+- Stage-17 test authored; full checkout compiler, CTest and hardware integration not yet run. Update skill and handoff every subsequent stage.
