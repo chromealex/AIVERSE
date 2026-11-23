@@ -44,6 +44,7 @@ def main():
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", default="HEAD")
     parser.add_argument("--allow-partial", action="store_true")
+    parser.add_argument("--format", choices=["text", "json"], default="text")
     args = parser.parse_args()
     try:
         changed = git_changed(args.base, args.head)
@@ -63,9 +64,12 @@ def main():
         except (OSError, ValueError) as exc:
             errors.append(f"{path}: {exc}")
     errors.extend(covered_paths(changed, manifests))
-    for error in errors:
-        print(error, file=sys.stderr)
-    print(f"Feature compliance: {len(manifests)} manifest(s), {len(errors)} error(s)")
+    if args.format == "json":
+        print(json.dumps({"base": args.base, "head": args.head, "strict": not args.allow_partial, "changed_paths": sorted(changed), "manifests": sorted(manifests), "errors": errors, "passed": not errors}, indent=2))
+    else:
+        for error in errors:
+            print(error, file=sys.stderr)
+        print(f"Feature compliance: {len(manifests)} manifest(s), {len(errors)} error(s)")
     return int(bool(errors))
 
 if __name__ == "__main__":
