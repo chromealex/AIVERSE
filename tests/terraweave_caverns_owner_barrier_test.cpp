@@ -7,6 +7,7 @@ int main(){
     auto first=barrier.begin(7,40,2);
     assert(!barrier.ready(first));
     assert(!barrier.prepared(first,CaveOwnerPart(static_cast<uint32_t>(32))));
+    assert(!barrier.prepared(first,CaveOwnerPart(static_cast<uint32_t>(3))));
     assert(barrier.prepared(first,CaveOwnerPart::Geometry));
     assert(barrier.prepared(first,CaveOwnerPart::Spatial));
     assert(barrier.prepared(first,CaveOwnerPart::Box3D));
