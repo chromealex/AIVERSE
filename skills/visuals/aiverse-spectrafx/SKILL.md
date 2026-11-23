@@ -1791,3 +1791,7 @@ Native `engine/fx/FxEffect.h` declares `meshes` as `std::vector<std::string>` an
 SpectraFxSceneHost wires the CPU ParticleSystem mesh loader to meshFromModelFile (FxModelMesh.h), which calls render::loadModel. Model.cpp registers GLTF/GLB unconditionally, OBJ/FBX and legacy formats conditionally, and supports a neighboring source-path + ".glb" fallback when no native loader exists.
 
 StudioSession's studio.assets now reports modelLoadableFormat for model entries using render::isNativeModelFormat and an indexed converted .glb sibling. spectraStudioAssetIndex excludes explicitly false entries. Missing metadata is tolerated for older hosts. This flag describes format availability, not successful decoding, geometry validity, or GPU execution. No tests run.
+
+## Stage 50 — asset diagnostics
+
+Graph resource inspector reports unavailable indexed paths and legacy paths separately. Explicit Check asset calls studio.spectraAssetCheck with an indexed GUID. Native CPU model/image decode uses a catalog-restricted reader with a 64 MiB cumulative input budget and reports gpuVerified:false. This is not a GPU upload test or a decoder memory/time bound. No tests executed; audit typed bridge registration and native compilation before release.
