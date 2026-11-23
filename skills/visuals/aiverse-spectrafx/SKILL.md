@@ -1835,3 +1835,7 @@ Seeded checkpoints export diagnostic V3 with 12-byte seed/ordinal/enabled traile
 ## Stage 60 — checked fresh in-memory GPU restore
 
 GpuCheckpoint captures free slot order, source tokens, birth uniforms and RNG state. ComputeParticles::restoreFreshGpuCheckpoint reuploads particle/VM buffers only for a fresh same-emitter checkpoint with no pending work and a healthy render-owner frame. Validates allocator partition and finite values; partial upload leaves GPU reset dirty. This is not historical rollback or SPFX file restore. No tests run.
+
+## Stage 61 — bounded historical checkpoints
+
+ComputeParticles::retainFreshGpuCheckpoint explicitly retains a complete fresh checkpoint, up to eight FIFO entries. historicalGpuCheckpointIds lists IDs; restoreHistoricalGpuCheckpoint(id) uses checked same-emitter upload, rejects pending GPU work and dirty state. History retires on GPU resource release. This is renderer-local rollback, not GraphRuntime clock/ECS rollback or portable file restore. No tests run.
