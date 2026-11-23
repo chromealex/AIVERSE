@@ -207,6 +207,24 @@ void testLateGameplayCommandWaitsForNextAdmission() {
     AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()->applied==1);
 }
 
+void testOutOfBoundsRegionMoveRejected() {
+    auto sim=create(false);
+    auto& host=actor::host(*sim);
+    const Entity entity=host.characterEntity(*sim,1);
+    std::string error;
+    const auto checksum=sim->checksum();
+    const Vec3 original=sim->world().get<actor::CharacterBody>(entity).pos;
+    // The private SpatialWorld::cells() helper must not be used by
+    // movement admission. The world-limit check is the public contract.
+    AIVERSE_TEST_CHECK(!host.requestRegionMove(
+        *sim,entity,{100001_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(error=="destination exceeds world limits");
+    AIVERSE_TEST_CHECK(sim->checksum()==checksum);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::CharacterBody>(entity).pos==original);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                       ->destinations.empty());
+}
+
 void testTrustedStableIdGateway() {
     auto sim=create(false);
     auto& host=actor::host(*sim);
@@ -487,6 +505,7 @@ int main() {
     testFailedDestinationPreservesAuthoritativeState();
     testLateGameplayCommandWaitsForNextAdmission();
     testQueuedDestinationSurvivesSave();
+    testOutOfBoundsRegionMoveRejected();
     testTrustedStableIdGateway();
     testStaticAndOccupiedMove();
     testOriginalVehicleResetDestinationPreloaded();
