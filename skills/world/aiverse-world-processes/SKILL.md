@@ -659,3 +659,6 @@ Canonical forest climate sampler rechecks live ECS Area and Region and current h
 
 ## Stage 59: authoritative persistent ecology
 Prefer `WorldProcessGameplayHost::advanceEcologyEcs` / `addEcologyEcsSystem` over standalone checkpoints. Delegates to existing TerraWeave World COW resources and persistence; register after EVOLVE and terrain/water prerequisites, not alongside a second forest update. Production registration and QA pending. See `docs/handoffs/world-processes-stage59-persistent-ecology-ecs-2026-11-23.md`.
+
+## Stage 60: TerraWeave registration opt-in
+`terraweave_native::registerSystems` accepts trailing `enableEvolveForestClimate=false`; when enabled with authored forest species, replaces the normal forest tick with EVOLVE-aware ECS update, retaining persistence and callbacks. Register PHYSIS/EVOLVE first. Do not register a second forest system. Source-only, no tests. See `docs/handoffs/world-processes-stage60-forest-registration-2026-11-23.md`.
