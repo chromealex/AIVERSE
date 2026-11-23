@@ -83,3 +83,16 @@ test('auto layout preserves dependencies and refuses cycles',()=>{
  const cyclic={nodes:[{id:'a',op:'add',inputs:['a']}]};
  assert.equal(arrangeShaderNodes(cyclic),cyclic);
 });
+
+import {shaderTintTemplate,setShaderOutput} from '../src/panels/shaderGraphLayout.ts';
+test('template requires real catalog entries and preserves existing output bindings',()=>{
+ const catalog=[...ops,{id:'input',inputs:0,domains:['material']},{id:'multiply',inputs:2,domains:['material']}];
+ assert.equal(shaderTintTemplate('particle',catalog),null);
+ const template=shaderTintTemplate('material',catalog);
+ const graph={domain:'material',nodes:[{id:'a',op:'constant'}],outputs:{color:'a'}};
+ const result=pasteShaderNodes(graph,template,catalog);
+ assert.equal(result.ids.length,3);assert.deepEqual(result.graph.outputs,{color:'a'});
+ assert.equal(setShaderOutput(result.graph,'color','missing'),result.graph);
+ const next=setShaderOutput(result.graph,'color',result.ids[2]);
+ assert.equal(next.outputs.color,result.ids[2]);assert.equal(graph.outputs.color,'a');
+});
