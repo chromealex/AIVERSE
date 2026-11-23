@@ -65,6 +65,11 @@ public:
             if(!next.emplace(pose.socketId,std::move(e)).second)
                 return fail("Duplicate dual-leaf socket ID");
         }
+        // SpatialWorld::add replaces an existing ID. Reject rather than
+        // borrowing colliders that belong to other scene/physics owners.
+        for(uint32_t id:reserved)
+            if(spatial.colliders().contains(id))
+                return fail("Dual-leaf collider ID is already owned");
         std::vector<uint32_t> added;
         for(const auto& [key,e]:next){
             (void)key;
