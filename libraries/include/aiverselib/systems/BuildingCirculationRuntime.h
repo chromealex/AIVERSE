@@ -41,6 +41,7 @@ struct BuildingLiftSnapshot {
     int64_t platformYmm=0;
     uint32_t phaseElapsedMs=0;
     uint64_t revision=1;
+    uint32_t passengerCount=0;
     bool doorsOpen()const{return phase==BuildingLiftPhase::Open;}
 };
 struct BuildingLiftEvent {
@@ -70,6 +71,7 @@ class BuildingLiftController {
 public:
     static constexpr int64_t kSpeedMmPerSecond=1400;
     static constexpr uint32_t kDoorTimeMs=650;
+    static constexpr uint32_t kMaxPassengers=8;
 
     bool initialize(const BuildingStructureGraph& graph,
                     uint32_t featureIndex,std::string* error=nullptr) {
@@ -155,6 +157,7 @@ public:
            snapshot.targetFloor>=floorsMm_.size()||
            snapshot.phase==BuildingLiftPhase::Offline||
            snapshot.phaseElapsedMs>kDoorTimeMs||
+           snapshot.passengerCount>kMaxPassengers||
            snapshot.platformYmm<floorsMm_.front()||
            snapshot.platformYmm>floorsMm_.back())return false;
         const int64_t old=state_.platformYmm;
@@ -170,6 +173,24 @@ public:
     bool readyAt(uint32_t floor)const noexcept{
         return online()&&state_.phase==BuildingLiftPhase::Open&&
                state_.currentFloor==floor;
+    }
+    // Station call moves an EMPTY cabin to the pickup floor. Once boarded,
+    // the rider calls a destination using requestDestination().
+    bool board(uint32_t floor,uint32_t passengerCount=1){
+        if(!readyAt(floor)||passengerCount==0||
+           passengerCount>kMaxPassengers-state_.passengerCount)return false;
+        state_.passengerCount+=passengerCount;
+        touch();return true;
+    }
+    bool disembark(uint32_t floor,uint32_t passengerCount=1){
+        if(!readyAt(floor)||passengerCount==0||
+           passengerCount>state_.passengerCount)return false;
+        state_.passengerCount-=passengerCount;
+        touch();return true;
+    }
+    bool requestDestination(uint32_t destination){
+        if(state_.passengerCount==0)return false;
+        return call(destination);
     }
     bool call(uint32_t floor){
         if(!online()||floor>=floorsMm_.size()||
