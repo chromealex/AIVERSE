@@ -21,6 +21,17 @@ inline std::optional<std::array<double,3>> parseStudioSssColor(std::string_view 
         if(!std::isfinite(channel) || channel<0 || channel>1) return std::nullopt;
     return color;
 }
+inline std::optional<std::array<double,2>> parseStudioUvPair(std::string_view text){
+    std::istringstream input{std::string(text)};
+    std::array<double,2> value{};
+    char comma=0;
+    if(!(input>>value[0])||!(input>>comma)||comma!=','||
+       !(input>>value[1]))return std::nullopt;
+    input>>std::ws;
+    if(!input.eof())return std::nullopt;
+    for(double n:value)if(!std::isfinite(n)||std::abs(n)>1024.)return std::nullopt;
+    return value;
+}
 inline bool studioMaterialTextureKey(std::string_view key) {
     return key=="texture" || key=="normalMap" || key=="emissiveMap" ||
            key=="teamMask" || key=="metallicRoughnessMap" || key=="occlusionMap";
