@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'libraries/include/aiverselib/systems/Building*.h'
+      - 'libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h'
+      - 'tests/render/runtime_building_model_compile.cpp'
       - 'engine/assets/building-styles/*.json'
       - 'tools/buildings/**'
       - 'tests/libraries/building*'
@@ -59,6 +61,23 @@ jobs:
             fi
           done
           find build/building-preview -name '*.glb' -printf '%f %s bytes\n'
+      - name: Real 20-building parametric size and seed QA
+        shell: bash
+        run: |
+          python3 tools/buildings/qa_batch_20.py --root . \
+            --exporter /tmp/aiverse_building_export \
+            --out build/building-preview/batch-20 --allow-failures
+      - name: Preserve 20-building meshes and structured QA reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-building-batch-20
+          path: |
+            build/building-preview/batch-20/*.glb
+            build/building-preview/batch-20/report.csv
+            build/building-preview/batch-20/report.json
+            build/building-preview/batch-20/view-*.command
+          if-no-files-found: error
+          retention-days: 7
       - name: Preserve raw GLB models for review and actual screenshots
         uses: actions/upload-artifact@v4
         with:
@@ -80,12 +99,16 @@ jobs:
           g++ $FLAGS tests/libraries/building_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_tests
           g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
           g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
+          g++ $FLAGS tests/libraries/building_runtime_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_runtime_tests
+          # Compile the Renderer3D adapter even without a live GPU in CI.
+          g++ $FLAGS -fsyntax-only tests/render/runtime_building_model_compile.cpp
       - name: Run genre-neutral building regression tests
         shell: bash
         run: |
           set -euo pipefail
           /tmp/aiverse_building_tests
           /tmp/aiverse_building_style_tests "$GITHUB_WORKSPACE"
+          /tmp/aiverse_building_runtime_tests "$GITHUB_WORKSPACE"
       - name: Compile native Studio asset generation contract
         shell: bash
         run: |
