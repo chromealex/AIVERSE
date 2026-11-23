@@ -1798,6 +1798,13 @@
           "titleEn": "Parametric building compositions: modular wings, silos, pylons and gantries",
           "text": "Файл стиля описывает композиционные формы по относительным координатам и размерам, а генератор собирает различимые силуэты с детерминированным seed.",
           "textEn": "Style data controls major forms at relative positions and sizes; the generator builds different silhouettes deterministically."
+        },
+        {
+          "status": "in-progress",
+          "title": "Генератор архитектуры: арки, купола, плавные корпуса и безопасные проёмы",
+          "titleEn": "Architectural generator: arches, domes, swept hulls and clearance validation",
+          "text": "Добавить формы по данным стиля и проверки реальных проходных размеров после подгонки модели, не изменяя старые пресеты без явного выбора.",
+          "textEn": "Add authored architectural primitives and verify usable openings after bounding-box fit, preserving existing presets by default."
         }
       ],
       "core": true,
