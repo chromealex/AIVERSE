@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
-import { bindSpectraNodeAsset, readSpectraNodeAsset } from './spectraAssetBinding';
+import { bindResolvedSpectraAsset } from './spectraAssetBinding';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 
 /** Asset-reference sub-inspector for a selected graph node.
@@ -29,7 +29,9 @@ export default function SpectraGraphAssetInspector({
   },[selectedNodeId,locked]);
   // A node deleted by a graph edit is never resurrected by a stale lock.
   const node=graph.nodes.find(n=>n.id===targetNodeId);
-  const current=node?readSpectraNodeAsset(graph,node.id,property):null;
+  const raw=node?.properties?.[property];
+  const selected=typeof raw==='string'?assets.find(a=>a.path===raw):undefined;
+  const current=selected?{guid:selected.guid,path:selected.path}:null;
   return <section aria-label="SpectraFX node asset reference">
     <header style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <strong>{property} asset</strong>
@@ -39,7 +41,7 @@ export default function SpectraGraphAssetInspector({
       disabled={disabled||!node} locked={locked} onLockChange={setLocked}
       onChange={asset=>{
         if(!node)return;
-        const result=bindSpectraNodeAsset(graph,node.id,property,asset);
+        const result=bindResolvedSpectraAsset(graph,node.id,property,asset,assets,kinds);
         if(result.error){setError(result.error);return;}
         setError('');
         onGraphChange(result.graph);
