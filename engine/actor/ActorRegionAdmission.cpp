@@ -22,7 +22,7 @@ bool moveGroup(const ActorHost& host,const Simulation& sim,Entity target,
     if(world.has<world::RegionDormant>(target))
         return reject(error,"cannot move a dormant region entity");
     if(car && world.has<vehicles::VehicleDrive>(target))
-        return reject(error,"typed vehicle requires authoritative controller teleport integration");
+        return host.typedRegionMoveGroup(sim,target,out,error);
     std::vector<Entity> members{target};
     if(car) {
         const auto* vehicle=world.tryGetConst<Vehicle>(target);
@@ -113,6 +113,8 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     struct Commit {
         Entity entity;
         Vec3 delta;
+        Vec3 destination;
+        bool typed=false;
         std::vector<Entity> members;
     };
     std::vector<Commit> changes;
@@ -141,7 +143,8 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
             if(!streamedCollision_ || !streamedCollision_->covers(required))
                 throw std::logic_error("region move destination not admitted before tick");
         }
-        changes.push_back({e,delta,std::move(members)});
+        changes.push_back({e,delta,destination,
+                           ecs.has<vehicles::VehicleDrive>(e),std::move(members)});
     }
     if(requests->applied>UINT64_MAX-changes.size())
         throw std::logic_error("region move counter exhausted");
@@ -149,6 +152,12 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     // All targets are validated before changing a position. No command, RNG
     // or authoritative actor component is touched by the admission gate.
     for(const auto& change:changes) {
+        if(change.typed) {
+            std::string error;
+            if(!placeTypedRegionMove(sim,change.entity,change.destination,&error))
+                throw std::logic_error("typed vehicle region commit failed: "+error);
+            continue;
+        }
         for(Entity member:change.members) {
             if(auto* body=ecs.tryGet<CharacterBody>(member))
                 body->pos+=change.delta;
