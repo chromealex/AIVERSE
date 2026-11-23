@@ -10,6 +10,7 @@
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "engine/render/Model.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -1902,6 +1903,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 item.set("path", str(asset.path));
                 item.set("guid", str(asset.guid));
                 item.set("importer",str(asset.importer));
+                if(!asset.directory&&asset.importer=="model") {
+                    const bool native=render::isNativeModelFormat(asset.path);
+                    const auto converted=catalog.byPath(asset.path+".glb");
+                    item.set("modelLoadableFormat",Json::fromBool(native||(converted&&!converted->directory)));
+                }
                 item.set("bytes", Json::number(asset.bytes));
                 if(asset.directory)folders.push(std::move(item));
                 else entries.push(std::move(item));
