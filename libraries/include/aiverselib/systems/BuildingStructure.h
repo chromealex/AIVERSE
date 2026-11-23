@@ -189,6 +189,20 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     }
     // 7. Superstructure: a smaller armoured tower on the roof with a glowing window slit.
     std::vector<std::array<float,4>> taken;
+    // Architecture occupies roof area before placing optional props. Otherwise
+    // industrial tanks/dishes could spawn through the generated silhouette.
+    if(rw>2.5f&&rd>2.5f){
+        if(k.massing==StructureMassing::Spire)
+            taken.push_back({top.x0+rw*0.31f,top.z0+rd*0.30f,top.x0+rw*0.69f,top.z0+rd*0.70f});
+        else if(k.massing==StructureMassing::TwinBay){
+            for(int side=0;side<2;++side){
+                const float x=top.x0+rw*(side?0.56f:0.07f);
+                taken.push_back({x,top.z0+rd*0.08f,x+rw*0.37f,top.z1-rd*0.08f});
+            }
+        }else if(k.massing==StructureMassing::Terraced)
+            taken.push_back({top.x0+rw*0.17f,top.z0+rd*0.26f,
+                             top.x0+rw*0.89f,top.z0+rd*0.92f});
+    }
     if(k.massing!=StructureMassing::Spire&&k.towerChance>0&&u()<k.towerChance){
         float tw=k.towerWidth.pick(g)*W,td=k.towerDepth.pick(g)*D,th=k.towerHeight.pick(g);
         float tx=top.x0+(top.x1-top.x0-tw)*(u()<0.5f?0.1f:0.9f),tz=top.z0+(top.z1-top.z0-td)*0.15f;
