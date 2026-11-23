@@ -427,16 +427,22 @@ void registerSpectraGraphOps(Workspace& ws) {
     add("fx_graph_preview",
         "Control the *real native Studio* SpectraFX GPU/CPU particle preview. "
         "Actions: status, load, play, pause, step, seek (0..3600 ticks), "
-        "restart, parameter (named scalar), stop, cameraReset, cameraOrbit, cameraZoom. "
+        "restart, parameter (named scalar), stop, cameraReset, cameraOrbit, cameraZoom, "
+        "cameraPreset (perspective/front/side/top), stage (background/grid/axes), "
+        "playback (speed 0.25..4 and loop). "
         "For load use a graph object or graphName with draft=true for a private draft. "
         "The preview is presentation only; no game ECS writes or offscreen fake renders. "
         "Requires the native Studio GPU viewport to be visible; standalone MCP "
         "returns a clear unavailable error.",
-        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom"]},
+        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom","cameraPreset","stage","playback"]},
             "graph":{"type":"object"},"graphName":{"type":"string"},
             "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
             "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"},
-            "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"}},
+            "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"},
+            "preset":{"type":"string","enum":["perspective","front","side","top"]},
+            "background":{"type":"string","enum":["dark","neutral","light","black"]},
+            "grid":{"type":"boolean"},"axes":{"type":"boolean"},
+            "speed":{"type":"number"},"loop":{"type":"boolean"}},
             "required":["action"]})",
         [&ws](const Json& p) {
             requireGame(ws);
@@ -444,7 +450,8 @@ void registerSpectraGraphOps(Workspace& ws) {
             if(action!="status"&&action!="load"&&action!="play"&&
                action!="pause"&&action!="step"&&action!="seek"&&
                action!="restart"&&action!="parameter"&&action!="stop"&&
-               action!="cameraReset"&&action!="cameraOrbit"&&action!="cameraZoom")
+               action!="cameraReset"&&action!="cameraOrbit"&&action!="cameraZoom"&&
+               action!="cameraPreset"&&action!="stage"&&action!="playback")
                 throw std::runtime_error("unknown SpectraFX preview action");
             Json command=p;
             if(action=="load") {
