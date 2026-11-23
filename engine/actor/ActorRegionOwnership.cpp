@@ -181,6 +181,10 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         decltype(grid.cell(Vec3{})) destination;
     };
     std::vector<PendingGroupTransfer> pendingGroups;
+    // Derived reverse membership index for this reconciliation. Never persist
+    // it or reuse it across restore without rebuilding from canonical seats.
+    std::map<uint64_t,Entity> carByMember;
+    std::set<uint64_t> candidateCars;
     std::set<uint64_t> handled;
     for(Entity car:cars) {
         ledger=target;
@@ -224,9 +228,11 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             if(entry->owner!=destination)changed=true;
             if(!handled.insert(member.packed()).second)
                 throw std::logic_error("regionOwnership: duplicate car occupant");
+            carByMember.emplace(member.packed(),car);
+            if(notified(member))candidateCars.insert(car.packed());
         }
         if(!changed)continue;
-        if(std::none_of(group.begin(),group.end(),notified))++uncoveredGroups;
+        if(!candidateCars.contains(car.packed()))++uncoveredGroups;
         if(streamManifest_.getBool("async")) {
             const world::Bounds required{
                 carState->pos-Vec3{2_fx,2_fx,2_fx},
@@ -236,6 +242,17 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         }
         pendingGroups.push_back({std::move(group),destination});
     }
+    // Resolve notified handles through the canonical reverse index. This is
+    // a candidate set, not a completeness proof: retain the full scan.
+    auto expandCandidates=[&](const auto& entries) {
+        for(auto packed:entries) {
+            const auto it=carByMember.find(packed);
+            if(it!=carByMember.end())candidateCars.insert(it->second.packed());
+        }
+    };
+    expandCandidates(bodyChanges.entities);
+    expandCandidates(vehicleChanges.entities);
+    expandCandidates(lootChanges.entities);
     // Apply migrations under the exclusive undo transaction.
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
