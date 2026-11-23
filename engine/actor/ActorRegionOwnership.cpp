@@ -7,6 +7,13 @@
 #include <stdexcept>
 
 namespace aiverse::actor {
+namespace {
+// Derived World resource: follows rollback snapshots, is absent from native
+// disk schemas, and is rebuilt by the compatibility pass after disk load.
+struct RegionSeatIndex {
+    std::map<uint64_t,Entity> carByMember;
+};
+}
 
 bool ActorHost::reportRegionChange(Simulation& sim,Entity entity,
                                     world::RegionDirtyKind kind) {
@@ -185,6 +192,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // it or reuse it across restore without rebuilding from canonical seats.
     std::map<uint64_t,Entity> carByMember;
     std::set<uint64_t> candidateCars;
+    const auto* previousSeats=view.resourceConst<RegionSeatIndex>();
     std::set<uint64_t> handled;
     for(Entity car:cars) {
         ledger=target;
@@ -253,6 +261,20 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     expandCandidates(bodyChanges.entities);
     expandCandidates(vehicleChanges.entities);
     expandCandidates(lootChanges.entities);
+    // A changed backlink can affect both the former and current vehicle.
+    // Compare canonical membership before publishing the next derived index.
+    if(previousSeats) {
+        for(const auto& [member,oldCar]:previousSeats->carByMember) {
+            const auto it=carByMember.find(member);
+            if(it==carByMember.end() || !(it->second==oldCar)) {
+                candidateCars.insert(oldCar.packed());
+                if(it!=carByMember.end())candidateCars.insert(it->second.packed());
+            }
+        }
+        for(const auto& [member,newCar]:carByMember)
+            if(!previousSeats->carByMember.contains(member))
+                candidateCars.insert(newCar.packed());
+    }
     // Apply migrations under the exclusive undo transaction.
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
@@ -322,6 +344,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         stagedLedger.commit();
         rollback.committed=true;
     }
+    ecs.setResource<RegionSeatIndex>(RegionSeatIndex{std::move(carByMember)});
     (void)ecs.drainComponentChanges<CharacterBody>();
     (void)ecs.drainComponentChanges<Vehicle>();
     (void)ecs.drainComponentChanges<Loot>();
