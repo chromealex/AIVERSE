@@ -1,6 +1,7 @@
 // Shared graph authoring facade. Workspace domain owners retain validation and persistence.
 #pragma once
 #include "Workspace.h"
+#include "GraphDraftEdits.h"
 #include <array>
 #include <stdexcept>
 
@@ -93,7 +94,7 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
 
 inline void registerGraphOps(Workspace& ws) {
     using namespace graph_ops;
-    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"}},"required":["domain"],"additionalProperties":false})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
     ws.registerOp({"graph_catalog","Discover actual registered graph domain operations, payload formats and save constraints.",Json::object(),[&ws](const Json&){
         Json r=Json::object(),items=Json::array();
         for(const auto& d:domains){
@@ -101,6 +102,12 @@ inline void registerGraphOps(Workspace& ws) {
             row.set("domain",Json::string(d.id));row.set("payload",Json::string(d.payload));row.set("concurrency",Json::string(d.concurrency));
             for(const auto& pair:std::array<std::pair<const char*,const char*>,6>{{{"list",d.list},{"get",d.get},{"validate",d.validate},{"nodeCatalog",d.catalog},{"edit",d.edit},{"save",d.save}}})
                 if(registered(ws,pair.second))ops.set(pair.first,Json::string(pair.second));
+            const auto id=std::string(d.id);
+            const char* actions=id=="shader"?R"(["add","replaceNode","deleteNode","move","connect","disconnect","setOutput"])":
+                id=="motionweave"?R"(["add","replaceNode","deleteNode","rename","connect","move","addState","replaceState","setInitial","setOutput","addTransition","removeTransition","replaceTransition"])":
+                id=="modeling"?R"(["put","remove","parameters","graph","replace"])":R"(["new","upgrade","add","connect","disconnect","deleteNode","setProperty"])";
+            const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
+            if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
             row.set("operations",ops);items.push(row);
         }
         r.set("ok",Json::fromBool(true));r.set("domains",items);return r;
@@ -111,11 +118,35 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_validate","Validate a candidate using the native domain compiler. No write.",schema,[&ws](const Json& p){const auto& d=domain(p);return envelope(d,d.validate,invoke(ws,d.validate,candidate(d,p)));}});
     ws.registerOp({"graph_diagnostics","Run native validation and return domain diagnostics; not runtime telemetry.",schema,[&ws](const Json& p){const auto& d=domain(p);return envelope(d,d.validate,invoke(ws,d.validate,candidate(d,p)));}});
     ws.registerOp({"graph_dependencies","List explicit schema references from a candidate. No filesystem writes or runtime inference.",schema,[](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_dependencies",inspectDependencies(d,q[d.payload]));}});
-    ws.registerOp({"graph_edit","Perform supported native in-memory graph edits. Currently SpectraFX only.",schema,[&ws](const Json& p){
+    ws.registerOp({"graph_edit","Apply 1..64 native-schema draft edits atomically in memory. Returns candidate and native diagnostics; never saves.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);
-        if(!p["edit"].isObject())throw std::invalid_argument("edit object required");
-        for(auto key:{"action","type","from","to","toPort","node","property","value"})if(p["edit"].has(key))q.set(key,p["edit"][key]);
-        return envelope(d,d.edit,invoke(ws,d.edit,q));
+        auto source=q[d.payload];const auto edits=graph_draft::actions(p);
+        const std::string id=d.id;
+        for(const auto& e:edits.items())if(!e.isObject())throw std::invalid_argument("every draft command must be an object");
+        if(id=="modeling"){
+            // Reuse native model document transaction; build/validate separately below.
+            source=modeling::edit(source,edits);
+        }else for(const auto& e:edits.items()){
+            if(id=="shader")graph_draft::shader(source,e);
+            else if(id=="motionweave")graph_draft::motion(source,e);
+            else{
+                Json args=Json::object();args.set("graph",source);
+                for(auto key:{"action","type","from","to","toPort","node","property","value"})if(e.has(key))args.set(key,e[key]);
+                auto r=invoke(ws,d.edit,args);
+                if(failed(r))return envelope(d,d.edit,std::move(r));
+                if(!r["graph"].isObject())throw std::runtime_error("native edit omitted graph");
+                source=r["graph"];
+            }
+        }
+        // Complete draft diagnostics are distinct from successful command application.
+        // Invalid drafts may be repaired; graph_save always revalidates.
+        if(id=="motionweave")animation::sort(source);
+        Json args=Json::object();args.set(d.payload,source);
+        auto validation=invoke(ws,d.validate,args);
+        Json result=Json::object();result.set("ok",Json::fromBool(true));result.set(d.payload,source);
+        result.set("valid",Json::fromBool(!failed(validation)));result.set("validation",compact(std::move(validation)));
+        result.set("applied",Json::number(int64_t(edits.size())));result.set("saved",Json::fromBool(false));
+        return envelope(d,"graph_edit",std::move(result));
     }});
     ws.registerOp({"graph_save","Explicit native save; respects domain revision contracts. No apply, bake or runtime execution.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);q.set("name",named(p)["name"]);
