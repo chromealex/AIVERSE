@@ -278,3 +278,35 @@ multiplayer, lift doors or completed GPU scene may be made from source alone.
 Next: explicit ECS actor components, render/physics owner wiring, safe boarding
 volume checks, door interlocks, rider replication, end-to-end Mac/Metal
 demonstration and compiler/CI validation.
+
+
+## Stage 17: authoritative ECS session entrypoint
+
+Native client/server game code may use
+engine/buildings/BuildingLiftGameSession.h (also included by
+engine/buildings/BuildingRuntime.h). This is a template for an EXISTING
+Body component with a writable Vec3 pos; it does not create a second ECS
+or network stack. The game passes its World, SpatialWorld, nav::Mesh,
+unique platform/door collider IDs, scene ID, and an actor authorization
+callback from its own ownership/session system.
+
+Sequence:
+
+1. generateRecipe; create static CPU mesh with elevator platform excluded.
+2. BuildingLiftGameSession<Body>.attach with current project scene identity,
+   game-owned collider IDs, world transform and authorization callback.
+3. attachDoors with game-owned leaf collider IDs, then refresh the native
+   nav::Mesh using its existing collision-backed nav::Source.
+4. board (requires genuine open landing door and feet in cabin volume),
+   call/requestDestination/exit through game-authorized ECS entities only.
+5. advance(ecs,spatial,nav,deltaMs,serverTick) on the authoritative world
+   update phase. Only if tick.complete is true may the existing secure
+   transport publish tick.frame. On error the scene is faulted.
+6. After update, the game's renderer owner applies published platform
+   instance transforms; game physics/actor owner has already moved ECS
+   passengers via the existing EcsBridge, after collider publication.
+7. Scene unload uses detachIfVacant; releaseAtLanding handles rider cleanup
+   only if the lift is open at a genuine landing. Do not eject moving actors.
+
+This is an owner API: it has not been wired into an actual running
+game mode, and C++/native/Metal tests are explicitly deferred.

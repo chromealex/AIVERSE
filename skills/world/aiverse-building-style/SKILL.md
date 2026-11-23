@@ -155,3 +155,12 @@ publishes only successful platform collider moves and corresponding rider
 deltas through SpatialWorld. Game ECS must acknowledge actual actor movement,
 boarding and exit; no teleport. Do not regenerate meshes each tick. No tests
 run by user request. Handoff: docs/agent-handoffs/building-route-executor-2026-11-23.md.
+
+
+Stage 17: BuildingLiftGameSession<Body> in BuildingRuntime.h is the
+approved native ECS actor integration. Require a nonempty game actor
+authorization callback and physical lift doors before boarding. Publish
+network frames only from complete authoritative ticks; normal unload via
+detachIfVacant and safe rider releaseAtLanding. Do not claim production
+verified until compiler/physics/Metal/multiplayer tests are run. Handoff:
+docs/agent-handoffs/building-authoritative-game-session-2026-11-23.md.

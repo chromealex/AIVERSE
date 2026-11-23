@@ -107,3 +107,12 @@ After world tick, apply only scene.update().publishedPlatforms and
 publishedRiders. Never apply uncommitted attempted motions.
 Navigation/physics owner integration is present at API level but untested,
 not a completed gameplay elevator demo.
+
+
+Stage 17: BuildingLiftGameSession<Body> composes existing ECS World,
+SpatialWorld, NavMesh and authenticated lift state frames. The owner must
+supply Entity authorization, unique platform and physical door collider IDs,
+then advance exclusively in authoritative tick order. Actor boarding checks
+actual cabin position and landing-door state; exit is permitted only at
+an open landing. releaseAtLanding and detachIfVacant prevent casual unload
+while passengers are riding. No game mode is wired or tested yet.

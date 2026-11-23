@@ -72,3 +72,23 @@ bind actor destroy / logout cleanup, guarantee no riders on scene detach,
 door obstruction interlocks and moving render-node transforms; later
 compile/test and capture real GPU screenshots on Mac. Do not merge to main
 until verified and reconciled with concurrent Studio and parent changes.
+
+
+## Stage 17 final API amendments
+
+- ef492e5699b927d1fc0710ceb274a573ca41013e:
+  releaseAtLanding(World,Entity,feature) validates real door state and
+  ECS marker for the correct building scene. It does not forcibly eject
+  an actor riding between floors.
+- detachIfVacant(spatial,nav) refuses ordinary scene unload while the
+  existing circulation host still has passengers. Forced detach is for
+  authoritative game destruction/reconciliation only.
+- hasPassengers() exposes rider activity for shutdown/streaming owners.
+- The session requires a nonempty actor-authorization callback. It also
+  requires physical landing doors attached before ECS boarding/exiting.
+- All API work is committed but deliberately UNCOMPILED and UNTESTED per
+  user instruction. No Mac/Metal or multiplayer demonstration is claimed.
+
+Next stage must integrate a real game actor lifecycle: actor disconnect while
+riding, saved game unloading, authoritative pose reconciliation and move-only
+GPU lift instance updates. Keep an agent handoff per stage.
