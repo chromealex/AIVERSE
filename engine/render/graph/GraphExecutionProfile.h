@@ -27,6 +27,11 @@ public:
         events_.reserve(maxEvents);
         beginTrace();
     }
+    // Explicit deep copy for a selected prepared presentation owner.
+    Profile(const Profile& other):nodes_(other.nodes_),events_(other.events_),origin_(other.origin_),overflow_(other.overflow_){events_.reserve(maxEvents);}
+    Profile& operator=(const Profile&)=delete;
+    Profile(Profile&&)=default;
+    Profile& operator=(Profile&&)=default;
     void beginTrace() noexcept {
         events_.clear();overflow_=0;origin_=Clock::now();
     }
