@@ -122,3 +122,14 @@ Read `engine/render/TerraWeaveCavernsPresentationLeases.h`,
 - IMPORTANT: `begin` on an existing STRATA-owned presentation requires the host to arrange a safe fallback and release old STRATA GPU residency before changing visibility; a route value alone cannot enforce GPU synchronization.
 - Keep collision/Box3D/navmesh independent of visual STRATA LOD. Do not remove original terrain source until the new source is committed, and do not double-submit the same geometry through both routes.
 - After completing any stage update this skill and a dated handoff; record tests actually executed, not simply authored.
+
+## Stage 10 — real GeometryScene prepared-model entry point
+
+Read `engine/render/TerraWeaveCavernsGeometryScene.h` and `docs/agent-handoffs/caverns-stage10-2026-11-23.md`.
+- `makeCaveGeometryModel(CaveMesh)` converts CPU triangle mesh to an actual rigid, unuploaded `render::Model` with a default rock material. Coordinates are chunk-local **metres**.
+- `caveGeometrySourceKey(key,generatorVersion,revision)` creates a versioned model key; `caveGeometrySceneManifest(key,generatorVersion,revision,resolution,spacingCm,strataEnabled)` makes the actual `GeometryScene` JSON schema with one instance placed at chunk origin in metres.
+- `CaveGeometrySceneResident::publish(device, mesh, generatorVersion, revision, resolution, spacingCm, strataEnabled)` creates a staged `render::GeometryScene`, sets its Strata staging/portable flags, and invokes the **existing** `GeometryScene::loadPrepared` with an owned unuploaded `Model`. `draw(renderer)` submits through the actual GeometryScene owner; `shutdown(device)` releases it.
+- Calling GeometryScene with Strata enabled does **not guarantee** it chooses STRATA or achieves visual parity. Query GeometryScene status/decisions; keep safe fallback. Do not draw an equivalent `CutTerrainResident` model concurrently with this scene.
+- This is an opt-in proof-of-integration for ONE cave chunk per GeometryScene; DO NOT launch hundreds of these per frame. Production must batch scene sources and add incremental updates with bounded GPU lifetime and staging budgets.
+- Current `publish` calls `GeometryScene::shutdown` for previous source after stage. This requires GPU idle, is not a nonblocking retirement strategy, and does not create a cross-system render/Box3D/SpatialWorld/NavMesh atomic transaction. Never claim complete gameplay-ready cave streaming.
+- Check real engine compilation and the new `tests/terraweave_caverns_geometry_scene_test.cpp`, then run Metal/GLES/Vulkan raster parity before enabling by default.
