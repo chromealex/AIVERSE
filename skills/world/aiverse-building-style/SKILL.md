@@ -489,3 +489,51 @@ obstacles, terrain and actual renderer animation are not included.
 
 Tests deferred by user request. Handoff:
 `docs/agent-handoffs/building-dynamic-multigraph-stage23c-2026-11-23.md`.
+
+
+## Stage 23D — concrete MapGrid path-cache and room connectivity adapters
+
+`engine/buildings/BuildingGraphOwnerAdapters.h`, included by
+`BuildingRuntime.h`, provides two concrete adapters for existing
+AIVERSE graph owners. Do not duplicate A*, HPA*, flow field, or room
+topology algorithms.
+
+For flat game maps, register the existing `game::MapGrid` owner
+under `BuildingGraphDomain::Hierarchy` using
+`BuildingGridGraphAdapter::consumer(grid, committedProjection)`.
+The callback's `committedProjection(change)` must only return true
+AFTER the game's original `MapGrid.flags/blocked` data has been
+authoritatively projected from the building change. It is NEVER
+sufficient to call `cellChanged` while leaving source obstacles
+unchanged. This adapter invokes the real `MapGrid::cellChanged`
+over affected cells, which bumps flow stamps and invalidates local
+HPA*/NavMesh/clearance. For changes exceeding the bounded local budget
+it uses the existing `invalidatePathing()` plus `flowDropAll()`.
+Reject sphere maps unless their separate topology-aware owner
+adapter is provided. The normal grid remains 2D; it cannot encode
+stacked building floors and must not be used for upper-storey routing.
+
+For room connectivity, initialize `BuildingRoomGraphCache` from
+the original `BuildingStructureGraph` and provide a live
+`CanTraverse(const BuildingGraphConnection&)` callback rooted in
+actual committed door, stair, lift and gameplay access policy.
+Register `roomCache.consumer()` under
+`BuildingGraphDomain::Spatial`. Each accepted event reevaluates
+existing connection accessibility in deterministic graph order,
+atomically replaces cached undirected adjacency and makes
+`reachable(fromRoom,toRoom)` available to gameplay code.
+This does not modify room-graph topology or grant external doors
+connections they never had. For one-way permissions, use the
+game's own directed logic graph instead of this cache.
+
+The stage complements the already implemented Navigation-domain
+`BuildingDynamicNavSource`. Graph change masks MUST contain only
+actual registered/impacted domains. Acknowledged invalidation does
+not imply every derived path is already computed: expensive graph
+searches are performed by their original owners when queried.
+No direct callbacks for RoadGraph, ZoneGraph, shader/VFX, audio,
+utilities or other optional graph owners have been wired yet.
+
+Tests were deferred per user instruction; no native compilation or
+end-to-end graph update was verified. Handoff:
+`docs/agent-handoffs/building-graph-owners-stage23d-2026-11-23.md`.
