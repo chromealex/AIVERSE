@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioWorldProcessesGizmos.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
@@ -787,6 +788,14 @@ bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && ses
 void StudioHost::rebuildOverlay() {
     if (!preview_) return;
     auto shapes = extShapes_;
+    // World-process authoring overlays use the existing native Scene
+    // OverlayShape renderer. This is a read-only projection of MapDoc,
+    // never a second ECS simulation or a new viewport.
+    if(session_ && !session_->workspace().project.dir.empty()) {
+        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map);
+        shapes.reserve(shapes.size()+worldShapes.size());
+        for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
+    }
     for (const auto& seg : splineCache_["segments"].items()) {
         StudioScene::OverlayShape sh; sh.kind = 1; sh.thickness = 2; sh.r = 255; sh.g = 200; sh.bl = 80;
         sh.a = {float(seg[0].toDouble()), 0.15f, float(seg[1].toDouble())};
