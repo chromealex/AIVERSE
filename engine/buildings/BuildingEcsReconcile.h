@@ -62,9 +62,27 @@ inline bool restoreBuildingEcsLeafScene(
     // One conservative graph invalidation covers all full closed extents;
     // real graph consumers (including BuildingDynamicNavSource) must be
     // registered on the new router before calling this helper.
-    world::Bounds affected=authoredPoses.front().bounds;
+    // Moving panels slide OUTSIDE the closed aperture. Invalidate the
+    // entire possible displacement for both leaves, not just the
+    // original opening, or old remote nav cells could remain stale.
+    auto fullTravel=[](const world::Bounds& original){
+        auto expanded=original;
+        const Fixed dx=original.max.x-original.min.x;
+        const Fixed dz=original.max.z-original.min.z;
+        if(dx>=dz){
+            const Fixed shift=dx/2;
+            expanded.min.x-=shift;
+            expanded.max.x+=shift;
+        }else{
+            const Fixed shift=dz/2;
+            expanded.min.z-=shift;
+            expanded.max.z+=shift;
+        }
+        return expanded;
+    };
+    world::Bounds affected=fullTravel(authoredPoses.front().bounds);
     for(size_t i=1;i<authoredPoses.size();++i){
-        const auto& b=authoredPoses[i].bounds;
+        const auto b=fullTravel(authoredPoses[i].bounds);
         affected.min={fxMin(affected.min.x,b.min.x),
                       fxMin(affected.min.y,b.min.y),
                       fxMin(affected.min.z,b.min.z)};
