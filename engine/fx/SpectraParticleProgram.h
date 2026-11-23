@@ -34,7 +34,7 @@ enum class Field : uint8_t {
     Attribute0, Attribute1, Attribute2, Attribute3,
     Attribute4, Attribute5, Attribute6, Attribute7,
     Param0, Param1, Param2, Param3, Param4, Param5, Param6, Param7,
-    Invalid
+    BirthRandom, Invalid
 };
 struct Instruction {
     Op op=Op::Constant;
@@ -68,7 +68,7 @@ inline Field fieldOf(std::string_view name) {
     struct Entry {const char* name;Field field;};
     static constexpr Entry entries[]{
         {"age",Field::Age},{"ageNormalized",Field::AgeNormalized},
-        {"dt",Field::Dt},{"uid",Field::Uid},
+        {"dt",Field::Dt},{"uid",Field::Uid},{"birthRandom",Field::BirthRandom},
         {"position.x",Field::PositionX},{"position.y",Field::PositionY},{"position.z",Field::PositionZ},
         {"velocity.x",Field::VelocityX},{"velocity.y",Field::VelocityY},{"velocity.z",Field::VelocityZ},
         {"size",Field::Size},{"rotation",Field::Rotation},
@@ -95,6 +95,11 @@ inline float read(Field f,const Context& c) {
     case Field::AgeNormalized:return c.ageNormalized;
     case Field::Dt:return c.dt;
     case Field::Uid:return c.uid;
+    case Field::BirthRandom:{
+        uint32_t x=uint32_t(std::max(0.f,c.uid))^0x85ebca6bu;
+        x^=x>>16u;x*=0x7feb352du;x^=x>>15u;x*=0x846ca68bu;x^=x>>16u;
+        return float(x>>8u)*(1.f/16777216.f);
+    }
     case Field::PositionX:return c.position.x;
     case Field::PositionY:return c.position.y;
     case Field::PositionZ:return c.position.z;
