@@ -207,6 +207,13 @@ class RegionEntityLedger::Transaction {
     std::map<RegionEntityId,Before> before_;
     std::set<RegionEntityId> restoreLive_;
     bool committed_=false;
+    bool capture_=false;
+    std::vector<std::pair<RegionEntityId,RegionEntityRecord>> mutations_;
+    void captureSince(uint64_t revision) {
+        if(!capture_)return;
+        auto changes=ledger_.since(revision);
+        mutations_.insert(mutations_.end(),changes.begin(),changes.end());
+    }
     void remember(RegionEntityId id) {
         if(before_.contains(id))return;
         const auto* old=ledger_.find(id);
@@ -214,8 +221,8 @@ class RegionEntityLedger::Transaction {
         before_.emplace(id,old?Before{true,*old}:Before{});
     }
 public:
-    explicit Transaction(RegionEntityLedger& ledger)
-        :ledger_(ledger),initialRevision_(ledger.lastRevision_) {}
+    explicit Transaction(RegionEntityLedger& ledger,bool capture=false)
+        :ledger_(ledger),initialRevision_(ledger.lastRevision_),capture_(capture) {}
     Transaction(const Transaction&)=delete;
     Transaction& operator=(const Transaction&)=delete;
     ~Transaction() noexcept {
@@ -241,21 +248,28 @@ public:
         ledger_.lastRevision_=initialRevision_;
     }
     bool spawn(RegionEntityId id,Cell owner) {
-        remember(id);return ledger_.spawn(id,owner);
+        remember(id);const auto rev=ledger_.lastRevision();
+        const bool ok=ledger_.spawn(id,owner);if(ok)captureSince(rev);return ok;
     }
     bool despawn(RegionEntityId id,Cell expected) {
-        remember(id);return ledger_.despawn(id,expected);
+        remember(id);const auto rev=ledger_.lastRevision();
+        const bool ok=ledger_.despawn(id,expected);if(ok)captureSince(rev);return ok;
     }
     bool transfer(RegionEntityId id,Cell expected,Cell destination) {
-        remember(id);return ledger_.transfer(id,expected,destination);
+        remember(id);const auto rev=ledger_.lastRevision();
+        const bool ok=ledger_.transfer(id,expected,destination);if(ok)captureSince(rev);return ok;
     }
     bool transferGroup(std::span<const std::pair<RegionEntityId,Cell>> members,
                        Cell destination) {
         for(const auto& [id,owner]:members)if(owner!=destination)remember(id);
-        return ledger_.transferGroup(members,destination);
+        const auto rev=ledger_.lastRevision();
+        const bool ok=ledger_.transferGroup(members,destination);if(ok)captureSince(rev);return ok;
     }
     const RegionEntityRecord* find(RegionEntityId id)const{return ledger_.find(id);}
     const RegionEntityLedger& view()const{return ledger_;}
+    uint64_t initialRevision()const{return initialRevision_;}
+    const auto& mutations()const{return mutations_;}
+    bool capturing()const{return capture_;}
     void commit() noexcept {committed_=true;}
 };
 
