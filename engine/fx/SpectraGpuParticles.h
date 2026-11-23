@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -167,6 +168,9 @@ public:
     // rejects open command buffers). This is not CPU ParticleSystem import.
     bool captureGpuCheckpoint(GpuCheckpoint& out);
     bool restoreFreshGpuCheckpoint();
+    bool retainFreshGpuCheckpoint();
+    bool restoreHistoricalGpuCheckpoint(uint64_t id);
+    std::vector<uint64_t> historicalGpuCheckpointIds() const;
     // Enqueues bounded async chunks, returns false if it cannot start.
     // Callback reports whether all three buffers formed a complete snapshot.
     bool requestGpuCheckpoint(std::function<void(bool)> callback = {});
@@ -264,6 +268,10 @@ private:
     uint64_t vmFrameRevision_ = 0;
     uint64_t checkpointRevision_ = 0;
     GpuCheckpoint lastCheckpoint_;
+    struct HistoricalCheckpoint {uint64_t id;GpuCheckpoint snapshot;};
+    std::deque<HistoricalCheckpoint> checkpointHistory_;
+    uint64_t nextHistoricalCheckpointId_=1;
+    bool restoreGpuSnapshot(const GpuCheckpoint& snapshot);
     bool asyncCheckpointPending_ = false;
     AdaptiveCheckpointCadence checkpointCadence_{};
 };
