@@ -109,6 +109,28 @@ save/replay/COW parity. The extended
 `actor_region_lifecycle_test` source checks boundary-only
 coalescing and rollback; **it has not run on Mac/KINGSTON**.
 
+## W1.17 complete grouped dirty mark preflight
+
+The generic `RegionDirtyQueue` offers
+`canMarkMany(std::span<const Entity>)` and
+`markMany(std::span<const Entity>,RegionDirtyKind)`.
+Use them when a game action moves multiple authoritative entities
+together (vehicle, driver, occupants). Preflight the entire group
+**before** modifying physical positions; then mark it with a single
+transactional batch. Duplicate keys are coalesced and only
+new missing entries allocate memory. A malformed kind or full
+pending queue must return false without changing entries.
+
+The existing ActorHost staged region move uses this contract.
+The remaining motor-owner audit added `Action::Vault` and
+deathmatch-respawn crossing reports. No changes to how the
+shared physics, controller or seat code computes positions.
+
+Source regressions: `region_dirty_queue_test` tests a full
+65,536-entry queue and atomic refusal/coalescing, and
+`actor_region_lifecycle_test` tests deathmatch respawn
+from another cell. **Native CTest has not run yet.**
+
 ## ECS/movement safety
 
 The generic ECS currently does NOT emit a full change event when
