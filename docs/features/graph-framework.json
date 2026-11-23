@@ -75,7 +75,8 @@
     "engine/render/graph/TextureGraphTemplates.h",
     "engine/render/graph/TextureGraphCache.h",
     "engine/render/graph/TextureGraphGpu.h",
-    "apps/editor/core/TextureGraphGpuPreview.h"
+    "apps/editor/core/TextureGraphGpuPreview.h",
+    "engine/render/graph/TextureGraphGpuPatterns.h"
   ],
   "traits": {
     "editable": true,
