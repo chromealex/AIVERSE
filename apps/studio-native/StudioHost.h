@@ -235,6 +235,7 @@ private:
         bool done=false;
         int width=0,height=0;
         std::string jpeg,error;
+        Json provenance=Json::object(); // immutable at native render-owner capture scheduling
     };
     std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
     double fxShotStartedAt_=0;
