@@ -102,6 +102,10 @@ public:
     // owner barrier. Tickets are NOT ACKed by pumpStreaming().
     void setStreamCenter(ChunkKey3 center){residency_.center(center);}
     void setStreamLod(uint32_t lod){residency_.visualLod(lod);}
+    void enableAdaptiveStreamLod(CaveDistanceLodSettings settings={}) {
+        residency_.enableDistanceLod(settings);
+    }
+    void disableAdaptiveStreamLod(){residency_.disableDistanceLod();}
     std::vector<CaveResidencyTicket> pumpStreaming() {
         if(closed_||physicsBarrier_.status().recoveryRequired)return {};
         syncStreamingEditPins();
@@ -171,8 +175,11 @@ public:
     // Streaming owner-barrier publication. The game host must actually
     // replace matching GPU, Box3D, SpatialWorld and nav resources BEFORE it
     // reports success. The exclusive proof must represent held exclusion.
+    // The TWO meshes are intentionally separate. Visual may be coarsened
+    // by camera distance; Box3D/SpatialWorld must use collisionMesh.
     using StreamBuildCommit=std::function<bool(const CaveResidencyTicket&,
-                                              const CaveMesh&)>;
+                                              const CaveMesh& visualMesh,
+                                              const CaveMesh& collisionMesh)>;
     using StreamRetireCommit=std::function<bool(const CaveResidencyTicket&)>;
     bool publishStreamBuild(
         CaveResidencyTicket ticket,
@@ -191,7 +198,8 @@ public:
            publishedMesh.sourceRevision!=ticket.sourceRevision ||
            publishedMesh.resolution==0 || publishedMesh.spacingCm<=0)
             return false;
-        if(!actualNativeCommit(ticket,it->second.mesh))return false;
+        if(!actualNativeCommit(ticket,it->second.mesh,
+                               it->second.collisionMesh))return false;
         try {
             // Match the already-published GPU/physics/nav revision with
             // committed CPU source and seam-residency metadata.
