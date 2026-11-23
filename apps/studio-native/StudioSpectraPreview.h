@@ -30,7 +30,8 @@ public:
         if(action=="playback") {
             // Preview-only playback settings: no graph file or gameplay
             // simulation writes. Apply even before the first graph is loaded.
-            if(!input["speed"].isNumber()||!input["loop"].isBool())
+            if(!input["speed"].isNumber()||
+               input["loop"].type()!=Json::Type::Bool)
                 return errorStatus("Playback needs numeric speed and boolean loop");
             const double speed=input["speed"].toDouble();
             if(!std::isfinite(speed) || (speed!=0.25 && speed!=0.5 &&
