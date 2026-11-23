@@ -73,6 +73,10 @@ test('rgba color editing retains alpha, normalizes case and blocks injection',()
 test('gradient key edit/add/delete and CSS preview',()=>{
   const g=graph();
   assert.match(gradientCss(readGradient(g.nodes[1])),/^linear-gradient\(90deg,/);
+  assert.equal(gradientCss([{t:0.5,color:'#112233ff'}]),
+    'linear-gradient(90deg,#112233ff 0%,#112233ff 100%)');
+  assert.equal(gradientCss([]),
+    'linear-gradient(90deg,#ffffffff 0%,#ffffffff 100%)');
   const edit=editGradientKey(g,'gradient',1,{t:1,color:'#00ff00'});
   assert.equal(edit.error,'');
   assert.equal(edit.graph.nodes[1].properties.value[1][1],'#00ff00ff');
