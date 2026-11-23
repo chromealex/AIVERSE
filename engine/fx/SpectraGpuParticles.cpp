@@ -1063,6 +1063,53 @@ bool ComputeParticles::exportFreshCheckpoint(
     return true;
 }
 
+bool ComputeParticles::restoreFreshGpuCheckpoint() {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!device_||
+       !device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !lastCheckpoint_.hostStateComplete)return false;
+    const auto snapshot=lastCheckpoint_;
+    const size_t n=ages_.size();
+    if(snapshot.sourceTokens.size()!=n||snapshot.freeSlotOrder.size()>n)return false;
+    std::vector<bool> free(n,false);
+    for(uint32_t slot:snapshot.freeSlotOrder){
+        if(slot>=n||free[slot])return false;
+        free[slot]=true;
+    }
+    std::vector<ParticleState> states(n);
+    std::vector<ProgramParams> params(n);
+    std::vector<ProgramAttributes> attrs(n);
+    for(size_t i=0;i<n;++i){
+        const auto& p=snapshot.slots[i];
+        const float remaining=snapshot.remainingLifetime[i];
+        if(!finite(remaining)||free[i]!=(remaining<=0.f))return false;
+        if(!finite(p.positionAge)||!finite(p.velocityLife)||!finite(p.tint)||!finite(p.size))return false;
+        for(float v:p.programParams)if(!finite(v))return false;
+        for(float v:p.attributes)if(!finite(v))return false;
+        states[i].positionAge=p.positionAge;states[i].velocityLife=p.velocityLife;
+        states[i].tint=p.tint;states[i].size=p.size;
+        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
+        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+    }
+    for(float v:snapshot.birthParameters)if(!finite(v))return false;
+    gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+    lastCheckpoint_={};checkpointRevision_=0;++vmFrameRevision_;
+    if(!device_->updateStorageBufferChecked(states_,states.data(),n*sizeof(ParticleState))||
+       !device_->updateStorageBufferChecked(stateProgramParams_,params.data(),n*sizeof(ProgramParams))||
+       !device_->updateStorageBufferChecked(stateAttributes_,attrs.data(),n*sizeof(ProgramAttributes))){
+        reason_="Checkpoint restore upload failed; checked reset required";
+        return false;
+    }
+    ages_=snapshot.remainingLifetime;freeSlots_=snapshot.freeSlotOrder;
+    slotSourceTokens_=snapshot.sourceTokens;programParams_=snapshot.birthParameters;
+    programStateCache_=std::move(params);programParamsDirty_=false;
+    shaderBirthSeed_=snapshot.shaderBirthSeed;shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;
+    shaderBirthSeedEnabled_=snapshot.shaderBirthSeedEnabled;
+    aliveSlots_.clear();stats_.alive=uint32_t(n-freeSlots_.size());
+    gpuResetDirty_=false;gpuStagingDirty_=false;reason_.clear();
+    return true;
+}
+
 bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
     out={};
     if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
