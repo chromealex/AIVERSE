@@ -96,7 +96,8 @@ inline float read(Field f,const Context& c) {
     case Field::Dt:return c.dt;
     case Field::Uid:return c.uid;
     case Field::BirthRandom:{
-        uint32_t x=uint32_t(std::max(0.f,c.uid))^0x85ebca6bu;
+        const double uid=std::isfinite(c.uid)?std::clamp(double(c.uid),0.0,4294967295.0):0.0;
+        uint32_t x=uint32_t(uid)^0x85ebca6bu;
         x^=x>>16u;x*=0x7feb352du;x^=x>>15u;x*=0x846ca68bu;x^=x>>16u;
         return float(x>>8u)*(1.f/16777216.f);
     }
