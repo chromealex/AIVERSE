@@ -33,7 +33,7 @@ struct CaveGameplayEditStats {
 struct CaveGameplayCommitView {
     const std::vector<CavePreparedEdit>& meshes;
     const std::vector<CaveShardSnapshot>& visualShards;
-    const std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess>& physics;
+    std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess>& physics;
     CaveAuthoredNavStage& navigation;
     const CaveVolumeSnapshot& snapshot;
     uint64_t visualRevision;
