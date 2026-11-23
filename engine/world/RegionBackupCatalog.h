@@ -5,7 +5,7 @@
 namespace aiverse::world {
 struct RegionBackupEntry {
     uint64_t generation=0;
-    bool active=false;
+    bool active=false, validated=false, metadataValid=false;
     RegionCheckpointLoadResult recovery;
 };
 struct RegionBackupCatalogResult {
@@ -30,9 +30,11 @@ public:
             auto parsed=std::from_chars(digits.data(),digits.data()+digits.size(),gen);
             if(parsed.ec!=std::errc{}||parsed.ptr!=digits.data()+digits.size()||!gen||std::to_string(gen)!=digits)continue;
             RegionBackupEntry entry;entry.generation=gen;entry.active=gen==active.generation;
+            entry.validated=validate;
             if(validate){
                 RegionEntityLedger staged;
                 entry.recovery=RegionCheckpointBackup::recover(dir,gen,active.identity.world,maxBytes,staged);
+                entry.metadataValid=entry.recovery.manifest.valid()&&entry.recovery.manifest.identity.world==active.identity.world;
             }else{
                 std::ifstream in(it->path(),std::ios::binary);
                 std::vector<uint8_t> bytes(RegionCheckpointManifestCodec::size);
@@ -42,6 +44,7 @@ public:
                     entry.recovery.status=RegionCheckpointLoadStatus::InvalidManifest;
                 else if(m.identity.world!=active.identity.world)
                     entry.recovery.status=RegionCheckpointLoadStatus::WrongWorld;
+                else entry.metadataValid=true;
             }
             result.entries.push_back(std::move(entry));
         }
