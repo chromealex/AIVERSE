@@ -47,7 +47,7 @@ public:
         }else if(ec)return R::IoError;
         // Exclusive creation: never overwrite an old or orphan generation.
         if(!writeNew(dir/m.checkpointName(),checkpoint))return R::IoError;
-        if(!writeNew(dir/m.walName(),{}))return R::IoError;
+        if(!writeNew(dir/m.walName(),manifest))return R::IoError;
         if(!sync(directory.n))return R::IoError;
         const auto temp=dir/("manifest-"+std::to_string(m.generation)+".tmp");
         if(!writeNew(temp,manifest))return R::IoError;
@@ -75,7 +75,7 @@ public:
                old.identity.world!=m.identity.world||old.generation>=m.generation||
                old.identity.sequence>m.identity.sequence||old.identity.revision>m.identity.revision)return R::Invalid;
         }else if(ec)return R::IoError;
-        if(!writeNew(dir/m.checkpointName(),checkpoint)||!writeNew(dir/m.walName(),{}))return R::IoError;
+        if(!writeNew(dir/m.checkpointName(),checkpoint)||!writeNew(dir/m.walName(),manifest))return R::IoError;
         const auto temp=dir/("manifest-"+std::to_string(m.generation)+".tmp");
         if(!writeNew(temp,manifest))return R::IoError;
         if(!::MoveFileExW(temp.c_str(),current.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
