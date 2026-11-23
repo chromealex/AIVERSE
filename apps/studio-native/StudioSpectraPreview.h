@@ -27,6 +27,13 @@ public:
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
         if(action=="status")return status();
+        if(action=="checkpointCancel"){
+            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;
+            error_.clear();return status();
+        }
+        if((checkpointRequest_||rollbackId_)&&action!="stop")
+            return errorStatus("Checkpoint operation pending; cancel or wait");
+
         if(action=="playback") {
             // Preview-only playback settings: no graph file or gameplay
             // simulation writes. Apply even before the first graph is loaded.
@@ -101,7 +108,7 @@ public:
                pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
                targetTicks_!=timeTicks_||!requestedParameters_.empty()||checkpointRequest_||rollbackId_)
                 return errorStatus("Checkpoint operation requires settled paused Metal preview");
-            if(action=="checkpointSave")checkpointRequest_=true;
+            if(action=="checkpointSave"){checkpointRequest_=true;checkpointWaitFrames_=0;}
             else {
                 const auto id=input["checkpointId"].integer(-1);
                 if(id<=0||!checkpointTicks_.count(uint64_t(id)))return errorStatus("Unknown checkpoint ID");
@@ -272,6 +279,7 @@ public:
             phase_=0;error_.clear();
         }
         if(checkpointRequest_){
+            if(++checkpointWaitFrames_>240){checkpointRequest_=false;error_="GPU checkpoint wait budget exceeded";return;}
             const auto state=runtime_.checkpointStatus();
             if(state.pending)return;
             if(state.restoreEligible&&runtime_.retainFreshGpuCheckpoint()){
@@ -281,7 +289,9 @@ public:
                     if(std::find(ids.begin(),ids.end(),it->first)==ids.end())it=checkpointTicks_.erase(it);else ++it;
                 }
                 checkpointRequest_=false;error_.clear();
-            }else if(!runtime_.requestGpuCheckpoint()){checkpointRequest_=false;error_="GPU checkpoint request rejected";}
+            }else if(!runtime_.requestGpuCheckpoint()){
+                if(checkpointWaitFrames_>=240){checkpointRequest_=false;error_="GPU checkpoint request rejected after retry budget";}
+            }
             return;
         }
         if(pendingClear_) {
@@ -424,6 +434,7 @@ public:
         Json checkpoints=Json::array();
         for(const auto& [id,clock]:checkpointTicks_){Json item=Json::object();item.set("id",Json::number(int64_t(id)));item.set("tick",Json::number(int64_t(clock.first)));checkpoints.push(std::move(item));}
         result.set("checkpoints",std::move(checkpoints));
+        result.set("checkpointWaitFrames",Json::number(int64_t(checkpointWaitFrames_)));
         result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
@@ -463,6 +474,7 @@ private:
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
     bool checkpointRequest_=false;
+    uint32_t checkpointWaitFrames_=0;
     uint64_t rollbackId_=0;
     uint64_t generation_=1;
     std::string backend_,error_;
