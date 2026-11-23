@@ -3,6 +3,7 @@
 // into ViewObjects; the scene doesn't know what genre produced those objects.
 #pragma once
 #include "engine/animation/MotionWeaveSourceBridge.h"
+#include "engine/animation/MotionWeaveTelemetry.h"
 #include "engine/animation/AnimationBudgetPolicy.h"
 #include "engine/animation/MotionWeave.h"
 #include "engine/render/Renderer3D.h"
@@ -691,6 +692,17 @@ public:
         return scheduler_ && scheduler_==other.scheduler_;
     }
     Entity presentationEntity(uint64_t id) const {return bridge_.find(id);}
+    // Host calls this on the published View, not on a preparation candidate.
+    // The epoch is host-owned and must change on world replacement.
+    std::optional<motionweave_telemetry::Sample> animationTelemetry(
+            uint64_t sourceId,uint64_t worldEpoch) const {
+        return motionweave_telemetry::read(presentation_,bridge_,sourceId,worldEpoch,frameStamp_);
+    }
+    bool captureAnimationTelemetry(uint64_t sourceId,uint64_t worldEpoch,
+            graph_telemetry::History& history) const {
+        auto sample=animationTelemetry(sourceId,worldEpoch);
+        return sample&&history.publish(sample->identity,sample->sequence,sample->value);
+    }
     // Detach selected presentation sources before their host-owned models
     // are evicted; other graph players keep their clocks and pose state.
     size_t forgetSources(std::span<const uint64_t> ids) {
