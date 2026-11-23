@@ -212,3 +212,63 @@ generation plus transition number.
 
 Source code only; these new stages have **not** been compiled or run under
 the user's deferred-testing instruction. Refer to handoffs stages 22–25.
+
+
+## Studio Scene gizmos and all-ten showcase generator (Stages 26–27)
+
+The **existing** Studio native Scene viewport now uses
+`apps/studio-native/StudioWorldProcessesGizmos.h` inside
+`StudioHost::rebuildOverlay()`. This is the same real
+`StudioScene::OverlayShape` renderer that already shows
+Lua extension gizmos and spline handles. It reads the actual
+MapDoc-authoring components and draws bounded, colored lines/points/rings:
+
+- MORPH cyan nodes, anchored rings, springs and impulse targets.
+- CROWD green agents, goals and preferred slots.
+- IMPRINT orange cell traces, diffusion links, trackers.
+- CIRCUIT yellow graph wires, switches and devices.
+- GRANULAR bounded sandy field rectangle and label.
+- EVOLVE region circle and pressure connections.
+- SOCIETY contacts, messages and NPC trigger targets.
+
+EVOLVE circle radii and GRANULAR grid cell sizes are **editor
+visual aids**, not automatically authoritative climate/terrain bounds.
+The optional `DocEntity.extra.worldProcessGizmo.radiusMetres`
+and `cellSizeMetres` metadata configure the drawing only.
+Full runtime simulation still uses existing native host data.
+
+### Generate a valid project copy
+
+Use an existing game with valid source maps, rules, non-collider
+entity types and assets. The Python generator **never overwrites
+your original project or an existing destination**:
+
+~~~sh
+python3 examples/world/world_processes_native/create_showcase.py \
+  --source-project /path/to/ExistingGame \
+  --source-map maps/duel.json \
+  --destination /path/to/AiverseWorldProcessesShowcase \
+  --carrier-type VALID_SPAWNABLE_NON_COLLIDER_TYPE \
+  --owner 0
+~~~
+
+The generator copies that game project, adds
+`maps/world_processes_showcase.json` with 10-mechanic
+components from the checked-in
+`examples/native/world_processes/authoring-examples.json`,
+and appends the new map to the copied `game.json`.
+It enables the `world_processes` native-module declaration in
+the copied rules; a native game host **must actually compile/link**
+the module from `examples/native/world_processes/`.
+`VALID_SPAWNABLE_NON_COLLIDER_TYPE` must be a **real** entity type
+already defined by that game's rules. A collider-only type has no live
+GameCore ECS Entity and will fail map hydration.
+
+Use Studio to open the generated project and choose the new map.
+The physical MORPH/GRANULAR scene host and native device/NPC owner callbacks
+are optional additional integrations; this script does not manufacture
+a production-ready PBR/Box3D game or invent missing native asset types.
+
+**Tests deliberately deferred.** No macOS/Vulkan Studio visual capture,
+Python generator execution, native CMake build or playable-game acceptance
+has yet verified this Stage26/27 source.
