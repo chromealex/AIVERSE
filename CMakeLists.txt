@@ -2916,6 +2916,13 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_library_building_style_tests PRIVATE AIVERSE::lib_building_style)
     add_test(NAME library_building_style COMMAND aiverse_library_building_style_tests ${PROJECT_SOURCE_DIR})
 endif()
+# Runtime generation uses the SAME header-only CPU library in packaged games.
+# This targeted test has no Studio, renderer, modelviewer or filesystem runtime dependency.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_building_runtime_tests tests/libraries/building_runtime_tests.cpp)
+    target_link_libraries(aiverse_library_building_runtime_tests PRIVATE AIVERSE::lib_building_style)
+    add_test(NAME library_building_runtime COMMAND aiverse_library_building_runtime_tests ${PROJECT_SOURCE_DIR})
+endif()
 if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     add_executable(aiverse_building_export tools/buildings/building_style_export.cpp)
     target_link_libraries(aiverse_building_export PRIVATE AIVERSE::lib_building_style)
