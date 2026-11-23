@@ -642,6 +642,12 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
                        throw JsonError(q+": form parameters outside supported bounds");
                     if((form.width*form.depth)>1.5f)
                        throw JsonError(q+": form footprint too large");
+                    // A repeated form must not escape the local placement budget.
+                    // Prevent a modest 'step' from accumulating an unbounded offset.
+                    const float lastX=form.x+form.stepX*float(form.repeat-1);
+                    const float lastZ=form.z+form.stepZ*float(form.repeat-1);
+                    if(!within(lastX,-0.75f,1.75f)||!within(lastZ,-0.75f,1.75f))
+                        throw JsonError(q+".step: repeated form escapes placement bounds");
                     k.forms.push_back(form);
                 }
             }
