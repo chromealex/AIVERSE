@@ -62,3 +62,25 @@ per-storey two-dimensional aperture layout, editable arbitrary room geometry
 and GPU node-based moving gates/panels. Preserve genre independence and
 separate handoff after each stage. Keep PR draft until verified and
 reconciled with main/parallel Studio work.
+
+## Post-stage hardening
+
+Commits after initial handoff:
+- abb3371f: 0.05m wall-centred window panes, instead of wall-thickness
+  glass volumes; collision is still attached to each pane.
+- bad25754: Studio native acceptance exports the 2-floor recipe to GLB
+  and validates the canonical sidecar (floors, room counts, upper-floor sill).
+- b8acccbb: standalone StructureGraph header no longer transitively imports
+  engine rendering/geometry/material helpers; mesh generator explicitly
+  includes its own engine-independent geometry header.
+- 1ec7e4c4: standalone pure C++ room/window/doorway/roof validation test.
+- ddb42546: CMake target library_building_structure_graph.
+- 31fbb984: focused workflow compiles and runs standalone test, and exports
+  two-floor workshop GLBs for both scifi and modern material styles.
+- 380b59a2: upper-window sill correctly measured from the top of finished
+  inter-floor slab, not the slab underside.
+- 1caa5c0a: regression for the precise upper-window sill elevation.
+
+At source head 1caa5c0a58093babd6c32b2f7b936c44fbc39988,
+the focused GitHub run 45239318312 was QUEUED, not PASS. No actual Mac
+screenshots, TS build or multistorey navigation test evidence yet.
