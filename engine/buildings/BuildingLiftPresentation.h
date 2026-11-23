@@ -113,8 +113,11 @@ inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
             frame.doorLeaves.clear();frame.platforms.clear();
             return frame;
         }
-        const float opening=(it->second.snapshot().currentFloor==door.key.floor||
-            it->second.snapshot().targetFloor==door.key.floor)?
+        // Departure animates only the CURRENT landing's doors. The
+        // destination landing must stay visually closed until arrival
+        // updates currentFloor, otherwise two landings open at once.
+        const float opening=
+            it->second.snapshot().currentFloor==door.key.floor?
             liftDoorVisualOpen(it->second.snapshot()):0.f;
         const float half=(door.x1-door.x0)*0.5f;
         const float mid=(door.x0+door.x1)*0.5f;
