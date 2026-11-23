@@ -48,7 +48,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
             return reject("particle VM needs explicit GPU program opt-in; CPU fallback");
         gpu_program::Payload payload;
         std::string why;
-        if(!gpu_program::prepareForMetal(e.particleProgram,payload,why)) {
+        if(!gpu_program::prepareForMetal(e.particleProgram,payload,why,options.gpuBirthRandom)) {
             result.reason=why.empty()?"GPU VM cannot execute this program":why;
             return result;
         }
