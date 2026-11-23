@@ -14,7 +14,9 @@
     "tests/extra-test-suites.txt",
     ".github/workflows/feature-gate.yml",
     "docs/agents/feature-contract.md",
-    "docs/devlog/systems.json"
+    "docs/devlog/systems.json",
+    "tools/agents/check_integrations.py",
+    "tools/mcp/audit_registry.py"
   ],
   "traits": {
     "editable": false,
@@ -113,5 +115,13 @@
       "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
       "evidence": []
     }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-new-feature"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
   }
 }
