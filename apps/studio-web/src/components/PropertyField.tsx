@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { StudioProperty } from '../types';
 import AssetReferencePicker from './AssetReferencePicker';
+import EntityReferencePicker from './EntityReferencePicker';
 import { isSameFieldValue, parseFieldDraft, scrubValue, validateBooleanChange } from '../propertyLogic';
 
 interface PropertyFieldProps {
