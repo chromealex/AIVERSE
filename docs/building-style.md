@@ -227,3 +227,41 @@ executables and GLB exporter directly with C++20 and `-Werror`, independently
 of the unrelated library-catalog gate. It generates four 28×15×24 m buildings,
 checks the GLB container and exact accessor bounds. Results must be read from
 GitHub Actions, not assumed from the existence of this workflow.
+
+
+## Constructive fit without deforming small details (stage 5)
+
+Explicit `StructureSize{width,height,depth}` is now solved by **regenerating
+the actual building** at bounded candidate body dimensions. The fitter compares
+the full rendered bounds (including roof, supports, domes and arches) to the
+requested final envelope and adjusts the underlying construction dimensions,
+rather than applying a nonuniform vertex transform. Once converged, it only
+applies a rigid translation so the model's minimum visible corner matches the
+requested origin. Normal vectors, UVs, wall trims, supports and roof props are
+never rescaled in this final placement operation.
+
+A finished `StyledStructure` reports `constructionSize`: the W/H/D of its
+raw hull before any rigid placement. `dressStructureGeometry` is a low-level
+geometry producer used by the fitter and regression tests; ordinary callers
+should use the unchanged `dressStructure` API. In particular, the
+original no-explicit-size path still runs exactly one generation and preserves
+the original authored look.
+
+The solver caps iteration attempts (32) and rejects an unreachable exact
+envelope rather than distorting meshes. Nominal gate dimensions are fixed
+against the style's authored structure dimensions rather than being derived
+from the current requested width; gate width must be at least 1.6 m and gate
+height at least 2.1 m when explicitly sized. Impossible requests currently
+return an empty structure (next: richer editor-facing error codes).
+
+**Boundary of this guarantee:** proportional architectural *massings* and forms
+still depend on candidate body dimensions; a taller requested building may
+intentionally result in larger tower modules. The claim is **no final mesh
+scaling**, not invariance of every generatively defined proportional feature.
+The sci-fi base hull is still not enterable.
+
+Focused verification: the \`Building Style Focused\` workflow compiles and runs
+the library tests, and checks the exported GLBs. A regression compares every
+vertex normal and UV of a sized structure to a fresh raw-generation instance,
+permitting positions to differ only by one translation. Only claim passing
+results when the workflow completes successfully on the current commit.

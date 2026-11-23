@@ -85,3 +85,14 @@ All forms are derived from the same dimensions and style data. Explicit
 not make the whole sci-fi hull enterable or preserve every small detail thickness.
 Use the `Building Style Focused` GitHub workflow for dedicated C++/GLB tests;
 its status must be inspected before claiming a test pass.
+
+
+Stage 5 constructive sizing: `dressStructure(..., StructureSize{W,H,D})` now
+iteratively rebuilds the structure at candidate body sizes; it never applies a
+nonuniform final scale to vertices. `StyledStructure::constructionSize` stores
+the chosen raw body dimensions. Regenerate with `dressStructureGeometry`
+(using that body size, the same style, kind, seed and yaw) to compare raw
+vertex normals/UVs. Existing unsized calls remain single-pass and compatible.
+Impossible envelopes fail instead of shrinking fixed-dimension gates below
+1.6 × 2.1 m. Solver is capped at 32 attempts; the editor should distinguish
+unsatisfied bounds from unknown function or malformed input in future stages.
