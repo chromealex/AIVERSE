@@ -632,3 +632,47 @@ accepted an invalidation, not that all graphics/navigation caches are
 already refreshed. User defers tests: no compile, native runtime,
 Metal/GL or multiplayer verification performed.
 Handoff: `docs/agent-handoffs/building-aperture-fixed-tick-stage23f-2026-11-23.md`.
+
+
+## Stage 23G — movable aperture CPU models and committed visual handoff
+
+`engine/buildings/BuildingAperturePresentation.h` is exported through
+`BuildingRuntime.h`. One `BuildingAperturePresentation` instance belongs
+to the existing Renderer3D presentation owner of each active building.
+Create it once with `initialize(apertures.poses(),style,&error)`.
+It creates one reusable CPU `render::Model` per independently
+controlled door, gate or sliding-roof socket and reuses the same half-
+panel geometry for both visual leaves. No static-mesh regeneration
+or per-frame GPU uploads are permitted. Existing renderer owner uploads
+`model(socketId)` once, leases the two instance transforms, and
+retires resources through its normal GPU fences at scene teardown.
+
+The existing network/ECS authority must first enqueue commands into
+`BuildingApertureFixedTickOwner` only after authenticated connection
+ownership is established. In the world-owner fixed update, call
+`advance(ecs,apertures,spatial,graphRouter,serverTick)` after actor
+movement, collision and obstruction sensors are current. Only if
+the resulting `BuildingApertureFixedTickFrame.complete` is true should
+the game transfer it to presentation using
+`presentation.accept(frame,&error)`. On the separate render-owner
+phase, `presentation.interpolate(renderDtMs,animationMs)` produces
+two world-space instance positions per socket and an informational
+visual fraction, which the existing Model/Renderer3D owner submits.
+Visual fraction NEVER controls collision, navigation permissions or
+network authority. No sprite, shader graph or second GPU cache is made.
+
+The model is deliberately a simple static cuboid leaf based on the
+authoritative closed world AABB, split along its widest horizontal
+axis. It is not a final hinge model or physically swept animation;
+door, roof and gate functionality is binary at the authoritative
+SpatialWorld boundary. The renderer must manage leases, model upload,
+render-node IDs and resource retirement. This stage does not yet
+insert the bridge into a specific example game application's scheduler,
+and it does not replace its transport protocol. For production-ready
+swept motion/interlocks, an actual PHYSIS moving-leaf owner and
+gameplay integration are still required.
+
+Tests stay deferred at user request. No Clang/CMake, actual renderer,
+in-game gameplay or GPU capture has been executed for this stage.
+Handoff:
+`docs/agent-handoffs/building-aperture-presentation-stage23g-2026-11-23.md`.
