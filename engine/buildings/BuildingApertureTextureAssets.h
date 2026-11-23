@@ -21,6 +21,15 @@ struct BuildingApertureTextureGuids {
     std::string emissive;
 };
 
+inline BuildingApertureTextureGuids buildingStyleTextureGuids(
+    const StyleMaterial& material){
+    return {material.textures.baseColor,
+            material.textures.metallicRoughness,
+            material.textures.normal,
+            material.textures.occlusion,
+            material.textures.emissive};
+}
+
 inline bool buildingTextureGuidValid(const std::string& id){
     if(id.empty())return true; // absent optional PBR channel
     if(id.size()!=32)return false;
