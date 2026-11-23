@@ -818,7 +818,7 @@ void StudioHost::rebuildOverlay() {
                     if(wpDrag_.component=="EvolveArea" &&
                        worldprocess_edit::previewArea(owner,
                            static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
-                           double(wpDrag_.value),false,areaPreview) &&
+                           double(wpDrag_.value),wpDrag_.symmetric,areaPreview) &&
                        shapes.size()+4<1398){
                         worldprocess_gizmos::rectangle(shapes,
                             {float(areaPreview.centerX),.38f,float(areaPreview.centerZ)},
@@ -859,7 +859,7 @@ void StudioHost::rebuildOverlay() {
 // Hit-testing and hover preview read ONLY the MapDoc. Commit is a single
 // validated StudioSession operation at mouse-up; never edit ECS/physics here.
 bool StudioHost::worldProcessDrag(int phase,double x,double y,
-                                  double w,double h){
+                                  double w,double h,bool symmetric){
     if(projectLoading_||!preview_||!session_||
        session_->workspace().project.dir.empty())return false;
     const auto& map=session_->workspace().map;
@@ -903,6 +903,7 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         return true;
     }
     if(!wpDrag_.active)return false;
+    wpDrag_.symmetric=symmetric;
     if(phase==1||phase==2){
         if(wpDrag_.mode==static_cast<std::uint8_t>(
                 worldprocess_edit::Handle::Mode::Reference)){
@@ -969,13 +970,25 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
     // Explicit edge operation: existing numeric extent RPC remains backward
     // compatible for inspectors and automation clients.
     const auto mode=static_cast<worldprocess_edit::Handle::Mode>(current.mode);
-    if(mode==worldprocess_edit::Handle::Mode::AreaWidth||
+    if(!current.symmetric && (mode==worldprocess_edit::Handle::Mode::AreaWidth||
        mode==worldprocess_edit::Handle::Mode::AreaDepth||
        mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
-       mode==worldprocess_edit::Handle::Mode::AreaDepthNegative){
+       mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)){
         params.set("edgeSide",Json::string(
             (mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
              mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)?"negative":"positive"));
+    }
+    if(current.symmetric && current.component=="EvolveArea" &&
+       (current.key=="halfWidthCm"||current.key=="halfDepthCm")){
+        const int index=map.findEntity(current.owner);
+        if(index<0)return true;
+        worldprocess_edit::AreaPreview areaPreview;
+        if(!worldprocess_edit::previewArea(
+               map.data.entities[std::size_t(index)],mode,
+               double(current.value),true,areaPreview))return true;
+        const double half=current.key=="halfWidthCm"?
+            areaPreview.halfWidth:areaPreview.halfDepth;
+        params.set("value",Json::number(int64_t(std::lround(half*100.))));
     }
     const char* method=current.mode==static_cast<std::uint8_t>(
         worldprocess_edit::Handle::Mode::Reference)?
@@ -1189,7 +1202,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
-        if(m.worldProcess){worldProcessDrag(1,x,y,w,h);return;}
+        if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
         if (m.move) { m.dragged = true; moveUpdate(x, y, w, h, mods.ctrl || mods.command); return; }
@@ -1209,7 +1222,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
-    if(st.worldProcess){worldProcessDrag(2,x,y,w,h);return;}
+    if(st.worldProcess){worldProcessDrag(2,x,y,w,h,mods.shift);return;}
     if (st.spline) { splineDrag(2, 0, 0, w, h); return; }
     if (st.stroke) { terrainStroke(2, 0, 0, w, h); return; }
     if (st.move) { moveEnd(); return; }
