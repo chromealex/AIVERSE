@@ -7,3 +7,8 @@
 .spectra-native__timeline span {color:var(--au-text-muted);font-size:var(--au-font-xs);}
 .spectra-native__params {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:var(--au-space-3);align-items:end;}
 .spectra-native__hint {color:var(--au-text-muted);font-size:var(--au-font-sm);line-height:var(--au-line-height);}
+
+.spectra-native__camera {display:flex;align-items:center;gap:var(--au-space-2);
+  flex-wrap:wrap;padding:var(--au-space-2) 0;}
+.spectra-native__camera span {font-size:var(--au-font-xs);color:var(--au-text-muted);
+  margin-right:auto;}
