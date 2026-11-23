@@ -1183,6 +1183,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         {"studio.nereidFlowSet","Edit water"},{"studio.keepPlayChanges","Keep play changes"},{"studio.entitiesAlign","Align"},{"studio.newMap","New map"}};
     for(const auto& [m,label]:names)if(method==m)return label;
     if(method=="studio.worldProcessAreaBatchMove")return "Move EVOLVE region group";
+    if(method=="studio.worldProcessAreaBatchResize")return "Resize EVOLVE region group";
     if(method=="studio.worldProcessAreaSet")
         return params.getStr("componentId")=="GranularField"?
             "Resize GRANULAR field":"Resize EVOLVE gameplay area";
