@@ -973,6 +973,18 @@ void StudioHost::importDroppedFiles(const std::vector<fs::path>& files, const st
 // Unity Scene view mapping, shared with the HTML composite path (apps/studio-web/src/panels/sceneCamera.ts):
 // LMB select (drag: marquee), Alt+LMB orbit, Alt+Command+LMB / MMB pan, RMB flythrough (WASD/QE), Alt+RMB zoom.
 void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx, double dy, double w, double h, StudioSceneMods mods) {
+    // Embedded VFX preview is *not* the game map. Its pointer input controls
+    // its isolated camera only; never pick, sculpt, paint, select, drag or
+    // delete an authored entity while this native layer belongs to FX.
+    if(spectraDockActive_) {
+        (void)x;(void)y;(void)w;(void)h;
+        if(phase==1) {
+            if(button==2)pan(dx,dy);
+            else if(button==1) {if(mods.alt)zoom((dx+dy)*.6);else look(dx,dy);}
+            else if(button==0) {if(mods.command)pan(dx,dy);else orbit(dx,dy);}
+        }
+        return;
+    }
     auto& m = mouse_;
     if (button == 1) { // right: look, Alt zooms
         if (phase == 1) { if (mods.alt) zoom((dx + dy) * 0.6); else look(dx, dy); }
@@ -1028,6 +1040,20 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
 void StudioHost::sceneWheel(double amount) { zoom(amount); }
 bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, bool rightHeld) {
     using K = StudioSceneKey;
+    if(spectraDockActive_) {
+        // In VFX preview never run map entity or brush keyboard shortcuts.
+        (void)mods;(void)rightHeld;
+        if(!down)return true;
+        if(key==K::Home) {
+            if(preview_)onScene([&]{preview_->resetSpectraDockCamera();});
+            return true;
+        }
+        if(key==K::Left)moveCamera(-1,0,0);
+        else if(key==K::Right)moveCamera(1,0,0);
+        else if(key==K::Up)moveCamera(0,0,1);
+        else if(key==K::Down)moveCamera(0,0,-1);
+        return true;
+    }
     if (!down) {
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
