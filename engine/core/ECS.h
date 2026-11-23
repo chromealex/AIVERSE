@@ -15,6 +15,9 @@
 #include <memory>
 #include <cassert>
 #include <tuple>
+#include <map>
+#include <set>
+#include <stdexcept>
 #include <type_traits>
 
 namespace aiverse {
@@ -315,8 +318,25 @@ public:
                 resourceOps_[i]=op;
             }
         }
+        trackedChanges_=o.trackedChanges_;
         cowSnapshots_=o.cowSnapshots_;
         gens_=o.gens_;alive_=o.alive_;free_=o.free_;pendingDestroy_=o.pendingDestroy_;
+    }
+
+    // Opt-in conservative tracking of mutable World API access. Direct pool
+    // and parallel writers require explicit notification at their barrier.
+    template<class T> void trackComponentChanges() {
+        trackedChanges_.try_emplace(detail::componentTypeId<T>());
+    }
+    template<class T> void notifyComponentChange(Entity e) {
+        recordComponentChange(detail::componentTypeId<T>(),e);
+    }
+    template<class T> std::set<uint64_t> takeComponentChanges() {
+        auto it=trackedChanges_.find(detail::componentTypeId<T>());
+        if(it==trackedChanges_.end())return {};
+        std::set<uint64_t> result;
+        result.swap(it->second);
+        return result;
     }
 
     Entity create() {
@@ -334,6 +354,10 @@ public:
 
     void destroy(Entity e) {
         if (!alive(e)) return;
+        for(const auto& [id,changes]:trackedChanges_) {
+            if(id<pools_.size() && pools_[id] && pools_[id]->has(e.index))
+                recordComponentChange(id,e);
+        }
         for (auto& p : pools_) if (p && p->has(e.index)) {
             // Unrelated pools remain shared; only pools containing this Entity
             // need a structural detach before swap-remove.
@@ -352,9 +376,10 @@ public:
 
     template <class T, class... Args> T& add(Entity e, Args&&... args) {
         assert(alive(e));
+        notifyComponentChange<T>(e);
         return pool<T>().emplace(e, std::forward<Args>(args)...);
     }
-    template <class T> void remove(Entity e) { if (alive(e)) pool<T>().remove(e.index); }
+    template <class T> void remove(Entity e) { if (has<T>(e)) { notifyComponentChange<T>(e); pool<T>().remove(e.index); } }
     template <class T> bool has(Entity e) const {
         auto* p = poolIfExists<T>();
         return alive(e) && p && p->has(e.index);
@@ -362,6 +387,7 @@ public:
     template <class T> T* tryGet(Entity e) {
         if (!alive(e)) return nullptr;
         auto* p = poolIfExists<T>();
+        if(p && p->has(e.index))notifyComponentChange<T>(e);
         return p ? p->tryGet(e.index) : nullptr;
     }
     // Never detaches a shared pool. Safe for declared read-only jobs if no
@@ -371,7 +397,7 @@ public:
         const auto* p=poolIfExists<T>();
         return p?p->tryGet(e.index):nullptr;
     }
-    template <class T> T& get(Entity e) { assert(alive(e)); return pool<T>().get(e.index); }
+    template <class T> T& get(Entity e) { assert(alive(e)); notifyComponentChange<T>(e); return pool<T>().get(e.index); }
 
     // Iterate entities having all components. fn(Entity, A&, B&, ...)
     template <class First, class... Rest, class Fn>
@@ -381,10 +407,14 @@ public:
         for (size_t i = 0; i < n && i < first.size(); ++i) {
             Entity e = first.entityAt(i);
             if constexpr (sizeof...(Rest) == 0) {
+                notifyComponentChange<First>(e);
                 fn(e, first.dataAt(i));
             } else {
-                if ((pool<Rest>().has(e.index) && ...))
+                if ((pool<Rest>().has(e.index) && ...)) {
+                    notifyComponentChange<First>(e);
+                    (notifyComponentChange<Rest>(e), ...);
                     fn(e, first.dataAt(i), pool<Rest>().get(e.index)...);
+                }
             }
         }
     }
@@ -396,8 +426,10 @@ public:
         auto* p = poolIfExists<T>();
         if (!p) return;
         const size_t n = p->size();
-        for (size_t i = 0; i < n && i < p->size(); ++i)
+        for (size_t i = 0; i < n && i < p->size(); ++i) {
+            notifyComponentChange<T>(p->entityAt(i));
             fn(p->entityAt(i), p->dataAt(i));
+        }
     }
 
     // Stable range iteration for already-registered component pools. No pool
@@ -541,6 +573,7 @@ public:
     void restoreEntityState(EntityState s) { gens_ = std::move(s.gens); alive_ = std::move(s.alive); free_ = std::move(s.free); pendingDestroy_ = std::move(s.pendingDestroy); }
 
     void clear() {
+        trackedChanges_.clear();
         pools_.clear(); resources_.clear(); resourceOps_.clear(); gens_.clear(); alive_.clear(); free_.clear(); pendingDestroy_.clear();
     }
 
@@ -557,6 +590,12 @@ private:
         return static_cast<Pool<T>*>(pools_[id].get());
     }
 
+    void recordComponentChange(uint32_t id,Entity e) {
+        if(trackedChanges_.empty() || !e.valid())return;
+        auto it=trackedChanges_.find(id);
+        if(it!=trackedChanges_.end())it->second.insert(e.packed());
+    }
+    std::map<uint32_t,std::set<uint64_t>> trackedChanges_;
     std::vector<std::shared_ptr<IPool>> pools_;
     bool cowSnapshots_=false;
     std::vector<std::shared_ptr<void>> resources_;
