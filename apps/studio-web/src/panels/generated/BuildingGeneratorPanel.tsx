@@ -12,6 +12,7 @@ import {
   StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect
 } from '../../ui';
 import BuildingMaterialEditor from './BuildingMaterialEditor';
+import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
 type Candidate = { seed:number; data?:StudioBuildingPreview; error?:string };
@@ -36,6 +37,8 @@ export default function BuildingGeneratorPanel({
 }: { snapshot:StudioSnapshot|null; showPanel:(p:PanelId)=>void; commitSnapshot:(s:StudioSnapshot)=>void }) {
   const projectLoaded=Boolean(snapshot?.project.path);
   const [styles,setStyles]=useState<StudioBuildingStyle[]>([]);
+  const [materialLibrary,setMaterialLibrary]=useState<MaterialLibrary>({library:{}});
+  const [materialBindings,setMaterialBindings]=useState<Record<string,string>>({});
   const [setting,setSetting]=useState('scifi');
   const [style,setStyle]=useState('scifi');
   const [role,setRole]=useState('factory');
@@ -63,6 +66,15 @@ export default function BuildingGeneratorPanel({
   const [status,setStatus]=useState('');
 
   useEffect(() => {
+    if(!projectLoaded){setMaterialLibrary({library:{}});return;}
+    let active=true;
+    void invoke('studio.materials',{}).then(lib=>{
+      if(active)setMaterialLibrary(lib);
+    }).catch(e=>{if(active)setError(explain(e));});
+    return ()=>{active=false;};
+  },[projectLoaded,snapshot?.project.path]);
+
+  useEffect(() => {
     let active=true;
     setSaved(null);setVariants([]);setThumbnail('');setError('');
     if(!projectLoaded)return () => {active=false;};
@@ -74,6 +86,7 @@ export default function BuildingGeneratorPanel({
         ?? value.styles.find(s=>s.functions.length>0) ?? value.styles[0];
       if(first){
         setSetting(first.setting);setStyle(first.id);setRole(first.functions[0]?.id ?? '');
+        setMaterialBindings({});
       }
     }).catch(e=>{if(active)setError(explain(e));})
       .finally(()=>{if(active)setLoading(false);});
@@ -186,6 +199,7 @@ export default function BuildingGeneratorPanel({
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,
     features:mode==='features'?features:undefined,
+    materialBindings:Object.keys(materialBindings).length?materialBindings:undefined,
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
     floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ)
   });
@@ -193,11 +207,12 @@ export default function BuildingGeneratorPanel({
   const changeSetting=(value:string)=>{
     const first=styles.find(item=>item.setting===value);
     setSetting(value);setStyle(first?.id??'');setRole(first?.functions[0]?.id??'');
+    setMaterialBindings({});
     clearGenerated();
   };
   const changeStyle=(value:string)=>{
     const item=styles.find(x=>x.id===value);
-    setStyle(value);setRole(item?.functions[0]?.id??'');clearGenerated();
+    setStyle(value);setRole(item?.functions[0]?.id??'');setMaterialBindings({});clearGenerated();
   };
   const changeRole=(value:string)=>{setRole(value);clearGenerated();};
   const changeMode=(value:'features'|'preset')=>{setMode(value);clearGenerated();};
@@ -324,6 +339,31 @@ export default function BuildingGeneratorPanel({
               {functions.map(item=><option value={item.id} key={item.id}>{item.name||item.id}</option>)}
             </StudioSelect>
           </StudioField>}
+        </div>
+      </StudioSection>
+      <StudioSection title="Architectural material bindings">
+        <p className="abg__note">Assign a project material to a named style slot. Generation applies its PBR factors and embeds its Assets PNG/JPEG textures into the exported GLB. Empty means use the original style material.</p>
+        <div className="abg__fields">
+          {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
+            label={slot} htmlFor={'abg-material-binding-'+slot}>
+            <StudioSelect id={'abg-material-binding-'+slot}
+              disabled={busy||!projectLoaded}
+              value={materialBindings[slot]??''}
+              onChange={e=>{
+                const value=e.target.value;
+                setMaterialBindings(old=>{
+                  const next={...old};
+                  if(value)next[slot]=value;
+                  else delete next[slot];
+                  return next;
+                });
+                clearGenerated();
+              }}>
+              <option value="">Use style material</option>
+              {Object.keys(materialLibrary.library).sort().map(material=>
+                <option value={material} key={material}>{material}</option>)}
+            </StudioSelect>
+          </StudioField>)}
         </div>
       </StudioSection>
       <StudioSection title="PBR materials & textures">
@@ -467,7 +507,7 @@ export default function BuildingGeneratorPanel({
                 :<small>{candidate.error??'Unavailable'}</small>}
             </button>)}
         </div>}
-        <small className="abg__note">Variant evaluation uses the real CPU geometry generator. Interactive 3D preview is a separate native viewport feature; these cards do not represent GPU screenshots.</small>
+        <small className="abg__note">Variant evaluation measures CPU geometry; project material bindings are applied when generating the GLB. Interactive 3D preview is a separate native viewport feature; these cards do not represent GPU screenshots.</small>
       </StudioSection>
       {saved&&<StudioSection title="Generated asset">
         <div className="abg__saved">
