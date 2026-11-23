@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
 from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry
 from new_feature import scaffold
+from legacy_inventory import inventory
 
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
 gate = importlib.util.module_from_spec(spec)
@@ -82,6 +83,25 @@ class GateTest(unittest.TestCase):
                 scaffold(root, "sample", "test", ["engine/a.cpp"], traits)
             with self.assertRaises(ValueError):
                 scaffold(root, "../outside", "test", ["engine/a.cpp"], traits)
+
+    def test_legacy_inventory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            sources = {
+                "docs/devlog/systems.json": {"systems": [{"id": "world", "name": "World", "doc": "docs/world.md"}]},
+                "libraries/catalog.json": {"packages": [{"id": "world", "skill": "skills/world/world/SKILL.md"}]},
+                "skills/catalog.json": {"skills": [{"id": "world", "path": "skills/world/world/SKILL.md"}]},
+                "docs/agents/legacy-integration-map.json": {"systems": {"world": {"skills": ["world"], "mcp": ["world_get"]}}}
+            }
+            for name, data in sources.items():
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(data))
+            result = inventory(root)
+            self.assertEqual(result["counts"], {"systems": 1, "libraries": 1, "skills": 1})
+            self.assertFalse(result["errors"])
+            self.assertTrue(all(row["verification"] == "not_run" for row in result["entries"]))
+            self.assertEqual(result["entries"][0]["mcp_candidates"], ["world_get"])
 
     def test_bad_shape(self):
         self.assertTrue(gate.validate([]))
