@@ -325,6 +325,7 @@ void ComputeParticles::releaseGpu() {
     drawCount_=0;
 }
 void ComputeParticles::shutdown() {
+    shaderBirthSeed_=0;shaderBirthOrdinal_=0;shaderBirthSeedEnabled_=false;
     cpu_.shutdown();cpuEffect_=-1;releaseGpu();device_=nullptr;
     initialized_=false;viewReady_=false;verticesReady_=false;
     drawCount_=0;
