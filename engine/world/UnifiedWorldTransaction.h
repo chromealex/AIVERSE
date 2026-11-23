@@ -17,10 +17,16 @@ public:
     }
     static bool encode(const RegionEntityLedger::Transaction& tx,const std::vector<Record>& records,
         const std::vector<DurableResourceTransaction::Record>& resources,uint64_t sequence,RegionWalFrame& out){
-        if(!sequence||!tx.capturing()||(tx.mutations().empty()&&records.empty()&&resources.empty()))return false;
+        if(!tx.capturing())return false;
+        return encodeCaptured(tx.initialRevision(),tx.view().lastRevision(),tx.mutations(),records,resources,sequence,out);
+    }
+    static bool encodeCaptured(uint64_t baseRevision,uint64_t finalRevision,
+        std::span<const RegionEntityLedger::Mutation> mutations,const std::vector<Record>& records,
+        const std::vector<DurableResourceTransaction::Record>& resources,uint64_t sequence,RegionWalFrame& out){
+        if(!sequence||(mutations.empty()&&records.empty()&&resources.empty()))return false;
         RegionWalFrame ledger;
-        if(!tx.mutations().empty()&&!RegionWalTransaction::encode(tx,sequence,ledger))return false;
-        if(tx.mutations().empty()&&tx.initialRevision()!=tx.view().lastRevision())return false;
+        if(!mutations.empty()&&!RegionWalTransaction::encodeCaptured(baseRevision,finalRevision,mutations,sequence,ledger))return false;
+        if(mutations.empty()&&baseRevision!=finalRevision)return false;
         std::vector<uint8_t> components,resourceBytes;
         if(!DurableComponentTransaction::encode(records,components))return false;
         const bool v2=!resources.empty();
@@ -31,7 +37,7 @@ public:
            resourceBytes.size()>RegionWalCodec::maxPayload-header-ledger.payload.size()-components.size())return false;
         RegionWalFrame frame;frame.sequence=sequence;
         auto& b=frame.payload;
-        put(b,0x31545755,4);put(b,v2?2:1,4);put(b,tx.initialRevision(),8);
+        put(b,0x31545755,4);put(b,v2?2:1,4);put(b,baseRevision,8);
         put(b,ledger.payload.size(),4);put(b,components.size(),4);
         if(v2)put(b,resourceBytes.size(),4);
         b.insert(b.end(),ledger.payload.begin(),ledger.payload.end());
