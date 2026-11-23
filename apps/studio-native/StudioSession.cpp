@@ -91,6 +91,13 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
 }
 StudioSession::StudioSession(const std::string& engineRoot, const std::string& project) {
     ws_.engineDir = engineRoot;
+    ws_.setSpectraAssetCheckHandler([this](const Json& params){
+        Json request=Json::object();request.set("method",str("studio.spectraAssetCheck"));
+        request.set("params",params);request.set("id",num(0));
+        const Json response=dispatchImpl(request);
+        if(response.has("error"))throw std::runtime_error(response.getStr("error"));
+        return response["result"];
+    });
     if (!project.empty()) {
         const auto directory=recoveredProjectDir(ws_,project);
         std::string error;
