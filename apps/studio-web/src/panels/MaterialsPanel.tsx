@@ -46,7 +46,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
    if(canceled)return;
    setLibrary(data);
    const all=materialNames(data);
-   setName(previous=>all.includes(previous)?previous:(all[0]??''));
+   setName(previous=>previous||(all[0]??''));
   }).catch(e=>{
    if(!canceled)setError(e instanceof Error?e.message:String(e));
   }).finally(()=>{if(!canceled)setLoading(false)});
@@ -75,7 +75,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   finally{setBusy(false);}
  };
  const apply=async()=>{
-  if(!name||changes===0||busy||!connected)return;
+  if(!name||!names.includes(name)||changes===0||busy||!connected)return;
   setBusy(true);setError('');setMessage('');
   try {
    const response=await invoke('studio.materialPatch',{name,patch:editablePatch(draft)});
@@ -138,7 +138,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
     }
    </aside>
    <div className="materials-detail">
-    {!name?<div className="materials-empty">Select a material from the library.</div>:
+    {!name||!names.includes(name)?<div className="materials-empty">{name?'Selected material is no longer present. Discard the draft and choose another material.':'Select a material from the library.'}</div>:
      <><div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
       <strong>{name}</strong><small>Library PBR factors</small>
@@ -157,7 +157,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
      onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Exit PBR preview':'Preview in Scene'}</button>
    {pending!==null&&<button className="materials-discard" onClick={discard}>Discard &amp; switch</button>}
    <button className="materials-discard" onClick={discard} disabled={changes===0}>Discard</button>
-   <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath}
+   <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}
     onClick={()=>void apply()}><Save size={14}/> Apply &amp; save</button>
   </footer>
  </section>;
