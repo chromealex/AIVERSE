@@ -210,6 +210,7 @@ public:
         const auto& c=index_->snapshot().settings;
         // Follow the authored cave vertical range, not a fixed Y=-10 m
         // assumption that would make deeper generated caves invisible.
+        if(c.maxYcm-c.minYcm<=2)return c.minYcm;
         return std::clamp<int64_t>(c.maxYcm-800,
                                    c.minYcm+1,c.maxYcm-1);
     }
