@@ -319,6 +319,38 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     }catch(e){setError(message(e));}
     finally{setBusy(false);}
   };
+  const exportCheckpointFile=async()=>{
+    setBusy(true);setError('');
+    try{
+      const first=await invoke('studio.spectraPreview',{action:'checkpointFileExport'});
+      if(first.error||!first.fileSize||first.fileSize>1048600)throw new Error(first.error||'Invalid checkpoint size');
+      const bytes=new Uint8Array(first.fileSize);
+      for(let offset=0;offset<bytes.length;offset+=32768){
+        const next=await invoke('studio.spectraPreview',{action:'checkpointFileRead',offset});
+        const hex=next.fileChunk??'';
+        if(next.error||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
+        for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
+      }
+      const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
+      const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();URL.revokeObjectURL(url);
+    }catch(e){setError(message(e));}finally{setBusy(false);}
+  };
+  const importCheckpointFile=async(file:File)=>{
+    setBusy(true);setError('');
+    try{
+      if(!file.size||file.size>1048600)throw new Error('Checkpoint exceeds size limit');
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      const begin=await invoke('studio.spectraPreview',{action:'checkpointFileBegin'});
+      if(begin.error)throw new Error(begin.error);
+      for(let offset=0;offset<bytes.length;offset+=32768){
+        const chunk=Array.from(bytes.subarray(offset,offset+32768),b=>b.toString(16).padStart(2,'0')).join('');
+        const next=await invoke('studio.spectraPreview',{action:'checkpointFileAppend',offset,chunk});
+        if(next.error)throw new Error(next.error);
+      }
+      const result=await invoke('studio.spectraPreview',{action:'checkpointFileImport'});
+      setState(result);if(result.error)throw new Error(result.error);
+    }catch(e){setError(message(e));}finally{setBusy(false);}
+  };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.
     await command('load',{graph,gpuBirthRandom});
@@ -472,6 +504,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointSave'}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
       {state?.checkpointPending&&<><small>Checkpoint pending ({state.checkpointWaitFrames??0}/240 frames)</small><StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointCancel'}).then(setState).catch(e=>setError(message(e)))}>Cancel checkpoint</StudioButton></>}
       {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointRestore',checkpointId:cp.id}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
+      <StudioButton size="sm" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onClick={()=>void exportCheckpointFile()}>Export checkpoint file</StudioButton>
+      <label>Import checkpoint <input type="file" accept=".spft" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onChange={e=>{const file=e.target.files?.[0];if(file)void importCheckpointFile(file);e.target.value='';}}/></label>
       <StudioField label="Metal shader seed (optional)" htmlFor="spectra-shader-seed">
         <StudioInput id="spectra-shader-seed" type="number" min={0} max={4294967295} step={1} value={gpuShaderSeed} onChange={e=>setGpuShaderSeed(e.target.value)}/>
       </StudioField>
