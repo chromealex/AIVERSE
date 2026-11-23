@@ -16,6 +16,7 @@
 #include <cassert>
 #include <tuple>
 #include <map>
+#include <mutex>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
@@ -344,8 +345,13 @@ public:
             entities.insert(e.packed());
         }
     };
+    // Merge at a worker barrier; registry configuration/drain must be quiescent.
     template<class T> void mergeComponentChanges(const ComponentChangeBatch& batch) {
-        auto it=trackedChanges_.find(detail::componentTypeId<T>());
+        mergeComponentChangesById(detail::componentTypeId<T>(),batch);
+    }
+    void mergeComponentChangesById(uint32_t id,const ComponentChangeBatch& batch) {
+        std::lock_guard lock(changeJournalMutex_);
+        auto it=trackedChanges_.find(id);
         if(it==trackedChanges_.end())return;
         if(batch.overflow) {it->second.overflow=true;it->second.entities.clear();return;}
         for(auto id:batch.entities)it->second.record(Entity::fromPacked(id));
@@ -616,8 +622,10 @@ private:
         return static_cast<Pool<T>*>(pools_[id].get());
     }
 
+    static inline std::mutex changeJournalMutex_;
     void recordComponentChange(uint32_t id,Entity e) {
         if(trackedChanges_.empty() || !e.valid())return;
+        std::lock_guard lock(changeJournalMutex_);
         auto it=trackedChanges_.find(id);
         if(it!=trackedChanges_.end())it->second.record(e);
     }
