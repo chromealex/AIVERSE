@@ -97,6 +97,14 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
 StudioHost::~StudioHost() { shutdown(); }
 void StudioHost::shutdown() {
     *alive_ = false;
+    // Release editor-only EVOLVE scratch even if the webview never sends pagehide.
+    wpNumericPreview_=Json();
+    wpPreviewOwner_.clear();
+    wpPreviewSelection_.clear();
+    wpPreviewRevision_=-1;
+    wpPivotSelection_.clear();
+    wpCustomPivot_=false;
+    wpDrag_={};
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
