@@ -2840,6 +2840,10 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_ecs_native_persistence_test tests/ecs_native_persistence_test.cpp)
     target_link_libraries(aiverse_ecs_native_persistence_test PRIVATE aiverse_engine)
     add_test(NAME ecs_native_persistence_test COMMAND aiverse_ecs_native_persistence_test)
+    # Optional ECHO zone/portal hearing: persistent ECS and dual-native-host regression.
+    add_executable(aiverse_ecs_echo_acoustics_test tests/ecs_echo_acoustics_test.cpp)
+    target_link_libraries(aiverse_ecs_echo_acoustics_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME ecs_echo_acoustics_test COMMAND aiverse_ecs_echo_acoustics_test)
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
