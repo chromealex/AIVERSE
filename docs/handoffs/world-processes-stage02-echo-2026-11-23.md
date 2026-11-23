@@ -26,7 +26,7 @@
 
 ## Minimal native setup
 ```cpp
-#include "libraries/include/aiverselib/world/EchoEcs.h"
+#include "aiverselib/world/EchoEcs.h"
 void Game::setup(aiverse::Simulation& sim, const aiverse::Json&, const aiverse::Json&) {
     aiverse::echo::install(sim);
     auto& world=sim.world();
@@ -36,9 +36,9 @@ void Game::setup(aiverse::Simulation& sim, const aiverse::Json&, const aiverse::
     world.add<aiverse::echo::AcousticPortal>(link,
         aiverse::echo::AcousticPortal{room1,room2,25,true,true});
     const auto emitter=world.create();
-    world.add<aiverse::echo::AcousticEmitter>(emitter,{room1,100,true});
+    world.add<aiverse::echo::AcousticEmitter>(emitter,\n        aiverse::echo::AcousticEmitter{room1,100,true});
     const auto listener=world.create();
-    world.add<aiverse::echo::AcousticReceiver>(listener,{room2,30,true});
+    world.add<aiverse::echo::AcousticReceiver>(listener,\n        aiverse::echo::AcousticReceiver{room2,30,true});
     world.add<aiverse::echo::AcousticHearing>(listener);
 }
 ```
