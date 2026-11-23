@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSection,StudioSelect} from '../ui';
 import {object} from './nativeGraphAdapters';
+import GraphGpuProfilePanel from './GraphGpuProfilePanel';
 import type {GraphObject} from './nativeGraphAdapters';
 
 export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'motionweave'|'spectrafx';projectPath:string}){
@@ -66,6 +67,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
    <div className="au-row" style={{flexWrap:'wrap'}}>{(['enable','read','reset','disable'] as const).map(action=><StudioButton key={action} size="sm" disabled={busy||!projectPath||! /^[0-9]{1,20}$/.test(entity)} onClick={()=>void profileAction(action)}>{action}</StudioButton>)}</div>
    {profile&&<>{profile.available===false?<small>{String(profile.reason??'No matching active profile')}</small>:<pre style={{maxHeight:320,overflow:'auto'}}>{JSON.stringify(profile,null,2)}</pre>}</>}
   </StudioSection>}
+  <GraphGpuProfilePanel projectPath={projectPath}/>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
   {snapshot&&<>{snapshot.available===false?<StudioAlert>{String(snapshot.reason??'Owner unavailable')}</StudioAlert>:<pre>{JSON.stringify(snapshot,null,2)}</pre>}</>}
  </StudioSection>;
