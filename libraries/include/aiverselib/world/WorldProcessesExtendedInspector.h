@@ -70,6 +70,14 @@ inline void appendWorldProcessExtendedComponents(const World& world,Entity e,
                     {"radius",num(v->radius)},{"speed",num(v->speed)},
                     {"allocated",ent(v->allocated)},{"enabled",boo(v->enabled)},
                     {"sampledTick",num(v->sampledTick)}}));
+    if(const auto* v=world.tryGetConst<crowd::Route>(e))
+        appendAuto(components,schemas,"CrowdRoute","CROWD · Nav Route",
+            fields({{"waypointCount",num(std::int64_t(v->points.size()))},
+                    {"cursor",num(v->cursor)},
+                    {"navigationRevision",num(v->navigationRevision)},
+                    {"arrivalRadius",num(v->arrivalRadius)},
+                    {"active",boo(v->active)},
+                    {"sampledTick",num(v->sampledTick)}}));
     if(const auto* v=world.tryGetConst<crowd::Slot>(e))
         appendAuto(components,schemas,"CrowdSlot","CROWD · Slot",
             fields({{"x",num(v->x)},{"z",num(v->z)},{"enabled",boo(v->enabled)}}));
@@ -85,6 +93,18 @@ inline void appendWorldProcessExtendedComponents(const World& world,Entity e,
                     {"residue",num(v->residue)},{"footprintFade",num(v->footprintFade)},
                     {"scentFade",num(v->scentFade)},{"residueFade",num(v->residueFade)},
                     {"enabled",boo(v->enabled)},{"sampledTick",num(v->sampledTick)}}));
+    if(const auto* v=world.tryGetConst<imprint::Tracker>(e))
+        appendAuto(components,schemas,"ImprintTracker","IMPRINT · Movement Tracker",
+            fields({{"source",ent(v->source)},{"cell",ent(v->cell)},
+                    {"lastX",num(v->lastX)},{"lastZ",num(v->lastZ)},
+                    {"currentX",num(v->currentX)},{"currentZ",num(v->currentZ)},
+                    {"minimumDistance",num(v->minimumDistance)},
+                    {"footprint",num(v->footprint)},{"scent",num(v->scent)},
+                    {"residue",num(v->residue)},
+                    {"motionTick",num(v->motionTick)},
+                    {"emittedTick",num(v->emittedTick)},
+                    {"initialized",boo(v->initialized)},
+                    {"enabled",boo(v->enabled)}}));
     if(const auto* v=world.tryGetConst<imprint::Link>(e))
         appendAuto(components,schemas,"ImprintLink","IMPRINT · Link",
             fields({{"a",ent(v->a)},{"b",ent(v->b)},
