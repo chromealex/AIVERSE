@@ -90,7 +90,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "Stage 30 in progress: request-scoped cancellation and readback watchdog; verification pending.",
       "evidence": []
     },
     "architecture": {
