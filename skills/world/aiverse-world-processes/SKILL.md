@@ -674,3 +674,6 @@ EVOLVE-aware TerraWeave registration requires nonempty species, exactly one prec
 
 ## Stage 64: headless demo target
 `aiverse_evolve_forest_demo` CMake target hydrates the demo fixture, plants 27 trees through TerraWeave authority and advances ECS ecology. Source only; PHYSIS/NEREID setup, disk CLI and QA pending. See `docs/handoffs/world-processes-stage64-headless-demo-2026-11-23.md`.
+
+## Stage 65: demo weather, water and replay
+Headless demo now initializes PHYSIS grid, EVOLVE climate links and NEREID lake; optional `--replay` restores a Simulation snapshot and compares checksum. Disk save/load awaits PHYSIS persistence audit. No build/run. See `docs/handoffs/world-processes-stage65-demo-weather-water-replay-2026-11-23.md`.
