@@ -71,6 +71,37 @@ public:
             }
             ready_.insert_or_assign(result.ticket.key,std::move(result));
         }
+        // Retire one undesired source at a time using a complete new shard
+        // manifest. Never remove the visual from just the CPU catalog:
+        // the old GPU owner is retained until a real completed fence.
+        for(auto it=pendingRetire_.begin();it!=pendingRetire_.end();) {
+            const auto ticket=it->second;
+            if(!residency_.current(ticket)){
+                it=pendingRetire_.erase(it);continue;
+            }
+            const auto* resident=geometry_.catalog().find(ticket.key);
+            if(!resident){
+                if(!residency_.acknowledge(ticket))
+                    throw std::logic_error("Caverns visual no-source retirement ACK");
+                ready_.erase(ticket.key);
+                it=pendingRetire_.erase(it);
+                continue;
+            }
+            const auto sourceRevision=resident->revision;
+            ++visualRevision_;
+            if(!geometry_.stageVisualRetire(device,ticket.key,sourceRevision,
+                                             visualRevision_))
+                break; // budget or pending GPU source: retry later
+            const auto shard=caveShardFor(ticket.key,geometry_.catalog().config());
+            if(!geometry_.activateVisualOnly({shard}))
+                throw std::runtime_error("Caverns client visual retirement activation");
+            if(!residency_.acknowledge(ticket))
+                throw std::logic_error("Caverns client retired source ACK mismatch");
+            ready_.erase(ticket.key);
+            it=pendingRetire_.erase(it);
+            // Keep a single whole-shard GPU publication per frame.
+            return;
+        }
         // Exactly one GPU upload per frame (Stage38 source-size admission).
         for(auto it=ready_.begin();it!=ready_.end();){
             if(!residency_.current(it->second.ticket)) {
@@ -107,6 +138,7 @@ public:
         return true;
     }
     size_t pendingCpu()const noexcept{return workers_.inFlight();}
+    bool opened()const noexcept{return index_!=nullptr;}
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
     CaveWorldResidency residency_;
