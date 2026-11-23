@@ -166,6 +166,17 @@ void vmRun(device const VmPayload& vm,uint stage,thread Particle& p,
 }
 // Vertex shaderGraph sources are compile-time-validated on the CPU.
 // The dynamic GPU kernel only gathers sources; no authored source code here.
+// Stateless integer hash of the authored seed, birth ordinal and stream.
+uint birthRandomBits(Particle p,uint stream) {
+    uint seed=uint(p.size.y)|(uint(p.size.z)<<16u);
+    uint x=seed^(uint(p.size.w)*0x9e3779b9u)^(stream*0x85ebca6bu);
+    x^=x>>16u;x*=0x7feb352du;
+    x^=x>>15u;x*=0x846ca68bu;
+    return x^(x>>16u);
+}
+float birthRandom01(Particle p,uint stream) {
+    return float(birthRandomBits(p,stream)>>8u)*(1.0f/16777216.0f);
+}
 float materialSource(uint code,Particle p,VmParams params,VmAttributes attrs) {
     switch(code) {
     case 0u:return p.positionAge.w;
