@@ -1961,7 +1961,17 @@ bool StudioHost::handleHostMethod(const Json& req) {
                (pivot=="custom"&&(!params["pivotXcm"].isNumber()||
                                    !params["pivotZcm"].isNumber())))
                 throw std::runtime_error("Invalid numeric EVOLVE preview");
+            for(const auto& id:selected)
+                if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))
+                    throw std::runtime_error("EVOLVE preview requires editable regions");
             if(pivot=="custom"){
+                const auto px=params["pivotXcm"].integer();
+                const auto pz=params["pivotZcm"].integer();
+                if(px < -evolve::kAreaCoordinateCm || px > evolve::kAreaCoordinateCm ||
+                   pz < -evolve::kAreaCoordinateCm || pz > evolve::kAreaCoordinateCm ||
+                   params["pivotXcm"].numberLiteral()!=std::to_string(px) ||
+                   params["pivotZcm"].numberLiteral()!=std::to_string(pz))
+                    throw std::runtime_error("Invalid custom EVOLVE preview pivot");
                 wpGroupPivot_={
                     float(params["pivotXcm"].integer())/100.f,.65f,
                     float(params["pivotZcm"].integer())/100.f};
