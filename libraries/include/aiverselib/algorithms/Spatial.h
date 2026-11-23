@@ -1,6 +1,9 @@
 #pragma once
 #include <array>
 #include <map>
+#include <unordered_map>
+#include <span>
+#include <type_traits>
 #include <vector>
 #include <algorithm>
 #include <cstdint>
@@ -10,14 +13,22 @@
 #include <utility>
 #include <cstddef>
 namespace aiverse::lib::algorithms {
-template<std::size_t N,class Id=uint64_t> class SpatialGrid {
+template<std::size_t N,class Id=uint64_t,bool Hashed=false> class SpatialGrid {
 public:
     using Point=std::array<int64_t,N>;
     struct Bounds {Point min,max;}; // inclusive
 private:
     int64_t cellSize_;
     std::map<Id,Bounds> objects_;
-    std::map<Point,std::vector<Id>> cells_;
+    struct PointHash {
+        size_t operator()(const Point& p)const noexcept{
+            uint64_t h=0x9e3779b97f4a7c15ULL;
+            for(auto x:p){uint64_t v=uint64_t(x);v=(v^(v>>30))*0xbf58476d1ce4e5b9ULL;v=(v^(v>>27))*0x94d049bb133111ebULL;v^=v>>31;h^=v+0x9e3779b97f4a7c15ULL+(h<<6)+(h>>2);}
+            return size_t(h);
+        }
+    };
+    using Cells=std::conditional_t<Hashed,std::unordered_map<Point,std::vector<Id>,PointHash>,std::map<Point,std::vector<Id>>>;
+    Cells cells_;
     std::vector<Id> large_;
     static constexpr size_t maxCells=4096;
     int64_t cell(int64_t x)const {return x/cellSize_-(x%cellSize_<0);}
@@ -110,8 +121,17 @@ public:
         }
         std::sort(hits.begin(),hits.end());out.clear();for(const auto& h:hits)out.push_back(h.second);
     }
+    // CSR-style batch output; offsets.size()==queries.size()+1.
+    void queryBatch(std::span<const Bounds> queries,std::vector<size_t>& offsets,std::vector<Id>& ids)const{
+        offsets.clear();ids.clear();offsets.push_back(0);
+        std::vector<Id> scratch;
+        for(const auto& b:queries){query(b,scratch);ids.insert(ids.end(),scratch.begin(),scratch.end());offsets.push_back(ids.size());}
+    }
     size_t size()const{return objects_.size();}
 };
+template<size_t N,class Id=uint64_t> using SpatialHash=SpatialGrid<N,Id,true>;
+template<class Id=uint64_t> using SpatialHash2D=SpatialHash<2,Id>;
+template<class Id=uint64_t> using SpatialHash3D=SpatialHash<3,Id>;
 template<class Id=uint64_t> using SpatialGrid2D=SpatialGrid<2,Id>;
 template<class Id=uint64_t> using SpatialGrid3D=SpatialGrid<3,Id>;
 }
