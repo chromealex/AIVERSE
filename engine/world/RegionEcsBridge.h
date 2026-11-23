@@ -16,6 +16,13 @@ struct RegionStableIdentity {
 };
 inline void io(Archive& a,RegionStableIdentity& value) {a(value.id);}
 
+// Explicit cold marker; a live ECS Entity keeps Transform + identity while
+// optional heavyweight components are parked in RegionColdStore.
+struct RegionDormant {
+    uint8_t marker=1;
+};
+inline void io(Archive& a,RegionDormant& value) {a(value.marker);}
+
 // The module registers the ledger resource separately via registerRegionEntityLedger.
 // Both registrations must occur at setup; no extra state is created by this helper.
 template<class SimulationT>
@@ -85,6 +92,8 @@ public:
         std::vector<RegionEntityId> ids;
         ids.reserve(entities.size());
         for(Entity e:entities) {
+            if(world.has<RegionDormant>(e))
+                return reject(error,"a dormant region entity must wake before ownership transfer");
             if(!world.alive(e) || !world.has<Transform>(e))
                 return reject(error,"group contains a dead or unpositioned entity");
             const auto* id=world.tryGetConst<RegionStableIdentity>(e);
@@ -101,6 +110,8 @@ public:
     // A renderer or chunk streamer must never invoke this method.
     static bool retire(World& world,RegionEntityLedger& ledger,Entity entity,
                        Cell expected,std::string* error=nullptr) {
+        if(world.has<RegionDormant>(entity))
+            return reject(error,"dormant entity requires parked-state retirement");
         if(!world.alive(entity))
             return reject(error,"entity is not alive");
         const auto* identity=world.tryGetConst<RegionStableIdentity>(entity);
