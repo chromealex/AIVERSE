@@ -209,6 +209,28 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
     ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
 }
 
+Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
+    needProject(ws);
+    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+    (void)render::texture_graph::outputKind(output);
+    if(image.width<8||image.width>1024||image.height!=image.width||image.rgba.size()!=size_t(image.width)*image.height*4)
+        throw std::invalid_argument("invalid completed texture image");
+    const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+    if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
+    fs::create_directories(dir);
+    const std::string rel="content/textures/"+name+"_"+output+".png";
+    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture already exists or staging busy");
+    struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+    std::string png;
+    if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,image.width,image.height,4,image.rgba.data(),image.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
+    const auto temp=stage/"payload";
+    {std::ofstream stream(temp,std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG write failed");}
+    fs::create_hard_link(temp,dest);
+    ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
+}
+
 void registerMaterialOps(Workspace& ws) {
     Workspace* w = &ws;
     auto add = [&ws](const char* name, const std::string& desc, const std::string& schema, Workspace::OpFn fn) {
@@ -441,19 +463,13 @@ void registerMaterialOps(Workspace& ws) {
         for(auto v:img.rgba){hex+="0123456789abcdef"[v>>4];hex+="0123456789abcdef"[v&15];}
         Json r=okJson();r.set("width",Json::number(int64_t(img.width)));r.set("height",Json::number(int64_t(img.height)));r.set("rgbaHex",Json::string(hex));r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
-    add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG under content/textures; never overwrite.",graphSchema,[w,publish,textureCache](const Json& p){
+    add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG under content/textures; never overwrite.",graphSchema,[w,textureCache](const Json& p){
         needProject(*w);auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());auto output=p.getStr("output"),name=p.getStr("textureName");
         if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
         auto it=program.outputs.find(output);if(it==program.outputs.end())throw std::invalid_argument("unknown output");
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();
-        const auto root=fs::canonical(w->project.dir);auto dir=root/"content"/"textures";
-        if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
-        std::string rel="content/textures/"+name+"_"+output+".png",png;
-        if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,img.width,img.height,4,img.rgba.data(),img.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
-        publish(root/rel,png,false);
-        w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
-        Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(img.width)));r.set("cacheHit",Json::fromBool(cacheHit));return r;
+        auto r=publishTextureGraphImage(*w,name,output,img);r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
 
     add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){
