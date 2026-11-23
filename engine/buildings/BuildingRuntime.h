@@ -12,3 +12,4 @@
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftPlatformModel.h"
+#include "engine/buildings/BuildingLiftGameSession.h"
