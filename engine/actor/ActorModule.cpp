@@ -31,6 +31,30 @@ void royaleIo(Archive& a,RoyaleRun& r) {
     uint32_t feed=a.count(r.feed.size());if(feed>6){a.fail();return;}if(!a.writing())r.feed.resize(feed);for(auto& e:r.feed)lib::mechanics::io(a,e);
 }
 }
+// Portable resource codec for the canonical match State. This does not alter
+// the existing interleaved native match snapshot layout.
+void io(Archive& a,State& s) {
+    a(s.round,s.winner,s.nextObject,s.match);
+    if(!a.ok()||!s.round||!s.nextObject||(a.writing()&&s.history.size()>121)){a.fail();return;}
+    uint32_t n=a.count(s.history.size());
+    if(!a.ok()||n>121){a.fail();return;}
+    if(!a.writing())s.history.resize(n);
+    uint32_t previous=0;bool first=true;
+    for(auto& frame:s.history){
+        a(frame.tick);
+        if(!a.ok()||(!first&&frame.tick<=previous)||(a.writing()&&frame.characters.size()>255)){a.fail();return;}
+        previous=frame.tick;first=false;
+        uint32_t count=a.count(frame.characters.size());
+        if(!a.ok()||count>255){a.fail();return;}
+        if(!a.writing())frame.characters.resize(count);
+        for(size_t i=0;i<frame.characters.size();++i){
+            auto& character=frame.characters[i];
+            io(a,character);ioMelee(a,character);
+            if(!a.ok()||character.slot!=i+1){a.fail();return;}
+        }
+    }
+    royaleIo(a,s.royale);
+}
 Config readConfig(const Json& root) {
     if(!root["actor"].isObject())throw JsonError("rules.actor: expected object");
     // Capability blocks that are not specific to this host may sit at the top level of the rules (shared names,
