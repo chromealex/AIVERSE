@@ -240,6 +240,7 @@ public:
                 return;
             }
             hasPendingGpuAllocationSeed_=false;
+            error_.clear();
             pendingRestart_=false; // seeded reset already cleared the GPU pool
             timeTicks_=0;
         }
