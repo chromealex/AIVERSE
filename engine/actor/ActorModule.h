@@ -124,6 +124,7 @@ public:
     uint64_t navigationRebuilds()const{return navigationRebuilds_;}
     uint64_t navigationCollisionRevision()const{return navigationCollisionRevision_;}
     const std::string& navigationReadinessError()const{return navigationReadinessError_;}
+    const std::string& collisionAdmissionError()const{return collisionAdmissionError_;}
 
     // Match-level data (round, winner, nextObject, match, royale, history).
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
@@ -256,6 +257,7 @@ private:
     uint64_t navigationCollisionRevision_=UINT64_MAX;
     uint64_t navigationRebuilds_=0;
     std::string navigationReadinessError_;
+    std::string collisionAdmissionError_;
     // Host-local derived admission from the most recent readyToStep.
     // Never saved/hashed; refreshed before every tick and after rollback.
     std::map<uint64_t,Vec3> admittedRegionMoves_;
