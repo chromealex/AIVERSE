@@ -124,6 +124,64 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && !call("studio.undo").has("error"));
        AIVERSE_TEST_CHECK(entity().extra["components"].has("StaticModel"));
    }
+   // World-process map authoring: defaults, strict integer validation,
+   // component ownership, one-step Undo/Redo, and real project disk persistence.
+   // Runtime remains read-only; the game's native setup must explicitly load
+   // these validated component documents into actual ECS entities.
+   {
+       auto& map=session.workspace().map;
+       const auto entity=[&]()->const editor::DocEntity&{
+           return map.data.entities[size_t(map.findEntity("second"))];
+       };
+       const char* ids[]={"EchoZone","FractureMember","AetherGasCell"};
+       for(const char* id:ids) {
+           const std::string input="{\\"entityId\\":\\"entity:@second\\",\\"componentId\\":\\""+std::string(id)+"\\"}";
+           AIVERSE_TEST_CHECK(!call("studio.componentAdd",input.c_str()).has("error"));
+           AIVERSE_TEST_CHECK(entity().extra["components"].has(id));
+           AIVERSE_TEST_CHECK(call("studio.componentAdd",input.c_str()).has("error"));
+       }
+       AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"FractureMember","key":"anchored","value":true})").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra["components"]["FractureMember"]["anchored"].boolean());
+       AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"EchoZone","key":"enabled","value":false})").has("error"));
+       AIVERSE_TEST_CHECK(!entity().extra["components"]["EchoZone"]["enabled"].boolean());
+       const size_t depth=map.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.setProperties",R"({"entityId":"entity:@second","componentId":"AetherGasCell","values":{"smoke":250,"oxygen":500}})").has("error"));
+       AIVERSE_TEST_CHECK(map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(entity().extra["components"]["AetherGasCell"]["smoke"].integer()==250);
+       AIVERSE_TEST_CHECK(entity().extra["components"]["AetherGasCell"]["oxygen"].integer()==500);
+       const auto before=entity().extra.dump();
+       AIVERSE_TEST_CHECK(call("studio.setProperties",R"({"entityId":"entity:@second","componentId":"AetherGasCell","values":{"smoke":300,"oxygen":1000000001}})").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra.dump()==before && map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"FractureMember","key":"broken","value":true})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"AetherGasCell","key":"smoke","value":2.5})").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra.dump()==before);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra["components"]["AetherGasCell"]["smoke"].integer()==0);
+       AIVERSE_TEST_CHECK(!call("studio.redo").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra["components"]["AetherGasCell"]["smoke"].integer()==250);
+       AIVERSE_TEST_CHECK(!call("studio.select",R"({"id":"entity:@second"})").has("error"));
+       const auto snap=call("studio.snapshot");
+       bool foundEdited=false;
+       for(const auto& comp:snap["result"]["inspector"]["components"].items()) {
+           if(comp.getStr("id")!="AetherGasCell")continue;
+           for(const auto& field:comp["properties"].items())
+               if(field.getStr("key")=="smoke")
+                   foundEdited=field.getBool("editable")&&field["value"].integer()==250;
+       }
+       AIVERSE_TEST_CHECK(foundEdited);
+       AIVERSE_TEST_CHECK(!call("studio.save").has("error"));
+       editor::MapDoc disk;
+       std::string why;
+       AIVERSE_TEST_CHECK(disk.load((project/"maps/scene.json").string(),&why));
+       const auto& saved=disk.data.entities[size_t(disk.findEntity("second"))].extra["components"];
+       AIVERSE_TEST_CHECK(saved["AetherGasCell"]["oxygen"].integer()==500);
+       AIVERSE_TEST_CHECK(saved["FractureMember"]["anchored"].boolean());
+       for(const char* id:ids) {
+           const std::string input="{\\"entityId\\":\\"entity:@second\\",\\"componentId\\":\\""+std::string(id)+"\\"}";
+           AIVERSE_TEST_CHECK(!call("studio.componentRemove",input.c_str()).has("error"));
+           AIVERSE_TEST_CHECK(!entity().extra["components"].has(id));
+       }
+   }
    // Multi-selection, group edit / duplicate / delete (one undo each), editor-only flags.
    {
        auto& map=session.workspace().map;
