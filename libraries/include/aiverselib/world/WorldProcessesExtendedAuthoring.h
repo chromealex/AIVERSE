@@ -94,7 +94,12 @@ inline bool validate(std::string_view id,const Json& doc,std::string* error=null
     if(id=="GranularField"&&doc.has("width"))
         return granular::authoring::validate(doc,error);
     const Json schema=defaults(id);
-    if(doc.size()!=schema.size())return fail("Missing or extra authoring fields");
+    if(id=="EvolveArea"){
+        // Stage30 maps without offsets remain valid and imply zero offsets.
+        if(doc.size()!=schema.size() &&
+           !(doc.size()==schema.size()-2&&!doc.has("offsetXcm")&&!doc.has("offsetZcm")))
+            return fail("Missing or extra authoring fields");
+    }else if(doc.size()!=schema.size())return fail("Missing or extra authoring fields");
     for(const auto& [key,v]:doc.members())
         if(!schema.has(key)||!validValue(id,key,v))
             return fail("Invalid authoring field: "+key);
@@ -164,7 +169,8 @@ inline bool apply(World& world,Entity e,std::string_view id,const Json& doc,
         evolve::Area v;
         v.halfWidthCm=n("halfWidthCm");
         v.halfDepthCm=n("halfDepthCm");
-        v.centerXcm=n("offsetXcm");v.centerZcm=n("offsetZcm");
+        v.centerXcm=doc.has("offsetXcm")?n("offsetXcm"):0;
+        v.centerZcm=doc.has("offsetZcm")?n("offsetZcm"):0;
         v.enabled=flag("enabled");
         if(!evolve::setArea(world,e,v))return false;
     }else if(id=="EvolveRegion"){
