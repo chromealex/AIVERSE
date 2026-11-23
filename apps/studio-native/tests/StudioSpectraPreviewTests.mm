@@ -23,6 +23,11 @@ int aiverseMain(int,char**) { @autoreleasepool {
         [window orderFront:nil];
         studio::StudioScene scene(gfx::createMetalDevice((__bridge void*)layer));
         editor::MapDoc map;map.reset(8,8);
+        const auto mapCamera=scene.cameraState();
+        scene.setSpectraDockMode(true);
+        require(scene.spectraDockMode(),"native FX dock mode not entered");
+        require(scene.cameraState().distance>2.f,
+                "isolated FX camera was not initialized");
         const Json empty;
         const auto frame=[&]{scene.frame(192,192,map,false,"","",empty,0);};
         Json graph=Json::parse(R"JSON({
@@ -82,6 +87,10 @@ int aiverseMain(int,char**) { @autoreleasepool {
         frame();
         const Json stopped=scene.spectraPreviewCommand(action("stop"),"");
         require(!stopped.getBool("ready"),"shutdown left GPU visual source alive");
+        scene.setSpectraDockMode(false);
+        require(!scene.spectraDockMode(),"native Scene not restored after FX tab close");
+        require(scene.cameraState().distance==mapCamera.distance,
+                "authored Scene camera changed during isolated FX preview");
         const Json failed=scene.spectraPreviewCommand(action("step"),"");
         require(!failed.getStr("error").empty(),"invalid transition should report error");
         std::cout<<"Studio SpectraFX Metal preview PASS\n";
