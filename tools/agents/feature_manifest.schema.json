@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "owner",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "skill",
+        "mcp",
+        "studio",
+        "inspector",
+        "persistence",
+        "graphs",
+        "performance",
+        "platforms",
+        "dependencies",
+        "headless",
+        "examples",
+        "tests",
+        "handoff",
+        "documentation",
+        "publishing"
+      ],
+      "properties": {
+        "implementation": {
+          "$ref": "#/$defs/check"
+        },
+        "architecture": {
+          "$ref": "#/$defs/check"
+        },
+        "native_api": {
+          "$ref": "#/$defs/check"
+        },
+        "skill": {
+          "$ref": "#/$defs/check"
+        },
+        "mcp": {
+          "$ref": "#/$defs/check"
+        },
+        "studio": {
+          "$ref": "#/$defs/check"
+        },
+        "inspector": {
+          "$ref": "#/$defs/check"
+        },
+        "persistence": {
+          "$ref": "#/$defs/check"
+        },
+        "graphs": {
+          "$ref": "#/$defs/check"
+        },
+        "performance": {
+          "$ref": "#/$defs/check"
+        },
+        "platforms": {
+          "$ref": "#/$defs/check"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/check"
+        },
+        "headless": {
+          "$ref": "#/$defs/check"
+        },
+        "examples": {
+          "$ref": "#/$defs/check"
+        },
+        "tests": {
+          "$ref": "#/$defs/check"
+        },
+        "handoff": {
+          "$ref": "#/$defs/check"
+        },
+        "documentation": {
+          "$ref": "#/$defs/check"
+        },
+        "publishing": {
+          "$ref": "#/$defs/check"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "note",
+        "evidence"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "not_run",
+            "not_applicable"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
