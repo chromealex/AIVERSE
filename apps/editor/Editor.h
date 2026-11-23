@@ -265,6 +265,15 @@ public:
 
     // camera of the Scene window (agents fly it with view_focus)
     render::Camera sceneCam;
+    // Caverns brush hover preview, authored by TerrainWindow on the UI thread.
+    // Consumed by drawEditOverlays3D on the same editor frame.
+    struct CavernsBrushPreview {
+        bool visible=false;
+        render::float3 position{};
+        float radiusMetres=0.0f;
+        bool fill=false;
+    } cavernsBrushPreview;
+
     void focusScene(float x, float z, float distance = -1);
     // planet maps (world block): the Scene camera is the view's orbit camera; picking returns a body point
     bool planetMap() const { return view_.planetMode(); }
