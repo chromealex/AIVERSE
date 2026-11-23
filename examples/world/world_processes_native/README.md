@@ -123,3 +123,92 @@ Stage17+ physical integration. Complete handoffs:
 docs/handoffs/world-processes-stage17-morph-render-box3d-2026-11-23.md
 docs/handoffs/world-processes-stage18-granular-terra-box3d-2026-11-23.md
 docs/handoffs/world-processes-stage19-physical-native-host-2026-11-23.md
+
+
+## CIRCUIT, EVOLVE and SOCIETY gameplay integration (Stage22–25)
+
+Include the new optional native facade:
+
+~~~cpp
+#include "examples/world/world_processes_native/WorldProcessGameplayHost.h"
+using namespace aiverse::examples::world_processes_native;
+WorldProcessGameplayHost bindings;
+
+// Connect a real existing Box3D kinematic door to its CIRCUIT Device Entity.
+CircuitDoorBinding door;
+door.body=realKinematicBodyHandle; // existing physics::Scene owner
+door.closedPosition={0,0,0};
+door.openPosition={0,4,0};
+bindings.circuitDevices().bindDoor(doorDeviceEntity,door);
+
+// Real project lighting/animation/pump/alarms and AI/quest owners supply
+// idempotent callbacks; this module does NOT create synthetic game objects.
+bindings.circuitDevices().setCallback(
+    [&](const CircuitDeviceAction& event) {
+        // Route event.device, event.kind and event.active to your existing
+        // light/animation/pump/audio/trigger system.
+        return applyExistingDeviceState(event);
+    });
+bindings.npcReactions().setDispatch(
+    [&](const NpcKnowledgeAction& event) {
+        // Route actionId, person, topics and transition to the existing
+        // behavior tree / dialogue / quest graph owner.
+        return dispatchExistingNpcEvent(event);
+    });
+
+// Player switch interaction at authoritative command barrier:
+bindings.setSwitch(sim.world(), switchEntity, true);
+
+// Optional PHYSIS source -> EVOLVE climate rates. Only after the PHYSIS and
+// EVOLVE owner entities exist and before the fixed tick system runs:
+evolve::ClimateLink climate;
+climate.rainEnrichment=100;
+climate.droughtConsumption=30;
+bindings.attachClimate(sim.world(),climateLinkEntity,
+                       regionEntity,physisCellEntity,climate);
+
+// Wrap the existing TerraWeave forest climate callback with EVOLVE region
+// effects (finite, world-centimetre bounds). It reuses the real ecology API.
+auto forestClimate=bindings.forestClimate(
+    sim.world(),
+    {{regionEntity,-10000,-10000,10000,10000,true}},
+    existingPhysisNereidClimateSampler);
+// Pass forestClimate into TerraWeave's existing advanceForestEcology(...).
+
+// AFTER the completed simulation tick: CIRCUIT outputs and SOCIETY trigger
+// results were written into the authoritative ECS:
+if(!bindings.reconcile(sim.world(),sim.tick(),&box3dScene))
+    gateGameplayOutputsAndRetry();
+
+// After rollback/load, reset external acknowledgements and reapply real
+// state from the restored World:
+bindings.resetAfterRollback();
+bindings.reconcile(sim.world(),sim.tick(),&box3dScene,true);
+~~~
+
+The identifiers realKinematicBodyHandle, doorDeviceEntity, switchEntity,
+sim, regionEntity, physisCellEntity, existingPhysisNereidClimateSampler,
+applyExistingDeviceState and dispatchExistingNpcEvent belong to your
+existing game host; the example does not invent an engine-wide singleton.
+
+CIRCUIT authored map schemas: CircuitNode/Wire/Gate/Switch/Device. Device
+kinds: generic(0), light(1), door(2), motor(3), pump(4), alarm(5).
+ECS systems are installed in phase order: switch inputs, power/logic solver,
+then device outputs. Box3D kinematic doors are moved only by the real native
+physics::Scene; the host callback owns the graphics/FX presentation.
+
+EVOLVE authored map schemas: EvolveRegion and EvolvePressure. A separate
+native PHYSIS ClimateLink is optional and must bind to **real** existing
+physis::Atmosphere + Surface ECS entities. The EVOLVE region then limits the
+real TerraWeave forest ecology nutrient and light climate sampler without
+replacing the TerraWeave plant registry.
+
+SOCIETY authored map schemas: SocietyPerson/Contact/Message/NpcTrigger.
+NpcTrigger has stable person ID, nonzero knowledge-topic hex mask,
+positive actionId, condition mode, once and enabled. The SOCIETY system
+records stable transition counters; its native callback routes to the
+project's actual NPC/quest systems and should dedupe by trigger Entity
+generation plus transition number.
+
+Source code only; these new stages have **not** been compiled or run under
+the user's deferred-testing instruction. Refer to handoffs stages 22–25.
