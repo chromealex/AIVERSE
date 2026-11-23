@@ -16,7 +16,8 @@
     "apps/studio-web/src/graphs/shaderAdapter.ts",
     "apps/studio-web/src/graphs/GraphCanvas.css",
     "apps/studio-web/src/panels/shaderGraphLayout.ts",
-    "apps/studio-web/tests/shaderGraphEdit.test.mjs"
+    "apps/studio-web/tests/shaderGraphEdit.test.mjs",
+    "apps/studio-web/src/graphs/graphSelection.ts"
   ],
   "traits": {
     "editable": true,
