@@ -88,6 +88,15 @@ void Editor::registerPlayOps() {
             r.set("note",Json::string("Aggregate owner counters, not per-graph or per-entity; GPU preview history contains estimates, not GPU timings."));
             return r;
         });
+    add("texture_graph_gpu_owner_preview","Queue or read a native texture GPU preview; CPU fallback unless requireGpu.",
+        R"({"properties":{"action":{"type":"string","enum":["start","read"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"}},"required":["action"]})",
+        [this](const Json& p){
+            if(!dev_)throw std::runtime_error("native graphics owner unavailable");
+            textureGraphGpuPreview_.checkProject(ws_.project.dir);
+            if(p.getStr("action")=="start")return textureGraphGpuPreview_.start(p,ws_.project.dir);
+            if(p.getStr("action")=="read")return textureGraphGpuPreview_.status();
+            throw std::invalid_argument("unknown GPU preview action");
+        });
     add("graph_gpu_owner_profile","Start, read or stop optional native RHI scope capture.",
         R"({"type":"object","properties":{"action":{"type":"string","enum":["start","read","stop"]}},"required":["action"]})",
         [this](const Json& p){
