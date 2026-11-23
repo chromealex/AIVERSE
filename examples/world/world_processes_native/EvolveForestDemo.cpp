@@ -85,8 +85,8 @@ static void writeEcologySvg(const World& world,const std::string& path){
     for(const auto& zone:evolve::extents(world)){
         const auto* region=world.tryGetConst<evolve::Region>(zone.region);
         if(!region||!region->enabled)continue;
-        const auto fertility=demo::permille(region->fertility);
-        const auto pollution=demo::permille(region->pollution);
+        const auto fertility=(region->fertility/1000000);
+        const auto pollution=(region->pollution/1000000);
         const auto left=x(zone.minXcm),top=z(zone.minZcm);
         const auto width=x(zone.maxXcm)-left,height=z(zone.maxZcm)-top;
         out<<"<rect x='"<<left<<"' y='"<<top<<"' width='"<<width
