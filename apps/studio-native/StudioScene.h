@@ -53,11 +53,8 @@ public:
             spectraPreview_.stop(*device_);
         spectraProject_=project;
         const Json result=spectraPreview_.command(*device_,input);
-        if(input.getStr("action")=="load" && result.getBool("ready")) {
-            camera_.target={0,1,0};camera_.distance=9.0f;
-            camera_.yaw=0.4f;camera_.pitch=0.2f;camera_.ortho=false;
-            cameraInitialized_=true;tween_.active=false;
-        }
+        // Preview spawns near the current Scene camera target; never steal
+        // the user's editor camera or change map editing navigation.
         lastFrameSignature_=0;settleFrames_=30;
         return result;
     }
