@@ -309,10 +309,19 @@ public:
             editor.cavernsBuildStats.gpuActive=stats.activeShards;
             editor.cavernsBuildStats.gpuStaged=stats.pendingShards;
             editor.cavernsBuildStats.gpuRetired=stats.retiredScenes;
+            editor.cavernsBuildStats.gpuRetainedStrata=stats.retainedStrata;
+            const auto uploads=visual->uploadStats();
+            editor.cavernsBuildStats.gpuFrameBytes=uploads.sourceBytes;
+            editor.cavernsBuildStats.gpuRejectedBytes=uploads.refusedBytes;
+            editor.cavernsBuildStats.gpuRejectedPressure=uploads.refusedPressure;
         }else{
             editor.cavernsBuildStats.gpuActive=0;
             editor.cavernsBuildStats.gpuStaged=0;
             editor.cavernsBuildStats.gpuRetired=0;
+            editor.cavernsBuildStats.gpuRetainedStrata=0;
+            editor.cavernsBuildStats.gpuFrameBytes=0;
+            editor.cavernsBuildStats.gpuRejectedBytes=0;
+            editor.cavernsBuildStats.gpuRejectedPressure=0;
         }
         editor.cavernsBuildStats.gpuRemaining=visualPacer.remaining();
         editor.cavernsBuildStats.gpuPreviewRevision=visualRevision;
