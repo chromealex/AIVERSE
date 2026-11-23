@@ -232,6 +232,10 @@ std::string HostedClient::errorText() const { return client_ ? client_->errorTex
 bool HostedClient::canControl() const { return client_ && step_ >= kSteps && client_->hostCanControl(); }
 bool HostedClient::paused() const { return client_ && step_ >= kSteps && client_->hostPaused(); }
 bool HostedClient::canStep() const { return client_ && step_ >= kSteps && client_->hostCanStep(); }
+bool HostedClient::setSpeed(double speed) {
+    if(!canControl())return false;
+    Scope scope(*this);return client_->setHostSpeed(speed);
+}
 bool HostedClient::setPaused(bool paused) {
     if (!canControl()) return false;
     Scope scope(*this);return client_->setHostPaused(paused);
