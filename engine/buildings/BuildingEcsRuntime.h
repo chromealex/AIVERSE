@@ -148,6 +148,63 @@ public:
                 pose.physicalPermille,pose.revision,pose.open,pose.moving});
     }
 
+    // Rebind the existing Simulation registration after rollback only
+    // after a new physical owner, graph router and presentation session
+    // have been rebuilt from the restored ECS leaf record. The old
+    // callbacks remain installed exactly once; their weak_ptr resolves
+    // to this live owner and now sees the reconciled external state.
+    bool rebindAfterRestore(BuildingDualLeafGameSession& session,
+                            BuildingDualLeafOwner& physics,
+                            world::SpatialWorld& spatial,
+                            BuildingGraphChangeRouter& router,
+                            std::string* error=nullptr){
+        auto reject=[&](const char* reason){
+            if(error)*error=reason;
+            return false;
+        };
+        if(!suspended_||!sim_||!session.attached()||
+           !physics.attached()||physics.faulted()||
+           physics.pendingGraphs())
+            return reject("Rebinding requires suspended runtime and fully rebuilt owners");
+        auto* state=sim_->world().resource<BuildingEcsWorldState>();
+        if(!state||!state->sceneId||physics.sceneId()!=state->sceneId||
+           !state->graphAcknowledged)
+            return reject("Restored scene/graph state not reconciled");
+        const auto poses=physics.poses();
+        if(poses.size()!=state->leaves.size()||
+           physics.revision()!=state->revision)
+            return reject("Restored physical scene revision or socket count differs");
+        for(size_t i=0;i<poses.size();++i){
+            const auto& expected=state->leaves[i];
+            const auto& pose=poses[i];
+            if(expected.socketId!=pose.socketId||
+               expected.physicalPermille!=pose.physicalPermille||
+               expected.open!=pose.open||pose.moving)
+                return reject("Restored collider position or phase differs");
+        }
+        const auto owned=physics.ownedColliderIds();
+        const auto closed=physics.closedColliderBounds();
+        for(uint32_t id:owned){
+            const auto a=spatial.colliders().find(id);
+            const auto b=closed.find(id);
+            if((a==spatial.colliders().end())!=(b==closed.end()))
+                return reject("Restored physical collider presence differs");
+            if(a!=spatial.colliders().end()&&
+               (a->second.bounds.min.x!=b->second.min.x||
+                a->second.bounds.min.y!=b->second.min.y||
+                a->second.bounds.min.z!=b->second.min.z||
+                a->second.bounds.max.x!=b->second.max.x||
+                a->second.bounds.max.y!=b->second.max.y||
+                a->second.bounds.max.z!=b->second.max.z))
+                return reject("Restored real collider bounds differ");
+        }
+        session_=&session;physics_=&physics;
+        spatial_=&spatial;router_=&router;
+        lastError_.clear();suspended_=false;
+        if(error)error->clear();
+        return true;
+    }
+
     // Called by the real ECS owner on authoritative actor retirement,
     // before Entity index/generation is reused. Never destroy actors
     // from inside the renderer or this adapter.
