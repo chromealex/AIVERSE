@@ -17,12 +17,12 @@ public:
     using Reader=std::function<bool(Archive&,World&,Entity,const Context&)>;
 private:
     using Remover=std::function<bool(World&,Entity)>;
-    struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;Remover remove;};
+    struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;Remover remove;std::function<bool(const World&,Entity)> present;};
     std::map<std::string,Codec> codecs_;
 public:
     bool add(std::string id,uint32_t version,Writer writer,Reader reader){
         if(id.empty()||id.size()>128||!version||!writer||!reader)return false;
-        Codec codec{version,std::move(writer),{}, {}};
+        Codec codec{version,std::move(writer),{}, {}, {}};
         codec.readers.emplace(version,std::move(reader));
         return codecs_.emplace(std::move(id),std::move(codec)).second;
     }
@@ -42,6 +42,7 @@ public:
                 if(world.has<T>(entity))world.remove<T>(entity);
                 world.add<T>(entity,std::move(value));return true;
             }))return false;
+        codecs_.at(key).present=[](const World& w,Entity e){return w.has<T>(e);};
         codecs_.at(key).remove=[](World& w,Entity e){if(w.has<T>(e))w.remove<T>(e);return true;};
         return true;
     }
@@ -77,6 +78,27 @@ public:
         if(reader==it->second.readers.end())return false;
         Archive a(chunk.bytes);a.formatVersion=chunk.version;
         return reader->second(a,staged,entity,refs)&&a.ok()&&a.remaining()==0;
+    }
+    bool setPresence(const std::string& schema,std::function<bool(const World&,Entity)> present){
+        auto it=codecs_.find(schema);if(it==codecs_.end()||!present)return false;
+        it->second.present=std::move(present);return true;
+    }
+    bool captureAll(const World& world,const RegionEntityLedger& ledger,
+        size_t budget,std::vector<Record>& out)const{
+        Context refs;if(!refs.rebuild(world,ledger))return false;
+        for(const auto& [id,codec]:codecs_)if(!codec.present)return false;
+        std::vector<Record> staged;size_t used=0;
+        for(auto owner:ledger.liveIds()){
+            Entity e;if(!refs.resolve(world,owner,e))continue;
+            for(const auto& [id,codec]:codecs_){
+                if(!codec.present(world,e))continue;
+                Chunk c;if(!capture(world,refs,owner,id,c))return false;
+                size_t cost=19+c.schema.size()+c.bytes.size();
+                if(cost>budget-used)return false;
+                used+=cost;staged.push_back({Operation::Upsert,std::move(c)});
+            }
+        }
+        out.swap(staged);return true;
     }
     bool setRemover(const std::string& schema,std::function<bool(World&,Entity)> remove){
         auto it=codecs_.find(schema);
