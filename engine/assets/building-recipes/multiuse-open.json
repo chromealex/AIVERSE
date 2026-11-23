@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "description": "Genre-neutral functional recipe; identical openings for any visual style.",
+  "width": 24,
+  "height": 12,
+  "depth": 18,
+  "seed": 7,
+  "features": [
+    {
+      "kind": "large-gate",
+      "side": "front",
+      "count": 1,
+      "width": 5,
+      "height": 4.5,
+      "open": 1
+    },
+    {
+      "kind": "small-gate",
+      "side": "back",
+      "count": 2,
+      "width": 2.7,
+      "height": 2.9,
+      "open": 1
+    },
+    {
+      "kind": "personnel-door",
+      "side": "front",
+      "count": 1,
+      "width": 1.2,
+      "height": 2.35,
+      "open": 1
+    },
+    {
+      "kind": "sliding-roof",
+      "count": 1,
+      "width": 5,
+      "depth": 5,
+      "open": 1
+    }
+  ]
+}
