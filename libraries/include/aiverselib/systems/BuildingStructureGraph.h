@@ -13,7 +13,7 @@
 namespace aiverse::lib::systems {
 
 enum class BuildingFeatureKind : uint8_t {
-    LargeGate, SmallGate, PersonnelDoor, SlidingRoof, Window
+    LargeGate, SmallGate, PersonnelDoor, SlidingRoof, Window, Stairs, Elevator
 };
 enum class BuildingFeatureSide : uint8_t { Front, Back, Left, Right };
 struct BuildingFeature {
@@ -36,7 +36,8 @@ struct FunctionalBuildingRecipe {
     std::vector<BuildingFeature> features;
 };
 enum class BuildingGraphPart : uint8_t {
-    Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel, WindowPane, Partition
+    Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel, WindowPane, Partition,
+    StairTread, StairLanding, ElevatorPlatform
 };
 struct BuildingGraphSolid {
     BuildingGraphPart part=BuildingGraphPart::Wall;
@@ -52,7 +53,10 @@ struct BuildingGraphSocket {
     float width=0,height=0,depth=0,open=0;
 };
 struct BuildingGraphRoom {std::string id;uint32_t floor=0,x=0,z=0;float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;};
-struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=0,y=0,z=0,width=1.2f,height=2.2f;};
+enum class BuildingConnectionKind : uint8_t { Passage, Stair, Elevator };
+struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=0,y=0,z=0,width=1.2f,height=2.2f;
+    BuildingConnectionKind kind=BuildingConnectionKind::Passage;
+};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -68,6 +72,8 @@ inline const char* buildingFeatureName(BuildingFeatureKind kind) {
       case BuildingFeatureKind::PersonnelDoor:return "personnel-door";
       case BuildingFeatureKind::SlidingRoof:return "sliding-roof";
       case BuildingFeatureKind::Window:return "window";
+      case BuildingFeatureKind::Stairs:return "stairs";
+      case BuildingFeatureKind::Elevator:return "elevator";
     }
     return "unknown";
 }
@@ -92,7 +98,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
     const float storey=(recipe.height-0.52f)/float(recipe.floors);
     if(storey<2.8f||recipe.width/float(recipe.roomsX)<2.5f||recipe.depth/float(recipe.roomsZ)<2.5f)
         return "Storey or room dimensions too small";
-    uint32_t roofs=0,portals=0;
+    uint32_t roofs=0,portals=0,verticals=0;
     for(const auto& f:recipe.features){
         if(!finite(f.width)||!finite(f.height)||!finite(f.depth)||!finite(f.open)||
            !finite(f.position)||!finite(f.positionZ)||!finite(f.spacing)||
@@ -112,6 +118,22 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
             if(f.positionZ>=0&&(f.positionZ-f.depth*0.5f<0.6f||
                                 f.positionZ+f.depth*0.5f>recipe.depth-0.6f))
                 return "Sliding roof Z position crosses its structural frame";
+            continue;
+        }
+        if(f.kind==BuildingFeatureKind::Stairs||f.kind==BuildingFeatureKind::Elevator){
+            if(++verticals>2||recipe.floors<2||f.count!=1||f.floor!=0)
+                return "Vertical cores require 2+ floors, start at floor 0 and have count=1 (max 2)";
+            if(f.kind==BuildingFeatureKind::Stairs){
+                if(f.width<2.4f||f.depth<5.6f)
+                    return "Switchback stairs require at least 2.4m width and 5.6m depth";
+                const float storey=(recipe.height-0.52f)/float(recipe.floors);
+                if(storey>8.5f||f.depth<0.55f+storey*0.78f)
+                    return "Stair run too short for storey height and safe tread pitch";
+            }else if(f.width<1.4f||f.depth<1.4f)
+                return "Lift platform requires at least 1.4 by 1.4 metres";
+            if(f.width>recipe.width/float(recipe.roomsX)-0.7f||
+               f.depth>recipe.depth/float(recipe.roomsZ)-0.7f)
+                return "Vertical core must fit completely inside one room cell";
             continue;
         }
         if(f.floor>=recipe.floors)return "Opening floor out of range";
@@ -154,7 +176,8 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             graph.solids.push_back({p,x0,y0,z0,x1,y1,z1,owner});
     };
     solid(BuildingGraphPart::Floor,0,0,0,W,floorTop,D);
-    for(uint32_t f=1;f<recipe.floors;++f){const float y=floorTop+storey*float(f);solid(BuildingGraphPart::Floor,0,y,0,W,y+slabThick,D);}
+    // Inter-storey slabs are cut AFTER core placement, so neither their
+    // visible mesh nor the conservative collider fills a staircase/lift shaft.
     struct Hole {
         uint32_t feature=0,copy=0;
         BuildingFeature value;
@@ -164,9 +187,41 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     std::array<std::vector<Hole>,4> walls;
     const BuildingFeature* roof=nullptr;
     uint32_t roofIndex=0;
+    struct VerticalCore {BuildingFeatureKind kind;uint32_t feature;
+        float x0,z0,x1,z1;uint32_t roomX,roomZ;};
+    std::vector<VerticalCore> cores;
+    const float roomW=W/float(recipe.roomsX),roomD=D/float(recipe.roomsZ);
     for(uint32_t i=0;i<recipe.features.size();++i){
         const auto& f=recipe.features[i];
         if(f.kind==BuildingFeatureKind::SlidingRoof){roof=&f;roofIndex=i;continue;}
+        if(f.kind==BuildingFeatureKind::Stairs||f.kind==BuildingFeatureKind::Elevator){
+            // Unspecified cores use the first available room cell, not the
+            // building centre where a partition intersection may be located.
+            const uint32_t defaultX=cores.empty()?0:std::min(1u,recipe.roomsX-1);
+            const float cx=f.position>=0?f.position:(float(defaultX)+0.5f)*roomW;
+            const float cz=f.positionZ>=0?f.positionZ:roomD*0.5f;
+            const float x0=cx-f.width*0.5f,x1=cx+f.width*0.5f;
+            const float z0=cz-f.depth*0.5f,z1=cz+f.depth*0.5f;
+            if(x0<0.35f||x1>W-0.35f||z0<0.35f||z1>D-0.35f){
+                graph.error="Vertical core must stay inside the structural perimeter";
+                return graph;
+            }
+            const uint32_t ix=std::min(uint32_t(cx/roomW),recipe.roomsX-1);
+            const uint32_t iz=std::min(uint32_t(cz/roomD),recipe.roomsZ-1);
+            if(x0<float(ix)*roomW+0.35f||x1>float(ix+1)*roomW-0.35f||
+               z0<float(iz)*roomD+0.35f||z1>float(iz+1)*roomD-0.35f){
+                graph.error="Vertical core must fit inside one room without crossing partitions";
+                return graph;
+            }
+            for(const auto& previous:cores)
+                if(x0<previous.x1+0.35f&&x1>previous.x0-0.35f&&
+                   z0<previous.z1+0.35f&&z1>previous.z0-0.35f){
+                    graph.error="Vertical cores overlap or lack separating supports";
+                    return graph;
+                }
+            cores.push_back({f.kind,i,x0,z0,x1,z1,ix,iz});
+            continue;
+        }
         auto& row=walls[size_t(f.side)];
         for(uint32_t j=0;j<f.count;++j)row.push_back({i,j,f});
     }
@@ -337,6 +392,79 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             graph.connections.push_back({"passage/z/"+std::to_string(f)+"/"+
                 std::to_string(x)+"/"+std::to_string(z),roomId(f,x,z-1),
                 roomId(f,x,z),f,mid,bottom,at,1.2f,lintel-bottom});
+        }
+    }
+    // Cut rectangular shafts from EVERY upper slab using a bounded planar
+    // partition. Each emitted floor box remains a real collision solid.
+    for(uint32_t floor=1;floor<recipe.floors;++floor){
+        const float y=floorTop+storey*float(floor);
+        std::vector<float> xs{0.f,W},zs{0.f,D};
+        for(const auto& core:cores){
+            xs.push_back(core.x0);xs.push_back(core.x1);
+            zs.push_back(core.z0);zs.push_back(core.z1);
+        }
+        std::sort(xs.begin(),xs.end());std::sort(zs.begin(),zs.end());
+        xs.erase(std::unique(xs.begin(),xs.end()),xs.end());
+        zs.erase(std::unique(zs.begin(),zs.end()),zs.end());
+        for(size_t ix=1;ix<xs.size();++ix)for(size_t iz=1;iz<zs.size();++iz){
+            const float mx=(xs[ix-1]+xs[ix])*0.5f,mz=(zs[iz-1]+zs[iz])*0.5f;
+            bool hole=false;
+            for(const auto& core:cores)
+                if(mx>core.x0&&mx<core.x1&&mz>core.z0&&mz<core.z1){hole=true;break;}
+            if(!hole)solid(BuildingGraphPart::Floor,xs[ix-1],y,zs[iz-1],
+                           xs[ix],y+slabThick,zs[iz]);
+        }
+    }
+    // Model two opposite stairs flights with a turn landing. Treads are
+    // physical boxes; semantic vertical links remain separate from navmesh.
+    auto roomIdFor=[](uint32_t floor,uint32_t x,uint32_t z){
+        return std::string("room/")+std::to_string(floor)+"/"+
+            std::to_string(x)+"/"+std::to_string(z);
+    };
+    for(const auto& core:cores){
+        const float cx=(core.x0+core.x1)*0.5f,cz=(core.z0+core.z1)*0.5f;
+        for(uint32_t floor=0;floor+1<recipe.floors;++floor){
+            const float bottom=floorTop+storey*float(floor)+(floor?slabThick:0.f);
+            const float next=floorTop+storey*float(floor+1)+slabThick;
+            const float climb=next-bottom;
+            const std::string from=roomIdFor(floor,core.roomX,core.roomZ);
+            const std::string to=roomIdFor(floor+1,core.roomX,core.roomZ);
+            const std::string token=std::to_string(core.feature)+"/"+std::to_string(floor);
+            graph.connections.push_back({"vertical/"+token,from,to,floor,cx,bottom,cz,
+                core.x1-core.x0,climb,
+                core.kind==BuildingFeatureKind::Stairs?
+                    BuildingConnectionKind::Stair:BuildingConnectionKind::Elevator});
+            graph.sockets.push_back({(core.kind==BuildingFeatureKind::Stairs?"stairs/":"lift/")+token,
+                core.kind,BuildingFeatureSide::Front,core.feature,floor,cx,bottom,cz,
+                core.x1-core.x0,climb,core.z1-core.z0,0.f});
+            if(core.kind==BuildingFeatureKind::Elevator){
+                // Stationary platform at its initial level. Motion/control
+                // are the responsibility of an actor/elevator runtime owner.
+                solid(BuildingGraphPart::ElevatorPlatform,core.x0,bottom,core.z0,
+                      core.x1,bottom+0.18f,core.z1,core.feature);
+                continue;
+            }
+            const float mid=bottom+climb*0.5f;
+            const float lane=(core.x1-core.x0-0.18f)*0.5f;
+            const float halfRun=core.z1-core.z0-0.9f;
+            const int steps=std::max(8,int(std::ceil(climb/0.4f)));
+            const int perFlight=(steps+1)/2;
+            const float rise=climb/float(2*perFlight);
+            for(int j=0;j<perFlight;++j){
+                const float z0=core.z0+halfRun*float(j)/float(perFlight);
+                const float z1=core.z0+halfRun*float(j+1)/float(perFlight);
+                const float y0=bottom+rise*float(j),y1=bottom+rise*float(j+1);
+                solid(BuildingGraphPart::StairTread,core.x0,y0,z0,
+                      core.x0+lane,y1,z1,core.feature);
+                // Return flight climbs towards -Z after the turn landing.
+                const float back0=core.z0+halfRun*float(perFlight-j-1)/float(perFlight);
+                const float back1=core.z0+halfRun*float(perFlight-j)/float(perFlight);
+                const float by0=mid+rise*float(j),by1=mid+rise*float(j+1);
+                solid(BuildingGraphPart::StairTread,core.x1-lane,by0,back0,
+                      core.x1,by1,back1,core.feature);
+            }
+            solid(BuildingGraphPart::StairLanding,core.x0,mid-0.14f,
+                  core.z1-0.9f,core.x1,mid,core.z1,core.feature);
         }
     }
     const float roofBase=H-roofThickness;
