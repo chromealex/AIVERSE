@@ -49,6 +49,10 @@ static void checkLedger() {
     AIVERSE_TEST_CHECK(!first.transfer(duplicates,b,c));
     AIVERSE_TEST_CHECK(first.lastRevision()==revision);
     AIVERSE_TEST_CHECK(first.despawn(102,b));
+    AIVERSE_TEST_CHECK(first.liveCount()==2);
+    AIVERSE_TEST_CHECK(!first.liveIds().contains(102));
+    AIVERSE_TEST_CHECK(first.liveIds().contains(101) &&
+                       first.liveIds().contains(103));
     AIVERSE_TEST_CHECK(!first.despawn(102,b));
     AIVERSE_TEST_CHECK(!first.spawn(102,a)); // tombstone prevents resurrection
     AIVERSE_TEST_CHECK(!first.transfer(102,b,c));
@@ -64,6 +68,26 @@ static void checkLedger() {
     AIVERSE_TEST_CHECK(read.ok() && read.remaining()==0);
     AIVERSE_TEST_CHECK(digest(first)==digest(recovered));
     AIVERSE_TEST_CHECK(encode(first)==encode(recovered));
+    AIVERSE_TEST_CHECK(recovered.liveIds()==first.liveIds());
+    AIVERSE_TEST_CHECK(recovered.liveCount()==2);
+    // A long history of tombstones never increases the live-ID index.
+    RegionEntityLedger history;
+    for(uint64_t i=1;i<=2000;++i) {
+        AIVERSE_TEST_CHECK(history.spawn(i,a));
+        AIVERSE_TEST_CHECK(history.despawn(i,a));
+    }
+    AIVERSE_TEST_CHECK(history.size()==2000 && history.liveCount()==0);
+    AIVERSE_TEST_CHECK(history.liveIds().empty());
+    AIVERSE_TEST_CHECK(history.spawn(2001,b));
+    AIVERSE_TEST_CHECK(history.liveCount()==1 &&
+                       *history.liveIds().begin()==2001);
+    const auto historicBytes=encode(history);
+    Archive historicInput(historicBytes);
+    RegionEntityLedger loadedHistory;
+    io(historicInput,loadedHistory);
+    AIVERSE_TEST_CHECK(historicInput.ok());
+    AIVERSE_TEST_CHECK(loadedHistory.liveIds()==history.liveIds());
+    AIVERSE_TEST_CHECK(encode(loadedHistory)==historicBytes);
     RegionEntityLedger preserved=first;
     std::string shortBytes=encoded.substr(0,encoded.size()-1);
     Archive truncated(shortBytes);
