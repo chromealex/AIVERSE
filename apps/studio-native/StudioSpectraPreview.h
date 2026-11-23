@@ -112,7 +112,7 @@ public:
     // Called once INSIDE the native Scene frame, after gfx::beginFrame and
     // before Renderer3D begins scene passes. Even paused views update their
     // camera-dependent draw uniforms, but never advance particle age.
-    void prepare(const fx::SpectraFxView& view) {
+    void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
         if(pendingRestart_) {
@@ -120,7 +120,7 @@ public:
             timeTicks_=0;
             pendingRestart_=false;
             // Native burst, NOT an HTML animation or placeholder quad.
-            if(!runtime_.burstAt({0,1.0f,0})) {
+            if(!runtime_.burstAt({origin.x,origin.y+1.0f,origin.z})) {
                 playing_=false;
                 error_=runtime_.reason().empty()?
                     "SpectraFX preview burst rejected":runtime_.reason();
