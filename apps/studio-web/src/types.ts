@@ -156,9 +156,22 @@ export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;
 export interface StudioBuildingFunction { id: string; name: string; width: number; height: number; depth: number }
 export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[] }
 export interface StudioBuildingCatalog { styles: StudioBuildingStyle[] }
+export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof';
+export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
+export interface StudioBuildingFeature {
+  kind: StudioBuildingFeatureKind;
+  side: StudioBuildingFeatureSide;
+  count: number;
+  width: number;
+  height: number;
+  depth: number;
+  open: number;
+}
 export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
   width: number; height: number; depth: number; seed: number;
+  mode?: 'features' | 'preset';
+  features?: StudioBuildingFeature[];
 }
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
