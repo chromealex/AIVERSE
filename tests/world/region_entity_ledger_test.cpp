@@ -119,6 +119,9 @@ static void checkEcsPersistence() {
     one->world().enableCowSnapshots();
     SimSnapshot rollback;
     one->saveState(rollback);
+    // Reacquire the mutable resource after COW snapshot; the old pointer may
+    // still reference a page shared with the saved snapshot.
+    state=one->world().resource<RegionEntityLedger>();
     std::array<uint64_t,2> group{700,701};
     AIVERSE_TEST_CHECK(state->transfer(group,a,b));
     AIVERSE_TEST_CHECK(one->checksum()!=baseline);
