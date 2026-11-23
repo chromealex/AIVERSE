@@ -287,8 +287,8 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
     using namespace buildingStudioDetail;
     if(project.empty())throw std::runtime_error("Open a project before previewing");
     const auto req=request(params);
-    auto building=produce(engine,req);
-    applyProjectMaterials(project,req,building);
+    auto built=produce(engine,req);
+    applyProjectMaterials(project,req,built);
     StudioAssetCatalog catalog(project);
     catalog.rebuild();
     const auto content=studioContentRoot(project);
@@ -331,7 +331,7 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
     };
     std::string error;
     auto model=building::runtimeTexturedBuildingModel(
-        building,resolver,"studio/generated-building-preview",&error);
+        built,resolver,"studio/generated-building-preview",&error);
     if(!model)throw std::runtime_error(error.empty()?
         "Building preview CPU Model failed":error);
     return model;
