@@ -1,3 +1,20 @@
+## 2026-11-23 — Stage 14: dual Scene/FX viewport QA hardening
+
+The real native Scene and SpectraFX editor now use two separate GPU
+drawables and independent cameras (Stage 13), both serialized on the
+existing native render thread. Stage 14 extends
+`StudioViewportLayoutTests.cpp` to verify two simultaneous independent
+rectangles, DPR, FX hide/resize without mutating Scene geometry.
+The focused macOS CI includes
+`aiverse_studio_viewport_layout_tests` and CTest
+`studio_viewport_layout` in addition to native Metal, codec and
+Workspace/MCP tests. `SpectraDockViewport.tsx` no longer dispatches
+the obsolete shared-surface reflow event when FX closes, preventing
+unnecessary authored Scene redraws.
+**Exact-SHA AppleClang/Metal, Node/Vite, Windows and dual live
+WKWebView screenshot QA remain unverified.** Detailed handoff:
+`docs/agent-handoffs/spectrafx-studio-stage14-dual-viewport-qa-2026-11-23.md`.
+
 ## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
 
 The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
