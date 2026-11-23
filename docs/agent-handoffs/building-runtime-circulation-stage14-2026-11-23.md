@@ -104,3 +104,16 @@ Deferred next-step verification: standalone C++20 and native headers,
 the navmesh source's actual walkable upper-floor spans, dynamic collision
 rollback, per-actor route acknowledgement, cabin door interlocks, and
 running character traversal in an actual Mac game scene. Keep PR Draft.
+
+## Final owner adapter exposure
+
+- Commit 9a5a86d4: engine/buildings/BuildingRuntime.h now also includes
+  BuildingCirculationScene.h for native game code.
+- Scene attach() registers exactly one game-assigned dynamic collider per
+  elevator and rolls back on partial failure. update() applies lift motion
+  to the existing SpatialWorld owner and invalidates nav::Mesh when needed.
+  rebuildNavigation() accepts only refreshed native meshes; detach()
+  retires registered colliders without destroying other game entities.
+- Tests remain deferred by user request. No runtime/motor/physics/graphics
+  verification was performed; all code is subject to later compilation
+  and integration QA.
