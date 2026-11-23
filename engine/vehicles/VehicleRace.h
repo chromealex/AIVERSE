@@ -56,6 +56,11 @@ public:
     // false: no race (no cars, bots without a racing line, ...).
     bool start(World& w, RaceHost& host, const DriveRules& drive, std::span<const Entity> cars, uint32_t tick) const;
     std::vector<RacePedals> pedals(World& w, RaceHost& host, uint32_t tick) const;
+    // Host-only broad-phase admission: candidate teleport destinations for
+    // the next race step, before collision publication and command mutation.
+    // Includes previous checkpoint/grid and the next checkpoint if crossed
+    // on the coming tick; sorted and unique for deterministic pinning.
+    std::vector<Vec3> possibleRespawnPositions(const World& w) const;
     void after(World& w, RaceHost& host, const DriveRules& drive, uint32_t tick) const;
     int64_t racerOf(const World& w, Entity car) const;                // racer id, 0: not racing
     bool holds(const World& w, Entity car) const;                     // a racer during the race: nobody gets out
