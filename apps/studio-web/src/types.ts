@@ -186,6 +186,7 @@ export interface StudioParams {
     preset?:'perspective'|'front'|'side'|'top';
     camera?:StudioSpectraCameraSnapshot;
     parameters?:Record<string,number>;
+    seed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
   'studio.wind':Record<string,never>;
