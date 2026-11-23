@@ -9,7 +9,7 @@ namespace aiverse::world {
 // Simulation::step() or a rollback resimulation loop.
 class NativeWorldFinality {
 public:
-    enum class Result { Committed, NoChanges, WaitingForContent, NeedsRecovery };
+    enum class Result { Committed, NoChanges, WaitingForContent, WaitingForDurability, NeedsRecovery };
     using State=UnifiedWorldReplay::State;
     using Record=DurableComponentCodecs::Record;
     using Resources=DurableResourceTransaction;
@@ -26,6 +26,7 @@ private:
     const NativeRestartState::CommandPolicy restartCommands_;
     bool failed_=false;
     bool running_=false;
+    bool awaitingAppend_=false;
 
     struct Projection {
         std::vector<RegionEntityId> materialized;
@@ -123,6 +124,21 @@ public:
     // IO/validation failure; recovery must happen through the host restore path.
     Result step(){
         if(running_)return fail();
+        if(failed_)return Result::NeedsRecovery;
+        if(awaitingAppend_){
+            if(sim_.tick()!=lastTick_+1)return fail();
+            const auto result=session_.pollIo();
+            if(result==UnifiedWalSession::IoResult::Pending)return Result::WaitingForDurability;
+            awaitingAppend_=false;
+            if(result!=UnifiedWalSession::IoResult::Committed)return fail();
+            lastTick_=sim_.tick();return Result::Committed;
+        }
+        // Checkpoint IO is a barrier, not a simulated tick.
+        if(session_.ioPending()){
+            const auto result=session_.pollIo();
+            if(result==UnifiedWalSession::IoResult::Pending)return Result::WaitingForDurability;
+            if(result!=UnifiedWalSession::IoResult::Checkpointed)return fail();
+        }
         if(failed_||!session_.managedReady()||!materialize_||!captureBudget_||
            sim_.tick()!=lastTick_||lastTick_==UINT32_MAX)return fail();
         running_=true;
@@ -171,6 +187,10 @@ public:
                 return candidate.restart==restartAfter&&equalProjection(candidate.world,candidate.ledger,sim_.world(),*live)&&
                     (!validate_||validate_(candidate));
             };
+            if(session_.asyncEnabled()){
+                if(session_.queueCommit(std::move(frame),codecs_,materialize_,check,resources_)!=UnifiedWalSession::IoResult::Pending)return fail();
+                awaitingAppend_=true;return Result::WaitingForDurability;
+            }
             if(session_.commit(frame,codecs_,materialize_,check,resources_)!=RegionWalWrite::Ok)return fail();
             lastTick_=sim_.tick();return Result::Committed;
         }catch(...){return fail();}
