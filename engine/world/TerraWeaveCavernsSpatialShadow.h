@@ -13,6 +13,7 @@ namespace aiverse::terraweave::caverns {
 class CaveSpatialShadow {
 public:
     bool prepared()const noexcept{return bool(staged_);}
+    bool candidateInstalled()const noexcept{return installed_;}
     uint64_t activeRevision()const noexcept{return activeRevision_;}
     uint64_t stagedRevision()const noexcept{return stagedRevision_;}
     size_t activeCount()const noexcept{return activeCount_;}
