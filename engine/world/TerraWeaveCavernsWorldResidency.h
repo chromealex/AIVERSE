@@ -160,6 +160,14 @@ public:
         return requests;
     }
 
+    bool current(CaveResidencyTicket ticket)const {
+        const auto it=items_.find(ticket.key);
+        if(it==items_.end()||ticket.sourceRevision!=revision_||
+           ticket.generation!=it->second.generation||
+           ticket.lod!=it->second.lod)return false;
+        return ticket.action==CaveResidencyAction::Build
+            ? it->second.building : it->second.retiring;
+    }
     // ACK only after native graphics/collider/nav resources for this ticket
     // have successfully been published or fully retired at an owner barrier.
     bool acknowledge(CaveResidencyTicket ticket){
