@@ -8,6 +8,7 @@
 //   --structure KIND: one whole structure of that kind from the style's `structures` block.
 //   --street N: N buildings of seeded sizes (1..5 floors) along both sides of a street, each with its own seed.
 #include "engine/buildings/BuildingGlbWriter.h"
+#include <aiverselib/systems/BuildingFeatureGenerator.h>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -29,18 +30,33 @@ StyledMesh ground(float x0,float z0,float x1,float z1){
 }
 int main(int argc,char** argv){
     try{
-        std::string style,out,def,structure;uint64_t seed=1;uint32_t yaw=0,street=0;bool withGround=false,sizeProvided=false;StructureSize size{};
+        std::string style,out,def,structure,recipePath;uint64_t seed=1;uint32_t yaw=0,street=0;bool withGround=false,sizeProvided=false,seedProvided=false;StructureSize size{};
         for(int i=1;i<argc;++i){std::string a=argv[i];auto next=[&]{if(i+1>=argc)throw std::runtime_error(a+": value expected");return std::string(argv[++i]);};
-            if(a=="--style")style=next();else if(a=="--out")out=next();else if(a=="--building")def=next();else if(a=="--seed")seed=std::stoull(next());
-            else if(a=="--yaw")yaw=uint32_t(std::stoul(next()));else if(a=="--street")street=uint32_t(std::stoul(next()));else if(a=="--ground")withGround=true;else if(a=="--structure")structure=next();
+            if(a=="--style")style=next();else if(a=="--out")out=next();else if(a=="--building")def=next();else if(a=="--seed"){seed=std::stoull(next());seedProvided=true;}
+            else if(a=="--yaw")yaw=uint32_t(std::stoul(next()));else if(a=="--street")street=uint32_t(std::stoul(next()));else if(a=="--ground")withGround=true;else if(a=="--structure")structure=next();else if(a=="--recipe")recipePath=next();
             else if(a=="--size"){if(sizeProvided)throw std::runtime_error("--size specified twice");sizeProvided=true;size.width=std::stof(next());size.height=std::stof(next());size.depth=std::stof(next());}
             else throw std::runtime_error("unknown argument "+a);}
-        if(style.empty()||out.empty())throw std::runtime_error("usage: aiverse_building_export --style <style.json> --out <file.glb> [--building def.json] [--seed N] [--yaw 0..3] [--street N] [--ground] [--structure KIND --size W H D]");
+        if(style.empty()||out.empty())throw std::runtime_error("usage: aiverse_building_export --style <style.json> --out <file.glb> [--building def.json] [--seed N] [--yaw 0..3] [--street N] [--ground] [--structure KIND --size W H D] [--recipe path.json]");
         auto st=readBuildingStyle(Json::parse(readFile(style)),style);
         Glb glb;size_t tris=0;
-        if(!structure.empty()){
+        if(!recipePath.empty()){
+            if(!structure.empty()||street||!def.empty())
+                throw std::runtime_error("--recipe is mutually exclusive with --structure, --street, --building");
+            auto recipe=readFunctionalBuildingRecipe(Json::parse(readFile(recipePath)),recipePath);
+            if(sizeProvided){
+                recipe.width=size.width;recipe.height=size.height;recipe.depth=size.depth;
+            }
+            if(seedProvided)recipe.seed=seed;
+            auto result=generateFunctionalBuilding(st,recipe,{},yaw);
+            if(!result)throw std::runtime_error(result.error);
+            tris+=result.building.mesh.triangles();
+            glb.add(result.building.mesh,"building-recipe");
+            if(withGround)glb.add(ground(-8,-8,recipe.width+8,recipe.depth+8),"ground");
+        }else if(!structure.empty()){
             if(sizeProvided&&(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||size.width<=0||size.height<=0||size.depth<=0))throw std::runtime_error("--size expects three positive finite dimensions");
-            auto r=dressStructure(st,structure,seed,{},yaw,size);if(r.mesh.vertices.empty())throw std::runtime_error("style '"+st.id+"' has no structure '"+structure+"'");
+            auto r=dressStructure(st,structure,seed,{},yaw,size);
+            if(r.mesh.vertices.empty())throw std::runtime_error(
+                r.fitError.empty()?"Unknown building preset or invalid dimensions":r.fitError);
             tris+=r.mesh.triangles();glb.add(r.mesh,structure);
             if(withGround)glb.add(ground(r.mesh.boundsMin[0]-8,r.mesh.boundsMin[2]-8,r.mesh.boundsMax[0]+8,r.mesh.boundsMax[2]+8),"ground");
         }else if(!street){
