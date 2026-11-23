@@ -1392,3 +1392,54 @@ not a registered game executable or verified GPU capture. Tests were
 deferred by the user, so no native/GLTF/Metal/Vulkan/GLES result may
 be claimed. Read the stage handoff:
 docs/agent-handoffs/building-renderer3d-stage23s-2026-11-24.md.
+
+## Twelve built-in architecture settings (Stage 23T.5)
+
+The following visual setting IDs are available for the *same*
+functional building / room / lift / door / ECS runtime: 
+`medieval-fantasy`, `dark-fantasy`, `steampunk`,
+`cyberpunk`, `scifi-space`, `alien-civilization`,
+`post-apocalypse`, `modern`, `ancient-civilizations`,
+`asian-historical`, `solarpunk` and `underwater`.
+An original `scifi` style also remains for legacy users.
+The Studio generator advertises these as independent named settings
+rather than relying on a shortened first-word label.
+
+Read `docs/building-settings.md` for each setting's materials,
+massing/structure forms, facade and ornament grammar. Each setting
+has its own `skills/world/aiverse-building-<id>/SKILL.md` and
+registration in `skills/catalog.json`. For any style-specific task
+read BOTH this parent skill and the selected setting skill.
+
+Visual material schema is data-only. `materials.<name>` may now
+contain `surfacePattern` (one of 16 values supported by
+`BuildingSurfacePattern.h`) and optional `surfaceSeed`.
+The portable deterministic CPU generator builds actual 128x128
+albedo, metallic/roughness and normal images. The GLB writer
+encodes those images as PNG; the runtime Model converter populates
+its existing render::Image table. Existing imported GUID texture
+slots *override* generated maps for each corresponding channel;
+never invent GUIDs or treat a generated `surfacePattern` as a file
+path. Explicit AO and emissive image channels still require
+imported GUIDs, while numeric AO/emission factors remain valid.
+
+All 12 settings have 3 authored palettes, 19 named PBR material
+slots, four neutral structural silhouette IDs (`residence`,
+`hall`, `workshop`, `watchtower`) and authored generic
+massing/facade/prop grammar. These structure names describe
+appearance only, not RTS/FPS/gameplay classes. The original
+`modern` style ID was updated in place, not renamed.
+
+Source changes have NOT been compiled or rendered. Do not claim
+visual accuracy or successful GLB/Metal/Vulkan/GLES validation
+until the deferred Stage 23U full QA. The next agents should
+avoid adding hardcoded per-setting branches to ECS/PHYSIS/Renderer3D:
+setting selection belongs exclusively to data and Studio UI.
+Mandatory handoffs for this pack are
+`docs/agent-handoffs/building-settings-core-stage23t0-2026-11-24.md`,
+`building-settings-historic-stage23t1-2026-11-24.md`,
+`building-settings-future-stage23t2-2026-11-24.md`,
+`building-settings-civil-stage23t3-2026-11-24.md`,
+`building-settings-nature-stage23t4-2026-11-24.md`, and
+`building-settings-catalog-stage23t5-2026-11-24.md`
+under the same `docs/agent-handoffs` directory.
