@@ -38,6 +38,9 @@ void GameView::clearSharedAnimationProfile() {
 }
 Json GameView::sharedAnimationProfile(uint64_t entityKey,uint64_t worldEpoch,const std::string& action) {
     Json r=Json::object();r.set("available",Json::fromBool(false));
+    if(action=="disable"&&!framePublication_.active()&&genericView_&&genericView_->profileMatches(entityKey,worldEpoch)){
+        genericView_->clearAnimationProfile();r.set("reason",Json::string("Profiling disabled"));return r;
+    }
     if(framePublication_.active()||!framePublication_.published().ready()||!genericView_||
        !sharedAnimationGraphDiagnostic(entityKey,worldEpoch).getBool("available")){
         r.set("reason",Json::string("Current committed common View instance unavailable"));return r;
@@ -46,11 +49,8 @@ Json GameView::sharedAnimationProfile(uint64_t entityKey,uint64_t worldEpoch,con
         if(!genericView_->enableAnimationProfile(entityKey,worldEpoch))return r;
     }else if(action=="reset"){
         if(!genericView_->resetAnimationProfile(entityKey,worldEpoch))return r;
-    }else if(action=="disable"){
-        if(!genericView_->profileMatches(entityKey,worldEpoch))return r;
-        genericView_->clearAnimationProfile();
-        r.set("reason",Json::string("Profiling disabled"));return r;
-    }else if(action!="read")throw std::invalid_argument("unknown live profile action");
+    }else if(action=="disable")return r;
+    else if(action!="read")throw std::invalid_argument("unknown live profile action");
     return genericView_->animationProfileReport(entityKey,worldEpoch);
 }
 Json GameView::sharedAnimationGraphDiagnostic(uint64_t entityKey,uint64_t worldEpoch,graph_telemetry::History* history) const {
