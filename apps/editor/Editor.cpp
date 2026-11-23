@@ -287,6 +287,11 @@ public:
                         16,100,1024,2);
                 bridge->invalidate(bounds,std::move(frozen));
             }
+            // Editor Play shares the real GameClient. Forward the authored
+            // SDF on MapDoc/Undo change without restarting the Game tab.
+            // GameClient treats this as visual-only, NOT a physics/nav ACK.
+            if(json.isObject()&&editor.clientHost_.active())
+                (void)editor.clientHost_.updateCavernsVisual(json);
             previousJson=json;
             previousStamps=newStamps;
             previousEntrances=newEntrances;
