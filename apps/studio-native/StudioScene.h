@@ -152,6 +152,7 @@ public:
         return result;
     }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    void captureNextFrameTagged(gfx::Device::TaggedCaptureFn callback) {lastFrameSignature_=0;device_->captureNextFrameTagged(std::move(callback));}
     uint64_t fxFrameSerial() const {return device_?device_->frameSerial():0;}
     uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
     uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
