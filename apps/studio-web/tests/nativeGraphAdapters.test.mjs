@@ -86,3 +86,26 @@ test('typed animation conditions preserve graph parameter types and transition o
  assert.equal(editAnimationCondition(next,'idle',0,0,null).states[0].transitions[0].when.length,0);
  assert.deepEqual(doc.states[0].transitions[0].when,[]);
 });
+
+import {addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from '../src/graphs/nativeGraphAdapters.ts';
+import {terrainRecipeProjection,buildingRecipeProjection,caveSnapshotProjection} from '../src/graphs/generatorProjections.ts';
+test('modifier presets and source material assignment retain native fields',()=>{
+ const doc={nodes:[{id:'a',geometry:{kind:'box',size:[1,2,3]}}],materials:[{id:'steel'}]};
+ const next=addGeometryModifier(doc,'a','mirror');
+ assert.deepEqual(next.nodes[0].geometry.modifiers,[{kind:'mirror',axis:'x'}]);
+ assert.equal(addGeometryModifier(doc,'a','constructor'),doc);
+ assert.deepEqual(removeGeometryModifier(next,'a',0).nodes[0].geometry.modifiers,[]);
+ assert.deepEqual(modelMaterialIds(doc),['steel']);
+ assert.equal(bindModelMaterial(doc,'a','missing'),doc);
+ assert.equal(bindModelMaterial(doc,'a','steel').nodes[0].material,'steel');
+ assert.equal(doc.nodes[0].material,undefined);
+});
+test('owner recipe projections are bounded and never mutate source',()=>{
+ const terrain={seed:7,octaves:5};
+ assert.equal(terrainRecipeProjection(terrain,{enabled:true}).links.length,2);
+ assert.equal(buildingRecipeProjection({style:'modern'}).nodes.length,5);
+ const snapshot={version:1,settings:{seed:7},stamps:Array.from({length:100},(_,i)=>({id:i+1,mode:'carve',radiusCm:400})),entrances:[]};
+ const view=caveSnapshotProjection(snapshot);
+ assert.equal(view.nodes.length,66);assert.equal(snapshot.stamps.length,100);
+ assert.throws(()=>caveSnapshotProjection({version:2}));
+});
