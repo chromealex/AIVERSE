@@ -64,6 +64,8 @@ export default function BuildingGeneratorPanel({
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
   const [status,setStatus]=useState('');
+  const [staleMaterials,setStaleMaterials]=useState<Array<{recipe:string;changes:Array<{guid:string;reason:string}>}>>([]);
+  const [checkingMaterials,setCheckingMaterials]=useState(false);
 
   useEffect(() => {
     if(!projectLoaded){setMaterialLibrary({library:{}});return;}
@@ -240,6 +242,19 @@ export default function BuildingGeneratorPanel({
     setSeed(String(n));clearGenerated();
   };
 
+  const checkMaterialDependencies=async()=>{
+    if(!nativeConnected()||!projectLoaded||checkingMaterials)return;
+    setCheckingMaterials(true);setError('');
+    try{
+      const result=await invoke('studio.buildingStaleMaterials',{});
+      setStaleMaterials(result.stale);
+      setStatus(result.stale.length
+        ? result.stale.length+' generated building recipes contain outdated texture sources.'
+        : 'No stale tracked texture dependencies found.');
+    }catch(e){setError(explain(e));}
+    finally{setCheckingMaterials(false);}
+  };
+
   const preview=async()=>{
     if(parameterError||busy)return;
     setBusy(true);setError('');setStatus('');setSaved(null);setThumbnail('');
@@ -365,6 +380,21 @@ export default function BuildingGeneratorPanel({
             </StudioSelect>
           </StudioField>)}
         </div>
+      </StudioSection>
+      <StudioSection title="Texture reimport dependencies">
+        <div className="abg__actions">
+          <StudioButton variant="secondary" disabled={busy||checkingMaterials||!nativeConnected()}
+            onClick={()=>void checkMaterialDependencies()}>
+            <RefreshCw size={15}/> {checkingMaterials?'Checking…':'Check generated material dependencies'}
+          </StudioButton>
+        </div>
+        {staleMaterials.map(item=><div className="abg__property" key={item.recipe}>
+          <strong>{item.recipe}</strong>
+          {item.changes.map((change,index)=><small key={index} className="abg__note">
+            {change.guid||'Asset'}: {change.reason}
+          </small>)}
+        </div>)}
+        <small className="abg__note">Checks embedded texture source bytes and .meta importer settings. Existing GLBs are not overwritten; regenerate explicitly to create a new asset after reimport.</small>
       </StudioSection>
       <StudioSection title="PBR materials & textures">
         <BuildingMaterialEditor projectLoaded={projectLoaded}/>
