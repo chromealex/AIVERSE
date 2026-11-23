@@ -1,0 +1,4 @@
+.au-graph-canvas{flex:1;min-height:0;min-width:0;overflow:auto;background:var(--au-canvas)}
+.au-graph-canvas .au-graph-node{cursor:grab;touch-action:none}
+.au-graph-canvas .au-graph-node:active{cursor:grabbing}
+.au-graph-canvas .au-graph-node:focus-visible rect{stroke:var(--au-accent-ink);stroke-width:2}
