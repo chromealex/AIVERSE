@@ -40,7 +40,9 @@
     "apps/editor/core/Workspace.cpp",
     "tools/mcp/audit_registry.py",
     "tests/vfx_graph_ops_test.cpp",
-    "apps/editor/core/GraphDraftEdits.h"
+    "apps/editor/core/GraphDraftEdits.h",
+    "apps/editor/core/GraphPropertySchema.h",
+    "apps/editor/core/GraphAssetDependencies.h"
   ],
   "traits": {
     "editable": true,
@@ -180,7 +182,9 @@
       "graph_edit",
       "graph_save",
       "graph_diagnostics",
-      "graph_dependencies"
+      "graph_dependencies",
+      "graph_property_schema",
+      "graph_asset_dependencies"
     ],
     "studio_panels": [
       "shader_graph",
