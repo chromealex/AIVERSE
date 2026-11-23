@@ -1212,8 +1212,16 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
         status.set("capture",std::move(capture));
         return status;
     };
-    if(action=="captureStatus") {
+    if(action=="captureCancel"||action=="captureStatus") {
         const auto shot=fxShot_;
+        if(shot){
+            if(!params["captureId"].isNull()&&params["captureId"].integer(-1)!=int64_t(shot->id))throw std::runtime_error("Stale capture ID");
+            out.set("captureId",Json::number(int64_t(shot->id)));
+            if(action=="captureCancel"){
+                {std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
+                fxShot_.reset();out.set("pending",Json::fromBool(false));out.set("ready",Json::fromBool(false));out.set("cancelled",Json::fromBool(true));return respond(std::move(out));
+            }
+        }
         if(!shot) {
             out.set("pending",Json::fromBool(false));
             out.set("ready",Json::fromBool(false));
@@ -1237,6 +1245,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
         }
         if(!done) {
             if(platform_.now()-fxShotStartedAt_>10.) {
+                {std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
                 fxShot_.reset(); // callback owns its shared state until completion
                 out.set("pending",Json::fromBool(false));
                 out.set("ready",Json::fromBool(false));
@@ -1279,7 +1288,10 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
         if(!fxShot_->done && platform_.now()-fxShotStartedAt_<=10.)
             throw std::runtime_error("An FX GPU capture is still pending");
     }
+    if(fxShot_){std::lock_guard<std::mutex> lock(fxShot_->mutex);fxShot_->cancelled=true;}
     auto shot=std::make_shared<FxShot>();
+    shot->id=nextFxShotId_++;
+    out.set("captureId",Json::number(int64_t(shot->id)));
     fxShot_=shot;
     fxShotStartedAt_=platform_.now();
     try {
@@ -1312,6 +1324,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
             fxPreview_->captureNextFrameTagged(
                 [shot,maxSide,requireReplayReady,requestedProject,requestedGeneration,requestedTick](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba,Json frameMetadata) {
+                    {std::lock_guard<std::mutex> lock(shot->mutex);if(shot->cancelled)return;}
                     const bool identityMatches=frameMetadata.isObject()&&frameMetadata.getStr("projectPath")==requestedProject&&frameMetadata["generation"].integer(-2)==requestedGeneration;
                     {std::lock_guard<std::mutex> lock(shot->mutex);
                      shot->provenance.set("identityMatches",Json::fromBool(identityMatches));
@@ -1354,6 +1367,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
                     }
                     {
                         std::lock_guard<std::mutex> lock(shot->mutex);
+                        if(shot->cancelled)return;
                         shot->jpeg=std::move(jpeg);
                         shot->error=std::move(error);
                         shot->width=ow;shot->height=oh;
@@ -1375,7 +1389,7 @@ Json StudioHost::runSpectraPreview(const Json& params) {
     if(!fxPreview_)
         throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
     const std::string action=params.getStr("action");
-    if(action=="capture"||action=="captureStatus")
+    if(action=="capture"||action=="captureStatus"||action=="captureCancel")
         return captureSpectraFrame(params);
     // Stopping and inspecting a ready runtime never require the view to
     // remain on screen. Load/play/step/seek need a drawable to advance.
