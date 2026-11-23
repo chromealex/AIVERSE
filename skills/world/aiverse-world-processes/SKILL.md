@@ -653,3 +653,6 @@ Canonical forest climate sampler rechecks live ECS Area and Region and current h
 
 ## Stage 57: synchronous ecology adapter
 `WorldProcessGameplayHost::advanceEcology` builds a fresh ECS climate sampler per synchronous TerraWeave ecology call. Caller owns forest/roots and must restore both to the same completed tick after rollback. Production tick wiring and QA pending. See `docs/handoffs/world-processes-stage57-ecology-step-2026-11-23.md`.
+
+## Stage 58: paired ecology checkpoint
+`WorldProcessGameplayHost::captureEcology` and `restoreEcology` provide caller-owned in-memory checkpoints of forest resource and rooted plants, guarded by completed tick. Automatic production tick and disk persistence wiring remain pending. No tests. See `docs/handoffs/world-processes-stage58-ecology-checkpoint-2026-11-23.md`.
