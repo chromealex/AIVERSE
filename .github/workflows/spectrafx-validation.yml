@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/spectrafx-generic-cue-queue
+      - feature/spectrafx-significance-data-20261123
     paths:
       - ".github/workflows/spectrafx-validation.yml"
       - "tools/spectrafx/**"
