@@ -4,6 +4,7 @@
 // authored collision geometry independent of camera and visual LOD.
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
