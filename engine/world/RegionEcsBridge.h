@@ -3,13 +3,24 @@
 #pragma once
 #include "engine/world/RegionEntityLedger.h"
 #include "engine/sim/CommonComponents.h"
+#include <functional>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace aiverse::world {
+
+// Read the canonical position through the host's real ECS component owner.
+// Do not synchronize or manufacture an alternative Transform for characters.
+using RegionPositionReader = std::function<std::optional<Vec3>(const World&,Entity)>;
+inline std::optional<Vec3> regionTransformPosition(const World& world,Entity e) {
+    const auto* transform=world.tryGetConst<Transform>(e);
+    if(!transform)return std::nullopt;
+    return transform->pos;
+}
 
 struct RegionStableIdentity {
     RegionEntityId id=0;
@@ -45,10 +56,10 @@ class RegionEcsBridge {
         return !seen;
     }
     static bool eligible(const World& world,Entity e,RegionEntityId id,
-                         std::string* error) {
+                         const RegionPositionReader& position,std::string* error) {
         if(!id)return reject(error,"stable region ID must be nonzero");
-        if(!world.alive(e) || !world.has<Transform>(e))
-            return reject(error,"entity must be alive and have a Transform");
+        if(!position || !world.alive(e) || !position(world,e).has_value())
+            return reject(error,"entity must be alive and have an authoritative position");
         if(world.has<RegionStableIdentity>(e))
             return reject(error,"entity already has a region identity");
         if(!available(world,id))
@@ -61,8 +72,9 @@ public:
     // Components are installed before updating the ledger so allocation failure
     // cannot create an unreachable authoritative identity.
     static bool bindNew(World& world,RegionEntityLedger& ledger,Entity e,
-                        RegionEntityId id,Cell owner,std::string* error=nullptr) {
-        if(!eligible(world,e,id,error))return false;
+                        RegionEntityId id,Cell owner,
+                        const RegionPositionReader& position,std::string* error=nullptr) {
+        if(!eligible(world,e,id,position,error))return false;
         if(ledger.find(id))return reject(error,"stable ID already exists (possibly tombstoned)");
         world.add<RegionStableIdentity>(e,RegionStableIdentity{id});
         if(ledger.spawn(id,owner))return true;
@@ -70,11 +82,17 @@ public:
         return reject(error,"could not allocate a persistent region identity");
     }
 
+    static bool bindNew(World& world,RegionEntityLedger& ledger,Entity e,
+                        RegionEntityId id,Cell owner,std::string* error=nullptr) {
+        return bindNew(world,ledger,e,id,owner,regionTransformPosition,error);
+    }
+
     // Attach a live materialization to an existing, non-deleted ledger record.
     // This does not spawn or duplicate the authoritative record.
     static bool bindExisting(World& world,const RegionEntityLedger& ledger,Entity e,
-                             RegionEntityId id,Cell expected,std::string* error=nullptr) {
-        if(!eligible(world,e,id,error))return false;
+                             RegionEntityId id,Cell expected,
+                             const RegionPositionReader& position,std::string* error=nullptr) {
+        if(!eligible(world,e,id,position,error))return false;
         const auto* record=ledger.find(id);
         if(!record || !record->live || record->owner!=expected)
             return reject(error,"missing, tombstoned or wrong-owner region record");
@@ -82,19 +100,25 @@ public:
         return true;
     }
 
+    static bool bindExisting(World& world,const RegionEntityLedger& ledger,Entity e,
+                             RegionEntityId id,Cell expected,std::string* error=nullptr) {
+        return bindExisting(world,ledger,e,id,expected,regionTransformPosition,error);
+    }
+
     // Atomic transfer of a caller-declared group: vehicle, occupants, cargo,
     // or hierarchy. A transfer does not mutate Transform; gameplay movement
     // owns positions. All entities must already be live and attached.
     static bool transferGroup(const World& world,RegionEntityLedger& ledger,
                               std::span<const Entity> entities,Cell expected,
-                              Cell destination,std::string* error=nullptr) {
+                              Cell destination,const RegionPositionReader& position,
+                              std::string* error=nullptr) {
         if(entities.empty())return reject(error,"empty region transfer group");
         std::vector<RegionEntityId> ids;
         ids.reserve(entities.size());
         for(Entity e:entities) {
             if(world.has<RegionDormant>(e))
                 return reject(error,"a dormant region entity must wake before ownership transfer");
-            if(!world.alive(e) || !world.has<Transform>(e))
+            if(!position || !world.alive(e) || !position(world,e).has_value())
                 return reject(error,"group contains a dead or unpositioned entity");
             const auto* id=world.tryGetConst<RegionStableIdentity>(e);
             if(!id || !id->id)
@@ -104,6 +128,13 @@ public:
         if(!ledger.transfer(ids,expected,destination))
             return reject(error,"transfer failed ledger validation; no owner changed");
         return true;
+    }
+
+    static bool transferGroup(const World& world,RegionEntityLedger& ledger,
+                              std::span<const Entity> entities,Cell expected,
+                              Cell destination,std::string* error=nullptr) {
+        return transferGroup(world,ledger,entities,expected,destination,
+                             regionTransformPosition,error);
     }
 
     // Gameplay destruction; never call during an active ECS pool iteration.
@@ -128,13 +159,14 @@ public:
     // as IDs and never cache this map across rollback without rebuilding.
     static bool rebuild(const World& world,const RegionEntityLedger& ledger,
                         std::map<RegionEntityId,Entity>& out,
+                        const RegionPositionReader& position,
                         std::string* error=nullptr) {
         std::map<RegionEntityId,Entity> next;
         bool valid=true;
         world.eachExistingConst<RegionStableIdentity>(
             [&](Entity e,const RegionStableIdentity& identity) {
                 const auto* record=ledger.find(identity.id);
-                if(!world.alive(e) || !world.has<Transform>(e) ||
+                if(!position || !world.alive(e) || !position(world,e).has_value() ||
                    !identity.id || !record || !record->live ||
                    !next.emplace(identity.id,e).second)valid=false;
             });
@@ -143,26 +175,38 @@ public:
         return true;
     }
 
+    static bool rebuild(const World& world,const RegionEntityLedger& ledger,
+                        std::map<RegionEntityId,Entity>& out,
+                        std::string* error=nullptr) {
+        return rebuild(world,ledger,out,regionTransformPosition,error);
+    }
+
     // Read-only diagnostic. Detect movement in authoritative fixed-point
     // coordinates. The caller groups occupants with the vehicle before
     // committing a transfer, never one entity at a time implicitly.
     struct Crossing {RegionEntityId id=0;Entity entity{};Cell from{},to{};};
     static bool crossings(const World& world,const RegionEntityLedger& ledger,
                           const SpatialWorld& spatial,std::vector<Crossing>& out,
+                          const RegionPositionReader& position,
                           std::string* error=nullptr) {
         std::map<RegionEntityId,Entity> current;
-        if(!rebuild(world,ledger,current,error))return false;
+        if(!rebuild(world,ledger,current,position,error))return false;
         std::vector<Crossing> detected;
         for(const auto& [id,e]:current) {
-            const auto* transform=world.tryGetConst<Transform>(e);
+            const auto location=position(world,e);
             const auto* record=ledger.find(id);
-            if(!transform || !record)return reject(error,"stale live region binding");
-            const auto destination=spatial.cell(transform->pos);
+            if(!location || !record)return reject(error,"stale live region binding");
+            const auto destination=spatial.cell(*location);
             if(destination!=record->owner)
                 detected.push_back({id,e,record->owner,destination});
         }
         out.swap(detected);
         return true;
+    }
+    static bool crossings(const World& world,const RegionEntityLedger& ledger,
+                          const SpatialWorld& spatial,std::vector<Crossing>& out,
+                          std::string* error=nullptr) {
+        return crossings(world,ledger,spatial,out,regionTransformPosition,error);
     }
 };
 
