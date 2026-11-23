@@ -82,3 +82,25 @@ map to actual NavMesh rectangles. Add a physically safe lift schedule,
 door interlocks and networking. Finally run all deferred tests and
 native Mac screenshot QA, and reconcile the stacked PR with main.
 After each change update the handoff with current SHA and test status.
+
+## Later source integration commits in this stage
+
+- 9841137f: portable BuildingRouteExecutor.h, a gameplay-neutral
+  actor route state machine with explicit movement and boarding/exit
+  acknowledgements. It never teleports actors on a graph edge.
+- f4b17df and 27a6ea36: BuildingCirculationHost wrappers for
+  route execution, owner-confirmed boarding/exit and route cancellation;
+  the native BuildingRuntime.h umbrella includes the route executor.
+- 2689c3a5: optional BuildingCirculationScene.h makes the existing
+  SpatialWorld + native NavMesh + circulation host integration a
+  single world-owner adapter with game-provided collider IDs.
+  A failure freezes publication instead of claiming stale NavMesh.
+- These changes are source-level only, with TESTS DEFERRED explicitly
+  by the user. No actual gameplay actor motor, multi-actor moving platform
+  parent relationship, native GUI visual QA, or confirmed CI pass is
+  asserted here.
+
+Deferred next-step verification: standalone C++20 and native headers,
+the navmesh source's actual walkable upper-floor spans, dynamic collision
+rollback, per-actor route acknowledgement, cabin door interlocks, and
+running character traversal in an actual Mac game scene. Keep PR Draft.
