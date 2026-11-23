@@ -1749,6 +1749,16 @@
   },
   {
    "id": "world",
+   "roadmap": [
+    {
+     "id": "world-ecs-region-lifecycle",
+     "title": "Жизненный цикл динамических сущностей регионов",
+     "titleEn": "Dynamic region entity lifecycle",
+     "text": "Детерминированное владение сущностями по регионам, атомарный перенос групп и сохранение; следующий этап — реальные ECS-резиденция и стриминг.",
+     "textEn": "Deterministic region ownership, atomic group transfer and persistence; live ECS residency and streaming follow.",
+     "status": "in-progress"
+    }
+   ],
    "name": "Дороги и город",
    "nameEn": "Roads and the city",
    "doc": "docs/city-planner.md",
