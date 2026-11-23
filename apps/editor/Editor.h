@@ -668,6 +668,8 @@ private:
     FxPreview fxPreview_;                      // fx_preview: the effect an agent is looking at
     bool fxFrozen_ = false;                    // fx_preview {freeze}: particles hold still for screenshots
     std::unique_ptr<Simulation> sim_;
+    uint64_t graphPlayEpoch_=0;
+    graph_telemetry::History graphPlayHistory_;
     std::vector<game::ComputerPlayer> bots_;
     int human_ = 0;
     std::map<std::string, Entity> playIds_;   // map entity "id" -> live entity of the play-test (play_command names)
