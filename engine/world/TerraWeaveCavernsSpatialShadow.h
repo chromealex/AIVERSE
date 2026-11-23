@@ -41,10 +41,52 @@ public:
         stagedRevision_=source.revision;
         return true;
     }
+    // Stage 35: insert a new ID range during an EXCLUSIVE reader pause
+    // without retiring any previously active collider. This may fail and
+    // is rollbackable while old colliders remain untouched.
+    bool installCandidate(world::SpatialWorld& spatial,uint64_t revision) {
+        if(!staged_||revision!=stagedRevision_||installed_)return false;
+        for(size_t i=0;i<staged_->size();++i)
+            if(spatial.colliders().contains(stagedId_+uint32_t(i)))return false;
+        size_t inserted=0;
+        try {
+            for(const auto& tri:*staged_) {
+                if(!spatial.addTriangle(stagedId_+uint32_t(inserted),tri))
+                    throw std::runtime_error("Caverns staged SpatialWorld insert");
+                ++inserted;
+            }
+        }catch(...) {
+            for(size_t i=0;i<inserted;++i)
+                spatial.remove(stagedId_+uint32_t(i));
+            return false;
+        }
+        installed_=true;
+        return true;
+    }
+    bool revertCandidate(world::SpatialWorld& spatial,uint64_t revision) {
+        if(!installed_||revision!=stagedRevision_||!staged_)return false;
+        for(size_t i=0;i<staged_->size();++i)
+            spatial.remove(stagedId_+uint32_t(i));
+        installed_=false;
+        return true;
+    }
+    // Called after all fallible candidate installations and the host's
+    // full no-reader barrier. Only old resource retirement occurs here.
+    bool finalizeInstalled(world::SpatialWorld& spatial,uint64_t revision) {
+        if(!installed_||revision!=stagedRevision_||!staged_)return false;
+        for(size_t i=0;i<activeCount_;++i)
+            spatial.remove(activeId_+uint32_t(i));
+        activeId_=stagedId_;
+        activeCount_=staged_->size();
+        activeRevision_=stagedRevision_;
+        staged_.reset();stagedId_=0;stagedRevision_=0;
+        installed_=false;
+        return true;
+    }
     // Called only between simulation updates/queries. The fresh range is
     // disjoint from the old range and owned by this lease.
     bool commit(world::SpatialWorld& spatial,uint64_t revision){
-        if(!staged_||revision!=stagedRevision_)return false;
+        if(!staged_||revision!=stagedRevision_||installed_)return false;
         // Revalidate reservation just before insert; another owner may have
         // occupied the IDs during the CPU staging interval.
         for(size_t i=0;i<staged_->size();++i)
@@ -70,7 +112,7 @@ public:
         return true;
     }
     bool abort(uint64_t revision){
-        if(!staged_||revision!=stagedRevision_)return false;
+        if(!staged_||revision!=stagedRevision_||installed_)return false;
         staged_.reset();stagedId_=0;stagedRevision_=0;return true;
     }
     void unload(world::SpatialWorld& spatial){
@@ -82,6 +124,7 @@ public:
 private:
     uint32_t activeId_=0,stagedId_=0;
     size_t activeCount_=0;
+    bool installed_=false;
     uint64_t activeRevision_=0,stagedRevision_=0;
     std::optional<std::vector<world::Triangle>> staged_;
 };
