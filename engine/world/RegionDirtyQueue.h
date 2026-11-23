@@ -84,7 +84,10 @@ inline void io(Archive& a,RegionDirtyQueue& q) {
     if(!a.ok() || schema!=RegionDirtyQueue::kSchema){a.fail();return;}
     uint64_t ack=q.acknowledged;
     a(ack);
-    uint32_t count=a.count(a.writing()?q.entries.size():0,17);
+    // Each entry is uint64_t key (8 bytes) + uint8_t flags (1 byte).
+    // Using 17 overestimated minimum payload size, wrongly rejecting
+    // legitimate archives with three or more pending notifications.
+    uint32_t count=a.count(a.writing()?q.entries.size():0,9);
     if(!a.ok() || count>RegionDirtyQueue::kMaxEntries){a.fail();return;}
     if(a.writing()) {
         for(const auto& [id,flags]:q.entries) {
