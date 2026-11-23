@@ -17,10 +17,14 @@ inline CaveNavSource makeCaveAuthoredNavSource(
     if(!snapshot||!snapshot->sourceRevision||!snapshot->generatorVersion)
         throw std::invalid_argument("Caverns authored nav snapshot");
     if(!terrainHeight)throw std::invalid_argument("Caverns authored terrain height");
-    return CaveNavSource(snapshot->settings,config,snapshot->entrances,
-        std::move(terrainHeight),
-        [snapshot=std::move(snapshot)](PointCm p) {
-            return caveSnapshotFieldCm(*snapshot,p);
-        });
+    // Evaluate settings/entrances before moving the shared snapshot into
+    // the callback: C++ does not guarantee argument evaluation order.
+    const Settings settings=snapshot->settings;
+    const auto entrances=snapshot->entrances;
+    auto density=[frozen=std::move(snapshot)](PointCm p) {
+        return caveSnapshotFieldCm(*frozen,p);
+    };
+    return CaveNavSource(settings,config,entrances,
+        std::move(terrainHeight),std::move(density));
 }
 } // namespace aiverse::terraweave::caverns
