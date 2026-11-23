@@ -67,3 +67,22 @@ Test source `tests/world_processes_linked_test.cpp` authored: validates link sch
 3. Add graph-wide dependency repair for document *entity deletion/rename* and safe broken-link migration, with deterministic warnings and Undo.
 4. Integrate actual Box3D durable structural consequences and PHYSIS fire/gas link ownership at a host barrier. Do not duplicate physical simulation.
 5. Sync/reconcile with `main` and `feature/studio-html5`; run merged-tree Mac `./run-tests.sh --quick`; only after all gates and cross-genre confirmations consider merging PR #112.
+
+## Follow-up within Stage09: actual GameCore linked-path regression
+
+- Commit `086f68111ea7f50df64a1c751093bdfbebc2c500` updates
+  `tests/world_processes_gamecore_native_test.cpp`: the existing
+  mushrooms game map now keeps existing stable IDs (or assigns IDs
+  when missing), authors two ECHO zones, an emitter, a portal and a
+  listener, and asserts native map setup resolves those exact
+  generation-safe Entity handles and emits a 75-intensity hearing
+  result under deterministic peer steps. This test also retains gas,
+  structural anchor, v9 opt-out, v10 save/reload and rollback checks.
+- Commit `2424b9ceec2a1e606d96edf330d83b3bdc5c6dde` adds
+  explicit `<set>` and `<string_view>` includes to the shared
+  StudioSession source used by reference validation and batch edits.
+
+These changes are **written, not yet confirmed passing** until the
+latest workflow and real GameCore CTest complete. The Stage09 focused
+CI has been triggered but was queued on last inspection; do not
+reuse Stage05 green results as proof of this version.
