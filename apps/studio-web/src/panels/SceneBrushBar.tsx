@@ -82,14 +82,15 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
 }
 export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
+  const [live,setLive]=useState(false);
   const [pending,setPending]=useState(true);
   const [error,setError]=useState('');
-  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active)setLayer(r.layer);}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
   return <div><label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} disabled={pending} onChange={e=>{
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><EcologyLiveMap layer={layer}/></div>;
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><EcologyLiveMap layer={layer}/></div>;
 }
 export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
