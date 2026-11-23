@@ -2655,8 +2655,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const std::string pivot=params.getStr("pivot");
             const std::string axis=params.getStr("axis");
             if(!ids.isArray()||ids.size()<2||ids.size()>256||
-               (pivot!="individual"&&pivot!="shared")||
-               (axis!="x"&&axis!="z")||
+               (pivot!="individual"&&pivot!="shared"&&pivot!="custom")||
+               (axis!="x"&&axis!="z"&&axis!="both")||
                !numerator.isNumber()||!denominator.isNumber())
                 throw std::runtime_error("Invalid EVOLVE group resize request");
             const int64_t n=numerator.integer(),d=denominator.integer();
@@ -2664,13 +2664,29 @@ Json StudioSession::dispatchImpl(const Json& request) {
                numerator.numberLiteral()!=std::to_string(n)||
                denominator.numberLiteral()!=std::to_string(d))
                 throw std::runtime_error("Invalid EVOLVE group scale ratio");
+            const auto& nzValue=params["scaleNumeratorZ"];
+            const auto& dzValue=params["scaleDenominatorZ"];
+            int64_t nz=axis=="both"?nzValue.integer(-1):n;
+            int64_t dz=axis=="both"?dzValue.integer(-1):d;
+            if(axis=="both"&&(!nzValue.isNumber()||!dzValue.isNumber()||
+               nz<1||nz>1000000||dz<1||dz>1000000||
+               nzValue.numberLiteral()!=std::to_string(nz)||
+               dzValue.numberLiteral()!=std::to_string(dz)))
+                throw std::runtime_error("Invalid EVOLVE Z scale ratio");
+            const auto& pivotX=params["pivotXcm"];
+            const auto& pivotZ=params["pivotZcm"];
+            if(pivot=="custom"&&(!pivotX.isNumber()||!pivotZ.isNumber()||
+               pivotX.numberLiteral()!=std::to_string(pivotX.integer())||
+               pivotZ.numberLiteral()!=std::to_string(pivotZ.integer())||
+               std::abs(pivotX.integer())>evolve::kAreaCoordinateCm||
+               std::abs(pivotZ.integer())>evolve::kAreaCoordinateCm))
+                throw std::runtime_error("Invalid custom EVOLVE pivot");
             std::set<std::string> seen;
             std::vector<std::pair<std::size_t,editor::DocEntity>> pending;
-            const std::string halfKey=axis=="x"?"halfWidthCm":"halfDepthCm";
-            const std::string offsetKey=axis=="x"?"offsetXcm":"offsetZcm";
+
             // Shared pivot is the arithmetic mean of selected authored
             // area centers on the active axis, in integer centimetres.
-            std::vector<std::int64_t> centers;
+            std::vector<std::int64_t> centersX,centersZ;
             for(const auto& idValue:ids.items()){
                 if(!idValue.isString())throw std::runtime_error("Invalid EVOLVE ID");
                 const auto id=idValue.str();
@@ -2685,34 +2701,45 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Selected entity lacks valid EVOLVE area");
                 if(!area.has("offsetXcm"))area.set("offsetXcm",Json::number(int64_t(0)));
                 if(!area.has("offsetZcm"))area.set("offsetZcm",Json::number(int64_t(0)));
-                const auto origin=std::llround(double(axis=="x"?candidate.x:candidate.z)*100.);
-                centers.push_back(origin+area[offsetKey].integer());
+                centersX.push_back(std::llround(double(candidate.x)*100.)+
+                                   area["offsetXcm"].integer());
+                centersZ.push_back(std::llround(double(candidate.z)*100.)+
+                                   area["offsetZcm"].integer());
                 Json components=candidate.extra["components"];
                 components.set("EvolveArea",std::move(area));
                 candidate.extra.set("components",std::move(components));
                 pending.emplace_back(std::size_t(index),std::move(candidate));
             }
-            std::int64_t shared=0;
-            if(pivot=="shared"){
+            const auto mean=[](const std::vector<std::int64_t>& values){
                 long double sum=0;
-                for(auto center:centers)sum+=center;
-                shared=std::llround(sum/centers.size());
-            }
+                for(auto v:values)sum+=v;
+                return std::llround(sum/values.size());
+            };
+            const std::int64_t sharedX=pivot=="custom"?pivotX.integer():mean(centersX);
+            const std::int64_t sharedZ=pivot=="custom"?pivotZ.integer():mean(centersZ);
             for(std::size_t i=0;i<pending.size();++i){
                 auto& candidate=pending[i].second;
                 Json components=candidate.extra["components"];
                 Json area=components["EvolveArea"];
-                const auto half=area[halfKey].integer();
-                const auto newHalf=std::llround((long double)half*n/d);
-                if(newHalf<50||newHalf>evolve::kAreaMaxHalfExtentCm)
-                    throw std::runtime_error("EVOLVE group size outside bounds");
-                const auto nextCenter=pivot=="shared"?
-                    shared+std::llround((long double)(centers[i]-shared)*n/d):
-                    centers[i];
-                const auto origin=std::llround(double(axis=="x"?candidate.x:candidate.z)*100.);
-                const auto offset=nextCenter-origin;
-                area.set(halfKey,Json::number(newHalf));
-                area.set(offsetKey,Json::number(offset));
+                for(int dim=0;dim<2;++dim){
+                    if(axis!="both"&&((axis=="x")!=(dim==0)))continue;
+                    const bool x=dim==0;
+                    const char* halfKey=x?"halfWidthCm":"halfDepthCm";
+                    const char* offsetKey=x?"offsetXcm":"offsetZcm";
+                    const auto scaleN=x?n:(axis=="both"?nz:n);
+                    const auto scaleD=x?d:(axis=="both"?dz:d);
+                    const auto half=area[halfKey].integer();
+                    const auto newHalf=std::llround((long double)half*scaleN/scaleD);
+                    if(newHalf<50||newHalf>evolve::kAreaMaxHalfExtentCm)
+                        throw std::runtime_error("EVOLVE group size outside bounds");
+                    const auto oldCenter=x?centersX[i]:centersZ[i];
+                    const auto pivotCenter=x?sharedX:sharedZ;
+                    const auto nextCenter=pivot=="individual"?oldCenter:
+                        pivotCenter+std::llround((long double)(oldCenter-pivotCenter)*scaleN/scaleD);
+                    const auto origin=std::llround(double(x?candidate.x:candidate.z)*100.);
+                    area.set(halfKey,Json::number(newHalf));
+                    area.set(offsetKey,Json::number(nextCenter-origin));
+                }
                 if(!lib::worldprocess::extended::validate("EvolveArea",area))
                     throw std::runtime_error("Invalid resized EVOLVE area");
                 const auto cx=std::llround(double(candidate.x)*100.)+area["offsetXcm"].integer();
@@ -2725,7 +2752,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 components.set("EvolveArea",std::move(area));
                 candidate.extra.set("components",std::move(components));
             }
-            if(n!=d){
+            if(n!=d||(axis=="both"&&nz!=dz)){
                 ws_.map.beginEdit();
                 for(auto& entry:pending)
                     ws_.map.data.entities[entry.first]=std::move(entry.second);
