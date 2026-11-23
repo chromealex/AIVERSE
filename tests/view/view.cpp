@@ -40,6 +40,16 @@ int main() {
     AIVERSE_TEST_CHECK(view.presentation().get<lib::animation::AnimationPoseComponent>(id).valid);
     AIVERSE_TEST_CHECK(view.presentation().get<lib::animation::AnimationInputsComponent>(id)
         .overrides.values.at("intensity")==.5f);
+    graph_telemetry::History graphHistory;
+    auto first=view.animationTelemetry(101,42);
+    AIVERSE_TEST_CHECK(first.has_value());
+    AIVERSE_TEST_CHECK(first->value.getStr("sourceGeneration")=="7");
+    AIVERSE_TEST_CHECK(first->value.getStr("graphPublication")=="1");
+    AIVERSE_TEST_CHECK(first->value.getStr("updates")=="1");
+    AIVERSE_TEST_CHECK(view.captureAnimationTelemetry(101,42,graphHistory));
+    AIVERSE_TEST_CHECK(!view.captureAnimationTelemetry(101,42,graphHistory));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(202,42));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(101,0));
     // A rejected batch (duplicate animated source ID) must leave the View
     // untouched: no stats reset, no frame stamp / LOD hysteresis advance.
     {
@@ -57,10 +67,16 @@ int main() {
     objects[0]=animated;
     result=view.update(objects,.016f);
     AIVERSE_TEST_CHECK(result.source.restarted==1);
+    auto replacement=view.animationTelemetry(101,42);
+    AIVERSE_TEST_CHECK(replacement.has_value());
+    AIVERSE_TEST_CHECK(replacement->value.getStr("sourceGeneration")=="8");
+    AIVERSE_TEST_CHECK(replacement->value.getStr("graphPublication")=="2");
+    AIVERSE_TEST_CHECK(graphHistory.read(replacement->identity).size()==0);
     objects.erase(objects.begin());
     result=view.update(objects,.016f);
     AIVERSE_TEST_CHECK(result.source.removed==1);
     AIVERSE_TEST_CHECK(!view.presentation().alive(id));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(101,42));
     // A generic View also accepts ordinary mesh render packets without
     // adding RTS/FPS-specific components or behavior.
     view::MeshObject mesh;
