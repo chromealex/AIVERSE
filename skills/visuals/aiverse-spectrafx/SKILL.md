@@ -1747,3 +1747,11 @@ This is a reusable sub-inspector, **not yet mounted** in the existing Graph Edit
 `apps/studio-web/src/panels/spectraStudioAssetIndex.ts` exports `indexedSpectraAssets(payload)`, converting the **result** of `invoke('studio.assets',{})` to `SpectraIndexedAsset[]`. Native `StudioSession.cpp` already obtains `StudioAssetCatalog` entries from `content/`, whose persistent GUIDs come from `.meta` and whose SQLite index is disposable. The adapter ignores malformed rows and deduplicates GUIDs. Pass its result to `SpectraGraphAssetInspector`; do not generate GUIDs in React.
 
 The adapter does not yet fetch on its own or mount the sub-inspector in the production graph window. The compiler's asset property schema must be checked before saving GUID objects. No builds/tests executed.
+
+## Stage 43 — native catalog fetch and compiler-safe graph properties
+
+`SpectraIndexedGraphAssetInspector.tsx` now fetches `studio.assets` from the native Studio GUID catalog and supports explicit refresh. It wraps the lockable node asset sub-inspector.
+
+`bindResolvedSpectraAsset` resolves a selected GUID against the authoritative indexed entries and writes the **content-relative path string** to the node property (not a GUID object), matching the existing string-based native graph properties such as `SpriteOutput.properties.texture`. Optional importer-kind restrictions are enforced. The GUI can still use the GUID as stable identity for lookup.
+
+**Not yet mounted in the production VFX Graph Editor panel**. Before mounting, identify the actual node selection and graph mutation state and wire `onGraphChange` into the editor's native validation/draft workflow. The source has not been typechecked or run.
