@@ -55,4 +55,41 @@ inline PenetrationResult convexPenetration(std::span<const Point3d> a,std::span<
     if(result.status==ConvexQuery::Invalid)return {ConvexQuery::Indeterminate};
     return result;
 }
+
+ // Recover a strict enclosing seed using a bounded set of support directions.
+ // This is a fallback, not a complete convex hull construction.
+inline std::optional<std::array<Point3d,4>> convexSeed(std::span<const Point3d> a,std::span<const Point3d> b){
+    if(a.empty()||b.empty()||a.size()>1000000||b.size()>1000000)return {};
+    for(auto p:a)if(!finite3(p))return {};
+    for(auto p:b)if(!finite3(p))return {};
+    std::vector<Point3d> points;
+    for(int x=-1;x<=1;++x)for(int y=-1;y<=1;++y)for(int z=-1;z<=1;++z){
+        if(!x&&!y&&!z)continue;
+        Point3d d{double(x),double(y),double(z)};
+        auto p=convexSupport(a,d)-convexSupport(b,d*(-1));
+        if(std::none_of(points.begin(),points.end(),[&](auto q){return squaredDistance(p,q)==0;}))points.push_back(p);
+    }
+    for(size_t i=0;i<points.size();++i)for(size_t j=i+1;j<points.size();++j)
+    for(size_t k=j+1;k<points.size();++k)for(size_t l=k+1;l<points.size();++l){
+        auto x=points[i],u=points[j]-x,v=points[k]-x,w=points[l]-x,q=x*(-1);
+        double det=dot(u,cross(v,w));if(det==0)continue;
+        double r=dot(q,cross(v,w))/det,t=dot(u,cross(q,w))/det,h=dot(u,cross(v,q))/det;
+        if(r>1e-10&&t>1e-10&&h>1e-10&&r+t+h<1-1e-10)return std::array<Point3d,4>{x,points[j],points[k],points[l]};
+    }return {};
+}
+inline PenetrationResult convexPenetrationExpanded(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-7,size_t gjkBudget=64,size_t epaBudget=128){
+    auto result=convexPenetration(a,b,tolerance,gjkBudget,epaBudget);
+    if(result.status!=ConvexQuery::Indeterminate)return result;
+    auto seed=convexSeed(a,b);if(!seed)return result;
+    auto expanded=convexEPA(a,b,*seed,tolerance,epaBudget);
+    return expanded.status==ConvexQuery::Invalid?result:expanded;
+}
+struct SupportPair {Point3d a,b;Point3d difference()const{return a-b;}};
+// Extreme points along a contact direction, NOT paired contact witnesses.
+inline std::optional<SupportPair> convexSupportPair(std::span<const Point3d> a,std::span<const Point3d> b,Point3d direction){
+    if(a.empty()||b.empty()||!finite3(direction)||dot(direction,direction)==0)return {};
+    for(auto p:a)if(!finite3(p))return {};
+    for(auto p:b)if(!finite3(p))return {};
+    return SupportPair{convexSupport(a,direction),convexSupport(b,direction*(-1))};
+}
 }
