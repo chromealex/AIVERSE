@@ -4875,7 +4875,7 @@
       "package": null,
       "path": "skills/visuals/aiverse-spectrafx/SKILL.md",
       "domain": "workflow",
-      "summary": "SpectraFX universal graphs, particle assets and ECS presentation for native games",
+      "summary": "SpectraFX universal graphs, particle assets, GPU RNG, checkpoint rollback, replay, capture and Studio/MCP authoring for native games",
       "side": "tools",
       "runtime": "none",
       "target": null,
