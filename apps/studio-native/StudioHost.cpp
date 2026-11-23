@@ -804,7 +804,13 @@ void StudioHost::rebuildOverlay() {
                 if(shapes.size()>=1400)break;
                 auto marker=worldprocess_gizmos::makePoint(
                     handle.position.x,handle.position.y,handle.position.z,
-                    245,245,245,8.f);
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?100:245,
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?255:245,
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?160:245,
+                    8.f);
                 shapes.push_back(std::move(marker));
             }
             if(wpDrag_.active && wpDrag_.valid && shapes.size()<1398){
@@ -835,7 +841,10 @@ void StudioHost::rebuildOverlay() {
                             {wpDrag_.previewPoint.x,
                              wpDrag_.previewPoint.y+0.8f,
                              wpDrag_.previewPoint.z},
-                            wpDrag_.label,245,245,245));
+                            wpDrag_.label+(wpDrag_.component=="EvolveArea" &&
+                               (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")?
+                               (wpDrag_.symmetric?" [symmetric]":" [opposite fixed]"):""),
+                             245,245,245));
                 }
             }
         }
