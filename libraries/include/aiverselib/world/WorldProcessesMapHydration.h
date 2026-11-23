@@ -54,9 +54,9 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     constexpr std::array<std::string_view,6> linkedTypes{
         "EchoPortal","EchoEmitter","EchoReceiver",
         "FractureBond","AetherDuct","AetherFlux"};
-    constexpr std::array<std::string_view,7> extendedTypes{
+    constexpr std::array<std::string_view,8> extendedTypes{
         "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
-        "GranularField","EvolveRegion","SocietyPerson"};
+        "GranularField","EvolveRegion","EvolveArea","SocietyPerson"};
     constexpr std::array<std::string_view,16> extendedEdgeTypes{
         "CrowdSlot", // slot targets exist before CrowdPreference is installed
         "MorphSpring","MorphForce","CrowdPreference",
@@ -95,6 +95,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             std::string error;
             if(!extended::validate(kind,components[name],&error))
                 throw std::invalid_argument("World Processes "+name+": "+error);
+            if(kind=="EvolveArea"&&!components["EvolveRegion"].isObject())
+                throw std::invalid_argument("World Processes: EvolveArea requires EvolveRegion on same entity");
             if(extended::hasExisting(sim.world(),placed[i],kind))
                 throw std::invalid_argument("World Processes: duplicate extended ECS component");
             extendedParts.push_back({placed[i],&components[name],kind});
@@ -103,7 +105,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             else if(kind=="ImprintCell")totals.extra.imprint=true;
             else if(kind=="CircuitNode")totals.extra.circuit=true;
             else if(kind=="GranularField")totals.extra.granular=true;
-            else if(kind=="EvolveRegion")totals.extra.evolve=true;
+            else if(kind=="EvolveRegion"||kind=="EvolveArea")totals.extra.evolve=true;
             else if(kind=="SocietyPerson")totals.extra.society=true;
         }
         for(std::size_t edgeIndex=0;edgeIndex<extendedEdgeTypes.size();++edgeIndex){
@@ -277,11 +279,44 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     // Install all seven systems in one well-defined order. The map stores no
     // duplicated runtime state; opt-in categories use portable ECS schemas.
     installSuite(sim,totals.extra);
+    // Root ECS components precede area attachment. The same map entity
+    // provides its static world X/Z; this is authoritative map configuration,
+    // not merely editor gizmo metadata.
     for(const auto& part:extendedParts){
+        if(part.component=="EvolveArea")continue;
         std::string error;
         if(!extended::apply(sim.world(),part.entity,part.component,*part.settings,&error))
             throw std::invalid_argument(
                 "World Processes: failed extended component "+std::string(part.component)+" "+error);
+    }
+    for(const auto& part:extendedParts){
+        if(part.component!="EvolveArea")continue;
+        std::string error;
+        if(!extended::apply(sim.world(),part.entity,part.component,*part.settings,&error))
+            throw std::invalid_argument("World Processes: EVOLVE area "+error);
+    }
+    // Bind EvolveArea centers from real authored map entity positions in
+    // map order. The Area is ECS-persisted and the Native TerraWeave forest
+    // sampler consumes exactly these bounds through evolve::extents().
+    for(std::size_t i=0;i<entities.size();++i){
+        if(!entities[i]["components"]["EvolveArea"].isObject())continue;
+        const auto& position=entities[i]["pos"];
+        if(!position.isArray()||(position.size()!=2&&position.size()!=3)||
+           !position[0].isNumber()||!position[position.size()==3?2:1].isNumber())
+            throw std::invalid_argument("World Processes: EVOLVE area requires numeric map X/Z");
+        const auto quantized=[](const Json& source)->std::int64_t{
+            const auto coordinate=source.fx(); // exact canonical game Fixed quantization
+            if(coordinate.raw>Fixed::kOne*1000000ll||
+               coordinate.raw< -Fixed::kOne*1000000ll)
+                throw std::invalid_argument("World Processes: EVOLVE center outside bounds");
+            return (coordinate.raw*100)/Fixed::kOne;
+        };
+        auto area=sim.world().get<evolve::Area>(placed[i]);
+        area.centerXcm=quantized(position[0]);
+        area.centerZcm=quantized(position[position.size()==3?2:1]);
+        if(!evolve::valid(area))
+            throw std::invalid_argument("World Processes: EVOLVE area exceeds world coordinate limits");
+        sim.world().get<evolve::Area>(placed[i])=area;
     }
     // All extended root components now exist. CrowdSlot is staged first so
     // any authored CrowdPreference has a live, generation-checked target.
