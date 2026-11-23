@@ -5,7 +5,7 @@
 #include "engine/world/UnifiedResourceSection.h"
 
 namespace aiverse::actor {
-// Owner-scoped synchronous persistence for the explicitly supported actor
+// Owner-scoped persistence for the explicitly supported actor
 // projection. All callbacks operate on private ECS state until publication.
 class ActorPersistentSession {
     using Finality=world::NativeWorldFinality;
@@ -18,7 +18,7 @@ class ActorPersistentSession {
     std::unique_ptr<Finality> finality_;
     std::string identity_;
     size_t budget_;
-    bool failed_=false;
+    bool failed_=false,checkpointPending_=false;
     static bool coverage(const World& w,const world::RegionEntityLedger& ledger){
         using namespace aiverse::detail;
         const std::set<uint32_t> components{
@@ -73,7 +73,7 @@ public:
         :sim_(sim),host_(host),identity_(std::move(identity)),budget_(budget){}
     ActorPersistentSession(const ActorPersistentSession&)=delete;
     ActorPersistentSession& operator=(const ActorPersistentSession&)=delete;
-    bool start(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume){
+    bool start(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume,bool async=false){
         if(failed_||finality_||!budget_||identity_.empty()||sim_.tick()!=0||sim_.hasCommandSink())return false;
         const auto* ledger=sim_.world().resourceConst<world::RegionEntityLedger>();
         if(!ledger||!coverage(sim_.world(),*ledger)||!ActorDurableComponents::registerCodecs(codecs_)||
@@ -99,25 +99,47 @@ public:
                 failed_=true;session_.close();return false;
             }
         }
+        if(async&&!session_.enableAsync(std::max(budget_,world::RegionWalCodec::maxPayload+world::RegionWalCodec::headerSize))){
+            failed_=true;session_.close();return false;
+        }
         finality_=std::make_unique<Finality>(sim_,session_,codecs_,policy,ActorDurableComponents::materialize,
             validator(),budget_,identity_,commandPolicy());
         return true;
     }
     Finality::Result step(){
-        if(!finality_||failed_)return Finality::Result::NeedsRecovery;
+        if(!finality_||failed_||checkpointPending_)return Finality::Result::NeedsRecovery;
         auto result=finality_->step();
         if(result==Finality::Result::NeedsRecovery)failed_=true;
         return result;
     }
+    // True means accepted; in async mode the caller must poll checkpoint
+    // completion separately and may not start a new tick until acknowledged.
     bool checkpoint(){
-        if(failed_||!finality_||sim_.tick()!=finality_->lastFinalizedTick())return false;
+        if(failed_||!finality_||session_.ioPending()||sim_.tick()!=finality_->lastFinalizedTick())return false;
         const auto* m=session_.manifest();
-        if(!m||m->generation==UINT64_MAX||
-           session_.checkpoint(m->generation+1,adapters(),budget_)!=world::RegionCheckpointPublishResult::Ok){
+        if(!m||m->generation==UINT64_MAX){failed_=true;return false;}
+        if(session_.asyncEnabled()){
+            checkpointPending_=session_.queueCheckpoint(m->generation+1,adapters(),budget_)==world::UnifiedWalSession::IoResult::Pending;
+            if(!checkpointPending_)failed_=true;
+            return checkpointPending_;
+        }
+        if(session_.checkpoint(m->generation+1,adapters(),budget_)!=world::RegionCheckpointPublishResult::Ok){
             failed_=true;return false;
         }
         return true;
     }
+    bool pollCheckpoint(){
+        if(failed_)return false;
+        if(!checkpointPending_)return true;
+        const auto result=session_.pollIo();
+        if(result==world::UnifiedWalSession::IoResult::Pending)return false;
+        checkpointPending_=false;
+        if(result!=world::UnifiedWalSession::IoResult::Checkpointed){failed_=true;return false;}
+        return true;
+    }
+    bool checkpointPending()const{return checkpointPending_;}
+    bool pending()const{return session_.ioPending();}
+    bool tickPending()const{return session_.ioPending()&&!checkpointPending_;}
     bool failed()const{return failed_;}
     uint32_t finalizedTick()const{return finality_?finality_->lastFinalizedTick():0;}
 };
