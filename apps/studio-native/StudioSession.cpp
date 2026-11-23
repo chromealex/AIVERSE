@@ -417,6 +417,9 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     Json field=genericField(key,item);
                     if(authorable) {
                         field.set("editable",Json::fromBool(true));
+                        if(extended&&name=="GranularField"&&value.has("width")&&
+                           (key=="width"||key=="height"||key=="mass"||key=="solid"))
+                            field.set("editable",Json::fromBool(false));
                         if((linked&&lib::worldprocess::linked::isReference(name,key)) ||
                            (extendedLinked&&lib::worldprocess::extendedLinks::isReference(name,key))) {
                             Json options=Json::array();
@@ -2844,7 +2847,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     if(!lib::worldprocess::linked::edit(componentId,key,value,staged,&error))
                         throw std::runtime_error(error);
                 } else if(lib::worldprocess::extended::supports(componentId)) {
-                    if(!lib::worldprocess::extended::edit(componentId,key,value,staged,&error))
+                    if(componentId=="GranularField"&&key=="grid"){
+                        // A single validated full-grid replacement is one MapDoc
+                        // Undo step; clients may use GranularDocument::resize/
+                        // paint to assemble the grid before committing.
+                        if(!value.isString()||value.str().size()>1024*1024)
+                            throw std::runtime_error("Invalid GRANULAR grid document payload");
+                        staged=Json::parse(value.str());
+                        if(!lib::worldprocess::extended::validate(componentId,staged,&error))
+                            throw std::runtime_error(error);
+                    }else if(!lib::worldprocess::extended::edit(componentId,key,value,staged,&error))
                         throw std::runtime_error(error);
                 } else if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
                     throw std::runtime_error(error);
