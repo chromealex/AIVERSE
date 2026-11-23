@@ -252,6 +252,27 @@ int main(int argc,char** argv){
         CHECK(!buildFunctionalStructureGraph(invalidUpper));
         invalidUpper=multi;invalidUpper.floors=7;
         CHECK(!buildFunctionalStructureGraph(invalidUpper));
+        // Real cross-floor model from the same genre-neutral graph.
+        const auto verticalRecipe=readFunctionalBuildingRecipe(Json::parse(readFile(
+            root+"/engine/assets/building-recipes/vertical-circulation.json")));
+        auto vertical=generateFunctionalBuilding(scifi,verticalRecipe);
+        CHECK(vertical);
+        CHECK(vertical.graph.connections.size()==10);
+        CHECK(vertical.graph.rooms.size()==8);
+        CHECK(vertical.building.mesh.triangles()>0);
+        CHECK(vertical.building.boxes.size()==vertical.graph.solids.size());
+        CHECK(vertical.anchors.size()==6); // two doors, two windows, two vertical cores
+        int stair=0,lift=0;
+        for(const auto& socket:vertical.anchors){
+            if(socket.kind==BuildingFeatureKind::Stairs)++stair;
+            if(socket.kind==BuildingFeatureKind::Elevator)++lift;
+        }
+        CHECK(stair==1&&lift==1);
+        auto modernVertical=generateFunctionalBuilding(modern,verticalRecipe);
+        CHECK(modernVertical);
+        CHECK(sameGeometry(vertical.building,modernVertical.building));
+        CHECK(vertical.building.boxes==modernVertical.building.boxes);
+        CHECK(vertical.graph.rooms.size()==modernVertical.graph.rooms.size());
         std::puts("building functional-feature tests passed");
         return 0;
     }catch(const std::exception& e){
