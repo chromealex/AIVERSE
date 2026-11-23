@@ -30,6 +30,14 @@ public:
         return catalog_.adopt(chunk);
     }
 
+    // Bookkeeping ONLY, called after a real owner-wide streaming retirement
+    // has safely removed the corresponding GPU source and physical/nav data.
+    // A staged shard must not be concurrently rewritten or forgotten.
+    bool forgetCommittedSource(ChunkKey3 key,uint64_t revision) {
+        if(pending_.contains(caveShardFor(key,catalog_.config())))return false;
+        return catalog_.erase(key,revision);
+    }
+
     // All source edits must belong to ONE shard. They may be zero-geometry
     // tombstones. This prepares an entire replacement shard GPU scene from
     // unchanged + edited sources, not just edited models.
