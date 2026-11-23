@@ -48,6 +48,16 @@ public:
         byId_.swap(staged.byId_);byHandle_.swap(staged.byHandle_);
         return true;
     }
+    // For a private durable projection whose authoritative ledger is held
+    // externally. Callers must separately validate the projection against it.
+    bool rebuildTagged(const World& world){
+        PersistentEntityReferences staged;bool ok=true;
+        world.eachExistingConst<RegionStableIdentity>([&](Entity e,const RegionStableIdentity& identity){
+            if(ok&&!staged.bind(world,identity.id,e))ok=false;
+        });
+        if(!ok)return false;
+        byId_.swap(staged.byId_);byHandle_.swap(staged.byHandle_);return true;
+    }
     enum class Resolution { Null, Materialized, Unmaterialized, Missing, Retired, Stale };
     Resolution classify(const World& world,const RegionEntityLedger& ledger,RegionEntityId id,Entity& out)const{
         if(!id){out=kNullEntity;return Resolution::Null;}
