@@ -1189,7 +1189,15 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
             Json batch=Json::object();
             batch.set("entityIds",std::move(ids));
             batch.set("axis",Json::string(x?"x":"z"));
-            batch.set("pivot",Json::string(current.symmetric?"individual":"shared"));
+            const bool custom=wpCustomPivot_&&!current.symmetric;
+            batch.set("pivot",Json::string(current.symmetric?"individual":
+                                          (custom?"custom":"shared")));
+            if(custom){
+                batch.set("pivotXcm",Json::number(
+                    std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+                batch.set("pivotZcm",Json::number(
+                    std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+            }
             batch.set("scaleNumerator",Json::number(newHalf));
             batch.set("scaleDenominator",Json::number(oldHalf));
             const auto response=request("studio.worldProcessAreaBatchResize",std::move(batch));
