@@ -333,3 +333,64 @@ and
 The user's test deferral is still active: NO current-stage compile,
 CTest, sanitizer, Mac GUI, real NavMesh path or screenshot has been
 verified. The previous Stage05 passes do not cover these changes.
+
+## Stages 22–25: CIRCUIT device actuation, EVOLVE ecology, SOCIETY NPC events
+
+**CIRCUIT.** `CircuitDevices.h` adds the real persisted `Switch`
+and `Device` ECS types, with `circuit.switch` /
+`circuit.device` v1 schemas. `setSwitch` accepts authoritative
+player/game input; `synchronizeSwitches` writes Node.drive only
+where one unambiguous switch owns that input; `circuit.power_logic`
+solves the original graph; `updateDevices` derives powered/signal
+device output and monotonic transition counters. The suite order is
+switch inputs -> logic solver -> device outputs. Switch/Device
+stable-ID authoring, link resolution, budget validation, Studio
+component picker and Live Inspector are implemented.
+`examples/world/world_processes_native/CircuitDeviceHost.h` applies
+configured door devices to **existing** Box3D kinematic bodies via
+`Scene::moveKinematic`, and calls project-supplied handlers for light,
+motors, pumps, alarms or other devices. The engine does not acquire
+a second electrical or rigid-body authority.
+
+**EVOLVE.** `EvolvePhysisBridge.h` defines persistable
+`evolve::ClimateLink`, which reads **existing** PHYSIS Atmosphere and
+Surface data and writes only a canonical EVOLVE Pressure ECS component
+before the region evolution tick.
+`examples/world/world_processes_native/EvolvePhysisHost.h` provides
+`attachEvolveClimate` after actual source/region entities exist.
+`EvolveTerraEcologyBridge.h` wraps the **existing**
+`TerraWeaveForestEcology.h` ForestEcologyClimateSampler to limit
+nutrient and light according to EVOLVE fertility/succession/pollution,
+without overwriting the PHYSIS/NEREID baseline or TerraWeave plant
+registry. The host decides region world bounds and synchronizes its
+ecology phase after completed EVOLVE tick.
+
+**SOCIETY.** `SocietyNpcTriggers.h` adds persistable NpcTrigger
+(source SocietyPerson, nonzero topic mask, project-defined action ID,
+all/any/none condition, once/repeating, fired and transition counter).
+This schedules **after** SOCIETY knowledge dissemination. The authored
+`SocietyNpcTrigger` map component is validated by stable Person ID
+and configured in existing Studio Add Component/Inspector with
+MapDoc Undo/Redo; the runtime Live Inspector is read-only.
+`examples/world/world_processes_native/SocietyNpcHost.h` dispatches
+typed `NpcKnowledgeAction` events to the game's existing AI/dialogue,
+behavior tree or quest action owner, using full Entity generation +
+transition as dedupe identity. Reconcile/reset after rollback through
+the host instead of creating a new NPC memory system.
+
+`examples/world/world_processes_native/WorldProcessGameplayHost.h`
+combines those three native host bindings. Its README gives concrete
+C++20 wiring for Box3D doors, host callbacks, PHYSIS climate, TerraWeave
+ecology, SOCIETY quests and rollback. Authoring component fragments for
+switches/devices and a knowledge action are in
+`examples/native/world_processes/authoring-examples.json`.
+
+**Verification policy:** the user expressly deferred tests. Stage22–25
+source is committed, **not** compiled or runtime-accepted; do not claim
+passing Mac/Metal/Vulkan/GLES, native CTest, Box3D, forest or NPC action
+behavior without actual test logs. The precise API, commits, constraints
+and next steps are in:
+- `docs/handoffs/world-processes-stage22-circuit-devices-2026-11-23.md`
+- `docs/handoffs/world-processes-stage23-evolve-physis-terra-2026-11-23.md`
+- `docs/handoffs/world-processes-stage24-society-npc-actions-2026-11-23.md`
+- `docs/handoffs/world-processes-stage25-gameplay-host-2026-11-23.md`
