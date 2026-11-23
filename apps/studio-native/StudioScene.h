@@ -39,6 +39,11 @@ public:
     ~StudioScene();
     StudioScene(const StudioScene&) = delete;
     StudioScene& operator=(const StudioScene&) = delete;
+    // Render-thread-only: ephemeral generated building preview, never an Asset.
+    // On replace/clear the old GPU model retires after a verified device idle.
+    bool setBuildingPreview(std::unique_ptr<render::Model> model,
+                            std::string* error=nullptr);
+    bool hasBuildingPreview() const noexcept {return bool(buildingPreview_);}
     void frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                bool fpsProject, const std::string& selectedId,
                const std::string& previewName, const Json& previewFactors,
@@ -175,6 +180,7 @@ private:
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
     std::unique_ptr<render::Model> materialSphere_;
+    std::unique_ptr<render::Model> buildingPreview_;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
     std::unique_ptr<render::Model> builtinCube_, builtinSphere_;
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
