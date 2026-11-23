@@ -1843,3 +1843,7 @@ ComputeParticles::retainFreshGpuCheckpoint explicitly retains a complete fresh c
 ## Stage 62 — Studio checkpoint timeline
 
 GraphRuntime exposes retain/list/restore. Paused settled Metal preview accepts checkpointSave/checkpointRestore, queues work in prepare, tracks checkpoint tick and burst count, exposes checkpoints/checkpointPending. HTML5 buttons and MCP fx_checkpoint_timeline route requests. No tests run; audit async failure retry and command exclusion while pending, native dispatch allowlists and exact frame provenance before release.
+
+## Stage 63 — timeline cancellation and bounded wait
+
+checkpointCancel cancels the pending Studio retain/restore request, not an already submitted GPU readback. While pending, simulation commands are rejected except status, cancel and stop. Save waits at most 240 valid prepare frames, with bounded retries; checkpointWaitFrames exposes progress. UI and MCP support cancellation. No tests run.
