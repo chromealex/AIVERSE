@@ -190,18 +190,13 @@ public:
     }
     bool requestDestination(uint32_t destination){
         if(state_.passengerCount==0)return false;
-        return call(destination);
+        return beginTrip(destination);
     }
     bool call(uint32_t floor){
-        if(!online()||floor>=floorsMm_.size()||
-           (state_.phase!=BuildingLiftPhase::Open&&
-            state_.phase!=BuildingLiftPhase::Opening))return false;
-        if(readyAt(floor))return true;
-        state_.targetFloor=floor;
-        state_.phase=BuildingLiftPhase::Closing;
-        state_.phaseElapsedMs=0;
-        touch();
-        return true;
+        // A building actor may summon the empty lift to a pickup floor,
+        // but cannot redirect a cabin currently occupied by other actors.
+        if(state_.passengerCount>0)return false;
+        return beginTrip(floor);
     }
     void setOffline(bool value){
         if(floorsMm_.empty())return;
@@ -281,6 +276,17 @@ public:
         return changed;
     }
 private:
+    bool beginTrip(uint32_t floor){
+        if(!online()||floor>=floorsMm_.size()||
+           (state_.phase!=BuildingLiftPhase::Open&&
+            state_.phase!=BuildingLiftPhase::Opening))return false;
+        if(readyAt(floor))return true;
+        state_.targetFloor=floor;
+        state_.phase=BuildingLiftPhase::Closing;
+        state_.phaseElapsedMs=0;
+        touch();
+        return true;
+    }
     void queueMotion(int64_t before,int64_t after){
         if(before==after)return;
         if(pendingMotion_){
