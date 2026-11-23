@@ -8,6 +8,36 @@
 > asset running on the GPU kernel or its CPU twin with Metal parity tests: see
 > [spectrafx-entity-effects.md](spectrafx-entity-effects.md).
 
+## 2026-11-23 — SpectraScale cue significance and external acceleration fields (opt-in)
+
+The scene host exposes `configureCueSignificance()`, `setCueImportance()` and
+`cueSignificance()` to rank queued VFX cues by approximate camera-space size,
+distance and explicit host importance. For projects, `fx/gpu/routes.json`
+optionally declares `cuePriority` and per-route `importance`; omitted policy
+preserves the original FIFO order. Each keyed Play/Move/Stop/Kill sequence
+remains ordered; Stop/Kill gains lifecycle priority without skipping visibility
+or making any gameplay/authoritative simulation changes. Priority reorders
+**only the scene cue inbox**; it does not guarantee emitter or GPU spawn budgets.
+
+`SpectraFxAccelerationFields` is a bounded, read-only registry of native
+host-provided acceleration fields. Use
+`SpectraFxSceneHost::bindAccelerationField(id,weight,callback)` after host
+initialization to sample a PHYSIS (or another environment system) snapshot.
+Metal GPU and CPU-twin **dedicated** effects receive the same additional
+acceleration every render update; legacy `cpuEffect` fallback and already
+active homogeneous shared pools do not. While fields are bound, new sources
+avoid GPU shared pooling because per-source acceleration differs.
+Neither SpectraFX nor this API directly accesses PHYSIS/ECS internals.
+
+**Current verification:** focused Linux CMake smoke + `spectrafx_contract` and
+`spectrafx_architecture` 2/2 PASS for pre-field commits, but Stage 3 field
+integration has **not yet been accepted** on real Metal/GLES/Vulkan or macOS.
+See handoffs:
+`docs/agent-handoffs/spectrafx-significance-stage1-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-significance-stage2-routes-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
+Full plan: `docs/spectrafx-modernization-roadmap-2026-11-23.md`.
+
 ## Integration boundary with PRISMA
 
 **SpectraFX is NOT the post-processing engine.** It owns emitters, particle simulation, FX graphs (VFX `fx/graphs/*.vfx.json`), ECS FX sources and transient visual events. **PRISMA** in `engine/render/Prisma.{h,cpp}` owns HDR composite/tone mapping, bloom, depth of field, motion blur, temporal AA, screen-space lighting and post-process camera volumes. FX sprites/meshes write scene HDR before PRISMA; the full-screen `postfx` Shader Graph domain belongs to PRISMA. The common Shader Graph compiler/RHI is shared infrastructure, not a second VFX or postprocess implementation.
