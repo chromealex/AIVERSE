@@ -601,3 +601,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 43: numeric 2D preview geometry and pivot overlay
 
 `worldprocess_edit::previewGroupScale2D` computes read-only candidate rectangles for exact rational X/Z scale and a custom world-centimetre pivot. Native Scene now draws a numeric pivot label/marker and example group preview during drag. The Stage42 batch RPC still commits exact custom-pivot/two-axis edits. **Editable numeric Scene controls and draggable pivot gizmo are not yet implemented.** No compile or runtime QA performed (deferred). See `docs/handoffs/world-processes-stage43-two-axis-preview-pivot-2026-11-23.md`.
+
+## Stage 44: draggable editor-only group pivot
+
+Native Scene now exposes GroupPivotX/GroupPivotZ drag handles for multi-selected EVOLVE areas, derived from the group centroid. Dragged custom pivot is transient Studio state, reset on selection change; subsequent group resize passes `pivot:"custom"` and integer world-centimetre X/Z coordinates to the Stage42 atomic batch RPC. Numeric pivot labels are read-only. Editable numeric Scene controls, simultaneous two-axis drag and consolidated custom-pivot preview remain unfinished. Source-only, no build/runtime QA. Handoff: `docs/handoffs/world-processes-stage44-draggable-group-pivot-2026-11-23.md`.
