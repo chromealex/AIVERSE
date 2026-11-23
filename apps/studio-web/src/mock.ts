@@ -57,6 +57,10 @@ const clone = (): StudioSnapshot => ({ ...structuredClone(snapshot), history: { 
  // cannot narrow generic M through a runtime method comparison.
 export function mockInvoke<M extends StudioMethod>(method: M, params: StudioParams[M]): Promise<StudioResult[M]>;
 export async function mockInvoke(method: StudioMethod, params: StudioParams[StudioMethod]): Promise<StudioResult[StudioMethod]> {
+  if (method === 'studio.worldProcessAreaPreview' ||
+      method === 'studio.worldProcessGroupPivot' ||
+      method === 'studio.worldProcessAreaBatchResize')
+    throw Error('EVOLVE group authoring requires the native AIVERSE host');
   if (method === 'studio.gameEntities') return {active:false,epoch:'0',tick:0,rows:[],total:0};
   if (method === 'studio.gameInspect') throw Error('Runtime inspection requires native gameplay');
   if (method === 'studio.gameDevices') return [];
