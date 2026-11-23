@@ -176,6 +176,33 @@ private:
     friend void io(Archive&,RegionEntityLedger&);
 };
 
+// Host-side incremental observer. Use it to dispatch the ledger's latest
+// state changes to region/collision/streaming adapters without a whole-ledger
+// scan. The cursor is derived observer state, NOT gameplay authority.
+// Advance only after the callback acknowledges an entry. A callback may fail
+// or throw; earlier acknowledged entries are never replayed accidentally.
+class RegionChangeCursor {
+public:
+    explicit RegionChangeCursor(uint64_t after=0):last_(after){}
+    uint64_t lastRevision()const{return last_;}
+    void reset(uint64_t after=0){last_=after;}
+
+    // Returns true once caught up; false for a refused callback, zero budget
+    // or a remaining page. A load/rollback owner must call reset() because a
+    // fresh World can have the same revision number with different records.
+    template<class Deliver>
+    bool consume(const RegionEntityLedger& ledger,size_t budget,Deliver&& deliver) {
+        if(!budget)return false;
+        if(last_>ledger.lastRevision())return false;
+        const auto page=ledger.pageSince(last_,budget);
+        for(const auto& [id,record]:page.changes) {
+            if(!deliver(id,record))return false;
+            last_=record.revision;
+        }
+        return !page.more;
+    }
+};
+
 // Transactional decode: an invalid/truncated archive must not mutate an
 // existing resource. Archive is already portable and used by native ECS v10.
 inline void io(Archive& a,RegionEntityLedger& ledger) {
