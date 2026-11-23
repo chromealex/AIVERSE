@@ -301,7 +301,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
 
   const command=async(action:Action,options:Partial<{
-    graph:Record<string,unknown>;gpuBirthRandom:boolean;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
+    graph:Record<string,unknown>;gpuBirthRandom:boolean;checkpointId:number;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
     preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean;count:number
   }>={})=>{
@@ -467,6 +467,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         <StudioInput id="spectra-gpu-seed" type="number" min={0} max={2147483647} step={1}
           value={gpuAllocationSeed} onChange={e=>setGpuAllocationSeed(e.target.value)}/>
       </StudioField>
+      <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointSave'}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
+      {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointRestore',checkpointId:cp.id}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
       <StudioField label="Metal shader seed (optional)" htmlFor="spectra-shader-seed">
         <StudioInput id="spectra-shader-seed" type="number" min={0} max={4294967295} step={1} value={gpuShaderSeed} onChange={e=>setGpuShaderSeed(e.target.value)}/>
       </StudioField>
