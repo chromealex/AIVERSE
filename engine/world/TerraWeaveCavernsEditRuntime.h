@@ -31,9 +31,9 @@ public:
     CaveEditRuntimeBridge(uint32_t resolution=16,int32_t spacingCm=100,
                           size_t maxQueued=1024,size_t maxWorkers=2)
         :resolution_(resolution),spacingCm_(spacingCm),
-         limit_(maxWorkers),dirty_(maxQueued),gate_(maxQueued) {
+         limit_(maxWorkers),maxQueued_(maxQueued),dirty_(maxQueued),gate_(maxQueued) {
         if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000||
-           !maxWorkers||maxWorkers>32)
+           !maxWorkers||maxWorkers>32||maxQueued>1024)
             throw std::invalid_argument("Caverns edit runtime settings");
     }
     CaveEditRuntimeBridge(const CaveEditRuntimeBridge&)=delete;
@@ -48,7 +48,18 @@ public:
             throw std::invalid_argument("Caverns missing edit snapshot");
         // Every dirty worker captures exactly this immutable snapshot.
         // Do not mix unrelated generator settings/versions on adjacent cells.
+        // A new source revision supersedes every not-yet-committed chunk,
+        // not just the latest brush footprint. Otherwise earlier jobs would
+        // retain an obsolete snapshot and block this batch forever.
+        const auto old=dirty_.pending(maxQueued_);
         dirty_.enqueue(bounds,resolution_,spacingCm_,snapshot->sourceRevision);
+        for(const auto& item:old) {
+            const int64_t span=int64_t(resolution_)*spacingCm_;
+            const CaveDirtyBounds full{item.key.x*span,item.key.y*span,item.key.z*span,
+                (item.key.x+1)*span,(item.key.y+1)*span,(item.key.z+1)*span};
+            dirty_.enqueue(full,resolution_,spacingCm_,snapshot->sourceRevision);
+        }
+        prepared_.clear();
         snapshot_=std::move(snapshot);
     }
 
@@ -167,7 +178,7 @@ private:
         CaveDirtyChunk dirty{};
         std::future<CaveMesh> future;
     };
-    size_t dirtyLimit()const{return 1024;} // constructor queue limit is <=1024 by contract
+    size_t dirtyLimit()const{return maxQueued_;}
     bool isCurrent(const CaveDirtyChunk& request)const{
         // Bounded linear lookup preserves queue ownership without exposing
         // unsafe mutable iterators to asynchronous workers.
@@ -179,7 +190,7 @@ private:
     }
     uint32_t resolution_;
     int32_t spacingCm_;
-    size_t limit_;
+    size_t limit_,maxQueued_;
     uint64_t renderSerial_=0;
     CaveDirtyQueue dirty_;
     CaveSeamPublicationGate gate_;
