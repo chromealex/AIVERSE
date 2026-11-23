@@ -37,7 +37,7 @@ inline bool lowerRuntimeExpression(const Json& expression,
         const std::string type=source.getStr("type");
         const Json& p=source["properties"];
         bool ok=true;
-        if(type=="InstanceParameter") {
+        if(type=="InstanceParameter" || type=="DataInterface") {
             // The graph-v2 compiler already resolved the named declaration
             // to a strict 0..7 slot. This is a dynamic per-instance read,
             // never a constant-folded graph parameter.
