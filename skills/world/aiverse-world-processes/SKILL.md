@@ -20,3 +20,9 @@ These functions do not touch `Simulation`. They are intentionally NOT self-conta
 7. At the end of each stage, update the handoff (branch, SHA, changed files, API, tests run, limitations and exact next action). Respect the five-area WIP limit and main-merge gate.
 
 Smoke test: `bash tests/libraries/world_processes_run.sh`.
+
+
+## Stage 02: ECHO's first ECS integration
+`engine/world/echo/EchoAcoustics.h` is the reusable, opt-in gameplay hearing pass. Call `aiverse::echo::install(sim)` once inside the native `GameModule::setup`; create `AcousticZone`, `AcousticPortal`, `AcousticEmitter`, `AcousticReceiver`, and `AcousticHearing` components on entities. Source, zone and portal references use generation-safe ECS `Entity` handles. The system publishes authoritative `AcousticHearing`; do not create a parallel AI perception cache. A host can instead call `propagate(world,tick)` explicitly at its read/write barrier.
+
+The native test is `ecs_echo_acoustics_test` (source `tests/ecs_echo_acoustics_test.cpp`). It covers COW rollback, save/reload, deterministic graph tie ordering, stale refs and bounded oversized inputs, but **has not been executed or validated on the current branch yet**. Run on a real build before calling the feature verified. ECHO currently models authored zone portals, not full audio ray tracing or reverb. See `docs/handoffs/world-processes-stage02-echo-2026-11-23.md`.
