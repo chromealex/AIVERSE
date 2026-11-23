@@ -14,13 +14,13 @@ class TextureGraphGpuPreview {
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
     std::string firstKey_,secondKey_;
     size_t capacity_=0,received_=0,blocks_=0,scratchBytes_=0;
-    int passes_=0;bool reused_=false,inFlight_=false,bake_=false,published_=false,setBake_=false;
+    int passes_=0;bool reused_=false,reusedBuffers_=false,inFlight_=false,bake_=false,published_=false,setBake_=false;
     Json sourceGraph_,overrides_;
     std::vector<std::pair<std::string,size_t>> setOutputs_;
     std::vector<render::Image> setImages_;
     std::vector<std::string> setBackends_;
     size_t reusedOutputs_=0;
-    bool setIncomplete()const{return setBake_&&setImages_.size()<setOutputs_.size();}
+    bool setIncomplete()const{return setBake_&&!published_&&setImages_.size()<setOutputs_.size();}
     bool setPending()const{return setIncomplete()&&state_!="failed"&&state_!="cancelled";}
     uint64_t fence_=0,serial_=0;
     std::optional<Program> program_;
@@ -67,7 +67,7 @@ class TextureGraphGpuPreview {
             reason_="all declared outputs completed";return;
         }
         const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
-        received_=blocks_=scratchBytes_=0;passes_=0;reused_=false;pixels_.clear();
+        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=false;pixels_.clear();
         backend_="none";reason_.clear();queued_=true;state_="queued";
     }
     // One range in flight, with exact offset and length. No graphics stalls.
@@ -85,11 +85,11 @@ public:
         r.set("busy",Json::fromBool(queued_||inFlight_||state_=="pending"||setPending()));
         r.set("encodedPasses",Json::number(int64_t(passes_)));r.set("plannedScratchBytes",Json::number(int64_t(scratchBytes_)));
         r.set("bake",Json::fromBool(bake_));r.set("setBake",Json::fromBool(setBake_));
-        r.set("completedOutputs",Json::number(int64_t(setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
+        r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
         r.set("currentOutput",Json::string(output_));r.set("reusedOutputs",Json::number(int64_t(reusedOutputs_)));
         Json outputs=Json::array();for(size_t i=0;i<setBackends_.size();++i){Json row=Json::object();row.set("output",Json::string(setOutputs_[i].first));row.set("backend",Json::string(setBackends_[i]));outputs.push(row);}r.set("outputs",outputs);r.set("published",Json::fromBool(published_));
         r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(size_t(size_)*size_*4)));
-        r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));
+        r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));r.set("reusedBuffers",Json::fromBool(reusedBuffers_));
         r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
@@ -113,7 +113,7 @@ public:
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        passes_=0;blocks_=received_=scratchBytes_=0;reused_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){queued_=false;state_="cancelled";pixels_.clear();setImages_.clear();setBackends_.clear();project_.clear();}
@@ -125,7 +125,7 @@ public:
         Json r;
         if(setBake_)r=publishTextureGraphSet(ws,p.getStr("textureName"),sourceGraph_,overrides_,setImages_,setBackends_);
         else{render::Image img;img.width=img.height=size_;img.rgba=pixels_;r=publishTextureGraphImage(ws,p.getStr("textureName"),output_,img);}
-        published_=true;r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
+        published_=true;pixels_.clear();setImages_.clear();r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
     }
     // Called at owner frame boundary, no active encoder. Read callback
     // owns only its bytes and is delivered on the owner thread.
@@ -164,14 +164,21 @@ public:
         reused_=capacity_==bytes&&first==firstKey_&&second==secondKey_&&buffer_.valid()&&compute_.valid()&&
             (!plan.twoPass||(scratch_.valid()&&secondCompute_.valid()));
         if(!reused_){
-            release(dev);
+            // On a completed plan boundary, same-sized storage is reusable
+            // even when the next output requires different shader source.
+            const bool keepBuffers=capacity_==bytes&&buffer_.valid();
+            if(compute_.valid())dev.destroyCompute(compute_);compute_={};
+            if(secondCompute_.valid())dev.destroyCompute(secondCompute_);secondCompute_={};
+            firstKey_.clear();secondKey_.clear();
+            if(!keepBuffers){if(buffer_.valid())dev.destroyBuffer(buffer_);buffer_={};if(scratch_.valid())dev.destroyBuffer(scratch_);scratch_={};capacity_=0;}
+            reusedBuffers_=keepBuffers;
             fence_=dev.gpuSubmissionFence();inFlight_=true;
             auto createPipeline=[&](const Source& source){return dev.createCompute({metal?source.msl.c_str():nullptr,vulkan?source.glsl.c_str():nullptr,"TextureGraph compute"});};
             compute_=createPipeline(plan.first);
             if(plan.twoPass)secondCompute_=createPipeline(plan.second);
             gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.size=bytes;desc.label="TextureGraph output";
-            buffer_=dev.createBuffer(desc);
-            if(plan.twoPass){desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
+            if(!buffer_.valid())buffer_=dev.createBuffer(desc);
+            if(plan.twoPass&&!scratch_.valid()){desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
             if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){if(!ownsResources())inFlight_=false;fallback("GPU plan allocation rejected");return;}
             capacity_=bytes;firstKey_=first;secondKey_=second;
         }
