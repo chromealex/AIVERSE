@@ -193,6 +193,8 @@ export interface StudioParams {
     camera?:StudioSpectraCameraSnapshot;
     parameters?:Record<string,number>;
     seed?:number;
+    gpuShaderSeed?:number;
+    gpuBirthRandom?:boolean;
     requireReplayReady?:boolean;
     gpuAllocationSeed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
