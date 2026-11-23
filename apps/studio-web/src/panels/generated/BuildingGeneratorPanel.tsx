@@ -274,35 +274,35 @@ export default function BuildingGeneratorPanel({
               <StudioButton variant="secondary" disabled={busy} onClick={()=>removeFeature(i)}>Remove</StudioButton>
             </div>
             <div className="abg__property-controls">
-              <StudioField label="Property type">
-                <StudioSelect value={feature.kind} disabled={busy}
+              <StudioField label="Property type" htmlFor={"abg-feature-"+i+"-kind"}>
+                <StudioSelect id={"abg-feature-"+i+"-kind"} value={feature.kind} disabled={busy}
                   onChange={e=>changeFeatureKind(i,e.target.value as StudioBuildingFeatureKind)}>
                   {Object.entries(propertyLabels).map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}
                 </StudioSelect>
               </StudioField>
-              {feature.kind!=='sliding-roof'&&<StudioField label="Wall">
-                <StudioSelect value={feature.side} disabled={busy}
+              {feature.kind!=='sliding-roof'&&<StudioField label="Wall" htmlFor={"abg-feature-"+i+"-side"}>
+                <StudioSelect id={"abg-feature-"+i+"-side"} value={feature.side} disabled={busy}
                   onChange={e=>setFeature(i,'side',e.target.value)}>
                   {['front','back','left','right'].map(side=><option key={side} value={side}>{side}</option>)}
                 </StudioSelect>
               </StudioField>}
-              {feature.kind!=='sliding-roof'&&<StudioField label="Count">
-                <StudioInput type="number" min={1} max={8} step={1} value={String(feature.count)} disabled={busy}
+              {feature.kind!=='sliding-roof'&&<StudioField label="Count" htmlFor={"abg-feature-"+i+"-count"}>
+                <StudioInput id={"abg-feature-"+i+"-count"} type="number" min={1} max={8} step={1} value={String(feature.count)} disabled={busy}
                   onChange={e=>setFeature(i,'count',Number(e.target.value))}/>
               </StudioField>}
-              <StudioField label={feature.kind==='sliding-roof'?'Aperture width, m':'Clear width, m'}>
-                <StudioInput type="number" min={0.85} step={0.1} value={String(feature.width)} disabled={busy}
+              <StudioField label={feature.kind==='sliding-roof'?'Aperture width, m':'Clear width, m'} htmlFor={"abg-feature-"+i+"-width"}>
+                <StudioInput id={"abg-feature-"+i+"-width"} type="number" min={0.85} step={0.1} value={String(feature.width)} disabled={busy}
                   onChange={e=>setFeature(i,'width',Number(e.target.value))}/>
               </StudioField>
-              {feature.kind==='sliding-roof'?<StudioField label="Aperture depth, m">
-                <StudioInput type="number" min={1} step={0.1} value={String(feature.depth)} disabled={busy}
+              {feature.kind==='sliding-roof'?<StudioField label="Aperture depth, m" htmlFor={"abg-feature-"+i+"-depth"}>
+                <StudioInput id={"abg-feature-"+i+"-depth"} type="number" min={1} step={0.1} value={String(feature.depth)} disabled={busy}
                   onChange={e=>setFeature(i,'depth',Number(e.target.value))}/>
-              </StudioField>:<StudioField label="Clear height, m">
-                <StudioInput type="number" min={2} step={0.1} value={String(feature.height)} disabled={busy}
+              </StudioField>:<StudioField label="Clear height, m" htmlFor={"abg-feature-"+i+"-height"}>
+                <StudioInput id={"abg-feature-"+i+"-height"} type="number" min={2} step={0.1} value={String(feature.height)} disabled={busy}
                   onChange={e=>setFeature(i,'height',Number(e.target.value))}/>
               </StudioField>}
-              <StudioField label="Open (0–1)">
-                <StudioInput type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
+              <StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
+                <StudioInput id={"abg-feature-"+i+"-open"} type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
                   onChange={e=>setFeature(i,'open',Number(e.target.value))}/>
               </StudioField>
             </div>
