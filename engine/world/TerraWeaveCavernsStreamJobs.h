@@ -17,6 +17,7 @@ namespace aiverse::terraweave::caverns {
 struct CaveStreamCpuResult {
     CaveResidencyTicket ticket{};
     CaveMesh mesh{};
+    bool success=true;
 };
 struct CaveStreamJobStats {
     size_t dispatched=0,completed=0,failed=0,inFlight=0;
@@ -48,7 +49,7 @@ public:
                                                     resolution,spacingCm);
                 return out;
             });
-        jobs_.emplace(request.key,std::move(work));
+        jobs_.emplace(request.key,Job{request,std::move(work)});
         ++dispatched_;
         return true;
     }
@@ -59,11 +60,17 @@ public:
         std::vector<CaveStreamCpuResult> ready;
         CaveStreamJobStats stats;
         for(auto it=jobs_.begin();it!=jobs_.end();){
-            if(it->second.wait_for(std::chrono::seconds(0))!=
+            if(it->second.future.wait_for(std::chrono::seconds(0))!=
                 std::future_status::ready){++it;continue;}
             ++stats.completed;
-            try {ready.push_back(it->second.get());}
-            catch(const std::exception&){++stats.failed;}
+            try {ready.push_back(it->second.future.get());}
+            catch(const std::exception&){
+                ++stats.failed;
+                CaveStreamCpuResult failed;
+                failed.ticket=it->second.ticket;
+                failed.success=false;
+                ready.push_back(std::move(failed));
+            }
             it=jobs_.erase(it);
         }
         stats.dispatched=std::exchange(dispatched_,0);
@@ -75,11 +82,15 @@ public:
     size_t inFlight()const{return jobs_.size();}
     // Call only at world teardown, not from inside a render pass.
     void drain(){
-        for(auto& [key,job]:jobs_){(void)key;job.wait();}
+        for(auto& [key,job]:jobs_){(void)key;job.future.wait();}
         jobs_.clear();
     }
 private:
+    struct Job {
+        CaveResidencyTicket ticket{};
+        std::future<CaveStreamCpuResult> future;
+    };
     size_t limit_=2,dispatched_=0;
-    std::map<ChunkKey3,std::future<CaveStreamCpuResult>,KeyLess> jobs_;
+    std::map<ChunkKey3,Job,KeyLess> jobs_;
 };
 } // namespace aiverse::terraweave::caverns
