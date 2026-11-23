@@ -1,6 +1,7 @@
 // In-memory graph edits only; native compilers remain the final authority.
 #pragma once
 #include "AnimationDocument.h"
+#include "GraphPropertySchema.h"
 #include "tools/modeling/Modeling.h"
 #include <algorithm>
 #include <cmath>
@@ -43,7 +44,8 @@ inline void move(Json& n,const Json& p){
 }
 inline void shader(Json& g,const Json& p){
     const auto action=p.getStr("action"),id=p.getStr("node");
-    if(action=="add")append(g,"nodes",p["value"],192);
+    if(action=="setProperty")graph_properties::set("shader",entry(g,"nodes",id),p);
+    else if(action=="add")append(g,"nodes",p["value"],192);
     else if(action=="replaceNode")replace(g,"nodes",p);
     else if(action=="deleteNode")erase(g,"nodes",id);
     else if(action=="move")move(entry(g,"nodes",id),p);
@@ -60,7 +62,8 @@ inline void shader(Json& g,const Json& p){
 }
 inline void motion(Json& g,const Json& p){
     const auto action=p.getStr("action"),id=p.getStr("node");
-    if(action=="add")append(g,"nodes",p["value"],128);
+    if(action=="setProperty")graph_properties::set("motionweave",entry(g,"nodes",id),p);
+    else if(action=="add")append(g,"nodes",p["value"],128);
     else if(action=="replaceNode")replace(g,"nodes",p);
     else if(action=="deleteNode"){(void)entry(g,"nodes",id);animation::remove(g,id);}
     else if(action=="rename")animation::rename(g,id,p.getStr("to"));
