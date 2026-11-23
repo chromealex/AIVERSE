@@ -33,6 +33,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const reloadBusy=useRef(false);
   const [seek,setSeek]=useState(0);
   const [burstCount,setBurstCount]=useState(1);
+  const [captureSide,setCaptureSide]=useState(512);
+  const [capturePending,setCapturePending]=useState(false);
+  const [captureImage,setCaptureImage]=useState('');
+  const [captureError,setCaptureError]=useState('');
   const [parameter,setParameter]=useState('');
   const [value,setValue]=useState('0');
   const active=nativeConnected();
@@ -40,6 +44,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   useEffect(()=>{
     setState(null);setSeek(0);setError('');setParameter('');
     setAutoReload(false);
+    setCapturePending(false);setCaptureImage('');setCaptureError('');
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -58,7 +63,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   // The existing Play state is restored only after successful validation.
   useEffect(()=>{
     if(!active || !autoReload || !state?.ready || !lastLoadedGraph.current ||
-       graphSignature===lastLoadedGraph.current || busy || disabled)return;
+       graphSignature===lastLoadedGraph.current || busy || disabled || capturePending)return;
     let closed=false;
     const handle=window.setTimeout(()=>{
       if(closed || reloadBusy.current)return;
@@ -89,7 +94,51 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       });
     },650);
     return()=>{closed=true;window.clearTimeout(handle);};
-  },[active,autoReload,state?.ready,graphSignature,graph,disabled,reloadCycle]);
+  },[active,autoReload,state?.ready,graphSignature,graph,disabled,reloadCycle,capturePending]);
+
+  // A single native GPU capture is completed asynchronously by the RHI
+  // fence callback. Poll only while one snapshot is in flight; never
+  // transfer a frame every animation tick or create fake browser particles.
+  useEffect(()=>{
+    if(!active || !capturePending)return;
+    let closed=false,inFlight=false;
+    const timer=window.setInterval(()=>{
+      if(inFlight || closed)return;
+      inFlight=true;
+      void invoke('studio.spectraPreview',{action:'captureStatus'}).then(result=>{
+        if(closed)return;
+        setState(result);
+        const capture=result.capture;
+        if(capture?.pending)return;
+        setCapturePending(false);
+        if(capture?.ready && typeof capture.image==='string' &&
+           capture.image.startsWith('data:image/jpeg;base64,') &&
+           capture.image.length<=900000) {
+          setCaptureImage(capture.image);
+          setCaptureError('');
+        } else {
+          setCaptureError(capture?.error||'Native FX GPU capture failed');
+        }
+      }).catch(e=>{
+        if(!closed) {setCapturePending(false);setCaptureError(message(e));}
+      }).finally(()=>{inFlight=false;});
+    },350);
+    return()=>{closed=true;window.clearInterval(timer);};
+  },[active,capturePending]);
+
+  const captureFrame=async()=>{
+    if(!active||busy||disabled||capturePending||!state?.ready)return;
+    setBusy(true);setCaptureError('');
+    try {
+      const result=await invoke('studio.spectraPreview',{
+        action:'capture',maxSide:captureSide
+      });
+      setState(result);
+      if(result.capture?.error) setCaptureError(result.capture.error);
+      else setCapturePending(!!result.capture?.pending);
+    }catch(e){setCaptureError(message(e));}
+    finally{setBusy(false);}
+  };
 
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
@@ -214,7 +263,29 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void command('clear')}>
         Clear Particles
       </StudioButton>
+      <StudioField label="Snapshot" htmlFor="spectra-capture-size">
+        <StudioSelect id="spectra-capture-size" value={String(captureSide)}
+          disabled={!active||busy||capturePending}
+          onChange={e=>setCaptureSide(Number(e.target.value))}>
+          <option value="256">256 px</option>
+          <option value="512">512 px</option>
+          <option value="768">768 px</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" variant="secondary"
+        disabled={!active||!state?.ready||busy||capturePending}
+        onClick={()=>void captureFrame()}>
+        {capturePending?'Capturing GPU frame…':'Capture Frame'}
+      </StudioButton>
     </div>
+    {captureError&&<StudioAlert tone="warning">{captureError}</StudioAlert>}
+    {captureImage&&<div className="spectra-native__snapshot">
+      <img src={captureImage} alt="Captured native SpectraFX GPU frame"/>
+      <a href={captureImage} download="spectrafx-preview.jpg">
+        Save captured JPEG
+      </a>
+      <small>Native one-shot GPU readback. Not a simulated browser frame.</small>
+    </div>}
     <div className="spectra-native__status">
       <StudioBadge tone={state?.gpu?'success':state?.ready?'warning':'neutral'}>
         {state?.ready?state.backend:'Preview not loaded'}
