@@ -4,10 +4,13 @@
 // Format: docs/models.md "Material library".
 #pragma once
 #include "Workspace.h"
+#include "engine/render/Model.h"
 
 namespace aiverse::editor {
 
 void registerMaterialOps(Workspace& ws);
+// Native owner only: publish completed validated pixels as a new texture asset.
+Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image);
 
 // materials.json of the open game ({"materials": {...}}); empty object when missing.
 Json loadMaterialLibrary(const Workspace& ws);
