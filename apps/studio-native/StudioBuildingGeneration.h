@@ -314,6 +314,9 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             socket.set("outside",std::move(point));
             sockets.push(std::move(socket));
         }
+        out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
+        out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
+        out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
