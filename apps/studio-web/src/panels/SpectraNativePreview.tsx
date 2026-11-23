@@ -225,9 +225,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           grid:replayPreset.grid,axes:replayPreset.axes},
         {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
         {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'restart' as const,play:false},
-        ...Object.entries(replayPreset.parameters).map(([name,value])=>({action:'parameter' as const,name,value})),
-        {action:'seek' as const,tick:replayPreset.tick}
+        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters}
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
