@@ -14,7 +14,9 @@
     "skills/catalog.json",
     "docs/devlog/systems.json",
     "apps/studio-web/src/graphs/shaderAdapter.ts",
-    "apps/studio-web/src/graphs/GraphCanvas.css"
+    "apps/studio-web/src/graphs/GraphCanvas.css",
+    "apps/studio-web/src/panels/shaderGraphLayout.ts",
+    "apps/studio-web/tests/shaderGraphEdit.test.mjs"
   ],
   "traits": {
     "editable": true,
