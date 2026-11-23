@@ -5,6 +5,24 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — Opt-in camera significance for SpectraFX cues (UNVERIFIED native)
+
+Read the two mandatory handoffs:
+- `docs/agent-handoffs/spectrafx-significance-stage1-2026-11-23.md`
+- `docs/agent-handoffs/spectrafx-significance-stage2-routes-2026-11-23.md`
+
+The new `SpectraFxSignificance` (camera/event score) and `SpectraFxCueInbox::drainPrioritized`
+prioritize bounded presentation cues while preserving per-key Play/Move/Stop/Kill
+ordering, callback snapshot semantics, visibility check and default FIFO behavior.
+Enable explicitly from `SpectraFxSceneHost::configureCueSignificance` or by
+`fx/gpu/routes.json` `cuePriority` with per-route `importance`. This orders
+only the scene cue inbox; it is NOT particle culling or whole-system budgeting.
+Native/Metal/mobile tests have NOT RUN here. Next step is clean build, CTest,
+full SpectraFX acceptance and real scene captures. Broader modernization plan:
+`docs/spectrafx-modernization-roadmap-2026-11-23.md`. Preserve all existing
+GPU fences, ECS ownership and PRISMA/LENS boundaries.
+
+
 **Canonical documentation:** `docs/spectrafx.md`.
 **Exact stage history:** `docs/agent-handoffs/universal-niagara-vfx-2026-11-18.md`.
 **Engineering rules:** `AGENTS.md`.
