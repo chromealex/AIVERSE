@@ -1839,3 +1839,7 @@ GpuCheckpoint captures free slot order, source tokens, birth uniforms and RNG st
 ## Stage 61 — bounded historical checkpoints
 
 ComputeParticles::retainFreshGpuCheckpoint explicitly retains a complete fresh checkpoint, up to eight FIFO entries. historicalGpuCheckpointIds lists IDs; restoreHistoricalGpuCheckpoint(id) uses checked same-emitter upload, rejects pending GPU work and dirty state. History retires on GPU resource release. This is renderer-local rollback, not GraphRuntime clock/ECS rollback or portable file restore. No tests run.
+
+## Stage 62 — Studio checkpoint timeline
+
+GraphRuntime exposes retain/list/restore. Paused settled Metal preview accepts checkpointSave/checkpointRestore, queues work in prepare, tracks checkpoint tick and burst count, exposes checkpoints/checkpointPending. HTML5 buttons and MCP fx_checkpoint_timeline route requests. No tests run; audit async failure retry and command exclusion while pending, native dispatch allowlists and exact frame provenance before release.
