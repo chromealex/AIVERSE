@@ -104,7 +104,7 @@ public:
         // Sweep the boundary midpoint against structural walls/partitions
         // including door leaf collision. We don't create a fake portal
         // across a closed partition or a wall.
-        return !blocked(lx,lz,y);
+        return !blocked(lx,lz,y-origin_.y);
     }
 private:
     struct Solid {
