@@ -34,7 +34,7 @@ enum class StructureMassing : uint8_t { Bastion, Spire, TwinBay, Terraced };
 // Large authored shapes, in footprint-relative units. Materials come from the
 // style palette; no engine/gameplay function name appears in this geometry API.
 struct StructureForm {
-    enum class Kind : uint8_t { Pod, Silo, Pylon, Gantry };
+    enum class Kind : uint8_t { Pod, Silo, Pylon, Gantry, Arch, Dome, SweptHull };
     Kind kind=Kind::Pod;
     float x=0.5f,z=0.5f,width=0.25f,height=0.25f,depth=0.25f;
     float level=0.8f,taper=0.1f,chance=1.f;
@@ -605,13 +605,16 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
                     const std::string q=at+"["+std::to_string(fi)+"]";
                     const auto& v=a[fi];allow(v,q,{"kind","at","size","level","taper","chance","material","repeat","step"});
                     StructureForm form;
-                    if(!v["kind"].isString())throw JsonError(q+".kind: expected pod, silo, pylon or gantry");
+                    if(!v["kind"].isString())throw JsonError(q+".kind: expected pod, silo, pylon, gantry, arch, dome or swept-hull");
                     const auto type=v["kind"].str();
                     if(type=="pod")form.kind=StructureForm::Kind::Pod;
                     else if(type=="silo")form.kind=StructureForm::Kind::Silo;
                     else if(type=="pylon")form.kind=StructureForm::Kind::Pylon;
                     else if(type=="gantry")form.kind=StructureForm::Kind::Gantry;
-                    else throw JsonError(q+".kind: expected pod, silo, pylon or gantry");
+                    else if(type=="arch")form.kind=StructureForm::Kind::Arch;
+                    else if(type=="dome")form.kind=StructureForm::Kind::Dome;
+                    else if(type=="swept-hull")form.kind=StructureForm::Kind::SweptHull;
+                    else throw JsonError(q+".kind: expected pod, silo, pylon, gantry, arch, dome or swept-hull");
                     form.material=mat(v,"material",q);
                     if(form.material<0)throw JsonError(q+".material: expected material");
                     auto pair=[&](const char* key,float* values,size_t length){

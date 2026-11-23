@@ -21,6 +21,82 @@ inline std::vector<P3> cutRect(float x0,float z0,float x1,float z1,float c,float
     if(c<=1e-4f)return {{x0,y,z0},{x1,y,z0},{x1,y,z1},{x0,y,z1}};
     return {{x0+c,y,z0},{x1-c,y,z0},{x1,y,z0+c},{x1,y,z1-c},{x1-c,y,z1},{x0+c,y,z1},{x0,y,z1-c},{x0,y,z0+c}};
 }
+
+// Architectural curves: bounded tessellation counts, true 3D shells rather
+// than merely adding more rectangular decorations. Coordinates in metres.
+inline void addArch(Mesher& m,int material,float cx,float y0,float z0,float width,float height,float depth){
+    const float x0=cx-width*0.5f,x1=cx+width*0.5f,z1=z0+depth;
+    const float leg=std::clamp(width*0.12f,0.24f,0.85f);
+    const float spring=y0+height*0.42f,rise=height*0.58f,rx=width*0.5f;
+    m.box(material,x0,y0,z0,x0+leg,spring,z1);
+    m.box(material,x1-leg,y0,z0,x1,spring,z1);
+    constexpr int segments=12;
+    constexpr float pi=3.14159265358979323846f;
+    auto arcPoint=[&](float theta,bool inner,float z)->P3{
+        const float radial=inner?rx-leg:rx,ry=inner?std::max(0.08f,rise-leg):rise;
+        return {cx+radial*std::cos(theta),spring+ry*std::sin(theta),z};
+    };
+    for(int i=0;i<segments;++i){
+        const float a=pi*float(i)/segments,b=pi*float(i+1)/segments;
+        std::vector<P3> near={arcPoint(a,false,z0),arcPoint(b,false,z0),
+                              arcPoint(b,true,z0),arcPoint(a,true,z0)};
+        std::vector<P3> far={arcPoint(a,false,z1),arcPoint(b,false,z1),
+                             arcPoint(b,true,z1),arcPoint(a,true,z1)};
+        m.prism(material,near,far);
+    }
+}
+inline void addDome(Mesher& m,int material,float cx,float y0,float cz,float width,float height,float depth){
+    constexpr int sides=16,bands=7;
+    constexpr float pi=3.14159265358979323846f;
+    const float rx=width*0.5f,rz=depth*0.5f;
+    auto point=[&](int side,int ring)->P3{
+        const float phi=2*pi*float(side)/sides;
+        const float theta=(pi*0.5f-0.06f)*float(ring)/bands;
+        const float radius=std::cos(theta);
+        return {cx+rx*radius*std::cos(phi),y0+height*std::sin(theta),
+                cz+rz*radius*std::sin(phi)};
+    };
+    for(int band=0;band<bands;++band)for(int side=0;side<sides;++side){
+        const auto a=point(side,band),b=point((side+1)%sides,band),
+                   c=point((side+1)%sides,band+1),d=point(side,band+1);
+        const float phi=2*pi*(float(side)+0.5f)/sides;
+        m.quad(material,{a,b,c,d},
+               {std::cos(phi),float(band+1)/bands,std::sin(phi)});
+    }
+    const P3 apex{cx,y0+height,cz};
+    for(int side=0;side<sides;++side){
+        const auto a=point(side,bands),b=point((side+1)%sides,bands);
+        const float phi=2*pi*(float(side)+0.5f)/sides;
+        m.poly(material,{a,b,apex},{std::cos(phi),1.f,std::sin(phi)});
+    }
+    std::vector<P3> base;
+    for(int side=0;side<sides;++side)base.push_back(point(side,0));
+    m.poly(material,std::move(base),{0,-1,0});
+}
+inline void addSweptHull(Mesher& m,int material,float cx,float y0,float cz,float width,float height,float depth){
+    constexpr int sides=12,segments=8;
+    constexpr float pi=3.14159265358979323846f;
+    auto point=[&](int side,int station)->P3{
+        const float t=float(station)/segments,a=2*pi*float(side)/sides;
+        const float profile=0.72f+0.28f*std::sin(pi*t);
+        const float yCentre=y0+height*(0.5f+0.06f*std::sin(2*pi*t));
+        return {cx+width*0.5f*profile*std::cos(a),
+                yCentre+height*0.48f*profile*std::sin(a),
+                cz+depth*t};
+    };
+    for(int station=0;station<segments;++station)
+        for(int side=0;side<sides;++side){
+            const auto a=point(side,station),b=point((side+1)%sides,station),
+                       c=point((side+1)%sides,station+1),d=point(side,station+1);
+            const float phi=2*pi*(float(side)+0.5f)/sides;
+            m.quad(material,{a,b,c,d},{std::cos(phi),std::sin(phi),0});
+        }
+    std::vector<P3> near,far;
+    for(int i=0;i<sides;++i){near.push_back(point(i,0));far.push_back(point(i,segments));}
+    m.poly(material,std::move(near),{0,0,-1});
+    m.poly(material,std::move(far),{0,0,1});
+}
+
 }
 inline StyledStructure dressStructure(const BuildingStyle& st,const std::string& kindId,uint64_t seed,Vec3 origin={},uint32_t yaw=0,StructureSize size={}){
     using namespace buildingStyleDetail;
@@ -255,6 +331,38 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
                 m.box(sm.beacon,cx-fw*0.12f,y1,cz-fd*0.12f,
                       cx+fw*0.12f,y1+0.15f,cz+fd*0.12f);
             break;}
+        case StructureForm::Kind::Arch:{
+            // Free-standing curved portal. AABB collision is deliberately split
+            // along each 12-piece arc, leaving the middle of the passage free.
+            if(fw<3.5f||fh<2.8f)break;
+            addArch(m,material,cx,y0,z0,fw,fh,fd);
+            const float leg=std::clamp(fw*0.12f,0.24f,0.85f);
+            const float spring=y0+fh*0.42f,rx=fw*0.5f,rise=fh*0.58f;
+            addBox(x0,y0,z0,x0+leg,spring,z1);
+            addBox(x1-leg,y0,z0,x1,spring,z1);
+            constexpr int seg=12;
+            constexpr float pi=3.14159265358979323846f;
+            for(int q=0;q<seg;++q){
+                const float a=pi*float(q)/seg,b=pi*float(q+1)/seg;
+                const float cornersX[]={cx+rx*std::cos(a),cx+rx*std::cos(b),
+                    cx+(rx-leg)*std::cos(a),cx+(rx-leg)*std::cos(b)};
+                const float cornersY[]={spring+rise*std::sin(a),spring+rise*std::sin(b),
+                    spring+(rise-leg)*std::sin(a),spring+(rise-leg)*std::sin(b)};
+                const auto [minX,maxX]=std::minmax_element(std::begin(cornersX),std::end(cornersX));
+                const auto [minY,maxY]=std::minmax_element(std::begin(cornersY),std::end(cornersY));
+                addBox(*minX,*minY,z0,*maxX,*maxY,z1);
+            }
+            break;}
+        case StructureForm::Kind::Dome:{
+            if(fw<1.5f||fd<1.5f||fh<0.8f)break;
+            addDome(m,material,cx,y0,cz,fw,fh,fd);
+            addBox(x0,y0,z0,x1,y1,z1); // conservative for non-walkable roof
+            break;}
+        case StructureForm::Kind::SweptHull:{
+            if(fw<1.5f||fd<2.5f||fh<1.2f)break;
+            addSweptHull(m,material,cx,y0,cz,fw,fh,fd);
+            addBox(x0,y0,z0,x1,y1,z1); // conservative closed body
+            break;}
         case StructureForm::Kind::Gantry:{
             // A portal built from two uprights and a crossbeam; unlike a
             // solid block, its centre is empty also in coarse collision.
@@ -344,6 +452,17 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
             auto fixed=[&](int i){return Fixed::fromRatio(int64_t(std::llround((base[i]+(at[i]-inMin[i])*scale[i])*1000.0)),1000);};
             return Vec3{fixed(0),fixed(1),fixed(2)};
         };
+        // Fit cannot silently crush a functional gate below a standing
+        // human's clearance. This is a geometry-level constraint only:
+        // sci-fi armoured hulls are not yet enterable.
+        if(k.doors>0){
+            const float originalWidth=std::min(k.doorWidth*W,
+                (W-2*cut)/float(k.doors)-0.6f);
+            const float originalHeight=std::min(k.doorHeight*Hh,Hh-0.8f);
+            const float horizontalScale=yaw%2?scale[2]:scale[0];
+            if(originalWidth*horizontalScale<1.6f ||
+               originalHeight*scale[1]<2.1f)return {};
+        }
         for(auto& v:out.mesh.vertices){
             float n2=0;
             for(int i=0;i<3;++i){

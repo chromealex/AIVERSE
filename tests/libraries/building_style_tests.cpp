@@ -136,8 +136,39 @@ int main(int argc,char** argv){
                 }
             }
         }
+        // Curved primitives: each adds geometry; the arch must preserve its
+        // open central corridor in coarse collision (no one giant box).
+        bool curvedKinds[3]{false,false,false};
+        for(const auto& k:st.structures)for(const auto& v:k.forms){
+            if(v.kind==StructureForm::Kind::Arch)curvedKinds[0]=true;
+            if(v.kind==StructureForm::Kind::Dome)curvedKinds[1]=true;
+            if(v.kind==StructureForm::Kind::SweptHull)curvedKinds[2]=true;
+        }
+        for(bool exists:curvedKinds)CHECK(exists);
+        {
+            auto archStyle=st;
+            auto* kinds=&archStyle.structures;
+            for(auto& kind:*kinds)if(kind.id=="depot"){
+                kind.forms.clear();
+                StructureForm arch;arch.kind=StructureForm::Kind::Arch;
+                arch.material=archStyle.shell;arch.x=0.5f;arch.z=1.35f;
+                arch.width=0.60f;arch.height=0.8f;arch.depth=0.18f;
+                arch.level=0.0f;kind.forms.push_back(arch);
+            }
+            auto withArch=dressStructure(archStyle,"depot",9);
+            auto without=st;
+            for(auto& kind:without.structures)if(kind.id=="depot")kind.forms.clear();
+            auto plain=dressStructure(without,"depot",9);
+            CHECK(withArch.mesh.triangles()>plain.mesh.triangles());
+            CHECK(withArch.boxes.size()>plain.boxes.size()+4);
+            for(const auto& v:withArch.mesh.vertices)
+                for(int a=0;a<3;++a)CHECK(std::isfinite(v.pos[a])&&std::isfinite(v.nrm[a]));
+        }
+        // A very low building is rejected if the final envelope would crush
+        // the visual front gate below clearance (unsized legacy stays unchanged).
+        CHECK(dressStructure(st,"command",13,{},0,StructureSize{24.f,5.f,18.f}).mesh.vertices.empty());
         // The four primitive kinds must all be exercised in shipped data.
-        bool found[4]={false,false,false,false};
+        bool found[7]={false,false,false,false,false,false,false};
         for(const auto& kind:st.structures)for(const auto& form:kind.forms)
             found[int(form.kind)]=true;
         for(bool exists:found)CHECK(exists);
@@ -151,6 +182,7 @@ int main(int argc,char** argv){
             catch(const JsonError& e){return std::string(e.what()).find(why)!=std::string::npos;}
             return false;
         };
+        CHECK(invalidForm(R"({"kind":"dome","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2],"chance":-0.1})","outside supported bounds"));
         CHECK(invalidForm(R"({"kind":"orb","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2]})",".kind: expected"));
         CHECK(invalidForm(R"({"kind":"silo","material":"unknown","at":[0.5,0.5],"size":[0.2,0.6,0.2]})",".material: unknown"));
         CHECK(invalidForm(R"({"kind":"silo","material":"m","at":[0.5],"size":[0.2,0.6,0.2]})",".at: expected array"));
