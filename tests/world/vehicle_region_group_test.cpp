@@ -125,10 +125,14 @@ void backwardsReferencesNotLost() {
     AIVERSE_TEST_CHECK(w::VehicleRegionTransfer::transfer(
         f.world,f.ledger,f.car,f.resolver(),first,next,&reason));
     AIVERSE_TEST_CHECK(f.ledger.find(5)->owner==next);
-    // A truly stale backlink is a hard failure, not a silent ignore.
-    f.world.destroy(extra);
+    // A stale seat mapping must fail instead of dropping the passenger.
+    // Destroying an Entity removes its backlinks from ECS automatically,
+    // so use a slot that still references a destroyed passenger.
+    f.world.destroy(f.passenger);
     AIVERSE_TEST_CHECK(!w::VehicleRegionTransfer::transfer(
         f.world,f.ledger,f.car,f.resolver(),next,far,&reason));
+    AIVERSE_TEST_CHECK(f.ledger.find(1)->owner==next);
+    AIVERSE_TEST_CHECK(f.ledger.find(5)->owner==next);
 }
 }
 int main() {
