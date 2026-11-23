@@ -4,8 +4,8 @@
 // Scene if it uses Box3D. The caller owns both and serializes this query
 // with the authoritative physics step.
 #include "engine/sim/CommonComponents.h"
+#include "engine/sim/Simulation.h"
 #include "engine/world/SpatialWorld.h"
-#include "engine/physics/Scene.h"
 #include <functional>
 #include <cstdint>
 
@@ -19,6 +19,17 @@ struct BuildingPhysicalExtent {
     Vec3 halfExtents{};
     bool blocksBuildingMotion=true;
 };
+inline void io(Archive& archive,BuildingPhysicalExtent& volume){
+    archive(volume.halfExtents,volume.blocksBuildingMotion);
+}
+
+
+// Register during GameModule::setup before PersistentEcsRegistry seals.
+// Game-specific ECS body schemas can still provide alternate probes.
+inline void registerBuildingPhysicalExtentPersistence(Simulation& sim){
+    sim.registerPersistentComponent<BuildingPhysicalExtent>(
+        "building.physical_extent",1);
+}
 
 inline bool buildingEcsSweptOccupied(
     const World& ecs,const world::Bounds& first,
@@ -41,39 +52,14 @@ inline bool buildingEcsSweptOccupied(
     return occupied;
 }
 
-// Optional Box3D support queries the EXISTING physics::Scene. It is
-// read-only and uses the physics engine's real rotated collision shapes;
-// unlike an AABB-only fallback it can see kinematic rigid bodies too.
-// The caller must exclude its own door bodies from these queries, or use
-// dedicated SpatialWorld leaves not registered as Box3D bodies.
-inline bool buildingPhysisSweptOccupied(
-    const physics::Scene& physis,const world::Bounds& a,
-    const world::Bounds& b,
-    const physics::QueryFilter& filter={}){
-    const auto overlap=[&](const world::Bounds& bounds){
-        const Vec3 center=(bounds.min+bounds.max)/2;
-        const Vec3 half=(bounds.max-bounds.min)/2;
-        return !physis.overlapBox(
-            {float(center.x.toDouble()),float(center.y.toDouble()),
-             float(center.z.toDouble())},
-            {float(half.x.toDouble()),float(half.y.toDouble()),
-             float(half.z.toDouble())},b3Quat_identity,filter).empty();
-    };
-    return overlap(a)||overlap(b);
-}
-
-inline auto buildingCommonSweptProbe(
-    const World& ecs,const physics::Scene* physis=nullptr,
-    physics::QueryFilter filter={}){
-    return [&ecs,physis,filter](
-        const world::Bounds& first,const world::Bounds& second,
-        uint32_t ownFirst,uint32_t ownSecond){
-        // The two SpatialWorld IDs are not Box3D handles. PHYSIS owner
-        // must not publish those same leaves as queryable Box3D bodies.
+// Optional PHYSIS/Box3D obstruction checking is implemented in the
+// separate BuildingPhysisObstruction.h. This common ECS adapter has no
+// mandatory Box3D build/link dependency.
+inline auto buildingCommonSweptProbe(const World& ecs){
+    return [&ecs](const world::Bounds& first,const world::Bounds& second,
+                  uint32_t ownFirst,uint32_t ownSecond){
         (void)ownFirst;(void)ownSecond;
-        return buildingEcsSweptOccupied(ecs,first,second)||
-               (physis&&buildingPhysisSweptOccupied(
-                   *physis,first,second,filter));
+        return buildingEcsSweptOccupied(ecs,first,second);
     };
 }
 
