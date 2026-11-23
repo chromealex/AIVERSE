@@ -322,7 +322,10 @@ export default function BuildingGeneratorPanel({
 
   const refreshGeneratedThumbnail=(path:string)=>{
     setThumbnail('');
-    void invoke('studio.assetThumbnail',{path}).then(thumb=>{
+    // StudioHost.assetThumbnail expects a project content/ path, while
+    // studio.buildingGenerate returns a path relative to content/.
+    const assetPath=path.startsWith('content/')?path:'content/'+path;
+    void invoke('studio.assetThumbnail',{path:assetPath}).then(thumb=>{
       if(thumb.url)setThumbnail(thumb.url);
     }).catch(()=>{});
   };
