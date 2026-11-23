@@ -25,9 +25,10 @@ class WorldProcessesNativeModule final:public game::NativeModule {
 public:
     void setup(game::GameCore& host,Simulation& sim,
                game::NativeState&,const Json& config) const override {
-        if(config.size()!=0)
-            throw std::invalid_argument("world_processes native module: unknown config fields");
-        (void)authoring::hydrateMap(sim,host.matchMap(),host.mapPlaced());
+        // Project may enable any of the seven new systems even before
+        // adding its first authored component. Unknown/typed flags fail fast.
+        const SuiteFlags flags=suiteFlags(config);
+        (void)authoring::hydrateMap(sim,host.matchMap(),host.mapPlaced(),flags);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
