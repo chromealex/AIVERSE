@@ -2509,7 +2509,7 @@
       "package": "grid",
       "path": "skills/core/aiverse-grid/SKILL.md",
       "domain": "gameplay",
-      "summary": "Four-neighbor multi-source distance fields",
+      "summary": "2D/3D grid traversal, components, morphology, distance fields and seeded watershed",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_grid",
