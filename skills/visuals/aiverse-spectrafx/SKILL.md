@@ -1875,3 +1875,7 @@ SpectraCheckpointFile.h defines bounded SPFR V1 same-build presentation restore 
 ## Stage 70 — runtime identity and native file IO
 
 GraphRuntime derives exact serialized graph/overrides/options identity for SPFR byte import/export. Identity above 4096 bytes disables restore rather than truncating. SpectraCheckpointFileIO.h provides bounded trusted-native path IO; no unrestricted IPC path access. Build fingerprint, asset identity, large graphs, Studio/MCP integration and atomic writes remain. No tests run.
+
+## Stage 71 — compact identity and timeline envelope
+
+GraphRuntime uses two deterministic 64-bit hash lanes for graph/options identity, removing the 4096-byte graph limit. This is non-cryptographic compatibility metadata, not authentication. SpectraTimelineCheckpoint.h encodes bounded SPFT V1 clock/burst metadata with CRC over header and state. Studio/MCP transfer remains pending. No tests run.
