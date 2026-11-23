@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -95,10 +96,6 @@ inline StudioBuildingDependencyReport studioCheckBuildingDependencies(
         const std::vector<uint8_t> bytes(
             std::istreambuf_iterator<char>{in},
             std::istreambuf_iterator<char>{});
-        if(!in.bad()&&in.eof()==false){
-            // EOF is not mandatory after iterator consumption, but a failed
-            // open or any hard read error is always stale.
-        }
         if(!in.is_open()||in.bad()){
             report.stale.push_back({guid,"Texture bytes could not be read"});
             continue;
@@ -109,6 +106,50 @@ inline StudioBuildingDependencyReport studioCheckBuildingDependencies(
     }
     report.current=report.stale.empty();
     return report;
+}
+
+
+// Read-only bounded scan for generated buildings whose embedded texture
+// sources or .meta importer settings changed. No silent overwrites and no
+// renderer/GPU operations inside this catalog inspection.
+inline Json studioBuildingStaleMaterials(const std::filesystem::path& project){
+    namespace fs=std::filesystem;
+    const auto root=studioContentRoot(project);
+    const auto generated=root/"GeneratedBuildings";
+    Json out=Json::object(),items=Json::array();
+    std::error_code ec;
+    if(!fs::is_directory(generated,ec)){
+        out.set("stale",std::move(items));
+        return out;
+    }
+    StudioAssetCatalog catalog(project);
+    catalog.rebuild();
+    size_t inspected=0;
+    for(const auto& file:fs::directory_iterator(generated)){
+        if(++inspected>2000)
+            throw std::runtime_error("Generated building scan budget exceeded");
+        if(file.path().extension()!=".json"||
+           file.path().filename().string().find(".glb.recipe.json")==std::string::npos)
+            continue;
+        if(fs::is_symlink(file.symlink_status(ec))||ec||
+           !fs::is_regular_file(file.symlink_status(ec)))
+            continue;
+        const auto recipe=Json::parseFile(file.path().string());
+        const auto report=studioCheckBuildingDependencies(project,recipe,catalog);
+        if(report.current)continue;
+        Json item=Json::object(),reasons=Json::array();
+        item.set("recipe",Json::string(file.path().lexically_relative(root).generic_string()));
+        for(const auto& stale:report.stale){
+            Json detail=Json::object();
+            detail.set("guid",Json::string(stale.guid));
+            detail.set("reason",Json::string(stale.reason));
+            reasons.push(std::move(detail));
+        }
+        item.set("changes",std::move(reasons));
+        items.push(std::move(item));
+    }
+    out.set("stale",std::move(items));
+    return out;
 }
 
 } // namespace aiverse::studio
