@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode } from './shaderGraphLayout';
+import GraphCanvas from '../graphs/GraphCanvas';
 import './ShaderGraphPanel.css';
 
 export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
@@ -14,7 +15,6 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [selected,setSelected]=useState('');
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
  const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
- const drag=useRef<{id:string; x:number; y:number; originalX:number; originalY:number}|null>(null);
  const [message,setMessage]=useState('');
  const [search,setSearch]=useState('');
  const [error,setError]=useState('');
@@ -137,44 +137,9 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save positions</button>
       </div>
-      <div className="graph-canvas-scroll">
-       <svg width={diagram.width} height={diagram.height} viewBox={'0 0 '+diagram.width+' '+diagram.height}
-        role="group" aria-label={'Editable node layout for '+selected}
-        onPointerMove={event=>{
-          if(!drag.current||!draft)return;
-          const current=drag.current;
-          // Client pointer delta is in zoomed CSS pixels, while node positions
-          // are stored in unscaled SVG viewBox coordinates.
-          const zoom=Number(window.document.documentElement.style.zoom)||1;
-          const x=current.originalX+(event.clientX-current.x)/zoom;
-          const y=current.originalY+(event.clientY-current.y)/zoom;
-          setDraft(previous=>previous?moveShaderGraphNode(previous,current.id,x,y):previous);
-        }}
-        onPointerUp={()=>{drag.current=null;}}
-        onPointerCancel={()=>{drag.current=null;}}>
-        {diagram.edges.map(edge=><path key={edge.key} d={'M '+edge.x1+' '+edge.y1+
-          ' C '+(edge.x1+55)+' '+edge.y1+', '+(edge.x2-55)+' '+edge.y2+', '+edge.x2+' '+edge.y2}
-          fill="none" stroke="#7aa3d2" strokeWidth="2"/>)}
-        {diagram.nodes.map(node=><g key={node.id} className="graph-draggable" transform={'translate('+node.x+' '+node.y+')'}
-          onPointerDown={event=>{
-            if(!draft||busy)return;
-            event.preventDefault();
-            setSelectedNode(node.id);
-            drag.current={id:node.id,x:event.clientX,y:event.clientY,originalX:node.x,originalY:node.y};
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerUp={event=>{
-            drag.current=null;
-            if(event.currentTarget.hasPointerCapture(event.pointerId))
-              event.currentTarget.releasePointerCapture(event.pointerId);
-          }}>
-         <rect width="130" height="54" rx="7" fill={selectedNode===node.id?'#355b7e':'#233751'}
-          stroke={selectedNode===node.id?'#cbe8ff':'#6581a8'}/>
-         <text x="10" y="20" fill="#eef5ff" fontSize="11">{node.id}</text>
-         <text x="10" y="39" fill="#a6bad5" fontSize="10">{node.op}</text>
-        </g>)}
-       </svg>
-      </div>
+      <GraphCanvas diagram={diagram} selected={selectedNode} label={'Editable node layout for '+selected}
+       disabled={!draft||busy} onSelect={setSelectedNode}
+       onMove={(id,x,y)=>setDraft(previous=>previous?moveShaderGraphNode(previous,id,x,y):previous)}/>
       <div className="graph-outputs">Outputs: {Object.entries(document.graph.outputs??{}).map(
        ([k,v])=>k+' ← '+v).join(' · ')||'none'}</div>
      </> : <div className="graph-empty">No graph loaded.</div>}
