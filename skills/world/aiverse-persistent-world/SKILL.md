@@ -64,9 +64,19 @@ Use `net::authority::Server::enablePersistence(directory, uuid, resume, budget)`
 
 Native server CLI: `aiverse_fps_server --project DIR --world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N]`. The UUID is a nonzero 128-bit hex identifier. A new directory starts a world; an existing manifest is reopened before network listeners bind. Nonempty incomplete directories are refused, not overwritten. No automatic repair of corrupt or truncated WAL. An optional positive interval rotates checkpoints on finalized tick multiples; zero disables rotation. `--ticks` remains an absolute simulation tick ceiling.
 
-Every completed tick in this mode synchronously appends its WAL frame before network snapshot publication. Failed persistence closes peers and prevents future step/broadcast; the CLI exits nonzero. Only the finalized server step may broadcast. Network input queues not yet accepted into a committed simulation tick are volatile; reconnect from the last durable acknowledgement. Do not mutate the live simulation between durable ticks via ad hoc external calls. Call `checkpointWorld()` at a quiescent finalized boundary, not from speculative or client code.
+Every completed tick in synchronous mode appends its WAL frame before network snapshot publication; optional W1.25a async mode preserves the same acknowledgement barrier. Failed persistence closes peers and prevents future step/broadcast; the CLI exits nonzero. Only the finalized server step may broadcast. Network input queues not yet accepted into a committed simulation tick are volatile; reconnect from the last durable acknowledgement. Do not mutate the live simulation between durable ticks via ad hoc external calls. Call `checkpointWorld()` at a quiescent finalized boundary, not from speculative or client code.
 
 This is source-only integration, not an accepted production deployment. Full native builds, restart parity with clients, fault injection, asynchronous persistence, immutable streamed asset identity and long-duration ledger capacity remain outstanding.
+
+## Asynchronous durable IO (W1.25a, experimental)
+
+The shared `engine/world/AsyncPersistenceIo.h` mailbox has one owner and one native worker, with a single outstanding operation (queued, writing or receipt awaiting consumption). It enforces an encoded-byte capacity and poisons the worker after a failed operation. A successful job must return only after durable flush; enqueue is NOT commit. stop() drains and joins before IO dependencies are destroyed.
+
+For managed UnifiedWalSession, call `enableAsync(byteBudget)` after successful startup. Prepare a validated frame with `queueCommit` or a checkpoint with `queueCheckpoint`; Pending means accepted, Busy means another operation is outstanding. Poll `pollIo()` until Committed or Checkpointed; Failed requires recovery. State, manifest, retention and fork are unavailable while a job is outstanding. All ECS capture, materialization, validation and checkpoint encoding occur on the owner thread. Only append/flush, encoded checkpoint publication and WAL reopen run on the worker. Encoded-byte limits do not bound the full ECS snapshot working set. The owner must not mutate or close dependencies concurrently.
+
+NativeWorldFinality returns WaitingForDurability after queueing a completed tick and until the owner consumes the receipt. Do not simulate another tick or publish results before Committed. Server's `enablePersistence(..., budget, true)` enables the mode. CLI adds `--world-async`; `--ticks` counts acknowledged finalized ticks. `checkpointWorld()` accepts a checkpoint request; `pollWorldCheckpoint()` acknowledges it and the next tick waits for the barrier. Network gameplay reads and input consumption pause while the tick is outstanding; transport updates continue. The ordinary synchronous mode remains default.
+
+This is single-flight backpressure, not speculative multi-tick simulation, group commit, or background ECS serialization. The owner remains responsible for orderly stop and recovery after ambiguous writes. No async native compile, performance benchmark or crash acceptance has run.
 
 ## Implementation
 
