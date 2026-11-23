@@ -176,6 +176,8 @@ public:
     bool alive(FxHandle h) const;                      // instance exists: emitting or still owns live particles
     void emitManual(FxHandle h);                       // fires the "manual" sub-emitters of its live particles
     void clear();                                      // everything (new match)
+    // Explicit presentation-only CPU replay seed; clears live particles and UID history.
+    void resetDeterministicSeed(uint32_t seed);
 
     // Generic camera/view packet: no dependency on an RTS or FPS camera.
     void setView(const SpectraFxView& view);
