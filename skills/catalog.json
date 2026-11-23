@@ -7672,7 +7672,7 @@
       "package": "geometry-algorithms",
       "path": "skills/core/aiverse-geometry-algorithms/SKILL.md",
       "domain": "gameplay",
-      "summary": "Pure integer planar geometry predicates and convex hull",
+      "summary": "Planar geometry, triangulation, Voronoi, 3D ray and primitive distance/overlap queries",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_geometry_algorithms",
