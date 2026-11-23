@@ -36,6 +36,12 @@ class CaveSnapshotSpatialIndex {
         }
     };
     using Grid=std::map<Key,std::vector<uint32_t>>;
+    struct Influence {uint32_t index=0;PointCm min{},max{};};
+    struct Node {
+        PointCm min{},max{};
+        int32_t left=-1,right=-1;
+        uint32_t begin=0,count=0;
+    };
 public:
     explicit CaveSnapshotSpatialIndex(
         std::shared_ptr<const CaveVolumeSnapshot> source,
@@ -71,6 +77,8 @@ public:
                 i,{stamp.center.x-r,stamp.center.y-r,stamp.center.z-r},
                   {stamp.center.x+r,stamp.center.y+r,stamp.center.z+r});
         }
+        buildTree(overflowStamps_,stampTree_,0,overflowStamps_.size());
+        buildTree(overflowEntrances_,entranceTree_,0,overflowEntrances_.size());
         stats_.stampCells=stampGrid_.size();
         stats_.entranceCells=entranceGrid_.size();
         stats_.overflowStamps=overflowStamps_.size();
@@ -92,17 +100,17 @@ public:
         const int64_t z=floorDiv(p.z,config_.cellCm);
         const Key key{x,y,z};
         int64_t cave=caveFieldCmUnchecked(source_->settings,p);
-        visit(entranceGrid_,overflowEntrances_,key,[&](uint32_t i) {
+        visit(entranceGrid_,overflowEntrances_,entranceTree_,key,p,[&](uint32_t i) {
             cave=std::max(cave,entranceFieldCm(source_->entrances[i],p));
         });
         // Compute all Carve contributions first, then all Fill contributions.
         // Never use ID order to interleave these two passes.
-        visit(stampGrid_,overflowStamps_,key,[&](uint32_t i) {
+        visit(stampGrid_,overflowStamps_,stampTree_,key,p,[&](uint32_t i) {
             const auto& stamp=source_->stamps[i];
             if(stamp.mode==CaveStampMode::Carve)
                 cave=std::max(cave,caveSphereField(stamp,p));
         });
-        visit(stampGrid_,overflowStamps_,key,[&](uint32_t i) {
+        visit(stampGrid_,overflowStamps_,stampTree_,key,p,[&](uint32_t i) {
             const auto& stamp=source_->stamps[i];
             if(stamp.mode==CaveStampMode::Fill)
                 cave=std::min(cave,-caveSphereField(stamp,p));
@@ -110,23 +118,84 @@ public:
         return cave;
     }
 private:
+    static bool contains(PointCm p,PointCm a,PointCm b)noexcept{
+        return p.x>=a.x&&p.y>=a.y&&p.z>=a.z&&
+               p.x<=b.x&&p.y<=b.y&&p.z<=b.z;
+    }
+    static int64_t axisValue(PointCm p,unsigned axis)noexcept{
+        return axis==0?p.x:(axis==1?p.y:p.z);
+    }
+    static PointCm pointMin(PointCm a,PointCm b)noexcept{
+        return {std::min(a.x,b.x),std::min(a.y,b.y),std::min(a.z,b.z)};
+    }
+    static PointCm pointMax(PointCm a,PointCm b)noexcept{
+        return {std::max(a.x,b.x),std::max(a.y,b.y),std::max(a.z,b.z)};
+    }
+    static int32_t buildTree(std::vector<Influence>& records,
+                             std::vector<Node>& nodes,size_t begin,size_t end){
+        if(begin==end)return -1;
+        Node bounds;
+        bounds.min=records[begin].min;bounds.max=records[begin].max;
+        for(size_t i=begin+1;i<end;++i){
+            bounds.min=pointMin(bounds.min,records[i].min);
+            bounds.max=pointMax(bounds.max,records[i].max);
+        }
+        const int32_t id=int32_t(nodes.size());
+        nodes.push_back(bounds);
+        if(end-begin<=8){
+            nodes[size_t(id)].begin=uint32_t(begin);
+            nodes[size_t(id)].count=uint32_t(end-begin);
+            return id;
+        }
+        const int64_t sx=bounds.max.x-bounds.min.x;
+        const int64_t sy=bounds.max.y-bounds.min.y;
+        const int64_t sz=bounds.max.z-bounds.min.z;
+        const unsigned axis=sx>=sy&&sx>=sz?0:(sy>=sz?1:2);
+        std::sort(records.begin()+std::ptrdiff_t(begin),
+                  records.begin()+std::ptrdiff_t(end),
+                  [axis](const Influence& a,const Influence& b){
+            const int64_t ca=axisValue(a.min,axis)+
+                (axisValue(a.max,axis)-axisValue(a.min,axis))/2;
+            const int64_t cb=axisValue(b.min,axis)+
+                (axisValue(b.max,axis)-axisValue(b.min,axis))/2;
+            return ca==cb?a.index<b.index:ca<cb;
+        });
+        const size_t middle=begin+(end-begin)/2;
+        const int32_t left=buildTree(records,nodes,begin,middle);
+        const int32_t right=buildTree(records,nodes,middle,end);
+        nodes[size_t(id)].left=left;
+        nodes[size_t(id)].right=right;
+        return id;
+    }
     template<class Func>
-    static void visit(const Grid& grid,const std::vector<uint32_t>& overflow,
-                      const Key& key,Func&& fn){
-        static const std::vector<uint32_t> empty;
-        const auto it=grid.find(key);
-        const auto& local=it==grid.end()?empty:it->second;
-        // Both lists have strictly increasing indices, and an influence
-        // belongs to exactly one of them. Merge in canonical source order.
-        size_t a=0,b=0;
-        while(a<local.size()||b<overflow.size()){
-            if(b==overflow.size() ||
-               (a<local.size()&&local[a]<overflow[b]))
-                fn(local[a++]);
-            else fn(overflow[b++]);
+    static void visitTree(const std::vector<Influence>& records,
+                          const std::vector<Node>& nodes,int32_t id,
+                          PointCm p,Func& fn){
+        if(id<0)return;
+        const Node& node=nodes[size_t(id)];
+        if(!contains(p,node.min,node.max))return;
+        if(node.left<0&&node.right<0){
+            const size_t last=size_t(node.begin)+node.count;
+            for(size_t i=node.begin;i<last;++i)
+                if(contains(p,records[i].min,records[i].max))
+                    fn(records[i].index);
+        }else{
+            visitTree(records,nodes,node.left,p,fn);
+            visitTree(records,nodes,node.right,p,fn);
         }
     }
-    void insert(Grid& grid,std::vector<uint32_t>& overflow,
+    template<class Func>
+    static void visit(const Grid& grid,
+                      const std::vector<Influence>& overflow,
+                      const std::vector<Node>& tree,const Key& key,
+                      PointCm p,Func&& fn){
+        const auto it=grid.find(key);
+        if(it!=grid.end())for(uint32_t id:it->second)fn(id);
+        // max/min of integer fields are order-independent within each pass.
+        // Carve and Fill still run as two separate passes.
+        visitTree(overflow,tree,tree.empty()?-1:0,p,fn);
+    }
+    void insert(Grid& grid,std::vector<Influence>& overflow,
                 size_t& postings,uint32_t id,PointCm min,PointCm max){
         // Clamp to the legal field world, which is all that callers sample.
         min.x=std::max(min.x,-kLimitCm);min.y=std::max(min.y,-kLimitCm);
@@ -147,7 +216,7 @@ private:
         if(nx>cap||ny>cap||nz>cap||nx*ny>cap||
            nx*ny*nz>cap||nx*ny*nz>config_.maxCellPostings||
            postings>config_.maxCellPostings-nx*ny*nz){
-            overflow.push_back(id);return;
+            overflow.push_back({id,min,max});return;
         }
         for(int64_t z=first.z;z<=last.z;++z)
         for(int64_t y=first.y;y<=last.y;++y)
@@ -160,7 +229,8 @@ private:
     CaveSdfIndexStats stats_{};
     size_t stampCount_=0,entranceCount_=0;
     Grid stampGrid_,entranceGrid_;
-    std::vector<uint32_t> overflowStamps_,overflowEntrances_;
+    std::vector<Influence> overflowStamps_,overflowEntrances_;
+    std::vector<Node> stampTree_,entranceTree_;
 };
 inline CaveMesh generateCaveIndexedSnapshotMesh(
     const CaveSnapshotSpatialIndex& index,ChunkKey3 key,
