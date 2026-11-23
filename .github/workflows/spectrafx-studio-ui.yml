@@ -1,0 +1,40 @@
+name: SpectraFX HTML5 Studio graph editor
+
+on:
+  push:
+    branches:
+      - feature/spectrafx-html5-data-interfaces-20261123
+    paths:
+      - 'apps/studio-web/**'
+      - '.github/workflows/spectrafx-studio-ui.yml'
+  pull_request:
+    paths:
+      - 'apps/studio-web/**'
+      - '.github/workflows/spectrafx-studio-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-contract:
+    name: Graph Editor typecheck and tests (Node 22)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install web dependencies
+        working-directory: apps/studio-web
+        run: npm install --no-audit --no-fund
+      - name: Typecheck complete Studio workspace
+        working-directory: apps/studio-web
+        run: npm run typecheck
+      - name: Run graph and Data Interface contracts
+        working-directory: apps/studio-web
+        run: npm run test:graphs
+      - name: Build Studio Web (Vite)
+        working-directory: apps/studio-web
+        run: npm run build
