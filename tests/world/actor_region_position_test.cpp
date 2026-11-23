@@ -167,6 +167,7 @@ static void portableActorProjection(){
     w.add<vs::VehicleDrive>(car,drive);
     vs::seatDriver(w,car,w.get<vs::VehicleDrive>(car),driver,1,0);
     w.get<actor::CharacterBody>(driver).vehicle=w.get<actor::Vehicle>(car).id;
+    w.get<actor::CharacterBody>(host.characterEntity(*sim,2)).vehicle=w.get<actor::Vehicle>(car).id;
     w.get<actor::CharacterHealth>(driver).health=73;
     w.resource<actor::State>()->round=3;
     w.resource<wd::RegionMoveRequests>()->destinations[carId]={64_fx,2_fx,0_fx};
