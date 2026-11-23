@@ -47,8 +47,8 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `scripts` | `apps/editor/windows/ScriptsWindow.cpp` | Scripts panel: Lua editor, save with syntax check, Check (108) |
 | `shader_graph` | `apps/editor/windows/ShaderGraphWindow.cpp` | Partial; native visual parity pending |
 | `spectrafx_gpu_assets` | `apps/editor/windows/SpectraFxGpuAssetsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
-| `spectrafx_graph` | `apps/editor/windows/SpectraFxGraphWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110); no node-graph canvas |
-| `spectrafx_graph` | `apps/editor/windows/SpectraGraphWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110); no node-graph canvas |
+| `spectrafx_graph` | `apps/editor/windows/SpectraFxGraphWindow.cpp` | Stage 115 typed Graph v2 Data Interface authoring (asset list, parameter/binding editor, native validation, drafts/publish, content texture picker); graph wiring canvas and real GPU preview still pending |
+| `spectrafx_graph` | `apps/editor/windows/SpectraGraphWindow.cpp` | Stage 115 typed Graph v2 Data Interface authoring (asset list, parameter/binding editor, native validation, drafts/publish, content texture picker); graph wiring canvas and real GPU preview still pending |
 | `stats` | `apps/editor/windows/StatsWindow.cpp` | Statistics panel: map contents, Scene fps (110) |
 | `studio_camera_bookmarks` | `apps/editor/windows/StudioCameraBookmarksWindow.cpp` | Scene toolbar bookmarks (106) |
 | `studio_extensions` | `apps/editor/windows/StudioExtensionsWindow.cpp` | Extensions panel: editor/extensions.lua widgets, commands, Scene gizmos (111) |
