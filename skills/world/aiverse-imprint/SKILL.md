@@ -1,18 +1,19 @@
 ---
 name: aiverse-imprint
-description: Use AIVERSE IMPRINT when implementing ECS следы, запахи и остаточные вещества с затуханиемдиффузией и генерацией от движения.
+description: Use AIVERSE IMPRINT for Persistent footsteps, scent, trace deposits, decay and diffusion sourced from real actor movement.
 ---
 # IMPRINT — AIVERSE skill
 
 ## When to activate
-ECS следы, запахи и остаточные вещества с затуханием/диффузией и генерацией от движения.
+Persistent footsteps, scent, trace deposits, decay and diffusion sourced from real actor movement.
 
-Typical request: следы ног, запахи для NPC, след от машин, поиск по отпечаткам, территориальные маркеры. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: footprints, vehicle trails, scent tracking, residue, trace AI. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/ImprintEcs.h`, `libraries/include/aiverselib/world/ImprintTrails.h`.
 - **Authoritative ECS:** `imprint::Cell, Link, Deposit, Tracker`.
 - **Lifecycle:** `aiverse::lib::worldprocess::installSuite(sim,flags) with flags.imprint=true`; per-tick behavior: `imprint::sampleMotion(world,tracker,tick,xCm,zCm) then stampMotion then advance`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `ImprintCell, ImprintLink, ImprintDeposit, ImprintTracker`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `ImprintCrowdBridge.h`, `examples/world/world_processes_native/README.md`, `WorldProcessesQueries.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
