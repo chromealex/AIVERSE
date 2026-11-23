@@ -10,6 +10,8 @@ import {
   DEFAULT_FOREST, DEFAULT_TERRAIN, forestParams, previewStats, terrainParams, validateForest, validateTerrain,
   type ForestForm, type GenerateMode, type TerrainForm
 } from './terraweaveGeneratorLogic';
+import GraphCanvas from '../../graphs/GraphCanvas';
+import {terrainRecipeProjection} from '../../graphs/generatorProjections';
 import './TerraweaveGeneratorPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -28,6 +30,7 @@ export default function TerraweaveGeneratorPanel({ snapshot, commitSnapshot }:
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showGraph,setShowGraph]=useState(false);
 
   const loadForest = useCallback(async () => {
     if (!projectLoaded) return;
@@ -80,6 +83,12 @@ export default function TerraweaveGeneratorPanel({ snapshot, commitSnapshot }:
     <div className="au-stack">
       {error && <StudioAlert tone="danger" title="TerraWeave">{error}</StudioAlert>}
       {status && !error && <StudioAlert tone="success" title="Done">{status}</StudioAlert>}
+      <StudioSection title="Recipe dependencies" actions={<StudioButton size="sm" onClick={()=>setShowGraph(v=>!v)}>{showGraph?'Hide graph':'Show graph'}</StudioButton>}>
+        {showGraph&&<div style={{height:220,display:'flex',flexDirection:'column'}}>
+          <GraphCanvas view={terrainRecipeProjection({...terrain},{...forest})} selected="" label="TerraWeave recipe dependency view" disabled onSelect={()=>{}} onMove={()=>{}}/>
+        </div>}
+        <small>Read-only projection. Landscape and forest edits below use their native operations; this is not a new graph evaluator.</small>
+      </StudioSection>
       <StudioSection title="Landscape">
         <div className="twg__grid">
           <StudioField label="Seed" htmlFor="twg-seed"><StudioInput id="twg-seed" type="number" min={0} value={terrain.seed} onChange={num(v => setTerrain({ ...terrain, seed: v }))}/></StudioField>
