@@ -18,6 +18,9 @@ namespace aiverse::render {
 // (unknown pattern, size out of 8..2048).
 void generateTexture(const Json& spec, Image& out);
 std::vector<std::string> texturePatterns();
+// Shared periodic scalar sources for procedural graph authoring. Validated period 1..256, octaves 1..6.
+float textureNoise(float u,float v,int period,int octaves,uint32_t seed);
+float textureVoronoi(float u,float v,int period,uint32_t seed);
 // One-line description per pattern and the keys it reads (MCP schema / editor tooltips).
 std::string texturePatternHelp();
 
