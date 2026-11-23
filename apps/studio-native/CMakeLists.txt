@@ -53,6 +53,26 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     target_sources(aiverse_studio_metal_lighting_tests PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     add_test(NAME studio_metal_lighting COMMAND aiverse_studio_metal_lighting_tests "${CMAKE_CURRENT_BINARY_DIR}/metal-lighting-captures")
     set_tests_properties(studio_metal_lighting PROPERTIES LABELS "EDITOR;LIGHTING" TIMEOUT 90 PASS_REGULAR_EXPRESSION "Studio Metal lighting PASS" FAIL_REGULAR_EXPRESSION "Studio Metal lighting FAIL")
+    # Real GPU SpectraFX preview: the Scene owns all device work and renders
+    # into its normal depth-tested HDR pass; no browser/ImGui fake frames.
+    add_executable(aiverse_studio_spectrafx_preview_tests
+        tests/StudioSpectraPreviewTests.mm StudioScene.cpp
+        StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
+    target_include_directories(aiverse_studio_spectrafx_preview_tests
+        PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE
+        SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
+        aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
+    target_sources(aiverse_studio_spectrafx_preview_tests
+        PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
+    set_source_files_properties(tests/StudioSpectraPreviewTests.mm
+        PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    add_test(NAME studio_spectrafx_preview
+        COMMAND aiverse_studio_spectrafx_preview_tests)
+    set_tests_properties(studio_spectrafx_preview PROPERTIES
+        LABELS "EDITOR;SpectraFX;GPU" TIMEOUT 90
+        PASS_REGULAR_EXPRESSION "Studio SpectraFX Metal preview PASS"
+        FAIL_REGULAR_EXPRESSION "Studio SpectraFX Metal preview FAIL")
     add_executable(aiverse_studio_render_lighting_tests tests/StudioRenderLightingTests.cpp StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
     target_include_directories(aiverse_studio_render_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_studio_render_lighting_tests PRIVATE aiverse_lua aiverse_editor_core SQLite::SQLite3)
