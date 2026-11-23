@@ -218,6 +218,14 @@ public:
     std::vector<CavePreparedEdit> visualPreviewCandidates()const {
         return certifiedCandidates();
     }
+    // Owner-thread streaming integration: all uncommitted dirty keys must
+    // remain residency-pinned until publishReady acknowledges a real commit.
+    std::vector<ChunkKey3> dirtyKeys()const {
+        std::vector<ChunkKey3> result;
+        for(const auto& item:dirty_.pending(maxQueued_))
+            result.push_back(item.key);
+        return result;
+    }
     size_t dirtyCount()const{return dirty_.size();}
     size_t preparedCount()const{return prepared_.size();}
     size_t inFlight()const{return running_.size();}
