@@ -1799,3 +1799,7 @@ Graph resource inspector reports unavailable indexed paths and legacy paths sepa
 ## Stage 51 — typed diagnostics and MCP
 
 Use `fx_asset_check {guid}` in native Studio MCP or typed `studio.spectraAssetCheck`. Results carry code `ok`, `missing`, `unsupported_format`, or `decode_failed`, detail and gpuVerified:false. Headless Workspace has no handler and returns unavailable. Decode failure can include missing dependencies or input budget exhaustion, not necessarily corrupt bytes. No tests run.
+
+## Stage 52 — Metal shader RNG primitive
+
+ComputeParticles::resetGpuShaderSeed(seed) performs checked reset and initializes independent birth seed/ordinal state. Birth state carries two 16-bit seed halves and a 24-bit ordinal in size.yzw; size.x remains billboard size. MSL birthRandomBits/birthRandom01 implement stateless integer hashing. The primitive is not yet consumed by VM/material operations, exposed in GraphRuntime/Studio, or proven checkpoint-safe. Do not claim deterministic visual replay or CPU/GPU parity. Tests deferred.
