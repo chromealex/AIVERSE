@@ -47,11 +47,22 @@ public:
         if(!reader_("fx/gpu/routes.json",routesText)) return true;
         SpectraFxGpuRouteAsset::Routes routes;
         SpectraFxGpuBudgetGovernor::Config budget;
+        SpectraFxSignificance::Config authoredImportance;
         std::optional<FxQuality> authoredQuality;
         if(!SpectraFxGpuRouteAsset::readText(routesText,routes,&lastError_,
-                                            &budget,&authoredQuality))
+                                            &budget,&authoredQuality,
+                                            &authoredImportance))
             return false;
         if(authoredQuality) quality_=*authoredQuality;
+        if(!significance_.configure(authoredImportance)) {
+            lastError_="invalid SpectraFX cue importance config";
+            return false;
+        }
+        for(const auto& [id,route]:routes)
+            if(!significance_.setEventWeight(id,route.importance)) {
+                lastError_="invalid SpectraFX route importance";
+                return false;
+            }
         if(routes.empty()) return true;
         if(!enable(budget)) return false;
         for(const auto& [type,route]:routes)
@@ -283,6 +294,7 @@ public:
         if(enabled_) textures_.shutdown();
         enabled_=false;
         inbox_.reset();
+        significance_=SpectraFxSignificance{}; // per-project policy; no stale weights
         reader_={};
         textureBase_.clear();
         device_=nullptr;
