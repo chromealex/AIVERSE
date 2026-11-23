@@ -138,6 +138,25 @@ void testVehicleGroupAndCrossings() {
     restored->loadState(snap);
     AIVERSE_TEST_CHECK(restored->checksum()==before);
 }
+void testOrphanedVehicleReference() {
+    auto sim=make(true);
+    const auto subjects=actors(*sim);
+    auto& ecs=sim->world();
+    const auto before=sim->checksum();
+    ecs.get<actor::CharacterBody>(subjects.driver).vehicle=9999;
+    const auto damaged=sim->checksum();
+    AIVERSE_TEST_CHECK(damaged!=before);
+    bool rejected=false;
+    try {
+        actor::host(*sim).synchronizeRegionOwnership(*sim);
+    } catch(const std::logic_error&) { rejected=true; }
+    AIVERSE_TEST_CHECK(rejected);
+    AIVERSE_TEST_CHECK(sim->checksum()==damaged);
+    ecs.get<actor::CharacterBody>(subjects.driver).vehicle=0;
+    actor::host(*sim).synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(sim->checksum()==before);
+}
+
 void testDynamicSpawnRetireAndRecycledIds() {
     auto sim=make(true);
     auto& ecs=sim->world();
@@ -176,6 +195,7 @@ void testDynamicSpawnRetireAndRecycledIds() {
 int main() {
     testAutomaticTickAndLegacy();
     testVehicleGroupAndCrossings();
+    testOrphanedVehicleReference();
     testDynamicSpawnRetireAndRecycledIds();
     std::cout<<"PASS world-space authoritative region reconciliation and tombstones\n";
 }
