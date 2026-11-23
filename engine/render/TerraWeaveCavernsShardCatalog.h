@@ -176,19 +176,22 @@ inline CaveMixedLodPlan planFullCaveShardLod(
     return planCaveMixedLodVisual(sources);
 }
 inline CaveBatchPrepared prepareFullCaveShardPresentation(
-    const CaveShardSnapshot& snapshot,CaveBatchSpec spec={}) {
+    const CaveShardSnapshot& snapshot,CaveBatchSpec spec={},
+    const CaveMixedLodPlan* sharedLod=nullptr) {
     if(snapshot.chunks.empty()||snapshot.visibleChunks==0)return {};
-    auto visualPlan=planFullCaveShardLod(snapshot);
+    CaveMixedLodPlan local;
+    if(!sharedLod)local=planFullCaveShardLod(snapshot);
+    const auto& visualPlan=sharedLod?*sharedLod:local;
     if(!visualPlan.ready())
         throw std::runtime_error("Caverns LOD borders need shared-SDF rebuild before GPU publication");
     std::vector<CaveBatchChunk> visualChunks=snapshot.chunks;
     for(auto& chunk:visualChunks) {
         const auto it=visualPlan.visual.find(chunk.mesh.key);
-        if(it!=visualPlan.visual.end()) {
-            // The stitched vertex/index data is PRESENTATION ONLY. A native
-            // collider uses the unmodified authoritative chunk from snapshot.
-            chunk.mesh=it->second.mesh;
-        }
+        if(it==visualPlan.visual.end())
+            throw std::logic_error("Caverns incomplete shared LOD shard plan");
+        // Stitched vertex/index data is PRESENTATION ONLY. Authoritative
+        // Box3D/SpatialWorld collision uses the unmodified snapshot mesh.
+        chunk.mesh=it->second.mesh;
     }
     return prepareCaveBatch(std::move(visualChunks),spec);
 }
