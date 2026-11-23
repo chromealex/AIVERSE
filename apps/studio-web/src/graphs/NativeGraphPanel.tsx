@@ -5,7 +5,7 @@ import GraphCanvas from './GraphCanvas';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {Positioned} from './graphSelection';
-import {animationProjection,connectAnimationPose,fxConnectArgs,fxProjection,graphNames,graphReply,object,replaceAnimationEntry} from './nativeGraphAdapters';
+import {animationProjection,connectAnimationPose,addAnimationTransition,editAnimationTransition,setAnimationInitial,fxConnectArgs,fxProjection,graphNames,graphReply,object,replaceAnimationEntry} from './nativeGraphAdapters';
 import type {FxNodeInfo,GraphObject,NativeGraphDomain} from './nativeGraphAdapters';
 
 const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -79,6 +79,10 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    const next=connectAnimationPose(draft,pending,to);
    if(next===draft){setError('Pose inputs must reference an earlier compatible pose node');return;}
    edit(next);setPending(null);
+  }else{
+   const next=addAnimationTransition(draft,pending,to);
+   if(next===draft){setError('Transition already exists or exceeds native bounds');return;}
+   edit(next);setPending(null);setStatus('Added unconditional transition. Configure conditions before saving.');
   }
  };
  const move=(next:Positioned[])=>{
@@ -134,9 +138,9 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    <StudioButton size="sm" disabled={!active||busy} onClick={()=>nativeEdit({action:'deleteNode',node:active})}>Delete node</StudioButton></>}
   </div>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
-  {fx?<StudioAlert tone="warning">Published graph save uses a read-back preflight, not an atomic revision lock. Avoid concurrent edits.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. State transition editing uses the JSON inspector.</StudioAlert>}
+  {fx?<StudioAlert tone="warning">Published graph save uses a read-back preflight, not an atomic revision lock. Avoid concurrent edits.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. Connect state ports to add an unconditional transition; configure timing and conditions before saving.</StudioAlert>}
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
-   disabled={busy} pendingOutput={pending} onOutput={fx||mode==='pose'?setPending:undefined} onInput={fx||mode==='pose'?connect:undefined} onCancel={()=>setPending(null)}
+   disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    {entry&&<StudioSection title={'Selected: '+active}>
     {fx?<><pre>{JSON.stringify(entry,null,2)}</pre>
@@ -144,6 +148,14 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
      <StudioInput placeholder="Property path" aria-label="Property path" value={property} onChange={e=>setProperty(e.target.value)}/>
      <StudioTextarea aria-label="Property JSON value" value={json} onChange={e=>setJson(e.target.value)}/>
      <StudioButton disabled={busy||!property.trim()} onClick={()=>{try{nativeEdit({action:'setProperty',node:active,property,value:JSON.parse(json)})}catch(e){setError(errorText(e))}}}>Apply property JSON</StudioButton></>:<>
+      {mode==='states'&&draft&&object(entry)&&<>
+       <StudioButton size="sm" disabled={busy||draft.initial===active} onClick={()=>edit(setAnimationInitial(draft,active))}>Set initial state</StudioButton>
+       {Array.isArray(entry.transitions)&&entry.transitions.map((t,i)=>object(t)&&<StudioSection key={i} title={'Transition '+(i+1)+' → '+String(t.to)}>
+        {(['fade','after'] as const).map(k=><StudioInput key={k} aria-label={k} type="number" min="0" step="0.05" value={typeof t[k]==='number'?t[k]:k==='fade'?.2:0}
+         onChange={e=>{if(e.target.value.trim()==='')return;const next=editAnimationTransition(draft,active,i,{fade:typeof t.fade==='number'?t.fade:.2,after:typeof t.after==='number'?t.after:0,[k]:Number(e.target.value)});edit(next)}}/>)}
+        <StudioButton size="sm" disabled={busy} onClick={()=>edit(editAnimationTransition(draft,active,i,null))}>Remove transition</StudioButton>
+       </StudioSection>)}
+      </>}
       <StudioTextarea aria-label="Animation entry JSON" value={json} onChange={e=>setJson(e.target.value)} rows={6}/>
       <StudioButton disabled={busy} onClick={applyEntry}>Apply entry draft</StudioButton></>}
    </StudioSection>}</>:<StudioEmptyState title={busy?'Loading graph assets…':'Choose an existing graph'} />}
