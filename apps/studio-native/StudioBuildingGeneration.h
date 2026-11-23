@@ -111,6 +111,9 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
         const std::string id=item.path().stem().string();
         if(!safeId(id))continue;
         const auto style=load(engine,id);
+        // Facade-only styles belong to the enterable-building tool, not this
+        // structure generator; do not expose unselectable functions.
+        if(style.structures.empty())continue;
         Json s=Json::object(),functions=Json::array();
         s.set("id",string(style.id));s.set("name",string(style.name));s.set("setting",string(settingId(id)));
         for(const auto& k:style.structures){
