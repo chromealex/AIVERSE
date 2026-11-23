@@ -76,6 +76,28 @@ Handoff:
 Bezier curves, actual hardware scene captures, Vulkan/Metal GLES parity,
 PHYSIS adapters, shared arena fields, fluids/destruction and final merge.
 
+## Stage 8 — native render-thread SpectraFX preview (source committed, QA pending)
+
+Stacked draft PR #115 now implements the first **real native Scene preview**
+for Graph v2. `StudioSpectraPreview.h` owns one `spectra::GraphRuntime`
+on StudioScene's existing render thread/gfx Device. Its playback operations
+(`status/load/play/pause/restart/step/seek/parameter/stop`) are allowlisted
+through `studio.spectraPreview`; 60 Hz fixed timeline, 60-second cap and
+bounded 8-tick seek replay. GPU simulation is scheduled before native render
+passes, and the effect is drawn into the still-open Scene HDR pass before
+PRISMA resolves. HTML5 Graph panel uses
+`SpectraNativePreview.tsx` to control the real Scene, not to render
+fake DOM particles. Actual native backend is exposed as Metal GPU or full
+CPU fallback; support remains capability-driven.
+
+A hardware CAMetalLayer CTest `studio_spectrafx_preview` and dedicated
+macOS CI workflow are included. **Not yet observed as passing on current
+SHA.** The preview is displayed in the native Scene window, not embedded
+inside the Graph pane. Next stage: exact-SHA compiler/Metal/Windows QA,
+frame pixel comparison, safe offscreen surface/panel integration and
+provider adapters. Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
+
 ## Stage matrix
 
 | Stage | Feature | Design/implementation requirements | Completion criteria |
