@@ -56,7 +56,8 @@ public:
           &&c.addTyped<Vehicle>("aiverse.actor.vehicle")
           &&c.addTyped<world::RegionDormant>("aiverse.world.region_dormant")
           &&vehicles::registerDurableVehicleComponents(c)
-          &&c.addRebuilder(rebuildDerived);
+          &&c.addRebuilder(rebuildDerived)
+          &&c.addCaptureValidator([](const World& w,const world::RegionEntityLedger&){return supportedWorld(w);});
     }
 
     // Separate codec registration only: all values still live in the canonical
