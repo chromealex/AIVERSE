@@ -1,6 +1,6 @@
 /** First-open SpectraStudio graph creation. Pure authoring helpers only.
- * The native fx_graph_validate compiler remains the source of truth.
- * Never overwrite published files, never create filesystem paths in React.
+ * Trust the native fx_graph_edit(new) factory for default nodes and links:
+ * it owns the canonical initial v2 graph. React never duplicates that schema.
  */
 import { safeGraphName, type SpectraGraphV2 } from './spectraDataInterfaceModel';
 
@@ -18,29 +18,19 @@ export function nextUnusedGraphName(
   throw new Error('No free VFX graph name.');
 }
 
-/** Valid V2 starter from the same execution path as the actual native
- * StudioSpectraPreview Metal test (Spawn -> Initialize -> SpriteOutput).
- * Does not touch original graph or alter instance parameter definitions.
+/** Native newGraphV2() already contains the canonical playable
+ * Spawn -> Initialize -> SpriteOutput chain. Pass through unchanged;
+ * native fx_graph_validate checks compilation before preview.
  */
-export function createBurstStarter(base:SpectraGraphV2):SpectraGraphV2|null {
-  if(base.version!==2 || base.nodes.length || base.links.length || base.outputs.length)
-    return null;
-  return {
-    ...base,
-    description:'SpectraFX starter · real Scene preview · Spawn → Initialize → SpriteOutput',
-    nodes:[
-      {id:'spawn',type:'Spawn',properties:{burst:32},position:[45,135]},
-      {id:'initialize',type:'Initialize',
-       properties:{life:3,speed:0.8,size:0.45,spread:0.4,gravity:[0,0,0]},
-       position:[295,135]},
-      {id:'output',type:'SpriteOutput',
-       properties:{texture:'builtin:soft',blend:'additive'},
-       position:[555,135]}
-    ],
-    links:[
-      {from:'spawn',to:'initialize'},
-      {from:'initialize',to:'output'}
-    ],
-    outputs:['output']
-  };
+export function createBurstStarter(nativeNew:SpectraGraphV2):SpectraGraphV2|null {
+  if(nativeNew.version!==2 || nativeNew.nodes.length===0 ||
+     nativeNew.outputs.length===0) return null;
+  return nativeNew;
+}
+
+/** Explicit blank variant for advanced authors; incomplete until nodes
+ * are added. Keep native schema metadata, never modify the source graph.
+ */
+export function createBlankGraph(nativeNew:SpectraGraphV2):SpectraGraphV2 {
+  return {...nativeNew,nodes:[],links:[],outputs:[]};
 }
