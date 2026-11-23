@@ -63,6 +63,52 @@ int main() {
     const auto checked = call("fx_graph_validate", validation);
     require(checked.getBool("ok") && checked.getInt("emitters")==1, "graph variant validation failed");
 
+    // MCP shares the normal Workspace graph registry. The live preview
+    // operation is discoverable even without a GPU; standalone MCP must
+    // reject it explicitly instead of generating a synthetic frame.
+    const Json tools=ws.toolList();
+    bool discoveredPreview=false;
+    for(const auto& t:tools.items())
+        if(t.getStr("name")=="fx_graph_preview")discoveredPreview=true;
+    require(discoveredPreview,"FX preview absent from MCP tools/list");
+    Json previewStatus=Json::object();
+    previewStatus.set("action",Json::string("status"));
+    require(call("fx_graph_preview",previewStatus).has("error"),
+            "headless MCP must not fake a GPU preview");
+    Json seen;
+    int previewCalls=0;
+    ws.setSpectraPreviewHandler([&](const Json& p){
+        ++previewCalls;seen=p;
+        Json response=Json::object();
+        response.set("ready",Json::fromBool(true));
+        response.set("tick",Json::number(int64_t(1)));
+        return response;
+    });
+    Json previewLoad=Json::object();
+    previewLoad.set("action",Json::string("load"));
+    previewLoad.set("graphName",Json::string("spark"));
+    const auto linked=call("fx_graph_preview",previewLoad);
+    require(linked.getBool("ready")&&previewCalls==1,
+            "MCP graph load did not reach native preview owner");
+    require(seen["graph"].isObject()&&seen["graph"].getInt("version")==1,
+            "MCP graph file not resolved by Workspace");
+    Json previewStep=Json::object();
+    previewStep.set("action",Json::string("step"));
+    require(call("fx_graph_preview",previewStep).getBool("ready")&&
+            seen.getStr("action")=="step","MCP step not forwarded");
+    const int forwarded=previewCalls;
+    Json unsafe=previewLoad;
+    unsafe.set("graphName",Json::string("../escape"));
+    require(call("fx_graph_preview",unsafe).has("error")&&
+            previewCalls==forwarded,"unsafe graph name reached native preview");
+    Json ambiguous=previewLoad;
+    ambiguous.set("graph",graph);
+    require(call("fx_graph_preview",ambiguous).has("error")&&
+            previewCalls==forwarded,"ambiguous source reached native preview");
+    ws.setSpectraPreviewHandler({});
+    require(call("fx_graph_preview",previewStatus).has("error"),
+            "detached Studio preview must not be callable from standalone MCP");
+
     Json bake = Json::object();
     bake.set("name", Json::string("spark"));
     bake.set("effect", Json::string("spark_baked"));
@@ -93,5 +139,5 @@ int main() {
     require(!fs::exists(root/"fx"/"graphs"/"spark.vfx.json"), "graph file still present");
     require(fs::exists(root/"fx"/"spark_baked.json"), "deleting graph deleted baked effect");
 
-    std::cout << "PASS SpectraFX MCP graph CRUD, validation, variants, bake, path safety and old-effect isolation\n";
+    std::cout << "PASS SpectraFX MCP graph CRUD, native preview bridge, validation, variants, bake and path safety\n";
 }
