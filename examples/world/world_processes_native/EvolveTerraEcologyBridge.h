@@ -20,8 +20,10 @@ struct EvolvePlantRegion {
 inline bool valid(const EvolvePlantRegion& zone){
     return zone.region.valid()&&zone.minXcm<zone.maxXcm&&
            zone.minZcm<zone.maxZcm&&
-           zone.minXcm>=-100000000&&zone.maxXcm<=100000000&&
-           zone.minZcm>=-100000000&&zone.maxZcm<=100000000;
+           zone.minXcm>=-evolve::kAreaCoordinateCm&&
+           zone.maxXcm<=evolve::kAreaCoordinateCm&&
+           zone.minZcm>=-evolve::kAreaCoordinateCm&&
+           zone.maxZcm<=evolve::kAreaCoordinateCm;
 }
 inline std::uint32_t permille(std::int64_t value){
     value=std::clamp(value,std::int64_t(0),evolve::kMaxState);
@@ -80,7 +82,28 @@ makeEvolveForestClimateSampler(const World& world,
     for(const auto& area:evolve::extents(world))
         zones.push_back({area.region,area.minXcm,area.minZcm,
                          area.maxXcm,area.maxZcm,true});
-    return makeEvolveForestClimateSampler(world,std::move(zones),
-                                           std::move(baseline));
+    if(zones.size()>evolve::kMaxRegions)
+        throw std::length_error("EVOLVE forest region projection budget");
+    // Bounds are a per-step snapshot. Recheck the authoritative Area before
+    // applying it so a removed, disabled or edited area cannot contribute
+    // stale climate if the sampler is reused between ecology steps.
+    return [&world,zones=std::move(zones),baseline=std::move(baseline)]
+           (const terraweave::AnchoredPlant& plant){
+        auto climate=baseline?baseline(plant):terraweave::ForestEcologyClimate{};
+        const auto x=plant.anchor.xCm,z=plant.anchor.zCm;
+        for(const auto& zone:zones){
+            if(!world.alive(zone.region))continue;
+            const auto* area=world.tryGetConst<evolve::Area>(zone.region);
+            const auto* region=world.tryGetConst<evolve::Region>(zone.region);
+            if(!area||!area->enabled||!evolve::valid(*area)||
+               !region||!region->enabled)continue;
+            if(x<area->centerXcm-area->halfWidthCm||
+               x>=area->centerXcm+area->halfWidthCm||
+               z<area->centerZcm-area->halfDepthCm||
+               z>=area->centerZcm+area->halfDepthCm)continue;
+            climate=projectEvolutionClimate(*region,climate);
+        }
+        return climate;
+    };
 }
 } // namespace aiverse::examples::world_processes_native
