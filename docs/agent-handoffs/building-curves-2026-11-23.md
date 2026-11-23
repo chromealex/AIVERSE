@@ -7,6 +7,9 @@ Parent handoffs: `docs/agent-handoffs/building-grammar-2026-11-23.md` and
 Stage roadmap commit: `1871c9397849bece528a6a226fe9d13cb844457e`.
 Curved forms implementation: `601b14f8c78d76ee76e6e8c07afb4081e852182a`.
 Focused workflow: `01e9dbca7e1c9da5cb06e73c9760e6fdf21b1c07`.
+Stage 4 docs/tests commit: `fd15b3c7ac0ccc8a2eaec8013d44dc22fc36c9ec`.
+Focused-workflow GCC warning-policy correction: `4f055df6bcd4d659529b68f964a7a4737241b2d4`.
+
 
 ## Architecture and implementation
 
@@ -37,6 +40,12 @@ Focused workflow: `01e9dbca7e1c9da5cb06e73c9760e6fdf21b1c07`.
 ## Tests / real evidence
 
 - Code, data and tests committed; original function contracts preserved.
+- First focused GitHub run `45208618191` **FAILED before compiling the
+  stage-4 files** because the older compact `BuildingGen.h` triggers GCC
+  `-Wmisleading-indentation` under `-Werror`. Corrected the workflow with
+  `-Wno-misleading-indentation` (same as the repository's library CMake
+  warning policy). The replacement run `45209394622` was queued when the
+  fix was recorded. This is not yet evidence of a passing test.
 - No local CMake, GPU screenshots or modelviewer output was executed in this
   model runtime. Do not describe as passing until a GitHub workflow has
   reported success. The preceding overall PR CI had unrelated catalog
