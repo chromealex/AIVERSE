@@ -75,6 +75,40 @@ for the pre-tick `requestRegionMoveByStableId` admission boundary.
 authored regression assertions for the API but have not been executed
 on the required Mac/KINGSTON checkout.
 
+## W1.16 report only real cell crossings
+
+For position-owning actor systems, use the shared
+`ActorHost::reportRegionMoveIfCrossed(sim,entity)` **after** the
+existing controller has updated its canonical ECS component.
+It computes the current 32-unit region and compares it with the
+persisted ledger owner; no dirty entry is created for motion
+within the same region. The queued `Move` is acknowledged by
+`actor.regionOwnership` after the normal atomic group
+validation. It never changes the destination or bypasses
+`readyToStep` collision admission.
+
+Existing producers include actor motor/locomotion, Royale
+skydiving, arcade vehicle movement/enter/exit, typed
+`VehicleDrive` physics and seated passengers, race
+respawns and bomb/round resets.
+
+```cpp
+// Example inside a trusted canonical movement owner after it moves:
+if (!actor::host(sim).reportRegionMoveIfCrossed(sim,entity))
+    throw std::logic_error("world region dirty notification failed");
+```
+
+Unopted worlds are no-ops. The opt-in host fails closed on
+missing live stable identity, missing canonical position or a
+full dirty queue. These producer hooks are NOT permission
+checks or a replacement for staged teleport admission.
+
+Keep the old full tracked-pool reconciliation until every
+direct field writer has been covered and tests demonstrate
+save/replay/COW parity. The extended
+`actor_region_lifecycle_test` source checks boundary-only
+coalescing and rollback; **it has not run on Mac/KINGSTON**.
+
 ## ECS/movement safety
 
 The generic ECS currently does NOT emit a full change event when
