@@ -1,4 +1,5 @@
 #include "WorldScene.h"
+#include "engine/buildings/BuildingRenderer3DScene.h"
 #include "TerraWeaveForestManifest.h"
 #include "TerraWeaveHorizonManifest.h"
 #include "TerraWeaveWorldHeightSource.h"
@@ -800,8 +801,23 @@ void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
             int64_t(origin.x)*factor,0,int64_t(origin.z)*factor
         });
     }
+    // Optional common ECS building aperture presentation. The world
+    // renderer receives only a borrowed owner and never updates physics.
+    buildingDrawError_.clear();
+    if(auto owner=buildingRenderOwner_.lock()){
+        if(!owner->draw(renderer,origin,size,buildingRenderElapsedMs_,
+                        &buildingDrawError_) &&
+           buildingDrawError_.empty())
+            buildingDrawError_="Building Renderer3D draw rejected";
+    }
+
 }
 void WorldScene::shutdown(gfx::Device& device) {
+    // Renderer is not owned here. The game/world owner must first call
+    // BuildingRenderer3DScene::shutdown outside an active graphics pass,
+    // then detach its authoritative session. Weak references are dropped.
+    buildingRenderOwner_.reset();
+    buildingDrawError_.clear();
     // Join streamed CPU preparation before releasing Model ownership.
     stream_->shutdown([&](Cell cell){
         auto it=resident_.find(cell);
