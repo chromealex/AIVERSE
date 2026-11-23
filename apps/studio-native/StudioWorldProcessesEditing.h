@@ -191,18 +191,19 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
     const auto& area=owner.extra["components"]["EvolveArea"];
     const double cx=double(owner.x)+double(area.getInt("offsetXcm",0))/100.;
     const double cz=double(owner.z)+double(area.getInt("offsetZcm",0))/100.;
+    // The pointer gives the dragged edge in centimetres relative to map pos.
+    // StudioSession atomically derives both half-extent and center offset,
+    // holding the opposite edge fixed (Stage33 asymmetric resize).
     if(handle.mode==Handle::Mode::AreaWidth||
        handle.mode==Handle::Mode::AreaWidthNegative){
-        value=std::clamp(float(std::lround(
-            std::abs(double(mouse.x)-cx)*100.)),50.f,
-            float(evolve::kAreaMaxHalfExtentCm));
+        value=float(std::clamp(std::round((double(mouse.x)-owner.x)*100.),
+            -double(evolve::kAreaCoordinateCm),double(evolve::kAreaCoordinateCm)));
         return true;
     }
     if(handle.mode==Handle::Mode::AreaDepth||
        handle.mode==Handle::Mode::AreaDepthNegative){
-        value=std::clamp(float(std::lround(
-            std::abs(double(mouse.z)-cz)*100.)),50.f,
-            float(evolve::kAreaMaxHalfExtentCm));
+        value=float(std::clamp(std::round((double(mouse.z)-owner.z)*100.),
+            -double(evolve::kAreaCoordinateCm),double(evolve::kAreaCoordinateCm)));
         return true;
     }
     if(handle.mode==Handle::Mode::GridWidth){
