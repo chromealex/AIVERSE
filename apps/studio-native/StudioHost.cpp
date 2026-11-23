@@ -835,10 +835,11 @@ void StudioHost::rebuildOverlay() {
         if(wpLiveEcology_&&wpLiveSnapshot_.getBool("active")){
             for(const auto& p:wpLiveSnapshot_["plants"].items()){
                 if(shapes.size()>=1250)break;
-                const bool fallen=p.getBool("fallen");
+                const bool fallen=p.getBool("fallen"),dead=p.getBool("dead");
+                const bool juvenile=p.has("mature")&&!p.getBool("mature");
                 shapes.push_back(worldprocess_gizmos::makePoint(
                     float(p.getInt("x",0))/100.f,1.f,float(p.getInt("z",0))/100.f,
-                    fallen?240:100,fallen?150:230,80,5.f));
+                    dead?160:fallen?240:100,dead?95:fallen?150:230,juvenile?240:80,juvenile?3.f:5.f));
             }
             for(const auto& c:wpLiveSnapshot_["weather"].items()){
                 if(shapes.size()+4>=1300)break;
