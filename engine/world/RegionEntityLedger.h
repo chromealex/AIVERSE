@@ -179,6 +179,13 @@ public:
         const auto it=records_.find(id);
         return it==records_.end()?nullptr:&it->second;
     }
+    // Tombstones participate in the high-water mark. No extra allocator state
+    // is needed in a checkpoint, WAL or rollback snapshot.
+    RegionEntityId nextIdentity()const noexcept{
+        if(records_.empty())return 1;
+        const auto high=records_.rbegin()->first;
+        return high==UINT64_MAX?0:high+1;
+    }
     uint64_t lastRevision() const {return lastRevision_;}
     size_t size() const {return records_.size();}
     // Derived active-ID index: tombstones are retained for archives/history,
