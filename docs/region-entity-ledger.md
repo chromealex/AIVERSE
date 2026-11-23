@@ -1003,3 +1003,87 @@ transactional archive reconstitution, acknowledged callback failure
 and retry, and cursor reset. No Mac/KINGSTON native build/CTest
 was run here, so these are authored assertions rather than
 passing-test evidence.
+
+
+## Stage 15 — explicit ECS lifecycle dirty observations, with a safe fallback
+
+The existing `World` ECS has no generic `onChanged` hook for direct
+writes to `CharacterBody.pos`, `Vehicle.pos` or other mutable component
+fields. Simply removing the previous full ECS scan would silently lose
+valid movement or entity destruction. W1.15 therefore introduces the
+**opt-in structural/movement dirty reporting contract** without
+disabling the existing correctness scan:
+
+- `engine/world/RegionDirtyQueue.h`: a versioned, native ECS persisted
+  resource `RegionDirtyQueue` (schema 1, bounded to 65,536 entity
+  handles) with stable `Entity::packed()+1` keys and coalesced bit flags
+  `Spawn=1`, `Move=2`, `Retire=4`. A repeated change to the same
+  entity in one tick takes one map entry. Archive decode is transactional
+  and rejects invalid versions, malformed flags and duplicate IDs.
+- `ActorHost::reportRegionChange(sim,entity,kind)` is a low-level,
+  *trusted simulation-owned* producer for projects with
+  `rules.regionOwnership={}`. It is a no-op on games without W1.
+  The host reports `Spawn` from existing loot and vehicle creation,
+  `Retire` from picked-up and round-reset loot destruction, and
+  `Move` for every entity moved by the admitted region teleport
+  controller.
+- `ActorHost::synchronizeRegionOwnership` consumes the explicit
+  observations in stable key order at the structural tick boundary,
+  binding a new live materialization or tombstoning a removed
+  identity where applicable. It then performs the existing
+  **full tracked-entity and occupancy group scan** so older code
+  still works even when it assigns positions directly.
+  Only after the entire reconciliation succeeds are the pending
+  observations cleared and `acknowledged` incremented.
+- Dirty queue and ledger live in native ECS resources, so ordinary
+  snapshots, COW rollback and on-disk saves track their
+  authoritative contents. After any COW writable ledger detach,
+  the reconciliation reacquires the const resource pointer instead
+  of retaining a stale snapshot reference.
+
+### Usage from a participating gameplay owner
+
+```cpp
+auto& world=sim.world();
+const Entity spawned=world.create();
+world.add<MyGameActor>(spawned,MyGameActor{});
+actor::host(sim).reportRegionChange(
+    sim,spawned,aiverse::world::RegionDirtyKind::Spawn);
+
+// For an already admitted canonical movement:
+actor::host(sim).reportRegionChange(
+    sim,spawned,aiverse::world::RegionDirtyKind::Move);
+
+// Before the authoritative owner destroys the entity:
+actor::host(sim).reportRegionChange(
+    sim,spawned,aiverse::world::RegionDirtyKind::Retire);
+world.destroy(spawned);
+```
+
+For additional game-specific actors, a corresponding canonical
+position reader, stable ID binding and reconciliation registration
+are still needed; merely marking an arbitrary component does not
+magically add it to the ActorHost character/vehicle/loot set.
+Reject a false producer result rather than silently losing an
+event when the bounded queue is full.
+
+The reporting queue is **not** a durable transaction-by-transaction
+audit log, disk region journal or replacement for the authoritative
+`RegionEntityLedger`. It coalesces repeated changes and can be
+cleared following successful reconciliation. Full per-field ECS
+instrumentation, efficient index-based movement detection and
+complete hot/cold gameplay ownership remain future work.
+
+### Authored regression tests (not executed here)
+
+`region_dirty_queue_test`: codec, coalescing, malformed/truncated
+payload refusal, ECS entity generation recycling, COW rollback.
+
+`actor_region_lifecycle_test` extension: explicit loot
+spawn/retire notifications and ACK count, no notifications for an
+old-style direct position update (which must still be detected),
+persistent dirty ACK state after save/reload.
+
+This change is source-committed and CTest-registered only. Native
+C++ compilation and Mac/KINGSTON CTests were **not executed**;
+W1 remains partial and PR #116 remains Draft.
