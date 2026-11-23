@@ -170,6 +170,15 @@ public:
                 ui::hint("ЛКМ: пересечение луча камеры с поверхностью SDF пещеры; "
                          "если попадания нет, кисть не рисует. Shift меняет Carve ↔ Fill. "
                          "Undo/Redo и сохранение через MapDoc.");
+                if(caveCacheIndex_ && caveHoverValid_) {
+                    const auto count=caveCacheIndex_->candidates(caveHoverCm_);
+                    const auto totals=caveCacheIndex_->snapshot().stamps.size();
+                    const auto totalEntrances=caveCacheIndex_->snapshot().entrances.size();
+                    ui::hint(("SDF spatial index: Carve/Fill кандидатов "+
+                        std::to_string(count.stamps)+"/"+std::to_string(totals)+
+                        ", входов "+std::to_string(count.entrances)+"/"+
+                        std::to_string(totalEntrances)).c_str());
+                }
                 ui::hint(caveHoverValid_ ? ("Курсор: "+std::to_string(caveHoverCm_.x)+", "+
                     std::to_string(caveHoverCm_.y)+", "+std::to_string(caveHoverCm_.z)+" см").c_str():
                     "Курсор: поверхность пещеры не найдена");
