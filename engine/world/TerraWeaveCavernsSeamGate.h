@@ -4,7 +4,8 @@
 // snapshot, then publish certified groups at its graphics/physics barrier.
 #include "engine/world/TerraWeaveCavernsLodPolicy.h"
 #include "engine/world/TerraWeaveCavernsShards.h"
-#include <cstdint>\n#include <array>
+#include <cstdint>
+#include <array>
 #include <map>
 #include <set>
 #include <stdexcept>
