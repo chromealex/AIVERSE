@@ -126,6 +126,64 @@ void ActorHost::setupVehicles(Simulation& sim,const Json& map) {
         vs::addVehicle(w,entities[i],*t,v.pos,v.yaw);
     }
 }
+world::RegionPositionReader ActorHost::regionPositionReader() {
+    return [](const World& world,Entity entity)->std::optional<Vec3> {
+        // ActorHost already owns these authoritative positions. Do not add
+        // a second Transform that could drift from real vehicle/actor state.
+        if(const auto* actor=world.tryGetConst<CharacterBody>(entity))
+            return actor->pos;
+        if(const auto* vehicle=world.tryGetConst<Vehicle>(entity))
+            return vehicle->pos;
+        return world::regionTransformPosition(world,entity);
+    };
+}
+
+bool ActorHost::transferVehicleRegion(Simulation& sim,Entity vehicle,
+                                     world::Cell from,world::Cell to,
+                                     std::string* error) {
+    auto reject=[&](const char* reason) {
+        if(error)*error=reason;
+        return false;
+    };
+    auto& ecs=sim.world();
+    const auto* ledger=ecs.resourceConst<world::RegionEntityLedger>();
+    const auto* car=ecs.tryGetConst<Vehicle>(vehicle);
+    if(!ledger || !car)return reject("world-space region ownership or vehicle is unavailable");
+    // A transfer only publishes ownership after the existing host gate has
+    // admitted collision and derived navigation. Never step into unloaded
+    // geometry, and never let an async camera decide authoritative ownership.
+    if(!readyToStep(sim))return reject("destination collision/navigation is not ready");
+    if(streamManifest_.getBool("async")) {
+        if(!streamedCollision_)return reject("collision streaming reader missing");
+        const auto pos=car->pos;
+        const world::Bounds required{
+            pos-Vec3{2_fx,2_fx,2_fx},pos+Vec3{2_fx,2_fx,2_fx}};
+        if(!streamedCollision_->covers(required))
+            return reject("destination vehicle bounds are not collision resident");
+    }
+    if(world::SpatialWorld(32).cell(car->pos)!=to)
+        return reject("vehicle has not reached the destination region");
+    const auto seatMap=[this,&sim](int64_t actor)->Entity {
+        if(actor<=0 || actor>int64_t(characterCount(sim)) || actor>UINT8_MAX)
+            return kNullEntity;
+        return characterEntity(sim,uint8_t(actor));
+    };
+    // Read-only preflight avoids copy-on-write ledger detach on failure.
+    world::VehicleRegionGroup group;
+    if(!world::VehicleRegionTransfer::gather(ecs,vehicle,seatMap,group,error))
+        return false;
+    for(Entity member:group.members) {
+        const auto* tag=ecs.tryGetConst<world::RegionStableIdentity>(member);
+        if(!tag || !tag->id)return reject("vehicle group member lacks stable region identity");
+        const auto* record=ledger->find(tag->id);
+        if(!record || !record->live || record->owner!=from)
+            return reject("vehicle group has stale or conflicting region owners");
+    }
+    auto* mutableLedger=ecs.resource<world::RegionEntityLedger>();
+    return world::VehicleRegionTransfer::transfer(
+        ecs,*mutableLedger,vehicle,seatMap,from,to,regionPositionReader(),error);
+}
+
 bool ActorHost::vehicleRegionGroup(const Simulation& sim,Entity vehicle,
                                    world::VehicleRegionGroup& out,
                                    std::string* error) const {
