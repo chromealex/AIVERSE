@@ -8,6 +8,7 @@
 #include "engine/world/TerraWeaveCavernsGameplayPhysicsBarrier.h"
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
 #include "engine/world/TerraWeaveCavernsStreamJobs.h"
+#include "engine/world/TerraWeaveCavernsNavigationPublication.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -40,6 +41,7 @@ public:
         if(closed_||physicsBarrier_.status().recoveryRequired)
             throw std::runtime_error("Caverns world closed or needs recovery");
         host_.edited(bounds,std::move(snapshot));
+        recordNavigationBounds(bounds);
         readyStreamBuilds_.clear();
         pendingRetires_.clear();
         syncStreamingEditPins();
@@ -49,6 +51,10 @@ public:
         if(closed_||physicsBarrier_.status().recoveryRequired)return false;
         const bool accepted=host_.consumeAuthoringOperation(response,std::move(snapshot));
         if(accepted){
+            const Json& b=response["dirtyBounds"];
+            recordNavigationBounds({
+                b.getInt("minXcm"),b.getInt("minYcm"),b.getInt("minZcm"),
+                b.getInt("maxXcm"),b.getInt("maxYcm"),b.getInt("maxZcm")});
             readyStreamBuilds_.clear();
             pendingRetires_.clear();
             syncStreamingEditPins();
@@ -102,8 +108,36 @@ public:
         }
         if(!published&&physicsFinalized)
             physicsBarrier_.requireRecovery();
-        if(published)syncStreamingEditPins();
+        if(published){
+            syncStreamingEditPins();
+            // Notify ALL derived solver caches only after a real all-owner
+            // Box3D/SpatialWorld/NavMesh/GPU commit. Failure to deliver an
+            // invalidation leaves a pending retry, not a false physics ACK.
+            if(navDirty_){
+                (void)navigationBus_.publish(host_.indexedSnapshot(),
+                                             navDirtyBounds_);
+                navDirty_=false;
+            }
+        }
         return published;
+    }
+    using NavigationCallback=CaveNavigationPublication::Callback;
+    CaveNavigationSubscription subscribeNavigation(
+        CaveNavigationConsumer algorithm,NavigationCallback callback){
+        return navigationBus_.subscribe(algorithm,std::move(callback));
+    }
+    bool unsubscribeNavigation(CaveNavigationSubscription token){
+        return navigationBus_.unsubscribe(token);
+    }
+    // A*/HPA*/FlowField/Hybrid/Custom consumers query this shared data.
+    // The NavMesh shadow still uses its existing nav::Source projection.
+    std::shared_ptr<const CaveNavigationDataProvider>
+    publishedNavigation()const{return navigationBus_.active();}
+    bool navigationInvalidationsPending()const noexcept{
+        return navigationBus_.hasPending();
+    }
+    bool retryNavigationInvalidations(){
+        return navigationBus_.dispatchPending();
     }
     // The host drives interest once per world frame using the camera/player
     // center in CHUNK coordinates. Build tickets may be scheduled on worker
@@ -222,6 +256,11 @@ public:
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming build ACK refused after native commit");
         readyStreamBuilds_.erase(it);
+        // Streaming may alter passable topology at the SAME authored SDF
+        // revision. Consumers rebuild local routes/flow seeds/cluster borders.
+        (void)navigationBus_.invalidateResidency(
+            navigationChunkBounds(ticket.key,publishedMesh.resolution,
+                                  publishedMesh.spacingCm));
         return true;
     }
     bool publishStreamRetire(
@@ -251,6 +290,8 @@ public:
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming retirement ACK refused after native commit");
         pendingRetires_.erase(it);
+        (void)navigationBus_.invalidateResidency(
+            navigationChunkBounds(ticket.key,chunkResolution_,chunkSpacingCm_));
         return true;
     }
 
@@ -284,6 +325,13 @@ public:
         return residency_.unpin(key,lease);
     }
     CaveResidencyStats streamingStats()const{return residency_.stats();}
+    // Native host may override canonical collision chunk dimensions.
+    void setNavigationChunkDimensions(uint32_t resolution,int32_t spacingCm){
+        if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000)
+            throw std::invalid_argument("Caverns nav chunk dimensions");
+        chunkResolution_=resolution;
+        chunkSpacingCm_=spacingCm;
+    }
     void drawCommitted(render::Renderer3D& renderer){
         if(!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
     }
@@ -310,6 +358,23 @@ public:
     }
     CaveGameplayEditHost& host()noexcept{return host_;}
 private:
+    static CaveDirtyBounds navigationChunkBounds(ChunkKey3 key,
+                                                  uint32_t resolution,
+                                                  int32_t spacingCm) {
+        const int64_t span=int64_t(resolution)*spacingCm;
+        return {key.x*span,key.y*span,key.z*span,
+                (key.x+1)*span,(key.y+1)*span,(key.z+1)*span};
+    }
+    void recordNavigationBounds(CaveDirtyBounds b) {
+        if(!navDirty_){navDirtyBounds_=b;navDirty_=true;return;}
+        auto& old=navDirtyBounds_;
+        old.minX=std::min(old.minX,b.minX);
+        old.minY=std::min(old.minY,b.minY);
+        old.minZ=std::min(old.minZ,b.minZ);
+        old.maxX=std::max(old.maxX,b.maxX);
+        old.maxY=std::max(old.maxY,b.maxY);
+        old.maxZ=std::max(old.maxZ,b.maxZ);
+    }
     void syncStreamingEditPins() {
         const auto source=host_.stats().requestedRevision;
         if(!source)return;
@@ -327,6 +392,11 @@ private:
             if(!editPins_.contains(key))
                 editPins_.emplace(key,residency_.pin(key,CaveLeasePurpose::Edit));
     }
+    CaveNavigationPublication navigationBus_{nullptr};
+    CaveDirtyBounds navDirtyBounds_{};
+    bool navDirty_=false;
+    uint32_t chunkResolution_=16;
+    int32_t chunkSpacingCm_=100;
     CaveWorldResidency residency_;
     CaveWorldStreamJobs streamJobs_{2};
     std::map<ChunkKey3,CaveResidencyTicket,KeyLess> pendingRetires_;
