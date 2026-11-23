@@ -4,6 +4,7 @@
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -105,6 +106,22 @@ int main() {
     ambiguous.set("graph",graph);
     require(call("fx_graph_preview",ambiguous).has("error")&&
             previewCalls==forwarded,"ambiguous source reached native preview");
+    // A harmless-looking graphName cannot cross the project boundary via
+    // a symlink to an external JSON file. Platforms that forbid symlink
+    // creation simply skip this OS capability-specific assertion.
+    const fs::path outside=root.parent_path()/
+        ("aiverse-outside-spectra-"+std::to_string(mark)+".json");
+    { std::ofstream file(outside); file<<graph.dump(2); }
+    std::error_code symlinkError;
+    fs::create_symlink(outside,root/"fx"/"graphs"/"outside.vfx.json",symlinkError);
+    if(!symlinkError) {
+        Json escaped=previewLoad;
+        escaped.set("graphName",Json::string("outside"));
+        require(call("fx_graph_preview",escaped).has("error")&&
+                previewCalls==forwarded,"symlink outside project reached GPU runtime");
+    }
+    std::error_code removeError;
+    fs::remove(outside,removeError);
     ws.setSpectraPreviewHandler({});
     require(call("fx_graph_preview",previewStatus).has("error"),
             "detached Studio preview must not be callable from standalone MCP");
