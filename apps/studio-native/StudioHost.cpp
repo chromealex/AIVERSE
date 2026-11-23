@@ -1913,14 +1913,23 @@ bool StudioHost::handleHostMethod(const Json& req) {
         std::string selectionKey;
         for(const auto& id:selected){selectionKey+=id;selectionKey.push_back('|');}
         const auto revision=params["revision"].integer(-1);
+        const auto owner=params.getStr("owner");
+        if(owner.empty()||owner.size()>128)
+            throw std::runtime_error("Invalid EVOLVE preview owner");
         if(revision<0)throw std::runtime_error("Missing EVOLVE preview revision");
         if(params.getStr("selectionKey")!=selectionKey)
             throw std::runtime_error("EVOLVE preview selection changed");
-        if(revision<wpPreviewRevision_){
+        if(owner!=wpPreviewOwner_ && params.getBool("clear")){
             Json ignored=Json::object();
             ignored.set("stale",Json::fromBool(true));
             return ignored;
         }
+        if(owner==wpPreviewOwner_ && revision<wpPreviewRevision_){
+            Json ignored=Json::object();
+            ignored.set("stale",Json::fromBool(true));
+            return ignored;
+        }
+        wpPreviewOwner_=owner;
         wpPreviewRevision_=revision;
         wpPreviewSelection_=selectionKey;
         if(params.getBool("clear")||selected.size()<2)wpNumericPreview_=Json();
