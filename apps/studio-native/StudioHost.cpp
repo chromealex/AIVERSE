@@ -1188,12 +1188,130 @@ Json StudioHost::assetThumbnail(const std::string& path) {
     out.set("none", Json::fromBool(true));
     return out;
 }
+// One-shot real GPU frame snapshot. The native RHI owns the readback; an
+// immutable shared state lives until its GPU completion callback finishes.
+// JPEG encoding stays in the callback and its result is read on the host UI
+// thread. No continuous bitmap uploads, no arbitrary output file paths.
+Json StudioHost::captureSpectraFrame(const Json& params) {
+    const std::string action=params.getStr("action");
+    Json out=Json::object();
+    if(action=="captureStatus") {
+        const auto shot=fxShot_;
+        if(!shot) {
+            out.set("pending",Json::fromBool(false));
+            out.set("ready",Json::fromBool(false));
+            out.set("error",Json::string("No pending SpectraFX frame capture"));
+            return out;
+        }
+        std::string jpeg,error;
+        int w=0,h=0;
+        bool done=false;
+        {
+            std::lock_guard<std::mutex> lock(shot->mutex);
+            done=shot->done;
+            if(done) {
+                jpeg=shot->jpeg;
+                error=shot->error;
+                w=shot->width;
+                h=shot->height;
+            }
+        }
+        if(!done) {
+            if(platform_.now()-fxShotStartedAt_>10.) {
+                fxShot_.reset(); // callback owns its shared state until completion
+                out.set("pending",Json::fromBool(false));
+                out.set("ready",Json::fromBool(false));
+                out.set("error",Json::string("SpectraFX GPU capture timed out"));
+                return out;
+            }
+            out.set("pending",Json::fromBool(true));
+            out.set("ready",Json::fromBool(false));
+            return out;
+        }
+        fxShot_.reset();
+        out.set("pending",Json::fromBool(false));
+        out.set("ready",Json::fromBool(!jpeg.empty()&&error.empty()));
+        out.set("width",Json::number(int64_t(w)));
+        out.set("height",Json::number(int64_t(h)));
+        out.set("mime",Json::string("image/jpeg"));
+        if(!error.empty())out.set("error",Json::string(error));
+        if(!jpeg.empty()&&error.empty())
+            out.set("image",Json::string("data:image/jpeg;base64,"+
+                editor::base64Encode(jpeg)));
+        return out;
+    }
+    if(action!="capture")throw std::runtime_error("Unknown FX capture operation");
+    if(!fxPreview_ || !fxPlacement_.visible ||
+       !platform_.surfaceDrawable(StudioSurface::Fx))
+        throw std::runtime_error("Open the native SpectraFX GPU viewport before capture");
+    const Json& raw=params["maxSide"];
+    if(!raw.isNull() &&
+       (!raw.isNumber()||raw.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+        raw.integer(0)<128||raw.integer(0)>768))
+        throw std::runtime_error("FX snapshot maxSide must be an integer in 128..768");
+    const int maxSide=int(raw.isNull()?512:raw.integer());
+    if(fxShot_) {
+        std::lock_guard<std::mutex> lock(fxShot_->mutex);
+        if(!fxShot_->done && platform_.now()-fxShotStartedAt_<=10.)
+            throw std::runtime_error("An FX GPU capture is still pending");
+    }
+    auto shot=std::make_shared<FxShot>();
+    fxShot_=shot;
+    fxShotStartedAt_=platform_.now();
+    try {
+        onScene([&] {
+            fxPreview_->captureNextFrame(
+                [shot,maxSide](int w,int h,std::vector<uint8_t> rgba) {
+                    std::string jpeg,error;
+                    int ow=0,oh=0;
+                    if(w<=0||h<=0||w>8192||h>8192||
+                       uint64_t(w)*uint64_t(h)*4>64ull*1024ull*1024ull ||
+                       rgba.size()<uint64_t(w)*uint64_t(h)*4)
+                        error="Invalid native FX GPU capture dimensions";
+                    else {
+                        const int longest=std::max(w,h);
+                        ow=std::max(1,w*maxSide/longest);
+                        oh=std::max(1,h*maxSide/longest);
+                        std::vector<uint8_t> pixels(size_t(ow)*oh*4);
+                        for(int y=0;y<oh;++y)for(int x=0;x<ow;++x) {
+                            const size_t sx=size_t(x)*w/ow,sy=size_t(y)*h/oh;
+                            const auto* p=&rgba[(sy*size_t(w)+sx)*4];
+                            auto* q=&pixels[(size_t(y)*ow+x)*4];
+                            q[0]=p[0];q[1]=p[1];q[2]=p[2];q[3]=255;
+                        }
+                        jpeg=encodeJpeg(pixels,ow,oh,80);
+                        // Bound a JSON-RPC response: 600 KiB JPEG encodes to
+                        // <= 800 KiB base64, under the 1 MiB bridge limit.
+                        if(jpeg.empty()||jpeg.size()>600u*1024u) {
+                            jpeg.clear();
+                            error="Native FX JPEG capture unavailable or too large";
+                        }
+                    }
+                    {
+                        std::lock_guard<std::mutex> lock(shot->mutex);
+                        shot->jpeg=std::move(jpeg);
+                        shot->error=std::move(error);
+                        shot->width=ow;shot->height=oh;
+                        shot->done=true;
+                    }
+                });
+        });
+    } catch(...) {
+        fxShot_.reset();
+        throw;
+    }
+    out.set("pending",Json::fromBool(true));
+    out.set("ready",Json::fromBool(false));
+    return out;
+}
 Json StudioHost::runSpectraPreview(const Json& params) {
     if(projectLoading_ || session_->workspace().project.dir.empty())
         throw std::runtime_error("Open a project before SpectraFX preview");
     if(!fxPreview_)
         throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
     const std::string action=params.getStr("action");
+    if(action=="capture"||action=="captureStatus")
+        return captureSpectraFrame(params);
     // Stopping and inspecting a ready runtime never require the view to
     // remain on screen. Load/play/step/seek need a drawable to advance.
     if(action!="status" && action!="stop" &&
