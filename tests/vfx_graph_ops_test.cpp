@@ -36,6 +36,22 @@ int main() {
       "outputs":["out"]
     })JSON");
 
+    const auto catalog = call("graph_catalog", Json::object());
+    require(catalog.getBool("ok") && catalog["domains"].size()==4, "generic graph catalog missing domains");
+    require(call("graph_list", Json::parse(R"({"domain":"unknown"})")).has("error"), "unknown graph domain accepted");
+    Json generic = Json::object();
+    generic.set("domain",Json::string("spectrafx"));
+    generic.set("name",Json::string("generic_spark"));
+    generic.set("graph",graph);
+    require(call("graph_validate",generic).getBool("ok"),"generic native validation failed");
+    require(call("graph_dependencies",generic)["result"]["edges"].size()==2,"generic dependency edges incorrect");
+    require(call("graph_save",generic).has("error"),"unversioned write accepted without explicit consent");
+    generic.set("allowUnversionedWrite",Json::fromBool(true));
+    require(call("graph_save",generic).getBool("ok"),"generic native save failed");
+    require(call("graph_get",generic)["result"]["graph"]==graph,"generic graph readback mismatch");
+    require(call("graph_node_catalog",generic)["result"]["nodes"].isArray(),"generic native node catalog missing");
+    require(call("fx_graph_delete",generic).getBool("ok"),"generic fixture cleanup failed");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
