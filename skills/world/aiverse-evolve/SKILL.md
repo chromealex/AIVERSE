@@ -230,3 +230,6 @@ Headless demo now initializes PHYSIS grid, EVOLVE climate links and NEREID lake;
 
 ## Stage 66: demo persistence
 Native PHYSIS install registers persistence; demo supports `--load FILE`, `--save FILE`, `--replay` and forest diagnostics. No build or roundtrip verification. See `docs/handoffs/world-processes-stage66-demo-persistence-2026-11-23.md`.
+
+## Stage 67: SVG ecology report
+Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dead/fallen plant markers. Fixed demo viewport, no live renderer. No build/run. See `docs/handoffs/world-processes-stage67-svg-report-2026-11-23.md`.
