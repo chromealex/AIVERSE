@@ -435,6 +435,25 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                 if(name=="AetherFlux")minimum=-aether::kMaxDuctRate;
                                 if(key=="strength"||key=="intensity")minimum=1;
                             }
+                            if(extended){
+                                if(name=="MorphNode"){
+                                    if(key=="restX"||key=="restY"||key=="restZ"){
+                                        minimum=-morph::kPositionLimit;maximum=morph::kPositionLimit;
+                                    }else maximum=1000;
+                                }else if(name=="CrowdAgent"){
+                                    if(key=="x"||key=="z"||key=="goalX"||key=="goalZ"){
+                                        minimum=-crowd::kCoord;maximum=crowd::kCoord;
+                                    }else maximum=key=="radius"?crowd::kMaxRadius:crowd::kMaxSpeed;
+                                }else if(name=="ImprintCell"){
+                                    maximum=key=="footprintFade"||key=="scentFade"||key=="residueFade"?
+                                        imprint::kMaxRate:imprint::kMaxLevel;
+                                }else if(name=="CircuitNode")maximum=circuit::kMaxUnits;
+                                else if(name=="GranularField"){
+                                    maximum=granular::kMaxCellMass;
+                                    if(key=="capacity")minimum=1;
+                                }else if(name=="EvolveRegion")maximum=evolve::kMaxState;
+                                else if(name=="SocietyPerson")maximum=key=="credibility"?1000:1000000;
+                            }
                             field.set("min",Json::number(minimum));
                             field.set("max",Json::number(maximum));
                             field.set("step",Json::number(int64_t(1)));
