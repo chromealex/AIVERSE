@@ -295,6 +295,7 @@ void testTypedVehicleAdmissionAndRestore() {
     AIVERSE_TEST_CHECK(loadedDrive &&
                        loadedDrive->controller.position==drive->controller.position);
     AIVERSE_TEST_CHECK(loadedDrive->seats.occupants.size()==2);
+    const Vec3 originalControllerPosition=loadedDrive->controller.position;
     loaded->world().enableCowSnapshots();
     SimSnapshot snap;
     loaded->saveState(snap);
@@ -306,7 +307,7 @@ void testTypedVehicleAdmissionAndRestore() {
     loaded->loadState(snap);
     AIVERSE_TEST_CHECK(loaded->checksum()==checksum);
     AIVERSE_TEST_CHECK(vehicles::driveOf(loaded->world(),actorsA.car)
-                        ->controller.position==loadedDrive->controller.position);
+                        ->controller.position==originalControllerPosition);
 }
 
 void testStaticAndOccupiedMove() {
