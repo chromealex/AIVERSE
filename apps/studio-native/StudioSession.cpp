@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingDependencies.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -1092,6 +1093,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
         }
         if(method=="studio.buildingInspect") {
             reply.set("result",studioBuildingInspect(ws_.engineDir,params));
+            return reply;
+        }
+        if(method=="studio.buildingStaleMaterials") {
+            reply.set("result",studioBuildingStaleMaterials(ws_.project.dir));
             return reply;
         }
         if(method=="studio.buildingGenerate") {
