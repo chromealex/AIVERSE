@@ -485,6 +485,35 @@ void registerMaterialOps(Workspace& ws) {
         Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("cacheHit",Json::fromBool(cacheHit));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
     });
 
+    add("texture_graph_material_variant","Create a new inherited library material from a baked set manifest. Requires explicit new material and base names; no regeneration or overwrite.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"}},"required":["textureName","materialName","base"]})",[w](const Json& p){
+        needProject(*w);
+        const auto set=p.getStr("textureName"),name=p.getStr("materialName"),base=p.getStr("base");
+        if(!render::texture_graph::safeId(set)||!render::texture_graph::safeId(name)||!render::texture_graph::safeId(base)||name==base)throw std::invalid_argument("invalid variant names");
+        const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures"/set,file=dir/"texture-set.json";
+        if(fs::is_symlink(root/"content")||fs::is_symlink(root/"content"/"textures")||fs::is_symlink(dir)||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>512*1024)throw std::runtime_error("invalid texture set manifest");
+        const auto manifest=Json::parseFile(file.string());
+        if(manifest.getInt("version")!=1)throw std::runtime_error("unsupported texture set manifest");
+        const auto program=render::texture_graph::compile(manifest["graph"],manifest["overrides"]);
+        if(!manifest["files"].isArray()||manifest["files"].size()!=program.outputs.size())throw std::runtime_error("incomplete texture set manifest");
+        const std::map<std::string,std::string> channels={{"color","texture"},{"normal","normalMap"},{"metallicRoughness","metallicRoughnessMap"},{"ao","occlusionMap"},{"emissive","emissiveMap"},{"mask","teamMask"}};
+        Json material=Json::object();material.set("base",Json::string(base));
+        std::set<std::string> seen;
+        for(const auto& row:manifest["files"].items()){
+            const auto output=row.getStr("output");
+            const auto path="content/textures/"+set+"/"+output+".png";
+            if(!program.outputs.count(output)||!seen.insert(output).second||row.getStr("path")!=path||fs::is_symlink(root/path)||!fs::is_regular_file(root/path))throw std::runtime_error("invalid or missing baked texture");
+            if(auto it=channels.find(output);it!=channels.end())material.set(it->second,Json::string(path));
+        }
+        if(material.size()<2)throw std::runtime_error("no material-compatible outputs");
+        const auto lib=loadMaterialLibrary(*w);
+        if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
+        // Reuse the native library writer, not a separate runtime material format.
+        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);
+        auto r=w->call("material_set",args,"texture-graph");
+        if(r.getBool("ok"))r.set("note",Json::string("Baked variant; configure texture importer metadata separately. Existing material library owner concurrency applies."));
+        return r;
+    });
+
     add("texture_generate",
         "Make a tileable texture (PNG in the game folder) for a material: bricks, metal panels, wood, camouflage, scales, noise, "
         "stripes, ... Also its normal map (output: normal) or a team mask (output: mask). Use the path in material_set / "
