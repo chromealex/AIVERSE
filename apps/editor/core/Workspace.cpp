@@ -258,10 +258,10 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
         }});
     registerOp({"fx_replay_capture",
         "Queue or poll a bounded native SpectraFX JPEG capture. Use action=capture with requireReplayReady=true; then action=captureStatus. Provenance is request-time, not exact GPU frame completion.",
-        Json::parse(R"({"properties":{"action":{"type":"string","enum":["capture","captureStatus"]},"maxSide":{"type":"integer","minimum":64,"maximum":1024},"requireReplayReady":{"type":"boolean"}},"required":["action"]})"),
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["capture","captureStatus","captureCancel"]},"maxSide":{"type":"integer","minimum":64,"maximum":1024},"requireReplayReady":{"type":"boolean"},"captureId":{"type":"integer","minimum":1}},"required":["action"]})"),
         [this](const Json& p)->Json {
             const std::string action=p.getStr("action");
-            if(action!="capture"&&action!="captureStatus")
+            if(action!="capture"&&action!="captureStatus"&&action!="captureCancel")
                 throw std::runtime_error("fx_replay_capture: invalid action");
             return spectraPreview(p);
         }});
