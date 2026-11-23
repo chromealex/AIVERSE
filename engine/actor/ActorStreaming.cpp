@@ -29,6 +29,14 @@ bool ActorHost::readyToStep(Simulation& sim) {
         if(p.program.enabled)for(const auto& m:config_.weapons[p.weapon].flight.modifiers)
             if(m.kind==projectile::ProjectileModKind::Ricochet)reach=fxMax(reach,m.radius+p.program.radius);
         region(p.pos,travel+reach+16_fx);}
+    // Authoritative staged moves extend the exact same collision residency
+    // request. The queue is ECS state; this poll only prepares derived assets.
+    // A refused step keeps tick, RNG and incoming commands unchanged.
+    if(const auto* moves=sim.world().resourceConst<world::RegionMoveRequests>())
+        for(const auto& [id,destination]:moves->destinations) {
+            (void)id;
+            region(destination,4_fx);
+        }
     // Collision assets must be present before deriving the bot navigation
     // meshes. Waiting happens before the authoritative tick consumes any
     // command, RNG or gameplay state (Simulation::step/readyToStep).
