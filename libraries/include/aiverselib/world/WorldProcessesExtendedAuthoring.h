@@ -14,7 +14,7 @@
 namespace aiverse::lib::worldprocess::extended {
 inline bool supports(std::string_view id){
     return id=="MorphNode"||id=="CrowdAgent"||id=="ImprintCell"||
-           id=="CircuitNode"||id=="GranularField"||id=="EvolveRegion"||
+           id=="CircuitNode"||id=="GranularField"||id=="EvolveRegion"||id=="EvolveArea"||
            id=="SocietyPerson";
 }
 inline Json defaults(std::string_view id){
@@ -24,6 +24,7 @@ inline Json defaults(std::string_view id){
     if(id=="CircuitNode")return Json::parse(R"({"supply":0,"demand":0,"drive":false,"enabled":true})");
     if(id=="GranularField")return Json::parse(R"({"capacity":1000,"initialMass":0,"enabled":true})");
     if(id=="EvolveRegion")return Json::parse(R"({"durability":1000000000,"fertility":500000000,"succession":0,"pollution":0,"enabled":true})");
+    if(id=="EvolveArea")return Json::parse(R"({"halfWidthCm":1000,"halfDepthCm":1000,"enabled":true})");
     if(id=="SocietyPerson")return Json::parse(R"({"knowledgeHex":"0000000000000000","credibility":1000,"acceptance":250000,"enabled":true})");
     return Json{};
 }
@@ -70,6 +71,10 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
         if(key=="mass"||key=="solid")return v.isArray();
         return false;
     }
+    if(id=="EvolveArea"){
+        return (key=="halfWidthCm"||key=="halfDepthCm")&&
+            authoring::integerExact(v,50,evolve::kAreaMaxHalfExtentCm);
+    }
     if(id=="EvolveRegion"){
         return (key=="durability"||key=="fertility"||key=="succession"||
                 key=="pollution")&&authoring::integerExact(v,0,evolve::kMaxState);
@@ -114,6 +119,7 @@ inline bool hasExisting(const World& world,Entity e,std::string_view id){
     if(id=="CircuitNode")return world.has<circuit::Node>(e);
     if(id=="GranularField")return world.has<granular::Field>(e);
     if(id=="EvolveRegion")return world.has<evolve::Region>(e);
+    if(id=="EvolveArea")return world.has<evolve::Area>(e);
     if(id=="SocietyPerson")return world.has<society::Person>(e);
     return false;
 }
@@ -150,6 +156,14 @@ inline bool apply(World& world,Entity e,std::string_view id,const Json& doc,
         v.capacity=n("capacity");v.mass[0]=n("initialMass");
         v.enabled=flag("enabled");
         world.add<granular::Field>(e,v);
+    }else if(id=="EvolveArea"){
+        // Generic standalone callers can set center later via setArea().
+        // Map hydration overrides center from the real authored map.pos.
+        evolve::Area v;
+        v.halfWidthCm=n("halfWidthCm");
+        v.halfDepthCm=n("halfDepthCm");
+        v.enabled=flag("enabled");
+        if(!evolve::setArea(world,e,v))return false;
     }else if(id=="EvolveRegion"){
         evolve::Region v;
         v.durability=n("durability");v.fertility=n("fertility");
