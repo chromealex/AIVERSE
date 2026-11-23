@@ -9,6 +9,7 @@
 #include "engine/world/CollisionStream.h"
 #include "engine/world/VehicleRegionTransfer.h"
 #include "engine/world/RegionMoveRequests.h"
+#include "engine/world/RegionDirtyQueue.h"
 #include "engine/mechanics/Melee.h"
 #include "engine/mechanics/royale/BattleRoyale.h"
 #include "engine/systems/Gear.h"
@@ -171,6 +172,10 @@ public:
     // Run at a structural ECS tick boundary after actor and vehicle systems.
     // Opt-in only; tracks live spawn/retire/movement in the region ledger.
     void synchronizeRegionOwnership(Simulation& sim);
+    // Explicit lifecycle observations from authoritative game/owner systems.
+    // Does not replace legacy full-pool scanning until every writer migrates.
+    bool reportRegionChange(Simulation& sim,Entity entity,
+                            world::RegionDirtyKind kind);
     // Authoritative host-only staged movement. The destination is requested
     // BEFORE a simulation tick; collision/nav admission runs in readyToStep.
     bool requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
