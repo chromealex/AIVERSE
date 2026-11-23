@@ -2917,6 +2917,14 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_library_building_feature_tests PRIVATE AIVERSE::lib_building_style)
     add_test(NAME library_building_features COMMAND aiverse_library_building_feature_tests ${PROJECT_SOURCE_DIR})
 endif()
+# Pure StructureGraph: functional layout without engine, renderer, material
+# catalog or Studio dependencies; standalone C++20 compilation contract.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_building_structure_graph_tests tests/libraries/building_structure_graph_tests.cpp)
+    target_compile_features(aiverse_building_structure_graph_tests PRIVATE cxx_std_20)
+    target_include_directories(aiverse_building_structure_graph_tests PRIVATE libraries/include)
+    add_test(NAME library_building_structure_graph COMMAND aiverse_building_structure_graph_tests)
+endif()
 # building-style (settings of generated buildings as style files) and its .glb exporter.
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_building_style_tests tests/libraries/building_style_tests.cpp)
