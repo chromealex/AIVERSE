@@ -126,6 +126,7 @@ export default function BuildingGeneratorPanel({
       const result=await invoke('studio.buildingGenerate',request(chosen));
       setSaved(result);setStatus('New GLB saved to Assets with persistent GUID.');
       // Existing browser windows can refresh their Assets lists on demand.
+      window.dispatchEvent(new Event('studio:assets-changed'));
       void invoke('studio.windowBroadcast',{event:'ui.assetsChanged',payload:{path:result.path}}).catch(()=>{});
       void invoke('studio.assetThumbnail',{path:result.path}).then(thumb=>{
         if(thumb.url)setThumbnail(thumb.url);
