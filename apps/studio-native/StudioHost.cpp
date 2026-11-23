@@ -1322,6 +1322,17 @@ bool StudioHost::handleHostMethod(const Json& req) {
         onScene([&] { preview_->captureFacialThumbnail(path.string()); });
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
+    if (method == "studio.spectraPreview") return answer([&] {
+        // All GPU actions are run on the Scene's render-owner thread BETWEEN
+        // frames. The HTML UI never obtains gfx handles or submits compute.
+        if (projectLoading_ || session_->workspace().project.dir.empty())
+            throw std::runtime_error("Open a project before SpectraFX preview");
+        if (!preview_ || !placement_.visible ||
+            !platform_.surfaceDrawable(StudioSurface::Scene))
+            throw std::runtime_error("Open the native Scene viewport before SpectraFX preview");
+        const std::string project=session_->workspace().project.dir;
+        return onScene([&] { return preview_->spectraPreviewCommand(params,project); });
+    });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
         if (method == "studio.gameEntities") {
