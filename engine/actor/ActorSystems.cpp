@@ -80,11 +80,11 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
     target.lastDamage=sim.tick();target.activeAction=Action::None;target.actionUntil=0;
     if(s.royale.enabled&&attacker&&source!=target.slot){s.royale.lastAttacker[target.slot-1]=source;s.royale.lastWeapon[target.slot-1]=uint8_t(attacker->weaponIndex+1);}
     if(attacker)++attacker->hits;
-    auto releaseVehicles=[&](uint8_t slot){for(const Entity e:vehicleEntities(sim)){auto& v=*w.tryGet<Vehicle>(e);if(v.driver==slot)v.driver=0;}};
+    auto releaseVehicles=[&](uint8_t slot){for(const Entity e:vehicleEntities(sim)){auto& v=*w.tryGet<Vehicle>(e);if(v.driver==slot){w.notifyComponentChange<Vehicle>(e);v.driver=0;}}};
     if(config_.systems.enabled&&config_.systems.knockdown&&!target.downed&&amount>=target.health) {
         bool teammate=false;
         for(size_t k=1;k<=characterCount(sim);++k){const auto a=character(sim,uint8_t(k));if(a.slot!=target.slot&&a.team==target.team&&a.health>0&&!a.downed)teammate=true;}
-        if(teammate){releaseVehicles(target.slot);target.vehicle=0;target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
+        if(teammate){releaseVehicles(target.slot);w.notifyComponentChange<CharacterBody>(target.entity);target.vehicle=0;target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
     }
     // The same immediate integer HP commit as the generic ECS DamageResolutionSystem.
     lib::mechanics::applyIntegerHitPointDamage(target.health,amount);
@@ -100,6 +100,7 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
             *gear(sim,target.slot)={};
         }
         releaseVehicles(target.slot);
+        w.notifyComponentChange<CharacterBody>(target.entity);
         target.vehicle=0;
     }
     sim.emit({2,source,{}, {},target.slot,target.pos});
@@ -108,7 +109,7 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
 void ActorHost::damageVehicle(Simulation& sim,uint8_t source,uint32_t vehicleId,int32_t amount) {
     auto* v=sim.world().tryGet<Vehicle>(vehicleEntity(sim,vehicleId));if(!v)return;
     v->health=std::max(0,v->health-amount);
-    if(!v->health&&v->driver){auto driver=character(sim,v->driver);v->driver=0;driver.vehicle=0;damage(sim,source,driver,1000);}
+    if(!v->health&&v->driver){auto driver=character(sim,v->driver);sim.world().notifyComponentChange<Vehicle>(vehicleEntity(sim,vehicleId));sim.world().notifyComponentChange<CharacterBody>(driver.entity);v->driver=0;driver.vehicle=0;damage(sim,source,driver,1000);}
 }
 bool ActorHost::traceShot(Simulation& sim,uint8_t source,Vec3 eye,Vec3 delta,int32_t amount,const WeaponConfig& weapon,const std::vector<HitPose>* rewind,Projectile* projectile) {
     Fixed best=1_fx;uint8_t victim=0;std::optional<HitPose> pose;
@@ -240,6 +241,8 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
         if(auto* v=w.tryGet<Vehicle>(vehicleEntity(sim,a.vehicle))){
             HitPose exit=HitPose::of(a);exit.pos=v->pos+Vec3{2_fx,Fixed::fromRatio(1,10),{}};
             auto box=actorBounds(exit,config_.motor);box.min.y+=Fixed::fromRatio(1,100);if(collision_.blocked(box))return;
+            w.notifyComponentChange<CharacterBody>(a.entity);
+            w.notifyComponentChange<Vehicle>(vehicleEntity(sim,a.vehicle));
             a.pos=exit.pos;v->driver=0;a.vehicle=0;
             if(!reportRegionMoveIfCrossed(sim,a.entity))
                 throw std::logic_error("regionOwnership: arcade exit dirty report failed");
@@ -277,6 +280,8 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
     for(const Entity e:vehicleEntities(sim)){
         auto& v=*w.tryGet<Vehicle>(e);
         if(v.health>0&&!v.driver&&!w.has<vehicles::VehicleDrive>(e)&&accessible(v.pos)){
+            w.notifyComponentChange<CharacterBody>(a.entity);
+            w.notifyComponentChange<Vehicle>(e);
             v.driver=a.slot;a.vehicle=v.id;a.pos=v.pos;
             if(!reportRegionMoveIfCrossed(sim,a.entity))
                 throw std::logic_error("regionOwnership: arcade enter dirty report failed");
