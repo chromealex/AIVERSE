@@ -7,7 +7,7 @@ import sys
 from check_feature import ROOT, validate
 
 PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/", "docs/agents/contracts/")
-EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json"}
+EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json", "docs/agents/graph-inventory.json"}
 MANIFEST = "docs/features/"
 
 def covered_paths(changed, manifests):
