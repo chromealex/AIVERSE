@@ -49,12 +49,14 @@ inline StudioBuildingDependencyReport studioCheckBuildingDependencies(
         report.stale.push_back({"","Invalid generated building recipe"});
         return report;
     }
-    if(!recipe.has("textureDependencies")){
-        report.current=true; // old recipes have no tracked embedded assets
+    // An authored material may change without any texture at all.
+    if(!recipe.has("textureDependencies")&&!recipe.has("materialDependencies")){
+        report.current=true; // legacy recipes with no tracked dependencies
         return report;
     }
-    const auto& dependencies=recipe["textureDependencies"];
-    if(!dependencies.isArray()||dependencies.size()>256){
+    const Json& dependencies=recipe["textureDependencies"];
+    if(recipe.has("textureDependencies")&&
+       (!dependencies.isArray()||dependencies.size()>256)){
         report.stale.push_back({"","Invalid texture dependency manifest"});
         return report;
     }
@@ -89,7 +91,7 @@ inline StudioBuildingDependencyReport studioCheckBuildingDependencies(
             }
         }
     }
-    for(const auto& dependency:dependencies.items()){
+    if(dependencies.isArray())for(const auto& dependency:dependencies.items()){
         const auto guid=dependency.getStr("guid");
         if(!dependency.isObject()||!studioValidGuid(guid)){
             report.stale.push_back({guid,"Invalid dependency GUID"});continue;
