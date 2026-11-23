@@ -35,7 +35,11 @@
     "apps/studio-web/src/graphs/strataAnalysis.ts",
     "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
     "apps/studio-web/src/graphs/graphDiagnostics.ts",
-    "apps/studio-web/src/graphs/GraphDiagnostics.tsx"
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
+    "apps/editor/core/GraphOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "tools/mcp/audit_registry.py",
+    "tests/vfx_graph_ops_test.cpp"
   ],
   "traits": {
     "editable": true,
@@ -166,7 +170,16 @@
       "texture_generate",
       "material_set",
       "strata_capabilities",
-      "strata_model_analyze"
+      "strata_model_analyze",
+      "graph_catalog",
+      "graph_list",
+      "graph_get",
+      "graph_node_catalog",
+      "graph_validate",
+      "graph_edit",
+      "graph_save",
+      "graph_diagnostics",
+      "graph_dependencies"
     ],
     "studio_panels": [
       "shader_graph",
