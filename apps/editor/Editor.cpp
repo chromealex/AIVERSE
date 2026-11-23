@@ -153,8 +153,12 @@ public:
             if(visualRevision==UINT64_MAX)
                 throw std::overflow_error("Caverns visual preview revision");
             visualGroups=terraweave::caverns::groupCaveEditsByShard(chunks);
-            if(!visual)
+            if(!visual) {
                 visual=std::make_unique<terraweave::caverns::CaveShardGpuHost>();
+                visual->setUploadLimits({
+                    32ull*1024*1024,1,64
+                });
+            }
             auto plan=terraweave::caverns::planCaveMixedLodShardBatch(
                 visual->catalog(),visualGroups,visualRevision+1);
             if(!plan.ready()){
@@ -170,6 +174,9 @@ public:
             visualStaged.clear();
             visualPacer.reset(epoch,visualPlan->snapshots.size());
         }
+        // Scene pre-render owner boundary. No Device idle stall:
+        // free completed non-STRATA GeometryScene owners by GPU fence only.
+        if(visual)(void)visual->collectCompletedWithoutIdle(editor.device());
         const uint64_t frame=editor.device().frameSerial();
         if(!visualPacer.mayStage(epoch,frame))return;
         if(!visual||!visualPlan)return;
@@ -181,7 +188,7 @@ public:
                                           visualPlan->visual,spec)) {
                 visualPacer.failed(frame);
                 editor.cavernsBuildStats.diagnostic=
-                    "Caverns GPU preview deferred (resident budget or stale stage)";
+                    "Caverns GPU preview deferred (upload bytes, fence pressure, or stale shard)";
                 return;
             }
             visualStaged.push_back(snapshot.shard);
