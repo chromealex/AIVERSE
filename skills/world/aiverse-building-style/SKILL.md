@@ -1443,3 +1443,56 @@ Mandatory handoffs for this pack are
 `building-settings-nature-stage23t4-2026-11-24.md`, and
 `building-settings-catalog-stage23t5-2026-11-24.md`
 under the same `docs/agent-handoffs` directory.
+
+## Stage 23T.6 — saved recipe authoring and authoritative layout inspection in HTML5 Studio
+
+The existing panel apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx
+now browses previously generated building recipe sidecars using the
+new native studio.buildingRecipes API, and reloads one through
+studio.buildingReadRecipe. The native implementation in
+apps/studio-native/StudioBuildingRegeneration.h permits only bounded
+real files directly inside project/content/GeneratedBuildings, refuses
+symbolic links and path traversal, checks recipe schema 1, loads the
+existing style, and validates the restored request through the
+existing buildingStudioDetail::request. The UI restores style/setting,
+functional/preset mode, dimensions, floors, X/Z rooms, seed, features,
+and PBR materialBindings. Next Generate always creates a NEW GLB and
+recipe and retains the original file/GUID. Native Session.cpp forwards
+both read/list methods; apps/studio-web/src/types.ts and mock.ts
+declare them, and the browser mock never pretends to read project
+files.
+
+studio.buildingInspect now uses the actual
+generateFunctionalBuilding(style,request.functionalRecipe) to expose
+authoritative socketId, featureIndex, opening kind, side, width,
+height, open fraction and outside position, along with number of
+physical structure solids, graph connections and rooms/floors grid.
+The new BuildingPlanPreview.tsx is an interactive TOP-DOWN
+inspect/edit-navigation view, not fabricated 3D: selecting an actual
+socket scrolls/focuses its corresponding functional property editor.
+BuildingGeneratorPanel.css supplies responsive styling. The shared
+native Studio assetThumbnail already renders a REAL model thumbnail,
+and Place in Scene intentionally creates an actual scene entity that
+can be explored with the existing interactive Scene viewport.
+
+On GLB creation, StudioBuildingGeneration.h also records
+physicalSockets for genuinely generated door/roof aperture features:
+stable source socket IDs, featureIndex, kind, initialOpen fraction and
+conservative LOCAL closedBoundsMin/Max. These local bounds match the
+existing BuildingApertureOwner wall/roof formulas at origin/yaw 0.
+The gameplay scene owner MUST still transform them for the actual
+world instance, reserve unique real collider IDs via
+SceneCollisionNamespaces, and instantiate through the shared ECS
+runtime. Do not assign fake collider IDs in Studio, and never derive
+physics from cosmetic panel geometry.
+
+IMPORTANT: This stage DOES NOT implement a zero-write temporary
+interactive native 3D viewport. The top-down plan is interactive,
+and an actual 3D scene can be inspected only after a GLB is generated
+and placed through the existing Studio scene APIs. Do not describe
+native geometry metrics or a thumbnail as full interactive 3D preview.
+The required additional zero-write native GPU preview pipeline must
+be implemented by the established StudioScene/GPU owner if needed.
+No TS/C++ build, GLB, native GPU or scene QA was run because the user
+deferred tests. Handoff:
+docs/agent-handoffs/building-studio-recipes-layout-stage23t6-2026-11-24.md.
