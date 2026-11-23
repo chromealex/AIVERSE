@@ -5,6 +5,21 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — SpectraFX HTML5 graph canvas (Stage 6; QA pending)
+
+Read `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`.
+The existing `fx_graph` dock tab now includes a 2D node/link canvas implemented
+by `SpectraGraphCanvas.tsx` and `spectraGraphCanvasModel.ts`:
+node drag/layout, zoom, display typed/exec links, native catalog-driven
+Add/Delete and native `fx_graph_edit` Connect/Disconnect.
+File saves still use the parent Stage 5 Data Interfaces pane's
+`fx_graph_validate` / `fx_graph_set` / `fx_graph_draft_set`, not browser IO.
+`npm run test:graphs` includes new canvas-model tests.
+**Source committed, CI queued; not hardware/UI-verified.**
+This is an authoring topology canvas, NOT a particle/GPU preview.
+Never represent it as a real frame or change RHI simulation based on it.
+
+
 ## 2026-11-23 — SpectraFX Graph v2 Data Interfaces (Stage 5, draft PR #115)
 
 Read `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md` before
