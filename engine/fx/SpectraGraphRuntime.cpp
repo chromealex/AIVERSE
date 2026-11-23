@@ -138,9 +138,11 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
                              const Json& overrides,const GraphRuntimeOptions& options) {
     shutdown();
     InstanceParameterTable schema;
+    DataInterfaceBindings bindings;
     if(graph.getInt("version")==2 &&
-       !loadInstanceParameterTable(graph["instanceParameters"],schema,errors_)) {
-        reason_=errors_.empty()?"invalid instance parameters":errors_.front();
+       (!loadInstanceParameterTable(graph["instanceParameters"],schema,errors_) ||
+        !loadDataInterfaceBindings(graph["dataInterfaces"],schema,bindings,errors_))) {
+        reason_=errors_.empty()?"invalid graph runtime bindings":errors_.front();
         return false;
     }
     fx::EffectDef compiled;
@@ -161,6 +163,7 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
         actual.preference=ComputePreference::CpuOnly;
     if(!initEffect(dev,compiled,actual))return false;
     namedParams_=std::move(schema);
+    dataBindings_=std::move(bindings);
     for(const auto& [name,definition]:namedParams_) {
         (void)name;
         if(!setProgramParameter(definition.slot,definition.initial,false))return false;
@@ -173,9 +176,11 @@ bool GraphRuntime::initGraph(BatchWorld& shared, const Json& graph,
                             const GraphRuntimeOptions& options) {
     shutdown();
     InstanceParameterTable schema;
+    DataInterfaceBindings bindings;
     if(graph.getInt("version")==2 &&
-       !loadInstanceParameterTable(graph["instanceParameters"],schema,errors_)) {
-        reason_=errors_.empty()?"invalid instance parameters":errors_.front();
+       (!loadInstanceParameterTable(graph["instanceParameters"],schema,errors_) ||
+        !loadDataInterfaceBindings(graph["dataInterfaces"],schema,bindings,errors_))) {
+        reason_=errors_.empty()?"invalid graph runtime bindings":errors_.front();
         return false;
     }
     fx::EffectDef compiled;
@@ -185,6 +190,7 @@ bool GraphRuntime::initGraph(BatchWorld& shared, const Json& graph,
     }
     if(!initEffect(shared,compiled,options))return false;
     namedParams_=std::move(schema);
+    dataBindings_=std::move(bindings);
     for(const auto& [name,definition]:namedParams_) {
         (void)name;
         if(!setProgramParameter(definition.slot,definition.initial,false))return false;
@@ -279,6 +285,9 @@ void GraphRuntime::shutdown() {
     paramValues_={};
     paramSet_={};
     namedParams_.clear();
+    dataBindings_.clear();
+    dataRegistry_=nullptr;
+    dataStats_={};
     sharedWorld_ = nullptr;
     gpu_.shutdown();
     cpu_.shutdown();
@@ -328,8 +337,42 @@ bool GraphRuntime::setNamedProgramParameter(const std::string& name,float value,
     }
     return setProgramParameter(it->second.slot,value,affectExisting);
 }
+bool GraphRuntime::applyDataInterfaces(fx::float3 position) {
+    if(dataBindings_.empty())return true;
+    std::array<float,8> prepared{};
+    std::string error;
+    DataInterfaceSampleStats sampleStats;
+    if(!sampleDataInterfaces(dataBindings_,namedParams_,dataRegistry_,
+                             position,paramValues_,prepared,error,&sampleStats)) {
+        dataStats_=sampleStats;
+        reason_=std::move(error);
+        return false;
+    }
+    // All provider reads and range checks have succeeded before touching
+    // GPU/CPU uniform storage or spawning particles. If the backend rejects
+    // a slot, restore earlier slots best-effort and refuse this burst.
+    const auto old=paramValues_;
+    for(const auto& [name,b]:dataBindings_) {
+        (void)b;
+        const uint32_t slot=namedParams_.at(name).slot;
+        if(!setProgramParameter(slot,prepared[slot],false)) {
+            const std::string backendError=reason_;
+            for(const auto& [rollbackName,ignored]:dataBindings_) {
+                (void)ignored;
+                const uint32_t prior=namedParams_.at(rollbackName).slot;
+                if(prior==slot)break;
+                (void)setProgramParameter(prior,old[prior],false);
+            }
+            reason_="SpectraFX dataInterfaces: backend rejected parameter '"+name+"': "+backendError;
+            return false;
+        }
+    }
+    dataStats_=sampleStats;
+    return true;
+}
 bool GraphRuntime::burstAt(fx::float3 position,fx::float3 dir,fx::float4 tint) {
     if(!initialized_)return false;
+    if(!applyDataInterfaces(position))return false;
     if(sharedWorld_) {
         const fx::FxHandle handle=sharedWorld_->playWithProgramParameters(
             cpuEffect_,position,dir,1.f,tint,paramValues_);
