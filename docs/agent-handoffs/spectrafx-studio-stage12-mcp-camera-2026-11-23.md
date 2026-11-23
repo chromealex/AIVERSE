@@ -1,3 +1,26 @@
+## Follow-up security and QA correction (2026-11-23)
+
+- Source commits after original Stage 12 handoff:
+  `18fe3c7468ee0c1e9e032bb4c8ec3a2f51819bb7` makes
+  `fx_graph_preview {action:"load",graphName:...}` resolve its canonical
+  on-disk graph path and reject any symlink-escaped path outside the
+  canonical active project root. Existing 1–48 lowercase Graph name
+  validation is preserved.
+  `082bbce01d4519f36fd6b2ea5f2e92faa9d3a1d1` extends
+  `tests/vfx_graph_ops_test.cpp` with optional OS-specific symlink
+  escape regression (skips only the symlink creation portion on
+  platforms where privilege policy forbids creating symlinks).
+- **Do not claim these tests have run**. Exact source commit must be
+  fetched from the draft PR and compiled on the user's Mac; the
+  C++ test and Metal/HTML5 CI for latest branch head are pending.
+- CI workflow builds
+  `aiverse_studio_spectrafx_preview_tests`,
+  `aiverse_studio_image_codecs_tests` and `aiverse_vfx_ops_tests`,
+  runs CTest names `studio_spectrafx_preview`,
+  `studio_image_codecs` and `vfx_graph_ops`.
+- Current Stage 12 source has no observed complete GPU/UI visual capture,
+  so remains **source implemented / acceptance pending**.
+
 # SpectraStudio Stage 12 — MCP live preview and dedicated FX camera
 
 Date: 2026-11-23
