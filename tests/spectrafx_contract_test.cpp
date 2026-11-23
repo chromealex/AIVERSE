@@ -8,6 +8,7 @@
 #include "engine/fx/SpectraFxView.h"
 #include "engine/fx/SpectraFxCueInbox.h"
 #include "engine/fx/SpectraFxSignificance.h"
+#include "engine/fx/SpectraFxAccelerationFields.h"
 #include "engine/fx/SpectraFxGpuLod.h"
 #include "engine/fx/SpectraFxGpuBudgetGovernor.h"
 #include "engine/fx/SpectraFxGpuEmitterLibrary.h"
@@ -338,6 +339,59 @@ int main() {
         priority.drain([&](const SpectraFxCue&){++remaining;return true;});
         expect(remaining==2 && priority.pending()==0,
                "FIFO compatibility remains available after priority drain");
+    }
+
+    // External environment sources are read-only acceleration snapshots.
+    // Invalid providers are ignored without poisoning the Metal uniform or
+    // CPU twin integration state.
+    {
+        SpectraFxAccelerationFields fields;
+        SpectraFxAccelerationFields::Point a{};
+        SpectraFxAccelerationFields::Stats telemetry{};
+        expect(!fields.evaluate({0,0,0},a,&telemetry) &&
+               telemetry.consulted==0,"empty acceleration registry is zero");
+        expect(fields.bind(1,1,[](render::float3,render::float3& v) {
+            v={1,2,3};return true;
+        }),"register first external field");
+        expect(fields.bind(2,0.5f,[](render::float3,render::float3& v) {
+            v={0,4,0};return true;
+        }),"register second external field");
+        expect(fields.evaluate({0,0,0},a,&telemetry) &&
+               a.x==1 && a.y==4 && a.z==3 &&
+               telemetry.accepted==2,"weighted field aggregation");
+        expect(fields.bind(1,2,[](render::float3,render::float3& v) {
+            v={3,0,0};return true;
+        }) && fields.size()==2,"provider hot replacement preserves slot count");
+        expect(fields.evaluate({0,0,0},a) &&
+               a.x==6 && a.y==2 && a.z==0,
+               "replaced provider produces current value");
+        expect(fields.bind(3,1,[](render::float3,render::float3& v) {
+            v={NAN,0,0};return true;
+        }),"invalid-result provider can be registered");
+        expect(fields.evaluate({0,0,0},a,&telemetry) &&
+               telemetry.invalid==1 && a.x==6 && a.y==2,
+               "nonfinite provider result is isolated");
+        expect(!fields.evaluate({NAN,0,0},a,&telemetry) &&
+               telemetry.invalid==1 &&
+               a.x==0 && a.y==0 && a.z==0,
+               "nonfinite query is rejected and output cleared");
+        expect(!fields.bind(0,1,[](render::float3,render::float3&){return true;}) &&
+               !fields.bind(4,17,[](render::float3,render::float3&){return true;}),
+               "invalid identifiers and extreme weights rejected");
+        expect(fields.unbind(3) && fields.unbind(2) &&
+               fields.unbind(1) && fields.empty(),
+               "all external field callbacks detached");
+
+        SpectraFxHybridEmitter dedicated;
+        expect(dedicated.setExternalAcceleration({2,-3,1}) &&
+               dedicated.externalAcceleration().y==-3,
+               "dedicated hybrid emitter accepts visual field acceleration");
+        expect(!dedicated.setExternalAcceleration({NAN,0,0}) &&
+               dedicated.externalAcceleration().y==-3,
+               "invalid acceleration preserves prior valid setting");
+        dedicated.stop();
+        expect(dedicated.externalAcceleration().y==0,
+               "emitter retirement clears external acceleration");
     }
 
     if(failures) {
