@@ -4,6 +4,7 @@
 #include "GraphDraftEdits.h"
 #include "GraphAssetDependencies.h"
 #include "GraphRuntimeProbe.h"
+#include "GraphDebugSession.h"
 #include <array>
 #include <stdexcept>
 
@@ -96,6 +97,7 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
 
 inline void registerGraphOps(Workspace& ws) {
     using namespace graph_ops;
+    auto debugger=std::make_shared<graph_debug::Session>();
     const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
     ws.registerOp({"graph_catalog","Discover actual registered graph domain operations, payload formats and save constraints.",Json::object(),[&ws](const Json&){
         Json r=Json::object(),items=Json::array();
@@ -140,8 +142,19 @@ inline void registerGraphOps(Workspace& ws) {
         r.set("reason",Json::string("Live owner unavailable in this host/domain; isolated probe and CPU analysis are separate."));
         return r;
     }});
-    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[&ws](const Json&){auto r=graph_probe::capabilities();bool owner=false;for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")owner=true;r.set("nativeEditorSnapshotOwner",Json::fromBool(owner));r.set("liveSnapshotOperation",Json::string("graph_live_snapshot"));return r;}});
+    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[&ws](const Json&){auto r=graph_probe::capabilities();bool owner=false;for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")owner=true;r.set("nativeEditorSnapshotOwner",Json::fromBool(owner));r.set("liveSnapshotOperation",Json::string("graph_live_snapshot"));r.set("isolatedDebugSessionOperation",Json::string("graph_debug_session"));return r;}});
     const auto probeSchema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"parameters":{"type":"object"}},"required":["domain","graph"],"additionalProperties":false})");
+    const auto debugSchema=Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","status","step","continue","breakpoints","stop"]},"session":{"type":"string"},"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"states":{"type":"array","items":{"type":"string"}},"nodes":{"type":"array","items":{"type":"string"}}},"required":["action"],"additionalProperties":false})");
+    ws.registerOp({"graph_debug_session","Control one isolated CPU debug instance. Explicit bounded advancement; no live game controls.",debugSchema,[&ws,debugger](const Json& p){
+        debugger->checkProject(ws);
+        const auto action=p.getStr("action");
+        if(action=="status")return debugger->status();
+        if(action=="start")return debugger->start(ws,p);
+        if(action=="step"||action=="continue")return debugger->advance(p,action=="step");
+        if(action=="breakpoints")return debugger->breakpoints(p);
+        if(action=="stop"){debugger->requireSession(p);debugger->stop();return debugger->status();}
+        throw std::invalid_argument("unknown debug session action");
+    }});
     ws.registerOp({"graph_runtime_probe","Execute a bounded isolated native CPU preview. Not live game telemetry.",probeSchema,[&ws](const Json& p){
         const auto id=p.getStr("domain");const int n=graph_probe::steps(p);
         if(id=="motionweave")return graph_probe::motion(ws,p["graph"],p,n);
