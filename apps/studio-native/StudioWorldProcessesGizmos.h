@@ -64,6 +64,24 @@ inline void rectangle(std::vector<Shape>& out,render::float3 center,
     add(out,makeLine(d,e,r,g,b));add(out,makeLine(e,a,r,g,b));
 }
 
+// Unlike StudioScene's built-in circle (screen-space pixel radius), this
+// ring is a true world-space contour so it matches the editable radius handle.
+inline void worldRing(std::vector<Shape>& shapes,render::float3 center,
+                      float radius,std::uint8_t r,std::uint8_t g,
+                      std::uint8_t b){
+    constexpr int sides=24;
+    radius=std::clamp(radius,.5f,500.f);
+    constexpr float tau=6.28318530718f;
+    for(int i=0;i<sides;++i){
+        const float angle=tau*float(i)/float(sides);
+        const float next=tau*float(i+1)/float(sides);
+        const render::float3 a{center.x+radius*std::cos(angle),
+                               center.y,center.z+radius*std::sin(angle)};
+        const render::float3 z{center.x+radius*std::cos(next),
+                               center.y,center.z+radius*std::sin(next)};
+        add(shapes,makeLine(a,z,r,g,b,1.5f));
+    }
+}
 inline std::vector<Shape> collect(const editor::MapDoc& document,
                                   std::string_view selectedId={}){
     std::vector<Shape> out;
@@ -167,7 +185,7 @@ inline std::vector<Shape> collect(const editor::MapDoc& document,
             // supplied by the native EvolvePlantRegion host, not this circle.
             const float radius=capped(
                 e.extra["worldProcessGizmo"]["radiusMetres"],10,.5f,500.f);
-            add(out,makeCircle(pos,radius,138,190,255));
+            worldRing(out,pos,radius,138,190,255);
             add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE",138,190,255));
         }
         if(const auto& c=components["EvolvePressure"];c.isObject())
