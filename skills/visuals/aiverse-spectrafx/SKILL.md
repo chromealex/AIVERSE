@@ -1855,3 +1855,7 @@ Device::captureNextFrameTagged reports actual Metal encoded frame serial, or zer
 ## Stage 65 — frame provenance ring
 
 FX dock records post-render status keyed by RHI frame serial in a 64-entry ring. Tagged capture callback matches metadata and sets frameExact only when serial and successful image dimensions match. Replay-ready capture rejects unmatched/non-ready frames. This identifies rendered-frame metadata, not numerical GPU/CPU parity. No tests run.
+
+## Stage 66 — capture identity safety
+
+Capture callback retains shared metadata ring instead of raw StudioScene pointer. Host checks captured project and generation against request; replay-ready capture also checks tick. Unmatched backends remain non-exact. No tests run; audit capture queue and timeout lifecycle next.
