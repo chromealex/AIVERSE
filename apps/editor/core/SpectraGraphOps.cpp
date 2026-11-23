@@ -452,8 +452,18 @@ void registerSpectraGraphOps(Workspace& ws) {
                     throw std::runtime_error("use either graph or graphName, not both");
                 if(!p.has("graph")) {
                     const std::string graphName=requireGraphName(p,"graphName");
-                    command.set("graph",Json::parse(readFile(p.getBool("draft")
-                        ?draftFile(ws,graphName):graphFile(ws,graphName))));
+                    const fs::path file=p.getBool("draft")
+                        ?draftFile(ws,graphName):graphFile(ws,graphName);
+                    std::error_code ec;
+                    const auto root=fs::weakly_canonical(fs::path(ws.project.dir),ec);
+                    if(ec)throw std::runtime_error("cannot resolve active project path");
+                    const auto resolved=fs::weakly_canonical(file,ec);
+                    if(ec)throw std::runtime_error("cannot resolve VFX graph file");
+                    const auto rel=resolved.lexically_relative(root);
+                    if(rel.empty()||rel.is_absolute()||
+                       (rel.begin()!=rel.end()&&(*rel.begin()).string()==".."))
+                        throw std::runtime_error("preview graph reference escapes the active project");
+                    command.set("graph",Json::parse(readFile(file)));
                 }
                 if(!command["graph"].isObject())
                     throw std::runtime_error("preview requires a Graph v2 JSON object");
