@@ -1,0 +1,35 @@
+/* World Processes object references use the shared Studio palette and density. */
+.studio-entity-ref { min-width: 0; width: 100%; position: relative; }
+.studio-entity-ref__control { display: flex; min-width: 0; align-items: center; gap: var(--au-space-1); }
+.studio-entity-ref__control .au-input { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.studio-entity-ref__open,.studio-entity-ref__clear {
+  background: var(--au-field); color: var(--au-text-soft);
+  border: 1px solid var(--au-line); border-radius: var(--au-radius-sm);
+  width: 28px; height: var(--au-control-height);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.studio-entity-ref__open:hover,.studio-entity-ref__clear:hover {
+  background: var(--au-hover); color: var(--au-text);
+}
+.studio-entity-ref button:focus-visible { outline: none; box-shadow: var(--au-focus); }
+.studio-entity-ref button:disabled { opacity: .55; cursor: not-allowed; }
+.studio-entity-ref__popover {
+  position: absolute; top: 100%; right: 0; z-index: 400;
+  width: max(100%, 240px); max-width: min(420px, 80vw);
+  margin-top: var(--au-space-1); padding: var(--au-space-2);
+  background: var(--au-overlay); border: 1px solid var(--au-line-strong);
+  border-radius: var(--au-radius-md); box-shadow: var(--au-popover-shadow);
+}
+.studio-entity-ref__search { display: flex; align-items: center; gap: var(--au-space-1); }
+.studio-entity-ref__search .au-input { flex: 1; min-width: 0; }
+.studio-entity-ref__list { margin-top: var(--au-space-2); max-height: 260px; overflow: auto; }
+.studio-entity-ref__option {
+  width: 100%; display: block; background: transparent; color: var(--au-text);
+  padding: var(--au-space-2); text-align: left; border: 0;
+  border-radius: var(--au-radius-sm); font-size: var(--au-font-md);
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis;
+}
+.studio-entity-ref__option:hover,.studio-entity-ref__option[aria-selected="true"] { background: var(--au-active); }
+.studio-entity-ref__empty,.studio-entity-ref__error { color: var(--au-text-muted); font-size: var(--au-font-sm); padding: var(--au-space-2); }
+.studio-entity-ref__error { color: var(--au-danger); }
