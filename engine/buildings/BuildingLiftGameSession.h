@@ -81,10 +81,11 @@ public:
            !scene_.doors().enabled()||!scene_.doorsOpenAt(feature,floor))return false;
         const auto lift=scene_.host().lifts().find(feature);
         if(lift==scene_.host().lifts().end())return false;
-        auto* body=ecs.tryGet<Body>(actor);
-        if(!body||!insidePlatform(body->pos,lift->second.platformPose()))
-            return false;
-        return actors_.exit(ecs,scene_.host(),sceneId_,actor,feature,floor);
+        // Disembark is acknowledged only AFTER the actor's motor has
+        // reached the landing outside the cabin; being inside is NOT an
+        // exit. The ECS bridge checks the real landing geometry.
+        return actors_.exit(ecs,scene_.host(),sceneId_,actor,feature,floor,
+                            width_,depth_,origin_,yaw_);
     }
     // Actor teardown/logout can safely release a rider only at an actually
     // open landing. During travel the game must retain the actor until
