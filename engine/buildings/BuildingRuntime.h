@@ -32,3 +32,4 @@
 #include "engine/buildings/BuildingApertureGameBridge.h"
 #include "engine/buildings/BuildingDualLeafOwner.h"
 #include "engine/buildings/BuildingApertureTextureAssets.h"
+#include "engine/buildings/BuildingMaterialAssets.h"
