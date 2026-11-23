@@ -5292,3 +5292,20 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
         COMMAND aiverse_actor_navigation_stream_gate_test)
     set_tests_properties(actor_navigation_stream_gate_test PROPERTIES LABELS "World;ECS;NETWORK")
 endif()
+
+# W1.6: shared VehicleDrive/VehicleOccupant region grouping and actual
+# world-space ActorHost seat-slot adapter, no external game dependency.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_engine)
+    add_executable(aiverse_vehicle_region_group_test
+        tests/world/vehicle_region_group_test.cpp)
+    target_link_libraries(aiverse_vehicle_region_group_test PRIVATE aiverse_engine)
+    add_test(NAME vehicle_region_group_test COMMAND aiverse_vehicle_region_group_test)
+    set_tests_properties(vehicle_region_group_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_vehicle_region_group_test
+        tests/world/actor_vehicle_region_group_test.cpp)
+    target_link_libraries(aiverse_actor_vehicle_region_group_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_vehicle_region_group_test COMMAND aiverse_actor_vehicle_region_group_test)
+    set_tests_properties(actor_vehicle_region_group_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
