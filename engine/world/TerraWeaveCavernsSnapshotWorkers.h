@@ -1,7 +1,7 @@
 #pragma once
 // Stage18: asynchronous immutable full-volume rebuilds using existing Stage17
 // gate protocol. No mutable ECS/renderer/device access from worker threads.
-#include "TerraWeaveCavernsVolumeSnapshot.h"
+#include "TerraWeaveCavernsSdfSpatialIndex.h"
 #include "TerraWeaveCavernsSeamGate.h"
 #include <chrono>
 #include <future>
@@ -33,6 +33,9 @@ public:
         std::shared_ptr<const CaveVolumeSnapshot> snapshot,size_t budget=8){
         if(!snapshot)throw std::invalid_argument("Caverns missing snapshot");
         CaveSnapshotPumpStats result=poll(gate);
+        if(!indexed_ || indexed_->frozenSnapshot()!=snapshot)
+            indexed_=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
+        auto indexed=indexed_;
         for(const auto& req:gate.requests(budget)){
             if(jobs_.size()>=limit_)break;
             if(jobs_.contains(req.key)||req.sourceRevision!=snapshot->sourceRevision)
@@ -41,11 +44,11 @@ public:
                 throw std::overflow_error("Caverns render revision overflow");
             const uint64_t renderRevision=++nextRenderRevision_;
             auto worker=std::async(std::launch::async,
-                [snapshot,req,renderRevision](){
+                [indexed,req,renderRevision](){
                     CaveSnapshotRebuildResult done;
                     done.request=req;
-                    done.chunk.mesh=generateCaveSnapshotMesh(
-                        *snapshot,req.key,req.resolution,req.spacingCm);
+                    done.chunk.mesh=generateCaveIndexedSnapshotMesh(
+                        *indexed,req.key,req.resolution,req.spacingCm);
                     done.chunk.resolution=req.resolution;
                     done.chunk.spacingCm=req.spacingCm;
                     done.chunk.sourceRevision=req.sourceRevision;
@@ -87,6 +90,7 @@ public:
 private:
     size_t limit_;
     uint64_t nextRenderRevision_=0;
+    std::shared_ptr<const CaveSnapshotSpatialIndex> indexed_;
     std::map<ChunkKey3,std::future<CaveSnapshotRebuildResult>,KeyLess> jobs_;
 };
 } // namespace aiverse::terraweave::caverns
