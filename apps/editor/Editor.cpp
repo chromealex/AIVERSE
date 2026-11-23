@@ -123,7 +123,7 @@ public:
         if(!visual->stagePreparedEdits(editor.device(),candidates,1,next,shards,spec))
             return;
         // This confirms only editor VISUAL preview, NOT physics/nav publication.
-        if(!visual->activateGroup(shards,[](const auto&){return true;}))
+        if(!visual->activateVisualOnly(shards))
             throw std::runtime_error("Caverns visual-only activation rejected");
         visualRevision=next;
         visualAttemptedEpoch=epoch;
