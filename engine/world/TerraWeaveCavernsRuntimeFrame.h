@@ -254,6 +254,8 @@ public:
            publishedMesh.sourceRevision!=ticket.sourceRevision ||
            publishedMesh.resolution==0 || publishedMesh.spacingCm<=0)
             return false;
+        const auto navigationBounds=navigationChunkBounds(
+            ticket.key,publishedMesh.resolution,publishedMesh.spacingCm);
         if(!actualNativeCommit(ticket,it->second.mesh,
                                it->second.collisionMesh))return false;
         try {
@@ -267,8 +269,6 @@ public:
         }
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming build ACK refused after native commit");
-        const auto navigationBounds=navigationChunkBounds(
-            ticket.key,publishedMesh.resolution,publishedMesh.spacingCm);
         readyStreamBuilds_.erase(it);
         // Streaming may alter passable topology at the SAME authored SDF
         // revision. Consumers rebuild local routes/flow seeds/cluster borders.
