@@ -116,6 +116,22 @@ private:
     uint64_t revision_=0;
 };
 
+// A single domain may have multiple existing owners (road + railway,
+// multiple independent transport networks). All must accept a committed
+// event before the domain can acknowledge it. Consumers must themselves
+// be idempotent, because a rejected later consumer may trigger retry.
+inline BuildingGraphChangeRouter::Consumer buildingAllGraphOwners(
+    std::vector<BuildingGraphChangeRouter::Consumer> owners){
+    return [owners=std::move(owners)](const BuildingGraphChange& change){
+        if(owners.empty())return false;
+        bool accepted=true;
+        for(const auto& owner:owners){
+            if(!owner||!owner(change))accepted=false;
+        }
+        return accepted;
+    };
+}
+
 // Railways is optional and not present at the expected include path in
 // this feature branch. The REAL rail owner must validate current route /
 // block reservations and accept invalidation before returning true.
