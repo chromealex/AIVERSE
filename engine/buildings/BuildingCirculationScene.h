@@ -14,7 +14,11 @@
 namespace aiverse::building {
 
 struct BuildingSceneUpdate {
-    BuildingCirculationTick tick;
+    BuildingCirculationTick tick; // raw authoritative events and attempted moves
+    // Only these motions have successfully committed physical collision.
+    // Apply them to existing ECS/render owners in their world-owner phase.
+    std::vector<BuildingLiftPlatformMotion> publishedPlatforms;
+    std::vector<BuildingRiderDisplacement> publishedRiders;
     bool published=true;
     bool navDirty=false;
     std::string error;
@@ -89,8 +93,16 @@ public:
                 if(navmesh)navmesh->markAllDirty();
                 break;
             }
+            result.publishedPlatforms.push_back(motion);
+            for(const auto& rider:result.tick.riderMovements)
+                if(rider.liftFeature==motion.featureIndex &&
+                   rider.revision==motion.revision)
+                    result.publishedRiders.push_back(rider);
             result.navDirty=navmesh&&navmesh->dirty();
         }
+        // On a partial failure, already-published platform/rider pairs remain
+        // authoritative. Unpublished movements MUST NOT be applied to actor
+        // transforms or rendering. The host stays faulted until reattached.
         return result;
     }
 
