@@ -197,3 +197,6 @@ EVOLVE preview, pivot and batch resize RPCs are registered in the HTML5 typed br
 
 ## Stage 55: hydration and native RPC audit
 Map hydration rounds Fixed positions to nearest cm instead of truncating; numeric preview rejects locked/hidden entities and invalid custom pivot coordinates. TerraWeave consumer audit and runtime parity remain pending. No builds/tests. See `docs/handoffs/world-processes-stage55-hydration-rpc-audit-2026-11-23.md`.
+
+## Stage 56: TerraWeave consumer audit
+Canonical forest climate sampler rechecks live ECS Area and Region and current half-open bounds before applying climate. Rebuild sampler each ecology step to include newly added/enabled regions. Baseline and forest ownership unchanged. Production call-site audit and QA remain pending. See `docs/handoffs/world-processes-stage56-terraweave-consumer-2026-11-23.md`.
