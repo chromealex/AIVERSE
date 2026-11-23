@@ -1306,8 +1306,11 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             metadata.set("completedFenceAtRequest",Json::number(int64_t(fxPreview_->fxCompletedFence())));
             metadata.set("frameExact",Json::fromBool(false));
             {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
-            fxPreview_->captureNextFrame(
-                [shot,maxSide](int w,int h,std::vector<uint8_t> rgba) {
+            fxPreview_->captureNextFrameTagged(
+                [shot,maxSide](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba) {
+                    {std::lock_guard<std::mutex> lock(shot->mutex);
+                     shot->provenance.set("capturedFrameSerial",Json::number(int64_t(capturedFrame)));
+                     shot->provenance.set("gpuFrameIdentified",Json::fromBool(capturedFrame!=0&&w>0&&h>0));}
                     std::string jpeg,error;
                     int ow=0,oh=0;
                     if(w<=0||h<=0||w>8192||h>8192||
