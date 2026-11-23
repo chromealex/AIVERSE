@@ -144,14 +144,9 @@ public:
     bool canTraverse(PointCm a,PointCm b,
                      const CaveAgentProfile& agent)const {
         if(!inBounds(a)||!inBounds(b))return false;
-        if(agent.traversal==CaveTraversal::Custom&&callbacks_.customLink) {
-            // Even custom graph policy cannot connect an out-of-bounds
-            // endpoint or a solid cell. Caller may extend traversal cost,
-            // but remains on the committed cave geometry.
-            if(!sample(a,agent).traversable||
-               !sample(b,agent).traversable)return false;
-            return callbacks_.customLink(a,b,agent);
-        }
+        if(agent.traversal==CaveTraversal::Custom&&callbacks_.customLink &&
+           !callbacks_.customLink(a,b,agent))
+            return false;
         const auto from=sample(a,agent),to=sample(b,agent);
         if(!from.traversable||!to.traversable)return false;
         if(agent.traversal==CaveTraversal::Ground &&
