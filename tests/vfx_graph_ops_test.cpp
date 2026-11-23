@@ -194,6 +194,20 @@ int main() {
     require(call("texture_graph_bake_set",tex).has("error"),"PBR set overwrite accepted");
     require(!fs::exists(root/"content"/"textures"/".fixture_set.stage"),"PBR staging leaked");
 
+    auto instance=tex;
+    instance.member("graph").set("parameters",Json::parse(R"({"roughness":{"default":0.5,"bindings":[{"node":"rough","property":"value"}]}})"));
+    instance.set("output",Json::string("metallicRoughness"));
+    instance.set("overrides",Json::parse(R"({"roughness":0.25})"));
+    const auto variantPixels=call("texture_graph_preview",instance);
+    require(variantPixels.getStr("rgbaHex").substr(0,8)=="ff40ffff","parameter override not evaluated");
+    require(call("texture_graph_preview",instance).getBool("cacheHit"),"identical resolved preview cache miss");
+    instance.set("overrides",Json::parse(R"({"roughness":0.75})"));
+    require(call("texture_graph_preview",instance).getStr("rgbaHex").substr(0,8)=="ffbfffff","parameter cache returned stale pixels");
+    instance.set("overrides",Json::parse(R"({"roughness":2})"));
+    require(call("texture_graph_preview",instance).has("error"),"invalid override accepted");
+    require(fs::is_regular_file(root/"content"/"textures"/"fixture_set"/"texture-set.json"),"bake provenance missing");
+    require(call("texture_graph_cache",Json::parse(R"({"clear":true})")).getInt("entries")==0,"cache clear failed");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
