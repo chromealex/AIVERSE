@@ -93,6 +93,9 @@ Json StudioGameSurface::ecologyState(){
                 Json row=Json::object();
                 row.set("x",Json::number(p.anchor.xCm));row.set("z",Json::number(p.anchor.zCm));
                 row.set("fallen",Json::fromBool(p.fallen));
+                row.set("ageTicks",Json::string(std::to_string(p.environment.ageTicks)));
+                row.set("matureTicks",Json::string(std::to_string(p.environment.matureTicks)));
+                row.set("mature",Json::fromBool(p.environment.ageTicks>=p.environment.matureTicks));
                 row.set("id",Json::string(std::to_string(p.anchor.speciesId)+":"+std::to_string(p.anchor.plantKey)));
                 if(ecology){
                     const terraweave::AnchoredPlantId id{p.anchor.speciesId,p.anchor.plantKey};
