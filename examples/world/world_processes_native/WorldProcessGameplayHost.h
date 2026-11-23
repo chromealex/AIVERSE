@@ -40,6 +40,14 @@ public:
         return attachEvolveClimate(ecs,linkEntity,region,physisCell,
                                   settings,error);
     }
+    // Preferred route: read the authoritative EvolveArea ECS rectangles
+    // hydrated from Studio-authored map positions, instead of manually
+    // maintaining a parallel native host region list.
+    terraweave::ForestEcologyClimateSampler forestClimate(
+            const World& ecs,
+            terraweave::ForestEcologyClimateSampler baseline={})const{
+        return makeEvolveForestClimateSampler(ecs,std::move(baseline));
+    }
     // Feed the actual TerraWeave ForestEcologyClimateSampler; baseline
     // remains the existing PHYSIS/NEREID/biome climate implementation.
     terraweave::ForestEcologyClimateSampler forestClimate(
