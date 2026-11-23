@@ -264,6 +264,8 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
             const auto* loadout=gear(sim,a.slot);
             if(!bag(a.bag,l.type,l.count,size_t(std::min<int64_t>(24,12+(loadout?lib::systems::gearCapacity(config_.gear,*loadout):0)))))continue;
         }
+        if(!reportRegionChange(sim,e,world::RegionDirtyKind::Retire))
+            throw std::logic_error("regionOwnership: dirty loot retire rejected");
         w.destroy(e);return;
     }
     if(vehicleInteract(sim,a))return;
