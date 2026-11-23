@@ -5,6 +5,7 @@
 // No Scene::create/SpatialWorld::add here. No geometry-based game genres.
 #include "engine/world/TerraWeaveCavernsShadowOwners.h"
 #include "engine/world/TerraWeaveCavernsMesh.h"
+#include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -96,5 +97,24 @@ inline CaveCollisionPrepared prepareCaveVolumeCollision(
         body.indices.insert(body.indices.end(),{indices[0],indices[1],indices[2]});
     }
     return out;
+}
+// Convenience contract: generate ONE versioned authoritative surface and
+// derive the physics payload from that EXACT geometry. Visual STRATA may
+// simplify a copy, but gameplay collision must use this unsimplified source.
+struct CaveAuthoritativeTile {
+    CaveMesh surface;
+    CaveCollisionPrepared collision;
+};
+inline CaveAuthoritativeTile prepareCaveAuthoritativeTile(
+    const CaveVolumeSnapshot& snapshot,ChunkKey3 key,
+    uint32_t resolution,int32_t spacingCm,
+    uint32_t userData=0,CaveVolumeCollisionLimits limits={}) {
+    if(!snapshot.sourceRevision||!snapshot.generatorVersion)
+        throw std::invalid_argument("Caverns authoritative snapshot version");
+    CaveAuthoritativeTile result;
+    result.surface=generateCaveSnapshotMesh(snapshot,key,resolution,spacingCm);
+    result.collision=prepareCaveVolumeCollision(result.surface,resolution,
+        spacingCm,snapshot.sourceRevision,userData,limits);
+    return result;
 }
 } // namespace aiverse::terraweave::caverns
