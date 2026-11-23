@@ -175,10 +175,13 @@ Json genericField(const std::string& key,const Json& value) {
 // runtime entity index or an untrusted browser list. Duplicate target IDs fail.
 bool validWorldProcessDocumentRef(const editor::MapDoc& map,std::string_view componentId,
                                   std::string_view field,const Json& value) {
-    if(!lib::worldprocess::linked::isReference(componentId,field))return true;
+    const auto target=lib::worldprocess::extendedLinks::supports(componentId)?
+        lib::worldprocess::extendedLinks::referenceTarget(componentId,field):
+        lib::worldprocess::linked::isReference(componentId,field)?
+        lib::worldprocess::linked::targetType(componentId):std::string_view{};
+    if(target.empty())return true;
     if(!value.isString())return false;
-    if(value.str().empty())return true; // allowed while the component is disabled
-    const auto target=lib::worldprocess::linked::targetType(componentId);
+    if(value.str().empty())return true; // allowed while disabled or unbound
     size_t found=0;
     for(const auto& entity:map.data.entities)
         if(entity.id==value.str() &&
@@ -204,9 +207,11 @@ void validateWorldProcessEntityDeletion(const editor::MapDoc& map,
         const auto& components=map.data.entities[i].extra["components"];
         if(!components.isObject())continue;
         for(const auto& [name,value]:components.members()){
-            if(!lib::worldprocess::linked::supports(name)||!value.isObject())continue;
+            if(!(lib::worldprocess::linked::supports(name)||
+                 lib::worldprocess::extendedLinks::supports(name))||!value.isObject())continue;
             for(const auto& [key,ref]:value.members()){
-                if(!lib::worldprocess::linked::isReference(name,key)||
+                if(!(lib::worldprocess::linked::isReference(name,key)||
+                     lib::worldprocess::extendedLinks::isReference(name,key))||
                    !ref.isString()||!removedIds.count(ref.str()))continue;
                 throw std::runtime_error(
                     "Map object '"+ref.str()+"' is referenced by "+name+
@@ -412,12 +417,15 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     Json field=genericField(key,item);
                     if(authorable) {
                         field.set("editable",Json::fromBool(true));
-                        if(linked&&lib::worldprocess::linked::isReference(name,key)) {
+                        if((linked&&lib::worldprocess::linked::isReference(name,key)) ||
+                           (extendedLinked&&lib::worldprocess::extendedLinks::isReference(name,key))) {
                             Json options=Json::array();
                             Json empty=Json::object();
                             empty.set("label",str("Unassigned"));empty.set("value",str(""));
                             options.push(std::move(empty));
-                            const auto target=lib::worldprocess::linked::targetType(name);
+                            const auto target=extendedLinked?
+                                lib::worldprocess::extendedLinks::referenceTarget(name,key):
+                                lib::worldprocess::linked::targetType(name);
                             for(const auto& candidate:ws_.map.data.entities){
                                 if(candidate.id.empty() ||
                                    !candidate.extra["components"].has(std::string(target)))continue;
@@ -440,6 +448,23 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                     fracture::kMaxBondStrength:aether::kMaxDuctRate;
                                 if(name=="AetherFlux")minimum=-aether::kMaxDuctRate;
                                 if(key=="strength"||key=="intensity")minimum=1;
+                            }
+                            if(extendedLinked){
+                                if(name=="MorphSpring") {
+                                    minimum=key=="stiffness"?0:-morph::kPositionLimit;
+                                    maximum=key=="stiffness"?1000:morph::kPositionLimit;
+                                }else if(name=="MorphForce") {
+                                    minimum=-morph::kForceLimit;maximum=morph::kForceLimit;
+                                }else if(name=="CrowdSlot") {
+                                    minimum=-crowd::kCoord;maximum=crowd::kCoord;
+                                }else if(name=="ImprintLink"||name=="ImprintDeposit")
+                                    maximum=imprint::kMaxRate;
+                                else if(name=="CircuitGate")maximum=3;
+                                else if(name=="GranularSource") {
+                                    minimum=key=="delta"?-granular::kMaxSourceRate:0;
+                                    maximum=key=="delta"?granular::kMaxSourceRate:granular::kMaxDimension-1;
+                                }else if(name=="EvolvePressure")maximum=evolve::kMaxRate;
+                                else if(name=="SocietyContact")maximum=1000;
                             }
                             if(extended){
                                 if(name=="MorphNode"){
@@ -2738,13 +2763,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         throw std::runtime_error("Component is not authored on this object");
                     Json edited=original;
                     for(const auto& [key,value]:values.members()) {
-                        if(!lib::worldprocess::linked::validValue(componentId,key,value) ||
+                        if(!(lib::worldprocess::extendedLinks::supports(componentId)?
+                          lib::worldprocess::extendedLinks::validValue(componentId,key,value):
+                          lib::worldprocess::linked::validValue(componentId,key,value)) ||
                            !validWorldProcessDocumentRef(ws_.map,componentId,key,value))
                             throw std::runtime_error("Invalid linked map reference or value: "+key);
                         edited.set(key,value);
                     }
                     std::string error;
-                    if(!lib::worldprocess::linked::validate(componentId,edited,&error))
+                    if(!(lib::worldprocess::extendedLinks::supports(componentId)?
+                          lib::worldprocess::extendedLinks::validate(componentId,edited,&error):
+                          lib::worldprocess::linked::validate(componentId,edited,&error)))
                         throw std::runtime_error(error);
                     if(edited!=original) {
                         auto candidate=source;
