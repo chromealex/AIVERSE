@@ -183,6 +183,28 @@ static void verifyLiveGameCore() {
     AIVERSE_TEST_CHECK(!regular->serialize().empty());
 }
 
+static void idleRegionSchedulerDoesNotCopyColdState() {
+    auto game=make(true);
+    auto& ecs=game->world();
+    const auto* before=ecs.resourceConst<w::RegionColdStore>();
+    AIVERSE_TEST_CHECK(before);
+    ecs.enableCowSnapshots();
+    SimSnapshot snap;
+    game->saveState(snap);
+    w::RegionDormancyController policy;
+    AIVERSE_TEST_CHECK(policy.registerComponent<fixture::RegionWork>("fixture.region_work",1));
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::step(*game,policy,1)==0);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<w::RegionColdStore>()==before);
+    // A second registration must be rejected before overwriting the owned
+    // ledger or queue, including when the registry has already been sealed.
+    bool rejected=false;
+    try {
+        w::RegionLifecycleRuntime::install(*game,std::move(policy),1);
+    } catch(const std::logic_error&) { rejected=true; }
+    AIVERSE_TEST_CHECK(rejected);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<w::RegionColdStore>()==before);
+}
+
 static void blockedRequestDoesNotLoseActors() {
     auto game=make(true);
     auto& ecs=game->world();
@@ -213,6 +235,7 @@ static void blockedRequestDoesNotLoseActors() {
 }
 
 int main() {
+    idleRegionSchedulerDoesNotCopyColdState();
     blockedRequestDoesNotLoseActors();
     verifyLiveGameCore();
     std::cout<<"PASS real GameCore region lifecycle integration, commands, save and rollback\n";
