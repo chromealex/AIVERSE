@@ -4,6 +4,7 @@
 #include "engine/world/TerraWeaveCavernsEditRuntime.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include "engine/render/TerraWeaveCavernsPreviewPacer.h"
 #include "engine/render/ModelSurfacePicking.h"
 #include "apps/editor/AuthoringComponents.h"
 #include "apps/editor/AuthoringWater.h"
@@ -93,6 +94,13 @@ public:
     std::unique_ptr<terraweave::caverns::CaveEditRuntimeBridge> bridge;
     std::unique_ptr<terraweave::caverns::CaveShardGpuHost> visual;
     uint64_t visualRevision=0,visualAttemptedEpoch=0;
+    terraweave::caverns::CavePreviewPacer visualPacer{30};
+    using ShardKey=terraweave::caverns::CaveShardKey;
+    using ShardGroups=std::map<ShardKey,
+        std::vector<terraweave::caverns::CaveBatchChunk>,
+        terraweave::caverns::CaveShardLess>;
+    ShardGroups visualGroups;
+    std::vector<ShardKey> visualStaged;
     std::string projectDir;
     Json previousJson;
     std::vector<Stamp> previousStamps;
@@ -105,29 +113,79 @@ public:
         if(!visual)return true;
         if(!visual->shutdownAfterGpuIdle(device))return false;
         visual.reset();visualRevision=0;visualAttemptedEpoch=0;
+        visualGroups.clear();visualStaged.clear();visualPacer.reset(0,0);
         return true;
     }
-    // Editor ONLY: visual presentation; never ACK gameplay dirtiness.
+    void cancelPartialPreview() {
+        if(visual)for(auto key:visualStaged)(void)visual->cancel(key);
+        visualGroups.clear();visualStaged.clear();
+        visualPacer.reset(0,0);
+    }
+    // Editor-only visual staging: ONE bounded GeometryScene upload per
+    // renderer frame. Do not ACK gameplay physics/nav dirty requests.
     void stageVisualPreview(Editor& editor) {
         if(!editor.cavernsVisualPreviewEnabled || !bridge ||
            projectDir!=editor.ws().project.dir)return;
         if(visualAttemptedEpoch==epoch)return;
-        const auto candidates=bridge->visualPreviewCandidates();
-        if(candidates.empty())return;
+        if(visualPacer.epoch()!=epoch)cancelPartialPreview();
+        if(visualGroups.empty()) {
+            const auto candidates=bridge->visualPreviewCandidates();
+            if(candidates.empty())return;
+            std::vector<terraweave::caverns::CaveBatchChunk> chunks;
+            chunks.reserve(candidates.size());
+            const uint64_t source=candidates.front().candidate.sourceRevision;
+            for(const auto& item:candidates){
+                const auto& candidate=item.candidate;
+                if(!source || source!=candidate.sourceRevision ||
+                   candidate.sourceRevision!=item.dirty.sourceRevision ||
+                   candidate.mesh.key!=item.dirty.key || !candidate.renderRevision)
+                    throw std::invalid_argument("Caverns visual source revision mismatch");
+                terraweave::caverns::CaveBatchChunk chunk;
+                chunk.mesh=candidate.mesh;
+                chunk.generatorVersion=1;
+                chunk.revision=candidate.renderRevision;
+                chunk.resolution=candidate.resolution;
+                chunk.spacingCm=candidate.spacingCm;
+                chunks.push_back(std::move(chunk));
+            }
+            if(visualRevision==UINT64_MAX)
+                throw std::overflow_error("Caverns visual preview revision");
+            visualGroups=terraweave::caverns::groupCaveEditsByShard(chunks);
+            visualStaged.clear();
+            visualPacer.reset(epoch,visualGroups.size());
+        }
+        const uint64_t frame=editor.device().frameSerial();
+        if(!visualPacer.mayStage(epoch,frame))return;
         if(!visual)visual=std::make_unique<terraweave::caverns::CaveShardGpuHost>();
-        if(visualRevision==UINT64_MAX)
-            throw std::overflow_error("Caverns visual preview revision");
-        const auto next=visualRevision+1;
-        std::vector<terraweave::caverns::CaveShardKey> shards;
+        const auto& group=*std::next(visualGroups.begin(),
+                                    std::ptrdiff_t(visualPacer.completed()));
         terraweave::caverns::CaveBatchSpec spec;
         spec.maxChunks=64;spec.enableStrata=false;
-        if(!visual->stagePreparedEdits(editor.device(),candidates,1,next,shards,spec))
+        try {
+            if(!visual->stage(editor.device(),group.first,group.second,
+                              visualRevision+1,spec)) {
+                visualPacer.failed(frame);
+                editor.cavernsBuildStats.diagnostic=
+                    "Caverns GPU preview deferred (resident budget or stale stage)";
+                return;
+            }
+            visualStaged.push_back(group.first);
+            visualPacer.staged(frame);
+            editor.cavernsBuildStats.diagnostic.clear();
+        } catch(const std::exception& e) {
+            visualPacer.failed(frame);
+            editor.cavernsBuildStats.diagnostic=e.what();
             return;
-        // This confirms only editor VISUAL preview, NOT physics/nav publication.
-        if(!visual->activateVisualOnly(shards))
-            throw std::runtime_error("Caverns visual-only activation rejected");
-        visualRevision=next;
-        visualAttemptedEpoch=epoch;
+        }
+        if(visualPacer.ready(epoch)) {
+            if(!visual->activateVisualOnly(visualStaged)) {
+                cancelPartialPreview();
+                throw std::runtime_error("Caverns visual preview group activation failed");
+            }
+            visualRevision++;
+            visualAttemptedEpoch=epoch;
+            visualGroups.clear();visualStaged.clear();
+        }
     }
     void drawVisualPreview(render::Renderer3D& renderer) {
         if(visual)visual->draw(renderer);
@@ -154,6 +212,7 @@ public:
         }
         const Json& json=editor.doc().data.extra["terraweaveCaverns"];
         if(!initialized || json!=previousJson) {
+            cancelPartialPreview(); // never activate old-epoch GPU candidates
             Volume newVolume=terraweave::caverns::caveSnapshotFromJson(json);
             const auto newStamps=newVolume.stamps;
             const auto newEntrances=newVolume.entrances;
@@ -221,6 +280,22 @@ public:
             editor.cavernsBuildStats.prepared=0;
             editor.cavernsBuildStats.inFlight=0;
         }
+        if(!editor.cavernsVisualPreviewEnabled && !visualStaged.empty())
+            cancelPartialPreview();
+        if(visual){
+            const auto stats=visual->stats();
+            editor.cavernsBuildStats.gpuActive=stats.activeShards;
+            editor.cavernsBuildStats.gpuStaged=stats.pendingShards;
+            editor.cavernsBuildStats.gpuRetired=stats.retiredScenes;
+        }else{
+            editor.cavernsBuildStats.gpuActive=0;
+            editor.cavernsBuildStats.gpuStaged=0;
+            editor.cavernsBuildStats.gpuRetired=0;
+        }
+        editor.cavernsBuildStats.gpuRemaining=visualPacer.remaining();
+        editor.cavernsBuildStats.gpuPreviewRevision=visualRevision;
+        editor.cavernsBuildStats.gpuRetryAfterFrame=visualPacer.retryAfterFrame();
+        editor.cavernsBuildStats.gpuUploadFailures=visualPacer.failures();
         editor.cavernsBuildStats.authorEpoch=epoch;
         editor.cavernsBuildStats.visualCommitConnected=false;
     }
@@ -230,7 +305,8 @@ void Editor::updateCavernsAuthoring() {
     if(!cavernsEditHost_)cavernsEditHost_=std::make_unique<CavernsEditHost>();
     try {
         cavernsEditHost_->update(*this);
-        cavernsBuildStats.diagnostic.clear();
+        // GPU staging diagnostic is cleared on a new successful upload,
+        // not every frame while a failed or deferred GPU owner remains.
     }catch(const std::exception& error){
         cavernsBuildStats.diagnostic=error.what();
     }
