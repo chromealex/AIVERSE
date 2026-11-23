@@ -86,6 +86,32 @@ public:
             return false;
         return actors_.exit(ecs,scene_.host(),sceneId_,actor,feature,floor);
     }
+    // Actor teardown/logout can safely release a rider only at an actually
+    // open landing. During travel the game must retain the actor until
+    // arrival, or fault this scene and reconcile actor lifecycle outside
+    // the component store (no silent passenger-count decrement in motion).
+    bool releaseAtLanding(World& ecs,Entity actor,uint32_t feature){
+        if(!attached_||scene_.faulted()||!ecs.alive(actor)||
+           !scene_.doors().enabled())return false;
+        const auto lift=scene_.host().lifts().find(feature);
+        if(lift==scene_.host().lifts().end()||
+           !scene_.doorsOpenAt(feature,lift->second.snapshot().currentFloor))
+            return false;
+        const auto* marker=ecs.tryGet<BuildingLiftPassenger>(actor);
+        if(!marker||!marker->attached||marker->sceneId!=sceneId_)
+            return false;
+        return actors_.releaseAtLanding(ecs,scene_.host(),actor,feature);
+    }
+    // Safe ordinary scene unload rejects active riders. Forced detach()
+    // remains for authoritative game/world destruction only.
+    bool detachIfVacant(world::SpatialWorld& spatial,nav::Mesh* nav){
+        if(!attached_||!scene_.host().riderBindings().empty())return false;
+        detach(spatial,nav);
+        return true;
+    }
+    bool hasPassengers()const noexcept{
+        return attached_&&!scene_.host().riderBindings().empty();
+    }
     // Call on the authoritative world-owner phase only. Returns an existing
     // transport-ready snapshot ONLY after collision and ECS rider movement
     // have been published successfully, never after an attempted delta.
