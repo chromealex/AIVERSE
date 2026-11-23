@@ -185,6 +185,13 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
         }
     }
     if(changes.empty())return;
+    // This admitted movement is a known canonical owner write. Publish the
+    // changed graph as dirty observations; the subsequent regionOwnership
+    // system still validates/atomically migrates vehicle groups.
+    for(const auto& change:changes)
+        for(Entity member:change.members)
+            if(!reportRegionChange(sim,member,world::RegionDirtyKind::Move))
+                throw std::logic_error("regionOwnership: dirty move queue full");
     auto* mutableQueue=ecs.resource<world::RegionMoveRequests>();
     mutableQueue->applied+=changes.size();
     for(const auto& [id,destination]:admittedRegionMoves_) {
