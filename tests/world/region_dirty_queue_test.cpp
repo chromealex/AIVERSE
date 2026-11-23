@@ -89,6 +89,31 @@ static void testAtomicGroupCapacityAndCoalescing() {
     AIVERSE_TEST_CHECK(q.entries.at(1)==7);
 }
 
+static void testDensePendingArchiveRoundtrip() {
+    // A RegionDirtyQueue entry is exactly 9 bytes on disk, not 17.
+    // This caught an incorrect minimum-stride check when reading a
+    // queue with >=3 pending IDs from native ECS persistence.
+    RegionDirtyQueue source;
+    for(uint32_t i=0;i<1024;++i)
+        AIVERSE_TEST_CHECK(source.mark(Entity{i,0},RegionDirtyKind::Spawn));
+    const auto encoded=save(source);
+    AIVERSE_TEST_CHECK(encoded.size()==4+8+4+1024*9);
+    RegionDirtyQueue loaded;
+    Archive input(encoded);
+    io(input,loaded);
+    AIVERSE_TEST_CHECK(input.ok() && input.remaining()==0);
+    AIVERSE_TEST_CHECK(loaded.entries==source.entries);
+    AIVERSE_TEST_CHECK(save(loaded)==encoded);
+
+    // A truncated multi-entry archive must fail transactionally.
+    const auto truncated=encoded.substr(0,encoded.size()-1);
+    const auto before=save(loaded);
+    Archive bad(truncated);
+    io(bad,loaded);
+    AIVERSE_TEST_CHECK(!bad.ok());
+    AIVERSE_TEST_CHECK(save(loaded)==before);
+}
+
 static void testCowAndRecycledEntityKeys() {
     World world;
     world.enableCowSnapshots();
@@ -113,6 +138,7 @@ static void testCowAndRecycledEntityKeys() {
 }
 int main() {
     testDirtyCoalescingAndArchive();
+    testDensePendingArchiveRoundtrip();
     testAtomicGroupCapacityAndCoalescing();
     testCowAndRecycledEntityKeys();
     std::cout<<"PASS region dirty queue coalescing/archive/COW rollback\n";
