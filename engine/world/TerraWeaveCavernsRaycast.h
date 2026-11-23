@@ -2,7 +2,7 @@
 // Caverns Stage20: finite, deterministic CPU ray intersection with the
 // authored density zero-isosurface. Positive density is cave air.
 // This is a discrete sign-change raycast, not GPU depth readback.
-#include "TerraWeaveCavernsVolumeSnapshot.h"
+#include "TerraWeaveCavernsSdfSpatialIndex.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -19,8 +19,9 @@ struct CaveRayHit {
     int64_t distanceCm=0;
     bool enteringVoid=false;
 };
-inline std::optional<CaveRayHit> raycastCaveSurface(
-    const CaveVolumeSnapshot& snapshot,CaveRayCm ray,
+template<class SampleField>
+inline std::optional<CaveRayHit> raycastCaveSurfaceSampled(
+    SampleField&& sampleField,CaveRayCm ray,
     int64_t maxDistanceCm=10000,int64_t stepCm=50) {
     if(maxDistanceCm<1||maxDistanceCm>100000||stepCm<1||stepCm>1000)
         throw std::invalid_argument("Caverns ray distance/step");
@@ -40,7 +41,7 @@ inline std::optional<CaveRayHit> raycastCaveSurface(
         if(p.x< -kLimitCm||p.x>kLimitCm||
            p.y< -kLimitCm||p.y>kLimitCm||
            p.z< -kLimitCm||p.z>kLimitCm)return false;
-        return caveSnapshotFieldCm(snapshot,p)>0;
+        return sampleField(p)>0;
     };
     int64_t previous=0;
     bool wasVoid=sign(0);
@@ -62,6 +63,22 @@ inline std::optional<CaveRayHit> raycastCaveSurface(
         t+=stepCm;
     }
     return {};
+}
+inline std::optional<CaveRayHit> raycastCaveSurface(
+    const CaveVolumeSnapshot& snapshot,CaveRayCm ray,
+    int64_t maxDistanceCm=10000,int64_t stepCm=50){
+    return raycastCaveSurfaceSampled(
+        [&snapshot](PointCm p){return caveSnapshotFieldCm(snapshot,p);},
+        ray,maxDistanceCm,stepCm);
+}
+// Fast path for an already indexed frozen authored SDF (e.g. TerrainWindow).
+// Uses the EXACT same stepping, zero-crossing and bisection as the original.
+inline std::optional<CaveRayHit> raycastCaveSurface(
+    const CaveSnapshotSpatialIndex& indexed,CaveRayCm ray,
+    int64_t maxDistanceCm=10000,int64_t stepCm=50){
+    return raycastCaveSurfaceSampled(
+        [&indexed](PointCm p){return indexed.field(p);},
+        ray,maxDistanceCm,stepCm);
 }
 // Dabs affecting a chunk must update all neighbors touched by the volume +
 // at least a gradient halo. Chunk span is resolution * spacing in cm.
