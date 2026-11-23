@@ -100,6 +100,7 @@ public:
         std::vector<terraweave::caverns::CaveBatchChunk>,
         terraweave::caverns::CaveShardLess>;
     ShardGroups visualGroups;
+    std::unique_ptr<terraweave::caverns::CaveMixedLodShardBatch> visualPlan;
     std::vector<ShardKey> visualStaged;
     std::string projectDir;
     Json previousJson;
@@ -113,12 +114,12 @@ public:
         if(!visual)return true;
         if(!visual->shutdownAfterGpuIdle(device))return false;
         visual.reset();visualRevision=0;visualAttemptedEpoch=0;
-        visualGroups.clear();visualStaged.clear();visualPacer.reset(0,0);
+        visualGroups.clear();visualPlan.reset();visualStaged.clear();visualPacer.reset(0,0);
         return true;
     }
     void cancelPartialPreview() {
         if(visual)for(auto key:visualStaged)(void)visual->cancel(key);
-        visualGroups.clear();visualStaged.clear();
+        visualGroups.clear();visualPlan.reset();visualStaged.clear();
         visualPacer.reset(0,0);
     }
     // Editor-only visual staging: ONE bounded GeometryScene upload per
@@ -152,25 +153,38 @@ public:
             if(visualRevision==UINT64_MAX)
                 throw std::overflow_error("Caverns visual preview revision");
             visualGroups=terraweave::caverns::groupCaveEditsByShard(chunks);
+            if(!visual)
+                visual=std::make_unique<terraweave::caverns::CaveShardGpuHost>();
+            auto plan=terraweave::caverns::planCaveMixedLodShardBatch(
+                visual->catalog(),visualGroups,visualRevision+1);
+            if(!plan.ready()){
+                const auto repairs=plan.visual.rebuild;
+                cancelPartialPreview();
+                if(!repairs.empty())(void)bridge->requestLodRepairs(repairs);
+                editor.cavernsBuildStats.diagnostic=
+                    "Caverns LOD contours: rebuilding shared SDF lattice";
+                return;
+            }
+            visualPlan=std::make_unique<terraweave::caverns::CaveMixedLodShardBatch>(
+                std::move(plan));
             visualStaged.clear();
-            visualPacer.reset(epoch,visualGroups.size());
+            visualPacer.reset(epoch,visualPlan->snapshots.size());
         }
         const uint64_t frame=editor.device().frameSerial();
         if(!visualPacer.mayStage(epoch,frame))return;
-        if(!visual)visual=std::make_unique<terraweave::caverns::CaveShardGpuHost>();
-        const auto& group=*std::next(visualGroups.begin(),
-                                    std::ptrdiff_t(visualPacer.completed()));
+        if(!visual||!visualPlan)return;
+        const auto& snapshot=visualPlan->snapshots.at(visualPacer.completed());
         terraweave::caverns::CaveBatchSpec spec;
         spec.maxChunks=64;spec.enableStrata=false;
         try {
-            if(!visual->stage(editor.device(),group.first,group.second,
-                              visualRevision+1,spec)) {
+            if(!visual->stagePlannedShard(editor.device(),snapshot,
+                                          visualPlan->visual,spec)) {
                 visualPacer.failed(frame);
                 editor.cavernsBuildStats.diagnostic=
                     "Caverns GPU preview deferred (resident budget or stale stage)";
                 return;
             }
-            visualStaged.push_back(group.first);
+            visualStaged.push_back(snapshot.shard);
             visualPacer.staged(frame);
             editor.cavernsBuildStats.diagnostic.clear();
         } catch(const std::exception& e) {
@@ -185,7 +199,7 @@ public:
             }
             visualRevision++;
             visualAttemptedEpoch=epoch;
-            visualGroups.clear();visualStaged.clear();
+            visualGroups.clear();visualPlan.reset();visualStaged.clear();
         }
     }
     void drawVisualPreview(render::Renderer3D& renderer) {
