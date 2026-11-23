@@ -34,3 +34,6 @@ Repository: `chromealex/AIVERSE`. Branch: `feature/terraweave-caverns-core-20261
 4. Actual `GeometryScene`/STRATA, SpatialWorld, Box3D and NavMesh atomic commit, retirement fences and rollback remain missing. Worker acceptance is only CPU preparation.
 5. Explicitly version serialization and metadata fingerprint for all settings/stamps/entrances. Current validation sorts by IDs, but does not compute a cross-platform save hash or implement persistence.
 6. Keep skill and dedicated dated handoff after every stage. No main merge before real compiler/CTest and integration evidence.
+
+## Post-handoff source correction
+- `c2e73b39c660734d7a564eb11aeff03be4504aa7`: repaired another literal escaped newline between `#include <cstdint>` and `#include <array>` in `TerraWeaveCavernsSeamGate.h`. This is a source fix, not proof of compilation; Stage18 C++ tests remain NOT RUN.
