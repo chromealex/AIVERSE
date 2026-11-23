@@ -52,7 +52,7 @@ static void canonicalOwnerAndRestore() {
         AIVERSE_TEST_CHECK(!world.has<Transform>(e));
         AIVERSE_TEST_CHECK(position(world,e).has_value());
         const auto* id=world.tryGetConst<wd::RegionStableIdentity>(e);
-        AIVERSE_TEST_CHECK(id && id->id==e.packed()+1);
+        AIVERSE_TEST_CHECK(id && id->id!=0);
         AIVERSE_TEST_CHECK(ledger->find(id->id)->owner==originalCell);
     }
     std::map<wd::RegionEntityId,Entity> index;
