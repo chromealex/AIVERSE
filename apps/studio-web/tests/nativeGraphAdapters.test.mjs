@@ -130,3 +130,24 @@ test('texture recipe is bounded and requests native no-overwrite generation',()=
  assert.throws(()=>textureRecipeParams({...recipe,size:4096},['brick']));
  assert.throws(()=>textureRecipeParams({...recipe,pattern:'unknown'},['brick']));
 });
+
+import {parseStrataAnalysis,strataReportGraph} from '../src/graphs/strataAnalysis.ts';
+import {inspectGraph} from '../src/graphs/graphDiagnostics.ts';
+test('STRATA report retains native CPU metrics and rejects incomplete results',()=>{
+ const result={ok:true,eligiblePrimitives:2,clusterNodes:16,meshlets:8,auxiliaryIndexBytes:2048,seamCertifiedPrimitives:2,seamRejectedParents:1,sharedBoundarySegments:3,sourceSeamsCertified:true,skipped:[{mesh:0,primitive:1,reason:'animated'}],note:'CPU only'};
+ const report=parseStrataAnalysis(result);
+ assert.equal(report.clusterNodes,16);assert.equal(report.auxiliaryIndexBytes,2048);
+ assert.equal(strataReportGraph(report).nodes.length,6);
+ assert.throws(()=>parseStrataAnalysis({...result,meshlets:-1}));
+ assert.throws(()=>parseStrataAnalysis({ok:true}));
+});
+test('diagnostics honor separate execution and data cycle rules',()=>{
+ const port=(id,type)=>({id,type});
+ const nodes=['a','b'].map(id=>({id,label:id,x:0,y:0,inputs:[port('exec','exec'),port('data','data')],outputs:[port('exec','exec'),port('data','data')]}));
+ const links=[{id:'1',from:'a',to:'b',output:'exec',input:'exec'},{id:'2',from:'b',to:'a',output:'data',input:'data'}];
+ assert.equal(inspectGraph({nodes,links},{cycles:'reject',cycleGroups:['exec','data']}).issues.length,0);
+ assert.equal(inspectGraph({nodes,links},{cycles:'reject'}).issues.some(i=>i.code==='cycle'),true);
+ const loop=[...links,{id:'3',from:'b',to:'a',output:'exec',input:'exec'}];
+ assert.equal(inspectGraph({nodes,links:loop},{cycles:'reject',cycleGroups:['exec','data']}).issues.some(i=>i.code==='cycle'&&i.subject==='exec'),true);
+ assert.equal(inspectGraph({nodes,links:loop},{cycles:'allow'}).issues.some(i=>i.code==='cycle'),false);
+});
