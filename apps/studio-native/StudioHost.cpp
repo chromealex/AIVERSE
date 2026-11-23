@@ -959,8 +959,15 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                     map.data.entities[std::size_t(ownerIndex)],handle,
                     ground,value);
                 if(wpDrag_.valid){
-                    if(wpDrag_.component=="EvolveArea"&&wpDrag_.snap)
-                        value=std::round(value/100.f)*100.f;
+                    if(wpDrag_.component=="EvolveArea"&&wpDrag_.snap){
+                        // Nearby authored region boundaries take precedence
+                        // over the 1m grid. No other object's data is changed.
+                        const auto snap=worldprocess_edit::snapNeighborEdge(
+                            map,map.data.entities[std::size_t(ownerIndex)],
+                            handle.mode,value,100.f);
+                        if(snap.found)value=snap.valueCm;
+                        else value=std::round(value/100.f)*100.f;
+                    }
                     wpDrag_.value=value;
                     wpDrag_.previewPoint=ground;
                 }
