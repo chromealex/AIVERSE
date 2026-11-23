@@ -1,13 +1,15 @@
 #pragma once
 #include "ActorModule.h"
+#include "ActorDurableProjectile.h"
 #include "engine/vehicles/DurableVehicleComponents.h"
+#include "engine/vehicles/DurableRaceState.h"
 #include "engine/world/UnifiedEntitySection.h"
 #include <set>
 
 namespace aiverse::actor {
 // Portable ECS projection of materialized region actors. The normal native
 // save/network serializers remain unchanged. This is not a full match save:
-// projectiles, match resources and host config require separate policies.
+// host configuration, additional gameplay resources and runtime publication require explicit policies.
 class ActorDurableComponents {
     using Codecs=world::DurableComponentCodecs;
     using Context=Codecs::Context;
@@ -54,6 +56,8 @@ public:
         })&&c.addTyped<lib::systems::GearLoadout>("aiverse.actor.gear")
           &&c.addTyped<Loot>("aiverse.actor.loot")
           &&c.addTyped<Vehicle>("aiverse.actor.vehicle")
+          &&c.addContextual<Projectile>("aiverse.actor.projectile",1,
+            [](Archive& a,Projectile& p,const World&,const Context&){return ioDurableProjectile(a,p);})
           &&c.addTyped<world::RegionDormant>("aiverse.world.region_dormant")
           &&vehicles::registerDurableVehicleComponents(c)
           &&c.addRebuilder(rebuildDerived)
@@ -71,6 +75,7 @@ public:
     // ECS World. Do not register this into a sealed rollback registry.
     static void registerResources(PersistentEcsRegistry& registry){
         registry.registerResource<State>("aiverse.actor.match_state",1);
+        registry.registerContextualResource<vehicles::RaceState,vehicles::ioDurableRaceState>("aiverse.vehicles.race_state",1);
         registry.registerResource<world::RegionMoveRequests>("aiverse.world.region_move_requests",
             world::RegionMoveRequests::kSchema);
         registry.registerResource<world::RegionDirtyQueue>("aiverse.world.region_dirty_queue",
@@ -87,14 +92,12 @@ public:
     }
     static world::DurableResourceTransaction::Policy resourcePolicy(const PersistentEcsRegistry& registry){
         return {&registry,{"aiverse.actor.match_state","aiverse.world.region_dirty_queue",
-            "aiverse.world.region_move_requests"}};
+            "aiverse.world.region_move_requests","aiverse.vehicles.race_state"}};
     }
-    // A complete actor runtime cannot yet be reconstructed if it contains
-    // projectile or race state. Reject rather than silently dropping it.
+    // The portable actor projection requires a drained runtime notification queue.
     static bool supportedWorld(const World& w){
         const auto* dirty=w.resourceConst<world::RegionDirtyQueue>();
-        return !w.countExisting<Projectile>()&&!w.resourceConst<vehicles::RaceState>()&&
-            w.resourceConst<State>()&&dirty&&dirty->entries.empty()&&w.resourceConst<world::RegionMoveRequests>();
+        return w.resourceConst<State>()&&dirty&&dirty->entries.empty()&&w.resourceConst<world::RegionMoveRequests>();
     }
 
     // A region actor's slot index is derived from its restored components.
@@ -123,11 +126,13 @@ public:
             const auto* character=w.tryGetConst<CharacterId>(e);
             const auto* car=w.tryGetConst<Vehicle>(e);
             const auto* loot=w.tryGetConst<Loot>(e);
-            if(unsigned(character!=nullptr)+unsigned(car!=nullptr)+unsigned(loot!=nullptr)!=1)return false;
+            const auto* shot=w.tryGetConst<Projectile>(e);
+            if(unsigned(character!=nullptr)+unsigned(car!=nullptr)+unsigned(loot!=nullptr)+unsigned(shot!=nullptr)!=1)return false;
             if(car){if(!car->id||!objectIds.insert(car->id).second)return false;cars.emplace(car->id,e);}
             if(loot&&(!loot->id||!objectIds.insert(loot->id).second))return false;
+            if(shot&&(!shot->id||!objectIds.insert(shot->id).second||!shot->owner||shot->owner>index.bySlot.size()))return false;
         }
-        if(ledger.liveCount()!=w.countExisting<CharacterId>()+w.countExisting<Vehicle>()+w.countExisting<Loot>())return false;
+        if(ledger.liveCount()!=w.countExisting<CharacterId>()+w.countExisting<Vehicle>()+w.countExisting<Loot>()+w.countExisting<Projectile>())return false;
         w.eachExistingConst<CharacterBody>([&](Entity e,const CharacterBody& body){
             if(!w.has<CharacterId>(e)||(body.vehicle&&!cars.contains(body.vehicle)))ok=false;
         });
