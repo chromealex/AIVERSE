@@ -42,6 +42,14 @@ bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
     return reportRegionChange(sim,entity,world::RegionDirtyKind::Move);
 }
 
+void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
+    auto& ecs=sim.world();
+    ecs.eraseResource<RegionSeatIndex>();
+    ecs.resetComponentChanges<CharacterBody>();
+    ecs.resetComponentChanges<Vehicle>();
+    ecs.resetComponentChanges<Loot>();
+}
+
 void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     auto& ecs=sim.world();
     const World& view=ecs;
