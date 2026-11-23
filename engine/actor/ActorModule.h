@@ -176,6 +176,9 @@ public:
     // Does not replace legacy full-pool scanning until every writer migrates.
     bool reportRegionChange(Simulation& sim,Entity entity,
                             world::RegionDirtyKind kind);
+    // Hot owner callback: mark Move only when the canonical position crosses
+    // the actor's current stable ledger cell. Avoid per-frame dirty churn.
+    bool reportRegionMoveIfCrossed(Simulation& sim,Entity entity);
     // Authoritative host-only staged movement. The destination is requested
     // BEFORE a simulation tick; collision/nav admission runs in readyToStep.
     bool requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
