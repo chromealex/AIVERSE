@@ -1126,6 +1126,26 @@ prompts, assets, or identity. Continue useful project work regardless of whether
   Report actual coverage and unverified platforms; do not describe routing or
   isolation requirements as completed implementations without evidence.
 
+## World Processes skill routing (10 genre-neutral capabilities)
+
+When implementing ECHO, FRACTURE, AETHER, MORPH, CROWD, IMPRINT, CIRCUIT,
+GRANULAR, EVOLVE or SOCIETY, first select the matching repository skill
+`skills/world/aiverse-<mechanic>/SKILL.md`. For cross-system work consult
+`skills/world/aiverse-world-processes/SKILL.md` as the shared router.
+All eleven skills are registered in the **canonical generated**
+`skills/catalog.json` through `tools/skills/catalog.py`; never create a
+second manually maintained skill index. Search examples:
+`python3 tools/skills/catalog.py search "acoustic portal"` and
+`python3 tools/skills/catalog.py plan --skills aiverse-circuit,aiverse-society --side both`.
+
+These are gameplay recipes for existing opt-in native ECS capabilities
+(`runtime: none`, not imaginary per-system CMake targets). Respect
+existing PHYSIS/Box3D/TerraWeave/NavMesh/Renderer3D/game-AI ownership,
+and read actual API and latest per-stage handoff before adding code.
+The world-processes experimental PR #112 remains DRAFT: new stages have
+not been accepted by a current full native build, replay and visual QA.
+Do not infer a passing stage from a committed source file.
+
 ## Skill orchestration and isolated builds
 
 Start cross-subsystem tasks with `skills/workflow/aiverse-orchestrator/SKILL.md` and
