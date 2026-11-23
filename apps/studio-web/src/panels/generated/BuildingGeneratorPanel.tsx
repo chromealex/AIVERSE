@@ -339,7 +339,7 @@ export default function BuildingGeneratorPanel({
                 <StudioInput id={"abg-feature-"+i+"-depth"} type="number" min={1} step={0.1} value={String(feature.depth)} disabled={busy}
                   onChange={e=>setFeature(i,'depth',Number(e.target.value))}/>
               </StudioField>:<StudioField label="Clear height, m" htmlFor={"abg-feature-"+i+"-height"}>
-                <StudioInput id={"abg-feature-"+i+"-height"} type="number" min={2} step={0.1} value={String(feature.height)} disabled={busy}
+                <StudioInput id={"abg-feature-"+i+"-height"} type="number" min={feature.kind==='window'?0.4:2} step={0.1} value={String(feature.height)} disabled={busy}
                   onChange={e=>setFeature(i,'height',Number(e.target.value))}/>
               </StudioField>}
               <StudioField label={feature.kind==='sliding-roof'?'Roof centre X, m (-1 auto)':'Wall centre, m (-1 auto)'} htmlFor={"abg-feature-"+i+"-position"}>
