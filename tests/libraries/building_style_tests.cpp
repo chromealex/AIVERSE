@@ -112,6 +112,51 @@ int main(int argc,char** argv){
                 CHECK(dressStructure(st,kind.id,seed,{},1).mesh.triangles()==dressStructure(st,kind.id,seed,{},0).mesh.triangles());
             }
         }
+        // Stage 3: functional geometry comes from bounded declarative forms.
+        // Every role has some authored silhouette components, and turning them
+        // off removes real geometry/collision, not merely changing materials.
+        for(const auto& kind:st.structures){
+            CHECK(!kind.forms.empty());
+            auto onlyCore=st;
+            for(auto& entry:onlyCore.structures)if(entry.id==kind.id)entry.forms.clear();
+            auto withForms=dressStructure(st,kind.id,5);
+            auto core=dressStructure(onlyCore,kind.id,5);
+            CHECK(withForms.mesh.vertices.size()>core.mesh.vertices.size());
+            CHECK(withForms.mesh.triangles()>core.mesh.triangles());
+            CHECK(withForms.boxes.size()>core.boxes.size());
+            CHECK(withForms.mesh.triangles()<20000);
+            for(uint64_t seed:{1u,5u,19u})for(uint32_t turn=0;turn<4;++turn){
+                auto one=dressStructure(st,kind.id,seed,{},turn,StructureSize{28.f,15.f,24.f});
+                auto two=dressStructure(st,kind.id,seed,{},turn,StructureSize{28.f,15.f,24.f});
+                CHECK(one.mesh.vertices.size()==two.mesh.vertices.size()&&one.mesh.parts.size()==two.mesh.parts.size());
+                CHECK(one.boxes==two.boxes&&one.gates==two.gates);
+                CHECK(one.mesh.triangles()<20000);
+                for(size_t i=0;i<one.mesh.vertices.size();++i){
+                    for(int j=0;j<3;++j)CHECK(std::abs(one.mesh.vertices[i].pos[j]-two.mesh.vertices[i].pos[j])<1e-6f);
+                }
+            }
+        }
+        // The four primitive kinds must all be exercised in shipped data.
+        bool found[4]={false,false,false,false};
+        for(const auto& kind:st.structures)for(const auto& form:kind.forms)
+            found[int(form.kind)]=true;
+        for(bool exists:found)CHECK(exists);
+        const auto withShape=R"({"id":"x","materials":{"m":{}},"shell":"m","interior":"m","roof":"m","structure":{"hull":"m","dark":"m"},"structures":{"x":{"forms":[{"kind":"silo","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2],"level":0.3}]}}})";
+        auto fromData=readBuildingStyle(Json::parse(withShape));
+        CHECK(fromData.structureKind("x")&&fromData.structureKind("x")->forms.size()==1);
+        CHECK(dressStructure(fromData,"x",1).mesh.triangles()>0);
+        auto invalidForm=[](const std::string& form,const std::string& why) {
+            const std::string json="{\"id\":\"x\",\"materials\":{\"m\":{}},\"shell\":\"m\",\"interior\":\"m\",\"roof\":\"m\",\"structure\":{\"hull\":\"m\",\"dark\":\"m\"},\"structures\":{\"x\":{\"forms\":["+form+"]}}}";
+            try{(void)readBuildingStyle(Json::parse(json));}
+            catch(const JsonError& e){return std::string(e.what()).find(why)!=std::string::npos;}
+            return false;
+        };
+        CHECK(invalidForm(R"({"kind":"orb","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2]})",".kind: expected"));
+        CHECK(invalidForm(R"({"kind":"silo","material":"unknown","at":[0.5,0.5],"size":[0.2,0.6,0.2]})",".material: unknown"));
+        CHECK(invalidForm(R"({"kind":"silo","material":"m","at":[0.5],"size":[0.2,0.6,0.2]})",".at: expected array"));
+        CHECK(invalidForm(R"({"kind":"silo","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2],"chance":1.2})","outside supported bounds"));
+        CHECK(invalidForm(R"({"kind":"silo","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2],"repeat":2.5})",".repeat: expected integer"));
+        CHECK(invalidForm(R"({"kind":"silo","material":"m","at":[0.5,0.5],"size":[0.2,0.6,0.2],"repeat":8,"step":[0.8,0]})",".step: repeated form escapes"));
         CHECK(dressStructure(st,"nope",1).mesh.vertices.empty());
         // Data-driven silhouettes distinguish functions without hardcoded game genres.
         CHECK(st.structureKind("barracks")->massing==StructureMassing::Bastion);
