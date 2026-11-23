@@ -813,7 +813,8 @@ void StudioHost::rebuildOverlay() {
                        session_->workspace().map,pivotSelection,
                        wpNumericPreview_["scaleNumerator"].integer(),100,
                        wpNumericPreview_["scaleNumeratorZ"].integer(),100,
-                       pivotX,pivotZ,numeric) &&
+                       pivotX,pivotZ,numeric,
+                       wpNumericPreview_.getStr("pivot")=="individual") &&
                    shapes.size()+numeric.size()*4+2<1390){
                     for(const auto& region:numeric)
                         worldprocess_gizmos::rectangle(shapes,
@@ -908,7 +909,8 @@ void StudioHost::rebuildOverlay() {
                                 session_->workspace().map,selected,
                                 newX,oldX,newZ,oldZ,
                                 std::llround(double(pivot.x)*100.),
-                                std::llround(double(pivot.z)*100.),group) &&
+                                std::llround(double(pivot.z)*100.),group,
+                                wpDrag_.symmetric) &&
                                shapes.size()+group.size()*4+2<1390){
                                 for(const auto& region:group)
                                     worldprocess_gizmos::rectangle(shapes,
