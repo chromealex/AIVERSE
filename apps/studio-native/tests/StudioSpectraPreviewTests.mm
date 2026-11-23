@@ -43,6 +43,13 @@ int aiverseMain(int,char**) { @autoreleasepool {
         for(int i=0;i<3;++i)frame();
         state=scene.spectraPreviewCommand(action("status"),"");
         require(state.getInt("tick")==3,"native frame advanced preview exactly once");
+        // A malformed edit must not dispose the last-known-good GPU/CPU
+        // preview, and a failed load must report compiler diagnostics.
+        Json invalid=action("load");
+        invalid.set("graph",Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})"));
+        const Json rejected=scene.spectraPreviewCommand(invalid,"");
+        require(rejected.getBool("ready") && !rejected.getStr("error").empty(),
+                "invalid graph destroyed a working preview or hid diagnostics");
         scene.spectraPreviewCommand(action("pause"),"");
         frame();
         require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==3,
@@ -64,6 +71,12 @@ int aiverseMain(int,char**) { @autoreleasepool {
         });
         for(int i=0;i<10&&!captured;++i){frame();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
         require(captured&&valid,"actual native Scene GPU frame capture failed");
+        Json longSeek=action("seek");longSeek.set("tick",Json::number(int64_t(100)));
+        scene.spectraPreviewCommand(longSeek,"");
+        scene.spectraPreviewCommand(action("pause"),"");
+        frame();
+        require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==25,
+                "Pause failed to cancel unfinished seek");
         const Json restart=scene.spectraPreviewCommand(action("restart"),"");
         require(restart.getInt("tick")==0,"restart resets tick");
         frame();
