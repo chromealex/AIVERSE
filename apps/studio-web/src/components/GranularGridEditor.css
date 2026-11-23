@@ -1,0 +1,15 @@
+/* Shared Studio tokens; no independent panel theme or fake render. */
+.granular-grid { display: grid; gap: var(--au-space-2); padding: var(--au-space-2); border: 1px solid var(--au-line); border-radius: var(--au-radius-sm); }
+.granular-grid__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--au-space-1); }
+.granular-grid__controls label { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--au-space-1); font-size: var(--au-font-xs); color: var(--au-text-soft); }
+.granular-grid__controls .au-input { min-width: 40px; width: 60px; flex: 1; }
+.granular-grid__tool { background: var(--au-field); color: var(--au-text-soft); border: 1px solid var(--au-line); border-radius: var(--au-radius-sm); font-size: var(--au-font-xs); padding: var(--au-space-1) var(--au-space-2); cursor: pointer; }
+.granular-grid__tool.is-selected { background: var(--au-active); color: var(--au-accent-ink); border-color: var(--au-accent); }
+.granular-grid__tool:focus-visible,.granular-grid__cell:focus-visible { outline: none; box-shadow: var(--au-focus); }
+.granular-grid__cells { display: grid; gap: 1px; min-width: 0; background: var(--au-line); border: 1px solid var(--au-line); border-radius: var(--au-radius-xs); overflow: hidden; }
+.granular-grid__cell { min-width: 0; aspect-ratio: 1; padding: 0; border: 0; color: var(--au-text); background: var(--au-field); cursor: crosshair; font-size: var(--au-font-xs); }
+.granular-grid__cell.is-filled { background: var(--au-accent-strong); }
+.granular-grid__cell.is-wall { background: var(--au-text-faint); }
+.granular-grid__cell:disabled,.granular-grid__tool:disabled { opacity: .65; cursor: not-allowed; }
+.granular-grid__hint,.granular-grid__error { font-size: var(--au-font-xs); color: var(--au-text-muted); }
+.granular-grid__error { color: var(--au-danger); }
