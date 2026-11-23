@@ -1,0 +1,12 @@
+# Shared Graph Framework — stage 20 — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Implementation HEAD: 78a3e5ed69fa80084e932d647ffdcec425c900f2
+
+Added opt-in live selected common MotionWeave CPU profile. View owns one selection pinned by world epoch, source generation, presentation entity and program publication. Default preparation clone disables profiling; selected View explicitly deep-copies counters/trace into its candidate, maintaining separate reserved storage. Failed preparation cannot publish measurements. Before worker execution mismatched, restarting or removed source drops selection; existing ECS evaluator begins a trace on actual update, preserves pose budget. Native Editor routes graph_live_profile enable/read/reset/disable through live entity check and committed FramePublicationEpoch; stop/restart clear instrumentation and watch. Studio provides controls and read-only live report, no mapping to unrelated draft. No GPU, live gameplay pause, second evaluator, remote host, or separate HTML5 live-owner integration.
+
+Changed paths: engine/render/graph/GraphExecutionProfile.h, engine/render/{AnimationGraph.h,AnimationGraph.cpp}, engine/animation/EcsAnimationSystems.h, engine/view/View.h, engine/view/game/{GameView.h,GameView.cpp}, apps/editor/{Editor.cpp,EditorPlayOps.cpp}, apps/editor/core/GraphOps.h, apps/studio-native/StudioTools.h, apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx, tools/mcp/audit_registry.py, tests/{view/view.cpp,vfx_graph_ops_test.cpp}, docs/features/graph-framework.json, docs/agents/graph-framework.md, skills/workflow/aiverse-graph-authoring/SKILL.md.
+
+Verification: NOT RUN. GitHub source writes confirmed; existing owner and candidate publication contracts inspected. Regression fixtures cover selected clone isolation, cumulative counters, world mismatch, reset/clear, source replacement, unavailable headless host. No C++ or TypeScript compile, CTest, real live editor capture, profiling performance/overhead measurement, GPU QA, CI or Mac merged-tree gate. No main merge. Main policy PR #122 reconciliation and MotionWeave owner coordination remain required.
+
+Next: inspect actual RHI scope timing providers and existing shader/FX owners; expose measured GPU scope timings only where real native queries and identity exist. Finish procedural texture graphs, generator integrations and asset graph template/catalog authoring; no unsupported GPU per-node timing claims. Verify compilation and full suite in actual checkout before main merge.
