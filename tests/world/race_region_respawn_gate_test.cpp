@@ -54,6 +54,33 @@ int main() {
         {60_fx,1_fx,0_fx},{320_fx,1_fx,0_fx}};
     AIVERSE_TEST_CHECK(race.possibleRespawnPositions(world)==expectedNext);
 
+    // Bounded admission retains the current known respawn even when the
+    // next checkpoint is far away. If controller state is unavailable,
+    // it fails closed by retaining both candidates.
+    AIVERSE_TEST_CHECK(race.imminentRespawnPositions(world,20_fx)==expectedNext);
+    auto& controller=world.add<v::VehicleDrive>(rs.racers.front());
+    controller.type=1;
+    lm::VehicleControllerDef definition;
+    controller.controller=lm::makeVehicleState(
+        definition,{64_fx,1_fx,-100_fx},Fixed{});
+    state=world.resource<v::RaceState>();
+    auto& history=state->session.race.racers.at(1);
+    history.seen=true;
+    history.last=controller.controller.position;
+    const std::vector<Vec3> onlyCurrent{{60_fx,1_fx,0_fx}};
+    AIVERSE_TEST_CHECK(race.imminentRespawnPositions(world,20_fx)==onlyCurrent);
+    // Approach the gate aperture: next checkpoint becomes possible.
+    world.get<v::VehicleDrive>(rs.racers.front()).controller.position=
+        {324_fx,1_fx,-3_fx};
+    state->session.race.racers.at(1).last=
+        world.get<v::VehicleDrive>(rs.racers.front()).controller.position;
+    AIVERSE_TEST_CHECK(race.imminentRespawnPositions(world,20_fx)==expectedNext);
+    // An externally changed pose with stale last sample remains conservative.
+    state->session.race.racers.at(1).last={64_fx,1_fx,-100_fx};
+    AIVERSE_TEST_CHECK(race.imminentRespawnPositions(world,20_fx)==expectedNext);
+    // Turning pruning off is the previous full-candidate behavior.
+    AIVERSE_TEST_CHECK(race.imminentRespawnPositions(world,Fixed{})==expectedNext);
+
     // After all checkpoints this lap, there is no extra next-gate point.
     state->session.race.route.racers.at(1).nextGate=2;
     const std::vector<Vec3> last{{320_fx,1_fx,0_fx}};
