@@ -175,6 +175,14 @@ public:
                     "Курсор: поверхность пещеры не найдена");
                 const Json& saved=ed.doc().data.extra["terraweaveCaverns"];
                 ui::hint(("SDF-операций: "+std::to_string(saved["stamps"].size())).c_str());
+                const auto& jobs=ed.cavernsBuildStats;
+                ui::hint(("CPU mesh: ожидание "+std::to_string(jobs.pending)+
+                          ", готово "+std::to_string(jobs.prepared)+
+                          ", выполняется "+std::to_string(jobs.inFlight)).c_str());
+                ui::hint("GPU/STRATA и Box3D/NavMesh ещё НЕ обновляются: "
+                         "требуется безопасный owner commit.");
+                if(!jobs.diagnostic.empty())
+                    ui::hint(("Caverns: "+jobs.diagnostic).c_str());
                 if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
                     Json p=Json::object();
                     p.set("mode",Json::string(caveAction_==0?"carve":"fill"));
