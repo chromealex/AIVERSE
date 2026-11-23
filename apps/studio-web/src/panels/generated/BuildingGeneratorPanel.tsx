@@ -82,6 +82,10 @@ export default function BuildingGeneratorPanel({
   const [checkingMaterials,setCheckingMaterials]=useState(false);
   const [regeneratingRecipe,setRegeneratingRecipe]=useState('');
   const [autoRegenerate,setAutoRegenerate]=useState(false);
+  const [savedRecipes,setSavedRecipes]=useState<string[]>([]);
+  const [sourceRecipe,setSourceRecipe]=useState('');
+  const [readingRecipe,setReadingRecipe]=useState(false);
+
   const regeneratedThisSession=useRef(new Set<string>());
   useEffect(()=>{
     regeneratedThisSession.current.clear();
@@ -116,6 +120,42 @@ export default function BuildingGeneratorPanel({
       .finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
   },[projectLoaded,snapshot?.project.path]);
+
+  const reloadRecipes=async()=>{
+    if(!projectLoaded||!nativeConnected())return;
+    const r=await invoke('studio.buildingRecipes',{});
+    setSavedRecipes(r.recipes);
+  };
+  useEffect(()=>{
+    setSourceRecipe('');setSavedRecipes([]);
+    if(!projectLoaded)return;
+    void invoke('studio.buildingRecipes',{}).then(r=>setSavedRecipes(r.recipes))
+      .catch(e=>setError(explain(e)));
+  },[projectLoaded,snapshot?.project.path]);
+
+  const loadRecipe=async (relative:string)=>{
+    if(!relative||busy||readingRecipe)return;
+    setReadingRecipe(true);setError('');
+    try{
+      const result=await invoke('studio.buildingReadRecipe',{recipe:relative});
+      const item=result.request;
+      const selected=styles.find(s=>s.id===item.style);
+      if(!selected)throw Error('The authored architectural style is missing: '+item.style);
+      setSourceRecipe(relative);
+      setSetting(selected.setting);setStyle(selected.id);
+      setRole(item.function??'');
+      setMode(item.mode??'features');
+      setWidth(String(item.width));setHeight(String(item.height));
+      setDepth(String(item.depth));setSeed(String(item.seed));
+      setFloors(String(item.floors??1));
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));
+      setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
+      setMaterialBindings(item.materialBindings??{});
+      clearGenerated();
+      setStatus('Recipe loaded: '+relative+'. Generate creates a new GLB; original asset is preserved.');
+    }catch(e){setError(explain(e));}
+    finally{setReadingRecipe(false);}
+  };
 
   const settings=useMemo(()=>[...new Set(styles.map(item=>item.setting))], [styles]);
   const choices=useMemo(()=>styles.filter(item=>item.setting===setting),[styles,setting]);
@@ -373,6 +413,7 @@ export default function BuildingGeneratorPanel({
       const chosen=selectedSeed??asNumber(seed);
       const result=await invoke('studio.buildingGenerate',request(chosen));
       setSaved(result);setStatus('New GLB saved to Assets with persistent GUID.');
+      void reloadRecipes().catch(()=>{});
       // Existing browser windows can refresh their Assets lists on demand.
       window.dispatchEvent(new Event('studio:assets-changed'));
       void invoke('studio.windowBroadcast',{event:'ui.assetsChanged',payload:{path:result.path}}).catch(()=>{});
@@ -439,6 +480,21 @@ export default function BuildingGeneratorPanel({
       {!loading&&styles.length===0&&<StudioEmptyState title="No building styles"
         icon={<Building2 size={22}/>} description="Install engine/assets/building-styles or open native AIVERSE Studio."/>}
       <p className="abg__note">Twelve built-in architecture settings share the same rooms, stairs, lifts, doors, physical openings and ECS runtime. PBR texture patterns are generated for each style; project texture GUIDs override them per channel.</p>
+      <StudioSection title="Saved generated buildings">
+        <p className="abg__note">Reopen a saved source recipe and edit its dimensions, architecture, doors, floors and PBR material bindings. Existing GLBs stay unchanged.</p>
+        <div className="abg__actions">
+          <StudioSelect aria-label="Saved building recipe" value={sourceRecipe}
+            disabled={busy||readingRecipe||savedRecipes.length===0}
+            onChange={e=>void loadRecipe(e.target.value)}>
+            <option value="">Choose a saved building…</option>
+            {savedRecipes.map(path=><option value={path} key={path}>{path}</option>)}
+          </StudioSelect>
+          <StudioButton variant="secondary" disabled={busy||readingRecipe||!nativeConnected()}
+            onClick={()=>void reloadRecipes().catch(e=>setError(explain(e)))}>
+            <RefreshCw size={15}/> Refresh
+          </StudioButton>
+        </div>
+      </StudioSection>
       <StudioSection title="Building recipe">
         <div className="abg__fields">
           <StudioField label="Setting" htmlFor="abg-setting">
