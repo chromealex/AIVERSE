@@ -1146,6 +1146,13 @@ void ParticleSystem::clear() {
     for (size_t i = 0; i < I.instances.size(); ++i) { I.instances[i].used = false; I.freeInstances.push_back(int(i)); }
 }
 
+void ParticleSystem::resetDeterministicSeed(uint32_t seed) {
+    clear();
+    auto& I=*impl_;
+    I.rng.s=seed==0?0x9E3779B9u:seed; // xorshift32 zero state is absorbing
+    I.nextUid=0;
+}
+
 void ParticleSystem::setView(const SpectraFxView& view) {
     if(!view.valid()) return;
     auto& I = *impl_;
