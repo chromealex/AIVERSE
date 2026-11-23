@@ -138,9 +138,12 @@ std::vector<Vec3> VehicleRace::imminentRespawnPositions(const World& w,
             positions.push_back(checkpoint.respawn);
             continue;
         }
-        const Fixed plane=(drive->controller.position-checkpoint.gate.center)
-                              .dot(checkpoint.gate.normal);
-        if(fxAbs(plane)<=maxTravel)
+        // Reaching the gate aperture requires entering its radius in 3D.
+        // A plane-distance test alone would incorrectly pin checkpoints
+        // thousands of metres away along that plane.
+        const Vec3 delta=drive->controller.position-checkpoint.gate.center;
+        const Fixed reachable=maxTravel+checkpoint.gate.radius;
+        if(delta.lengthSq()<=reachable*reachable)
             positions.push_back(checkpoint.respawn);
     }
     std::sort(positions.begin(),positions.end(),[](Vec3 a,Vec3 b){
