@@ -231,6 +231,8 @@ private:
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
     struct FxShot {
+        uint64_t id=0;
+        bool cancelled=false;
         std::mutex mutex; // capture callback may run on GPU completion thread
         bool done=false;
         int width=0,height=0;
@@ -239,6 +241,7 @@ private:
     };
     std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
     double fxShotStartedAt_=0;
+    uint64_t nextFxShotId_=1;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
