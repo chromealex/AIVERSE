@@ -284,6 +284,7 @@ inline void evaluateAnimationPresentationRange(World& world,
                 validInputs=inst.parameters().set(name,v)&&validInputs;
             inst.parameters().environment=input->overrides.environment;
         }
+        inst.beginExecutionTrace(); // no clock read unless explicitly instrumented
         inst.update(dt);
         if(auto* events=graphNotifies?graphNotifies->tryGet(e.index):nullptr)
             events->events=inst.notifies();
