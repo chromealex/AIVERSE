@@ -273,6 +273,13 @@ public:
         float radiusMetres=0.0f;
         bool fill=false;
     } cavernsBrushPreview;
+    struct CavernsBuildStats {
+        size_t pending=0,prepared=0,inFlight=0;
+        uint64_t authorEpoch=0;
+        bool visualCommitConnected=false;
+        std::string diagnostic;
+    } cavernsBuildStats;
+
 
     void focusScene(float x, float z, float distance = -1);
     // planet maps (world block): the Scene camera is the view's orbit camera; picking returns a body point
@@ -490,6 +497,10 @@ public:
     std::vector<PlaySample> playHistory;
 
 private:
+    // Unpublished CPU-only generation. Pointer keeps the bridge's async worker
+    // state out of this header and is retired with the Editor lifecycle.
+    class CavernsEditHost;
+    std::unique_ptr<CavernsEditHost> cavernsEditHost_;
     void drawMenuBar();
     void drawWindowItems(const std::string& group);
     void drawTopBarControls();   // breadcrumb, play controls, MCP pill (inside the main menu bar)
@@ -506,6 +517,7 @@ private:
     void buildEditScene(game::GameScene& out) const;
     void drawEditOverlays3D();
     void applyChanges();
+    void updateCavernsAuthoring(); // owner-thread MapDoc / Undo observer
     void pollVisualAssets(double dt); // editor-owned asset watcher, independent of windows
     bool convertVisualModelSource(const std::string& source);
     void pollAgentLink();
