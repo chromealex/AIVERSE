@@ -1,0 +1,242 @@
+{
+  "schema": 1,
+  "note": "Candidate associations derived from existing skill catalog, MCP audit baseline and Studio panel IDs. Empty means unknown, not missing or not applicable. No runtime PASS claims.",
+  "systems": {
+    "terraweave": {
+      "skills": [
+        "aiverse-terrain",
+        "aiverse-terraweave",
+        "aiverse-terra-vegetation"
+      ],
+      "mcp": [
+        "terrain_sculpt",
+        "terrain_material"
+      ],
+      "studio": [
+        "terrain",
+        "terraweave_generator"
+      ]
+    },
+    "physis": {
+      "skills": [
+        "aiverse-physis",
+        "aiverse-physis-authoring"
+      ],
+      "mcp": [
+        "physis_get",
+        "physis_set"
+      ],
+      "studio": [
+        "physis",
+        "wind",
+        "fields"
+      ]
+    },
+    "nereid": {
+      "skills": [
+        "aiverse-nereid-buoyancy",
+        "aiverse-nereid-cascades",
+        "aiverse-nereid-currents",
+        "aiverse-nereid-interactions",
+        "aiverse-nereid-vortices",
+        "aiverse-nereid-water"
+      ],
+      "studio": [
+        "water",
+        "nereid_flow"
+      ]
+    },
+    "strata": {
+      "skills": [
+        "aiverse-strata"
+      ],
+      "mcp": [
+        "geometry_catalog",
+        "strata_capabilities"
+      ],
+      "studio": [
+        "models"
+      ]
+    },
+    "lens": {
+      "skills": [
+        "aiverse-lens",
+        "aiverse-lens-native"
+      ],
+      "mcp": [
+        "lens_scene_get",
+        "lens_camera_set"
+      ],
+      "studio": [
+        "actor",
+        "scene"
+      ]
+    },
+    "vivid": {
+      "skills": [
+        "aiverse-human-creator"
+      ],
+      "mcp": [
+        "human_schema",
+        "human_create"
+      ],
+      "studio": [
+        "human_creator",
+        "human_appearance",
+        "facial_rig"
+      ]
+    },
+    "lighting": {
+      "skills": [
+        "aiverse-lighting"
+      ],
+      "mcp": [
+        "light_list",
+        "scene_light_create"
+      ],
+      "studio": [
+        "lighting"
+      ]
+    },
+    "prisma": {
+      "skills": [
+        "aiverse-prisma"
+      ],
+      "mcp": [
+        "postfx_get"
+      ],
+      "studio": [
+        "postfx"
+      ]
+    },
+    "spectrafx": {
+      "skills": [
+        "aiverse-spectrafx"
+      ],
+      "mcp": [
+        "fx_graph_list",
+        "fx_graph_set"
+      ],
+      "studio": [
+        "effects",
+        "fx_graph",
+        "fx_functions"
+      ]
+    },
+    "motionweave": {
+      "skills": [
+        "aiverse-motionweave"
+      ],
+      "mcp": [
+        "animation_graph_list",
+        "animation_graph_set"
+      ],
+      "studio": [
+        "animation",
+        "anim_graph",
+        "anim_rig",
+        "anim_assets"
+      ]
+    },
+    "navigation": {
+      "skills": [
+        "aiverse-navmesh"
+      ]
+    },
+    "physics": {
+      "skills": [
+        "aiverse-physics"
+      ]
+    },
+    "shadergraph": {
+      "skills": [
+        "aiverse-shader-graph"
+      ],
+      "studio": [
+        "shader_graph"
+      ]
+    },
+    "lightbake": {
+      "studio": [
+        "lightbake"
+      ]
+    },
+    "world": {
+      "studio": [
+        "roads"
+      ]
+    },
+    "planets": {
+      "skills": [
+        "aiverse-planets"
+      ],
+      "studio": [
+        "generate"
+      ]
+    },
+    "voxel": {
+      "skills": [
+        "aiverse-voxel-game",
+        "aiverse-voxel-gen",
+        "aiverse-voxel-light",
+        "aiverse-voxel-mesh",
+        "aiverse-voxel-nav",
+        "aiverse-voxel-replication",
+        "aiverse-voxel-ticks",
+        "aiverse-voxel-world"
+      ]
+    },
+    "inputflow": {
+      "studio": [
+        "input"
+      ]
+    },
+    "studio": {
+      "studio": [
+        "inspector",
+        "hierarchy",
+        "assets",
+        "scene",
+        "game"
+      ]
+    },
+    "agents": {
+      "skills": [
+        "aiverse-new-feature"
+      ],
+      "mcp": [
+        "mcp_registry"
+      ],
+      "studio": [
+        "agent"
+      ]
+    },
+    "build": {
+      "studio": [
+        "build"
+      ]
+    },
+    "import": {
+      "studio": [
+        "project_import"
+      ]
+    },
+    "render": {
+      "studio": [
+        "materials",
+        "models",
+        "texture_resources"
+      ]
+    },
+    "ecs": {
+      "mcp": [
+        "scene_entity_list",
+        "scene_component_set"
+      ],
+      "studio": [
+        "inspector",
+        "hierarchy"
+      ]
+    }
+  }
+}
