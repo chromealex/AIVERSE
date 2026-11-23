@@ -164,6 +164,7 @@ export interface StudioSpectraPreviewState {
   bursts:number;queuedBursts:number;clearing:boolean;
   checkpoints?:Array<{id:number;tick:number}>;
   checkpointPending?:boolean;
+  transferId?:number;
   fileChunk?:string;fileSize?:number;
   checkpointWaitFrames?:number;
   gpuSeedPending?:boolean;
@@ -184,7 +185,7 @@ export interface StudioSpectraPreviewState {
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'checkpointFileBegin'|'checkpointFileAppend'|'checkpointFileExport'|'checkpointFileRead'|'checkpointFileImport'|'playback'|'burst'|'clear'|'capture'|'captureStatus'|'captureCancel';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'checkpointFileBegin'|'checkpointFileAppend'|'checkpointFileExport'|'checkpointFileRead'|'checkpointFileImport'|'checkpointFileCancel'|'playback'|'burst'|'clear'|'capture'|'captureStatus'|'captureCancel';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -199,7 +200,7 @@ export interface StudioParams {
     seed?:number;
     gpuShaderSeed?:number;
     checkpointId?:number;
-    offset?:number;chunk?:string;
+    offset?:number;chunk?:string;transferId?:number;
     captureId?:number;
     gpuBirthRandom?:boolean;
     requireReplayReady?:boolean;
