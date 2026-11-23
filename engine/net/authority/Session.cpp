@@ -165,11 +165,14 @@ bool Server::step() {
     if(simulation_.tick()==before)return false;
     inputsStaged_=false;
     auto& cfg=module().config();
-    if(uint64_t(simulation_.tick())*cfg.snapshotRate/cfg.tickRate!=uint64_t(simulation_.tick()-1)*cfg.snapshotRate/cfg.tickRate)broadcast();
+    if(uint64_t(simulation_.tick())*cfg.snapshotRate/cfg.tickRate!=uint64_t(simulation_.tick()-1)*cfg.snapshotRate/cfg.tickRate){
+        struct Publication {bool& flag;Publication(bool& f):flag(f){flag=true;}~Publication(){flag=false;}} guard(publishingFinalized_);
+        broadcast();
+    }
     return true;
 }
 void Server::broadcast() {
-    if(persistenceFailed_||(persistence_&&simulation_.tick()!=persistence_->finalizedTick()))return;
+    if(persistenceFailed_||(persistence_&&(!publishingFinalized_||simulation_.tick()!=persistence_->finalizedTick())))return;
     const auto actors=module().snapshots(simulation_);
     world::SpatialWorld index(64);
     const auto projectiles=module().projectiles(simulation_);const auto loot=module().loot(simulation_);const auto vehicles=module().vehicles(simulation_);
