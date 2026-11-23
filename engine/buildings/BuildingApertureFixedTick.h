@@ -4,6 +4,8 @@
 // The host calls advance() only on its authoritative fixed tick.
 #include "engine/buildings/BuildingApertureOwner.h"
 #include "engine/core/ECS.h"
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
