@@ -64,6 +64,7 @@ public:
     bool canStep() const;
     bool setPaused(bool paused);
     bool setSpeed(double speed);
+    bool checkpoint(bool restore);
     bool stepOnce();
 
 private:
