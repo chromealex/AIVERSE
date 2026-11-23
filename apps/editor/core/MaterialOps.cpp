@@ -396,12 +396,13 @@ void registerMaterialOps(Workspace& ws) {
         if(fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>256*1024)throw std::runtime_error("texture graph missing or invalid");
         return Json::parseFile(file.string());
     };
-    auto publish=[](const fs::path& file,const std::string& bytes,bool overwrite){
+    auto publish=[](const fs::path& file,const std::string& bytes,bool overwrite,const Json* expected=nullptr){
         fs::create_directories(file.parent_path());
         if(fs::is_symlink(file)||fs::is_symlink(file.parent_path()))throw std::runtime_error("symlink destination rejected");
         const auto staging=fs::path(file.string()+".stage");
         if(!fs::create_directory(staging))throw std::runtime_error("publication already in progress or stale staging directory");
         struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{staging};
+        if(overwrite&&(!expected||!fs::is_regular_file(file)||fs::is_symlink(file)||fs::file_size(file)>256*1024||!(Json::parseFile(file.string())==*expected)))throw std::runtime_error("texture graph changed before publication");
         auto temp=staging/"payload";
         {std::ofstream stream(temp,std::ios::binary);stream.write(bytes.data(),std::streamsize(bytes.size()));stream.close();if(!stream)throw std::runtime_error("texture graph publication write failed");}
         if(overwrite)fs::rename(temp,file);
@@ -422,7 +423,7 @@ void registerMaterialOps(Workspace& ws) {
         render::texture_graph::compile(p["graph"]);auto file=graphPath(p.getStr("name"));
         bool exists=fs::exists(file);
         if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
-        publish(file,p["graph"].dump(2)+"\n",exists);
+        publish(file,p["graph"].dump(2)+"\n",exists,&p["expected"]);
         Json r=okJson();r.set("graph",p["graph"]);return r;
     });
     add("texture_graph_preview","Evaluate one node or output at up to 32x32, return actual RGBA8 hex without disk writes.",graphSchema,[](const Json& p){
