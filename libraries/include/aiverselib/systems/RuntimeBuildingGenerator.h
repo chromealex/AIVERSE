@@ -40,6 +40,7 @@ struct RuntimeBuildingResult {
     RuntimeBuildingError error=RuntimeBuildingError::None;
     std::string message;
     StyledStructure building;             // CPU mesh, style materials, AABB, gate points
+    std::vector<BuildingFeatureAnchor> featureAnchors; // semantic doors/roof controls
     explicit operator bool() const noexcept {
         return error==RuntimeBuildingError::None&&!building.mesh.vertices.empty();
     }
@@ -176,6 +177,7 @@ public:
         }
         auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw);
         const bool valid=bool(built);
+        result.featureAnchors=std::move(built.anchors);
         result.building=std::move(built.building);
         if(!valid){
             result.error=RuntimeBuildingError::InvalidInput;
