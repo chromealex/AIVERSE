@@ -179,8 +179,11 @@ public:
                 ui::hint(("CPU mesh: ожидание "+std::to_string(jobs.pending)+
                           ", готово "+std::to_string(jobs.prepared)+
                           ", выполняется "+std::to_string(jobs.inFlight)).c_str());
-                ui::hint("GPU/STRATA и Box3D/NavMesh ещё НЕ обновляются: "
-                         "требуется безопасный owner commit.");
+                ImGui::Checkbox("3D GPU-предпросмотр пещер (только визуально)##caverns",
+                                &ed.cavernsVisualPreviewEnabled);
+                ui::hint("Предпросмотр GPU рисует GeometryScene без STRATA. "
+                         "Box3D, SpatialWorld и NavMesh НЕ изменяются; "
+                         "в игре правки пока не опубликованы.");
                 if(!jobs.diagnostic.empty())
                     ui::hint(("Caverns: "+jobs.diagnostic).c_str());
                 if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
