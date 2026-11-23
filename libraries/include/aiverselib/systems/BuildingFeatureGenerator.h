@@ -122,8 +122,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     auto graph=buildFunctionalStructureGraph(recipe);
     if(!graph)return reject(graph.error);
 
-    const float W=recipe.width,H=recipe.height,D=recipe.depth;
-    constexpr float floorTop=0.24f,wall=0.36f,roofThick=0.28f;
+    const float W=recipe.width,D=recipe.depth;
     const auto& sm=style.structure;
     const int hull=sm.hull>=0?sm.hull:style.shell;
     const int trim=sm.plate>=0?sm.plate:hull;
