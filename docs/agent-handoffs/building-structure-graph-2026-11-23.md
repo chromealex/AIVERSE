@@ -63,3 +63,17 @@ Expand graph with windows, window collision/visibility/occlusion, load
 frames, precise opening side placement, parent/child wing attachments,
 physical roof actuators and multi-floor partition/navmesh.
 After each stage commit a new handoff with tested evidence and branch SHA.
+
+## Post-handoff fixes (same stage)
+
+- `2f16c8215bc080c0f186f4bf9cb6c48deda93328`: remove obsolete local
+  geometry layout constants after switching to the shared StructureGraph.
+- `8087f4e051da2669df8aef0df977464b013651ee`: require -1 (not arbitrary
+  negative values) for automatic placement, and reject partly retracted door
+  leaves that would cross the building envelope.
+- `cbc1405e37c30c8620099c007e917d7d25591dac`: regressions for partial
+  sliding and invalid positions.
+- `ff99cdc02bfaefffc73c1dd9b9b00370426049b8`: native Studio bridge
+  explicitly includes the feature generator it consumes (no transitive include).
+- Current verification still requires the queued focused C++/Studio CI checks,
+  then a Mac run with the exact pinned recipe and GPU screenshot.
