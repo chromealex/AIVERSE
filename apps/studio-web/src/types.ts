@@ -158,12 +158,13 @@ export interface StudioSpectraPreviewState {
   tick:number;targetTick:number;timeSeconds:number;
   generation:number;alive:number;error:string;
   speed:number;loop:boolean;
+  bursts:number;queuedBursts:number;clearing:boolean;
   background:'dark'|'neutral'|'light'|'black';
   grid:boolean;axes:boolean;
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -173,7 +174,7 @@ export interface StudioParams {
     background?:'dark'|'neutral'|'light'|'black';
     grid?:boolean;axes?:boolean;
     preset?:'perspective'|'front'|'side'|'top';
-    speed?:number;loop?:boolean;
+    speed?:number;loop?:boolean;count?:number;
   };
   'studio.wind':Record<string,never>;
   'studio.windSet':Partial<WindSettings>;
