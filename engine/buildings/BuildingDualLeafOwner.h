@@ -186,6 +186,7 @@ public:
         return result;
     }
 
+    bool attached()const noexcept{return attached_;}
     bool moving()const{
         for(const auto& [id,e]:entries_){
             (void)id;
