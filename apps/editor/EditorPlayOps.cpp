@@ -89,7 +89,7 @@ void Editor::registerPlayOps() {
             return r;
         });
     add("texture_graph_gpu_owner_preview","Queue or read a native texture GPU preview; CPU fallback unless requireGpu.",
-        R"({"properties":{"action":{"type":"string","enum":["start","read"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"}},"required":["action"]})",
+        R"({"properties":{"action":{"type":"string","enum":["start","read"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128}},"required":["action"]})",
         [this](const Json& p){
             if(!dev_)throw std::runtime_error("native graphics owner unavailable");
             textureGraphGpuPreview_.checkProject(ws_.project.dir);
