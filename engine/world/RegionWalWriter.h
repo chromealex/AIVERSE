@@ -8,6 +8,11 @@
 #include <unistd.h>
 #include <sys/file.h>
 #include <cerrno>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #endif
 namespace aiverse::world {
 enum class RegionWalWrite { Ok, Unsupported, Busy, IoError, InvalidSequence, InvalidFrame, NeedsRecovery };
@@ -39,6 +44,22 @@ public:
         bool synced=syncFd(dir);::close(dir);
         if(!synced){close();return RegionWalWrite::IoError;}
         last_=scan.lastSequence;return RegionWalWrite::Ok;
+#elif defined(_WIN32)
+        handle_=::CreateFileW(path.c_str(),GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ,
+            nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+        if(handle_==INVALID_HANDLE_VALUE)return ::GetLastError()==ERROR_SHARING_VIOLATION?RegionWalWrite::Busy:RegionWalWrite::IoError;
+        std::ifstream input(path,std::ios::binary);
+        if(!input){close();return RegionWalWrite::IoError;}
+        auto scan=RegionWalReader::scan(input,previous,[](const RegionWalFrame&){return true;});
+        input.close();
+        if(scan.status==RegionWalScan::Incomplete && repairIncompleteTail){
+            LARGE_INTEGER pos;pos.QuadPart=static_cast<LONGLONG>(scan.validBytes);
+            if(scan.validBytes>uint64_t(INT64_MAX)||!::SetFilePointerEx(handle_,pos,nullptr,FILE_BEGIN)||
+               !::SetEndOfFile(handle_)||!::FlushFileBuffers(handle_)){close();return RegionWalWrite::IoError;}
+        }else if(scan.status!=RegionWalScan::End){close();return RegionWalWrite::NeedsRecovery;}
+        LARGE_INTEGER zero{};
+        if(!::SetFilePointerEx(handle_,zero,nullptr,FILE_END)){close();return RegionWalWrite::IoError;}
+        last_=scan.lastSequence;return RegionWalWrite::Ok;
 #else
         (void)path;(void)previous;(void)repairIncompleteTail;return RegionWalWrite::Unsupported;
 #endif
@@ -58,6 +79,21 @@ public:
         }
         if(!syncData(fd_)){poisoned_=true;return RegionWalWrite::IoError;}
         last_=frame.sequence;return RegionWalWrite::Ok;
+#elif defined(_WIN32)
+        if(handle_==INVALID_HANDLE_VALUE||poisoned_)return RegionWalWrite::NeedsRecovery;
+        if(last_==UINT64_MAX||frame.sequence!=last_+1)return RegionWalWrite::InvalidSequence;
+        std::vector<uint8_t> bytes;
+        if(!RegionWalCodec::encode(frame,bytes))return RegionWalWrite::InvalidFrame;
+        size_t offset=0;
+        while(offset<bytes.size()){
+            DWORD written=0;
+            if(!::WriteFile(handle_,bytes.data()+offset,static_cast<DWORD>(bytes.size()-offset),&written,nullptr)||!written){
+                poisoned_=true;return RegionWalWrite::IoError;
+            }
+            offset+=written;
+        }
+        if(!::FlushFileBuffers(handle_)){poisoned_=true;return RegionWalWrite::IoError;}
+        last_=frame.sequence;return RegionWalWrite::Ok;
 #else
         (void)frame;return RegionWalWrite::Unsupported;
 #endif
@@ -66,6 +102,9 @@ public:
     void close(){
 #if defined(__unix__) || defined(__APPLE__)
         if(fd_>=0)::close(fd_);
+#elif defined(_WIN32)
+        if(handle_!=INVALID_HANDLE_VALUE)::CloseHandle(handle_);
+        handle_=INVALID_HANDLE_VALUE;
 #endif
         fd_=-1;last_=0;poisoned_=false;
     }
@@ -80,6 +119,9 @@ private:
 #endif
     }
     static bool syncFd(int fd){int r;do{r=::fsync(fd);}while(r<0&&errno==EINTR);return r==0;}
+#endif
+ #if defined(_WIN32)
+    HANDLE handle_=INVALID_HANDLE_VALUE;
 #endif
     int fd_=-1;uint64_t last_=0;bool poisoned_=false;
 };
