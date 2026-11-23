@@ -5,6 +5,7 @@ import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes, shaderTintTemplate, setShaderOutput } from './shaderGraphLayout';
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
+import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
 import GraphDiagnostics from '../graphs/GraphDiagnostics';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
 import type {PortRef} from '../graphs/graphGeometry';
@@ -205,6 +206,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
       <GraphDiagnostics view={view} policy={{cycles:'reject'}}/>
+      <GraphGpuProfilePanel projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>
        <div className="au-stack">
