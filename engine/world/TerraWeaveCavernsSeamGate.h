@@ -88,9 +88,11 @@ public:
                     &first.mesh,first.resolution,first.spacingCm,
                     &second.mesh,second.resolution,second.spacingCm});
                 const CaveFaceKey face{key,next};
-                // Subdivision also needs a newly published modified coarse mesh. Until
-                // that mesh is staged, favor regeneration at common LOD.
-                if(decision.decision!=CaveFaceDecision::ExactMatch) {
+                // Stage37 GPU shard publication applies certified collinear
+                // subdivisions to the presentation mesh of BOTH participating
+                // shards. Only truly divergent contours require regeneration.
+                // Game collision always uses the unsimplified source mesh.
+                if(decision.decision==CaveFaceDecision::RegenerateAtCommonLod) {
                     ++fallbackFaces_;
                     const uint64_t span=int64_t(first.resolution)*first.spacingCm;
                     const int32_t spacing=decision.commonSpacingCm;
