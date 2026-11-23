@@ -22,13 +22,23 @@ public:
     explicit CaveGameplayRuntimeFrame(uint32_t resolution=16,
                                       int32_t spacingCm=100,
                                       CaveShardConfig shards={},
-                                      size_t pending=1024,size_t workers=2)
-        :host_(resolution,spacingCm,shards,pending,workers),
-         streamJobs_(workers) {}
+                                      size_t pending=1024,size_t workers=2,
+                                      StreamSettings streaming={})
+        :residency_(streaming),
+         streamJobs_(workers),
+         host_(resolution,spacingCm,shards,pending,workers) {}
+    // Explicit per-world entry point. Instances are single-world owners:
+    // after closeWorldAfterGpuIdle succeeds, construct a new one for a new
+    // world/device. No GPU shutdown happens in the C++ destructor itself.
+    void openWorld(CaveDirtyBounds initialLoadedBounds,
+                   std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
+        if(closed_)throw std::logic_error("Caverns frame host already closed");
+        onEditedVolume(initialLoadedBounds,std::move(snapshot));
+    }
     void onEditedVolume(CaveDirtyBounds bounds,
                         std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
-        if(physicsBarrier_.status().recoveryRequired)
-            throw std::runtime_error("Caverns needs world recovery");
+        if(closed_||physicsBarrier_.status().recoveryRequired)
+            throw std::runtime_error("Caverns world closed or needs recovery");
         host_.edited(bounds,std::move(snapshot));
         readyStreamBuilds_.clear();
         pendingRetires_.clear();
@@ -36,7 +46,7 @@ public:
     }
     bool onAuthoringOperation(const Json& response,
                              std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
-        if(physicsBarrier_.status().recoveryRequired)return false;
+        if(closed_||physicsBarrier_.status().recoveryRequired)return false;
         const bool accepted=host_.consumeAuthoringOperation(response,std::move(snapshot));
         if(accepted){
             readyStreamBuilds_.clear();
@@ -53,8 +63,8 @@ public:
         const CaveGameplayEditHost::ColliderIdAllocator& colliderIds,
         uint64_t nextVisualRevision,size_t jobsPerFrame=2,
         CaveBatchSpec graphicsOptions={}) {
-        if(physicsBarrier_.status().recoveryRequired)
-            throw std::runtime_error("Caverns game world requires recovery");
+        if(closed_||physicsBarrier_.status().recoveryRequired)
+            throw std::runtime_error("Caverns game world closed or requires recovery");
         syncStreamingEditPins();
         return host_.advance(device,spatial,navConfig,std::move(height),
                              colliderIds,nextVisualRevision,jobsPerFrame,
@@ -67,7 +77,7 @@ public:
     bool publishWithExclusiveWorld(
         physics::Scene& box3D,world::SpatialWorld& spatial,
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive) {
-        if(!exclusive || !exclusive()||
+        if(closed_||!exclusive || !exclusive()||
            physicsBarrier_.status().recoveryRequired)return false;
         bool physicsFinalized=false;
         bool published=false;
@@ -93,7 +103,7 @@ public:
     void setStreamCenter(ChunkKey3 center){residency_.center(center);}
     void setStreamLod(uint32_t lod){residency_.visualLod(lod);}
     std::vector<CaveResidencyTicket> pumpStreaming() {
-        if(physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
         syncStreamingEditPins();
         return residency_.pump();
     }
@@ -223,8 +233,8 @@ public:
         return failed;
     }
     uint64_t pinStreamChunk(ChunkKey3 key,CaveLeasePurpose purpose){
-        if(physicsBarrier_.status().recoveryRequired)
-            throw std::runtime_error("Caverns stream pin requires recovered world");
+        if(closed_||physicsBarrier_.status().recoveryRequired)
+            throw std::runtime_error("Caverns stream pin requires active recovered world");
         if(!residency_.stats().sourceRevision)
             throw std::logic_error("Caverns stream pin requires source revision");
         return residency_.pin(key,purpose);
@@ -243,8 +253,13 @@ public:
         streamJobs_.drain();
         if(!host_.shutdownAfterGpuIdle(device))return false;
         pendingRetires_.clear();readyStreamBuilds_.clear();editPins_.clear();
+        closed_=true;
         return true;
     }
+    bool closeWorldAfterGpuIdle(gfx::Device& device){
+        return shutdownAfterGpuIdle(device);
+    }
+    bool closed()const noexcept{return closed_;}
     CaveGameplayEditStats stats()const{return host_.stats();}
     const CavePhysicsCommitStatus& physicsStatus()const noexcept{
         return physicsBarrier_.status();
@@ -274,6 +289,7 @@ private:
     std::map<ChunkKey3,CaveStreamCpuResult,KeyLess> readyStreamBuilds_;
     std::map<ChunkKey3,uint64_t,KeyLess> editPins_;
     CaveGameplayEditHost host_;
+    bool closed_=false;
     CaveGameplayPhysicsBarrier physicsBarrier_;
 };
 } // namespace aiverse::terraweave::caverns
