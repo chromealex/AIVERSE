@@ -1,5 +1,5 @@
 #pragma once
-#include "UnifiedBackupRecovery.h"
+#include "UnifiedBackupRead.h"
 #include <algorithm>
 #include <charconv>
 #include <string_view>
@@ -71,7 +71,7 @@ public:
                         entry.status=UnifiedBackupStatus::MetadataOnly;
                     }else{
                         std::unique_ptr<UnifiedWorldReplay::State> recovered;
-                        entry.status=UnifiedBackupRecovery::recover(dir,generation,active.identity.world,
+                        entry.status=UnifiedBackupRead::recover(dir,generation,active.identity.world,
                             budget,adapters,factory,codecs,materialize,recovered,validate)
                             ?UnifiedBackupStatus::Recoverable:UnifiedBackupStatus::RecoveryFailed;
                     }
