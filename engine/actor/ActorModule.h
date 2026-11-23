@@ -98,6 +98,8 @@ struct State {
     RoundState match;
     RoyaleRun royale;
 };
+// Portable resource codec: same canonical match fields, no runtime handles.
+void io(Archive&,State&);
 Config readConfig(const Json& rules);
 Command command(uint8_t slot,const Input& input);
 bool decodeInput(const Command& command,Input& input);
