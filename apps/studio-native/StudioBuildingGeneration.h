@@ -289,12 +289,14 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
     const auto req=request(params);
     auto built=produce(engine,req);
     applyProjectMaterials(project,req,built);
-    StudioAssetCatalog catalog(project);
-    catalog.rebuild();
+    // No asset index write when all material maps use generated PBR.
+    // An explicit imported GUID may use the existing project's catalog.
+    std::unique_ptr<StudioAssetCatalog> catalog;
     const auto content=studioContentRoot(project);
     building::BuildingImageByGuid resolver=[&](
         const std::string& guid,render::Image& image,std::string& issue){
-        const auto entry=catalog.byGuid(guid);
+        if(!catalog)catalog=std::make_unique<StudioAssetCatalog>(project);
+        const auto entry=catalog->byGuid(guid);
         if(!entry||entry->directory||entry->importer!="texture"){
             issue="Building preview texture GUID does not resolve";return false;
         }
