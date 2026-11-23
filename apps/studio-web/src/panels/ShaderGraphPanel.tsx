@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes } from './shaderGraphLayout';
+import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes } from './shaderGraphLayout';
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
-import {shaderAdapters} from '../graphs/shaderAdapter';
+import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
+import type {PortRef} from '../graphs/graphGeometry';
+import {samePort} from '../graphs/graphGeometry';
 import {DraftHistory} from '../graphs/graphFramework';
 import {StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import './ShaderGraphPanel.css';
@@ -23,10 +25,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
  const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
  const history=useRef<DraftHistory<StudioShaderGraphDocument['graph']>|null>(null);
- const [pendingOutput,setPendingOutput]=useState('');
+ const [pendingOutput,setPendingOutput]=useState<PortRef|null>(null);
  const [nodeQuery,setNodeQuery]=useState('');
  const resetDraft=(next:StudioShaderGraphDocument['graph']|null)=>{
-  history.current=next?new DraftHistory(next):null;setDraft(next);setPendingOutput('');
+  history.current=next?new DraftHistory(next):null;setDraft(next);setPendingOutput(null);
  };
  const editDraft=(next:StudioShaderGraphDocument['graph'])=>{
   if(history.current&&next!==history.current.current())setDraft(history.current.push(next));
@@ -64,7 +66,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
     .finally(()=>{if(!closed)setBusy(false)});
   return ()=>{closed=true};
  },[selected]);
- const diagram=useMemo(()=>layoutShaderGraph(draft??document?.graph??{}),[draft,document]);
+ const view=useMemo(()=>shaderProjection(draft??document?.graph??{},operations),[draft,document,operations]);
  const dirty=!!document&&!!draft&&JSON.stringify(draft)!==JSON.stringify(document.graph);
  const compatibleOps=shaderNodeCatalog(operations,draft?.domain??'material',nodeQuery);
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
@@ -78,11 +80,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   editDraft(result.graph);setSelection(result.ids);setError('');
  };
  const ports=Object.fromEntries((draft?.nodes??[]).map(n=>[n.id,{inputs:operations.find(o=>o.id===n.op&&o.domains.includes(draft?.domain??'material'))?.inputs??0,output:true}]));
- const wire=(to:string,index:number)=>{
+ const wire=(input:PortRef)=>{
   if(!draft||busy||!pendingOutput)return;
-  const next=connectShaderInput(draft,operations,pendingOutput,to,index);
+  const next=connectShaderInput(draft,operations,pendingOutput.node,input.node,Number(input.port));
   if(next===draft){setError('Connection unchanged or invalid (check ports and cycles).');return;}
-  editDraft(next);setPendingOutput('');setError('');
+  editDraft(next);setPendingOutput(null);setError('');
  };
  const duplicate=()=>{
   if(!draft||busy||!activeNode)return;
@@ -177,19 +179,27 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        <StudioButton size="sm" disabled={!draft||!clipboard||busy} onClick={pasteNodes}>Paste</StudioButton>
        <StudioButton size="sm" disabled={!draft||busy} onClick={()=>{if(draft){const next=arrangeShaderNodes(draft);if(next===draft)setError('Layout unavailable: cyclic or exceeds canvas bounds.');else editDraft(next);}}}>Auto layout</StudioButton>
        <span>{selectedIds.length} selected</span>
-       <StudioButton size="sm" disabled={!history.current?.canUndo()||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput('')}}>Undo</StudioButton>
-       <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput('')}}>Redo</StudioButton>
+       <StudioButton size="sm" disabled={!history.current?.canUndo()||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput(null)}}>Undo</StudioButton>
+       <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
-      <GraphCanvas diagram={diagram} selected={selectedNode} label={'Editable node layout for '+selected}
+      <GraphCanvas view={view} selected={selectedNode} label={'Editable node layout for '+selected}
        disabled={!draft||busy} onSelect={setSelectedNode} selection={selectedIds} onSelection={setSelection}
-       onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} ports={ports} pendingOutput={pendingOutput}
-       onOutput={id=>setPendingOutput(old=>old===id?'':id)} onInput={wire}
+       onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} pendingOutput={pendingOutput}
+       onOutput={port=>setPendingOutput(old=>samePort(old,port)?null:port)} onInput={wire}
+       onCancel={()=>setPendingOutput(null)} commands={[
+        {id:'copy',label:'Copy',shortcut:'mod+c',disabled:!selectedIds.length,run:copyNodes},
+        {id:'paste',label:'Paste',shortcut:'mod+v',disabled:!clipboard,run:pasteNodes},
+        {id:'duplicate',label:'Duplicate',shortcut:'mod+d',disabled:!activeNode,run:duplicate},
+        {id:'undo',label:'Undo',shortcut:'mod+z',disabled:!history.current?.canUndo(),run:()=>{if(history.current)setDraft(history.current.undo());setPendingOutput(null)}},
+        {id:'redo',label:'Redo',shortcut:'mod+shift+z',disabled:!history.current?.canRedo(),run:()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}},
+        {id:'all',label:'Select all',shortcut:'mod+a',run:()=>setSelection(view.nodes.map(n=>n.id))}
+       ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
-      {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput('')}>Cancel connection from {pendingOutput}</StudioButton>}
+      {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>
        <div className="au-stack">
         <span>{activeNode.op}</span>
