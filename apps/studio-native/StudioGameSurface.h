@@ -23,6 +23,7 @@ public:
     Json inspect(const std::string& epoch,const std::string& ref);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
+    Json ecologyState();
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
