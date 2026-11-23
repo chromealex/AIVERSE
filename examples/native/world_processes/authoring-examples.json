@@ -1,6 +1,6 @@
 {
   "exampleOnly": true,
-  "notes": "Merge entities[*].components into real existing game map entities with valid type, owner, pos and stable IDs. This is not a complete map.",
+  "notes": "These are component configuration fragments for real authored map entities; GameCore gameplay type/owner/pos must be supplied by the concrete game. CIRCUIT lights/doors/motors use host callbacks; SOCIETY actionId is routed by the existing NPC/quest owner. EVOLVE Pressure can optionally be driven from PHYSIS ClimateLink after project host resolves weather cells.",
   "entities": [
     {
       "id": "morph_anchor",
@@ -290,6 +290,79 @@
         "SocietyMessage": {
           "source": "npc_alice",
           "topicsHex": "0000000000000002",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "power_switch",
+      "components": {
+        "CircuitSwitch": {
+          "node": "power_generator",
+          "closed": true,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "door_power_node",
+      "components": {
+        "CircuitNode": {
+          "supply": 0,
+          "demand": 25,
+          "drive": false,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "door_power_wire",
+      "components": {
+        "CircuitWire": {
+          "from": "power_generator",
+          "to": "door_power_node",
+          "bidirectional": true,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "door_device",
+      "components": {
+        "CircuitDevice": {
+          "node": "door_power_node",
+          "kind": 2,
+          "requireSignal": false,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "eco_climate_source",
+      "components": {
+        "EvolvePressure": {
+          "region": "eco_region",
+          "wear": 2,
+          "recovery": 1,
+          "enrichment": 10,
+          "consumption": 1,
+          "contamination": 0,
+          "purification": 2,
+          "growth": 3,
+          "regression": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "npc_action",
+      "components": {
+        "SocietyNpcTrigger": {
+          "person": "npc_bob",
+          "topicsHex": "0000000000000002",
+          "actionId": 1001,
+          "mode": 0,
+          "once": true,
           "enabled": true
         }
       }
