@@ -54,6 +54,9 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
 bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
     shutdown();
     desc_=config;
+    shaderBirthSeedEnabled_=config.gpuBirthRandom;
+    shaderBirthSeed_=config.gpuBirthSeed;
+    shaderBirthOrdinal_=0;
     if(!validComputeEmitter(config,&reason_))return false;
     programParams_={};
     device_=dev;
@@ -79,7 +82,7 @@ bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
             gpu_material::Material material;
             std::string materialReason;
             if(!gpu_material::compile(desc_.shaderGraph,desc_.graphInputs,
-                                      material,materialReason)) {
+                                      material,materialReason,desc_.gpuBirthRandom)) {
                 vmCompatible=false;
                 vmReason=materialReason;
             }
@@ -164,7 +167,7 @@ bool ComputeParticles::initGpu() {
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
     compute_=device_->createCompute({shaders::kMetal,shaders::kGLSL,"SpectraFX Metal particle simulation"});
-    if(!compute_.valid()) {reason_=device_->lastError();return false;}
+    if(!compute_.valid(,desc_.gpuBirthRandom)) {reason_=device_->lastError();return false;}
 
     std::vector<ParticleState> reset(cap);
     for(auto& s:reset) {s.positionAge={0,0,0,-1};s.velocityLife={0,0,0,1};}
