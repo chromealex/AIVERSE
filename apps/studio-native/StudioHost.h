@@ -249,6 +249,7 @@ private:
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
     std::int64_t wpPreviewRevision_=-1;
+    std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;
     bool wpCustomPivot_=false;
     render::float3 wpGroupPivot_{};
