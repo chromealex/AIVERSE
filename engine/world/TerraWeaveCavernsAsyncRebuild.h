@@ -48,6 +48,7 @@ public:
         validate(settings);
         CaveRebuildPumpStats stats;
         collect(gate,stats);
+        if(stats.accepted)gate.analyze();
         const auto wanted=gate.requests(requestBudget);
         for(const auto& request:wanted) {
             if(jobs_.size()>=limit_)break;
