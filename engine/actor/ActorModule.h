@@ -20,6 +20,7 @@
 
 #include "../game/HostSystems.h"
 namespace aiverse::actor {
+class ActorBuildingApertures;
 constexpr uint32_t kBuildingColliderBase=0x40000000;
 constexpr uint32_t kRotatedColliderBase=0x50000000;   // triangles of map colliders with a "yaw" (12 per box)   // collider ids of map `buildings` (building-gen)
 struct WeaponConfig {
@@ -110,6 +111,15 @@ public:
     const Config& config() const { return config_; }
 
     const world::SpatialWorld& collision() const { return collision_; }
+    // Same actor-motor collision world, on the exclusive authoritative
+    // world-owner tick. Never a second physics database.
+    world::SpatialWorld& buildingCollision() { return collision_; }
+    void setBuildingApertures(std::shared_ptr<ActorBuildingApertures> owner){
+        buildingApertures_=std::move(owner);
+    }
+    std::shared_ptr<ActorBuildingApertures> buildingApertures()const{
+        return buildingApertures_;
+    }
     void setContentReader(world::AssetReader);
     bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
@@ -203,6 +213,7 @@ private:
     std::vector<Loot> initialLoot_;
     lib::mechanics::AttackSet meleeAttacks_;
 
+    std::shared_ptr<ActorBuildingApertures> buildingApertures_;
     Config config_;
     world::SpatialWorld collision_;
     std::vector<Vec3> spawns_;
