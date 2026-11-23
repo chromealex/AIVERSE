@@ -14,6 +14,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: python3 tools/agents/check_contracts.py
       - run: python3 tests/feature_gate_test.py
       - run: python3 tools/agents/audit_compliance.py --base "$BASE_SHA"
         env:
