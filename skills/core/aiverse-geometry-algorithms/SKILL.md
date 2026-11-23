@@ -9,3 +9,5 @@ triangulatePolygon returns original-index triangles for simple polygons without 
 GeometryClip.h: iterative Douglas–Peucker returns original indices; clipConvexPolygon uses Sutherland–Hodgman for strictly convex input polygons, either winding. Floating point, not lockstep; simplification does not guarantee topology preservation. No tests yet.
 
 Voronoi.h: voronoiCells clips each site's cell to rectangular bounds (max 2048 sites); delaunay uses Bowyer–Watson (max 4096 sites). Duplicate sites rejected. Floating predicates are not robust for near degeneracy or cross-platform lockstep. No tests yet.
+
+Geometry3D.h: rayBox/raySphere return forward parameter intervals; rayPlane and rayTriangle return forward hit parameters, triangle barycentric u/v. Direction need not be normalized. Box/sphere overlaps include touching. closestPoint requires valid box. Floating point, not lockstep. No tests yet.
