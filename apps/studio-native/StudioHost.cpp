@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioHost.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
 #include "apps/editor/core/BuildTool.h"
@@ -1285,6 +1286,35 @@ bool StudioHost::handleHostMethod(const Json& req) {
         return true; // diagnostics never touch Workspace or the filesystem
     }
     if (!hasId) return false;
+    if(method=="studio.buildingPreview")return answer([&]{
+        if(!preview_)throw std::runtime_error("Open the native Scene viewport");
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty())throw std::runtime_error("Open a project before preview");
+        // CPU-only source generation; the actual Model is uploaded and
+        // owned by StudioScene on its existing render thread.
+        auto model=studioBuildingPreviewCpuModel(
+            fs::path(session_->workspace().engineDir),fs::path(project),
+            params);
+        std::string error;
+        const bool ok=onScene([&]{
+            return preview_->setBuildingPreview(std::move(model),&error);
+        });
+        if(!ok)throw std::runtime_error(error);
+        Json result=Json::object();
+        result.set("active",Json::fromBool(true));
+        return result;
+    });
+    if(method=="studio.buildingPreviewStop")return answer([&]{
+        if(!preview_)throw std::runtime_error("Scene viewport not available");
+        std::string error;
+        const bool ok=onScene([&]{
+            return preview_->setBuildingPreview({},&error);
+        });
+        if(!ok)throw std::runtime_error(error);
+        Json result=Json::object();
+        result.set("active",Json::fromBool(false));
+        return result;
+    });
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")
         return answer([&] { return platform_.windowRequest(method, params); });
     if (method == "studio.windowBroadcast") return answer([&] {
