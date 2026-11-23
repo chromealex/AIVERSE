@@ -65,7 +65,9 @@
     "engine/render/graph/GraphExecutionProfile.h",
     "engine/render/AnimationGraph.h",
     "engine/render/AnimationGraph.cpp",
-    "apps/studio-web/src/graphs/GraphExecutionProfilePanel.tsx"
+    "apps/studio-web/src/graphs/GraphExecutionProfilePanel.tsx",
+    "engine/render/graph/GraphGpuProfile.h",
+    "apps/studio-web/src/graphs/GraphGpuProfilePanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -213,7 +215,8 @@
       "graph_live_snapshot",
       "graph_debug_session",
       "graph_live_watch",
-      "graph_live_profile"
+      "graph_live_profile",
+      "graph_gpu_profile"
     ],
     "studio_panels": [
       "shader_graph",
