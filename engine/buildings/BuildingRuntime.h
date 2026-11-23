@@ -22,3 +22,4 @@
 #include "engine/buildings/BuildingActorLifecycleTick.h"
 #include "engine/buildings/BuildingStairMotor.h"
 #include "engine/buildings/BuildingNavSource.h"
+#include "engine/buildings/BuildingGraphChanges.h"
