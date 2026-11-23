@@ -79,7 +79,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache" || op == "texture_graph_gpu_preview") return true;
+    if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
