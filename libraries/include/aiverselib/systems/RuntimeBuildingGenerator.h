@@ -10,6 +10,7 @@
 #include "BuildingStructure.h"
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -63,6 +64,19 @@ public:
         }
     }
 
+    // A packaged-game resource callback (Addressables/PAK/zip/HTTP/file
+    // abstraction) supplies UTF-8 bytes. This never opens an OS file.
+    using AssetReader=std::function<bool(const std::string&,std::string&)>;
+    bool registerStyleAsset(const std::string& assetId,const AssetReader& read,
+                            std::string* error=nullptr) {
+        std::string bytes;
+        if(assetId.empty()||assetId.size()>256||!read||!read(assetId,bytes)) {
+            if(error)*error="Failed to read packaged building-style asset: "+assetId;
+            return false;
+        }
+        return registerStyleJson(bytes,error);
+    }
+
     bool registerStyle(BuildingStyle style,std::string* error=nullptr) {
         if(style.id.empty()||style.id.size()>64||style.structures.empty()||
            style.structure.hull<0||style.structure.dark<0) {
@@ -109,8 +123,15 @@ public:
         auto it=styles_.find(request.style);
         if(it==styles_.end())
             return fail(RuntimeBuildingError::UnknownStyle,"Unknown building style: "+request.style);
-        if(!it->second.structureKind(request.function))
+        const auto* kind=it->second.structureKind(request.function);
+        if(!kind)
             return fail(RuntimeBuildingError::UnknownFunction,"Unknown building function: "+request.function);
+        if(sized && (request.size.width < std::max(8.f,float(kind->doors)*4.f+4.f)||
+                     request.size.width>160.f||request.size.depth<8.f||
+                     request.size.depth>160.f||request.size.height<5.f||
+                     request.size.height>80.f))
+            return fail(RuntimeBuildingError::InvalidInput,
+                "Requested building dimensions are outside style/geometry limits");
         try {
             result.building=dressStructure(it->second,request.function,request.seed,
                                            request.origin,request.yaw,request.size);
