@@ -69,6 +69,26 @@ inline CaveMixedLodShardBatch planCaveMixedLodShardBatch(
         residents.push_back(std::move(c));
     }
     batch.visual=planCaveMixedLodVisual(residents,maxConnected);
+    // Legacy catalog entries without SDF source provenance cannot safely
+    // participate in a new stitched mixed-LOD face. Rebuild both sides from
+    // the current frozen source, even if their render revisions look valid.
+    for(const auto& face:batch.visual.faces){
+        const auto& a=combined.at(face.keys.negative);
+        const auto& b=combined.at(face.keys.positive);
+        if(face.decision!=CaveFaceDecision::ExactMatch &&
+           (!a.sourceRevision||!b.sourceRevision)){
+            batch.visual.sourceConflict=true;
+            for(const auto* chunk:{&a,&b}){
+                const auto it=batch.visual.rebuild.find(chunk->mesh.key);
+                if(it==batch.visual.rebuild.end()||
+                   it->second.spacingCm>face.targetSpacingCm)
+                    batch.visual.rebuild[chunk->mesh.key]=CaveRebuildRequest{
+                        chunk->mesh.key,face.targetResolution,
+                        face.targetSpacingCm,
+                        chunk->sourceRevision,0};
+            }
+        }
+    }
     if(!batch.ready())return batch;
 
     // If a coarse neighbor must change its visual triangulation, its
