@@ -191,6 +191,27 @@ public:
         return true;
     }
 
+    // EXPLICIT EDITOR-ONLY VISUAL PREVIEW. Does not publish game physics,
+    // does not certify navigation, and must NEVER ACK the gameplay dirty queue.
+    // The caller must keep native editor/play views separate. This is a
+    // presentation change only and no cross-owner transaction is implied.
+    bool activateVisualOnly(const std::vector<CaveShardKey>& shardKeys) {
+        if(shardKeys.empty())return false;
+        std::set<CaveShardKey,CaveShardLess> unique;
+        for(const auto& key:shardKeys){
+            if(!unique.insert(key).second)return false;
+            const auto a=pending_.find(key);
+            const auto b=owners_.find(key);
+            if(a==pending_.end()||b==owners_.end()||!b->second||
+               !b->second->hasStaged()||
+               b->second->stagedRevision()!=a->second.revision)
+                return false;
+        }
+        // This callback asserts ONLY the visual state was staged. Do not
+        // substitute it for activateGroup's real gameplay owner callback.
+        return activateGroup(shardKeys,[](const auto&){return true;});
+    }
+
     bool cancel(CaveShardKey shard) {
         auto it=pending_.find(shard);
         if(it==pending_.end())return false;
