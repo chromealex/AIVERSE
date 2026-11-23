@@ -241,6 +241,14 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
             Json request=p;request.set("action",Json::string("replayPrepare"));
             return spectraPreview(request);
         }});
+    registerOp({"fx_checkpoint_timeline",
+        "Save or restore a paused Metal preview checkpoint; poll fx_replay_status for completion.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["checkpointSave","checkpointRestore","status"]},"checkpointId":{"type":"integer","minimum":1}},"required":["action"]})"),
+        [this](const Json& p)->Json {
+            const auto action=p.getStr("action");
+            if(action!="checkpointSave"&&action!="checkpointRestore"&&action!="status")throw std::runtime_error("Invalid checkpoint action");
+            return spectraPreview(p);
+        }});
     registerOp({"fx_replay_status",
         "Read native SpectraFX replay readiness, tick, GPU seed retry state and backend. Requires a running Studio FX viewport.",
         Json::parse(R"({"properties":{}})"),
