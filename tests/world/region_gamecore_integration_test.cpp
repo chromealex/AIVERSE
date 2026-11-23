@@ -183,7 +183,37 @@ static void verifyLiveGameCore() {
     AIVERSE_TEST_CHECK(!regular->serialize().empty());
 }
 
+static void blockedRequestDoesNotLoseActors() {
+    auto game=make(true);
+    auto& ecs=game->world();
+    auto* ledger=ecs.resource<w::RegionEntityLedger>();
+    auto* cold=ecs.resource<w::RegionColdStore>();
+    const Entity e=target(*game);
+    const auto cell=region(*game);
+    AIVERSE_TEST_CHECK(ledger && cold);
+    // A ledger owner without a live ECS binding is a load/reification fault.
+    // The scheduler must keep the request, not silently park the other actor.
+    AIVERSE_TEST_CHECK(ledger->spawn(9999,cell));
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::request(*game,cell,false));
+    const auto before=game->checksum();
+    w::RegionDormancyController policy;
+    AIVERSE_TEST_CHECK(policy.registerComponent<fixture::RegionWork>("fixture.region_work",1));
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::step(*game,policy,1)==0);
+    AIVERSE_TEST_CHECK(game->checksum()==before);
+    AIVERSE_TEST_CHECK(ecs.has<fixture::RegionWork>(e));
+    AIVERSE_TEST_CHECK(!ecs.has<w::RegionDormant>(e));
+    const auto* queue=ecs.resourceConst<w::RegionActivationQueue>();
+    AIVERSE_TEST_CHECK(queue && queue->pending.size()==1 && queue->applied==0);
+    // A new validated command can replace the failed request without clearing
+    // the ledger identity of any already-living entity.
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::request(*game,cell,true));
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::step(*game,policy,1)==0);
+    // An unmaterialized identity blocks both hot and cold transitions.
+    AIVERSE_TEST_CHECK(ecs.has<fixture::RegionWork>(e));
+}
+
 int main() {
+    blockedRequestDoesNotLoseActors();
     verifyLiveGameCore();
     std::cout<<"PASS real GameCore region lifecycle integration, commands, save and rollback\n";
 }
