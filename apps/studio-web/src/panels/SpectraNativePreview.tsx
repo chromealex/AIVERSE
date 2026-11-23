@@ -5,19 +5,19 @@ import type { StudioSpectraPreviewState } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioField, StudioInput, StudioSection } from '../ui';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
+import SpectraDockViewport from './SpectraDockViewport';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
 interface Props {
   graph:SpectraGraphV2;
   projectPath:string;
-  showScene:()=>void;
   disabled?:boolean;
 }
 /** The only particle GPU preview is the actual render-thread-owned native
  * Scene. This UI never claims that its DOM contains GPU particles.
  */
-export default function SpectraNativePreview({graph,projectPath,showScene,disabled=false}:Props){
+export default function SpectraNativePreview({graph,projectPath,disabled=false}:Props){
   const [state,setState]=useState<StudioSpectraPreviewState|null>(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -63,13 +63,12 @@ export default function SpectraNativePreview({graph,projectPath,showScene,disabl
     }
     await command('parameter',{name:parameter,value:numeric});
   };
-  return <StudioSection title="Real native particle preview"
-    actions={<StudioButton size="sm" variant="secondary" onClick={showScene}>
-      <Eye size={14}/> Open Scene viewport</StudioButton>}>
+  return <StudioSection title="Particle Preview">
+    <SpectraDockViewport/>
     {!active&&<StudioAlert tone="warning">Use the native AIVERSE Studio application for actual Metal/Vulkan Scene rendering. Browser demo cannot access a GPU Device.</StudioAlert>}
     <p className="spectra-native__hint">
-      Renders real SpectraFX particles in the native Scene view before PRISMA resolve.
-      Open Scene first, then load this unsaved graph. The browser does not draw fake particles.
+      Live native Metal/Vulkan particle stage, embedded in the Graph panel.
+      Load this graph and press Play. Orbit the camera in the viewport; no Scene tab or map placement is required.
     </p>
     {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
     <div className="spectra-native__toolbar">
@@ -128,8 +127,8 @@ export default function SpectraNativePreview({graph,projectPath,showScene,disabl
         onClick={()=>void setLiveValue()}>Apply live</StudioButton>
     </div>}
     <p className="spectra-native__hint">
-      GPU is selected only when the complete compiled graph is eligible and Metal compute is available;
-      otherwise the real CPU fallback draws into the same native pass. A loaded preview is not proof of cross-backend parity.
+      The native backend decides GPU eligibility; CPU fallback renders real particles into the same viewport.
+      Graph edits require Load graph again. GPU/CPU numerical parity is a separate hardware test.
     </p>
   </StudioSection>;
 }
