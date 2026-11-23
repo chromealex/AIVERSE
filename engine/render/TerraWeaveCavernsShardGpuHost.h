@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -56,6 +57,55 @@ public:
             (void)gpu->cancelStage();
             throw;
         }
+        return true;
+    }
+
+    // Bridge adapter: group prepared CPU edits by spatial shard, then GPU
+    // stage each full shard (including unchanged sources). On any rejection,
+    // cancel the stages created by THIS invocation; failed GPU allocations
+    // retain their GeometryScene owner for later GPU-idle recovery.
+    // Returns all affected keys only when every shard has staged.
+    bool stagePreparedEdits(gfx::Device& device,
+                            const std::vector<CavePreparedEdit>& edits,
+                            uint64_t generatorVersion,
+                            uint64_t batchRenderRevision,
+                            std::vector<CaveShardKey>& stagedShards,
+                            CaveBatchSpec spec={}) {
+        if(!generatorVersion||edits.empty()||!batchRenderRevision)
+            return false;
+        std::vector<CaveBatchChunk> chunks;
+        chunks.reserve(edits.size());
+        const auto sourceRevision=edits.front().candidate.sourceRevision;
+        for(const auto& item:edits){
+            const auto& c=item.candidate;
+            if(!sourceRevision||c.sourceRevision!=sourceRevision||
+               c.sourceRevision!=item.dirty.sourceRevision||
+               c.mesh.key!=item.dirty.key||!c.renderRevision)
+                return false;
+            CaveBatchChunk itemChunk;
+            itemChunk.mesh=c.mesh;
+            itemChunk.generatorVersion=generatorVersion;
+            itemChunk.revision=c.renderRevision;
+            itemChunk.resolution=c.resolution;
+            itemChunk.spacingCm=c.spacingCm;
+            chunks.push_back(std::move(itemChunk));
+        }
+        const auto grouped=groupCaveEditsByShard(chunks,catalog_.config());
+        std::vector<CaveShardKey> local;
+        local.reserve(grouped.size());
+        try{
+            for(const auto& [shard,group]:grouped){
+                if(!stage(device,shard,group,batchRenderRevision,spec)){
+                    for(auto key:local)(void)cancel(key);
+                    return false;
+                }
+                local.push_back(shard);
+            }
+        }catch(...){
+            for(auto key:local)(void)cancel(key);
+            throw;
+        }
+        stagedShards=std::move(local);
         return true;
     }
 
