@@ -161,6 +161,30 @@ void testLateGameplayCommandWaitsForNextAdmission() {
     AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()->applied==1);
 }
 
+void testQueuedDestinationSurvivesSave() {
+    auto original=create(false);
+    auto& host=actor::host(*original);
+    const Entity actor=host.characterEntity(*original,1);
+    const Vec3 destination{100_fx,2_fx,4_fx};
+    std::string error;
+    AIVERSE_TEST_CHECK(host.requestRegionMove(
+        *original,actor,destination,&error));
+    const auto checksum=original->checksum();
+    const auto bytes=original->serialize();
+    AIVERSE_TEST_CHECK(!bytes.empty() && uint8_t(bytes[4])==10);
+    auto recovered=create(false);
+    AIVERSE_TEST_CHECK(recovered->deserialize(bytes,&error));
+    AIVERSE_TEST_CHECK(recovered->checksum()==checksum);
+    AIVERSE_TEST_CHECK(recovered->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.size()==1);
+    original->step();
+    recovered->step();
+    AIVERSE_TEST_CHECK(original->checksum()==recovered->checksum());
+    AIVERSE_TEST_CHECK(recovered->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+    AIVERSE_TEST_CHECK(recovered->world().get<actor::CharacterBody>(actor).pos.x>=96_fx);
+}
+
 void testStaticAndOccupiedMove() {
     auto sim=create(false);
     auto& host=actor::host(*sim);
@@ -197,6 +221,7 @@ void testStaticAndOccupiedMove() {
 int main() {
     testFailedDestinationPreservesAuthoritativeState();
     testLateGameplayCommandWaitsForNextAdmission();
+    testQueuedDestinationSurvivesSave();
     testStaticAndOccupiedMove();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
 }
