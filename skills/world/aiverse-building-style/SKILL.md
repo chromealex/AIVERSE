@@ -537,3 +537,53 @@ utilities or other optional graph owners have been wired yet.
 Tests were deferred per user instruction; no native compilation or
 end-to-end graph update was verified. Handoff:
 `docs/agent-handoffs/building-graph-owners-stage23d-2026-11-23.md`.
+
+
+## Stage 23E — RoadGraph, directed ZoneGraph and optional rail owner
+
+Use `engine/buildings/BuildingTransportZoneGraphAdapters.h` from the
+`BuildingRuntime.h` umbrella for existing road and game-zone systems.
+
+`BuildingRoadGraphView::initialize(const game::RoadGraph&,CanTraverse)`
+produces a filtered ROAD GRAPH of existing ECS road nodes/adjacency,
+with the game-provided `CanTraverse(uint16_t from,uint16_t to)`
+grounded in current authoritative world/collider/permissions.
+The source RoadGraph remains owned by the game, and the existing
+RoadGraph::path(World&,from,to) still solves routes on the filtered
+copy. Register `roadView.consumer()` under
+`BuildingGraphDomain::Transport` when roads depend on building
+gate access. Never convert world-space building sockets into arbitrary
+new road nodes. The view preserves original node indices and is
+recomputed from the actual source on committed graph events.
+
+`BuildingZoneGraphView` wraps the existing
+`aiverselib/strategy/ZoneGraph.h`. The game supplies a live
+`CanTraverse(const ZoneDoor&)` predicate; derived data may REMOVE
+directed door edges blocked by physics, but NEVER adds permissions,
+abilities, checkpoints or fake reverse links. Register its consumer
+under `BuildingGraphDomain::Gameplay`. Existing ZoneState remains
+the game-owned mutable actor state; routing/checkpoints and
+`moveZone` still require actual authoritative contact and sequence
+checks. The derived view is not itself a live ZoneState migration or
+proof of absence of softlocks.
+
+The rail mechanics `libraries/include/aiverselib/mechanics/Railways.h`
+was identified in the default branch search, but was NOT fetchable
+from the current building feature branch; do not add a broken mandatory
+include. Pass the existing rail owner's callback to
+`buildingRailOwnerInvalidator`, checking active track blocks and
+train reservations before acknowledging. To register both road and rail
+under the single Transport domain, use
+`buildingAllGraphOwners({roadView.consumer(), railCallback})`.
+All callbacks must be retry-safe; no new rail occupancy/physics
+implementation is created. Avoid claiming a full integrated railway
+update merely because the optional callback interface exists.
+
+Changes flow from physically committed gate/roof events, through
+`BuildingGraphChangeRouter`, to these derived graph owners.
+The caller registers only the domains it genuinely uses. Source
+snapshot changes require the game's exclusive owner phase; the
+views reference source graphs, which must outlive the adapters.
+No tests were run per user instruction; this code is NOT verified
+as compiling or running in a live game.
+Handoff: `docs/agent-handoffs/building-transport-zone-stage23e-2026-11-23.md`.
