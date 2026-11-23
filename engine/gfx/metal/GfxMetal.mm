@@ -2309,12 +2309,14 @@ public:
         if (gpuScopeActive_) endGpuScope();
         if (capture_ && drawable_ && captureDelay_-- <= 0 && !drawable_.texture.framebufferOnly) {
             // copy the finished frame into a shared buffer before presenting it
-            const NSUInteger w = drawable_.texture.width, h = drawable_.texture.height, row = w * 4;
+            const NSUInteger w = drawable_.texture.width, h = drawable_.texture.height, row = (w * 4 + 255) & ~NSUInteger(255);
             id<MTLBuffer> buf = [device_ newBufferWithLength:row * h options:MTLResourceStorageModeShared];
-            id<MTLBlitCommandEncoder> blit = [cmd_ blitCommandEncoder];
+            id<MTLBlitCommandEncoder> blit = buf ? [cmd_ blitCommandEncoder] : nil;
+            if(blit){
             [blit copyFromTexture:drawable_.texture sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
                        sourceSize:MTLSizeMake(w, h, 1) toBuffer:buf destinationOffset:0 destinationBytesPerRow:row destinationBytesPerImage:row * h];
             [blit endEncoding];
+            }
             auto c = std::make_shared<Captured>();
             c->w = int(w); c->h = int(h); c->fn = std::move(capture_);
             capture_ = nullptr;
@@ -2324,13 +2326,15 @@ public:
                 c->fn=[tagged=std::move(tagged),serial](int w,int h,std::vector<uint8_t> pixels){tagged(serial,w,h,std::move(pixels));};
             }
             captured_ = c;
-            [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
+            if(!blit){c->w=0;c->h=0;c->ready=true;}
+            else [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
                 if(completed.status!=MTLCommandBufferStatusCompleted||!buf){c->w=0;c->h=0;c->ready=true;return;}
                 const uint8_t* src = static_cast<const uint8_t*>(buf.contents);
-                c->px.resize(size_t(row * h));
-                for (size_t i = 0; i < size_t(w * h); ++i) { // BGRA -> RGBA
-                    c->px[i * 4 + 0] = src[i * 4 + 2]; c->px[i * 4 + 1] = src[i * 4 + 1];
-                    c->px[i * 4 + 2] = src[i * 4 + 0]; c->px[i * 4 + 3] = 255;
+                c->px.resize(size_t(w * h * 4));
+                for (size_t i = 0; i < size_t(w * h); ++i) { // BGRA -> RGBA, strip row padding
+                    const size_t j=(i/size_t(w))*size_t(row)+(i%size_t(w))*4;
+                    c->px[i * 4 + 0] = src[j + 2]; c->px[i * 4 + 1] = src[j + 1];
+                    c->px[i * 4 + 2] = src[j + 0]; c->px[i * 4 + 3] = 255;
                 }
                 c->ready = true; // read on the main thread in the next beginFrame (after the semaphore)
             }];
