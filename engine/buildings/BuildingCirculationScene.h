@@ -166,6 +166,12 @@ public:
         host_.clear();
         attached_=false;faulted_=false;
     }
+    // An ECS rider/transform publication failure must also stop the
+    // navigation owner: the cabin's collision and actor state diverged.
+    void fault(nav::Mesh* navmesh){
+        faulted_=true;
+        if(navmesh)navmesh->markAllDirty();
+    }
     bool attached()const noexcept{return attached_;}
     bool faulted()const noexcept{return faulted_;}
 
