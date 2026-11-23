@@ -3,6 +3,10 @@
 #include "engine/actor/ActorModule.h"
 #include "engine/net/SnapshotDelta.h"
 #include <deque>
+#include <filesystem>
+#include <array>
+
+namespace aiverse::actor { class ActorPersistentSession; }
 
 namespace aiverse::net::authority {
 constexpr uint32_t kProtocol=6;   // 6: RaceView in snapshots
@@ -28,6 +32,12 @@ struct SnapshotStats{uint64_t packets=0,bytes=0,fullBytes=0,fullPackets=0;};
 class Server {
 public:
     Server(const Json& rules,const Json& map,uint64_t seed=1,world::AssetReader reader={});
+    ~Server();
+    // Enable before attaching any connection; create and resume are explicit.
+    bool enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,
+                           bool resume,size_t budget=64u*1024u*1024u);
+    bool persistenceFailed()const{return persistenceFailed_;}
+    bool checkpointWorld();
     bool attach(uint8_t slot,std::unique_ptr<Conn> connection);
     void poll(uint64_t now);
     bool step();
@@ -43,6 +53,8 @@ private:
     uint64_t content_=0,rejected_=0;
     SnapshotStats stats_;
     std::vector<Peer> peers_;
+    std::unique_ptr<actor::ActorPersistentSession> persistence_;
+    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false;
 };
 class Client {
 public:
