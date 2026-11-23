@@ -185,7 +185,8 @@ bool validWorldProcessDocumentRef(const editor::MapDoc& map,std::string_view com
     size_t found=0;
     for(const auto& entity:map.data.entities)
         if(entity.id==value.str() &&
-           entity.extra["components"].has(std::string(target)))++found;
+           (target=="Entity"||
+            entity.extra["components"].has(std::string(target))))++found;
     return found==1;
 }
 // A Scene/Hierarchy deletion cannot leave a survivor with an orphaned
