@@ -1,18 +1,19 @@
 ---
 name: aiverse-crowd
-description: Use AIVERSE CROWD when implementing Жанронезависимая система групповых целей, назначения слотов и движения по NavMesh маршрутам.
+description: Use AIVERSE CROWD for Deterministic crowd placement, slots, local avoidance and existing NavMesh route following.
 ---
 # CROWD — AIVERSE skill
 
 ## When to activate
-Жанронезависимая система групповых целей, назначения слотов и движения по NavMesh маршрутам.
+Deterministic crowd placement, slots, local avoidance and existing NavMesh route following.
 
-Typical request: толпы NPC, распределение мест, очереди, локальное избегание, маршруты персонажей. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: NPC crowds, queues, formations, path routing, destination allocation. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/CrowdEcs.h`, `libraries/include/aiverselib/world/CrowdRoutes.h`.
 - **Authoritative ECS:** `crowd::Agent, Slot, Preference, Route`.
 - **Lifecycle:** `aiverse::lib::worldprocess::installSuite(sim, flags) with flags.crowd=true`; per-tick behavior: `crowd::advanceRoutes(world,tick) BEFORE crowd::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `CrowdAgent, CrowdSlot, CrowdPreference (Route is runtime-generated)`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/CrowdNavMeshBridge.h`, `ImprintCrowdBridge.h`, `WorldProcessesQueries.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
