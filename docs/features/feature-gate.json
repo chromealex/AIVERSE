@@ -32,7 +32,8 @@
     "tools/agents/feature_registry.py",
     "tools/agents/new_feature.py",
     "tools/agents/legacy_inventory.py",
-    "docs/agents/legacy-integration-map.json"
+    "docs/agents/legacy-integration-map.json",
+    "tools/agents/capability_inventory.py"
   ],
   "traits": {
     "editable": false,
