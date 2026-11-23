@@ -18,7 +18,11 @@
     "apps/studio-web/src/panels/shaderGraphLayout.ts",
     "apps/studio-web/tests/shaderGraphEdit.test.mjs",
     "apps/studio-web/src/graphs/graphSelection.ts",
-    "apps/studio-web/src/graphs/graphGeometry.ts"
+    "apps/studio-web/src/graphs/graphGeometry.ts",
+    "apps/studio-web/src/graphs/nativeGraphAdapters.ts",
+    "apps/studio-web/src/graphs/NativeGraphPanel.tsx",
+    "apps/studio-web/src/panels/ToolPanel.tsx",
+    "apps/studio-web/tests/nativeGraphAdapters.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -126,16 +130,29 @@
       "shader_graph_catalog",
       "shader_graph_get",
       "shader_graph_validate",
-      "shader_graph_set"
+      "shader_graph_set",
+      "fx_graph_list",
+      "fx_graph_get",
+      "fx_graph_node_catalog",
+      "fx_graph_edit",
+      "fx_graph_validate",
+      "fx_graph_set",
+      "animation_graph_list",
+      "animation_graph_get",
+      "animation_graph_validate",
+      "animation_graph_set"
     ],
     "studio_panels": [
-      "shader_graph"
+      "shader_graph",
+      "fx_graph",
+      "anim_graph"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",
       "studio.shaderGraphGet",
       "studio.shaderGraphValidate",
-      "studio.shaderGraphSave"
+      "studio.shaderGraphSave",
+      "studio.op"
     ]
   },
   "test_reports": []
