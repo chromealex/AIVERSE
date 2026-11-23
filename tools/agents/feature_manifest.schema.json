@@ -6,7 +6,9 @@
     "schema",
     "id",
     "owner",
-    "checks"
+    "checks",
+    "changed_paths",
+    "traits"
   ],
   "properties": {
     "schema": {
@@ -97,6 +99,39 @@
         },
         "publishing": {
           "$ref": "#/$defs/check"
+        }
+      }
+    },
+    "changed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "traits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "editable",
+        "simulation",
+        "visible",
+        "runtime"
+      ],
+      "properties": {
+        "editable": {
+          "type": "boolean"
+        },
+        "simulation": {
+          "type": "boolean"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "runtime": {
+          "type": "boolean"
         }
       }
     }
