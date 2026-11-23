@@ -21,12 +21,53 @@ public:
         stagedRevision_=source.revision;
         return true;
     }
+    // Stage35: create candidate while all physics ticks/queries are paused.
+    // The new body is IMMEDIATELY active in Box3D (not invisible staging).
+    // This function must not be exposed outside an exclusive owner barrier.
+    // Old body remains alive so pre-publication failure can revert.
+    bool installCandidate(physics::Scene& scene,uint64_t revision) {
+        if(!staged_||revision!=stagedRevision_||
+           candidateInstalled_)return false;
+        if(staged_->indices.empty()) {
+            candidateBody_=physics::kNoBody;
+            candidateInstalled_=true;
+            return true;
+        }
+        candidateBody_=scene.create(*staged_);
+        if(candidateBody_==physics::kNoBody)return false;
+        candidateInstalled_=true;
+        return true;
+    }
+    bool revertCandidate(physics::Scene& scene,uint64_t revision) {
+        if(!candidateInstalled_||!staged_||
+           revision!=stagedRevision_)return false;
+        if(candidateBody_!=physics::kNoBody&&
+           scene.valid(candidateBody_)&&!scene.destroy(candidateBody_))
+            return false;
+        candidateBody_=physics::kNoBody;
+        candidateInstalled_=false;
+        return true;
+    }
+    // Final retirement may fail if Scene::destroy refuses; a host MUST keep
+    // the exclusive barrier closed and enter recovery, not publish GPU/nav.
+    bool finalizeInstalled(physics::Scene& scene,uint64_t revision) {
+        if(!candidateInstalled_||!staged_||
+           revision!=stagedRevision_)return false;
+        if(activeBody_!=physics::kNoBody&&scene.valid(activeBody_)&&
+           !scene.destroy(activeBody_))return false;
+        activeBody_=candidateBody_;
+        activeRevision_=stagedRevision_;
+        staged_.reset();stagedRevision_=0;
+        candidateBody_=physics::kNoBody;
+        candidateInstalled_=false;
+        return true;
+    }
     // Never call during a Box3D tick or concurrent collision query.
     // Creates new body then destroys old one at owner barrier.
     // If creation fails, keeps the old body and staged descriptor.
     // Creating a new body briefly overlaps old one inside this call.
     bool commit(physics::Scene& scene,uint64_t revision){
-        if(!staged_||revision!=stagedRevision_)return false;
+        if(!staged_||revision!=stagedRevision_||candidateInstalled_)return false;
         // A fully filled/no-surface chunk has NO active body. Retiring
         // the previous body is itself a versioned commit.
         if(staged_->indices.empty()) {
@@ -50,7 +91,7 @@ public:
         return true;
     }
     bool abort(uint64_t revision){
-        if(!staged_||revision!=stagedRevision_)return false;
+        if(!staged_||revision!=stagedRevision_||candidateInstalled_)return false;
         staged_.reset();stagedRevision_=0;return true;
     }
     void unload(physics::Scene& scene){
@@ -62,6 +103,8 @@ public:
 private:
     std::optional<physics::BodyDesc> staged_;
     physics::BodyHandle activeBody_=physics::kNoBody;
+    physics::BodyHandle candidateBody_=physics::kNoBody;
+    bool candidateInstalled_=false;
     uint64_t stagedRevision_=0,activeRevision_=0;
 };
 } // namespace aiverse::terraweave::caverns
