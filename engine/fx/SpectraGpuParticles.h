@@ -166,6 +166,7 @@ public:
     // Blocking diagnostics only, between COMPLETED frames (Metal's readBuffer
     // rejects open command buffers). This is not CPU ParticleSystem import.
     bool captureGpuCheckpoint(GpuCheckpoint& out);
+    bool restoreFreshGpuCheckpoint();
     // Enqueues bounded async chunks, returns false if it cannot start.
     // Callback reports whether all three buffers formed a complete snapshot.
     bool requestGpuCheckpoint(std::function<void(bool)> callback = {});
