@@ -1145,3 +1145,57 @@ automatic hot/cold eviction.
 
 CTest was authored/extended but **not compiled or executed** on
 the required Mac/KINGSTON build. PR #116 remains Draft.
+
+
+## Stage 17 — close missed movement owner paths and batch-atomic dirty marks
+
+This source stage audited canonical movement writers across
+`ActorModule.cpp`, `ActorSystems.cpp`, `ActorVehicles.cpp`,
+`ActorRoyale.cpp`, the existing pre-tick `ActorRegionAdmission`,
+and the generic `RegionDirtyQueue`. Two uncovered gameplay
+position writers were found and amended:
+
+- **Vault:** `ActorHost::action(Action::Vault)` writes
+  `CharacterBody.pos` after collision checks. It now calls
+  `reportRegionMoveIfCrossed` before returning, so a vault
+  that lands across a 32-unit boundary marks the character.
+- **Deathmatch respawn:** `ActorHost::tick` restores the
+  canonical `CharacterSnapshot` at a spawn point. It now
+  reports a crossing immediately after `assign(a,fresh)`.
+  Existing `ActorHost::readyToStep` already preloads spawn
+  collision and remains the admission owner.
+
+The staged teleport path now calls
+`RegionDirtyQueue::canMarkMany(entities)` **before** the
+authoritative movement commit. Its final `markMany` operation
+updates all actor/car/occupant `Move` flags in a batch;
+a full dirty queue rejects the whole request instead of
+partially marking a car without its passengers. It also
+rejects invalid/unknown event kinds.
+
+The generic queue reserves only missing IDs in a sorted
+group, inserts them before modifying any existing flags,
+and rolls back newly inserted keys if allocation fails.
+Unlike copying the entire 65,536-entry queue, this approach
+scales with the moved group. Repeated IDs coalesce.
+The persistent v1 Archive schema and deterministic key order
+are unchanged.
+
+The new source assertions in `region_dirty_queue_test`
+fill the bounded queue, prove a two-actor group is
+rejected without modification when only one slot remains,
+then prove duplicates/existing IDs do not consume space.
+`actor_region_lifecycle_test` adds an actual world-space
+deathmatch respawn across a cell boundary and verifies
+one ACK, original owner and a completed fixed tick.
+
+**Scope limitation:** this is still **not** guaranteed
+exception-atomic across all ActorHost/VehicleDrive component
+writes, nor universal interception of custom native scripts.
+The fallback full ECS scan must remain enabled; the
+event-feed path cannot be treated as complete until a
+real compiled, tested writer audit has been executed.
+
+All tests here were authored and committed in source; none
+were executed on the user's Mac/KINGSTON build. W1 remains
+partial and PR #116 Draft.
