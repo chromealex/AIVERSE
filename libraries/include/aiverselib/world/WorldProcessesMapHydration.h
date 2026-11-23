@@ -32,7 +32,10 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
-        return {};
+        MapHydration enabled;
+        enabled.extra=requested;
+        installSuite(sim,requested); // explicitly enabled native runtime, empty map
+        return enabled;
     }
     if(entities.size()!=placed.size())
         throw std::invalid_argument("World Processes: map ECS placement count mismatch");
