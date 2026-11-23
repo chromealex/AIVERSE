@@ -6,6 +6,8 @@ import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, St
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
+import { compareSpectraCaptures } from './spectraPixelDiff';
+import type { SpectraPixelDiff } from './spectraPixelDiff';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -40,6 +42,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [compareB,setCompareB]=useState('');
   const [captureSlot,setCaptureSlot]=useState<'A'|'B'|null>(null);
   const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
+  const [diffThreshold,setDiffThreshold]=useState(16);
+  const [pixelDiff,setPixelDiff]=useState<SpectraPixelDiff|null>(null);
+  const [diffError,setDiffError]=useState('');
   const [captureError,setCaptureError]=useState('');
   const [parameter,setParameter]=useState('');
   const [value,setValue]=useState('0');
@@ -50,6 +55,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setAutoReload(false);
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
+    setPixelDiff(null);setDiffError('');
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -135,6 +141,28 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     return()=>{closed=true;window.clearInterval(timer);};
   },[active,capturePending,captureSlot]);
 
+  useEffect(()=>{
+    let cancelled=false;
+    setPixelDiff(null);setDiffError('');
+    if(!compareA||!compareB)return;
+    void compareSpectraCaptures(compareA,compareB,diffThreshold).then(result=>{
+      if(!cancelled)setPixelDiff(result);
+    }).catch(e=>{if(!cancelled)setDiffError(message(e));});
+    return()=>{cancelled=true;};
+  },[compareA,compareB,diffThreshold]);
+
+  const exportComparison=()=>{
+    if(!pixelDiff||!compareA||!compareB)return;
+    const report={kind:'spectrafx-native-jpeg-ab',formatVersion:1,
+      threshold:diffThreshold,width:pixelDiff.width,height:pixelDiff.height,
+      changed:pixelDiff.changed,total:pixelDiff.total,
+      changedPercent:pixelDiff.changedPercent,meanAbsoluteError:pixelDiff.meanAbsoluteError,
+      caveat:'8-bit decoded JPEG sRGB comparison; not HDR/alpha or backend parity'};
+    const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;link.download='spectrafx-ab-report.json';
+    link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
     setBusy(true);setCaptureError('');setCaptureSlot(slot);
@@ -318,6 +346,21 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         </div>}
       </div>
       <small>Comparison uses actual native GPU JPEG captures. Pixel-difference metrics are not yet available.</small>
+    </div>}
+    {(compareA&&compareB)&&<div className="spectra-native__snapshot">
+      <StudioField label="Pixel difference threshold (0–255)" htmlFor="spectra-diff-threshold">
+        <StudioInput id="spectra-diff-threshold" type="range" min={0} max={255} step={1}
+          value={diffThreshold} onChange={e=>setDiffThreshold(Number(e.target.value))}/>
+      </StudioField>
+      <span>Threshold: {diffThreshold}</span>
+      {diffError&&<StudioAlert tone="warning">{diffError}</StudioAlert>}
+      {pixelDiff&&<>
+        <p>Changed: {pixelDiff.changedPercent.toFixed(2)}% ({pixelDiff.changed}/{pixelDiff.total} pixels)
+          · Mean RGB error: {pixelDiff.meanAbsoluteError.toFixed(2)}/255</p>
+        <img src={pixelDiff.heatmap} alt="Absolute RGB pixel difference heatmap"/>
+        <a href={pixelDiff.heatmap} download="spectrafx-ab-difference.png">Save difference heatmap</a>
+        <StudioButton size="sm" onClick={exportComparison}>Export JSON report</StudioButton>
+      </>}
     </div>}
     {captureError&&<StudioAlert tone="warning">{captureError}</StudioAlert>}
     {captureImage&&<div className="spectra-native__snapshot">
