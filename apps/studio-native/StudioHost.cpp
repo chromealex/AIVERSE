@@ -838,6 +838,32 @@ void StudioHost::rebuildOverlay() {
                             float(areaPreview.halfWidth*2.),
                             float(areaPreview.halfDepth*2.),100,255,160);
                     }
+                    // Preview every selected region for group resize, with
+                    // a shared centroid marker (individual mode keeps centers).
+                    if(wpDrag_.component=="EvolveArea" &&
+                       (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")){
+                        const auto selected=session_->selectedObjectIds();
+                        std::vector<worldprocess_edit::AreaPreview> group;
+                        render::float3 pivot{};
+                        if(selected.size()>1 &&
+                           worldprocess_edit::previewGroupResize(
+                               session_->workspace().map,selected,wpDrag_.owner,
+                               static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                               double(wpDrag_.value),wpDrag_.symmetric,group,pivot) &&
+                           shapes.size()+group.size()*4+2<1390){
+                            for(const auto& region:group)
+                                worldprocess_gizmos::rectangle(shapes,
+                                    {float(region.centerX),.47f,float(region.centerZ)},
+                                    float(region.halfWidth*2.),
+                                    float(region.halfDepth*2.),255,195,90);
+                            shapes.push_back(worldprocess_gizmos::makePoint(
+                                pivot.x,pivot.y,pivot.z,255,195,90,11.f));
+                            shapes.push_back(worldprocess_gizmos::makeLabel(
+                                {pivot.x,pivot.y+.6f,pivot.z},
+                                wpDrag_.symmetric?"Individual pivots":"Group centroid",
+                                255,195,90));
+                        }
+                    }
                     shapes.push_back(worldprocess_gizmos::makeLine(
                         origin,wpDrag_.previewPoint,245,245,245,3.f));
                     shapes.push_back(worldprocess_gizmos::makePoint(
