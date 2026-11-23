@@ -47,7 +47,9 @@
     "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx",
     "engine/view/game/GameView.h",
     "apps/editor/EditorPlayOps.cpp",
-    "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx"
+    "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx",
+    "engine/render/graph/GraphTelemetry.h",
+    "apps/editor/core/GraphDebugSession.h"
   ],
   "traits": {
     "editable": true,
@@ -192,7 +194,8 @@
       "graph_asset_dependencies",
       "graph_runtime_capabilities",
       "graph_runtime_probe",
-      "graph_live_snapshot"
+      "graph_live_snapshot",
+      "graph_debug_session"
     ],
     "studio_panels": [
       "shader_graph",
