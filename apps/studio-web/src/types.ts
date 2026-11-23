@@ -177,7 +177,7 @@ export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
 }
-export interface StudioBuildingGenerated { path: string; guid: string; bytes: number; triangles: number }
+export interface StudioBuildingGenerated { path: string; recipePath?: string; guid: string; bytes: number; triangles: number }
 export interface StudioParams {
   'studio.buildingCatalog': Record<string, never>;
   'studio.buildingInspect': StudioBuildingRequest;
