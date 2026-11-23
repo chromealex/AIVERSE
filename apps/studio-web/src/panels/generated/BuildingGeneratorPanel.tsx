@@ -375,6 +375,24 @@ export default function BuildingGeneratorPanel({
     // Reopening a dock may mount Assets only on the next React commit.
     requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path:saved.path}})));
   };
+  const applyToSelected=async()=>{
+    if(!saved||busy||!snapshot?.selectedId?.startsWith('entity:'))return;
+    if(!window.confirm('Replace the selected object’s mesh with the updated generated GLB? This is an undoable scene edit.'))return;
+    setBusy(true);setError('');
+    try{
+      // StudioSession::setMeshRenderer validates the existing authored
+      // entity, asset GUID and file; StudioScene owns GPU reload/retire.
+      const updated=await invoke('studio.setProperty',{
+        entityId:snapshot.selectedId,componentId:'MeshRenderer',
+        key:'asset',value:saved.guid
+      });
+      commitSnapshot(updated);
+      setStatus('Selected scene object now references the updated asset. Original GLB remains in Assets.');
+      showPanel('scene');
+    }catch(e){setError(explain(e));}
+    finally{setBusy(false);}
+  };
+
   const place=async()=>{
     if(!saved||busy)return;
     setBusy(true);setError('');
@@ -643,6 +661,8 @@ export default function BuildingGeneratorPanel({
           <div className="abg__actions">
             <StudioButton onClick={reveal}>Reveal in Assets</StudioButton>
             <StudioButton variant="primary" disabled={busy} loading={busy} onClick={()=>void place()}>Place in Scene</StudioButton>
+            <StudioButton variant="secondary" disabled={busy||!snapshot?.selectedId?.startsWith('entity:')}
+              onClick={()=>void applyToSelected()}>Use on Selected Object</StudioButton>
           </div>
         </div>
       </StudioSection>}
