@@ -518,3 +518,26 @@ has been performed; do not claim Stage28 green or merge PR #112.
 Next: overlapping endpoint cycling/labels, actual EVOLVE gameplay bounds
 authoring, and cross-platform verified Scene interaction when testing
 is later authorized.
+
+## Stage 30: shared EVOLVE spatial area authoring contract
+
+EVOLVE now has an ECS-persisted spatial footprint:
+`evolve::Area` in `aiverselib/world/EvolveArea.h`, authored through
+`EvolveArea` on the same map entity as `EvolveRegion`.
+`WorldProcessesMapHydration` attaches its center from the real map
+`pos` and its half-extents from the typed Studio component.
+The native `WorldProcessGameplayHost::forestClimate(world,baseline)`
+uses `evolve::extents(world)` for the existing TerraWeave forest
+climate sampler. Do not route ecology through the legacy editor-only
+`worldProcessGizmo.radiusMetres` circle.
+
+Native Studio Scene `StudioWorldProcessesEditing.h` provides handles
+for actual EvolveArea width/depth and stable reference links.
+Repeated clicks at one projected point cycle overlapping handles;
+the active field label appears beside the preview. Undo/Redo is through
+normal MapDoc RPCs at release; no browser-side shadow map.
+
+See `skills/world/aiverse-evolve/SKILL.md` and
+`docs/handoffs/world-processes-stage30-evolve-area-handle-cycling-2026-11-23.md`.
+Current source is committed but native compilation and runtime scene
+verification are deferred by user request. Do not claim QA success.
