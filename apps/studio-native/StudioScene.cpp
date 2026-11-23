@@ -1316,6 +1316,54 @@ void StudioScene::resetView() {
     camera_.pitch=0.85f;
     camera_.yaw=0.55f;
 }
+// Real Scene-device render target placed inside the SpectraFX Graph dock.
+// This is deliberately a *mode* on the existing render-thread-owned
+// CAMetalLayer/Vulkan surface, NOT a second graphics context or HTML frame.
+// The map is not submitted while FX authoring is active.
+void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
+    if(!device_ || framebufferWidth<2 || framebufferHeight<2)return;
+    // GPU updates/retirement happen between frames, before an active pass.
+    if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
+    if(renderer_.pendingProgramRetirements())renderer_.collectRetiredPrograms();
+    if(renderer_.pendingTargetRetirements())renderer_.collectRetiredTargets();
+    device_->beginFrame(framebufferWidth,framebufferHeight);
+    StudioFrameScope scope{*device_};
+    const auto view=viewCamera();
+    const float aspect=float(framebufferWidth)/float(framebufferHeight);
+    const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
+    if(spectraPreview_.active()) {
+        spectraPreview_.prepare(fx::SpectraFxView::fromCamera(
+            view,viewProj,framebufferWidth,framebufferHeight),{0,0,0});
+    }
+    renderer_.beginScene(view,framebufferWidth,framebufferHeight);
+    renderer_.clearDynamicGiOverlay();
+    renderer_.setSceneSelectionOutline(false);
+    renderer_.lighting=render::Lighting{};
+    renderer_.lighting.sunIntensity=1.0f;
+    renderer_.lighting.skyColor={.14f,.19f,.26f};
+    renderer_.lighting.groundColor={.12f,.14f,.18f};
+    renderer_.lighting.fogDensity=0.0f;
+    // Readable neutral particle stage. The origin stays under the camera
+    // so Spawn isn't hidden somewhere in the project's authored map.
+    const uint32_t major=rgba(78,111,146,110);
+    const uint32_t minor=rgba(53,76,102,72);
+    for(int i=-5;i<=5;++i) {
+        const auto color=i==0?major:minor;
+        renderer_.line({float(i),-.05f,-5},{float(i),-.05f,5},color);
+        renderer_.line({-5,-.05f,float(i)},{5,-.05f,float(i)},color);
+    }
+    renderer_.line({-.65f,0,0},{.65f,0,0},rgba(230,108,98));
+    renderer_.line({0,0,-.65f},{0,0,.65f},rgba(104,147,237));
+    gfx::PassDesc pass;
+    pass.clearColor[0]=.021f;pass.clearColor[1]=.032f;
+    pass.clearColor[2]=.052f;pass.clearColor[3]=1.0f;
+    renderer_.render(pass,&antialiasing_);
+    if(spectraPreview_.active())spectraPreview_.draw();
+    renderer_.resolvePostFx();
+    ++framesDrawn_;
+    // StudioFrameScope closes the native pass and frame on owner thread.
+}
+
 void StudioScene::frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                              bool fpsProject, const std::string& selectedId,
                              const std::string& previewName, const Json& previewFactors,
@@ -1332,6 +1380,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     facialReady_=false;
     facialError_.clear();
     if (!device_ || framebufferWidth < 2 || framebufferHeight < 2) return;
+    if(spectraDockMode_) {
+        // A dedicated VFX authoring viewport, not the authored map.
+        frameSpectraDock(framebufferWidth,framebufferHeight);
+        return;
+    }
     if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
     if (renderer_.pendingProgramRetirements()) renderer_.collectRetiredPrograms();
     if (renderer_.pendingTargetRetirements()) renderer_.collectRetiredTargets();
