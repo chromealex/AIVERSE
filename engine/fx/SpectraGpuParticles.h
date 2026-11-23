@@ -51,6 +51,8 @@ struct ComputeEmitterDesc {
     // Optional particle shaderGraph subset sharing the CPU material language.
     // Off by default, validated on the whole EffectDef before Metal routing.
     bool gpuMaterial = false;
+    bool gpuBirthRandom = false; // explicit Metal-specific random semantics
+    uint32_t gpuBirthSeed = 0;
     Json shaderGraph;
     Json graphInputs; // four vertex graphData source names
     // Opt-in async checkpoint cadence (0 = disabled). One full capture is
