@@ -77,7 +77,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       });
     },650);
     return()=>{closed=true;window.clearTimeout(handle);};
-  },[active,autoReload,state?.ready,state?.playing,graphSignature,graph,busy,disabled]);
+  },[active,autoReload,state?.ready,graphSignature,graph,disabled]);
 
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
