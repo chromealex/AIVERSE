@@ -50,7 +50,14 @@
     "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx",
     "engine/render/graph/GraphTelemetry.h",
     "apps/editor/core/GraphDebugSession.h",
-    "apps/studio-web/src/graphs/GraphDebugSessionPanel.tsx"
+    "apps/studio-web/src/graphs/GraphDebugSessionPanel.tsx",
+    "engine/animation/EcsAnimationSystems.h",
+    "engine/animation/MotionWeaveTelemetry.h",
+    "engine/view/View.h",
+    "engine/view/game/GameView.cpp",
+    "apps/editor/Editor.h",
+    "apps/editor/Editor.cpp",
+    "tests/view/view.cpp"
   ],
   "traits": {
     "editable": true,
