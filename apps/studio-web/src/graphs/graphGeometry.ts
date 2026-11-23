@@ -27,5 +27,5 @@ export function graphGeometry(view:GraphView,preview:readonly Positioned[]=[]){
  return {nodes,ports,wires};
 }
 export function samePort(a:PortRef|null|undefined,b:PortRef):boolean {
- return a?.node===b.node&&a.port===b.port;
+ return !!a&&a.node===b.node&&a.port===b.port;
 }
