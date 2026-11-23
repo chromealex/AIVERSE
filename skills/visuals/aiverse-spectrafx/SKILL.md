@@ -1895,3 +1895,7 @@ File transfers require transferId for append/read/import/cancel; idle buffers ex
 ## Stage 74 — static integration audit
 
 StudioTools fx_graph group now lists asset check, replay and checkpoint operations. Fixed missing TS asset failure helper, texture regex, malformed compute_.valid call and CPU UID conversion. Catalog summary updated. No compilation/tests. Continue audit of async restore state, transfer cleanup and RHI allocation failures before QA.
+
+## Stage 75 — restore and transfer lifecycle
+
+Active upload excludes simulation commands; cancel clears transfer ID; browser cancels failed uploads, successful import transfers ownership to render queue. Restore rebuilds host live slot mirror for non-indirect mode. No builds/tests; RHI failure handling and compile audit remain.
