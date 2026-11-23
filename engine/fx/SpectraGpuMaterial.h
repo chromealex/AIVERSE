@@ -20,7 +20,7 @@ struct Material {
 };
 
 // Packed GPU vertex graphData source selector:
-// 0 age, 1 lifetime, 2 reserved stable UID random (GPU unsupported),
+// 0 age, 1 lifetime, 2 Metal birth RNG (reserved until explicit routing opt-in),
 // 3 zero, 4..11 custom attribute0..7, 12..19 instance param0..7.
 inline bool decodeSources(const Json& inputs, std::array<uint32_t,4>& out,
                           std::string& reason) {
