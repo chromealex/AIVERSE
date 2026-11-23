@@ -160,12 +160,13 @@ export interface StudioSpectraPreviewState {
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
     value?:number;
     play?:boolean;
+    dx?:number;dy?:number;amount?:number;
   };
   'studio.wind':Record<string,never>;
   'studio.windSet':Partial<WindSettings>;
