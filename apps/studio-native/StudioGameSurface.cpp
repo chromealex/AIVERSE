@@ -1,5 +1,6 @@
 #include "aiverselib/world/EvolveVisualization.h"
 #include "engine/world/TerraWeaveEcsAuthority.h"
+#include "engine/world/TerraWeaveForestEcology.h"
 #include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "engine/sim/Simulation.h"
@@ -86,11 +87,26 @@ Json StudioGameSurface::ecologyState(){
     if(sim){
         const auto& world=sim->world();
         if(const auto* authority=world.resourceConst<terraweave::TerraWeaveAuthorityResource>()){
+            const auto* ecology=world.resourceConst<terraweave::ForestEcologyResource>();
             for(const auto& p:authority->rooted){
                 if(plants.size()>=4096)break;
                 Json row=Json::object();
                 row.set("x",Json::number(p.anchor.xCm));row.set("z",Json::number(p.anchor.zCm));
-                row.set("fallen",Json::fromBool(p.fallen));plants.push(std::move(row));
+                row.set("fallen",Json::fromBool(p.fallen));
+                row.set("id",Json::string(std::to_string(p.anchor.speciesId)+":"+std::to_string(p.anchor.plantKey)));
+                if(ecology){
+                    const terraweave::AnchoredPlantId id{p.anchor.speciesId,p.anchor.plantKey};
+                    const auto it=std::lower_bound(ecology->plants.begin(),ecology->plants.end(),id,
+                        [](const auto& a,const auto& b){return a.id<b;});
+                    if(it!=ecology->plants.end()&&it->id==id){
+                        row.set("dead",Json::fromBool(it->dead));
+                        row.set("recruited",Json::fromBool(it->recruited));
+                        row.set("shadeStress",Json::string(std::to_string(it->shadeStressTicks)));
+                        row.set("floodStress",Json::string(std::to_string(it->floodStressTicks)));
+                        row.set("droughtStress",Json::string(std::to_string(it->droughtStressTicks)));
+                    }
+                }
+                plants.push(std::move(row));
             }
             out.set("plantCount",Json::number(int64_t(authority->rooted.size())));
         }
