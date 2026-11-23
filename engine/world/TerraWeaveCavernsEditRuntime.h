@@ -113,8 +113,10 @@ public:
                 continue;
             auto frozen=snapshot_;
             const auto key=pending.key;
-            auto future=std::async(std::launch::async,[frozen,key,this](){
-                return generateCaveSnapshotMesh(*frozen,key,resolution_,spacingCm_);
+            const uint32_t resolution=resolution_;
+            const int32_t spacingCm=spacingCm_;
+            auto future=std::async(std::launch::async,[frozen,key,resolution,spacingCm](){
+                return generateCaveSnapshotMesh(*frozen,key,resolution,spacingCm);
             });
             running_.emplace(key,Running{pending,std::move(future)});
             ++info.dispatched;
