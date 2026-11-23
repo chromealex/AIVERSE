@@ -16,6 +16,7 @@
 #include <vector>
 #include <set>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -138,6 +139,22 @@ inline void applyProjectMaterials(const fs::path& project,const Request& req,
         number("metallic",styleMaterial.metallic,0.f,1.f);
         number("roughness",styleMaterial.roughness,0.f,1.f);
         number("emissiveStrength",styleMaterial.emissiveStrength,0.f,100.f);
+        number("normalScale",styleMaterial.normalScale,0.f,16.f);
+        number("occlusionStrength",styleMaterial.occlusionStrength,0.f,1.f);
+        const auto uvPair=[&](const char* key,std::array<float,2>& target){
+            if(!material.has(key))return;
+            const Json& value=material[key];
+            if(!value.isArray()||value.size()!=2)
+                throw std::runtime_error(std::string(key)+" must be [u,v]");
+            for(size_t i=0;i<2;++i){
+                const double n=value[i].toDouble(std::numeric_limits<double>::quiet_NaN());
+                if(!value[i].isNumber()||!std::isfinite(n)||std::abs(n)>1024.)
+                    throw std::runtime_error("Invalid material UV transform");
+                target[i]=float(n);
+            }
+        };
+        uvPair("uvScale",styleMaterial.uvScale);
+        uvPair("uvOffset",styleMaterial.uvOffset);
         const auto color=[&](const char* name,StyleRgb& target){
             if(!material.has(name))return;
             const Json& value=material[name];
@@ -169,6 +186,8 @@ inline void applyProjectMaterials(const fs::path& project,const Request& req,
         guid("occlusionMap",styleMaterial.textures.occlusion);
         guid("emissiveMap",styleMaterial.textures.emissive);
     }
+    // Shared material library may not author rotation yet. Style-local
+    // rotation remains valid and is exported via KHR_texture_transform.
     if(used.size()!=req.materialBindings.size())
         throw std::runtime_error("Material binding references a missing architecture style slot");
 }
