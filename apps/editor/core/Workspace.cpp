@@ -1464,6 +1464,7 @@ void Workspace::registerCoreOps() {
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
     gui("play_stop", "Stop the play-test and return to editing.", "{}");
+    gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
     gui("play_status", "Current play-test state: time, players, resources, units, result.", "{}");
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "
         "Filter by owner / type; at most 'limit' (default 200).",
