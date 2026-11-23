@@ -1,6 +1,8 @@
 // Editor: lifecycle, docking layout, menus, documents, play-test and viewport rendering.
 // Window contents live in apps/editor/windows/*.cpp; the agent link in EditorAgent.cpp.
 #include "Editor.h"
+#include "engine/world/TerraWeaveCavernsEditRuntime.h"
+#include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/render/ModelSurfacePicking.h"
 #include "apps/editor/AuthoringComponents.h"
 #include "apps/editor/AuthoringWater.h"
@@ -78,6 +80,95 @@ void Editor::refreshPrismaVolumes() {
     std::vector<std::string> issues;
     prismaVolumes_ = render::parsePrismaVolumes(game, map, &issues);
     for (const auto& issue : issues) ws_.log("prisma", issue, true);
+}
+
+// Stage23 editor-owned CPU preparation. This is NOT a GPU/Box3D/NavMesh
+// publication owner; no dirty requests are ACKed without a host barrier.
+class Editor::CavernsEditHost {
+public:
+    using Volume=terraweave::caverns::CaveVolumeSnapshot;
+    using Bounds=terraweave::caverns::CaveDirtyBounds;
+    using Stamp=terraweave::caverns::CaveSphereStamp;
+    std::unique_ptr<terraweave::caverns::CaveEditRuntimeBridge> bridge;
+    std::string projectDir;
+    Json previousJson;
+    std::vector<Stamp> previousStamps;
+    uint64_t epoch=0;
+    bool initialized=false;
+
+    void update(Editor& editor) {
+        const auto& project=editor.ws().project.dir;
+        if(project.empty()) {
+            bridge.reset();projectDir.clear();initialized=false;
+            editor.cavernsBuildStats={};
+            return;
+        }
+        if(project!=projectDir) {
+            // The bridge owns CPU futures, which are joined during teardown.
+            bridge.reset();
+            projectDir=project;initialized=false;
+            previousJson=Json{};
+            previousStamps.clear();epoch=0;
+            editor.cavernsBuildStats={};
+        }
+        const Json& json=editor.doc().data.extra["terraweaveCaverns"];
+        if(!initialized || json!=previousJson) {
+            Volume newVolume=terraweave::caverns::caveSnapshotFromJson(json);
+            const auto newStamps=newVolume.stamps;
+            // MapDoc Undo/Redo can restore a lower persisted revision. The
+            // runtime epoch remains strictly monotonic across that history.
+            if(epoch==UINT64_MAX)throw std::overflow_error("Caverns author epoch");
+            epoch=std::max(epoch,newVolume.sourceRevision)+1;
+            newVolume.sourceRevision=epoch;
+            auto frozen=std::make_shared<const Volume>(std::move(newVolume));
+
+            bool any=false;
+            Bounds bounds{};
+            const auto include=[&](const Stamp& stamp) {
+                const Bounds b=terraweave::caverns::dirtyBoundsForStamp(stamp,100);
+                if(!any){bounds=b;any=true;return;}
+                bounds.minX=std::min(bounds.minX,b.minX);
+                bounds.minY=std::min(bounds.minY,b.minY);
+                bounds.minZ=std::min(bounds.minZ,b.minZ);
+                bounds.maxX=std::max(bounds.maxX,b.maxX);
+                bounds.maxY=std::max(bounds.maxY,b.maxY);
+                bounds.maxZ=std::max(bounds.maxZ,b.maxZ);
+            };
+            for(const auto& stamp:previousStamps)include(stamp);
+            for(const auto& stamp:newStamps)include(stamp);
+            if(any){
+                if(!bridge)
+                    bridge=std::make_unique<terraweave::caverns::CaveEditRuntimeBridge>(
+                        16,100,1024,2);
+                bridge->invalidate(bounds,std::move(frozen));
+            }
+            previousJson=json;
+            previousStamps=newStamps;
+            initialized=true;
+        }
+        if(bridge){
+            bridge->tick(2);
+            editor.cavernsBuildStats.pending=bridge->dirtyCount();
+            editor.cavernsBuildStats.prepared=bridge->preparedCount();
+            editor.cavernsBuildStats.inFlight=bridge->inFlight();
+        }else{
+            editor.cavernsBuildStats.pending=0;
+            editor.cavernsBuildStats.prepared=0;
+            editor.cavernsBuildStats.inFlight=0;
+        }
+        editor.cavernsBuildStats.authorEpoch=epoch;
+        editor.cavernsBuildStats.visualCommitConnected=false;
+    }
+};
+
+void Editor::updateCavernsAuthoring() {
+    if(!cavernsEditHost_)cavernsEditHost_=std::make_unique<CavernsEditHost>();
+    try {
+        cavernsEditHost_->update(*this);
+        cavernsBuildStats.diagnostic.clear();
+    }catch(const std::exception& error){
+        cavernsBuildStats.diagnostic=error.what();
+    }
 }
 
 Editor::Editor(Options o) : opt_(std::move(o)) {}
@@ -2453,6 +2544,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     syncSelection();
     updateWorld();
     for (auto& w : windows_) w->update(*this, dt);
+    updateCavernsAuthoring(); // observe MapDoc/Undo changes and prepare CPU cave edits
     const auto afterUpdate = std::chrono::steady_clock::now();
 
     theme_.applyPending();
