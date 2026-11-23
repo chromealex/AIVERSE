@@ -15,7 +15,7 @@ inline std::vector<VisualRegion> visualRegions(const World& world,
         VisualLayer layer=VisualLayer::Combined,float opacity=.65f){
     std::vector<VisualRegion> result;
     for(const auto& extent:extents(world)){
-        const auto& r=world.get<Region>(extent.region);
+        const auto& r=*world.tryGetConst<Region>(extent.region);
         if(!r.enabled||!valid(r))continue;
         const float f=visualUnit(r.fertility),p=visualUnit(r.pollution),
                     s=visualUnit(r.succession),d=visualUnit(r.durability);
