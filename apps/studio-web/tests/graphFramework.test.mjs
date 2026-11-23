@@ -40,3 +40,18 @@ test('group movement clamps without distorting relative spacing',()=>{
  const next=moveGroup([{id:'a',x:10,y:20},{id:'b',x:100,y:120}],-100,5000);
  assert.deepEqual(next,[{id:'a',x:0,y:1900},{id:'b',x:90,y:2000}]);
 });
+
+import {graphGeometry,samePort} from '../src/graphs/graphGeometry.ts';
+test('multiple named output ports have distinct anchors and follow preview positions',()=>{
+ const a={id:'a',label:'A',x:10,y:20,inputs:[],outputs:[{id:'color',type:'float4'},{id:'mask',type:'float'}]};
+ const b={id:'b',label:'B',x:300,y:40,inputs:[{id:'mask',type:'float'}],outputs:[]};
+ const view={nodes:[a,b],links:[{id:'wire',from:'a',output:'mask',to:'b',input:'mask'}]};
+ const base=graphGeometry(view), moved=graphGeometry(view,[{id:'a',x:30,y:50}]);
+ assert.equal(base.wires[0].y1,59);
+ assert.equal(moved.wires[0].y1,89);
+ assert.equal(moved.wires[0].x1,160);
+ assert.equal(moved.wires[0].x2,300);
+ assert.equal(a.x,10);
+ assert.equal(samePort(null,{node:'a',port:'mask'}),false);
+ assert.equal(samePort({node:'a',port:'color'},{node:'a',port:'mask'}),false);
+});
