@@ -232,6 +232,7 @@ public:
         source.mesh=mesh.mesh;
         source.generatorVersion=generatorVersion;
         source.revision=mesh.renderRevision;
+        source.sourceRevision=mesh.sourceRevision;
         source.resolution=mesh.resolution;
         source.spacingCm=mesh.spacingCm;
         if(!geometry_.registerCommittedSource(source))
