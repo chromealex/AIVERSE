@@ -6,6 +6,7 @@
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesExtendedAuthoring.h"
+#include "libraries/include/aiverselib/world/WorldProcessesExtendedLinks.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -264,7 +265,10 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
                           "EchoPortal","EchoEmitter","EchoReceiver",
                           "FractureBond","AetherDuct","AetherFlux",
                           "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
-                          "GranularField","EvolveRegion","SocietyPerson"}) {
+                          "GranularField","EvolveRegion","SocietyPerson",
+                          "MorphSpring","MorphForce","CrowdSlot","CrowdPreference",
+                          "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
+                          "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
              "Authoring data; native game setup must install the ECS component",
@@ -401,7 +405,9 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     lib::worldprocess::linked::validate(name,value);
                 const bool extended=lib::worldprocess::extended::supports(name) &&
                     lib::worldprocess::extended::validate(name,value);
-                const bool authorable=standalone||linked||extended;
+                const bool extendedLinked=lib::worldprocess::extendedLinks::supports(name) &&
+                    lib::worldprocess::extendedLinks::validate(name,value);
+                const bool authorable=standalone||linked||extended||extendedLinked;
                 if(value.isObject())for(const auto& [key,item]:value.members()) {
                     Json field=genericField(key,item);
                     if(authorable) {
@@ -2619,7 +2625,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     candidate.extra.set("components",components);
                 } else if(lib::worldprocess::authoring::supports(componentId) ||
                           lib::worldprocess::linked::supports(componentId) ||
-                          lib::worldprocess::extended::supports(componentId)) {
+                          lib::worldprocess::extended::supports(componentId) ||
+                          lib::worldprocess::extendedLinks::supports(componentId)) {
                     if(source.extra["components"].has(componentId))
                         throw std::runtime_error("World-process component is already present");
                     candidate=promotedAuthored(index);
@@ -2629,7 +2636,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         lib::worldprocess::authoring::defaults(componentId) :
                         lib::worldprocess::linked::supports(componentId) ?
                         lib::worldprocess::linked::defaults(componentId) :
-                        lib::worldprocess::extended::defaults(componentId));
+                        lib::worldprocess::extended::supports(componentId) ?
+                        lib::worldprocess::extended::defaults(componentId) :
+                        lib::worldprocess::extendedLinks::defaults(componentId));
                     candidate.extra.set("components",components);
                 } else throw std::runtime_error("This component cannot be added here");
             } else {
@@ -2709,7 +2718,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             else targets.push_back(params.getStr("entityId"));
             if(targets.empty() || targets.size()>10000)throw std::runtime_error("Invalid entity list");
             const std::string componentId=params.getStr("componentId");
-            if(lib::worldprocess::linked::supports(componentId)) {
+            if(lib::worldprocess::linked::supports(componentId) ||
+               lib::worldprocess::extendedLinks::supports(componentId)) {
                 // Validate the complete new component on every target BEFORE
                 // mutating the map. Switching both bond ends in one paste
                 // must not fail merely because its intermediate state is
@@ -2777,7 +2787,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const std::string componentId=params.getStr("componentId");
             if(lib::worldprocess::authoring::supports(componentId) ||
                lib::worldprocess::linked::supports(componentId) ||
-               lib::worldprocess::extended::supports(componentId)) {
+               lib::worldprocess::extended::supports(componentId) ||
+               lib::worldprocess::extendedLinks::supports(componentId)) {
                 if(entityId.compare(0,7,"entity:")!=0)
                     throw std::runtime_error("Authoring applies only to map entities");
                 const int index=indexFor(entityId);
@@ -2786,7 +2797,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(!existing.isObject())throw std::runtime_error("Component is not authored on this object");
                 Json staged=existing;
                 std::string error;
-                if(lib::worldprocess::linked::supports(componentId)) {
+                if(lib::worldprocess::extendedLinks::supports(componentId)){
+                    if(!validWorldProcessDocumentRef(ws_.map,componentId,key,value))
+                        throw std::runtime_error("Invalid extended link map target");
+                    if(!lib::worldprocess::extendedLinks::edit(componentId,key,value,staged,&error))
+                        throw std::runtime_error(error);
+                } else if(lib::worldprocess::linked::supports(componentId)) {
                     if(!validWorldProcessDocumentRef(ws_.map,componentId,key,value))
                         throw std::runtime_error("Unknown or incompatible linked map object");
                     if(!lib::worldprocess::linked::edit(componentId,key,value,staged,&error))
