@@ -156,7 +156,7 @@ export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;
 export interface StudioBuildingFunction { id: string; name: string; width: number; height: number; depth: number }
 export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[] }
 export interface StudioBuildingCatalog { styles: StudioBuildingStyle[] }
-export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof' | 'window';
+export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof' | 'window' | 'stairs' | 'elevator';
 export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
 export interface StudioBuildingFeature {
   kind: StudioBuildingFeatureKind;
