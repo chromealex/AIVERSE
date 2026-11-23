@@ -273,7 +273,7 @@ public:
             if(playing_ && loop_ && error_.empty()) {
                 // Reset at the next frame's safe simulation update point.
                 // Never recursively call GPU clear() in an open pass.
-                pendingRestart_=true;
+                pendingRestart_=true;restartBurstPending_=true;
                 timeTicks_=targetTicks_=0;
                 phase_=0;
             } else {
