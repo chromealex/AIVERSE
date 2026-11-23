@@ -5251,3 +5251,11 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     add_test(NAME region_entity_ledger_test COMMAND aiverse_region_entity_ledger_test)
     set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
 endif()
+
+# Live ECS region attachment and authority-crossing fixture, without game assets.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
+    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine)
+    add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
+    set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
+endif()
