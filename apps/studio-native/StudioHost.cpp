@@ -796,6 +796,30 @@ void StudioHost::rebuildOverlay() {
         auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map);
         shapes.reserve(shapes.size()+worldShapes.size());
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
+        const auto selected=session_->selectedObjectId();
+        if(selected.rfind("entity:@",0)==0){
+            auto handles=worldprocess_edit::handles(
+                session_->workspace().map,selected);
+            for(const auto& handle:handles){
+                if(shapes.size()>=1400)break;
+                auto marker=worldprocess_gizmos::makePoint(
+                    handle.position.x,handle.position.y,handle.position.z,
+                    245,245,245,8.f);
+                shapes.push_back(std::move(marker));
+            }
+            if(wpDrag_.active && wpDrag_.valid && shapes.size()<1398){
+                const auto index=session_->workspace().map.findEntity(wpDrag_.owner);
+                if(index>=0){
+                    const auto origin=worldprocess_edit::point(
+                        session_->workspace().map.data.entities[std::size_t(index)]);
+                    shapes.push_back(worldprocess_gizmos::makeLine(
+                        origin,wpDrag_.previewPoint,245,245,245,3.f));
+                    shapes.push_back(worldprocess_gizmos::makePoint(
+                        wpDrag_.previewPoint.x,wpDrag_.previewPoint.y,
+                        wpDrag_.previewPoint.z,100,255,160,10.f));
+                }
+            }
+        }
     }
     for (const auto& seg : splineCache_["segments"].items()) {
         StudioScene::OverlayShape sh; sh.kind = 1; sh.thickness = 2; sh.r = 255; sh.g = 200; sh.bl = 80;
