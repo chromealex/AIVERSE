@@ -1,4 +1,5 @@
 #include "EvolveForestDemo.h"
+#include "engine/world/nereid/NereidNativeWater.h"
 #include "aiverselib/world/WorldProcessesMapHydration.h"
 #include <iostream>
 #include <memory>
@@ -15,7 +16,31 @@ struct ForestDemo final:GameModule {
         for(const auto& entry:map["entities"].items()){
             (void)entry;entities.push_back(sim.world().create());
         }
+        physis::Settings weather;
+        weather.originX=-2;weather.originZ=-1;
+        weather.width=4;weather.height=2;weather.cellSizeMeters=32;
+        physis::initialize(sim.world(),weather);
+        sim.addSystem("demo.physis",[](Simulation& current){physis::advance(current.world());});
         wp::hydrateMap(sim,map,entities);
+        for(int i=0;i<3;++i){
+            const auto cell=physis::cellAtPosition(sim.world(),
+                Vec3{Fixed::fromInt((i-1)*30),Fixed{},Fixed{}});
+            const auto producer=sim.world().create();
+            evolve::ClimateLink link;
+            link.rainEnrichment=1000;link.droughtConsumption=1000;
+            link.rainPurification=500;link.warmGrowth=1000;
+            std::string error;
+            if(!demo::attachEvolveClimate(sim.world(),producer,entities.at(i),cell,link,&error))
+                throw std::runtime_error(error);
+        }
+        lib::nereid::NativeWaterPipelineConfig water;
+        water.probeFromTransform=false;
+        lib::nereid::registerNativeWaterPipeline(sim,"nereid",water);
+        lib::nereid::WaterBodyComponent lake;
+        lake.center={Fixed::fromInt(30),Fixed{},Fixed{}};
+        lake.halfExtents={Fixed::fromInt(6),Fixed::fromInt(6)};
+        lake.surfaceY=Fixed::fromInt(10);lake.bottomY=Fixed::fromInt(-100);
+        lib::nereid::spawnNativeWaterBodies(sim.world(),{lake});
         terraweave::TerraWeaveEcsAuthorityConfig cfg;
         cfg.immutableRecipeId="evolve-demo-v1";
         terraweave::registerTerraWeaveAuthorityResource(sim,cfg);
