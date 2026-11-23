@@ -76,6 +76,31 @@ static void checkLedger() {
     io(bad,preserved);
     AIVERSE_TEST_CHECK(!bad.ok() && encode(preserved)==encoded);
 
+    // Mixed-region boarding: a driver and passenger may arrive from
+    // distinct source cells but must land in one atomic vehicle region.
+    RegionEntityLedger mixed;
+    AIVERSE_TEST_CHECK(mixed.spawn(1000,a));
+    AIVERSE_TEST_CHECK(mixed.spawn(1001,b));
+    AIVERSE_TEST_CHECK(mixed.spawn(1002,c));
+    std::array<std::pair<RegionEntityId,Cell>,3> members{{
+        {1002,c},{1000,a},{1001,b}
+    }};
+    const auto mixedRevision=mixed.lastRevision();
+    AIVERSE_TEST_CHECK(mixed.transferGroup(members,c));
+    AIVERSE_TEST_CHECK(mixed.lastRevision()==mixedRevision+2);
+    AIVERSE_TEST_CHECK(mixed.activeIn(c)==
+                       std::vector<uint64_t>({1000,1001,1002}));
+    AIVERSE_TEST_CHECK(mixed.transferGroup(
+        std::array<std::pair<RegionEntityId,Cell>,3>{{
+            {1000,c},{1001,c},{1002,c}}},c));
+    AIVERSE_TEST_CHECK(mixed.lastRevision()==mixedRevision+2);
+    auto invalid=members;
+    invalid[1].second=b;
+    const auto beforeFailed=mixed.lastRevision();
+    AIVERSE_TEST_CHECK(!mixed.transferGroup(invalid,a));
+    AIVERSE_TEST_CHECK(mixed.lastRevision()==beforeFailed);
+    AIVERSE_TEST_CHECK(mixed.activeIn(c).size()==3);
+
     // Persistent changes are authoritative even when an observer is far away.
     RegionEntityLedger roaming;
     AIVERSE_TEST_CHECK(roaming.spawn(500,a) && roaming.spawn(501,a));
