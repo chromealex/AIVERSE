@@ -175,3 +175,33 @@ interactive catalog flow, full VIVID suite or other GPU backend verification.
 Next: add contact/sole calibration and ankle traces on Ada, then support
 terrain and agent-facing catalog asset publication. Keep the walk roadmap
 in-progress until those are accepted.
+
+## Ada natural gait pass, 2026-11-23
+
+Source commit `d852d1c9a` on `feature/motionweave-walk-generator-current`.
+The walk's pelvis bob is now a fraction of measured world leg length, converted
+back to the pelvis parent units. This fixes the nearly invisible weight motion
+on Ada's centimetre-scale skeleton under a 0.01 scene parent. Pelvis lateral
+shift and roll, delayed arm swing, elbow bends, torso roll/pitch and a lower
+swing-foot arc add visible motion without changing the stance IK contract.
+Creator's preview parameter changed from the old 2.5 source units to the new
+0.018 leg-length fraction. An initial capture attempt with the old parameter
+failed validation and produced no frames; this was corrected before acceptance.
+
+Actually run on macOS AppleClang 17: focused generator and VIVID Creator
+built; `ctest -R '^motionweave_walk_generator$'` 1/1 PASS, including
+stance-ankle and pelvis-shift assertions. The corrected external Ada-Groom-Bound
+asset rendered 48/48 Metal frames with `pipelineFailures=0`, 43 colour and
+43 shadow submissions per frame. Frames 0, 12, 24 and 36 were inspected.
+AVFoundation encoded the frames at 24 fps, 1500x920 into
+`/Volumes/KINGSTON/AIVERSE-builds/motionweave-walk-natural/ada-natural-v1/ada-walk-natural.mp4`.
+A real frame is in the MotionWeave development log entry
+`2026-11-23-motionweave-ada-natural-walk`.
+
+Limits: the stance target is still a flat plane at bind ankle height. No
+shoe-sole roll/contact geometry, uneven terrain, acceleration/deceleration,
+interactive Studio catalog flow, full VIVID suite, non-Metal backend, or
+numerical Ada-world ankle trace was checked. The legacy Creator
+`footEndpointMaxDrift` spans root travel and must not be treated as foot-slide
+measurement. Next: calibrated sole contact, Ada ankle trace, speed-dependent
+stride and authoring/publication path.

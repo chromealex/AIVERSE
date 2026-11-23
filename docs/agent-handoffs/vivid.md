@@ -3210,3 +3210,17 @@ Actually run: native Creator build, corrected Ada-Groom-Bound Metal capture
 The two-second MP4 and precise limits are recorded in the MotionWeave walk
 handoff. Other modular humans, terrain, shoe soles and Studio integration
 remain unverified.
+
+## 2026-11-23 — Ada natural walk preview
+
+Source `d852d1c9a` on `feature/motionweave-walk-generator-current`.
+The Creator diagnostic now passes the MotionWeave pelvis bob as a leg-length
+fraction. The prior centimetre-unit setting was rejected by the new generator
+and caused the preview to retry without a frame until corrected. The shared
+clip adds side-to-side weight shift, elbow movement, torso roll and a softer
+foot arc; VIVID only maps and previews it. Native Creator built and captured
+48/48 real Metal frames from the external Ada-Groom-Bound package, with no
+pipeline failures. Inspected frames 0/12/24/36 and encoded the sequence to
+`/Volumes/KINGSTON/AIVERSE-builds/motionweave-walk-natural/ada-natural-v1/ada-walk-natural.mp4`.
+The asset remains external; other modular humans and Studio catalog publishing
+are not verified. See the MotionWeave handoff for tests and gait limits.
