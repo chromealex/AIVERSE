@@ -254,6 +254,7 @@ public:
         for(const auto& [id,owner]:members)if(owner!=destination)remember(id);
         return ledger_.transferGroup(members,destination);
     }
+    const RegionEntityRecord* find(RegionEntityId id)const{return ledger_.find(id);}
     const RegionEntityLedger& view()const{return ledger_;}
     void commit() noexcept {committed_=true;}
 };
