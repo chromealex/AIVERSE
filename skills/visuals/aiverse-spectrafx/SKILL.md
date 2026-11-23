@@ -1879,3 +1879,7 @@ GraphRuntime derives exact serialized graph/overrides/options identity for SPFR 
 ## Stage 71 — compact identity and timeline envelope
 
 GraphRuntime uses two deterministic 64-bit hash lanes for graph/options identity, removing the 4096-byte graph limit. This is non-cryptographic compatibility metadata, not authentication. SpectraTimelineCheckpoint.h encodes bounded SPFT V1 clock/burst metadata with CRC over header and state. Studio/MCP transfer remains pending. No tests run.
+
+## Stage 71 — timeline file envelope
+
+SPFT V1 wraps SPFR payload with tick and burst count, CRC covers header and payload. StudioSpectraPreview exposes settled-paused exportTimelineCheckpoint/importTimelineCheckpoint byte APIs; import requires render-owner frame. Compact graph fingerprint already present on branch. Browser/MCP transfer and import queue remain. No tests run.
