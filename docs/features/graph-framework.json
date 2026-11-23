@@ -13,7 +13,8 @@
     "tools/skills/catalog.py",
     "skills/catalog.json",
     "docs/devlog/systems.json",
-    "apps/studio-web/src/graphs/shaderAdapter.ts"
+    "apps/studio-web/src/graphs/shaderAdapter.ts",
+    "apps/studio-web/src/graphs/GraphCanvas.css"
   ],
   "traits": {
     "editable": true,
