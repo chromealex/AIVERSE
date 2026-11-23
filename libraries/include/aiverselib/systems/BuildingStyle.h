@@ -29,8 +29,10 @@ struct StyleRange{float lo=0,hi=0;float pick(Random& g)const{return lo+(hi-lo)*f
 struct StyleLight{int material=-1;float height=0.06f,chance=0;};   // an emissive strip; material -1 = none
 struct BuildingStyleProp{enum Kind{Box,Mast,Tank,Stack,Dish}kind=Box;int material=-1;uint32_t min=0,max=0;StyleRange x{0.6f,1.2f},y{0.4f,1},z{0.6f,1.2f};StyleLight tip;};
 // A whole structure (RTS-style building: one armoured hull, not floors): sizes in metres, fractions of the hull.
+// Shared geometric grammar, orthogonal to setting and gameplay role.
+enum class StructureMassing : uint8_t { Bastion, Spire, TwinBay, Terraced };
 struct StructureKind{
-    std::string id;float width=12,depth=12;StyleRange height{6,8};float taper=0.15f,chamfer=1.6f,roofRise=0.7f,teamChance=0.25f;uint32_t bands=3;
+    std::string id;StructureMassing massing=StructureMassing::Bastion;float width=12,depth=12;StyleRange height{6,8};float taper=0.15f,chamfer=1.6f,roofRise=0.7f,teamChance=0.25f;uint32_t bands=3;
     uint32_t modulesMin=0,modulesMax=0;StyleRange moduleWidth{0.25f,0.4f},moduleDepth{0.4f,0.7f},moduleHeight{0.45f,0.7f};
     float towerChance=0;StyleRange towerWidth{0.25f,0.4f},towerDepth{0.25f,0.4f},towerHeight{2,3.5f};
     float doorWidth=0.4f,doorHeight=0.55f;uint32_t doors=1;bool legs=false;uint32_t thrusters=0;float pad=1.2f;
@@ -560,8 +562,17 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(j.has("structures")){const auto& all=j["structures"];if(!all.isObject())throw JsonError(path+".structures: expected object");
         if(s.structure.hull<0)throw JsonError(path+".structures: needs the structure materials block");
         for(const auto& [id,o]:all.members()){auto p=path+".structures."+id;
-            allow(o,p,{"size","height","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props"});
+            allow(o,p,{"size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props"});
             StructureKind k;k.id=id;
+            if(o.has("massing")){
+                if(!o["massing"].isString())throw JsonError(p+".massing: expected string");
+                const auto m=o["massing"].str();
+                if(m=="bastion")k.massing=StructureMassing::Bastion;
+                else if(m=="spire")k.massing=StructureMassing::Spire;
+                else if(m=="twin-bay")k.massing=StructureMassing::TwinBay;
+                else if(m=="terraced")k.massing=StructureMassing::Terraced;
+                else throw JsonError(p+".massing: expected bastion, spire, twin-bay or terraced");
+            }
             if(o.has("size")){const auto& a=o["size"];if(!a.isArray()||a.size()!=2)throw JsonError(p+".size: expected [width, depth]");k.width=num(a[0],p+".size[0]");k.depth=num(a[1],p+".size[1]");}
             range(o,"height",k.height,p);get(o,"taper",k.taper,p);get(o,"chamfer",k.chamfer,p);get(o,"roofRise",k.roofRise,p);get(o,"teamChance",k.teamChance,p);
             if(o.has("bands")){StyleRange r{float(k.bands),float(k.bands)};range(o,"bands",r,p);k.bands=uint32_t(std::clamp(r.lo,1.f,8.f));}

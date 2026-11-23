@@ -52,7 +52,7 @@
   "structure": {"hull": "hull", "plate": "plate", "team": "team", "dark": "trim", "pad": "deck", "glow": "warn",
                 "beacon": "red", "exhaust": "exhaust", "window": "glassLit"},
   "structures": {
-    "barracks": {"size": [12, 11], "height": [6.5, 7.5], "taper": 0.16, "chamfer": 1.8, "roofRise": 0.8, "bands": 3, "teamChance": 0.3,
+    "barracks": {"size": [12, 11], "height": [6.5, 7.5], "massing": "bastion", "taper": 0.16, "chamfer": 1.8, "roofRise": 0.8, "bands": 3, "teamChance": 0.3,
                  "modules": {"count": [1, 2], "width": [0.22, 0.32], "depth": [0.4, 0.6], "height": [0.5, 0.65]},
                  "tower": {"chance": 0.8, "width": [0.3, 0.4], "depth": [0.3, 0.4], "height": [2.2, 3.2]},
                  "door": {"width": 0.42, "height": 0.6, "count": 1}, "legs": true, "thrusters": 0, "pad": 1.4,
@@ -60,7 +60,7 @@
                    {"kind": "stack", "material": "pipe", "count": [1, 2], "size": [[0.6, 0.8], [2.0, 3.5], 0], "tip": {"material": "exhaust", "height": 0.06, "chance": 0.9}},
                    {"kind": "box", "material": "hull", "count": [1, 3], "size": [[0.8, 1.4], [0.5, 0.9], [0.8, 1.4]], "tip": {"material": "trim", "height": 0.08, "chance": 0.8}},
                    {"kind": "mast", "material": "trim", "count": [1, 2], "size": [[0.08, 0.12], [2.5, 4.5], [0.08, 0.12]], "tip": {"material": "red", "height": 0.15, "chance": 0.9}}]},
-    "command": {"size": [18, 18], "height": [7.5, 8.5], "taper": 0.2, "chamfer": 3.5, "roofRise": 1.2, "bands": 4, "teamChance": 0.25,
+    "command": {"size": [18, 18], "height": [7.5, 8.5], "massing": "spire", "taper": 0.2, "chamfer": 3.5, "roofRise": 1.2, "bands": 4, "teamChance": 0.25,
                 "modules": {"count": [2, 3], "width": [0.18, 0.25], "depth": [0.35, 0.5], "height": [0.45, 0.6]},
                 "tower": {"chance": 1, "width": [0.28, 0.34], "depth": [0.28, 0.34], "height": [3.0, 4.0]},
                 "door": {"width": 0.3, "height": 0.5, "count": 2}, "legs": true, "thrusters": 3, "pad": 2.0,
@@ -68,7 +68,7 @@
                   {"kind": "dish", "material": "plate", "count": [1, 1], "size": [[2.6, 3.4], [1.8, 2.6], 0], "tip": {"material": "red", "height": 0.15, "chance": 1}},
                   {"kind": "tank", "material": "pipe", "count": [1, 2], "size": [[1.6, 2.2], [1.4, 2.2], 0], "tip": {"material": "hazardY", "height": 0.12, "chance": 0.6}},
                   {"kind": "box", "material": "hull", "count": [2, 4], "size": [[1.0, 1.8], [0.6, 1.0], [1.0, 1.8]], "tip": {"material": "trim", "height": 0.08, "chance": 0.8}}]},
-    "factory": {"size": [16, 11], "height": [5.5, 6.5], "taper": 0.12, "chamfer": 1.4, "roofRise": 0.6, "bands": 2, "teamChance": 0.3,
+    "factory": {"size": [16, 11], "height": [5.5, 6.5], "massing": "twin-bay", "taper": 0.12, "chamfer": 1.4, "roofRise": 0.6, "bands": 2, "teamChance": 0.3,
                 "modules": {"count": [1, 2], "width": [0.2, 0.3], "depth": [0.45, 0.7], "height": [0.6, 0.8]},
                 "tower": {"chance": 0.4, "width": [0.2, 0.25], "depth": [0.3, 0.4], "height": [1.8, 2.6]},
                 "door": {"width": 0.32, "height": 0.7, "count": 2}, "legs": false, "thrusters": 0, "pad": 1.4,
@@ -76,7 +76,7 @@
                   {"kind": "stack", "material": "pipe", "count": [2, 3], "size": [[0.6, 0.9], [3.0, 5.0], 0], "tip": {"material": "exhaust", "height": 0.06, "chance": 0.9}},
                   {"kind": "tank", "material": "pipe", "count": [1, 2], "size": [[1.4, 2.0], [1.2, 2.0], 0]},
                   {"kind": "box", "material": "hull", "count": [1, 3], "size": [[0.8, 1.4], [0.5, 0.9], [0.8, 1.4]]}]},
-    "depot": {"size": [8, 8], "height": [2.4, 3.0], "taper": 0.25, "chamfer": 1.6, "roofRise": 0.5, "bands": 2, "teamChance": 0.4,
+    "depot": {"size": [8, 8], "height": [2.4, 3.0], "massing": "terraced", "taper": 0.25, "chamfer": 1.6, "roofRise": 0.5, "bands": 2, "teamChance": 0.4,
               "door": {"count": 0}, "legs": false, "pad": 0.8,
               "props": [
                 {"kind": "box", "material": "hull", "count": [1, 2], "size": [[0.8, 1.2], [0.3, 0.6], [0.8, 1.2]], "tip": {"material": "warn", "height": 0.05, "chance": 0.7}}]}

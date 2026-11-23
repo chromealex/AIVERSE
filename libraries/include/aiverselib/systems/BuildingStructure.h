@@ -9,6 +9,9 @@
 // minimum corner on the ground; quarter-turn yaw as building-gen.
 #include "BuildingStyle.h"
 namespace aiverse::lib::systems {
+// All zero preserves legacy style dimensions. Explicit dimensions are the final envelope,
+// including projecting components, props, foundations and gates in the mesh.
+struct StructureSize{float width=0,height=0,depth=0;};
 struct StyledStructure{StyledMesh mesh;std::vector<BuildingBox> boxes;std::vector<Vec3> gates;};   // gates: ground points in front of each gate
 namespace buildingStyleDetail {
 using P3=std::array<float,3>;
@@ -19,18 +22,24 @@ inline std::vector<P3> cutRect(float x0,float z0,float x1,float z1,float c,float
     return {{x0+c,y,z0},{x1-c,y,z0},{x1,y,z0+c},{x1,y,z1-c},{x1-c,y,z1},{x0+c,y,z1},{x0,y,z1-c},{x0,y,z0+c}};
 }
 }
-inline StyledStructure dressStructure(const BuildingStyle& st,const std::string& kindId,uint64_t seed,Vec3 origin={},uint32_t yaw=0){
+inline StyledStructure dressStructure(const BuildingStyle& st,const std::string& kindId,uint64_t seed,Vec3 origin={},uint32_t yaw=0,StructureSize size={}){
     using namespace buildingStyleDetail;
     StyledStructure out;const StructureKind* kp=st.structureKind(kindId);const auto& sm=st.structure;
     if(!kp||sm.hull<0||yaw>3)return out;
-    const StructureKind& k=*kp;Random g(seed,0x57c7);
+    const StructureKind& k=*kp;
+    const bool custom=size.width!=0||size.height!=0||size.depth!=0;
+    if(custom&&(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||
+        size.width<std::max(8.f,float(k.doors)*4.f+4.f)||size.width>160.f||
+        size.depth<8.f||size.depth>160.f||size.height<5.f||size.height>80.f))return out;
+    Random g(seed,0x57c7);
     auto u=[&]{return float(g.unit().toDouble());};
     out.mesh.materials=st.materials;
     if(!st.palettes.empty()){const auto& p=st.palettes[g.below(uint32_t(st.palettes.size()))];
         for(const auto& [m,c]:p){if(m<0||size_t(m)>=out.mesh.materials.size())continue;auto& mat=out.mesh.materials[size_t(m)];
             if(mat.emissive[0]+mat.emissive[1]+mat.emissive[2]>0)mat.emissive=c;else mat.color=c;}}
     Mesher m(out.mesh.materials.size());
-    const float W=k.width,D=k.depth,Hh=k.height.pick(g),pad=k.pad,cut=k.chamfer;
+    const float W=custom?size.width:k.width,D=custom?size.depth:k.depth,Hh=custom?size.height:k.height.pick(g),pad=k.pad;
+    const float cut=custom?std::min(k.chamfer,std::min(W,D)*0.22f):k.chamfer;
     const float padH=0.35f;
     auto plateMat=[&]{return sm.team>=0&&u()<k.teamChance?sm.team:(sm.plate>=0?sm.plate:sm.hull);};
     auto addBox=[&](float x0,float y0,float z0,float x1,float y1,float z1){out.boxes.push_back({{Fixed::fromRatio(int64_t(std::lround(x0*1000)),1000),Fixed::fromRatio(int64_t(std::lround(y0*1000)),1000),Fixed::fromRatio(int64_t(std::lround(z0*1000)),1000)},
@@ -83,8 +92,36 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
             m.box(sm.beacon,x-0.1f,padH+0.12f,z-0.1f,x+0.1f,padH+0.24f,z+0.1f);}
     }
     // 2. Main hull.
-    const float lean=Hh*k.taper;
+    const float lean=custom?std::min(Hh*k.taper,std::min(W,D)*0.20f):Hh*k.taper;
     auto top=block(0,0,W,D,padH,Hh,cut,lean,k.bands,k.roofRise);
+    // Data-chosen silhouettes: a function changes the large shapes, not just the roof props.
+    const float rw=top.x1-top.x0,rd=top.z1-top.z0;
+    if(rw>2.5f&&rd>2.5f){
+        switch(k.massing){
+            case StructureMassing::Bastion: break;
+            case StructureMassing::Spire:{
+                const float w=rw*0.38f,d=rd*0.40f,x=top.x0+(rw-w)*0.5f,z=top.z0+(rd-d)*0.5f;
+                auto cap=block(x,z,x+w,z+d,top.y,Hh*0.66f,std::min(cut,0.8f),std::min(w,d)*0.07f,3,k.roofRise*0.3f);
+                if(sm.beacon>=0)m.box(sm.beacon,(cap.x0+cap.x1)*0.5f-0.15f,cap.y,(cap.z0+cap.z1)*0.5f-0.15f,
+                    (cap.x0+cap.x1)*0.5f+0.15f,cap.y+0.24f,(cap.z0+cap.z1)*0.5f+0.15f);
+                break;}
+            case StructureMassing::TwinBay:{
+                const float w=rw*0.37f,z=top.z0+rd*0.08f,z1=top.z1-rd*0.08f;
+                for(int side=0;side<2;++side){
+                    const float x=top.x0+rw*(side?0.56f:0.07f);
+                    block(x,z,x+w,z1,top.y,Hh*0.22f,std::min(cut*0.3f,0.5f),
+                          std::min(w,z1-z)*0.025f,2,k.roofRise*0.25f);
+                }
+                break;}
+            case StructureMassing::Terraced:{
+                const float w=rw*0.72f,d=rd*0.66f,x=top.x0+rw*0.17f,z=top.z0+rd*0.26f;
+                auto tier=block(x,z,x+w,z+d,top.y,Hh*0.23f,std::min(cut,0.6f),std::min(w,d)*0.045f,2,k.roofRise*0.2f);
+                const float tw=(tier.x1-tier.x0)*0.57f,td=(tier.z1-tier.z0)*0.58f;
+                const float tx=tier.x0+(tier.x1-tier.x0-tw)*0.5f,tz=tier.z0+(tier.z1-tier.z0-td)*0.5f;
+                block(tx,tz,tx+tw,tz+td,tier.y,Hh*0.15f,0.3f,std::min(tw,td)*0.03f,1,k.roofRise*0.15f);
+                break;}
+        }
+    }
     // 3. Side modules (left / right / back), lower, overlapping the hull.
     uint32_t modules=k.modulesMin+(k.modulesMax>k.modulesMin?g.below(k.modulesMax-k.modulesMin+1):0);
     std::vector<Top> moduleTops;
@@ -152,7 +189,7 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     }
     // 7. Superstructure: a smaller armoured tower on the roof with a glowing window slit.
     std::vector<std::array<float,4>> taken;
-    if(k.towerChance>0&&u()<k.towerChance){
+    if(k.massing!=StructureMassing::Spire&&k.towerChance>0&&u()<k.towerChance){
         float tw=k.towerWidth.pick(g)*W,td=k.towerDepth.pick(g)*D,th=k.towerHeight.pick(g);
         float tx=top.x0+(top.x1-top.x0-tw)*(u()<0.5f?0.1f:0.9f),tz=top.z0+(top.z1-top.z0-td)*0.15f;
         tw=std::min(tw,top.x1-top.x0);td=std::min(td,top.z1-top.z0);
@@ -213,6 +250,33 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     for(auto& gp:out.gates)gp=buildingDetail::turn(gp,yaw,Wf,Df)+origin;
     out.mesh.vertices=std::move(m.v);
     for(size_t i=0;i<m.perMaterial.size();++i)if(!m.perMaterial[i].empty())out.mesh.parts.push_back({int(i),std::move(m.perMaterial[i])});
+    if(custom&&!out.mesh.vertices.empty()){
+        // Size means the *final* overall visual envelope. Each requested model was
+        // freshly composed at its dimensions; this final fit also accounts for
+        // projecting pads, legs, antennas and roof props. Keep anchors in lockstep.
+        const float inMin[3]={out.mesh.boundsMin[0],out.mesh.boundsMin[1],out.mesh.boundsMin[2]};
+        const float inMax[3]={out.mesh.boundsMax[0],out.mesh.boundsMax[1],out.mesh.boundsMax[2]};
+        const float target[3]={yaw%2?size.depth:size.width,size.height,yaw%2?size.width:size.depth};
+        const float base[3]={ox,oy,oz};
+        float scale[3];
+        for(int i=0;i<3;++i){const float span=inMax[i]-inMin[i];if(span<=0.f||!std::isfinite(span))return {};scale[i]=target[i]/span;}
+        auto project=[&](Vec3 p){
+            const float at[3]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+            auto fixed=[&](int i){return Fixed::fromRatio(int64_t(std::llround((base[i]+(at[i]-inMin[i])*scale[i])*1000.0)),1000);};
+            return Vec3{fixed(0),fixed(1),fixed(2)};
+        };
+        for(auto& v:out.mesh.vertices){
+            float n2=0;
+            for(int i=0;i<3;++i){
+                v.pos[i]=base[i]+(v.pos[i]-inMin[i])*scale[i];
+                v.nrm[i]/=scale[i];n2+=v.nrm[i]*v.nrm[i];
+            }
+            if(n2>0){const float inv=1.f/std::sqrt(n2);for(float& n:v.nrm)n*=inv;}
+        }
+        for(auto& box:out.boxes){box.min=project(box.min);box.max=project(box.max);}
+        for(auto& point:out.gates)point=project(point);
+        for(int i=0;i<3;++i){out.mesh.boundsMin[i]=base[i];out.mesh.boundsMax[i]=base[i]+target[i];}
+    }
     return out;
 }
 }
