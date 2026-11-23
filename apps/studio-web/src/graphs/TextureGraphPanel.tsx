@@ -60,7 +60,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='load'){
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
-    setOriginal({name,graph:r.graph});edit(r.graph);setSelected('');return;
+    setOriginal({name,graph:r.graph});edit(r.graph);setSelected('');setPending(null);return;
    }
    if(!graph)throw new Error('Invalid graph JSON');
    if(action==='save'){
@@ -97,10 +97,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     setAsset(null);const r=await op('texture_graph_bake',{graph,output,textureName});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.path!=='string')throw new Error('Native bake failed');
     setStatus('Baked '+r.path);
-    const key=channels[output];if(!key)return;
+    const key=channels[output];
     const assets=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=assets.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');if(key)setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
    }
   }catch(e){if(epoch.current===token)setError(e instanceof Error?e.message:String(e))}
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
@@ -151,8 +151,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    })}
   </StudioSection>}
   {graph&&<StudioSection title="Bind outputs">{Object.entries(outputTypes).map(([key,kind])=><label key={key} className="au-row"><span>{key}</span><StudioSelect value={object(graph?.outputs)?String(graph.outputs[key]??''):''} disabled={busy||disabled} onChange={e=>{if(!graph)return;const next={...(object(graph.outputs)?graph.outputs:{})};if(e.target.value)next[key]=e.target.value;else delete next[key];edit({...graph,outputs:next})}}><option value="">Unassigned</option>{view.nodes.filter(n=>n.outputs[0]?.type===kind).map(n=><option key={n.id}>{n.id}</option>)}</StudioSelect></label>)}</StudioSection>}
-  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null)}}/>
-  <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
+  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null);setAssets([]);setPending(null)}}/>
+  <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
   {preview&&preview.source===text&&<canvas ref={canvas} width={preview.width} height={preview.height} style={{width:128,height:128,imageRendering:'pixelated'}} aria-label="Native texture preview"/>}
   <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
