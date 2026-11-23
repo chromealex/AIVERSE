@@ -46,7 +46,8 @@
     "apps/editor/core/GraphRuntimeProbe.h",
     "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx",
     "engine/view/game/GameView.h",
-    "apps/editor/EditorPlayOps.cpp"
+    "apps/editor/EditorPlayOps.cpp",
+    "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx"
   ],
   "traits": {
     "editable": true,
