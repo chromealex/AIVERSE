@@ -19,6 +19,7 @@ private:
     using Remover=std::function<bool(World&,Entity)>;
     struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;Remover remove;std::function<bool(const World&,Entity)> present;};
     std::map<std::string,Codec> codecs_;
+    std::vector<std::function<bool(World&,const RegionEntityLedger&)>> rebuilders_;
 public:
     bool add(std::string id,uint32_t version,Writer writer,Reader reader){
         if(id.empty()||id.size()>128||!version||!writer||!reader)return false;
@@ -29,21 +30,37 @@ public:
     // Opt-in only: T's Archive codec must not contain raw runtime Entity
     // handles. Use PersistentDeferredReference or an explicit contextual codec.
     template<class T> bool addTyped(std::string id,uint32_t version=1){
+        return addContextual<T>(std::move(id),version,
+            [](Archive& a,T& value,const World&,const Context&){io(a,value);return a.ok();});
+    }
+    // The same field codec runs in both directions. Reference-bearing types
+    // must translate handles through the supplied stable identity context.
+    template<class T,class Fn> bool addContextual(std::string id,uint32_t version,Fn transfer){
         const auto key=id;
         if(!add(std::move(id),version,
-            [](Archive& a,const World& world,Entity entity,const Context&){
+            [transfer](Archive& a,const World& world,Entity entity,const Context& refs){
                 const T* source=world.tryGetConst<T>(entity);
                 if(!source)return false;
-                T value=*source;io(a,value);return a.ok();
+                T value=*source;return transfer(a,value,world,refs)&&a.ok();
             },
-            [](Archive& a,World& world,Entity entity,const Context&){
-                T value{};io(a,value);
-                if(!a.ok()||a.remaining()!=0)return false;
+            [transfer](Archive& a,World& world,Entity entity,const Context& refs){
+                T value{};
+                if(!transfer(a,value,world,refs)||!a.ok()||a.remaining()!=0)return false;
                 if(world.has<T>(entity))world.remove<T>(entity);
                 world.add<T>(entity,std::move(value));return true;
             }))return false;
         codecs_.at(key).present=[](const World& w,Entity e){return w.has<T>(e);};
         codecs_.at(key).remove=[](World& w,Entity e){if(w.has<T>(e))w.remove<T>(e);return true;};
+        return true;
+    }
+    // Rebuild host-derived indices only after the entire component stream,
+    // including all referenced entities, has been restored privately.
+    bool addRebuilder(std::function<bool(World&,const RegionEntityLedger&)> fn){
+        if(!fn)return false;
+        rebuilders_.push_back(std::move(fn));return true;
+    }
+    bool rebuildDerived(World& world,const RegionEntityLedger& ledger)const{
+        for(const auto& fn:rebuilders_)if(!fn(world,ledger))return false;
         return true;
     }
     template<class T,class Fn> bool addTypedMigration(const std::string& id,uint32_t version,Fn reader){
@@ -129,6 +146,7 @@ public:
                    !refs.resolve(staged,c.owner,e)||!it->second.remove(staged,e))return false;
             }else return false;
         }
+        if(!rebuildDerived(staged,ledger))return false;
         Context checked;if(!checked.rebuild(staged,ledger))return false;
         world=std::move(staged);return true;
     }
