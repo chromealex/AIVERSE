@@ -2808,10 +2808,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
                               area["offsetXcm"].integer();
                 const auto cz=std::llround(double(candidate.z)*100.)+
                               area["offsetZcm"].integer();
-                if(cx-area["halfWidthCm"].integer() < -evolve::kAreaCoordinateCm||
-                   cx+area["halfWidthCm"].integer() > evolve::kAreaCoordinateCm||
-                   cz-area["halfDepthCm"].integer() < -evolve::kAreaCoordinateCm||
-                   cz+area["halfDepthCm"].integer() > evolve::kAreaCoordinateCm)
+                if(!evolve::scale_math::withinBounds(cx,area["halfWidthCm"].integer(),
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm)||
+                   !evolve::scale_math::withinBounds(cz,area["halfDepthCm"].integer(),
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm))
                     throw std::runtime_error("EVOLVE batch world bounds exceeded");
                 Json components=candidate.extra["components"];
                 components.set("EvolveArea",std::move(area));
@@ -2833,6 +2833,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const std::string key=params.getStr("key");
             if(entityId.rfind("entity:@",0)!=0)
                 throw std::runtime_error("World-process resize requires stable map ID");
+            if(locked_.contains(entityId)||hidden_.contains(entityId))
+                throw std::runtime_error("World-process resize requires an editable entity");
             const int index=indexFor(entityId);
             const auto& source=ws_.map.data.entities[size_t(index)];
             if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm"||
@@ -2895,10 +2897,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 const auto centerZ=worldZ+next["offsetZcm"].integer();
                 const auto halfX=next["halfWidthCm"].integer();
                 const auto halfZ=next["halfDepthCm"].integer();
-                if(centerX-halfX < -evolve::kAreaCoordinateCm ||
-                   centerX+halfX > evolve::kAreaCoordinateCm ||
-                   centerZ-halfZ < -evolve::kAreaCoordinateCm ||
-                   centerZ+halfZ > evolve::kAreaCoordinateCm)
+                if(!evolve::scale_math::withinBounds(centerX,halfX,
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm)||
+                   !evolve::scale_math::withinBounds(centerZ,halfZ,
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm))
                     throw std::runtime_error("EVOLVE area exceeds world coordinate budget");
                 if(!(original==next)){
                     auto candidate=source;
