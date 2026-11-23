@@ -38,6 +38,12 @@ export default function SpectraGraphAssetInspector({
   const selected=currentPath?assets.find(a=>a.path&&'content/'+a.path===currentPath):undefined;
   const current=selected?{guid:selected.guid,path:selected.path}:null;
   const meshSlots=property==='meshes'&&Array.isArray(raw)?raw.filter((v):v is string=>typeof v==='string'):[];
+  const diagnostic=(path:string)=>{
+    if(path.startsWith('builtin:'))return '';
+    if(!path.startsWith('content/'))return 'Legacy path: '+path+' (not checked by the content index)';
+    if(!assets.some(a=>a.path&&'content/'+a.path===path))return 'Not available in current asset picker: '+path+' (missing, unsupported or not indexed)';
+    return '';
+  };
   const commit=(result:{graph:SpectraGraphV2;error:string})=>{
     if(result.error){setError(result.error);return;}
     setError('');onGraphChange(result.graph);
@@ -53,6 +59,8 @@ export default function SpectraGraphAssetInspector({
         const entry=assets.find(a=>a.path&&'content/'+a.path===path);
         return <div key={slot} style={{display:'flex',alignItems:'center',gap:6,marginBlock:6,flexWrap:'wrap'}}>
           <small style={{minWidth:36}}>#{slot+1}</small>
+          <small title={path}>{path}</small>
+          {diagnostic(path)&&<small role="status">{diagnostic(path)}</small>}
           <div style={{flex:1}}>
             <SpectraAssetPicker assets={assets}
               value={entry?{guid:entry.guid,path:entry.path}:null} kinds={kinds}
@@ -86,6 +94,7 @@ export default function SpectraGraphAssetInspector({
         if(!node)return;
         commit(bindResolvedSpectraAsset(graph,node.id,property,asset,assets,kinds));
       }}/>}
+    {property!=='meshes'&&currentPath&&diagnostic(currentPath)&&<small role="status">{diagnostic(currentPath)}</small>}
     {locked&&<small>Selection locked to this graph node</small>}
     {error&&<small role="alert">{error}</small>}
   </section>;
