@@ -2655,20 +2655,27 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 throw std::runtime_error("World-process resize requires stable map ID");
             const int index=indexFor(entityId);
             const auto& source=ws_.map.data.entities[size_t(index)];
-            if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm")){
+            if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm"||
+                                    key=="offsetXcm"||key=="offsetZcm")){
                 const Json& original=source.extra["components"]["EvolveArea"];
                 if(!lib::worldprocess::extended::validate("EvolveArea",original))
                     throw std::runtime_error("EVOLVE spatial Area missing or malformed");
                 const auto& value=params["value"];
                 if(!value.isNumber())throw std::runtime_error("Expected EVOLVE integer centimetres");
                 const int64_t extent=value.integer(-1);
-                if(extent<50||extent>evolve::kAreaMaxHalfExtentCm||
+                const bool offset=key=="offsetXcm"||key=="offsetZcm";
+                if(extent<(offset?-evolve::kAreaCoordinateCm:50)||
+                   extent>(offset?evolve::kAreaCoordinateCm:evolve::kAreaMaxHalfExtentCm)||
                    value.numberLiteral()!=std::to_string(extent))
                     throw std::runtime_error("Invalid EVOLVE half-extent");
-                if(original[key].integer()!=extent){
+                if((original.has(key)?original[key].integer():0)!=extent){
                     auto candidate=source;
                     Json next=original;
+                    if(!next.has("offsetXcm"))next.set("offsetXcm",Json::number(int64_t(0)));
+                    if(!next.has("offsetZcm"))next.set("offsetZcm",Json::number(int64_t(0)));
                     next.set(key,Json::number(extent));
+                    if(!lib::worldprocess::extended::validate("EvolveArea",next))
+                        throw std::runtime_error("Invalid EVOLVE area update");
                     Json components=candidate.extra["components"];
                     components.set("EvolveArea",std::move(next));
                     candidate.extra.set("components",std::move(components));
@@ -2676,7 +2683,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     ws_.map.data.entities[std::size_t(index)]=std::move(candidate);
                     ws_.map.touched();
                 }
-            if(area=="EvolveRegion"&&key=="radiusMetres"){
+            }else if(area=="EvolveRegion"&&key=="radiusMetres"){
                 if(!source.extra["components"]["EvolveRegion"].isObject())
                     throw std::runtime_error("EVOLVE region missing from map entity");
                 if(!params["value"].isNumber())throw std::runtime_error("Expected numeric radius");
