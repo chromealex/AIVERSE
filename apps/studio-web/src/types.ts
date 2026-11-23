@@ -187,6 +187,7 @@ export interface StudioParams {
     camera?:StudioSpectraCameraSnapshot;
     parameters?:Record<string,number>;
     seed?:number;
+    gpuAllocationSeed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
   'studio.wind':Record<string,never>;
