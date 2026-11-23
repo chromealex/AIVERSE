@@ -38,11 +38,11 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
- const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number}|null>(null),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
+ const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuReady(false);setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -80,13 +80,25 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
-   if(action==='gpuStart'||action==='gpuRead'){
-    const r=await op('texture_graph_gpu_preview',action==='gpuStart'?{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution}:{action:'read'});if(token!==epoch.current)return;
+   if(action==='gpuPublish'){
+    if(!gpuRequest?.bake||!gpuReady||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||gpuRequest.output!==output)throw new Error('No matching completed bake');
+    const r=await op('texture_graph_gpu_preview',{action:'publish',request:gpuRequest.id,textureName});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||typeof r.path!=='string'||r.output!==output)throw new Error('Native GPU bake publication failed');
+    setGpuReady(false);setStatus('Published '+r.path+' via '+String(r.backend));setAsset(null);
+    const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
+    const a=index.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;
+      if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');const key=channels[output];if(key)setAsset({guid:a.guid,path:a.path,key});}
+    return;
+   }
+   if(action==='gpuStart'||action==='gpuBake'||action==='gpuRead'){
+    const r=await op('texture_graph_gpu_preview',action!=='gpuRead'?{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution,bake:action==='gpuBake'}:{action:'read'});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
-    if(action==='gpuStart'){setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution});setPreview(null);}
-    else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||gpuRequest.output!==output||gpuRequest.resolution!==gpuResolution)throw new Error('Preview belongs to a different request or draft');
-    setGpuStatus(String(r.state)+' / '+String(r.backend)+' · encoded passes '+String(r.encodedPasses??0)+' · planned scratch '+String(r.plannedScratchBytes??0)+' bytes — '+String(r.reason??''));
-    if(r.state==='ready'){
+    if(action!=='gpuRead'){setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'});setPreview(null);setGpuReady(false);}
+    else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||gpuRequest.output!==output||(!gpuRequest.bake&&gpuRequest.resolution!==gpuResolution))throw new Error('Preview belongs to a different request or draft');
+    setGpuStatus(String(r.state)+' / '+String(r.backend)+' · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · '+String(r.readbackBlocks??0)+' blocks · encoded passes '+String(r.encodedPasses??0)+(r.reusedPlan===true?' · reused plan':'')+' — '+String(r.reason??''));
+    setGpuReady(r.bake===true&&r.state==='ready'&&r.published!==true&&r.busy!==true);
+    if(r.state==='ready'&&r.bake!==true){
       if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
       setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});
     }return;
@@ -189,10 +201,11 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>Preview output</StudioButton></div>
   <StudioSection title="Experimental GPU output preview">
-   <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; pattern and two-pass normal source supported. Rejected work falls back unless GPU is required. Bake remains CPU.</small>
+   <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; pattern and two-pass normal source supported. Rejected work falls back unless GPU is required. Full-size single-output bake uses native readback; CPU set bake remains available.</small>
    <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
    <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU</label>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>Queue GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
+   <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuBake')}>Queue full-size GPU bake</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||gpuRequest?.output!==output} onClick={()=>void run('gpuPublish')}>Publish completed PNG</StudioButton></div>
    {gpuStatus&&<small>{gpuStatus}</small>}
   </StudioSection>
   {preview&&preview.source===text&&<canvas ref={canvas} width={preview.width} height={preview.height} style={{width:128,height:128,imageRendering:'pixelated'}} aria-label="Native texture preview"/>}
