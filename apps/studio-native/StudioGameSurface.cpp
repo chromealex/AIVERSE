@@ -1,6 +1,7 @@
 #include "aiverselib/world/EvolveVisualization.h"
 #include "engine/world/TerraWeaveEcsAuthority.h"
 #include "engine/world/TerraWeaveForestEcology.h"
+#include "engine/world/TerraWeaveForestDeadwood.h"
 #include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "engine/sim/Simulation.h"
@@ -130,6 +131,28 @@ Json StudioGameSurface::ecologyState(){
                 }
         }
     }
+    Json logs=Json::array(),soil=Json::array();
+    if(sim)if(const auto* d=sim->world().resourceConst<terraweave::ForestDeadwoodResource>()){
+        for(const auto& log:d->logs){
+            if(logs.size()>=4096)break;
+            if(!log.remainingUnits)continue;
+            Json row=Json::object();
+            row.set("x",Json::number(log.xCm));row.set("z",Json::number(log.zCm));
+            row.set("ratio",Json::number(log.initialUnits?double(log.remainingUnits)/double(log.initialUnits):0.,4));
+            logs.push(std::move(row));
+        }
+        for(const auto& cell:d->soil){
+            if(soil.size()>=4096)break;
+            Json row=Json::object();
+            row.set("x",Json::number(cell.x*terraweave::ForestDeadwoodResource::kNutrientCellCm));
+            row.set("z",Json::number(cell.z*terraweave::ForestDeadwoodResource::kNutrientCellCm));
+            row.set("units",Json::string(std::to_string(cell.availableUnits)));
+            soil.push(std::move(row));
+        }
+        out.set("absorbedUnits",Json::string(std::to_string(d->totalAbsorbedUnits)));
+        out.set("respiredUnits",Json::string(std::to_string(d->totalRespiredUnits)));
+    }
+    out.set("logs",std::move(logs));out.set("soil",std::move(soil));
     out.set("plants",std::move(plants));out.set("weather",std::move(weather));
     out.set("regions",std::move(regions));return out;
 }
