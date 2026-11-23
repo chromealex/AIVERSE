@@ -386,3 +386,54 @@ Tests are deferred per user instruction; this source-level graph router is
 not evidence of verified all-graph live integration.
 Handoff:
 `docs/agent-handoffs/building-multigraph-stage23a-2026-11-23.md`.
+
+
+## Stage 23B — authoritative interactive doors, gates and sliding roofs
+
+Use `engine/buildings/BuildingApertureOwner.h` via
+`BuildingRuntime.h` for runtime binary access of `PersonnelDoor`,
+`SmallGate`, `LargeGate` and `SlidingRoof`. The runtime
+`RuntimeBuildingGenerator::generateRecipe` now omits movable
+`DoorLeaf` and `RoofPanel` from STATIC mesh/collision, while Studio
+GLB preview still bakes the initial visual leaves. Game renderer must
+construct its own reusable moving door/roof instances; no GPU updates
+occur in the simulation.
+
+In the authoritative world-owner phase, call
+`owner.attach(generated,spatial,sceneId,origin,yaw,colliderIds,
+obstructionProbe)` with unique game-allocated IDs per operable socket.
+The obstruction probe MUST check live characters, cargo and vehicles,
+not only `SpatialWorld::blocked` against the door itself. Static
+geometry and doors must never share collider IDs. Full-width
+conservative closed barriers are inserted as dynamic SpatialWorld
+colliders. For authorized opening/closing call
+`setOpen(socketId,open,spatial,router,domainMask)`. Closing is rejected
+if obstructed. The authoritative barrier is added/removed first;
+only then is `BuildingGraphChange` published with a revision and
+world-space bounds. Binary physically open/closed state alone controls
+game access; visual intermediate animation grants no permission.
+If a graph consumer refuses an event, physical state remains committed,
+subsequent changes are blocked, and the exact event must be retried
+via `retryGraphPublication(router)`.
+
+Register only real graph owners from `BuildingGraphChanges.h`; native
+NavMesh uses `buildingNavInvalidator`. For every other affected domain
+(HPA*/flow, room/zone, transport, render/VFX, audio, simulation),
+register a consumer adapter implemented by its existing owner.
+Unregistered masks remain pending; they are not treated as success.
+A nav::Mesh markDirty is ONLY an invalidation: callers must regenerate
+its Source using updated dynamic collision/door state and call refresh
+before pathfinding. The current `BuildingNavSource` uses generated
+static graph solids; it is NOT yet a collision-world composite source
+that dynamically reflects these doors. Never claim closed doors are
+NavMesh-blocked solely from this notification.
+
+`BuildingApertureOwner` currently supports instantaneous binary
+physical commits and conservative full-width slabs, not partial
+collision hinges, swept animations, custom leaf render meshes,
+PHYSIS actor impulses, network authorization transports or automatic
+multi-graph adapter registration. Avoid duplicate lift door ownership:
+`BuildingLiftDoorOwner` remains authoritative for elevators.
+
+Stage 23B source committed without build/tests per user preference.
+Handoff: `docs/agent-handoffs/building-aperture-owner-stage23b-2026-11-23.md`.
