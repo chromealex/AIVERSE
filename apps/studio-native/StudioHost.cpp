@@ -801,7 +801,7 @@ void StudioHost::rebuildOverlay() {
     // OverlayShape renderer. This is a read-only projection of MapDoc,
     // never a second ECS simulation or a new viewport.
     if(session_ && !session_->workspace().project.dir.empty()) {
-        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map);
+        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map,{},wpEcologyLayer_);
         shapes.reserve(shapes.size()+worldShapes.size());
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
         const auto selected=session_->selectedObjectId();
@@ -1918,6 +1918,19 @@ bool StudioHost::handleHostMethod(const Json& req) {
         result.set("pivotZcm",Json::number(
             std::int64_t(std::llround(double(pivot.z)*100.))));
         result.set("custom",Json::fromBool(wpCustomPivot_));
+        return result;
+    });
+    if(method=="studio.evolveLayer")return answer([&]{
+        const auto layer=params.getStr("layer");
+        if(!layer.empty()){
+            if(layer!="combined"&&layer!="fertility"&&layer!="pollution"&&
+               layer!="succession"&&layer!="durability"&&layer!="off")
+                throw std::runtime_error("Invalid EVOLVE layer");
+            wpEcologyLayer_=layer;
+            rebuildOverlay();
+        }
+        Json result=Json::object();
+        result.set("layer",Json::string(wpEcologyLayer_));
         return result;
     });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{
