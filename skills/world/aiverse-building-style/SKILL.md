@@ -185,3 +185,15 @@ Dynamic model should be uploaded once, never regenerated every tick.
 
 Handoff: docs/agent-handoffs/building-lift-safety-network-2026-11-23.md.
 No C++/TS/GPU/network tests were run (explicitly deferred by user).
+
+
+Stage 18 ECS physical integration: use BuildingCirculationEcsScene<Body> with the
+existing ECS World/Entity and BuildingLiftPassenger marker, or the alternative
+BuildingLiftGameSession<Body>, never both for the same lift. Boarding checks
+physical feet inside the cabin, exiting checks the real target landing.
+Door closure requires an authoritative obstruction probe; the generic ECS
+scene supplies one for its Body pool. Add PHYSIS sensors for other object
+kinds. Apply only publishedRiders after successful SpatialWorld platform
+collider publication, then send the EXISTING BuildingLiftReplication.h server
+frame. No tests run at user request; do not claim verified gameplay.
+Handoff: docs/agent-handoffs/building-ecs-physical-doors-2026-11-23.md.
