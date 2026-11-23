@@ -57,6 +57,7 @@ const clone = (): StudioSnapshot => ({ ...structuredClone(snapshot), history: { 
  // cannot narrow generic M through a runtime method comparison.
 export function mockInvoke<M extends StudioMethod>(method: M, params: StudioParams[M]): Promise<StudioResult[M]>;
 export async function mockInvoke(method: StudioMethod, params: StudioParams[StudioMethod]): Promise<StudioResult[StudioMethod]> {
+  if (method === 'studio.evolveLayer') return {layer: (params as StudioParams['studio.evolveLayer']).layer ?? 'combined'} as StudioResult['studio.evolveLayer'];
   if (method === 'studio.worldProcessAreaPreview' ||
       method === 'studio.worldProcessGroupPivot' ||
       method === 'studio.worldProcessAreaBatchResize')
