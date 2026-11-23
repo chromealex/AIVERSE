@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/buildings/BuildingGlbWriter.h"
+#include <aiverselib/systems/BuildingFeatureGenerator.h>
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <cmath>
