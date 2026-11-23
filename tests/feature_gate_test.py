@@ -18,7 +18,25 @@ class GateTest(unittest.TestCase):
             data = dict(schema=1, id="sample", owner="test", changed_paths=["engine/sample.cpp"], traits=dict(editable=True, simulation=True, visible=True, runtime=True), checks={
                 key: dict(status="pass", note="fixture", evidence=["proof.txt"])
                 for key in gate.DIMENSIONS})
+            data["integrations"] = dict(skills=["sample"], mcp_tools=["sample_get"], studio_panels=["sample"], studio_methods=["studio.sample"])
+            fixtures = {
+                "skills/catalog.json": '{"skills":[{"id":"sample","path":"skills/workflow/sample/SKILL.md"}]}',
+                "skills/workflow/sample/SKILL.md": "name: sample\n",
+                "apps/studio-web/src/nestedDock.ts": "export const STUDIO_PANELS = ['sample'] as const;",
+                "apps/studio-web/src/panels/StudioPanelRenderer.tsx": "switch (panel) { case 'sample': return null; }",
+                "apps/studio-web/src/types.ts": "export interface StudioParams {\n  'studio.sample': {};\n}\n"
+            }
+            for name, content in fixtures.items():
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content)
             self.assertEqual(gate.validate(data, root, True), [])
+            data["integrations"]["studio_panels"] = ["missing"]
+            self.assertTrue(gate.validate(data, root, True))
+            data["integrations"]["studio_panels"] = ["sample"]
+            data["integrations"]["skills"] = ["missing"]
+            self.assertTrue(gate.validate(data, root, True))
+            data["integrations"]["skills"] = ["sample"]
             data["checks"]["tests"]["status"] = "not_run"
             self.assertEqual(gate.validate(data, root), [])
             self.assertTrue(gate.validate(data, root, True))
