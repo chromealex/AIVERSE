@@ -324,3 +324,70 @@ CTest target: `aiverse_region_gamecore_integration_test`, name
 normal external test template package. It is source-registered, but
 actual Mac/KINGSTON compilation and runtime checks have **not** been
 performed yet. The PR remains Draft and W1 remains partial.
+
+
+## Stage 06 — vehicle/occupant region grouping (shared ECS)
+
+`engine/world/VehicleRegionTransfer.h` reads the existing shared
+`vehicles::VehicleDrive` and `vehicles::VehicleOccupant` components.
+It is a pure validation/transfer adapter, **not** another car physics
+or seating implementation.
+
+```cpp
+using namespace aiverse::world;
+
+// The world-space ActorHost maps seat actor IDs to real CharacterIndex
+// entities. Other hosts provide their own stable actor-ID mapping.
+SeatEntityResolver seatToEntity = [&](int64_t slot) -> Entity {
+    return slotEntity(slot);
+};
+VehicleRegionGroup group;
+if(VehicleRegionTransfer::gather(world,car,seatToEntity,group,&error)) {
+    // Before transfer, validate destination collision + navigation residency
+    // using the actual owning host, then:
+    VehicleRegionTransfer::transfer(
+        world,*ledger,car,seatToEntity,source,destination,&error);
+}
+```
+
+The group contains the vehicle entity, its `VehicleDrive::driver`,
+all `seats.occupants` resolved through the host callback, and all
+`VehicleOccupant` ECS backlinks to the same vehicle. The result is
+sorted by ECS entity handle; duplicate/invalid seat actors, stale
+driver/entity handles and contradictory backlinks fail. The
+transfer path delegates to `RegionEcsBridge::transferGroup`, which
+validates every member's stable ID, `Transform`, non-dormant status
+and original owner **before any ledger owner is changed**.
+
+The world-space host now exposes
+`actor::ActorHost::vehicleRegionGroup(sim,vehicle,out,error)` as a
+**read-only adapter** mapping integer seat actors to `CharacterIndex`
+entities. It does not install `RegionStableIdentity`, move any actor,
+or park `VehicleDrive` or `CharacterBody`.
+
+**Known gap:** world-space `ActorHost` characters store their position
+in `actor::CharacterBody`, and do not automatically have
+`aiverse::Transform`. The current W1 `RegionEcsBridge` requires a
+`Transform` on every group member. Consequently, the new adapter
+can correctly discover a real occupied vehicle, but its region
+ownership transfer must fail until a supported, authoritative
+world-space position/identity binding is implemented and validated.
+Do not add a cosmetic `Transform` or a parallel position model
+just to bypass this condition.
+
+Tests:
+- `tests/world/vehicle_region_group_test.cpp` (CTest
+  `vehicle_region_group_test`) builds actual shared vehicle ECS
+  components, validates occupants/backlinks and transfers a fully
+  registered car+driver+passenger, including all-or-nothing refusals.
+- `tests/world/actor_vehicle_region_group_test.cpp` (CTest
+  `actor_vehicle_region_group_test`) constructs real world-space
+  `GameCore`/`ActorHost`, resolves game-player seat slots and
+  confirms an incomplete W1 registration cannot mutate ownership.
+
+These tests are source-registered but **not compiled or executed on
+Mac/KINGSTON yet**. W1 remains partial; the existing native game
+world/vehicle simulation has not been switched over to the cold
+region lifecycle. Next work: canonical shared positions, component
+owner participation, collision/nav admission, and full deterministic
+save/replay before production activation.
