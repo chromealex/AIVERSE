@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 from check_feature import ROOT, DIMENSIONS, validate
+from legacy_inventory import inventory
 
 PREFIX = "docs/features/"
 
@@ -55,6 +56,7 @@ def matrix(registry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
+    parser.add_argument("--legacy", action="store_true", help="Include catalog inventory without claiming runtime verification")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     args = parser.parse_args()
     try:
@@ -63,6 +65,9 @@ def main():
         if args.base:
             errors.extend(regressions(baseline(ROOT, args.base), registry))
         report = matrix(registry)
+        if args.legacy:
+            report["legacy_inventory"] = inventory(ROOT)
+            errors.extend(report["legacy_inventory"]["errors"])
         report["errors"] = errors
         if args.format == "json":
             print(json.dumps(report, indent=2))
@@ -73,6 +78,9 @@ def main():
             print("|---|" + "---|" * len(columns))
             for row in report["features"]:
                 print("| " + row["id"] + " | " + " | ".join(row["checks"][c] for c in columns) + " |")
+            if args.legacy:
+                print("\nLegacy catalog counts: " + json.dumps(report["legacy_inventory"]["counts"]))
+                print("Legacy rows are catalog references, not verified feature manifests.")
             for error in errors:
                 print("- " + error)
         return int(bool(errors))
