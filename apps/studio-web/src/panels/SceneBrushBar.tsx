@@ -38,6 +38,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const [state,setState]=useState<EvolveLiveState|null>(null);
   const [vegetation,setVegetation]=useState(true);
   const [climate,setClimate]=useState(false);
+  const [nutrients,setNutrients]=useState(false);
   const [opacity,setOpacity]=useState(.65);
   const [error,setError]=useState('');
   useEffect(()=>{
@@ -63,6 +64,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   return <div><small>Live ecology · tick {state.tick}</small>
     <div><label><input type="checkbox" checked={vegetation} onChange={e=>setVegetation(e.target.checked)}/>Vegetation</label>
       <label><input type="checkbox" checked={climate} onChange={e=>setClimate(e.target.checked)}/>Climate</label>
+      <label><input type="checkbox" checked={nutrients} onChange={e=>setNutrients(e.target.checked)}/>Deadwood / nutrients</label>
       <label>Opacity <input type="range" min="0.1" max="1" step="0.05" value={opacity} onChange={e=>setOpacity(Number(e.target.value))}/></label></div>
     <svg viewBox={`${x} ${z} ${w} ${h}`} width="100%" height="160" aria-label="Live ecological regions">
       {regions.map(r=>{
@@ -77,8 +79,10 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
       })}
       {climate&&(state.weather??[]).map(c=><rect key={`${c.x}:${c.z}`} x={c.x} y={c.z} width={c.size} height={c.size}
         fill="royalblue" fillOpacity={Math.min(.8,Math.max(0,c.wetness))*opacity}><title>Rain {c.rain}; temperature {c.temperature} °C; wetness {c.wetness}</title></rect>)}
+      {nutrients&&(state.soil??[]).map(c=><rect key={`${c.x}:${c.z}`} x={c.x} y={c.z} width={3200} height={3200} fill="#bfa34c" fillOpacity={opacity*.3}><title>Soil nutrients: {c.units}</title></rect>)}
+      {nutrients&&(state.logs??[]).map((c,i)=><circle key={i} cx={c.x} cy={c.z} r={Math.max(w,h)/120} fill="#956b43" fillOpacity={Math.max(.1,c.ratio)*opacity}><title>Deadwood remaining {Math.round(c.ratio*100)}%</title></circle>)}
       {vegetation&&(state.plants??[]).map((p,i)=><circle key={p.id??i} cx={p.x} cy={p.z} r={Math.max(w,h)/180} fill={p.dead?'#a36c55':p.fallen?'orange':p.mature===false?'#8ee9ef':'lightgreen'} fillOpacity={opacity}><title>{p.dead?'Dead':p.fallen?'Fallen':p.mature===false?'Juvenile':'Mature'} · age {p.ageTicks??'unknown'} · shade {p.shadeStress??'—'} · flood {p.floodStress??'—'} · drought {p.droughtStress??'—'}</title></circle>)}
-    </svg>{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
+    </svg>{nutrients&&<small>Absorbed: {state.absorbedUnits??"—"} · respired: {state.respiredUnits??"—"}</small>}{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
 }
 export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
