@@ -10,18 +10,23 @@ class RegionWalTransaction {
 public:
     static constexpr size_t maxMutations=(RegionWalCodec::maxPayload-prefix)/row;
     static bool encode(const RegionEntityLedger::Transaction& tx,uint64_t sequence,RegionWalFrame& out){
-        const auto& changes=tx.mutations();
-        if(!tx.capturing()||!sequence||changes.empty()||changes.size()>maxMutations)return false;
+        if(!tx.capturing())return false;
+        return encodeCaptured(tx.initialRevision(),tx.view().lastRevision(),tx.mutations(),sequence,out);
+    }
+    // Exact chronological stream, never a coalesced latest-state journal.
+    static bool encodeCaptured(uint64_t baseRevision,uint64_t finalRevision,
+        std::span<const RegionEntityLedger::Mutation> changes,uint64_t sequence,RegionWalFrame& out){
+        if(!sequence||changes.empty()||changes.size()>maxMutations)return false;
         RegionWalFrame f;f.sequence=sequence;
         auto& b=f.payload;b.reserve(prefix+row*changes.size());
-        put(b,1,4);put(b,tx.initialRevision(),8);put(b,changes.size(),4);
-        auto revision=tx.initialRevision();
+        put(b,1,4);put(b,baseRevision,8);put(b,changes.size(),4);
+        auto revision=baseRevision;
         for(const auto& [id,r]:changes){
             if(!id||r.live>1||revision==UINT64_MAX||r.revision!=++revision)return false;
             put(b,id,8);put(b,uint32_t(r.owner.x),4);put(b,uint32_t(r.owner.y),4);put(b,uint32_t(r.owner.z),4);
             put(b,r.revision,8);put(b,r.live,1);
         }
-        if(revision!=tx.view().lastRevision())return false;
+        if(revision!=finalRevision)return false;
         out=std::move(f);return true;
     }
     static bool replay(RegionEntityLedger& ledger,const RegionWalFrame& frame){
