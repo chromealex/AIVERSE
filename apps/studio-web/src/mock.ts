@@ -119,6 +119,10 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     return [];
   }
   if (method === 'studio.buildingCatalog') return {styles: []} as StudioResult['studio.buildingCatalog'];
+  if (method === 'studio.buildingStaleMaterials')
+    return {stale: []} as StudioResult['studio.buildingStaleMaterials'];
+  if (method === 'studio.buildingRegenerate')
+    throw new Error('Regenerating building assets requires native AIVERSE Studio');
   if (method === 'studio.buildingInspect' || method === 'studio.buildingGenerate')
     throw new Error('Generated building meshes require native AIVERSE Studio');
   if (method === 'studio.assets') {
