@@ -25,6 +25,13 @@ public:
             if(!a.version||!a.write||!a.write(state,section.bytes)||section.bytes.size()>budget-used)return false;
             used+=section.bytes.size();snapshot.sections.push_back(std::move(section));
         }
+        if(!state.restart.empty()){
+            NativeRestartState::Data metadata;
+            if(state.restart.size()>budget-used||!NativeRestartState::decode(state.restart,metadata)||
+               !NativeRestartState::referencesValid(metadata,state.world,state.ledger))return false;
+            snapshot.sections.push_back({Format::Kind::Restart,1,
+                std::vector<uint8_t>(state.restart.begin(),state.restart.end())});
+        }
         return Format::encode(snapshot,budget,out);
     }
     // The factory prepares a private World with required pools/resources.
@@ -46,6 +53,15 @@ public:
             if(!a.read||!a.read(*staged,section.version,section.bytes))return false;
         }
         if(staged->sequence!=snapshot.sequence||staged->ledger.lastRevision()!=snapshot.revision)return false;
+        staged->restart.clear();
+        if(snapshot.sections.size()==5){
+            const auto& section=snapshot.sections[4];
+            if(section.version!=1||section.bytes.empty()||section.bytes.size()>NativeRestartState::MaxBytes)return false;
+            staged->restart.assign(section.bytes.begin(),section.bytes.end());
+            NativeRestartState::Data metadata;
+            if(!NativeRestartState::decode(staged->restart,metadata)||
+               !NativeRestartState::referencesValid(metadata,staged->world,staged->ledger))return false;
+        }
         PersistentEntityReferences refs;
         if(!refs.rebuild(staged->world,staged->ledger)||(validate&&!validate(*staged)))return false;
         out.swap(staged);return true;
