@@ -37,7 +37,7 @@ struct FunctionalBuildingRecipe {
 };
 enum class BuildingGraphPart : uint8_t {
     Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel, WindowPane, Partition,
-    StairTread, StairLanding, ElevatorPlatform
+    StairTread, StairLanding, ElevatorPlatform, ElevatorGuide
 };
 struct BuildingGraphSolid {
     BuildingGraphPart part=BuildingGraphPart::Wall;
@@ -428,6 +428,15 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     };
     for(const auto& core:cores){
         const float cx=(core.x0+core.x1)*0.5f,cz=(core.z0+core.z1)*0.5f;
+        if(core.kind==BuildingFeatureKind::Elevator){
+            // Slim fixed guide rails make the lift-shaft footprint visible
+            // without filling its movement volume with a solid collider.
+            constexpr float e=0.09f;
+            for(const float x:{core.x0+0.12f,core.x1-0.12f})
+                for(const float z:{core.z0+0.12f,core.z1-0.12f})
+                    solid(BuildingGraphPart::ElevatorGuide,x-e,floorTop,z-e,
+                          x+e,H-roofThickness,z+e,core.feature);
+        }
         for(uint32_t floor=0;floor+1<recipe.floors;++floor){
             const float bottom=floorTop+storey*float(floor)+(floor?slabThick:0.f);
             const float next=floorTop+storey*float(floor+1)+slabThick;
