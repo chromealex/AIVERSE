@@ -88,6 +88,7 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-graph-authoring','Shared Studio graph canvas and domain adapters without duplicate graph execution','docs/agents/graph-framework.md'),
  ('aiverse-new-feature','Plan, implement and verify feature evidence and integration readiness','docs/agents/feature-contract.md'),
  ('aiverse-mcp-coverage','Audit real MCP tools/list, GUI-only restrictions and verified capability calls','docs/agents/mcp-coverage.md'),
  ('aiverse-warcraft3-import','Import licensed Warcraft III map archives and assets using the bounded MPQ/Studio pipeline','docs/warcraft3-import.md'),
