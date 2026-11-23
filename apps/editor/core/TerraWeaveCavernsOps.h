@@ -3,6 +3,7 @@
 #pragma once
 #include "apps/editor/core/Workspace.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
+#include "engine/world/TerraWeaveCavernsRaycast.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -36,6 +37,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             auto volume=terraweave::caverns::caveSnapshotFromJson(original);
             bool changed=false;
             uint64_t stampId=0;
+            std::optional<terraweave::caverns::CaveSphereStamp> affected;
             if(mode=="erase"){
                 const auto requested=p.getInt("stampId",0);
                 if(requested<=0)throw std::invalid_argument("Caverns erase stamp ID");
@@ -44,6 +46,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 if(it==volume.stamps.end())
                     throw std::out_of_range("Caverns stamp not found");
                 stampId=it->id;
+                affected=*it;
                 volume.stamps.erase(it);
                 changed=true;
             }else if(mode!="get"){
@@ -67,6 +70,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 volume.stamps.push_back({stampId,xyz,int32_t(radius),
                     mode=="carve"?terraweave::caverns::CaveStampMode::Carve:
                                   terraweave::caverns::CaveStampMode::Fill});
+                affected=volume.stamps.back();
                 changed=true;
             }
             if(changed){
@@ -85,6 +89,17 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             result.set("revision",Json::number(int64_t(volume.sourceRevision)));
             result.set("stampCount",Json::number(int64_t(volume.stamps.size())));
             if(stampId)result.set("stampId",Json::number(int64_t(stampId)));
+            if(affected){
+                const auto bounds=terraweave::caverns::dirtyBoundsForStamp(*affected);
+                Json dirty=Json::object();
+                dirty.set("minXcm",Json::number(bounds.minX));
+                dirty.set("minYcm",Json::number(bounds.minY));
+                dirty.set("minZcm",Json::number(bounds.minZ));
+                dirty.set("maxXcm",Json::number(bounds.maxX));
+                dirty.set("maxYcm",Json::number(bounds.maxY));
+                dirty.set("maxZcm",Json::number(bounds.maxZ));
+                result.set("dirtyBounds",std::move(dirty));
+            }
             if(mode=="get")result.set("snapshot",terraweave::caverns::caveSnapshotToJson(volume));
             result.set("summary",Json::string(
                 "Caverns: "+std::to_string(volume.stamps.size())+
