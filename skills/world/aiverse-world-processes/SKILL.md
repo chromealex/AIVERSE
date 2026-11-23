@@ -565,3 +565,7 @@ Four native Scene handles now keep the opposite edge fixed. Dragging an edge sen
 ## Stage 34: live EVOLVE rectangle preview
 
 Native Studio Scene now projects the candidate EvolveArea rectangle during valid center/edge dragging via pure `worldprocess_edit::previewArea` and existing `worldprocess_gizmos::rectangle` overlay shapes. No MapDoc/ECS mutation occurs until release. Current host uses fixed-opposite-edge asymmetric resize; symmetric mode is helper-only, not yet exposed as a user control. Source-only, not compiled/tested. Handoff: `docs/handoffs/world-processes-stage34-evolve-live-preview-2026-11-23.md`.
+
+## Stage 35: Scene resize modifier
+
+Plain LMB edge drag keeps the opposite EVOLVE area edge fixed. Hold Shift during an active edge drag for symmetric resize about the authored center. The live candidate rectangle follows the current modifier and the drag label shows the mode; the host highlights active handles. On mouse-up, symmetric resize sends a typed half-extent to `studio.worldProcessAreaSet` while asymmetric resize sends `edgeSide`; both use one existing MapDoc Undo transaction. No ECS/forest duplication. No compilation or runtime QA performed (user deferred). See `docs/handoffs/world-processes-stage35-evolve-resize-modes-2026-11-23.md`.
