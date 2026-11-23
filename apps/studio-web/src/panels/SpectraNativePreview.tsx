@@ -250,6 +250,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     }
     setBusy(true);setReplayRestoring(true);setError('');
     try{
+      if(replayPreset.gpuBirthRandom!==undefined){
+        const loaded=await invoke('studio.spectraPreview',{action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom});
+        if(loaded.error||!loaded.ready)throw new Error(loaded.error||'Replay graph reload failed');
+        setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
+      }
       // All commands are serialized. Stop playback before restoring tick/camera.
       const actions=[
         {action:'pause' as const},
