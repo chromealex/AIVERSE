@@ -120,6 +120,25 @@ and not correct for every-event replay. Future crash journal
 must record each mutation transaction individually and commit
 it atomically to durable storage.
 
+## Agent skill and catalog integration
+
+- `skills/world/aiverse-region-lifecycle/SKILL.md` — generic API
+  integration skill for the ledger/bridge, canonical positions,
+  VehicleDrive group ownership, pre-tick move admission and revision
+  change consumer. It explicitly distinguishes convergent latest-state
+  replication from a lossless journal, and marks source tests as
+  unexecuted.
+- `skills/catalog.json` — registers `aiverse-region-lifecycle`
+  as an API reference (not a separately installable library).
+- GitHub commits:
+  `fef59dd29eb4359992fa87bce667098610e9d925` (skill),
+  `a5f676a05cc43335c703c81807f7129637ca94c2`
+  (catalog registration),
+  `a409287e7241e59fffc5e993f69d5b92fa4fdadd`
+  (correct reference-only target metadata).
+- Catalog JSON was parsed structurally after modification, but the
+  engine's full catalog/build validation was **not run** on Mac.
+
 ## Tests performed and not performed
 
 - **Performed**: read actual current GitHub source contracts and
