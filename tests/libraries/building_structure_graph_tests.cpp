@@ -115,6 +115,26 @@ int main(){
         CHECK(!buildFunctionalStructureGraph(collision)); // unsafe stair pitch
         collision=vertical;collision.floors=1;
         CHECK(!buildFunctionalStructureGraph(collision)); // no vertical links
+        // Three storeys: two vertical links per core and only ONE initial
+        // lift platform; no phantom upper-floor lift slabs.
+        auto three=vertical;three.height=22.f;three.floors=3;
+        auto threeGraph=buildFunctionalStructureGraph(three);
+        CHECK(threeGraph);
+        CHECK(threeGraph.rooms.size()==12);
+        CHECK(threeGraph.connections.size()==16); // 12 horizontal + 4 vertical
+        int liftPlatforms=0,guides=0,upperHoles=0;
+        for(const auto& part:threeGraph.solids){
+            if(part.part==BuildingGraphPart::ElevatorPlatform)++liftPlatforms;
+            if(part.part==BuildingGraphPart::ElevatorGuide)++guides;
+        }
+        CHECK(liftPlatforms==1&&guides==4);
+        for(uint32_t floor=1;floor<3;++floor){
+            const float level=0.24f+(three.height-0.52f)/3.f*float(floor)+0.12f;
+            CHECK(!intersects(threeGraph,6.f,level,4.5f,BuildingGraphPart::Floor));
+            CHECK(!intersects(threeGraph,18.f,level,4.5f,BuildingGraphPart::Floor));
+            ++upperHoles;
+        }
+        CHECK(upperHoles==2);
         std::puts("building structure graph standalone PASS");
         return 0;
     }catch(const std::exception& e){
