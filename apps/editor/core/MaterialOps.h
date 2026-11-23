@@ -11,6 +11,8 @@ namespace aiverse::editor {
 void registerMaterialOps(Workspace& ws);
 // Native owner only: publish completed validated pixels as a new texture asset.
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image);
+// Images/backends in native Program::outputs sorted order; trusted native owner only.
+Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends);
 
 // materials.json of the open game ({"materials": {...}}); empty object when missing.
 Json loadMaterialLibrary(const Workspace& ws);
