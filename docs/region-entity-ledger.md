@@ -18,6 +18,7 @@ sim.world().setResource<RegionEntityLedger>(RegionEntityLedger{});
 // During deterministic Simulation tick handlers:
 auto* ledger = sim.world().resource<RegionEntityLedger>();
 ledger->spawn(1001, Cell{0,0,0});  // a stable, nonzero game identity
+ledger->spawn(1002, Cell{0,0,0});  // passenger identity
 
 // Car and occupants move together, atomically; no partial transfer on error.
 std::array<RegionEntityId, 2> occupants{1001,1002};
