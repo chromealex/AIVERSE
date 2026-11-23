@@ -16,6 +16,9 @@ on:
     paths:
       - 'apps/studio-native/**'
       - 'engine/fx/**'
+      - 'apps/editor/core/SpectraGraphOps.cpp'
+      - 'apps/editor/core/Workspace.h'
+      - 'tests/vfx_graph_ops_test.cpp'
       - 'apps/studio-web/**'
       - '.github/workflows/spectrafx-native-preview.yml'
   workflow_dispatch:
