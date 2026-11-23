@@ -9,10 +9,10 @@ public:
         const std::array<uint8_t,16>& newWorld,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={}){
+        const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         if(world==newWorld)return RegionWalWrite::InvalidFrame;
         std::unique_ptr<State> recovered;
-        if(!recover(source,generation,world,budget,adapters,factory,codecs,materialize,recovered,validate))
+        if(!recover(source,generation,world,budget,adapters,factory,codecs,materialize,recovered,validate,resources))
             return RegionWalWrite::NeedsRecovery;
         UnifiedWalSession session;
         return session.create(destination,newWorld,*recovered,adapters,budget);
