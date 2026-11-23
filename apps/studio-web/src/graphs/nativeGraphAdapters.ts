@@ -180,3 +180,34 @@ export function editAnimationCondition(doc:GraphObject,stateId:string,index:numb
  }
  return editAnimationTransition(doc,stateId,index,{when:conditions});
 }
+
+/** Documented native modifier defaults, not a new geometry evaluator. */
+const modifierDefaults:Record<string,GraphObject>={
+ transform:{translation:[0,0,0],scale:[1,1,1],rotation:[0,0,0]},
+ mirror:{axis:'x'},array:{count:2,offset:[1,0,0]},bevel:{amount:.02},
+ subdivide:{levels:1},smoothSubdivision:{levels:1},simplify:{cell:.05},
+ normals:{},uv:{mode:'box',scale:1},uvAtlas:{padding:.01}
+};
+export const geometryModifierKinds=Object.keys(modifierDefaults);
+export function addGeometryModifier(doc:GraphObject,id:string,kind:string):GraphObject {
+ const n=records(doc.nodes).find(x=>x.id===id);
+ if(!n||!object(n.geometry)||!Object.prototype.hasOwnProperty.call(modifierDefaults,kind))return doc;
+ if(n.geometry.modifiers!==undefined&&!Array.isArray(n.geometry.modifiers))return doc;
+ const modifiers=Array.isArray(n.geometry.modifiers)?n.geometry.modifiers:[];
+ return replaceAnimationEntry(doc,'pose',id,{...n,geometry:{...n.geometry,modifiers:[...modifiers,{kind,...structuredClone(modifierDefaults[kind])}]}});
+}
+export function removeGeometryModifier(doc:GraphObject,id:string,index:number):GraphObject {
+ const n=records(doc.nodes).find(x=>x.id===id);
+ if(!n||!object(n.geometry)||!Array.isArray(n.geometry.modifiers)||!Number.isInteger(index)||index<0||index>=n.geometry.modifiers.length)return doc;
+ return replaceAnimationEntry(doc,'pose',id,{...n,geometry:{...n.geometry,modifiers:n.geometry.modifiers.filter((_,i)=>i!==index)}});
+}
+export function modelMaterialIds(doc:GraphObject):string[] {
+ return records(doc.materials).map(m=>text(m.id)).filter(Boolean);
+}
+export function bindModelMaterial(doc:GraphObject,id:string,material:string):GraphObject {
+ const n=records(doc.nodes).find(x=>x.id===id);
+ if(!n||!object(n.geometry)||material&&!modelMaterialIds(doc).includes(material))return doc;
+ const next={...n};
+ if(material)next.material=material;else delete next.material;
+ return replaceAnimationEntry(doc,'pose',id,next);
+}
