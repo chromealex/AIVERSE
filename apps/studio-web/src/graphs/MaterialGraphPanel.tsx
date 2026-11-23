@@ -5,6 +5,7 @@ import PropertyField from '../components/PropertyField';
 import {materialFields} from '../panels/materialSchema';
 import type {MaterialData,MaterialPatch,MaterialKey,FieldValue} from '../panels/materialSchema';
 import GraphCanvas from './GraphCanvas';
+import TextureGraphPanel from './TextureGraphPanel';
 import {materialGraph,textureRecipeParams,textureChannelForOutput} from './materialGraph';
 import type {TextureRecipe,TextureOutput} from './materialGraph';
 
@@ -51,6 +52,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
   </div>
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
+  <TextureGraphPanel projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/>
   <StudioSection title="Generate texture">
    <StudioSelect aria-label="Pattern" disabled={busy||disabled} value={recipe.pattern} onChange={e=>setRecipe(r=>({...r,pattern:e.target.value}))}>{patterns.map(p=><option key={p}>{p}</option>)}</StudioSelect>
    <StudioSelect aria-label="Texture output" disabled={busy||disabled} value={recipe.output} onChange={e=>setRecipe(r=>({...r,output:e.target.value as TextureOutput}))}><option value="color">Color / albedo</option><option value="normal">Normal</option><option value="mask">Team mask</option></StudioSelect>
