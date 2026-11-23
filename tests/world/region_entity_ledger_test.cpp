@@ -1,5 +1,5 @@
 #include "engine/world/RegionEntityLedger.h"
-#include "engine/world/UnifiedBackupCatalog.h"
+#include "engine/world/UnifiedWalSession.h"
 #include <chrono>
 #include <fstream>
 #include "engine/sim/Simulation.h"
@@ -325,6 +325,77 @@ static void checkUnifiedBackupCatalog() {
     AIVERSE_TEST_CHECK(verified.complete && verified.entries.size()==5);
     AIVERSE_TEST_CHECK(verified.entries[0].status==Status::RecoveryFailed);
     AIVERSE_TEST_CHECK(verified.entries[4].status==Status::RecoveryFailed);
+
+#if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
+    const auto managed=temp.path/"managed";
+    const auto destination=temp.path/"fork";
+    AIVERSE_TEST_CHECK(fs::create_directory(managed)&&fs::create_directory(destination));
+    // Empty adapters are sufficient for a ledger-only fixture inside the
+    // unified four-section format. The production adapters are tested separately.
+    for(auto& adapter:adapters){
+        adapter.write=[](const UnifiedWorldReplay::State&,std::vector<uint8_t>& bytes){
+            bytes.clear();return true;
+        };
+        adapter.read=[](UnifiedWorldReplay::State&,uint32_t version,std::span<const uint8_t> bytes){
+            return version==1&&bytes.empty();
+        };
+    }
+    factory=[](){return std::make_unique<UnifiedWorldReplay::State>();};
+    materialize=[](World&,const RegionEntityLedger&,const RegionEntityLedger&){return true;};
+    UnifiedWalSession session;
+    UnifiedWalSession::State initial;
+    AIVERSE_TEST_CHECK(initial.ledger.spawn(99,a));
+    constexpr size_t budget=64*1024;
+    const auto world=active.identity.world;
+    AIVERSE_TEST_CHECK(session.create(managed,world,initial,adapters,budget)==RegionWalWrite::Ok);
+    AIVERSE_TEST_CHECK(session.checkpoint(3,adapters,budget)==RegionCheckpointPublishResult::Ok);
+    AIVERSE_TEST_CHECK(session.checkpoint(5,adapters,budget)==RegionCheckpointPublishResult::Ok);
+    AIVERSE_TEST_CHECK(session.checkpoint(7,adapters,budget)==RegionCheckpointPublishResult::Ok);
+    // Corrupt an old checkpoint, inject a foreign-world pair and a future pair.
+    std::ofstream(managed/"checkpoint-1.bin",std::ios::binary|std::ios::trunc).put('x');
+    auto inject=[&](uint64_t gen,bool foreign){
+        auto m=*session.manifest();m.generation=gen;
+        if(foreign)m.identity.world[0]=2;
+        fs::copy_file(managed/session.manifest()->checkpointName(),managed/m.checkpointName());
+        std::vector<uint8_t> prefix;
+        AIVERSE_TEST_CHECK(UnifiedCheckpointPublisher::identity(m,prefix));
+        std::ofstream wal(managed/m.walName(),std::ios::binary);
+        wal.write(reinterpret_cast<const char*>(prefix.data()),prefix.size());
+        AIVERSE_TEST_CHECK(wal.good());
+    };
+    inject(2,true);inject(8,false);
+    std::ofstream(managed/"checkpoint-4.bin").put('x'); // orphan
+    auto catalog=session.backups(budget,adapters,factory,codecs,materialize,{},true);
+    AIVERSE_TEST_CHECK(catalog.complete&&catalog.entries.size()==6);
+    AIVERSE_TEST_CHECK(catalog.entries[0].generation==8&&catalog.entries[0].status==Status::Recoverable);
+    AIVERSE_TEST_CHECK(catalog.entries[1].active&&catalog.entries[1].status==Status::Recoverable);
+    RegionRetentionPolicy policy;policy.keepPrevious=1;policy.maxBytes=1;
+    auto plan=session.retentionPlan(policy,budget,adapters,factory,codecs,materialize);
+    AIVERSE_TEST_CHECK(plan.valid&&plan.overBudget&&plan.removeGenerations==std::vector<uint64_t>{3});
+    auto stale=*session.manifest();stale.generation=5;
+    AIVERSE_TEST_CHECK(!UnifiedCheckpointRetention::cleanup(managed,stale,policy,budget,
+        adapters,factory,codecs,materialize).ok);
+    auto cleaned=session.cleanupRetention(policy,budget,adapters,factory,codecs,materialize);
+    AIVERSE_TEST_CHECK(cleaned.ok&&cleaned.removed==std::vector<uint64_t>{3});
+    AIVERSE_TEST_CHECK(!fs::exists(managed/"wal-3.bin")&&!fs::exists(managed/"checkpoint-3.bin"));
+    for(auto gen:{1,2,5,7,8}){
+        RegionCheckpointManifest m;m.generation=gen;
+        AIVERSE_TEST_CHECK(fs::exists(managed/m.walName())&&fs::exists(managed/m.checkpointName()));
+    }
+    AIVERSE_TEST_CHECK(fs::exists(managed/"checkpoint-4.bin"));
+    auto forkWorld=world;forkWorld[0]=3;
+    AIVERSE_TEST_CHECK(session.forkGeneration(8,destination,forkWorld,budget,adapters,factory,codecs,materialize)
+        ==RegionWalWrite::InvalidFrame);
+    AIVERSE_TEST_CHECK(session.forkGeneration(5,destination,forkWorld,budget,adapters,factory,codecs,materialize)
+        ==RegionWalWrite::Ok);
+    UnifiedWalSession forked;
+    AIVERSE_TEST_CHECK(forked.openCheckpoint(destination,forkWorld,budget,adapters,factory,codecs,materialize)
+        ==RegionWalWrite::Ok);
+    AIVERSE_TEST_CHECK(forked.state()->sequence==0&&forked.state()->ledger.find(99));
+    AIVERSE_TEST_CHECK(session.state()->ledger.find(99)&&session.manifest()->generation==7);
+    forked.close();session.close();
+    AIVERSE_TEST_CHECK(!session.backups(budget,adapters,factory,codecs,materialize).complete);
+#endif
 }
 
 int main() {
