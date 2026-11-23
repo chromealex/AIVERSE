@@ -1859,3 +1859,7 @@ FX dock records post-render status keyed by RHI frame serial in a 64-entry ring.
 ## Stage 66 — capture identity safety
 
 Capture callback retains shared metadata ring instead of raw StudioScene pointer. Host checks captured project and generation against request; replay-ready capture also checks tick. Unmatched backends remain non-exact. No tests run; audit capture queue and timeout lifecycle next.
+
+## Stage 67 — capture request lifecycle
+
+Single-flight host capture returns captureId. Poll/cancel may supply ID to reject stale requests. Timeout and replacement mark old shared shot cancelled; callback skips publication. Studio cancel button and MCP captureCancel added. Cancellation is logical, not GPU abort. UI ID-aware polling and RHI readback resource audit remain. No tests run.
