@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "id": "graph-framework",
+  "owner": "studio",
+  "changed_paths": [
+    "apps/studio-web/src/graphs/graphFramework.ts",
+    "apps/studio-web/src/graphs/GraphCanvas.tsx",
+    "apps/studio-web/src/panels/ShaderGraphPanel.tsx",
+    "apps/studio-web/tests/graphFramework.test.mjs",
+    "apps/studio-web/package.json",
+    "docs/agents/graph-framework.md",
+    "skills/workflow/aiverse-graph-authoring/SKILL.md",
+    "tools/skills/catalog.py",
+    "skills/catalog.json",
+    "docs/devlog/systems.json"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-graph-authoring"
+    ],
+    "mcp_tools": [
+      "shader_graph_catalog",
+      "shader_graph_get",
+      "shader_graph_validate",
+      "shader_graph_set"
+    ],
+    "studio_panels": [
+      "shader_graph"
+    ],
+    "studio_methods": [
+      "studio.shaderGraphCatalog",
+      "studio.shaderGraphGet",
+      "studio.shaderGraphValidate",
+      "studio.shaderGraphSave"
+    ]
+  },
+  "test_reports": []
+}
