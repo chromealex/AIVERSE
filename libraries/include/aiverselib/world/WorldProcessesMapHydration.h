@@ -309,7 +309,10 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             if(coordinate.raw>Fixed::kOne*1000000ll||
                coordinate.raw< -Fixed::kOne*1000000ll)
                 throw std::invalid_argument("World Processes: EVOLVE center outside bounds");
-            return (coordinate.raw*100)/Fixed::kOne;
+            // Round to nearest centimetre, ties away from zero, as Studio does.
+            const auto scaled=coordinate.raw*100;
+            return scaled>=0?(scaled+Fixed::kOne/2)/Fixed::kOne:
+                             (scaled-Fixed::kOne/2)/Fixed::kOne;
         };
         auto area=sim.world().get<evolve::Area>(placed[i]);
         area.centerXcm=quantized(position[0])+area.centerXcm;
