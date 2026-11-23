@@ -817,6 +817,12 @@ void StudioHost::rebuildOverlay() {
                     shapes.push_back(worldprocess_gizmos::makePoint(
                         wpDrag_.previewPoint.x,wpDrag_.previewPoint.y,
                         wpDrag_.previewPoint.z,100,255,160,10.f));
+                    if(shapes.size()<1399)
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            {wpDrag_.previewPoint.x,
+                             wpDrag_.previewPoint.y+0.8f,
+                             wpDrag_.previewPoint.z},
+                            wpDrag_.label,245,245,245));
                 }
             }
         }
@@ -852,10 +858,20 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
            session_->hiddenIds().contains(selected))return false;
         const auto handles=worldprocess_edit::handles(map,selected);
         if(handles.empty())return false;
-        const int index=onScene([&]{
-            return worldprocess_edit::hit(handles,*preview_,x,y,w,h);
+        const auto candidates=onScene([&]{
+            return worldprocess_edit::hitCandidates(
+                handles,*preview_,x,y,w,h);
         });
-        if(index<0)return false;
+        if(candidates.empty())return false;
+        // Repeated presses at one screen location cycle deterministic
+        // overlapping endpoints, even when multiple links point to
+        // precisely the same world object.
+        if(wpHitOwner_==selected&&std::hypot(x-wpHitX_,y-wpHitY_)<=9.)
+            ++wpHitOrdinal_;
+        else wpHitOrdinal_=0;
+        wpHitOwner_=selected;
+        wpHitX_=x;wpHitY_=y;
+        const int index=candidates[wpHitOrdinal_%candidates.size()];
         const auto& hit=handles[std::size_t(index)];
         wpDrag_.active=true;
         wpDrag_.mode=static_cast<std::uint8_t>(hit.mode);
@@ -863,6 +879,10 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         wpDrag_.component=hit.component;
         wpDrag_.key=hit.key;
         wpDrag_.targetType=hit.targetType;
+        wpDrag_.label=hit.component+"."+hit.key+
+            (candidates.size()>1?
+                 " ("+std::to_string(wpHitOrdinal_%candidates.size()+1)+
+                 "/"+std::to_string(candidates.size())+")":"");
         wpDrag_.baseline=hit.baseline;
         wpDrag_.previewPoint=hit.position;
         wpDrag_.valid=false;
