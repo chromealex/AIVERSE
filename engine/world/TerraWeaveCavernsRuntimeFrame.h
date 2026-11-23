@@ -176,6 +176,7 @@ public:
     using StreamRetireCommit=std::function<bool(const CaveResidencyTicket&)>;
     bool publishStreamBuild(
         CaveResidencyTicket ticket,
+        CaveCertifiedChunk publishedMesh,uint64_t generatorVersion,
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamBuildCommit& actualNativeCommit) {
         const auto it=readyStreamBuilds_.find(ticket.key);
@@ -184,9 +185,22 @@ public:
            it==readyStreamBuilds_.end() ||
            !residency_.current(ticket) ||
            it->second.ticket.generation!=ticket.generation ||
-           it->second.ticket.sourceRevision!=ticket.sourceRevision)
+           it->second.ticket.sourceRevision!=ticket.sourceRevision ||
+           !generatorVersion || !publishedMesh.renderRevision ||
+           publishedMesh.mesh.key!=ticket.key ||
+           publishedMesh.sourceRevision!=ticket.sourceRevision ||
+           publishedMesh.resolution==0 || publishedMesh.spacingCm<=0)
             return false;
         if(!actualNativeCommit(ticket,it->second.mesh))return false;
+        try {
+            // Match the already-published GPU/physics/nav revision with
+            // committed CPU source and seam-residency metadata.
+            host_.registerCommittedMesh(std::move(publishedMesh),
+                                        generatorVersion);
+        } catch(...) {
+            physicsBarrier_.requireRecovery();
+            throw;
+        }
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming build ACK refused after native commit");
         readyStreamBuilds_.erase(it);
@@ -207,6 +221,15 @@ public:
         // SpatialWorld range/NavMesh at an exclusive owner barrier. Never
         // use an empty/dummy callback as proof of full retirement.
         if(!actualNativeCommit(ticket))return false;
+        // The native owner has removed the old source. Forget its committed
+        // catalog entry and loaded-neighbor seam certification; do not
+        // forget a pending edit or a shard still in GPU staging.
+        if(const auto* previous=host_.geometry().catalog().find(ticket.key)) {
+            if(!host_.forgetCommittedMesh(ticket.key,previous->revision)){
+                physicsBarrier_.requireRecovery();
+                throw std::logic_error("Caverns streaming catalog retirement refused");
+            }
+        }
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming retirement ACK refused after native commit");
         pendingRetires_.erase(it);
