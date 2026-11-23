@@ -2855,6 +2855,9 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_world_processes_inspector_test tests/world_processes_inspector_test.cpp)
     target_link_libraries(aiverse_world_processes_inspector_test PRIVATE aiverse_engine AIVERSE::libraries)
     add_test(NAME world_processes_inspector_test COMMAND aiverse_world_processes_inspector_test)
+    add_executable(aiverse_world_processes_authoring_test tests/world_processes_authoring_test.cpp)
+    target_link_libraries(aiverse_world_processes_authoring_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_authoring_test COMMAND aiverse_world_processes_authoring_test)
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
