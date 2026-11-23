@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
-import type { StudioSpectraPreviewState } from '../types';
+import type { StudioSpectraPreviewState, StudioSpectraCameraSnapshot } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSection, StudioSelect } from '../ui';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
@@ -43,6 +43,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [captureSlot,setCaptureSlot]=useState<'A'|'B'|null>(null);
   const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
   const [splitPosition,setSplitPosition]=useState(50);
+  const [lockedCamera,setLockedCamera]=useState<StudioSpectraCameraSnapshot|null>(null);
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -60,7 +61,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
-    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -169,11 +170,17 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     const link=document.createElement('a');link.href=url;link.download='spectrafx-ab-report.json';
     link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
+  const restoreCamera=async()=>{
+    if(!lockedCamera||!active||busy||capturePending||disabled)return;
+    setBusy(true);setError('');
+    try{setState(await invoke('studio.spectraPreview',{action:'cameraRestore',camera:lockedCamera}));}
+    catch(e){setError(message(e));}finally{setBusy(false);}
+  };
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
     setBusy(true);setCaptureError('');setCaptureSlot(slot);
     pendingMeta.current={graphSignature,projectPath,tick:state.tick,
-      backend:state.backend,cameraPreset:'see viewport',snapshotMaxSide:captureSide,
+      backend:state.backend,camera:state.camera??null,snapshotMaxSide:captureSide,
       capturedAt:new Date().toISOString()};
     try {
       const result=await invoke('studio.spectraPreview',{
@@ -336,6 +343,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           <option value="split">Interactive split</option>
         </StudioSelect>
       </StudioField>
+      <StudioButton size="sm" disabled={!state?.camera||busy}
+        onClick={()=>setLockedCamera(state?.camera??null)}>Lock camera</StudioButton>
+      <StudioButton size="sm" disabled={!lockedCamera||busy||capturePending}
+        onClick={()=>void restoreCamera()}>Restore camera</StudioButton>
       <StudioButton size="sm" disabled={!compareA&&!compareB}
         onClick={()=>{setCompareA('');setCompareB('');setCaptureMetaA(null);setCaptureMetaB(null);}}>Clear A/B</StudioButton>
     </div>
@@ -367,11 +378,13 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         {compareA&&<a href={compareA} download="spectrafx-A.jpg">Save A</a>}
         {compareB&&<a href={compareB} download="spectrafx-B.jpg">Save B</a>}
       </div>
+      {lockedCamera&&<small>Saved FX camera pose. Restore before capturing B for matched framing.</small>}
       {captureMetaA&&captureMetaB&&
         (captureMetaA.graphSignature!==captureMetaB.graphSignature||
          captureMetaA.tick!==captureMetaB.tick||
          captureMetaA.backend!==captureMetaB.backend||
-         captureMetaA.snapshotMaxSide!==captureMetaB.snapshotMaxSide)&&
+         captureMetaA.snapshotMaxSide!==captureMetaB.snapshotMaxSide||
+         JSON.stringify(captureMetaA.camera)!==JSON.stringify(captureMetaB.camera))&&
         <StudioAlert tone="warning">A/B capture settings differ (graph revision, tick, backend or snapshot size).
           Pixel differences may reflect these settings rather than an effect change.</StudioAlert>}
       <small>Two native JPEG frames; alignment assumes the same camera pose and dimensions.
