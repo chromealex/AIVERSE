@@ -1,0 +1,3 @@
+# W1.21a — WAL framing
+
+Commit `3d3b70bc`, PR #116 Draft. Added engine/world/RegionWalFrame.h, portable little-endian frame codec: magic, version 1, nonzero uint64 sequence, uint32 payload size, CRC32 over header with zeroed CRC and payload. Maximum payload 16 MiB. Decode distinguishes complete, incomplete and corrupt; output remains unchanged on failure and consumed=0. CRC is accidental corruption detection, not authentication. No disk I/O, fsync, sequence continuity, transaction capture or recovery implemented yet. No native tests run. Next implement bounded streaming reader and durable single-writer append, then transaction integration and skill/catalog. No main merge.
