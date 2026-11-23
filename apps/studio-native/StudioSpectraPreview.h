@@ -89,6 +89,32 @@ public:
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
+        if(action=="replayPrepare") {
+            // Validate every input before changing live preview state.
+            if(!input["tick"].isNumber() ||
+               input["tick"].numberLiteral().find_first_of(".eE-")!=std::string::npos ||
+               input["tick"].integer(-1)<0 || input["tick"].integer(-1)>kMaxTicks)
+                return errorStatus("Replay tick must be an integer in 0..3600");
+            if(!input["parameters"].isObject() || input["parameters"].size()>8)
+                return errorStatus("Replay parameters must be an object with at most 8 scalars");
+            std::map<std::string,float> validated;
+            for(const auto& [name,value]:input["parameters"].members()) {
+                const auto it=runtime_.instanceParameters().find(name);
+                if(it==runtime_.instanceParameters().end() || !value.isNumber())
+                    return errorStatus("Unknown replay parameter: "+name);
+                const double n=value.toDouble();
+                if(!std::isfinite(n)||n<it->second.minimum||n>it->second.maximum)
+                    return errorStatus("Replay parameter outside authored range: "+name);
+                validated[name]=float(n);
+            }
+            playing_=false;phase_=0;pendingRestart_=true;
+            pendingClear_=false;burstsPending_=0;triggeredBursts_=0;
+            stepsPending_=0;timeTicks_=0;
+            targetTicks_=uint32_t(input["tick"].integer());
+            requestedParameters_=std::move(validated);
+            error_.clear();
+            return status();
+        }
         if(action=="burst") {
             const auto& raw=input["count"];
             if(!raw.isNull() &&
