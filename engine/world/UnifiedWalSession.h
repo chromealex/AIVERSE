@@ -19,7 +19,7 @@ public:
         close();
         if(identity.size()<4||identity[0]!='U'||identity[1]!='W'||identity[2]!='T'||identity[3]!='1')
             return RegionWalWrite::InvalidFrame;
-        if(!lock_.open(dir))return RegionWalWrite::Busy;
+        if(lock_.acquire(dir)!=RegionWorldLockResult::Ok)return RegionWalWrite::Busy;
         std::ifstream in(wal,std::ios::binary);
         std::vector<uint8_t> actual(identity.size());
         in.read(reinterpret_cast<char*>(actual.data()),actual.size());
