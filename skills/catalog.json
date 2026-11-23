@@ -5225,15 +5225,21 @@
       "package": "spatial",
       "path": "skills/world/aiverse-spatial-queries/SKILL.md",
       "domain": "gameplay",
-      "summary": "Existing game spatial queries",
+      "summary": "Generic spatial grids, hashes, BVH and trees",
       "side": "simulation",
-      "runtime": "none",
-      "target": null,
+      "runtime": "header",
+      "target": "AIVERSE::lib_spatial",
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "engine/game/GameCore.h",
-      "keywords": [],
+      "source": "libraries/include/aiverselib/algorithms/Spatial.h",
+      "keywords": [
+        "spatial",
+        "bvh",
+        "octree",
+        "quadtree",
+        "hash"
+      ],
       "contentPackages": []
     },
     {
