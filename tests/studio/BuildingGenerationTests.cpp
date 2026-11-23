@@ -104,6 +104,33 @@ int main(int argc,char** argv){
         multi.set("setting",Json::string("modern"));
         auto otherStyle=studioBuildingInspect(engine,multi);
         CHECK(otherStyle["triangles"].integer()==multiPreview["triangles"].integer());
+        // Two-storey vertical circulation is a reusable recipe, not a
+        // factory/command preset. The exact shaft sizes, X/Z and kind
+        // survive native GLB + asset GUID + canonical recipe sidecar.
+        auto vertical=Json::parseFile(
+            (engine/"engine/assets/building-recipes/vertical-circulation.json").string());
+        vertical.set("mode",Json::string("features"));
+        vertical.set("style",Json::string("scifi"));
+        vertical.set("setting",Json::string("scifi"));
+        auto stairPreview=studioBuildingInspect(engine,vertical);
+        CHECK(stairPreview["triangles"].integer()>0);
+        auto stairAsset=studioBuildingGenerate(engine,temp,vertical);
+        CHECK(studioValidGuid(stairAsset.getStr("guid")));
+        CHECK(fs::is_regular_file(content/stairAsset.getStr("path")));
+        CHECK(fs::is_regular_file(content/stairAsset.getStr("recipePath")));
+        auto savedVertical=Json::parseFile(
+            (content/stairAsset.getStr("recipePath")).string());
+        CHECK(savedVertical["floors"].integer()==2);
+        CHECK(savedVertical["features"][3].getStr("kind")=="stairs");
+        CHECK(savedVertical["features"][4].getStr("kind")=="elevator");
+        CHECK(std::abs(savedVertical["features"][3]["width"].toDouble()-2.6)<0.01);
+        CHECK(std::abs(savedVertical["features"][3]["depth"].toDouble()-6.6)<0.01);
+        CHECK(std::abs(savedVertical["features"][3]["position"].toDouble()-6.)<0.01);
+        CHECK(std::abs(savedVertical["features"][4]["position"].toDouble()-18.)<0.01);
+        vertical.set("style",Json::string("modern"));
+        vertical.set("setting",Json::string("modern"));
+        auto modernStairs=studioBuildingInspect(engine,vertical);
+        CHECK(modernStairs["triangles"].integer()==stairPreview["triangles"].integer());
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;
