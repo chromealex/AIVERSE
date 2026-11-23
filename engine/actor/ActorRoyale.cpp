@@ -59,6 +59,8 @@ bool ActorHost::skydive(Simulation& sim,CharacterRef a) {
     auto events=stepSkydiver(r.drop,*r.flight,run.flight,d,in,ground,sim.tick());
     if(!events)return true;
     a.pos=d.position;a.velocity=d.velocity*Fixed::fromInt(config_.tickRate);a.yaw=input.yaw;a.pitch=input.pitch;
+    if(!reportRegionMoveIfCrossed(sim,a.entity))
+        throw std::logic_error("regionOwnership: skydiver move dirty report failed");
     a.grounded=d.phase==SkydivePhase::Landed;
     a.input.buttons&=~uint32_t(Jump);
     return d.phase!=SkydivePhase::Landed;
