@@ -22,7 +22,9 @@
     "apps/studio-web/src/graphs/nativeGraphAdapters.ts",
     "apps/studio-web/src/graphs/NativeGraphPanel.tsx",
     "apps/studio-web/src/panels/ToolPanel.tsx",
-    "apps/studio-web/tests/nativeGraphAdapters.test.mjs"
+    "apps/studio-web/tests/nativeGraphAdapters.test.mjs",
+    "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
+    "apps/studio-native/StudioTools.h"
   ],
   "traits": {
     "editable": true,
@@ -140,12 +142,17 @@
       "animation_graph_list",
       "animation_graph_get",
       "animation_graph_validate",
-      "animation_graph_set"
+      "animation_graph_set",
+      "modeling_list",
+      "modeling_get",
+      "modeling_edit",
+      "modeling_validate"
     ],
     "studio_panels": [
       "shader_graph",
       "fx_graph",
-      "anim_graph"
+      "anim_graph",
+      "modeling"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",
