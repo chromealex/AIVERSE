@@ -56,8 +56,16 @@ inline BuildingStyle load(const fs::path& engine,const std::string& id) {
     return style;
 }
 inline std::string settingId(const std::string& style) {
+    // New settings are data-driven full style IDs: never silently group
+    // unrelated settings under the first word (e.g. Dark Fantasy).
+    // Legacy prefixes remain available for older asset style families.
+    for(const auto* id:{"medieval-fantasy","dark-fantasy","steampunk",
+                        "cyberpunk","scifi-space","alien-civilization",
+                        "post-apocalypse","modern","ancient-civilizations",
+                        "asian-historical","solarpunk","underwater"})
+        if(style==id)return style;
     if(style=="scifi"||style.rfind("scifi-",0)==0)return "scifi";
-    if(style=="modern"||style.rfind("modern-",0)==0)return "modern";
+    if(style.rfind("modern-",0)==0)return "modern";
     const auto dash=style.find('-');
     return style.substr(0,dash);
 }
