@@ -95,7 +95,7 @@ public:
         const Registry* registry=nullptr;
         std::vector<std::string> selected;
         bool restore(World& world,const std::vector<Record>& records,const RegionEntityLedger* ledger=nullptr)const{
-            if(records.empty())return true;
+            if(selected.empty())return records.empty();
             if(!registry||selected.size()>Registry::kMaxSchemas)return false;
             auto ids=selected;std::sort(ids.begin(),ids.end());
             if(std::adjacent_find(ids.begin(),ids.end())!=ids.end())return false;
