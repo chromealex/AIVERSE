@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -73,6 +74,19 @@ public:
         const auto* state=sim.world().resourceConst<BuildingEcsWorldState>();
         if(!state||state->sceneId!=physics.sceneId())
             return fail("Missing or mismatched persistent ECS building scene resource");
+        // Initial physical state is part of the persisted ECS resource,
+        // including fully open leaves before the first moving command.
+        {
+            auto& current=*sim.world().resource<BuildingEcsWorldState>();
+            const auto poses=physics.poses();
+            if(poses.size()>64)return fail("Building scene aperture budget exceeded");
+            current.leaves.clear();
+            for(const auto& pose:poses)current.leaves.push_back({
+                pose.socketId,pose.physicalPermille,pose.revision,
+                pose.open,pose.moving});
+            current.revision=physics.revision();
+            current.graphAcknowledged=!physics.pendingGraphs();
+        }
         auto runtime=std::shared_ptr<BuildingEcsRuntime>(
             new BuildingEcsRuntime(sim,session,physics,spatial,router,stepPermille));
         // Never capture a bare pointer into the global system registry.
@@ -110,7 +124,9 @@ public:
             sim.world(),*physics_,*spatial_,*router_,
             uint64_t(sim.tick())+1u,stepPermille_);
         lastError_=frame.error;
-        if(!frame.presentationAccepted || !frame.graphAcknowledged)return;
+        // Physical commit can precede graph ACK; World must capture that
+        // collider revision even while movement and presentation are held.
+        // The graphAccepted flag stays false until the same event retries.
         auto* record=sim.world().resource<BuildingEcsWorldState>();
         if(!record||record->sceneId!=physics_->sceneId()){
             suspended_=true;
@@ -125,7 +141,7 @@ public:
         }
         record->fixedTick=sim.tick()+1;
         record->revision=physics_->revision();
-        record->graphAcknowledged=true;
+        record->graphAcknowledged=frame.graphAcknowledged;
         record->leaves.clear();
         for(const auto& pose:poses)
             record->leaves.push_back({pose.socketId,
