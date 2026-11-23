@@ -1028,6 +1028,10 @@ public:
     // Tools (editor screenshots, MCP): deliver the next presented frame as top-down RGBA8.
     // The callback may run one or two frames later; it always runs on the main thread.
     using CaptureFn = std::function<void(int w, int h, std::vector<uint8_t> rgba)>;
+    using TaggedCaptureFn = std::function<void(uint64_t frame,int w,int h,std::vector<uint8_t> rgba)>;
+    virtual void captureNextFrameTagged(TaggedCaptureFn fn) {
+        captureNextFrame([fn=std::move(fn)](int w,int h,std::vector<uint8_t> rgba){if(fn)fn(0,w,h,std::move(rgba));});
+    }
     virtual void captureNextFrame(CaptureFn fn) { if (fn) fn(0, 0, {}); }
     // Optional offscreen RGBA8 readback inside a frame but outside a pass.
     virtual bool captureTexture(TextureHandle source,CaptureFn callback) {
