@@ -250,7 +250,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if((next.error&&!next.gpuSeedPending)||!next.ready)
           throw new Error(next.error||'Replay backend unavailable');
         setState(next);
-        if(next.tick===replayPreset.tick&&!next.gpuSeedPending&&!next.clearing){settled=true;break;}
+        if(next.tick===replayPreset.tick&&next.replayReady){settled=true;break;}
         if(next.tick>replayPreset.tick)throw new Error('Replay overshot requested tick');
         await new Promise<void>(resolve=>window.setTimeout(resolve,100));
       }
@@ -268,7 +268,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       capturedAt:new Date().toISOString()};
     try {
       const result=await invoke('studio.spectraPreview',{
-        action:'capture',maxSide:captureSide
+        action:'capture',maxSide:captureSide,
+        ...(replayPreset&&state.replayReady?{requireReplayReady:true}:{})
       });
       setState(result);
       if(result.capture?.error){setCaptureSlot(null);setCaptureError(result.capture.error);}
