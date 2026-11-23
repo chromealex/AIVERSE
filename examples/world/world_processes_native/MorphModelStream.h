@@ -65,7 +65,6 @@ public:
                 error_="MORPH: duplicate or out-of-bounds vertex binding";return false;
             }
             std::uint32_t total=0;
-            std::array<std::uint64_t,4> nodes{};
             for(std::size_t j=0;j<4;++j){
                 const auto weight=influence.weight[j];
                 if(!weight)continue;
@@ -77,7 +76,6 @@ public:
                        influence.node[k]==influence.node[j]){
                         error_="MORPH: repeated influence Entity";return false;
                     }
-                nodes[j]=influence.node[j].packed();
                 total+=weight;
             }
             if(total!=65535){
