@@ -73,8 +73,10 @@ public:
                         uint32_t maxTransitionsPerTick=2) {
         if(!maxTransitionsPerTick || maxTransitionsPerTick>16)
             throw std::invalid_argument("regionLifecycle.maxTransitionsPerTick must be 1..16");
-        if(sim.world().resourceConst<RegionActivationQueue>())
-            throw std::logic_error("region lifecycle already installed");
+        if(sim.world().resourceConst<RegionActivationQueue>() ||
+           sim.world().resourceConst<RegionEntityLedger>() ||
+           sim.world().resourceConst<RegionColdStore>())
+            throw std::logic_error("region lifecycle already installed or region resources pre-owned");
         registerRegionEntityLedger(sim);
         registerRegionStableIdentity(sim);
         registerRegionColdState(sim);
@@ -95,12 +97,16 @@ public:
     // rules may queue a request. Never call from view/client/render tasks.
     // Repeating the request is idempotent until it has been processed.
     static bool request(Simulation& sim,Cell region,bool active){
+        const auto* current=sim.world().resourceConst<RegionActivationQueue>();
+        if(!current)return false;
+        const auto it=current->pending.find(region);
+        const uint8_t target=active?1:0;
+        if(it!=current->pending.end() && it->second==target)return true;
+        if(it==current->pending.end() &&
+           current->pending.size()>=RegionActivationQueue::kMaxPending)return false;
+        // A redundant request must not detach a COW snapshot's resource page.
         auto* queue=sim.world().resource<RegionActivationQueue>();
-        if(!queue)return false;
-        auto it=queue->pending.find(region);
-        if(it==queue->pending.end() &&
-           queue->pending.size()>=RegionActivationQueue::kMaxPending)return false;
-        queue->pending[region]=active?1:0;
+        queue->pending[region]=target;
         return true;
     }
 
@@ -112,10 +118,14 @@ public:
     static size_t step(Simulation& sim,const RegionDormancyController& policy,
                        uint32_t budget){
         auto& world=sim.world();
-        auto* queue=world.resource<RegionActivationQueue>();
+        const auto* queued=world.resourceConst<RegionActivationQueue>();
+        if(!budget || !queued || queued->pending.empty())return 0;
         const auto* ledger=world.resourceConst<RegionEntityLedger>();
+        if(!ledger || !world.resourceConst<RegionColdStore>())return 0;
+        // The hot path with no requests is read-only, avoiding cold-store
+        // COW detach and giant copy on every ordinary game tick.
+        auto* queue=world.resource<RegionActivationQueue>();
         auto* cold=world.resource<RegionColdStore>();
-        if(!queue || !ledger || !cold || !budget)return 0;
         size_t finished=0;
         while(!queue->pending.empty() && finished<budget) {
             const auto item=*queue->pending.begin();
