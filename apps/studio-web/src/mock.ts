@@ -119,6 +119,10 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     return [];
   }
   if (method === 'studio.buildingCatalog') return {styles: []} as StudioResult['studio.buildingCatalog'];
+  if (method === 'studio.buildingRecipes')
+    return {recipes: []} as StudioResult['studio.buildingRecipes'];
+  if (method === 'studio.buildingReadRecipe')
+    throw new Error('Opening project building recipes requires native AIVERSE Studio');
   if (method === 'studio.buildingStaleMaterials')
     return {stale: []} as StudioResult['studio.buildingStaleMaterials'];
   if (method === 'studio.buildingRegenerate')
