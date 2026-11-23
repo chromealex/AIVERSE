@@ -135,7 +135,7 @@ void authoredEntityWorkflow() {
        };
        const char* ids[]={"EchoZone","FractureMember","AetherGasCell"};
        for(const char* id:ids) {
-           const std::string input="{\\"entityId\\":\\"entity:@second\\",\\"componentId\\":\\""+std::string(id)+"\\"}";
+           const std::string input="{\"entityId\":\"entity:@second\",\"componentId\":\""+std::string(id)+"\"}";
            AIVERSE_TEST_CHECK(!call("studio.componentAdd",input.c_str()).has("error"));
            AIVERSE_TEST_CHECK(entity().extra["components"].has(id));
            AIVERSE_TEST_CHECK(call("studio.componentAdd",input.c_str()).has("error"));
@@ -177,7 +177,7 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(saved["AetherGasCell"]["oxygen"].integer()==500);
        AIVERSE_TEST_CHECK(saved["FractureMember"]["anchored"].boolean());
        for(const char* id:ids) {
-           const std::string input="{\\"entityId\\":\\"entity:@second\\",\\"componentId\\":\\""+std::string(id)+"\\"}";
+           const std::string input="{\"entityId\":\"entity:@second\",\"componentId\":\""+std::string(id)+"\"}";
            AIVERSE_TEST_CHECK(!call("studio.componentRemove",input.c_str()).has("error"));
            AIVERSE_TEST_CHECK(!entity().extra["components"].has(id));
        }
