@@ -81,8 +81,8 @@ public:
     }
 
     bool registerStyle(BuildingStyle style,std::string* error=nullptr) {
-        if(style.id.empty()||style.id.size()>64||style.structures.empty()||
-           style.structure.hull<0||style.structure.dark<0) {
+        if(style.id.empty()||style.id.size()>64||style.materials.empty()||
+           style.shell<0||style.roof<0) {
             if(error)*error="Invalid runtime building style (id, structure or materials)";
             return false;
         }
@@ -175,8 +175,9 @@ public:
             return result;
         }
         auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw);
+        const bool valid=bool(built);
         result.building=std::move(built.building);
-        if(!built){
+        if(!valid){
             result.error=RuntimeBuildingError::InvalidInput;
             result.message=built.error;
             return result;
