@@ -3,6 +3,7 @@
 #include "Workspace.h"
 #include "GraphDraftEdits.h"
 #include "GraphAssetDependencies.h"
+#include "GraphRuntimeProbe.h"
 #include <array>
 #include <stdexcept>
 
@@ -110,6 +111,7 @@ inline void registerGraphOps(Workspace& ws) {
             const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
             if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
             ops.set("propertySchema",Json::string("graph_property_schema"));ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
+            if(id=="motionweave"||id=="spectrafx")ops.set("runtimeProbe",Json::string("graph_runtime_probe"));
             row.set("operations",ops);items.push(row);
         }
         r.set("ok",Json::fromBool(true));r.set("domains",items);return r;
@@ -129,6 +131,14 @@ inline void registerGraphOps(Workspace& ws) {
         return envelope(d,"graph_property_schema",result);
     }});
     ws.registerOp({"graph_asset_dependencies","Inspect literal asset references and embedded animation subgraph recursion; no writes.",schema,[&ws](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_asset_dependencies",graph_dependencies::resolve(d.id,q[d.payload],ws.project.dir));}});
+    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[](const Json&){return graph_probe::capabilities();}});
+    const auto probeSchema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"parameters":{"type":"object"}},"required":["domain","graph"],"additionalProperties":false})");
+    ws.registerOp({"graph_runtime_probe","Execute a bounded isolated native CPU preview. Not live game telemetry.",probeSchema,[&ws](const Json& p){
+        const auto id=p.getStr("domain");const int n=graph_probe::steps(p);
+        if(id=="motionweave")return graph_probe::motion(ws,p["graph"],p,n);
+        if(id=="spectrafx")return graph_probe::fx(p["graph"],p,n);
+        throw std::invalid_argument("runtime probe unavailable for this domain");
+    }});
     ws.registerOp({"graph_edit","Apply 1..64 native-schema draft edits atomically in memory. Returns candidate and native diagnostics; never saves.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);
         auto source=q[d.payload];const auto edits=graph_draft::actions(p);
