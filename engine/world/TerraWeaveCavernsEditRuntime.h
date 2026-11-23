@@ -4,6 +4,7 @@
 // GPU/STRATA, Box3D and NavMesh publish remain explicit host callbacks.
 // NEVER report completion of a dirty region before a successful host commit.
 #include "engine/world/TerraWeaveCavernsDirtyQueue.h"
+#include "engine/world/TerraWeaveCavernsSdfSpatialIndex.h"
 #include "engine/world/TerraWeaveCavernsSeamGate.h"
 #include "engine/data/Json.h"
 #include <chrono>
@@ -65,7 +66,11 @@ public:
         }
         prepared_.clear();
         lodOverrides_.clear();
+        // Build one immutable index per authoring revision on the owner
+        // thread. Every worker for this epoch shares exactly this source.
+        auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
         snapshot_=std::move(snapshot);
+        index_=std::move(index);
     }
 
     // Optional explicit adapter for the Stage20 Workspace operation return.
@@ -188,7 +193,7 @@ public:
                 continue;
             if(!snapshot_||pending.sourceRevision!=snapshot_->sourceRevision)
                 continue;
-            auto frozen=snapshot_;
+            auto frozen=index_;
             const auto key=pending.key;
             const auto override=lodOverrides_.find(key);
             const uint32_t resolution=override==lodOverrides_.end()
@@ -196,7 +201,7 @@ public:
             const int32_t spacingCm=override==lodOverrides_.end()
                 ?spacingCm_:override->second.second;
             auto future=std::async(std::launch::async,[frozen,key,resolution,spacingCm](){
-                return generateCaveSnapshotMesh(*frozen,key,resolution,spacingCm);
+                return generateCaveIndexedSnapshotMesh(*frozen,key,resolution,spacingCm);
             });
             running_.emplace(key,Running{pending,resolution,spacingCm,
                                          std::move(future)});
@@ -334,6 +339,7 @@ private:
     CaveDirtyQueue dirty_;
     CaveSeamPublicationGate gate_;
     std::shared_ptr<const CaveVolumeSnapshot> snapshot_;
+    std::shared_ptr<const CaveSnapshotSpatialIndex> index_;
     std::map<ChunkKey3,Running,KeyLess> running_;
     std::map<ChunkKey3,CavePreparedEdit,KeyLess> prepared_;
     std::map<ChunkKey3,std::pair<uint32_t,int32_t>,KeyLess> lodOverrides_;
