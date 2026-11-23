@@ -87,6 +87,28 @@ bool CollisionStream::publish(Cell cell,const AsyncChunkStream::Payload& payload
     if(revision_!=UINT64_MAX)++revision_;
     return true;
 }
+bool CollisionStream::canFitRegions(std::span<const Bounds> regions,
+                                    std::string* error)const {
+    const auto wanted=assets_.intersecting(regions);
+    if(wanted.size()>assets_.limits.residentChunks) {
+        if(error)*error="collision pin set exceeds maxResidentChunks";
+        return false;
+    }
+    size_t bytes=0;
+    for(const Cell cell:wanted) {
+        const auto it=assets_.chunks.find(cell);
+        if(it==assets_.chunks.end())continue;
+        const size_t reservation=it->second.bytes;
+        if(reservation>assets_.limits.residentBytes-bytes) {
+            if(error)*error="collision pin set exceeds maxResidentBytes";
+            return false;
+        }
+        bytes+=reservation;
+    }
+    if(error)error->clear();
+    return true;
+}
+
 bool CollisionStream::prepareRegions(std::span<const Bounds> regions,size_t requests,size_t publications) {
     auto pins=assets_.intersecting(regions);
     auto status=stream_->update({},pins,requests,publications,[this](Cell c,const auto& p){return publish(c,p);},[this](Cell c){retire(c);});
