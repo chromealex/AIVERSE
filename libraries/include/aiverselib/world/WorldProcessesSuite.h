@@ -11,6 +11,7 @@
 #include "CircuitDevices.h"
 #include "GranularEcs.h"
 #include "EvolveEcs.h"
+#include "EvolveArea.h"
 #include "EvolvePhysisBridge.h"
 #include "SocietyEcs.h"
 #include "SocietyNpcTriggers.h"
@@ -62,6 +63,7 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
     }
     if(flags.granular)granular::install(sim);
     if(flags.evolve){
+        evolve::registerAreaPersistence(sim);
         evolve::registerClimatePersistence(sim);
         evolve::installClimateBridge(sim);
         evolve::install(sim);
