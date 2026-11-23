@@ -22,6 +22,15 @@ int aiverseMain(int,char**) { @autoreleasepool {
         window.contentView.wantsLayer=YES;window.contentView.layer=layer;
         [window orderFront:nil];
         studio::StudioScene scene(gfx::createMetalDevice((__bridge void*)layer));
+        // The normal map view and VFX authoring view now own INDEPENDENT
+        // Metal render targets and gfx Devices. Both stay visible and are
+        // driven by one render owner thread in StudioHost.
+        CAMetalLayer* mapLayer=[CAMetalLayer layer];
+        mapLayer.frame=CGRectMake(0,0,192,192);
+        mapLayer.drawableSize=CGSizeMake(192,192);
+        mapLayer.framebufferOnly=NO;
+        [window.contentView.layer addSublayer:mapLayer];
+        studio::StudioScene mapScene(gfx::createMetalDevice((__bridge void*)mapLayer));
         editor::MapDoc map;map.reset(8,8);
         const auto mapCamera=scene.cameraState();
         scene.setSpectraDockMode(true);
@@ -30,6 +39,9 @@ int aiverseMain(int,char**) { @autoreleasepool {
                 "isolated FX camera was not initialized");
         const Json empty;
         const auto frame=[&]{scene.frame(192,192,map,false,"","",empty,0);};
+        const auto mapFrame=[&]{mapScene.frame(192,192,map,false,"","",empty,0);};
+        mapFrame();
+        const auto independentMapCamera=mapScene.cameraState();
         Json graph=Json::parse(R"JSON({
           "version":2,"nodes":[
              {"id":"spawn","type":"Spawn","properties":{"burst":20}},
@@ -45,7 +57,9 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(state.getInt("tick",-1)==0,"preview starts at zero tick");
         const Json started=scene.spectraPreviewCommand(action("play"),"");
         require(started.getBool("playing"),"play did not start clock");
-        for(int i=0;i<3;++i)frame();
+        for(int i=0;i<3;++i){frame();mapFrame();}
+        require(mapScene.cameraState().distance==independentMapCamera.distance,
+                "map camera was hijacked by the separate FX preview");
         state=scene.spectraPreviewCommand(action("status"),"");
         require(state.getInt("tick")==3,"native frame advanced preview exactly once");
         // A malformed edit must not dispose the last-known-good GPU/CPU
@@ -75,7 +89,17 @@ int aiverseMain(int,char**) { @autoreleasepool {
             valid=(w==192&&h==192&&pixels.size()==size_t(w*h*4));
         });
         for(int i=0;i<10&&!captured;++i){frame();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
-        require(captured&&valid,"actual native Scene GPU frame capture failed");
+        require(captured&&valid,"actual native FX GPU frame capture failed");
+        bool capturedMap=false,validMap=false;
+        mapScene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels) {
+            capturedMap=true;
+            validMap=w==192&&h==192&&pixels.size()==size_t(w*h*4);
+        });
+        for(int i=0;i<10&&!capturedMap;++i){
+            mapFrame();std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        require(capturedMap&&validMap,
+                "independent map GPU capture failed while FX was loaded");
         Json longSeek=action("seek");longSeek.set("tick",Json::number(int64_t(100)));
         scene.spectraPreviewCommand(longSeek,"");
         scene.spectraPreviewCommand(action("pause"),"");
