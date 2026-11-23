@@ -1851,3 +1851,7 @@ checkpointCancel cancels the pending Studio retain/restore request, not an alrea
 ## Stage 64 — tagged GPU capture
 
 Device::captureNextFrameTagged reports actual Metal encoded frame serial, or zero on unsupported backends. Metal completion checks command buffer status. Studio provenance includes capturedFrameSerial and gpuFrameIdentified; frameExact remains false because simulation metadata is still request-time. No tests run.
+
+## Stage 65 — frame provenance ring
+
+FX dock records post-render status keyed by RHI frame serial in a 64-entry ring. Tagged capture callback matches metadata and sets frameExact only when serial and successful image dimensions match. Replay-ready capture rejects unmatched/non-ready frames. This identifies rendered-frame metadata, not numerical GPU/CPU parity. No tests run.
