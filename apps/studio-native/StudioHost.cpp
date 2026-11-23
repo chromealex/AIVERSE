@@ -818,6 +818,13 @@ void StudioHost::rebuildOverlay() {
                 if(index>=0){
                     const auto origin=worldprocess_edit::point(
                         session_->workspace().map.data.entities[std::size_t(index)]);
+                    if(wpDrag_.neighborSnap && shapes.size()+2<1398){
+                        shapes.push_back(worldprocess_gizmos::makeLine(
+                            wpDrag_.snapGuideA,wpDrag_.snapGuideB,255,205,90,4.f));
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            wpDrag_.snapGuideA,
+                            "Snap: "+wpDrag_.snapTarget,255,205,90));
+                    }
                     // Read-only candidate gameplay rectangle during drag.
                     const auto& owner=session_->workspace().map.data.entities[std::size_t(index)];
                     worldprocess_edit::AreaPreview areaPreview;
@@ -959,14 +966,28 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                     map.data.entities[std::size_t(ownerIndex)],handle,
                     ground,value);
                 if(wpDrag_.valid){
+                    wpDrag_.neighborSnap=false;
+                    wpDrag_.snapTarget.clear();
                     if(wpDrag_.component=="EvolveArea"&&wpDrag_.snap){
-                        // Nearby authored region boundaries take precedence
-                        // over the 1m grid. No other object's data is changed.
+                        // Snap only to overlapping neighboring edge segments.
                         const auto snap=worldprocess_edit::snapNeighborEdge(
                             map,map.data.entities[std::size_t(ownerIndex)],
                             handle.mode,value,100.f);
-                        if(snap.found)value=snap.valueCm;
-                        else value=std::round(value/100.f)*100.f;
+                        if(snap.found){
+                            value=snap.valueCm;
+                            wpDrag_.neighborSnap=true;
+                            wpDrag_.snapTarget=snap.targetId;
+                            const auto& owner=map.data.entities[std::size_t(ownerIndex)];
+                            const bool x=handle.mode==worldprocess_edit::Handle::Mode::AreaWidth||
+                                handle.mode==worldprocess_edit::Handle::Mode::AreaWidthNegative;
+                            const float edge=(x?owner.x:owner.z)+value/100.f;
+                            wpDrag_.snapGuideA=x?
+                                render::float3{edge,.42f,snap.guideStart}:
+                                render::float3{snap.guideStart,.42f,edge};
+                            wpDrag_.snapGuideB=x?
+                                render::float3{edge,.42f,snap.guideEnd}:
+                                render::float3{snap.guideEnd,.42f,edge};
+                        }else value=std::round(value/100.f)*100.f;
                     }
                     wpDrag_.value=value;
                     wpDrag_.previewPoint=ground;
