@@ -61,6 +61,9 @@ jobs:
             /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
               --recipe engine/assets/building-recipes/two-floor-workshop.json \
               --out "build/building-preview/${style}-two-floor-workshop.glb"
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
+              --recipe engine/assets/building-recipes/vertical-circulation.json \
+              --out "build/building-preview/${style}-vertical-circulation.glb"
           done
           # Validate the new constructive W/H/D solver separately without
           # losing default-model screenshots if it still fails some settings.
