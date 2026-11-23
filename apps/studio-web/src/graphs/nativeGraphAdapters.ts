@@ -72,3 +72,48 @@ export function graphNames(result:unknown):string[] {
  if(!object(result)||!Array.isArray(result.graphs))throw new Error('Native graph list unavailable');
  return result.graphs.flatMap(g=>typeof g==='string'?[g]:object(g)&&typeof g.name==='string'?[g.name]:[]);
 }
+
+/** State order and transition order are semantic. Preserve both when editing. */
+export function addAnimationTransition(doc:GraphObject,from:PortRef,to:PortRef):GraphObject {
+ if(from.port!=='transition'||to.port!=='enter')return doc;
+ const states=records(doc.states),source=states.find(s=>s.id===from.node);
+ if(!source||!states.some(s=>s.id===to.node))return doc;
+ const transitions=records(source.transitions);
+ if(transitions.length>=64||transitions.some(t=>t.to===to.node))return doc;
+ // Explicit unconditional transition; the editor must expose this default.
+ return replaceAnimationEntry(doc,'states',from.node,{...source,transitions:[...transitions,{to:to.node,fade:.2,after:0,when:[]}]});
+}
+export function editAnimationTransition(doc:GraphObject,stateId:string,index:number,patch:GraphObject|null):GraphObject {
+ const state=records(doc.states).find(s=>s.id===stateId);
+ if(!state||!Array.isArray(state.transitions)||!Number.isInteger(index)||index<0||index>=state.transitions.length)return doc;
+ const transitions=records(state.transitions);
+ if(transitions.length!==state.transitions.length)return doc;
+ if(patch){
+  const next={...transitions[index],...patch};
+  if(!records(doc.states).some(s=>s.id===next.to)||!['fade','after'].every(k=>typeof next[k]==='number'&&Number.isFinite(next[k])&&Number(next[k])>=0))return doc;
+  transitions[index]=next;
+ }else transitions.splice(index,1);
+ return replaceAnimationEntry(doc,'states',stateId,{...state,transitions});
+}
+export function setAnimationInitial(doc:GraphObject,id:string):GraphObject {
+ return records(doc.states).some(s=>s.id===id)?{...doc,initial:id}:doc;
+}
+export function modelProjection(doc:GraphObject):GraphView {
+ const rows=records(doc.nodes);
+ const nodes=rows.map((n,i)=>({id:text(n.id),label:object(n.geometry)?text(n.geometry.kind)||'Geometry':'Joint / pivot',...xy({},i),
+  inputs:[port('parent','transform')],outputs:[port('children','transform',true)]}));
+ const links=rows.flatMap(n=>text(n.parent)?[{id:JSON.stringify([n.id,'parent']),from:text(n.parent),output:'children',to:text(n.id),input:'parent'}]:[]);
+ return {nodes,links};
+}
+export function connectModelParent(doc:GraphObject,from:PortRef,to:PortRef):GraphObject {
+ if(from.port!=='children'||to.port!=='parent'||from.node===to.node)return doc;
+ const rows=records(doc.nodes),byId=new Map(rows.map(n=>[n.id,n]));
+ if(!byId.has(from.node)||!byId.has(to.node))return doc;
+ const visited=new Set<string>();let current=from.node;
+ while(current){if(current===to.node||visited.has(current))return doc;visited.add(current);current=text(byId.get(current)?.parent);}
+ return replaceAnimationEntry(doc,'pose',to.node,{...byId.get(to.node)!,parent:from.node});
+}
+export function modelingReply(result:unknown):{document:GraphObject;revision:number}{
+ if(!object(result)||result.ok!==true||!object(result.document)||typeof result.revision!=='number'||!Number.isSafeInteger(result.revision)||result.revision<1)throw new Error('Invalid native modeling response');
+ return {document:result.document,revision:result.revision};
+}
