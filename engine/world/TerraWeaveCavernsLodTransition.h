@@ -1,6 +1,6 @@
 #pragma once
 // TerraWeave Caverns Stage 14: certified mixed-LOD boundary-edge subdivision.
-// Only supports collinear fine edges that partition each coarse border edge.
+// Supports both face orientations where collinear fine edges partition each coarse edge.
 // If contours diverge, decline rather than fabricate a non-manifold bridge.
 // The resulting mesh is PRESENTATION ONLY. Authoritative physics remains unchanged.
 #include "engine/world/TerraWeaveCavernsSeamAudit.h"
@@ -42,10 +42,21 @@ inline CaveTransitionResult stitchCaveCollinearBoundary(
         throw std::invalid_argument("Caverns mixed LOD input");
     const std::array<int64_t,3> a{coarse.key.x,coarse.key.y,coarse.key.z};
     const std::array<int64_t,3> b{fine.key.x,fine.key.y,fine.key.z};
-    for(unsigned d=0;d<3;++d)
-        if(b[d]-a[d]!=int64_t(d==axis))
+    int direction=0;
+    for(unsigned d=0;d<3;++d) {
+        const int64_t delta=b[d]-a[d];
+        if(d==axis) {
+            if(delta!=1 && delta!=-1)
+                throw std::invalid_argument("Caverns mixed LOD adjacency");
+            direction=delta>0?1:-1;
+        } else if(delta!=0)
             throw std::invalid_argument("Caverns mixed LOD adjacency");
-    const int64_t plane=(a[axis]+1)*int64_t(coarseResolution)*coarseSpacingCm;
+    }
+    // Both orientations are supported: coarse on negative or positive side
+    // of X/Y/Z. The shared world plane is the HIGH boundary of the negative
+    // chunk, regardless of which one is coarser.
+    const int64_t span=int64_t(coarseResolution)*coarseSpacingCm;
+    const int64_t plane=(a[axis]+(direction>0?1:0))*span;
     const auto coarseEdges=caveBoundaryEdges(coarse,coarseResolution,coarseSpacingCm,axis,plane);
     const auto fineEdges=caveBoundaryEdges(fine,fineResolution,fineSpacingCm,axis,plane);
     CaveTransitionResult out;out.coarseStitched=coarse;
