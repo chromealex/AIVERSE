@@ -5,10 +5,10 @@ import { dockDragActive, forgetViewportRect, visibleViewport,
 import { fxViewportRect } from './spectraViewportModel';
 import './SpectraDockViewport.css';
 
-/** The real native gfx::Device's Scene CAMetalLayer/Vulkan surface is
- * REPOSITIONED over this HTML rectangle. It renders an isolated particle
- * stage using StudioScene's existing renderer and GraphRuntime; this DOM
- * contains neither a fake canvas nor a serialized particle bitmap.
+/** A dedicated native FX CAMetalLayer/Vulkan swapchain covers this HTML
+ * rectangle. The authored Scene has its own independent native drawable,
+ * camera and StudioScene. Both are serialized on the render-owner thread.
+ * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
 export default function SpectraDockViewport(){
   const ref=useRef<HTMLDivElement>(null);
