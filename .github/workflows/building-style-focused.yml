@@ -22,6 +22,50 @@ permissions:
   contents: read
 
 jobs:
+  model-preview-export:
+    name: Export real procedural building models for visual QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile standalone C++ building exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++20 -O1 -Wno-misleading-indentation -I. -Ilibraries/include \
+            tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
+            -o /tmp/aiverse_building_export
+      - name: Generate real sci-fi GLB models, two deterministic seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/building-preview
+          for kind in barracks command factory depot; do
+            for seed in 3 7; do
+              /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+                --structure "$kind" --seed "$seed" \
+                --out "build/building-preview/${kind}-seed${seed}.glb"
+            done
+          done
+          # Validate the new constructive W/H/D solver separately without
+          # losing default-model screenshots if it still fails some settings.
+          for kind in barracks command factory depot; do
+            if /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+               --structure "$kind" --size 28 15 24 --seed 42 \
+               --out "build/building-preview/${kind}-28x15x24.glb"; then
+              echo "sized ${kind}: OK"
+            else
+              echo "sized ${kind}: FAILED (constructive fit needs investigation)"
+            fi
+          done
+          find build/building-preview -name '*.glb' -printf '%f %s bytes\n'
+      - name: Preserve raw GLB models for review and actual screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-sci-fi-building-glb
+          path: build/building-preview/*.glb
+          if-no-files-found: error
+          retention-days: 7
   focused-building:
     name: Building style generator and GLB export
     runs-on: ubuntu-24.04
