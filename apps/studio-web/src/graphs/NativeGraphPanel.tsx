@@ -3,6 +3,7 @@ import {invoke,nativeConnected} from '../bridge';
 import {StudioAlert,StudioButton,StudioEmptyState,StudioInput,StudioPanel,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import GraphDiagnostics from './GraphDiagnostics';
+import GraphRuntimeProbePanel from './GraphRuntimeProbePanel';
 import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
@@ -144,6 +145,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
    disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
+   <GraphRuntimeProbePanel domain={domain} graph={draft} disabled={busy}/>
    <GraphDiagnostics view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
    {!fx&&<AnimationParameters doc={draft} disabled={busy} onEdit={edit}/>}
    {entry&&<StudioSection title={'Selected: '+active}>
