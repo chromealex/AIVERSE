@@ -239,6 +239,10 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
+      {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><label key="evolve-preset" className="ptp__row"><span>Ecology preset</span><select className="au-input" disabled={busy} value="" onChange={e=>{
+        const presets:Record<string,number[]>={healthy:[100,90,80,0],industrial:[70,20,20,80],recovering:[80,35,10,50],desert:[85,10,10,0],young_forest:[90,70,20,0],old_growth:[100,95,95,0]};
+        const p=presets[e.target.value];if(p)setMany(component,{durability:p[0]*1e7,fertility:p[1]*1e7,succession:p[2]*1e7,pollution:p[3]*1e7});
+      }}><option value="">Apply preset…</option>{['healthy','industrial','recovering','desert','young_forest','old_growth'].map(p=><option key={p} value={p}>{p}</option>)}</select></label>)}
       {inspector.components.map(component => <ComponentCard key={inspector.id + ':' + component.id}
         component={component} entityId={inspector.id} busy={busy}
         collapsed={!!collapsed[component.id]}
