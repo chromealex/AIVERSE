@@ -202,6 +202,25 @@ public:
                                          std::move(future)});
             ++info.dispatched;
         }
+        // Resolve unsupported contours BEFORE publication. All affected
+        // chunks, including previously unedited resident neighbors, are
+        // scheduled on the same latest snapshot at a shared fine lattice.
+        // The job queue is versioned; no gameplay ACK occurs here.
+        if(running_.empty()&&!prepared_.empty()&&
+           prepared_.size()==dirty_.size()) {
+            CaveSeamPublicationGate prospective=gate_;
+            for(const auto& [key,entry]:prepared_){
+                (void)key;
+                prospective.upsert(entry.candidate);
+            }
+            const auto seamStatus=prospective.analyze();
+            if(seamStatus.fallbackFaces){
+                const auto requests=prospective.requests(dirtyLimit());
+                std::map<ChunkKey3,CaveRebuildRequest,KeyLess> work;
+                for(const auto& req:requests)work.emplace(req.key,req);
+                (void)requestLodRepairs(work);
+            }
+        }
         info.pending=dirty_.size();
         info.ready=prepared_.size();
         info.blocked=info.pending-info.ready;
