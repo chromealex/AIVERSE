@@ -18,7 +18,7 @@ public:
     CaveGeometrySwapOwner(const CaveGeometrySwapOwner&)=delete;
     CaveGeometrySwapOwner& operator=(const CaveGeometrySwapOwner&)=delete;
     bool resident()const noexcept{return active_!=nullptr;}
-    bool hasStaged()const noexcept{return staged_!=nullptr;}
+    bool hasStaged()const noexcept{return staged_!=nullptr || stagedEmpty_;}
     uint64_t activeRevision()const noexcept{return activeRevision_;}
     uint64_t stagedRevision()const noexcept{return stagedRevision_;}
     size_t retiredCount()const noexcept{return retired_.size();}
@@ -33,7 +33,7 @@ public:
     bool stage(gfx::Device& dev,CaveBatchPrepared prepared,
                uint64_t renderRevision,bool enableStrata,
                size_t vertexBudget=2000000){
-        if(!vertexBudget||vertexBudget>16000000||prepared.models.empty())return false;
+        if(!vertexBudget||vertexBudget>16000000||prepared.models.empty()||stagedEmpty_)return false;
         const size_t liveOwners=retired_.size()+size_t(bool(active_))+size_t(bool(staged_));
         if(!caveCanStageScene(activeRevision_,stagedRevision_,renderRevision,
                               liveOwners,kMaxRetainedScenes))return false; // backpressure, never leak/overallocate
@@ -57,19 +57,38 @@ public:
         stagedRevision_=renderRevision;
         return true;
     }
+    // Full-Fill or all-solid/no-surface result: stage a DELETE without
+    // uploading a dummy GeometryScene. The old active draw remains until
+    // the same external owner barrier approves collision and nav retirement.
+    bool stageEmpty(uint64_t renderRevision) {
+        const size_t liveOwners=retired_.size()+size_t(bool(active_))+
+                                size_t(bool(staged_));
+        if(!caveCanStageScene(activeRevision_,stagedRevision_,
+                              renderRevision,liveOwners,kMaxRetainedScenes)||
+           stagedEmpty_)return false;
+        if(staged_) {
+            if(retired_.capacity()<kMaxRetainedScenes)
+                retired_.reserve(kMaxRetainedScenes);
+            retired_.push_back(std::move(staged_));
+        }
+        stagedEmpty_=true;
+        stagedRevision_=renderRevision;
+        return true;
+    }
     // Host callback must guarantee all affected graphics + collision/nav
     // owners have staged compatible revisions and that coordinated visibility
     // swap succeeded at the owner barrier. A false result retains old draw.
     template<class Commit>
     bool activate(Commit&& hostCommit) {
-        if(!staged_||!caveCanActivateScene(activeRevision_,stagedRevision_))return false;
+        if(!hasStaged()||!caveCanActivateScene(activeRevision_,stagedRevision_))return false;
         bool committed=false;
         try {committed=hostCommit(stagedRevision_);}
         catch(...) {return false;}
         if(!committed)return false;
         if(active_)retired_.push_back(std::move(active_));
-        active_=std::move(staged_);
+        active_=std::move(staged_); // nullptr for a staged empty cave
         activeRevision_=stagedRevision_;
+        stagedEmpty_=false;
         stagedRevision_=0;
         return true;
     }
@@ -96,6 +115,7 @@ public:
     }
     // Cancels staging but does not release GPU resources. Retire via above.
     bool cancelStage() {
+        if(stagedEmpty_){stagedEmpty_=false;stagedRevision_=0;return true;}
         if(!staged_)return false;
         // Moving the already-counted staged owner to retirement does not
         // increase the total number of live GPU owners.
@@ -113,6 +133,7 @@ public:
             try {staged_->shutdown(dev);}catch(...) {return false;}
             staged_.reset();stagedRevision_=0;
         }
+        stagedEmpty_=false;
         if(active_) {
             try {active_->shutdown(dev);}catch(...) {return false;}
             active_.reset();activeRevision_=0;
@@ -124,6 +145,7 @@ private:
     std::unique_ptr<render::GeometryScene> active_;
     std::unique_ptr<render::GeometryScene> staged_;
     uint64_t activeRevision_=0,stagedRevision_=0;
+    bool stagedEmpty_=false;
     std::vector<std::unique_ptr<render::GeometryScene>> retired_;
 };
 } // namespace aiverse::terraweave::caverns
