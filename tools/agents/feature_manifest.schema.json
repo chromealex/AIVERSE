@@ -8,7 +8,8 @@
     "owner",
     "checks",
     "changed_paths",
-    "traits"
+    "traits",
+    "integrations"
   ],
   "properties": {
     "schema": {
@@ -132,6 +133,50 @@
         },
         "runtime": {
           "type": "boolean"
+        }
+      }
+    },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skills",
+        "mcp_tools",
+        "studio_panels",
+        "studio_methods"
+      ],
+      "properties": {
+        "skills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "mcp_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "studio_panels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "studio_methods": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }
