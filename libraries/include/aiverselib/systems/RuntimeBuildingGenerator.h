@@ -180,7 +180,7 @@ public:
         // Keep the generated building Model and static collision free of
         // duplicated, immovable cabin geometry. Studio GLB export retains
         // the initial platform through the default generator argument.
-        auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw,false);
+        auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw,false,false);
         const bool valid=bool(built);
         result.featureAnchors=std::move(built.anchors);
         result.structureGraph=std::move(built.graph);
