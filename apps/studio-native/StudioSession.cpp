@@ -7,6 +7,7 @@
 #include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesExtendedAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesExtendedLinks.h"
+#include "libraries/include/aiverselib/world/GranularDocument.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -2638,6 +2639,69 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.buildInfo" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
+        } else if(method=="studio.worldProcessAreaSet"){
+            // Exactly one MapDoc Undo snapshot for one final gizmo release.
+            // Runtime EVOLVE region bounds are not inferred from this visual radius.
+            const std::string entityId=params.getStr("entityId");
+            const std::string area=params.getStr("componentId");
+            const std::string key=params.getStr("key");
+            if(entityId.rfind("entity:@",0)!=0)
+                throw std::runtime_error("World-process resize requires stable map ID");
+            const int index=indexFor(entityId);
+            const auto& source=ws_.map.data.entities[size_t(index)];
+            if(area=="EvolveRegion"&&key=="radiusMetres"){
+                if(!source.extra["components"]["EvolveRegion"].isObject())
+                    throw std::runtime_error("EVOLVE region missing from map entity");
+                if(!params["value"].isNumber())throw std::runtime_error("Expected numeric radius");
+                const double radius=params["value"].toDouble();
+                if(!std::isfinite(radius)||radius<.5||radius>500)
+                    throw std::runtime_error("Invalid EVOLVE gizmo radius");
+                auto candidate=source;
+                Json meta=candidate.extra["worldProcessGizmo"];
+                if(!meta.isObject())meta=Json::object();
+                const Json next=Json::number(radius,3);
+                if(!(meta["radiusMetres"]==next)){
+                    meta.set("radiusMetres",next);
+                    candidate.extra.set("worldProcessGizmo",std::move(meta));
+                    ws_.map.beginEdit();
+                    ws_.map.data.entities[std::size_t(index)]=std::move(candidate);
+                    ws_.map.touched();
+                }
+            }else if(area=="GranularField"&&(key=="width"||key=="height")){
+                if(!params["value"].isNumber())throw std::runtime_error("Expected grid dimension");
+                const int64_t desired=params["value"].integer(-1);
+                if(desired<1||desired>granular::kMaxDimension ||
+                   params["value"].numberLiteral()!=std::to_string(desired))
+                    throw std::runtime_error("Invalid GRANULAR integer grid dimension");
+                const Json& original=source.extra["components"]["GranularField"];
+                if(!original.isObject() ||
+                   !lib::worldprocess::extended::validate("GranularField",original))
+                    throw std::runtime_error("Invalid authored GRANULAR grid");
+                Json grid=original;
+                std::string error;
+                if(!grid.has("width")){
+                    grid=granular::authoring::create(
+                        1,1,original["capacity"].integer());
+                    if(grid.isNull())throw std::runtime_error("Invalid GRANULAR capacity");
+                    grid.member("mass").at(0)=original["initialMass"];
+                    grid.set("enabled",original["enabled"]);
+                }
+                const int64_t width=key=="width"?desired:grid["width"].integer();
+                const int64_t height=key=="height"?desired:grid["height"].integer();
+                if(!granular::authoring::resize(grid,
+                     std::uint16_t(width),std::uint16_t(height),&error))
+                    throw std::runtime_error("Cannot resize GRANULAR grid: "+error);
+                if(!(original==grid)){
+                    auto candidate=source;
+                    Json components=candidate.extra["components"];
+                    components.set("GranularField",std::move(grid));
+                    candidate.extra.set("components",std::move(components));
+                    ws_.map.beginEdit();
+                    ws_.map.data.entities[std::size_t(index)]=std::move(candidate);
+                    ws_.map.touched();
+                }
+            }else throw std::runtime_error("Unsupported world-process gizmo edit");
+            reply.set("result",snapshot());
         } else if (method == "studio.componentCatalog") {
             reply.set("result", componentCatalog(params.getStr("entityId")));
         } else if (method == "studio.componentAdd" || method == "studio.componentRemove") {
