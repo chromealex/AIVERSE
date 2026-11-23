@@ -149,6 +149,31 @@ Typed `VehicleDrive` teleports must use the existing shared
 controller and seat-owner code. Never park those core gameplay
 components unless every owning system is dormancy-aware.
 
+## W1.18 native test gate and archive format
+
+The source repository provides
+`.github/workflows/open-world-w1.yml`: a focused macOS 15
+GitHub Actions workflow to compile and run all 11 W1 CTests.
+It installs the real external `mushrooms` template and
+archives configure/build/test logs. You may run it manually
+through **GitHub Actions → Open world W1 native acceptance →
+Run workflow**, selecting this feature branch. Do not report
+the workflow passed until an actual run shows a successful
+conclusion and all focused tests are green.
+
+For the portable `RegionDirtyQueue` Archive, each pending
+entry is **9 bytes** (uint64 key + uint8 mask). The reader
+must use `Archive::count(...,9)`; using 17 corrupts
+valid many-entry save reloads even though the serialized
+byte layout remains identical. The
+`region_dirty_queue_test` contains a 1024-record roundtrip
+to guard this contract.
+
+A hosted runner is not the owner's writable
+`/Volumes/KINGSTON` Mac installation. Real acceptance must
+also reconcile current main, run the merged-tree quick suite
+and record exact platform and build SHAs.
+
 ## Tests, acceptance and handoffs
 
 Relevant source targets include `region_entity_ledger_test`,
