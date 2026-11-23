@@ -5268,3 +5268,16 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     add_test(NAME region_cold_store_test COMMAND aiverse_region_cold_store_test)
     set_tests_properties(region_cold_store_test PROPERTIES LABELS "World;ECS")
 endif()
+
+# W1.4: real GameCore/NativeModule command -> shared region authority runtime.
+# Game map content comes from the normal external template package, not this repo.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)
+    add_executable(aiverse_region_gamecore_integration_test
+        tests/world/region_gamecore_integration_test.cpp)
+    target_link_libraries(aiverse_region_gamecore_integration_test PRIVATE aiverse_game)
+    target_compile_definitions(aiverse_region_gamecore_integration_test PRIVATE
+        AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME region_gamecore_integration_test
+        COMMAND aiverse_region_gamecore_integration_test)
+    set_tests_properties(region_gamecore_integration_test PROPERTIES LABELS "World;ECS")
+endif()
