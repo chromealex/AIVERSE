@@ -7,6 +7,7 @@ export interface SpectraReplayPreset {
   background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
   parameters:Record<string,number>;
   seed?:number; // CPU backend only
+  gpuAllocationSeed?:number; // Metal slot ordering only
 }
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const bounded=(v:unknown,min:number,max:number):v is number=>
@@ -31,6 +32,10 @@ export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
      typeof c.ortho!=='boolean')throw new Error('Invalid replay camera');
   if(v.seed!==undefined && (!bounded(v.seed,0,2147483647)||!Number.isInteger(v.seed)))
     throw new Error('Invalid CPU replay seed');
+  if(v.gpuAllocationSeed!==undefined && (!bounded(v.gpuAllocationSeed,0,2147483647)||!Number.isInteger(v.gpuAllocationSeed)))
+    throw new Error('Invalid GPU allocation seed');
+  if(v.seed!==undefined&&v.gpuAllocationSeed!==undefined)
+    throw new Error('CPU and GPU allocation seed modes are mutually exclusive');
   if(!record(v.parameters)||Object.keys(v.parameters).length>8)
     throw new Error('Invalid replay parameter table');
   for(const [key,value] of Object.entries(v.parameters)){
