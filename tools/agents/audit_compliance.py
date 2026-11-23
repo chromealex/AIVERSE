@@ -23,6 +23,13 @@ def covered_paths(changed, manifests):
             errors.append(f"{path}: invalid changed_paths")
             continue
         claimed.update(scope)
+        traits = data.get("traits", {})
+        if isinstance(traits, dict):
+            actual = set(scope) & changed
+            if any(p.startswith(("engine/", "libraries/", "modules/")) for p in actual) and not traits.get("runtime"):
+                errors.append(f"{path}: engine/library/module changes require runtime trait")
+            if any(p.startswith(("engine/sim/", "engine/core/")) for p in actual) and not traits.get("simulation"):
+                errors.append(f"{path}: simulation/core changes require simulation trait")
     for path in sorted(required - claimed):
         errors.append(f"uncovered changed path: {path}")
     return errors
@@ -50,7 +57,7 @@ def main():
         try:
             data = json.loads((ROOT / path).read_text(encoding="utf-8"))
             manifests[path] = data
-            errors.extend(f"{path}: {e}" for e in validate(data, ready=not args.allow_partial))
+            errors.extend(f"{path}: {e}" for e in validate(data, ready=not args.allow_partial, verify_git=not args.allow_partial))
             if isinstance(data, dict) and Path(path).stem != data.get("id"):
                 errors.append(f"{path}: filename must match id")
         except (OSError, ValueError) as exc:
