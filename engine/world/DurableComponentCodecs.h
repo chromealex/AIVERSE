@@ -9,24 +9,28 @@ namespace aiverse::world {
 class DurableComponentCodecs {
 public:
     struct Chunk {std::string schema;uint32_t version=0;RegionEntityId owner=0;std::string bytes;};
+    enum class Operation : uint8_t { Upsert=1, Remove=2 };
+    struct Record {Operation operation=Operation::Upsert;Chunk chunk;};
     using Context=PersistentEntityReferences;
     static constexpr size_t MaxBytes=16u*1024u*1024u;
     using Writer=std::function<bool(Archive&,const World&,Entity,const Context&)>;
     using Reader=std::function<bool(Archive&,World&,Entity,const Context&)>;
 private:
-    struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;};
+    using Remover=std::function<bool(World&,Entity)>;
+    struct Codec {uint32_t version;Writer write;std::map<uint32_t,Reader> readers;Remover remove;};
     std::map<std::string,Codec> codecs_;
 public:
     bool add(std::string id,uint32_t version,Writer writer,Reader reader){
         if(id.empty()||id.size()>128||!version||!writer||!reader)return false;
-        Codec codec{version,std::move(writer),{}};
+        Codec codec{version,std::move(writer),{}, {}};
         codec.readers.emplace(version,std::move(reader));
         return codecs_.emplace(std::move(id),std::move(codec)).second;
     }
     // Opt-in only: T's Archive codec must not contain raw runtime Entity
     // handles. Use PersistentDeferredReference or an explicit contextual codec.
     template<class T> bool addTyped(std::string id,uint32_t version=1){
-        return add(std::move(id),version,
+        const auto key=id;
+        if(!add(std::move(id),version,
             [](Archive& a,const World& world,Entity entity,const Context&){
                 const T* source=world.tryGetConst<T>(entity);
                 if(!source)return false;
@@ -37,7 +41,9 @@ public:
                 if(!a.ok()||a.remaining()!=0)return false;
                 if(world.has<T>(entity))world.remove<T>(entity);
                 world.add<T>(entity,std::move(value));return true;
-            });
+            }))return false;
+        codecs_.at(key).remove=[](World& w,Entity e){if(w.has<T>(e))w.remove<T>(e);return true;};
+        return true;
     }
     template<class T,class Fn> bool addTypedMigration(const std::string& id,uint32_t version,Fn reader){
         return addMigration(id,version,[reader=std::move(reader)](Archive& a,World& world,Entity entity,const Context& refs){
@@ -72,5 +78,38 @@ public:
         Archive a(chunk.bytes);a.formatVersion=chunk.version;
         return reader->second(a,staged,entity,refs)&&a.ok()&&a.remaining()==0;
     }
+    bool setRemover(const std::string& schema,std::function<bool(World&,Entity)> remove){
+        auto it=codecs_.find(schema);
+        if(it==codecs_.end()||!remove)return false;
+        it->second.remove=std::move(remove);return true;
+    }
+    // Ordered transaction, including repeated keys. Host serializes access.
+    // Codecs must not mutate identity, allocator or external state.
+    bool restoreBatch(World& world,const RegionEntityLedger& ledger,
+        const std::vector<Record>& records)const{
+        constexpr size_t maxRecords=1000000,maxTotal=128u*1024u*1024u;
+        if(records.size()>maxRecords)return false;
+        size_t total=0;
+        for(const auto& r:records){
+            if(r.chunk.bytes.size()>MaxBytes||r.chunk.bytes.size()>maxTotal-total)return false;
+            total+=r.chunk.bytes.size();
+        }
+        World staged=world;
+        Context refs;if(!refs.rebuild(staged,ledger))return false;
+        for(const auto& r:records){
+            if(r.operation==Operation::Upsert){
+                if(!restoreStaged(staged,refs,r.chunk))return false;
+            }else if(r.operation==Operation::Remove){
+                const auto& c=r.chunk;Entity e;
+                auto it=codecs_.find(c.schema);
+                if(!c.owner||!c.bytes.empty()||it==codecs_.end()||
+                   c.version!=it->second.version||!it->second.remove||
+                   !refs.resolve(staged,c.owner,e)||!it->second.remove(staged,e))return false;
+            }else return false;
+        }
+        Context checked;if(!checked.rebuild(staged,ledger))return false;
+        world=std::move(staged);return true;
+    }
+
 };
 }
