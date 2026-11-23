@@ -4,6 +4,7 @@
 #include "RegionWalWriter.h"
 #include "RegionWorldSessionLock.h"
 #include "UnifiedCheckpointRetention.h"
+#include "AsyncPersistenceIo.h"
 namespace aiverse::world {
 class UnifiedWalSession {
     RegionWorldSessionLock lock_;
@@ -13,8 +14,16 @@ class UnifiedWalSession {
     std::filesystem::path dir_;
     RegionCheckpointManifest manifest_;
     bool managed_=false;
+    AsyncPersistenceIo io_;
+    bool async_=false;
+    enum class Pending { None, Append, Checkpoint } pending_=Pending::None;
+    std::unique_ptr<UnifiedWorldReplay::State> prepared_;
+    RegionCheckpointManifest preparedManifest_;
+    uint64_t ticket_=0;
 public:
     using State=UnifiedWorldReplay::State;
+    enum class IoResult { Idle, Pending, Committed, Checkpointed, Failed };
+    ~UnifiedWalSession(){close();}
     // Caller supplies a verified checkpoint and its exact nonempty identity
     // prefix, including a unified-format discriminator. Existing WAL only.
     RegionWalWrite open(const std::filesystem::path& dir,const std::filesystem::path& wal,
@@ -91,7 +100,7 @@ private:
 public:
     RegionCheckpointPublishResult checkpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
         using R=RegionCheckpointPublishResult;
-        if(!ready_||!managed_||generation<=manifest_.generation)return R::Invalid;
+        if(!ready_||!managed_||ioPending()||generation<=manifest_.generation)return R::Invalid;
         ready_=false;writer_.close();
         RegionCheckpointManifest next;
         auto result=UnifiedCheckpointPublisher::publish(dir_,*state_,manifest_.identity.world,generation,adapters,budget,next);
@@ -103,16 +112,76 @@ public:
     // Finalized barrier only. No external side effects in replay callbacks.
     RegionWalWrite commit(const RegionWalFrame& frame,const DurableComponentCodecs& codecs,
         const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
-        if(!ready_)return RegionWalWrite::NeedsRecovery;
+        if(!ready_||ioPending())return RegionWalWrite::NeedsRecovery;
         auto staged=std::make_unique<State>(*state_);
         if(!UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate,resources))return RegionWalWrite::InvalidFrame;
         auto result=writer_.append(frame);
         if(result!=RegionWalWrite::Ok){ready_=false;return result;}
         state_.swap(staged);return RegionWalWrite::Ok;
     }
+    // Enable after startup. IO thread receives only frames or encoded
+    // checkpoint bytes; all ECS capture/replay and callbacks stay on owner.
+    bool enableAsync(size_t bytes){
+        if(async_||!managedReady()||!io_.start(bytes))return false;
+        async_=true;return true;
+    }
+    bool asyncEnabled()const{return async_;}
+    bool ioPending()const{return pending_!=Pending::None;}
+    AsyncPersistenceIo::Receipt ioStatus()const{return io_.status();}
+    IoResult queueCommit(RegionWalFrame frame,const DurableComponentCodecs& codecs,
+        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},
+        const DurableResourceTransaction::Policy& resources={}){
+        if(ioPending())return IoResult::Pending;
+        if(!async_||!managedReady()||ticket_==UINT64_MAX)return IoResult::Failed;
+        auto staged=std::make_unique<State>(*state_);
+        if(!UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate,resources))return IoResult::Failed;
+        const size_t bytes=frame.payload.size()+RegionWalCodec::headerSize;
+        auto submit=io_.submit(ticket_+1,bytes,[this,frame=std::move(frame)](){
+            return writer_.append(frame)==RegionWalWrite::Ok;
+        });
+        if(submit!=AsyncPersistenceIo::Submit::Accepted)return IoResult::Failed;
+        ++ticket_;prepared_=std::move(staged);pending_=Pending::Append;
+        return IoResult::Pending;
+    }
+    IoResult queueCheckpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
+        if(ioPending())return IoResult::Pending;
+        if(!async_||!managedReady()||generation<=manifest_.generation||ticket_==UINT64_MAX)return IoResult::Failed;
+        std::vector<uint8_t> bytes;
+        if(!UnifiedCheckpointSections::capture(*state_,manifest_.identity.world,adapters,budget,bytes))return IoResult::Failed;
+        RegionCheckpointManifest m;
+        m.generation=generation;m.identity.world=manifest_.identity.world;
+        m.identity.sequence=state_->sequence;m.identity.revision=state_->ledger.lastRevision();
+        m.identity.digest=pack::sha256(bytes.data(),bytes.size());m.checkpointBytes=bytes.size();
+        auto submit=io_.submit(ticket_+1,bytes.size(),[this,m,dir=dir_,bytes=std::move(bytes)](){
+            writer_.close();
+            if(RegionCheckpointPublisher::publish(dir,m,bytes,true)!=RegionCheckpointPublishResult::Ok)return false;
+            std::vector<uint8_t> prefix;
+            return UnifiedCheckpointPublisher::identity(m,prefix)&&
+                writer_.open(dir/m.walName(),m.identity.sequence,false,prefix)==RegionWalWrite::Ok&&
+                writer_.lastSequence()==m.identity.sequence;
+        });
+        if(submit!=AsyncPersistenceIo::Submit::Accepted)return IoResult::Failed;
+        ++ticket_;preparedManifest_=m;pending_=Pending::Checkpoint;
+        return IoResult::Pending;
+    }
+    // Owner consumes the ordered receipt. Only here is private ECS state or
+    // the new manifest published. A failed/ambiguous write poisons the session.
+    IoResult pollIo(){
+        if(!ioPending())return ready_?IoResult::Idle:IoResult::Failed;
+        AsyncPersistenceIo::Receipt receipt;
+        if(!io_.take(receipt))return IoResult::Pending;
+        const auto operation=pending_;pending_=Pending::None;
+        if(receipt.ticket!=ticket_||receipt.status!=AsyncPersistenceIo::Status::Durable){
+            prepared_.reset();ready_=false;return IoResult::Failed;
+        }
+        if(operation==Pending::Append){
+            state_.swap(prepared_);prepared_.reset();return IoResult::Committed;
+        }
+        manifest_=preparedManifest_;return IoResult::Checkpointed;
+    }
     // Managed sessions only; caller serializes these operations at a finalized
     // barrier. Read-only operations do not publish their temporary ECS worlds.
-    bool managedReady()const{return ready_&&managed_&&lock_.held();}
+    bool managedReady()const{return ready_&&managed_&&!ioPending()&&lock_.held();}
     const RegionCheckpointManifest* manifest()const{return managedReady()?&manifest_:nullptr;}
     UnifiedBackupCatalogResult backups(size_t budget,const UnifiedCheckpointSections::Adapters& adapters,
         const UnifiedCheckpointSections::Factory& factory,const DurableComponentCodecs& codecs,
@@ -150,7 +219,7 @@ public:
         UnifiedWalSession destinationSession;
         return destinationSession.create(destination,newWorld,*recovered,adapters,budget);
     }
-    const State* state()const{return ready_?state_.get():nullptr;}
-    void close(){ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
+    const State* state()const{return ready_&&!ioPending()?state_.get():nullptr;}
+    void close(){io_.stop();async_=false;pending_=Pending::None;prepared_.reset();ticket_=0;ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
 };
 }
