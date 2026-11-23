@@ -55,6 +55,14 @@ public:
         }
         return accepted;
     }
+    // Optional Stage38 real GPU upload source-byte budget and bounded
+    // whole-shard count per frame, used by the gameplay edit host.
+    void setGpuUploadLimits(CaveGpuUploadLimits limits){
+        host_.setGpuUploadLimits(limits);
+    }
+    CaveGpuUploadStats gpuUploadStats()const noexcept{
+        return host_.gpuUploadStats();
+    }
     // Runs on an owner frame boundary, not from a deterministic simulation
     // system or an already open graphics command buffer.
     CaveEditTick frameOutsidePass(
@@ -66,6 +74,7 @@ public:
         if(closed_||physicsBarrier_.status().recoveryRequired)
             throw std::runtime_error("Caverns game world closed or requires recovery");
         syncStreamingEditPins();
+        (void)host_.collectGpuCompletedWithoutIdle(device);
         return host_.advance(device,spatial,navConfig,std::move(height),
                              colliderIds,nextVisualRevision,jobsPerFrame,
                              graphicsOptions);
