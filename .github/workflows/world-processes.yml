@@ -9,6 +9,8 @@ on:
       - 'tests/ecs_aether_gas_test.cpp'
       - 'tests/world_processes_inspector_test.cpp'
       - 'tests/world_processes_authoring_test.cpp'
+      - 'tests/world_processes_map_hydration_test.cpp'
+      - 'tests/world_processes_gamecore_native_test.cpp'
       - 'apps/studio-native/StudioSession.cpp'
       - 'apps/studio-native/tests/StudioSessionTests.cpp'
       - 'apps/editor/core/WorldInspect.cpp'
