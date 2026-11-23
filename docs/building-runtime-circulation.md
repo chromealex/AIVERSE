@@ -99,3 +99,39 @@ existing gameplay owner; validate real step-following across the generated
 staircase, navmesh source sampling and moving collider synchronization.
 Then run C++20/Clang+GCC, existing native Studio checks, Mac/Metal,
 Vulkan/GLES and network/state tests as a separate requested QA phase.
+
+
+## Stage 16 — authoritative lift interactions and safety
+
+Game clients never send a complete lift state to authority. An existing
+authenticated server handler calls BuildingLiftAuthority<Body>::execute()
+from engine/buildings/BuildingLiftCommands.h, passing the client ID that
+the existing connection authenticated. The handler checks actor ownership,
+scene ID, per-actor increasing request sequence and authoritative physical
+landing access before Call, Board, SelectFloor or Exit. Board requires real
+cabin-volume validation from the existing BuildingLiftEcsBridge.
+
+When landing doors are attached, call
+BuildingCirculationScene::setDoorObstructionProbe(worldOwnerCallback).
+The callback returns true for a physically blocked landing/cabin opening.
+Blocking during Closing reopens doors. Without a sensor, lift simulation
+will not advance with physical doors enabled. Only the existing
+PHYSIS/ECS owner should query live actor/object collision volumes.
+
+Server state publication uses BuildingLiftReplication.h:
+captureBuildingLiftServerFrame(host, sceneId, serverTick) copies the
+authoritative state *after* world collision and actor carry commits;
+encodeBuildingLiftStateFrame writes a bounded little-endian, versioned
+payload. The existing authenticated server->client snapshot channel
+transports those bytes. Clients call decodeBuildingLiftStateFrame, then
+BuildingLiftReplica::acceptServerFrame and applyToClient.
+The client replica preflights all lift states, rejects foreign scenes,
+old server ticks/revisions and implausible landing poses. No new socket
+or general network transport is created.
+
+**Scope**: Owner-facing APIs have been written to GitHub; this is not
+yet a finished in-game lift interaction or an actual multiplayer run.
+The network/game owners must register the new snapshot field and command
+dispatcher, supply physical door sensors and route actor motor events.
+Tests and native GPU evidence are explicitly deferred by the user.
+Agent handoff: docs/agent-handoffs/building-lift-safety-network-2026-11-23.md.
