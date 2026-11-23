@@ -2,7 +2,7 @@
  * Trust the native fx_graph_edit(new) factory for default nodes and links:
  * it owns the canonical initial v2 graph. React never duplicates that schema.
  */
-import { safeGraphName, type SpectraGraphV2 } from './spectraDataInterfaceModel';
+import { safeGraphName, type SpectraGraphV2 } from './spectraDataInterfaceModel.ts';
 
 export function nextUnusedGraphName(
   existing: readonly {name:string}[], base='preview_fx'
