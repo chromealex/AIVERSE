@@ -30,8 +30,8 @@ export default function SpectraGraphAssetInspector({
   const checkAsset=async(guid:string)=>{
     setChecking(true);
     try {
-      const result=await invoke('studio.spectraAssetCheck' as never,{guid} as never) as unknown as {ok:boolean;detail:string};
-      setChecks(old=>({...old,[guid]:(result.ok?'PASS: ':'FAIL: ')+result.detail+' (CPU only)'}));
+      const result=await invoke('studio.spectraAssetCheck',{guid});
+      setChecks(old=>({...old,[guid]:(result.ok?'PASS: ':'FAIL: ')+result.code+' — '+result.detail+' (CPU only)'}));
     }catch(e){setChecks(old=>({...old,[guid]:String(e)}));}
     finally{setChecking(false);}
   };
