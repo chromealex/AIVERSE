@@ -37,14 +37,15 @@ Actors actors(Simulation& sim) {
     return {cars.front(),host.characterEntity(sim,1),
             host.characterEntity(sim,2)};
 }
-wd::RegionEntityId stable(Entity e) {
-    AIVERSE_TEST_CHECK(e.packed()!=UINT64_MAX);
-    return e.packed()+1;
+wd::RegionEntityId stable(const Simulation& sim,Entity e) {
+    const auto* tag=sim.world().tryGetConst<wd::RegionStableIdentity>(e);
+    AIVERSE_TEST_CHECK(tag && tag->id);
+    return tag->id;
 }
 wd::Cell owner(const Simulation& sim,Entity e) {
     const auto* ledger=sim.world().resourceConst<wd::RegionEntityLedger>();
     AIVERSE_TEST_CHECK(ledger);
-    const auto* rec=ledger->find(stable(e));
+    const auto* rec=ledger->find(stable(sim,e));
     AIVERSE_TEST_CHECK(rec && rec->live);
     return rec->owner;
 }
@@ -199,7 +200,7 @@ void testBoundaryOnlyDirtyMotionProducer() {
     AIVERSE_TEST_CHECK(host.reportRegionMoveIfCrossed(*sim,actor));
     const auto* pending=ecs.resourceConst<wd::RegionDirtyQueue>();
     AIVERSE_TEST_CHECK(pending && pending->entries.size()==1);
-    AIVERSE_TEST_CHECK(pending->entries.at(stable(actor))==
+    AIVERSE_TEST_CHECK(pending->entries.at(actor.packed()+1)==
                        uint8_t(wd::RegionDirtyKind::Move));
 
     host.synchronizeRegionOwnership(*sim);
@@ -244,7 +245,7 @@ void testDynamicSpawnRetireAndRecycledIds() {
                         ->entries.empty());
     AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
                         ->acknowledged==1);
-    const auto first=stable(item);
+    const auto first=stable(*sim,item);
     const auto* ledger=ecs.resourceConst<wd::RegionEntityLedger>();
     AIVERSE_TEST_CHECK(ledger->find(first) && ledger->find(first)->live);
     ecs.get<actor::Loot>(item).pos={67_fx,2_fx,4_fx};
@@ -271,7 +272,9 @@ void testDynamicSpawnRetireAndRecycledIds() {
     host.synchronizeRegionOwnership(*sim);
     AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
                         ->acknowledged==3);
-    AIVERSE_TEST_CHECK(stable(replacement)!=first);
+    const auto second=stable(*sim,replacement);
+    AIVERSE_TEST_CHECK(second>first);
+    AIVERSE_TEST_CHECK(second!=replacement.packed()+1);
     AIVERSE_TEST_CHECK(owner(*sim,replacement)==wd::Cell(0,0,0));
     AIVERSE_TEST_CHECK(!ledger->find(first)->live);
     const auto bytes=sim->serialize();
@@ -284,7 +287,7 @@ void testDynamicSpawnRetireAndRecycledIds() {
                        loadedDirty->acknowledged==3);
     const auto* loadedLedger=loaded->world().resourceConst<wd::RegionEntityLedger>();
     AIVERSE_TEST_CHECK(loadedLedger && !loadedLedger->find(first)->live);
-    AIVERSE_TEST_CHECK(loadedLedger->find(stable(replacement))->live);
+    AIVERSE_TEST_CHECK(loadedLedger->find(second)->live);
 }
 }
 int main() {
