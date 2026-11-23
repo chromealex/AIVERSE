@@ -569,3 +569,85 @@ event-driven region ownership indexes and bounded disk-backed
 journals. Gameplay spawn hooks, collision admission for
 teleports, lifecycle of all actor pools, offscreen clock,
 large-world memory and performance measurements remain W1 work.
+
+
+## Stage 09 — pre-tick destination admission for actor/car teleports
+
+`engine/world/RegionMoveRequests.h` provides an **opt-in persisted ECS
+resource** `RegionMoveRequests` (schema v1; maximum 64 pending objects).
+The queue contains a map keyed by `Entity::packed()+1` to the requested
+destination in fixed-point world coordinates, plus an applied counter.
+The +1 encoding includes a first Entity whose packed handle is zero.
+The portable Archive codec refuses duplicates, invalid keys and
+over-budget requests and decodes atomically. A native-ECS load validator
+rejects pending requests whose Entity is no longer alive.
+
+On a world-space `GameCore` map with `"regionOwnership": {}`,
+`ActorHost::requestRegionMove(sim,entity,destination,error)` stages a
+**gameplay-authorized** movement request. It supports a live
+`CharacterBody` not riding in a vehicle, or an arcade
+`actor::Vehicle` with its `Vehicle.driver` and
+`CharacterBody.vehicle` occupants as an indivisible group.
+The API rejects missing/dormant identities, overlapping requests,
+invalid world bounds, or requests for a passenger independently of
+its car. It **does not** directly mutate a position. Typed
+`vehicles::VehicleDrive` teleports remain intentionally unsupported
+until the same transaction can update their authoritative controller
+position, seat pose and physics safely.
+
+### The two-phase admission contract
+
+1. **Stage** an authoritative target in the native ECS queue.
+2. **Prepare**: before the next simulation step consumes its pending
+   commands, `ActorHost::readyToStep` includes each staged
+   destination (4-unit radius) in the existing
+   `CollisionStream::prepareRegions` interest volume, in addition to
+   actors, vehicles, projectiles and respawn bounds. For async maps
+   an unavailable destination blocks the step. No RNG, tick, command,
+   canonical actor pose, or ECS ledger ownership changes on that
+   refused step.
+3. **Admit**: after collision/nav readiness succeeds,
+   `readyToStep` captures a host-local *derived* copy of the
+   particular destination requests it just validated.
+   This cache is neither serialized nor hashed. It is reset before
+   every ready check and recomputed following rollback.
+4. **Commit**: the `actor.regionMoves` Simulation system runs before
+   the existing ActorHost gameplay systems. It validates the entire
+   admitted actor/car group again, then changes the existing
+   `CharacterBody.pos` / `Vehicle.pos` components by the requested
+   delta. Applied requests are removed from the persistent queue;
+   new requests inserted by a gameplay command or system **after**
+   the `readyToStep` check remain pending for a later tick.
+5. **Reconcile**: the already existing
+   `actor.regionOwnership` system follows normal gameplay and
+   atomically updates the W1 ledger for the newly moved car and
+   passengers.
+
+This avoids the W1.8 failure mode where the post-movement region
+synchronizer discovers a teleport into a collision chunk that was never
+admitted. The stage only protects movements issued via
+`requestRegionMove` — **direct, unsupported writes to
+`CharacterBody.pos` / `Vehicle.pos` by other gameplay code are
+not intercepted** and may still outpace collision streaming.
+Game commands arriving during the tick can stage a request, but
+cannot apply that new destination until it has passed a *subsequent*
+`readyToStep`. It is the caller's responsibility to authorize
+which player or game rule may request a teleport.
+
+### Tests, exclusions, and known limits
+
+`tests/world/actor_region_admission_test.cpp` is registered as
+`actor_region_admission_test` (CTest World/ECS/NETWORK). It
+uses actual GameCore, ActorHost and hashed asynchronous collision
+chunks with a deliberately unavailable remote chunk to assert:
+blocked tick and unchanged RNG/commands/checksum/position,
+eventual exact command processing after loader recovery, two
+independent peer checksums, native save/reload, a late in-tick
+request waiting for a new admission and a grouped arcade car move.
+
+The queue is bounded to 64 target entities. It does not contain a
+fully typed transport movement contract, a transactional ECS tick
+rollback or an outdoor streamed NavMesh. It also does not remove
+W1.8's full-scan ownership reconciliation cost. Actual Mac/KINGSTON
+CMake+CTest execution **has not been completed** as part of this
+source stage; W1 remains partial and PR #116 Draft.
