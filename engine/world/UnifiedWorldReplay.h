@@ -5,7 +5,7 @@
 namespace aiverse::world {
 class UnifiedWorldReplay {
 public:
-    struct State {RegionEntityLedger ledger;World world;uint64_t sequence=0;};
+    struct State {RegionEntityLedger ledger;World world;uint64_t sequence=0;std::string restart;};
     using Materializer=std::function<bool(World&,const RegionEntityLedger&,const RegionEntityLedger&)>;
     using Validator=std::function<bool(const State&)>;
     // Ownership swap publishes both halves together. Readers must be quiescent;
@@ -23,6 +23,16 @@ public:
         if(!materialize(staged->world,current->ledger,staged->ledger))return false;
         if(!codecs.restoreBatch(staged->world,staged->ledger,decoded.components))return false;
         if(!resources.restore(staged->world,decoded.resources))return false;
+        // Restart-aware worlds must carry metadata on every committed tick.
+        if(current->restart.empty()!=decoded.restart.empty())return false;
+        if(!decoded.restart.empty()){
+            NativeRestartState::Data old,next;
+            if(!NativeRestartState::decode(current->restart,old)||!NativeRestartState::decode(decoded.restart,next)||
+               old.contentIdentity!=next.contentIdentity||old.seed!=next.seed||old.tickRate!=next.tickRate||
+               old.tick==UINT32_MAX||next.tick!=old.tick+1||
+               !NativeRestartState::referencesValid(next,staged->world,staged->ledger))return false;
+            staged->restart=std::move(decoded.restart);
+        }
         staged->sequence=frame.sequence;
         if(validate&&!validate(*staged))return false;
         current.swap(staged);return true;
