@@ -9,13 +9,14 @@
 #include <limits>
 
 namespace aiverse::render::texture_graph::gpu {
-struct Source {std::string msl,reason;};
+struct Source {std::string msl,reason,glsl;};
+inline constexpr int maxPreviewSize=128;
 inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());
     s<<std::scientific<<std::setprecision(std::numeric_limits<float>::max_digits10)<<v<<"f";return s.str();
 }
 inline Source compile(const Program& p,size_t target,int n){
-    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=32,"GPU preview resolution must be 8..32");
+    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxPreviewSize,"GPU preview resolution must be 8..128");
     std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto j:p.nodes[i].inputs)mark(j);};mark(target);
     std::string msl=R"MSL(
 #include <metal_stdlib>
@@ -37,11 +38,14 @@ float cells(float2 uv,int p,uint seed){
  float2 point=float2(float(x)+rand01(wrapi(x,p),wrapi(y,p),seed),float(y)+rand01(wrapi(x,p),wrapi(y,p),seed+971u));
  float2 d=point-xy;best=min(best,dot(d,d));}return clamp(sqrt(best),0.0f,1.0f);
 }
-kernel void cs_main(device uint* output [[buffer(0)]],uint tid [[thread_position_in_grid]]){
 )MSL";
-    msl+="const uint n="+std::to_string(n)+"u; if(tid>=n*n)return; float2 uv=(float2(tid%n,tid/n)+0.5f)/float(n);\n";
+    // Normal is a terminal typed output. Re-evaluate its scalar DAG at four
+    // wrapped neighbors, preserving float precision (no intermediate RGBA8).
+    const bool normal=std::string(p.nodes[target].info->id)=="normal";
+    const size_t valueTarget=normal?p.nodes[target].inputs[0]:target;
+    msl+="float3 evaluatePoint(float2 uv){\n";
     for(auto i:p.order){
-        if(!needed[i])continue;
+        if(!needed[i]||(normal&&i==target))continue;
         const auto& node=p.nodes[i];const auto& q=node.parameters;const std::string id=node.info->id;
         auto var=[&](size_t j){return "v"+std::to_string(node.inputs[j]);};
         auto a=[&](){return var(0)+".x";};auto b=[&](){return var(1)+".x";};
@@ -68,7 +72,24 @@ kernel void cs_main(device uint* output [[buffer(0)]],uint tid [[thread_position
         else return {"","GPU pointwise preview unsupported node: "+id};
         msl+="float3 v"+std::to_string(i)+"=clamp("+expr+",0.0f,1.0f);\n";
     }
-    msl+="uint3 rgb=uint3(floor(v"+std::to_string(target)+"*255.0f+0.5f));output[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}\n";
-    return {std::move(msl),{}};
+    msl+="return v"+std::to_string(valueTarget)+";}\n";
+    std::string body="const uint n="+std::to_string(n)+"u; if(tid>=n*n)return; uint x=tid%n,y=tid/n; float2 uv=(float2(x,y)+0.5f)/float(n);\n";
+    if(normal){
+        const auto strength=literal(scalar(p.nodes[target].parameters["strength"],2,0,16));
+        body+="float k="+strength+"*float(n)/256.0f;\n"
+              "float dx=(evaluatePoint((float2((x+1u)%n,y)+0.5f)/float(n)).x-evaluatePoint((float2((x+n-1u)%n,y)+0.5f)/float(n)).x)*k;\n"
+              "float dy=(evaluatePoint((float2(x,(y+1u)%n)+0.5f)/float(n)).x-evaluatePoint((float2(x,(y+n-1u)%n)+0.5f)/float(n)).x)*k;\n"
+              "float len=sqrt(dx*dx+dy*dy+1.0f);float3 result=float3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len);\n";
+    }else body+="float3 result=evaluatePoint(uv);\n";
+    body+="uint3 rgb=uint3(floor(clamp(result,0.0f,1.0f)*255.0f+0.5f));output[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}\n";
+    // Same validated numeric program, backend-specific vector spelling and entry ABI.
+    // TextureResources uses storage buffer slot 0 => binding 12.
+    auto glsl=msl.substr(msl.find("uint hash3"))+"layout(std430,set=0,binding=12) buffer Result { uint outputPixels[]; };\nvoid main(){uint tid=gl_GlobalInvocationID.x;\n"+body;
+    auto replaceAll=[](std::string& s,const std::string& from,const std::string& to){
+        size_t at=0;while((at=s.find(from,at))!=std::string::npos){s.replace(at,from.size(),to);at+=to.size();}
+    };
+    replaceAll(glsl,"float2","vec2");replaceAll(glsl,"float3","vec3");replaceAll(glsl,"uint3","uvec3");replaceAll(glsl,"int2","ivec2");replaceAll(glsl,"output[tid]","outputPixels[tid]");
+    msl+="kernel void cs_main(device uint* output [[buffer(0)]],uint tid [[thread_position_in_grid]]){\n"+body;
+    return {std::move(msl),{},std::move(glsl)};
 }
 } // namespace aiverse::render::texture_graph::gpu
