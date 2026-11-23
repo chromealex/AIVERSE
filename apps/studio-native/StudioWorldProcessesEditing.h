@@ -19,7 +19,7 @@
 namespace aiverse::studio::worldprocess_edit {
 
 struct Handle {
-    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative,AreaCenterX,AreaCenterZ,GroupPivotX,GroupPivotZ};
+    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative,AreaCenterX,AreaCenterZ,GroupPivotX,GroupPivotZ,GroupCornerXZ};
     Mode mode=Mode::Reference;
     std::string owner,component,key,targetType;
     render::float3 position{};
@@ -85,6 +85,10 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
                            {},{centerX-float(width)/100.f,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaDepthNegative,owner.id,"EvolveArea","halfDepthCm",
                            {},{centerX,.35f,centerZ-float(depth)/100.f},0});
+            out.push_back({Handle::Mode::GroupCornerXZ,owner.id,
+                           "EvolveArea","cornerXZ",{},
+                           {centerX+float(width)/100.f,.35f,
+                            centerZ+float(depth)/100.f},0});
             out.push_back({Handle::Mode::AreaCenterX,owner.id,"EvolveArea","offsetXcm",
                            {},{centerX,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaCenterZ,owner.id,"EvolveArea","offsetZcm",
@@ -446,6 +450,11 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
     // The pointer gives the dragged edge in centimetres relative to map pos.
     // StudioSession atomically derives both half-extent and center offset,
     // holding the opposite edge fixed (Stage33 asymmetric resize).
+    if(handle.mode==Handle::Mode::GroupCornerXZ){
+        value=float(std::clamp(std::round((double(mouse.x)-owner.x)*100.),
+            -double(evolve::kAreaCoordinateCm),double(evolve::kAreaCoordinateCm)));
+        return true;
+    }
     if(handle.mode==Handle::Mode::AreaWidth||
        handle.mode==Handle::Mode::AreaWidthNegative){
         value=float(std::clamp(std::round((double(mouse.x)-owner.x)*100.),
