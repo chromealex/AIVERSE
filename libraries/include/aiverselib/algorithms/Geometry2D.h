@@ -5,6 +5,9 @@
 #include <span>
 #include <stdexcept>
 #include <compare>
+#include <array>
+#include <optional>
+#include <numeric>
 namespace aiverse::lib::algorithms {
 struct Point2i {int64_t x=0,y=0;auto operator<=>(const Point2i&)const=default;};
 inline constexpr int64_t geometryLimit=1000000000;
@@ -45,5 +48,50 @@ inline PolygonLocation pointInPolygon(std::span<const Point2i> poly,Point2i p){
             if((b.y>a.y&&side>0)||(b.y<a.y&&side<0))inside=!inside;
         }
     }return inside?PolygonLocation::Inside:PolygonLocation::Outside;
+}
+
+ // Simple polygon, no holes, no repeated closing vertex. Original vertex IDs.
+inline std::optional<std::vector<std::array<size_t,3>>> triangulatePolygon(std::span<const Point2i> p){
+    if(p.size()<3||p.size()>4096)return {};
+    for(auto v:p)validatePoint(v);
+    const size_t n=p.size();
+    for(size_t i=0;i<n;++i){
+        if(p[i]==p[(i+1)%n]||orientation(p[(i+n-1)%n],p[i],p[(i+1)%n])==0)return {};
+        for(size_t j=i+1;j<n;++j){
+            if(j==i+1||(i==0&&j==n-1))continue;
+            if(segmentsIntersect(p[i],p[(i+1)%n],p[j],p[(j+1)%n]))return {};
+        }
+    }
+    auto extreme=size_t(std::min_element(p.begin(),p.end())-p.begin());
+    int winding=orientation(p[(extreme+n-1)%n],p[extreme],p[(extreme+1)%n]);
+    std::vector<size_t> ring(n);std::iota(ring.begin(),ring.end(),0);
+    std::vector<std::array<size_t,3>> out;out.reserve(n-2);
+    while(ring.size()>3){
+        bool found=false;
+        for(size_t i=0;i<ring.size();++i){
+            auto a=ring[(i+ring.size()-1)%ring.size()],b=ring[i],c=ring[(i+1)%ring.size()];
+            if(orientation(p[a],p[b],p[c])!=winding)continue;
+            bool blocked=false;
+            for(auto v:ring){
+                if(v==a||v==b||v==c)continue;
+                if(orientation(p[a],p[b],p[v])*winding>=0&&orientation(p[b],p[c],p[v])*winding>=0&&orientation(p[c],p[a],p[v])*winding>=0){blocked=true;break;}
+            }
+            if(blocked)continue;
+            out.push_back({a,b,c});ring.erase(ring.begin()+i);found=true;break;
+        }
+        if(!found)return {};
+    }
+    if(orientation(p[ring[0]],p[ring[1]],p[ring[2]])!=winding)return {};
+    out.push_back({ring[0],ring[1],ring[2]});return out;
+}
+// Exact simplification of an open polyline: remove duplicates and redundant
+// collinear points only, preserving reversals and original geometric trace.
+inline std::vector<Point2i> simplifyCollinear(std::span<const Point2i> points){
+    std::vector<Point2i> out;
+    for(auto p:points){
+        validatePoint(p);if(!out.empty()&&out.back()==p)continue;
+        while(out.size()>1&&onSegment(out[out.size()-2],p,out.back()))out.pop_back();
+        out.push_back(p);
+    }return out;
 }
 }
