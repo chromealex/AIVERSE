@@ -191,10 +191,10 @@ public:
         return true;
     }
 
-    // Editor-only VISUAL preview: read a complete current CPU mesh batch
-    // without acknowledging gameplay dirty markers. Native owner must not
-    // publish it as physics-ready or NavMesh-ready.
-    std::vector<CavePreparedEdit> visualPreviewCandidates()const {
+    // Inspect a complete, seam-certified version-current CPU candidate batch
+    // WITHOUT acknowledging gameplay dirty markers. Caller may stage graphics,
+    // collision and nav owners, then publishReady at a real owner barrier.
+    std::vector<CavePreparedEdit> certifiedCandidates()const {
         if(!running_.empty()||prepared_.empty()||
            prepared_.size()!=dirty_.size())return {};
         std::vector<CavePreparedEdit> result;
@@ -214,6 +214,10 @@ public:
         return result;
     }
 
+    // Backward-compatible editor-only alias; does not ACK gameplay.
+    std::vector<CavePreparedEdit> visualPreviewCandidates()const {
+        return certifiedCandidates();
+    }
     size_t dirtyCount()const{return dirty_.size();}
     size_t preparedCount()const{return prepared_.size();}
     size_t inFlight()const{return running_.size();}
