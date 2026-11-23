@@ -7,6 +7,7 @@
 #include <deque>
 #include <map>
 #include <limits>
+#include <stdexcept>
 
 namespace aiverse::graph_gpu_profile {
 inline const char* backend(gfx::Backend b){
@@ -29,8 +30,9 @@ public:
         clear();if(epoch_==std::numeric_limits<uint64_t>::max())throw std::overflow_error("GPU profile epoch exhausted");
         ++epoch_;backend_=backend(info.backend);device_=info.name;project_=project;enabled_=true;
     }
-    void checkProject(const std::string& project){if(project!=project_&&enabled_)clear();}
+    void checkProject(const std::string& project){if(!project_.empty()&&project!=project_)clear();}
     void stop(){enabled_=false;pending_.clear();}
+    void expire(uint64_t frame){for(auto it=pending_.begin();it!=pending_.end();){if(frame>it->second.frame&&frame-it->second.frame>240){it=pending_.erase(it);++invalid_;}else ++it;}}
     template<class Device> uint64_t begin(Device& dev,const char* scope,uint64_t view,bool adaptive){
         if(!enabled_)return 0;
         if(pending_.size()>=maxPending||serial_>=mask){++rejected_;return 0;}
@@ -55,7 +57,7 @@ public:
     void cancel(uint64_t tag){pending_.erase(tag);}
     Json report() const{
         Json r=Json::object();r.set("available",Json::fromBool(!samples_.empty()));r.set("enabled",Json::fromBool(enabled_));
-        r.set("backend",Json::string(backend_));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
+        r.set("backend",Json::string(backend_));r.set("scopeBackendImplemented",Json::fromBool(backend_=="Metal"||backend_=="GL33"));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
         r.set("accepted",Json::string(std::to_string(accepted_)));r.set("rejected",Json::string(std::to_string(rejected_)));
         r.set("invalid",Json::string(std::to_string(invalid_)));r.set("pending",Json::number(int64_t(pending_.size())));
         Json rows=Json::array();for(const auto& s:samples_)rows.push(s);r.set("samples",rows);
@@ -73,6 +75,7 @@ public:
     ~Scope(){if(dev_){dev_->endGpuScope();capture_->cancel(tag_);}}
     bool active()const{return dev_!=nullptr;}
     void finish(){if(dev_){dev_->endGpuScope();dev_=nullptr;}}
+    void abort(){if(dev_){dev_->endGpuScope();capture_->cancel(tag_);dev_=nullptr;}}
     Scope(const Scope&)=delete;Scope& operator=(const Scope&)=delete;
 };
 } // namespace aiverse::graph_gpu_profile
