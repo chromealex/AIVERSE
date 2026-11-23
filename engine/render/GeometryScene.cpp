@@ -304,6 +304,30 @@ bool GeometryScene::recoverFailedStagesAfterGpuIdle(gfx::Device& dev) {
     }
     return true;
 }
+bool GeometryScene::deferredShutdownEligible()const noexcept {
+    // Stage38 supports only ordinary GeometryScene Model GPU ownership.
+    // STRATA retains auxiliary index/culling/compact buffers which still
+    // demand a global idle barrier during retireResident().
+    return !strataStagingEnabled_ && !strataPortableRenderingEnabled_ &&
+           !strataGpuMetadataEnabled_ && !strataGpuCullingEnabled_ &&
+           failedStages_.empty() && !strataGpuMetadata_ &&
+           !strataGpuCulling_ && strataPortableSources_.empty() &&
+           strataCompactBuffers_.empty() && strataGlobalIndexLeases_.empty();
+}
+bool GeometryScene::beginDeferredShutdown(gfx::Device& dev) {
+    if(deferredShutdownStarted_)return true;
+    if(!deferredShutdownEligible())return false;
+    // No render submissions for this owner are allowed after this point.
+    // Model handles are moved into a fence-backed retirement queue.
+    retireResident(dev);
+    deferredShutdownStarted_=true;
+    return true;
+}
+bool GeometryScene::pollDeferredShutdown(gfx::Device& dev) {
+    if(!deferredShutdownStarted_)return false;
+    if(!retirement_.collectWithoutIdle(dev))return false;
+    return retirement_.pending()==0 && failedStages_.empty();
+}
 void GeometryScene::shutdown(gfx::Device& dev) {
     retireResident(dev);
     if(!recoverFailedStagesAfterGpuIdle(dev))
