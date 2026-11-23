@@ -190,3 +190,11 @@ Report exact test results, failures, branch/commit and limitations.
 Every completed stage requires its own handoff document with changed
 files, API, real validation and precise next action. Keep PR #116
 Draft and W1 partial until actual acceptance succeeds.
+
+## W1.20 — change tracking, transactions and diagnostics
+
+Use World::trackComponentChanges<T>(), notifyComponentChange<T>(entity), peekComponentChanges<T>() and drainComponentChanges<T>() at quiescent barriers. Mutable World access is conservative, not proof of value change. Raw Pool access and escaped references need explicit notifications. ComponentChangeBatch is bounded at 65536 handles; overflow requires full reconciliation. GuardedWorld adaptive jobs publish lane batches; other schedulers are not automatically covered.
+
+RegionEntityLedger::Transaction is an exclusive sparse undo transaction: use its mutation methods and commit only after validation. No observers, snapshots or archive while active. COW detachment can still copy the resource. RegionDirtyQueue is persistent and coalesced, not a WAL. Restore hooks invalidate transient actor journals and seat cache.
+
+Read engine/world/RegionOwnershipDiagnostics.h via World::resourceConst<RegionOwnershipDiagnostics>() for last successful reconciliation. Experimental stream manifest flags regionDirtyOnlyLoot, regionDirtyOnlySolo and regionDirtyOnlyVehicles default off; configuration and native acceptance are unverified. Vehicle mode still scans canonical groups; do not claim scan-free transport. strictRegionJournalAudit is a development coverage check, not proof of all writers. Keep full scan default. See stage20 handoffs for limitations. No W1.20 native tests have been run.
