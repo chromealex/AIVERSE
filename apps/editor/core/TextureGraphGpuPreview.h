@@ -1,6 +1,7 @@
 // Native editor owner: one queued preview/bake, bounded readback and idle plan cache.
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
+#include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "MaterialOps.h"
 #include <chrono>
 #include <memory>
@@ -137,6 +138,17 @@ public:
         if(project_.empty()||p.getStr("request")!=std::to_string(serial_)||published_||
             (!active()&&state_!="ready"))throw std::runtime_error("no matching cancellable GPU texture request");
         discard("cancelled","cancelled by caller");return status();
+    }
+    // Native host integration point; only the owning appearance transaction
+    // may commit the returned candidate. No project-file mutation here.
+    render::Material stageCompletedMaterial(const std::string& project,const std::string& request,
+            std::string_view generation,render::ModelImageUploadTransaction& transaction,
+            render::Model& model,const render::Material& base) const {
+        if(!setBake_||published_||state_!="ready"||active()||inFlight_||setIncomplete()||
+           !program_||project.empty()||project_!=project||request!=std::to_string(serial_))
+            throw std::runtime_error("no matching completed texture set for material staging");
+        auto plan=render::texture_graph::prepareMaterialImages(*program_,setImages_,generation);
+        return render::texture_graph::stageMaterialImages(transaction,model,base,std::move(plan));
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);

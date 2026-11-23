@@ -5,6 +5,7 @@
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
 #include "engine/render/graph/TextureGraphGpu.h"
+#include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
@@ -20,6 +21,21 @@ static void require(bool yes, const char* reason) {
 }
 
 int main() {
+    {
+        using namespace render::texture_graph;
+        const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","properties":{"value":[1,0,0]}},{"id":"s","op":"constant","properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
+        std::vector<size_t> targets;for(const auto& pair:p.outputs)targets.push_back(pair.second);
+        auto images=evaluateMany(p,targets);
+        auto plan=prepareMaterialImages(p,images,"fixture_1");
+        require(plan.entries.size()==2,"only bindable graph outputs should stage");
+        require(plan.entries[0].slot==&render::Material::occlusionTex&&plan.entries[1].slot==&render::Material::baseTex,"ordered material slots incorrect");
+        require(plan.entries[1].image.name=="#texture-graph/fixture_1/color","generation identity missing");
+        bool rejected=false;try{(void)prepareMaterialImages(p,images,"../bad");}catch(const std::invalid_argument&){rejected=true;}
+        require(rejected,"invalid generation accepted");
+        images[0].rgba.pop_back();rejected=false;
+        try{(void)prepareMaterialImages(p,images,"fixture_2");}catch(const std::invalid_argument&){rejected=true;}
+        require(rejected,"incomplete texture pixels accepted");
+    }
     const auto mark = std::chrono::steady_clock::now().time_since_epoch().count();
     const fs::path root = fs::temp_directory_path() / ("aiverse-spectrafx-ops-" + std::to_string(mark));
     struct Cleanup { fs::path path; ~Cleanup() { std::error_code e; fs::remove_all(path, e); } } cleanup{root};

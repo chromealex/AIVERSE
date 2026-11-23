@@ -91,7 +91,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 31A in progress: native staged material binding of validated graph outputs through ModelImageUploadTransaction; zero-copy GPU path excluded pending owner integration.",
+      "note": "Stage 31A native staged material candidate and exact completed set bridge implemented; host integration, GPU-to-GPU and verification NOT RUN.",
       "evidence": []
     },
     "architecture": {
