@@ -212,6 +212,11 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("height",Json::number(double(req.dimensions.height),3));
         saved.set("depth",Json::number(double(req.dimensions.depth),3));
         if(req.composeFeatures){
+            saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
+            saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
+            saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+        }
+        if(req.composeFeatures){
             Json features=Json::array();
             for(const auto& feature:req.functionalRecipe.features){
                 Json spec=Json::object();
@@ -225,6 +230,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 spec.set("position",Json::number(double(feature.position),3));
                 spec.set("positionZ",Json::number(double(feature.positionZ),3));
                 spec.set("spacing",Json::number(double(feature.spacing),3));
+                spec.set("floor",Json::number(int64_t(feature.floor)));
+                spec.set("sill",Json::number(double(feature.sill),3));
                 features.push(std::move(spec));
             }
             saved.set("features",std::move(features));
