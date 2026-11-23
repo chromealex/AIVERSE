@@ -412,12 +412,11 @@ inline bool previewGroupScale2D(
            !evolve::scale_math::transform(cz,area.getInt("halfDepthCm",0),
                 pivotZcm,numeratorZ,denominatorZ,individual,tz))return false;
         const auto hx=tx.half,hz=tz.half,nx=tx.center,nz=tz.center;
-        if(hx<50||hx>evolve::kAreaMaxHalfExtentCm||
-           hz<50||hz>evolve::kAreaMaxHalfExtentCm||
-           nx-hx < -evolve::kAreaCoordinateCm||
-           nx+hx > evolve::kAreaCoordinateCm||
-           nz-hz < -evolve::kAreaCoordinateCm||
-           nz+hz > evolve::kAreaCoordinateCm)return false;
+        if(!evolve::scale_math::withinBounds(nx,hx,
+               evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm)||
+           !evolve::scale_math::withinBounds(nz,hz,
+               evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm))
+            return false;
         output.push_back({double(nx)/100.,double(nz)/100.,
                           double(hx)/100.,double(hz)/100.});
     }
