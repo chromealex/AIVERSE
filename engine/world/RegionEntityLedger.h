@@ -40,9 +40,19 @@ public:
     bool spawn(RegionEntityId id,Cell owner) {
         if(!id || records_.contains(id) || records_.size()>=kMaxEntities ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
-        records_.emplace(id,RegionEntityRecord{owner,++lastRevision_,1});
-        liveIds_.insert(id);
-        revisionIndex_.emplace(lastRevision_,id);
+        const auto next=lastRevision_+1;
+        // New IDs allocate three map/set entries. On allocation failure,
+        // leave no partially published ledger record or derived index.
+        const auto entry=records_.emplace(id,RegionEntityRecord{owner,next,1}).first;
+        try {
+            liveIds_.insert(id);
+            revisionIndex_.emplace(next,id);
+        }catch(...) {
+            liveIds_.erase(id);
+            records_.erase(entry);
+            throw;
+        }
+        lastRevision_=next;
         return true;
     }
     // Two-phase validation prevents half-moving an occupied car and its passengers.
@@ -60,10 +70,13 @@ public:
         if(destination==expected)return true;
         for(auto id:sorted) {
             auto& entry=records_.at(id);
-            revisionIndex_.erase(entry.revision);
+            // Re-key the existing node in place: no new allocation during
+            // a validated multi-actor ownership transfer.
+            auto node=revisionIndex_.extract(entry.revision);
             entry.owner=destination;
             entry.revision=++lastRevision_;
-            revisionIndex_.emplace(entry.revision,id);
+            node.key()=entry.revision;
+            revisionIndex_.insert(std::move(node));
         }
         return true;
     }
@@ -108,11 +121,12 @@ public:
         const auto it=records_.find(id);
         if(it==records_.end() || !it->second.live || it->second.owner!=expected ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
-        revisionIndex_.erase(it->second.revision);
+        auto node=revisionIndex_.extract(it->second.revision);
         it->second.live=0;
         it->second.revision=++lastRevision_;
         liveIds_.erase(id);
-        revisionIndex_.emplace(it->second.revision,id);
+        node.key()=it->second.revision;
+        revisionIndex_.insert(std::move(node));
         return true;
     }
     const RegionEntityRecord* find(RegionEntityId id) const {
