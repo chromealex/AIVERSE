@@ -67,6 +67,11 @@ int main(int argc,char** argv){
         CHECK(savedRecipe["features"].size()==4);
         CHECK(savedRecipe["features"][1].getStr("kind")=="small-gate");
         CHECK(savedRecipe["features"][1]["count"].integer()==2);
+        CHECK(std::abs(savedRecipe["features"][0]["position"].toDouble()-7.)<0.01);
+        CHECK(std::abs(savedRecipe["features"][1]["position"].toDouble()-12.)<0.01);
+        CHECK(std::abs(savedRecipe["features"][1]["spacing"].toDouble()-1.)<0.01);
+        CHECK(std::abs(savedRecipe["features"][3]["position"].toDouble()-13.)<0.01);
+        CHECK(std::abs(savedRecipe["features"][3]["positionZ"].toDouble()-10.)<0.01);
         custom.set("style",Json::string("modern"));
         custom.set("setting",Json::string("modern"));
         auto modernPreview=studioBuildingInspect(engine,custom);
