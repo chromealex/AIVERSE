@@ -166,6 +166,9 @@ public:
     bool transferVehicleRegion(Simulation& sim,Entity vehicle,
                                world::Cell from,world::Cell to,
                                std::string* error=nullptr);
+    // Run at a structural ECS tick boundary after actor and vehicle systems.
+    // Opt-in only; tracks live spawn/retire/movement in the region ledger.
+    void synchronizeRegionOwnership(Simulation& sim);
 
     RoyaleView royaleView(Simulation&,uint8_t slot) const;
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
