@@ -12,6 +12,7 @@
 #include "engine/render/Model.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
+#include "engine/render/graph/TextureGraphTemplates.h"
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -410,6 +411,7 @@ void registerMaterialOps(Workspace& ws) {
     };
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"}}})";
     add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});
+    add("texture_graph_templates","Validated native PBR starter graph documents.",R"({"type":"object"})",[](const Json&){Json r=okJson();r.set("templates",render::texture_graph::templates());return r;});
     add("texture_graph_list","List saved texture graph documents.",R"({"type":"object"})",[graphPath](const Json&){
         auto dir=graphPath("placeholder").parent_path();std::vector<std::string> names;
         if(fs::exists(dir))for(const auto& e:fs::directory_iterator(dir))if(!e.is_symlink()&&e.is_regular_file()&&e.path().extension()==".json"&&render::texture_graph::safeId(e.path().stem().string()))names.push_back(e.path().stem().string());
@@ -446,6 +448,32 @@ void registerMaterialOps(Workspace& ws) {
         publish(root/rel,png,false);
         w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
         Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(img.width)));return r;
+    });
+
+    add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w](const Json& p){
+        needProject(*w);const auto program=render::texture_graph::compile(p["graph"]);
+        const auto name=p.getStr("textureName");if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
+        const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures";
+        if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
+        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
+        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
+        struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+        std::vector<size_t> targets;for(const auto& [output,index]:program.outputs)targets.push_back(index);
+        auto images=render::texture_graph::evaluateMany(program,targets);
+        Json files=Json::array();size_t i=0;
+        for(const auto& [output,index]:program.outputs){
+            (void)index;auto& img=images[i++];std::string png;
+            if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,img.width,img.height,4,img.rgba.data(),img.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
+            std::ofstream stream(stage/(output+".png"),std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG stage write failed");
+            Json row=Json::object();row.set("output",Json::string(output));row.set("path",Json::string("content/textures/"+name+"/"+output+".png"));
+            row.set("sRGB",Json::fromBool(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Color));files.push(row);
+        }
+        // Cooperating publishers share the exclusive stage directory.
+        // No promise against an external process creating an empty destination.
+        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
+        fs::rename(stage,dest);
+        w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
+        Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));return r;
     });
 
     add("texture_generate",
