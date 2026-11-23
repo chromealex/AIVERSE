@@ -26,3 +26,13 @@
   min-height:30px;
   align-self:center;
 }
+
+/* Real on-demand GPU readback; thumbnail is captured once, never streamed. */
+.spectra-native__snapshot {display:flex;flex-direction:column;gap:var(--au-space-2);
+  padding:var(--au-space-3);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);
+  background:var(--au-panel);max-width:100%;min-width:0;}
+.spectra-native__snapshot img {display:block;max-width:min(100%,768px);
+  max-height:430px;width:auto;height:auto;object-fit:contain;border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-sm);}
+.spectra-native__snapshot a {font-size:var(--au-font-sm);color:var(--au-accent);}
+.spectra-native__snapshot small {font-size:var(--au-font-xs);color:var(--au-text-muted);}
