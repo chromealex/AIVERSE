@@ -108,6 +108,8 @@ public:
     bool step(float dt); // between beginFrame/endFrame, before scene render pass
     void draw(const fx::FxFog& fog = {}); // during still-open render pass
     void clear();
+    // CPU-only deterministic reset. GPU/shared-world paths reject explicitly.
+    bool resetDeterministicSeed(uint32_t seed);
 
     ComputeBackend backend() const { return backend_; }
     bool gpuActive() const { return initialized_ && backend_ == ComputeBackend::Metal && gpu_.gpuActive(); }
