@@ -5,6 +5,22 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — SpectraFX Stage 7: typed Curve and Gradient authoring (QA pending)
+
+Mandatory handoff: `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
+`apps/studio-web/src/panels/SpectraCurveEditor.tsx` adds bounded
+visual key editing for the existing Graph v2 `Curve` and `Gradient`
+value nodes. `spectraCurveModel.ts` validates 1..32 unique normalized
+keys, finite curve numbers, safe six/eight-digit RGBA hex and immutable
+changes. Alpha, add/remove key, time/parameter edits and static chart/
+color-strip preview are authoring only. Existing `fx_graph_validate`
+and `fx_graph_set` remain authoritative for Publish. Never describe the
+static chart as GPU particles or use browser code to own RHI handles.
+`npm run test:graphs` now includes `spectraCurveModel.test.mjs`.
+**Current Stage 7 source has NOT passed confirmed CI or GUI hardware QA.**
+This feature is on stacked draft PR #115, parent PR #113 remains a draft.
+
+
 ## 2026-11-23 — SpectraFX HTML5 graph canvas (Stage 6; QA pending)
 
 Read `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`.
