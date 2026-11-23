@@ -131,13 +131,15 @@ inline void io(Archive& a,RegionColdStore& store) {
 }
 
 template<class SimulationT>
-void registerRegionColdState(SimulationT& sim) {
+void registerRegionColdState(SimulationT& sim,
+                             RegionPositionReader position=regionTransformPosition) {
+    if(!position)throw std::invalid_argument("region cold-state position reader is required");
     sim.template registerPersistentResource<RegionColdStore>(
         "aiverse.world.region_cold_store",RegionColdStore::kSchema);
     sim.template registerPersistentComponent<RegionDormant>(
         "aiverse.world.region_dormant",1);
     sim.addPersistentLoadValidator("aiverse.world.region_cold_consistency",
-        [](const World& world,std::string& error)->bool {
+        [position=std::move(position)](const World& world,std::string& error)->bool {
             const auto* cold=world.resourceConst<RegionColdStore>();
             const auto* ledger=world.resourceConst<RegionEntityLedger>();
             bool valid=true;
@@ -150,7 +152,7 @@ void registerRegionColdState(SimulationT& sim) {
                     if(!tag || !seen.insert(tag->id).second)valid=false;
                     const auto* stored=cold && tag?cold->find(tag->id):nullptr;
                     const auto* record=ledger && tag?ledger->find(tag->id):nullptr;
-                    if(!world.alive(e) || !world.has<Transform>(e) ||
+                    if(!world.alive(e) || !position(world,e).has_value() ||
                        dormant.marker!=1 || !tag || !tag->id ||
                        !stored || !record || !record->live ||
                        stored->owner!=record->owner ||
@@ -188,14 +190,15 @@ class RegionDormancyController {
         std::vector<std::pair<const Adapter*,std::any>> components;
     };
     std::map<std::string,Adapter> adapters_;
+    RegionPositionReader position_=regionTransformPosition;
 
     static bool reject(std::string* error,const char* message) {
         if(error)*error=message;
         return false;
     }
-    static bool identity(const World& world,const RegionEntityLedger& ledger,
-                         Entity entity,Cell expected,RegionEntityId& id) {
-        if(!world.alive(entity) || !world.has<Transform>(entity))return false;
+    bool identity(const World& world,const RegionEntityLedger& ledger,
+                  Entity entity,Cell expected,RegionEntityId& id)const {
+        if(!world.alive(entity) || !position_(world,entity).has_value())return false;
         const auto* tag=world.tryGetConst<RegionStableIdentity>(entity);
         if(!tag || !tag->id)return false;
         const auto* record=ledger.find(tag->id);
@@ -205,6 +208,12 @@ class RegionDormancyController {
     }
 
 public:
+    void setPositionReader(RegionPositionReader position) {
+        if(!position)throw std::invalid_argument("region position reader is required");
+        position_=std::move(position);
+    }
+    const RegionPositionReader& positionReader()const{return position_;}
+
     template<class T>
     bool registerComponent(std::string name,uint32_t version=1) {
         static_assert(std::is_default_constructible_v<T> && std::is_copy_constructible_v<T>,
@@ -380,7 +389,7 @@ public:
                          RegionColdStore& store,Cell region,bool active,
                          std::string* error=nullptr)const {
         std::map<RegionEntityId,Entity> live;
-        if(!RegionEcsBridge::rebuild(world,ledger,live,error))return false;
+        if(!RegionEcsBridge::rebuild(world,ledger,live,position_,error))return false;
         const auto ids=ledger.activeIn(region);
         if(ids.empty())return true;
         std::vector<Entity> entities;
