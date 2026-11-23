@@ -167,3 +167,7 @@ The HTML5 Studio shell now mounts `apps/studio-web/src/components/EvolveGroupNum
 ## Stage 47: two-axis group corner gizmo
 
 For multi-selected EvolveArea regions, native Studio adds a +X/+Z corner drag handle (`GroupCornerXZ`) and stores X/Z drag coordinates separately. It renders transient candidate group rectangles and submits `studio.worldProcessAreaBatchResize` with `axis:"both"`, independent X/Z scale ratios and the selected shared/custom/individual pivot mode on release. Ctrl/Command snaps both coordinates to a 1m grid. Stage46 numeric input does not yet drive Scene preview while typing, and Shift individual-pivot corner preview needs parity work. Source-only; no compilation/runtime QA. Handoff: `docs/handoffs/world-processes-stage47-two-axis-corner-2026-11-23.md`.
+
+## Stage 48: numeric-to-Scene preview bridge
+
+Studio HTML5 numeric group scale panel now calls read-only host RPC `studio.worldProcessAreaPreview` while X/Z percentage or pivot inputs change, clearing it on invalid input/close. Native Scene renders transient cyan group rectangles using `previewGroupScale2D`; individual pivot mode is now supported by that helper and the Shift corner preview. Commit remains the Stage42 atomic batch resize RPC. Native draggable pivot is not yet synchronized back into HTML5 fields, and request ordering/compile/runtime QA remain pending. Handoff: `docs/handoffs/world-processes-stage48-numeric-preview-2026-11-23.md`.
