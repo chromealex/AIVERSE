@@ -1,3 +1,9 @@
+## Additional Stage 8 fixes (2026-11-23)
+
+- `c54a39ab508fe695d3d02fa659be772dc3edaa91`: native Pause now also cancels outstanding bounded seek replay/single-step work, so Pause cannot advance visual time after returning.
+- `bad66a01e8db7fa0f38aa633369af8bd1ebc8bb5`: real Metal fixture now verifies invalid Graph v2 load leaves the existing preview ready with diagnostic, and explicit Pause cancels a queued seek. Native fixture has not yet been observed executing on this new SHA.
+- After these commits, **re-run the exact latest HEAD acceptance**; all prior source QA statuses are historical only. No evidence of completed latest native macOS/Windows/Metal tests yet.
+
 # SpectraFX — Stage 8: native Studio Scene particle preview (2026-11-23)
 
 ## Provenance
