@@ -2,6 +2,7 @@
 // Shared CPU GLB serializer for the procedural building asset pipeline.
 // No rendering backend, process invocation or Studio dependencies.
 #include <aiverselib/systems/BuildingStructure.h>
+#include "engine/buildings/BuildingPngEncoder.h"
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -58,6 +59,38 @@ struct Glb{
         cachedTextures.emplace(guid,id);
         return id;
     }
+    int generatedTexture(const StyleMaterial& source,int channel){
+        if(source.surfacePattern.empty())return -1;
+        const std::string key="surface:"+source.id+":"+
+            source.surfacePattern+":"+
+            std::to_string(source.surfaceSeed)+":"+
+            std::to_string(channel);
+        if(auto it=cachedTextures.find(key);it!=cachedTextures.end())
+            return it->second;
+        const auto generated=generateBuildingSurface(
+            source.surfacePattern,source.id,source.surfaceSeed,
+            static_cast<BuildingSurfaceChannel>(channel));
+        if(generated.rgba.empty())
+            throw std::runtime_error("Cannot generate authored PBR surface");
+        const auto bytes=aiverse::building::encodeBuildingPngRgba(
+            generated.rgba,generated.width,generated.height);
+        while(bin.size()%4)bin.push_back(0);
+        const size_t off=bin.size();
+        bin.insert(bin.end(),bytes.begin(),bytes.end());
+        sep(views);
+        views+="{\\"buffer\\":0,\\"byteOffset\\":"+
+            std::to_string(off)+",\\"byteLength\\":"+
+            std::to_string(bytes.size())+"}";
+        const int viewId=nView++;
+        const int id=int(cachedTextures.size());
+        sep(images);
+        images+="{\\"bufferView\\":"+std::to_string(viewId)+
+                ",\\"mimeType\\":\\"image/png\\"}";
+        sep(textures);
+        textures+="{\\"source\\":"+std::to_string(id)+"}";
+        cachedTextures.emplace(key,id);
+        return id;
+    }
     int material(const StyleMaterial& m){
         aiverse::Json root=aiverse::Json::object();
         root.set("name",aiverse::Json::string(m.id));
@@ -91,9 +124,12 @@ struct Glb{
             }
             return o;
         };
-        const int base=texture(m.textures.baseColor);
-        const int mr=texture(m.textures.metallicRoughness);
-        const int normal=texture(m.textures.normal);
+        const int base=m.textures.baseColor.empty()?
+            generatedTexture(m,0):texture(m.textures.baseColor);
+        const int mr=m.textures.metallicRoughness.empty()?
+            generatedTexture(m,1):texture(m.textures.metallicRoughness);
+        const int normal=m.textures.normal.empty()?
+            generatedTexture(m,2):texture(m.textures.normal);
         const int ao=texture(m.textures.occlusion);
         const int emissive=texture(m.textures.emissive);
         if(base>=0)pbr.set("baseColorTexture",texInfo(base));
