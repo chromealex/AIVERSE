@@ -2,6 +2,7 @@
 #include "RegionWorldSessionLock.h"
 #include "RegionCheckpointRetention.h"
 #include "RegionCheckpointBackup.h"
+#include "RegionBackupCatalog.h"
 #include "RegionCheckpointArchive.h"
 #include "RegionWalFinality.h"
 namespace aiverse::world {
@@ -94,6 +95,10 @@ public:
         if(result.status!=RegionCheckpointLoadStatus::Ok)return PersistentWorldResult::NeedsRecovery;
         PersistentWorldSession fork;
         return fork.create(destination,newWorld,recovered);
+    }
+    RegionBackupCatalogResult backups(uint64_t maxBytes,bool validate=false)const {
+        if(!ready()||!lock_.held())return {};
+        return RegionBackupCatalog::list(dir_,manifest_,maxBytes,validate);
     }
     RegionRetentionPlan retentionPlan(RegionRetentionPolicy policy)const {
         if(!ready()||!lock_.held())return {};
