@@ -1,6 +1,7 @@
 // SpectraFX editor/MCP graph authoring end-to-end regression.
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
+#include "engine/render/graph/GraphTelemetry.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
@@ -99,6 +100,24 @@ int main() {
     require(sampled["frames"][size_t(5)].getInt("particles")>0,"expected native particles");
     probe.set("steps",Json::number(int64_t(61)));
     require(call("graph_runtime_probe",probe).has("error"),"unbounded probe accepted");
+
+    graph_telemetry::History history;
+    const graph_telemetry::Identity track{"world-1","42","revision-1","spectrafx"};
+    for(uint64_t i=1;i<=121;++i)require(history.publish(track,i,Json::object()),"history publish failed");
+    require(history.read(track).size()==120&&history.read(track)[size_t(0)].getStr("sequence")=="2","history bound failed");
+    require(!history.publish(track,121,Json::object()),"duplicate sequence accepted");
+    require(history.read({"world-2","42","revision-1","spectrafx"}).size()==0,"world identity crossed");
+    history.clearWorld("world-1");require(history.read(track).size()==0,"world history not cleared");
+    Json debug=Json::object();debug.set("action",Json::string("start"));debug.set("domain",Json::string("spectrafx"));debug.set("graph",graph);
+    const auto begun=call("graph_debug_session",debug);
+    require(begun.getBool("active")&&!begun.getStr("session").empty(),"FX isolated session not started");
+    Json step=Json::object();step.set("action",Json::string("step"));step.set("session",begun["session"]);
+    const auto stepped=call("graph_debug_session",step);
+    require(stepped.getInt("step")==1&&stepped["frames"].size()==1,"debug step failed");
+    step.set("action",Json::string("continue"));step.set("steps",Json::number(int64_t(3)));
+    require(call("graph_debug_session",step).getInt("step")==4,"debug continuation did not retain state");
+    step.set("action",Json::string("stop"));require(!call("graph_debug_session",step).getBool("active"),"session stop failed");
+    step.set("action",Json::string("step"));require(call("graph_debug_session",step).has("error"),"stopped session accepted");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
