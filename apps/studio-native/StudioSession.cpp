@@ -4,6 +4,7 @@
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
+#include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -211,7 +212,9 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
     item("Light","Point Light","Rendering","Adds a light entity at this position","light",true,"");
     item("NereidWater","NEREID Water","World","Rivers, lakes and sea are authored in World › NEREID Water","water",false,"Create water from the NEREID Water panel");
     item("Unit","Unit","Gameplay","Type, owner and stats come from rules.json","native",false,"Defined by the entity type");
-    for(const auto& name:{"EchoZone","FractureMember","AetherGasCell"}) {
+    for(const auto& name:{"EchoZone","FractureMember","AetherGasCell",
+                          "EchoPortal","EchoEmitter","EchoReceiver",
+                          "FractureBond","AetherDuct","AetherFlux"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
              "Authoring data; native game setup must install the ECS component",
@@ -2510,12 +2513,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     candidate=promotedAuthored(index);
                     auto components=candidate.extra["components"];components.set("StaticModel",Json::object());
                     candidate.extra.set("components",components);
-                } else if(lib::worldprocess::authoring::supports(componentId)) {
+                } else if(lib::worldprocess::authoring::supports(componentId) ||
+                          lib::worldprocess::linked::supports(componentId)) {
                     if(source.extra["components"].has(componentId))
                         throw std::runtime_error("World-process component is already present");
                     candidate=promotedAuthored(index);
                     auto components=candidate.extra["components"];
-                    components.set(componentId,lib::worldprocess::authoring::defaults(componentId));
+                    components.set(componentId,
+                        lib::worldprocess::authoring::supports(componentId) ?
+                        lib::worldprocess::authoring::defaults(componentId) :
+                        lib::worldprocess::linked::defaults(componentId));
                     candidate.extra.set("components",components);
                 } else throw std::runtime_error("This component cannot be added here");
             } else {
