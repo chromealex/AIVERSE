@@ -42,6 +42,12 @@ int aiverseMain(int,char**) { @autoreleasepool {
         const auto mapFrame=[&]{mapScene.frame(192,192,map,false,"","",empty,0);};
         mapFrame();
         const auto independentMapCamera=mapScene.cameraState();
+        const auto fxCameraBefore=scene.cameraState();
+        scene.orbit(24,-12);
+        require(scene.cameraState().yaw!=fxCameraBefore.yaw,
+                "FX camera orbit was not applied");
+        require(mapScene.cameraState().yaw==independentMapCamera.yaw,
+                "FX orbit changed the independent map camera");
         Json graph=Json::parse(R"JSON({
           "version":2,"nodes":[
              {"id":"spawn","type":"Spawn","properties":{"burst":20}},
@@ -84,22 +90,32 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(state.getInt("tick")==25 && !state.getBool("playing"),
                 "bounded seek reached target and paused");
         bool captured=false,valid=false;
+        std::vector<uint8_t> fxPixels;
         scene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels){
+            fxPixels=std::move(pixels);
+            valid=(w==192&&h==192&&fxPixels.size()==size_t(w*h*4));
             captured=true;
-            valid=(w==192&&h==192&&pixels.size()==size_t(w*h*4));
         });
         for(int i=0;i<10&&!captured;++i){frame();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
         require(captured&&valid,"actual native FX GPU frame capture failed");
         bool capturedMap=false,validMap=false;
+        std::vector<uint8_t> mapPixels;
         mapScene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels) {
+            mapPixels=std::move(pixels);
+            validMap=w==192&&h==192&&mapPixels.size()==size_t(w*h*4);
             capturedMap=true;
-            validMap=w==192&&h==192&&pixels.size()==size_t(w*h*4);
         });
         for(int i=0;i<10&&!capturedMap;++i){
             mapFrame();std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
         require(capturedMap&&validMap,
                 "independent map GPU capture failed while FX was loaded");
+        size_t pixelDifferences=0;
+        for(size_t i=0;i+3<fxPixels.size();i+=4)
+            if(fxPixels[i]!=mapPixels[i]||fxPixels[i+1]!=mapPixels[i+1]||
+               fxPixels[i+2]!=mapPixels[i+2])++pixelDifferences;
+        require(pixelDifferences>1000,
+                "Scene and FX rendered identical GPU frames despite separate outputs");
         Json longSeek=action("seek");longSeek.set("tick",Json::number(int64_t(100)));
         scene.spectraPreviewCommand(longSeek,"");
         scene.spectraPreviewCommand(action("pause"),"");
