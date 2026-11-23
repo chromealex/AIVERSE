@@ -1,3 +1,19 @@
+## 2026-11-23 — Graph v2 Data Interfaces, Stage 4 (PR #113, QA pending)
+
+New typed `dataInterfaces` bindings + runtime-only DataInterface node map
+immutable host-provided scalar samples into existing VM `param0..param7`
+at burst time. Editor model has shared node metadata and atomic binding edit
+helpers; HTML5 Studio GUI integration remains outstanding. Source changes
+and tests are on `feature/spectrafx-significance-data-20261123`, not main.
+**No native PASS recorded for Stage 4 yet.** CI is queued. Must run focused
+Linux/macOS compiler+runtime CTests, Metal parity and full acceptance before
+marking done. Canonical handoff:
+`docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
+Previous stages:
+`docs/agent-handoffs/spectrafx-significance-stage1-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-significance-stage2-routes-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
+
 ## 2026-11-20 — Inspector revalidated with lighting main
 
 Combined implementation `4acfb482742d2bb1d615c3eaae60308af09ffa1b` preserves incoming main `d84e958b1`.
