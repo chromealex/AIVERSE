@@ -1883,3 +1883,7 @@ GraphRuntime uses two deterministic 64-bit hash lanes for graph/options identity
 ## Stage 71 — timeline file envelope
 
 SPFT V1 wraps SPFR payload with tick and burst count, CRC covers header and payload. StudioSpectraPreview exposes settled-paused exportTimelineCheckpoint/importTimelineCheckpoint byte APIs; import requires render-owner frame. Compact graph fingerprint already present on branch. Browser/MCP transfer and import queue remain. No tests run.
+
+## Stage 72 — SPFT file transfer
+
+Studio checkpointFileBegin/Append/Import and Export/Read transfer ordered 32 KiB hex chunks with bounded size; import queues render-owner restore. HTML5 file picker/download and MCP fx_checkpoint_file registered. Export requires fresh paused checkpoint. No tests run. Transfer ownership IDs, command exclusion and native dispatch/catalog audit remain.
