@@ -67,8 +67,10 @@ export function validateTopology(view: GraphView, policy: GraphPolicy): Diagnost
 /** Bounded immutable draft history; native commit/history stays with the adapter. */
 export class DraftHistory<T> {
  private past:T[]=[]; private future:T[]=[];
- constructor(private value:T,private readonly limit=64) {
+ private value:T; private readonly limit:number;
+ constructor(value:T,limit=64) {
   if(!Number.isSafeInteger(limit)||limit<1)throw new Error('Invalid history limit');
+  this.value=value;this.limit=limit;
  }
  current():T{return this.value;}
  canUndo():boolean{return this.past.length>0;}
