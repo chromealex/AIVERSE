@@ -183,6 +183,37 @@ bool validWorldProcessDocumentRef(const editor::MapDoc& map,std::string_view com
            entity.extra["components"].has(std::string(target)))++found;
     return found==1;
 }
+// A Scene/Hierarchy deletion cannot leave a survivor with an orphaned
+// persistent ECHO/FRACTURE/AETHER reference. Batch deletion is permitted
+// when ALL referring entities are deleted in the same atomic map edit.
+void validateWorldProcessEntityDeletion(const editor::MapDoc& map,
+                                        const std::vector<int>& indexes) {
+    std::set<int> removed(indexes.begin(),indexes.end());
+    std::set<std::string> removedIds;
+    for(int index:indexes){
+        if(index<0||size_t(index)>=map.data.entities.size())
+            throw std::runtime_error("Invalid map entity deletion index");
+        const auto& id=map.data.entities[size_t(index)].id;
+        if(!id.empty())removedIds.insert(id);
+    }
+    if(removedIds.empty())return;
+    for(size_t i=0;i<map.data.entities.size();++i){
+        if(removed.count(int(i)))continue;
+        const auto& components=map.data.entities[i].extra["components"];
+        if(!components.isObject())continue;
+        for(const auto& [name,value]:components.members()){
+            if(!lib::worldprocess::linked::supports(name)||!value.isObject())continue;
+            for(const auto& [key,ref]:value.members()){
+                if(!lib::worldprocess::linked::isReference(name,key)||
+                   !ref.isString()||!removedIds.count(ref.str()))continue;
+                throw std::runtime_error(
+                    "Map object '"+ref.str()+"' is referenced by "+name+
+                    " on '"+map.data.entities[i].id+
+                    "'; clear or relink that field before deleting the target");
+            }
+        }
+    }
+}
 // Map "facing" is clockwise degrees seen from above; Transform rotation Y is
 // right-handed (counter-clockwise). Both normalized to [0,360).
 double studioFacingToYaw(double facing){double y=std::fmod(360.0-std::fmod(facing,360.0),360.0);return y<0?y+360.0:y;}
@@ -2151,6 +2182,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 for(const int c:copies)next.push_back(studioDocumentId(editor::DocumentEntityRef::mapEntity(size_t(c)),ws_.map));
                 selected_=next.back();next.pop_back();selection_=std::move(next);
             } else {
+                validateWorldProcessEntityDeletion(ws_.map,indices);
                 std::sort(indices.rbegin(),indices.rend()); // highest first: lower indices stay valid
                 const size_t depth=ws_.map.undoDepth();
                 try {
@@ -2284,6 +2316,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (selected_.empty() || id!=selected_) throw std::runtime_error("Selection changed while editing");
                 const int index=indexFor(id);
                 if (method == "studio.entityDelete") {
+                    validateWorldProcessEntityDeletion(ws_.map,{index});
                     Json args=Json::object(); args.set("index",num(index));
                     const Json result=ws_.call("entity_delete",args,"studio");
                     if (result.has("error")) throw std::runtime_error(result.getStr("error"));
