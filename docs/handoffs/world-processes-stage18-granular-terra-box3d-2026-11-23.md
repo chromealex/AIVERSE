@@ -56,3 +56,6 @@ Known limitations:
 2. Extend 3D Studio scene gizmos for MORPH springs and GRANULAR field volume and camera clipping/LOD; coordinate with Studio owner rather than duplicating windows.
 3. When feature phase is complete, user's chosen consolidated test phase: GCC/Clang/ASan/UBSan, GPU Metal/Vulkan/GLES, Box3D scene, TerraWeave authoritative save+rollback, both scene publications, full project Studio and merged-tree Mac `./run-tests.sh --quick`.
 4. Update the handoff with actual CI/test results before any PR merge. PR #112 remains draft.
+
+## Additional source hardening
+- Commit `e0469098bcaad34b7b308362c42229886b4a3ad0` in `examples/world/world_processes_native/GranularTerraWeaveBinding.h`: if an external Box3D owner has destroyed a cached scene handle, matching geometry signature no longer short-circuits its reconstruction. The publisher checks `scene.valid(handle)` before reporting the resident surface current. This remains source review only; no native test has been executed.
