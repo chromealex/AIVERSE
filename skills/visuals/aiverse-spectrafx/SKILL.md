@@ -1863,3 +1863,7 @@ Capture callback retains shared metadata ring instead of raw StudioScene pointer
 ## Stage 67 — capture request lifecycle
 
 Single-flight host capture returns captureId. Poll/cancel may supply ID to reject stale requests. Timeout and replacement mark old shared shot cancelled; callback skips publication. Studio cancel button and MCP captureCancel added. Cancellation is logical, not GPU abort. UI ID-aware polling and RHI readback resource audit remain. No tests run.
+
+## Stage 68 — cross-platform tagged capture
+
+GL/GLES shared backend and Vulkan tag synchronous capture callbacks with current frame serial. GL checks readback error; Vulkan checks submission and fence result. Studio polls/cancels with captureId. No builds/tests; allocation failure, Vulkan failed-submit slot recovery and cross-platform serial matching require audit.
