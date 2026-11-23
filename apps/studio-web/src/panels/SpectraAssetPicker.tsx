@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { DragEvent } from 'react';
 import { StudioButton, StudioInput } from '../ui';
 import type { SpectraAssetReference } from './spectraAssetBinding';
 
@@ -44,7 +45,7 @@ export default function SpectraAssetPicker({
     onChange({guid:asset.guid,...(asset.path?{path:asset.path}:{})});
     setError('');setOpen(false);
   };
-  const drop=(event:React.DragEvent<HTMLDivElement>)=>{
+  const drop=(event:DragEvent<HTMLDivElement>)=>{
     event.preventDefault();
     if(disabled)return;
     // Drag data is untrusted. Resolve GUID against the indexed assets,
