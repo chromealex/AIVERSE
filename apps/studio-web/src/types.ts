@@ -173,7 +173,7 @@ export interface StudioSpectraPreviewState {
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -184,6 +184,7 @@ export interface StudioParams {
     grid?:boolean;axes?:boolean;
     preset?:'perspective'|'front'|'side'|'top';
     camera?:StudioSpectraCameraSnapshot;
+    parameters?:Record<string,number>;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
   'studio.wind':Record<string,never>;
