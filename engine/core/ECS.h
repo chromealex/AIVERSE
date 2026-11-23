@@ -331,12 +331,38 @@ public:
     template<class T> void notifyComponentChange(Entity e) {
         recordComponentChange(detail::componentTypeId<T>(),e);
     }
+    // Worker-owned journals: no World mutation until the scheduler barrier.
+    struct ComponentChangeBatch {
+        static constexpr size_t kMaxEntries=65536;
+        std::set<uint64_t> entities;
+        bool overflow=false;
+        void record(Entity e) {
+            if(!e.valid() || overflow)return;
+            if(entities.size()>=kMaxEntries && !entities.contains(e.packed())) {
+                overflow=true; entities.clear(); return;
+            }
+            entities.insert(e.packed());
+        }
+    };
+    template<class T> void mergeComponentChanges(const ComponentChangeBatch& batch) {
+        auto it=trackedChanges_.find(detail::componentTypeId<T>());
+        if(it==trackedChanges_.end())return;
+        if(batch.overflow) {it->second.overflow=true;it->second.entities.clear();return;}
+        for(auto id:batch.entities)it->second.record(Entity::fromPacked(id));
+    }
+    template<class T> ComponentChangeBatch drainComponentChanges() {
+        auto it=trackedChanges_.find(detail::componentTypeId<T>());
+        if(it==trackedChanges_.end())return {};
+        ComponentChangeBatch result;
+        std::swap(result,it->second);
+        return result;
+    }
+    // Legacy consumer must not silently mistake overflow for no changes.
     template<class T> std::set<uint64_t> takeComponentChanges() {
         auto it=trackedChanges_.find(detail::componentTypeId<T>());
         if(it==trackedChanges_.end())return {};
-        std::set<uint64_t> result;
-        result.swap(it->second);
-        return result;
+        if(it->second.overflow)throw std::overflow_error("ECS change journal requires full scan");
+        return drainComponentChanges<T>().entities;
     }
 
     Entity create() {
@@ -593,9 +619,9 @@ private:
     void recordComponentChange(uint32_t id,Entity e) {
         if(trackedChanges_.empty() || !e.valid())return;
         auto it=trackedChanges_.find(id);
-        if(it!=trackedChanges_.end())it->second.insert(e.packed());
+        if(it!=trackedChanges_.end())it->second.record(e);
     }
-    std::map<uint32_t,std::set<uint64_t>> trackedChanges_;
+    std::map<uint32_t,ComponentChangeBatch> trackedChanges_;
     std::vector<std::shared_ptr<IPool>> pools_;
     bool cowSnapshots_=false;
     std::vector<std::shared_ptr<void>> resources_;
