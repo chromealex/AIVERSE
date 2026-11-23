@@ -52,7 +52,5 @@ jobs:
       - name: Test focused contracts and dependency boundary
         run: |
           ctest --test-dir build/spectrafx-importance \
-            -R '^(spectrafx_contract|spectrafx_architecture|vfx_graph_compiler|vfx_graph_runtime) \
-            --output-on-failure --no-tests=error
- \
+            -R '^(spectrafx_contract|spectrafx_architecture|vfx_graph_compiler|vfx_graph_runtime)$' \
             --output-on-failure --no-tests=error
