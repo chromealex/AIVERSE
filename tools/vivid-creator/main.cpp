@@ -645,7 +645,7 @@ struct CreatorApp {
                 WalkCycleSettings walk;
                 walk.duration=1.0f;
                 walk.rootSpeed=120.0f; // source MetaHuman joints are centimetres under a 0.01 scene scale
-                walk.rootBob=2.5f;
+                walk.rootBob=0.018f; // fraction of leg length, independent of source scale
                 proposedWalkClip=int(proposed.head->clips.size());
                 HumanWalkPreviewStats walkStats;
                 proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk,&walkStats));

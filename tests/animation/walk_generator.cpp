@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     WalkCycleSettings settings;
     settings.rootSpeed = 1.2f;
     AnimClip clip = generateWalkCycle(model, rig, settings);
-    AIVERSE_TEST_CHECK(clip.channels.size() == 14);
+    AIVERSE_TEST_CHECK(clip.channels.size() == 16);
     AIVERSE_TEST_CHECK(clip.duration == 1.0f);
     for (const auto& channel : clip.channels) {
         AIVERSE_TEST_CHECK(channel.times.size() == 33);
@@ -68,6 +68,8 @@ int main(int argc, char** argv) {
     AIVERSE_TEST_CHECK(clip.channels[9].node == bones.hips);
     AIVERSE_TEST_CHECK(clip.channels[11].node == rig.torso);
     AIVERSE_TEST_CHECK(clip.channels[12].node == rig.neck && clip.channels[13].node == rig.head);
+    AIVERSE_TEST_CHECK(clip.channels[14].node == rig.leftElbow && clip.channels[15].node == rig.rightElbow);
+    AIVERSE_TEST_CHECK(std::abs(clip.channels[9].values[3 * 8] - clip.channels[9].values[0]) > 0.005f);
     AIVERSE_TEST_CHECK(std::abs(clip.channels[13].values[4 * 8 + 1] - clip.channels[13].values[1]) > 0.0001f);
     bool rejected = false;
     try { WalkRig invalid = rig; invalid.leftKnee = invalid.rightKnee; (void)generateWalkCycle(model, invalid); }

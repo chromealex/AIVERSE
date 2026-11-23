@@ -2,7 +2,7 @@
 
 // Presentation adapter for modular human packages with duplicated skin rigs.
 // Each complete rig receives the shared MotionWeave walk generator output;
-// partial head/groom roots receive the same root travel only.
+// partial head/groom roots receive matching pose tracks and root travel.
 #include "HumanPreviewAnimation.h"
 #include "engine/render/WalkCycleGenerator.h"
 #include <array>

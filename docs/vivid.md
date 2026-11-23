@@ -18,6 +18,9 @@ generator. It detects Ada's A-pose and lowers her arms before swinging them;
 the neck and head receive smaller delayed motion during walking. Pelvis and
 upper torso move with the step. Terrain contact and shoe-sole calibration are
 not yet implemented.
+The current Ada preview derives pelvis motion from leg length, adds a small
+lateral weight shift, delayed arm swing and elbow bend, and lowers the swing
+foot arc. The Creator diagnostic sets `rootBob` as a proportion of leg length.
 Code ownership: `engine/character/vivid/`, `tests/vivid/`, `docs/vivid.md`, `skills/visuals/aiverse-vivid/`.
 Cross-cutting render, animation and build changes must be small and coordinated with their owners; avoid editing their in-progress features.
 

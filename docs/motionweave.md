@@ -10,6 +10,10 @@ semantic joint mapping when importing a skeleton and then adds the returned
 clip to a model or asset publication transaction. The rig must use local +Z
 forward; joint pitch axes are derived from the bind pose. Duration, swing angles, pelvis bob and
 sample count and optional forward `rootSpeed` are bounded and validated.
+`rootBob` is a fraction of measured leg length, so pelvis motion scales with
+the skeleton rather than the source file's units. The walk also uses a small
+side-to-side weight shift, delayed arm swing and elbow bend, torso roll and a
+lower swing-foot arc.
 `rootSpeed=0` produces an in-place clip; a positive value writes local +Z
 translation into the root channel, with exactly `rootSpeed * duration` travel
 per cycle. Stance targets hold ankle positions against root travel, and the

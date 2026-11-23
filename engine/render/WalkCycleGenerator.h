@@ -83,8 +83,8 @@ struct WalkCycleSettings {
     float duration = 1.0f;
     float hipSwing = 0.35f;       // radians
     float kneeLift = 0.55f;       // radians during swing
-    float armSwing = 0.22f;       // radians, opposite the legs
-    float rootBob = 0.025f;      // model units; applied at pelvis, not the root
+    float armSwing = 0.30f;       // radians, opposite the legs
+    float rootBob = 0.018f;      // fraction of leg length; applied at pelvis
     float rootSpeed = 0.0f;      // model units/s along local +Z; 0 = in-place
     int samples = 33;            // includes duplicate closing pose
 };
@@ -100,6 +100,7 @@ inline void appendWalkHeadMotion(const Model& model, int torso, int neck, int he
         channel.comps = 4;
         const float3 yawAxis = walkLocalAxis(model, bone, {0, 1, 0});
         const float3 pitchAxis = walkLocalAxis(model, bone, {1, 0, 0});
+        const float3 rollAxis = walkLocalAxis(model, bone, {0, 0, 1});
         for (int i = 0; i < settings.samples; ++i) {
             const float phase = tau * float(i) / float(settings.samples - 1);
             const float torsoYaw = 0.055f * std::sin(phase);
@@ -110,7 +111,8 @@ inline void appendWalkHeadMotion(const Model& model, int torso, int neck, int he
                 -torsoYaw * 0.35f + delayedYaw * 0.4f;
             const quat rotation = model.nodes[size_t(bone)].r *
                 quat::axisAngle(yawAxis, yaw) *
-                quat::axisAngle(pitchAxis, bone == head ? pitch : 0.0f);
+                quat::axisAngle(pitchAxis, bone == head ? pitch : bone == torso ? -pitch * 0.6f : 0.0f) *
+                quat::axisAngle(rollAxis, bone == torso ? 0.014f * std::sin(phase) : 0.0f);
             channel.times.push_back(settings.duration * float(i) / float(settings.samples - 1));
             channel.values.insert(channel.values.end(), {rotation.x, rotation.y, rotation.z, rotation.w});
         }
@@ -138,7 +140,7 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         !std::isfinite(settings.hipSwing) || settings.hipSwing < 0 || settings.hipSwing > 1.2f ||
         !std::isfinite(settings.kneeLift) || settings.kneeLift < 0 || settings.kneeLift > 1.5f ||
         !std::isfinite(settings.armSwing) || settings.armSwing < 0 || settings.armSwing > 1.2f ||
-        !std::isfinite(settings.rootBob) || settings.rootBob < 0 || settings.rootBob > 100.0f ||
+        !std::isfinite(settings.rootBob) || settings.rootBob < 0 || settings.rootBob > 0.1f ||
         !std::isfinite(settings.rootSpeed) || settings.rootSpeed < 0 || settings.rootSpeed > 1000.0f ||
         settings.samples < 5 || settings.samples > 257)
         throw std::invalid_argument("walk cycle: invalid settings");
@@ -158,7 +160,25 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
     const int pelvis = model.nodes[size_t(rig.leftHip)].parent;
     if (pelvis < 0 || model.nodes[size_t(rig.rightHip)].parent != pelvis)
         throw std::invalid_argument("walk cycle: legs need a shared pelvis");
-    clip.channels.reserve(14);
+    const float leftLegLength = length(walkBindPoint(model, rig.leftHip) - walkBindPoint(model, rig.leftKnee)) +
+                                length(walkBindPoint(model, rig.leftKnee) - walkBindPoint(model, rig.leftAnkle));
+    const float rightLegLength = length(walkBindPoint(model, rig.rightHip) - walkBindPoint(model, rig.rightKnee)) +
+                                 length(walkBindPoint(model, rig.rightKnee) - walkBindPoint(model, rig.rightAnkle));
+    const float legScale = std::min(leftLegLength, rightLegLength);
+    const int pelvisParent = model.nodes[size_t(pelvis)].parent;
+    mat4 pelvisParentWorld;
+    if (pelvisParent >= 0) {
+        Pose bind;
+        bindPose(model, bind);
+        std::vector<mat4> world;
+        worldMatrices(model, bind, world);
+        pelvisParentWorld = world[size_t(pelvisParent)];
+    }
+    const float xScale = length(pelvisParentWorld.transformDir({1, 0, 0}));
+    const float yScale = length(pelvisParentWorld.transformDir({0, 1, 0}));
+    if (legScale < 1e-4f || xScale < 1e-5f || yScale < 1e-5f)
+        throw std::invalid_argument("walk cycle: invalid leg or pelvis scale");
+    clip.channels.reserve(16);
     for (int bone : bones) {
         AnimChannel channel;
         channel.node = bone;
@@ -198,7 +218,8 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
             -0.5f * settings.kneeLift * leftLift - 0.35f * settings.hipSwing * stride,
             -settings.hipSwing * stride, settings.kneeLift * rightLift,
             -0.5f * settings.kneeLift * rightLift + 0.35f * settings.hipSwing * stride,
-            -settings.armSwing * stride, settings.armSwing * stride
+            -settings.armSwing * std::sin(phase - 0.18f),
+             settings.armSwing * std::sin(phase - 0.18f)
         };
         const float time = settings.duration * float(i) / float(settings.samples - 1);
         for (size_t j = 0; j < 8; ++j) {
@@ -218,18 +239,36 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
         const float3 hipBase = model.nodes[size_t(pelvis)].t;
         hipMove.times.push_back(time);
         hipMove.values.insert(hipMove.values.end(),
-                              {hipBase.x + settings.rootBob * 0.4f * std::sin(phase),
-                               hipBase.y + settings.rootBob * (1.0f - std::cos(2.0f * phase)) * 0.5f,
+                              {hipBase.x - legScale * 0.024f * std::sin(phase) / xScale,
+                               hipBase.y + legScale * settings.rootBob *
+                                   (1.0f - std::cos(2.0f * phase)) * 0.5f / yScale,
                                hipBase.z});
         auto& hipTurn = clip.channels[10];
         const quat hipRotation = model.nodes[size_t(pelvis)].r *
-            quat::axisAngle(pelvisYawAxis, 0.035f * std::sin(phase)) *
-            quat::axisAngle(pelvisRollAxis, 0.02f * std::sin(phase));
+            quat::axisAngle(pelvisYawAxis, 0.045f * std::sin(phase)) *
+            quat::axisAngle(pelvisRollAxis, -0.025f * std::sin(phase));
         hipTurn.times.push_back(time);
         hipTurn.values.insert(hipTurn.values.end(),
                               {hipRotation.x, hipRotation.y, hipRotation.z, hipRotation.w});
     }
     appendWalkHeadMotion(model, rig.torso, rig.neck, rig.head, settings, clip);
+    for (int side = 0; side < 2; ++side) {
+        const int elbow = side == 0 ? rig.leftElbow : rig.rightElbow;
+        if (!valid(elbow)) continue;
+        AnimChannel channel;
+        channel.node = elbow;
+        channel.path = AnimChannel::Rotation;
+        channel.comps = 4;
+        const float3 axis = walkLocalAxis(model, elbow, {1, 0, 0});
+        for (int i = 0; i < settings.samples; ++i) {
+            const float phase = tau * float(i) / float(settings.samples - 1) + float(side) * 3.14159265358979323846f;
+            const float bend = 0.10f * (1.0f - std::cos(phase));
+            const quat q = model.nodes[size_t(elbow)].r * quat::axisAngle(axis, bend);
+            channel.times.push_back(settings.duration * float(i) / float(settings.samples - 1));
+            channel.values.insert(channel.values.end(), {q.x, q.y, q.z, q.w});
+        }
+        clip.channels.push_back(std::move(channel));
+    }
 
     // Bake stance targets through the shared two-bone solver. During stance,
     // the foot moves backward relative to the advancing root by the same
@@ -279,7 +318,7 @@ inline AnimClip generateWalkCycle(const Model& model, const WalkRig& rig,
             else {
                 const float swing = (phase - duty) / (1.0f - duty);
                 offset = stride * (-0.5f + 0.5f - 0.5f * std::cos(pi * swing));
-                lift = legLength[side] * 0.12f * std::sin(pi * swing);
+                lift = legLength[side] * 0.075f * std::pow(std::sin(pi * swing), 1.25f);
             }
             targets[side] = bindWorld[size_t(ankles[side])].transformPoint({}) +
                             rootOffset + forward * offset + float3{0, lift, 0};
