@@ -89,7 +89,7 @@ export function editAnimationTransition(doc:GraphObject,stateId:string,index:num
  const transitions=records(state.transitions);
  if(transitions.length!==state.transitions.length)return doc;
  if(patch){
-  const next={fade:.2,after:0,...transitions[index],...patch};
+  const next:GraphObject={fade:.2,after:0,...transitions[index],...patch};
   if(!records(doc.states).some(s=>s.id===next.to)||!['fade','after'].every(k=>typeof next[k]==='number'&&Number.isFinite(next[k])&&Number(next[k])>=0))return doc;
   transitions[index]=next;
  }else transitions.splice(index,1);
@@ -156,7 +156,7 @@ export function moveGeometryModifier(doc:GraphObject,id:string,index:number,delt
 }
 export const animationComparisons=['eq','ne','gt','ge','lt','le'] as const;
 export function animationScalarNames(doc:GraphObject):string[] {
- return object(doc.parameters)?Object.keys(doc.parameters).filter(k=>typeof (doc.parameters as GraphObject)[k]==='boolean'||(typeof (doc.parameters as GraphObject)[k]==='number'&&Number.isFinite((doc.parameters as GraphObject)[k]))):[];
+ return object(doc.parameters)?Object.keys(doc.parameters).filter(k=>typeof (doc.parameters as GraphObject)[k]==='boolean'||(typeof (doc.parameters as GraphObject)[k]==='number'&&Number.isFinite(Number((doc.parameters as GraphObject)[k])))):[];
 }
 export function setAnimationScalar(doc:GraphObject,name:string,value:number|boolean):GraphObject {
  if(!animationScalarNames(doc).includes(name)||typeof value!=='boolean'&&!Number.isFinite(value))return doc;
