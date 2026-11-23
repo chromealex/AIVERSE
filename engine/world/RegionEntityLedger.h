@@ -42,6 +42,7 @@ public:
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
         records_.emplace(id,RegionEntityRecord{owner,++lastRevision_,1});
         liveIds_.insert(id);
+        revisionIndex_.emplace(lastRevision_,id);
         return true;
     }
     // Two-phase validation prevents half-moving an occupied car and its passengers.
@@ -59,8 +60,10 @@ public:
         if(destination==expected)return true;
         for(auto id:sorted) {
             auto& entry=records_.at(id);
+            revisionIndex_.erase(entry.revision);
             entry.owner=destination;
             entry.revision=++lastRevision_;
+            revisionIndex_.emplace(entry.revision,id);
         }
         return true;
     }
@@ -90,8 +93,10 @@ public:
         for(const auto& [id,expected]:sorted) {
             if(expected==destination)continue;
             auto& entry=records_.at(id);
+            revisionIndex_.erase(entry.revision);
             entry.owner=destination;
             entry.revision=++lastRevision_;
+            revisionIndex_.emplace(entry.revision,id);
         }
         return true;
     }
@@ -103,9 +108,11 @@ public:
         const auto it=records_.find(id);
         if(it==records_.end() || !it->second.live || it->second.owner!=expected ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
+        revisionIndex_.erase(it->second.revision);
         it->second.live=0;
         it->second.revision=++lastRevision_;
         liveIds_.erase(id);
+        revisionIndex_.emplace(it->second.revision,id);
         return true;
     }
     const RegionEntityRecord* find(RegionEntityId id) const {
@@ -130,19 +137,42 @@ public:
     // Caller persists this whole ledger, not only records active in a visible cell.
     std::vector<std::pair<RegionEntityId,RegionEntityRecord>> since(uint64_t revision) const {
         std::vector<std::pair<RegionEntityId,RegionEntityRecord>> result;
-        for(const auto& [id,record]:records_)
-            if(record.revision>revision)result.emplace_back(id,record);
-        std::sort(result.begin(),result.end(),[](const auto& a,const auto& b){
-            return a.second.revision==b.second.revision
-                ? a.first<b.first : a.second.revision<b.second.revision;
-        });
+        const auto first=revision==std::numeric_limits<uint64_t>::max()
+            ? revisionIndex_.end():revisionIndex_.upper_bound(revision);
+        for(auto it=first;it!=revisionIndex_.end();++it) {
+            const auto row=records_.find(it->second);
+            if(row!=records_.end())result.emplace_back(row->first,row->second);
+        }
         return result;
+    }
+    // Bounded latest-state change feed for streaming observers and disk
+    // snapshot deltas. Only each ID's current record is represented; this
+    // is NOT a full audit of intermediate moves or a crash-safe disk journal.
+    struct ChangePage {
+        std::vector<std::pair<RegionEntityId,RegionEntityRecord>> changes;
+        uint64_t nextRevision=0;
+        bool more=false;
+    };
+    ChangePage pageSince(uint64_t after,size_t limit)const {
+        ChangePage page;
+        page.nextRevision=after;
+        if(!limit || after==std::numeric_limits<uint64_t>::max())return page;
+        auto it=revisionIndex_.upper_bound(after);
+        for(;it!=revisionIndex_.end() && page.changes.size()<limit;++it) {
+            auto record=records_.find(it->second);
+            if(record==records_.end())continue;
+            page.changes.emplace_back(record->first,record->second);
+            page.nextRevision=record->second.revision;
+        }
+        page.more=it!=revisionIndex_.end();
+        return page;
     }
 
 private:
     uint64_t lastRevision_=0;
     std::map<RegionEntityId,RegionEntityRecord> records_;
     std::set<RegionEntityId> liveIds_; // never separately saved/hashed
+    std::map<uint64_t,RegionEntityId> revisionIndex_; // current revision -> id
     friend void io(Archive&,RegionEntityLedger&);
 };
 
@@ -159,6 +189,7 @@ inline void io(Archive& a,RegionEntityLedger& ledger) {
     std::map<RegionEntityId,RegionEntityRecord> decoded;
     std::set<uint64_t> revisions;
     std::set<RegionEntityId> live;
+    std::map<uint64_t,RegionEntityId> ordered;
     if(a.writing()) {
         for(const auto& [id,record]:ledger.records_) {
             RegionEntityId copyId=id;
@@ -176,11 +207,13 @@ inline void io(Archive& a,RegionEntityLedger& ledger) {
            record.revision>latest || !revisions.insert(record.revision).second ||
            !decoded.emplace(id,record).second){a.fail();break;}
         if(record.live)live.insert(id);
+        ordered.emplace(record.revision,id);
     }
     if(a.ok()) {
         ledger.lastRevision_=latest;
         ledger.records_=std::move(decoded);
         ledger.liveIds_=std::move(live);
+        ledger.revisionIndex_=std::move(ordered);
     }
 }
 
