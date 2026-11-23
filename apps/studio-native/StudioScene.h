@@ -80,10 +80,46 @@ public:
         lastFrameSignature_=0;settleFrames_=30;
     }
     Json spectraPreviewCommand(const Json& input,const std::string& project) {
+        const auto action=input.getStr("action","status");
+        if(action=="stage") {
+            const auto background=input.getStr("background");
+            if(background!="dark" && background!="neutral" &&
+               background!="light" && background!="black")
+                throw std::runtime_error("FX stage background must be dark, neutral, light or black");
+            if(input["grid"].type()!=Json::Type::Bool ||
+               input["axes"].type()!=Json::Type::Bool)
+                throw std::runtime_error("FX stage grid and axes must be booleans");
+            fxBackground_=background;
+            fxGrid_=input.getBool("grid");
+            fxAxes_=input.getBool("axes");
+        }
+        if(action=="cameraPreset") {
+            if(!spectraDockMode_)throw std::runtime_error("FX camera preset requires the FX stage");
+            const auto preset=input.getStr("preset");
+            if(preset!="perspective" && preset!="front" &&
+               preset!="side" && preset!="top")
+                throw std::runtime_error("FX camera preset must be perspective, front, side or top");
+            resetSpectraDockCamera();
+            if(preset=="front"){camera_.yaw=0;camera_.pitch=0;camera_.ortho=true;}
+            else if(preset=="side"){camera_.yaw=1.5707963f;camera_.pitch=0;camera_.ortho=true;}
+            else if(preset=="top"){camera_.yaw=0;camera_.pitch=1.54f;camera_.ortho=true;}
+        }
+        if(action=="stage"||action=="cameraPreset"||action=="status") {
+            const Json state=spectraPreview_.status();
+            Json out=state;
+            out.set("background",Json::string(fxBackground_));
+            out.set("grid",Json::fromBool(fxGrid_));
+            out.set("axes",Json::fromBool(fxAxes_));
+            if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
+            return out;
+        }
         if(project!=spectraProject_ && spectraPreview_.active())
             spectraPreview_.stop(*device_);
         spectraProject_=project;
-        const Json result=spectraPreview_.command(*device_,input);
+        Json result=spectraPreview_.command(*device_,input);
+        result.set("background",Json::string(fxBackground_));
+        result.set("grid",Json::fromBool(fxGrid_));
+        result.set("axes",Json::fromBool(fxAxes_));
         // Preview spawns near the current Scene camera target; never steal
         // the user's editor camera or change map editing navigation.
         lastFrameSignature_=0;settleFrames_=30;
@@ -228,6 +264,8 @@ private:
     // Not a second gfx device: the same Scene renderer is placed in the
     // SpectraFX panel and switches between authored map and isolated FX.
     bool spectraDockMode_=false;
+    std::string fxBackground_="dark";
+    bool fxGrid_=true,fxAxes_=true;
     bool sceneCameraInitializedBeforeSpectra_=false;
     render::Camera sceneCameraBeforeSpectra_{};
     void frameSpectraDock(int framebufferWidth,int framebufferHeight);
