@@ -1343,20 +1343,33 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     renderer_.lighting.skyColor={.14f,.19f,.26f};
     renderer_.lighting.groundColor={.12f,.14f,.18f};
     renderer_.lighting.fogDensity=0.0f;
-    // Readable neutral particle stage. The origin stays under the camera
-    // so Spawn isn't hidden somewhere in the project's authored map.
-    const uint32_t major=rgba(78,111,146,110);
-    const uint32_t minor=rgba(53,76,102,72);
-    for(int i=-5;i<=5;++i) {
-        const auto color=i==0?major:minor;
-        renderer_.line({float(i),-.05f,-5},{float(i),-.05f,5},color);
-        renderer_.line({-5,-.05f,float(i)},{5,-.05f,float(i)},color);
-    }
-    renderer_.line({-.65f,0,0},{.65f,0,0},rgba(230,108,98));
-    renderer_.line({0,0,-.65f},{0,0,.65f},rgba(104,147,237));
+    // Genre-independent visual reference stage. Never writes to the game
+    // map and never changes native particle positions or update cadence.
     gfx::PassDesc pass;
-    pass.clearColor[0]=.021f;pass.clearColor[1]=.032f;
-    pass.clearColor[2]=.052f;pass.clearColor[3]=1.0f;
+    if(fxBackground_=="black") {
+        pass.clearColor[0]=0;pass.clearColor[1]=0;pass.clearColor[2]=0;
+    } else if(fxBackground_=="light") {
+        pass.clearColor[0]=.62f;pass.clearColor[1]=.67f;pass.clearColor[2]=.73f;
+    } else if(fxBackground_=="neutral") {
+        pass.clearColor[0]=.18f;pass.clearColor[1]=.20f;pass.clearColor[2]=.23f;
+    } else {
+        pass.clearColor[0]=.021f;pass.clearColor[1]=.032f;pass.clearColor[2]=.052f;
+    }
+    pass.clearColor[3]=1.0f;
+    if(fxGrid_) {
+        const uint32_t major=fxBackground_=="light"?rgba(60,78,95,150):rgba(78,111,146,110);
+        const uint32_t minor=fxBackground_=="light"?rgba(82,98,115,110):rgba(53,76,102,72);
+        for(int i=-5;i<=5;++i) {
+            const auto color=i==0?major:minor;
+            renderer_.line({float(i),-.05f,-5},{float(i),-.05f,5},color);
+            renderer_.line({-5,-.05f,float(i)},{5,-.05f,float(i)},color);
+        }
+    }
+    if(fxAxes_) {
+        renderer_.line({-.65f,0,0},{.65f,0,0},rgba(230,108,98));
+        renderer_.line({0,0,-.65f},{0,0,.65f},rgba(104,147,237));
+        renderer_.line({0,-.45f,0},{0,.75f,0},rgba(108,214,129));
+    }
     renderer_.render(pass,&antialiasing_);
     if(spectraPreview_.active())spectraPreview_.draw();
     renderer_.resolvePostFx();
