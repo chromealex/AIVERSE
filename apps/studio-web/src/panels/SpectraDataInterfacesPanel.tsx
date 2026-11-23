@@ -10,6 +10,7 @@ import {
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
+import SpectraIndexedGraphAssetInspector from './SpectraIndexedGraphAssetInspector';
 import { createBlankGraph, createBurstStarter, nextUnusedGraphName } from './spectraStarterModel';
 import './SpectraDataInterfacesPanel.css';
 
@@ -361,7 +362,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             <p className="spectra-di__hint">Drag a provider onto the binding form. Actual runtime availability is resolved by the host.</p>
           </StudioSection>
           <StudioSection title="Sprite texture — Assets picker">
-            <p className="spectra-di__hint">Only images indexed by the native project content/ Assets catalog can be assigned. Drag an image onto the output target or select it from the filtered list.</p>
+            <p className="spectra-di__hint">Choose a texture by its indexed GUID. The graph saves a compiler-compatible content/ path. Lock prevents outside node selection from changing the asset target.</p>
             <StudioField label="SpriteOutput node" htmlFor="spectra-texture-output">
               <StudioSelect id="spectra-texture-output" value={selectedOutput}
                 onChange={e=>setSelectedOutput(e.target.value)}>
@@ -370,23 +371,9 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
                   <option key={node.id} value={node.id}>{node.id} · {String(node.properties?.texture??'builtin:soft')}</option>)}
               </StudioSelect>
             </StudioField>
-            <StudioField label="Search images" htmlFor="spectra-image-search">
-              <StudioInput id="spectra-image-search" value={imageSearch} placeholder="Texture path…"
-                onChange={e=>setImageSearch(e.target.value)}/>
-            </StudioField>
-            <div className="spectra-di__providers spectra-di__image-list" role="list" aria-label="Asset textures">
-              {images.filter(path=>path.toLowerCase().includes(imageSearch.trim().toLowerCase())).map(path=>
-                <button type="button" key={path} draggable disabled={!selectedOutput}
-                  onDragStart={e=>e.dataTransfer.setData('text/x-aiverse-spectra-asset',path)}
-                  title={'content/'+path}
-                  onClick={()=>apply(putSpriteTexture(graph,selectedOutput,path,images))}>{path}</button>)}
-            </div>
-            <div className="spectra-di__drop" role="region" aria-label="Drop a texture asset here"
-              onDragOver={e=>{if(e.dataTransfer.types.includes('text/x-aiverse-spectra-asset'))e.preventDefault();}}
-              onDrop={e=>{const value=e.dataTransfer.getData('text/x-aiverse-spectra-asset');
-                if(value){e.preventDefault();apply(putSpriteTexture(graph,selectedOutput,value,images));}}}>
-              Drop a project image here · {selectedOutput||'select a SpriteOutput first'}
-            </div>
+            <SpectraIndexedGraphAssetInspector graph={graph} selectedNodeId={selectedOutput}
+              property="texture" kinds={['texture']}
+              disabled={busy} onGraphChange={next=>apply({graph:next,error:''})}/>
           </StudioSection>
           <StudioSection title="DataInterface nodes">
             <div className="spectra-di__items">
