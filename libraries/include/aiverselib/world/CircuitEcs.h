@@ -131,12 +131,16 @@ inline bool advance(World& world,std::uint32_t tick){
         if(static_cast<std::uint8_t>(g.operation)>3)return false;
         const auto output=ids.find(g.output.packed());
         if(output==ids.end())continue;
+        const auto a=ids.find(g.inputA.packed()),b=ids.find(g.inputB.packed());
+        // A stale/disconnected input must not create a NOT=true output:
+        // refuse to drive the destination, preserving fail-closed semantics.
+        if(a==ids.end()||!nodes[a->second].second.enabled||
+           (g.operation!=Op::Not &&
+             (b==ids.end()||!nodes[b->second].second.enabled)))continue;
         const std::size_t i=output->second;
         if(gateSet[i])return false; // duplicate owner is not deterministic authoring
         gateSet[i]=true;
-        const auto a=ids.find(g.inputA.packed()),b=ids.find(g.inputB.packed());
-        const bool av=a!=ids.end()&&nodes[a->second].second.enabled&&
-                      nodes[a->second].second.signal;
+        const bool av=nodes[a->second].second.signal;
         const bool bv=b!=ids.end()&&nodes[b->second].second.enabled&&
                       nodes[b->second].second.signal;
         // Evaluate prior signals, so cycles have a defined one-tick delay.
