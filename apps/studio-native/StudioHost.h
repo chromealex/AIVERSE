@@ -235,7 +235,7 @@ private:
         std::uint8_t mode=0;
         std::string owner,component,key,targetType,previewTarget,label;
         render::float3 previewPoint{};
-        float baseline=1.f,value=0.f;
+        float baseline=1.f,value=0.f,valueZ=0.f;
         bool symmetric=false;
         bool snap=false;
         bool neighborSnap=false;
