@@ -26,6 +26,34 @@ prove Metal/GPU image parity. Stage 8 macOS native, Windows, WebView
 and frontend checks are pending. Handoff:
 `docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
 
+## 2026-11-23 — SpectraStudio embedded native FX preview + MCP (Stages 11–12)
+
+The latest HTML5 SpectraFX Graph panel includes a **real embedded native
+Metal/Vulkan particle viewport**: `SpectraDockViewport.tsx` reports its
+scroll-clipped CSS rect as `studio.viewportRect {id:"fx"}`. StudioHost
+repositions its existing Scene GPU surface with FX priority and switches
+StudioScene into a neutral grid stage with isolated camera, preserving the
+authored map camera and blocking all Scene entity edits. The real
+`spectra::GraphRuntime` executes on the render thread, then draws inside
+native GPU render passes. Scene and FX share one surface; concurrent
+independent rendering is NOT supported in this initial stage.
+
+`fx_graph_preview` is now in the existing `aiversemcp` tools/list,
+sharing a render-thread callback with `studio.spectraPreview`.
+Supports status/load/play/pause/step/seek/restart/parameter/stop plus
+cameraReset/cameraOrbit/cameraZoom. `load` accepts safe graphName,
+`draft:true`, or inline Graph v2. All earlier `fx_graph_*` asset CRUD,
+editor and draft MCP tools remain unchanged. Standalone MCP reports no
+native GPU viewport and does not fake frames.
+Node clipping tests, native Metal isolated dock tests and MCP discovery,
+safe path/callback tests were AUTHORED. No exact-SHA AppleClang/Metal/
+HTML5/WebView/Windows PASS has been observed for these latest changes;
+the user's prior native CTest 2/2 PASS predates the embedded viewport.
+
+Handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`
+
 ## Window inventory
 
 Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. Forwarding files without registrations are excluded. Each source remains the detailed behavior reference, including context menus, shortcuts and native-only workflows.
