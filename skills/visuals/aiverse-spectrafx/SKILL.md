@@ -1729,3 +1729,9 @@ These operations require an attached native Studio FX viewport and an open proje
 `apps/studio-web/src/panels/spectraAssetBinding.ts` exports `bindSpectraNodeAsset(graph,nodeId,property,{guid,path?})` and `readSpectraNodeAsset(...)`. The helper is immutable, requires a GUID supplied by the Studio Assets index, and rejects unsafe paths. Do not fabricate GUIDs, use raw filenames as resolved references, or assume this helper is wired into the Graph Editor picker yet.
 
 **Important:** this is a browser authoring data structure, NOT a confirmed compiler/runtime asset-reference schema. Before exposing it in the UI or persisting graph JSON, inspect the native SpectraFX graph schema and resolve GUIDs to the compiler's expected asset property representation. Existing native graph validation remains authoritative. Source-only changes have not been compiled or tested.
+
+## Stage 40 — reusable indexed asset picker
+
+`apps/studio-web/src/panels/SpectraAssetPicker.tsx` is a standalone React picker. Pass `assets` from the existing project GUID index, `value`, `onChange`, optional `kinds`, and optionally controlled `locked/onLockChange`. It filters by name/path/type/GUID (first 200 results), handles `application/x-aiverse-asset` drag payloads by resolving GUIDs against the supplied index, and rejects unknown external GUIDs. The lock is a **UI signal controlled by the caller**; the parent must actually prevent external selection updates when locked.
+
+Do not claim the picker is already mounted inside the VFX Graph inspector or that the native compiler accepts GUID objects. First inspect compiler property schema and existing Assets index adapter. Do not persist unresolved references. Source-only; tests deferred.
