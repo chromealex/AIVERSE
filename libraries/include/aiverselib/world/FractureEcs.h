@@ -156,6 +156,28 @@ inline bool acknowledge(World& world,const Event& event){
     world.get<Collapse>(event.entity).delivery=Delivery::Acknowledged;
     return true;
 }
+// Trusted repair/reconstruction transition. The host must first rebuild
+// physical objects, repair relevant Bonds and clear any PHYSIS stress latch.
+// Preserve old event identity as a tombstone; the old event cannot be re-acked.
+// Reusing a collapsed member inside the original tick is forbidden.
+inline bool rearmAfterRepair(World& world,const Event& acknowledged,
+                             std::uint32_t currentTick){
+    if(!world.alive(acknowledged.entity))return false;
+    const World& read=world;
+    const auto* member=read.tryGetConst<Member>(acknowledged.entity);
+    const auto* box=read.tryGetConst<Collapse>(acknowledged.entity);
+    if(!member||!member->detached||!box||
+       box->delivery!=Delivery::Acknowledged ||
+       box->eventKey!=acknowledged.key ||
+       box->detachedTick!=acknowledged.tick ||
+       currentTick<=box->detachedTick)return false;
+    auto& mutableMember=world.get<Member>(acknowledged.entity);
+    mutableMember.detached=false;
+    mutableMember.broken=false;
+    // Keep `eventKey` and `detachedTick` so old confirmations remain invalid.
+    world.get<Collapse>(acknowledged.entity).delivery=Delivery::Empty;
+    return true;
+}
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<Member>("fracture.member",1);
     sim.registerPersistentComponent<Bond>("fracture.bond",1);
