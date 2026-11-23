@@ -1,0 +1,3 @@
+# W1.21b — streaming WAL reader
+
+Commit `cc82f4fc`, PR #116 Draft. RegionWalReader.h scans std::istream frame-by-frame with bounded memory, validates codec CRC and contiguous sequence from supplied previous sequence, reports accepted bytes/sequence/count and End/Incomplete/Corrupt/IoError/SequenceError/Rejected. Consumer must accept atomically; rejected frame does not advance cursor. Offsets relative to initial stream position. No automatic truncation or disk writes. Native tests not run. Next durable append with exclusive writer and sync, then recovery and transaction integration. No main merge.
