@@ -81,6 +81,15 @@ public:
         registry.registerResource<world::RegionDirtyQueue>("aiverse.world.region_dirty_queue",
             world::RegionDirtyQueue::kSchema);
         registry.addLoadValidator("aiverse.world.region_move_requests",world::validateRegionMoveRequests);
+        registry.addLoadValidator("aiverse.vehicles.race_state",[](const World& w,std::string& error){
+            const auto* race=w.resourceConst<vehicles::RaceState>();
+            if(!race)return true;
+            auto copy=*race;Hasher hash;Archive archive(hash);
+            if(!vehicles::ioDurableRaceState(archive,copy,w)||!archive.ok()){
+                error="invalid portable race state or unresolved racer vehicle";return false;
+            }
+            return true;
+        });
         registry.addLoadValidator("aiverse.actor.portable_resources",[](const World& w,std::string& error){
             const auto* state=w.resourceConst<State>();
             const auto* dirty=w.resourceConst<world::RegionDirtyQueue>();
