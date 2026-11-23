@@ -2164,7 +2164,7 @@ void Editor::startPlay(int humanSlot) {
         sim_.reset();
         return;
     }
-    ++graphPlayEpoch_; // native play session identity; zero disables telemetry on wrap
+    if(graphPlayEpoch_!=~uint64_t{0})++graphPlayEpoch_; // saturated epoch disables further telemetry
     graphPlayHistory_.clear();
     human_ = humanSlot;
     gameFx_.clear();
