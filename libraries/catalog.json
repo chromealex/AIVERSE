@@ -44,18 +44,22 @@
     },
     {
       "id": "graphs",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "engine/core/Graphs.h",
       "skill": "skills/core/aiverse-graphs/SKILL.md",
-      "summary": "BFS and topological ordering",
-      "notes": "Use dense IDs. Test unreachable nodes, cycles and duplicate edges. Weighted search and flows remain planned.",
+      "summary": "Graph traversal, weighted paths, connectivity, spanning forests and integral flows",
+      "notes": "Integer graph algorithms; signed paths flag negative cycles; flow budgets and restrictions documented in skill. No new verification.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_graphs",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "engine/core/GraphFlow.h",
+        "engine/core/GraphAnalysis.h"
+      ]
     },
     {
       "id": "spatial",
