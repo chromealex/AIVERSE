@@ -3,6 +3,7 @@
 #include "apps/editor/core/Workspace.h"
 #include "engine/render/graph/GraphTelemetry.h"
 #include "engine/render/graph/GraphWatch.h"
+#include "engine/render/graph/GraphGpuProfile.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
@@ -134,6 +135,29 @@ int main() {
     require(!call("graph_live_watch",Json::parse(R"({"action":"status"})")).getBool("available"),"headless watch claims owner");
 
     require(!call("graph_live_profile",Json::parse(R"({"action":"read","entity":"42"})")).getBool("available"),"headless profile claims live owner");
+
+    struct FakeScopeDevice {
+        uint64_t frameSerial() const{return 11;}
+        bool beginGpuScope(uint64_t){return allow;}
+        bool allow=true;
+    } fakeScope;
+    graph_gpu_profile::Capture gpuProfile;
+    gfx::DeviceInfo fakeInfo;fakeInfo.backend=gfx::Backend::Metal;fakeInfo.name="test metadata only";
+    gpuProfile.start(fakeInfo,"fixture");
+    const auto scopeTag=gpuProfile.begin(fakeScope,"viewport",2,true);
+    require(scopeTag!=0&&!gpuProfile.report().getBool("available"),"pending GPU query treated as complete");
+    require(gpuProfile.complete({scopeTag,2.5,true},12)==2,"adaptive scope result routing failed");
+    require(gpuProfile.report()["samples"].size()==1,"completed GPU sample missing");
+    const auto invalidTag=gpuProfile.begin(fakeScope,"fx",1,false);
+    gpuProfile.complete({invalidTag,0,false},13);
+    require(gpuProfile.report()["samples"].size()==1,"invalid GPU query recorded");
+    const auto cancelled=gpuProfile.begin(fakeScope,"fx",1,false);
+    gpuProfile.stop();gpuProfile.start(fakeInfo,"fixture");
+    gpuProfile.complete({cancelled,1.5,true},14);
+    require(!gpuProfile.report().getBool("available"),"cancelled query crossed capture epoch");
+    fakeScope.allow=false;
+    require(gpuProfile.begin(fakeScope,"fx",1,false)==0,"unsupported timing accepted");
+    require(!call("graph_gpu_profile",Json::parse(R"({"action":"read"})")).getBool("available"),"headless GPU owner fabricated");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
