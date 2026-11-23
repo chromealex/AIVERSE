@@ -422,6 +422,7 @@ void StudioHost::tick() {
                 // Interactive viewport: redraw on change only, debounce lighting rebuilds.
                 // AIVERSE_STUDIO_CONTINUOUS_REDRAW=1 restores drawing every tick.
                 created->setContinuousRedraw(always);
+                created->setSpectraDockMode(spectraDockActive_);
                 preview_ = std::move(created);
             });
         }
@@ -1139,13 +1140,23 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if (id != "scene") {
-        // Another panel's rect: the Scene view is not there.
-        ViewportRect hidden;
-        NativeViewportPlacement none;
-        if (platform_.placeSurface(StudioSurface::Scene, hidden, none)) placement_ = {};
+    if (id == "fx") {
+        // The SpectraFX Graph dock reuses the actual native Scene GPU
+        // surface; no extra graphics device, no bitmap-over-bridge path.
+        // When FX and Scene tabs are both visible, FX takes priority.
+        NativeViewportPlacement placed;
+        if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
+        placement_=placed;
+        const bool mode=placed.visible;
+        if(spectraDockActive_!=mode) {
+            spectraDockActive_=mode;
+            if(preview_) onScene([&]{preview_->setSpectraDockMode(mode);});
+        }
+        if(!placement_.visible)readyEmitted_=false;
         return;
     }
+    if (id != "scene") return;
+    if(spectraDockActive_)return; // native FX pane currently owns this view.
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
@@ -1324,7 +1335,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             throw std::runtime_error("Open a project before SpectraFX preview");
         if (!preview_ || !placement_.visible ||
             !platform_.surfaceDrawable(StudioSurface::Scene))
-            throw std::runtime_error("Open the native Scene viewport before SpectraFX preview");
+            throw std::runtime_error("Open the embedded SpectraFX or native Scene viewport first");
         const std::string project=session_->workspace().project.dir;
         return onScene([&] { return preview_->spectraPreviewCommand(params,project); });
     });
