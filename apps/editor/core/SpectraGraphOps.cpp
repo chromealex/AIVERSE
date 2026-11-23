@@ -427,22 +427,24 @@ void registerSpectraGraphOps(Workspace& ws) {
     add("fx_graph_preview",
         "Control the *real native Studio* SpectraFX GPU/CPU particle preview. "
         "Actions: status, load, play, pause, step, seek (0..3600 ticks), "
-        "restart, parameter (named scalar), stop. "
+        "restart, parameter (named scalar), stop, cameraReset, cameraOrbit, cameraZoom. "
         "For load use a graph object or graphName with draft=true for a private draft. "
         "The preview is presentation only; no game ECS writes or offscreen fake renders. "
         "Requires the native Studio GPU viewport to be visible; standalone MCP "
         "returns a clear unavailable error.",
-        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop"]},
+        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom"]},
             "graph":{"type":"object"},"graphName":{"type":"string"},
             "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
-            "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"}},
+            "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"},
+            "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"}},
             "required":["action"]})",
         [&ws](const Json& p) {
             requireGame(ws);
             const std::string action=p.getStr("action");
             if(action!="status"&&action!="load"&&action!="play"&&
                action!="pause"&&action!="step"&&action!="seek"&&
-               action!="restart"&&action!="parameter"&&action!="stop")
+               action!="restart"&&action!="parameter"&&action!="stop"&&
+               action!="cameraReset"&&action!="cameraOrbit"&&action!="cameraZoom")
                 throw std::runtime_error("unknown SpectraFX preview action");
             Json command=p;
             if(action=="load") {
