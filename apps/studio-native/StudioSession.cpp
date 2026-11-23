@@ -1921,7 +1921,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(!studioValidGuid(guid))throw std::runtime_error("Invalid asset GUID");
             StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild();
             const auto entry=catalog.byGuid(guid);
-            if(!entry||entry->directory)throw std::runtime_error("Asset missing from project index");
+            if(!entry||entry->directory){
+                Json result=Json::object();result.set("guid",str(guid));result.set("ok",Json::fromBool(false));
+                result.set("code",str("missing"));result.set("detail",str("Asset missing from project index"));
+                result.set("gpuVerified",Json::fromBool(false));reply.set("result",std::move(result));return reply;
+            }
             if(entry->importer!="model"&&entry->importer!="texture")
                 throw std::runtime_error("Expected model or texture asset");
             const auto root=std::filesystem::path(ws_.project.dir)/"content";
@@ -1951,18 +1955,21 @@ Json StudioSession::dispatchImpl(const Json& request) {
             Json result=Json::object();
             result.set("guid",str(guid));
             bool ok=false;
-            std::string detail;
+            std::string detail,code="decode_failed";
             try {
-                if(entry->importer=="model"){
+                if(entry->importer=="model"&&!render::isNativeModelFormat(entry->path)&&!catalog.byPath(entry->path+".glb")){
+                    code="unsupported_format";detail="No native model loader or converted GLB";
+                }else if(entry->importer=="model"){
                     auto model=render::loadModel(entry->path,reader);
                     ok=model&&!model->vertices.empty()&&!model->indices.empty();
                 }else{
                     std::string bytes;render::Image image;
                     ok=reader(entry->path,bytes)&&render::decodeImage(bytes,image);
                 }
-                detail=ok?"CPU decode succeeded":"CPU decode failed or geometry empty";
+                if(detail.empty())detail=ok?"CPU decode succeeded":"CPU decode failed or geometry empty";
+                if(ok)code="ok";
             }catch(const std::exception& e){detail=e.what();}
-            result.set("ok",Json::fromBool(ok));result.set("detail",str(detail));
+            result.set("ok",Json::fromBool(ok));result.set("detail",str(detail));result.set("code",str(code));
             result.set("gpuVerified",Json::fromBool(false));
             reply.set("result",std::move(result));
         } else if (method == "studio.assetMetaPatch") {
