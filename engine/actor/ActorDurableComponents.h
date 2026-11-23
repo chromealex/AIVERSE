@@ -2,6 +2,7 @@
 #include "ActorModule.h"
 #include "engine/vehicles/DurableVehicleComponents.h"
 #include "engine/world/UnifiedEntitySection.h"
+#include <set>
 
 namespace aiverse::actor {
 // Portable ECS projection of materialized region actors. The normal native
@@ -56,6 +57,36 @@ public:
           &&c.addTyped<world::RegionDormant>("aiverse.world.region_dormant")
           &&vehicles::registerDurableVehicleComponents(c)
           &&c.addRebuilder(rebuildDerived);
+    }
+
+    // Separate codec registration only: all values still live in the canonical
+    // ECS World. Do not register this into a sealed rollback registry.
+    static void registerResources(PersistentEcsRegistry& registry){
+        registry.registerResource<State>("aiverse.actor.match_state",1);
+        registry.registerResource<world::RegionMoveRequests>("aiverse.world.region_move_requests",
+            world::RegionMoveRequests::kSchema);
+        registry.registerResource<world::RegionDirtyQueue>("aiverse.world.region_dirty_queue",
+            world::RegionDirtyQueue::kSchema);
+        registry.addLoadValidator("aiverse.world.region_move_requests",world::validateRegionMoveRequests);
+        registry.addLoadValidator("aiverse.actor.portable_resources",[](const World& w,std::string& error){
+            const auto* state=w.resourceConst<State>();
+            const auto* dirty=w.resourceConst<world::RegionDirtyQueue>();
+            if(!state||!dirty||!dirty->entries.empty()||!w.resourceConst<world::RegionMoveRequests>()){
+                error="missing actor resources or undrained runtime notifications";return false;
+            }
+            return true;
+        });
+    }
+    static world::DurableResourceTransaction::Policy resourcePolicy(const PersistentEcsRegistry& registry){
+        return {&registry,{"aiverse.actor.match_state","aiverse.world.region_dirty_queue",
+            "aiverse.world.region_move_requests"}};
+    }
+    // A complete actor runtime cannot yet be reconstructed if it contains
+    // projectile or race state. Reject rather than silently dropping it.
+    static bool supportedWorld(const World& w){
+        const auto* dirty=w.resourceConst<world::RegionDirtyQueue>();
+        return !w.countExisting<Projectile>()&&!w.resourceConst<vehicles::RaceState>()&&
+            w.resourceConst<State>()&&dirty&&dirty->entries.empty()&&w.resourceConst<world::RegionMoveRequests>();
     }
 
     // A region actor's slot index is derived from its restored components.
