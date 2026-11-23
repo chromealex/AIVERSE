@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -68,9 +69,10 @@ public:
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
-        if(action=="play") {playing_=true;return status();}
+        if(action=="play") {error_.clear();playing_=true;return status();}
         if(action=="pause") {playing_=false;return status();}
         if(action=="restart") {
+            error_.clear();
             playing_=input.getBool("play",false);
             pendingRestart_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
             return status();
@@ -79,6 +81,7 @@ public:
             playing_=false;
             if(timeTicks_>=kMaxTicks)return errorStatus("Preview reached 60-second limit");
             // An explicit Step supersedes any earlier unfinished seek.
+            error_.clear();
             targetTicks_=timeTicks_;
             stepsPending_=1;
             return status();
@@ -89,6 +92,7 @@ public:
                input["tick"].integer(-1)<0 || input["tick"].integer(-1)>kMaxTicks)
                 return errorStatus("Preview seek expects a tick in 0..3600");
             playing_=false;
+            error_.clear();
             targetTicks_=uint32_t(input["tick"].integer());
             stepsPending_=0;
             if(targetTicks_<timeTicks_) {
@@ -106,6 +110,7 @@ public:
             if(!std::isfinite(n) || n<it->second.minimum || n>it->second.maximum)
                 return errorStatus("Preview parameter value outside authored range");
             requestedParameters_[name]=float(n);
+            error_.clear();
             return status();
         }
         return errorStatus("Unknown SpectraFX preview action");
