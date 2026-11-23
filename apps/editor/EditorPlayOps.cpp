@@ -12,6 +12,38 @@ namespace aiverse::editor {
 
 using namespace aiverse::game;
 
+Json Editor::graphWatchSample(const std::string& domain,const std::string& entity) const {
+    Json r=Json::object();r.set("available",Json::fromBool(false));
+    if(!sim_||!graphPlayEpoch_||graphPlayEpoch_==~uint64_t{0})return r;
+    if(domain=="motionweave"){
+        uint64_t key=0;const auto parsed=std::from_chars(entity.data(),entity.data()+entity.size(),key);
+        if(entity.empty()||parsed.ec!=std::errc{}||parsed.ptr!=entity.data()+entity.size()||!sim_->world().alive(Entity::fromPacked(key)))return r;
+        return view_.sharedAnimationGraphDiagnostic(key,graphPlayEpoch_);
+    }
+    if(domain!="spectrafx"||entity!="preview"||fxPreview_.name.empty())return r;
+    const auto sample=gameFx_.instanceTelemetry(fxPreview_.h);
+    const auto seq=gameFx_.telemetryUpdateSerial();
+    if(!sample.serial||!seq||seq==~uint64_t{0})return r;
+    r.set("available",Json::fromBool(true));r.set("domain",Json::string(domain));
+    r.set("worldEpoch",Json::string(std::to_string(graphPlayEpoch_)));
+    r.set("instanceSerial",Json::string(std::to_string(sample.serial)));
+    r.set("programIdentity",Json::string("instance:"+std::to_string(sample.serial)));
+    r.set("sequence",Json::string(std::to_string(seq)));
+    r.set("scope",Json::string("native-editor-cpu-preview-instance"));
+    r.set("effect",Json::string(fxPreview_.name));r.set("particles",Json::number(int64_t(sample.particles)));
+    r.set("emitting",Json::fromBool(sample.emitting));r.set("time",Json::number(double(sample.time),6));
+    return r;
+}
+void Editor::captureGraphWatch() noexcept {
+    if(!graphWatch_.running())return;
+    try{
+        if(!sim_){graphWatch_.stop("play-ended");return;}
+        // Do not sample a hidden or non-published game viewport.
+        if(!prismaGameRendered_)return;
+        graphWatch_.capture(graphWatchSample(graphWatch_.domain(),graphWatch_.entity()));
+    }catch(...){graphWatch_.stop("capture-failed");}
+}
+
 void Editor::registerPlayOps() {
     auto add = [this](const char* name, const std::string& desc, const char* schema, Workspace::OpFn fn) {
         ws_.registerOp({name, desc, Json::parse(schema), std::move(fn), true});
@@ -55,6 +87,17 @@ void Editor::registerPlayOps() {
             if(spectraGpuPreviewActive())r.set("gpuPreviewHistory",Json::parse(spectraGpuPreviewHistoryJson()));
             r.set("note",Json::string("Aggregate owner counters, not per-graph or per-entity; GPU preview history contains estimates, not GPU timings."));
             return r;
+        });
+    add("graph_live_owner_watch","Subscribe to one current published play-view instance. CPU diagnostics only.",
+        R"({"type":"object","properties":{"action":{"type":"string","enum":["start","status","stop"]},"domain":{"type":"string","enum":["motionweave","spectrafx"]},"entity":{"type":"string"}},"required":["action"]})",
+        [this](const Json& p){
+            const auto action=p.getStr("action");
+            if(action=="start"){
+                const auto domain=p.getStr("domain"),entity=p.getStr("entity");
+                graphWatch_.start(domain,entity,graphWatchSample(domain,entity));
+            }else if(action=="stop")graphWatch_.stop();
+            else if(action!="status")throw std::invalid_argument("unknown watch action");
+            return graphWatch_.status();
         });
     add("play_units",
         "Live objects of the running play-test: entity id (for play_command), type, owner, position, hp, current order. "
