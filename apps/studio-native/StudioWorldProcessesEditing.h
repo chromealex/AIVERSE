@@ -171,6 +171,56 @@ inline int hit(const std::vector<Handle>& choices,
     auto near=hitCandidates(choices,scene,x,y,width,height,maxDistancePx);
     return near.empty()?-1:near.front();
 }
+// Preview-only geometry, derived from the same opposite-fixed edge arithmetic
+// as studio.worldProcessAreaSet. Does not mutate MapDoc or ECS.
+struct AreaPreview {
+    double centerX=0,centerZ=0,halfWidth=0,halfDepth=0;
+};
+inline bool previewArea(const editor::DocEntity& owner,Handle::Mode mode,
+                        double valueCm,bool symmetric,AreaPreview& result){
+    const auto& area=owner.extra["components"]["EvolveArea"];
+    if(!area.isObject()||!std::isfinite(valueCm))return false;
+    const double ox=double(area.getInt("offsetXcm",0));
+    const double oz=double(area.getInt("offsetZcm",0));
+    const double hx=double(area.getInt("halfWidthCm",1000));
+    const double hz=double(area.getInt("halfDepthCm",1000));
+    double cx=ox,cz=oz,wx=hx,wz=hz;
+    if(mode==Handle::Mode::AreaCenterX)cx=valueCm;
+    else if(mode==Handle::Mode::AreaCenterZ)cz=valueCm;
+    else{
+        const bool x=mode==Handle::Mode::AreaWidth||
+            mode==Handle::Mode::AreaWidthNegative;
+        const bool z=mode==Handle::Mode::AreaDepth||
+            mode==Handle::Mode::AreaDepthNegative;
+        if(!x&&!z)return false;
+        const bool positive=mode==Handle::Mode::AreaWidth||
+            mode==Handle::Mode::AreaDepth;
+        const double center=x?cx:cz,half=x?wx:wz;
+        if(symmetric){
+            const double extent=std::clamp(std::abs(valueCm-center),50.,50000.);
+            if(x)wx=extent;else wz=extent;
+        }else{
+            const double opposite=center+(positive?-half:half);
+            double edge=positive?
+                std::clamp(valueCm,opposite+100.,opposite+100000.):
+                std::clamp(valueCm,opposite-100000.,opposite-100.);
+            // Match the integer-centimetre even-span rounding of StudioSession.
+            edge=std::round(edge);
+            if(std::fmod(std::abs(edge-opposite),2.)!=0.)
+                edge+=positive?-1.:1.;
+            if(x){cx=(edge+opposite)/2.;wx=std::abs(edge-opposite)/2.;}
+            else {cz=(edge+opposite)/2.;wz=std::abs(edge-opposite)/2.;}
+        }
+    }
+    const double worldX=double(owner.x)*100.+cx;
+    const double worldZ=double(owner.z)*100.+cz;
+    if(worldX-wx < -double(evolve::kAreaCoordinateCm)||
+       worldX+wx > double(evolve::kAreaCoordinateCm)||
+       worldZ-wz < -double(evolve::kAreaCoordinateCm)||
+       worldZ+wz > double(evolve::kAreaCoordinateCm))return false;
+    result={worldX/100.,worldZ/100.,wx/100.,wz/100.};
+    return true;
+}
 inline bool extent(const editor::DocEntity& owner,const Handle& handle,
                    render::float3 mouse,float& value) {
     if(!std::isfinite(mouse.x)||!std::isfinite(mouse.z))return false;
