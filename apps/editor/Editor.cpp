@@ -1672,7 +1672,7 @@ void Editor::tickSpectraGpuPreview(const Camera& cam,int w,int h,bool game) {
     }
     graph_gpu_profile::Scope fxGpuScope(*dev_,graphGpuProfile_,"spectrafx-preview-step",game?2ULL:1ULL);
     const bool accepted=spectraPreviewGpu_->step(dt);
-    if(accepted)fxGpuScope.finish();
+    if(accepted)fxGpuScope.finish();else fxGpuScope.abort();
     if(!accepted) {
         spectraPreviewLastError_="Metal preview step: "+spectraPreviewGpu_->reason();
         ws_.log("spectrafx",spectraPreviewLastError_,true);
@@ -2348,6 +2348,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
         else if(const auto view=graphGpuProfile_.complete(timing,dev.frameSerial()))
             prisma_.acceptViewGpuTiming(view,timing.milliseconds);
     }
+    graphGpuProfile_.expire(dev.frameSerial());
     viewportRetirement_.collect(dev);
     gpuResourceRetirement_.collect(dev);
     clientHost_.collectGpuRetirements();
