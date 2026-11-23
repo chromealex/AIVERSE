@@ -61,7 +61,11 @@
     "engine/render/graph/GraphWatch.h",
     "engine/fx/FxInternal.h",
     "engine/fx/ParticleSystem.h",
-    "engine/fx/ParticleSystem.cpp"
+    "engine/fx/ParticleSystem.cpp",
+    "engine/render/graph/GraphExecutionProfile.h",
+    "engine/render/AnimationGraph.h",
+    "engine/render/AnimationGraph.cpp",
+    "apps/studio-web/src/graphs/GraphExecutionProfilePanel.tsx"
   ],
   "traits": {
     "editable": true,
