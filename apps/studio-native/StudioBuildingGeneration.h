@@ -55,13 +55,16 @@ struct Request {
     std::string style,kind;
     uint64_t seed=1;
     StructureSize dimensions{};
+    bool composeFeatures=false;
+    FunctionalBuildingRecipe functionalRecipe{};
 };
 inline Request request(const Json& params) {
     if(!params.isObject())throw std::runtime_error("Building request must be an object");
     Request req;
     req.style=params.getStr("style");
     req.kind=params.getStr("function");
-    if(!safeId(req.style)||!safeId(req.kind))
+    req.composeFeatures=params.getStr("mode")=="features";
+    if(!safeId(req.style)||(!req.composeFeatures&&!safeId(req.kind)))
         throw std::runtime_error("Choose a valid style and building function");
     const Json& seed=params["seed"];
     if(!seed.isNumber())throw std::runtime_error("Building seed must be a nonnegative integer");
@@ -78,19 +81,30 @@ inline Request request(const Json& params) {
         return float(n);
     };
     req.dimensions={positive("width"),positive("height"),positive("depth")};
+    if(req.composeFeatures){
+        req.functionalRecipe=readFunctionalBuildingRecipe(params,"building-recipe");
+    }
     if(params.has("setting") && params.getStr("setting")!=settingId(req.style))
         throw std::runtime_error("Style does not belong to the selected setting");
     return req;
 }
 inline StyledStructure produce(const fs::path& engine,const Request& req) {
     const auto style=load(engine,req.style);
-    if(!style.structureKind(req.kind))
-        throw std::runtime_error("Building function '"+req.kind+"' is not available in style '"+req.style+"'");
-    auto generated=dressStructure(style,req.kind,req.seed,{},0,req.dimensions);
-    if(generated.mesh.vertices.empty())
-        throw std::runtime_error(generated.fitError.empty()
-            ?"Building cannot fit the requested dimensions and physical clearances"
-            :generated.fitError);
+    StyledStructure generated;
+    if(req.composeFeatures){
+        auto result=generateFunctionalBuilding(style,req.functionalRecipe);
+        if(!result)
+            throw std::runtime_error("Functional building recipe: "+result.error);
+        generated=std::move(result.building);
+    }else{
+        if(!style.structureKind(req.kind))
+            throw std::runtime_error("Building preset '"+req.kind+"' is not available in style '"+req.style+"'");
+        generated=dressStructure(style,req.kind,req.seed,{},0,req.dimensions);
+        if(generated.mesh.vertices.empty())
+            throw std::runtime_error(generated.fitError.empty()
+                ?"Building cannot fit the requested dimensions and physical clearances"
+                :generated.fitError);
+    }
     if(generated.mesh.triangles()>150000)
         throw std::runtime_error("Generated building exceeds the 150k triangle asset budget");
     return generated;
@@ -111,9 +125,8 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
         const std::string id=item.path().stem().string();
         if(!safeId(id))continue;
         const auto style=load(engine,id);
-        // Facade-only styles belong to the enterable-building tool, not this
-        // structure generator; do not expose unselectable functions.
-        if(style.structures.empty())continue;
+        // Functional property recipes work with *any* material style, even
+        // a facade-only file with no legacy preset building roles.
         Json s=Json::object(),functions=Json::array();
         s.set("id",string(style.id));s.set("name",string(style.name));s.set("setting",string(settingId(id)));
         for(const auto& k:style.structures){
@@ -163,7 +176,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         ec.clear();fs::create_directory(folder,ec);
         if(ec)throw std::runtime_error("Cannot create GeneratedBuildings directory");
     }
-    const std::string stem=req.style+"-"+req.kind+"-"+std::to_string(req.seed);
+    const std::string stem=req.style+"-"+(req.composeFeatures?std::string("custom"):req.kind)+"-"+std::to_string(req.seed);
     fs::path file;
     for(int index=0;index<=99;++index){
         const std::string suffix=index?"-"+std::to_string(index):"";
