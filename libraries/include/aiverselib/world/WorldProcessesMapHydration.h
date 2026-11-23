@@ -150,6 +150,11 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
         if(!linked::apply(sim.world(),part.entity,part.component,*part.settings,ids,&error))
             throw std::invalid_argument(
                 "World Processes: failed linked component "+std::string(part.component)+" "+error);
+        // A listener needs the authoritative hearing output pool to receive
+        // the shared ECHO propagation result; it is never authored as map data.
+        if(part.component=="EchoReceiver" &&
+           !sim.world().has<echo::AcousticHearing>(part.entity))
+            sim.world().add<echo::AcousticHearing>(part.entity);
     }
     return totals;
 }
