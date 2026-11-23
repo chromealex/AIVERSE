@@ -13,3 +13,7 @@
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/buildings/BuildingLiftPlatformModel.h"
 #include "engine/buildings/BuildingLiftGameSession.h"
+#include "engine/buildings/BuildingLiftDoorOwner.h"
+#include "engine/buildings/BuildingLiftEcsBridge.h"
+#include "engine/buildings/BuildingCirculationEcsScene.h"
+#include "engine/buildings/BuildingLiftReplication.h"
