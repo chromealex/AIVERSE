@@ -14,6 +14,8 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     result.gpu.gpuIndirect=options.gpuIndirect;
     result.gpu.gpuProgram=options.gpuProgram;
     result.gpu.gpuMaterial=options.gpuMaterial;
+    result.gpu.gpuBirthRandom=options.gpuBirthRandom;
+    result.gpu.gpuBirthSeed=options.gpuBirthSeed;
     result.gpu.checkpointEveryFrames=options.checkpointEveryFrames;
     result.gpu.adaptiveCheckpoint=options.adaptiveCheckpoint;
     result.gpu.checkpointBudget=options.checkpointBudget;
@@ -34,7 +36,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
             return reject("shaderGraph requires opt-in gpuMaterial and a complete particle material");
         gpu_material::Material compiled;
         std::string why;
-        if(!gpu_material::compile(e.shaderGraph,e.graphInputs,compiled,why)) {
+        if(!gpu_material::compile(e.shaderGraph,e.graphInputs,compiled,why,options.gpuBirthRandom)) {
             result.reason=why.empty()?"GPU shaderGraph unsupported":why;
             return result;
         }
