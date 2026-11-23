@@ -157,6 +157,27 @@ void testOrphanedVehicleReference() {
     AIVERSE_TEST_CHECK(sim->checksum()==before);
 }
 
+void testDeathmatchRespawnReportsCrossing() {
+    auto sim=make(true);
+    auto& ecs=sim->world();
+    auto& host=actor::host(*sim);
+    const Entity player=host.characterEntity(*sim,1);
+    ecs.get<actor::CharacterBody>(player).pos={36_fx,2_fx,4_fx};
+    host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(owner(*sim,player)==wd::Cell(1,0,0));
+    const auto ack=ecs.resourceConst<wd::RegionDirtyQueue>()->acknowledged;
+    auto& health=ecs.get<actor::CharacterHealth>(player);
+    health.health=0;
+    health.respawnAt=sim->tick();
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==1);
+    AIVERSE_TEST_CHECK(ecs.get<actor::CharacterHealth>(player).health>0);
+    AIVERSE_TEST_CHECK(owner(*sim,player)==wd::Cell(0,0,0));
+    const auto* notifications=ecs.resourceConst<wd::RegionDirtyQueue>();
+    AIVERSE_TEST_CHECK(notifications->entries.empty());
+    AIVERSE_TEST_CHECK(notifications->acknowledged==ack+1);
+}
+
 void testBoundaryOnlyDirtyMotionProducer() {
     auto sim=make(true);
     auto& ecs=sim->world();
@@ -270,6 +291,7 @@ int main() {
     testAutomaticTickAndLegacy();
     testVehicleGroupAndCrossings();
     testOrphanedVehicleReference();
+    testDeathmatchRespawnReportsCrossing();
     testBoundaryOnlyDirtyMotionProducer();
     testDynamicSpawnRetireAndRecycledIds();
     std::cout<<"PASS world-space authoritative region reconciliation and tombstones\n";
