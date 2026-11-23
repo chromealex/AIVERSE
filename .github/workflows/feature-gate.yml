@@ -16,6 +16,9 @@ jobs:
           python-version: '3.12'
       - run: python3 tools/agents/check_contracts.py
       - run: python3 tests/feature_gate_test.py
+      - run: python3 tools/agents/feature_registry.py --base "$BASE_SHA" --format markdown
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
       - run: python3 tools/agents/audit_compliance.py --base "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
