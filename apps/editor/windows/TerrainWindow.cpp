@@ -307,12 +307,15 @@ public:
                 const auto& saved=ed.doc().data.extra["terraweaveCaverns"];
                 try {
                     if(!caveCacheValid_ || saved!=caveCacheJson_) {
-                        auto newSnapshot=terraweave::caverns::caveSnapshotFromJson(saved);
+                        auto snapshot=std::make_shared<terraweave::caverns::CaveVolumeSnapshot>(
+                            terraweave::caverns::caveSnapshotFromJson(saved));
+                        auto index=std::make_shared<const terraweave::caverns::CaveSnapshotSpatialIndex>(
+                            snapshot);
                         caveCacheJson_=saved;
-                        caveCacheSnapshot_=std::move(newSnapshot);
+                        caveCacheIndex_=std::move(index);
                         caveCacheValid_=true;
                     }
-                    const auto& snapshot=caveCacheSnapshot_;
+                    const auto& index=*caveCacheIndex_;
                     constexpr double scale=double(1<<20);
                     const double dlen=std::sqrt(double(direction.x)*direction.x+
                         double(direction.y)*direction.y+double(direction.z)*direction.z);
@@ -324,7 +327,7 @@ public:
                         ray.dxQ20=int32_t(std::llround(double(direction.x)/dlen*scale));
                         ray.dyQ20=int32_t(std::llround(double(direction.y)/dlen*scale));
                         ray.dzQ20=int32_t(std::llround(double(direction.z)/dlen*scale));
-                        auto hit=terraweave::caverns::raycastCaveSurface(snapshot,ray,50000,100);
+                        auto hit=terraweave::caverns::raycastCaveSurface(index,ray,50000,100);
                         if(hit){caveHoverCm_=hit->point;caveHoverValid_=true;}
                     }
                 }catch(const std::exception&){}
@@ -488,7 +491,7 @@ private:
     bool caverns_=false, caveHoverValid_=false;
     terraweave::caverns::PointCm caveHoverCm_{};
     Json caveCacheJson_{};
-    terraweave::caverns::CaveVolumeSnapshot caveCacheSnapshot_{};
+    std::shared_ptr<const terraweave::caverns::CaveSnapshotSpatialIndex> caveCacheIndex_;
     bool caveCacheValid_=false;
     int caveAction_=0,caveRadiusCm_=400,caveDepthCm_=1000;
     int sparseAction_=0,sparseChunkMetres_=256;
