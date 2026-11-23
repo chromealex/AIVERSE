@@ -333,6 +333,22 @@ void ComputeParticles::shutdown() {
     checkpointCadence_={};
     backend_=ComputeBackend::Cpu;stats_={};reason_.clear();
 }
+bool ComputeParticles::resetGpuAllocationSeed(uint32_t seed) {
+    if(!initialized_ || backend_!=ComputeBackend::Metal) {
+        reason_="Seeded GPU allocation requires active Metal backend";
+        return false;
+    }
+    if(!tryClear())return false;
+    // Fisher-Yates on the free-slot list. The seed controls allocation
+    // order only; GPU shader random streams are not modified.
+    uint32_t state=seed==0?0x9E3779B9u:seed;
+    for(size_t i=freeSlots_.size();i>1;--i) {
+        state^=state<<13;state^=state>>17;state^=state<<5;
+        const size_t j=size_t(state)%i;
+        std::swap(freeSlots_[i-1],freeSlots_[j]);
+    }
+    return true;
+}
 void ComputeParticles::clear() {
     (void)tryClear(); // preserve legacy ABI; status is available via reason()
 }
