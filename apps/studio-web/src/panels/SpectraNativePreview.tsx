@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, Pause, Play, RotateCcw, SkipForward, Square } from 'lucide-react';
+import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
 import type { StudioSpectraPreviewState } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioField, StudioInput, StudioSection } from '../ui';
@@ -7,7 +7,7 @@ import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
 
-type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop';
+type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
 interface Props {
   graph:SpectraGraphV2;
@@ -40,7 +40,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   },[active,state?.ready]);
 
   const command=async(action:Action,options:Partial<{
-    graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean
+    graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number
   }>={})=>{
     if(busy||disabled||!active)return;
     setBusy(true);setError('');
@@ -65,6 +65,15 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
   return <StudioSection title="Particle Preview">
     <SpectraDockViewport/>
+    <div className="spectra-native__camera">
+      <span>VFX camera · Left drag orbit · Wheel zoom</span>
+      <StudioButton size="sm" variant="ghost" disabled={!active||busy}
+        onClick={()=>void command('cameraZoom',{amount:30})}><ZoomIn size={14}/> Zoom in</StudioButton>
+      <StudioButton size="sm" variant="ghost" disabled={!active||busy}
+        onClick={()=>void command('cameraZoom',{amount:-30})}><ZoomOut size={14}/> Zoom out</StudioButton>
+      <StudioButton size="sm" variant="ghost" disabled={!active||busy}
+        onClick={()=>void command('cameraReset')}><Focus size={14}/> Reset camera</StudioButton>
+    </div>
     {!active&&<StudioAlert tone="warning">Use the native AIVERSE Studio application for actual Metal/Vulkan Scene rendering. Browser demo cannot access a GPU Device.</StudioAlert>}
     <p className="spectra-native__hint">
       Live native Metal/Vulkan particle stage, embedded in the Graph panel.
