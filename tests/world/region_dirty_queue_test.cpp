@@ -41,7 +41,8 @@ static void testDirtyCoalescingAndArchive() {
 
     RegionDirtyQueue preserved=restored;
     const auto original=save(preserved);
-    Archive shortened(bytes.substr(0,bytes.size()-1));
+    const auto truncated=bytes.substr(0,bytes.size()-1);
+    Archive shortened(truncated);
     io(shortened,preserved);
     AIVERSE_TEST_CHECK(!shortened.ok());
     AIVERSE_TEST_CHECK(save(preserved)==original);
