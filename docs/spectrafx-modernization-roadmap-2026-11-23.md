@@ -57,6 +57,25 @@ preview/time controls, complex graph function/program editors, advanced
 curves/gradient widgets, external PHYSIS adapter, Vulkan compute and
 fluid/destruction systems remain separate work.
 
+## Stage 7 — Curve / Gradient key authoring (2026-11-23, unverified UI)
+
+The HTML5 Graph v2 pane now includes `SpectraCurveEditor.tsx` and
+`spectraCurveModel.ts`. Existing Curve nodes support key time/value
+edits and a static scalar plot, and Gradient nodes support RGBA/alpha
+key stops with a static gradient strip. The immutable model validates
+1..32 unique normalized keys, finite ±1e7 scalar values and safe RGB(A)
+hex strings; it does not invent a new effect format or GPU renderer.
+`spectraCurveModel.test.mjs` has been included in `test:graphs`.
+
+**Current test status:** source committed in draft PR #115, CI pending;
+do not call TypeScript, Vite, WebView or native graphics PASS on this SHA.
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
+
+**Still remaining:** real RHI-owned particle preview and timeline, advanced
+Bezier curves, actual hardware scene captures, Vulkan/Metal GLES parity,
+PHYSIS adapters, shared arena fields, fluids/destruction and final merge.
+
 ## Stage matrix
 
 | Stage | Feature | Design/implementation requirements | Completion criteria |
