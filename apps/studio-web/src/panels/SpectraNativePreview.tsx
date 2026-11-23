@@ -44,6 +44,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
   const [splitPosition,setSplitPosition]=useState(50);
   const [lockedCamera,setLockedCamera]=useState<StudioSpectraCameraSnapshot|null>(null);
+  const [replayPreset,setReplayPreset]=useState<{camera:StudioSpectraCameraSnapshot;tick:number;speed:number;loop:boolean;background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;graphSignature:string;projectPath:string}|null>(null);
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -61,7 +62,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
-    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -175,6 +176,38 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setBusy(true);setError('');
     try{setState(await invoke('studio.spectraPreview',{action:'cameraRestore',camera:lockedCamera}));}
     catch(e){setError(message(e));}finally{setBusy(false);}
+  };
+  const saveReplayPreset=()=>{
+    if(!state?.ready||!state.camera)return;
+    setReplayPreset({camera:{...state.camera},tick:state.tick,speed:state.speed,
+      loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
+      graphSignature,projectPath});
+  };
+  const restoreReplayPreset=async()=>{
+    if(!replayPreset||!active||busy||disabled||capturePending)return;
+    if(replayPreset.projectPath!==projectPath||
+       replayPreset.graphSignature!==graphSignature){
+      setError('Replay preset belongs to a different project or graph revision.');return;
+    }
+    setBusy(true);setError('');
+    try{
+      // All commands are serialized. Stop playback before restoring tick/camera.
+      const actions=[
+        {action:'pause' as const},
+        {action:'stage' as const,background:replayPreset.background,
+          grid:replayPreset.grid,axes:replayPreset.axes},
+        {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
+        {action:'cameraRestore' as const,camera:replayPreset.camera},
+        {action:'seek' as const,tick:replayPreset.tick}
+      ];
+      let result:StudioSpectraPreviewState|null=null;
+      for(const action of actions){
+        result=await invoke('studio.spectraPreview',action);
+        if(result.error||!result.ready)throw new Error(result.error||'Native replay restore failed');
+      }
+      setState(result);setSeek(replayPreset.tick);
+    }catch(e){setError(message(e));}
+    finally{setBusy(false);}
   };
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
@@ -343,6 +376,12 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           <option value="split">Interactive split</option>
         </StudioSelect>
       </StudioField>
+      <StudioButton size="sm" disabled={!state?.ready||!state.camera||busy||capturePending}
+        onClick={saveReplayPreset}>Save replay preset</StudioButton>
+      <StudioButton size="sm" disabled={!replayPreset||busy||capturePending||!state?.ready}
+        onClick={()=>void restoreReplayPreset()}>Restore replay preset</StudioButton>
+      {replayPreset&&<small>Preset tick {replayPreset.tick} · {replayPreset.speed}× ·
+        camera and stage stored in memory</small>}
       <StudioButton size="sm" disabled={!state?.camera||busy}
         onClick={()=>setLockedCamera(state?.camera??null)}>Lock camera</StudioButton>
       <StudioButton size="sm" disabled={!lockedCamera||busy||capturePending}
