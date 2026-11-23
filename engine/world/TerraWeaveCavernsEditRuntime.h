@@ -302,6 +302,9 @@ public:
     }
     // Owner-thread streaming integration: all uncommitted dirty keys must
     // remain residency-pinned until publishReady acknowledges a real commit.
+    std::shared_ptr<const CaveSnapshotSpatialIndex> indexedSnapshot()const {
+        return index_;
+    }
     std::vector<ChunkKey3> dirtyKeys()const {
         std::vector<ChunkKey3> result;
         for(const auto& item:dirty_.pending(maxQueued_))
