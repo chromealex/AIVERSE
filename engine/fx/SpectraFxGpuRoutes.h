@@ -9,6 +9,7 @@
 #include <optional>
 #include "../data/Json.h"
 #include "SpectraFxHybridPlayback.h"
+#include "SpectraFxSignificance.h"
 
 namespace aiverse::fx {
 
@@ -18,6 +19,7 @@ struct SpectraFxGpuEventRoute {
     // A source game must explicitly opt in to its own event types. Never
     // render opponents' hidden events merely because they exist in the sim.
     bool ownPlayerOnly = true;
+    float importance = 1.0f; // host-defined presentation order, not gameplay
 };
 
 class SpectraFxGpuRouteAsset {
@@ -25,7 +27,8 @@ public:
     using Routes = std::unordered_map<uint16_t, SpectraFxGpuEventRoute>;
     static bool read(const Json& doc, Routes& result, std::string* error=nullptr,
                      SpectraFxGpuBudgetGovernor::Config* gpuBudget=nullptr,
-                     std::optional<FxQuality>* sceneQuality=nullptr) {
+                     std::optional<FxQuality>* sceneQuality=nullptr,
+                     SpectraFxSignificance::Config* cuePriority=nullptr) {
         auto fail=[&](const std::string& reason){
             if(error) *error=reason;
             return false;
@@ -35,7 +38,7 @@ public:
         for(const auto& p:doc.members())
             if(p.first!="version" && p.first!="routes" &&
                p.first!="gpuFrameBudgetMs" && p.first!="minGpuSpawnScale" &&
-               p.first!="sceneQuality")
+               p.first!="sceneQuality" && p.first!="cuePriority")
                 return fail("SpectraFX GPU routes: unknown field "+p.first);
         std::optional<FxQuality> parsedQuality;
         if(doc.has("sceneQuality")) {
@@ -68,6 +71,42 @@ public:
         SpectraFxGpuBudgetGovernor validation;
         if(!validation.configure(budget))
             return fail("SpectraFX GPU frame-budget settings invalid");
+        SpectraFxSignificance::Config ranking;
+        const Json& authoredPriority=doc["cuePriority"];
+        if(!authoredPriority.isNull()) {
+            if(!authoredPriority.isObject())
+                return fail("cuePriority must be object");
+            ranking.enabled=true; // presence explicitly opts in
+            for(const auto& p:authoredPriority.members())
+                if(p.first!="enabled" && p.first!="nearDistance" &&
+                   p.first!="farDistance" && p.first!="targetRadiusPixels" &&
+                   p.first!="peripheralMultiplier" &&
+                   p.first!="behindMultiplier")
+                    return fail("unknown cuePriority field "+p.first);
+            if(authoredPriority.has("enabled")) {
+                if(authoredPriority["enabled"].type()!=Json::Type::Bool)
+                    return fail("cuePriority.enabled must be bool");
+                ranking.enabled=authoredPriority["enabled"].boolean();
+            }
+            const auto numeric=[&](const char* key,float& field) {
+                if(!authoredPriority.has(key))return true;
+                const Json& j=authoredPriority[key];
+                const double d=j.toDouble();
+                if(!j.isNumber() || !std::isfinite(d) ||
+                   std::abs(d)>1000000)return false;
+                field=float(d);
+                return true;
+            };
+            if(!numeric("nearDistance",ranking.nearDistance) ||
+               !numeric("farDistance",ranking.farDistance) ||
+               !numeric("targetRadiusPixels",ranking.targetRadiusPixels) ||
+               !numeric("peripheralMultiplier",ranking.peripheralMultiplier) ||
+               !numeric("behindMultiplier",ranking.behindMultiplier))
+                return fail("invalid cuePriority number");
+            SpectraFxSignificance validation;
+            if(!validation.configure(ranking))
+                return fail("cuePriority settings out of range");
+        }
         const Json& values=doc["routes"];
         if(!values.isArray() || values.size()>64)
             return fail("SpectraFX GPU routes must contain at most 64 entries");
@@ -79,7 +118,8 @@ public:
                 if(p.first!="eventType" && p.first!="asset" &&
                    p.first!="oneShotSeconds" && p.first!="enabled" &&
                    p.first!="ownPlayerOnly" &&
-                   p.first!="sharedPool" && p.first!="sharedPoolCapacity")
+                   p.first!="sharedPool" && p.first!="sharedPoolCapacity" &&
+                   p.first!="importance")
                     return fail("SpectraFX GPU route: unknown field "+p.first);
             const Json& event=value["eventType"];
             if(!event.isNumber() ||
@@ -105,6 +145,14 @@ public:
                 // Hidden enemy events must not leak through FX.
                 if(!entry.ownPlayerOnly)
                     return fail("SpectraFX shared event visibility requires a host visibility adapter");
+            }
+            if(value.has("importance")) {
+                const Json& val=value["importance"];
+                const double d=val.toDouble();
+                if(!val.isNumber() || !std::isfinite(d) ||
+                   d<0.01 || d>100)
+                    return fail("importance must be a number in [0.01,100]");
+                entry.importance=float(d);
             }
             if(value.has("sharedPool")) {
                 if(!value["sharedPool"].isString() ||
@@ -142,14 +190,16 @@ public:
         result=std::move(next);
         if(gpuBudget) *gpuBudget=budget;
         if(sceneQuality) *sceneQuality=parsedQuality;
+        if(cuePriority) *cuePriority=ranking;
         if(error) error->clear();
         return true;
     }
     static bool readText(const std::string& text,Routes& routes,
                          std::string* error=nullptr,
                          SpectraFxGpuBudgetGovernor::Config* gpuBudget=nullptr,
-                         std::optional<FxQuality>* sceneQuality=nullptr) {
-        try {return read(Json::parse(text),routes,error,gpuBudget,sceneQuality);}
+                         std::optional<FxQuality>* sceneQuality=nullptr,
+                         SpectraFxSignificance::Config* cuePriority=nullptr) {
+        try {return read(Json::parse(text),routes,error,gpuBudget,sceneQuality,cuePriority);}
         catch(const std::exception& e) {
             if(error) *error=e.what();
             return false;
