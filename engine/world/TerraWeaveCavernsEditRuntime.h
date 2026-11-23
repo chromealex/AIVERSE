@@ -47,6 +47,8 @@ public:
                     std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
         if(!snapshot || !snapshot->sourceRevision)
             throw std::invalid_argument("Caverns missing edit snapshot");
+        if(snapshot_ && snapshot->sourceRevision<snapshot_->sourceRevision)
+            throw std::invalid_argument("Caverns stale snapshot invalidation");
         // Every dirty worker captures exactly this immutable snapshot.
         // Do not mix unrelated generator settings/versions on adjacent cells.
         // A new source revision supersedes every not-yet-committed chunk,
