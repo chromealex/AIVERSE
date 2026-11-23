@@ -8,6 +8,7 @@
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include "engine/buildings/BuildingLiftDoorOwner.h"
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -30,6 +31,13 @@ public:
     const BuildingCirculationHost& host()const noexcept{return host_;}
     const BuildingLiftColliderOwner& colliders()const noexcept{return colliders_;}
     const BuildingLiftDoorOwner& doors()const noexcept{return doors_;}
+    // World owner callback returns true when the cabin/landing doorway
+    // intersects a character, vehicle, cargo or other blocking object.
+    // This is an authoritative PHYSIS/ECS sensor, never a client callback.
+    using ObstructionProbe=std::function<bool(uint32_t,uint32_t)>;
+    void setDoorObstructionProbe(ObstructionProbe probe){
+        obstructionProbe_=std::move(probe);
+    }
 
     // All collider IDs come from the calling game's normal ECS/physics owner.
     // Invalid/duplicate IDs are rejected by SpatialWorld::add. Do not
@@ -107,6 +115,19 @@ public:
                 "Tick delta must be 1..1000ms");
             return result;
         }
+        // Door closing is fail-closed for gameplay: with physical landing
+        // doors enabled the scene MUST have an authoritative obstruction
+        // probe. We refuse to advance any lift while no sensor is installed.
+        if(doors_.enabled()&&!obstructionProbe_){
+            result.published=false;
+            result.error="Physical lift door safety probe is required";
+            return result;
+        }
+        if(obstructionProbe_)for(const auto& [feature,lift]:host_.lifts()){
+            if(lift.snapshot().phase!=BuildingLiftPhase::Closing)continue;
+            if(obstructionProbe_(feature,lift.snapshot().currentFloor))
+                host_.interruptLiftDoorClosing(feature);
+        }
         result.tick=host_.advance(elapsedMs);
         // Before publishing new cabin/rider poses, commit landing-door
         // transitions to the same SpatialWorld. A door collision failure
@@ -165,6 +186,7 @@ public:
             (void)colliders_.remove(spatial,navmesh,feature);
         host_.clear();
         attached_=false;faulted_=false;
+        obstructionProbe_={};
     }
     // An ECS rider/transform publication failure must also stop the
     // navigation owner: the cabin's collision and actor state diverged.
@@ -179,6 +201,7 @@ private:
     BuildingCirculationHost host_;
     BuildingLiftColliderOwner colliders_;
     BuildingLiftDoorOwner doors_;
+    ObstructionProbe obstructionProbe_;
     Vec3 origin_{};
     float width_=0,depth_=0;
     uint32_t yaw_=0;
