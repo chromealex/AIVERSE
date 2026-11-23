@@ -7,6 +7,18 @@
 
 namespace aiverse::actor {
 
+bool ActorHost::reportRegionChange(Simulation& sim,Entity entity,
+                                    world::RegionDirtyKind kind) {
+    auto& ecs=sim.world();
+    const auto* queue=ecs.resourceConst<world::RegionDirtyQueue>();
+    if(!queue)return true;
+    if(!entity.valid() || entity.packed()==UINT64_MAX)return false;
+    const uint64_t id=entity.packed()+1;
+    if(!queue->entries.contains(id) &&
+       queue->entries.size()>=world::RegionDirtyQueue::kMaxEntries)return false;
+    return ecs.resource<world::RegionDirtyQueue>()->mark(entity,kind);
+}
+
 void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     auto& ecs=sim.world();
     const World& view=ecs;
@@ -14,6 +26,40 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     if(!ledger)return;
     const auto position=regionPositionReader();
     const world::SpatialWorld grid(32);
+    const auto* dirty=view.resourceConst<world::RegionDirtyQueue>();
+    // Process known structural changes before the compatibility scan.
+    // Position changes remain handled by the full scan until every
+    // authoritative canonical-position writer emits a dirty event.
+    if(dirty) {
+        for(const auto& [id,flags]:dirty->entries) {
+            (void)flags;
+            const Entity entity=Entity::fromPacked(id-1);
+            const bool tracked=view.alive(entity) &&
+                (view.has<CharacterBody>(entity) || view.has<Vehicle>(entity) ||
+                 view.has<Loot>(entity));
+            const auto* record=ledger->find(id);
+            if(!tracked) {
+                if(record && record->live &&
+                   !ecs.resource<world::RegionEntityLedger>()->despawn(id,record->owner))
+                    throw std::logic_error("regionOwnership: dirty retire failed");
+                continue;
+            }
+            const auto location=position(view,entity);
+            if(!location)
+                throw std::logic_error("regionOwnership: dirty actor lacks position");
+            if(!record) {
+                if(!world::RegionEcsBridge::bindNew(
+                       ecs,*ecs.resource<world::RegionEntityLedger>(),
+                       entity,id,grid.cell(*location),position))
+                    throw std::logic_error("regionOwnership: dirty spawn failed");
+            }else if(!record->live) {
+                throw std::logic_error("regionOwnership: tombstoned dirty ID");
+            }
+            // resourceConst may have been detached by a COW write.
+            ledger=view.resourceConst<world::RegionEntityLedger>();
+        }
+    }
+    ledger=view.resourceConst<world::RegionEntityLedger>();
 
     // Snapshot before adding ECS tags. Stable order ignores sparse pool order.
     std::vector<Entity> tracked;
@@ -160,6 +206,16 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         if(!entry || !entry->live ||
            !ecs.resource<world::RegionEntityLedger>()->despawn(id,entry->owner))
             throw std::logic_error("regionOwnership: tombstone failed");
+    }
+    // ACK after successful authoritative reconciliation; failures keep
+    // pending observations for retry/rollback.
+    if(dirty && !dirty->entries.empty()) {
+        const size_t count=dirty->entries.size();
+        if(count>UINT64_MAX-dirty->acknowledged)
+            throw std::logic_error("regionOwnership: dirty ACK overflow");
+        auto* queue=ecs.resource<world::RegionDirtyQueue>();
+        queue->acknowledged+=count;
+        queue->entries.clear();
     }
 }
 } // namespace aiverse::actor
