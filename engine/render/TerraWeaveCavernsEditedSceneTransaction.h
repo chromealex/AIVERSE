@@ -26,9 +26,13 @@ public:
         auto prepared=prepareCaveEditPresentation(candidates,generatorVersion,options);
         // Stage FIRST, preserving old active scene; then open owner ticket.
         // Do not expose geometry to Renderer3D until all owners are ready.
-        if(!gpu_.stage(device,std::move(prepared),
-                       batchRenderRevision,strataEnabled,options.maxVertices))
-            return false;
+        // A completely filled/no-surface batch retires the old visual scene
+        // ONLY after the same Box3D/SpatialWorld/NavMesh barrier succeeds.
+        const bool staged=prepared.models.empty()
+            ? gpu_.stageEmpty(batchRenderRevision)
+            : gpu_.stage(device,std::move(prepared),
+                         batchRenderRevision,strataEnabled,options.maxVertices);
+        if(!staged)return false;
         ticket_=state_.begin(src,batchRenderRevision,candidates.size());
         (void)state_.prepared(ticket_,CaveOwnerPart::Geometry);
         return true;
