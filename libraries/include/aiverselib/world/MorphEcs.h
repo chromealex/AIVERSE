@@ -35,6 +35,14 @@ struct Force {
     I x=0,y=0,z=0; // per-tick authored impulse, not a physics force
     bool enabled=true;
 };
+// One-shot host contact impulse. Unlike Force it is consumed exactly once
+// on its scheduled tick, including under COW rollback and save/replay.
+// The authoritative host quantizes external Box3D input before enqueueing.
+struct Impact {
+    I x=0,y=0,z=0;
+    std::uint32_t applyTick=UINT32_MAX;
+    bool pending=false;
+};
 inline void io(Archive& a,Node& n){
     a(n.x,n.y,n.z,n.vx,n.vy,n.vz,n.restX,n.restY,n.restZ,
       n.drag,n.anchored,n.enabled,n.sampledTick);
@@ -62,6 +70,36 @@ inline void io(Archive& a,Force& f){
     if(!a.writing()&&(f.x< -kForceLimit||f.x>kForceLimit||
         f.y< -kForceLimit||f.y>kForceLimit||
         f.z< -kForceLimit||f.z>kForceLimit))a.fail();
+}
+inline bool valid(const Impact& i){
+    return i.x>=-kForceLimit&&i.x<=kForceLimit&&
+           i.y>=-kForceLimit&&i.y<=kForceLimit&&
+           i.z>=-kForceLimit&&i.z<=kForceLimit;
+}
+inline void io(Archive& a,Impact& i){
+    a(i.x,i.y,i.z,i.applyTick,i.pending);
+    if(!a.writing()&&!valid(i))a.fail();
+}
+// Enqueue on the ECS owner thread after a physics contact barrier.
+// Multiple contacts on a node/tick are merged with saturation, not lost.
+// Callers must supply only validated, authoritative replayable inputs.
+inline bool enqueueImpact(World& world,Entity node,std::uint32_t tick,
+                          I dx,I dy,I dz){
+    if(!world.alive(node)||!world.has<Node>(node)||
+       !valid(Impact{dx,dy,dz,tick,true}))return false;
+    Impact next;
+    if(const auto* previous=static_cast<const World&>(world).tryGetConst<Impact>(node))
+        next=*previous;
+    if(next.pending && next.applyTick!=tick)return false;
+    if(!next.pending){
+        next={0,0,0,tick,true};
+    }
+    next.x=std::clamp(next.x+dx,-kForceLimit,kForceLimit);
+    next.y=std::clamp(next.y+dy,-kForceLimit,kForceLimit);
+    next.z=std::clamp(next.z+dz,-kForceLimit,kForceLimit);
+    if(!world.has<Impact>(node))world.add<Impact>(node,next);
+    else world.get<Impact>(node)=next;
+    return true;
 }
 inline I limit(I n,I bound){return std::clamp(n,-bound,bound);}
 inline bool valid(const Node& n){
@@ -93,7 +131,8 @@ inline bool advance(World& world,std::uint32_t tick){
     const World& read=world;
     if(read.countExisting<Node>()>kMaxNodes||
        read.countExisting<Spring>()>kMaxSprings||
-       read.countExisting<Force>()>kMaxForces)return false;
+       read.countExisting<Force>()>kMaxForces||
+       read.countExisting<Impact>()>kMaxNodes)return false;
     struct Item{Entity id;Node value;};
     std::vector<Item> nodes;
     read.eachExistingConst<Node>([&](Entity e,const Node& n){
@@ -153,6 +192,29 @@ inline bool advance(World& world,std::uint32_t tick){
             a=limit(a+v[axis],kForceLimit);
         }
     }
+    // Apply scheduled one-shot contacts after continuous spring/Force terms.
+    // Stage their acknowledgement; no authoritative pool is mutated until
+    // all Nodes and pending Impact values have been validated.
+    std::vector<std::pair<Entity,Impact>> consumed;
+    read.eachExistingConst<Impact>([&](Entity e,const Impact& impulse){
+        if(read.alive(e))consumed.push_back({e,impulse});
+    });
+    std::sort(consumed.begin(),consumed.end(),
+        [](const auto& a,const auto& b){return a.first.packed()<b.first.packed();});
+    for(auto& [e,impulse]:consumed){
+        if(!valid(impulse))return false;
+        if(!impulse.pending)continue;
+        if(impulse.applyTick!=tick)return false;
+        const auto it=ids.find(e.packed());
+        if(it==ids.end())return false;
+        I delta[3]{impulse.x,impulse.y,impulse.z};
+        for(int axis=0;axis<3;++axis){
+            auto& out=acceleration[it->second][std::size_t(axis)];
+            out=limit(out+delta[axis],kForceLimit);
+        }
+        impulse.pending=false;
+        impulse.x=impulse.y=impulse.z=0;
+    }
     for(std::size_t i=0;i<nodes.size();++i){
         auto& n=nodes[i].value;
         if(!n.enabled){n.sampledTick=tick;continue;}
@@ -176,13 +238,16 @@ inline bool advance(World& world,std::uint32_t tick){
         n.sampledTick=tick;
     }
     if(!world.prepareExistingWrite<Node>())return false;
+    if(!consumed.empty()&&!world.prepareExistingWrite<Impact>())return false;
     for(const auto& item:nodes)world.get<Node>(item.id)=item.value;
+    for(const auto& [e,impact]:consumed)world.get<Impact>(e)=impact;
     return true;
 }
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<Node>("morph.node",1);
     sim.registerPersistentComponent<Spring>("morph.spring",1);
     sim.registerPersistentComponent<Force>("morph.force",1);
+    sim.registerPersistentComponent<Impact>("morph.impact",1);
 }
 inline void install(Simulation& sim,std::string name="morph.constraints"){
     registerPersistence(sim);
