@@ -59,3 +59,30 @@ test('model parent graph preserves geometry and rejects hierarchy cycles',()=>{
  assert.deepEqual(modelingReply({ok:true,document:doc,revision:7}),{document:doc,revision:7});
  assert.throws(()=>modelingReply({ok:true,document:doc,revision:0}));
 });
+
+import {geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,animationScalarNames,setAnimationScalar,editAnimationCondition} from '../src/graphs/nativeGraphAdapters.ts';
+test('geometry graph distinguishes CSG operands from transform parents',()=>{
+ const doc={nodes:[{id:'a',geometry:{kind:'box'}},{id:'b',parent:'a',geometry:{kind:'sphere'}},{id:'c',geometry:{kind:'boolean',a:'a',b:'b',operation:'union',modifiers:[{kind:'normals'},{kind:'uv'}]}}]};
+ const view=geometryProjection(doc);
+ assert.deepEqual(view.links.map(l=>[l.from,l.to,l.input]),[['a','c','a'],['b','c','b']]);
+ const next=connectGeometryOperand(doc,{node:'b',port:'mesh'},{node:'c',port:'a'});
+ assert.equal(next.nodes[2].geometry.a,'b');
+ assert.equal(doc.nodes[2].geometry.a,'a');
+ assert.equal(connectGeometryOperand(doc,{node:'c',port:'mesh'},{node:'c',port:'a'}),doc);
+ assert.equal(setGeometryBoolean(doc,'c','invalid'),doc);
+ assert.equal(setGeometryBoolean(doc,'c','subtract').nodes[2].geometry.operation,'subtract');
+ assert.deepEqual(moveGeometryModifier(doc,'c',1,-1).nodes[2].geometry.modifiers.map(m=>m.kind),['uv','normals']);
+ assert.equal(moveGeometryModifier(doc,'c',0,-1),doc);
+});
+test('typed animation conditions preserve graph parameter types and transition order',()=>{
+ const doc={parameters:{speed:0,moving:false,direction:[0,0,1]},states:[{id:'idle',transitions:[{to:'run',when:[]}]},{id:'run'}]};
+ assert.deepEqual(animationScalarNames(doc),['speed','moving']);
+ assert.equal(setAnimationScalar(doc,'direction',1),doc);
+ assert.equal(setAnimationScalar(doc,'speed',Infinity),doc);
+ const next=editAnimationCondition(doc,'idle',0,0,{parameter:'speed',op:'gt',value:0.5});
+ assert.deepEqual(next.states[0].transitions[0].when,[{parameter:'speed',op:'gt',value:.5}]);
+ assert.equal(editAnimationCondition(next,'idle',0,0,{parameter:'direction'}),next);
+ assert.equal(editAnimationCondition(next,'idle',0,0,{op:'bad'}),next);
+ assert.equal(editAnimationCondition(next,'idle',0,0,null).states[0].transitions[0].when.length,0);
+ assert.deepEqual(doc.states[0].transitions[0].when,[]);
+});
