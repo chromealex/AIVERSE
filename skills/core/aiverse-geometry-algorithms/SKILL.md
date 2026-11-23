@@ -19,3 +19,5 @@ GeometryConvex.h: convexSupport, bounded convexIntersect (GJK, four-state result
 GeometryEPA.h: convexEPA accepts four actual Minkowski support vertices strictly enclosing origin; returns depth and outward A-B normal on convergence. Caller supplies simplex; current GJK API does not expose it. Invalid/Indeterminate are explicit. No tests.
 
 convexIntersect optionally exports a strict enclosing tetrahedron; convexPenetration automatically invokes EPA when available. Lower-dimensional or early tolerance contacts may yield Indeterminate for penetration even when intersection is known. Witness points remain unimplemented. No tests.
+
+convexPenetrationExpanded attempts a strict tetrahedron from 26 sampled directions on Indeterminate. This is incomplete and can still fail. convexSupportPair returns extreme points, not contact witnesses. No tests.
