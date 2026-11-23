@@ -60,6 +60,8 @@ namespace studio = aiverse::studio;
 @property(nonatomic, assign) StudioShell* shell;
 @end
 
+@interface StudioFxView : StudioMetalView
+@end
 @interface StudioGameView : StudioMetalView { NSTrackingArea* tracking_; }
 @end
 
@@ -106,6 +108,7 @@ namespace studio = aiverse::studio;
     NSWindow* window_;
     WKWebView* web_;
     StudioMetalView* viewport_;
+    StudioFxView* fxViewport_;
     StudioGameView* gameViewport_;
     StudioDeviceChromeView* gameChrome_;
     NSTimer* timer_;
@@ -151,9 +154,13 @@ public:
         else [shell_ evaluateInAllWebs:text];
     }
     // The Scene's device is made on its render thread: the layers were captured on the main thread.
-    void setLayers(void* scene, void* game) { sceneLayer_=scene; gameLayer_=game; }
+    void setLayers(void* scene, void* game, void* fx) {
+        sceneLayer_=scene;gameLayer_=game;fxLayer_=fx;
+    }
     std::unique_ptr<aiverse::gfx::Device> createDevice(studio::StudioSurface surface) override {
-        return aiverse::gfx::createMetalDevice(surface==studio::StudioSurface::Scene ? sceneLayer_ : gameLayer_);
+        return aiverse::gfx::createMetalDevice(
+            surface==studio::StudioSurface::Scene?sceneLayer_:
+            surface==studio::StudioSurface::Fx?fxLayer_:gameLayer_);
     }
     // Render-thread frames: layer changes off the main thread go into an explicit transaction.
     void sceneThreadScope(const std::function<void()>& body) override {
@@ -165,7 +172,8 @@ public:
         }
     }
     bool surfaceDrawable(studio::StudioSurface surface) override {
-        NSView* view=surface==studio::StudioSurface::Scene ? (NSView*)shell_->viewport_ : (NSView*)shell_->gameViewport_;
+        NSView* view=surface==studio::StudioSurface::Scene?(NSView*)shell_->viewport_:
+            surface==studio::StudioSurface::Fx?(NSView*)shell_->fxViewport_:(NSView*)shell_->gameViewport_;
         NSWindow* window=view.window ?: shell_->window_;
         return !view.hidden && !window.isMiniaturized && window.visible;
     }
@@ -532,6 +540,37 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 }
 @end
 
+@implementation StudioFxView
+// A dedicated VFX render target is never a map editor. Mouse gestures can
+// only manipulate its isolated camera; no pick, brush or asset drop.
+- (void)mouseDown:(NSEvent*)event { (void)event; [self.window makeFirstResponder:self]; }
+- (void)mouseDragged:(NSEvent*)event {
+    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+}
+- (void)rightMouseDragged:(NSEvent*)event {
+    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+}
+- (void)otherMouseDragged:(NSEvent*)event {
+    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+}
+- (void)scrollWheel:(NSEvent*)event {
+    const CGFloat wheel=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?.12:1.0);
+    if(auto* core=[self core])core->fxCameraZoom(wheel);
+}
+- (void)mouseMoved:(NSEvent*)event {(void)event;}
+- (void)mouseExited:(NSEvent*)event {(void)event;}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    (void)sender;return NSDragOperationNone;
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+    (void)sender;return NSDragOperationNone;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    (void)sender;return NO;
+}
+- (void)keyDown:(NSEvent*)event {(void)event;}
+@end
+
 @implementation StudioGameView
 // The hosted game never accepts Scene asset drops.
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender { (void)sender; return NSDragOperationNone; }
@@ -681,13 +720,19 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     viewport_.hidden=YES;
     [window_.contentView addSubview:viewport_
         positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
+    fxViewport_=[[StudioFxView alloc] initWithFrame:NSZeroRect];
+    fxViewport_.shell=self;fxViewport_.hidden=YES;
+    [window_.contentView addSubview:fxViewport_
+        positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
     gameViewport_=[[StudioGameView alloc] initWithFrame:NSZeroRect];
     gameViewport_.shell=self;gameViewport_.hidden=YES;
     gameChrome_=[[StudioDeviceChromeView alloc] initWithFrame:NSZeroRect];
     gameChrome_.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
     [gameViewport_ addSubview:gameChrome_];
     [window_.contentView addSubview:gameViewport_ positioned:NSWindowAbove relativeTo:web_];
-    static_cast<MacPlatform*>(platform_.get())->setLayers((__bridge void*)viewport_.layer,(__bridge void*)gameViewport_.layer);
+    static_cast<MacPlatform*>(platform_.get())->setLayers(
+        (__bridge void*)viewport_.layer,(__bridge void*)gameViewport_.layer,
+        (__bridge void*)fxViewport_.layer);
     StudioWindowChrome* chrome=[[StudioWindowChrome alloc]
         initWithFrame:NSMakeRect(0,window_.contentView.bounds.size.height-44,80,44)];
     chrome.autoresizingMask=NSViewMinYMargin;
@@ -912,6 +957,12 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
         [window_.contentView addSubview:viewport_ positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
         core_->surfaceDetached(studio::StudioSurface::Scene);
     }
+    if (fxViewport_.window==window) {
+        [fxViewport_ removeFromSuperview];fxViewport_.hidden=YES;
+        [window_.contentView addSubview:fxViewport_ positioned:
+            (htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
+        core_->surfaceDetached(studio::StudioSurface::Fx);
+    }
     if (gameViewport_.window==window) {
         [gameViewport_ removeFromSuperview];gameViewport_.hidden=YES;
         core_->surfaceDetached(studio::StudioSurface::Game);
@@ -1106,11 +1157,12 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
 // Returns NO for a stale report from a window that no longer hosts the view.
 - (BOOL)placeSurface:(studio::StudioSurface)surface rect:(const studio::ViewportRect&)rect out:(studio::NativeViewportPlacement&)out {
     WKWebView* host=currentWeb_ ?: web_;
-    NSView* view=surface==studio::StudioSurface::Scene ? (NSView*)viewport_ : (NSView*)gameViewport_;
+    NSView* view=surface==studio::StudioSurface::Scene?(NSView*)viewport_:
+        surface==studio::StudioSurface::Fx?(NSView*)fxViewport_:(NSView*)gameViewport_;
     if (view.superview!=host.superview) {
         if (!rect.visible) return NO;
         [view removeFromSuperview];
-        [host.superview addSubview:view positioned:((htmlComposite_ && view==viewport_) ? NSWindowBelow : NSWindowAbove) relativeTo:host];
+        [host.superview addSubview:view positioned:((htmlComposite_ && view!=gameViewport_) ? NSWindowBelow : NSWindowAbove) relativeTo:host];
     }
     out=studio::viewportPlacement(rect,host.bounds.size.width,host.bounds.size.height,host.window.backingScaleFactor);
     if (view.hidden!=!out.visible) view.hidden=!out.visible;
@@ -1124,7 +1176,8 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     const CGSize size=CGSizeMake(out.pixelsW,out.pixelsH);
     if (!CGSizeEqualToSize(layer.drawableSize,size)) {
         // The Scene layer is drawn on the render thread: resize between its frames.
-        if (view==viewport_) core_->runOnSceneThread([&]{ layer.drawableSize=size; });
+        if (view==viewport_ || view==fxViewport_)
+            core_->runOnSceneThread([&]{ layer.drawableSize=size; });
         else layer.drawableSize=size;
     }
     return YES;
