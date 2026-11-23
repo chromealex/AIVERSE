@@ -72,6 +72,17 @@ int main() {
     AIVERSE_TEST_CHECK(!view.captureAnimationTelemetry(101,42,graphHistory));
     AIVERSE_TEST_CHECK(!view.animationTelemetry(202,42));
     AIVERSE_TEST_CHECK(!view.animationTelemetry(101,0));
+    AIVERSE_TEST_CHECK(view.enableAnimationProfile(101,42));
+    auto candidate=view.prepareUpdate(objects,.016f);
+    AIVERSE_TEST_CHECK(candidate->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(view.animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    auto candidate2=candidate->prepareUpdate(objects,.016f);
+    AIVERSE_TEST_CHECK(candidate2->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="2");
+    AIVERSE_TEST_CHECK(!candidate2->animationProfileReport(101,43).getBool("available"));
+    AIVERSE_TEST_CHECK(candidate2->resetAnimationProfile(101,42));
+    AIVERSE_TEST_CHECK(candidate2->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    candidate2->clearAnimationProfile();
+    AIVERSE_TEST_CHECK(!candidate2->animationProfileReport(101,42).getBool("available"));
     // A rejected batch (duplicate animated source ID) must leave the View
     // untouched: no stats reset, no frame stamp / LOD hysteresis advance.
     {
@@ -91,6 +102,7 @@ int main() {
     AIVERSE_TEST_CHECK(result.source.restarted==1);
     auto replacement=view.animationTelemetry(101,42);
     AIVERSE_TEST_CHECK(replacement.has_value());
+    AIVERSE_TEST_CHECK(!view.animationProfileReport(101,42).getBool("available"));
     AIVERSE_TEST_CHECK(replacement->value.getStr("sourceGeneration")=="8");
     AIVERSE_TEST_CHECK(replacement->value.getStr("graphPublication")=="2");
     AIVERSE_TEST_CHECK(graphHistory.read(replacement->identity).size()==0);
