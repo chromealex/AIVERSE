@@ -8,6 +8,7 @@
 #include "ImprintTrails.h"
 #include "ImprintCrowdBridge.h"
 #include "CircuitEcs.h"
+#include "CircuitDevices.h"
 #include "GranularEcs.h"
 #include "EvolveEcs.h"
 #include "SocietyEcs.h"
@@ -51,7 +52,12 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
         imprint::installTrails(sim);
         imprint::install(sim);
     }
-    if(flags.circuit)circuit::install(sim);
+    if(flags.circuit){
+        circuit::registerDevicePersistence(sim);
+        circuit::installSwitches(sim);
+        circuit::install(sim);
+        circuit::installDevices(sim);
+    }
     if(flags.granular)granular::install(sim);
     if(flags.evolve)evolve::install(sim);
     if(flags.society)society::install(sim);
