@@ -49,7 +49,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
                       "texture_patterns", "texture_generate"}},
         {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
-        {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_debug_session", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
+        {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_debug_session", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
                         "animation_montage_validate"}},
         {"anim_rig", {"animation_avatar_suggest", "animation_avatar_validate", "rig_auto_weights", "rig_edit", "animation_ragdoll_generate",
                       "animation_root_motion_generate"}},
@@ -79,7 +79,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_debug_session") return true;
+    if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_debug_session") return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
                                      "_preview", "_analyze", "_state", "_export", "_run", "_scan", "_report", "_sample",
