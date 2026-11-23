@@ -4,6 +4,7 @@
 #include "engine/render/graph/GraphTelemetry.h"
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
+#include "engine/render/graph/TextureGraphGpu.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
@@ -207,6 +208,14 @@ int main() {
     require(call("texture_graph_preview",instance).has("error"),"invalid override accepted");
     require(fs::is_regular_file(root/"content"/"textures"/"fixture_set"/"texture-set.json"),"bake provenance missing");
     require(call("texture_graph_cache",Json::parse(R"({"clear":true})")).getInt("entries")==0,"cache clear failed");
+
+    const auto gpuTexture=render::texture_graph::compile(tex["graph"]);
+    const auto gpuPacked=render::texture_graph::gpu::compile(gpuTexture,gpuTexture.outputs.at("metallicRoughness"),8);
+    require(!gpuPacked.msl.empty()&&gpuPacked.msl.find("cs_main")!=std::string::npos,"GPU texture source missing");
+    const auto gpuNormal=render::texture_graph::gpu::compile(gpuTexture,gpuTexture.outputs.at("normal"),8);
+    require(gpuNormal.msl.empty()&&!gpuNormal.reason.empty(),"unsupported GPU normal accepted");
+    const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
+    require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
