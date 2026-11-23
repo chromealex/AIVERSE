@@ -8,3 +8,4 @@ third-party-notices|python3|tests/notices/notices_test.py|
 readme-translations|python3|tools/readme/check.py|
 skill-catalog|python3|tests/skills/catalog_test.py|
 unified-runner-smoke|python3|tests/test_unified_runner.py|
+feature-gate|python3|tests/feature_gate_test.py|
