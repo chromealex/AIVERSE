@@ -886,6 +886,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     struct Pending {
         std::array<std::vector<uint8_t>,3> bytes;
         std::vector<float> remainingLifetime;
+        std::vector<uint32_t> freeSlotOrder;
+        std::vector<uint64_t> sourceTokens;
+        std::array<float,8> birthParameters{};
         uint64_t frameRevision=0, frameSerial=0;
         uint32_t shaderBirthSeed=0, shaderBirthOrdinal=0;
         bool shaderBirthSeedEnabled=false;
@@ -903,6 +906,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     };
     auto pending=std::make_shared<Pending>();
     pending->remainingLifetime=ages_;
+    pending->freeSlotOrder=freeSlots_;
+    pending->sourceTokens=slotSourceTokens_;
+    pending->birthParameters=programParams_;
     pending->shaderBirthSeed=shaderBirthSeed_;
     pending->shaderBirthOrdinal=shaderBirthOrdinal_;
     pending->shaderBirthSeedEnabled=shaderBirthSeedEnabled_;
@@ -958,6 +964,10 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                         const size_t total=pending->remainingLifetime.size();
                         result.slots.resize(total);
                         result.remainingLifetime=pending->remainingLifetime;
+                        result.freeSlotOrder=pending->freeSlotOrder;
+                        result.sourceTokens=pending->sourceTokens;
+                        result.birthParameters=pending->birthParameters;
+                        result.hostStateComplete=true;
                         result.frameSerial=pending->frameSerial;
                         result.shaderBirthSeed=pending->shaderBirthSeed;
                         result.shaderBirthOrdinal=pending->shaderBirthOrdinal;
@@ -1076,6 +1086,13 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
     GpuCheckpoint next;
     next.slots.resize(n);
     next.remainingLifetime=ages_;
+    next.freeSlotOrder=freeSlots_;
+    next.sourceTokens=slotSourceTokens_;
+    next.birthParameters=programParams_;
+    next.shaderBirthSeed=shaderBirthSeed_;
+    next.shaderBirthOrdinal=shaderBirthOrdinal_;
+    next.shaderBirthSeedEnabled=shaderBirthSeedEnabled_;
+    next.hostStateComplete=true;
     next.frameSerial=device_->frameSerial();
     for(size_t i=0;i<n;++i) {
         auto& d=next.slots[i];
