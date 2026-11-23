@@ -211,3 +211,63 @@ call, board, destination, exit state machine.
 For outbound server snapshots use captureServerSnapshot(serverTick, out)
 after successful owner-phase collision + ECS rider updates. Clients may
 accept only trusted server state frames through BuildingLiftReplica.
+
+
+## Stage 23P: authoritative dual-leaf physics / Renderer3D scene contract
+
+The packaged game integration API is
+`engine/buildings/BuildingDualLeafGameSession.h` (exported by
+`engine/buildings/BuildingRuntime.h`). This is an owner-phase
+adapter: its methods MUST be called by the actual game's authoritative
+fixed-tick scheduler and renderer owner. It does not install a scheduler,
+network socket, GPU backend, or standalone game executable.
+
+1. Generate static runtime geometry with movable panels excluded from
+   static collision and visuals; retain the authoritative structure
+   socket IDs/closed bounds. **Do not** attach the legacy
+   `BuildingApertureOwner` to those same sockets.
+2. Allocate two unique SpatialWorld collider IDs per socket and
+   attach `BuildingDualLeafOwner` with a `SweptObstruction`
+   callback that checks *both* leaf swept volumes for real actor,
+   vehicle and cargo collisions. This callback must not count
+   the two moving leaf colliders as obstructions. Configure
+   `BuildingGraphChangeRouter` with actual owner-specific
+   callbacks; for native navmesh use `buildingDualLeafNavInvalidator`
+   with the existing `BuildingDynamicNavSource`.
+3. Attach `BuildingDualLeafGameSession` with the exact same scene ID,
+   the existing `BuildingStyle`, a current authoritative
+   `Authorize(Entity,socket,bool)` callback and
+   `InteractionRange(Entity,bounds)` callback. Resolve combined
+   material and PBR image GUID references via
+   `session.bindMaterial(socketId, style.materials[index], imageResolver)`
+   **before** the renderer uploads the dedicated CPU leaf Model.
+4. Existing authenticated transport resolves request actor identity
+   to the real ECS Entity and calls `session.enqueue(ecs,command)`
+   on the world owner thread. The server tick then calls
+   `session.fixedTick(ecs,dualLeafOwner,spatial,router,serverTick,100)`
+   after movement/occupancy/obstruction data is up to date.
+   During graph ACK failures no new motion is published; a successful
+   retry publishes the previous physical revision on its own tick.
+5. Only fully acknowledged physical snapshots are accepted by the
+   CPU visual presentation. Existing Renderer3D owner calls
+   `session.submit(renderDtMs, [&](const render::Model& model,
+   const BuildingApertureLeafPose& pose){ ... })`; it owns actual
+   ModelDraw instance transformation/submit, texture uploads,
+   resource leases and GPU retirement. A mutex serializes the
+   presentation model/pose state between world and render owners.
+   Callback must not reenter this session. The authoritative game
+   uses `pose.open` after endpoint completion to grant traversal,
+   **never** the interpolated visual fraction.
+6. On ECS destruction/connection retirement call
+   `session.retireActor(actor)` before generation reuse, and on
+   scene unload reconcile riders, pending graph publications,
+   renderer GPU leases, then detach the session and physical owner.
+   Avoid destroying CPU Models while any frame borrows their pointers.
+
+These are public integration instructions and source APIs, not proof
+of an actually wired sample game's main loop. Current dual-leaf
+motor is a conservative axis-aligned sliding AABB approximation,
+not a hinged/curved or fully characterized PHYSIS rigid body.
+Tests are deferred by user instruction: no native build,
+CTest, GPU capture, navmesh-refresh or multiplayer run for Stage 23P.
+Handoff: `docs/agent-handoffs/building-dual-leaf-game-session-stage23p-2026-11-23.md`.
