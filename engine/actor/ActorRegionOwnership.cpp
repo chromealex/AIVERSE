@@ -308,12 +308,25 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             if(!previousSeats->carByMember.contains(member))
                 candidateCars.insert(newCar.packed());
     }
+    // Experimental vehicle candidate mode retains canonical seat validation.
+    // A missed crossing falls back to the complete migration list rather than
+    // silently losing ownership. No traversal reduction is claimed yet.
+    const bool vehicleCandidateMode=journalReady && !journalOverflow &&
+        streamManifest_.getBool("regionDirtyOnlyVehicles") &&
+        !streamManifest_.getBool("strictRegionJournalAudit") && previousSeats;
+    const bool completeGroupCoverage=std::all_of(crossingCars.begin(),crossingCars.end(),
+        [&](uint64_t car){return candidateCars.contains(car);});
     // Evaluate coverage after expanding both old and new seat membership.
     for(auto car:crossingCars)
         if(!candidateCars.contains(car))++uncoveredGroups;
     // Apply migrations under the exclusive undo transaction.
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
+        if(vehicleCandidateMode && completeGroupCoverage &&
+           std::none_of(pending.members.begin(),pending.members.end(),[&](Entity member){
+               const auto it=carByMember.find(member.packed());
+               return it!=carByMember.end() && candidateCars.contains(it->second.packed());
+           }))continue;
         std::string error;
         if(!world::RegionEcsBridge::transferGroupMixed(
                 view,stagedLedger,pending.members,
