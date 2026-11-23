@@ -59,6 +59,30 @@ and
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — Stage 18: real native SpectraFX frame capture (tests deferred)
+
+`apps/studio-native/StudioHost::captureSpectraFrame` now adds bounded
+asynchronous one-shot readback of the dedicated native FX drawable,
+NOT a browser-generated screenshot. The existing `gfx::Device`
+`captureNextFrame` is scheduled on the native render owner and
+completed via an immutable shared callback state guarded by a mutex.
+`studio.spectraPreview` and authenticated `aiversemcp`
+`fx_graph_preview` share new actions
+`{"action":"capture","maxSide":512}` and
+`{"action":"captureStatus"}`. Capture status includes
+`capture:{pending,ready,width,height,mime,image?,error?}` in the
+normal preview status. Max capture side 128–768, default 512;
+JPEG ≤600 KiB, at most one outstanding request, 10s timeout;
+project switch, FX detach and shutdown discard stale results.
+Graph UI exposes Capture Frame, genuine JPEG thumbnail and Save
+captured JPEG. No gameplay/ECS writes, fake particles, filesystem
+output path or continuous video streaming. **No current-source
+AppleClang/Metal, Node/Vite, CTest, Mac UI or Windows Vulkan tests
+were run (user requested features first).**
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+
 ## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
 
 The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
