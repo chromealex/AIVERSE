@@ -2166,6 +2166,7 @@ void Editor::startPlay(int humanSlot) {
     }
     if(graphPlayEpoch_!=~uint64_t{0})++graphPlayEpoch_; // saturated epoch disables further telemetry
     graphPlayHistory_.clear();
+    graphWatch_.clear();
     human_ = humanSlot;
     gameFx_.clear();
     fxPreview_ = {};
@@ -2494,6 +2495,8 @@ void Editor::frame(gfx::Device& dev, double dt) {
         drawActivityToasts();
         if (focusFirst_ > 0) --focusFirst_;
     }
+    // Published viewport owners have completed CPU preparation and worker joins.
+    captureGraphWatch();
     const auto afterWindows = std::chrono::steady_clock::now();
     // At a hidden/closed tab transition, drop only camera-private histories.
     // Shared size-keyed scene render targets remain usable by other tabs.
