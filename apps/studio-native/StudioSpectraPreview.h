@@ -65,6 +65,8 @@ public:
             runtime_.shutdown();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
+            opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
+            opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
             opts.preference=spectra::ComputePreference::Automatic;
             if(!runtime_.initGraph(&device,graph,Json::object(),opts)) {
@@ -111,6 +113,8 @@ public:
                     return errorStatus("Replay parameter outside authored range: "+name);
                 validated[name]=float(n);
             }
+            if(!input["gpuShaderSeed"].isNull() && (!input["seed"].isNull()||!input["gpuAllocationSeed"].isNull()))
+                return errorStatus("GPU shader seed must be requested independently");
             if(!input["seed"].isNull() && !input["gpuAllocationSeed"].isNull())
                 return errorStatus("CPU seed and GPU allocation seed cannot be combined");
             if(!input["seed"].isNull()) {
@@ -123,7 +127,17 @@ public:
                 if(!runtime_.resetDeterministicSeed(uint32_t(seed.integer())))
                     return errorStatus(runtime_.reason());
             }
+            if(!input["gpuShaderSeed"].isNull()) {
+                const Json& seed=input["gpuShaderSeed"];
+                if(!seed.isNumber()||seed.numberLiteral().find_first_of(".eE-")!=std::string::npos||seed.integer(-1)<0||seed.integer(-1)>4294967295LL)
+                    return errorStatus("GPU shader seed must be uint32");
+                if(!runtime_.gpuActive())return errorStatus("GPU shader seed requires Metal GPU backend");
+                pendingGpuAllocationSeed_=uint32_t(seed.integer());
+                pendingShaderSeedMode_=true;hasPendingGpuAllocationSeed_=true;
+                gpuSeedRetryCount_=0;gpuSeedFailed_=false;
+            }
             if(!input["gpuAllocationSeed"].isNull()) {
+                pendingShaderSeedMode_=false;
                 const Json& seed=input["gpuAllocationSeed"];
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
@@ -244,7 +258,7 @@ public:
         if(hasPendingGpuAllocationSeed_) {
             // GPU buffer reset is legal only within the render-owner frame.
             // Keep the request pending after failure for explicit retry.
-            if(!runtime_.resetGpuAllocationSeed(pendingGpuAllocationSeed_)) {
+            if(!(pendingShaderSeedMode_?runtime_.resetGpuShaderSeed(pendingGpuAllocationSeed_):runtime_.resetGpuAllocationSeed(pendingGpuAllocationSeed_))) {
                 playing_=false;
                 ++gpuSeedRetryCount_;
                 error_=runtime_.reason().empty()?
@@ -407,6 +421,7 @@ private:
     uint32_t pendingGpuAllocationSeed_=0,gpuSeedRetryCount_=0;
     bool gpuSeedFailed_=false,replayPrepared_=false;
     bool hasPendingGpuAllocationSeed_=false;
+    bool pendingShaderSeedMode_=false;
     uint64_t generation_=1;
     std::string backend_,error_;
 };
