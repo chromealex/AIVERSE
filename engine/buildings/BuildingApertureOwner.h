@@ -190,6 +190,21 @@ public:
         for(const auto& [id,e]:entries_){(void)id;out.push_back(e.pose);}
         return out;
     }
+    // Read-only authoritative collider identity for native navigation
+    // overlays. Never treat a generated static preview leaf as dynamic.
+    std::map<uint32_t,world::Bounds> closedColliderBounds()const{
+        std::map<uint32_t,world::Bounds> result;
+        for(const auto& [id,e]:entries_){
+            (void)id;
+            if(!e.pose.open)result.emplace(e.colliderId,e.pose.bounds);
+        }
+        return result;
+    }
+    std::set<uint32_t> ownedColliderIds()const{
+        std::set<uint32_t> result;
+        for(const auto& [id,e]:entries_){(void)id;result.insert(e.colliderId);}
+        return result;
+    }
     bool attached()const noexcept{return attached_;}
     bool hasPendingGraphs()const noexcept{return pendingChange_.has_value();}
     uint64_t revision()const noexcept{return revision_;}
