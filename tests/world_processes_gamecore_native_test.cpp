@@ -15,10 +15,25 @@ static Json baseMap(){
 }
 static Json mapWithProcesses(){
     Json m=baseMap();
-    m.member("entities").at(1).set("components",Json::parse(
-        R"({"EchoZone":{"enabled":true},"FractureMember":{"anchored":true}})"));
-    m.member("entities").at(2).set("components",Json::parse(
-        R"({"AetherGasCell":{"smoke":250,"toxin":50,"oxygen":500,"enabled":true}})"));
+    auto& entities=m.member("entities");
+    auto& first=entities.at(1);
+    auto& second=entities.at(2);
+    std::string id1=first.getStr("id"),id2=second.getStr("id");
+    if(id1.empty()){id1="world_zone_a";first.set("id",Json::string(id1));}
+    if(id2.empty()){id2="world_zone_b";second.set("id",Json::string(id2));}
+    Json a=Json::parse(R"({"EchoZone":{"enabled":true},
+        "FractureMember":{"anchored":true},
+        "EchoEmitter":{"zone":"","intensity":100,"enabled":true}})");
+    a.member("EchoEmitter").set("zone",Json::string(id1));
+    first.set("components",std::move(a));
+    Json b=Json::parse(R"({"EchoZone":{"enabled":true},
+        "AetherGasCell":{"smoke":250,"toxin":50,"oxygen":500,"enabled":true},
+        "EchoPortal":{"from":"","to":"","loss":25,"bidirectional":true,"enabled":true},
+        "EchoReceiver":{"zone":"","threshold":30,"enabled":true}})");
+    b.member("EchoPortal").set("from",Json::string(id1));
+    b.member("EchoPortal").set("to",Json::string(id2));
+    b.member("EchoReceiver").set("zone",Json::string(id2));
+    second.set("components",std::move(b));
     return m;
 }
 static std::unique_ptr<Simulation> make(const Json& map,bool enable){
@@ -48,12 +63,18 @@ int main(){
     AIVERSE_TEST_CHECK(sim->world().get<fracture::Member>(zone).anchored);
     AIVERSE_TEST_CHECK(sim->world().get<aether::GasCell>(gas).oxygen==500);
     AIVERSE_TEST_CHECK(sim->world().get<aether::GasCell>(gas).smoke==250);
+    AIVERSE_TEST_CHECK(sim->world().has<echo::AcousticReceiver>(gas));
+    AIVERSE_TEST_CHECK(sim->world().has<echo::AcousticHearing>(gas));
+    AIVERSE_TEST_CHECK(sim->world().get<echo::AcousticPortal>(gas).from==zone);
+    AIVERSE_TEST_CHECK(sim->world().get<echo::AcousticEmitter>(zone).zone==zone);
     AIVERSE_TEST_CHECK(uint8_t(sim->serialize()[4])==10);
     AIVERSE_TEST_CHECK(sim->checksum()==peer->checksum());
     for(int i=0;i<5;++i){
         sim->step();peer->step();
         AIVERSE_TEST_CHECK(sim->checksum()==peer->checksum());
     }
+    AIVERSE_TEST_CHECK(sim->world().get<echo::AcousticHearing>(gas).audible);
+    AIVERSE_TEST_CHECK(sim->world().get<echo::AcousticHearing>(gas).intensity==75);
     const std::string bytes=sim->serialize();
     auto restored=make(map,true);
     std::string err;
