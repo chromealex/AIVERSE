@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,10 +76,8 @@ public:
         const auto b=filteredIndex(x1,z1,j);
         if(!a||!b)return false;
         if(!base_.link(x0,z0,*a,x1,z1,*b))return false;
-        const auto cfg=base_.config();
         const Fixed wx=(cellCenterX(x0)+cellCenterX(x1))/2;
         const Fixed wz=(cellCenterZ(z0)+cellCenterZ(z1))/2;
-        (void)cfg;
         // We already validated both standing surfaces. Check the crossing
         // midpoint for a dynamic blocker at the higher surface elevation.
         std::vector<nav::Span> as,bs;
