@@ -79,7 +79,9 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
         if(!tag || !ledger->find(tag->id) || !ledger->find(tag->id)->live)
             return reject(error,"unregistered region move member");
     }
-    const uint64_t id=entity.packed();
+    if(entity.packed()==UINT64_MAX)return reject(error,"region move identity exhausted");
+    // +1 allows the first ECS Entity (packed handle 0) to be encoded.
+    const uint64_t id=entity.packed()+1;
     const auto it=queued->destinations.find(id);
     if(it==queued->destinations.end() &&
        queued->destinations.size()>=world::RegionMoveRequests::kMaxRequests)
@@ -93,7 +95,7 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
         (void)point;
         if(otherId==id)continue;
         std::vector<Entity> others;
-        if(!moveGroup(*this,sim,Entity::fromPacked(otherId),others,error))
+        if(!moveGroup(*this,sim,Entity::fromPacked(otherId-1),others,error))
             return false;
         for(Entity e:group)
             if(std::find(others.begin(),others.end(),e)!=others.end())
@@ -116,7 +118,7 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     std::vector<Commit> changes;
     std::set<uint64_t> checked;
     for(const auto& [id,destination]:requests->destinations) {
-        Entity e=Entity::fromPacked(id);
+        Entity e=Entity::fromPacked(id-1);
         std::vector<Entity> members;
         std::string error;
         if(!moveGroup(*this,sim,e,members,&error))
