@@ -48,6 +48,33 @@ const bool caughtUp = cursor.consume(*ledger, 128,
 - Never use render observer/visibility state to update an
   authoritative `RegionEntityLedger`.
 
+## W1.15 dirty lifecycle observations
+
+Use `engine/world/RegionDirtyQueue.h` for deterministic, bounded,
+coalesced, persisted `Spawn`/`Move`/`Retire` notifications.
+Participating authoritative owners call:
+
+```cpp
+actor::host(sim).reportRegionChange(
+    sim,entity,aiverse::world::RegionDirtyKind::Spawn);
+// Also Move after an authorized canonical position update,
+// or Retire before destroying a durable actor.
+```
+
+The queue is opt-in with `rules.regionOwnership={}`, has a maximum
+of 65,536 distinct pending IDs and is acknowledged only after a
+successful `ActorHost::synchronizeRegionOwnership`. Its bits
+coalesce: **it is not a lossless event log**. The host still performs
+a full tracked-pool scan because older systems directly write
+component positions. Do not remove that fallback without proving
+complete producer coverage and replay/COW persistence semantics.
+Do not use dirty marks as permission to teleport or as a substitute
+for the pre-tick `requestRegionMoveByStableId` admission boundary.
+
+`region_dirty_queue_test` and `actor_region_lifecycle_test` contain
+authored regression assertions for the API but have not been executed
+on the required Mac/KINGSTON checkout.
+
 ## ECS/movement safety
 
 The generic ECS currently does NOT emit a full change event when
