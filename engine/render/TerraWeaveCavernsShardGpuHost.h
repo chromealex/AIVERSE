@@ -97,6 +97,28 @@ public:
         return stageSnapshot(device,snapshot,visual,spec);
     }
 
+    // Stage40 client visual streaming retirement. The owner first uploads a
+    // complete shard snapshot WITHOUT the unloaded source (or stages empty),
+    // then activates and updates the committed catalog in the same graphics
+    // owner epoch. This does not retire gameplay Box3D/nav resources.
+    bool stageVisualRetire(gfx::Device& device,ChunkKey3 key,
+                           uint64_t expectedRevision,
+                           uint64_t newRenderRevision,
+                           CaveBatchSpec spec={}) {
+        const auto shard=caveShardFor(key,catalog_.config());
+        if(pending_.contains(shard)||!newRenderRevision)return false;
+        auto preview=catalog_.previewRetire(key,expectedRevision,newRenderRevision);
+        std::vector<CaveCertifiedChunk> adjacent;
+        adjacent.reserve(preview.chunks.size());
+        for(const auto& chunk:preview.chunks) {
+            adjacent.push_back({chunk.mesh,chunk.resolution,chunk.spacingCm,
+                chunk.sourceRevision?chunk.sourceRevision:1,chunk.revision});
+        }
+        auto visual=planCaveMixedLodVisual(adjacent);
+        if(!visual.ready())return false;
+        return stageSnapshot(device,preview,visual,spec);
+    }
+
     // Bridge adapter: group prepared CPU edits by spatial shard, then GPU
     // stage each full shard (including unchanged sources). On any rejection,
     // cancel the stages created by THIS invocation; failed GPU allocations
