@@ -145,7 +145,7 @@ public:
                     throw std::runtime_error("Caverns collision stage refused");
                 preparedPhysics_.push_back(c.dirty.key);
             }
-            if(!navigation_.prepare(snapshot_,navConfig,
+            if(!navigation_.prepare(worker_.indexedSnapshot(),navConfig,
                                     std::move(terrainHeight)))
                 throw std::runtime_error("Caverns authored navigation stage refused");
             std::vector<CaveBatchChunk> chunks;
@@ -327,6 +327,9 @@ public:
     std::vector<ChunkKey3> pendingEditKeys()const{return worker_.dirtyKeys();}
     std::shared_ptr<const CaveVolumeSnapshot> sourceSnapshot()const {
         return snapshot_;
+    }
+    std::shared_ptr<const CaveSnapshotSpatialIndex> indexedSnapshot()const {
+        return worker_.indexedSnapshot();
     }
     const CaveAuthoredNavStage& navigation()const noexcept{return navigation_;}
     const CaveShardGpuHost& geometry()const noexcept{return geometry_;}
