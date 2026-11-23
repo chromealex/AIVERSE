@@ -133,6 +133,8 @@ int main() {
     watch.clear();require(watch.status()["frames"].size()==0,"watch clear failed");
     require(!call("graph_live_watch",Json::parse(R"({"action":"status"})")).getBool("available"),"headless watch claims owner");
 
+    require(!call("graph_live_profile",Json::parse(R"({"action":"read","entity":"42"})")).getBool("available"),"headless profile claims live owner");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
