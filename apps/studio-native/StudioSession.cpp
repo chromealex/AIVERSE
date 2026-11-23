@@ -2629,19 +2629,63 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(params["entityIds"].isArray()){for(const auto& v:params["entityIds"].items())if(v.isString())targets.push_back(v.str());}
             else targets.push_back(params.getStr("entityId"));
             if(targets.empty() || targets.size()>10000)throw std::runtime_error("Invalid entity list");
-            const size_t depth=ws_.map.undoDepth();
-            try {
-                for(const auto& target:targets) for(const auto& [key,value]:values.members()) {
-                    Json nested=Json::object(),input=Json::object();
-                    nested.set("id",request["id"]);nested.set("method",str("studio.setProperty"));
-                    input.set("entityId",str(target));input.set("key",str(key));input.set("value",value);
-                    if(params.has("componentId"))input.set("componentId",params["componentId"]);
-                    nested.set("params",input);
-                    const auto updated=dispatchImpl(nested);
-                    if(updated.has("error"))throw std::runtime_error(key+": "+updated.getStr("error"));
+            const std::string componentId=params.getStr("componentId");
+            if(lib::worldprocess::linked::supports(componentId)) {
+                // Validate the complete new component on every target BEFORE
+                // mutating the map. Switching both bond ends in one paste
+                // must not fail merely because its intermediate state is
+                // temporarily invalid; still commit as ONE Undo snapshot.
+                std::vector<std::pair<size_t,editor::DocEntity>> updates;
+                std::set<int> seen;
+                for(const auto& target:targets) {
+                    if(target.rfind("entity:",0)!=0)
+                        throw std::runtime_error("Linked authoring requires a map entity");
+                    const int index=indexFor(target);
+                    if(!seen.insert(index).second)
+                        throw std::runtime_error("Duplicate linked authoring target");
+                    const auto& source=ws_.map.data.entities[size_t(index)];
+                    const Json& original=source.extra["components"][componentId];
+                    if(!original.isObject())
+                        throw std::runtime_error("Component is not authored on this object");
+                    Json edited=original;
+                    for(const auto& [key,value]:values.members()) {
+                        if(!lib::worldprocess::linked::validValue(componentId,key,value) ||
+                           !validWorldProcessDocumentRef(ws_.map,componentId,key,value))
+                            throw std::runtime_error("Invalid linked map reference or value: "+key);
+                        edited.set(key,value);
+                    }
+                    std::string error;
+                    if(!lib::worldprocess::linked::validate(componentId,edited,&error))
+                        throw std::runtime_error(error);
+                    if(edited!=original) {
+                        auto candidate=source;
+                        Json components=candidate.extra["components"];
+                        components.set(componentId,std::move(edited));
+                        candidate.extra.set("components",std::move(components));
+                        updates.push_back({size_t(index),std::move(candidate)});
+                    }
                 }
-            } catch(...) { ws_.map.abandonSince(depth); throw; }
-            ws_.map.mergeUndoSince(depth);
+                if(!updates.empty()) {
+                    ws_.map.beginEdit();
+                    for(auto& [index,entity]:updates)
+                        ws_.map.data.entities[index]=std::move(entity);
+                    ws_.map.touched();
+                }
+            }else{
+                const size_t depth=ws_.map.undoDepth();
+                try {
+                    for(const auto& target:targets) for(const auto& [key,value]:values.members()) {
+                        Json nested=Json::object(),input=Json::object();
+                        nested.set("id",request["id"]);nested.set("method",str("studio.setProperty"));
+                        input.set("entityId",str(target));input.set("key",str(key));input.set("value",value);
+                        if(params.has("componentId"))input.set("componentId",params["componentId"]);
+                        nested.set("params",input);
+                        const auto updated=dispatchImpl(nested);
+                        if(updated.has("error"))throw std::runtime_error(key+": "+updated.getStr("error"));
+                    }
+                } catch(...) { ws_.map.abandonSince(depth); throw; }
+                ws_.map.mergeUndoSince(depth);
+            }
             reply.set("result",snapshot());
         } else if (method == "studio.setProperty") {
             const std::string entityId = params.getStr("entityId");
