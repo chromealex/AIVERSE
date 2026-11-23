@@ -87,6 +87,16 @@ int main() {
     auto textureRef=Json::parse(R"({"domain":"shader","graph":{"nodes":[{"id":"tex","op":"sampleTexture","texture":"../outside.png"}]}})");
     require(call("graph_asset_dependencies",textureRef)["result"]["references"][size_t(0)].getStr("status")=="invalid-path","unsafe path not flagged");
 
+    const auto caps=call("graph_runtime_capabilities",Json::object());
+    require(caps.getBool("ok")&&!caps.getBool("liveAttached"),"runtime capability misreported");
+    Json probe=Json::object();probe.set("domain",Json::string("spectrafx"));probe.set("graph",graph);probe.set("steps",Json::number(int64_t(6)));
+    const auto sampled=call("graph_runtime_probe",probe);
+    require(sampled.getBool("ok")&&sampled["frames"].size()==6,"headless FX runtime probe failed");
+    require(!sampled.getBool("liveAttached")&&!sampled.getBool("gpuMeasured"),"probe mislabeled");
+    require(sampled["frames"][size_t(5)].getInt("particles")>0,"expected native particles");
+    probe.set("steps",Json::number(int64_t(61)));
+    require(call("graph_runtime_probe",probe).has("error"),"unbounded probe accepted");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
