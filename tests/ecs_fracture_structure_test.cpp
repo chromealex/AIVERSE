@@ -1,5 +1,6 @@
 // FRACTURE ECS: generic structure support, cascade, durable events and persistence.
 #include "aiverselib/world/FractureEcs.h"
+#include "aiverselib/world/FracturePhysisBridge.h"
 #include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
@@ -94,6 +95,19 @@ int main(){
     stale->step();
     AIVERSE_TEST_CHECK(!stale->world().get<fr::Member>(sh.root).detached);
     AIVERSE_TEST_CHECK(stale->world().get<fr::Member>(sh.tip).detached);
+
+    // Synthetic canonical PHYSIS stress snapshot, without recalculating wind
+    // or installing a second climate solver. Host schedules bridge after PHYSIS.
+    auto nature=make<6>();
+    auto& nh=static_cast<StructureHost<6>&>(nature->module());
+    physis::NatureStressOutputComponent stress{};
+    stress.valid=true;
+    stress.fractured=true;
+    nature->world().add<physis::NatureStressOutputComponent>(nh.root,stress);
+    AIVERSE_TEST_CHECK(fr::applyPhysisFractures(nature->world())==1);
+    AIVERSE_TEST_CHECK(fr::applyPhysisFractures(nature->world())==0);
+    nature->step();
+    AIVERSE_TEST_CHECK(fr::pending(nature->world()).size()==3);
 
     auto large=make<5>();
     auto& lh=static_cast<StructureHost<5>&>(large->module());
