@@ -78,7 +78,13 @@ bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
     return reportRegionChange(sim,entity,world::RegionDirtyKind::Move);
 }
 
+std::vector<uint32_t> ActorHost::portableDerivedResourceTypes(){
+    return {aiverse::detail::componentTypeId<RegionIdentityIndex>(),aiverse::detail::componentTypeId<RegionSeatIndex>(),
+        aiverse::detail::componentTypeId<world::RegionOwnershipDiagnostics>(),aiverse::detail::componentTypeId<CharacterIndex>()};
+}
+
 void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
+    admittedRegionMoves_.clear();
     auto& ecs=sim.world();
     ecs.eraseResource<RegionSeatIndex>();
     ecs.eraseResource<RegionIdentityIndex>();
