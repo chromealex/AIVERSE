@@ -1,3 +1,9 @@
+## 2026-11-23 update — responsive dock fix and verified parent baseline
+
+- Responsive fix `8a1686a9ae1bf632aedff5f29908e36b279e2076` adds `container-type:inline-size` to `.spectra-di` so the existing `@container (max-width:570px)` layout works when the dock itself is 240px wide even on a 1440px desktop. Browser visual QA remains unrun.
+- Previous parent Stage 4 SHA `e81a0c6f74d5855e0671ab530a9e2e9f675f2714` GitHub Actions run `45207729395`, Ubuntu job `137807891278`: **4/4 PASS**: `spectrafx_architecture`, `vfx_graph_compiler`, `spectrafx_contract`, `vfx_graph_runtime`. These checks verify an earlier SpectraFX runtime source, not this HTML5 Stage 6.
+- Latest UI PR #115 focused Node 22/Vite/TypeScript CI remains **queued**, and no native WebView/GPU screenshot evidence exists at this update. Do not claim UI acceptance.
+
 # SpectraFX Stage 6 — HTML5 graph topology canvas (2026-11-23)
 
 ## Provenance
