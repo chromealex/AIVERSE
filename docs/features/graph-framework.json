@@ -42,7 +42,9 @@
     "tests/vfx_graph_ops_test.cpp",
     "apps/editor/core/GraphDraftEdits.h",
     "apps/editor/core/GraphPropertySchema.h",
-    "apps/editor/core/GraphAssetDependencies.h"
+    "apps/editor/core/GraphAssetDependencies.h",
+    "apps/editor/core/GraphRuntimeProbe.h",
+    "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -184,7 +186,9 @@
       "graph_diagnostics",
       "graph_dependencies",
       "graph_property_schema",
-      "graph_asset_dependencies"
+      "graph_asset_dependencies",
+      "graph_runtime_capabilities",
+      "graph_runtime_probe"
     ],
     "studio_panels": [
       "shader_graph",
