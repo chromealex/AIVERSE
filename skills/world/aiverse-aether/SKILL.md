@@ -1,18 +1,19 @@
 ---
 name: aiverse-aether
-description: Use AIVERSE AETHER when implementing Транспорт массы газов дым, токсин, кислород через ECS ячейки и каналы.
+description: Use AIVERSE AETHER for Authoritative multi-species gas transport (smoke, toxin, oxygen) through rooms and ducts.
 ---
 # AETHER — AIVERSE skill
 
 ## When to activate
-Транспорт массы газов (дым, токсин, кислород) через ECS ячейки и каналы.
+Authoritative multi-species gas transport (smoke, toxin, oxygen) through rooms and ducts.
 
-Typical request: дым в здании, вентиляция, газовая утечка, пожар, кислород в комнате. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: smoke, ventilation, gas leaks, fire coupling, low oxygen. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/AetherEcs.h`.
 - **Authoritative ECS:** `aether::GasCell, GasDuct, GasFlux`.
 - **Lifecycle:** `aiverse::aether::install(sim)`; per-tick behavior: `aether::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `AetherGasCell, AetherDuct, AetherFlux`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `AetherPhysisBridge.h`, `WorldProcessesLinkedAuthoring.h`, `WorldProcessesMapHydration.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
