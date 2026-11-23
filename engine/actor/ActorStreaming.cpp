@@ -28,6 +28,13 @@ bool ActorHost::readyToStep(Simulation& sim) {
     auto region=[&](Vec3 p,Fixed r){Vec3 extent{r,r,r};regions.push_back({p-extent,p+extent});};
     // Includes respawn and round reset destinations before any actions can consume the tick.
     for(auto p:spawns_)region(p,radius);
+    // A race may reset a wrecked/stuck car to a distant grid/checkpoint in
+    // VehicleRace::after, inside the current gameplay tick. Before admitting
+    // that tick, pin both possible checkpoint outcomes through the existing
+    // authoritative collision stream. Only opt-in W1 maps change behavior.
+    if(race_ && sim.world().resourceConst<world::RegionEntityLedger>())
+        for(Vec3 destination:race_->possibleRespawnPositions(view.world()))
+            region(destination,4_fx);
     forEachCharacter(view,[&](ConstCharacterRef actor){region(actor.pos,radius);});
     for(const auto& vehicle:cars)region(vehicle.pos,radius);
     for(const auto& p:projectiles(view)){auto travel=fxMax(fxAbs(p.velocity.y),fxMax(fxAbs(p.velocity.x),fxAbs(p.velocity.z)))*sim.dt();
