@@ -135,8 +135,8 @@ public:
             break;
         case CaveTraversal::Custom:break;
         }
-        out.traversable=out.traversable&&
-            (agent.areaMask&(1u<<(out.area%32)))!=0;
+        out.traversable=out.traversable&&out.area<32&&
+            (agent.areaMask&(1u<<out.area))!=0;
         return out;
     }
     // Strict directed edge legality. Asymmetric costs/one-way links are
@@ -144,8 +144,14 @@ public:
     bool canTraverse(PointCm a,PointCm b,
                      const CaveAgentProfile& agent)const {
         if(!inBounds(a)||!inBounds(b))return false;
-        if(agent.traversal==CaveTraversal::Custom&&callbacks_.customLink)
+        if(agent.traversal==CaveTraversal::Custom&&callbacks_.customLink) {
+            // Even custom graph policy cannot connect an out-of-bounds
+            // endpoint or a solid cell. Caller may extend traversal cost,
+            // but remains on the committed cave geometry.
+            if(!sample(a,agent).traversable||
+               !sample(b,agent).traversable)return false;
             return callbacks_.customLink(a,b,agent);
+        }
         const auto from=sample(a,agent),to=sample(b,agent);
         if(!from.traversable||!to.traversable)return false;
         if(agent.traversal==CaveTraversal::Ground &&
