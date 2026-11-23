@@ -298,7 +298,7 @@
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Construction.h",
       "skill": "skills/gameplay/aiverse-construction/SKILL.md",
-      "summary": "Placement checks, resource explanations, refunds and native construction commands",
+      "summary": "Construction grids, placement checks, resource explanations, refunds and native construction commands",
       "notes": "Call checkPlacement with authoritative map/territory/slope queries. Render its Decision as preview, then submit buildCommand. The engine must revalidate the command at execution time; previews never reserve or debit resources.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_construction",
