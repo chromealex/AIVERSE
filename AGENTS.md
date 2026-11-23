@@ -164,6 +164,27 @@ not a mandate to add terrain to UI-only/indoor/2D games or overwrite authored wo
 Vegetation recipes: `skills/world/aiverse-terra-vegetation/SKILL.md`. Distinguish exported
 assets from live native terrain/streaming/ecology/physics and record actual verification.
 
+### TerraWeave Caverns owner and streaming integration
+
+For cave volumes, editor Carve/Fill, cave CPU meshes, gameplay collision,
+NavMesh and streaming, read
+`skills/world/aiverse-terraweave-caverns/SKILL.md` and the latest
+`docs/agent-handoffs/caverns-stage*-YYYY-MM-DD.md`.
+World-space resource/streaming ownership lives under
+`engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
+`engine/render/TerraWeaveCaverns*.h`.
+Stage36's `CaveGameplayRuntimeFrame` coordinates immutable versioned SDF
+authoring with `CaveWorldResidency` and `CaveWorldStreamJobs`. The
+game/client/server host must hold the actual draw/physics/NavMesh owner barrier
+before ACKing a streaming build or retirement. Never silently ACK on a CPU
+completion, never create a genre-specific duplicate cave streamer, and never
+treat visual-only preview as gameplay collision. Resident maps are external
+resource ownership metadata, **not substitute ECS gameplay state**.
+Until the native game host integration and cross-owner recovery are complete,
+mark runtime publication experimental and retain old resources on failure.
+After every stage update the Caverns skill and a separate handoff. Finish
+features first, then perform comprehensive native builds/tests before main merge.
+
 ## Water ownership for all new worlds (user policy, 2026-11-20)
 
 All new water uses NEREID: rivers, lakes, sea/ocean, flow and water interactions.
