@@ -46,6 +46,24 @@ else()
         message(FATAL_ERROR "HTML5 bundle missing: build on KINGSTON and set AIVERSE_STUDIO_WEB_DIST")
     endif()
 endif()
+# Portable Studio image codec contract: compile the actual private stb
+# implementation using diagnostics as errors, not a globally disabled -W
+# category. Exercise real lossless PNG and lossy JPEG memory roundtrips.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_studio_image_codecs_tests
+        tests/StudioImageCodecsWarningTests.cpp)
+    target_include_directories(aiverse_studio_image_codecs_tests
+        PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_options(aiverse_studio_image_codecs_tests PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=unused-function>
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=missing-field-initializers>
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=deprecated-declarations>)
+    add_test(NAME studio_image_codecs COMMAND aiverse_studio_image_codecs_tests)
+    set_tests_properties(studio_image_codecs PROPERTIES LABELS "EDITOR;TOOLS"
+        PASS_REGULAR_EXPRESSION "Studio image codecs PASS"
+        FAIL_REGULAR_EXPRESSION "Studio image codecs FAIL")
+endif()
+
 if(AIVERSE_BUILD_TESTS AND APPLE)
     add_executable(aiverse_studio_metal_lighting_tests tests/StudioMetalLightingTests.mm StudioScene.cpp StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}")
