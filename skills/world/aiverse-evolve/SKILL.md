@@ -187,3 +187,7 @@ Repaired the malformed Stage49 React numeric preview effect and ensured invalid 
 ## Stage 52: window lifecycle and shared bounds validation
 
 Numeric EVOLVE preview now releases its owner-scoped native overlay on HTML5 pagehide/unmount and suspends while document visibility is hidden; visible windows refresh with revisioned updates. Shared `evolve::scale_math::withinBounds` validates world-coordinate half-extent constraints in both two-axis group preview and atomic batch commit, alongside Stage50 shared transform. Unfocused-but-visible floating windows and legacy single-edge parity remain to be addressed. Source-only, no TS/C++ compile or runtime QA. Handoff: `docs/handoffs/world-processes-stage52-window-lifecycle-bounds-2026-11-23.md`.
+
+## Stage 53: single-area validation and native host shutdown
+
+Single-area and group-move commits use shared `evolve::scale_math::withinBounds`; single-area edits reject hidden/locked entities. Single-area and one-axis group previews use authored limits and shared geometry checks. Native `StudioHost::shutdown` releases host-local numeric preview and pivot/drag state even without web pagehide. Cross-host forwarding and complete validation parity still require integration audit. No build or runtime tests performed. See `docs/handoffs/world-processes-stage53-single-area-native-shutdown-2026-11-23.md`.
