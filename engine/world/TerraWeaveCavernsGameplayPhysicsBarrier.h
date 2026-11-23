@@ -27,6 +27,12 @@ class CaveGameplayPhysicsBarrier {
 public:
     using ExclusiveProof=std::function<bool()>;
     const CavePhysicsCommitStatus& status()const noexcept{return status_;}
+    // The outer GPU/catalog owner may fail after physics finalized. Stop the
+    // world rather than continuing with an inconsistent publication epoch.
+    void requireRecovery()noexcept {
+        status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+        status_.recoveryRequired=true;
+    }
     // The exclusive predicate must reflect actual host-side exclusion, not
     // merely an animation frame counter. Exclusive lock must outlive this
     // function and the subsequent GPU shard activation.
