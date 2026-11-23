@@ -87,11 +87,9 @@ bool ActorHost::requestRegionMove(Simulation& sim,Entity entity,Vec3 destination
        fxAbs(destination.y)>config_.worldLimit ||
        fxAbs(destination.z)>config_.worldLimit)
         return reject(error,"destination exceeds world limits");
-    // SpatialWorld::cells() is intentionally private. A destination has
-    // already passed the authoritative world-limit check above; the
-    // public cell() API is the only boundary lookup this host requires.
-    const world::Cell targetCell=world::SpatialWorld(32).cell(destination);
-    (void)targetCell;
+    // SpatialWorld::cells() is private. The authoritative world-limit
+    // validation above bounds the target; the region transition itself
+    // uses the public SpatialWorld::cell() in region ownership sync.
     std::vector<Entity> group;
     if(!moveGroup(*this,sim,entity,group,error))return false;
     for(Entity member:group) {
