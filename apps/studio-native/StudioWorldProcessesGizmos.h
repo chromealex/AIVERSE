@@ -183,7 +183,9 @@ inline std::vector<Shape> collect(const editor::MapDoc& document,
         if(const auto& c=components["EvolveArea"];c.isObject()){
             const float halfWidth=capped(c["halfWidthCm"],1000,50,50000)/100.f;
             const float halfDepth=capped(c["halfDepthCm"],1000,50,50000)/100.f;
-            rectangle(out,pos,halfWidth*2.f,halfDepth*2.f,138,190,255);
+            const render::float3 areaCenter={pos.x+float(c.getInt("offsetXcm",0))/100.f,
+                                               pos.y,pos.z+float(c.getInt("offsetZcm",0))/100.f};
+            rectangle(out,areaCenter,halfWidth*2.f,halfDepth*2.f,138,190,255);
             add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE AREA",138,190,255));
         }else if(const auto& c=components["EvolveRegion"];c.isObject()){
             // Back-compat visualization only; add EvolveArea for actual gameplay
