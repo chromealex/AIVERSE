@@ -48,6 +48,12 @@ public:
         }
         std::ifstream wal(dir/r.manifest.walName(),std::ios::binary);
         if(!wal)return r;
+        std::vector<uint8_t> walIdentity(RegionCheckpointManifestCodec::size);
+        wal.read(reinterpret_cast<char*>(walIdentity.data()),walIdentity.size());
+        RegionCheckpointManifest bound;
+        if(!wal||!RegionCheckpointManifestCodec::decode(walIdentity,bound)||
+           bound.identity!=r.manifest.identity||bound.generation!=r.manifest.generation||
+           bound.checkpointBytes!=r.manifest.checkpointBytes){r.status=RegionCheckpointLoadStatus::InvalidWal;return r;}
         r.wal=RegionWalReader::scan(wal,r.manifest.identity.sequence,[&](const RegionWalFrame& frame){
             return RegionWalTransaction::replay(staged,frame);
         });
