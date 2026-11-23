@@ -66,6 +66,7 @@ public:
             e.pose.featureIndex=socket.featureIndex;
             e.pose.kind=socket.kind;
             e.pose.open=socket.open>=0.9999f;
+            e.pose.physicalPermille=e.pose.open?1000:0;
             e.pose.revision=1;
             e.colliderId=it->second;
             // Treat each aperture as one conservative full-width closed
@@ -162,6 +163,7 @@ public:
             out.error="Could not install closed aperture collider";return out;
         }
         e.pose.open=open;
+        e.pose.physicalPermille=open?1000:0;
         e.pose.revision=++revision_;
         pendingChange_=BuildingGraphChange{
             sceneId_,revision_,e.pose.featureIndex,
@@ -235,17 +237,24 @@ public:
         }
         const auto found=spatial.colliders().find(e.colliderId);
         // The existing owner must still own the previous published AABB.
-        if(found==spatial.colliders().end()||
-           !sameBounds(found->second.bounds,before)){
+        // Fully opened barriers have no collider. The first closing step
+        // creates one; every subsequent step must match the old bounds.
+        const bool wasAbsent=prev==1000&&e.pose.open;
+        if(wasAbsent){
+            if(found!=spatial.colliders().end()){
+                out.error="Opened aperture unexpectedly has a collider";return out;
+            }
+        }else if(found==spatial.colliders().end()||
+                 !sameBounds(found->second.bounds,before)){
             out.error="Moving aperture collider ownership lost";return out;
         }
-        spatial.remove(e.colliderId);
+        if(!wasAbsent)spatial.remove(e.colliderId);
         const bool finished=e.targetOpen?next==1000:next==0;
         // At a fully open endpoint, release the physical barrier. Otherwise
         // keep exactly one dynamic collider at the next committed position.
         if(!(finished&&e.targetOpen)&&
            !spatial.add({e.colliderId,after})){
-            if(!spatial.add({e.colliderId,before})){
+            if(!wasAbsent&&!spatial.add({e.colliderId,before})){
                 faulted_=true;
                 out.error="Motion failed and collider rollback failed; scene faulted";
             }else out.error="Motion collider publication rejected and rolled back";
