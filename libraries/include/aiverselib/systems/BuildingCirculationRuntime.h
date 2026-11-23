@@ -150,16 +150,26 @@ public:
     }
     // Client-side replication accepts only a validated newer snapshot.
     // Authoritative simulation must never use remote snapshots.
-    bool applyReplicatedSnapshot(const BuildingLiftSnapshot& snapshot){
-        if(!online()||snapshot.revision<=state_.revision||
+    bool canApplyReplicatedSnapshot(const BuildingLiftSnapshot& snapshot)const{
+        if(floorsMm_.empty()||snapshot.revision<=state_.revision||
            snapshot.featureIndex!=state_.featureIndex||
            snapshot.currentFloor>=floorsMm_.size()||
            snapshot.targetFloor>=floorsMm_.size()||
-           snapshot.phase==BuildingLiftPhase::Offline||
+           snapshot.phase>BuildingLiftPhase::Offline||
            snapshot.phaseElapsedMs>kDoorTimeMs||
            snapshot.passengerCount>kMaxPassengers||
            snapshot.platformYmm<floorsMm_.front()||
            snapshot.platformYmm>floorsMm_.back())return false;
+        // At an open/closing/opening station the cabin must already be
+        // at the actual floor height. Never accept forged landing poses.
+        if((snapshot.phase==BuildingLiftPhase::Open||
+            snapshot.phase==BuildingLiftPhase::Closing||
+            snapshot.phase==BuildingLiftPhase::Opening) &&
+           snapshot.platformYmm!=floorsMm_[snapshot.currentFloor])return false;
+        return true;
+    }
+    bool applyReplicatedSnapshot(const BuildingLiftSnapshot& snapshot){
+        if(!canApplyReplicatedSnapshot(snapshot))return false;
         const int64_t old=state_.platformYmm;
         state_=snapshot;
         pose_.yMm=snapshot.platformYmm;
