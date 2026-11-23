@@ -4,7 +4,7 @@ import { invoke, onNativeEvent } from '../bridge';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
 import {
   graphV2, providerNames, scalarParameters, validateInterfaces, putInterface,
-  dropInterface, putParameter, dropParameter, putNode, dropNode, putSpriteTexture, safeGraphName,
+  dropInterface, putParameter, dropParameter, putNode, dropNode, safeGraphName,
   type SpectraGraphV2, type FxDataInterface, type FxInstanceScalar, type GraphEdit
 } from './spectraDataInterfaceModel';
 import SpectraGraphCanvas from './SpectraGraphCanvas';
@@ -49,8 +49,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   const [pinned,setPinned]=useState(false);
   const [search,setSearch]=useState('');
   const [providerSearch,setProviderSearch]=useState('');
-  const [images,setImages]=useState<string[]>([]);
-  const [imageSearch,setImageSearch]=useState('');
   const [selectedOutput,setSelectedOutput]=useState('');
   const [binding,setBinding]=useState<FxDataInterface>(blankBinding);
   const [paramName,setParamName]=useState('');
@@ -90,17 +88,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     void listAssets().catch(e=>{if(alive)setError(errorText(e));});
     return()=>{alive=false;};
   },[projectPath,listAssets]);
-  useEffect(()=>{
-    let active=true;
-    setImages([]);
-    if(!projectPath)return;
-    void invoke('studio.assets',{}).then(list=>{
-      if(!active)return;
-      setImages(list.files.map(item=>item.path).filter(path=>
-        /\.(png|jpe?g|tga)$/i.test(path)).sort());
-    }).catch(e=>{if(active)setError(errorText(e));});
-    return()=>{active=false;};
-  },[projectPath]);
   useEffect(()=>onNativeEvent(event=>{
     if(event==='workspace.changed') void listAssets().catch(()=>{});
   }),[listAssets]);
