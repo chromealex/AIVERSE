@@ -165,6 +165,7 @@ export interface StudioSpectraPreviewState {
   gpuSeedPending?:boolean;
   gpuSeedFailed?:boolean;
   gpuSeedRetries?:number;
+  replayReady?:boolean;
   capture?:{
     pending:boolean;ready:boolean;
     width?:number;height?:number;mime?:'image/jpeg';
@@ -190,6 +191,7 @@ export interface StudioParams {
     camera?:StudioSpectraCameraSnapshot;
     parameters?:Record<string,number>;
     seed?:number;
+    requireReplayReady?:boolean;
     gpuAllocationSeed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
