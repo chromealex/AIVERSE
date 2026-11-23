@@ -953,6 +953,17 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         else
             params.set("value",Json::number(int64_t(std::lround(current.value))));
     }
+    // Explicit edge operation: existing numeric extent RPC remains backward
+    // compatible for inspectors and automation clients.
+    const auto mode=static_cast<worldprocess_edit::Handle::Mode>(current.mode);
+    if(mode==worldprocess_edit::Handle::Mode::AreaWidth||
+       mode==worldprocess_edit::Handle::Mode::AreaDepth||
+       mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+       mode==worldprocess_edit::Handle::Mode::AreaDepthNegative){
+        params.set("edgeSide",Json::string(
+            (mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+             mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)?"negative":"positive"));
+    }
     const char* method=current.mode==static_cast<std::uint8_t>(
         worldprocess_edit::Handle::Mode::Reference)?
         "studio.setProperty":"studio.worldProcessAreaSet";
