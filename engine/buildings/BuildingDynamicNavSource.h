@@ -25,7 +25,8 @@ public:
     // registered SpatialWorld collision. On failure, leave the previous
     // committed source snapshot unchanged and return false. Game owner must
     // keep affected nav tiles dirty until reconciliation succeeds.
-    bool synchronize(const BuildingApertureOwner& owner,
+    template<class ApertureOwner>
+    bool synchronize(const ApertureOwner& owner,
                      const world::SpatialWorld& spatial,
                      std::string* error=nullptr){
         if(!owner.attached()){
@@ -144,4 +145,22 @@ inline BuildingGraphChangeRouter::Consumer buildingDynamicNavInvalidator(
     };
 }
 
+
+// Use this variant when the alternate two-leaf collider owner is selected.
+// It delegates to the same physical snapshot validation and existing
+// native nav::Mesh dirty-tile mechanism; never combine both owners for
+// the same aperture.
+template<class ApertureOwner>
+inline BuildingGraphChangeRouter::Consumer buildingDualLeafNavInvalidator(
+    BuildingDynamicNavSource& source,
+    const ApertureOwner& apertures,
+    const world::SpatialWorld& spatial,nav::Mesh& mesh){
+    return [&source,&apertures,&spatial,&mesh](
+        const BuildingGraphChange& change){
+        if(!mesh.built()||!source.synchronize(apertures,spatial))
+            return false;
+        markBuildingNavCollisionChanged(mesh,change.bounds);
+        return true;
+    };
+}
 } // namespace aiverse::building
