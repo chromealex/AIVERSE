@@ -40,3 +40,5 @@ category is implemented when only its foundational API exists.
 Build selection: `AIVERSE::lib_graphs`; native OBJECT modules call
 `aiverse_native_use_libraries(target graphs)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+WeightedGraph/WeightedEdge, dijkstra, graphPath, dfs and weakComponents now live in engine/core/Graphs.h. Nonnegative uint64 costs; UINT64_MAX reserved; overflowing paths ignored. DFS follows declared adjacency order; weak components label by smallest vertex. No tests yet.
