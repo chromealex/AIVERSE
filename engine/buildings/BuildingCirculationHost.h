@@ -92,6 +92,18 @@ public:
         auto it=lifts_.find(feature);
         return it!=lifts_.end()&&it->second.call(targetFloor);
     }
+    bool boardLift(uint32_t feature,uint32_t floor,uint32_t passengers=1){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&it->second.board(floor,passengers);
+    }
+    bool requestLiftDestination(uint32_t feature,uint32_t targetFloor){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&it->second.requestDestination(targetFloor);
+    }
+    bool disembarkLift(uint32_t feature,uint32_t floor,uint32_t passengers=1){
+        auto it=lifts_.find(feature);
+        return it!=lifts_.end()&&it->second.disembark(floor,passengers);
+    }
     bool takeLiftOffline(uint32_t feature,bool offline){
         auto it=lifts_.find(feature);
         if(it==lifts_.end())return false;
