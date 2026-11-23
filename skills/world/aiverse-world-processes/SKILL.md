@@ -621,3 +621,7 @@ For multi-selected EvolveArea regions, native Studio adds a +X/+Z corner drag ha
 ## Stage 48: numeric-to-Scene preview bridge
 
 Studio HTML5 numeric group scale panel now calls read-only host RPC `studio.worldProcessAreaPreview` while X/Z percentage or pivot inputs change, clearing it on invalid input/close. Native Scene renders transient cyan group rectangles using `previewGroupScale2D`; individual pivot mode is now supported by that helper and the Shift corner preview. Commit remains the Stage42 atomic batch resize RPC. Native draggable pivot is not yet synchronized back into HTML5 fields, and request ordering/compile/runtime QA remain pending. Handoff: `docs/handoffs/world-processes-stage48-numeric-preview-2026-11-23.md`.
+
+## Stage 49: pivot synchronization and preview revision guards
+
+Native host RPC `studio.worldProcessGroupPivot` returns current group pivot X/Z in world cm. Native Scene pivot drag emits `worldProcess.pivotChanged`; Studio HTML5 numeric controls subscribe and refresh their custom pivot fields. Read-only `studio.worldProcessAreaPreview` now requires monotonically increasing `revision` and `selectionKey`, rejecting stale/mismatched previews; React increments revisions for edits and clear requests. Pivot is transient editor state; actual region changes still use atomic batch RPC. Multi-window arbitration and exact preview/commit math remain outstanding. No TS/C++ compilation or runtime QA. Handoff: `docs/handoffs/world-processes-stage49-pivot-sync-revisions-2026-11-23.md`.
