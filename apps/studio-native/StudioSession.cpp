@@ -274,7 +274,7 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
                           "GranularField","EvolveRegion","SocietyPerson",
                           "MorphSpring","MorphForce","CrowdSlot","CrowdPreference",
                           "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate","CircuitSwitch","CircuitDevice",
-                          "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}) {
+                          "GranularSource","EvolvePressure","SocietyContact","SocietyMessage","SocietyNpcTrigger"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
              "Authoring data; native game setup must install the ECS component",
@@ -2683,7 +2683,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                                             "FractureBond","AetherDuct","AetherFlux",
                                             "MorphSpring","MorphForce","CrowdPreference",
                                             "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate","CircuitSwitch","CircuitDevice",
-                                            "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}){
+                                            "GranularSource","EvolvePressure","SocietyContact","SocietyMessage","SocietyNpcTrigger"}){
                             const auto& linkedDoc=other.extra["components"][kind];
                             if(!linkedDoc.isObject())continue;
                             for(const auto& [key,value]:linkedDoc.members()){
