@@ -446,3 +446,46 @@ Detailed handoffs:
 Mac native scene, Box3D device test or full merged-tree quick test was
 executed in Stages26–27. Do not merge PR #112 on the basis of these
 source commits alone.
+
+## Stage 28: native Studio Scene direct editing (interactive handles)
+
+Source: `apps/studio-native/StudioWorldProcessesEditing.h`,
+plus `StudioHost.{h,cpp}`, `StudioSession.cpp`, and
+`StudioWorldProcessesGizmos.h` on branch
+`feature/world-processes-experimental`.
+
+The selected authored entity's live Scene Overlay now includes small
+handle points for its World Processes link references and size fields.
+`StudioHost::sceneMouse` performs screen hit detection on mouse press,
+preview with the existing native overlay on drag, and **one**
+`StudioSession::dispatch` on release. All intermediate state is transient
+in `StudioHost::wpDrag_`; no live ECS or MapDoc changes occur before
+release. `Escape` discards the transient drag.
+
+- Linked component endpoint -> existing `studio.setProperty` with
+  a stable authored target map ID, revalidated against the required
+  component type by the native Session. No raw ECS slot/index writes.
+- `studio.worldProcessAreaSet` `EvolveRegion/radiusMetres`
+  (0.5..500 world metres) edits **editor-only**
+  `DocEntity.extra.worldProcessGizmo.radiusMetres`. This is NOT
+  the authoritative native EVOLVE ecological footprint.
+- `studio.worldProcessAreaSet` `GranularField/width|height`
+  (1..128) uses the existing typed `GranularDocument::resize`,
+  preserving overlapping cell mass and obstacle array. Supports
+  conversion of a simple initialMass 1×1 document to the full-grid
+  format, then the normal MapDoc Save, Undo/Redo and History.
+- `StudioWorldProcessesGizmos.h` now renders EVOLVE region rings
+  as world-space line segments, rather than StudioScene's pixel-size
+  circle primitive. Area handle and outline scale together.
+
+Studio-specific handoff:
+`docs/handoff/studio-html5/110-world-processes-scene-handles.md`.
+Complete agent handoff and exact code ledger:
+`docs/handoffs/world-processes-stage28-interactive-studio-gizmos-2026-11-23.md`.
+
+**Tests deferred by user.** No native Mac/Windows Studio mouse QA,
+compiler, sanitizers, screenshot, save/reopen or merged-tree quick gate
+has been performed; do not claim Stage28 green or merge PR #112.
+Next: overlapping endpoint cycling/labels, actual EVOLVE gameplay bounds
+authoring, and cross-platform verified Scene interaction when testing
+is later authorized.
