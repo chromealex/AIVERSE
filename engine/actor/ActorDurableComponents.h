@@ -57,7 +57,14 @@ public:
           &&c.addTyped<world::RegionDormant>("aiverse.world.region_dormant")
           &&vehicles::registerDurableVehicleComponents(c)
           &&c.addRebuilder(rebuildDerived)
-          &&c.addCaptureValidator([](const World& w,const world::RegionEntityLedger&){return supportedWorld(w);});
+          &&c.addCaptureValidator([](const World& w,const world::RegionEntityLedger& ledger){
+              if(!supportedWorld(w))return false;
+              World staged=w;
+              if(!rebuildDerived(staged,ledger))return false;
+              staged.setResource<world::RegionEntityLedger>(ledger);
+              std::string error;
+              return world::validateRegionMoveRequests(staged,error);
+          });
     }
 
     // Separate codec registration only: all values still live in the canonical
