@@ -108,3 +108,17 @@ Read `engine/world/TerraWeaveCavernsPublication.h`, `engine/world/TerraWeaveCave
 - STRATA stage-6 eligibility is not an acquisition handshake. Actual STRATA source adoption must be performed by GeometryScene and acknowledged only when residency, safety, and exactly-once draw routing are verified. Until then use Renderer3D fallback and omit STRATA from requiredMask.
 - Never allocate IDs from a pool overlapping gameplay/terrain owners; pool cannot detect such external overlap itself.
 - Test source: `tests/terraweave_caverns_publication_test.cpp`. Added only; actual checkout build / CTest not run.
+
+## Stage 9 — STRATA/Renderer3D exclusive presentation lease
+
+Read `engine/render/TerraWeaveCavernsPresentationLeases.h`,
+`tests/terraweave_caverns_presentation_test.cpp`, and
+`docs/agent-handoffs/caverns-stage9-2026-11-23.md`.
+
+- `CavePresentationLeases` is a per-chunk host-side versioned presentation state machine. `begin(chunk,sourceRevision,renderRevision)` invalidates stale STRATA candidates and returns a generation token. `confirmFallback(ticket)` MUST only be called after the new Renderer3D model has been uploaded and made available by the host. `confirmStrataPrepared(ticket)` MUST only be called after the existing GeometryScene has actually acquired the source and verified all geometry/material/GPU leases.
+- `activateStrata(ticket, exclusiveDrawProof)` is allowed only after STRATA is prepared, Renderer3D fallback is available, and the host proves exclusive routing in **all** relevant render passes. `route(chunk)` is a decision for host draw submission; calling it does not submit or suppress any draws. `deactivateStrata` reverts to fallback before STRATA source expiry.
+- `requestRetirement` records pending teardown but does **not** hide a live chunk. `finishRetirement(ticket,resourcesReleased)` is valid only after the host observed GPU fences, GeometryScene lease release and collision/navmesh/Box3D retirement; stale tickets cannot retire new versions.
+- This is NOT live GeometryScene insertion, STRATA cooking, GPU culling or draw submission. The current source is a protocol only. No false claims of working STRATA streaming or atomic cross-system rollback.
+- IMPORTANT: `begin` on an existing STRATA-owned presentation requires the host to arrange a safe fallback and release old STRATA GPU residency before changing visibility; a route value alone cannot enforce GPU synchronization.
+- Keep collision/Box3D/navmesh independent of visual STRATA LOD. Do not remove original terrain source until the new source is committed, and do not double-submit the same geometry through both routes.
+- After completing any stage update this skill and a dated handoff; record tests actually executed, not simply authored.
