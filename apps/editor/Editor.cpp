@@ -1114,6 +1114,30 @@ void Editor::buildEditScene(game::GameScene& out) const {
 }
 
 void Editor::drawEditOverlays3D() {
+    // Caverns SDF brush: three great circles show the world-space brush
+    // volume on walls, ceilings and floors; visualization has no ECS state.
+    if(cavernsBrushPreview.visible &&
+       cavernsBrushPreview.radiusMetres>0.0f) {
+        const auto c=cavernsBrushPreview.position;
+        const float r=cavernsBrushPreview.radiusMetres;
+        const uint32_t ink=cavernsBrushPreview.fill
+            ? rgba(255,160,90,225) : rgba(95,220,255,225);
+        constexpr float tau=6.28318530717958647692f;
+        constexpr int segments=48;
+        for(int axis=0;axis<3;++axis) {
+            for(int i=0;i<segments;++i) {
+                const float a=tau*float(i)/float(segments);
+                const float b=tau*float(i+1)/float(segments);
+                const auto at=[&](float angle)->render::float3 {
+                    const float u=std::cos(angle)*r,v=std::sin(angle)*r;
+                    if(axis==0)return {c.x,c.y+u,c.z+v};
+                    if(axis==1)return {c.x+u,c.y,c.z+v};
+                    return {c.x+u,c.y+v,c.z};
+                };
+                r3d_.line(at(a),at(b),ink);
+            }
+        }
+    }
     const auto& d = doc().data;
     const float W = float(d.w), H = float(d.h);
     uint32_t border = rgba(255, 255, 255, 120);
