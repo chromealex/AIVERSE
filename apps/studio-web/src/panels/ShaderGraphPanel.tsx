@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode } from './shaderGraphLayout';
+import { layoutShaderGraph, addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes } from './shaderGraphLayout';
+import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import {shaderAdapters} from '../graphs/shaderAdapter';
 import {DraftHistory} from '../graphs/graphFramework';
@@ -13,7 +14,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
- const [selectedNode,setSelectedNode]=useState('');
+ const [selection,setSelection]=useState<string[]>([]);
+ const selectedNode=selection.at(-1)??'';
+ const setSelectedNode=(id:string)=>setSelection(id?[id]:[]);
+ const [clipboard,setClipboard]=useState<ShaderClipboard|null>(null);
  const [pendingName,setPendingName]=useState('');
  const [selected,setSelected]=useState('');
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
@@ -65,6 +69,14 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const compatibleOps=shaderNodeCatalog(operations,draft?.domain??'material',nodeQuery);
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
  const activeNode=draft?.nodes?.find(n=>n.id===selectedNode);
+ const selectedIds=selection.filter(id=>draft?.nodes?.some(n=>n.id===id));
+ const copyNodes=()=>{if(draft&&selectedIds.length)setClipboard(copyShaderNodes(draft,selectedIds));};
+ const pasteNodes=()=>{
+  if(!draft||busy||!clipboard)return;
+  const result=pasteShaderNodes(draft,clipboard,operations);
+  if(result.graph===draft){setError('Cannot paste: incompatible domain, operation or graph limit.');return;}
+  editDraft(result.graph);setSelection(result.ids);setError('');
+ };
  const ports=Object.fromEntries((draft?.nodes??[]).map(n=>[n.id,{inputs:operations.find(o=>o.id===n.op&&o.domains.includes(draft?.domain??'material'))?.inputs??0,output:true}]));
  const wire=(to:string,index:number)=>{
   if(!draft||busy||!pendingOutput)return;
@@ -74,6 +86,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  };
  const duplicate=()=>{
   if(!draft||busy||!activeNode)return;
+  if(selectedIds.length>1){const result=pasteShaderNodes(draft,copyShaderNodes(draft,selectedIds),operations);if(result.graph!==draft){editDraft(result.graph);setSelection(result.ids);}return;}
   const next=duplicateShaderNode(draft,activeNode.id);
   if(next!==draft){editDraft(next);setSelectedNode(next.nodes?.at(-1)?.id??'');}
  };
@@ -128,7 +141,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
     disabled={busy||dirty} onClick={()=>{setSelected('');setDocument(null);resetDraft(null);setNonce(n=>n+1)}}><RefreshCw size={15}/></button>
   </header>
   <p className="graph-readonly">Drag nodes to arrange the graph. Validate before explicit Save.
-    Select an output, then an input to connect. GPU preview still requires the legacy editor.</p>
+    Select output then input to connect. Shift-click or drag a selection box; middle-drag or Alt-drag to pan. GPU preview still requires the legacy editor.</p>
   {error&&<p className="graph-error" role="alert">{error}</p>}
   {pendingName&&<div className="graph-pending">
     <span>Discard unsaved changes and open {pendingName}?</span>
@@ -160,6 +173,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        </select>
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <StudioButton size="sm" disabled={!activeNode||busy} onClick={duplicate}>Duplicate</StudioButton>
+       <StudioButton size="sm" disabled={!selectedIds.length||busy} onClick={copyNodes}>Copy</StudioButton>
+       <StudioButton size="sm" disabled={!draft||!clipboard||busy} onClick={pasteNodes}>Paste</StudioButton>
+       <StudioButton size="sm" disabled={!draft||busy} onClick={()=>{if(draft){const next=arrangeShaderNodes(draft);if(next===draft)setError('Layout unavailable: cyclic or exceeds canvas bounds.');else editDraft(next);}}}>Auto layout</StudioButton>
+       <span>{selectedIds.length} selected</span>
        <StudioButton size="sm" disabled={!history.current?.canUndo()||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput('')}}>Undo</StudioButton>
        <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput('')}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
@@ -168,7 +185,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
       <GraphCanvas diagram={diagram} selected={selectedNode} label={'Editable node layout for '+selected}
-       disabled={!draft||busy} onSelect={setSelectedNode} ports={ports} pendingOutput={pendingOutput}
+       disabled={!draft||busy} onSelect={setSelectedNode} selection={selectedIds} onSelection={setSelection}
+       onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} ports={ports} pendingOutput={pendingOutput}
        onOutput={id=>setPendingOutput(old=>old===id?'':id)} onInput={wire}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput('')}>Cancel connection from {pendingOutput}</StudioButton>}
