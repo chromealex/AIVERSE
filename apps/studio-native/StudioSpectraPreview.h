@@ -78,6 +78,8 @@ public:
         if(action=="step") {
             playing_=false;
             if(timeTicks_>=kMaxTicks)return errorStatus("Preview reached 60-second limit");
+            // An explicit Step supersedes any earlier unfinished seek.
+            targetTicks_=timeTicks_;
             stepsPending_=1;
             return status();
         }
@@ -143,6 +145,8 @@ public:
         for(uint32_t i=0;i<ticks;++i) {
             if(!runtime_.step(kStep)) {
                 playing_=false;
+                ready_=runtime_.backend()==spectra::ComputeBackend::Cpu ||
+                       runtime_.gpuActive();
                 error_=runtime_.reason().empty()?
                     "SpectraFX preview simulation failed":runtime_.reason();
                 break;
