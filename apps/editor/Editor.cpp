@@ -144,6 +144,7 @@ public:
                 chunk.mesh=candidate.mesh;
                 chunk.generatorVersion=1;
                 chunk.revision=candidate.renderRevision;
+                chunk.sourceRevision=candidate.sourceRevision;
                 chunk.resolution=candidate.resolution;
                 chunk.spacingCm=candidate.spacingCm;
                 chunks.push_back(std::move(chunk));
