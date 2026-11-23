@@ -11,6 +11,8 @@
 #include <vector>
 
 namespace aiverse::building {
+using lib::systems::StyleMaterial;
+using lib::systems::StyledStructure;
 
 using BuildingImageByGuid=std::function<bool(
     const std::string&,render::Image&,std::string&)>;
