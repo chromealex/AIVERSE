@@ -12,7 +12,7 @@ public:
     // this is transactional publication, not a concurrent atomic pointer.
     static bool apply(std::unique_ptr<State>& current,const RegionWalFrame& frame,
         const DurableComponentCodecs& codecs,const Materializer& materialize,
-        const Validator& validate={}){
+        const Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         if(!current||!materialize||current->sequence==UINT64_MAX||
            frame.sequence!=current->sequence+1)return false;
         UnifiedWorldTransaction::Decoded decoded;
@@ -22,6 +22,7 @@ public:
         // Host reconciles spawns/despawns and region residency in private state.
         if(!materialize(staged->world,current->ledger,staged->ledger))return false;
         if(!codecs.restoreBatch(staged->world,staged->ledger,decoded.components))return false;
+        if(!resources.restore(staged->world,decoded.resources))return false;
         staged->sequence=frame.sequence;
         if(validate&&!validate(*staged))return false;
         current.swap(staged);return true;
