@@ -230,6 +230,10 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
     // Discoverable, genre-independent SpectraFX native Studio tools.
     // Headless MCP hosts retain the schemas but receive an explicit
     // no-native-viewport error from spectraPreview().
+    registerOp({"fx_asset_check",
+        "Check an indexed model or texture GUID using native Studio CPU decoding; does not verify GPU upload.",
+        Json::parse(R"({"properties":{"guid":{"type":"string"}},"required":["guid"]})"),
+        [this](const Json& p)->Json {return spectraAssetCheck(p);}});
     registerOp({"fx_replay_prepare",
         "Prepare a native SpectraFX replay at an exact tick with optional CPU RNG seed or Metal allocation seed. Poll fx_replay_status until replayReady.",
         Json::parse(R"({"properties":{"tick":{"type":"integer","minimum":0,"maximum":3600},"parameters":{"type":"object"},"seed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuAllocationSeed":{"type":"integer","minimum":0,"maximum":2147483647}},"required":["tick"]})"),
