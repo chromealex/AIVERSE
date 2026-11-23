@@ -394,3 +394,55 @@ and next steps are in:
 - `docs/handoffs/world-processes-stage23-evolve-physis-terra-2026-11-23.md`
 - `docs/handoffs/world-processes-stage24-society-npc-actions-2026-11-23.md`
 - `docs/handoffs/world-processes-stage25-gameplay-host-2026-11-23.md`
+
+## Stages 26–27: real native Studio Scene gizmos + showcase project generator
+
+`apps/studio-native/StudioWorldProcessesGizmos.h` provides a **read-only
+MapDoc → StudioScene::OverlayShape** projector for the ten system areas.
+It is integrated in existing
+`apps/studio-native/StudioHost.cpp::rebuildOverlay` and uses native
+Renderer3D's already-implemented gizmo line/circle/point/label drawing,
+alongside the normal extensions and spline handlers. No new plugin
+window, JS rendering pass, Entity ID substitution, or ECS mutation.
+
+Gizmos: MORPH nodes/springs, CROWD goals/slots,
+IMPRINT trace cells/links, CIRCUIT nodes/wires/switches/devices,
+GRANULAR region bounds, EVOLVE region aid and SOCIETY social links.
+Colors are distinct but use existing Scene overlay primitives.
+The optional DocEntity.extra.worldProcessGizmo metadata controls
+editor-only GRANULAR grid pitch and EVOLVE visual radius. Do not mistake
+the EVOLVE circle for authoritative TerraWeave biome or native
+EvolvePlantRegion coverage; the owning host supplies the actual bounds.
+Gizmos are capped by a strict authoring-overlay budget.
+
+`examples/world/world_processes_native/create_showcase.py` generates
+a separate **real GameCore project copy** based on an existing valid
+game.json/rules.json/assets/map directory. It reads
+`examples/native/world_processes/authoring-examples.json`,
+writes a normal `maps/world_processes_showcase.json` with stable-ID
+entities for all ten mechanism areas, updates the copied game.json map
+list, and opts in the native `world_processes` rules module. It
+**requires** an explicit real, spawned **non-collider** entity type
+from the source game's rules; neither invented IDs nor static collider
+entities may be used as World Process ECS owners. The destination
+must not already exist; the original project remains unchanged.
+
+Example:
+`python3 examples/world/world_processes_native/create_showcase.py
+--source-project /path/to/ActualGame --source-map maps/duel.json
+--destination /path/to/WorldProcessDemo --carrier-type REAL_TYPE`
+
+This is a project generator and map authoring fixture. The host still
+must compile `examples/native/world_processes` into the game, supply
+its real graphical/physics assets and attach optional
+`PhysicalSceneHost`/`WorldProcessGameplayHost` callbacks.
+No claim of verified playable integration or image capture is made.
+
+Detailed handoffs:
+`docs/handoffs/world-processes-stage26-studio-gizmos-2026-11-23.md`
+`docs/handoffs/world-processes-stage27-showcase-project-2026-11-23.md`.
+
+**Tests deferred by user.** No native Studio build, Python generator run,
+Mac native scene, Box3D device test or full merged-tree quick test was
+executed in Stages26–27. Do not merge PR #112 on the basis of these
+source commits alone.
