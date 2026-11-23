@@ -28,6 +28,17 @@ public:
            manifest.bad()||!RegionCheckpointManifestCodec::decode(b,r.manifest)){
             r.status=RegionCheckpointLoadStatus::InvalidManifest;return r;
         }
+        return loadGeneration(dir,r.manifest,expectedWorld,maxCheckpointBytes,ledger,
+            std::forward<Verify>(verify),std::forward<Decode>(decode),acceptIncomplete);
+    }
+    template<class Verify,class Decode>
+    static RegionCheckpointLoadResult loadGeneration(const std::filesystem::path& dir,
+        const RegionCheckpointManifest& selected,const std::array<uint8_t,16>& expectedWorld,
+        uint64_t maxCheckpointBytes,RegionEntityLedger& ledger,Verify&& verify,Decode&& decode,
+        bool acceptIncomplete=false){
+        RegionCheckpointLoadResult r;r.manifest=selected;
+        std::vector<uint8_t> b;
+        if(!selected.valid()){r.status=RegionCheckpointLoadStatus::InvalidManifest;return r;}
         if(r.manifest.identity.world!=expectedWorld){r.status=RegionCheckpointLoadStatus::WrongWorld;return r;}
         const auto n=r.manifest.checkpointBytes;
         if(n>maxCheckpointBytes||n>uint64_t(std::numeric_limits<size_t>::max())||
