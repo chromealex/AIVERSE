@@ -301,6 +301,9 @@ void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
     if (!game_) return;
+    if(wpLiveEcology_ && !game_->state().getBool("inMatch") && wpLiveSnapshot_.getBool("active")){
+        wpLiveSnapshot_=Json();rebuildOverlay();
+    }
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
@@ -827,6 +830,26 @@ void StudioHost::rebuildOverlay() {
                 shapes.push_back(worldprocess_gizmos::makeLabel(
                     {center.x,1.3f,center.z},"LIVE F:"+std::to_string(int(u("fertility")*100))+
                     "% P:"+std::to_string(int(u("pollution")*100))+"%",rr,gg,bb));
+            }
+        }
+        if(wpLiveEcology_&&wpLiveSnapshot_.getBool("active")){
+            for(const auto& p:wpLiveSnapshot_["plants"].items()){
+                if(shapes.size()>=1250)break;
+                const bool fallen=p.getBool("fallen");
+                shapes.push_back(worldprocess_gizmos::makePoint(
+                    float(p.getInt("x",0))/100.f,1.f,float(p.getInt("z",0))/100.f,
+                    fallen?240:100,fallen?150:230,80,5.f));
+            }
+            for(const auto& c:wpLiveSnapshot_["weather"].items()){
+                if(shapes.size()+4>=1300)break;
+                const float size=float(c.getInt("size",0))/100.f;
+                if(size<=0)continue;
+                const float wet=std::clamp(float(c["wetness"].toDouble(0)),0.f,1.f);
+                if(wet<.05f)continue;
+                worldprocess_gizmos::rectangle(shapes,
+                    {float(c.getInt("x",0))/100.f+size*.5f,1.1f,
+                     float(c.getInt("z",0))/100.f+size*.5f},
+                    size,size,60,uint8_t(80+wet*120),240);
             }
         }
         const auto selected=session_->selectedObjectId();
