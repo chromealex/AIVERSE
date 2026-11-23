@@ -71,6 +71,8 @@ export class DraftHistory<T> {
   if(!Number.isSafeInteger(limit)||limit<1)throw new Error('Invalid history limit');
  }
  current():T{return this.value;}
+ canUndo():boolean{return this.past.length>0;}
+ canRedo():boolean{return this.future.length>0;}
  push(next:T):T {
   if(Object.is(next,this.value))return this.value;
   this.past.push(this.value);
