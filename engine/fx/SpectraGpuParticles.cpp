@@ -161,7 +161,7 @@ bool ComputeParticles::initGpu() {
     gpu_material::Material graphMaterial;
     const bool materialActive=desc_.gpuMaterial&&!desc_.shaderGraph.isNull();
     if(materialActive && !gpu_material::compile(
-        desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_))return false;
+        desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_,desc_.gpuBirthRandom))return false;
     const std::array<uint32_t,4> graphChannels=graphMaterial.sources;
     gpuIndirectActive_=desc_.gpuIndirect && device_->supportsGpuAuthoredIndirectDraw();
     gpuResetDirty_=false;
