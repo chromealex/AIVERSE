@@ -118,6 +118,9 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     // Demo cannot inspect an actual project's materials/rules.
     return [];
   }
+  if (method === 'studio.buildingCatalog') return {styles: []} as StudioResult['studio.buildingCatalog'];
+  if (method === 'studio.buildingInspect' || method === 'studio.buildingGenerate')
+    throw new Error('Generated building meshes require native AIVERSE Studio');
   if (method === 'studio.assets') {
     // Empty DEMO catalog: never imply that mock file names exist in the user project.
     return { files: [], folders: [], root: 'content' };
