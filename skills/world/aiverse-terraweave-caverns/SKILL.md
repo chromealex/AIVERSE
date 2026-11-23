@@ -167,3 +167,16 @@ Read `engine/world/TerraWeaveCavernsLodWeld.h`, `tests/terraweave_caverns_lod_we
 - Run `auditCaveSameLodSeam` after actual mesh generation on each shared face. If audit reports unmatched edges, do not mark scene ready for crack-free display; defer/correct the source. Do not confuse matching integer-cm edge coordinates with matching normals, UVs or cross-chunk STRATA cluster safety.
 - STRATA must consume the welded **presentation-only** result as an immutable versioned source. The physics/navmesh owner must continue to use authoritative original geometry. STRATA selection must never independently lower the resolution across an uncoupled boundary unless its own source-wide seam certification proves safe.
 - Test source added; no actual full-engine native build or GPU/STRATA seam acceptance executed this stage. Report tests NOT RUN until there are logs. Update this skill and a separate handoff after each following stage.
+
+## Stage 14 — selective mixed-LOD contour stitching
+
+Read `engine/world/TerraWeaveCavernsLodTransition.h`,
+`tests/terraweave_caverns_lod_transition_test.cpp`, and
+`docs/agent-handoffs/caverns-stage14-2026-11-23.md`.
+
+- `stitchCaveCollinearBoundary(coarse,coarseResolution,coarseSpacingCm,fine,fineResolution,fineSpacingCm,axis)` accepts adjacent +X/+Y/+Z chunk meshes of equal physical span, with fine spacing <= coarse spacing. It operates on **presentation meshes only**. It audits the shared world-coordinate boundary, and subdivides coarse boundary triangles where fine contour segments partition a *collinear* coarse edge. Returns `CaveTransitionResult{coarseStitched,splitTriangles,supported}`.
+- `supported=true` certifies the resulting chunk-face edge set matches the fine source's corresponding edge set at integer-centimetre precision. It is NOT proof of normal continuity, physical watertightness, or STRATA cluster LOD stability in every render pass.
+- `supported=false` is a NORMAL result for independently sampled curved/branched cave contours, overlapping boundary features, incompatible or ambiguous topology. Do not display a cracked transition. Fall back to `planCaveSeamSafeLod` from stage 13, regenerate both neighbors at a common spacing, and rerun the same-resolution seam audit.
+- This is **not general Transvoxel**. Do not claim arbitrary mixed LODs are seamless. Geometry is only changed on the coarse visual source; Box3D / SpatialWorld / native NavMesh remain unchanged. Do not stitch across different world spans, source revisions or incompatible density snapshots.
+- Host must publish updated meshes to GeometryScene/STRATA with a new render revision; preserve Renderer3D fallback while STRATA residency updates.
+- C++ tests for all three positive face axes and divergent fallback are authored, NOT executed in the full AIVERSE checkout yet.
