@@ -25,6 +25,8 @@ struct GpuCheckpoint {
     // position snapshot and may differ from GPU remaining lifetime estimates.
     std::vector<float> remainingLifetime;
     uint64_t frameSerial=0;
+    uint32_t shaderBirthSeed=0, shaderBirthOrdinal=0;
+    bool shaderBirthSeedEnabled=false;
     bool complete=false; // all three GPU buffers were read successfully
 };
 } // namespace aiverse::spectra
