@@ -304,6 +304,11 @@ void StudioHost::tickGame() {
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
+    if(wpLiveEcology_ && now-wpLiveRefresh_>=.25){
+        wpLiveRefresh_=now;
+        wpLiveSnapshot_=game_->ecologyState();
+        rebuildOverlay();
+    }
 }
 void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
@@ -804,6 +809,26 @@ void StudioHost::rebuildOverlay() {
         auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map,{},wpEcologyLayer_);
         shapes.reserve(shapes.size()+worldShapes.size());
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
+        if(wpLiveEcology_&&wpLiveSnapshot_.getBool("active")){
+            for(const auto& r:wpLiveSnapshot_["regions"].items()){
+                if(shapes.size()+5>=1390)break;
+                const float x0=float(r.getInt("minXcm",0))/100.f,z0=float(r.getInt("minZcm",0))/100.f;
+                const float x1=float(r.getInt("maxXcm",0))/100.f,z1=float(r.getInt("maxZcm",0))/100.f;
+                const auto u=[&](const char* key){return std::clamp(float(r.getInt(key,0))/1e9f,0.f,1.f);};
+                float red=u("pollution"),green=u("fertility"),blue=.35f;
+                if(wpEcologyLayer_=="fertility")red=.15f;
+                if(wpEcologyLayer_=="pollution")green=.15f;
+                if(wpEcologyLayer_=="succession"){red=.15f;green=u("succession");blue=.85f;}
+                if(wpEcologyLayer_=="durability"){green=u("durability");red=1-green;}
+                if(wpEcologyLayer_=="off")continue;
+                const auto rr=uint8_t(red*255),gg=uint8_t(green*255),bb=uint8_t(blue*255);
+                render::float3 center{(x0+x1)*.5f,.9f,(z0+z1)*.5f};
+                worldprocess_gizmos::rectangle(shapes,center,x1-x0,z1-z0,rr,gg,bb);
+                shapes.push_back(worldprocess_gizmos::makeLabel(
+                    {center.x,1.3f,center.z},"LIVE F:"+std::to_string(int(u("fertility")*100))+
+                    "% P:"+std::to_string(int(u("pollution")*100))+"%",rr,gg,bb));
+            }
+        }
         const auto selected=session_->selectedObjectId();
         const auto pivotSelection=session_->selectedObjectIds();
         std::string currentPreviewSelection;
@@ -1926,6 +1951,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
         out.set("regions",Json::array());return out;
     });
     if(method=="studio.evolveLayer")return answer([&]{
+        if(params.has("live")){
+            wpLiveEcology_=params.getBool("live");
+            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState():Json();
+            rebuildOverlay();
+        }
         const auto layer=params.getStr("layer");
         if(!layer.empty()){
             if(layer!="combined"&&layer!="fertility"&&layer!="pollution"&&
@@ -1936,6 +1966,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         Json result=Json::object();
         result.set("layer",Json::string(wpEcologyLayer_));
+        result.set("live",Json::fromBool(wpLiveEcology_));
         return result;
     });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{
