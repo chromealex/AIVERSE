@@ -7,6 +7,8 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <stdexcept>
+#include <utility>
 #include <thread>
 #include <map>
 #include <string>
