@@ -2258,6 +2258,21 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-graph-authoring",
+      "package": null,
+      "path": "skills/workflow/aiverse-graph-authoring/SKILL.md",
+      "domain": "workflow",
+      "summary": "Shared Studio graph canvas and domain adapters without duplicate graph execution",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/agents/graph-framework.md",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-graphs",
       "package": "graphs",
       "path": "skills/core/aiverse-graphs/SKILL.md",
