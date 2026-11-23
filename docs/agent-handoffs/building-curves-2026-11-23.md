@@ -9,6 +9,8 @@ Curved forms implementation: `601b14f8c78d76ee76e6e8c07afb4081e852182a`.
 Focused workflow: `01e9dbca7e1c9da5cb06e73c9760e6fdf21b1c07`.
 Stage 4 docs/tests commit: `fd15b3c7ac0ccc8a2eaec8013d44dc22fc36c9ec`.
 Focused-workflow GCC warning-policy correction: `4f055df6bcd4d659529b68f964a7a4737241b2d4`.
+Isolated arch test correction: `675f51bdd47872e0861d8c68bdad638f09440c1e` (explicit height above minimum for this low depot).
+
 
 
 ## Architecture and implementation
@@ -46,6 +48,13 @@ Focused-workflow GCC warning-policy correction: `4f055df6bcd4d659529b68f964a7a47
   `-Wno-misleading-indentation` (same as the repository's library CMake
   warning policy). The replacement run `45209394622` was queued when the
   fix was recorded. This is not yet evidence of a passing test.
+- Focused run `45209394622` **compiled** all three C++ executables and
+  started `building_style_tests`, but failed at `building_style_tests.cpp:162`:
+  the isolated depot arch test requested `height=0.8*Hh`, below the
+  intended minimum `fh >= 2.8m`, so the mesh was correctly omitted.
+  The test fixture now uses `height=1.3*Hh`. The replacement focused
+  job `45209714148` was queued at the latest observation.
+  Compile success is verified; **test suite PASS is not yet verified**.
 - No local CMake, GPU screenshots or modelviewer output was executed in this
   model runtime. Do not describe as passing until a GitHub workflow has
   reported success. The preceding overall PR CI had unrelated catalog
