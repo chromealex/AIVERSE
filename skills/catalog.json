@@ -3402,6 +3402,21 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-new-feature",
+      "package": null,
+      "path": "skills/workflow/aiverse-new-feature/SKILL.md",
+      "domain": "workflow",
+      "summary": "Plan, implement and verify feature evidence and integration readiness",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/agents/feature-contract.md",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-new-mechanic",
       "package": null,
       "path": "skills/workflow/aiverse-new-mechanic/SKILL.md",
