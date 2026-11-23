@@ -89,7 +89,8 @@ public:
                     &second.mesh,second.resolution,second.spacingCm});
                 const CaveFaceKey face{key,next};
                 // Subdivision also needs a newly published modified coarse mesh. Until
-                // that mesh is staged, favor regeneration at common LOD.\n                if(decision.decision!=CaveFaceDecision::ExactMatch) {
+                // that mesh is staged, favor regeneration at common LOD.
+                if(decision.decision!=CaveFaceDecision::ExactMatch) {
                     ++fallbackFaces_;
                     const uint64_t span=int64_t(first.resolution)*first.spacingCm;
                     const int32_t spacing=decision.commonSpacingCm;
