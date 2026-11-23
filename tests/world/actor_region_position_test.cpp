@@ -1,6 +1,9 @@
 // W1.7: actual world-space GameCore positions and opt-in ECS region state.
 // No synthetic Transform is added to characters or vehicles.
 #include "engine/actor/ActorModule.h"
+#include "engine/actor/ActorDurableComponents.h"
+#include "engine/world/UnifiedComponentSection.h"
+#include "engine/world/UnifiedResourceSection.h"
 #include "engine/world/RegionColdStore.h"
 #include "engine/game/GameCore.h"
 #include "tests/AlwaysCheck.h"
@@ -150,7 +153,69 @@ static void noOptInDoesNotChangeLegacy() {
     const auto bytes=regular->serialize();
     AIVERSE_TEST_CHECK(!bytes.empty() && uint8_t(bytes[4])==9);
 }
+
+static void portableActorProjection(){
+    auto sim=make(true);
+    auto& w=sim->world();
+    auto& host=actor::host(*sim);
+    const auto driver=host.characterEntity(*sim,1);
+    const auto car=host.vehicleEntities(*sim).front();
+    const auto driverId=w.tryGetConst<wd::RegionStableIdentity>(driver)->id;
+    const auto carId=w.tryGetConst<wd::RegionStableIdentity>(car)->id;
+    vs::VehicleDrive drive;
+    drive.type=1;drive.seats.occupants={{10,1},{20,2}};
+    w.add<vs::VehicleDrive>(car,drive);
+    vs::seatDriver(w,car,w.get<vs::VehicleDrive>(car),driver,1,0);
+    w.get<actor::CharacterBody>(driver).vehicle=w.get<actor::Vehicle>(car).id;
+    w.get<actor::CharacterHealth>(driver).health=73;
+    w.resource<actor::State>()->round=3;
+    w.resource<wd::RegionMoveRequests>()->destinations[carId]={64_fx,2_fx,0_fx};
+    wd::DurableComponentCodecs codecs;
+    using Portable=actor::ActorDurableComponents;
+    AIVERSE_TEST_CHECK(Portable::registerCodecs(codecs));
+    PersistentEcsRegistry registry;Portable::registerResources(registry);registry.seal();
+    const auto policy=Portable::resourcePolicy(registry);
+    AIVERSE_TEST_CHECK(Portable::supportedWorld(w));
+    constexpr size_t budget=1024*1024;
+    wd::UnifiedCheckpointSections::Adapters adapters{
+        wd::UnifiedEntitySection::adapter(Portable::spawnShell),
+        wd::UnifiedComponentSection::adapter(codecs,budget),
+        wd::UnifiedResourceSection::adapter(policy,budget)
+    };
+    wd::UnifiedWorldReplay::State state;
+    state.ledger=*w.resourceConst<wd::RegionEntityLedger>();state.world=w;
+    state.world.eraseResource<wd::RegionEntityLedger>();
+    std::array<uint8_t,16> uuid{};uuid[0]=42;
+    std::vector<uint8_t> bytes;
+    AIVERSE_TEST_CHECK(wd::UnifiedCheckpointSections::capture(state,uuid,adapters,budget,bytes));
+    std::unique_ptr<wd::UnifiedWorldReplay::State> restored;
+    auto factory=[](){
+        auto s=std::make_unique<wd::UnifiedWorldReplay::State>();
+        // Shift the reconstructed allocator so persistent references must be remapped.
+        for(int i=0;i<8;++i)s->world.create();
+        return s;
+    };
+    AIVERSE_TEST_CHECK(wd::UnifiedCheckpointSections::restore(bytes,budget,uuid,adapters,factory,restored));
+    wd::PersistentEntityReferences refs;
+    AIVERSE_TEST_CHECK(refs.rebuild(restored->world,restored->ledger));
+    Entity newCar,newDriver;
+    AIVERSE_TEST_CHECK(refs.resolve(restored->world,carId,newCar)&&refs.resolve(restored->world,driverId,newDriver));
+    AIVERSE_TEST_CHECK(newCar!=car&&newDriver!=driver);
+    const auto& rw=restored->world;
+    AIVERSE_TEST_CHECK(rw.resourceConst<actor::CharacterIndex>()->bySlot[0]==newDriver);
+    AIVERSE_TEST_CHECK(rw.tryGetConst<vs::VehicleDrive>(newCar)->driver==newDriver);
+    AIVERSE_TEST_CHECK(rw.tryGetConst<vs::VehicleOccupant>(newDriver)->vehicle==newCar);
+    AIVERSE_TEST_CHECK(rw.tryGetConst<actor::CharacterHealth>(newDriver)->health==73);
+    AIVERSE_TEST_CHECK(rw.resourceConst<actor::State>()->round==3);
+    AIVERSE_TEST_CHECK(rw.resourceConst<wd::RegionMoveRequests>()->destinations.contains(carId));
+    AIVERSE_TEST_CHECK(!rw.resourceConst<wd::RegionEntityLedger>());
+    // A missing stable reference is a hard failure, not a stale-handle fallback.
+    state.world.get<vs::VehicleDrive>(car).driver=state.world.create();
+    AIVERSE_TEST_CHECK(!wd::UnifiedCheckpointSections::capture(state,uuid,adapters,budget,bytes));
+}
+
 int main() {
+    portableActorProjection();
     canonicalOwnerAndRestore();
     noOptInDoesNotChangeLegacy();
     std::cout<<"PASS world-space canonical actor/vehicle position and ECS region state\n";
