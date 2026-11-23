@@ -74,6 +74,7 @@ public:
                     "SpectraFX preview backend unavailable":runtime_.reason());
             }
             ready_=true;
+            replayPrepared_=false;
             playing_=false;
             pendingRestart_=true;restartBurstPending_=true;
             phase_=0;
@@ -139,6 +140,7 @@ public:
             stepsPending_=0;timeTicks_=0;
             targetTicks_=uint32_t(input["tick"].integer());
             requestedParameters_=std::move(validated);
+            replayPrepared_=true;
             error_.clear();
             return status();
         }
@@ -159,6 +161,7 @@ public:
             // GPU pool reset happens next frame after beginFrame, not in an
             // arbitrary Studio IPC callback or an open graphics encoder.
             playing_=false;phase_=0;
+            replayPrepared_=false;
             timeTicks_=targetTicks_=stepsPending_=0;
             burstsPending_=0;triggeredBursts_=0;
             pendingRestart_=false;restartBurstPending_=false;
@@ -168,12 +171,13 @@ public:
             error_.clear();
             return status();
         }
-        if(action=="play") {error_.clear();playing_=true;return status();}
+        if(action=="play") {error_.clear();replayPrepared_=false;playing_=true;return status();}
         if(action=="pause") {
             playing_=false;targetTicks_=timeTicks_;stepsPending_=0;
             phase_=0;return status();
         }
         if(action=="restart") {
+            replayPrepared_=false;
             error_.clear();
             playing_=input.getBool("play",false);
             pendingRestart_=true;restartBurstPending_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
@@ -185,6 +189,7 @@ public:
             return status();
         }
         if(action=="step") {
+            replayPrepared_=false;
             playing_=false;phase_=0;
             if(timeTicks_>=kMaxTicks)return errorStatus("Preview reached 60-second limit");
             // An explicit Step supersedes any earlier unfinished seek.
@@ -199,6 +204,7 @@ public:
                input["tick"].integer(-1)<0 || input["tick"].integer(-1)>kMaxTicks)
                 return errorStatus("Preview seek expects a tick in 0..3600");
             playing_=false;
+            replayPrepared_=false;
             phase_=0;
             error_.clear();
             targetTicks_=uint32_t(input["tick"].integer());
@@ -363,6 +369,10 @@ public:
         result.set("gpuSeedPending",Json::fromBool(hasPendingGpuAllocationSeed_));
         result.set("gpuSeedFailed",Json::fromBool(gpuSeedFailed_));
         result.set("gpuSeedRetries",Json::number(int64_t(gpuSeedRetryCount_)));
+        result.set("replayReady",Json::fromBool(replayPrepared_ && ready_ && error_.empty() &&
+            !playing_ && !pendingRestart_ && !restartBurstPending_ &&
+            !hasPendingGpuAllocationSeed_ && !pendingClear_ &&
+            requestedParameters_.empty() && targetTicks_==timeTicks_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -395,7 +405,7 @@ private:
     uint32_t timeTicks_=0,targetTicks_=0,stepsPending_=0;
     static constexpr uint32_t kMaxGpuSeedRetries=8;
     uint32_t pendingGpuAllocationSeed_=0,gpuSeedRetryCount_=0;
-    bool gpuSeedFailed_=false;
+    bool gpuSeedFailed_=false,replayPrepared_=false;
     bool hasPendingGpuAllocationSeed_=false;
     uint64_t generation_=1;
     std::string backend_,error_;
