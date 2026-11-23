@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { onNativeEvent } from '../bridge';
+let previewRevision = 0;
 import { invoke } from '../bridge';
 
 type Props = { ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
@@ -18,8 +20,34 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
   const [pivotZ, setPivotZ] = useState('0');
   const [pending, setPending] = useState(false);
   useEffect(() => {
+    if (!open || ids.length < 2) return;
+    let cancelled = false;
+    void invoke('studio.worldProcessGroupPivot', {}).then(value => {
+      if (cancelled || !value || typeof value !== 'object') return;
+      const data = value as { pivotXcm?: number; pivotZcm?: number; custom?: boolean };
+      if (typeof data.pivotXcm === 'number') setPivotX(String(data.pivotXcm));
+      if (typeof data.pivotZcm === 'number') setPivotZ(String(data.pivotZcm));
+      if (data.custom) setPivot('custom');
+    }).catch(() => {});
+    const unsubscribe = onNativeEvent((event, payload) => {
+      if (event !== 'worldProcess.pivotChanged' || !payload || typeof payload !== 'object') return;
+      const data = payload as { pivotXcm?: number; pivotZcm?: number };
+      if (typeof data.pivotXcm === 'number') setPivotX(String(data.pivotXcm));
+      if (typeof data.pivotZcm === 'number') setPivotZ(String(data.pivotZcm));
+      setPivot('custom');
+    });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [open, ids.join('|')]);
+  useEffect(() => {
+    const revision = ++previewRevision;
+    const selectionKey = ids.join('|') + '|';
+    const clear = () => invoke('studio.worldProcessAreaPreview',
+      { clear: true, revision: ++previewRevision, selectionKey }).catch(() => {});
     if (!open || ids.length < 2) {
-      void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {});
+      void clear();
+      return;
+    }
+      void clear();
       return;
     }
     const x = integer(scaleX), z = integer(scaleZ);
@@ -31,10 +59,11 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
       return;
     }
     void invoke('studio.worldProcessAreaPreview', {
+      revision, selectionKey,
       scaleNumerator: x, scaleNumeratorZ: z, pivot,
       ...(pivot === 'custom' ? { pivotXcm: px, pivotZcm: pz } : {})
     }).catch(() => {});
-    return () => { void invoke('studio.worldProcessAreaPreview', { clear: true }).catch(() => {}); };
+    return () => { void clear(); };
   }, [open, ids.join('|'), scaleX, scaleZ, pivot, pivotX, pivotZ]);
   if (ids.length < 2) return null;
   const submit = async () => {
