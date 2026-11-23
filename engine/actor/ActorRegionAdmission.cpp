@@ -36,7 +36,8 @@ bool moveGroup(const ActorHost& host,const Simulation& sim,Entity target,
             if(body.vehicle==vehicle->id)members.push_back(e);
         });
     }else{
-        if(world.get<CharacterBody>(target).vehicle)
+        const auto* body=world.tryGetConst<CharacterBody>(target);
+        if(body && body->vehicle)
             return reject(error,"occupied character must move with its vehicle");
     }
     std::sort(members.begin(),members.end(),[](Entity a,Entity b){
