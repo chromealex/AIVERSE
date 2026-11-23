@@ -3,6 +3,7 @@
 namespace aiverse::actor {
 void ActorHost::setContentReader(world::AssetReader reader) {
     streamedCollision_.reset();
+    navigationCollisionRevision_=UINT64_MAX;
     if(streamManifest_.getBool("async"))streamedCollision_=std::make_unique<world::CollisionStream>(streamManifest_,std::move(reader),collision_);
 }
 bool ActorHost::readyToStep(Simulation& sim) {
@@ -27,6 +28,15 @@ bool ActorHost::readyToStep(Simulation& sim) {
         if(p.program.enabled)for(const auto& m:config_.weapons[p.weapon].flight.modifiers)
             if(m.kind==projectile::ProjectileModKind::Ricochet)reach=fxMax(reach,m.radius+p.program.radius);
         region(p.pos,travel+reach+16_fx);}
-    return streamedCollision_->prepareRegions(regions);
+    // Collision assets must be present before deriving the bot navigation
+    // meshes. Waiting happens before the authoritative tick consumes any
+    // command, RNG or gameplay state (Simulation::step/readyToStep).
+    if(!streamedCollision_->prepareRegions(regions))return false;
+    if(botHost_ && navigationCollisionRevision_!=streamedCollision_->revision()) {
+        std::string error;
+        if(!rebuildBotNavigation(&error))return false;
+        navigationCollisionRevision_=streamedCollision_->revision();
+    }
+    return true;
 }
 }
