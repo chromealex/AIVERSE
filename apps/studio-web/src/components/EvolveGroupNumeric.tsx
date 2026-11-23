@@ -19,6 +19,23 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
   const [pivotX, setPivotX] = useState('0');
   const [pivotZ, setPivotZ] = useState('0');
   const [pending, setPending] = useState(false);
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
+  useEffect(() => {
+    const update = () => setVisible(document.visibilityState === 'visible');
+    const release = () => {
+      void invoke('studio.worldProcessAreaPreview', {
+        clear: true, owner: previewOwner, revision: ++previewRevision,
+        selectionKey: ids.join('|') + '|'
+      }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', update);
+    window.addEventListener('pagehide', release);
+    return () => {
+      document.removeEventListener('visibilitychange', update);
+      window.removeEventListener('pagehide', release);
+      release();
+    };
+  }, [ids.join('|')]);
   useEffect(() => {
     if (!open || ids.length < 2) return;
     let cancelled = false;
@@ -43,7 +60,7 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
     const selectionKey = ids.join('|') + '|';
     const clear = () => invoke('studio.worldProcessAreaPreview',
       { clear: true, owner: previewOwner, revision: ++previewRevision, selectionKey }).catch(() => {});
-    if (!open || ids.length < 2) {
+    if (!open || !visible || ids.length < 2) {
       void clear();
       return;
     }
@@ -61,7 +78,7 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
       ...(pivot === 'custom' ? { pivotXcm: px, pivotZcm: pz } : {})
     }).catch(() => {});
     return () => { void clear(); };
-  }, [open, ids.join('|'), scaleX, scaleZ, pivot, pivotX, pivotZ]);
+  }, [open, visible, ids.join('|'), scaleX, scaleZ, pivot, pivotX, pivotZ]);
   if (ids.length < 2) return null;
   const submit = async () => {
     const x = integer(scaleX), z = integer(scaleZ);
