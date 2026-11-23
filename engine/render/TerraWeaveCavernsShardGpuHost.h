@@ -1,0 +1,142 @@
+#pragma once
+// TerraWeave Caverns Stage30: one GPU-owner GeometryScene per bounded shard.
+// Stage the COMPLETE shard snapshot and keep unrelated active shards unchanged.
+// The renderer and physics host must own commit barriers; this class never
+// reports an atomic Box3D/SpatialWorld/NavMesh transaction by itself.
+#include "engine/render/TerraWeaveCavernsGpuSwap.h"
+#include "engine/render/TerraWeaveCavernsShardCatalog.h"
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+namespace aiverse::terraweave::caverns {
+
+class CaveShardGpuHost {
+public:
+    explicit CaveShardGpuHost(CaveShardConfig cfg={}):catalog_(cfg){
+        validateCaveShardConfig(cfg);
+    }
+    CaveShardGpuHost(const CaveShardGpuHost&)=delete;
+    CaveShardGpuHost& operator=(const CaveShardGpuHost&)=delete;
+
+    // Register existing committed source geometry only for initial loaded
+    // world bootstrapping. Never call to acknowledge an unpublished edit.
+    bool registerCommittedSource(const CaveBatchChunk& chunk){
+        if(pending_.contains(caveShardFor(chunk.mesh.key,catalog_.config())))
+            return false;
+        return catalog_.adopt(chunk);
+    }
+
+    // All source edits must belong to ONE shard. They may be zero-geometry
+    // tombstones. This prepares an entire replacement shard GPU scene from
+    // unchanged + edited sources, not just edited models.
+    // Graphics owner calls OUTSIDE a draw pass; failed stage never adopts
+    // the CPU catalog and never switches active visuals.
+    bool stage(gfx::Device& device,CaveShardKey shard,
+               const std::vector<CaveBatchChunk>& edits,
+               uint64_t batchRenderRevision,
+               CaveBatchSpec spec={}) {
+        if(edits.empty()||!batchRenderRevision||pending_.contains(shard))
+            return false;
+        auto preview=catalog_.preview(shard,edits,batchRenderRevision);
+        if(preview.chunks.size()>spec.maxChunks)return false;
+        auto prepared=prepareFullCaveShardPresentation(preview,spec);
+        auto& gpu=owners_[shard];
+        if(!gpu)gpu=std::make_unique<CaveGeometrySwapOwner>();
+        const bool ok=prepared.models.empty()
+            ? gpu->stageEmpty(batchRenderRevision)
+            : gpu->stage(device,std::move(prepared),batchRenderRevision,
+                         spec.enableStrata,spec.maxVertices);
+        if(!ok)return false;
+        try{
+            pending_.emplace(shard,std::move(preview));
+        }catch(...){
+            (void)gpu->cancelStage();
+            throw;
+        }
+        return true;
+    }
+
+    bool hasPending(CaveShardKey shard)const{
+        return pending_.contains(shard);
+    }
+    const CaveShardSnapshot* pending(CaveShardKey shard)const{
+        const auto it=pending_.find(shard);
+        return it==pending_.end()?nullptr:&it->second;
+    }
+
+    // Real graphics/physics/nav owner proves all-or-none visibility outside
+    // this class. On refusal, keep both active scene and pending snapshot.
+    // On successful callback the exact GPU shard is activated and the
+    // catalog is advanced. Do NOT supply a no-op success callback.
+    template<class OwnerCommit>
+    bool activate(CaveShardKey shard,OwnerCommit&& commitOwners){
+        auto it=pending_.find(shard);
+        if(it==pending_.end())return false;
+        auto jt=owners_.find(shard);
+        if(jt==owners_.end()||!jt->second ||
+           jt->second->stagedRevision()!=it->second.revision)
+            return false;
+        // The catalog's committed state must remain unchanged while the
+        // external host performs its synchronized visibility barrier.
+        const CaveShardSnapshot snap=it->second;
+        bool success=jt->second->activate([&](uint64_t revision){
+            return revision==snap.revision && commitOwners(snap);
+        });
+        if(!success)return false;
+        // This should be infallible after a valid preview with no concurrent
+        // writers. If not, never claim success silently.
+        if(!catalog_.adoptSnapshot(snap))
+            throw std::logic_error("Caverns committed GPU shard not reflected in source catalog");
+        pending_.erase(it);
+        return true;
+    }
+
+    bool cancel(CaveShardKey shard) {
+        auto it=pending_.find(shard);
+        if(it==pending_.end())return false;
+        auto owner=owners_.find(shard);
+        if(owner==owners_.end()||!owner->second||
+           !owner->second->cancelStage())return false;
+        pending_.erase(it);
+        return true;
+    }
+
+    // Native Scene must draw ONLY this active source for the cave shards.
+    // The rest of the engine's terrain must still draw normally.
+    void draw(render::Renderer3D& renderer) {
+        for(auto& [key,gpu]:owners_){
+            (void)key;
+            if(gpu)gpu->draw(renderer);
+        }
+    }
+    // Use only after a real GPU idle proof, not per brush dab.
+    // Keep owners on failed retirement rather than destruct them.
+    bool collectAfterGpuIdle(gfx::Device& device){
+        for(auto& [key,gpu]:owners_){
+            (void)key;
+            if(gpu&&!gpu->collectAfterGpuIdle(device))return false;
+        }
+        return true;
+    }
+    // Call when Scene draws have stopped and device lifetime is retained.
+    bool shutdownAfterGpuIdle(gfx::Device& device){
+        for(auto& [key,gpu]:owners_){
+            (void)key;
+            if(gpu&&!gpu->shutdownAfterGpuIdle(device))return false;
+        }
+        pending_.clear();
+        owners_.clear();
+        return true;
+    }
+    size_t pendingCount()const noexcept{return pending_.size();}
+    size_t ownerCount()const noexcept{return owners_.size();}
+    const CaveShardCatalog& catalog()const noexcept{return catalog_;}
+private:
+    CaveShardCatalog catalog_;
+    std::map<CaveShardKey,std::unique_ptr<CaveGeometrySwapOwner>,CaveShardLess> owners_;
+    std::map<CaveShardKey,CaveShardSnapshot,CaveShardLess> pending_;
+};
+} // namespace aiverse::terraweave::caverns
