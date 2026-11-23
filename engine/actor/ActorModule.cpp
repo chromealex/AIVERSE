@@ -1,5 +1,4 @@
 #include "ActorModule.h"
-#include "ActorBuildingApertures.h"
 #include "libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h"
 #include <algorithm>
 #include <set>
@@ -273,7 +272,6 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     if(sim.players().empty()||sim.players().size()>config_.maxPlayers)throw JsonError("actor: invalid player count");
     streamedCollision_.reset();streamManifest_=map["world"];
     if(streamManifest_.getBool("async"))world::WorldAssets::parse(streamManifest_);
-    buildingApertures_.reset();
     collision_.clear();spawns_.clear();bots_.clear();
     const auto& boxes=map["colliders"];
     if(!boxes.isArray()||boxes.size()>100000)throw JsonError("actor.colliders: expected at most 100000 boxes");
@@ -336,13 +334,6 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         tickOrdinaryProjectiles(s);
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
-    // Runs AFTER actor movement/vehicles, so paired leaf swept checks
-    // sample the same ECS state used by the authoritative FPS motor.
-    // Installation is opt-in; without a map-owned runtime this does nothing.
-    sim.addSystem("actor.building_dual_leaves",[this](Simulation& s){
-        if(buildingApertures_&&buildingApertures_->sceneId())
-            (void)buildingApertures_->tick(s);
-    });
 }
 void ActorHost::applyCommand(Simulation& sim,const Command& c) {
     Input input;
