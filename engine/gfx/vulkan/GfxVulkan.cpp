@@ -1094,7 +1094,8 @@ void VulkanDevice::endFrame() {
     si.commandBufferCount = count;
     si.pCommandBuffers = cbs;
     vkResetFences(device_, 1, &s.fence);
-    if (vkQueueSubmit(queue_, 1, &si, s.fence) == VK_ERROR_DEVICE_LOST) healthy_ = false;
+    const VkResult submitResult=vkQueueSubmit(queue_, 1, &si, s.fence);
+    if(submitResult!=VK_SUCCESS)healthy_=false;
     s.serial = serial_;
     if (swapAcquired_) {
         auto pi = vkStruct<VkPresentInfoKHR>(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
@@ -1105,16 +1106,16 @@ void VulkanDevice::endFrame() {
         swapAcquired_ = false;
     }
     if (capture_) {
-        vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX);
-        std::vector<uint8_t> px(size_t(cw) * size_t(ch) * 4);
+        const bool captureOk=submitResult==VK_SUCCESS&&vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX)==VK_SUCCESS&&readAlloc.mapped;
+        std::vector<uint8_t> px(captureOk?size_t(cw)*size_t(ch)*4:0);
         const size_t row = size_t(cw) * 4;
         const auto* src = static_cast<const uint8_t*>(readAlloc.mapped);
-        for (int y = 0; y < ch; ++y) std::memcpy(px.data() + size_t(y) * row, src + size_t(ch - 1 - y) * row, row);   // top-down
+        if(captureOk)for (int y = 0; y < ch; ++y) std::memcpy(px.data() + size_t(y) * row, src + size_t(ch - 1 - y) * row, row);   // top-down
         vkDestroyBuffer(device_, readback, nullptr);
         memory_.release(readAlloc);
         auto fn = std::move(capture_);
         capture_ = nullptr;
-        fn(cw, ch, std::move(px));
+        fn(captureOk?cw:0, captureOk?ch:0, std::move(px));
     }
     ++serial_;
     slot_ = (slot_ + 1) % kFramesInFlight;
