@@ -1,3 +1,23 @@
+## 2026-11-23 — Stage 8 native SpectraFX Scene preview (source/QA pending)
+
+On draft stacked PR #115, `StudioSpectraPreview.h` now wraps one real
+`spectra::GraphRuntime` owned by StudioScene's native render thread.
+Allowlisted `studio.spectraPreview` host operations load/validate an
+unsaved Graph v2 and control Play/Pause/Restart/Step/Seek, finite named
+VM parameters and actual backend status. Native GPU/CPU particle
+simulation steps between beginFrame and the scene pass, then draws
+inside the real open Renderer3D HDR pass before PRISMA resolves.
+The HTML5 SpectraFX tab has real native Scene preview controls, not
+fake DOM particles; open Scene to see the effects. No standalone
+offscreen preview picture in the graph panel yet.
+
+**Stage 8 exact-source native Studio build/Metal acceptance NOT confirmed**.
+The macOS CAMetalLayer regression target and CI were authored, but
+queued run is not a PASS. See mandatory handoff
+`docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`
+for changed files, commits, test plan, risks and next step.
+Parent PR #113 remains draft; main unchanged.
+
 ## 2026-11-23 — HTML5 SpectraStudio Graph authoring Stage 7 (draft PR #115)
 
 The `fx_graph` dock tab now includes three new authoring surfaces:
