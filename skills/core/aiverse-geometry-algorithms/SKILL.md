@@ -7,3 +7,5 @@ Use <aiverselib/algorithms/Geometry2D.h>, namespace aiverse::lib::algorithms, AI
 triangulatePolygon returns original-index triangles for simple polygons without holes, duplicate closing vertices or collinear consecutive triples (max 4096). simplifyCollinear removes redundant points from open polylines without changing trace. No tests yet.
 
 GeometryClip.h: iterative Douglas–Peucker returns original indices; clipConvexPolygon uses Sutherland–Hodgman for strictly convex input polygons, either winding. Floating point, not lockstep; simplification does not guarantee topology preservation. No tests yet.
+
+Voronoi.h: voronoiCells clips each site's cell to rectangular bounds (max 2048 sites); delaunay uses Bowyer–Watson (max 4096 sites). Duplicate sites rejected. Floating predicates are not robust for near degeneracy or cross-platform lockstep. No tests yet.
