@@ -86,6 +86,7 @@ void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
     ecs.resetComponentChanges<CharacterBody>();
     ecs.resetComponentChanges<Vehicle>();
     ecs.resetComponentChanges<Loot>();
+    ecs.resetComponentChanges<Projectile>();
 }
 
 void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
@@ -96,22 +97,26 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // Enable lazily, including after native restore. The compatibility scan
     // below bootstraps ownership even when no journal history exists.
     const bool journalReady=view.componentChangesTracked<CharacterBody>() &&
-        view.componentChangesTracked<Vehicle>() && view.componentChangesTracked<Loot>();
+        view.componentChangesTracked<Vehicle>() && view.componentChangesTracked<Loot>() &&
+        view.componentChangesTracked<Projectile>();
     ecs.trackComponentChanges<CharacterBody>();
     ecs.trackComponentChanges<Vehicle>();
     ecs.trackComponentChanges<Loot>();
+    ecs.trackComponentChanges<Projectile>();
     const auto position=regionPositionReader();
     const world::SpatialWorld grid(32);
     const auto* dirty=view.resourceConst<world::RegionDirtyQueue>();
     const auto bodyChanges=view.peekComponentChanges<CharacterBody>();
     const auto vehicleChanges=view.peekComponentChanges<Vehicle>();
     const auto lootChanges=view.peekComponentChanges<Loot>();
-    const bool journalOverflow=bodyChanges.overflow || vehicleChanges.overflow || lootChanges.overflow;
+    const auto projectileChanges=view.peekComponentChanges<Projectile>();
+    const bool journalOverflow=bodyChanges.overflow || vehicleChanges.overflow || lootChanges.overflow || projectileChanges.overflow;
     size_t uncoveredCrossings=0, uncoveredGroups=0, uncoveredLifecycle=0;
     auto notified=[&](Entity e) {
         return bodyChanges.entities.contains(e.packed()) ||
                vehicleChanges.entities.contains(e.packed()) ||
                lootChanges.entities.contains(e.packed()) ||
+               projectileChanges.entities.contains(e.packed()) ||
                (dirty && dirty->marked(e));
     };
     // Exclusive simulation-thread transaction; only changed records are saved.
@@ -156,6 +161,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         !streamManifest_.getBool("strictRegionJournalAudit") &&
         (soloCharacters || (view.countExisting<CharacterBody>()==0 && bodyChanges.entities.empty())) &&
         view.countExisting<Vehicle>()==0 && vehicleChanges.entities.empty() &&
+        view.countExisting<Projectile>()==0 && projectileChanges.entities.empty() &&
         view.resourceConst<RegionSeatIndex>() &&
         view.resourceConst<RegionSeatIndex>()->carByMember.empty();
     // Snapshot before adding ECS tags. Stable order ignores sparse pool order.
@@ -179,6 +185,9 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     view.eachExistingConst<Loot>([&](Entity e,const Loot&) {
         if(view.alive(e))tracked.push_back(e);
     });
+    view.eachExistingConst<Projectile>([&](Entity e,const Projectile&) {
+        if(view.alive(e))tracked.push_back(e);
+    });
     }
     // Allocate new identities in semantic order (slot / object ID), not
     // sparse pool or runtime handle order. Existing identities keep their IDs.
@@ -187,7 +196,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         if(const auto* id=view.tryGetConst<CharacterId>(e))return {1,id->slot};
         if(const auto* car=view.tryGetConst<Vehicle>(e))return {2,car->id};
         if(const auto* loot=view.tryGetConst<Loot>(e))return {3,loot->id};
-        return {4,0};
+        if(const auto* shot=view.tryGetConst<Projectile>(e))return {4,shot->id};
+        return {5,0};
     };
     std::sort(tracked.begin(),tracked.end(),[&](Entity a,Entity b){
         return std::tuple{key(a),a.packed()}<std::tuple{key(b),b.packed()};
@@ -195,7 +205,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     tracked.erase(std::unique(tracked.begin(),tracked.end()),tracked.end());
     for(size_t i=0;i<tracked.size();++i){
         auto k=key(tracked[i]);
-        if(!k.second||k.first==4||(i&&key(tracked[i-1])==k))
+        if(!k.second||k.first==5||(i&&key(tracked[i-1])==k))
             throw std::logic_error("regionOwnership: missing or duplicate identity key");
     }
 
@@ -450,5 +460,6 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     (void)ecs.drainComponentChanges<CharacterBody>();
     (void)ecs.drainComponentChanges<Vehicle>();
     (void)ecs.drainComponentChanges<Loot>();
+    (void)ecs.drainComponentChanges<Projectile>();
 }
 } // namespace aiverse::actor
