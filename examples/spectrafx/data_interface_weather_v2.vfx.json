@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "description": "SpectraFX: a read-only weather snapshot sampled per burst via DataInterface. Works with CPU and supported Metal VM param slots; no gameplay/ECS dependencies.",
+  "parameters": {},
+  "instanceParameters": {
+    "wind_lift": {"slot": 0, "default": 2, "min": 0, "max": 25}
+  },
+  "dataInterfaces": {
+    "wind_lift": {
+      "provider": "weather",
+      "channel": "vertical_acceleration",
+      "scale": 1,
+      "offset": 0,
+      "fallback": 2,
+      "required": false
+    }
+  },
+  "nodes": [
+    {"id":"spawn","type":"Spawn","properties":{"burst":16},"position":[30,180]},
+    {"id":"init","type":"Initialize","properties":{"life":2,"speed":0,"size":0.4,"spread":0,"gravity":[0,0,0]},"position":[240,180]},
+    {"id":"wind","type":"DataInterface","properties":{"name":"wind_lift"},"position":[55,420]},
+    {"id":"program","type":"ParticleProgramModule","properties":{
+      "version":1,
+      "spawn":[{"target":"velocity.y","op":"set","value":{"$runtime":"wind"}}]
+    },"position":[460,180]},
+    {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft","blend":"additive"},"position":[710,180]}
+  ],
+  "links":[
+    {"from":"spawn","to":"init"},
+    {"from":"init","to":"program"},
+    {"from":"program","to":"out"}
+  ],
+  "outputs":["out"]
+}
