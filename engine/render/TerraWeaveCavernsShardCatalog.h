@@ -5,6 +5,7 @@
 // chunks), never only the changed nonempty subset. No Device/GPU operations.
 #include "engine/render/TerraWeaveCavernsBatchGeometry.h"
 #include "engine/world/TerraWeaveCavernsShards.h"
+#include "engine/world/TerraWeaveCavernsMixedLodPlan.h"
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -154,12 +155,40 @@ groupCaveEditsByShard(const std::vector<CaveBatchChunk>& edits,
     }
     return grouped;
 }
-// The GPU owner can route a snapshot with 0 visible chunks to stageEmpty,
-// otherwise prepare one GeometryScene from the whole shard (not edited subset).
+// The GPU owner can route an empty shard to stageEmpty without uploads.
+// Otherwise, verify and transform presentation-only mixed LOD boundaries
+// BEFORE creating GeometryScene models. Physics uses the ORIGINAL CaveMesh.
+inline CaveMixedLodPlan planFullCaveShardLod(
+    const CaveShardSnapshot& snapshot) {
+    std::vector<CaveCertifiedChunk> sources;
+    sources.reserve(snapshot.chunks.size());
+    for(const auto& chunk:snapshot.chunks){
+        CaveCertifiedChunk c;
+        c.mesh=chunk.mesh;
+        c.resolution=chunk.resolution;
+        c.spacingCm=chunk.spacingCm;
+        c.renderRevision=chunk.revision;
+        // Legacy unversioned resident sources may render at a single exact
+        // lattice. Mixed-LOD transitions REQUIRE explicit authored epochs.
+        c.sourceRevision=chunk.sourceRevision?chunk.sourceRevision:1;
+        sources.push_back(std::move(c));
+    }
+    return planCaveMixedLodVisual(sources);
+}
 inline CaveBatchPrepared prepareFullCaveShardPresentation(
     const CaveShardSnapshot& snapshot,CaveBatchSpec spec={}) {
     if(snapshot.chunks.empty()||snapshot.visibleChunks==0)return {};
-    // prepareCaveBatch skips empty entries but retains unchanged source models.
-    return prepareCaveBatch(snapshot.chunks,spec);
+    auto visualPlan=planFullCaveShardLod(snapshot);
+    if(!visualPlan.ready())
+        throw std::runtime_error("Caverns LOD borders need shared-SDF rebuild before GPU publication");
+    std::vector<CaveBatchChunk> visualChunks=snapshot.chunks;
+    for(auto& chunk:visualChunks) {
+        const auto it=visualPlan.visual.find(chunk.mesh.key);
+        if(it!=visualPlan.visual.end()) {
+            // The stitched vertex/index data is PRESENTATION ONLY. A native
+            // collider uses the unmodified authoritative chunk from snapshot.
+            chunk.mesh=it->second.mesh;
+        }
+    }
+    return prepareCaveBatch(std::move(visualChunks),spec);
 }
-} // namespace aiverse::terraweave::caverns
