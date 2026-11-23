@@ -3,6 +3,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
+#include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -210,6 +211,12 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
     item("Light","Point Light","Rendering","Adds a light entity at this position","light",true,"");
     item("NereidWater","NEREID Water","World","Rivers, lakes and sea are authored in World › NEREID Water","water",false,"Create water from the NEREID Water panel");
     item("Unit","Unit","Gameplay","Type, owner and stats come from rules.json","native",false,"Defined by the entity type");
+    for(const auto& name:{"EchoZone","FractureMember","AetherGasCell"}) {
+        const bool present=comps.has(name);
+        item(name,name,"World Processes",
+             "Authoring data; native game setup must install the ECS component",
+             "native",!present,present?"Already on this entity":"");
+    }
     return out;
 }
 bool StudioSession::documentHas(const std::string& id) const {
@@ -335,9 +342,24 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             for(const auto& [name,value]:comps.members()) {
                 if(name=="Transform"||name=="StaticModel")continue;
                 Json fields=Json::array();
-                if(value.isObject())for(const auto& [key,item]:value.members())fields.push(genericField(key,item));
+                const bool authorable=lib::worldprocess::authoring::supports(name) &&
+                    lib::worldprocess::authoring::validate(name,value);
+                if(value.isObject())for(const auto& [key,item]:value.members()) {
+                    Json field=genericField(key,item);
+                    if(authorable) {
+                        field.set("editable",Json::fromBool(true));
+                        if(item.isNumber()) {
+                            field.set("min",Json::number(int64_t(0)));
+                            field.set("max",Json::number(aether::kMaxCellMass));
+                            field.set("step",Json::number(int64_t(1)));
+                            field.set("integer",Json::fromBool(true));
+                        }
+                    }
+                    fields.push(std::move(field));
+                }
                 else fields.push(genericField("value",value));
-                components.push(component(name.c_str(),name.c_str(),fields,"Read-only in Studio."));
+                components.push(component(name.c_str(),name.c_str(),fields,
+                    authorable?"Map authoring only; applies on next native game setup.":"Read-only in Studio."));
             }
         } else {
             result.set("kind",str(node.ref.source==editor::DocumentEntityRef::Source::ActorCollider?"Collider":"Spawn"));
@@ -2482,12 +2504,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const auto& source=ws_.map.data.entities[size_t(index)];
             auto candidate=source;
             if(method=="studio.componentAdd") {
-                if(componentId!="MeshRenderer")throw std::runtime_error("This component cannot be added here");
-                if(source.extra["components"].has("StaticModel"))throw std::runtime_error("Mesh Renderer is already on this entity");
-                if(source.extra["components"].has("NereidWater"))throw std::runtime_error("Water entities are drawn by NEREID");
-                candidate=promotedAuthored(index);
-                auto components=candidate.extra["components"];components.set("StaticModel",Json::object());
-                candidate.extra.set("components",components);
+                if(componentId=="MeshRenderer") {
+                    if(source.extra["components"].has("StaticModel"))throw std::runtime_error("Mesh Renderer is already on this entity");
+                    if(source.extra["components"].has("NereidWater"))throw std::runtime_error("Water entities are drawn by NEREID");
+                    candidate=promotedAuthored(index);
+                    auto components=candidate.extra["components"];components.set("StaticModel",Json::object());
+                    candidate.extra.set("components",components);
+                } else if(lib::worldprocess::authoring::supports(componentId)) {
+                    if(source.extra["components"].has(componentId))
+                        throw std::runtime_error("World-process component is already present");
+                    candidate=promotedAuthored(index);
+                    auto components=candidate.extra["components"];
+                    components.set(componentId,lib::worldprocess::authoring::defaults(componentId));
+                    candidate.extra.set("components",components);
+                } else throw std::runtime_error("This component cannot be added here");
             } else {
                 const char* id=componentId=="MeshRenderer"?"StaticModel":componentId.c_str();
                 if(componentId=="Transform"||componentId=="Unit"||componentId=="NereidWater")
@@ -2569,7 +2599,30 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (entityId.empty()) throw std::runtime_error("Missing document entity ID");
             const std::string key = params.getStr("key");
             const Json& value = params["value"];
-            if(params.getStr("componentId")=="MeshRenderer") {
+            const std::string componentId=params.getStr("componentId");
+            if(lib::worldprocess::authoring::supports(componentId)) {
+                if(entityId.compare(0,7,"entity:")!=0)
+                    throw std::runtime_error("Authoring applies only to map entities");
+                const int index=indexFor(entityId);
+                const auto& source=ws_.map.data.entities[size_t(index)];
+                const Json& existing=source.extra["components"][componentId];
+                if(!existing.isObject())throw std::runtime_error("Component is not authored on this object");
+                Json staged=existing;
+                std::string error;
+                if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
+                    throw std::runtime_error(error);
+                if(staged!=existing) {
+                    auto candidate=source;
+                    Json components=candidate.extra["components"];
+                    components.set(componentId,std::move(staged));
+                    candidate.extra.set("components",std::move(components));
+                    ws_.map.beginEdit();
+                    ws_.map.data.entities[size_t(index)]=std::move(candidate);
+                    ws_.map.touched();
+                }
+                reply.set("result",snapshot());return reply;
+            }
+            if(componentId=="MeshRenderer") {
                 reply.set("result",setMeshRenderer(indexFor(entityId),key,value));
                 return reply;
             }
