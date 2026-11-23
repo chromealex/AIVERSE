@@ -1,3 +1,36 @@
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
 ## 2026-11-23 — Stage 14: dual Scene/FX viewport QA hardening
 
 The real native Scene and SpectraFX editor now use two separate GPU
