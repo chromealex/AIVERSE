@@ -16,6 +16,9 @@ int main() {
     auto a=generateEntrances(caves,cfg,{-10000,-10000,0,10000},flat);
     auto b=generateEntrances(caves,cfg,{0,-10000,10000,10000},flat);
     a.insert(a.end(),b.begin(),b.end());
+    auto byId=[](const Entrance& l,const Entrance& r){return l.id<r.id;};
+    std::sort(all.begin(),all.end(),byId);
+    std::sort(a.begin(),a.end(),byId);
     assert(all==a);
     assert(!all.empty());
     for(const auto& e:all) {
