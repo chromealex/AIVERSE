@@ -49,12 +49,16 @@ public:
     void placed(Entity e,vs::VehicleDrive& d) override {
         Vehicle* v=w_.tryGet<Vehicle>(e);if(!v)return;
         v->pos=d.controller.position;v->yaw=d.controller.yaw;v->velocity=d.controller.velocity;
+        if(!m_.reportRegionMoveIfCrossed(sim_,e))
+            throw std::logic_error("regionOwnership: typed vehicle move report failed");
         const auto* type=m_.drive_.type(d.type);if(!type)return;
         const auto count=int64_t(m_.characterCount(sim_));
         for(auto [seat,actor]:d.seats.occupants){
             if(actor<=0||actor>count)continue;auto a=m_.character(sim_,uint8_t(actor));
             for(const auto& s:type->seats.seats)if(s.id==seat)a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};
             a.velocity=d.controller.velocity;a.grounded=true;
+            if(!m_.reportRegionMoveIfCrossed(sim_,a.entity))
+                throw std::logic_error("regionOwnership: typed passenger move report failed");
         }
     }
     void damage(Entity victim,Fixed amount,Entity,uint8_t) override {
@@ -87,9 +91,13 @@ public:
     }
     void respawned(size_t,Entity car,vs::VehicleDrive& d) override {
         if(Vehicle* v=w_.tryGet<Vehicle>(car)){v->pos=d.controller.position;v->yaw=d.controller.yaw;v->velocity={};if(v->health<=0)v->health=Vehicle{}.health;}
+        if(!m_.reportRegionMoveIfCrossed(sim_,car))
+            throw std::logic_error("regionOwnership: race car respawn report failed");
         const auto count=int64_t(m_.characterCount(sim_));const auto& type=*m_.drive_.type(d.type);
         for(auto [seat,actor]:d.seats.occupants)for(const auto& s:type.seats.seats)if(s.id==seat&&actor>=1&&actor<=count){
-            auto a=m_.character(sim_,uint8_t(actor));a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};}
+            auto a=m_.character(sim_,uint8_t(actor));a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};
+            if(!m_.reportRegionMoveIfCrossed(sim_,a.entity))
+                throw std::logic_error("regionOwnership: race passenger respawn report failed");}
     }
     int32_t raceOver(int64_t winner) override {   // the race decides the round
         auto& s=m_.state(sim_);
