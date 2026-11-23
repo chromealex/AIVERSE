@@ -165,20 +165,42 @@ void testDynamicSpawnRetireAndRecycledIds() {
     const Entity item=ecs.create();
     const uint32_t lootId=state->nextObject++;
     ecs.add<actor::Loot>(item,actor::Loot{lootId,{6_fx,2_fx,4_fx},1,1});
+    AIVERSE_TEST_CHECK(host.reportRegionChange(
+        *sim,item,wd::RegionDirtyKind::Spawn));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.size()==1);
     host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.empty());
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->acknowledged==1);
     const auto first=stable(item);
     const auto* ledger=ecs.resourceConst<wd::RegionEntityLedger>();
     AIVERSE_TEST_CHECK(ledger->find(first) && ledger->find(first)->live);
     ecs.get<actor::Loot>(item).pos={67_fx,2_fx,4_fx};
+    // Legacy direct component writes remain detected by the fallback scan
+    // even when no explicit Move event was reported.
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.empty());
     host.synchronizeRegionOwnership(*sim);
     AIVERSE_TEST_CHECK(owner(*sim,item)==wd::Cell(2,0,0));
+    AIVERSE_TEST_CHECK(host.reportRegionChange(
+        *sim,item,wd::RegionDirtyKind::Retire));
     ecs.destroy(item);
     host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->entries.empty());
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->acknowledged==2);
     AIVERSE_TEST_CHECK(ledger->find(first) && !ledger->find(first)->live);
     const Entity replacement=ecs.create();
     const uint32_t secondLootId=state->nextObject++;
     ecs.add<actor::Loot>(replacement,actor::Loot{secondLootId,{3_fx,2_fx,4_fx},1,1});
+    AIVERSE_TEST_CHECK(host.reportRegionChange(
+        *sim,replacement,wd::RegionDirtyKind::Spawn));
     host.synchronizeRegionOwnership(*sim);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wd::RegionDirtyQueue>()
+                        ->acknowledged==3);
     AIVERSE_TEST_CHECK(stable(replacement)!=first);
     AIVERSE_TEST_CHECK(owner(*sim,replacement)==wd::Cell(0,0,0));
     AIVERSE_TEST_CHECK(!ledger->find(first)->live);
@@ -187,6 +209,9 @@ void testDynamicSpawnRetireAndRecycledIds() {
     auto loaded=make(true);
     std::string error;
     AIVERSE_TEST_CHECK(loaded->deserialize(bytes,&error));
+    const auto* loadedDirty=loaded->world().resourceConst<wd::RegionDirtyQueue>();
+    AIVERSE_TEST_CHECK(loadedDirty && loadedDirty->entries.empty() &&
+                       loadedDirty->acknowledged==3);
     const auto* loadedLedger=loaded->world().resourceConst<wd::RegionEntityLedger>();
     AIVERSE_TEST_CHECK(loadedLedger && !loadedLedger->find(first)->live);
     AIVERSE_TEST_CHECK(loadedLedger->find(stable(replacement))->live);
