@@ -81,7 +81,7 @@ inline void validateParameters(const Node& n){
     if(id=="remap"){scalar(p["low"],0);scalar(p["high"],1);}
     if(id=="normal")scalar(p["strength"],2,0,16);
 }
-inline Program compile(const Json& g){
+inline Program compileResolved(const Json& g){
     require(g.isObject()&&g.getInt("version")==1&&g.dump(-1).size()<=256*1024,"texture graph version 1 / 256 KiB required");
     Program p;p.size=integer(g["size"],256,8,1024);
     const auto& nodes=g["nodes"];require(nodes.isArray()&&nodes.size()>0&&nodes.size()<=32,"texture graph requires 1..32 nodes");
@@ -106,6 +106,43 @@ inline Program compile(const Json& g){
         auto it=ids.find(value.str());require(it!=ids.end(),"missing texture output node");
         require(outputKind(key)==p.nodes[it->second].info->output,"texture output type mismatch");p.outputs.emplace(key,it->second);
     }return p;
+}
+// A declaration binds one named value to one or more existing native properties.
+// Source graph is never mutated. Validate both authored defaults and overrides.
+inline Json resolveParameters(const Json& source,const Json& overrides=Json::object()){
+    require(source.isObject()&&source.dump(-1).size()<=256*1024,"invalid texture source");
+    require(overrides.isObject()&&overrides.size()<=32&&overrides.dump(-1).size()<=32768,"invalid texture overrides");
+    const auto& defs=source["parameters"];
+    require(defs.isNull()||(defs.isObject()&&defs.size()<=32),"invalid texture parameter declarations");
+    for(const auto& [name,value]:overrides.members()){(void)value;require(defs.has(name),"unknown texture override");}
+    Json resolved=source;resolved.erase("parameters");
+    require(resolved["nodes"].isArray()&&resolved["nodes"].size()<=32,"invalid texture nodes");
+    std::map<std::string,size_t> ids;for(size_t i=0;i<resolved["nodes"].size();++i)ids.emplace(resolved["nodes"][i].getStr("id"),i);
+    std::map<std::pair<std::string,std::string>,bool> bound;
+    for(const auto& [name,def]:defs.members()){
+        require(safeId(name)&&def.isObject()&&def.has("default")&&!def["default"].isNull(),"invalid parameter declaration");
+        const auto& bindings=def["bindings"];require(bindings.isArray()&&bindings.size()>0&&bindings.size()<=32,"invalid parameter bindings");
+        const Json& value=overrides.has(name)?overrides[name]:def["default"];
+        require(!value.isNull(),"null parameter override");
+        std::string commonType;
+        for(const auto& b:bindings.items()){
+            const auto node=b.getStr("node"),key=b.getStr("property");auto it=ids.find(node);
+            require(it!=ids.end()&&bound.emplace(std::make_pair(node,key),true).second,"unknown or duplicate parameter binding");
+            auto& entry=resolved.member("nodes").at(it->second);
+            auto schema=properties(entry.getStr("op"));
+            require(schema.has(key),"unknown bound node property");
+            const auto type=schema[key].getStr("type");require(commonType.empty()||commonType==type,"parameter binding type mismatch");commonType=type;
+            if(!entry.has("properties"))entry.set("properties",Json::object());
+            require(entry["properties"].isObject(),"invalid bound properties");
+            entry.member("properties").set(key,value);
+        }
+    }
+    return resolved;
+}
+inline Program compile(const Json& g,const Json& overrides=Json::object()){
+    auto defaults=resolveParameters(g);auto p=compileResolved(defaults);
+    if(overrides.isObject()&&overrides.size()==0)return p;
+    return compileResolved(resolveParameters(g,overrides));
 }
 inline float clamp(float x){return std::clamp(x,0.f,1.f);}
 inline Pixel gray(float x){return {x,x,x};}
