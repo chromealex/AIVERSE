@@ -185,6 +185,16 @@ inline void appendWorldProcessExtendedComponents(const World& world,Entity e,
         appendAuto(components,schemas,"SocietyContact","SOCIETY · Contact",
             fields({{"source",ent(v->source)},{"target",ent(v->target)},
                     {"trust",num(v->trust)},{"enabled",boo(v->enabled)}}));
+    if(const auto* v=world.tryGetConst<society::NpcTrigger>(e))
+        appendAuto(components,schemas,"SocietyNpcTrigger","SOCIETY · NPC Action Trigger",
+            fields({{"person",ent(v->person)},{"topicsHex",str(hex64(v->topics))},
+                    {"actionId",num(v->actionId)},
+                    {"mode",num(static_cast<std::uint8_t>(v->mode))},
+                    {"enabled",boo(v->enabled)},{"once",boo(v->once)},
+                    {"active",boo(v->active)},{"fired",boo(v->fired)},
+                    {"transition",num(v->transition)},
+                    {"changedTick",num(v->changedTick)},
+                    {"sampledTick",num(v->sampledTick)}}));
     if(const auto* v=world.tryGetConst<society::Message>(e))
         appendAuto(components,schemas,"SocietyMessage","SOCIETY · Message",
             fields({{"source",ent(v->source)},{"topicsHex",str(hex64(v->topics))},
