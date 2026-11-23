@@ -20,9 +20,14 @@
 #include <vector>
 namespace aiverse::lib::systems {
 using StyleRgb=std::array<float,3>;
+struct StyleTextureGuidSlots {
+    std::string baseColor,metallicRoughness,normal,occlusion,emissive;
+    bool operator==(const StyleTextureGuidSlots&)const=default;
+};
 struct StyleMaterial{
     std::string id;StyleRgb color{0.5f,0.5f,0.5f};float metallic=0,roughness=0.8f;
     StyleRgb emissive{0,0,0};float emissiveStrength=1;
+    StyleTextureGuidSlots textures;
     bool operator==(const StyleMaterial&)const=default;
 };
 struct StyleRange{float lo=0,hi=0;float pick(Random& g)const{return lo+(hi-lo)*float(g.unit().toDouble());}};
@@ -513,10 +518,29 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(!j["materials"].isObject()||j["materials"].members().empty())throw JsonError(path+".materials: expected object of materials");
     std::map<std::string,int> ids;
     for(const auto& [k,v]:j["materials"].members()){
-        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength"});
+        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures"});
         StyleMaterial mt;mt.id=k;if(v.has("color"))mt.color=rgb(v["color"],p+".color");if(v.has("metallic"))mt.metallic=num(v["metallic"],p+".metallic");
         if(v.has("roughness")){mt.roughness=num(v["roughness"],p+".roughness");}if(v.has("emissive"))mt.emissive=rgb(v["emissive"],p+".emissive");
         if(v.has("emissiveStrength"))mt.emissiveStrength=num(v["emissiveStrength"],p+".emissiveStrength");
+        if(v.has("textures")){
+            const auto& tex=v["textures"];
+            const std::string tp=p+".textures";
+            allow(tex,tp,{"baseColor","metallicRoughness","normal","occlusion","emissive"});
+            auto guid=[&](const char* key,std::string& dest){
+                if(!tex.has(key))return;
+                if(!tex[key].isString())
+                    throw JsonError(tp+"."+key+": expected GUID string");
+                dest=tex[key].str();
+                if(dest.size()!=32||!std::all_of(dest.begin(),dest.end(),[](char ch){
+                    return (ch>='0'&&ch<='9')||(ch>='a'&&ch<='f');
+                }))throw JsonError(tp+"."+key+": expected 32 lowercase hex GUID");
+            };
+            guid("baseColor",mt.textures.baseColor);
+            guid("metallicRoughness",mt.textures.metallicRoughness);
+            guid("normal",mt.textures.normal);
+            guid("occlusion",mt.textures.occlusion);
+            guid("emissive",mt.textures.emissive);
+        }
         ids[k]=int(s.materials.size());s.materials.push_back(mt);
     }
     auto mat=[&](const Json& o,const char* key,const std::string& p){if(!o.has(key))return -1;auto n=o[key].str();auto it=ids.find(n);
