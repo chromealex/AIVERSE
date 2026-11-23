@@ -22,3 +22,11 @@
 .abg__property-controls>*{min-width:0}
 .abg__property-add{display:flex;flex-wrap:wrap;gap:var(--au-space-2);margin-top:var(--au-space-3)}
 @media(max-width:300px){.abg__property-controls{grid-template-columns:1fr}}
+
+.abg__plan{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:var(--au-space-3);align-items:start;border:1px solid var(--au-line);border-radius:var(--au-radius-md);background:var(--au-panel-raised);padding:var(--au-space-3)}
+.abg__plan svg{display:block;width:100%;aspect-ratio:1;border:1px solid var(--au-line);border-radius:var(--au-radius-sm);background:var(--au-bg);overflow:visible}
+.abg__plan svg circle{cursor:pointer}
+.abg__plan svg circle:focus-visible{outline:none;stroke:var(--au-accent);stroke-width:.25}
+.abg__plan-caption{min-width:0;display:flex;flex-direction:column;gap:var(--au-space-2)}
+.abg__plan-caption small{color:var(--au-text-muted);font-size:var(--au-font-xs);overflow-wrap:anywhere}
+@media(max-width:430px){.abg__plan{grid-template-columns:1fr}}
