@@ -1,0 +1,79 @@
+name: Building Style Focused
+
+on:
+  push:
+    branches:
+      - 'feature/aiv20261123_building-grammar'
+    paths:
+      - 'libraries/include/aiverselib/systems/Building*.h'
+      - 'engine/assets/building-styles/*.json'
+      - 'tools/buildings/**'
+      - 'tests/libraries/building*'
+      - '.github/workflows/building-style-focused.yml'
+  pull_request:
+    paths:
+      - 'libraries/include/aiverselib/systems/Building*.h'
+      - 'engine/assets/building-styles/*.json'
+      - 'tools/buildings/**'
+      - 'tests/libraries/building*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-building:
+    name: Building style generator and GLB export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile only the building generator tests and exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -pedantic -I. -Ilibraries/include"
+          g++ $FLAGS tests/libraries/building_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_tests
+          g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
+          g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
+      - name: Run genre-neutral building regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/aiverse_building_tests
+          /tmp/aiverse_building_style_tests "$GITHUB_WORKSPACE"
+      - name: Export four sci-fi functions at the requested exact envelope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aiverse-buildings
+          for kind in barracks command factory depot; do
+            /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+              --structure "$kind" --size 28 15 24 --seed 42 \
+              --out "/tmp/aiverse-buildings/$kind.glb"
+          done
+      - name: Check GLB header, mesh bounds and distinct silhouettes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, struct
+          meshes = []
+          for path in sorted(pathlib.Path('/tmp/aiverse-buildings').glob('*.glb')):
+              data = path.read_bytes()
+              magic, version, length = struct.unpack_from('<III', data)
+              assert magic == 0x46546c67 and version == 2 and length == len(data), path
+              count, kind = struct.unpack_from('<II', data, 12)
+              assert kind == 0x4e4f534a
+              doc = json.loads(data[20:20+count])
+              assert doc['meshes'] and doc['accessors'], path
+              bounds = [a for a in doc['accessors'] if a.get('type') == 'VEC3' and 'min' in a and 'max' in a]
+              assert bounds, path
+              lo,hi = bounds[0]['min'],bounds[0]['max']
+              assert all(abs(lo[i]) < .002 for i in range(3)), (path, lo)
+              assert all(abs(hi[i]-[28.,15.,24.][i]) < .002 for i in range(3)), (path, hi)
+              triangles = sum(a['count']//3 for a in doc['accessors'] if a.get('type') == 'SCALAR' and a.get('componentType') == 5125)
+              assert 0 < triangles < 20000, (path, triangles)
+              meshes.append((path.stem, triangles))
+          assert len(meshes) == 4
+          print('building focused GLB export:', meshes)
+          PY
