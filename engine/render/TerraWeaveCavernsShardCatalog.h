@@ -84,6 +84,27 @@ public:
         }
         return result;
     }
+    // Streaming: preview a complete shard with ONE already committed slot
+    // removed, without mutating the active catalog. Used before a real
+    // owner barrier unload; neighbors in that shard remain visible.
+    CaveShardSnapshot previewRetire(ChunkKey3 key,uint64_t expectedRevision,
+                                    uint64_t batchRevision)const {
+        if(!batchRevision)throw std::invalid_argument("Caverns retire batch revision");
+        const auto current=source_.find(key);
+        if(current==source_.end()||current->second.revision!=expectedRevision)
+            throw std::invalid_argument("Caverns stale retire source");
+        CaveShardSnapshot result;
+        result.shard=caveShardFor(key,config_);
+        result.revision=batchRevision;
+        for(const auto& [residentKey,chunk]:source_){
+            if(residentKey==key||
+               !(caveShardFor(residentKey,config_)==result.shard))continue;
+            result.visibleChunks+=!chunk.mesh.indices.empty();
+            result.chunks.push_back(chunk);
+        }
+        return result;
+    }
+
     // The host must have committed the corresponding full GeometryScene and
     // the authoritative physics/nav revision before it calls adoptSnapshot.
     // This only mutates catalog bookkeeping, never a GPU/physics object.
