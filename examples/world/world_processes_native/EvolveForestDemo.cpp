@@ -73,9 +73,50 @@ struct ForestDemo final:GameModule {
     int result(Simulation&)override{return 0;}
     bool serializeState(Simulation&,Archive& a)override{return a.ok();}
 };
+// Read-only portable SVG report, independent of graphics backend.
+static void writeEcologySvg(const World& world,const std::string& path){
+    std::ofstream out(path);
+    if(!out)throw std::runtime_error("Cannot open ecology SVG");
+    out<<"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 520'>"
+          "<rect width='960' height='520' fill='#101820'/>"
+          "<text x='30' y='32' fill='white' font-size='20'>EVOLVE forest ecology</text>";
+    const auto x=[](std::int64_t cm){return 480.+double(cm)*.09;};
+    const auto z=[](std::int64_t cm){return 230.+double(cm)*.09;};
+    for(const auto& zone:evolve::extents(world)){
+        const auto* region=world.tryGetConst<evolve::Region>(zone.region);
+        if(!region||!region->enabled)continue;
+        const auto fertility=demo::permille(region->fertility);
+        const auto pollution=demo::permille(region->pollution);
+        const auto left=x(zone.minXcm),top=z(zone.minZcm);
+        const auto width=x(zone.maxXcm)-left,height=z(zone.maxZcm)-top;
+        out<<"<rect x='"<<left<<"' y='"<<top<<"' width='"<<width
+           <<"' height='"<<height<<"' fill='rgb("<<pollution*220/1000
+           <<","<<fertility*200/1000<<",55)' stroke='#b0c0c0'/>";
+        out<<"<text x='"<<left+8<<"' y='"<<top+18
+           <<"' fill='white' font-size='12'>F "<<fertility/10
+           <<"% / P "<<pollution/10<<"%</text>";
+    }
+    const auto* ecology=world.resourceConst<terraweave::ForestEcologyResource>();
+    if(const auto* authority=world.resourceConst<terraweave::TerraWeaveAuthorityResource>())
+        for(const auto& p:authority->rooted){
+            bool dead=false;
+            if(ecology){
+                const terraweave::AnchoredPlantId id{p.anchor.speciesId,p.anchor.plantKey};
+                const auto it=std::lower_bound(ecology->plants.begin(),ecology->plants.end(),id,
+                    [](const auto& state,const auto& key){return state.id<key;});
+                dead=it!=ecology->plants.end()&&it->id==id&&it->dead;
+            }
+            out<<"<circle cx='"<<x(p.anchor.xCm)<<"' cy='"<<z(p.anchor.zCm)
+               <<"' r='5' fill='"<<(dead||p.fallen?"#e0a060":"#a4e8a0")
+               <<"' stroke='#101820'/>";
+        }
+    out<<"<text x='30' y='480' fill='white' font-size='14'>Green: fertility / live tree; red: pollution; amber: dead or fallen</text></svg>";
+    out.close();
+    if(!out)throw std::runtime_error("Cannot write ecology SVG");
+}
 int main(int argc,char** argv){
     try{
-        if(argc<2){std::cerr<<"Usage: aiverse_evolve_forest_demo MAP_JSON [ticks] [--replay] [--load FILE] [--save FILE]\n";return 2;}
+        if(argc<2){std::cerr<<"Usage: aiverse_evolve_forest_demo MAP_JSON [ticks] [--replay] [--load FILE] [--save FILE] [--svg FILE]\n";return 2;}
         std::ifstream file(argv[1]);if(!file)throw std::runtime_error("Cannot open demo map");
         std::ostringstream data;data<<file.rdbuf();
         auto map=Json::parse(data.str());
@@ -83,12 +124,12 @@ int main(int argc,char** argv){
         sim.setup(Json::object(),map);
         const auto ticks=argc>2?std::stoul(argv[2]):1024ul;
         bool replay=false;
-        std::string loadPath,savePath;
+        std::string loadPath,savePath,svgPath;
         for(int i=3;i<argc;++i){
             const std::string arg=argv[i];
             if(arg=="--replay")replay=true;
-            else if((arg=="--load"||arg=="--save")&&i+1<argc){
-                (arg=="--load"?loadPath:savePath)=argv[++i];
+            else if((arg=="--load"||arg=="--save"||arg=="--svg")&&i+1<argc){
+                (arg=="--load"?loadPath:arg=="--save"?savePath:svgPath)=argv[++i];
             }else throw std::invalid_argument("Unknown or incomplete demo option: "+arg);
         }
         if(!loadPath.empty()){
@@ -123,6 +164,7 @@ int main(int argc,char** argv){
             std::cout<<"tracked="<<ecology->plants.size()<<" dead="<<dead
                      <<" recruited="<<recruited<<" lastStep="<<ecology->lastStepTick<<"\n";
         }
+        if(!svgPath.empty())writeEcologySvg(sim.world(),svgPath);
         if(!savePath.empty()){
             const auto bytes=sim.serialize();
             std::ofstream output(savePath,std::ios::binary|std::ios::trunc);
