@@ -50,6 +50,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
   const [replaySeed,setReplaySeed]=useState('');
+  const [gpuAllocationSeed,setGpuAllocationSeed]=useState('');
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -67,7 +68,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
-    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});setReplaySeed('');
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});setReplaySeed('');setGpuAllocationSeed('');
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -187,7 +188,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     if(replaySeed!==''&&(!Number.isInteger(Number(replaySeed))||Number(replaySeed)<0||Number(replaySeed)>2147483647)){
       setError('CPU replay seed must be integer 0..2147483647');return;
     }
+    if(gpuAllocationSeed!==''&&(!Number.isInteger(Number(gpuAllocationSeed))||Number(gpuAllocationSeed)<0||Number(gpuAllocationSeed)>2147483647||replaySeed!=='')){
+      setError('GPU allocation seed must be integer 0..2147483647 and cannot be combined with CPU seed');return;
+    }
     setReplayPreset({format:'aiverse.spectrafx.replay',version:1,parameters:{...liveScalars},...(replaySeed!==''?{seed:Number(replaySeed)}:{}),
+      ...(gpuAllocationSeed!==''?{gpuAllocationSeed:Number(gpuAllocationSeed)}:{}),
       camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
       graphSignature,projectPath});
@@ -211,7 +216,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if(!spec||value<spec.min||value>spec.max)
           throw new Error('Invalid scalar for current graph: '+name);
       }
-      setReplayPreset(preset);setReplaySeed(preset.seed===undefined?'':String(preset.seed));setError('');
+      setReplayPreset(preset);setReplaySeed(preset.seed===undefined?'':String(preset.seed));
+      setGpuAllocationSeed(preset.gpuAllocationSeed===undefined?'':String(preset.gpuAllocationSeed));setError('');
     }catch(e){setError(message(e));}
   };
   const restoreReplayPreset=async()=>{
@@ -229,7 +235,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           grid:replayPreset.grid,axes:replayPreset.axes},
         {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
         {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters,...(replayPreset.seed===undefined?{}:{seed:replayPreset.seed})}
+        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters,...(replayPreset.seed===undefined?{}:{seed:replayPreset.seed}),
+          ...(replayPreset.gpuAllocationSeed===undefined?{}:{gpuAllocationSeed:replayPreset.gpuAllocationSeed})}
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
@@ -428,6 +435,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       <StudioField label="CPU seed (optional)" htmlFor="spectra-replay-seed">
         <StudioInput id="spectra-replay-seed" type="number" min={0} max={2147483647} step={1}
           value={replaySeed} onChange={e=>setReplaySeed(e.target.value)}/>
+      </StudioField>
+      <StudioField label="Metal slot allocation seed (optional)" htmlFor="spectra-gpu-seed">
+        <StudioInput id="spectra-gpu-seed" type="number" min={0} max={2147483647} step={1}
+          value={gpuAllocationSeed} onChange={e=>setGpuAllocationSeed(e.target.value)}/>
       </StudioField>
       <StudioButton size="sm" disabled={!state?.ready||!state.camera||busy||capturePending}
         onClick={saveReplayPreset}>Save replay preset</StudioButton>
