@@ -69,6 +69,7 @@ public:
             opts.preference=spectra::ComputePreference::Automatic;
             if(!runtime_.initGraph(&device,graph,Json::object(),opts)) {
                 ready_=false;playing_=false;pendingRestart_=false;restartBurstPending_=false;
+        hasPendingGpuAllocationSeed_=false;
                 return errorStatus(runtime_.reason().empty()?
                     "SpectraFX preview backend unavailable":runtime_.reason());
             }
@@ -124,8 +125,8 @@ public:
                     return errorStatus("GPU allocation seed must be integer 0..2147483647");
                 if(!runtime_.gpuActive())
                     return errorStatus("GPU allocation seed requires Metal GPU backend");
-                if(!runtime_.resetGpuAllocationSeed(uint32_t(seed.integer())))
-                    return errorStatus(runtime_.reason());
+                pendingGpuAllocationSeed_=uint32_t(seed.integer());
+                hasPendingGpuAllocationSeed_=true;
             }
             playing_=false;phase_=0;pendingRestart_=true;restartBurstPending_=true;
             pendingClear_=false;burstsPending_=0;triggeredBursts_=0;
@@ -155,6 +156,7 @@ public:
             timeTicks_=targetTicks_=stepsPending_=0;
             burstsPending_=0;triggeredBursts_=0;
             pendingRestart_=false;restartBurstPending_=false;
+            hasPendingGpuAllocationSeed_=false;
             pendingClear_=true;
             error_.clear();
             return status();
@@ -222,6 +224,19 @@ public:
         if(pendingClear_) {
             runtime_.clear();
             pendingClear_=false;
+        }
+        if(hasPendingGpuAllocationSeed_) {
+            // GPU buffer reset is legal only within the render-owner frame.
+            // Keep the request pending after failure for explicit retry.
+            if(!runtime_.resetGpuAllocationSeed(pendingGpuAllocationSeed_)) {
+                playing_=false;
+                error_=runtime_.reason().empty()?
+                    "SpectraFX GPU allocation seed reset failed":runtime_.reason();
+                return;
+            }
+            hasPendingGpuAllocationSeed_=false;
+            pendingRestart_=false; // seeded reset already cleared the GPU pool
+            timeTicks_=0;
         }
         if(pendingRestart_) {
             runtime_.clear();
@@ -309,7 +324,8 @@ public:
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
-        return ready_ && (playing_ || pendingRestart_ || restartBurstPending_ || pendingClear_ ||
+        return ready_ && (playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
+                          restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
     uint32_t timeTicks() const {return timeTicks_;}
@@ -326,6 +342,7 @@ public:
         result.set("bursts",Json::number(int64_t(triggeredBursts_)));
         result.set("queuedBursts",Json::number(int64_t(burstsPending_)));
         result.set("clearing",Json::fromBool(pendingClear_));
+        result.set("gpuSeedPending",Json::fromBool(hasPendingGpuAllocationSeed_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -356,6 +373,8 @@ private:
     float speed_=1.0f;
     uint32_t phase_=0,burstsPending_=0,triggeredBursts_=0;
     uint32_t timeTicks_=0,targetTicks_=0,stepsPending_=0;
+    uint32_t pendingGpuAllocationSeed_=0;
+    bool hasPendingGpuAllocationSeed_=false;
     uint64_t generation_=1;
     std::string backend_,error_;
 };
