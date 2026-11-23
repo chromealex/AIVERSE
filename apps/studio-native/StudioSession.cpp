@@ -2749,10 +2749,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Invalid resized EVOLVE area");
                 const auto cx=std::llround(double(candidate.x)*100.)+area["offsetXcm"].integer();
                 const auto cz=std::llround(double(candidate.z)*100.)+area["offsetZcm"].integer();
-                if(cx-area["halfWidthCm"].integer() < -evolve::kAreaCoordinateCm||
-                   cx+area["halfWidthCm"].integer() > evolve::kAreaCoordinateCm||
-                   cz-area["halfDepthCm"].integer() < -evolve::kAreaCoordinateCm||
-                   cz+area["halfDepthCm"].integer() > evolve::kAreaCoordinateCm)
+                if(!evolve::scale_math::withinBounds(
+                       cx,area["halfWidthCm"].integer(),
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm)||
+                   !evolve::scale_math::withinBounds(
+                       cz,area["halfDepthCm"].integer(),
+                       evolve::kAreaCoordinateCm,50,evolve::kAreaMaxHalfExtentCm))
                     throw std::runtime_error("EVOLVE resized area exceeds world bounds");
                 components.set("EvolveArea",std::move(area));
                 candidate.extra.set("components",std::move(components));
