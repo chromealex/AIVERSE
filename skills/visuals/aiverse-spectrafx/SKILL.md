@@ -1735,3 +1735,9 @@ These operations require an attached native Studio FX viewport and an open proje
 `apps/studio-web/src/panels/SpectraAssetPicker.tsx` is a standalone React picker. Pass `assets` from the existing project GUID index, `value`, `onChange`, optional `kinds`, and optionally controlled `locked/onLockChange`. It filters by name/path/type/GUID (first 200 results), handles `application/x-aiverse-asset` drag payloads by resolving GUIDs against the supplied index, and rejects unknown external GUIDs. The lock is a **UI signal controlled by the caller**; the parent must actually prevent external selection updates when locked.
 
 Do not claim the picker is already mounted inside the VFX Graph inspector or that the native compiler accepts GUID objects. First inspect compiler property schema and existing Assets index adapter. Do not persist unresolved references. Source-only; tests deferred.
+
+## Stage 41 — lockable graph asset sub-inspector
+
+`apps/studio-web/src/panels/SpectraGraphAssetInspector.tsx` composes the indexed `SpectraAssetPicker` and Stage 39 immutable binding helper. Pass the current graph, externally selected node ID, native asset property name, indexed assets and an `onGraphChange` callback. When locked, external node-selection changes do not retarget the asset field; if the locked node is deleted, the inspector disables editing. Unlocking follows the latest external selection.
+
+This is a reusable sub-inspector, **not yet mounted** in the existing Graph Editor. Before wiring it to the production inspector, confirm the compiler property representation and translate GUID references to supported native values. Do not persist an unvalidated GUID object. Tests remain deferred.
