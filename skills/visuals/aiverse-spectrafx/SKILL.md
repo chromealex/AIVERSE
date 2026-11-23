@@ -1903,3 +1903,7 @@ Active upload excludes simulation commands; cancel clears transfer ID; browser c
 ## Stage 76 — RHI capture error handling
 
 Vulkan rejects invalid readback copies and stops frame submission/present progression on failed submit. Metal guards allocation/blit failure and strips aligned row padding. Shared GL/GLES capture rejects empty framebuffer and restores framebuffer/pack state. No builds/tests. Device-loss teardown and pending asynchronous readbacks still require verification.
+
+## Stage 77 — API consistency
+
+Preview stop clears transfer buffers, IDs and replay/seed queues. Replay JSON export enforces the same 64 KiB limit as import. Browser SPFT download defers URL release. Checked TS action union and MCP transfer schema against native names. No builds/tests; main synchronization and compile/acceptance remain.
