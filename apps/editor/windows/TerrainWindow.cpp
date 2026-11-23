@@ -302,8 +302,6 @@ public:
         if (stamped_) return;
         if (!painting_ && !(io.MouseClicked[0] && vp.hovered)) return;
         if (ed.planetMap()) { planetStroke(ed, vp, io); return; }
-        float x, z;
-        if (!ed.groundAt(vp, ed.sceneCam, io.MousePos.x, io.MousePos.y, x, z)) return;
         if(caverns_) {
             if(!caveHoverValid_)return;
             const double x=double(caveHoverCm_.x)/100.;
@@ -326,6 +324,8 @@ public:
             }
             return;
         }
+        float x, z;
+        if (!ed.groundAt(vp, ed.sceneCam, io.MousePos.x, io.MousePos.y, x, z)) return;
         if(sparse_) {
             // Camera ray/plane projection is world-wide; unlike MapDoc
             // fixed corners, this tool never clamps to the old RTS map size.
