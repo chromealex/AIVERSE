@@ -97,3 +97,14 @@ Mandatory files: `engine/world/TerraWeaveCavernsStreaming.h`, `engine/world/Terr
 ### Verification
 - Stage 7 adds `tests/terraweave_caverns_streaming_test.cpp` and `tests/terraweave_caverns_multinav_test.cpp`. These have not been compiled or run in this turn. Do not mark them PASS without real build logs.
 - After EVERY implementation stage append an exact handoff with changed files, commits, API, tests actually run, limitations and next actions; update this skill too.
+
+## Stage 8 — safe publish gating and collider leases
+
+Read `engine/world/TerraWeaveCavernsPublication.h`, `engine/world/TerraWeaveCavernsColliderLeases.h`, and `docs/agent-handoffs/caverns-stage8-2026-11-23.md`.
+
+- `CavePublicationCoordinator(maxPending)`: `begin(key,sourceRevision,renderRevision,requiredMask)` issues a new unique versioned ticket; `prepared(ticket, CavePublishPart)` acknowledges staged Renderer / SpatialWorld / Box3D / Navigation and optional STRATA; `commit(ticket, ownerBarrierSucceeded)` marks the ticket committed only when EVERY required stage is ready and the host confirms barrier success. `abort` cancels pending work, `retire` discards the key, and `readyForGameplay(key,revision)` refuses stale/incomplete tiles.
+- The coordinator is **not a multi-system rollback implementation**. Do not call `prepared` for resources that have already replaced visible scene state; all steps must be prepare-only until a host-controlled owner barrier makes every subsystem visible. A failed commit must preserve old render/collision/physics/navigation and release staged candidates. Current stage-5/6 resident publishers perform their own immediate swaps: THEY ARE NOT YET WIRED into a single atomic host transaction. Do not claim actual atomic publication or playable caverns.
+- `CaveColliderLeasePool(first,count)` uses a dedicated globally reserved collider-ID namespace and returns `ColliderLease {first,count,token}`. Different stage revisions require fresh nonoverlapping ranges. Only release a lease after all associated SpatialWorld colliders have been removed. Tokens prevent a stale release from stealing a newly reused range.
+- STRATA stage-6 eligibility is not an acquisition handshake. Actual STRATA source adoption must be performed by GeometryScene and acknowledged only when residency, safety, and exactly-once draw routing are verified. Until then use Renderer3D fallback and omit STRATA from requiredMask.
+- Never allocate IDs from a pool overlapping gameplay/terrain owners; pool cannot detect such external overlap itself.
+- Test source: `tests/terraweave_caverns_publication_test.cpp`. Added only; actual checkout build / CTest not run.
