@@ -24,9 +24,11 @@ export default function SpectraGraphAssetInspector({
   const [locked,setLocked]=useState(false);
   const [targetNodeId,setTargetNodeId]=useState<string|null>(selectedNodeId);
   const [error,setError]=useState('');
+  const [pendingInsertAfter,setPendingInsertAfter]=useState<number|null>(null);
   useEffect(()=>{
     if(!locked)setTargetNodeId(selectedNodeId);
   },[selectedNodeId,locked]);
+  useEffect(()=>{setPendingInsertAfter(null);},[targetNodeId]);
   // A node deleted by a graph edit is never resurrected by a stale lock.
   const node=graph.nodes.find(n=>n.id===targetNodeId);
   const raw=node?.properties?.[property];
@@ -48,7 +50,7 @@ export default function SpectraGraphAssetInspector({
       {meshSlots.length===0&&<small>MeshOutput has no valid mesh array; add a mesh using native graph node defaults before editing slots.</small>}
       {meshSlots.map((path,slot)=>{
         const entry=assets.find(a=>a.path&&'content/'+a.path===path);
-        return <div key={slot} style={{display:'flex',alignItems:'center',gap:6,marginBlock:6}}>
+        return <div key={slot} style={{display:'flex',alignItems:'center',gap:6,marginBlock:6,flexWrap:'wrap'}}>
           <small style={{minWidth:36}}>#{slot+1}</small>
           <div style={{flex:1}}>
             <SpectraAssetPicker assets={assets}
@@ -63,11 +65,18 @@ export default function SpectraGraphAssetInspector({
           <button type="button" disabled={disabled||!node||meshSlots.length<=1}
             onClick={()=>node&&commit(editSpectraMeshSlot(graph,node.id,'remove',slot))}>Remove</button>
           <button type="button" disabled={disabled||!node||meshSlots.length>=32}
-            onClick={()=>{if(!node)return;
-              const seed=entry??assets.find(a=>(!kinds||kinds.includes(a.kind))&&a.path);
-              if(!seed){setError('No indexed model available for a new slot.');return;}
-              commit(editSpectraMeshSlot(graph,node.id,'add',slot,seed,assets));
-            }}>Add</button>
+            onClick={()=>setPendingInsertAfter(pendingInsertAfter===slot?null:slot)}>Add</button>
+          {pendingInsertAfter===slot&&<div style={{flexBasis:'100%',width:'100%'}}>
+            <small>Choose a model for the new mesh slot</small>
+            <SpectraAssetPicker assets={assets} value={null} kinds={['model']}
+              disabled={disabled||!node} onChange={asset=>{
+                if(!node)return;
+                const result=editSpectraMeshSlot(graph,node.id,'add',slot,asset,assets);
+                if(!result.error)setPendingInsertAfter(null);
+                commit(result);
+              }}/>
+            <button type="button" onClick={()=>setPendingInsertAfter(null)}>Cancel</button>
+          </div>}
         </div>;
       })}
     </> : <SpectraAssetPicker assets={assets} value={current} kinds={kinds}
