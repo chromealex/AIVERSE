@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import type { StudioSceneBrush, EvolveLayer } from '../types';
+import type { StudioSceneBrush, EvolveLayer, EvolveLiveState } from '../types';
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
@@ -34,14 +34,51 @@ function Slider({ label, value, min, max, step, onCommit }: { label: string; val
  * Scene brush for a World panel: arm it, then drag in the Scene. Dab tools (Sculpt, Paint, Objects, Tiles, Field) apply live;
  * Draw road / Draw river collect the path and build it on release. Each stroke is one History step. [ ] resize, Esc puts it down.
  */
+function EcologyLiveMap({layer}:{layer:EvolveLayer}){
+  const [state,setState]=useState<EvolveLiveState|null>(null);
+  const [error,setError]=useState('');
+  useEffect(()=>{
+    let alive=true,busy=false;
+    const refresh=async()=>{
+      if(busy||document.hidden)return;
+      busy=true;
+      try{const result=await invoke('studio.evolveState',{});if(alive){setState(result);setError('');}}
+      catch(e){if(alive){setState(null);setError(message(e));}}
+      finally{busy=false;}
+    };
+    void refresh();const timer=window.setInterval(refresh,500);
+    return()=>{alive=false;window.clearInterval(timer);};
+  },[]);
+  if(error)return <span role="alert">{error}</span>;
+  if(!state?.active)return <small>Live ecology: start Play mode</small>;
+  const regions=state.regions.slice(0,8192);
+  if(!regions.length)return <small>No active EVOLVE regions</small>;
+  const x=Math.min(...regions.map(r=>r.minXcm)),z=Math.min(...regions.map(r=>r.minZcm));
+  const w=Math.max(1,Math.max(...regions.map(r=>r.maxXcm))-x);
+  const h=Math.max(1,Math.max(...regions.map(r=>r.maxZcm))-z);
+  const u=(n:number)=>Math.round(255*Math.max(0,Math.min(1,n/1e9)));
+  return <div><small>Live ecology · tick {state.tick}</small>
+    <svg viewBox={`${x} ${z} ${w} ${h}`} width="100%" height="160" aria-label="Live ecological regions">
+      {regions.map(r=>{
+        let red=u(r.pollution),green=u(r.fertility),blue=90;
+        if(layer==='fertility')red=40;
+        if(layer==='pollution')green=40;
+        if(layer==='succession'){red=40;green=u(r.succession);blue=220;}
+        if(layer==='durability'){green=u(r.durability);red=255-green;}
+        if(layer==='off'){red=138;green=190;blue=255;}
+        return <rect key={r.id} x={r.minXcm} y={r.minZcm} width={r.maxXcm-r.minXcm} height={r.maxZcm-r.minZcm}
+          fill={`rgb(${red},${green},${blue})`} stroke="currentColor" vectorEffect="non-scaling-stroke"><title>{r.id}: fertility {r.fertility/1e7}%, pollution {r.pollution/1e7}%, succession {r.succession/1e7}%</title></rect>;
+      })}
+    </svg></div>;
+}
 export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
   const [error,setError]=useState('');
   useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active)setLayer(r.layer);}).catch(e=>{if(active)setError(message(e));});return()=>{active=false;};},[]);
-  return <label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} onChange={e=>{
+  return <div><label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} onChange={e=>{
     const next=e.target.value as EvolveLayer;
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e)));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label>;
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><EcologyLiveMap layer={layer}/></div>;
 }
 export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
