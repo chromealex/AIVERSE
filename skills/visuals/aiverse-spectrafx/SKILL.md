@@ -1723,3 +1723,9 @@ The Workspace tool registry now advertises these genre-independent operations th
 - `fx_replay_capture {action:"capture",maxSide:512,requireReplayReady:true}`: request native JPEG; poll `fx_replay_capture {action:"captureStatus"}` for result and provenance.
 
 These operations require an attached native Studio FX viewport and an open project. A standalone headless MCP server may list them but cannot execute GPU capture; it returns an explicit unavailable error. The JPEG provenance includes request-time frame serial/fence observations with `frameExact:false`. Do not interpret them as verified capture-completion fence IDs. Tests are deferred, so the new schemas have not been runtime-validated.
+
+## Stage 39 — asset-picker binding helper (authoring only)
+
+`apps/studio-web/src/panels/spectraAssetBinding.ts` exports `bindSpectraNodeAsset(graph,nodeId,property,{guid,path?})` and `readSpectraNodeAsset(...)`. The helper is immutable, requires a GUID supplied by the Studio Assets index, and rejects unsafe paths. Do not fabricate GUIDs, use raw filenames as resolved references, or assume this helper is wired into the Graph Editor picker yet.
+
+**Important:** this is a browser authoring data structure, NOT a confirmed compiler/runtime asset-reference schema. Before exposing it in the UI or persisting graph JSON, inspect the native SpectraFX graph schema and resolve GUIDs to the compiler's expected asset property representation. Existing native graph validation remains authoritative. Source-only changes have not been compiled or tested.
