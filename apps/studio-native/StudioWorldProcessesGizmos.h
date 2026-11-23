@@ -185,8 +185,17 @@ inline std::vector<Shape> collect(const editor::MapDoc& document,
             const float halfDepth=capped(c["halfDepthCm"],1000,50,50000)/100.f;
             const render::float3 areaCenter={pos.x+float(c.getInt("offsetXcm",0))/100.f,
                                                pos.y,pos.z+float(c.getInt("offsetZcm",0))/100.f};
-            rectangle(out,areaCenter,halfWidth*2.f,halfDepth*2.f,138,190,255);
-            add(out,makeLabel({pos.x,.65f,pos.z},"EVOLVE AREA",138,190,255));
+            const auto& region=components["EvolveRegion"];
+            const float fertility=capped(region["fertility"],500000000.f,0.f,1000000000.f)/1000000000.f;
+            const float pollution=capped(region["pollution"],0.f,0.f,1000000000.f)/1000000000.f;
+            const float succession=capped(region["succession"],0.f,0.f,1000000000.f)/1000000000.f;
+            const auto red=std::uint8_t(40+pollution*215);
+            const auto green=std::uint8_t(40+fertility*215);
+            rectangle(out,areaCenter,halfWidth*2.f,halfDepth*2.f,red,green,90);
+            add(out,makeLabel({areaCenter.x,.65f,areaCenter.z},
+                "EVOLVE authored F:"+std::to_string(int(fertility*100))+
+                "% P:"+std::to_string(int(pollution*100))+
+                "% S:"+std::to_string(int(succession*100))+"%",red,green,90));
         }else if(const auto& c=components["EvolveRegion"];c.isObject()){
             // Back-compat visualization only; add EvolveArea for actual gameplay
             // TerraWeave forest climate bounds.
