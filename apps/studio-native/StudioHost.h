@@ -225,7 +225,7 @@ private:
     NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
     // Independent native FX drawable/swapchain: no Scene surface reparent,
     // no camera hijack. Both run on the existing native render owner thread.
-    bool spectraDockActive_=false;
+    bool fxSurfaceVisible_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
