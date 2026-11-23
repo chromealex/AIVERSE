@@ -106,6 +106,17 @@ public:
     Simulation(SimConfig cfg, std::unique_ptr<GameModule> module);
 
     void setup(const Json& rules, const Json& map);
+    // Long-lived storage selection is independent of rollback registration.
+    auto persistentSchemas()const{return persistentEcs_.schemas();}
+    bool capturePersistentSchema(const std::string& id,PersistentEcsRegistry::LoadedHash::Chunk& out)const {
+        return persistentEcs_.captureSchema(world_,id,out);
+    }
+    // Offline staged World only; live simulation restoration must use the
+    // host's normal restore barrier and invalidate derived state.
+    bool restorePersistentSchemas(World& staged,const std::vector<PersistentEcsRegistry::LoadedHash::Chunk>& chunks)const {
+        if(&staged==&world_)return false;
+        return persistentEcs_.restoreSchemas(staged,chunks);
+    }
     template<class T> void registerPersistentComponent(std::string id,uint32_t version=1) {
         persistentEcs_.registerComponent<T>(world_,std::move(id),version);
     }
