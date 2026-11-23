@@ -79,6 +79,31 @@ int main(int argc,char** argv){
         auto modernAsset=studioBuildingGenerate(engine,temp,custom);
         CHECK(modernAsset.getStr("path").find("modern-custom-7")!=std::string::npos);
         CHECK(studioValidGuid(modernAsset.getStr("guid")));
+        // Floors, room layout and window parameters survive the native GLB
+        // export into the project's GUID-indexed canonical recipe sidecar.
+        auto multi=Json::parseFile(
+            (engine/"engine/assets/building-recipes/two-floor-workshop.json").string());
+        multi.set("mode",Json::string("features"));
+        multi.set("style",Json::string("scifi"));
+        multi.set("setting",Json::string("scifi"));
+        auto multiPreview=studioBuildingInspect(engine,multi);
+        CHECK(multiPreview["triangles"].integer()>recipePreview["triangles"].integer());
+        CHECK(std::abs(multiPreview["height"].toDouble()-14.)<0.01);
+        auto multiAsset=studioBuildingGenerate(engine,temp,multi);
+        CHECK(studioValidGuid(multiAsset.getStr("guid")));
+        CHECK(fs::is_regular_file(content/multiAsset.getStr("recipePath")));
+        const auto savedMulti=Json::parseFile(
+            (content/multiAsset.getStr("recipePath")).string());
+        CHECK(savedMulti["floors"].integer()==2);
+        CHECK(savedMulti["roomsX"].integer()==2);
+        CHECK(savedMulti["roomsZ"].integer()==2);
+        CHECK(savedMulti["features"][2].getStr("kind")=="window");
+        CHECK(savedMulti["features"][2]["floor"].integer()==1);
+        CHECK(std::abs(savedMulti["features"][2]["sill"].toDouble()-1.05)<0.02);
+        multi.set("style",Json::string("modern"));
+        multi.set("setting",Json::string("modern"));
+        auto otherStyle=studioBuildingInspect(engine,multi);
+        CHECK(otherStyle["triangles"].integer()==multiPreview["triangles"].integer());
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;
