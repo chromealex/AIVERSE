@@ -358,7 +358,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
                   <option key={node.id} value={node.id}>{node.id} · {String(node.properties?.texture??'builtin:soft')}</option>)}
               </StudioSelect>
             </StudioField>
-            <SpectraIndexedGraphAssetInspector graph={graph} selectedNodeId={selectedOutput}
+            <SpectraIndexedGraphAssetInspector graph={graph} projectPath={projectPath} selectedNodeId={selectedOutput}
               property="texture" kinds={['texture']}
               disabled={busy} onGraphChange={next=>apply({graph:next,error:''})}/>
           </StudioSection>
