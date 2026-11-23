@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-unified-backup-retention",
+     "title": "Безопасное хранение поколений мира",
+     "titleEn": "Safe world generation retention",
+     "text": "Проверка резервных копий перед очисткой, защита активного поколения и управление через сессию мира.",
+     "textEn": "Verify backups before cleanup, protect the active generation and manage through the world session.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-unified-backup-catalog",
      "title": "Каталог резервных копий мира",
      "titleEn": "World backup catalog",
