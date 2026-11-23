@@ -1847,3 +1847,7 @@ GraphRuntime exposes retain/list/restore. Paused settled Metal preview accepts c
 ## Stage 63 — timeline cancellation and bounded wait
 
 checkpointCancel cancels the pending Studio retain/restore request, not an already submitted GPU readback. While pending, simulation commands are rejected except status, cancel and stop. Save waits at most 240 valid prepare frames, with bounded retries; checkpointWaitFrames exposes progress. UI and MCP support cancellation. No tests run.
+
+## Stage 64 — tagged GPU capture
+
+Device::captureNextFrameTagged reports actual Metal encoded frame serial, or zero on unsupported backends. Metal completion checks command buffer status. Studio provenance includes capturedFrameSerial and gpuFrameIdentified; frameExact remains false because simulation metadata is still request-time. No tests run.
