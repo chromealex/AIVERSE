@@ -1040,10 +1040,22 @@ A changed image can require regenerating the GLB and replacing/reloading
 the Model through the EXISTING Renderer3D model lifetime and GPU
 retirement owners. **The checker does not do this automatically.**
 It is a safe source-level inspection API, not a filesystem watcher,
-shader hot reload or GPU uploader. The GLB image writer still accepts
-PNG/JPEG only; do not silently inject DDS/KTX2/EXR/TGA/WebP bytes with
-a fake MIME type. A converter needs existing importer decoding plus a
-genuine PNG/JPEG encoder or an explicit supported glTF extension.
+shader hot reload or GPU uploader. The GLB image writer only embeds PNG/JPEG interchange bytes.
+`engine/buildings/BuildingPngEncoder.h` now provides a bounded
+dependency-free true PNG RGBA8 encoder (zlib stored blocks, max
+2048x2048). `StudioBuildingGeneration.h` invokes the existing
+`render::decodeImage` CPU decoder on non-PNG/JPEG imported sources,
+and encodes the returned RGBA as valid PNG for GLB. This supports only
+those formats the engine really decodes into RGBA (e.g. supported
+TGA/DDS/BLP and CPU-decodable KTX2 variants), not arbitrary compressed
+ASTC/GPU-only KTX2, WebP or HDR/EXR data. Failed or oversize conversion
+must abort export, never relabel source bytes with a fake MIME type.
+The source `.meta` fingerprint still hashes ORIGINAL input bytes
+before conversion; recipe dependency metadata records the resulting
+embedded image type. The GLB embedded image budget is now 20 MiB
+for valid converted PNG/JPEG bytes (original imported source cap is
+16 MiB). Performance, compression and cross-backend quality remain
+unverified until native tests are explicitly enabled.
 
 No C++/TypeScript compilation, CTest, native Studio invocation, actual
 import/decode, glTF parser, Metal/Vulkan/GLES graphics acceptance or
