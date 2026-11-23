@@ -20,12 +20,12 @@ public:
     RegionWalWrite open(const std::filesystem::path& dir,const std::filesystem::path& wal,
         std::span<const uint8_t> identity,const State& checkpoint,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={},bool repair=false){
+        const UnifiedWorldReplay::Validator& validate={},bool repair=false,const DurableResourceTransaction::Policy& resources={}){
         close();
         if(identity.size()<4||identity[0]!='U'||identity[1]!='W'||identity[2]!='T'||identity[3]!='1')
             return RegionWalWrite::InvalidFrame;
         if(lock_.acquire(dir)!=RegionWorldLockResult::Ok)return RegionWalWrite::Busy;
-        return recoverLocked(wal,identity,checkpoint,codecs,materialize,validate,repair);
+        return recoverLocked(wal,identity,checkpoint,codecs,materialize,validate,repair,resources);
     }
     RegionWalWrite create(const std::filesystem::path& dir,const std::array<uint8_t,16>& world,
         const State& initial,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
@@ -55,28 +55,28 @@ public:
     RegionWalWrite openCheckpoint(const std::filesystem::path& dir,const std::array<uint8_t,16>& world,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={},bool repair=false){
+        const UnifiedWorldReplay::Validator& validate={},bool repair=false,const DurableResourceTransaction::Policy& resources={}){
         close();
         if(lock_.acquire(dir)!=RegionWorldLockResult::Ok)return RegionWalWrite::Busy;
         std::unique_ptr<State> checkpoint;RegionCheckpointManifest m;
         std::vector<uint8_t> prefix;
         if(!UnifiedCheckpointLoader::load(dir,world,budget,adapters,factory,checkpoint,m,validate)||
            !UnifiedCheckpointPublisher::identity(m,prefix)){close();return RegionWalWrite::NeedsRecovery;}
-        auto result=recoverLocked(dir/m.walName(),prefix,*checkpoint,codecs,materialize,validate,repair);
+        auto result=recoverLocked(dir/m.walName(),prefix,*checkpoint,codecs,materialize,validate,repair,resources);
         if(result==RegionWalWrite::Ok){dir_=dir;manifest_=m;managed_=true;}
         return result;
     }
 private:
     RegionWalWrite recoverLocked(const std::filesystem::path& wal,std::span<const uint8_t> identity,const State& checkpoint,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate,bool repair){
+        const UnifiedWorldReplay::Validator& validate,bool repair,const DurableResourceTransaction::Policy& resources){
         std::ifstream in(wal,std::ios::binary);
         std::vector<uint8_t> actual(identity.size());
         in.read(reinterpret_cast<char*>(actual.data()),actual.size());
         if(!in||!std::equal(actual.begin(),actual.end(),identity.begin())){close();return RegionWalWrite::NeedsRecovery;}
         auto staged=std::make_unique<State>(checkpoint);
         auto scan=RegionWalReader::scan(in,checkpoint.sequence,[&](const RegionWalFrame& f){
-            return UnifiedWorldReplay::apply(staged,f,codecs,materialize,validate);
+            return UnifiedWorldReplay::apply(staged,f,codecs,materialize,validate,resources);
         });
         in.close();
         if(scan.status!=RegionWalScan::End&&!(repair&&scan.status==RegionWalScan::Incomplete)){
@@ -102,10 +102,10 @@ public:
     }
     // Finalized barrier only. No external side effects in replay callbacks.
     RegionWalWrite commit(const RegionWalFrame& frame,const DurableComponentCodecs& codecs,
-        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={}){
+        const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         if(!ready_)return RegionWalWrite::NeedsRecovery;
         auto staged=std::make_unique<State>(*state_);
-        if(!UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate))return RegionWalWrite::InvalidFrame;
+        if(!UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate,resources))return RegionWalWrite::InvalidFrame;
         auto result=writer_.append(frame);
         if(result!=RegionWalWrite::Ok){ready_=false;return result;}
         state_.swap(staged);return RegionWalWrite::Ok;
@@ -117,36 +117,36 @@ public:
     UnifiedBackupCatalogResult backups(size_t budget,const UnifiedCheckpointSections::Adapters& adapters,
         const UnifiedCheckpointSections::Factory& factory,const DurableComponentCodecs& codecs,
         const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},
-        bool verify=false)const{
+        bool verify=false,const DurableResourceTransaction::Policy& resources={})const{
         if(!managedReady())return {};
-        return UnifiedBackupCatalog::list(dir_,manifest_,budget,adapters,factory,codecs,materialize,validate,verify);
+        return UnifiedBackupCatalog::list(dir_,manifest_,budget,adapters,factory,codecs,materialize,validate,verify,resources);
     }
     RegionRetentionPlan retentionPlan(RegionRetentionPolicy policy,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={})const{
+        const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={})const{
         if(!managedReady())return {};
-        return UnifiedCheckpointRetention::plan(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate);
+        return UnifiedCheckpointRetention::plan(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate,resources);
     }
     RegionRetentionCleanup cleanupRetention(RegionRetentionPolicy policy,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={}){
+        const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         if(!managedReady())return {};
-        return UnifiedCheckpointRetention::cleanup(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate);
+        return UnifiedCheckpointRetention::cleanup(dir_,manifest_,policy,budget,adapters,factory,codecs,materialize,validate,resources);
     }
     RegionWalWrite forkGeneration(uint64_t generation,const std::filesystem::path& destination,
         const std::array<uint8_t,16>& newWorld,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        const UnifiedWorldReplay::Validator& validate={})const{
+        const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={})const{
         if(!managedReady())return RegionWalWrite::NeedsRecovery;
         if(!generation||generation>manifest_.generation||newWorld==manifest_.identity.world||
            std::none_of(newWorld.begin(),newWorld.end(),[](auto b){return b!=0;}))
             return RegionWalWrite::InvalidFrame;
         std::unique_ptr<State> recovered;
         if(!UnifiedBackupRead::recover(dir_,generation,manifest_.identity.world,budget,
-            adapters,factory,codecs,materialize,recovered,validate))return RegionWalWrite::NeedsRecovery;
+            adapters,factory,codecs,materialize,recovered,validate,resources))return RegionWalWrite::NeedsRecovery;
         UnifiedWalSession destinationSession;
         return destinationSession.create(destination,newWorld,*recovered,adapters,budget);
     }
