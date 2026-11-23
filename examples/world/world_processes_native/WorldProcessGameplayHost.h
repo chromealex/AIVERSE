@@ -85,11 +85,11 @@ public:
         const evolve::SpatialIndex zones(ecs);
         return terraweave::advanceForestEcologyEcs(
             ecs,cfg,tick,species,settings,
-            [&ecs,&zones,baseline=std::move(baseline)](
+            [&ecs,&zones,baseline=std::move(baseline),scratch=std::vector<size_t>{}](
                 const terraweave::AnchoredPlant& plant,
-                terraweave::ForestEcologyClimate climate){
+                terraweave::ForestEcologyClimate climate) mutable {
                 if(baseline)climate=baseline(plant,climate);
-                zones.query(plant.anchor.xCm,plant.anchor.zCm,[&](const evolve::Extent& zone){
+                zones.query(plant.anchor.xCm,plant.anchor.zCm,scratch,[&](const evolve::Extent& zone){
                     const auto* region=ecs.tryGetConst<evolve::Region>(zone.region);
                     if(region)climate=projectEvolutionClimate(*region,climate);
                 });
