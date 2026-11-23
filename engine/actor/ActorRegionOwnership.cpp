@@ -12,6 +12,22 @@ namespace {
 // disk schemas, and is rebuilt by the compatibility pass after disk load.
 struct RegionSeatIndex {
     std::map<uint64_t,Entity> carByMember;
+    std::map<uint64_t,std::set<uint64_t>> membersByCar;
+    void eraseMember(uint64_t member) {
+        auto it=carByMember.find(member);
+        if(it==carByMember.end())return;
+        auto group=membersByCar.find(it->second.packed());
+        if(group!=membersByCar.end()) {
+            group->second.erase(member);
+            if(group->second.empty())membersByCar.erase(group);
+        }
+        carByMember.erase(it);
+    }
+    void setMember(uint64_t member,Entity car) {
+        eraseMember(member);
+        carByMember.emplace(member,car);
+        membersByCar[car.packed()].insert(member);
+    }
 };
 }
 
@@ -394,8 +410,18 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         rollback.committed=true;
     }
     // Avoid replacing the derived resource on ticks with unchanged membership.
-    if(!previousSeats || previousSeats->carByMember!=carByMember)
-        ecs.setResource<RegionSeatIndex>(RegionSeatIndex{std::move(carByMember)});
+    if(!previousSeats || previousSeats->carByMember!=carByMember) {
+        RegionSeatIndex next=previousSeats?*previousSeats:RegionSeatIndex{};
+        if(previousSeats)for(const auto& [member,oldCar]:previousSeats->carByMember) {
+            const auto it=carByMember.find(member);
+            if(it==carByMember.end() || !(it->second==oldCar))next.eraseMember(member);
+        }
+        for(const auto& [member,car]:carByMember) {
+            const auto it=next.carByMember.find(member);
+            if(it==next.carByMember.end() || !(it->second==car))next.setMember(member,car);
+        }
+        ecs.setResource<RegionSeatIndex>(std::move(next));
+    }
     (void)ecs.drainComponentChanges<CharacterBody>();
     (void)ecs.drainComponentChanges<Vehicle>();
     (void)ecs.drainComponentChanges<Loot>();
