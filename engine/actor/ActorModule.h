@@ -172,6 +172,7 @@ public:
     // Run at a structural ECS tick boundary after actor and vehicle systems.
     // Opt-in only; tracks live spawn/retire/movement in the region ledger.
     void synchronizeRegionOwnership(Simulation& sim);
+    void invalidateRegionOwnershipCaches(Simulation& sim);
     // Explicit lifecycle observations from authoritative game/owner systems.
     // Does not replace legacy full-pool scanning until every writer migrates.
     bool reportRegionChange(Simulation& sim,Entity entity,
