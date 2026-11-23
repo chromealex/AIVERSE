@@ -10,6 +10,7 @@ import {
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
+import { createBurstStarter, nextUnusedGraphName } from './spectraStarterModel';
 import './SpectraDataInterfacesPanel.css';
 
 type AssetEntry = { name: string; draft: boolean; valid: boolean };
@@ -54,7 +55,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
   const [binding,setBinding]=useState<FxDataInterface>(blankBinding);
   const [paramName,setParamName]=useState('');
   const [param,setParam]=useState<FxInstanceScalar>({slot:0,default:0,min:-100,max:100});
-  const [newName,setNewName]=useState('');
+  const [newName,setNewName]=useState('preview_fx');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [status,setStatus]=useState('');
@@ -129,18 +130,33 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
     }catch(e){setError(errorText(e));}
     finally{setBusy(false);}
   };
-  const makeGraph=async()=>{
-    if(!safeGraphName(newName)){setError('Graph name: 1–48 lowercase letters, digits, underscore.');return;}
+  const makeGraph=async(starter:boolean)=>{
+    const name=newName.trim();
+    if(!safeGraphName(name)){setError('Graph name: 1–48 lowercase letters, digits, underscore.');return;}
+    if(assets.some(item=>item.name===name) || selected?.name===name){
+      setError('A graph or draft with this name already exists. Choose a different name.');return;
+    }
     if(dirty){setError('Save or discard the current draft before creating another graph.');return;}
     setBusy(true);setError('');setStatus('');
     try{
       const r=await nativeOp('fx_graph_edit',{action:'new'});
-      const parsed=graphV2(r.graph);
-      if(!parsed||r.ok===false)throw new Error('Native editor did not return a Graph v2.');
-      setSelected({name:newName,draft:true,valid:true});setSaved(null);setGraph(parsed);
-      setSelectedOutput(parsed.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
-      setSelectedName('');setValidation(asRecord(r.validation));
-      setStatus('New local graph created. Save Draft or Publish to create a file.');
+      const base=graphV2(r.graph);
+      if(!base||r.ok===false)throw new Error('Native editor did not return a Graph v2.');
+      const next=starter?createBurstStarter(base):base;
+      if(!next)throw new Error('Native new Graph v2 unexpectedly contains nodes. Nothing was changed.');
+      let verified:NativeResponse|null=asRecord(r.validation);
+      if(starter){
+        verified=await nativeOp('fx_graph_validate',{graph:next});
+        if(verified.ok!==true)throw new Error('Native starter validation failed: '+diagnostics(verified));
+      }
+      setSelected({name,draft:true,valid:true});setSaved(null);setGraph(next);
+      setSelectedOutput(next.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
+      setSelectedName('');setValidation(verified);
+      setNewName(nextUnusedGraphName([...assets,{name}], 'preview_fx'));
+      setSearch('');
+      setStatus(starter
+        ? 'Starter graph compiled by native SpectraFX. Open Scene, then Load graph and Play. Save Draft or Publish when ready.'
+        : 'New blank graph created locally. Add Spawn, Initialize and SpriteOutput nodes to make a playable effect.');
     }catch(e){setError(errorText(e));}
     finally{setBusy(false);}
   };
@@ -191,7 +207,12 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
   return <StudioPanel title="SpectraFX Graph" eyebrow="VFX · Data Interfaces"
     subtitle="Typed, presentation-only parameters · native compiler validation"
     className="spectra-di"
-    actions={<StudioButton size="sm" variant="ghost" disabled={busy} onClick={()=>void listAssets().catch(e=>setError(errorText(e)))}><RefreshCw size={14}/> Refresh</StudioButton>}>
+    actions={<div className="spectra-di__top-actions">
+      <StudioButton size="sm" variant="primary" disabled={busy||dirty}
+        onClick={()=>void makeGraph(true)}><FilePlus2 size={14}/> Starter FX</StudioButton>
+      <StudioButton size="sm" variant="ghost" disabled={busy}
+        onClick={()=>void listAssets().catch(e=>setError(errorText(e)))}><RefreshCw size={14}/> Refresh</StudioButton>
+    </div>}>
     {error&&<StudioAlert tone="danger" title="SpectraFX error">{error}</StudioAlert>}
     {status&&<StudioAlert tone="success">{status}</StudioAlert>}
     {pending&&<StudioAlert tone="warning" title="Unsaved changes">
@@ -203,6 +224,20 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
     </StudioAlert>}
     <div className="spectra-di__layout">
       <aside className="spectra-di__library">
+        <StudioSection title="New Graph">
+          <StudioField label="Asset name" htmlFor="spectra-new-name">
+            <StudioInput id="spectra-new-name" value={newName} placeholder="preview_fx"
+              onChange={e=>setNewName(e.target.value)}/>
+          </StudioField>
+          <div className="spectra-di__actions">
+            <StudioButton size="sm" variant="primary" disabled={busy||dirty||!safeGraphName(newName.trim())}
+              onClick={()=>void makeGraph(true)}><FilePlus2 size={14}/> Starter FX</StudioButton>
+            <StudioButton size="sm" disabled={busy||dirty||!safeGraphName(newName.trim())}
+              onClick={()=>void makeGraph(false)}>Blank V2</StudioButton>
+          </div>
+          <p className="spectra-di__hint">Starter FX creates a working Spawn → Initialize → SpriteOutput chain.
+          Load it in the native Scene to preview actual particles. Nothing is written until Save Draft or Publish.</p>
+        </StudioSection>
         <StudioSection title="Graph Assets">
           <StudioField label="Search graphs" htmlFor="spectra-search">
             <StudioInput id="spectra-search" value={search} placeholder="Search fx/graphs…" onChange={e=>setSearch(e.target.value)}/>
@@ -216,23 +251,25 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
               <GitBranch size={14}/><span>{asset.name}</span>
               <StudioBadge tone={asset.draft?'warning':asset.valid?'success':'danger'}>{asset.draft?'Draft':asset.valid?'Live':'Error'}</StudioBadge>
             </button>)}
-            {available.length===0&&<StudioEmptyState title="No matching graphs" description="Create a V2 graph or change the search."/>}
+            {available.length===0&&<p className="spectra-di__hint spectra-di__empty-list">
+              {assets.length===0?'No VFX graphs in this project. Use Starter FX above to create the first one.':'No graphs match the search. Clear the filter or create a new asset.'}
+            </p>}
           </div>
-        </StudioSection>
-        <StudioSection title="New Graph">
-          <StudioField label="Asset name" htmlFor="spectra-new-name">
-            <StudioInput id="spectra-new-name" value={newName} placeholder="weather_particles" onChange={e=>setNewName(e.target.value)}/>
-          </StudioField>
-          <StudioButton size="sm" disabled={busy||!safeGraphName(newName)} onClick={()=>void makeGraph()}>
-            <FilePlus2 size={14}/> New V2 graph
-          </StudioButton>
         </StudioSection>
       </aside>
       <main className="spectra-di__editor"
         onDragOver={e=>{if(e.dataTransfer.types.includes('application/x-aiverse-spectra-graph'))e.preventDefault();}}
         onDrop={e=>{const raw=e.dataTransfer.getData('application/x-aiverse-spectra-graph');if(!raw)return;e.preventDefault();
           try{const value=JSON.parse(raw) as AssetEntry;if(safeGraphName(value.name))void openAsset(value);}catch{setError('Invalid dropped graph.');}}}>
-        {!graph||!selected ? <StudioEmptyState title="Choose a Graph v2" description="Select or drag an asset from fx/graphs. Changes are local until explicit Publish."/> : <>
+        {!graph||!selected ? <div className="spectra-di__welcome">
+          <GitBranch size={26}/>
+          <strong>{assets.length===0?'Create your first VFX effect':'Choose a Graph v2'}</strong>
+          <p>{assets.length===0
+            ?'Start with a compilable particle burst: Spawn → Initialize → SpriteOutput. Preview it in the actual Metal Scene viewport.'
+            :'Select an existing asset on the left or start a new particle effect. Changes stay local until you Save Draft or Publish.'}</p>
+          <StudioButton size="sm" variant="primary" disabled={busy||dirty||!safeGraphName(newName.trim())}
+            onClick={()=>void makeGraph(true)}><FilePlus2 size={14}/> Create Starter FX</StudioButton>
+        </div> : <>
           <div className="spectra-di__toolbar">
             <strong>{selected.name}</strong><StudioBadge tone={dirty?'warning':'neutral'}>{dirty?'Unsaved':selected.draft?'Saved draft':'Saved'}</StudioBadge>
             <StudioButton size="sm" disabled={busy} onClick={()=>void validate()}><CheckCircle2 size={14}/> Validate</StudioButton>
