@@ -325,3 +325,71 @@ a weak_ptr to avoid dangling scene references.
 This is the actual common Simulation system registration API,
 but no sample game executable has invoked it yet. Tests were deferred;
 see `docs/agent-handoffs/building-common-ecs-stage23q-2026-11-23.md`.
+
+
+## Stage 23R: shared ECS and optional PHYSIS swept collision and rollback
+
+The generic obstruction probe does not inspect an obsolete FPS character
+registry. In the authoritative `World`, dynamic entities that can block
+a moving door have `Transform` and `BuildingPhysicalExtent` (the
+current physical half-size in metres). Register persistence before
+`Simulation::setup` seals it:
+
+```cpp
+// Shared module::setup, before the persistent registry seals:
+building::registerBuildingEcsPersistence(sim,stableSceneId);
+building::registerBuildingPhysicalExtentPersistence(sim);
+
+// At the common ECS structural barrier, on an existing entity:
+sim.world().add<building::BuildingPhysicalExtent>(
+    obstacle,building::BuildingPhysicalExtent{
+        Vec3{1_fx,1_fx,1_fx},true});
+
+// Existing world collision owns the actual dynamic leaf colliders:
+auto probe=building::buildingCommonSweptProbe(sim.world());
+// Or, only when the game already owns PHYSIS / Box3D:
+// #include "engine/buildings/BuildingPhysisObstruction.h"
+// auto probe=building::buildingCommonPhysisSweptProbe(sim.world(),physicsScene);
+```
+
+Pass this `probe` to the existing
+`BuildingDualLeafOwner::attach(...)`. The game must keep entity
+Transform/extent synchronized with the real authoritative actor/body
+position before the building fixed-tick stage. For PHYSIS, specify
+query filters so own door bodies do not count as blockers. The
+optional PHYSIS header must never be included by projects that do not
+link Box3D.
+
+After restoring a saved `Simulation::World` snapshot, the
+`BuildingEcsRuntime` suspends its current fixed-tick callback.
+External SpatialWorld, NavMesh, transport-command nonces and
+Renderer3D leases are NOT part of the ECS snapshot. On the common
+scene owner's structural barrier:
+
+```cpp
+// First retire old renderer GPU leases/fences, tear down old world
+// graph/physics owners, release their SceneCollisionNamespaces leases.
+// Then reserve collision IDs with the SAME stable scene mapping.
+// Create freshPhysics, freshSession, freshRouter with REAL owners
+// registered for each graph bit in requested domains.
+bool recovered=building::restoreBuildingEcsLeafScene(
+    sim,*runtime,freshPhysics,freshSession,spatial,freshRouter,
+    originalAuthoredPoses,disjointLeafColliderIds,
+    building::buildingCommonSweptProbe(sim.world()),style,
+    authorizeEcsActor,withinInteractionRange,requestedGraphDomains,
+    &error);
+if(!recovered){
+    // Remain suspended: do not accept building commands, physics movement
+    // or unacknowledged nav graph paths. Do not clear suspended manually.
+}
+// Existing NavMesh owner refreshes its dirty tiles in the normal phase.
+```
+
+A rebuilt intermediate physical leaf is conservatively stationary
+until a new authenticated open/close instruction. Restored graph
+invalidation includes every possible half-leaf sliding displacement,
+including outside the original opening. A graph ACK is a successful
+invalidation, NOT proof the NavMesh refresh already completed.
+This API is intentionally genre-neutral. No native build, PHYSIS,
+rollback or GPU test has been performed for the stage.
+See `docs/agent-handoffs/building-ecs-physis-reconcile-stage23r-2026-11-23.md`.
