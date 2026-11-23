@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSection,StudioSelect} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import GraphExecutionProfilePanel from './GraphExecutionProfilePanel';
 import {animationProjection,object} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
@@ -51,5 +52,6 @@ export default function GraphDebugSessionPanel({domain,graph,projectPath,disable
   {frames.length>0&&<StudioSelect aria-label="Debug history frame" value={String(frame)} onChange={e=>setFrame(Number(e.target.value))}>{frames.map((f,i)=><option key={i} value={i}>Step {String(f.sequence)}</option>)}</StudioSelect>}
   {current&&own&&source&&domain==='motionweave'&&<div style={{height:260,display:'flex',flexDirection:'column'}}><GraphCanvas view={animationProjection(source,'pose')} highlighted={Array.isArray(current.activeProgram)?current.activeProgram.filter((id):id is string=>typeof id==='string'):[]} selected="" label="Isolated debugger pose program" disabled onSelect={()=>{}} onMove={()=>{}}/></div>}
   {current&&<pre>{JSON.stringify(current,null,2)}</pre>}
+  {own&&source&&domain==='motionweave'&&typeof report?.session==='string'&&<GraphExecutionProfilePanel session={report.session} step={Number(report.step??0)} source={source} disabled={disabled||busy}/> }
  </StudioSection>;
 }
