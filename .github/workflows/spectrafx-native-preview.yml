@@ -58,5 +58,4 @@ jobs:
       - name: Execute hardware GPU preview and image codec warning contracts
         run: |
           ctest --test-dir build/spectrafx-studio-preview \
-            -R '^(studio_spectrafx_preview|studio_image_codecs)
- --output-on-failure --no-tests=error
+            -R '^(studio_spectrafx_preview|studio_image_codecs)$' --output-on-failure --no-tests=error
