@@ -604,6 +604,62 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-alien-civilization",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-alien-civilization/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Alien Civilization setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/alien-civilization.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "alien-civilization",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-cyberpunk",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-cyberpunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Cyberpunk setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/cyberpunk.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "cyberpunk",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-dark-fantasy",
       "package": "building-style",
       "path": "skills/world/aiverse-building-dark-fantasy/SKILL.md",
@@ -697,6 +753,34 @@
         "decor",
         "здания",
         "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-scifi-space",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-scifi-space/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Sci-Fi / Space setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/scifi-space.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "scifi-space",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
       ],
       "contentPackages": []
     },
