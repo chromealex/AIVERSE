@@ -69,7 +69,7 @@ public:
         if(staged_) {
             if(retired_.capacity()<kMaxRetainedScenes)
                 retired_.reserve(kMaxRetainedScenes);
-            retired_.push_back(std::move(staged_));
+            retired_.push_back({std::move(staged_),0});
         }
         stagedEmpty_=true;
         stagedRevision_=renderRevision;
@@ -154,7 +154,7 @@ public:
         if(!staged_)return false;
         // Moving the already-counted staged owner to retirement does not
         // increase the total number of live GPU owners.
-        retired_.push_back(std::move(staged_));
+        retired_.push_back({std::move(staged_),0});
         stagedRevision_=0;
         return true;
     }
