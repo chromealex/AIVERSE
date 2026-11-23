@@ -238,6 +238,9 @@ private:
         float baseline=1.f,value=0.f;
         bool symmetric=false;
         bool snap=false;
+        bool neighborSnap=false;
+        std::string snapTarget;
+        render::float3 snapGuideA{},snapGuideB{};
         bool valid=false;
     } wpDrag_;
     // Repeated clicks at overlapping handles cycle through stable candidates.
