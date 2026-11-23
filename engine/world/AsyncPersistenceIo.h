@@ -20,7 +20,9 @@ public:
 private:
     mutable std::mutex mutex_;
     std::condition_variable wake_;
+#if !defined(__EMSCRIPTEN__)
     std::thread worker_;
+#endif
     Operation operation_;
     Receipt receipt_;
     size_t budget_=0;
@@ -81,7 +83,9 @@ public:
             if(!started_)return;
             stopping_=true;wake_.notify_one();
         }
+#if !defined(__EMSCRIPTEN__)
         if(worker_.joinable())worker_.join();
+#endif
         std::lock_guard lock(mutex_);
         started_=false;operation_={};receipt_={};budget_=0;
     }
