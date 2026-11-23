@@ -221,6 +221,14 @@ public:
         return true;
     }
 
+    // Exclusive renderer owner calls at resource preparation and retirement,
+    // after the owning Device has completed all relevant frames.
+    template<class Callback>
+    bool forEachCpuModel(Callback&& callback){
+        std::lock_guard<std::mutex> lock(presentationMutex_);
+        return presentation_.forEachCpuModel(std::forward<Callback>(callback));
+    }
+
     // One combined authored material+texture assignment BEFORE GPU upload.
     bool bindMaterial(const std::string& socketId,
                       const StyleMaterial& style,
