@@ -1761,3 +1761,9 @@ The adapter does not yet fetch on its own or mount the sub-inspector in the prod
 The actual Graph Editor is `apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx` (not `SpectraNativePreview`). Its SpriteOutput texture section now mounts `SpectraIndexedGraphAssetInspector`, which loads `studio.assets`, supports GUID-indexed search/drag, selection lock, and routes edits through the panel's existing `apply()` function. Existing `Validate`, `Save Draft`, and `Publish` use native `fx_graph_validate`, `fx_graph_draft_set`, and `fx_graph_set`; the picker does not bypass them.
 
 `bindResolvedSpectraAsset` stores `content/<asset-relative-path>` in the SpriteOutput texture property, as required by the established `putSpriteTexture` compiler contract, and rejects unsupported texture extensions. Existing path-only picker UI has been replaced. This stage has not been built or tested.
+
+## Stage 45 — Assets Browser drag compatibility and project refresh
+
+The production Assets Browser (`apps/studio-web/src/components/AssetsPanel.tsx`) uses MIME `application/x-aiverse-content-path`, carrying a content-relative path, **not** the GUID JSON MIME originally assumed by the picker. `SpectraAssetPicker` now accepts this existing MIME and resolves the path through the current native GUID catalog before selecting it; unknown paths remain rejected. Legacy GUID JSON drags are still accepted after index lookup.
+
+`SpectraIndexedGraphAssetInspector` refreshes the native catalog when the active `projectPath` changes or `workspace.changed`/`document.changed` events arrive. The production graph panel passes `projectPath`. Do not bypass the native graph validate/draft/publish path. No build or UI test has been run.
