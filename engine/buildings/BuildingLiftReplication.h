@@ -244,6 +244,8 @@ public:
             if(error)*error="No trusted lift snapshot";
             return false;
         }
+        // Transactional preflight: one invalid lift must not leave earlier
+        // lifts at the new revision while later ones remain stale.
         for(const auto& state:latest_.lifts){
             auto it=controllers.find(state.featureIndex);
             if(it==controllers.end()){
@@ -251,10 +253,15 @@ public:
                 return false;
             }
             if(state.revision<=it->second.snapshot().revision)continue;
-            if(!it->second.applyReplicatedSnapshot(state)){
+            if(!it->second.canApplyReplicatedSnapshot(state)){
                 if(error)*error="Client rejected invalid lift state";
                 return false;
             }
+        }
+        for(const auto& state:latest_.lifts){
+            auto it=controllers.find(state.featureIndex);
+            if(state.revision>it->second.snapshot().revision)
+                (void)it->second.applyReplicatedSnapshot(state);
         }
         if(error)error->clear();
         return true;
