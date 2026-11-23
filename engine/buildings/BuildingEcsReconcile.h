@@ -94,10 +94,7 @@ inline bool restoreBuildingEcsLeafScene(
     // Restored partially-open leaves are intentionally stationary. The
     // next authenticated command may explicitly finish opening/closing.
     // Set metadata only after collision + all graph owners have committed.
-    const uint64_t oldRevision=state->revision;
-    const bool oldAck=state->graphAcknowledged;
-    const bool oldMoving=std::any_of(state->leaves.begin(),state->leaves.end(),
-                  [](const BuildingEcsLeafState& leaf){return leaf.moving;});
+    const BuildingEcsWorldState original=*state;
     state->revision=newRevision;
     state->graphAcknowledged=true;
     for(auto& leaf:state->leaves){
@@ -106,14 +103,7 @@ inline bool restoreBuildingEcsLeafScene(
     }
     if(!runtime.rebindAfterRestore(freshSession,freshPhysics,spatial,
                                    freshGraphs,error)){
-        state->revision=oldRevision;
-        state->graphAcknowledged=oldAck;
-        if(oldMoving){
-            // Legacy snapshot had its own per-leaf moving values; an
-            // unsuccessful restoration leaves it suspended regardless.
-            // Preserve those flags by asking the host to reload snapshot
-            // rather than falsely continuing with altered canonical state.
-        }
+        *state=original; // Do not corrupt the restored authoritative World.
         freshSession.detach();
         freshPhysics.detach(spatial);
         freshGraphs.forgetScene(state->sceneId);
