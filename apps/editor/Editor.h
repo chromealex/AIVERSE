@@ -6,6 +6,7 @@
 // The public part of Editor is the API windows use; keep it small and stable.
 #pragma once
 #include "engine/render/graph/GraphWatch.h"
+#include "engine/render/graph/GraphGpuProfile.h"
 #include "SceneRenderable.h"
 #include <array>
 #include <cmath>
@@ -672,6 +673,7 @@ private:
     uint64_t graphPlayEpoch_=0;
     graph_telemetry::History graphPlayHistory_;
     graph_telemetry::Watch graphWatch_;
+    graph_gpu_profile::Capture graphGpuProfile_;
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;
