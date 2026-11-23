@@ -1,3 +1,19 @@
+## Stage 9 — SpectraFX Graph first-use UX (2026-11-23)
+
+User screenshot showed the `New Graph` form hidden below a scrolling asset list
+in the narrow ~420px HTML5 Graph dock. Creation now appears as always-visible
+**Starter FX** and **Blank V2** actions, above Graph Assets and in the no-graph
+welcome state. Starter passes through the canonical native
+`fx_graph_edit {action:"new"}` result (which already has
+Spawn→Initialize→SpriteOutput) and invokes native `fx_graph_validate`
+before presenting it as runnable. Blank V2 explicitly removes nodes/links
+without mutating the native source. Duplicate graph names are rejected;
+source controls and tests live in `SpectraDataInterfacesPanel.tsx`,
+`spectraStarterModel.ts`, `SpectraDataInterfacesPanel.css` and
+`tests/spectraStarterModel.test.mjs`. **Exact HEAD UI/Node/Vite checks
+not yet confirmed PASS.** Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage9-first-use-2026-11-23.md`.
+
 # Agent rules: SpectraFX universal VFX: status, APIs, stage log
 
 ## 2026-11-23 — SpectraFX native Scene GPU preview (Stage 8; hardware acceptance pending)
