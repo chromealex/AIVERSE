@@ -9,6 +9,7 @@ namespace aiverse::terraweave::caverns {
 class CaveBox3DShadow {
 public:
     bool prepared()const noexcept{return bool(staged_);}
+    bool candidateInstalled()const noexcept{return candidateInstalled_;}
     uint64_t stagedRevision()const noexcept{return stagedRevision_;}
     uint64_t activeRevision()const noexcept{return activeRevision_;}
     physics::BodyHandle activeBody()const noexcept{return activeBody_;}
