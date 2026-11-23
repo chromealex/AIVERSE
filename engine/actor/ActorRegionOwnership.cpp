@@ -150,9 +150,15 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
     // Destroyed entities retain tombstones: recycled ECS indices have
     // distinct generation bits, so stable IDs cannot be reused.
-    for(const auto& [id,entry]:ledger->records()) {
-        if(!entry.live || present.contains(id))continue;
-        if(!ecs.resource<world::RegionEntityLedger>()->despawn(id,entry.owner))
+    // Iterate ONLY live IDs; historical tombstones may outnumber the hot
+    // population by orders of magnitude in a long-running city.
+    const std::vector<world::RegionEntityId> live(
+        ledger->liveIds().begin(),ledger->liveIds().end());
+    for(const auto id:live) {
+        if(present.contains(id))continue;
+        const auto* entry=ledger->find(id);
+        if(!entry || !entry->live ||
+           !ecs.resource<world::RegionEntityLedger>()->despawn(id,entry->owner))
             throw std::logic_error("regionOwnership: tombstone failed");
     }
 }
