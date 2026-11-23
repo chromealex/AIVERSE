@@ -22,6 +22,7 @@
 #include "SpectraGpuCueBridge.h"
 #include "SpectraFxSignificance.h"
 #include "SpectraFxCuePriority.h"
+#include "SpectraFxAccelerationFields.h"
 
 namespace aiverse::spectra {
 
