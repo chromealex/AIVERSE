@@ -1805,6 +1805,13 @@
           "titleEn": "Architectural generator: arches, domes, swept hulls and clearance validation",
           "text": "Добавить формы по данным стиля и проверки реальных проходных размеров после подгонки модели, не изменяя старые пресеты без явного выбора.",
           "textEn": "Add authored architectural primitives and verify usable openings after bounding-box fit, preserving existing presets by default."
+        },
+        {
+          "status": "in-progress",
+          "title": "Конструктивная подгонка моделей под размеры без растяжения деталей",
+          "titleEn": "Constructive fitting to requested building dimensions without stretching parts",
+          "text": "Подбирать габариты исходной архитектуры повторной генерацией; сохранять мировые размеры ворот, толщины мелких элементов и радиусы деталей, отклонять несовместимые габариты.",
+          "textEn": "Fit the underlying construction dimensions through bounded regeneration; preserve doorways, detail thickness and radii, rejecting infeasible envelopes."
         }
       ],
       "core": true,
