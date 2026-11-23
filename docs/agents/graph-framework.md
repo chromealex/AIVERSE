@@ -12,3 +12,7 @@ DraftHistory is a local immutable-reference utility, not yet wired into the shad
 Next: coordinate with Studio owner before migrating more panels; extract typed node catalog and port interaction, integrate draft history and inspector, then adapter-based native validation/save/preview for SpectraFX, MotionWeave and modeling. For other graph families use the actual owner schema; graph algorithms alone do not imply a node editor.
 
 Tests: apps/studio-web npm run test:graphs, npm run typecheck, npm run build, native Mac visual verification. Existing graph operations are unchanged. See the stage handoff for real results.
+
+## Stage 2 — shader authoring interactions
+
+Shared canvas supports click output/input wiring callbacks, keyboard activation, zoom 50–200%, scroll navigation, and a single committed movement per pointer gesture. Shader-specific authoring operations filter the native catalog, preserve input slots, reject cycles and invalid arity, disconnect inputs, edit finite float4 constant/parameter values, duplicate nodes and maintain local draft history. The shader panel connects these operations and retains the native compiler/save bridge. Local Undo/Redo is reset on graph load, discard or save; it is not global project Undo. Workspace refresh updates catalog without deliberately resetting the loaded draft. Native external-writer conflict handling, shared inspector generalization, multi-selection, drag-to-pan, graph templates and other domain adapters remain pending. No runtime or visual verification claimed.
