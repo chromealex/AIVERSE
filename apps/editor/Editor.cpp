@@ -3,6 +3,7 @@
 #include "Editor.h"
 #include "engine/world/TerraWeaveCavernsEditRuntime.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
+#include "engine/render/TerraWeaveCavernsShardGpuHost.h"
 #include "engine/render/ModelSurfacePicking.h"
 #include "apps/editor/AuthoringComponents.h"
 #include "apps/editor/AuthoringWater.h"
@@ -90,6 +91,8 @@ public:
     using Bounds=terraweave::caverns::CaveDirtyBounds;
     using Stamp=terraweave::caverns::CaveSphereStamp;
     std::unique_ptr<terraweave::caverns::CaveEditRuntimeBridge> bridge;
+    std::unique_ptr<terraweave::caverns::CaveShardGpuHost> visual;
+    uint64_t visualRevision=0,visualAttemptedEpoch=0;
     std::string projectDir;
     Json previousJson;
     std::vector<Stamp> previousStamps;
@@ -97,14 +100,50 @@ public:
     uint64_t epoch=0;
     bool initialized=false;
 
+    // Explicit graphics-owner cleanup. Do not destroy GPU scenes if idle fails.
+    bool stopPreview(gfx::Device& device) {
+        if(!visual)return true;
+        if(!visual->shutdownAfterGpuIdle(device))return false;
+        visual.reset();visualRevision=0;visualAttemptedEpoch=0;
+        return true;
+    }
+    // Editor ONLY: visual presentation; never ACK gameplay dirtiness.
+    void stageVisualPreview(Editor& editor) {
+        if(!editor.cavernsVisualPreviewEnabled || !bridge)return;
+        if(visualAttemptedEpoch==epoch)return;
+        const auto candidates=bridge->visualPreviewCandidates();
+        if(candidates.empty())return;
+        if(!visual)visual=std::make_unique<terraweave::caverns::CaveShardGpuHost>();
+        if(visualRevision==UINT64_MAX)
+            throw std::overflow_error("Caverns visual preview revision");
+        const auto next=visualRevision+1;
+        std::vector<terraweave::caverns::CaveShardKey> shards;
+        terraweave::caverns::CaveBatchSpec spec;
+        spec.maxChunks=64;spec.enableStrata=false;
+        if(!visual->stagePreparedEdits(editor.device(),candidates,1,next,shards,spec))
+            return;
+        // This confirms only editor VISUAL preview, NOT physics/nav publication.
+        if(!visual->activateGroup(shards,[](const auto&){return true;}))
+            throw std::runtime_error("Caverns visual-only activation rejected");
+        visualRevision=next;
+        visualAttemptedEpoch=epoch;
+    }
+    void drawVisualPreview(render::Renderer3D& renderer) {
+        if(visual)visual->draw(renderer);
+    }
+
     void update(Editor& editor) {
         const auto& project=editor.ws().project.dir;
         if(project.empty()) {
+            if(visual && !stopPreview(editor.device()))
+                throw std::runtime_error("Caverns GPU preview needs idle");
             bridge.reset();projectDir.clear();initialized=false;
             editor.cavernsBuildStats={};
             return;
         }
         if(project!=projectDir) {
+            if(visual && !stopPreview(editor.device()))
+                throw std::runtime_error("Caverns project change GPU preview needs idle");
             // The bridge owns CPU futures, which are joined during teardown.
             bridge.reset();
             projectDir=project;initialized=false;
@@ -411,6 +450,9 @@ void Editor::shutdown() {
     // Nature preview retires grass Models through previewModelRetirement_
     // and stops its particles while gameFx_ is still alive.
     physisNaturePreview_.release(*dev_, gameFx_);
+    if(cavernsEditHost_ && !cavernsEditHost_->stopPreview(*dev_))
+        throw std::runtime_error("Caverns GPU preview retirement refused");
+    cavernsEditHost_.reset();
     sim_.reset();
     gameFx_.shutdown();
     fxTextures_.shutdown();
@@ -1957,6 +1999,12 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
         for(auto& material:out.materials)material.baseColor.w*=draw.tint.w;
         if(draw.nodeMaterial)out.nodeMaterials=*draw.nodeMaterial;else out.nodeMaterials.clear();
     });
+    // GPU preparation only at the Scene pre-render boundary, never in pass.
+    if(cavernsEditHost_ && editOverlays && !planets &&
+       !ws_.map.data.worldSpace && cavernsVisualPreviewEnabled) {
+        try{cavernsEditHost_->stageVisualPreview(*this);}
+        catch(const std::exception& e){cavernsBuildStats.diagnostic=e.what();}
+    }
     r3d_.beginScene(renderCam,renderW,renderH);
     // Scene selection outline is a depth-tested posteffect, not an
     // inverted-hull ModelDraw vertex extrusion. Never enable in Game.
@@ -1971,6 +2019,10 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
         view_.draw(r3d_, scene_, time_, nullptr, grid_);
         view_.setSelectionOutline(false);
     }
+    // Only the committed cave visual shard owners render; no gameplay claim.
+    if(cavernsEditHost_ && editOverlays && !planets &&
+       !ws_.map.data.worldSpace && cavernsVisualPreviewEnabled)
+        cavernsEditHost_->drawVisualPreview(r3d_);
     nereidPreview_.draw(r3d_);
     visualPickCacheGeneration_=view_.modelResources().generation();
     const auto afterView = std::chrono::steady_clock::now();
