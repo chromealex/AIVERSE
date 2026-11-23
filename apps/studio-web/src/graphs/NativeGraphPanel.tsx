@@ -59,7 +59,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   const rows=draft?.[fx||mode==='pose'?'nodes':'states'];
   return Array.isArray(rows)?rows.find(n=>object(n)&&n.id===active):undefined;
  },[draft,active,fx,mode]);
- useEffect(()=>{setJson(entry?JSON.stringify(entry,null,2):'');},[entry]);
+ useEffect(()=>{setJson(entry?(fx?'':JSON.stringify(entry,null,2)):'');},[entry,fx]);
  const open=(asset:string)=>void run(async current=>{
   if(!asset||dirty)return;
   const doc=graphReply(await op(prefix+'_get',{name:asset}));if(!current())return;
@@ -87,6 +87,12 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   const map=new Map(next.map(p=>[p.id,p]));
   if(!Array.isArray(draft.nodes))return;
   edit({...draft,nodes:draft.nodes.map(n=>{if(!object(n)||typeof n.id!=='string')return n;const p=map.get(n.id);return p?{...n,position:[p.x,p.y]}:n;})});
+ };
+ const selectedLinks=view.links.filter(e=>e.to===active||e.from===active);
+ const disconnect=(id:string)=>{
+  if(!draft||!fx||busy)return;
+  const link=view.links.find(e=>e.id===id);if(!link)return;
+  nativeEdit({action:'disconnect',from:link.from,to:link.to,...(link.input.startsWith('data:')?{toPort:link.input.slice(5)}:{})});
  };
  const validate=()=>void run(async current=>{
   if(!draft)return;
@@ -130,10 +136,12 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
   {fx?<StudioAlert tone="warning">Published graph save uses a read-back preflight, not an atomic revision lock. Avoid concurrent edits.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. State transition editing uses the JSON inspector.</StudioAlert>}
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
-   disabled={busy} pendingOutput={pending} onOutput={p=>{if(fx||mode==='pose')setPending(p)}} onInput={connect} onCancel={()=>setPending(null)}
+   disabled={busy} pendingOutput={pending} onOutput={fx||mode==='pose'?setPending:undefined} onInput={fx||mode==='pose'?connect:undefined} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    {entry&&<StudioSection title={'Selected: '+active}>
-    {fx?<><pre>{JSON.stringify(entry,null,2)}</pre><StudioInput placeholder="Property path" aria-label="Property path" value={property} onChange={e=>setProperty(e.target.value)}/>
+    {fx?<><pre>{JSON.stringify(entry,null,2)}</pre>
+     {selectedLinks.map(link=><div className="au-row" key={link.id}><span>{link.from} → {link.to} ({link.input})</span><StudioButton size="sm" disabled={busy} onClick={()=>disconnect(link.id)}>Disconnect</StudioButton></div>)}
+     <StudioInput placeholder="Property path" aria-label="Property path" value={property} onChange={e=>setProperty(e.target.value)}/>
      <StudioTextarea aria-label="Property JSON value" value={json} onChange={e=>setJson(e.target.value)}/>
      <StudioButton disabled={busy||!property.trim()} onClick={()=>{try{nativeEdit({action:'setProperty',node:active,property,value:JSON.parse(json)})}catch(e){setError(errorText(e))}}}>Apply property JSON</StudioButton></>:<>
       <StudioTextarea aria-label="Animation entry JSON" value={json} onChange={e=>setJson(e.target.value)} rows={6}/>
