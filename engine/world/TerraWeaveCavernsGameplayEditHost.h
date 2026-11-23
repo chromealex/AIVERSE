@@ -93,6 +93,15 @@ public:
         return true;
     }
 
+    // Optional game-owner budget: stage a full cross-shard batch over
+    // several pre-render frames. The final owner barrier publishes all
+    // staged shards at once; CPU physics/NavMesh shadows remain pending.
+    void setGpuUploadLimits(CaveGpuUploadLimits limits){
+        geometry_.setUploadLimits(limits);
+    }
+    CaveGpuUploadStats gpuUploadStats()const noexcept{
+        return geometry_.uploadStats();
+    }
     CaveEditTick pumpCpu(size_t budget=8) {
         return worker_.tick(budget);
     }
@@ -108,8 +117,12 @@ public:
                     const ColliderIdAllocator& colliderIds,
                     uint64_t visualRevision,
                     CaveBatchSpec geometryOptions={}) {
-        if(!snapshot_ || !colliderIds || !terrainHeight ||
-           !visualRevision || stagedRevision_)return false;
+        if(!snapshot_ || !visualRevision || stagedRevision_)return false;
+        // Stage38 pacing: a single consistent batch is prepared once, then
+        // its GPU shard uploads advance under the configured frame budget.
+        if(gpuBatch_)
+            return pumpGpuBatch(device,visualRevision,geometryOptions);
+        if(!colliderIds || !terrainHeight)return false;
         const auto candidates=worker_.certifiedCandidates();
         if(candidates.empty())return false;
         const uint64_t sourceRevision=snapshot_->sourceRevision;
@@ -135,27 +148,59 @@ public:
             if(!navigation_.prepare(snapshot_,navConfig,
                                     std::move(terrainHeight)))
                 throw std::runtime_error("Caverns authored navigation stage refused");
-            if(!geometry_.stagePreparedEdits(device,candidates,
-                                             snapshot_->generatorVersion,
-                                             visualRevision,stagedShards_,
-                                             geometryOptions)) {
-                // GPU plan may discover mixed-LOD incompatibilities beyond
-                // the Stage16 loaded-neighbor gate, including OTHER shards.
-                // Promote those same-SDF boundary sources into the game's
-                // async dirty queue instead of retrying an impossible stage.
-                const auto& repairs=geometry_.lodRebuilds();
-                if(!repairs.empty())
-                    (void)worker_.requestLodRepairs(repairs);
-                throw std::runtime_error("Caverns GPU shard stage refused");
+            std::vector<CaveBatchChunk> chunks;
+            chunks.reserve(candidates.size());
+            for(const auto& item:candidates) {
+                CaveBatchChunk chunk;
+                chunk.mesh=item.candidate.mesh;
+                chunk.revision=item.candidate.renderRevision;
+                chunk.sourceRevision=item.candidate.sourceRevision;
+                chunk.generatorVersion=snapshot_->generatorVersion;
+                chunk.resolution=item.candidate.resolution;
+                chunk.spacingCm=item.candidate.spacingCm;
+                chunks.push_back(std::move(chunk));
             }
+            const auto groups=groupCaveEditsByShard(
+                chunks,geometry_.catalog().config());
+            auto planned=planCaveMixedLodShardBatch(
+                geometry_.catalog(),groups,visualRevision);
+            if(!planned.ready()){
+                if(!planned.visual.rebuild.empty())
+                    (void)worker_.requestLodRepairs(planned.visual.rebuild);
+                throw std::runtime_error(
+                    "Caverns mixed LOD requires same-snapshot repair");
+            }
+            stagedMeshes_=candidates;
+            stagedVisualRevision_=visualRevision;
+            gpuBatch_=std::make_unique<CaveMixedLodShardBatch>(
+                std::move(planned));
         } catch(...) {
             cancelPending();
             throw;
         }
-        stagedMeshes_=candidates;
-        stagedRevision_=sourceRevision;
-        stagedVisualRevision_=visualRevision;
-        return true;
+        // First upload is admitted now; subsequent shards are admitted by
+        // later owner frames without redoing collision or nav preparation.
+        return pumpGpuBatch(device,visualRevision,geometryOptions);
+    }
+
+    // Resume one prospective GPU shard upload. No mixed-epoch publish;
+    // all shards remain invisible until commitAtOwnerBarrier is called.
+    bool pumpGpuBatch(gfx::Device& device,uint64_t visualRevision,
+                      CaveBatchSpec spec={}) {
+        if(!gpuBatch_||stagedVisualRevision_!=visualRevision ||
+           !snapshot_||!gpuBatch_->ready())return false;
+        if(gpuBatchIndex_>=gpuBatch_->snapshots.size())return false;
+        const auto& shard=gpuBatch_->snapshots[gpuBatchIndex_];
+        if(!geometry_.stagePlannedShard(device,shard,gpuBatch_->visual,spec))
+            return false; // frame budget / GPU owner pressure; retry later
+        stagedShards_.push_back(shard.shard);
+        ++gpuBatchIndex_;
+        if(gpuBatchIndex_==gpuBatch_->snapshots.size()){
+            stagedRevision_=snapshot_->sourceRevision;
+            gpuBatch_.reset();gpuBatchIndex_=0;
+            return true;
+        }
+        return false;
     }
 
     // Typical game-owner frame hook, after an authored event, outside an
@@ -231,6 +276,7 @@ public:
         if(snapshot_&&navigation_.staged(snapshot_->sourceRevision))
             (void)navigation_.abort(snapshot_->sourceRevision);
         stagedMeshes_.clear();
+        gpuBatch_.reset();gpuBatchIndex_=0;
         stagedRevision_=stagedVisualRevision_=0;
     }
 
@@ -294,6 +340,8 @@ private:
     std::shared_ptr<const CaveVolumeSnapshot> snapshot_;
     std::vector<CavePreparedEdit> stagedMeshes_;
     std::vector<CaveShardKey> stagedShards_;
+    std::unique_ptr<CaveMixedLodShardBatch> gpuBatch_;
+    size_t gpuBatchIndex_=0;
     std::vector<ChunkKey3> preparedPhysics_;
     uint64_t stagedRevision_=0,stagedVisualRevision_=0,committedRevision_=0;
     uint64_t runtimeEpoch_=0;
