@@ -1209,3 +1209,69 @@ Stage 23Q game-specific source attempt was reversed in separate
 GitHub commits before compiling or testing. Never reinstate it.
 Correction handoff:
 `docs/agent-handoffs/building-stage23q-architecture-correction-2026-11-23.md`.
+
+
+## Stage 23Q (correct architecture) — common ECS Simulation adapter
+
+`engine/buildings/BuildingEcsRuntime.h` is the **genre-independent**
+integration with the current `Simulation` and its native ECS `World`,
+not the legacy `engine/actor`/FPS/RTS module. The previously attempted
+genre-specific Stage 23Q source changes were reverted and MUST NOT be
+reintroduced.
+
+The existing shared Simulation has a two-phase lifecycle:
+`GameModule::setup` registers systems/persistence first,
+`Simulation::setup` additionally auto-installs shared PHYSIS systems
+and seals the persistence registry, and ordinary fixed ticks run
+systems in registration order. Integration must respect this:
+
+1. In common map/scene initialization during `GameModule::setup`,
+   before the registry seals, call
+   `building::registerBuildingEcsPersistence(sim, sceneId)`.
+   The registered `BuildingEcsWorldState` ECS singleton contains
+   the current authoritative per-socket committed physical progress,
+   open/moving flags and revision, graph ACK and fixed-tick identity.
+   It is copy-on-write snapshot and save compatible through the
+   existing `PersistentEcsRegistry`; no GPU state or external
+   collider pointers are serialized.
+2. Use the game's existing scene collision ID namespace, one
+   `SpatialWorld`, `BuildingDualLeafOwner` and
+   `BuildingGraphChangeRouter`, plus the existing
+   `BuildingDualLeafGameSession` with real ECS actor authorization,
+   physical interaction range, and sweep/obstruction policies.
+   Do NOT attach the old single-barrier owner to the same sockets.
+3. AFTER `Simulation::setup()` and PHYSIS auto-registration,
+   BEFORE the first `Simulation::step()`, call
+   `BuildingEcsRuntime::attachAfterSetup(sim, session, physics,
+   spatial, router, stepPermille)`. This appends the shared
+   `building.dual_leaves` fixed-tick system after existing
+   module movement and shared PHYSIS stages. A weak captured owner
+   prevents a dangling callback if the scene is unloaded.
+   Retain the returned shared_ptr in the common scene owner.
+   Command transport resolves authenticated actor identity to a
+   real Entity and calls `runtime->enqueue(command)`.
+   No genre-specific action or network wire format is mandated.
+4. Each accepted server tick calls existing dual-owner physics,
+   graph ACK and CPU presentation; the EOS physical pose is
+   recorded in the ECS singleton even when graph ACK is still
+   pending, while visual acceptance remains gated on graph ACK.
+   The real renderer consumes `BuildingDualLeafGameSession::submit`
+   through its normal `Renderer3D::drawModel` and GPU owner.
+5. `Simulation::addStateRestoredHook` suspends the adapter when
+   `loadState` or persistent deserialization restores World,
+   because external SpatialWorld colliders, the graph router,
+   the pending command authority and GPU leases are NOT part of
+   ECS COW snapshots. The game scene owner must tear down/rebuild
+   or fully reconcile those derived external owners against the
+   saved `BuildingEcsWorldState` before accepting new building
+   commands. Never resume solely by clearing a boolean. When
+   unloading, unregister/revoke commands and retire renderer
+   model leases before removing the physics scene; call
+   `retireActor` before Entity generation reuse.
+
+This is a concrete shared Simulation registration helper, **not**
+a default auto-installed feature for every game map. Games opt in
+by calling the two setup phases and supplying their existing
+world collision and render owners. No tests were run per user request.
+Handoff:
+`docs/agent-handoffs/building-common-ecs-stage23q-2026-11-23.md`.
