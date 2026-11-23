@@ -1,0 +1,23 @@
+/* SpectraFX 2D graph topology editor. It is NOT an effect rendering viewport. */
+.spectra-canvas {display:flex;flex-direction:column;gap:var(--au-space-3);min-width:0;}
+.spectra-canvas__toolbar {display:flex;align-items:end;flex-wrap:wrap;gap:var(--au-space-2);}
+.spectra-canvas__toolbar .au-field {min-width:min(100%,180px);flex:1;}
+.spectra-canvas__spacer {flex:1;}
+.spectra-canvas__zoom {color:var(--au-text-muted);font-size:var(--au-font-xs);min-width:38px;text-align:center;}
+.spectra-canvas__viewport {overflow:auto;scrollbar-gutter:stable;max-height:410px;min-height:220px;height:34vh;background:var(--au-canvas);border:1px solid var(--au-line);border-radius:var(--au-radius-md);background-image:linear-gradient(90deg,var(--au-line) 1px,transparent 1px),linear-gradient(var(--au-line) 1px,transparent 1px);background-size:24px 24px;}
+.spectra-canvas__extent {position:relative;}
+.spectra-canvas__world {position:relative;transform-origin:0 0;}
+.spectra-canvas__edges {position:absolute;inset:0;pointer-events:none;}
+.spectra-canvas__node {position:absolute;display:flex;flex-direction:column;width:170px;min-height:58px;max-width:170px;background:var(--au-panel-raised);border:1px solid var(--au-line-strong);border-radius:var(--au-radius-md);box-shadow:var(--au-shadow-sm);color:var(--au-text);font-size:var(--au-font-sm);user-select:none;touch-action:none;cursor:grab;overflow:hidden;}
+.spectra-canvas__node:active {cursor:grabbing;}
+.spectra-canvas__node.is-selected {border-color:var(--au-accent);box-shadow:var(--au-focus);}
+.spectra-canvas__node:focus-visible {outline:2px solid var(--au-accent);outline-offset:2px;}
+.spectra-canvas__node-head {display:flex;align-items:center;gap:var(--au-space-2);background:var(--au-shell-tab);border-bottom:1px solid var(--au-line);padding:var(--au-space-2);font-weight:600;}
+.spectra-canvas__node-id {padding:var(--au-space-2);color:var(--au-text-soft);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;}
+.spectra-canvas__node-param {padding:0 var(--au-space-2) var(--au-space-2);color:var(--au-accent);overflow-wrap:anywhere;}
+.spectra-canvas__connect {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr));gap:var(--au-space-2);align-items:end;}
+.spectra-canvas__links {display:flex;flex-direction:column;gap:var(--au-space-1);max-height:140px;overflow-y:auto;}
+.spectra-canvas__link {display:flex;align-items:center;justify-content:space-between;gap:var(--au-space-2);padding:var(--au-space-1) var(--au-space-2);background:var(--au-field);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);color:var(--au-text-soft);font-size:var(--au-font-sm);overflow-wrap:anywhere;}
+.spectra-canvas__selected {display:flex;flex-direction:column;gap:var(--au-space-1);border-top:1px solid var(--au-line);padding-top:var(--au-space-2);}
+.spectra-canvas__selected code {color:var(--au-text-soft);white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--au-font-xs);}
+.spectra-canvas__hint {font-size:var(--au-font-xs);color:var(--au-text-muted);line-height:var(--au-line-height);}
