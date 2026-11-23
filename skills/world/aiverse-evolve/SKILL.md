@@ -227,3 +227,6 @@ EVOLVE-aware TerraWeave registration requires nonempty species, exactly one prec
 
 ## Stage 65: demo weather, water and replay
 Headless demo now initializes PHYSIS grid, EVOLVE climate links and NEREID lake; optional `--replay` restores a Simulation snapshot and compares checksum. Disk save/load awaits PHYSIS persistence audit. No build/run. See `docs/handoffs/world-processes-stage65-demo-weather-water-replay-2026-11-23.md`.
+
+## Stage 66: demo persistence
+Native PHYSIS install registers persistence; demo supports `--load FILE`, `--save FILE`, `--replay` and forest diagnostics. No build or roundtrip verification. See `docs/handoffs/world-processes-stage66-demo-persistence-2026-11-23.md`.
