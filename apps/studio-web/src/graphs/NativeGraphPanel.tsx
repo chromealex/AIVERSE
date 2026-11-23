@@ -151,7 +151,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
       {mode==='states'&&draft&&object(entry)&&<>
        <StudioButton size="sm" disabled={busy||draft.initial===active} onClick={()=>edit(setAnimationInitial(draft,active))}>Set initial state</StudioButton>
        {Array.isArray(entry.transitions)&&entry.transitions.map((t,i)=>object(t)&&<StudioSection key={i} title={'Transition '+(i+1)+' → '+String(t.to)}>
-        {(['fade','after'] as const).map(k=><StudioInput key={k} aria-label={k} type="number" min="0" step="0.05" value={typeof t[k]==='number'?t[k]:k==='fade'?.2:0}
+        {(['fade','after'] as const).map(k=><StudioInput key={k} aria-label={k} disabled={busy} type="number" min="0" step="0.05" value={typeof t[k]==='number'?t[k]:k==='fade' ? .2 : 0}
          onChange={e=>{if(e.target.value.trim()==='')return;const next=editAnimationTransition(draft,active,i,{fade:typeof t.fade==='number'?t.fade:.2,after:typeof t.after==='number'?t.after:0,[k]:Number(e.target.value)});edit(next)}}/>)}
         <StudioButton size="sm" disabled={busy} onClick={()=>edit(editAnimationTransition(draft,active,i,null))}>Remove transition</StudioButton>
        </StudioSection>)}
