@@ -221,6 +221,9 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 spec.set("height",Json::number(double(feature.height),3));
                 spec.set("depth",Json::number(double(feature.depth),3));
                 spec.set("open",Json::number(double(feature.open),3));
+                spec.set("position",Json::number(double(feature.position),3));
+                spec.set("positionZ",Json::number(double(feature.positionZ),3));
+                spec.set("spacing",Json::number(double(feature.spacing),3));
                 features.push(std::move(spec));
             }
             saved.set("features",std::move(features));
