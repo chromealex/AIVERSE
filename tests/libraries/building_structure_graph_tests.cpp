@@ -36,7 +36,11 @@ int main(){
         CHECK(a.rooms.size()==8&&a.connections.size()==8);
         CHECK(a.sockets.size()==4);
         std::unordered_set<std::string> ids;
-        for(const auto& socket:a.sockets)CHECK(ids.insert(socket.id).second);
+        for(const auto& socket:a.sockets){
+            CHECK(ids.insert(socket.id).second);
+            if(socket.kind==BuildingFeatureKind::Window)
+                CHECK(std::abs(socket.y-(0.24f+(14.f-0.52f)/2.f+0.24f+1.05f))<0.002f);
+        }
         for(const auto& room:a.rooms){
             CHECK(room.x1>room.x0&&room.y1>room.y0&&room.z1>room.z0);
             CHECK(ids.insert(room.id).second);
