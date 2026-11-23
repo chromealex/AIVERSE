@@ -90,6 +90,27 @@ public:
         });
     }
 
+    // Explicit world-aware resource codec, e.g. stable references. Transfer
+    // is a stateless function; native handle-based codecs remain unchanged.
+    template<class T,bool (*Transfer)(Archive&,T&,const World&)>
+    void registerContextualResource(std::string id,uint32_t version=1){
+        static_assert(std::is_copy_constructible_v<T> && std::is_default_constructible_v<T>);
+        insert({std::move(id),Kind::Resource,version,detail::componentTypeId<T>(),
+            [](Archive& a,const World& w){
+                const auto* source=w.resourceConst<T>();
+                uint8_t present=source?1:0;a(present);
+                if(source){T value=*source;if(!Transfer(a,value,w))a.fail();}
+            },
+            [](Archive& a,World& w,const Decoder* migrate){
+                uint8_t present=0;a(present);
+                if(!a.ok()||present>1||migrate){a.fail();return;}
+                if(!present){w.eraseResource<T>();return;}
+                T value{};
+                if(!Transfer(a,value,w)){a.fail();return;}
+                if(a.ok())w.setResource<T>(std::move(value));
+            },{}});
+    }
+
     // Decode an OLD value, then explicitly transform it into the current T.
     // The new schema's normal io(Archive&,T&) always handles writes.
     // Versions are exact: readers for unregistered older versions are rejected.
