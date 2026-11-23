@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -36,6 +37,10 @@ struct AnimationPlayerComponent {
     uint64_t playbackRestoreAttempts=0;
     uint64_t playbackRestoreAccepted=0;
     uint64_t playbackRestoreDeclined=0;
+    // Instance publication serial within this presentation entity generation.
+    // Copied with a prepared View, advanced only on actual player reset.
+    // Saturation disables telemetry identity rather than changing gameplay.
+    uint64_t graphPublicationSerial=0;
 };
 struct AnimationPoseComponent {
     render::Pose local;
@@ -235,6 +240,7 @@ inline void evaluateAnimationPresentationRange(World& world,
             player.active=asset->graph;
             player.instance=std::make_shared<render::AnimationGraphInstance>();
             player.instance->reset(asset->graph);
+            if(player.graphPublicationSerial!=std::numeric_limits<uint64_t>::max())++player.graphPublicationSerial;
             if(player.pendingPlayback) {
                 try {
                     // One-shot portable state/clip clocks only. A missing
