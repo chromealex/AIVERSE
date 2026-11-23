@@ -37,9 +37,14 @@ bool ActorHost::readyToStep(Simulation& sim) {
     // VehicleRace::after, inside the current gameplay tick. Before admitting
     // that tick, pin both possible checkpoint outcomes through the existing
     // authoritative collision stream. Only opt-in W1 maps change behavior.
-    if(race_ && sim.world().resourceConst<world::RegionEntityLedger>())
-        for(Vec3 destination:race_->possibleRespawnPositions(view.world()))
+    if(race_ && sim.world().resourceConst<world::RegionEntityLedger>()) {
+        // Conservative fixed-tick travel bound for ANY valid controller.
+        // This avoids pinning unreachable next checkpoints all around a
+        // large track while never omitting the current respawn/grid target.
+        const Fixed bound=lib::mechanics::kVehicleMaxSpeed*sim.dt()+4_fx;
+        for(Vec3 destination:race_->imminentRespawnPositions(view.world(),bound))
             region(destination,4_fx);
+    }
     forEachCharacter(view,[&](ConstCharacterRef actor){region(actor.pos,radius);});
     for(const auto& vehicle:cars)region(vehicle.pos,radius);
     for(const auto& p:projectiles(view)){auto travel=fxMax(fxAbs(p.velocity.y),fxMax(fxAbs(p.velocity.x),fxAbs(p.velocity.z)))*sim.dt();
