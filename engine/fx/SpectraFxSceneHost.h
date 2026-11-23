@@ -17,6 +17,7 @@
 #include "FxModelMesh.h"
 #include "SpectraFxGpuRoutes.h"
 #include "SpectraFxCueInbox.h"
+#include "SpectraFxSignificance.h"
 #include "SpectraFxEntityEffects.h"
 #include "../render/Renderer3D.h"
 #include "../render/TextureCache.h"
@@ -148,6 +149,16 @@ public:
     uint64_t cueEpoch() const {return inbox_.epoch();}
     const SpectraFxCueInbox::Stats& cueStats() const {return inbox_.stats();}
     size_t pendingCues() const {return inbox_.pending();}
+    // Explicit opt-in. Disabled by default for identical legacy FIFO playback.
+    // Only commands passing through the frame inbox are prioritized;
+    // entity attachments and direct dispatch retain their existing semantics.
+    bool configureCueSignificance(const SpectraFxSignificance::Config& config) {
+        return significance_.configure(config);
+    }
+    bool setCueImportance(uint32_t eventId,float importance) {
+        return significance_.setEventWeight(eventId,importance);
+    }
+    const SpectraFxSignificance& cueSignificance() const {return significance_;}
     bool enqueueCue(SpectraFxCue cue,bool visibleToViewer,
                     uint64_t expectedEpoch) {
         return enabled_ &&
@@ -188,9 +199,18 @@ public:
         entities_.flushGpu([this](const SpectraFxCue& cue) {
             playback_->dispatch(cue);
         });
-        inbox_.drain([this](const SpectraFxCue& cue) {
-            return playback_->dispatch(cue);
-        },maxCuesPerFrame_);
+        if(significance_.enabled())
+            inbox_.drainPrioritized(
+                [this,&view](const SpectraFxCue& cue) {
+                    return significance_.score(cue,view);
+                },
+                [this](const SpectraFxCue& cue) {
+                    return playback_->dispatch(cue);
+                },maxCuesPerFrame_);
+        else
+            inbox_.drain([this](const SpectraFxCue& cue) {
+                return playback_->dispatch(cue);
+            },maxCuesPerFrame_);
         playback_->updateGpu(std::clamp(dt,0.0f,0.1f),
                              view.eye,render::normalize(view.forward));
     }
@@ -274,6 +294,7 @@ public:
 private:
     ParticleSystem cpu_;
     SpectraFxEntityEffects entities_;
+    SpectraFxSignificance significance_{};
     SpectraFxCueInbox inbox_{1024};
     size_t maxCuesPerFrame_=256;
     render::TextureCache textures_;
