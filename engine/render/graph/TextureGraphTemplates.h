@@ -13,7 +13,7 @@ inline Json templates(){
         nodes.at(3).member("properties").set("low",Json::number(recipe.lo));nodes.at(3).member("properties").set("high",Json::number(recipe.hi));
         nodes.at(4).member("properties").set("value",Json::number(recipe.metallic));
         // Brick relief tracks the mortar mask; other patterns use independent microrelief.
-        if(std::string(recipe.name)=="brick"){nodes.at(1).set("op",Json::string("patternMask"));nodes.at(1).set("properties",Json::parse(R"({"pattern":"brick","scale":8,"seed":1})"));nodes.at(0).member("properties").set("scale",Json::number(int64_t(8)));}
+        if(std::string(recipe.name)=="brick"){nodes.at(1).set("op",Json::string("patternMask"));nodes.at(1).set("properties",Json::parse(R"({"pattern":"brick","scale":8,"seed":1})"));nodes.at(0).member("properties").set("scale",Json::number(int64_t(8)));nodes.push(Json::parse(R"({"id":"brickRelief","op":"invert","inputs":["height"]})"));nodes.at(2).set("inputs",Json::parse(R"(["brickRelief"])"));g.member("outputs").set("height",Json::string("brickRelief"));}
         compile(g);Json row=Json::object();row.set("name",Json::string(recipe.name));row.set("graph",g);out.push(row);
     }
     return out;
