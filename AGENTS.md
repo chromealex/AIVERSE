@@ -173,6 +173,19 @@ NavMesh and streaming, read
 World-space resource/streaming ownership lives under
 `engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
 `engine/render/TerraWeaveCaverns*.h`.
+Stage40 native hookup: `apps/client/GameClient.{h,cpp}` now owns the
+optional visual-only `CaveClientVisualHost`; this path is shared by
+standalone AiverseGame and `apps/client/HostedClient` Editor Play. The
+editor forwards MapDoc/Undo changes through HostedClient, without changing
+gameplay physics or NavMesh. Never interpret this preview as a native
+all-owner gameplay commit. Authoritative simulation/replay can use
+`engine/world/TerraWeaveCavernsHeadlessWorldSource.h` for versioned
+integer SDF without RHI. The `engine/net/server/Server.h` server is
+an INPUT RELAY and does not run simulation; do not create cave physics or
+renderers in `apps/server/main.cpp`. Real simulated authority owners must
+provide Box3D/SpatialWorld/NavMesh quiescence and use
+`TerraWeaveCavernsRuntimeFrame.h` / `TerraWeaveCavernsWorldRecovery.h`
+for safely staged physical publication and recovery.
 Stage36's `CaveGameplayRuntimeFrame` coordinates immutable versioned SDF
 authoring with `CaveWorldResidency` and `CaveWorldStreamJobs`. The
 game/client/server host must hold the actual draw/physics/NavMesh owner barrier
