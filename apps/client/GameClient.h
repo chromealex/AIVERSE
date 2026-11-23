@@ -56,6 +56,8 @@
 namespace Rml { class ElementDocument; class Element; }
 typedef struct lua_State lua_State;
 
+namespace aiverse::terraweave::caverns {class CaveClientVisualHost;}
+
 namespace aiverse::client {
 
 using namespace aiverse::render;
@@ -99,6 +101,7 @@ class GameClient {
     struct ScriptUiApi;     // ClientScriptUi.cpp: scripthost.event / send for engine/ui/lib/scriptui.lua
     friend struct ScriptUiApi;
 public:
+    ~GameClient(); // out-of-line: owns an optional incomplete-type Caverns GPU host
     // Embedded GameClient shares its editor's gfx::Device generation.
     // Standalone client creates an epoch automatically during initStep(0).
     void setGpuDeviceLease(render::RenderDeviceLifetime::Lease lease) {
@@ -379,6 +382,9 @@ private:
     bool lensCamerasActive_=false;
     // streamed static world (map "streamedWorld": {"async": true, ...}, docs/large-worlds.md): chunks around the camera
     std::unique_ptr<world::WorldScene> worldScene_;
+    // Shared native GameClient and Editor Play visual-only cave presentation.
+    // No physics or NavMesh authority is claimed by this optional owner.
+    std::unique_ptr<terraweave::caverns::CaveClientVisualHost> cavernsVisual_;
     // Stage41: ordered nonblocking CPU/GPU samples only when the streamed
     // world's Horizon adaptive presentation quality is explicitly enabled.
     terraweave::HorizonFrameTimingBridge horizonFrameTiming_;
