@@ -6,6 +6,7 @@
 #include <string_view>
 #include <charconv>
 #include <limits>
+#include <functional>
 namespace aiverse::world {
 struct RegionRetentionPolicy {
     size_t keepPrevious=2;
@@ -24,10 +25,11 @@ struct RegionRetentionCleanup {
 };
 class RegionCheckpointRetention {
 public:
+    using Eligibility=std::function<bool(uint64_t)>;
     // Run under world session lock. Only complete older pairs are eligible.
     // Orphans, symlinks, unknown names and future generations are never deleted.
     static RegionRetentionPlan plan(const std::filesystem::path& dir,
-        const RegionCheckpointManifest& active,RegionRetentionPolicy policy){
+        const RegionCheckpointManifest& active,RegionRetentionPolicy policy,const Eligibility& eligible={}){
         RegionRetentionPlan result;
         if(!active.valid())return result;
         struct Pair {bool checkpoint=false,wal=false;uint64_t bytes=0;};
@@ -56,9 +58,9 @@ public:
         auto current=pairs.find(active.generation);
         if(current==pairs.end()||!current->second.checkpoint||!current->second.wal)return {};
         size_t previous=0;
-        for(const auto& [gen,p]:pairs)if(gen<active.generation&&p.checkpoint&&p.wal)++previous;
+        for(const auto& [gen,p]:pairs)if(gen<active.generation&&p.checkpoint&&p.wal&&(!eligible||eligible(gen)))++previous;
         for(const auto& [gen,p]:pairs){
-            if(gen>=active.generation||!p.checkpoint||!p.wal)continue;
+            if(gen>=active.generation||!p.checkpoint||!p.wal||(eligible&&!eligible(gen)))continue;
             if(previous<=policy.keepPrevious&&(!policy.maxBytes||result.retainedBytes<=policy.maxBytes))break;
             // keepPrevious is a minimum backup count even under byte pressure.
             if(previous<=policy.keepPrevious)break;
@@ -70,7 +72,7 @@ public:
     // Caller owns the lifetime world lock and a quiescent save barrier.
     // Partial removal is reported; orphan files are deliberately retained.
     static RegionRetentionCleanup cleanup(const std::filesystem::path& dir,
-        const RegionCheckpointManifest& active,RegionRetentionPolicy policy){
+        const RegionCheckpointManifest& active,RegionRetentionPolicy policy,const Eligibility& eligible={}){
         RegionRetentionCleanup result;
         std::ifstream in(dir/"manifest.bin",std::ios::binary);
         std::vector<uint8_t> bytes(RegionCheckpointManifestCodec::size);
@@ -81,11 +83,11 @@ public:
            current.identity!=active.identity||current.generation!=active.generation||
            current.checkpointBytes!=active.checkpointBytes)return result;
         in.close();
-        result.plan=plan(dir,current,policy);
+        result.plan=plan(dir,current,policy,eligible);
         if(!result.plan.valid)return result;
         result.removed.reserve(result.plan.removeGenerations.size());
         for(auto gen:result.plan.removeGenerations){
-            if(gen>=current.generation){result.failedGeneration=gen;return result;}
+            if(gen>=current.generation||(eligible&&!eligible(gen))){result.failedGeneration=gen;return result;}
             RegionCheckpointManifest old;old.generation=gen;
             auto cp=dir/old.checkpointName(),wal=dir/old.walName();
             std::error_code ec;
