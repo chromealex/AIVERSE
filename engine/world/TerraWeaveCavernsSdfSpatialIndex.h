@@ -1,7 +1,7 @@
 #pragma once
 // Stage39: immutable, bounded spatial acceleration for authored CaveVolumeSnapshot.
 // The index changes WHERE we look, never HOW the integer SDF is evaluated.
-// Canonical ID order and carve-then-fill precedence are preserved exactly.
+// Integer max/min reduction and carve-then-fill precedence are preserved exactly.
 // Large influence volumes go into a bounded overflow list, not millions of cells.
 // No global caches, GPU, ECS, mutable reader state, or genre dependencies.
 #include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
@@ -26,6 +26,7 @@ struct CaveSdfIndexStats {
     size_t stampPostings=0,entrancePostings=0;
     size_t overflowStamps=0,overflowEntrances=0;
 };
+struct CaveSdfPointCandidates {size_t stamps=0,entrances=0;};
 class CaveSnapshotSpatialIndex {
     struct Key {
         int64_t x=0,y=0,z=0;
@@ -48,6 +49,7 @@ public:
         CaveSdfIndexConfig config={})
         :source_(std::move(source)),config_(config) {
         if(!source_||!source_->sourceRevision||!source_->generatorVersion||
+           source_->stamps.size()>16384||source_->entrances.size()>4096||
            config_.cellCm<100||config_.cellCm>1000000||
            !config_.maxCellsPerInfluence||config_.maxCellsPerInfluence>65536||
            !config_.maxCellPostings||config_.maxCellPostings>4000000)
@@ -90,6 +92,21 @@ public:
     }
     uint64_t revision()const noexcept{return source_->sourceRevision;}
     const CaveSdfIndexStats& stats()const noexcept{return stats_;}
+
+    // Read-only workload instrumentation, useful for editor brush telemetry.
+    // Counts influence candidates which can affect this exact query point;
+    // it does not change SDF, allocate memory, or store mutable counters.
+    CaveSdfPointCandidates candidates(PointCm p)const {
+        const Key key{floorDiv(p.x,config_.cellCm),
+                      floorDiv(p.y,config_.cellCm),
+                      floorDiv(p.z,config_.cellCm)};
+        CaveSdfPointCandidates count;
+        visit(stampGrid_,overflowStamps_,stampTree_,key,p,
+              [&](uint32_t){++count.stamps;});
+        visit(entranceGrid_,overflowEntrances_,entranceTree_,key,p,
+              [&](uint32_t){++count.entrances;});
+        return count;
+    }
 
     // Produces exactly caveSnapshotFieldCm(snapshot(),p) for every legal
     // point, including negative coordinates, touching sphere boundaries,
