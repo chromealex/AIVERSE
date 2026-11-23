@@ -80,18 +80,20 @@
     "apps/editor/core/MaterialOps.h",
     "engine/gfx/vulkan/VkDevice.h",
     "engine/gfx/vulkan/VkCompute.cpp",
-    "engine/render/graph/TextureGraphMaterialBinding.h"
+    "engine/render/graph/TextureGraphMaterialBinding.h",
+    "engine/view/AppearanceAssetRegistry.h",
+    "tests/view/appearance_prepared.cpp"
   ],
   "traits": {
     "editable": true,
     "simulation": false,
     "visible": true,
-    "runtime": false
+    "runtime": true
   },
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 31A native staged material candidate and exact completed set bridge implemented; host integration, GPU-to-GPU and verification NOT RUN.",
+      "note": "Stage 31B in progress: version-checked appearance publication through existing model image transaction; host and GPU validation pending.",
       "evidence": []
     },
     "architecture": {
