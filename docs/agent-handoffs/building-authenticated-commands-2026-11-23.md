@@ -81,3 +81,11 @@ reconnect/scene-id allocation, physical door obstruction and passenger
 carry through real ECS commands. Then run focused C++/Metal/native Studio
 and multiplayer tests when user allows; record exact outputs. Keep PR Draft
 and do not merge main until evidence and branch reconciliation.
+
+## Exact stage provenance
+
+- `0d886275407fc7ccd1f36b3c4c5bff2c290ba107` — bounded command codec.
+- `6eda93320a4a147d34bf281b764c806958be62f7` — authenticated ECS endpoint and physical-door guard.
+- `5c3c9f20c024241efc7900860daaf52dbe26e702` — explicit wire header dependency.
+- `dff59892e2f67fdffaa369b5666bf75b3980b524` — Stage 16 docs, skill and roadmap update.
+- The handoff was updated after that documentation commit; resolve latest branch SHA before rebasing.
