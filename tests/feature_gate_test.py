@@ -11,6 +11,7 @@ from feature_registry import regressions, matrix, load_registry
 from new_feature import scaffold
 from legacy_inventory import inventory
 from capability_inventory import capability_id, source_operations
+from graph_inventory import inventory as graph_inventory
 
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
 gate = importlib.util.module_from_spec(spec)
@@ -113,6 +114,30 @@ class GateTest(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text('add("water_set", "description");\nws.registerOp({"water_get", "description"});')
             self.assertEqual(set(source_operations(root)), {"water_set", "water_get"})
+
+    def test_graph_inventory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            row = dict(id="shader", title="Shader", owner="render", kind="authoring", source="engine/Graph.h",
+                       skill="shader", mcp_candidates=["graph_set", "unknown_op"], studio_candidates=["graph"])
+            files = {
+                "docs/agents/graph-inventory.json": json.dumps({"graphs": [row]}),
+                "skills/catalog.json": json.dumps({"skills": [{"id": "shader"}]}),
+                "engine/Graph.h": "// fixture",
+                "apps/editor/core/GraphOps.cpp": 'add("graph_set", "fixture");',
+                "apps/studio-web/src/nestedDock.ts": "export const STUDIO_PANELS = ['graph'] as const;"
+            }
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            report = graph_inventory(root)
+            self.assertFalse(report["errors"])
+            self.assertEqual(report["graphs"][0]["verification"], "not_run")
+            self.assertEqual(report["graphs"][0]["literal_mcp_matches"], ["graph_set"])
+            self.assertEqual(report["graphs"][0]["unmatched_mcp_candidates"], ["unknown_op"])
+            self.assertEqual(report["graphs"][0]["studio_matches"], ["graph"])
+            self.assertEqual(report["tasks"][0]["kind"], "investigate")
 
     def test_bad_shape(self):
         self.assertTrue(gate.validate([]))
