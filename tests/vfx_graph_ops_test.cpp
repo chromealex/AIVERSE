@@ -2,6 +2,7 @@
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
 #include "engine/render/graph/GraphTelemetry.h"
+#include "engine/render/graph/GraphWatch.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
 #include <filesystem>
@@ -118,6 +119,19 @@ int main() {
     require(call("graph_debug_session",step).getInt("step")==4,"debug continuation did not retain state");
     step.set("action",Json::string("stop"));require(!call("graph_debug_session",step).getBool("active"),"session stop failed");
     step.set("action",Json::string("step"));require(call("graph_debug_session",step).has("error"),"stopped session accepted");
+
+    graph_telemetry::Watch watch;
+    auto watchSample=Json::parse(R"({"available":true,"domain":"spectrafx","worldEpoch":"1","instanceSerial":"5","programIdentity":"instance:5","sequence":"1","particles":3})");
+    watch.start("spectrafx","preview",watchSample);
+    require(watch.running(),"watch not started");
+    require(!watch.capture(watchSample),"duplicate sample accepted");
+    watchSample.set("sequence",Json::string("2"));
+    require(watch.capture(watchSample)&&watch.status()["frames"].size()==2,"watch capture failed");
+    watchSample.set("instanceSerial",Json::string("6"));
+    require(!watch.capture(watchSample)&&!watch.running(),"watch followed replacement");
+    require(watch.status()["frames"].size()==2,"watch lost stopped history");
+    watch.clear();require(watch.status()["frames"].size()==0,"watch clear failed");
+    require(!call("graph_live_watch",Json::parse(R"({"action":"status"})")).getBool("available"),"headless watch claims owner");
 
     Json create = Json::object();
     create.set("name", Json::string("spark"));
