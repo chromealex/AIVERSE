@@ -56,6 +56,45 @@ int main(int argc,char** argv){
             CHECK(std::abs(opened.building.mesh.boundsMin[c])<0.001f);
             CHECK(std::abs(opened.building.mesh.boundsMax[c]-want[c])<0.001f);
         }
+        // Stage 11: exact geometry, collision and sockets come from one graph.
+        const auto graph=buildFunctionalStructureGraph(recipe);
+        CHECK(graph);
+        CHECK(graph.sockets.size()==5);
+        CHECK(graph.solids.size()==opened.building.boxes.size());
+        CHECK(opened.graph.solids.size()==graph.solids.size());
+        CHECK(opened.anchors.size()==graph.sockets.size());
+        for(size_t i=0;i<graph.sockets.size();++i){
+            CHECK(opened.anchors[i].socketId==graph.sockets[i].id);
+            CHECK(opened.anchors[i].featureIndex==graph.sockets[i].featureIndex);
+            CHECK(std::abs(float(opened.anchors[i].outside.x.toDouble())-graph.sockets[i].x)<0.002f);
+            CHECK(std::abs(float(opened.anchors[i].outside.z.toDouble())-graph.sockets[i].z)<0.002f);
+        }
+        CHECK(graph.sockets[0].id=="entrance/0/0");
+        CHECK(std::abs(graph.sockets[0].x-7.f)<0.001f);  // large gate pinned to front X=7
+        CHECK(std::abs(graph.sockets[1].x-10.15f)<0.001f); // two back gates, 1m gap
+        CHECK(std::abs(graph.sockets[2].x-13.85f)<0.001f);
+        CHECK(std::abs(graph.sockets[3].x-18.f)<0.001f); // personnel door pinned at X=18
+        CHECK(graph.sockets[4].id=="roof/3");
+        CHECK(std::abs(graph.sockets[4].x-13.f)<0.001f);
+        CHECK(std::abs(graph.sockets[4].z-10.f)<0.001f);
+
+        // Mixed fixed and automatic positions: auto features fill free wall
+        // space without displacing an exact portal or producing overlaps.
+        auto mixed=recipe;
+        mixed.features[2].position=-1.f;
+        const auto mixedGraph=buildFunctionalStructureGraph(mixed);
+        CHECK(mixedGraph);
+        CHECK(mixedGraph.sockets.size()==5);
+        CHECK(std::abs(mixedGraph.sockets[0].x-7.f)<0.001f);
+        CHECK(std::abs(mixedGraph.sockets[3].x-1.32f)<0.001f);
+        auto overlap=recipe;
+        overlap.features[2].position=7.f; // same front wall span as large gate
+        const auto badGraph=buildFunctionalStructureGraph(overlap);
+        CHECK(!badGraph);
+        CHECK(badGraph.error.find("overlap")!=std::string::npos);
+        auto narrowRoof=recipe;
+        narrowRoof.features[3].position=3.1f;
+        CHECK(!buildFunctionalStructureGraph(narrowRoof)); // cannot retract off roof
         auto again=generateFunctionalBuilding(scifi,recipe);
         CHECK(again&&sameGeometry(opened.building,again.building));
         CHECK(opened.building.boxes==again.building.boxes);
