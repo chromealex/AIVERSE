@@ -167,6 +167,13 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
     }
     if(requests->applied>UINT64_MAX-changes.size())
         throw std::logic_error("region move counter exhausted");
+    std::vector<Entity> dirtyMembers;
+    for(const auto& change:changes)
+        dirtyMembers.insert(dirtyMembers.end(),change.members.begin(),change.members.end());
+    if(const auto* dirty=ecs.resourceConst<world::RegionDirtyQueue>()) {
+        if(!dirty->canMarkMany(dirtyMembers))
+            throw std::logic_error("regionOwnership: dirty group capacity exhausted");
+    }
 
     // All targets are validated before changing a position. No command, RNG
     // or authoritative actor component is touched by the admission gate.
@@ -185,13 +192,11 @@ void ActorHost::applyRegionMoves(Simulation& sim) {
         }
     }
     if(changes.empty())return;
-    // This admitted movement is a known canonical owner write. Publish the
-    // changed graph as dirty observations; the subsequent regionOwnership
-    // system still validates/atomically migrates vehicle groups.
-    for(const auto& change:changes)
-        for(Entity member:change.members)
-            if(!reportRegionChange(sim,member,world::RegionDirtyKind::Move))
-                throw std::logic_error("regionOwnership: dirty move queue full");
+    // Publish the entire occupied graph in one atomic dirty-queue update:
+    // no partially marked passenger groups when capacity is exhausted.
+    if(auto* dirty=ecs.resource<world::RegionDirtyQueue>())
+        if(!dirty->markMany(dirtyMembers,world::RegionDirtyKind::Move))
+            throw std::logic_error("regionOwnership: atomic dirty group mark failed");
     auto* mutableQueue=ecs.resource<world::RegionMoveRequests>();
     mutableQueue->applied+=changes.size();
     for(const auto& [id,destination]:admittedRegionMoves_) {
