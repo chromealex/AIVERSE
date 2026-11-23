@@ -25,7 +25,9 @@
     "apps/studio-web/tests/nativeGraphAdapters.test.mjs",
     "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
     "apps/studio-native/StudioTools.h",
-    "apps/studio-web/src/graphs/AnimationConditions.tsx"
+    "apps/studio-web/src/graphs/AnimationConditions.tsx",
+    "apps/studio-web/src/graphs/generatorProjections.ts",
+    "apps/studio-web/src/panels/generated/TerraweaveGeneratorPanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -147,13 +149,18 @@
       "modeling_list",
       "modeling_get",
       "modeling_edit",
-      "modeling_validate"
+      "modeling_validate",
+      "terraweave_preview",
+      "terraweave_generate",
+      "terraweave_forest_get",
+      "terraweave_forest_set"
     ],
     "studio_panels": [
       "shader_graph",
       "fx_graph",
       "anim_graph",
-      "modeling"
+      "modeling",
+      "terraweave_generator"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",
