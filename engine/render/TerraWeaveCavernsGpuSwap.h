@@ -66,11 +66,11 @@ public:
         if(!caveCanStageScene(activeRevision_,stagedRevision_,
                               renderRevision,liveOwners,kMaxRetainedScenes)||
            stagedEmpty_)return false;
-        if(staged_) {
-            if(retired_.capacity()<kMaxRetainedScenes)
-                retired_.reserve(kMaxRetainedScenes);
-            retired_.push_back({std::move(staged_),0});
-        }
+        // Preallocate the eventual active retirement slot BEFORE any
+        // gameplay callback can commit physics, so activation is noexcept.
+        if(retired_.capacity()<kMaxRetainedScenes)
+            retired_.reserve(kMaxRetainedScenes);
+        if(staged_)retired_.push_back({std::move(staged_),0});
         stagedEmpty_=true;
         stagedRevision_=renderRevision;
         return true;
@@ -81,6 +81,10 @@ public:
     template<class Commit>
     bool activate(Commit&& hostCommit) {
         if(!hasStaged()||!caveCanActivateScene(activeRevision_,stagedRevision_))return false;
+        // Host callbacks may irreversibly publish native physics. Reserve
+        // the old GPU owner retirement slot before invoking that callback.
+        if(active_ && retired_.capacity()<retired_.size()+1)
+            retired_.reserve(retired_.size()+1);
         bool committed=false;
         try {committed=hostCommit(stagedRevision_);}
         catch(...) {return false;}
