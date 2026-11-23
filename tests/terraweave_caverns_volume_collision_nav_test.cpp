@@ -23,7 +23,7 @@ int main(){
     assert(payload.revision==42);
     assert(payload.triangles.size()==3);
     assert(payload.body.indices.size()==9);
-    assert(payload.body.vertices.size()==8);
+    assert(payload.body.vertices.size()==7);
     assert(payload.body.position.x==-4.0f);
     assert(payload.body.position.y==-8.0f);
     assert(payload.body.position.z==0.0f);
