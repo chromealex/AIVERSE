@@ -30,7 +30,7 @@ inline CaveCollisionPrepared prepareCaveVolumeCollision(
     if(!revision||!resolution||resolution>64||spacingCm<=0||spacingCm>10000||
        limits.maxTriangles==0||limits.maxTriangles>65534||
        limits.maxVertices==0||limits.maxVertices>65535||
-       mesh.indices.empty()||mesh.indices.size()%3||
+       mesh.indices.size()%3||
        mesh.indices.size()/3>limits.maxTriangles)
         throw std::invalid_argument("Caverns volume collision source/budget");
     const int64_t span=int64_t(resolution)*spacingCm;
@@ -54,6 +54,13 @@ inline CaveCollisionPrepared prepareCaveVolumeCollision(
     body.userData=userData;
     body.position={float(double(ox)/100.),float(double(oy)/100.),
                    float(double(oz)/100.)};
+    // A completely empty isosurface means there is no underground collision.
+    // The caller must retire any previous resident collider/Box3D body.
+    if(mesh.indices.empty()) {
+        if(!mesh.vertices.empty())
+            throw std::invalid_argument("Caverns empty mesh has unused vertices");
+        return out;
+    }
     std::map<std::tuple<int64_t,int64_t,int64_t>,int32_t> localVertexIds;
     const auto toLocalCm=[&](MeshVertex v){
         if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.z))
