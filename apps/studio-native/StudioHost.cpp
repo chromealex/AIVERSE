@@ -1292,6 +1292,10 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             if(requireReplayReady && !nativeStatus.getBool("replayReady"))
                 throw std::runtime_error("FX replay has not reached its requested frame");
             Json metadata=Json::object();
+            const auto requestedProject=session_->workspace().project.dir;
+            const auto requestedGeneration=nativeStatus["generation"].integer(-1);
+            const auto requestedTick=nativeStatus["tick"].integer(-1);
+            metadata.set("projectPathAtRequest",Json::string(requestedProject));
             metadata.set("sampling",Json::string("render-owner-readback-request"));
             metadata.set("tick",nativeStatus["tick"]);
             metadata.set("generation",nativeStatus["generation"]);
@@ -1307,11 +1311,13 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             metadata.set("frameExact",Json::fromBool(false));
             {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
             fxPreview_->captureNextFrameTagged(
-                [shot,maxSide,requireReplayReady](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba,Json frameMetadata) {
+                [shot,maxSide,requireReplayReady,requestedProject,requestedGeneration,requestedTick](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba,Json frameMetadata) {
+                    const bool identityMatches=frameMetadata.isObject()&&frameMetadata.getStr("projectPath")==requestedProject&&frameMetadata["generation"].integer(-2)==requestedGeneration;
                     {std::lock_guard<std::mutex> lock(shot->mutex);
+                     shot->provenance.set("identityMatches",Json::fromBool(identityMatches));
                      shot->provenance.set("capturedFrameSerial",Json::number(int64_t(capturedFrame)));
                      shot->provenance.set("gpuFrameIdentified",Json::fromBool(capturedFrame!=0&&w>0&&h>0));
-                     const bool matched=capturedFrame!=0&&w>0&&h>0&&frameMetadata.isObject();
+                     const bool matched=capturedFrame!=0&&w>0&&h>0&&identityMatches;
                      if(matched){
                          for(const char* key:{"tick","generation","backend","camera","background","grid","axes","gpu","replayReady","projectPath"})
                              shot->provenance.set(key,frameMetadata[key]);
@@ -1320,7 +1326,8 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
                      shot->provenance.set("frameExact",Json::fromBool(matched));}
                     std::string jpeg,error;
                     int ow=0,oh=0;
-                    if(requireReplayReady&&(!frameMetadata.isObject()||!frameMetadata.getBool("replayReady")))
+                    if(frameMetadata.isObject()&&!identityMatches)error="Capture belongs to a different graph generation or project";
+                    else if(requireReplayReady&&(!identityMatches||!frameMetadata.getBool("replayReady")||frameMetadata["tick"].integer(-2)!=requestedTick))
                         error="Captured frame has no matching replay-ready provenance";
                     else if(w<=0||h<=0||w>8192||h>8192||
                        uint64_t(w)*uint64_t(h)*4>64ull*1024ull*1024ull ||
