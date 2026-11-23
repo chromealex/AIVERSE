@@ -197,6 +197,7 @@ private:
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
     Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
+    Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
     void applyViewport(const Json& params);
     bool handleHostMethod(const Json& req); // methods the host answers itself; false: StudioSession's
     void afterSessionReply(const Json& req, const Json& reply);
@@ -229,6 +230,14 @@ private:
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
+    struct FxShot {
+        std::mutex mutex; // capture callback may run on GPU completion thread
+        bool done=false;
+        int width=0,height=0;
+        std::string jpeg,error;
+    };
+    std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
+    double fxShotStartedAt_=0;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
