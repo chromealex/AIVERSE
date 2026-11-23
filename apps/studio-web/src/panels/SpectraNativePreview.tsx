@@ -170,11 +170,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     const b=captureMetaB.native as Record<string,unknown>|null|undefined;
     if(!a||!b)return ['missing native provenance'];
     const mismatches:string[]=[];
-    for(const key of ['tick','generation','backend','gpu','background']){
+    for(const key of ['tick','generation','backend','gpu','background','replayReady']){
       if(a[key]!==b[key])mismatches.push(key);
     }
     if(JSON.stringify(a.camera)!==JSON.stringify(b.camera))mismatches.push('native camera');
     if(a.frameExact!==true||b.frameExact!==true)mismatches.push('frame identity not verified');
+    if(a.frameExact===true&&b.frameExact===true&&
+       a.frameSerialAtRequest!==b.frameSerialAtRequest)
+      mismatches.push('capture frame serial');
     return mismatches;
   },[captureMetaA,captureMetaB]);
   const exportComparison=()=>{
