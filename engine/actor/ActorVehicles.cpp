@@ -79,6 +79,8 @@ public:
         auto& v=*w_.tryGet<Vehicle>(car);auto a=m_.character(sim_,uint8_t(i+1));
         const auto* seat=driverSeat(m_.drive_.type(d.type)->seats);
         v.pos=d.controller.position;v.yaw=d.controller.yaw;v.velocity={};
+        w_.notifyComponentChange<CharacterBody>(a.entity);
+        w_.notifyComponentChange<Vehicle>(car);
         d.seats.occupants[seat->id]=a.slot;d.seats.team=a.team;d.seats.locked=true;d.driver=a.entity;d.player=a.slot;
         a.vehicle=v.id;a.velocity={};a.pos=vehicleWorldPoint(d.controller,seat->entry)+Vec3{{},Fixed::fromRatio(1,2),{}};v.driver=a.slot;
         return i<m_.bots_.size()&&m_.bots_[i];
@@ -90,12 +92,13 @@ public:
         const Vehicle* v=w_.tryGet<Vehicle>(car);return (v&&v->health<=0)||d.controller.position.y< -50_fx;
     }
     void respawned(size_t,Entity car,vs::VehicleDrive& d) override {
+        w_.notifyComponentChange<Vehicle>(car);
         if(Vehicle* v=w_.tryGet<Vehicle>(car)){v->pos=d.controller.position;v->yaw=d.controller.yaw;v->velocity={};if(v->health<=0)v->health=Vehicle{}.health;}
         if(!m_.reportRegionMoveIfCrossed(sim_,car))
             throw std::logic_error("regionOwnership: race car respawn report failed");
         const auto count=int64_t(m_.characterCount(sim_));const auto& type=*m_.drive_.type(d.type);
         for(auto [seat,actor]:d.seats.occupants)for(const auto& s:type.seats.seats)if(s.id==seat&&actor>=1&&actor<=count){
-            auto a=m_.character(sim_,uint8_t(actor));a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};
+            auto a=m_.character(sim_,uint8_t(actor));w_.notifyComponentChange<CharacterBody>(a.entity);a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};
             if(!m_.reportRegionMoveIfCrossed(sim_,a.entity))
                 throw std::logic_error("regionOwnership: race passenger respawn report failed");}
     }
