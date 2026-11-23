@@ -33,6 +33,11 @@ inline render::Material authoredBuildingMaterial(const StyleMaterial& style){
     m.roughness=style.roughness;
     m.emissive={style.emissive[0],style.emissive[1],style.emissive[2]};
     m.emissiveStrength=style.emissiveStrength;
+    m.uvScale={style.uvScale[0],style.uvScale[1]};
+    m.uvOffset={style.uvOffset[0],style.uvOffset[1]};
+    m.uvRotation=style.uvRotation;
+    m.normalScale=style.normalScale;
+    m.occlusionStrength=style.occlusionStrength;
     return m;
 }
 
