@@ -35,6 +35,11 @@ void StudioGameSurface::control(const std::string& action) {
         if (!host_->active()) throw std::runtime_error("Start a game before restarting");
         start(launch_,assets_);return;
     }
+    if(action=="checkpointSave"||action=="checkpointRestore"){
+        if(!host_->checkpoint(action=="checkpointRestore"))throw std::runtime_error("Checkpoint requires a paused local match and valid saved state");
+        if(action=="checkpointRestore"){++runtimeEpoch_;}
+        return;
+    }
     if(action=="speed1"||action=="speed2"||action=="speed5"||action=="speed10"||action=="speed25"||action=="speed50"||action=="speed100"){
         if(!host_->setSpeed(std::stoi(action.substr(5))))throw std::runtime_error("Speed requires a local match");
         return;
