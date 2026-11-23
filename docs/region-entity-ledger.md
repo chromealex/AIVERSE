@@ -62,3 +62,75 @@ The initial implementation deliberately uses a sorted `std::map` of up to one mi
 Do not move a specific game's taxi/fleet/mission code into this layer. The same ledger must serve players, NPCs, vehicles, cargo, animals, machinery and buildings in any project that opts in.
 
 Stage note: `docs/agent-handoffs/open-world-stage01-ledger-2026-11-23.md`.
+
+
+## Live ECS bridge — stage 02
+
+Include `engine/world/RegionEcsBridge.h` in a gameplay system that owns
+actual live `Transform` components. Register two schemas **during setup**:
+
+```cpp
+registerRegionEntityLedger(sim);  // resource
+registerRegionStableIdentity(sim); // component
+sim.world().setResource<RegionEntityLedger>(RegionEntityLedger{});
+```
+
+When spawning an existing ECS actor in deterministic gameplay, call:
+
+```cpp
+auto& world=sim.world();
+auto* ledger=world.resource<RegionEntityLedger>();
+const Entity car=world.create();
+world.add<Transform>(car,Transform{});
+RegionEcsBridge::bindNew(world,*ledger,car,1001,Cell{0,0,0});
+```
+
+The vehicle system or AI movement already owns `Transform`. To transfer an
+entity with all affected occupants, pass the **whole group**:
+
+```cpp
+std::array<Entity,2> group{car,passenger};
+RegionEcsBridge::transferGroup(world,*ledger,group,Cell{0,0,0},Cell{1,0,0});
+```
+
+`passenger` must already exist and be registered, and the call must only be
+made after gameplay has validated its parent/seat ownership. The bridge does
+not infer attachments, move the player, copy any component, or create a
+passenger itself. All group members are validated before the ledger transfer;
+a stale or missing binding fails without moving any owner.
+
+`RegionEcsBridge::crossings(world,*ledger,spatial,pending)` reports
+region-boundary candidates from authoritative fixed-point Transform values.
+**It is read-only.** Cameras, view-origin rebasing, LOD, streaming budgets
+and asynchronous loaders cannot trigger authoritative changes through it.
+`RegionEcsBridge::rebuild(world,*ledger,idToEntity)` reconstructs a derived
+lookup table sorted by stable ID. Rebuild it after loading a save, rollback
+or changes in ECS pool membership. Missing live bindings are allowed because
+a region can be cold; an invalid, duplicate or tombstoned live binding is
+rejected without altering the previous lookup table.
+
+`RegionEcsBridge::bindExisting` permits attaching a newly materialized
+live entity to an existing owner record. It does **not** load or preserve that
+entity's arbitrary ECS component state. The caller must deserialize the
+complete component payload first and verify its region. `retire` records a
+durable tombstone and destroys the ECS entity; call only at a safe structural
+mutation point, never from inside an ECS pool iteration.
+
+### Stage 02 tests
+
+`tests/world/region_ecs_bridge_test.cpp`, CTest `region_ecs_bridge_test`
+covers duplicate refusal, live index rebuild, fixed-point boundary
+detection, group transfer, manual reattachment, retirement, 100 successive
+live Transform crossings, portable native ECS save and a COW rollback.
+The independent test fixture supplies an explicit Transform archive codec.
+A production module must use its actual existing Transform persistence
+contract rather than registering a second conflicting codec.
+
+### Not yet delivered
+
+No production host calls these APIs automatically. Missing: authoritative
+ECS state parking/reification, collision/navmesh barrier, active/cold tier
+scheduler, externally journalled region storage, automatic group discovery,
+runtime instrumentation and Mac/KINGSTON full-suite acceptance. W1 remains
+`partial`. The bridge is an opt-in reusable layer, not a complete seamless
+open-world feature.
