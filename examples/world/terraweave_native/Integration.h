@@ -65,6 +65,20 @@ inline void registerSystems(
         std::function<void(const terraweave::ForestMicroOutcome&)>
             onMicroNutrients={},
         bool enableEvolveForestClimate=false) {
+    if(enableEvolveForestClimate){
+        if(rootedForestSpecies.empty())
+            throw std::invalid_argument("EVOLVE forest climate requires authored forest species");
+        std::size_t evolveCount=0;
+        for(std::size_t i=0;i<sim.systemCount();++i){
+            const auto& name=sim.systemName(i);
+            if(name=="evolve.succession")++evolveCount;
+            if(name=="terraweave.forest_ecology")
+                throw std::logic_error("TerraWeave forest ecology already registered");
+        }
+        if(evolveCount!=1)
+            throw std::logic_error("Register exactly one evolve.succession before TerraWeave");
+    }
+
     // Stage68 cannot run without the versioned organic ledger. Reject
     // invalid setup BEFORE registering any ECS system or persistence type.
     if(enableForestNutrientCycle && !enableForestDeadwood)
