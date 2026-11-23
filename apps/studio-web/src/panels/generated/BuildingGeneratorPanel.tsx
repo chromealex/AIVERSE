@@ -3,7 +3,8 @@ import { Building2, Dices, RefreshCw, WandSparkles } from 'lucide-react';
 import { invoke, nativeConnected } from '../../bridge';
 import type {
   StudioSnapshot, StudioBuildingRequest, StudioBuildingStyle,
-  StudioBuildingPreview, StudioBuildingGenerated
+  StudioBuildingPreview, StudioBuildingGenerated,
+  StudioBuildingFeature, StudioBuildingFeatureKind
 } from '../../types';
 import type { StudioPanel as PanelId } from '../../nestedDock';
 import {
@@ -16,6 +17,15 @@ type Candidate = { seed:number; data?:StudioBuildingPreview; error?:string };
 const explain = (error:unknown) => error instanceof Error ? error.message : String(error);
 const settingLabel = (id:string) => ({scifi:'Sci-fi',modern:'Modern'} as Record<string,string>)[id] ?? id;
 const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
+const makeFeature = (kind:StudioBuildingFeatureKind):StudioBuildingFeature => ({
+  kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:1.2,
+  height:kind==='large-gate'?4.5:kind==='small-gate'?2.9:kind==='sliding-roof'?0:2.35,
+  depth:kind==='sliding-roof'?5:0, open:0
+});
+const propertyLabels:Record<StudioBuildingFeatureKind,string> = {
+  'large-gate':'Large vehicle gates', 'small-gate':'Small gates',
+  'personnel-door':'Personnel entrances', 'sliding-roof':'Retractable roof'
+};
 
 export default function BuildingGeneratorPanel({
   snapshot, showPanel, commitSnapshot
@@ -25,6 +35,13 @@ export default function BuildingGeneratorPanel({
   const [setting,setSetting]=useState('scifi');
   const [style,setStyle]=useState('scifi');
   const [role,setRole]=useState('factory');
+  const [mode,setMode]=useState<'features'|'preset'>('features');
+  const [features,setFeatures]=useState<StudioBuildingFeature[]>([
+    makeFeature('large-gate'),
+    {...makeFeature('small-gate'), side:'back',count:2},
+    {...makeFeature('personnel-door'), side:'front'},
+    makeFeature('sliding-roof')
+  ]);
   const [width,setWidth]=useState('24');
   const [height,setHeight]=useState('12');
   const [depth,setDepth]=useState('18');
@@ -62,9 +79,10 @@ export default function BuildingGeneratorPanel({
   const functions=selectedStyle?.functions ?? [];
   const selectedFunction=functions.find(item=>item.id===role);
   const parameterError=useMemo(()=>{
-    if(!selectedStyle||!selectedFunction)return 'Choose a style with generated building functions.';
+    if(!selectedStyle||(mode==='preset'&&!selectedFunction))
+      return 'Choose an architectural style and a valid legacy silhouette.';
     for(const [name,raw,min,max] of [
-      ['Width',width,8,160],['Height',height,5,80],['Depth',depth,8,160]
+      ['Width',width,8,160],['Height',height,mode==='features'?4:5,80],['Depth',depth,8,160]
     ] as const){
       const value=asNumber(raw);
       if(!Number.isFinite(value)||value<min||value>max)
@@ -73,12 +91,44 @@ export default function BuildingGeneratorPanel({
     const n=asNumber(seed);
     if(!Number.isSafeInteger(n)||n<0||n>2147483645)
       return 'Seed must be an integer between 0 and 2147483645.';
+    if(mode==='features'){
+      if(features.length>24)return 'Maximum 24 functional properties.';
+      const roofs=features.filter(f=>f.kind==='sliding-roof');
+      if(roofs.length>1)return 'Only one retractable roof is supported.';
+      let entrances=0;
+      const used:{[side:string]:{width:number;count:number}}={};
+      for(const feature of features){
+        if(!Number.isFinite(feature.open)||feature.open<0||feature.open>1)
+          return 'Open fraction must be between 0 and 1.';
+        if(feature.kind==='sliding-roof'){
+          if(feature.width<1||feature.depth<1||feature.width>asNumber(width)*0.48||feature.depth>asNumber(depth)*0.75)
+            return 'Roof opening must fit within 48% of building width and 75% of depth.';
+        }else{
+          if(!Number.isInteger(feature.count)||feature.count<1||feature.count>8)
+            return 'Each entrance property requires 1 to 8 openings.';
+          entrances+=feature.count;
+          if(entrances>16)return 'Maximum 16 total wall entrances.';
+          const maxWidth=feature.kind==='large-gate'?20:feature.kind==='small-gate'?8:3;
+          if(feature.width<0.85||feature.width>maxWidth||feature.height<2||feature.height>asNumber(height)-0.6)
+            return 'Invalid gate or personnel door dimensions for the requested height.';
+          const info=used[feature.side]??{width:0,count:0};
+          info.width+=feature.width*feature.count;info.count+=feature.count;
+          used[feature.side]=info;
+        }
+      }
+      for(const [side,info] of Object.entries(used)){
+        const length=(side==='front'||side==='back')?asNumber(width):asNumber(depth);
+        if((length-1.44-info.width)/(info.count+1)<0.35)
+          return 'Too many or overly wide openings on the '+side+' wall.';
+      }
+    }
     return '';
-  },[selectedStyle,selectedFunction,width,height,depth,seed]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
-    setting,style,function:role,width:asNumber(width),height:asNumber(height),
-    depth:asNumber(depth),seed:useSeed
+    setting,style,function:mode==='preset'?role:'',mode,
+    features:mode==='features'?features:undefined,
+    width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed
   });
   const clearGenerated=()=>{setVariants([]);setSelectedSeed(null);setSaved(null);setThumbnail('');setStatus('');};
   const changeSetting=(value:string)=>{
@@ -91,6 +141,22 @@ export default function BuildingGeneratorPanel({
     setStyle(value);setRole(item?.functions[0]?.id??'');clearGenerated();
   };
   const changeRole=(value:string)=>{setRole(value);clearGenerated();};
+  const changeMode=(value:'features'|'preset')=>{setMode(value);clearGenerated();};
+  const setFeature=(index:number,key:keyof StudioBuildingFeature,value:string|number)=>{
+    setFeatures(old=>old.map((f,i)=>i===index?({...f,[key]:value} as StudioBuildingFeature):f));
+    clearGenerated();
+  };
+  const changeFeatureKind=(index:number,kind:StudioBuildingFeatureKind)=>{
+    setFeatures(old=>old.map((f,i)=>i===index?makeFeature(kind):f));
+    clearGenerated();
+  };
+  const addFeature=(kind:StudioBuildingFeatureKind)=>{
+    if(features.length>=24||(kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof')))return;
+    setFeatures(old=>[...old,makeFeature(kind)]);clearGenerated();
+  };
+  const removeFeature=(index:number)=>{
+    setFeatures(old=>old.filter((_,i)=>i!==index));clearGenerated();
+  };
   const setDimension=(update:(v:string)=>void)=>(e:{target:{value:string}})=>{
     update(e.target.value);clearGenerated();
   };
@@ -186,14 +252,71 @@ export default function BuildingGeneratorPanel({
               {choices.map(item=><option value={item.id} key={item.id}>{item.name||item.id}</option>)}
             </StudioSelect>
           </StudioField>
-          <StudioField label="Building function" htmlFor="abg-role">
+          <StudioField label="Construction mode" htmlFor="abg-mode">
+            <StudioSelect id="abg-mode" value={mode} onChange={e=>changeMode(e.target.value as 'features'|'preset')} disabled={busy}>
+              <option value="features">Functional properties</option>
+              <option value="preset">Legacy structure silhouette</option>
+            </StudioSelect>
+          </StudioField>
+          {mode==='preset'&&<StudioField label="Legacy silhouette preset" htmlFor="abg-role">
             <StudioSelect id="abg-role" value={role} onChange={e=>changeRole(e.target.value)}
               disabled={busy||functions.length===0}>
               {functions.map(item=><option value={item.id} key={item.id}>{item.name||item.id}</option>)}
             </StudioSelect>
-          </StudioField>
+          </StudioField>}
         </div>
       </StudioSection>
+      {mode==='features'&&<StudioSection title="Functional properties">
+        <div className="abg__property-list">
+          {features.map((feature,i)=><div className="abg__property" key={i}>
+            <div className="abg__property-header">
+              <strong>{propertyLabels[feature.kind]}</strong>
+              <StudioButton variant="secondary" disabled={busy} onClick={()=>removeFeature(i)}>Remove</StudioButton>
+            </div>
+            <div className="abg__property-controls">
+              <StudioField label="Property type">
+                <StudioSelect value={feature.kind} disabled={busy}
+                  onChange={e=>changeFeatureKind(i,e.target.value as StudioBuildingFeatureKind)}>
+                  {Object.entries(propertyLabels).map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}
+                </StudioSelect>
+              </StudioField>
+              {feature.kind!=='sliding-roof'&&<StudioField label="Wall">
+                <StudioSelect value={feature.side} disabled={busy}
+                  onChange={e=>setFeature(i,'side',e.target.value)}>
+                  {['front','back','left','right'].map(side=><option key={side} value={side}>{side}</option>)}
+                </StudioSelect>
+              </StudioField>}
+              {feature.kind!=='sliding-roof'&&<StudioField label="Count">
+                <StudioInput type="number" min={1} max={8} step={1} value={String(feature.count)} disabled={busy}
+                  onChange={e=>setFeature(i,'count',Number(e.target.value))}/>
+              </StudioField>}
+              <StudioField label={feature.kind==='sliding-roof'?'Aperture width, m':'Clear width, m'}>
+                <StudioInput type="number" min={0.85} step={0.1} value={String(feature.width)} disabled={busy}
+                  onChange={e=>setFeature(i,'width',Number(e.target.value))}/>
+              </StudioField>
+              {feature.kind==='sliding-roof'?<StudioField label="Aperture depth, m">
+                <StudioInput type="number" min={1} step={0.1} value={String(feature.depth)} disabled={busy}
+                  onChange={e=>setFeature(i,'depth',Number(e.target.value))}/>
+              </StudioField>:<StudioField label="Clear height, m">
+                <StudioInput type="number" min={2} step={0.1} value={String(feature.height)} disabled={busy}
+                  onChange={e=>setFeature(i,'height',Number(e.target.value))}/>
+              </StudioField>}
+              <StudioField label="Open (0–1)">
+                <StudioInput type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
+                  onChange={e=>setFeature(i,'open',Number(e.target.value))}/>
+              </StudioField>
+            </div>
+          </div>)}
+        </div>
+        <div className="abg__property-add">
+          {Object.entries(propertyLabels).map(([kind,label])=><StudioButton key={kind}
+            variant="secondary" disabled={busy||features.length>=24||
+              (kind==='sliding-roof'&&features.some(f=>f.kind==='sliding-roof'))}
+            onClick={()=>addFeature(kind as StudioBuildingFeatureKind)}>+ {label}</StudioButton>)}
+        </div>
+        <small className="abg__note">Functionality is independent of setting. Entrances cut real wall openings;
+          roof panels retract from a real roof aperture. Use Open to test different runtime states.</small>
+      </StudioSection>}
       <StudioSection title="Dimensions">
         <div className="abg__dimensions">
           <StudioField label="Width, m" htmlFor="abg-width">
