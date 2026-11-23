@@ -133,7 +133,7 @@ inline void registerGraphOps(Workspace& ws) {
         return envelope(d,"graph_property_schema",result);
     }});
     ws.registerOp({"graph_asset_dependencies","Inspect literal asset references and embedded animation subgraph recursion; no writes.",schema,[&ws](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_asset_dependencies",graph_dependencies::resolve(d.id,q[d.payload],ws.project.dir));}});
-    ws.registerOp({"graph_live_snapshot","Read actual native editor owner telemetry if the owner is registered; never starts or modifies play.",Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx","shader","modeling","strata"]},"entity":{"type":"string"}},"required":["domain"],"additionalProperties":false})"),[&ws](const Json& p){
+    ws.registerOp({"graph_live_snapshot","Read actual native editor owner telemetry if the owner is registered; never starts or modifies play.",Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx","shader","modeling","strata"]},"entity":{"type":"string"},"captureHistory":{"type":"boolean"}},"required":["domain"],"additionalProperties":false})"),[&ws](const Json& p){
         const auto id=p.getStr("domain");
         if(id!="motionweave"&&id!="spectrafx"&&id!="shader"&&id!="modeling"&&id!="strata")throw std::invalid_argument("unknown live domain");
         if(id=="motionweave"||id=="spectrafx")
