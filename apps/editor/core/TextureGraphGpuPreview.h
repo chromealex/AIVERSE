@@ -14,7 +14,14 @@ class TextureGraphGpuPreview {
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
     std::string firstKey_,secondKey_;
     size_t capacity_=0,received_=0,blocks_=0,scratchBytes_=0;
-    int passes_=0;bool reused_=false,inFlight_=false,bake_=false,published_=false;
+    int passes_=0;bool reused_=false,inFlight_=false,bake_=false,published_=false,setBake_=false;
+    Json sourceGraph_,overrides_;
+    std::vector<std::pair<std::string,size_t>> setOutputs_;
+    std::vector<render::Image> setImages_;
+    std::vector<std::string> setBackends_;
+    size_t reusedOutputs_=0;
+    bool setIncomplete()const{return setBake_&&setImages_.size()<setOutputs_.size();}
+    bool setPending()const{return setIncomplete()&&state_!="failed"&&state_!="cancelled";}
     uint64_t fence_=0,serial_=0;
     std::optional<Program> program_;
     size_t target_=0;int size_=0;
@@ -41,6 +48,28 @@ class TextureGraphGpuPreview {
         if(valid){state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
         else fallback("GPU readback or CPU parity check failed");
     }
+    // Collect only a completed output. Multiple named outputs pointing to
+    // the same compiled node reuse its validated bytes and actual backend.
+    void advanceSet(){
+        if(!setPending()||state_!="ready"||inFlight_)return;
+        render::Image image;image.width=image.height=size_;image.rgba=std::move(pixels_);
+        setImages_.push_back(std::move(image));setBackends_.push_back(backend_);
+        while(setIncomplete()){
+            const auto next=setImages_.size();
+            size_t previous=next;
+            for(size_t i=0;i<next;++i)if(setOutputs_[i].second==setOutputs_[next].second){previous=i;break;}
+            if(previous==next)break;
+            setImages_.push_back(setImages_[previous]);setBackends_.push_back(setBackends_[previous]);++reusedOutputs_;
+        }
+        if(!setIncomplete()){
+            backend_=setBackends_.front();
+            for(const auto& b:setBackends_)if(b!=backend_){backend_="mixed";break;}
+            reason_="all declared outputs completed";return;
+        }
+        const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
+        received_=blocks_=scratchBytes_=0;passes_=0;reused_=false;pixels_.clear();
+        backend_="none";reason_.clear();queued_=true;state_="queued";
+    }
     // One range in flight, with exact offset and length. No graphics stalls.
     bool queueRange(gfx::Device& dev){
         if(received_>=pixels_.size())return false;
@@ -51,11 +80,14 @@ class TextureGraphGpuPreview {
     }
 public:
     Json status() const{
-        Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(state_));r.set("backend",Json::string(backend_));
+        Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
         r.set("request",Json::string(std::to_string(serial_)));r.set("reason",Json::string(reason_));
-        r.set("busy",Json::fromBool(queued_||inFlight_||state_=="pending"));
+        r.set("busy",Json::fromBool(queued_||inFlight_||state_=="pending"||setPending()));
         r.set("encodedPasses",Json::number(int64_t(passes_)));r.set("plannedScratchBytes",Json::number(int64_t(scratchBytes_)));
-        r.set("bake",Json::fromBool(bake_));r.set("published",Json::fromBool(published_));
+        r.set("bake",Json::fromBool(bake_));r.set("setBake",Json::fromBool(setBake_));
+        r.set("completedOutputs",Json::number(int64_t(setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
+        r.set("currentOutput",Json::string(output_));r.set("reusedOutputs",Json::number(int64_t(reusedOutputs_)));
+        Json outputs=Json::array();for(size_t i=0;i<setBackends_.size();++i){Json row=Json::object();row.set("output",Json::string(setOutputs_[i].first));row.set("backend",Json::string(setBackends_[i]));outputs.push(row);}r.set("outputs",outputs);r.set("published",Json::fromBool(published_));
         r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(size_t(size_)*size_*4)));
         r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));
         r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
@@ -66,28 +98,33 @@ public:
         }return r;
     }
     Json start(const Json& p,const std::string& project){
-        if(queued_||inFlight_||state_=="pending")throw std::runtime_error("previous GPU texture request still active");
+        if(queued_||inFlight_||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
         if(project.empty())throw std::invalid_argument("open project first");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
-        size_t target=program.nodes.size();const bool bake=p.getBool("bake");
-        const auto output=p.getStr("output");
-        if(!bake&&p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
+        size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
+        auto output=p.getStr("output");
+        if(setBake){output=program.outputs.begin()->first;target=program.outputs.begin()->second;}
+        else if(!bake&&p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
         else{auto it=program.outputs.find(output);if(it!=program.outputs.end())target=it->second;}
         if(target>=program.nodes.size())throw std::invalid_argument("unknown texture target");
         if(serial_==~uint64_t{0})throw std::overflow_error("GPU texture identity exhausted");
         const int requested=bake?program.size:render::texture_graph::integer(p["resolution"],32,8,render::texture_graph::gpu::maxPreviewSize);
-        ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;
+        ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
+        sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
+        setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
+        if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
         passes_=0;blocks_=received_=scratchBytes_=0;reused_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
-        if(!project_.empty()&&project_!=project){queued_=false;state_="cancelled";pixels_.clear();project_.clear();}
+        if(!project_.empty()&&project_!=project){queued_=false;state_="cancelled";pixels_.clear();setImages_.clear();setBackends_.clear();project_.clear();}
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
-        if(!bake_||published_||state_!="ready"||p.getStr("request")!=std::to_string(serial_)||inFlight_||project_!=ws.project.dir)
+        if(!bake_||published_||state_!="ready"||p.getStr("request")!=std::to_string(serial_)||inFlight_||setIncomplete()||project_!=ws.project.dir)
             throw std::runtime_error("no matching completed unpublished texture bake");
-        render::Image img;img.width=img.height=size_;img.rgba=pixels_;
-        auto r=publishTextureGraphImage(ws,p.getStr("textureName"),output_,img);
+        Json r;
+        if(setBake_)r=publishTextureGraphSet(ws,p.getStr("textureName"),sourceGraph_,overrides_,setImages_,setBackends_);
+        else{render::Image img;img.width=img.height=size_;img.rgba=pixels_;r=publishTextureGraphImage(ws,p.getStr("textureName"),output_,img);}
         published_=true;r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
     }
     // Called at owner frame boundary, no active encoder. Read callback
@@ -110,6 +147,8 @@ public:
             }else release(dev);
         }else if(inFlight_&&!read_&&fence_&&dev.gpuCompletedFence()>=fence_&&dev.gpuHealthy())release(dev);
         if(project_.empty()&&!inFlight_&&ownsResources())release(dev);
+        if(setBake_&&state_=="failed"){setImages_.clear();setBackends_.clear();}
+        if(setPending()&&state_=="ready"&&!inFlight_){advanceSet();return;}
         if(!queued_)return;
         queued_=false;
         const bool metal=dev.info().backend==gfx::Backend::Metal,vulkan=dev.info().backend==gfx::Backend::Vulkan;
@@ -148,6 +187,6 @@ public:
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
-    void shutdownAfterIdle(gfx::Device& dev){queued_=false;state_="cancelled";pixels_.clear();if(dev.gpuHealthy())release(dev);else abandon();}
+    void shutdownAfterIdle(gfx::Device& dev){queued_=false;state_="cancelled";pixels_.clear();setImages_.clear();setBackends_.clear();if(dev.gpuHealthy())release(dev);else abandon();}
 };
 } // namespace aiverse::editor
