@@ -49,10 +49,10 @@ public:
         } catch(...) {
             // A partially uploaded source may retain GPU retirement tokens.
             // Keep it alive for explicit idle/shutdown in collectAfterGpuIdle.
-            retired_.push_back(std::move(candidate));
+            retired_.push_back({std::move(candidate),0});
             throw;
         }
-        if(staged_)retired_.push_back(std::move(staged_));
+        if(staged_)retired_.push_back({std::move(staged_),0});
         staged_=std::move(candidate);
         stagedRevision_=renderRevision;
         return true;
@@ -85,7 +85,7 @@ public:
         try {committed=hostCommit(stagedRevision_);}
         catch(...) {return false;}
         if(!committed)return false;
-        if(active_)retired_.push_back(std::move(active_));
+        if(active_)retired_.push_back({std::move(active_),0});
         active_=std::move(staged_); // nullptr for a staged empty cave
         activeRevision_=stagedRevision_;
         stagedEmpty_=false;
@@ -97,6 +97,41 @@ public:
     void draw(render::Renderer3D& renderer) {
         if(active_)active_->draw(renderer);
     }
+    // Stage38: graphics-owner frame boundary, OUTSIDE render passes.
+    // No GPU idle wait: standard non-STRATA scenes are removed after real
+    // GPU fence completion, then their model retirement tokens are polled.
+    // STRATA scenes remain quarantined for a later explicit full-idle drain.
+    // A zero/unsupported fence means keep the old owner alive.
+    size_t collectCompletedWithoutIdle(gfx::Device& dev) {
+        if(!dev.gpuHealthy())return 0;
+        const uint64_t completed=dev.gpuCompletedFence();
+        if(!completed)return 0;
+        size_t released=0;
+        for(auto it=retired_.begin();it!=retired_.end();) {
+            if(!it->submissionFence)
+                it->submissionFence=dev.gpuSubmissionFence();
+            if(!it->submissionFence || completed<it->submissionFence ||
+               !it->scene->deferredShutdownEligible()) {
+                ++it;continue;
+            }
+            try {
+                if(!it->scene->beginDeferredShutdown(dev)||
+                   !it->scene->pollDeferredShutdown(dev)) {
+                    ++it;continue;
+                }
+            }catch(...) {++it;continue;}
+            it=retired_.erase(it);
+            ++released;
+        }
+        return released;
+    }
+    size_t retainedStrataOwners()const noexcept{
+        size_t count=0;
+        for(const auto& entry:retired_)
+            if(!entry.scene->deferredShutdownEligible())++count;
+        return count;
+    }
+
     // No active-GPU scene disposal without actual device idle proof.
     // Explicitly call only when renderer submissions for the old owner are
     // finished; failure must RETAIN all retired scenes for a later retry.
@@ -105,7 +140,7 @@ public:
         if(!dev.waitForResourceIdle())return false;
         for(auto it=retired_.begin();it!=retired_.end();) {
             try {
-                (*it)->shutdown(dev);
+                it->scene->shutdown(dev);
                 it=retired_.erase(it);
             }catch(...) {
                 return false;
@@ -146,6 +181,10 @@ private:
     std::unique_ptr<render::GeometryScene> staged_;
     uint64_t activeRevision_=0,stagedRevision_=0;
     bool stagedEmpty_=false;
-    std::vector<std::unique_ptr<render::GeometryScene>> retired_;
+    struct RetiredScene {
+        std::unique_ptr<render::GeometryScene> scene;
+        uint64_t submissionFence=0; // captured at frame owner collection
+    };
+    std::vector<RetiredScene> retired_;
 };
 } // namespace aiverse::terraweave::caverns
