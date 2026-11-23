@@ -3,15 +3,16 @@
 #include <vector>
 #include <utility>
 namespace aiverse::lib::algorithms {
-struct PenetrationResult {ConvexQuery status=ConvexQuery::Invalid;double depth=0;Point3d normal{};};
+struct PenetrationResult {ConvexQuery status=ConvexQuery::Invalid;double depth=0;Point3d normal{};Point3d witnessA{},witnessB{};bool hasWitness=false;};
 // Initial simplex must consist of actual Minkowski support points and
 // strictly enclose the origin. Normal points outward from A-B.
-inline PenetrationResult convexEPA(std::span<const Point3d> a,std::span<const Point3d> b,std::array<Point3d,4> seed,double tolerance=1e-7,size_t budget=128){
+inline PenetrationResult convexEPA(std::span<const Point3d> a,std::span<const Point3d> b,std::array<Point3d,4> seed,double tolerance=1e-7,size_t budget=128,const std::array<Point3d,4>* seedA=nullptr,const std::array<Point3d,4>* seedB=nullptr){
     if(a.empty()||b.empty()||a.size()>1000000||b.size()>1000000||!std::isfinite(tolerance)||tolerance<=0||tolerance>1||!budget||budget>1024)return {};
     for(auto p:a)if(!finite3(p))return {};
     for(auto p:b)if(!finite3(p))return {};
     for(auto p:seed)if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||std::abs(p.x)>2e9||std::abs(p.y)>2e9||std::abs(p.z)>2e9)return {};
-    std::vector<Point3d> vertices(seed.begin(),seed.end());
+    std::vector<Point3d> vertices(seed.begin(),seed.end()), witnessesA,witnessesB;
+    if(seedA&&seedB){for(size_t i=0;i<4;++i){if(!finite3((*seedA)[i])||!finite3((*seedB)[i])||squaredDistance((*seedA)[i]-(*seedB)[i],seed[i])>tolerance*tolerance)return {};witnessesA.push_back((*seedA)[i]);witnessesB.push_back((*seedB)[i]);}}
     struct Face {size_t a,b,c;Point3d n;double d;};
     std::vector<Face> faces;
     auto face=[&](size_t i,size_t j,size_t k)->std::optional<Face>{
@@ -28,9 +29,24 @@ inline PenetrationResult convexEPA(std::span<const Point3d> a,std::span<const Po
     for(size_t step=0;step<budget;++step){
         if(faces.empty()||faces.size()>8192)return {ConvexQuery::Indeterminate};
         auto f=*std::min_element(faces.begin(),faces.end(),[](auto x,auto y){return x.d<y.d;});
-        auto p=convexSupport(a,f.n)-convexSupport(b,f.n*(-1));double gap=dot(p,f.n)-f.d;
+        auto pa=convexSupport(a,f.n),pb=convexSupport(b,f.n*(-1));auto p=pa-pb;double gap=dot(p,f.n)-f.d;
         if(gap < -tolerance)return {};
-        if(gap<=tolerance)return {ConvexQuery::Intersecting,f.d,f.n};
+        if(gap<=tolerance){
+            PenetrationResult result{ConvexQuery::Intersecting,f.d,f.n};
+            if(!witnessesA.empty()){
+                auto x=vertices[f.a],u=vertices[f.b]-x,v=vertices[f.c]-x,q=f.n*f.d-x;
+                double uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),den=dot(cross(u,v),cross(u,v));
+                if(den>0){
+                    double j=(vv*dot(q,u)-uv*dot(q,v))/den,k=(uu*dot(q,v)-uv*dot(q,u))/den,i=1-j-k;
+                    if(i>=-1e-8&&j>=-1e-8&&k>=-1e-8){
+                        result.witnessA=witnessesA[f.a]*i+witnessesA[f.b]*j+witnessesA[f.c]*k;
+                        result.witnessB=witnessesB[f.a]*i+witnessesB[f.b]*j+witnessesB[f.c]*k;
+                        result.hasWitness=true;
+                    }
+                }
+            }
+            return result;
+        }
         for(auto v:vertices)if(squaredDistance(v,p)<=tolerance*tolerance)return {ConvexQuery::Indeterminate};
         std::vector<std::pair<size_t,size_t>> horizon;
         std::vector<Face> kept;
@@ -40,7 +56,7 @@ inline PenetrationResult convexEPA(std::span<const Point3d> a,std::span<const Po
             else kept.push_back(old);
         }
         if(horizon.empty())return {ConvexQuery::Indeterminate};
-        auto id=vertices.size();vertices.push_back(p);
+        auto id=vertices.size();vertices.push_back(p);if(!witnessesA.empty()){witnessesA.push_back(pa);witnessesB.push_back(pb);}
         for(auto [x,y]:horizon){auto nf=face(x,y,id);if(!nf||nf->d<=0)return {ConvexQuery::Indeterminate};kept.push_back(*nf);}
         faces.swap(kept);
     }return {ConvexQuery::Indeterminate};
@@ -91,5 +107,19 @@ inline std::optional<SupportPair> convexSupportPair(std::span<const Point3d> a,s
     for(auto p:a)if(!finite3(p))return {};
     for(auto p:b)if(!finite3(p))return {};
     return SupportPair{convexSupport(a,direction),convexSupport(b,direction*(-1))};
+}
+
+inline PenetrationResult convexContact(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-7,size_t budget=128){
+    auto seed=convexSeed(a,b);
+    if(!seed)return convexPenetrationExpanded(a,b,tolerance,64,budget);
+    std::array<Point3d,4> sa{},sb{};std::array<bool,4> found{};
+    for(int x=-1;x<=1;++x)for(int y=-1;y<=1;++y)for(int z=-1;z<=1;++z){
+        if(!x&&!y&&!z)continue;
+        Point3d d{double(x),double(y),double(z)};
+        auto pa=convexSupport(a,d),pb=convexSupport(b,d*(-1));
+        for(size_t i=0;i<4;++i)if(!found[i]&&squaredDistance(pa-pb,(*seed)[i])==0){sa[i]=pa;sb[i]=pb;found[i]=true;}
+    }
+    if(!std::all_of(found.begin(),found.end(),[](bool v){return v;}))return {ConvexQuery::Indeterminate};
+    return convexEPA(a,b,*seed,tolerance,budget,&sa,&sb);
 }
 }
