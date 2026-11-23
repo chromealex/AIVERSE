@@ -11,7 +11,7 @@ if [[ "${AIVERSE_SANITIZE:-0}" == "1" ]]; then
 fi
 LINK=(engine/sim/Simulation.cpp engine/core/Fixed.cpp engine/core/FixedMath.cpp
       engine/data/Json.cpp engine/data/JsonCompose.cpp)
-for entry in world_processes_test ecs_echo_acoustics_test ecs_fracture_structure_test ecs_aether_gas_test; do
+for entry in world_processes_test ecs_echo_acoustics_test ecs_fracture_structure_test ecs_aether_gas_test world_processes_inspector_test; do
     if [[ "$entry" == world_processes_test ]]; then
         src=tests/libraries/world_processes_test.cpp
         "$CXX" "${COMMON[@]}" -Werror "$src" -o "$WORK/$entry"
