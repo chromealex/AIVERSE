@@ -1767,3 +1767,9 @@ The actual Graph Editor is `apps/studio-web/src/panels/SpectraDataInterfacesPane
 The production Assets Browser (`apps/studio-web/src/components/AssetsPanel.tsx`) uses MIME `application/x-aiverse-content-path`, carrying a content-relative path, **not** the GUID JSON MIME originally assumed by the picker. `SpectraAssetPicker` now accepts this existing MIME and resolves the path through the current native GUID catalog before selecting it; unknown paths remain rejected. Legacy GUID JSON drags are still accepted after index lookup.
 
 `SpectraIndexedGraphAssetInspector` refreshes the native catalog when the active `projectPath` changes or `workspace.changed`/`document.changed` events arrive. The production graph panel passes `projectPath`. Do not bypass the native graph validate/draft/publish path. No build or UI test has been run.
+
+## Stage 46 — resource fields across renderer and material nodes
+
+The production HTML5 graph panel now has a **Graph resource assets** selector for `SpriteOutput`, `TrailModule`, `MaterialModule`, and `MeshOutput`. The first three bind `properties.texture` as a `content/`-prefixed string using indexed texture assets. `MeshOutput` binds `properties.meshes` as a string array, replacing the first entry while retaining later mesh slots; it accepts indexed `model` importer assets. The asset sub-inspector reads the first mesh slot back for picker display.
+
+Native `SpectraAuthoring.h` declares `MeshOutput` default `{"meshes":["builtin:cube"]}` and `VfxGraph.h` requires a meshes property. This stage does **not** prove every model file is supported by the runtime mesh loader. Always validate through native `fx_graph_validate` before publishing. Tests are deferred.
