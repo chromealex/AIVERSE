@@ -36,6 +36,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [captureSide,setCaptureSide]=useState(512);
   const [capturePending,setCapturePending]=useState(false);
   const [captureImage,setCaptureImage]=useState('');
+  const [compareA,setCompareA]=useState('');
+  const [compareB,setCompareB]=useState('');
+  const [captureSlot,setCaptureSlot]=useState<'A'|'B'|null>(null);
+  const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
   const [captureError,setCaptureError]=useState('');
   const [parameter,setParameter]=useState('');
   const [value,setValue]=useState('0');
@@ -45,6 +49,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setState(null);setSeek(0);setError('');setParameter('');
     setAutoReload(false);
     setCapturePending(false);setCaptureImage('');setCaptureError('');
+    setCompareA('');setCompareB('');setCaptureSlot(null);
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -115,28 +120,32 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
            capture.image.startsWith('data:image/jpeg;base64,') &&
            capture.image.length<=900000) {
           setCaptureImage(capture.image);
+          if(captureSlot==='A')setCompareA(capture.image);
+          if(captureSlot==='B')setCompareB(capture.image);
+          setCaptureSlot(null);
           setCaptureError('');
         } else {
+          setCaptureSlot(null);
           setCaptureError(capture?.error||'Native FX GPU capture failed');
         }
       }).catch(e=>{
-        if(!closed) {setCapturePending(false);setCaptureError(message(e));}
+        if(!closed) {setCapturePending(false);setCaptureSlot(null);setCaptureError(message(e));}
       }).finally(()=>{inFlight=false;});
     },350);
     return()=>{closed=true;window.clearInterval(timer);};
-  },[active,capturePending]);
+  },[active,capturePending,captureSlot]);
 
-  const captureFrame=async()=>{
+  const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
-    setBusy(true);setCaptureError('');
+    setBusy(true);setCaptureError('');setCaptureSlot(slot);
     try {
       const result=await invoke('studio.spectraPreview',{
         action:'capture',maxSide:captureSide
       });
       setState(result);
-      if(result.capture?.error) setCaptureError(result.capture.error);
+      if(result.capture?.error){setCaptureSlot(null);setCaptureError(result.capture.error);}
       else setCapturePending(!!result.capture?.pending);
-    }catch(e){setCaptureError(message(e));}
+    }catch(e){setCaptureSlot(null);setCaptureError(message(e));}
     finally{setBusy(false);}
   };
 
@@ -278,6 +287,38 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
     </div>
+    <div className="spectra-native__toolbar">
+      <StudioButton size="sm" disabled={!active||!state?.ready||busy||capturePending}
+        onClick={()=>void captureFrame('A')}>Capture A</StudioButton>
+      <StudioButton size="sm" disabled={!active||!state?.ready||busy||capturePending}
+        onClick={()=>void captureFrame('B')}>Capture B</StudioButton>
+      <StudioField label="Compare" htmlFor="spectra-compare-mode">
+        <StudioSelect id="spectra-compare-mode" value={compareMode}
+          onChange={e=>setCompareMode(e.target.value as 'side'|'split')}>
+          <option value="side">Side by side</option>
+          <option value="split">50/50 split</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" disabled={!compareA&&!compareB}
+        onClick={()=>{setCompareA('');setCompareB('');}}>Clear A/B</StudioButton>
+    </div>
+    {(compareA||compareB)&&<div className="spectra-native__snapshot">
+      <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+        {compareA&&<div style={{flex:1,minWidth:0}}>
+          <small>Capture A</small>
+          <img src={compareA} alt="Native FX capture A"
+            style={compareMode==='split'?{clipPath:'inset(0 50% 0 0)',width:'200%',maxWidth:'none'}:{width:'100%'}}/>
+          <a href={compareA} download="spectrafx-A.jpg">Save A</a>
+        </div>}
+        {compareB&&<div style={{flex:1,minWidth:0}}>
+          <small>Capture B</small>
+          <img src={compareB} alt="Native FX capture B"
+            style={compareMode==='split'?{clipPath:'inset(0 0 0 50%)',width:'200%',maxWidth:'none',transform:'translateX(-50%)'}:{width:'100%'}}/>
+          <a href={compareB} download="spectrafx-B.jpg">Save B</a>
+        </div>}
+      </div>
+      <small>Comparison uses actual native GPU JPEG captures. Pixel-difference metrics are not yet available.</small>
+    </div>}
     {captureError&&<StudioAlert tone="warning">{captureError}</StudioAlert>}
     {captureImage&&<div className="spectra-native__snapshot">
       <img src={captureImage} alt="Captured native SpectraFX GPU frame"/>
