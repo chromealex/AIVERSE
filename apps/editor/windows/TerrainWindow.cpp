@@ -191,6 +191,10 @@ public:
                 ui::hint(("GPU revision "+std::to_string(jobs.gpuPreviewRevision)+
                           ", failures "+std::to_string(jobs.gpuUploadFailures)+
                           ", retry frame "+std::to_string(jobs.gpuRetryAfterFrame)).c_str());
+                ui::hint(("GPU frame source bytes "+std::to_string(jobs.gpuFrameBytes)+
+                          ", upload rejections "+std::to_string(jobs.gpuRejectedBytes)+
+                          ", owner pressure "+std::to_string(jobs.gpuRejectedPressure)+
+                          ", STRATA idle pending "+std::to_string(jobs.gpuRetainedStrata)).c_str());
                 if(!jobs.diagnostic.empty())
                     ui::hint(("Caverns: "+jobs.diagnostic).c_str());
                 if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
