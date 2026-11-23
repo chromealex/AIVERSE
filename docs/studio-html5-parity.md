@@ -4,6 +4,16 @@ Owner scope confirmed 2026-11-20: complete full functional transfer before main 
 
 Baseline: main 076139d12d9ea2380a5445f823323f4e2c096811 integrated into feature/studio-html5; tested HEAD 6e54c2e5ad743caa88daa95e4355daf313f942e4. Native app builds, 17 selected CTests pass, Python contracts 19 pass, frontend build/domain tests pass. These checks do not demonstrate functional parity. Mac UI was initially blocked by locked desktop; Stage 80 later exercised native Game interactively.
 
+## SpectraFX V2 editing update (Stage 7, 2026-11-23)
+
+The `fx_graph` HTML5 pane has a typed Curve/Gradient key editor for
+existing `Curve` and `Gradient` value nodes, in addition to the
+Data Interfaces inspector, real project Assets image picker and native
+Workspace-backed topology canvas. Static curve/gradient visualization is
+**not** a GPU particle preview. Typecheck/build and macOS/Windows
+interaction QA for the latest code remain pending on stacked draft PR #115.
+See `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
+
 ## Window inventory
 
 Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. Forwarding files without registrations are excluded. Each source remains the detailed behavior reference, including context menus, shortcuts and native-only workflows.
