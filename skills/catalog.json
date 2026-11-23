@@ -661,6 +661,35 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-asian-historical",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-asian-historical/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Asian Historical procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/asian-historical.json",
+      "keywords": [
+        "building",
+        "asian-historical",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-cyberpunk",
       "package": "building-style",
       "path": "skills/world/aiverse-building-cyberpunk/SKILL.md",
@@ -872,6 +901,35 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-solarpunk",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-solarpunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Solarpunk procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/solarpunk.json",
+      "keywords": [
+        "building",
+        "solarpunk",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-steampunk",
       "package": "building-style",
       "path": "skills/world/aiverse-building-steampunk/SKILL.md",
@@ -938,6 +996,35 @@
         "застройк",
         "город",
         "вид"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-underwater",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-underwater/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Underwater procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/underwater.json",
+      "keywords": [
+        "building",
+        "underwater",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
       ],
       "contentPackages": []
     },
