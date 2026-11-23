@@ -259,9 +259,14 @@ void ActorHost::spawnProjectile(Simulation& sim,Projectile projectile) {
 }
 void ActorHost::spawnLoot(Simulation& sim,Loot loot) {
     World& w=sim.world();const Entity e=w.create();w.add<Loot>(e,std::move(loot));
+    if(!reportRegionChange(sim,e,world::RegionDirtyKind::Spawn))
+        throw std::logic_error("regionOwnership: dirty loot spawn rejected");
 }
 Entity ActorHost::spawnVehicle(Simulation& sim,Vehicle vehicle) {
-    World& w=sim.world();const Entity e=w.create();w.add<Vehicle>(e,std::move(vehicle));return e;
+    World& w=sim.world();const Entity e=w.create();w.add<Vehicle>(e,std::move(vehicle));
+    if(!reportRegionChange(sim,e,world::RegionDirtyKind::Spawn))
+        throw std::logic_error("regionOwnership: dirty vehicle spawn rejected");
+    return e;
 }
 void ActorHost::clearProjectiles(Simulation& sim) {
     World& w=sim.world();
@@ -269,7 +274,11 @@ void ActorHost::clearProjectiles(Simulation& sim) {
 }
 void ActorHost::resetLootAndVehicles(Simulation& sim) {
     World& w=sim.world();
-    for(const Entity e:lootEntities(sim))w.destroy(e);
+    for(const Entity e:lootEntities(sim)) {
+        if(!reportRegionChange(sim,e,world::RegionDirtyKind::Retire))
+            throw std::logic_error("regionOwnership: dirty loot retire rejected");
+        w.destroy(e);
+    }
     for(const auto& l:initialLoot_)spawnLoot(sim,l);
     // Vehicles are never created or destroyed after setup: restore their initial values in place
     // (the entity and a typed vehicle's VehicleDrive stay).
@@ -341,6 +350,9 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         world::registerRegionEntityLedger(sim);
         world::registerRegionStableIdentity(sim);
         world::registerRegionMoveRequests(sim);
+        world::registerRegionDirtyQueue(sim);
+        sim.world().setResource<world::RegionDirtyQueue>(
+            world::RegionDirtyQueue{});
         sim.world().setResource<world::RegionEntityLedger>(
             world::RegionEntityLedger{});
         sim.world().setResource<world::RegionMoveRequests>(
