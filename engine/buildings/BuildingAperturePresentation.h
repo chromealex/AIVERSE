@@ -145,6 +145,37 @@ public:
         return true;
     }
 
+    // Use this ONLY after the dual-leaf physics owner successfully
+    // publishes both collider positions AND all selected graph owners ACK.
+    // It keeps visual panels aligned with the same committed substep.
+    bool acceptPhysicalStep(const std::vector<BuildingAperturePose>& poses,
+                            uint64_t serverTick,uint64_t revision,
+                            std::string* error=nullptr){
+        if(!serverTick||serverTick<=lastTick_||
+           revision<lastRevision_||poses.size()!=entries_.size()){
+            if(error)*error="Stale or incompatible physical leaf step";
+            return false;
+        }
+        for(const auto& pose:poses){
+            const auto it=entries_.find(pose.socketId);
+            if(it==entries_.end()||
+               !sameBounds(it->second.pose.bounds,pose.bounds)||
+               it->second.pose.kind!=pose.kind||
+               pose.physicalPermille>1000){
+                if(error)*error="Physical leaf geometry or state changed";
+                return false;
+            }
+        }
+        for(const auto& pose:poses){
+            auto& e=entries_.at(pose.socketId);
+            e.pose=pose;
+            e.visualOpening=Fixed::fromRatio(pose.physicalPermille,1000);
+        }
+        lastTick_=serverTick;lastRevision_=revision;
+        if(error)error->clear();
+        return true;
+    }
+
     // Render-thread visual interpolation only; dtMs is not simulation time.
     // Opening/closing access is still determined by authoritative colliders.
     BuildingApertureVisualFrame interpolate(uint32_t dtMs,
@@ -158,7 +189,9 @@ public:
         const Fixed alpha=Fixed::fromRatio(
             std::min(dtMs,animationMs),animationMs);
         for(auto& [id,e]:entries_){
-            const Fixed target=e.pose.open?Fixed::fromInt(1):Fixed{};
+            const Fixed target=e.pose.moving?
+                Fixed::fromRatio(e.pose.physicalPermille,1000):
+                (e.pose.open?Fixed::fromInt(1):Fixed{});
             if(e.visualOpening<target)
                 e.visualOpening=fxMin(target,e.visualOpening+alpha);
             else if(e.visualOpening>target)
