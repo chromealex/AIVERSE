@@ -1,0 +1,80 @@
+# W1 acceptance gate: compile the actual C++ feature branch on a native macOS
+# runner before merging any stage into main. This is not the owner's KINGSTON
+# hardware acceptance; it catches compile and deterministic CTest regressions.
+name: Open world W1 native acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'engine/world/**'
+      - 'engine/actor/**'
+      - 'engine/vehicles/**'
+      - 'engine/sim/**'
+      - 'tests/world/**'
+      - 'CMakeLists.txt'
+      - 'engine/actor/CMakeLists.txt'
+      - '.github/workflows/open-world-w1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-world-w1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  w1-native:
+    name: W1 real C++ and CTest (macOS 15)
+    runs-on: macos-15
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure W1 native feature targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/open-world-w1 -DCMAKE_BUILD_TYPE=Debug \
+            -DAIVERSE_BUILD_TESTS=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_TOOLS=OFF \
+            2>&1 | tee w1-configure.log
+      - name: Build all W1 source and integration fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/open-world-w1 --parallel 4 --target \
+            aiverse_region_entity_ledger_test \
+            aiverse_region_ecs_bridge_test \
+            aiverse_region_cold_store_test \
+            aiverse_region_gamecore_integration_test \
+            aiverse_vehicle_region_group_test \
+            aiverse_actor_vehicle_region_group_test \
+            aiverse_actor_region_position_test \
+            aiverse_actor_region_lifecycle_test \
+            aiverse_actor_region_admission_test \
+            aiverse_race_region_respawn_gate_test \
+            aiverse_region_dirty_queue_test \
+            2>&1 | tee w1-build.log
+      - name: Run all W1 tests with explicit no-tests-error
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/open-world-w1 --output-on-failure \
+            --no-tests=error \
+            -R '^(region_entity_ledger_test|region_ecs_bridge_test|region_cold_store_test|region_gamecore_integration_test|vehicle_region_group_test|actor_vehicle_region_group_test|actor_region_position_test|actor_region_lifecycle_test|actor_region_admission_test|race_region_respawn_gate_test|region_dirty_queue_test)$' \
+            2>&1 | tee w1-ctest.log
+      - name: Archive native evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w1-native-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            w1-configure.log
+            w1-build.log
+            w1-ctest.log
+            build/open-world-w1/Testing/Temporary/LastTest.log
