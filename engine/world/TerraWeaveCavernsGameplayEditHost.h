@@ -255,6 +255,7 @@ public:
                 snapshot_?snapshot_->sourceRevision:0,
                 stagedRevision_,committedRevision_,stagedRevision_!=0};
     }
+    std::vector<ChunkKey3> pendingEditKeys()const{return worker_.dirtyKeys();}
     const CaveAuthoredNavStage& navigation()const noexcept{return navigation_;}
     const CaveShardGpuHost& geometry()const noexcept{return geometry_;}
     const std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess>&
