@@ -1891,3 +1891,7 @@ Studio checkpointFileBegin/Append/Import and Export/Read transfer ordered 32 KiB
 ## Stage 73 — transfer IDs and replay mode
 
 File transfers require transferId for append/read/import/cancel; idle buffers expire after 30 seconds on command processing. Replay preset optional gpuBirthRandom validated and restored via graph reload before replay. IDs correlate operations, not authentication. No tests run; audit import cleanup on error, native dispatch and loaded-versus-checkbox mode.
+
+## Stage 74 — static integration audit
+
+StudioTools fx_graph group now lists asset check, replay and checkpoint operations. Fixed missing TS asset failure helper, texture regex, malformed compute_.valid call and CPU UID conversion. Catalog summary updated. No compilation/tests. Continue audit of async restore state, transfer cleanup and RHI allocation failures before QA.
