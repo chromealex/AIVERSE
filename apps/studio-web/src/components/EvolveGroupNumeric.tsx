@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onNativeEvent } from '../bridge';
 let previewRevision = 0;
+const previewOwner = `evolve-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 import { invoke } from '../bridge';
 
 type Props = { ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
@@ -42,7 +43,7 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
     const revision = ++previewRevision;
     const selectionKey = ids.join('|') + '|';
     const clear = () => invoke('studio.worldProcessAreaPreview',
-      { clear: true, revision: ++previewRevision, selectionKey }).catch(() => {});
+      { clear: true, owner: previewOwner, revision: ++previewRevision, selectionKey }).catch(() => {});
     if (!open || ids.length < 2) {
       void clear();
       return;
@@ -59,7 +60,7 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
       return;
     }
     void invoke('studio.worldProcessAreaPreview', {
-      revision, selectionKey,
+      revision, selectionKey, owner: previewOwner,
       scaleNumerator: x, scaleNumeratorZ: z, pivot,
       ...(pivot === 'custom' ? { pivotXcm: px, pivotZcm: pz } : {})
     }).catch(() => {});
