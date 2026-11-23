@@ -227,6 +227,32 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
+    // Discoverable, genre-independent SpectraFX native Studio tools.
+    // Headless MCP hosts retain the schemas but receive an explicit
+    // no-native-viewport error from spectraPreview().
+    registerOp({"fx_replay_prepare",
+        "Prepare a native SpectraFX replay at an exact tick with optional CPU RNG seed or Metal allocation seed. Poll fx_replay_status until replayReady.",
+        Json::parse(R"({"properties":{"tick":{"type":"integer","minimum":0,"maximum":3600},"parameters":{"type":"object"},"seed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuAllocationSeed":{"type":"integer","minimum":0,"maximum":2147483647}},"required":["tick"]})"),
+        [this](const Json& p)->Json {
+            Json request=p;request.set("action",Json::string("replayPrepare"));
+            return spectraPreview(request);
+        }});
+    registerOp({"fx_replay_status",
+        "Read native SpectraFX replay readiness, tick, GPU seed retry state and backend. Requires a running Studio FX viewport.",
+        Json::parse(R"({"properties":{}})"),
+        [this](const Json&)->Json {
+            Json request=Json::object();request.set("action",Json::string("status"));
+            return spectraPreview(request);
+        }});
+    registerOp({"fx_replay_capture",
+        "Queue or poll a bounded native SpectraFX JPEG capture. Use action=capture with requireReplayReady=true; then action=captureStatus. Provenance is request-time, not exact GPU frame completion.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["capture","captureStatus"]},"maxSide":{"type":"integer","minimum":64,"maximum":1024},"requireReplayReady":{"type":"boolean"}},"required":["action"]})"),
+        [this](const Json& p)->Json {
+            const std::string action=p.getStr("action");
+            if(action!="capture"&&action!="captureStatus")
+                throw std::runtime_error("fx_replay_capture: invalid action");
+            return spectraPreview(p);
+        }});
 }
 Workspace::~Workspace() { if (buildThread_.joinable()) buildThread_.join(); }
 
