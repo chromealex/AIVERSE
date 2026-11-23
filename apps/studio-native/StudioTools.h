@@ -47,7 +47,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
         {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
-                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake"}},
+                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set"}},
         {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
         {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
                         "animation_montage_validate"}},
@@ -79,7 +79,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if (op == "texture_graph_preview" || op == "texture_graph_catalog") return true;
+    if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
