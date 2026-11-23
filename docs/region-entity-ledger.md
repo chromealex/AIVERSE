@@ -1248,3 +1248,44 @@ No local compile/CTest has been performed. The workflow is an
 acceptance gate, not a claim that W1's complete gameplay systems
 are production-ready. Keep the PR Draft until real tests pass and
 concurrent `main` changes are reconciled.
+
+
+## Stage 19 — ensure W1 macOS CI actually starts and remove private SpatialWorld API use
+
+The W1.18 native CI workflow was initially committed with
+`pull_request` / `workflow_dispatch` events, but no resulting
+workflow execution was observed on this work branch. Stage19 adds
+an explicitly scoped **`push` trigger for**
+`feature/aiv20261123_open_world_audit`, restricted to the same
+W1 engine, test, CMake and workflow paths.
+
+This produced real GitHub Actions workflow run
+**[45255049441](https://github.com/chromealex/AIVERSE/actions/runs/45255049441)**,
+confirming that the workflow trigger works. That run and the immediate
+follow-ups were **cancelled** by the workflow's
+`cancel-in-progress: true` policy when newer source commits were
+pushed. The latest source test push created
+**[45255698623](https://github.com/chromealex/AIVERSE/actions/runs/45255698623)**.
+At the time this documentation was authored, it was queued, with no
+compiler log, CTest results or PASS evidence. Avoid unnecessary source
+pushes while this run is pending; they supersede/cancel earlier runs.
+
+Source inspection also found a guaranteed C++ access violation in the
+staged movement API: `ActorHost::requestRegionMove` used
+`SpatialWorld(32).cells(bounds)`, but `SpatialWorld::cells` is
+**private**. That redundant check was removed. The existing
+`config_.worldLimit` validation remains responsible for bounding
+destination positions, and the established
+`SpatialWorld::cell(position)` **public API** is used by the
+region ownership reconciler. No saved format or motion semantics
+were intentionally changed.
+
+The existing `actor_region_admission_test` now includes
+`testOutOfBoundsRegionMoveRejected`, verifying that a destination
+outside the configured world limit is rejected before changing
+`CharacterBody.pos`, the staged request queue, or the ECS checksum.
+
+**Status:** workflow started but no completed build or CTest
+result yet; the new test is written but not executed. W1 remains
+partial and the PR Draft. Hosted macOS CI, even when completed,
+must be supplemented by the merged-tree Mac/KINGSTON quick suite.
