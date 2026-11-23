@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Eye, Layers, RefreshCw, Save, Search, ShieldAlert } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
+import MaterialGraphPanel from '../graphs/MaterialGraphPanel';
+import {StudioButton} from '../ui';
 import { StudioLoader } from '../ui';
 import { editablePatch, materialFields, materialNames, materialSwatchColor, MATERIAL_PRESETS } from './materialSchema';
 import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
@@ -23,6 +25,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
  const [nonce,setNonce]=useState(0);
+ const [graphMode,setGraphMode]=useState(false);
  const connected=nativeConnected();
  const names=useMemo(()=>materialNames(library),[library]);
  const selected:MaterialData=library.library[name]??{};
@@ -35,7 +38,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
  }),[]);
  useEffect(()=>{
   let canceled=false;
-  setLoading(true);setError('');setMessage('');setDraft({});setPending(null);
+  setLoading(true);setError('');
   if(connected&&!projectPath){
    setLibrary(EMPTY);setName('');setLoading(false);return;
   }
@@ -49,6 +52,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   }).finally(()=>{if(!canceled)setLoading(false)});
   return ()=>{canceled=true};
  },[projectPath,nonce,connected]);
+ useEffect(()=>{setDraft({});setPending(null);setName('');setMessage('');},[projectPath]);
  const switchTo=(next:string)=>{
   if(next===name)return;
   if(changes>0){setPending(next);setMessage('Unsaved draft. Apply or discard changes to switch materials.');return;}
@@ -139,10 +143,11 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
       <strong>{name}</strong><small>Library PBR factors</small>
      </div>
-     <div className="materials-fields">
+     <StudioButton size="sm" onClick={()=>setGraphMode(v=>!v)}>{graphMode?'Properties':'Graph / texture generator'}</StudioButton>
+     {graphMode&&connected&&projectPath?<MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit}/>:<div className="materials-fields">
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}
-     </div></>}
+     </div>}</>}
    </div>
   </div>
   <footer className="materials-footer">
