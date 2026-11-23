@@ -28,3 +28,7 @@ Every manifest declares integrations: skills (catalog IDs), mcp_tools (exact too
 ## Rule routing
 
 The root AGENTS.md routes mandatory common and area-specific contracts. The index in docs/agents/contracts/index.json records the extracted baseline sections. Run `python3 tools/agents/check_contracts.py` after editing routing; this checks existence, links and headings, not semantic preservation. Changes to contracts themselves require feature coverage and integrator review. Keep repository-root-relative path semantics in extracted text. Do not silently delete or weaken owner rules.
+
+## Test evidence provenance
+
+Record tests on a clean committed checkout: `python3 tools/agents/evidence.py --id <unique-id> -- python3 tests/feature_gate_test.py`. Commit the resulting JSON and log under docs/evidence/ and list the report in manifest test_reports. PASS for tests requires a successful report, full tested commit SHA and matching SHA-256 log digest. Strict audit requires the tested commit to be an ancestor and rejects subsequent changes outside evidence/manifests/handoffs. Run again after any code or configuration change. This is integrity and freshness checking, not cryptographic attestation of who ran a test or whether the command was meaningful. Integrator review and independent CI remain required. Conservative path rules require runtime for engine/library/module changes and simulation for engine/core or engine/sim changes; finer scope needs reviewed policy changes, not arbitrary exclusions.
