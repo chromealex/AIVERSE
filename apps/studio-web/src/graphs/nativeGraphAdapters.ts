@@ -117,3 +117,66 @@ export function modelingReply(result:unknown):{document:GraphObject;revision:num
  if(!object(result)||result.ok!==true||!object(result.document)||typeof result.revision!=='number'||!Number.isSafeInteger(result.revision)||result.revision<1)throw new Error('Invalid native modeling response');
  return {document:result.document,revision:result.revision};
 }
+
+/** Geometry dependency view: native CSG operands, not transform hierarchy. */
+export function geometryProjection(doc:GraphObject):GraphView {
+ const rows=records(doc.nodes).filter(n=>object(n.geometry));
+ const nodes=rows.map((n,i)=>{
+  const g=n.geometry as GraphObject;
+  const modifiers=records(g.modifiers).map(m=>text(m.kind)).filter(Boolean);
+  return {id:text(n.id),label:[text(g.kind),...modifiers].join(' → '),...xy({},i),
+   inputs:g.kind==='boolean'?[port('a','mesh'),port('b','mesh')]:[],outputs:[port('mesh','mesh',true)]};
+ });
+ const links:Link[]=[];
+ for(const n of rows){
+  const g=n.geometry as GraphObject;
+  if(g.kind==='boolean')for(const p of ['a','b'])if(text(g[p]))links.push({id:JSON.stringify([n.id,p]),from:text(g[p]),output:'mesh',to:text(n.id),input:p});
+ }
+ return {nodes,links};
+}
+export function connectGeometryOperand(doc:GraphObject,from:PortRef,to:PortRef):GraphObject {
+ const rows=records(doc.nodes),i=rows.findIndex(n=>n.id===from.node),j=rows.findIndex(n=>n.id===to.node);
+ if(from.port!=='mesh'||!['a','b'].includes(to.port)||i<0||j<=i||!object(rows[i].geometry))return doc;
+ const target=rows[j],g=target.geometry;
+ if(!object(g)||g.kind!=='boolean'||g[to.port]===from.node)return doc;
+ return replaceAnimationEntry(doc,'pose',to.node,{...target,geometry:{...g,[to.port]:from.node}});
+}
+export function setGeometryBoolean(doc:GraphObject,id:string,operation:string):GraphObject {
+ const n=records(doc.nodes).find(x=>x.id===id);
+ if(!n||!object(n.geometry)||n.geometry.kind!=='boolean'||!['union','subtract','intersect'].includes(operation))return doc;
+ return replaceAnimationEntry(doc,'pose',id,{...n,geometry:{...n.geometry,operation}});
+}
+export function moveGeometryModifier(doc:GraphObject,id:string,index:number,delta:-1|1):GraphObject {
+ const n=records(doc.nodes).find(x=>x.id===id);
+ if(!n||!object(n.geometry)||!Array.isArray(n.geometry.modifiers)||!Number.isInteger(index)||![-1,1].includes(delta))return doc;
+ const modifiers=n.geometry.modifiers.slice(),target=index+delta;
+ if(index<0||index>=modifiers.length||target<0||target>=modifiers.length)return doc;
+ [modifiers[index],modifiers[target]]=[modifiers[target],modifiers[index]];
+ return replaceAnimationEntry(doc,'pose',id,{...n,geometry:{...n.geometry,modifiers}});
+}
+export const animationComparisons=['eq','ne','gt','ge','lt','le'] as const;
+export function animationScalarNames(doc:GraphObject):string[] {
+ return object(doc.parameters)?Object.keys(doc.parameters).filter(k=>typeof (doc.parameters as GraphObject)[k]==='boolean'||(typeof (doc.parameters as GraphObject)[k]==='number'&&Number.isFinite((doc.parameters as GraphObject)[k]))):[];
+}
+export function setAnimationScalar(doc:GraphObject,name:string,value:number|boolean):GraphObject {
+ if(!animationScalarNames(doc).includes(name)||typeof value!=='boolean'&&!Number.isFinite(value))return doc;
+ return {...doc,parameters:{...(doc.parameters as GraphObject),[name]:value}};
+}
+export function editAnimationCondition(doc:GraphObject,stateId:string,index:number,conditionIndex:number,patch:GraphObject|null):GraphObject {
+ const state=records(doc.states).find(s=>s.id===stateId);
+ if(!state||!Array.isArray(state.transitions)||!Number.isInteger(index)||!Number.isInteger(conditionIndex))return doc;
+ const transition=state.transitions[index];
+ if(!object(transition))return doc;
+ if(transition.when!==undefined&&!Array.isArray(transition.when))return doc;
+ const conditions=records(transition.when);
+ if(Array.isArray(transition.when)&&conditions.length!==transition.when.length)return doc;
+ if(conditionIndex<0||conditionIndex>conditions.length)return doc;
+ if(patch===null){if(conditionIndex===conditions.length)return doc;conditions.splice(conditionIndex,1);}
+ else{
+  if(conditionIndex===conditions.length&&conditions.length>=32)return doc;
+  const next={...(conditions[conditionIndex]??{}),...patch};
+  if(typeof next.parameter!=='string'||!animationScalarNames(doc).includes(next.parameter)||!animationComparisons.some(op=>op===next.op)||typeof next.value!=='number'||!Number.isFinite(next.value))return doc;
+  conditions[conditionIndex]=next;
+ }
+ return editAnimationTransition(doc,stateId,index,{when:conditions});
+}
