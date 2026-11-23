@@ -5,6 +5,8 @@
 #include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioBuildingDependencies.h"
 #include <filesystem>
+#include <algorithm>
+#include <vector>
 #include <stdexcept>
 #include <string>
 
@@ -79,9 +81,13 @@ inline Json studioBuildingRecipes(const std::filesystem::path& project){
     const fs::path folder=studioContentRoot(project)/"GeneratedBuildings";
     Json result=Json::object(),list=Json::array();
     std::error_code ec;
-    if(!fs::is_directory(folder,ec)){
+    const auto folderStatus=fs::symlink_status(folder,ec);
+    if(ec||!fs::is_directory(folderStatus)){
         result.set("recipes",std::move(list));return result;
     }
+    if(fs::is_symlink(folderStatus))
+        throw std::runtime_error("GeneratedBuildings cannot be a symbolic link");
+    std::vector<std::string> matches;
     size_t scanned=0;
     for(const auto& entry:fs::directory_iterator(folder)){
         if(++scanned>2000)
@@ -93,9 +99,11 @@ inline Json studioBuildingRecipes(const std::filesystem::path& project){
         if(ec||fs::is_symlink(status)||!fs::is_regular_file(status))
             continue;
         if(entry.file_size(ec)>256u*1024u||ec)continue;
-        list.push(Json::string(
-            "GeneratedBuildings/"+entry.path().filename().string()));
+        matches.push_back(
+            "GeneratedBuildings/"+entry.path().filename().string());
     }
+    std::sort(matches.begin(),matches.end());
+    for(const auto& relative:matches)list.push(Json::string(relative));
     result.set("recipes",std::move(list));
     return result;
 }
