@@ -71,6 +71,8 @@ export function bindResolvedSpectraAsset(
     return failure(graph,'Asset GUID is not resolvable to a safe content path.');
   if(expectedKinds&&!expectedKinds.includes(resolved.kind))
     return failure(graph,'Asset importer type is incompatible with this property.');
+  if(property==='texture'&&!/\\.(png|jpe?g|tga)$/i.test(resolved.path))
+    return failure(graph,'Sprite textures require PNG, JPEG or TGA assets.');
   const index=graph.nodes.findIndex(node=>node.id===nodeId);
   if(index<0)return failure(graph,'Target graph node not found.');
   const nodes=graph.nodes.map((node,i)=>i===index?{
