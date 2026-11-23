@@ -29,6 +29,7 @@ export default function SpectraGraphAssetInspector({
     if(!locked)setTargetNodeId(selectedNodeId);
   },[selectedNodeId,locked]);
   useEffect(()=>{setPendingInsertAfter(null);},[targetNodeId]);
+  useEffect(()=>{setPendingInsertAfter(null);},[property]);
   // A node deleted by a graph edit is never resurrected by a stale lock.
   const node=graph.nodes.find(n=>n.id===targetNodeId);
   const raw=node?.properties?.[property];
