@@ -271,3 +271,57 @@ not a hinged/curved or fully characterized PHYSIS rigid body.
 Tests are deferred by user instruction: no native build,
 CTest, GPU capture, navmesh-refresh or multiplayer run for Stage 23P.
 Handoff: `docs/agent-handoffs/building-dual-leaf-game-session-stage23p-2026-11-23.md`.
+
+
+## Stage 23Q — common ECS Simulation registration (no genre module coupling)
+
+The modern shared `Simulation` owns `World`, a fixed-tick system
+registry, versioned persistent ECS resources, state snapshots/rollback
+and PHYSIS auto-install. Building dual-leaf simulation must use it
+rather than the legacy FPS/ActorHost integration.
+
+**Phase 1, during your generic GameModule::setup, before the ECS
+persistence registry seals:**
+
+```cpp
+#include "engine/buildings/BuildingEcsRuntime.h"
+
+// In shared module/scene setup:
+building::registerBuildingEcsPersistence(sim, stableSceneId);
+```
+
+**Phase 2, after Simulation::setup returns, before its first tick:**
+
+```cpp
+// The existing shared world scene owns all of these and they must
+// live longer than the registered callbacks:
+auto runtime = building::BuildingEcsRuntime::attachAfterSetup(
+    sim, dualLeafSession, dualLeafPhysics, spatialWorld,
+    graphRouter, /*stepPermille=*/100, &error);
+if (!runtime) { /* keep scene unavailable; report error */ }
+
+// A real authenticated connection/session maps a peer to its ECS Entity:
+runtime->enqueue(validatedBuildingCommand,&error);
+// No additional manual tick: sim.step() invokes building.dual_leaves
+// AFTER previously registered ECS/PHYSIS systems.
+```
+
+The shared ECS resource `BuildingEcsWorldState` snapshots physical
+progress even when a graph callback has not acknowledged a revision.
+Renderer reads the separately committed `BuildingDualLeafGameSession`
+CPU poses and gives `Renderer3D` its usual ModelDraw instances;
+the ECS system never uploads textures or retains GPU handles.
+
+**Rollback is fail-closed.** Restoring a `SimSnapshot` or a persisted
+World rolls back the ECS state, but existing `SpatialWorld` colliders,
+graph ACK state, command nonce cache and GPU leases are external.
+The registered state-restored hook suspends this adapter. The host
+must reconstruct/reconcile the physical scene and reattach new
+runtime/session owners before accepting new commands; this stage
+does not claim automatic physics rollback. The returned runtime
+shared_ptr belongs to the host scene. The system callback holds only
+a weak_ptr to avoid dangling scene references.
+
+This is the actual common Simulation system registration API,
+but no sample game executable has invoked it yet. Tests were deferred;
+see `docs/agent-handoffs/building-common-ecs-stage23q-2026-11-23.md`.
