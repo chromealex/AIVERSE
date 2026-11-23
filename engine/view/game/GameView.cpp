@@ -33,6 +33,26 @@
 #include <exception>
 
 namespace aiverse::game {
+void GameView::clearSharedAnimationProfile() {
+    if(genericView_)genericView_->clearAnimationProfile();
+}
+Json GameView::sharedAnimationProfile(uint64_t entityKey,uint64_t worldEpoch,const std::string& action) {
+    Json r=Json::object();r.set("available",Json::fromBool(false));
+    if(framePublication_.active()||!framePublication_.published().ready()||!genericView_||
+       !sharedAnimationGraphDiagnostic(entityKey,worldEpoch).getBool("available")){
+        r.set("reason",Json::string("Current committed common View instance unavailable"));return r;
+    }
+    if(action=="enable"){
+        if(!genericView_->enableAnimationProfile(entityKey,worldEpoch))return r;
+    }else if(action=="reset"){
+        if(!genericView_->resetAnimationProfile(entityKey,worldEpoch))return r;
+    }else if(action=="disable"){
+        if(!genericView_->profileMatches(entityKey,worldEpoch))return r;
+        genericView_->clearAnimationProfile();
+        r.set("reason",Json::string("Profiling disabled"));return r;
+    }else if(action!="read")throw std::invalid_argument("unknown live profile action");
+    return genericView_->animationProfileReport(entityKey,worldEpoch);
+}
 Json GameView::sharedAnimationGraphDiagnostic(uint64_t entityKey,uint64_t worldEpoch,graph_telemetry::History* history) const {
     Json unavailable=Json::object();unavailable.set("available",Json::fromBool(false));
     const auto it=anims_.find(entityKey);
