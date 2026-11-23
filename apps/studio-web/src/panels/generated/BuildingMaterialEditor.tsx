@@ -39,6 +39,23 @@ const initial = (source: MaterialData): MaterialPatch => {
   return copy;
 };
 
+// The native material library stores content-relative paths, while the
+// shared Assets picker exclusively edits GUIDs. Resolve on load; never
+// send an existing path back as a new picker value to native patch.
+const editableSource = async (material:MaterialData):Promise<MaterialPatch> => {
+  const values=initial(material);
+  const assets=await invoke('studio.assets',{});
+  for(const {key} of textures){
+    const source=String(values[key]??'');
+    if(!source || /^[0-9a-f]{32}$/.test(source))continue;
+    const path=source.startsWith('content/')?source.slice(8):source;
+    const entry=assets.files.find(item=>item.path===path&&item.importer==='texture');
+    if(!entry?.guid)throw Error('Material texture is not indexed in Assets: '+source);
+    values[key]=entry.guid;
+  }
+  return values;
+};
+
 const same = (a:MaterialPatch,b:MaterialPatch) =>
   [...numeric.map(f=>f.key),...textures.map(f=>f.key),...uvFields.map(f=>f.key)].every(key => a[key]===b[key]);
 
@@ -57,24 +74,20 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
   const names = useMemo(()=>materialNames(library),[library]);
   const reload = async (requested?:string) => {
     const data = await invoke('studio.materials',{});
-    setLibrary(data);
     const next = requested && data.library[requested] ? requested :
       name && data.library[name] ? name : materialNames(data)[0] ?? '';
-    setName(next);
-    const source = data.library[next] ?? {};
-    const values = initial(source);
-    setDraft(values);setBaseline(values);
+    const values = await editableSource(data.library[next] ?? {});
+    setLibrary(data);setName(next);setDraft(values);setBaseline(values);
     setMessage('');setError('');
   };
   useEffect(()=>{
     if(!projectLoaded){setLibrary({library:{}});setName('');return;}
     let alive=true;
-    void invoke('studio.materials',{}).then(data=>{
-      if(!alive)return;
-      setLibrary(data);
+    void invoke('studio.materials',{}).then(async data=>{
       const next=materialNames(data)[0]??'';
-      setName(next);
-      const values=initial(data.library[next]??{});
+      const values=await editableSource(data.library[next]??{});
+      if(!alive)return;
+      setLibrary(data);setName(next);
       setDraft(values);setBaseline(values);
     }).catch(e=>{if(alive)setError(String(e));});
     return ()=>{alive=false;};
@@ -88,10 +101,10 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
 
   const selectMaterial=(next:string)=>{
     if(dirty && !window.confirm('Discard unsaved material and texture changes?'))return;
-    setName(next);
-    const values=initial(library.library[next]??{});
-    setDraft(values);setBaseline(values);
-    setError('');setMessage('');
+    void editableSource(library.library[next]??{}).then(values=>{
+      setName(next);setDraft(values);setBaseline(values);
+      setError('');setMessage('');
+    }).catch(e=>setError(String(e)));
   };
   const save=async()=>{
     if(!nativeConnected()||!name||!dirty||busy)return;
@@ -109,7 +122,7 @@ export default function BuildingMaterialEditor({ projectLoaded }:{projectLoaded:
       // GUIDs atomically in the existing materials.json document.
       const saved=await invoke('studio.materialPatch',{name,patch:draft});
       setLibrary(saved);
-      const next=initial(saved.library[name]??{});
+      const next=await editableSource(saved.library[name]??{});
       setDraft(next);setBaseline(next);
       setMessage('Material and textures saved together in materials.json.');
       window.dispatchEvent(new Event('studio:assets-changed'));
