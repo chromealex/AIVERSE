@@ -70,6 +70,8 @@ public:
         if(!revision_)throw std::logic_error("Caverns pin before revision");
         if(nextLease_==UINT64_MAX)
             throw std::overflow_error("Caverns lease identity");
+        if(!items_.contains(key)&&items_.size()>=settings_.maxResident)
+            throw std::length_error("Caverns pinned residency capacity exhausted");
         auto& item=ensure(key);
         const uint64_t id=++nextLease_;
         item.leases.emplace(id,purpose);
@@ -141,6 +143,10 @@ public:
         }
         size_t builds=0;
         for(const auto& key:desired){
+            // Wait until native retirement is acknowledged before occupying
+            // its scarce resident slot with another distant cave chunk.
+            if(!items_.contains(key)&&items_.size()>=settings_.maxResident)
+                continue;
             auto& item=ensure(key);
             if(item.ready||item.building||item.retiring||
                builds>=settings_.maxBuildsPerPump)continue;
