@@ -191,6 +191,7 @@ private:
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
+    Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
     void applyViewport(const Json& params);
     bool handleHostMethod(const Json& req); // methods the host answers itself; false: StudioSession's
     void afterSessionReply(const Json& req, const Json& reply);
