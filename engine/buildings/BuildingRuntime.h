@@ -35,3 +35,5 @@
 #include "engine/buildings/BuildingMaterialAssets.h"
 #include "engine/buildings/BuildingDualLeafGameSession.h"
 #include "engine/buildings/BuildingEcsRuntime.h"
+#include "engine/buildings/BuildingEcsObstruction.h"
+#include "engine/buildings/BuildingEcsReconcile.h"
