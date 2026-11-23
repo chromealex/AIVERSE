@@ -182,6 +182,69 @@ void authoredEntityWorkflow() {
            AIVERSE_TEST_CHECK(!entity().extra["components"].has(id));
        }
    }
+   // Stable linked object selection: maps document IDs to typed targets,
+   // validates a multi-field reference edit as a single atomic Undo step.
+   {
+       auto& doc=session.workspace().map;
+       auto entity=[&]()->const editor::DocEntity&{
+           return doc.data.entities[size_t(doc.findEntity("second"))];
+       };
+       AIVERSE_TEST_CHECK(!call("studio.componentAdd",R"({"entityId":"entity:@first","componentId":"EchoZone"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.componentAdd",R"({"entityId":"entity:@second","componentId":"EchoZone"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.componentAdd",R"({"entityId":"entity:@second","componentId":"EchoPortal"})").has("error"));
+       const auto list=call("studio.componentCatalog",R"({"entityId":"entity:@second"})");
+       bool portalFound=false;
+       for(const auto& item:list["result"].items())
+           if(item.getStr("id")=="EchoPortal")portalFound=!item.getBool("available");
+       AIVERSE_TEST_CHECK(portalFound);
+       const auto depth=doc.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.setProperties",
+           R"({"entityId":"entity:@second","componentId":"EchoPortal","values":{"from":"first","to":"second","loss":25,"enabled":true}})").has("error"));
+       AIVERSE_TEST_CHECK(doc.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(entity().extra["components"]["EchoPortal"]["from"].str()=="first");
+       AIVERSE_TEST_CHECK(entity().extra["components"]["EchoPortal"]["enabled"].boolean());
+       const auto before=entity().extra.dump();
+       AIVERSE_TEST_CHECK(call("studio.setProperty",
+           R"({"entityId":"entity:@second","componentId":"EchoPortal","key":"to","value":"not-real"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.setProperty",
+           R"({"entityId":"entity:@second","componentId":"EchoPortal","key":"to","value":"entity:0"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.setProperties",
+           R"({"entityId":"entity:@second","componentId":"EchoPortal","values":{"from":"second","to":"second"}})").has("error"));
+       AIVERSE_TEST_CHECK(doc.undoDepth()==depth+1 && entity().extra.dump()==before);
+       AIVERSE_TEST_CHECK(call("studio.componentRemove",
+           R"({"entityId":"entity:@first","componentId":"EchoZone"})").has("error"));
+       const auto insp=call("studio.select",R"({"id":"entity:@second"})");
+       AIVERSE_TEST_CHECK(!insp.has("error"));
+       const auto snap=call("studio.snapshot");
+       bool hasRefPicker=false;
+       for(const auto& comp:snap["result"]["inspector"]["components"].items()){
+           if(comp.getStr("id")!="EchoPortal")continue;
+           for(const auto& field:comp["properties"].items()){
+               if(field.getStr("key")!="from")continue;
+               hasRefPicker=field.getBool("entityReference")&&field.getBool("editable");
+               bool firstOption=false;
+               for(const auto& option:field["options"].items())
+                   if(option.getStr("value")=="first")firstOption=true;
+               AIVERSE_TEST_CHECK(firstOption);
+           }
+       }
+       AIVERSE_TEST_CHECK(hasRefPicker);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(!entity().extra["components"]["EchoPortal"]["enabled"].boolean());
+       AIVERSE_TEST_CHECK(!call("studio.redo").has("error"));
+       AIVERSE_TEST_CHECK(entity().extra["components"]["EchoPortal"]["from"].str()=="first");
+       AIVERSE_TEST_CHECK(!call("studio.save").has("error"));
+       editor::MapDoc disk;std::string why;
+       AIVERSE_TEST_CHECK(disk.load((project/"maps/scene.json").string(),&why));
+       AIVERSE_TEST_CHECK(disk.data.entities[size_t(disk.findEntity("second"))]
+           .extra["components"]["EchoPortal"]["from"].str()=="first");
+       AIVERSE_TEST_CHECK(!call("studio.componentRemove",
+           R"({"entityId":"entity:@second","componentId":"EchoPortal"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.componentRemove",
+           R"({"entityId":"entity:@first","componentId":"EchoZone"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.componentRemove",
+           R"({"entityId":"entity:@second","componentId":"EchoZone"})").has("error"));
+   }
    // Multi-selection, group edit / duplicate / delete (one undo each), editor-only flags.
    {
        auto& map=session.workspace().map;
