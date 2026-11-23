@@ -2265,7 +2265,7 @@
           "title": "Общий редактор графов",
           "titleEn": "Shared graph editor framework",
           "text": "Общие адаптеры и полотно, с сохранением собственных форматов и выполнения каждой системы.",
-          "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation and safe readback timeout implemented in source, verification pending."
+          "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation implemented in source; Stage 31A native material staging in progress."
         }
       ],
       "enablesEn": [

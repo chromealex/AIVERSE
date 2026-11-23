@@ -79,7 +79,8 @@
     "engine/render/graph/TextureGraphGpuPatterns.h",
     "apps/editor/core/MaterialOps.h",
     "engine/gfx/vulkan/VkDevice.h",
-    "engine/gfx/vulkan/VkCompute.cpp"
+    "engine/gfx/vulkan/VkCompute.cpp",
+    "engine/render/graph/TextureGraphMaterialBinding.h"
   ],
   "traits": {
     "editable": true,
@@ -90,7 +91,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 30 cancellation and monotonic request watchdog implemented in source; native and Studio verification NOT RUN.",
+      "note": "Stage 31A in progress: native staged material binding of validated graph outputs through ModelImageUploadTransaction; zero-copy GPU path excluded pending owner integration.",
       "evidence": []
     },
     "architecture": {
