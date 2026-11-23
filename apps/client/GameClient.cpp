@@ -59,6 +59,20 @@ namespace aiverse::client {
 
 GameClient::~GameClient() = default;
 
+bool GameClient::updateCavernsVisual(const Json& authored) {
+    if(!dev_||!sim_||!authored.isObject())return false;
+    if(lastCavernsVisualJson_==authored)return true;
+    auto source=std::make_shared<terraweave::caverns::CaveVolumeSnapshot>(
+        terraweave::caverns::caveSnapshotFromJson(authored));
+    if(!cavernsVisual_){
+        cavernsVisual_=std::make_unique<
+            terraweave::caverns::CaveClientVisualHost>();
+        cavernsVisual_->open(std::move(source));
+    } else cavernsVisual_->replaceSnapshot(std::move(source));
+    lastCavernsVisualJson_=authored;
+    return true;
+}
+
 // ------------------------------------------------------------------ setup
 
 void GameClient::init(gfx::Device& dev) {
@@ -451,7 +465,9 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         // the Editor Play Game window. This is visual-only; no Box3D/nav ACK.
         const Json& caves=map["terraweaveCaverns"].isObject()
             ? map["terraweaveCaverns"] : map["extra"]["terraweaveCaverns"];
+        lastCavernsVisualJson_=Json();
         if(caves.isObject()) {
+            lastCavernsVisualJson_=caves;
             auto frozen=std::make_shared<terraweave::caverns::CaveVolumeSnapshot>(
                 terraweave::caverns::caveSnapshotFromJson(caves));
             cavernsVisual_=std::make_unique<
