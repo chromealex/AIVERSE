@@ -28,3 +28,4 @@
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
 #include "engine/buildings/BuildingTransportZoneGraphAdapters.h"
 #include "engine/buildings/BuildingApertureFixedTick.h"
+#include "engine/buildings/BuildingAperturePresentation.h"
