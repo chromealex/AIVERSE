@@ -146,7 +146,21 @@ def make_showcase(
 
     map_doc["entities"] = entities
     out_relative = "maps/world_processes_showcase.json"
-    # Only now create the destination; all inputs were validated first.
+    # Check all destination manifest/rules schemas BEFORE copying anything.
+    if not isinstance(game.get("maps", []), list):
+        raise ValueError("Source game maps index must be an array")
+    rules_relative = game.get("rules", "rules.json")
+    if not isinstance(rules_relative, str):
+        raise ValueError("Source rules reference must be a string path")
+    source_rules = read_json(safe_child(source, rules_relative))
+    configured = source_rules.get("nativeModules", [])
+    if not isinstance(configured, list):
+        raise ValueError("Source nativeModules must be an array")
+    if any(isinstance(m, dict) and m.get("id") == "world_processes"
+           for m in configured):
+        raise ValueError("Source already activates world_processes; configure explicitly")
+
+    # Only now create the destination; all known inputs were validated first.
     shutil.copytree(source, destination)
     out_map_path = safe_child(destination, out_relative)
     write_json(out_map_path, map_doc)
