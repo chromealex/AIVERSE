@@ -179,6 +179,12 @@ public:
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
     bool racing() const { return race_!=nullptr; }   // this map has a race (map "race": vehicles::RaceState resource)
 private:
+    // Validate a typed vehicle's seat/controller schema before staging.
+    // No mutation; uses the shared VehicleRegionTransfer group.
+    bool typedRegionMoveGroup(const Simulation&,Entity,
+                              std::vector<Entity>&,std::string* error=nullptr)const;
+    // Commit one already pre-admitted typed vehicle pose and all real seats.
+    bool placeTypedRegionMove(Simulation&,Entity,Vec3,std::string* error=nullptr);
     void applyRegionMoves(Simulation&);
     void tick(Simulation&);
     void shoot(Simulation&,CharacterRef);
