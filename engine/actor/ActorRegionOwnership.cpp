@@ -131,22 +131,24 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     ledger=target;
 
     // Explicit opt-in contract: all canonical writes must use tracked World APIs
-    // or report dirty events. Never enable for vehicle/character graphs yet.
+    // or report dirty events. Never enable for vehicle graphs yet.
+    const bool soloCharacters=streamManifest_.getBool("regionDirtyOnlySolo");
     const bool lootOnly=journalReady && !journalOverflow && dirty &&
-        streamManifest_.getBool("regionDirtyOnlyLoot") &&
+        (streamManifest_.getBool("regionDirtyOnlyLoot") || soloCharacters) &&
         !streamManifest_.getBool("strictRegionJournalAudit") &&
-        view.countExisting<CharacterBody>()==0 && view.countExisting<Vehicle>()==0 &&
-        bodyChanges.entities.empty() && vehicleChanges.entities.empty() &&
+        (soloCharacters || (view.countExisting<CharacterBody>()==0 && bodyChanges.entities.empty())) &&
+        view.countExisting<Vehicle>()==0 && vehicleChanges.entities.empty() &&
         view.resourceConst<RegionSeatIndex>() &&
         view.resourceConst<RegionSeatIndex>()->carByMember.empty();
     // Snapshot before adding ECS tags. Stable order ignores sparse pool order.
     std::vector<Entity> tracked;
     if(lootOnly) {
         std::set<uint64_t> candidates=lootChanges.entities;
+        if(soloCharacters)candidates.insert(bodyChanges.entities.begin(),bodyChanges.entities.end());
         for(const auto& [id,flags]:dirty->entries) { (void)flags; candidates.insert(id-1); }
         for(auto packed:candidates) {
             const auto e=Entity::fromPacked(packed);
-            if(view.alive(e) && view.has<Loot>(e))tracked.push_back(e);
+            if(view.alive(e) && (view.has<Loot>(e) || (soloCharacters && view.has<CharacterBody>(e))))tracked.push_back(e);
             else if(const auto* record=ledger->find(packed+1);record && record->live) {
                 if(!stagedLedger.despawn(packed+1,record->owner))
                     throw std::logic_error("regionOwnership: candidate retire failed");
