@@ -17,3 +17,4 @@
 #include "engine/buildings/BuildingLiftEcsBridge.h"
 #include "engine/buildings/BuildingCirculationEcsScene.h"
 #include "engine/buildings/BuildingLiftReplication.h"
+#include "engine/buildings/BuildingLiftCommands.h"
