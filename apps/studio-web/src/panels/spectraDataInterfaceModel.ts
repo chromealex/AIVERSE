@@ -145,3 +145,21 @@ export function providerNames(graph:SpectraGraphV2, query=''):string[] {
   return [...new Set(Object.values(graph.dataInterfaces??{}).map(b=>b.provider))]
     .filter(name=>validName(name)&&name.toLowerCase().includes(q)).sort();
 }
+
+/** Only select an actual image listed by the native Studio Assets catalog.
+ * Native ContentDirectory reports content-relative paths; SpectraFX texture
+ * loader resolves project-relative references ("content/" + path).
+ */
+export function putSpriteTexture(graph:SpectraGraphV2,nodeId:string,
+                                 assetPath:string,knownAssets:readonly string[]):GraphEdit {
+  const node=graph.nodes.find(n=>n.id===nodeId && n.type==='SpriteOutput');
+  if(!node)return failure(graph,'Select an existing SpriteOutput node.');
+  if(!knownAssets.includes(assetPath) ||
+     !assetPath || assetPath.startsWith('/') || assetPath.includes('\\') ||
+     assetPath.split('/').some(p=>p===''||p==='.'||p==='..') ||
+     !/\.(png|jpe?g|tga)$/i.test(assetPath))
+    return failure(graph,'Choose a supported image from the project Assets catalog.');
+  const path='content/'+assetPath;
+  return {graph:{...graph,nodes:graph.nodes.map(n=>n.id===nodeId?
+    {...n,properties:{...(n.properties??{}),texture:path}}:n)},error:''};
+}
