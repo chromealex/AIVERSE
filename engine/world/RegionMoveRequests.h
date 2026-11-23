@@ -53,6 +53,28 @@ inline void io(Archive& a,RegionMoveRequests& q) {
     }
 }
 
+inline bool validateRegionMoveRequests(const World& world,std::string& error){
+    const auto* moves=world.resourceConst<RegionMoveRequests>();
+    if(!moves)return true;
+    if(moves->destinations.empty())return true;
+    const auto* ledger=world.resourceConst<RegionEntityLedger>();
+    PersistentEntityReferences refs;
+    if(!ledger||!refs.rebuild(world,*ledger)){
+        error="staged region move identity index unavailable";
+        return false;
+    }
+    for(const auto& [id,destination]:moves->destinations) {
+        (void)destination;
+        Entity entity;
+        if(!id || !refs.resolve(world,id,entity)) {
+            error="staged region move references an unresolved identity";
+            return false;
+        }
+    }
+    return true;
+
+}
+
 template<class SimulationT>
 void registerRegionMoveRequests(SimulationT& sim) {
     sim.template registerPersistentResource<RegionMoveRequests>(
@@ -62,27 +84,7 @@ void registerRegionMoveRequests(SimulationT& sim) {
     sim.template registerPersistentResourceMigration<RegionMoveRequests>(
         "aiverse.world.region_move_requests",1,[](Archive& a,RegionMoveRequests& q){io(a,q);});
     // Save/load must reject unresolved or retired identities.
-    sim.addPersistentLoadValidator("aiverse.world.region_move_requests",
-        [](const World& world,std::string& error)->bool {
-            const auto* moves=world.resourceConst<RegionMoveRequests>();
-            if(!moves)return true;
-            if(moves->destinations.empty())return true;
-            const auto* ledger=world.resourceConst<RegionEntityLedger>();
-            PersistentEntityReferences refs;
-            if(!ledger||!refs.rebuild(world,*ledger)){
-                error="staged region move identity index unavailable";
-                return false;
-            }
-            for(const auto& [id,destination]:moves->destinations) {
-                (void)destination;
-                Entity entity;
-                if(!id || !refs.resolve(world,id,entity)) {
-                    error="staged region move references an unresolved identity";
-                    return false;
-                }
-            }
-            return true;
-        });
+    sim.addPersistentLoadValidator("aiverse.world.region_move_requests",validateRegionMoveRequests);
 }
 
 } // namespace aiverse::world
