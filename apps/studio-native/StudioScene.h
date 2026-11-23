@@ -70,6 +70,15 @@ public:
         settleFrames_=30;
     }
     bool spectraDockMode() const {return spectraDockMode_;}
+    void resetSpectraDockCamera() {
+        if(!spectraDockMode_)return;
+        camera_.target={0,1.0f,0};
+        camera_.distance=6.5f;
+        camera_.yaw=0.45f;camera_.pitch=0.23f;camera_.ortho=false;
+        cameraInitialized_=true;
+        tween_.active=false;
+        lastFrameSignature_=0;settleFrames_=30;
+    }
     Json spectraPreviewCommand(const Json& input,const std::string& project) {
         if(project!=spectraProject_ && spectraPreview_.active())
             spectraPreview_.stop(*device_);
