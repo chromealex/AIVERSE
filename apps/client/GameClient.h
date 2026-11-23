@@ -157,8 +157,10 @@ public:
     bool hostCanStep() const;
     bool setHostPaused(bool paused);
     bool setHostSpeed(double speed);
+    bool hostCheckpoint(bool restore);
 private:
     double hostSpeed_=0;
+    std::string hostCheckpoint_;
 public:
     bool requestHostStep();
 
