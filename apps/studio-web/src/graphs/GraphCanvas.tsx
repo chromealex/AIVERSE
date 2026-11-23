@@ -10,13 +10,13 @@ import './GraphCanvas.css';
 
 export interface GraphCommand {id:string;label:string;shortcut?:string;disabled?:boolean;run:()=>void}
 export interface GraphCanvasProps {
- view:GraphView; selected:string; label:string; disabled?:boolean;
+ view:GraphView; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
  commands?:readonly GraphCommand[]; onCancel?:()=>void;
  selection?:readonly string[]; onSelection?:(ids:string[])=>void; onMoveGroup?:(positions:Positioned[])=>void;
  onSelect:(id:string)=>void; onMove:(id:string,x:number,y:number)=>void;
 }
-export default function GraphCanvas({view,selected,label,disabled,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
+export default function GraphCanvas({view,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel}:GraphCanvasProps) {
  const svg=useRef<SVGSVGElement>(null);
  const scroll=useRef<HTMLDivElement>(null);
  const drag=useRef<{pointer:number;origin:Point;nodes:Positioned[]}|null>(null);
@@ -57,7 +57,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
   if(disabled||event.target!==event.currentTarget)return;
   const offsets:Record<string,[number,number]>={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]};
   if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelect(node.id);return;}
-  const delta=offsets[event.key];if(!delta)return;
+  const delta=offsets[event.key];if(!delta||readOnly)return;
   event.preventDefault();onSelect(node.id);onMove(node.id,node.x+delta[0],node.y+delta[1]);
  };
  const maxHeight=Math.max(320,...view.nodes.map(n=>n.y+(geometry.nodes.find(g=>g.id===n.id)?.height??54)+36));
@@ -109,7 +109,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
      if(disabled||event.button!==0||event.altKey||drag.current||box.current||pan.current)return;const p=point(event);if(!p)return;
      event.preventDefault();event.stopPropagation();event.currentTarget.focus();
      const next=selectNode(ids,node.id,event.shiftKey||event.metaKey||event.ctrlKey);
-     updateSelection(next);if(!next.includes(node.id))return;
+     updateSelection(next);if(readOnly||!next.includes(node.id))return;
      drag.current={pointer:event.pointerId,origin:p,nodes:view.nodes.filter(n=>next.includes(n.id)).map(n=>({id:n.id,x:n.x,y:n.y}))};
      event.currentTarget.setPointerCapture(event.pointerId);
     }}>
@@ -118,7 +118,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
     <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
     {geometry.ports.filter(p=>p.node===node.id).map(p=><circle key={p.direction+':'+p.port}
-     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||!(p.direction==='output'?onOutput:onInput)?-1:0}
+     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}
      aria-pressed={p.direction==='output'?samePort(pendingOutput,p):undefined}
      fill={p.direction==='output'&&samePort(pendingOutput,p)?'var(--au-accent-ink)':'var(--au-accent)'}
