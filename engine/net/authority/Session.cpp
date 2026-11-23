@@ -85,14 +85,14 @@ bool recordsSnapshot(const lib::delta::RecordSet& records,Snapshot& out) {
 Server::Server(const Json& rules,const Json& map,uint64_t seed,world::AssetReader reader):
     simulation_({seed,actor::readConfig(rules).tickRate,0,false},std::make_unique<game::GameCore>()),content_(contentId(rules,map)) {persistenceSupported_=rules.has("regionOwnership")&&!map["world"].getBool("async");simulation_.setup(rules,map);if(map["world"].getBool("async")){if(!reader)throw JsonError("world: server content reader required");module().setContentReader(std::move(reader));}}
 Server::~Server()=default;
-bool Server::enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume,size_t budget){
+bool Server::enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume,size_t budget,bool async){
     if(persistence_||persistenceFailed_||!persistenceSupported_||simulation_.tick()!=0||!peers_.empty())return false;
     try{
         // Static inline map content is bound by the existing canonical content
         // hash. External streaming assets need an immutable manifest digest.
         persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),
             "aiverse.actor.portable.v1:"+std::to_string(content_),budget);
-        if(persistence_->start(directory,uuid,resume))return true;
+        if(persistence_->start(directory,uuid,resume,async))return true;
     }catch(...){}
     persistenceFailed_=true;return false;
 }
@@ -103,13 +103,29 @@ bool Server::checkpointWorld(){
     for(auto& peer:peers_)peer.conn->close();
     return false;
 }
+bool Server::persistencePending()const{return persistence_&&persistence_->pending();}
+uint32_t Server::finalizedTick()const{return persistence_?persistence_->finalizedTick():simulation_.tick();}
+bool Server::pollWorldCheckpoint(){
+    if(persistenceFailed_)return false;
+    if(!persistence_||!persistence_->checkpointPending())return true;
+    if(persistence_->pollCheckpoint())return true;
+    if(persistence_->failed()){
+        persistenceFailed_=true;
+        for(auto& peer:peers_)peer.conn->close();
+    }
+    return false;
+}
 bool Server::occupied(uint8_t slot) const {for(const auto& p:peers_)if(p.slot==slot&&p.conn->state()!=ConnState::Closed)return true;return false;}
 bool Server::attach(uint8_t slot,std::unique_ptr<Conn> conn) {
-    if(persistenceFailed_||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
+    if(persistenceFailed_||(persistence_&&persistence_->tickPending())||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
     Peer peer;peer.slot=slot;peer.conn=std::move(conn);peer.lastReceived=module().character(std::as_const(simulation_),slot).lastSequence;peers_.push_back(std::move(peer));return true;
 }
 void Server::poll(uint64_t now) {
     if(persistenceFailed_)return;
+    if(persistence_&&persistence_->tickPending()){
+        for(auto& p:peers_)p.conn->update(now);
+        return; // no gameplay reads or input acknowledgements from an uncommitted tick
+    }
     for(auto& p:peers_) {
         if(!p.born)p.born=now+1;
         p.conn->update(now);
@@ -142,16 +158,18 @@ void Server::poll(uint64_t now) {
 }
 bool Server::step() {
     if(persistenceFailed_)return false;
-    if(!module().readyToStep(simulation_))return false;
+    if(!pollWorldCheckpoint())return false;
+    const bool awaiting=persistence_&&persistence_->tickPending();
+    if(!awaiting&&!module().readyToStep(simulation_))return false;
     // If Simulation's second readiness check refuses, keep the already
     // staged input batch; never inject a second batch for that same tick.
-    if(!inputsStaged_){
+    if(!awaiting&&!inputsStaged_){
         for(auto& p:peers_)if(p.ready&&!p.inputs.empty()) {
             auto c=actor::command(p.slot,p.inputs.front());p.inputs.pop_front();c.tick=simulation_.tick();simulation_.inject(c);
         }
         inputsStaged_=true;
     }
-    const auto before=simulation_.tick();
+    const auto before=finalizedTick();
     if(persistence_){
         using Result=world::NativeWorldFinality::Result;
         const auto result=persistence_->step();
@@ -160,7 +178,7 @@ bool Server::step() {
             for(auto& peer:peers_)peer.conn->close();
             return false;
         }
-        if(result==Result::WaitingForContent)return false;
+        if(result==Result::WaitingForContent||result==Result::WaitingForDurability)return false;
     }else simulation_.step();
     if(simulation_.tick()==before)return false;
     inputsStaged_=false;
