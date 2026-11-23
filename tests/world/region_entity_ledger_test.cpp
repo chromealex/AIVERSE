@@ -544,7 +544,7 @@ static void checkExactMutationCapture(){
 
 struct FinalityFixtureComponent {uint32_t value=0;};
 inline void io(Archive& ar,FinalityFixtureComponent& value){ar(value.value);}
-static void checkNativeFinality(){
+static void checkNativeFinality(bool restart=false){
 #if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
     namespace fs=std::filesystem;
     struct Temp {
@@ -566,6 +566,7 @@ static void checkNativeFinality(){
     AIVERSE_TEST_CHECK(ledger->spawn(101,a));
     sim->addSystem("finality.fixture",[e](Simulation& s){
         if(s.tick()!=0)return;
+        s.rng().next();
         auto* l=s.world().resource<RegionEntityLedger>();
         AIVERSE_TEST_CHECK(l->transfer(101,a,b)&&l->transfer(101,b,c));
         s.world().remove<FinalityFixtureComponent>(e);
@@ -581,29 +582,59 @@ static void checkNativeFinality(){
     adapters[1]=UnifiedComponentSection::adapter(codecs,budget);
     adapters[2]={1,[](const UnifiedWorldReplay::State&,std::vector<uint8_t>& out){out.clear();return true;},
         [](UnifiedWorldReplay::State&,uint32_t version,std::span<const uint8_t> in){return version==1&&in.empty();}};
+    NativeRestartState::CommandPolicy commandPolicy=[](const Command& cmd){return cmd.type==42&&cmd.args.empty()&&cmd.param==0;};
+    if(restart){
+        Command cmd;cmd.tick=4;cmd.player=1;cmd.type=42;cmd.units={e};cmd.target=e;
+        AIVERSE_TEST_CHECK(sim->submit(cmd)==4);
+    }
     UnifiedWorldReplay::State initial;
     initial.ledger=*ledger;initial.world=sim->world();
     initial.world.eraseResource<RegionEntityLedger>();
+    if(restart){
+        AIVERSE_TEST_CHECK(NativeRestartState::capture(*sim,*ledger,"fixture-content-v1",commandPolicy,initial.restart));
+        NativeRestartState::Data decoded;
+        AIVERSE_TEST_CHECK(NativeRestartState::decode(initial.restart,decoded)&&decoded.pending.size()==1);
+        AIVERSE_TEST_CHECK(decoded.pending[0].target==101&&decoded.pending[0].units==std::vector<RegionEntityId>{101});
+        auto truncated=initial.restart;truncated.pop_back();
+        AIVERSE_TEST_CHECK(!NativeRestartState::decode(truncated,decoded));
+        AIVERSE_TEST_CHECK(!NativeRestartState::capture(*sim,*ledger,"fixture-content-v1",{},truncated));
+    }
     UnifiedWalSession session;
     std::array<uint8_t,16> uuid{};uuid[0]=9;
     AIVERSE_TEST_CHECK(session.create(temp.dir,uuid,initial,adapters,budget)==RegionWalWrite::Ok);
     auto materialize=[](World&,const RegionEntityLedger&,const RegionEntityLedger&){return true;};
-    NativeWorldFinality finality(*sim,session,codecs,{},materialize);
+    NativeWorldFinality finality(*sim,session,codecs,{},materialize,{},budget,
+        restart?"fixture-content-v1":"",commandPolicy);
     using Result=NativeWorldFinality::Result;
     AIVERSE_TEST_CHECK(finality.step()==Result::Committed);
     AIVERSE_TEST_CHECK(session.state()->sequence==1&&session.state()->ledger.find(101)->owner==c);
-    AIVERSE_TEST_CHECK(finality.step()==Result::NoChanges&&finality.lastFinalizedTick()==2);
+    AIVERSE_TEST_CHECK(finality.step()==(restart?Result::Committed:Result::NoChanges)&&finality.lastFinalizedTick()==2);
+    const auto finalizedRng=sim->rng().state();
     // A normal speculative/unowned step is never written to WAL.
     sim->step();
     AIVERSE_TEST_CHECK(finality.step()==Result::NeedsRecovery&&finality.failed());
-    AIVERSE_TEST_CHECK(session.state()->sequence==1);
+    AIVERSE_TEST_CHECK(session.state()->sequence==(restart?2:1));
     session.close();
     AIVERSE_TEST_CHECK(session.openCheckpoint(temp.dir,uuid,budget,adapters,
-        [](){return std::make_unique<UnifiedWorldReplay::State>();},codecs,materialize)==RegionWalWrite::Ok);
+        [restart](){auto state=std::make_unique<UnifiedWorldReplay::State>();if(restart)state->world.create();return state;},codecs,materialize)==RegionWalWrite::Ok);
     PersistentEntityReferences refs;Entity restored;
     AIVERSE_TEST_CHECK(refs.rebuild(session.state()->world,session.state()->ledger));
     AIVERSE_TEST_CHECK(refs.resolve(session.state()->world,101,restored));
     AIVERSE_TEST_CHECK(session.state()->world.tryGetConst<FinalityFixtureComponent>(restored)->value==25);
+    if(restart){
+        AIVERSE_TEST_CHECK(restored!=e);
+        SimSnapshot snapshot;
+        auto fresh=makeSim();
+        AIVERSE_TEST_CHECK(!NativeRestartState::stage(*fresh,session.state()->world,session.state()->ledger,
+            session.state()->restart,"wrong-content",commandPolicy,snapshot));
+        AIVERSE_TEST_CHECK(NativeRestartState::stage(*fresh,session.state()->world,session.state()->ledger,
+            session.state()->restart,"fixture-content-v1",commandPolicy,snapshot));
+        AIVERSE_TEST_CHECK(snapshot.tick==2&&snapshot.rng.state()==finalizedRng);
+        AIVERSE_TEST_CHECK(snapshot.pending.at(4).front().target==restored&&snapshot.pending.at(4).front().units.front()==restored);
+        AIVERSE_TEST_CHECK(snapshot.seqByPlayer.at(1)==1);
+        fresh->loadState(snapshot);
+        AIVERSE_TEST_CHECK(fresh->tick()==2&&fresh->rng().state()==finalizedRng);
+    }
     session.close();
 #endif
 }
@@ -611,6 +642,7 @@ static void checkNativeFinality(){
 int main() {
     checkExactMutationCapture();
     checkNativeFinality();
+    checkNativeFinality(true);
     checkResourceWal();
     checkUnifiedBackupCatalog();
     checkLedger();
