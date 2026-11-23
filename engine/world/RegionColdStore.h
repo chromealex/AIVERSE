@@ -59,8 +59,10 @@ inline void regionColdBytes(Archive& a,std::string& bytes,uint32_t max) {
 }
 
 // Portable field-by-field, deterministic and failure-atomic decode.
-// Bytes held here contain parked components only, not Entity references or
-// presentation resources. Native ECS v10 persists the resource with its schema.
+// Bytes held here contain game-defined component payloads. Entity references
+// inside those payloads remain the host's responsibility (their handles are
+// retained in this stage); never store GPU or other presentation resources.
+// Native ECS v10 persists this resource with its schema.
 inline void io(Archive& a,RegionColdStore& store) {
     uint32_t schema=RegionColdStore::kSchema;
     a(schema);
