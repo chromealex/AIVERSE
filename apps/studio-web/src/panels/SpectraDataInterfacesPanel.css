@@ -33,3 +33,19 @@
 .spectra-di__image-list button {max-width:100%;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;}
 .spectra-di__drop {display:flex;align-items:center;justify-content:center;min-height:50px;padding:var(--au-space-3);border:1px dashed var(--au-line-strong);border-radius:var(--au-radius-sm);color:var(--au-text-soft);background:var(--au-field);font-size:var(--au-font-sm);text-align:center;overflow-wrap:anywhere;}
 .spectra-di__drop:focus-within {outline:2px solid var(--au-accent);}
+
+/* First-use flow: creation must remain visible in a narrow dock instead of
+   hiding below the asset list's independent scrollbar. */
+.spectra-di__top-actions {display:flex;align-items:center;flex-wrap:wrap;gap:var(--au-space-2);}
+.spectra-di__welcome {display:flex;flex:1;min-height:180px;align-items:center;justify-content:center;
+  flex-direction:column;text-align:center;gap:var(--au-space-3);padding:var(--au-space-4);color:var(--au-text-soft);}
+.spectra-di__welcome strong {font-size:var(--au-font-lg);color:var(--au-text);}
+.spectra-di__welcome p {font-size:var(--au-font-sm);color:var(--au-text-muted);
+  max-width:320px;line-height:1.5;margin:0;}
+.spectra-di__welcome .au-button {flex-shrink:0;}
+.spectra-di__empty-list {padding:var(--au-space-2);text-align:left;}
+@container (max-width:570px) {
+  .spectra-di__library {max-height:300px;}
+  .spectra-di__layout {grid-template-rows:auto minmax(180px,1fr);}
+  .spectra-di__assets {max-height:110px;min-height:0;}
+}
