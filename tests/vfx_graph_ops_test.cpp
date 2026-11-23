@@ -216,7 +216,18 @@ int main() {
     require(!gpuNormal.msl.empty()&&gpuNormal.msl.find("evaluatePoint")!=std::string::npos,"GPU normal source missing");
     require(gpuNormal.glsl.find("binding=12")!=std::string::npos&&gpuNormal.glsl.find("gl_GlobalInvocationID")!=std::string::npos,"Vulkan storage ABI missing");
     auto unsupportedTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":128,"nodes":[{"id":"p","op":"pattern","inputs":[],"properties":{"pattern":"brick"}}],"outputs":{"color":"p"}})"));
-    require(render::texture_graph::gpu::compile(unsupportedTexture,0,128).msl.empty(),"unsupported pattern compiled to GPU");
+    require(!render::texture_graph::gpu::compile(unsupportedTexture,0,128).msl.empty(),"GPU brick pattern source missing");
+    for(const auto& pattern:render::texturePatterns()){
+        auto doc=Json::parse(R"({"version":1,"size":128,"nodes":[{"id":"p","op":"pattern","inputs":[],"properties":{}},{"id":"mask","op":"patternMask","inputs":[],"properties":{}},{"id":"normal","op":"normal","inputs":["mask"]}],"outputs":{"color":"p","normal":"normal"}})");
+        doc.member("nodes").at(0).member("properties").set("pattern",Json::string(pattern));
+        doc.member("nodes").at(1).member("properties").set("pattern",Json::string(pattern));
+        const auto program=render::texture_graph::compile(doc);
+        const auto colorPlan=render::texture_graph::gpu::plan(program,0,128);
+        require(!colorPlan.first.msl.empty()&&!colorPlan.first.glsl.empty()&&!colorPlan.twoPass,"pattern plan source missing");
+        const auto normalPlan=render::texture_graph::gpu::plan(program,2,128);
+        require(normalPlan.twoPass&&normalPlan.scratchBytes==65536,"normal scratch plan wrong");
+        require(normalPlan.first.glsl.find("floatBitsToUint")!=std::string::npos&&normalPlan.second.glsl.find("binding=13")!=std::string::npos,"normal plan ABI missing");
+    }
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
 
