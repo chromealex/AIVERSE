@@ -216,7 +216,10 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
         if(up<=Fixed{}||up>Fixed::fromRatio(15,10))return;
         auto height=stanceHeight(a,config_.motor);Vec3 center=a.pos+Vec3{{},height/2,{}},half{config_.motor.radius,height/2,config_.motor.radius};
         if(collision_.cast(center,{{},up,{}},half).hit||collision_.cast(center+Vec3{{},up,{}},dir,half).hit)return;
-        a.pos+=Vec3{{},up,{}}+dir;a.velocity={};return;
+        a.pos+=Vec3{{},up,{}}+dir;a.velocity={};
+        if(!reportRegionMoveIfCrossed(sim,a.entity))
+            throw std::logic_error("regionOwnership: vault boundary dirty report failed");
+        return;
     }
     if(a.activeAction!=Action::None)return;
     auto begin=[&](Action action,uint32_t duration,uint32_t target){a.activeAction=action;a.actionUntil=now+duration;a.actionTarget=target;a.actionOrigin=a.pos;};
