@@ -121,6 +121,8 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_edit","Apply 1..64 native-schema draft edits atomically in memory. Returns candidate and native diagnostics; never saves.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);
         auto source=q[d.payload];const auto edits=graph_draft::actions(p);
+        const size_t budget=std::string(d.id)=="modeling"?16*1024*1024:1024*1024;
+        if(source.dump(-1).size()>budget||edits.dump(-1).size()>budget)throw std::length_error("graph draft input exceeds size budget");
         const std::string id=d.id;
         for(const auto& e:edits.items())if(!e.isObject())throw std::invalid_argument("every draft command must be an object");
         if(id=="modeling"){
@@ -140,11 +142,13 @@ inline void registerGraphOps(Workspace& ws) {
         }
         // Complete draft diagnostics are distinct from successful command application.
         // Invalid drafts may be repaired; graph_save always revalidates.
+        if(source.dump(-1).size()>budget)throw std::length_error("edited graph exceeds size budget");
         if(id=="motionweave")animation::sort(source);
         Json args=Json::object();args.set(d.payload,source);
         auto validation=invoke(ws,d.validate,args);
         Json result=Json::object();result.set("ok",Json::fromBool(true));result.set(d.payload,source);
-        result.set("valid",Json::fromBool(!failed(validation)));result.set("validation",compact(std::move(validation)));
+        result.set("valid",Json::fromBool(!failed(validation)));
+        validation.erase(d.payload);result.set("validation",compact(std::move(validation)));
         result.set("applied",Json::number(int64_t(edits.size())));result.set("saved",Json::fromBool(false));
         return envelope(d,"graph_edit",std::move(result));
     }});
@@ -157,7 +161,7 @@ inline void registerGraphOps(Workspace& ws) {
             if(!p["expected"].isObject())throw std::invalid_argument("expected original graph required");
             q.set("expected",p["expected"]);
         }else{
-            if(!p["expectedRevision"].isNumber()||p.getInt("expectedRevision")<1)throw std::invalid_argument("positive expectedRevision required");
+            if(!p["expectedRevision"].isNumber()||p.getInt("expectedRevision")<1||p["expectedRevision"].toDouble()!=double(p.getInt("expectedRevision")))throw std::invalid_argument("positive expectedRevision required");
             q.set("expectedRevision",p["expectedRevision"]);
         }
         auto validation=invoke(ws,d.validate,candidate(d,p));
