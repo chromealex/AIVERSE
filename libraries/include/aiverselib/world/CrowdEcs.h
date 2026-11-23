@@ -78,17 +78,22 @@ inline bool advance(World& world,std::uint32_t tick){
         if(slots[i].second.enabled)slotIds.emplace(slots[i].first.packed(),i);
     }
     std::map<std::uint64_t,std::vector<std::size_t>> preferred;
+    std::vector<std::pair<Entity,Preference>> preferences;
     read.eachExistingConst<Preference>([&](Entity e,const Preference& p){
-        if(!read.alive(e)||!p.enabled||!read.alive(p.agent))return;
+        if(read.alive(e)&&p.enabled&&read.alive(p.agent))
+            preferences.push_back({e,p});
+    });
+    std::sort(preferences.begin(),preferences.end(),
+              [](const auto& a,const auto& b){return a.first.packed()<b.first.packed();});
+    for(const auto& [entity,p]:preferences){
+        (void)entity;
         auto& vec=preferred[p.agent.packed()];
         for(Entity slot:p.options){
             const auto it=slotIds.find(slot.packed());
-            if(it!=slotIds.end())vec.push_back(it->second);
+            if(it!=slotIds.end()&&
+               std::find(vec.begin(),vec.end(),it->second)==vec.end())
+                vec.push_back(it->second);
         }
-    });
-    for(auto& [key,vec]:preferred){
-        (void)key;
-        vec.erase(std::unique(vec.begin(),vec.end()),vec.end());
     }
     bool all=true,any=false;
     for(const auto& [e,a]:agents){
