@@ -69,14 +69,23 @@ int main(int argc,char** argv){
             CHECK(std::abs(float(opened.anchors[i].outside.x.toDouble())-graph.sockets[i].x)<0.002f);
             CHECK(std::abs(float(opened.anchors[i].outside.z.toDouble())-graph.sockets[i].z)<0.002f);
         }
-        CHECK(graph.sockets[0].id=="entrance/0/0");
-        CHECK(std::abs(graph.sockets[0].x-7.f)<0.001f);  // large gate pinned to front X=7
-        CHECK(std::abs(graph.sockets[1].x-10.15f)<0.001f); // two back gates, 1m gap
-        CHECK(std::abs(graph.sockets[2].x-13.85f)<0.001f);
-        CHECK(std::abs(graph.sockets[3].x-18.f)<0.001f); // personnel door pinned at X=18
-        CHECK(graph.sockets[4].id=="roof/3");
-        CHECK(std::abs(graph.sockets[4].x-13.f)<0.001f);
-        CHECK(std::abs(graph.sockets[4].z-10.f)<0.001f);
+        const auto socket=[&](const BuildingStructureGraph& layout,
+                              const std::string& id)->const BuildingGraphSocket* {
+            for(const auto& item:layout.sockets)if(item.id==id)return &item;
+            return nullptr;
+        };
+        const auto* large=socket(graph,"entrance/0/0");
+        const auto* small0=socket(graph,"entrance/1/0");
+        const auto* small1=socket(graph,"entrance/1/1");
+        const auto* person=socket(graph,"entrance/2/0");
+        const auto* roof=socket(graph,"roof/3");
+        CHECK(large&&small0&&small1&&person&&roof);
+        CHECK(std::abs(large->x-7.f)<0.001f);
+        CHECK(std::abs(small0->x-10.15f)<0.001f);
+        CHECK(std::abs(small1->x-13.85f)<0.001f);
+        CHECK(std::abs(person->x-18.f)<0.001f);
+        CHECK(std::abs(roof->x-13.f)<0.001f);
+        CHECK(std::abs(roof->z-10.f)<0.001f);
 
         // Mixed fixed and automatic positions: auto features fill free wall
         // space without displacing an exact portal or producing overlaps.
@@ -85,8 +94,10 @@ int main(int argc,char** argv){
         const auto mixedGraph=buildFunctionalStructureGraph(mixed);
         CHECK(mixedGraph);
         CHECK(mixedGraph.sockets.size()==5);
-        CHECK(std::abs(mixedGraph.sockets[0].x-7.f)<0.001f);
-        CHECK(std::abs(mixedGraph.sockets[3].x-1.32f)<0.001f);
+        CHECK(socket(mixedGraph,"entrance/0/0"));
+        CHECK(socket(mixedGraph,"entrance/2/0"));
+        CHECK(std::abs(socket(mixedGraph,"entrance/0/0")->x-7.f)<0.001f);
+        CHECK(std::abs(socket(mixedGraph,"entrance/2/0")->x-1.32f)<0.001f);
         auto overlap=recipe;
         overlap.features[2].position=7.f; // same front wall span as large gate
         const auto badGraph=buildFunctionalStructureGraph(overlap);
