@@ -18,8 +18,8 @@ const settingLabel = (id:string) => ({scifi:'Sci-fi',modern:'Modern'} as Record<
 const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
 
 export default function BuildingGeneratorPanel({
-  snapshot, showPanel
-}: { snapshot:StudioSnapshot|null; showPanel:(p:PanelId)=>void }) {
+  snapshot, showPanel, commitSnapshot
+}: { snapshot:StudioSnapshot|null; showPanel:(p:PanelId)=>void; commitSnapshot:(s:StudioSnapshot)=>void }) {
   const projectLoaded=Boolean(snapshot?.project.path);
   const [styles,setStyles]=useState<StudioBuildingStyle[]>([]);
   const [setting,setSetting]=useState('scifi');
@@ -135,6 +135,23 @@ export default function BuildingGeneratorPanel({
     finally{setBusy(false);}
   };
 
+  const reveal=()=>{
+    if(!saved)return;
+    showPanel('assets');
+    window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path:saved.path}}));
+  };
+  const place=async()=>{
+    if(!saved||busy)return;
+    setBusy(true);setError('');
+    try{
+      const updated=await invoke('studio.assetPlace',{asset:'content/'+saved.path,x:0,z:0});
+      commitSnapshot(updated);
+      setStatus('Generated model placed as a scene entity at the map origin. Use Transform to move it.');
+      showPanel('scene');
+    }catch(e){setError(explain(e));}
+    finally{setBusy(false);}
+  };
+
   if(!projectLoaded)return <StudioPanel title="Building Generator" eyebrow="WORLD / PROCEDURAL">
     <StudioEmptyState title="Open a project" icon={<Building2 size={24}/>}
       description="Generated models are saved as real .glb files in your project's content/ folder."/>
@@ -231,7 +248,10 @@ export default function BuildingGeneratorPanel({
           <strong>{saved.path}</strong>
           <small>GUID: {saved.guid}</small>
           <small>{saved.triangles.toLocaleString()} triangles · {(saved.bytes/1024).toFixed(1)} KiB</small>
-          <StudioButton onClick={()=>showPanel('assets')}>Show Assets</StudioButton>
+          <div className="abg__actions">
+            <StudioButton onClick={reveal}>Reveal in Assets</StudioButton>
+            <StudioButton variant="primary" disabled={busy} loading={busy} onClick={()=>void place()}>Place in Scene</StudioButton>
+          </div>
         </div>
       </StudioSection>}
     </div>

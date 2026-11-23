@@ -162,7 +162,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'human_appearance': return <HumanAppearancePanel snapshot={snapshot}/>;
       case 'human_creator': return <HumanCreatorPanel snapshot={snapshot}/>;
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'building_generator': return <BuildingGeneratorPanel snapshot={snapshot} showPanel={ctx.showPanel}/>;
+      case 'building_generator': return <BuildingGeneratorPanel snapshot={snapshot} showPanel={ctx.showPanel} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
