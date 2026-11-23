@@ -61,6 +61,12 @@ int main(int argc,char** argv){
         CHECK(recipeAsset.getStr("path").find("scifi-custom-7")!=std::string::npos);
         CHECK(studioValidGuid(recipeAsset.getStr("guid")));
         CHECK(fs::is_regular_file(studioMetaPath(content/recipeAsset.getStr("path"))));
+        CHECK(fs::is_regular_file(content/recipeAsset.getStr("recipePath")));
+        const auto savedRecipe=Json::parseFile((content/recipeAsset.getStr("recipePath")).string());
+        CHECK(savedRecipe.getStr("mode")=="features");
+        CHECK(savedRecipe["features"].size()==4);
+        CHECK(savedRecipe["features"][1].getStr("kind")=="small-gate");
+        CHECK(savedRecipe["features"][1]["count"].integer()==2);
         custom.set("style",Json::string("modern"));
         custom.set("setting",Json::string("modern"));
         auto modernPreview=studioBuildingInspect(engine,custom);
