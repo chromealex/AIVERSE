@@ -632,6 +632,35 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-ancient-civilizations",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-ancient-civilizations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Ancient Civilizations portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/ancient-civilizations.json",
+      "keywords": [
+        "building",
+        "ancient-civilizations",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-cyberpunk",
       "package": "building-style",
       "path": "skills/world/aiverse-building-cyberpunk/SKILL.md",
@@ -753,6 +782,64 @@
         "decor",
         "здания",
         "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-modern",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-modern/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Modern / Contemporary portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/modern.json",
+      "keywords": [
+        "building",
+        "modern",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-post-apocalypse",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-post-apocalypse/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Post-Apocalypse portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/post-apocalypse.json",
+      "keywords": [
+        "building",
+        "post-apocalypse",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
       ],
       "contentPackages": []
     },
