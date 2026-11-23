@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -222,6 +223,16 @@ public:
         if(scene.valid(it->second.body))scene.destroy(it->second.body);
         resident_.erase(it);
     }
+    // Retire chunks no longer requested by the physics owner's resident
+    // region selection. Call only after ALL replacement patches succeeded.
+    void retireAbsent(physics::Scene& scene,
+                      const std::set<GranularPatchKey>& required){
+        for(auto it=resident_.begin();it!=resident_.end();){
+            if(required.contains(it->first)){++it;continue;}
+            if(scene.valid(it->second.body))scene.destroy(it->second.body);
+            it=resident_.erase(it);
+        }
+    }
     void shutdown(physics::Scene& scene){
         for(const auto& [key,entry]:resident_){
             (void)key;
@@ -291,6 +302,23 @@ public:
         if(it->second.mesh.vb.valid())device.destroyBuffer(it->second.mesh.vb);
         if(it->second.mesh.ib.valid())device.destroyBuffer(it->second.mesh.ib);
         resident_.erase(it);
+        return true;
+    }
+    bool retireAbsent(gfx::Device& device,
+                      const std::set<GranularPatchKey>& required){
+        bool any=false;
+        for(const auto& [key,item]:resident_){
+            (void)item;
+            if(!required.contains(key)){any=true;break;}
+        }
+        if(!any)return true;
+        if(!device.waitForResourceIdle())return false;
+        for(auto it=resident_.begin();it!=resident_.end();){
+            if(required.contains(it->first)){++it;continue;}
+            if(it->second.mesh.vb.valid())device.destroyBuffer(it->second.mesh.vb);
+            if(it->second.mesh.ib.valid())device.destroyBuffer(it->second.mesh.ib);
+            it=resident_.erase(it);
+        }
         return true;
     }
     // Submit only at the normal Renderer3D beginScene/drawMesh stage.
