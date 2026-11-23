@@ -519,7 +519,9 @@ W1 ledger schema continues to use 32-unit region cells.
    `transferGroup` overload validates each expected source
    independently, then changes all necessary owners in stable
    ID order. An invalid/stale/dormant member causes the group
-   to be rejected rather than partially changed.
+   to be rejected rather than partially changed. The ActorHost adapter
+   also rejects an orphaned `CharacterBody.vehicle` backlink or duplicate
+   `Vehicle.id` before attempting any ownership change.
 4. Independently migrate on-foot actors and loot whose region
    changed. Those already handled as car occupants are skipped,
    preventing the same tick from moving one passenger twice.
