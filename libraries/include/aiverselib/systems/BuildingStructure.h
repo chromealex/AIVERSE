@@ -12,7 +12,9 @@ namespace aiverse::lib::systems {
 // All zero preserves legacy style dimensions. Explicit dimensions are the final envelope,
 // including projecting components, props, foundations and gates in the mesh.
 struct StructureSize{float width=0,height=0,depth=0;};
-struct StyledStructure{StyledMesh mesh;std::vector<BuildingBox> boxes;std::vector<Vec3> gates;};   // gates: ground points in front of each gate
+struct StyledStructure{StyledMesh mesh;std::vector<BuildingBox> boxes;std::vector<Vec3> gates;
+    StructureSize constructionSize{}; // actual authored body dimensions, before any rigid translation
+};   // gates: ground points in front of each gate
 namespace buildingStyleDetail {
 using P3=std::array<float,3>;
 // Rectangle with cut corners (8 points; 4 when the cut is 0) at height y, counter-clockwise from -Z.
@@ -117,6 +119,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             if(mat.emissive[0]+mat.emissive[1]+mat.emissive[2]>0)mat.emissive=c;else mat.color=c;}}
     Mesher m(out.mesh.materials.size());
     const float W=custom?body.width:k.width,D=custom?body.depth:k.depth,Hh=custom?body.height:k.height.pick(g),pad=k.pad;
+    out.constructionSize={W,Hh,D};
     const float cut=custom?std::min(k.chamfer,std::min(W,D)*0.22f):k.chamfer;
     const float padH=0.35f;
     auto plateMat=[&]{return sm.team>=0&&u()<k.teamChance?sm.team:(sm.plate>=0?sm.plate:sm.hull);};

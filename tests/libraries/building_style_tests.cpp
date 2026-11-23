@@ -227,6 +227,35 @@ int main(int argc,char** argv){
                     CHECK(bb.lo[axis]>=base[axis]-0.002f&&bb.hi[axis]<=base[axis]+want[axis]+0.002f);
             }
         }
+        // Crucial invariant of constructive fitting: every rendered vertex
+        // differs from fresh raw geometry by the SAME translation; normals
+        // and UVs must remain exactly unchanged (no nonuniform rescaling).
+        for(const auto& kind:st.structures){
+            const Vec3 origin{10_fx,2_fx,-5_fx};
+            for(uint32_t turn=0;turn<4;++turn){
+                const auto sized=dressStructure(st,kind.id,7,origin,turn,StructureSize{32.f,20.f,28.f});
+                CHECK(!sized.mesh.vertices.empty());
+                const auto raw=dressStructureGeometry(st,kind.id,7,{},turn,sized.constructionSize);
+                CHECK(!raw.mesh.vertices.empty());
+                CHECK(sized.mesh.vertices.size()==raw.mesh.vertices.size());
+                CHECK(sized.mesh.triangles()==raw.mesh.triangles());
+                const float shift[3]={
+                    sized.mesh.boundsMin[0]-raw.mesh.boundsMin[0],
+                    sized.mesh.boundsMin[1]-raw.mesh.boundsMin[1],
+                    sized.mesh.boundsMin[2]-raw.mesh.boundsMin[2]
+                };
+                for(size_t i=0;i<sized.mesh.vertices.size();++i)for(int axis=0;axis<3;++axis){
+                    CHECK(std::abs((sized.mesh.vertices[i].pos[axis]-raw.mesh.vertices[i].pos[axis])-shift[axis])<0.003f);
+                    CHECK(sized.mesh.vertices[i].nrm[axis]==raw.mesh.vertices[i].nrm[axis]);
+                }
+                for(size_t i=0;i<sized.mesh.vertices.size();++i)for(int uv=0;uv<2;++uv)
+                    CHECK(sized.mesh.vertices[i].uv[uv]==raw.mesh.vertices[i].uv[uv]);
+                CHECK(sized.constructionSize.width>0&&sized.constructionSize.height>0);
+                CHECK(std::abs((sized.mesh.boundsMax[0]-sized.mesh.boundsMin[0])-(turn%2?28.f:32.f))<0.002f);
+                CHECK(std::abs((sized.mesh.boundsMax[1]-sized.mesh.boundsMin[1])-20.f)<0.002f);
+                CHECK(std::abs((sized.mesh.boundsMax[2]-sized.mesh.boundsMin[2])-(turn%2?32.f:28.f))<0.002f);
+            }
+        }
         auto small=dressStructure(st,"factory",42,{},0,StructureSize{12.f,10.f,12.f});
         auto large=dressStructure(st,"factory",42,{},0,StructureSize{40.f,12.f,30.f});
         CHECK(!small.mesh.vertices.empty()&&!large.mesh.vertices.empty());
