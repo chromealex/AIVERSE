@@ -147,3 +147,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 42: two-axis group scale and custom pivot RPC
 
 `studio.worldProcessAreaBatchResize` now accepts `axis:"both"`, independent X ratio (`scaleNumerator`,`scaleDenominator`) and Z ratio (`scaleNumeratorZ`,`scaleDenominatorZ`), plus `pivot:"custom"` with world-centimetre `pivotXcm`,`pivotZcm`. It stages all selected EvolveArea offset/half-extent changes and commits one MapDoc Undo after validation. Legacy one-axis/shared/individual calls remain. Native Scene numeric inputs and custom-pivot gizmos are **not yet implemented**; the new operation is accessible through the RPC. No build/runtime QA performed (deferred). See `docs/handoffs/world-processes-stage42-two-axis-custom-pivot-2026-11-23.md`.
+
+## Stage 43: numeric 2D preview geometry and pivot overlay
+
+`worldprocess_edit::previewGroupScale2D` computes read-only candidate rectangles for exact rational X/Z scale and a custom world-centimetre pivot. Native Scene now draws a numeric pivot label/marker and example group preview during drag. The Stage42 batch RPC still commits exact custom-pivot/two-axis edits. **Editable numeric Scene controls and draggable pivot gizmo are not yet implemented.** No compile or runtime QA performed (deferred). See `docs/handoffs/world-processes-stage43-two-axis-preview-pivot-2026-11-23.md`.
