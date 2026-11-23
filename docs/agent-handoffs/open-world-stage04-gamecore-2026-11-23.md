@@ -23,6 +23,8 @@ Code commits:
 - `3bd97f52093164cba85e8fd98b6932f19eab177c` — CMake test.
 - `912a63faf9caf2af2027365e494d03390e9114d0` — missing ECS binding/fail-closed pending-request case.
 - `e664d39875a7610ad5eaa1a5c7e408c584cc595d` — documentation.
+- `0a3ca21ed1ea18a3fb4bcb0f9afcfe0a8fd63671` — idle scheduler now avoids detaching large COW cold resources, idempotent request avoids queue COW detach; install rejects any already-owned W1 resource rather than resetting it.
+- `cce148d49771c084688662464e67c7238c1aba7b` — added source tests for idle COW pointer preservation and rejected duplicate installation.
 
 ## API/architecture
 
@@ -61,6 +63,7 @@ Test source `tests/world/region_gamecore_integration_test.cpp` includes:
 - Real Simulation serialized save → fresh GameCore restore, same checksum, same assignment; hot state resumes tick processing.
 - COW rollback restores live component after a subsequent cold request.
 - Missing materialized ledger ID blocks a queued request without touching existing actor, remains queued; hot as well as cold requests fail conservatively until ownership is repaired.
+- Idle scheduler on a COW snapshot leaves the cold-store pointer untouched (no pointless 16 MiB data copy); duplicate install is rejected without overwriting preexisting W1 state.
 - A normal GameCore run **without** this native module has no W1 ECS resources at all.
 
 **Source verification actually performed:** fetched real `GameCore::setup`, `NativeModules::load/command/tick`, `Simulation::setup/step/serialize` interfaces, connected current W1 sources, CMake pattern from existing `ecs_native_rts_integration_test`, and the current W1 branch ancestry. Created the new header/test/CMake/docs and verified GitHub accepted those commits.
@@ -76,6 +79,7 @@ Test source `tests/world/region_gamecore_integration_test.cpp` includes:
 - The scheduler does not make structural ECS pool changes exception-atomic; allocation failures during hot/cold commit remain a host boundary.
 - The authority queue has bounded region-entry count, but the initial cold-store implementation copies its map for preflight and still keeps all Entity/Transform objects resident; not a proof of AAA memory budgets.
 - The test uses external template content like existing engine integration tests; no user project/game source is copied into the engine.
+- **Current real-host adapter covers GameCore's grid path via `NativeModules`**. The `RegionLifecycleRuntime` API itself is Simulation-generic, but `GameCore::setup` delegates immediately to `ActorHost` for world-space maps, and that path does not load the grid-native module interface. W1.5 must prove an independent world-space host consumer rather than claiming world-space runtime support from this test alone.
 
 ## Next agent steps (W1.5)
 
