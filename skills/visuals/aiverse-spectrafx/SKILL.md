@@ -1701,3 +1701,16 @@ SPFX verification with Metal device correctness.
 
 Stage 44 handoff:
 `docs/agent-handoffs/spectrafx-stage-44-offline-diagnostics-tested-2026-11-19.md`.
+
+## HTML5 Studio native FX replay and capture (Stages 26–36)
+
+Use the Studio native FX bridge (`studio.spectraPreview`) for deterministic **CPU** replay, not the older GUI-only `fx_graph_preview` when you need tick-controlled capture.
+
+- `{action:"replayPrepare",tick:120,parameters:{},seed:1234}`: CPU-only RNG seed; the runtime resets particle UIDs and RNG before the initial burst. Seed must be an integer from 0 to 2147483647.
+- `{action:"replayPrepare",tick:120,parameters:{},gpuAllocationSeed:1234}`: Metal-only *slot allocation* seed. It does **not** seed GPU shader randomness or guarantee CPU/GPU visual parity. Never pass `seed` and `gpuAllocationSeed` together.
+- Poll `{action:"status"}` until `replayReady===true`; check `gpuSeedPending`, `gpuSeedFailed`, and `gpuSeedRetries` (maximum 8). Do not treat a matching tick alone as completion.
+- Request `{action:"capture",maxSide:512,requireReplayReady:true}`, then poll `{action:"captureStatus"}` for bounded asynchronous JPEG completion. The capture guard and callback registration run in a single native render-owner dispatch.
+- Inspect `capture.provenance`: tick, generation, backend, camera, replayReady, request-time frame serial and fence observations. **`frameExact:false`** means the GPU completion callback does not identify the exact captured frame. Never claim fence-exact capture.
+- The HTML5 A/B tool compares decoded 8-bit JPEG pixels, not HDR or alpha. Warn when graph generation, native tick, camera or backend differs. Keep provenance attached to comparison reports.
+
+Read handoffs `docs/agent-handoffs/spectrafx-studio-stage30-cpu-replay-seed-2026-11-23.md` through `spectrafx-studio-stage36-rhi-capture-observations-2026-11-23.md` before changing this flow. The current feature branch has **not** undergone the deferred native/TypeScript/Metal QA; do not report source-only features as tested.
