@@ -4,6 +4,7 @@
 // STRATA and Renderer3D are both routed through ONE GeometryScene::draw.
 // Physics/NavMesh commit is a mandatory host callback, NOT performed here.
 #include "engine/render/TerraWeaveCavernsEditPresentation.h"
+#include "engine/render/TerraWeaveCavernsSwapPolicy.h"
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -32,12 +33,10 @@ public:
     bool stage(gfx::Device& dev,CaveBatchPrepared prepared,
                uint64_t renderRevision,bool enableStrata,
                size_t vertexBudget=2000000){
-        if(!renderRevision||renderRevision<=activeRevision_||
-           (staged_ && renderRevision<=stagedRevision_)||
-           !vertexBudget||vertexBudget>16000000||
-           prepared.models.empty())return false;
-        if(retired_.size()+size_t(bool(active_))+size_t(bool(staged_))>=kMaxRetainedScenes)
-            return false; // backpressure, never leak/overallocate
+        if(!vertexBudget||vertexBudget>16000000||prepared.models.empty())return false;
+        const size_t liveOwners=retired_.size()+size_t(bool(active_))+size_t(bool(staged_));
+        if(!caveCanStageScene(activeRevision_,stagedRevision_,renderRevision,
+                              liveOwners,kMaxRetainedScenes))return false; // backpressure, never leak/overallocate
         // Reserve before a GPU allocation to make failure retention safe.
         if(retired_.capacity()<kMaxRetainedScenes)
             retired_.reserve(kMaxRetainedScenes);
@@ -63,7 +62,7 @@ public:
     // swap succeeded at the owner barrier. A false result retains old draw.
     template<class Commit>
     bool activate(Commit&& hostCommit) {
-        if(!staged_||stagedRevision_<=activeRevision_)return false;
+        if(!staged_||!caveCanActivateScene(activeRevision_,stagedRevision_))return false;
         bool committed=false;
         try {committed=hostCommit(stagedRevision_);}
         catch(...) {return false;}
