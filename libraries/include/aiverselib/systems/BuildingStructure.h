@@ -212,6 +212,69 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
         taken.push_back({tx-0.3f,tz-0.3f,tx+tw+0.3f,tz+td+0.3f});
         if(sm.beacon>=0)m.box(sm.beacon,(t.x0+t.x1)/2-0.12f,t.y,(t.z0+t.z1)/2-0.12f,(t.x0+t.x1)/2+0.12f,t.y+0.2f,(t.z0+t.z1)/2+0.12f);
     }
+    // 7b. Bounded, data-authored large-scale geometry. Layout coordinates are
+    // relative to the footprint and height; the material belongs to the style.
+    // This grammar is independent of the setting and gameplay role.
+    for(const StructureForm& form:k.forms)for(uint32_t i=0;i<form.repeat;++i){
+        if(u()>form.chance)continue;
+        const float cx=(form.x+form.stepX*float(i))*W;
+        const float cz=(form.z+form.stepZ*float(i))*D;
+        const float fw=form.width*W,fd=form.depth*D,fh=form.height*Hh;
+        const float x0=cx-fw*0.5f,x1=cx+fw*0.5f,z0=cz-fd*0.5f,z1=cz+fd*0.5f;
+        const float y0=padH+form.level*Hh,y1=y0+fh;
+        if(fw<0.35f||fd<0.35f||fh<0.3f)continue;
+        const int material=form.material;
+        switch(form.kind){
+        case StructureForm::Kind::Pod:{
+            // Cut-corner wing, possibly protruding past the main hull.
+            if(fw<1.5f||fd<1.5f)break;
+            const float chamfer=std::min({cut*0.45f,fw*0.15f,fd*0.15f});
+            block(x0,z0,x1,z1,y0,fh,chamfer,
+                  std::min(fw,fd)*form.taper,2,k.roofRise*0.25f);
+            break;}
+        case StructureForm::Kind::Silo:{
+            // Round reactor, storage silo or coolant vessel.
+            const float radius=std::min(fw,fd)*0.46f;
+            m.cylinder(material,{cx,y0,cz},1,radius,fh,16);
+            if(sm.dark>=0)
+                m.cylinder(sm.dark,{cx,y0+fh*0.78f,cz},1,radius*1.06f,
+                           std::max(0.08f,fh*0.055f),16);
+            addBox(cx-radius,y0,cz-radius,cx+radius,y1,cz+radius);
+            break;}
+        case StructureForm::Kind::Pylon:{
+            // Four-sided tapered support with a light at its apex.
+            const float inset=std::min(fw,fd)*form.taper;
+            const float bevel=std::min({fw*0.2f,fd*0.2f,0.8f});
+            m.prism(material,cutRect(x0,z0,x1,z1,bevel,y0),
+                    cutRect(x0+inset,z0+inset,x1-inset,z1-inset,
+                            bevel*0.45f,y1));
+            addBox(x0,y0,z0,x1,y1,z1);
+            if(sm.beacon>=0)
+                m.box(sm.beacon,cx-fw*0.12f,y1,cz-fd*0.12f,
+                      cx+fw*0.12f,y1+0.15f,cz+fd*0.12f);
+            break;}
+        case StructureForm::Kind::Gantry:{
+            // A portal built from two uprights and a crossbeam; unlike a
+            // solid block, its centre is empty also in coarse collision.
+            const float leg=std::max(0.15f,std::min(fw*0.16f,0.75f));
+            const float beam=std::max(0.18f,std::min(fh*0.20f,0.85f));
+            if(fw<=leg*2.8f||fh<=beam*2.f)break;
+            m.box(material,x0,y0,z0,x0+leg,y1,z1);
+            m.box(material,x1-leg,y0,z0,x1,y1,z1);
+            m.box(material,x0+leg,y1-beam,z0,x1-leg,y1,z1);
+            addBox(x0,y0,z0,x0+leg,y1,z1);
+            addBox(x1-leg,y0,z0,x1,y1,z1);
+            addBox(x0+leg,y1-beam,z0,x1-leg,y1,z1);
+            if(sm.glow>=0)
+                m.box(sm.glow,x0+leg,y1-beam-0.10f,z0-0.08f,
+                      x1-leg,y1-beam,z0+0.02f);
+            break;}
+        }
+        // Large authored modules keep random roof props clear of their
+        // footprint whenever they intersect the rooftop elevation.
+        if(y1>=top.y-0.15f)
+            taken.push_back({x0-0.15f,z0-0.15f,x1+0.15f,z1+0.15f});
+    }
     // 8. Roof props on the main deck (and module roofs for small ones).
     auto freeAt=[&](float x0,float z0,float x1,float z1){for(const auto& r:taken)if(x0<r[2]&&r[0]<x1&&z0<r[3]&&r[1]<z1)return false;return true;};
     auto place=[&](const Top& t,float sx,float sz,std::array<float,4>& at){
