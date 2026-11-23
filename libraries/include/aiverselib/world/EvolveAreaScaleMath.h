@@ -6,6 +6,13 @@
 #include <limits>
 namespace aiverse::evolve::scale_math {
 struct AxisResult { std::int64_t center=0,half=0; };
+inline bool withinBounds(std::int64_t center,std::int64_t half,
+                         std::int64_t maxCoordinate,
+                         std::int64_t minHalf,std::int64_t maxHalf){
+    return half>=minHalf&&half<=maxHalf&&
+           center>=-maxCoordinate+half&&center<=maxCoordinate-half;
+}
+
 inline bool transform(std::int64_t center,std::int64_t half,
                       std::int64_t pivot,std::int64_t numerator,
                       std::int64_t denominator,bool individual,
