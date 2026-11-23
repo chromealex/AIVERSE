@@ -836,6 +836,17 @@ void StudioHost::rebuildOverlay() {
                     shapes.push_back(worldprocess_gizmos::makePoint(
                         wpDrag_.previewPoint.x,wpDrag_.previewPoint.y,
                         wpDrag_.previewPoint.z,100,255,160,10.f));
+                    if(wpDrag_.component=="EvolveArea" &&
+                       worldprocess_edit::previewArea(owner,
+                           static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                           double(wpDrag_.value),wpDrag_.symmetric,areaPreview) &&
+                       shapes.size()<1395){
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            {float(areaPreview.centerX),.95f,float(areaPreview.centerZ)},
+                            "W "+std::to_string(int(std::lround(areaPreview.halfWidth*2.*100.)))+
+                            "cm / D "+std::to_string(int(std::lround(areaPreview.halfDepth*2.*100.)))+
+                            "cm",100,255,160));
+                    }
                     if(shapes.size()<1399)
                         shapes.push_back(worldprocess_gizmos::makeLabel(
                             {wpDrag_.previewPoint.x,
@@ -843,7 +854,8 @@ void StudioHost::rebuildOverlay() {
                              wpDrag_.previewPoint.z},
                             wpDrag_.label+(wpDrag_.component=="EvolveArea" &&
                                (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")?
-                               (wpDrag_.symmetric?" [symmetric]":" [opposite fixed]"):""),
+                               (wpDrag_.symmetric?" [symmetric]":" [opposite fixed]"):"")+
+                             (wpDrag_.snap?" [1m snap]":""),
                              245,245,245));
                 }
             }
@@ -868,7 +880,7 @@ void StudioHost::rebuildOverlay() {
 // Hit-testing and hover preview read ONLY the MapDoc. Commit is a single
 // validated StudioSession operation at mouse-up; never edit ECS/physics here.
 bool StudioHost::worldProcessDrag(int phase,double x,double y,
-                                  double w,double h,bool symmetric){
+                                  double w,double h,bool symmetric,bool snap){
     if(projectLoading_||!preview_||!session_||
        session_->workspace().project.dir.empty())return false;
     const auto& map=session_->workspace().map;
@@ -913,6 +925,7 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
     }
     if(!wpDrag_.active)return false;
     wpDrag_.symmetric=symmetric;
+    wpDrag_.snap=snap;
     if(phase==1||phase==2){
         if(wpDrag_.mode==static_cast<std::uint8_t>(
                 worldprocess_edit::Handle::Mode::Reference)){
@@ -946,6 +959,8 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                     map.data.entities[std::size_t(ownerIndex)],handle,
                     ground,value);
                 if(wpDrag_.valid){
+                    if(wpDrag_.component=="EvolveArea"&&wpDrag_.snap)
+                        value=std::round(value/100.f)*100.f;
                     wpDrag_.value=value;
                     wpDrag_.previewPoint=ground;
                 }
@@ -1211,7 +1226,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
-        if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift);return;}
+        if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
         if (m.move) { m.dragged = true; moveUpdate(x, y, w, h, mods.ctrl || mods.command); return; }
@@ -1231,7 +1246,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
-    if(st.worldProcess){worldProcessDrag(2,x,y,w,h,mods.shift);return;}
+    if(st.worldProcess){worldProcessDrag(2,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
     if (st.spline) { splineDrag(2, 0, 0, w, h); return; }
     if (st.stroke) { terrainStroke(2, 0, 0, w, h); return; }
     if (st.move) { moveEnd(); return; }
