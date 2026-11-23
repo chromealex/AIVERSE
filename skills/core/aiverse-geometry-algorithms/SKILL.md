@@ -11,3 +11,5 @@ GeometryClip.h: iterative Douglas–Peucker returns original indices; clipConvex
 Voronoi.h: voronoiCells clips each site's cell to rectangular bounds (max 2048 sites); delaunay uses Bowyer–Watson (max 4096 sites). Duplicate sites rejected. Floating predicates are not robust for near degeneracy or cross-platform lockstep. No tests yet.
 
 Geometry3D.h: rayBox/raySphere return forward parameter intervals; rayPlane and rayTriangle return forward hit parameters, triangle barycentric u/v. Direction need not be normalized. Box/sphere overlaps include touching. closestPoint requires valid box. Floating point, not lockstep. No tests yet.
+
+GeometryDistance.h: closestPoint for segment/triangle (including degenerate triangles), segmentDistanceSquared, capsule-sphere/capsule-capsule overlaps and 15-axis OBB SAT. OBB axes must be orthonormal. Closest point helpers require finite bounded input. Floating point, no lockstep guarantee. No tests yet.
