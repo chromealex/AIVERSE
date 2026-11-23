@@ -1,3 +1,4 @@
+#include "aiverselib/world/EvolveAreaScaleMath.h"
 // Interactive World Processes Scene handles. Geometry and hit testing
 // are read-only; the actual edit is submitted to StudioSession on mouse-up.
 // No runtime ECS mutation or independent editor Undo stack.
@@ -404,14 +405,12 @@ inline bool previewGroupScale2D(
             area.getInt("offsetXcm",0);
         const auto cz=std::llround(double(entity.z)*100.)+
             area.getInt("offsetZcm",0);
-        const auto hx=std::llround((long double)area.getInt("halfWidthCm",0)*
-                                    numeratorX/denominatorX);
-        const auto hz=std::llround((long double)area.getInt("halfDepthCm",0)*
-                                    numeratorZ/denominatorZ);
-        const auto nx=(individual?cx:pivotXcm)+std::llround((long double)(cx-(individual?cx:pivotXcm))*
-                                            numeratorX/denominatorX);
-        const auto nz=(individual?cz:pivotZcm)+std::llround((long double)(cz-(individual?cz:pivotZcm))*
-                                            numeratorZ/denominatorZ);
+        evolve::scale_math::AxisResult tx,tz;
+        if(!evolve::scale_math::transform(cx,area.getInt("halfWidthCm",0),
+                pivotXcm,numeratorX,denominatorX,individual,tx)||
+           !evolve::scale_math::transform(cz,area.getInt("halfDepthCm",0),
+                pivotZcm,numeratorZ,denominatorZ,individual,tz))return false;
+        const auto hx=tx.half,hz=tz.half,nx=tx.center,nz=tz.center;
         if(hx<50||hx>evolve::kAreaMaxHalfExtentCm||
            hz<50||hz>evolve::kAreaMaxHalfExtentCm||
            nx-hx < -evolve::kAreaCoordinateCm||
