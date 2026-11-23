@@ -163,6 +163,8 @@ export interface StudioSpectraPreviewState {
   speed:number;loop:boolean;
   bursts:number;queuedBursts:number;clearing:boolean;
   gpuSeedPending?:boolean;
+  gpuSeedFailed?:boolean;
+  gpuSeedRetries?:number;
   capture?:{
     pending:boolean;ready:boolean;
     width?:number;height?:number;mime?:'image/jpeg';
