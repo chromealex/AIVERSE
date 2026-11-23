@@ -28,7 +28,9 @@
     "docs/agents/contracts/reuse-skills.md",
     "docs/agents/contracts/mcp-contract.md",
     "docs/agents/contracts/index.json",
-    "tools/agents/evidence.py"
+    "tools/agents/evidence.py",
+    "tools/agents/feature_registry.py",
+    "tools/agents/new_feature.py"
   ],
   "traits": {
     "editable": false,
