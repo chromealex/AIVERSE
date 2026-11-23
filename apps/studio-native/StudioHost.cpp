@@ -1269,6 +1269,19 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
        (!raw.isNumber()||raw.numberLiteral().find_first_of(".eE-")!=std::string::npos||
         raw.integer(0)<128||raw.integer(0)>768))
         throw std::runtime_error("FX snapshot maxSide must be an integer in 128..768");
+    if(!params["requireReplayReady"].isNull()) {
+        if(params["requireReplayReady"].type()!=Json::Type::Bool)
+            throw std::runtime_error("requireReplayReady must be boolean");
+        if(params.getBool("requireReplayReady")) {
+            const Json snapshot=onScene([&] {
+                return fxPreview_->spectraPreviewCommand(
+                    Json::parse(R"({"action":"status"})"),
+                    session_->workspace().project.dir);
+            });
+            if(!snapshot.getBool("replayReady"))
+                throw std::runtime_error("FX replay has not reached its requested frame");
+        }
+    }
     const int maxSide=int(raw.isNull()?512:raw.integer());
     if(fxShot_) {
         std::lock_guard<std::mutex> lock(fxShot_->mutex);
