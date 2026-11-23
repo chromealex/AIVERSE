@@ -36,6 +36,9 @@ function Slider({ label, value, min, max, step, onCommit }: { label: string; val
  */
 function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const [state,setState]=useState<EvolveLiveState|null>(null);
+  const [vegetation,setVegetation]=useState(true);
+  const [climate,setClimate]=useState(false);
+  const [opacity,setOpacity]=useState(.65);
   const [error,setError]=useState('');
   useEffect(()=>{
     let alive=true,busy=false;
@@ -58,6 +61,9 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const h=Math.max(1,Math.max(...regions.map(r=>r.maxZcm))-z);
   const u=(n:number)=>Math.round(255*Math.max(0,Math.min(1,n/1e9)));
   return <div><small>Live ecology · tick {state.tick}</small>
+    <div><label><input type="checkbox" checked={vegetation} onChange={e=>setVegetation(e.target.checked)}/>Vegetation</label>
+      <label><input type="checkbox" checked={climate} onChange={e=>setClimate(e.target.checked)}/>Climate</label>
+      <label>Opacity <input type="range" min="0.1" max="1" step="0.05" value={opacity} onChange={e=>setOpacity(Number(e.target.value))}/></label></div>
     <svg viewBox={`${x} ${z} ${w} ${h}`} width="100%" height="160" aria-label="Live ecological regions">
       {regions.map(r=>{
         let red=u(r.pollution),green=u(r.fertility),blue=90;
@@ -67,9 +73,12 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
         if(layer==='durability'){green=u(r.durability);red=255-green;}
         if(layer==='off'){red=138;green=190;blue=255;}
         return <rect key={r.id} x={r.minXcm} y={r.minZcm} width={r.maxXcm-r.minXcm} height={r.maxZcm-r.minZcm}
-          fill={`rgb(${red},${green},${blue})`} stroke="currentColor" vectorEffect="non-scaling-stroke"><title>{r.id}: fertility {r.fertility/1e7}%, pollution {r.pollution/1e7}%, succession {r.succession/1e7}%</title></rect>;
+          fill={`rgb(${red},${green},${blue})`} fillOpacity={opacity} stroke="currentColor" vectorEffect="non-scaling-stroke"><title>{r.id}: fertility {r.fertility/1e7}%, pollution {r.pollution/1e7}%, succession {r.succession/1e7}%</title></rect>;
       })}
-    </svg></div>;
+      {climate&&(state.weather??[]).map(c=><rect key={`${c.x}:${c.z}`} x={c.x} y={c.z} width={c.size} height={c.size}
+        fill="royalblue" fillOpacity={Math.min(.8,Math.max(0,c.wetness))*opacity}><title>Rain {c.rain}; temperature {c.temperature} °C; wetness {c.wetness}</title></rect>)}
+      {vegetation&&(state.plants??[]).map((p,i)=><circle key={i} cx={p.x} cy={p.z} r={Math.max(w,h)/180} fill={p.fallen?'orange':'lightgreen'} fillOpacity={opacity}><title>{p.fallen?'Fallen':'Rooted'}</title></circle>)}
+    </svg>{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
 }
 export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
