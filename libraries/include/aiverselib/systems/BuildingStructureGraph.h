@@ -292,6 +292,49 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         }
         wallSection(BuildingGraphPart::Wall,cursor,length,floorTop,H);
     }
+    // A room is an accessible rectangular cell, not merely a decorative
+    // rectangle. Real internal partitions are segmented around each opening.
+    // Connections record room adjacency for later navmesh/door integrations.
+    const float cellW=W/float(recipe.roomsX),cellD=D/float(recipe.roomsZ);
+    auto roomId=[](uint32_t f,uint32_t x,uint32_t z){
+        return std::string("room/")+std::to_string(f)+"/"+
+            std::to_string(x)+"/"+std::to_string(z);
+    };
+    for(uint32_t f=0;f<recipe.floors;++f){
+        const float level=floorTop+storey*float(f);
+        const float bottom=level+(f?slabThick:0.f);
+        const float ceiling=std::min(H-roofThickness,level+storey);
+        const float lintel=std::min(bottom+2.2f,ceiling-0.2f);
+        for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x)
+            graph.rooms.push_back({roomId(f,x,z),f,x,z,float(x)*cellW,bottom,
+                float(z)*cellD,float(x+1)*cellW,ceiling,float(z+1)*cellD});
+        for(uint32_t x=1;x<recipe.roomsX;++x)for(uint32_t z=0;z<recipe.roomsZ;++z){
+            const float at=float(x)*cellW,mid=(float(z)+0.5f)*cellD;
+            const float a=mid-0.6f,c=mid+0.6f;
+            solid(BuildingGraphPart::Partition,at-0.12f,bottom,float(z)*cellD,
+                  at+0.12f,ceiling,a);
+            solid(BuildingGraphPart::Partition,at-0.12f,bottom,c,
+                  at+0.12f,ceiling,float(z+1)*cellD);
+            solid(BuildingGraphPart::Partition,at-0.12f,lintel,a,
+                  at+0.12f,ceiling,c);
+            graph.connections.push_back({"passage/x/"+std::to_string(f)+"/"+
+                std::to_string(x)+"/"+std::to_string(z),roomId(f,x-1,z),
+                roomId(f,x,z),f,at,bottom,mid,1.2f,lintel-bottom});
+        }
+        for(uint32_t z=1;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x){
+            const float at=float(z)*cellD,mid=(float(x)+0.5f)*cellW;
+            const float a=mid-0.6f,c=mid+0.6f;
+            solid(BuildingGraphPart::Partition,float(x)*cellW,bottom,at-0.12f,
+                  a,ceiling,at+0.12f);
+            solid(BuildingGraphPart::Partition,c,bottom,at-0.12f,
+                  float(x+1)*cellW,ceiling,at+0.12f);
+            solid(BuildingGraphPart::Partition,a,lintel,at-0.12f,
+                  c,ceiling,at+0.12f);
+            graph.connections.push_back({"passage/z/"+std::to_string(f)+"/"+
+                std::to_string(x)+"/"+std::to_string(z),roomId(f,x,z-1),
+                roomId(f,x,z),f,mid,bottom,at,1.2f,lintel-bottom});
+        }
+    }
     const float roofBase=H-roofThickness;
     if(!roof)solid(BuildingGraphPart::Roof,0,roofBase,0,W,H,D);
     else {
