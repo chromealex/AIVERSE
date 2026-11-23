@@ -272,7 +272,7 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
                           "EchoPortal","EchoEmitter","EchoReceiver",
                           "FractureBond","AetherDuct","AetherFlux",
                           "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
-                          "GranularField","EvolveRegion","SocietyPerson",
+                          "GranularField","EvolveRegion","EvolveArea","SocietyPerson",
                           "MorphSpring","MorphForce","CrowdSlot","CrowdPreference",
                           "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate","CircuitSwitch","CircuitDevice",
                           "GranularSource","EvolvePressure","SocietyContact","SocietyMessage","SocietyNpcTrigger"}) {
@@ -489,6 +489,9 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                     maximum=granular::kMaxCellMass;
                                     if(key=="capacity")minimum=1;
                                 }else if(name=="EvolveRegion")maximum=evolve::kMaxState;
+                                else if(name=="EvolveArea"){
+                                    minimum=50;maximum=evolve::kAreaMaxHalfExtentCm;
+                                }
                                 else if(name=="SocietyPerson")maximum=key=="credibility"?1000:1000000;
                             }
                             field.set("min",Json::number(minimum));
@@ -1181,7 +1184,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
     for(const auto& [m,label]:names)if(method==m)return label;
     if(method=="studio.worldProcessAreaSet")
         return params.getStr("componentId")=="GranularField"?
-            "Resize GRANULAR field":"Resize EVOLVE visual region";
+            "Resize GRANULAR field":"Resize EVOLVE gameplay area";
     if(method=="studio.op")return studioToolLabel(params.getStr("op"));
     return "Edit";
 }
@@ -2652,6 +2655,27 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 throw std::runtime_error("World-process resize requires stable map ID");
             const int index=indexFor(entityId);
             const auto& source=ws_.map.data.entities[size_t(index)];
+            if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm")){
+                const Json& original=source.extra["components"]["EvolveArea"];
+                if(!lib::worldprocess::extended::validate("EvolveArea",original))
+                    throw std::runtime_error("EVOLVE spatial Area missing or malformed");
+                const auto& value=params["value"];
+                if(!value.isNumber())throw std::runtime_error("Expected EVOLVE integer centimetres");
+                const int64_t extent=value.integer(-1);
+                if(extent<50||extent>evolve::kAreaMaxHalfExtentCm||
+                   value.numberLiteral()!=std::to_string(extent))
+                    throw std::runtime_error("Invalid EVOLVE half-extent");
+                if(original[key].integer()!=extent){
+                    auto candidate=source;
+                    Json next=original;
+                    next.set(key,Json::number(extent));
+                    Json components=candidate.extra["components"];
+                    components.set("EvolveArea",std::move(next));
+                    candidate.extra.set("components",std::move(components));
+                    ws_.map.beginEdit();
+                    ws_.map.data.entities[std::size_t(index)]=std::move(candidate);
+                    ws_.map.touched();
+                }
             if(area=="EvolveRegion"&&key=="radiusMetres"){
                 if(!source.extra["components"]["EvolveRegion"].isObject())
                     throw std::runtime_error("EVOLVE region missing from map entity");
