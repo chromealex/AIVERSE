@@ -16,7 +16,18 @@
     "docs/agents/feature-contract.md",
     "docs/devlog/systems.json",
     "tools/agents/check_integrations.py",
-    "tools/mcp/audit_registry.py"
+    "tools/mcp/audit_registry.py",
+    "tools/agents/check_contracts.py",
+    "docs/agents/contracts/release-site.md",
+    "docs/agents/contracts/architecture-common.md",
+    "docs/agents/contracts/world-ownership.md",
+    "docs/agents/contracts/workflow-parallel.md",
+    "docs/agents/contracts/studio-contract.md",
+    "docs/agents/contracts/render-contract.md",
+    "docs/agents/contracts/build-testing.md",
+    "docs/agents/contracts/reuse-skills.md",
+    "docs/agents/contracts/mcp-contract.md",
+    "docs/agents/contracts/index.json"
   ],
   "traits": {
     "editable": false,
