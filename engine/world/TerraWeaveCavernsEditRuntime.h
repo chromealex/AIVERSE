@@ -9,6 +9,7 @@
 #include <chrono>
 #include <future>
 #include <map>
+#include <set>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -63,6 +64,7 @@ public:
             dirty_.enqueue(full,resolution_,spacingCm_,snapshot->sourceRevision);
         }
         prepared_.clear();
+        lodOverrides_.clear();
         snapshot_=std::move(snapshot);
     }
 
@@ -84,6 +86,50 @@ public:
             throw std::invalid_argument("Caverns editor snapshot revision mismatch");
         invalidate(bounds,std::move(snapshot));
         return true;
+    }
+
+    // Stage37 LOD fallback: coalesce asynchronous rebuilds for coarse/fine
+    // neighboring chunks using ONE current immutable authored SDF snapshot.
+    // The chunk coordinate extent does not change: only its meshing lattice
+    // (resolution/spacing) changes. This never ACKs gameplay dirtiness.
+    bool requestLodRepairs(
+        const std::map<ChunkKey3,CaveRebuildRequest,KeyLess>& requests) {
+        if(!snapshot_||requests.empty())return false;
+        const int64_t chunkSpan=int64_t(resolution_)*spacingCm_;
+        const auto current=dirty_.pending(maxQueued_);
+        std::set<ChunkKey3,KeyLess> pendingKeys;
+        for(const auto& item:current)pendingKeys.insert(item.key);
+        size_t added=0;
+        for(const auto& [key,request]:requests) {
+            if(key!=request.key||!request.resolution||
+               request.resolution>64||request.spacingCm<=0||
+               int64_t(request.resolution)*request.spacingCm!=chunkSpan)
+                throw std::invalid_argument("Caverns invalid shared-lattice repair");
+            if(!pendingKeys.contains(key))++added;
+        }
+        if(added>maxQueued_-dirty_.size())
+            throw std::length_error("Caverns shared-lattice dirty budget");
+        bool queued=false;
+        for(const auto& [key,request]:requests){
+            const auto override=lodOverrides_.find(key);
+            const bool alreadyPending=pendingKeys.contains(key);
+            if(alreadyPending && override!=lodOverrides_.end() &&
+               override->second.first==request.resolution &&
+               override->second.second==request.spacingCm)
+                continue;
+            const CaveDirtyBounds exact{
+                key.x*chunkSpan,key.y*chunkSpan,key.z*chunkSpan,
+                (key.x+1)*chunkSpan,(key.y+1)*chunkSpan,
+                (key.z+1)*chunkSpan};
+            dirty_.enqueue(exact,resolution_,spacingCm_,
+                           snapshot_->sourceRevision);
+            lodOverrides_.insert_or_assign(key,
+                std::pair<uint32_t,int32_t>{request.resolution,
+                                            request.spacingCm});
+            prepared_.erase(key);
+            queued=true;
+        }
+        return queued;
     }
 
     // Provide an existing resident mesh for cross-chunk border certification.
@@ -122,8 +168,8 @@ public:
                 }else{
                     CaveCertifiedChunk candidate;
                     candidate.mesh=std::move(mesh);
-                    candidate.resolution=resolution_;
-                    candidate.spacingCm=spacingCm_;
+                    candidate.resolution=it->second.resolution;
+                    candidate.spacingCm=it->second.spacingCm;
                     candidate.sourceRevision=expected.sourceRevision;
                     if(renderSerial_==UINT64_MAX)
                         throw std::overflow_error("Caverns render revision");
@@ -144,12 +190,16 @@ public:
                 continue;
             auto frozen=snapshot_;
             const auto key=pending.key;
-            const uint32_t resolution=resolution_;
-            const int32_t spacingCm=spacingCm_;
+            const auto override=lodOverrides_.find(key);
+            const uint32_t resolution=override==lodOverrides_.end()
+                ?resolution_:override->second.first;
+            const int32_t spacingCm=override==lodOverrides_.end()
+                ?spacingCm_:override->second.second;
             auto future=std::async(std::launch::async,[frozen,key,resolution,spacingCm](){
                 return generateCaveSnapshotMesh(*frozen,key,resolution,spacingCm);
             });
-            running_.emplace(key,Running{pending,std::move(future)});
+            running_.emplace(key,Running{pending,resolution,spacingCm,
+                                         std::move(future)});
             ++info.dispatched;
         }
         info.pending=dirty_.size();
@@ -244,6 +294,8 @@ public:
 private:
     struct Running {
         CaveDirtyChunk dirty{};
+        uint32_t resolution=0;
+        int32_t spacingCm=0;
         std::future<CaveMesh> future;
     };
     size_t dirtyLimit()const{return maxQueued_;}
@@ -265,5 +317,6 @@ private:
     std::shared_ptr<const CaveVolumeSnapshot> snapshot_;
     std::map<ChunkKey3,Running,KeyLess> running_;
     std::map<ChunkKey3,CavePreparedEdit,KeyLess> prepared_;
+    std::map<ChunkKey3,std::pair<uint32_t,int32_t>,KeyLess> lodOverrides_;
 };
 } // namespace aiverse::terraweave::caverns
