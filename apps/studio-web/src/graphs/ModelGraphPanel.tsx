@@ -6,7 +6,7 @@ import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {Positioned} from './graphSelection';
-import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier} from './nativeGraphAdapters';
+import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
 const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params})).result;
@@ -16,6 +16,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
  const [revision,setRevision]=useState(0),[mode,setMode]=useState<'model'|'geometry'|'pose'|'states'>('model');
  const [selection,setSelection]=useState<string[]>([]),[pending,setPending]=useState<PortRef|null>(null);
  const [positions,setPositions]=useState<Record<string,Positioned>>({}),[json,setJson]=useState('');
+ const [modifierKind,setModifierKind]=useState('transform');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const history=useRef<DraftHistory<GraphObject>|null>(null),epoch=useRef(0),lock=useRef(false);
  const dirty=!!draft&&!!original&&JSON.stringify(draft)!==JSON.stringify(original);
@@ -102,11 +103,14 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    {graph&&(mode==='pose'||mode==='states')&&<AnimationParameters doc={graph} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>}
    {entry&&<StudioSection title={'Entry '+active}>{mode==='geometry'&&object(entry)&&object(entry.geometry)&&<>
+    <StudioSelect aria-label="Source material" disabled={busy} value={String(entry.material??'')} onChange={e=>edit(bindModelMaterial(draft,active,e.target.value))}><option value="">Default material</option>{modelMaterialIds(draft).map(id=><option key={id} value={id}>{id}</option>)}</StudioSelect>
+    <div className="au-row"><StudioSelect aria-label="Geometry modifier" disabled={busy} value={modifierKind} onChange={e=>setModifierKind(e.target.value)}>{geometryModifierKinds.map(kind=><option key={kind} value={kind}>{kind}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy} onClick={()=>edit(addGeometryModifier(draft,active,modifierKind))}>Add modifier</StudioButton></div>
     {entry.geometry.kind==='boolean'&&<StudioSelect aria-label="Boolean operation" disabled={busy} value={String(entry.geometry.operation??'union')} onChange={e=>edit(setGeometryBoolean(draft,active,e.target.value))}>
      <option value="union">Union</option><option value="subtract">Subtract</option><option value="intersect">Intersect</option></StudioSelect>}
     {Array.isArray(entry.geometry.modifiers)&&entry.geometry.modifiers.map((m,i)=>object(m)&&<div key={i} className="au-row"><span>{String(m.kind)}</span>
      <StudioButton size="sm" disabled={busy||i===0} onClick={()=>edit(moveGeometryModifier(draft,active,i,-1))}>Up</StudioButton>
      <StudioButton size="sm" disabled={busy||i===((entry.geometry as GraphObject).modifiers as unknown[]).length-1} onClick={()=>edit(moveGeometryModifier(draft,active,i,1))}>Down</StudioButton>
+     <StudioButton size="sm" disabled={busy} onClick={()=>edit(removeGeometryModifier(draft,active,i))}>Remove</StudioButton>
     </div>)}
    </>}
    {mode==='states'&&graph&&object(entry)&&Array.isArray(entry.transitions)&&entry.transitions.map((t,i)=>object(t)&&<AnimationConditions key={i} doc={graph} state={active} index={i} transition={t} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>)}
