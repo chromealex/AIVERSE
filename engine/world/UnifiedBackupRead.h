@@ -9,7 +9,7 @@ public:
         const std::array<uint8_t,16>& world,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
-        std::unique_ptr<State>& out,const UnifiedWorldReplay::Validator& validate={}){
+        std::unique_ptr<State>& out,const UnifiedWorldReplay::Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
         if(!generation)return false;
         RegionCheckpointManifest m;m.generation=generation;
         std::error_code ec;
@@ -24,7 +24,7 @@ public:
         std::unique_ptr<State> staged;RegionCheckpointManifest verified;
         if(!UnifiedCheckpointLoader::loadGeneration(dir,m,world,budget,adapters,factory,staged,verified,validate))return false;
         auto scan=RegionWalReader::scan(wal,staged->sequence,[&](const RegionWalFrame& frame){
-            return UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate);
+            return UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate,resources);
         });
         if(scan.status!=RegionWalScan::End)return false;
         out.swap(staged);return true;
