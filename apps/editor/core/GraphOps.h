@@ -131,7 +131,16 @@ inline void registerGraphOps(Workspace& ws) {
         return envelope(d,"graph_property_schema",result);
     }});
     ws.registerOp({"graph_asset_dependencies","Inspect literal asset references and embedded animation subgraph recursion; no writes.",schema,[&ws](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_asset_dependencies",graph_dependencies::resolve(d.id,q[d.payload],ws.project.dir));}});
-    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[](const Json&){return graph_probe::capabilities();}});
+    ws.registerOp({"graph_live_snapshot","Read actual native editor owner telemetry if the owner is registered; never starts or modifies play.",Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx","shader","modeling","strata"]},"entity":{"type":"string"}},"required":["domain"],"additionalProperties":false})"),[&ws](const Json& p){
+        const auto id=p.getStr("domain");
+        if(id!="motionweave"&&id!="spectrafx"&&id!="shader"&&id!="modeling"&&id!="strata")throw std::invalid_argument("unknown live domain");
+        if(id=="motionweave"||id=="spectrafx")
+            for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")return ws.call(op.name,p,"graph");
+        Json r=Json::object();r.set("available",Json::fromBool(false));r.set("domain",Json::string(id));
+        r.set("reason",Json::string("Live owner unavailable in this host/domain; isolated probe and CPU analysis are separate."));
+        return r;
+    }});
+    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[&ws](const Json&){auto r=graph_probe::capabilities();bool owner=false;for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")owner=true;r.set("nativeEditorSnapshotOwner",Json::fromBool(owner));r.set("liveSnapshotOperation",Json::string("graph_live_snapshot"));return r;}});
     const auto probeSchema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"parameters":{"type":"object"}},"required":["domain","graph"],"additionalProperties":false})");
     ws.registerOp({"graph_runtime_probe","Execute a bounded isolated native CPU preview. Not live game telemetry.",probeSchema,[&ws](const Json& p){
         const auto id=p.getStr("domain");const int n=graph_probe::steps(p);
