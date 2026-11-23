@@ -12,7 +12,8 @@
     "skills/workflow/aiverse-graph-authoring/SKILL.md",
     "tools/skills/catalog.py",
     "skills/catalog.json",
-    "docs/devlog/systems.json"
+    "docs/devlog/systems.json",
+    "apps/studio-web/src/graphs/shaderAdapter.ts"
   ],
   "traits": {
     "editable": true,
