@@ -22,7 +22,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game };
+enum class StudioSurface { Scene, Game, Fx };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -83,6 +83,10 @@ public:
     // Runs fn on the Scene render thread between its frames and waits (inline when there is none yet).
     // Shells use it for Scene surface changes, e.g. resizing the drawable.
     void runOnSceneThread(const std::function<void()>& fn) { if (renderThread_) renderThread_->invoke(fn); else fn(); }
+    // Separate dedicated FX drawable; both GPU Scenes have the same owner
+    // thread, but independent devices/swapchains and camera lifetimes.
+    void fxCameraOrbit(double dx,double dy);
+    void fxCameraZoom(double wheel);
     bool projectLoading() const { return projectLoading_; }
     bool htmlComposite() const { return htmlComposite_; }
 
@@ -175,6 +179,7 @@ private:
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
     void publishSceneFrame(const FrameOutputs& out);
@@ -204,6 +209,7 @@ private:
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
+    std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     FrameInputs renderInputs_;
@@ -216,9 +222,9 @@ private:
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
-    NativeViewportPlacement placement_{}, gamePlacement_{};
-    // One render-owned Scene GPU surface moves between the Scene dock and
-    // the SpectraFX Graph embedded preview. Never allocate a second Device.
+    NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
+    // Independent native FX drawable/swapchain: no Scene surface reparent,
+    // no camera hijack. Both run on the existing native render owner thread.
     bool spectraDockActive_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
