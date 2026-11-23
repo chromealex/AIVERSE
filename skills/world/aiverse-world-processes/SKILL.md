@@ -589,3 +589,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 40: atomic EVOLVE group resize
 
 `studio.worldProcessAreaBatchResize` accepts stable `entityIds` (2–256), axis `x|z`, pivot `shared|individual`, and integer scale numerator/denominator. It validates all members and bounds before one MapDoc Undo mutation. In native Scene, multi-selected EvolveArea edge drag scales on one axis; plain drag uses the shared mean center pivot, Shift uses individual region centers. Single-region operations remain unchanged. Only authored offsets and half-extents change; ECS Area/TerraWeave remain authoritative at runtime. Group preview is not yet implemented. Source-only, no build or runtime tests. See `docs/handoffs/world-processes-stage40-group-resize-2026-11-23.md`.
+
+## Stage 41: group resize preview
+
+`worldprocess_edit::previewGroupResize` computes transient candidate rectangles for all selected EVOLVE areas during a group edge drag. Studio overlays amber outlines and a shared centroid marker; Shift uses individual pivots. The preview is read-only and the Stage40 atomic batch RPC remains the sole authoring commit. No editable numeric Scene input or custom pivot yet. No compile/runtime QA performed (deferred). Handoff: `docs/handoffs/world-processes-stage41-group-preview-2026-11-23.md`.
