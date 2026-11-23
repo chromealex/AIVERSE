@@ -3,22 +3,23 @@
 #pragma once
 #include "engine/core/Archive.h"
 #include "engine/sim/CommonComponents.h"
+#include "PersistentEntityReferences.h"
 #include <cstdint>
 #include <map>
 
 namespace aiverse::world {
 
 struct RegionMoveRequests {
-    static constexpr uint32_t kSchema=1;
+    static constexpr uint32_t kSchema=2;
     static constexpr size_t kMaxRequests=64;
-    std::map<uint64_t,Vec3> destinations; // packed Entity -> destination
+    std::map<RegionEntityId,Vec3> destinations; // persistent identity -> destination
     uint64_t applied=0;
 };
 
 inline void io(Archive& a,RegionMoveRequests& q) {
     uint32_t schema=RegionMoveRequests::kSchema;
     a(schema);
-    if(!a.ok() || schema!=RegionMoveRequests::kSchema){a.fail();return;}
+    if(!a.ok() || (schema!=RegionMoveRequests::kSchema && (a.writing()||schema!=1))){a.fail();return;}
     uint64_t applied=q.applied;
     a(applied);
     uint32_t count=0;
@@ -56,17 +57,27 @@ template<class SimulationT>
 void registerRegionMoveRequests(SimulationT& sim) {
     sim.template registerPersistentResource<RegionMoveRequests>(
         "aiverse.world.region_move_requests",RegionMoveRequests::kSchema);
-    // Save/load is an atomic staged-World operation. Reject a request that
-    // targets a destroyed or recycled ECS handle, before the running
-    // simulation is overwritten by the decoded state.
+    // v1 keys were packed()+1, which was also the stored stable tag in
+    // v1 ActorHost saves. Preserve the numeric tag and validate the binding.
+    sim.template registerPersistentResourceMigration<RegionMoveRequests>(
+        "aiverse.world.region_move_requests",1,[](Archive& a,RegionMoveRequests& q){io(a,q);});
+    // Save/load must reject unresolved or retired identities.
     sim.addPersistentLoadValidator("aiverse.world.region_move_requests",
         [](const World& world,std::string& error)->bool {
             const auto* moves=world.resourceConst<RegionMoveRequests>();
             if(!moves)return true;
+            if(moves->destinations.empty())return true;
+            const auto* ledger=world.resourceConst<RegionEntityLedger>();
+            PersistentEntityReferences refs;
+            if(!ledger||!refs.rebuild(world,*ledger)){
+                error="staged region move identity index unavailable";
+                return false;
+            }
             for(const auto& [id,destination]:moves->destinations) {
                 (void)destination;
-                if(!id || !world.alive(Entity::fromPacked(id-1))) {
-                    error="staged region move references a dead entity";
+                Entity entity;
+                if(!id || !refs.resolve(world,id,entity)) {
+                    error="staged region move references an unresolved identity";
                     return false;
                 }
             }
