@@ -205,31 +205,35 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         }
         pendingGroups.push_back({std::move(group),destination});
     }
+    // Stage ledger-only migrations in a private copy. No ownership revision
+    // is published until every group and independent transfer succeeds.
+    ledger=view.resourceConst<world::RegionEntityLedger>();
+    auto stagedLedger=*ledger;
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
         std::string error;
         if(!world::RegionEcsBridge::transferGroupMixed(
-                view,*ecs.resource<world::RegionEntityLedger>(),pending.members,
+                view,stagedLedger,pending.members,
                 pending.destination,position,&error))
             throw std::logic_error("regionOwnership: car transfer: "+error);
     }
 
     // On-foot characters and loose durable objects move independently.
     for(Entity entity:tracked) {
-        ledger=view.resourceConst<world::RegionEntityLedger>();
         if(handled.contains(entity.packed()))continue;
         const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
-        const auto* entry=ledger->find(tag->id);
+        const auto* entry=stagedLedger.find(tag->id);
         if(!entry || !entry->live)
             throw std::logic_error("regionOwnership: missing solo owner");
         const auto destination=grid.cell(*position(view,entity));
         if(destination==entry->owner)continue;
         if(view.has<world::RegionDormant>(entity))
             throw std::logic_error("regionOwnership: dormant actor crossing");
-        if(!ecs.resource<world::RegionEntityLedger>()->transfer(
-                tag->id,entry->owner,destination))
+        if(!stagedLedger.transfer(tag->id,entry->owner,destination))
             throw std::logic_error("regionOwnership: solo transfer failed");
     }
+
+    *ecs.resource<world::RegionEntityLedger>()=std::move(stagedLedger);
 
     // Destroyed entities retain tombstones: recycled ECS indices have
     // distinct generation bits, so stable IDs cannot be reused.
