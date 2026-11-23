@@ -1,18 +1,6 @@
 name: Building Style Focused
 
 on:
-  push:
-    branches:
-      - 'feature/aiv20261123_building-grammar'
-    paths:
-      - 'libraries/include/aiverselib/systems/Building*.h'
-      - 'engine/assets/building-styles/*.json'
-      - 'tools/buildings/**'
-      - 'tests/libraries/building*'
-      - 'engine/buildings/**'
-      - 'apps/studio-native/StudioBuildingGeneration.h'
-      - 'tests/studio/BuildingGenerationTests.cpp'
-      - '.github/workflows/building-style-focused.yml'
   pull_request:
     paths:
       - 'libraries/include/aiverselib/systems/Building*.h'
@@ -23,6 +11,12 @@ on:
       - 'apps/studio-native/StudioBuildingGeneration.h'
       - 'tests/studio/BuildingGenerationTests.cpp'
   workflow_dispatch:
+
+# A single focused run per PR revision. The project-wide CI also runs on this
+# PR; prevent duplicate queued push + pull_request jobs from starving it.
+concurrency:
+  group: building-style-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
