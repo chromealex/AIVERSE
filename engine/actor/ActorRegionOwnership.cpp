@@ -13,6 +13,12 @@ namespace {
 struct RegionSeatIndex {
     std::map<uint64_t,Entity> carByMember;
     std::map<uint64_t,std::set<uint64_t>> membersByCar;
+    void eraseCar(uint64_t car) {
+        auto it=membersByCar.find(car);
+        if(it==membersByCar.end())return;
+        for(auto member:it->second)carByMember.erase(member);
+        membersByCar.erase(it);
+    }
     void eraseMember(uint64_t member) {
         auto it=carByMember.find(member);
         if(it==carByMember.end())return;
@@ -412,13 +418,17 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // Avoid replacing the derived resource on ticks with unchanged membership.
     if(!previousSeats || previousSeats->carByMember!=carByMember) {
         RegionSeatIndex next=previousSeats?*previousSeats:RegionSeatIndex{};
-        if(previousSeats)for(const auto& [member,oldCar]:previousSeats->carByMember) {
-            const auto it=carByMember.find(member);
-            if(it==carByMember.end() || !(it->second==oldCar))next.eraseMember(member);
+        // Replace only candidate groups using the validated canonical graph.
+        // Compare with the full scan before publishing; missed events trigger
+        // a complete rebuild rather than leaving a stale reverse index.
+        if(previousSeats && journalReady && !journalOverflow) {
+            for(auto car:candidateCars)next.eraseCar(car);
+            for(const auto& [member,car]:carByMember)
+                if(candidateCars.contains(car.packed()))next.setMember(member,car);
         }
-        for(const auto& [member,car]:carByMember) {
-            const auto it=next.carByMember.find(member);
-            if(it==next.carByMember.end() || !(it->second==car))next.setMember(member,car);
+        if(next.carByMember!=carByMember) {
+            next=RegionSeatIndex{};
+            for(const auto& [member,car]:carByMember)next.setMember(member,car);
         }
         ecs.setResource<RegionSeatIndex>(std::move(next));
     }
