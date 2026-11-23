@@ -170,7 +170,7 @@ export interface StudioSpectraPreviewState {
     pending:boolean;ready:boolean;
     width?:number;height?:number;mime?:'image/jpeg';
     image?:string;error?:string;
-    provenance?:{tick?:number;generation?:number;backend?:string;camera?:StudioSpectraCameraSnapshot;background?:string;gpu?:boolean;sampling?:string};
+    provenance?:{tick?:number;generation?:number;backend?:string;camera?:StudioSpectraCameraSnapshot;background?:string;gpu?:boolean;sampling?:string;replayReady?:boolean};
   };
   background:'dark'|'neutral'|'light'|'black';
   grid:boolean;axes:boolean;
