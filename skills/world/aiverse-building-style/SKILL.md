@@ -1337,3 +1337,58 @@ retirement remain their existing owners. No compiler, CTest,
 Box3D contact test, real nav refresh or GPU test has been run,
 per user's feature-first testing deferral. Handoff:
 `docs/agent-handoffs/building-ecs-physis-reconcile-stage23r-2026-11-23.md`.
+
+## Stage 23S — Renderer3D ModelDraw + verified GPU resource retirement
+
+Do NOT attach new building functionality to obsolete FPS/ActorHost or
+any other genre module. The actual common graphics integration is:
+
+- engine/buildings/BuildingRenderer3DScene.h: a renderer-thread GPU
+  resource owner for one existing BuildingDualLeafGameSession. Call
+  initialize(device,renderer,existingRenderDeviceLifetime.lease(),
+  session,stableSceneInstanceId) AFTER all the authored PBR material
+  factors and texture GUID images have been resolved into CPU models.
+  Requires a live generation-safe device lease on its owning thread.
+- The adapter walks session.forEachCpuModel, marks each leaf a dedicated
+  non-rigid/non-autoLOD model, calls the real render::prepareModelUpload
+  and render::uploadModel. It stages speculative images without
+  publishing new entries in the shared texture cache until the owner
+  proves residency and has an explicit retirement path.
+- engine/world/WorldScene.h/.cpp has the optional
+  setBuildingRenderOwner(shared_ptr<BuildingRenderer3DScene>) and
+  setBuildingRenderElapsedMs(dtMs) composition seam. WorldScene keeps
+  a WEAK reference to the graphics owner and calls owner->draw from
+  its real draw(Renderer3D,Cell,cellSize) method. The game scene owns
+  session, renderer owner and GPU lifetime; the WorldScene does NOT
+  copy authoritative collision state or acquire raw ECS pointers.
+- draw() uses BuildingDualLeafGameSession::submit to receive only
+  graph-ACKed physical poses; for each visual panel it creates
+  Renderer3D ModelDraw(model, persistentId, world transform) and
+  calls the existing Renderer3D::drawModel. Position is made
+  camera-relative using world::relativeTo. Unique per-scene-instance
+  namespaces are required. It does not make physical access decisions
+  from interpolation, upload meshes in the fixed tick, or re-upload
+  textures on each draw. Static render packet reuse is disabled for
+  moving leaves, with stable per-socket/leaf IDs for diagnostics.
+- On GPU unload/update, call WorldScene::setBuildingRenderOwner({})
+  followed by BuildingRenderer3DScene::shutdown at an owning renderer
+  frame boundary OUTSIDE an active rendering pass. It verifies the
+  device generation with RenderDeviceLifetime::Lease and calls the
+  existing gfx::Device::waitForResourceIdle. ONLY after this succeeds
+  can it invalidate Renderer3D model caches and releaseModel for each
+  uploaded CPU Model. Failure preserves all session Models and GPU
+  references and requires retry; NEVER detach the session, release
+  its CPU models or retire the device epoch while cleanup is pending.
+  Then game host may detach the authoritative session and physics.
+  This conservative approach can stall the device at unload and is
+  not yet a per-resource async-retirement replacement.
+- WorldScene::buildingDrawError() exposes failures because the
+  original WorldScene draw API returns void. The game host should
+  inspect it and report device or session errors rather than assume
+  every frame rendered.
+
+This is REAL source wiring into the COMMON WorldScene render path,
+not a registered game executable or verified GPU capture. Tests were
+deferred by the user, so no native/GLTF/Metal/Vulkan/GLES result may
+be claimed. Read the stage handoff:
+docs/agent-handoffs/building-renderer3d-stage23s-2026-11-24.md.
