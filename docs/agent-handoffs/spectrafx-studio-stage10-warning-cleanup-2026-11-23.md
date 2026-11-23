@@ -1,3 +1,27 @@
+## Local Mac acceptance — 2026-11-23 (user-supplied result)
+
+The tester ran the CTest selection for the Studio image-codec and native
+SpectraFX GPU preview fixtures in
+`~/Projects/AIVERSE-spectrafx-test/build/spectrafx-preview`:
+
+```text
+Start 450: studio_image_codecs
+1/2 Test #450: studio_image_codecs .............. Passed 0.57 sec
+Start 452: studio_spectrafx_preview
+2/2 Test #452: studio_spectrafx_preview ......... Passed 6.43 sec
+100% tests passed, 0 tests failed out of 2
+Total Test time (real) = 7.02 sec
+```
+
+**Evidence:** user-reported native Apple CTest 2/2 PASS (0 failed).
+`studio_image_codecs` exercises stb PNG/JPEG decode/encode contracts;
+`studio_spectrafx_preview` exercises the native preview smoke test.
+The report shows neither the exact local Git commit SHA nor the compiler
+warnings from the corresponding build. The current CI state and exact-head
+warning-free status must therefore be validated separately, not inferred
+from these two passing tests. No GPU/CPU pixel parity or Windows Vulkan
+acceptance is asserted here.
+
 # SpectraFX / HTML5 Studio Stage 10 — native codec warning cleanup
 
 Date: 2026-11-23
