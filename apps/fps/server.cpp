@@ -32,27 +32,28 @@ bool parseWorldId(const std::string& text,std::array<uint8_t,16>& out){
 int main(int argc,char** argv) {
     try {
         std::string project="examples/fps/arena",admissionFile,audience,worldDir,worldId;
-        uint16_t port=27100;uint32_t ticks=0,checkpointTicks=0;bool loopbackOnly=false;
+        uint16_t port=27100;uint32_t ticks=0,checkpointTicks=0;bool loopbackOnly=false,worldAsync=false;
         for(int i=1;i<argc;++i) {
             std::string arg=argv[i];
             if(arg=="--project"&&i+1<argc)project=argv[++i];
             else if(arg=="--loopback")loopbackOnly=true;
             else if(arg=="--admission-file"&&i+1<argc)admissionFile=argv[++i];
             else if(arg=="--audience"&&i+1<argc)audience=argv[++i];
+            else if(arg=="--world-async")worldAsync=true;
             else if(arg=="--world-dir"&&i+1<argc)worldDir=argv[++i];
             else if(arg=="--world-id"&&i+1<argc)worldId=argv[++i];
             else if((arg=="--port"||arg=="--ticks"||arg=="--world-checkpoint-ticks")&&i+1<argc) {
                 std::string value=argv[++i];uint32_t n=0;auto [end,err]=std::from_chars(value.data(),value.data()+value.size(),n);
                 if(err!=std::errc{}||end!=value.data()+value.size()||(arg=="--port"&&(n==0||n>=65535)))throw std::runtime_error("invalid numeric argument");
                 if(arg=="--port")port=uint16_t(n);else if(arg=="--ticks")ticks=n;else checkpointTicks=n;
-            } else throw std::runtime_error("usage: aiverse_fps_server --project DIR [--port 27100] [--ticks N] [--loopback] [--admission-file FILE --audience MATCH] [--world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N]]");
+            } else throw std::runtime_error("usage: aiverse_fps_server --project DIR [--port 27100] [--ticks N] [--loopback] [--admission-file FILE --audience MATCH] [--world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N] [--world-async]]");
         }
         if(audience.size()>128)throw std::runtime_error("match audience exceeds 128 bytes");
         if(admissionFile.empty()!=audience.empty())throw std::runtime_error("admission file and match audience must be specified together");
         auto data=aiverse::actor::readProject([&](const auto& file,std::string& text){std::ifstream input(project+"/"+file);if(!input)return false;text.assign(std::istreambuf_iterator<char>(input),{});return true;});
         auto rules=data.rules,map=data.map;
         aiverse::net::authority::Server server(rules,map,1,aiverse::platform::makeContentReader(project));
-        if(worldDir.empty()!=worldId.empty()||(worldDir.empty()&&checkpointTicks))
+        if(worldDir.empty()!=worldId.empty()||(worldDir.empty()&&(checkpointTicks||worldAsync)))
             throw std::runtime_error("world directory and UUID must be specified together");
         if(!worldDir.empty()){
             std::array<uint8_t,16> uuid{};
@@ -63,7 +64,7 @@ int main(int argc,char** argv) {
             if(ec||!std::filesystem::is_directory(directory,ec)||ec)
                 throw std::runtime_error("cannot prepare persistent world directory");
             const bool resume=std::filesystem::exists(directory/"manifest.bin",ec);
-            if(ec||!server.enablePersistence(directory,uuid,resume))
+            if(ec||!server.enablePersistence(directory,uuid,resume,64u*1024u*1024u,worldAsync))
                 throw std::runtime_error("world persistence refused: unsupported content, invalid state, busy directory or recovery required");
             std::printf("Persistent world: %s at tick %u\n",resume?"recovered":"created",server.simulation().tick());
         }
@@ -76,7 +77,7 @@ int main(int argc,char** argv) {
         uint64_t lastReload=0;bool loaded=false;
         auto utc=[](){return uint64_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());};
         auto previous=aiverse::net::nowMs();double accumulated=0;const double step=1000.0/server.simulation().tickRate();
-        while(!ticks||server.simulation().tick()<ticks) {
+        while(!ticks||server.finalizedTick()<ticks) {
             auto now=aiverse::net::nowMs();accumulated+=double(now-previous);previous=now;
             if(!admissionFile.empty()&&(!loaded||now-lastReload>=1000)){
                 loaded=true;lastReload=now;
@@ -116,15 +117,20 @@ int main(int argc,char** argv) {
                 }
             }
             int budget=8;
-            while(accumulated>=step&&budget--&&(!ticks||server.simulation().tick()<ticks)){
+            while(accumulated>=step&&budget--&&(!ticks||server.finalizedTick()<ticks)){
                 if(!server.step()){
                     if(server.persistenceFailed())throw std::runtime_error("persistent tick refused; restart/recovery required");
-                    accumulated=0;break;
+                    accumulated=server.persistencePending()?step:0;break;
                 }
                 accumulated-=step;
-                if(checkpointTicks&&server.simulation().tick()%checkpointTicks==0&&!server.checkpointWorld())
+                if(checkpointTicks&&server.finalizedTick()%checkpointTicks==0&&!server.checkpointWorld())
                     throw std::runtime_error("persistent checkpoint refused; restart/recovery required");
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        // A final checkpoint may still be in flight at the requested tick ceiling.
+        while(!server.pollWorldCheckpoint()){
+            if(server.persistenceFailed())throw std::runtime_error("final persistent checkpoint failed");
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         std::printf("ticks=%u checksum=%llu rejected=%llu\n",server.simulation().tick(),(unsigned long long)server.simulation().checksum(),(unsigned long long)server.rejected());
