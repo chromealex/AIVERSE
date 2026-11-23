@@ -234,6 +234,11 @@ int main(int argc,char** argv){
             const Vec3 origin{10_fx,2_fx,-5_fx};
             for(uint32_t turn=0;turn<4;++turn){
                 const auto sized=dressStructure(st,kind.id,7,origin,turn,StructureSize{32.f,20.f,28.f});
+                if(sized.mesh.vertices.empty())std::fprintf(stderr,
+                    "constructive-fit: kind=%s yaw=%u error=%s, body=(%.4f,%.4f,%.4f) residual=(%.4f,%.4f,%.4f) iterations=%u\n",
+                    kind.id.c_str(),turn,sized.fitError.c_str(),sized.constructionSize.width,
+                    sized.constructionSize.height,sized.constructionSize.depth,sized.fitResidual.width,
+                    sized.fitResidual.height,sized.fitResidual.depth,sized.fitIterations);
                 CHECK(!sized.mesh.vertices.empty());
                 const auto raw=dressStructureGeometry(st,kind.id,7,{},turn,sized.constructionSize);
                 CHECK(!raw.mesh.vertices.empty());

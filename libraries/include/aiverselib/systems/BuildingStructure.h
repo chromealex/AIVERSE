@@ -14,6 +14,9 @@ namespace aiverse::lib::systems {
 struct StructureSize{float width=0,height=0,depth=0;};
 struct StyledStructure{StyledMesh mesh;std::vector<BuildingBox> boxes;std::vector<Vec3> gates;
     StructureSize constructionSize{}; // actual authored body dimensions, before any rigid translation
+    StructureSize fitResidual{}; // signed unsatisfied W/H/D after last attempt
+    std::string fitError; // empty when successful; intended for Studio diagnostics
+    uint32_t fitIterations=0;
 };   // gates: ground points in front of each gate
 namespace buildingStyleDetail {
 using P3=std::array<float,3>;
@@ -458,13 +461,15 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
                                      StructureSize size={}){
     StyledStructure empty;
     const auto* kind=st.structureKind(kindId);
-    if(!kind||yaw>3)return empty;
+    if(!kind||yaw>3){empty.fitError="Unknown function or invalid orientation";return empty;}
     if(size.width==0&&size.height==0&&size.depth==0)
         return dressStructureGeometry(st,kindId,seed,origin,yaw);
     if(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||
        size.width<std::max(8.f,float(kind->doors)*4.f+4.f)||size.width>160.f||
-       size.depth<8.f||size.depth>160.f||size.height<5.f||size.height>80.f)
+       size.depth<8.f||size.depth>160.f||size.height<5.f||size.height>80.f){
+        empty.fitError="Requested envelope outside allowed size range";
         return empty;
+    }
 
     // The hull occupies less than the final bounds: legs, side modules,
     // chimneys, pylons, towers and foundations project out of the body.
@@ -476,15 +481,24 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     constexpr float tolerance=0.0015f;
     for(int attempt=0;attempt<32;++attempt){
         auto result=dressStructureGeometry(st,kindId,seed,{},yaw,body);
-        if(result.mesh.vertices.empty())return empty;
+        if(result.mesh.vertices.empty()){
+            empty.fitError="No valid raw architecture for the current body dimensions";
+            empty.constructionSize=body;empty.fitIterations=unsigned(attempt+1);
+            return empty;
+        }
         float delta[3]{};
         bool aligned=true;
         for(int i=0;i<3;++i){
             const float extent=result.mesh.boundsMax[i]-result.mesh.boundsMin[i];
-            if(extent<=0.f||!std::isfinite(extent))return empty;
+            if(extent<=0.f||!std::isfinite(extent)){
+                empty.fitError="Degenerate generated geometry";
+                return empty;
+            }
             delta[i]=targets[i]-extent;
             aligned&=std::abs(delta[i])<=tolerance;
         }
+        empty.fitResidual={yaw%2?delta[2]:delta[0],delta[1],yaw%2?delta[0]:delta[2]};
+        empty.constructionSize=body;empty.fitIterations=unsigned(attempt+1);
         if(aligned){
             // A minimum practical gate aperture. Use *unscaled* dimensions;
             // a 12-metre envelope cannot magically compress a five-metre
@@ -495,7 +509,7 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
                          (body.width-2*cut)/float(kind->doors)-0.6f);
                 const float dh=std::min(kind->doorHeight*(kind->height.lo+kind->height.hi)*0.5f,
                          body.height-0.8f);
-                if(dw<1.6f||dh<2.1f)return empty;
+                if(dw<1.6f||dh<2.1f){empty.fitError="Requested size reduces gate clearance below 1.6 by 2.1 metres";return empty;}
             }
             const float translation[3]={
                 float(origin.x.toDouble())-result.mesh.boundsMin[0],
@@ -516,6 +530,7 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
                 result.mesh.boundsMin[i]+=translation[i];
                 result.mesh.boundsMax[i]+=translation[i];
             }
+            result.fitIterations=unsigned(attempt+1);
             return result;
         }
         // Damped constructive fit: the XZ volume depends mainly on its base
@@ -527,6 +542,7 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
         body.depth=std::clamp(body.depth+zdelta*0.72f,4.f,180.f);
         body.height=std::clamp(body.height+delta[1]*0.58f,2.4f,90.f);
     }
+    empty.fitError="Unable to fit full envelope without deforming geometry";
     return empty; // impossible envelope, discontinuous seeded layout or no convergence
 }
 }
