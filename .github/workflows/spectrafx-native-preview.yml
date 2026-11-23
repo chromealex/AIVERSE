@@ -46,15 +46,17 @@ jobs:
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_CLIENT=OFF \
-            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_BUILD_SERVER=OFF \
             -DAIVERSE_BUILD_HEADLESS=OFF \
-            -DAIVERSE_BUILD_STUDIO_HTML5=ON
-      - name: Compile real Scene GPU fixture
+            -DAIVERSE_BUILD_STUDIO_HTML5=ON \
+            -DAIVERSE_FETCH_TEMPLATES=OFF
+      - name: Compile real Scene GPU fixture and codecs diagnostics target
         run: |
           cmake --build build/spectrafx-studio-preview --parallel 4 \
-            --target aiverse_studio_spectrafx_preview_tests
-      - name: Execute hardware GPU preview contract
+            --target aiverse_studio_spectrafx_preview_tests aiverse_studio_image_codecs_tests
+      - name: Execute hardware GPU preview and image codec warning contracts
         run: |
           ctest --test-dir build/spectrafx-studio-preview \
-            -R '^studio_spectrafx_preview$' --output-on-failure --no-tests=error
+            -R '^(studio_spectrafx_preview|studio_image_codecs)
+ --output-on-failure --no-tests=error
