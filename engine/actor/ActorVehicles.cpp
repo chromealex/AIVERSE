@@ -385,6 +385,8 @@ void ActorHost::tickVehicles(Simulation& sim,std::span<const vs::RacePedals> rac
                 if(e.kind==VehicleEventKind::SeatEntered){a.vehicle=v->id;a.velocity={};}
             }
             for(const auto& x:report->exits){auto a=character(sim,uint8_t(x.actor));a.vehicle=0;a.pos=x.position;a.velocity=run.controller.velocity;
+                if(!reportRegionMoveIfCrossed(sim,a.entity))
+                    throw std::logic_error("regionOwnership: typed seat exit dirty report failed");
                 if(v->health<=0)damage(sim,0,a,1000);}
         }
         auto driver=vehicleDriver(seats,run.seats);v->driver=uint8_t(driver);
