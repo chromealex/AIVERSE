@@ -127,17 +127,35 @@ public:
         return report;
     }
 
-    // The game motor confirms actual feet at destination landing before
-    // this transition. No actor transform teleport here.
+    // Physically validate that the game motor has moved the actor out
+    // through the real front landing opening. A client cannot acknowledge
+    // leaving from inside the moving cabin or from a different floor.
     bool exit(World& ecs,BuildingCirculationHost& host,
               uint64_t sceneId,Entity entity,uint32_t liftFeature,
-              uint32_t floor){
-        if(!ecs.alive(entity))return false;
+              uint32_t floor,float width,float depth,Vec3 origin,uint32_t yaw){
+        if(!ecs.alive(entity)||yaw>3)return false;
         auto* marker=ecs.tryGet<BuildingLiftPassenger>(entity);
-        if(!marker||!marker->attached||marker->sceneId!=sceneId||
+        auto* body=ecs.tryGet<Body>(entity);
+        if(!marker||!body||!marker->attached||marker->sceneId!=sceneId||
            marker->liftFeature!=liftFeature)return false;
         const auto it=host.lifts().find(liftFeature);
         if(it==host.lifts().end()||!it->second.readyAt(floor))return false;
+        const auto pose=it->second.platformPose();
+        const float centre=(pose.x0+pose.x1)*0.5f;
+        const auto left=buildingLocalToWorld(pose.x0,0,pose.z0-0.8f,
+                                           width,depth,origin,yaw);
+        const auto right=buildingLocalToWorld(pose.x1,0,pose.z0-0.8f,
+                                            width,depth,origin,yaw);
+        (void)centre;
+        const Fixed margin=buildingFixedMm(350);
+        const Fixed landing=origin.y+buildingFixedMm(pose.yMm)+buildingFixedMm(
+            int64_t(std::llround(double(pose.thickness)*1000.)));
+        if(body->pos.x<fxMin(left.x,right.x)-margin||
+           body->pos.x>fxMax(left.x,right.x)+margin||
+           body->pos.z<fxMin(left.z,right.z)-margin||
+           body->pos.z>fxMax(left.z,right.z)+margin||
+           fxAbs(body->pos.y-landing)>buildingFixedMm(350))
+            return false;
         if(!host.exitRider(entity.packed(),liftFeature,floor))return false;
         marker->attached=false;
         return true;
