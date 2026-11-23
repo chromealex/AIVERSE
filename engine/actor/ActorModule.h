@@ -117,6 +117,9 @@ public:
     bool serializeState(Simulation&,Archive&) override;
     int result(Simulation& sim) override { return state(sim).winner; }
     const Config& config() const { return config_; }
+    // Runtime-only storage audit and content-specific portable validation.
+    static std::vector<uint32_t> portableDerivedResourceTypes();
+    bool validatePortableWorld(const World&,uint32_t tick)const;
 
     const world::SpatialWorld& collision() const { return collision_; }
     void setContentReader(world::AssetReader);
