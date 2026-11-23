@@ -109,6 +109,7 @@ public:
         });
         if(!ok||std::any_of(index.bySlot.begin(),index.bySlot.end(),[](Entity e){return !e.valid();}))return false;
         std::set<uint32_t> objectIds;
+        std::map<uint32_t,Entity> cars;
         for(auto id:ledger.liveIds()){
             Entity e;
             if(!refs.resolve(w,id,e))return false; // this policy materializes all live actors
@@ -116,19 +117,27 @@ public:
             const auto* car=w.tryGetConst<Vehicle>(e);
             const auto* loot=w.tryGetConst<Loot>(e);
             if(unsigned(character!=nullptr)+unsigned(car!=nullptr)+unsigned(loot!=nullptr)!=1)return false;
-            if(car&&(!car->id||!objectIds.insert(car->id).second))return false;
+            if(car){if(!car->id||!objectIds.insert(car->id).second)return false;cars.emplace(car->id,e);}
             if(loot&&(!loot->id||!objectIds.insert(loot->id).second))return false;
         }
+        if(ledger.liveCount()!=w.countExisting<CharacterId>()+w.countExisting<Vehicle>()+w.countExisting<Loot>())return false;
+        w.eachExistingConst<CharacterBody>([&](Entity e,const CharacterBody& body){
+            if(!w.has<CharacterId>(e)||(body.vehicle&&!cars.contains(body.vehicle)))ok=false;
+        });
         w.eachExistingConst<vehicles::VehicleDrive>([&](Entity e,const vehicles::VehicleDrive& d){
             if(!ok)return;
-            if(!w.has<Vehicle>(e)||!vehicles::valid(d)||!d.requests.empty()){ok=false;return;}
+            const auto* car=w.tryGetConst<Vehicle>(e);
+            if(!car||!vehicles::valid(d)||!d.requests.empty()){ok=false;return;}
             if(d.driver.valid()){
                 const auto* id=w.tryGetConst<CharacterId>(d.driver);
                 const auto* back=w.tryGetConst<vehicles::VehicleOccupant>(d.driver);
-                if(!id||id->slot!=d.player||!back||back->vehicle!=e){ok=false;return;}
+                const auto* body=w.tryGetConst<CharacterBody>(d.driver);
+                if(!id||id->slot!=d.player||!back||back->vehicle!=e||!body||body->vehicle!=car->id){ok=false;return;}
             }
             for(const auto& [seat,slot]:d.seats.occupants){
                 (void)seat;if(slot<=0||uint64_t(slot)>index.bySlot.size()){ok=false;return;}
+                const auto* body=w.tryGetConst<CharacterBody>(index.bySlot[size_t(slot-1)]);
+                if(!body||body->vehicle!=car->id){ok=false;return;}
             }
         });
         w.eachExistingConst<vehicles::VehicleOccupant>([&](Entity e,const vehicles::VehicleOccupant& back){
