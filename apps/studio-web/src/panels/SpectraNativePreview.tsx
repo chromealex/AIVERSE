@@ -42,6 +42,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [compareB,setCompareB]=useState('');
   const [captureSlot,setCaptureSlot]=useState<'A'|'B'|null>(null);
   const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
+  const [splitPosition,setSplitPosition]=useState(50);
+  const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
+  const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
+  const pendingMeta=useRef<Record<string,unknown>|null>(null);
   const [diffThreshold,setDiffThreshold]=useState(16);
   const [pixelDiff,setPixelDiff]=useState<SpectraPixelDiff|null>(null);
   const [diffError,setDiffError]=useState('');
@@ -56,6 +60,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -126,8 +131,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
            capture.image.startsWith('data:image/jpeg;base64,') &&
            capture.image.length<=900000) {
           setCaptureImage(capture.image);
-          if(captureSlot==='A')setCompareA(capture.image);
-          if(captureSlot==='B')setCompareB(capture.image);
+          if(captureSlot==='A'){setCompareA(capture.image);setCaptureMetaA(pendingMeta.current);}
+          if(captureSlot==='B'){setCompareB(capture.image);setCaptureMetaB(pendingMeta.current);}
           setCaptureSlot(null);
           setCaptureError('');
         } else {
@@ -157,6 +162,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       threshold:diffThreshold,width:pixelDiff.width,height:pixelDiff.height,
       changed:pixelDiff.changed,total:pixelDiff.total,
       changedPercent:pixelDiff.changedPercent,meanAbsoluteError:pixelDiff.meanAbsoluteError,
+      captureA:captureMetaA,captureB:captureMetaB,
       caveat:'8-bit decoded JPEG sRGB comparison; not HDR/alpha or backend parity'};
     const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -166,6 +172,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
     setBusy(true);setCaptureError('');setCaptureSlot(slot);
+    pendingMeta.current={graphSignature,projectPath,tick:state.tick,
+      backend:state.backend,cameraPreset:'see viewport',snapshotMaxSide:captureSide,
+      capturedAt:new Date().toISOString()};
     try {
       const result=await invoke('studio.spectraPreview',{
         action:'capture',maxSide:captureSide
@@ -324,28 +333,49 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         <StudioSelect id="spectra-compare-mode" value={compareMode}
           onChange={e=>setCompareMode(e.target.value as 'side'|'split')}>
           <option value="side">Side by side</option>
-          <option value="split">50/50 split</option>
+          <option value="split">Interactive split</option>
         </StudioSelect>
       </StudioField>
       <StudioButton size="sm" disabled={!compareA&&!compareB}
-        onClick={()=>{setCompareA('');setCompareB('');}}>Clear A/B</StudioButton>
+        onClick={()=>{setCompareA('');setCompareB('');setCaptureMetaA(null);setCaptureMetaB(null);}}>Clear A/B</StudioButton>
     </div>
     {(compareA||compareB)&&<div className="spectra-native__snapshot">
-      <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
-        {compareA&&<div style={{flex:1,minWidth:0}}>
-          <small>Capture A</small>
-          <img src={compareA} alt="Native FX capture A"
-            style={compareMode==='split'?{clipPath:'inset(0 50% 0 0)',width:'200%',maxWidth:'none'}:{width:'100%'}}/>
-          <a href={compareA} download="spectrafx-A.jpg">Save A</a>
+      {compareMode==='split'&&compareA&&compareB&&!diffError?
+        <div>
+          <StudioField label={`Split position: ${splitPosition}% A`} htmlFor="spectra-split-position">
+            <StudioInput id="spectra-split-position" type="range" min={0} max={100} step={1}
+              value={splitPosition} onChange={e=>setSplitPosition(Number(e.target.value))}/>
+          </StudioField>
+          <div style={{position:'relative',width:'100%',overflow:'hidden'}}>
+            <img src={compareB} alt="Native capture B" style={{display:'block',width:'100%'}}/>
+            <img src={compareA} alt="Native capture A"
+              style={{position:'absolute',inset:0,width:'100%',height:'100%',
+                clipPath:`inset(0 ${100-splitPosition}% 0 0)`}}/>
+            <div aria-hidden="true" style={{position:'absolute',left:`${splitPosition}%`,
+              top:0,bottom:0,width:2,background:'white',pointerEvents:'none'}}/>
+          </div>
+        </div>:
+        <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+          {compareA&&<div style={{flex:1,minWidth:0}}>
+            <small>Capture A</small><img src={compareA} alt="Native capture A" style={{width:'100%'}}/>
+          </div>}
+          {compareB&&<div style={{flex:1,minWidth:0}}>
+            <small>Capture B</small><img src={compareB} alt="Native capture B" style={{width:'100%'}}/>
+          </div>}
         </div>}
-        {compareB&&<div style={{flex:1,minWidth:0}}>
-          <small>Capture B</small>
-          <img src={compareB} alt="Native FX capture B"
-            style={compareMode==='split'?{clipPath:'inset(0 0 0 50%)',width:'200%',maxWidth:'none',transform:'translateX(-50%)'}:{width:'100%'}}/>
-          <a href={compareB} download="spectrafx-B.jpg">Save B</a>
-        </div>}
+      <div style={{display:'flex',gap:12}}>
+        {compareA&&<a href={compareA} download="spectrafx-A.jpg">Save A</a>}
+        {compareB&&<a href={compareB} download="spectrafx-B.jpg">Save B</a>}
       </div>
-      <small>Comparison uses actual native GPU JPEG captures. Pixel-difference metrics are not yet available.</small>
+      {captureMetaA&&captureMetaB&&
+        (captureMetaA.graphSignature!==captureMetaB.graphSignature||
+         captureMetaA.tick!==captureMetaB.tick||
+         captureMetaA.backend!==captureMetaB.backend||
+         captureMetaA.snapshotMaxSide!==captureMetaB.snapshotMaxSide)&&
+        <StudioAlert tone="warning">A/B capture settings differ (graph revision, tick, backend or snapshot size).
+          Pixel differences may reflect these settings rather than an effect change.</StudioAlert>}
+      <small>Two native JPEG frames; alignment assumes the same camera pose and dimensions.
+        Captures are not synchronized automatically.</small>
     </div>}
     {(compareA&&compareB)&&<div className="spectra-native__snapshot">
       <StudioField label="Pixel difference threshold (0–255)" htmlFor="spectra-diff-threshold">
