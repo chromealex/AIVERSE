@@ -1741,3 +1741,9 @@ Do not claim the picker is already mounted inside the VFX Graph inspector or tha
 `apps/studio-web/src/panels/SpectraGraphAssetInspector.tsx` composes the indexed `SpectraAssetPicker` and Stage 39 immutable binding helper. Pass the current graph, externally selected node ID, native asset property name, indexed assets and an `onGraphChange` callback. When locked, external node-selection changes do not retarget the asset field; if the locked node is deleted, the inspector disables editing. Unlocking follows the latest external selection.
 
 This is a reusable sub-inspector, **not yet mounted** in the existing Graph Editor. Before wiring it to the production inspector, confirm the compiler property representation and translate GUID references to supported native values. Do not persist an unvalidated GUID object. Tests remain deferred.
+
+## Stage 42 — authoritative Studio Assets GUID adapter
+
+`apps/studio-web/src/panels/spectraStudioAssetIndex.ts` exports `indexedSpectraAssets(payload)`, converting the **result** of `invoke('studio.assets',{})` to `SpectraIndexedAsset[]`. Native `StudioSession.cpp` already obtains `StudioAssetCatalog` entries from `content/`, whose persistent GUIDs come from `.meta` and whose SQLite index is disposable. The adapter ignores malformed rows and deduplicates GUIDs. Pass its result to `SpectraGraphAssetInspector`; do not generate GUIDs in React.
+
+The adapter does not yet fetch on its own or mount the sub-inspector in the production graph window. The compiler's asset property schema must be checked before saving GUID objects. No builds/tests executed.
