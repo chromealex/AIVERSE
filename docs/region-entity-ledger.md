@@ -790,3 +790,85 @@ The existing race/vehicle state machine still owns the actual respawn.
 Other direct movement writers (custom scripts, host-native teleports,
 some air insertion and nonstandard respawn systems) are **not** universally
 rerouted through the W1.9 staging API.
+
+
+## Stage 12 — bounded race preloading and collision budget diagnostics
+
+W1.11's race admission conservatively pinned a current respawn and the next
+checkpoint for every active racer. On large tracks, the *next* checkpoint
+can be unreachable within the upcoming fixed tick, wasting the finite
+collision-residency budget and blocking gameplay when other required
+regions cannot fit.
+
+`VehicleRace::imminentRespawnPositions(world,maxTravel)` is a read-only,
+opt-in **tick-bounded** alternative to
+`possibleRespawnPositions(world)`, which remains unchanged:
+
+- It always preserves the current respawn destination (last passed
+  checkpoint or grid).
+- It includes a next checkpoint only when the current physical
+  `VehicleDrive::controller.position` lies within
+  `maxTravel + gate.radius` of its gate centre, so that a legitimate
+  accepted controller step can reach its aperture during this tick.
+- Missing/invalid controller data or an unmatched previous race sample
+  falls back to pinning the next checkpoint, never guessing that it is
+  unreachable. Zero/negative maxTravel retains old full-candidate behavior.
+- The result is sorted, deduplicated and changes **no** race/vehicle/RNG
+  state. A pure policy source test covers distant, close and stale poses.
+
+Opt-in world-space `ActorHost::readyToStep` now uses a conservative
+travel bound `kVehicleMaxSpeed * dt + 4m`. The current respawn target
+remains mandatory. Only the *additional*, physically unreachable next
+gate can be omitted. This preserves the existing shared race-policy
+owner and avoids a second simulation system.
+
+The previous unconditional `initialVehicles_` pin is now also restricted
+to the due bomb/round-reset tick:
+`config_.mode=="bomb" && config_.systems.enabled && match.end &&
+tick>=match.end`. Ordinary gameplay no longer retains a remote original
+vehicle spawn unnecessarily.
+
+### Impossible simultaneous residency
+
+New `CollisionStream::canFitRegions(regions,error)` is a read-only
+preflight over the *same* deduplicated static manifest chunks used by
+`prepareRegions`. It compares the requested cell count against
+`maxResidentChunks` and the sum of reserved chunk bytes against
+`maxResidentBytes`, using overflow-safe subtraction.
+
+When the necessary pins can **never** fit simultaneously, the host
+immediately rejects the next tick and exposes
+`ActorHost::collisionAdmissionError()` as a host-local diagnostic
+(`"collision pin set exceeds maxResidentChunks"` or
+`"collision pin set exceeds maxResidentBytes"`). It does not schedule
+additional async loads, advance the tick, consume commands/RNG or change
+the ECS checksum. A merely unfinished async load is still retried
+normally and has no impossible-budget diagnostic.
+
+This **does not increase** the configured budget, omit mandatory
+collision, or make a physically impossible pin set runnable. Host code
+must change its gameplay interest/region configuration, schedule
+destinations differently, or increase the manifest budget. Capacity
+diagnostics remain derived, not saved/hashed.
+
+### Regression and current acceptance status
+
+`race_region_respawn_gate_test` now covers
+`imminentRespawnPositions` (far gate pruned, close gate restored,
+stale controller conservative, old full query unchanged).
+`actor_region_admission_test` now covers a two-chunk manifest with
+`maxResidentChunks=1`, diagnostic, unchanged state and successful
+retry after replacing the target with one in the resident region.
+Its bomb round-reset fixture was updated to verify the remote original
+car position is needed **only when reset is due**.
+
+These are authored CTest assertions, not executed results.
+No Mac/KINGSTON native build or CTest was run. The branch remains WIP
+and must pass the merged-tree suite before release or main merge.
+
+Remaining limits: the fixed maximum-controller-speed envelope is for
+standard accepted motion and cannot protect scripts that directly mutate
+positions by arbitrary distances; those require explicit staged admission.
+A race with several *mandatory* distant respawns exceeding capacity
+still blocks; next-stage policy needs deterministic residency partition
+or larger manifest budget, not unsafe eviction.
