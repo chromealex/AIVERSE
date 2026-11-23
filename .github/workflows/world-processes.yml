@@ -1,0 +1,33 @@
+name: World processes focused ECS acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'libraries/include/aiverselib/world/**'
+      - 'tests/ecs_echo_acoustics_test.cpp'
+      - 'tests/ecs_fracture_structure_test.cpp'
+      - 'tests/ecs_aether_gas_test.cpp'
+      - 'tests/world_processes_verify.sh'
+      - 'tests/libraries/world_processes_test.cpp'
+      - '.github/workflows/world-processes.yml'
+  workflow_dispatch:
+
+jobs:
+  focused-native:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and execute ECHO / FRACTURE / AETHER
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: bash tests/world_processes_verify.sh
+      - name: Compile and execute with ASan / UBSan
+        if: matrix.compiler == 'clang++'
+        env:
+          CXX: clang++
+          AIVERSE_SANITIZE: '1'
+        run: bash tests/world_processes_verify.sh
