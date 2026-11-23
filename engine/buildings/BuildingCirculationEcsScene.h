@@ -76,7 +76,8 @@ public:
         if(!ecs_||!scene_.doorsOpenAt(feature,floor))return false;
         // Actor movement/boarding volume validation should have run in
         // the game's motor/interaction owner before invoking exit().
-        return ecsBridge_.exit(*ecs_,scene_.host(),sceneId_,actor,feature,floor);
+        return ecsBridge_.exit(*ecs_,scene_.host(),sceneId_,actor,feature,floor,
+                               width_,depth_,origin_,yaw_);
     }
 
     Tick advance(world::SpatialWorld& spatial,nav::Mesh* navmesh,
