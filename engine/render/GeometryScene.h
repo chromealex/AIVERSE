@@ -115,6 +115,14 @@ public:
     // Full Device idle proof is required at final teardown. Live reload
     // instead moves old resident Models/HLOD proxies into the ordered queue.
     void shutdown(gfx::Device& dev);
+    // Stage38: strictly NONBLOCKING retirement for ordinary Model-only
+    // scenes. Explicitly refuses STRATA sidecars; those still need a real
+    // global GPU idle proof until their owners have fence-aware teardown.
+    // Call only after removing this scene from all Renderer3D draw paths.
+    bool deferredShutdownEligible()const noexcept;
+    bool beginDeferredShutdown(gfx::Device& dev);
+    bool pollDeferredShutdown(gfx::Device& dev);
+
     // Discard the current static presentation scene without waiting idle:
     // used on rules/project reload, not final Device teardown.
     void clear(gfx::Device& dev) {retireResident(dev);}
@@ -399,6 +407,7 @@ private:
     // Copies STRATA policy/budget settings (not resources) for staged loads.
     void copyStrataConfigFrom(const GeometryScene& other);
     NativePresentationRetirement retirement_;
+    bool deferredShutdownStarted_=false;
     // Failed transactions may still own GPU models after a refused idle.
     // Retain those retirement queues for a later safe collect/shutdown.
     std::vector<std::unique_ptr<GeometryScene>> failedStages_;
