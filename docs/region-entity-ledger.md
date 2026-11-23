@@ -391,3 +391,95 @@ world/vehicle simulation has not been switched over to the cold
 region lifecycle. Next work: canonical shared positions, component
 owner participation, collision/nav admission, and full deterministic
 save/replay before production activation.
+
+
+## Stage 07 — canonical position owner for real world-space actors
+
+The generic W1 policy no longer requires a duplicate `Transform`
+when the host already owns an authoritative position elsewhere.
+`RegionPositionReader` is a read-only adapter
+(`std::optional<Vec3>(const World&,Entity)`). The original
+`Transform`-only overloads remain in `RegionEcsBridge`; the new
+overloads for `bindNew`, `bindExisting`, `transferGroup`,
+`rebuild` and `crossings` receive the host's reader explicitly.
+
+```cpp
+// For real world-space GameCore/ActorHost:
+auto position=actor::ActorHost::regionPositionReader();
+auto* ledger=sim.world().resource<world::RegionEntityLedger>();
+world::RegionEcsBridge::crossings(
+    sim.world(),*ledger,world::SpatialWorld(32),crossings,position);
+
+// The host's existing typed vehicle seat resolver is used automatically:
+actor::host(sim).transferVehicleRegion(
+    sim,car,world::Cell{0,0,0},world::Cell{1,0,0},&error);
+```
+
+### Enabling it
+
+Use the root rules block `"regionOwnership": {}` on a
+**world-space GameCore map**. It registers the existing native ECS
+`RegionEntityLedger` resource and `RegionStableIdentity` component
+at `ActorHost::setup`, then binds all initial live characters and
+vehicles using a deterministic stable ID (the packed entity handle
+plus one). The location is read from the **existing**
+`actor::CharacterBody.pos` or `actor::Vehicle.pos` component;
+other entities may provide `Transform` as before.
+
+This is opt-in: projects without `regionOwnership` do not register
+any W1 persistence schemas, so their default save format and
+checksums stay unchanged. The current stage uses fixed 32-unit
+regions; configurable units/large-world cell ownership still need
+explicit work.
+
+`ActorHost::transferVehicleRegion` uses the shared
+`VehicleRegionTransfer` for atomic car + occupant ownership
+updates, but first requires existing `ActorHost::readyToStep`
+collision/nav admission. On asynchronous maps it also requires
+`CollisionStream::covers` for the car's destination bounding box.
+It then checks that the vehicle's **canonical** position belongs
+to the destination W1 region and that every group member already
+belongs to the expected source region. No authority update occurs
+on failure.
+
+Vehicle physics/seat changes remain entirely in
+`engine/vehicles` and `ActorHost`; no cloned position, actor
+controller, or seat simulation has been added.
+
+### Hot/cold compatibility
+
+The shared `RegionDormancyController` also accepts
+`setPositionReader` and passes this reader to
+`registerRegionColdState` load validation through
+`RegionLifecycleRuntime::install`. This supports safe, expressly
+registered optional components on world-space actors without a
+`Transform`. It does **not** automatically park
+`CharacterBody`, `VehicleDrive`, vehicle health or combat state:
+their systems would need explicit dormant handling, and their
+persistence ownership must remain consistent.
+
+A normal game using only `regionOwnership` registers ledger and
+stable IDs, **not** the hot/cold runtime or cold-store resources.
+Installing the latter in a production host still requires validated
+parkable component codecs and a deterministic activation policy.
+
+### Tests and limitations
+
+Added `tests/world/actor_region_position_test.cpp` (CTest
+`actor_region_position_test`). It uses an actual world-space
+`GameCore` with `CharacterBody` and `Vehicle`, tests opt-in
+native ECS IDs, real typed seat link discovery over a synthetic
+`VehicleDrive`, read-only crossings, atomic transfer, optional
+component park/wake, ECS v10 full save/restore, COW rollback and
+legacy v9 format with no opt-in. The fixture's synthetic
+`VehicleDrive` is removed before full game save since it is not
+part of the map's ordinary vehicle configuration.
+
+Tests are committed and CMake-registered but **not compiled or
+executed** in the required Mac/KINGSTON checkout yet. W1 remains
+partial. Still needed: real vehicle movement transitions from the
+gameplay tick, dynamic respawns/destructions tracked in ledger,
+source/destination load retry integration, actual hot/cold guards
+for production character/car systems, offscreen simulation, disk
+region journal and performance validation. Branch needs integrating
+with the more recent `main` before acceptance.
