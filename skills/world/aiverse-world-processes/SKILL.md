@@ -593,3 +593,7 @@ Ctrl/Command during native Scene EvolveArea edge drag now prioritizes the closes
 ## Stage 41: group resize preview
 
 `worldprocess_edit::previewGroupResize` computes transient candidate rectangles for all selected EVOLVE areas during a group edge drag. Studio overlays amber outlines and a shared centroid marker; Shift uses individual pivots. The preview is read-only and the Stage40 atomic batch RPC remains the sole authoring commit. No editable numeric Scene input or custom pivot yet. No compile/runtime QA performed (deferred). Handoff: `docs/handoffs/world-processes-stage41-group-preview-2026-11-23.md`.
+
+## Stage 42: two-axis group scale and custom pivot RPC
+
+`studio.worldProcessAreaBatchResize` now accepts `axis:"both"`, independent X ratio (`scaleNumerator`,`scaleDenominator`) and Z ratio (`scaleNumeratorZ`,`scaleDenominatorZ`), plus `pivot:"custom"` with world-centimetre `pivotXcm`,`pivotZcm`. It stages all selected EvolveArea offset/half-extent changes and commits one MapDoc Undo after validation. Legacy one-axis/shared/individual calls remain. Native Scene numeric inputs and custom-pivot gizmos are **not yet implemented**; the new operation is accessible through the RPC. No build/runtime QA performed (deferred). See `docs/handoffs/world-processes-stage42-two-axis-custom-pivot-2026-11-23.md`.
