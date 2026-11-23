@@ -11,6 +11,7 @@
 // Random), so every client builds the same mesh. Output: vertices (position, normal, world-metre UV) and one
 // index list per used material, ready for a Model or a glTF export (tools/buildings).
 #include "BuildingGen.h"
+#include "BuildingSurfacePattern.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -28,6 +29,7 @@ struct StyleMaterial{
     std::string id;StyleRgb color{0.5f,0.5f,0.5f};float metallic=0,roughness=0.8f;
     StyleRgb emissive{0,0,0};float emissiveStrength=1;
     StyleTextureGuidSlots textures;
+    std::string surfacePattern; uint32_t surfaceSeed=0; // optional generated PBR maps
     std::array<float,2> uvScale{1.f,1.f},uvOffset{0.f,0.f};
     float uvRotation=0.f; // radians, shared by all PBR texture channels
     float normalScale=1.f,occlusionStrength=1.f;
@@ -521,7 +523,7 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(!j["materials"].isObject()||j["materials"].members().empty())throw JsonError(path+".materials: expected object of materials");
     std::map<std::string,int> ids;
     for(const auto& [k,v]:j["materials"].members()){
-        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures","uvScale","uvOffset","uvRotation","normalScale","occlusionStrength"});
+        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures","uvScale","uvOffset","uvRotation","normalScale","occlusionStrength","surfacePattern","surfaceSeed"});
         StyleMaterial mt;mt.id=k;if(v.has("color"))mt.color=rgb(v["color"],p+".color");if(v.has("metallic"))mt.metallic=num(v["metallic"],p+".metallic");
         if(v.has("roughness")){mt.roughness=num(v["roughness"],p+".roughness");}if(v.has("emissive"))mt.emissive=rgb(v["emissive"],p+".emissive");
         if(v.has("emissiveStrength"))mt.emissiveStrength=num(v["emissiveStrength"],p+".emissiveStrength");
@@ -553,6 +555,20 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
                 else if(std::string(key)=="normalScale")mt.normalScale=float(n);
                 else mt.occlusionStrength=float(n);
             }
+        if(v.has("surfacePattern")){
+            if(!v["surfacePattern"].isString()||
+               !validBuildingSurfacePattern(v["surfacePattern"].str()))
+                throw JsonError(p+".surfacePattern: unknown generated PBR surface");
+            mt.surfacePattern=v["surfacePattern"].str();
+        }
+        if(v.has("surfaceSeed")){
+            const auto& value=v["surfaceSeed"];
+            if(!value.isNumber()||value.toDouble(-1)<0.||
+               value.toDouble(-1)>2147483647.||
+               std::floor(value.toDouble(-1))!=value.toDouble(-1))
+                throw JsonError(p+".surfaceSeed: expected 0..2147483647 integer");
+            mt.surfaceSeed=uint32_t(value.toDouble());
+        }
         if(v.has("textures")){
             const auto& tex=v["textures"];
             const std::string tp=p+".textures";
