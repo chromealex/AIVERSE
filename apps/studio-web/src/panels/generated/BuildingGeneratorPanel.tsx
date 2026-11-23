@@ -86,6 +86,8 @@ export default function BuildingGeneratorPanel({
   const [savedRecipes,setSavedRecipes]=useState<string[]>([]);
   const [sourceRecipe,setSourceRecipe]=useState('');
   const [readingRecipe,setReadingRecipe]=useState(false);
+  const [livePreview,setLivePreview]=useState(false);
+  const [previewBusy,setPreviewBusy]=useState(false);
 
   const regeneratedThisSession=useRef(new Set<string>());
   useEffect(()=>{
@@ -396,6 +398,37 @@ export default function BuildingGeneratorPanel({
       window.removeEventListener('studio:assets-changed',onAssets);
     };
   },[projectLoaded,snapshot?.project.path,autoRegenerate]);
+
+  const previewNative3D=async()=>{
+    if(parameterError||busy||previewBusy||!nativeConnected())return;
+    setPreviewBusy(true);setError('');
+    try{
+      const chosen=selectedSeed??asNumber(seed);
+      const reply=await invoke('studio.buildingPreview',request(chosen));
+      if(!reply.active)throw Error('Native 3D preview was not activated');
+      setLivePreview(true);
+      setStatus('Temporary 3D model displayed in native Scene. Orbit, pan and zoom there; no GLB or GUID was created.');
+      showPanel('scene');
+    }catch(e){setError(explain(e));}
+    finally{setPreviewBusy(false);}
+  };
+  const closeNative3D=async()=>{
+    if(previewBusy||!nativeConnected())return;
+    setPreviewBusy(true);setError('');
+    try{
+      await invoke('studio.buildingPreviewStop',{});
+      setLivePreview(false);
+      setStatus('Temporary 3D preview released.');
+    }catch(e){setError(explain(e));}
+    finally{setPreviewBusy(false);}
+  };
+  useEffect(()=>{
+    // An old project's preview must not remain shown when the workspace
+    // changes. The native Studio GPU owner validates its retirement.
+    setLivePreview(false);
+    if(nativeConnected())
+      void invoke('studio.buildingPreviewStop',{}).catch(()=>{});
+  },[snapshot?.project.path]);
 
   const preview=async()=>{
     if(parameterError||busy)return;
@@ -720,6 +753,13 @@ export default function BuildingGeneratorPanel({
         <div className="abg__actions">
           <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy}
             onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
+          <StudioButton variant="secondary" loading={previewBusy}
+            disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
+            onClick={()=>void previewNative3D()}>
+            Preview 3D in Scene
+          </StudioButton>
+          {livePreview&&<StudioButton variant="secondary" disabled={previewBusy}
+            onClick={()=>void closeNative3D()}>Close 3D preview</StudioButton>}
           <StudioButton variant="primary" loading={busy}
             disabled={Boolean(parameterError)||busy||!nativeConnected()}
             onClick={()=>void generate()}>
@@ -738,7 +778,7 @@ export default function BuildingGeneratorPanel({
                 :<small>{candidate.error??'Unavailable'}</small>}
             </button>)}
         </div>}
-        <small className="abg__note">Variant evaluation measures CPU geometry; project material bindings are applied when generating the GLB. Interactive 3D preview is a separate native viewport feature; these cards do not represent GPU screenshots.</small>
+        <small className="abg__note">Variant evaluation measures native CPU geometry and reports real sockets. Use Preview 3D in Scene for the native Renderer3D model without writing an Asset. Generate GLB only when ready to persist the model.</small>
       </StudioSection>
       {saved&&<StudioSection title="Generated asset">
         <div className="abg__saved">
