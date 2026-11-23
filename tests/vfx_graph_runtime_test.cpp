@@ -1,7 +1,10 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include <array>
+#include <cmath>
 #include <iostream>
+#include <string_view>
 #include <stdexcept>
 #include <string>
 #include <vector>
