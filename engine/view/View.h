@@ -151,6 +151,15 @@ public:
                 if(player.instance)player.instance=player.instance->cloneForPreparation();
             });
         next->bridge_=bridge_;
+        // Only the explicitly pinned live selection may carry a private copy.
+        // Discarded candidate work never changes published counters.
+        if(profileSelection_){
+            const auto entity=bridge_.find(profileSelection_->source);
+            const auto* old=presentation_.tryGetConst<lib::animation::AnimationPlayerComponent>(entity);
+            auto* fresh=next->presentation_.tryGet<lib::animation::AnimationPlayerComponent>(entity);
+            if(old&&fresh&&old->instance&&fresh->instance&&fresh->instance->copyExecutionProfileFrom(*old->instance))
+                next->profileSelection_=profileSelection_;
+        }
         next->budgets_=budgets_;
         next->minimumParallelActors_=minimumParallelActors_;
         next->stats_=stats_;
@@ -277,6 +286,9 @@ public:
             significance=obj.significance;
             significance.visible=obj.visible && obj.significance.visible;
         }
+        // Drop instrumentation before workers run if a source was replaced.
+        if(profileSelection_&&!profileMatches(profileSelection_->source,profileSelection_->world))
+            clearAnimationProfile();
         stats_.budget=lib::animation::assignAnimationBudgets(presentation_,budgets_);
         if(stats_.animated>=minimumParallelActors_) {
             if(!scheduler_)scheduler_=std::make_shared<SharedScheduler>(workerCount_);
@@ -703,6 +715,45 @@ public:
         auto sample=animationTelemetry(sourceId,worldEpoch);
         return sample&&history.publish(sample->identity,sample->sequence,sample->value);
     }
+    bool enableAnimationProfile(uint64_t source,uint64_t world) {
+        auto sample=animationTelemetry(source,world);
+        if(!sample)return false;
+        clearAnimationProfile();
+        auto* player=presentation_.tryGet<lib::animation::AnimationPlayerComponent>(bridge_.find(source));
+        if(!player||!player->instance)return false;
+        player->instance->enableExecutionProfile(true);
+        profileSelection_=ProfileSelection{source,world,std::move(sample->identity)};
+        return true;
+    }
+    bool profileMatches(uint64_t source,uint64_t world) const {
+        if(!profileSelection_||profileSelection_->source!=source||profileSelection_->world!=world)return false;
+        const auto sample=animationTelemetry(source,world);
+        return sample&&!(sample->identity<profileSelection_->identity)&&!(profileSelection_->identity<sample->identity);
+    }
+    void clearAnimationProfile() {
+        if(!profileSelection_)return;
+        auto* player=presentation_.tryGet<lib::animation::AnimationPlayerComponent>(bridge_.find(profileSelection_->source));
+        if(player&&player->instance)player->instance->enableExecutionProfile(false);
+        profileSelection_.reset();
+    }
+    bool resetAnimationProfile(uint64_t source,uint64_t world){
+        if(!profileMatches(source,world))return false;
+        auto* player=presentation_.tryGet<lib::animation::AnimationPlayerComponent>(bridge_.find(source));
+        if(!player||!player->instance)return false;
+        player->instance->resetExecutionProfile();return true;
+    }
+    Json animationProfileReport(uint64_t source,uint64_t world) const {
+        Json r=Json::object();r.set("available",Json::fromBool(false));
+        if(!profileMatches(source,world))return r;
+        const auto* player=presentation_.tryGetConst<lib::animation::AnimationPlayerComponent>(bridge_.find(source));
+        if(!player||!player->instance)return r;
+        r=player->instance->executionProfileReport();
+        r.set("worldEpoch",Json::string(std::to_string(world)));
+        r.set("sourceId",Json::string(std::to_string(source)));
+        r.set("programIdentity",Json::string(profileSelection_->identity.program));
+        r.set("sequence",Json::string(std::to_string(frameStamp_)));
+        r.set("gpuMeasured",Json::fromBool(false));return r;
+    }
     // Detach selected presentation sources before their host-owned models
     // are evicted; other graph players keep their clocks and pose state.
     size_t forgetSources(std::span<const uint64_t> ids) {
@@ -739,6 +790,7 @@ public:
     void clear() {
         if(retargetScratchBusy_)
             throw std::logic_error("View cannot clear during nested model submission");
+        clearAnimationProfile();
         bridge_.clear(presentation_);
         lodState_.clear();
         cameraLodState_.clear();
@@ -814,6 +866,8 @@ private:
         x^=x>>31;
         return x?x:1;
     }
+    struct ProfileSelection {uint64_t source=0,world=0;graph_telemetry::Identity identity;};
+    std::optional<ProfileSelection> profileSelection_;
     World presentation_;
     lib::animation::MotionWeaveSourceBridge bridge_;
     // Worker threads + per-frame scratch only (no World state); shared
