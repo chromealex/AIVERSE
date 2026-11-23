@@ -73,10 +73,14 @@ inline void io(Archive& a,RegionColdStore& store) {
     a(count);
     if(!a.ok() || count>RegionColdStore::kMaxEntities){a.fail();return;}
     std::map<RegionEntityId,RegionColdRecord> decoded;
-    size_t totalBytes=0;
+    // This total includes metadata, not only opaque component payloads.
+    // It must remain below the native ECS v10 per-resource byte budget.
+    size_t totalBytes=8;
     auto readOne=[&](RegionEntityId& id,RegionColdRecord& record){
         a(id,record.owner.x,record.owner.y,record.owner.z,record.ownerRevision);
-        if(!a.ok() || !id || !record.ownerRevision){a.fail();return;}
+        totalBytes+=sizeof(id)+3*sizeof(int32_t)+sizeof(uint64_t)+sizeof(uint32_t);
+        if(!a.ok() || !id || !record.ownerRevision ||
+           totalBytes>RegionColdStore::kMaxTotalBytes){a.fail();return;}
         uint32_t components=0;
         if(a.writing()) {
             if(record.components.empty() || record.components.size()>RegionColdStore::kMaxComponents)
@@ -99,7 +103,7 @@ inline void io(Archive& a,RegionColdStore& store) {
             a(blob.version);
             if(!a.ok() || name.empty() || blob.version==0){a.fail();return;}
             regionColdBytes(a,blob.bytes,RegionColdStore::kMaxComponentBytes);
-            totalBytes+=blob.bytes.size();
+            totalBytes+=2*sizeof(uint32_t)+name.size()+sizeof(uint32_t)+blob.bytes.size();
             if(!a.ok() || totalBytes>RegionColdStore::kMaxTotalBytes){a.fail();return;}
             if(!a.writing() && !restored.emplace(std::move(name),std::move(blob)).second)
                 {a.fail();return;}
@@ -130,6 +134,31 @@ void registerRegionColdState(SimulationT& sim) {
         "aiverse.world.region_cold_store",RegionColdStore::kSchema);
     sim.template registerPersistentComponent<RegionDormant>(
         "aiverse.world.region_dormant",1);
+    sim.addPersistentLoadValidator("aiverse.world.region_cold_consistency",
+        [](const World& world,std::string& error)->bool {
+            const auto* cold=world.resourceConst<RegionColdStore>();
+            const auto* ledger=world.resourceConst<RegionEntityLedger>();
+            bool valid=true;
+            size_t dormantCount=0;
+            world.eachExistingConst<RegionDormant>(
+                [&](Entity e,const RegionDormant& dormant) {
+                    ++dormantCount;
+                    const auto* tag=world.tryGetConst<RegionStableIdentity>(e);
+                    const auto* stored=cold && tag?cold->find(tag->id):nullptr;
+                    const auto* record=ledger && tag?ledger->find(tag->id):nullptr;
+                    if(!world.alive(e) || !world.has<Transform>(e) ||
+                       dormant.marker!=1 || !tag || !tag->id ||
+                       !stored || !record || !record->live ||
+                       stored->owner!=record->owner ||
+                       stored->ownerRevision!=record->revision)
+                        valid=false;
+                });
+            if(!valid || (cold?cold->size():0)!=dormantCount) {
+                error="dormant tag, region ledger and parked payload disagree";
+                return false;
+            }
+            return true;
+        });
 }
 
 // Register only components whose *entire* state has a portable Archive codec
