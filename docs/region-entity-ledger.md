@@ -948,7 +948,9 @@ to its stable entity ID. It is updated when IDs are spawned, transferred
 transactionally when decoding a saved ledger. The persistent schema
 remains v1 and the serializer still writes only `records_` and
 `lastRevision_`; no derived index changes the saved bytes or
-authoritative checksum.
+authoritative checksum. Indexed spawn reverts newly allocated index
+entries if allocation fails; transfers and tombstones re-key existing
+map nodes rather than allocating replacement revision nodes.
 
 `since(revision)` now uses
 `revisionIndex_.upper_bound(revision)` instead of scanning every
@@ -996,7 +998,7 @@ reconciliation with `pageSince` alone; that would miss new
 positions that never reached the ledger.
 
 The `region_entity_ledger_test` source now checks
-pagenation over repeated transfers, mixed owners, tombstones,
+pagination over repeated transfers, mixed owners, tombstones,
 transactional archive reconstitution, acknowledged callback failure
 and retry, and cursor reset. No Mac/KINGSTON native build/CTest
 was run here, so these are authored assertions rather than
