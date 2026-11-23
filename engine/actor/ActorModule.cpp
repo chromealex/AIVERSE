@@ -284,7 +284,12 @@ void ActorHost::resetLootAndVehicles(Simulation& sim) {
     // (the entity and a typed vehicle's VehicleDrive stay).
     for(const Entity e:vehicleEntities(sim)){
         auto& v=*w.tryGet<Vehicle>(e);
-        for(const auto& initial:initialVehicles_)if(initial.id==v.id){v=initial;break;}
+        for(const auto& initial:initialVehicles_)if(initial.id==v.id){
+            v=initial;
+            if(!reportRegionMoveIfCrossed(sim,e))
+                throw std::logic_error("regionOwnership: round car reset dirty report failed");
+            break;
+        }
     }
 }
 // ---------------------------------------------------------------- setup
@@ -495,6 +500,11 @@ void ActorHost::tick(Simulation& sim) {
         if(!a.vehicle){
             if(config_.locomotion)moveActorModes(a,*sim.world().tryGet<LocomotionBody>(a.entity),input,config_.motor,*config_.locomotion,collision_,sim.dt(),config_.worldLimit);
             else moveActor(a,input,config_.motor,collision_,sim.dt(),config_.worldLimit);
+            // Both motor and generic locomotion write CharacterBody directly.
+            // Emit only an actual boundary change; the ledger is updated
+            // later by actor.regionOwnership after grouped car movement.
+            if(!reportRegionMoveIfCrossed(sim,a.entity))
+                throw std::logic_error("regionOwnership: character move dirty report failed");
         }
         if(config_.melee.enabled)tickMelee(sim,a,input);
         // Jump is an edge, movement/fire are held; loss of input eventually releases them.
