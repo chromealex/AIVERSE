@@ -118,7 +118,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
     <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
     {geometry.ports.filter(p=>p.node===node.id).map(p=><circle key={p.direction+':'+p.port}
-     cx={p.x-node.x} cy={p.y-node.y} r="5" role="button" tabIndex={disabled?-1:0}
+     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}
      aria-pressed={p.direction==='output'?samePort(pendingOutput,p):undefined}
      fill={p.direction==='output'&&samePort(pendingOutput,p)?'var(--au-accent-ink)':'var(--au-accent)'}
