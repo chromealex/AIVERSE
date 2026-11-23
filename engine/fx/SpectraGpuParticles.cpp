@@ -887,6 +887,8 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
         std::array<std::vector<uint8_t>,3> bytes;
         std::vector<float> remainingLifetime;
         uint64_t frameRevision=0, frameSerial=0;
+        uint32_t shaderBirthSeed=0, shaderBirthOrdinal=0;
+        bool shaderBirthSeedEnabled=false;
         size_t left=0;
         bool failed=false, acceptedAll=false;
         std::function<void(bool)> completion;
@@ -901,6 +903,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     };
     auto pending=std::make_shared<Pending>();
     pending->remainingLifetime=ages_;
+    pending->shaderBirthSeed=shaderBirthSeed_;
+    pending->shaderBirthOrdinal=shaderBirthOrdinal_;
+    pending->shaderBirthSeedEnabled=shaderBirthSeedEnabled_;
     pending->frameRevision=vmFrameRevision_;
     pending->frameSerial=device_->frameSerial();
     pending->completion=std::move(callback);
@@ -954,6 +959,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                         result.slots.resize(total);
                         result.remainingLifetime=pending->remainingLifetime;
                         result.frameSerial=pending->frameSerial;
+                        result.shaderBirthSeed=pending->shaderBirthSeed;
+                        result.shaderBirthOrdinal=pending->shaderBirthOrdinal;
+                        result.shaderBirthSeedEnabled=pending->shaderBirthSeedEnabled;
                         for(size_t i=0;i<total;++i) {
                             auto& dst=result.slots[i];
                             std::memcpy(&dst.positionAge,
