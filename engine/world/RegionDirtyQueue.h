@@ -45,12 +45,27 @@ struct RegionDirtyQueue {
     }
     bool markMany(std::span<const Entity> entities,RegionDirtyKind kind) {
         if(!canMarkMany(entities))return false;
-        // All logical checks happened above. Build a complete next map to
-        // make allocation failure atomic as well, then swap it into place.
-        auto staged=entries;
+        // Reserve only the missing group keys, NOT a copy of every queued
+        // entity: work stays proportional to the moved occupant group.
+        // Existing flags are modified only after every allocation succeeds.
+        std::set<uint64_t> missing;
+        for(const Entity e:entities) {
+            const uint64_t key=e.packed()+1;
+            if(!entries.contains(key))missing.insert(key);
+        }
+        std::vector<uint64_t> inserted;
+        inserted.reserve(missing.size());
+        try {
+            for(const uint64_t key:missing) {
+                entries.emplace(key,uint8_t(0));
+                inserted.push_back(key);
+            }
+        }catch(...) {
+            for(const uint64_t key:inserted)entries.erase(key);
+            throw;
+        }
         for(const Entity e:entities)
-            staged[e.packed()+1]|=uint8_t(kind);
-        entries.swap(staged);
+            entries.find(e.packed()+1)->second|=uint8_t(kind);
         return true;
     }
     bool marked(Entity entity)const {
