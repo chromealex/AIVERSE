@@ -7,6 +7,8 @@
 #include "engine/world/TerraWeaveCavernsMesh.h"
 #include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
 #include <cmath>
+#include <cstddef>
+#include <vector>
 #include <cstdint>
 #include <limits>
 #include <map>
