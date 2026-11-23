@@ -36,8 +36,7 @@ public:
            (staged_ && renderRevision<=stagedRevision_)||
            !vertexBudget||vertexBudget>16000000||
            prepared.models.empty())return false;
-        if(retired_.size()>=kMaxRetainedScenes ||
-           (staged_ && retired_.size()+1>=kMaxRetainedScenes))
+        if(retired_.size()+size_t(bool(active_))+size_t(bool(staged_))>=kMaxRetainedScenes)
             return false; // backpressure, never leak/overallocate
         // Reserve before a GPU allocation to make failure retention safe.
         if(retired_.capacity()<kMaxRetainedScenes)
@@ -99,7 +98,8 @@ public:
     // Cancels staging but does not release GPU resources. Retire via above.
     bool cancelStage() {
         if(!staged_)return false;
-        if(retired_.size()>=kMaxRetainedScenes)return false;
+        // Moving the already-counted staged owner to retirement does not
+        // increase the total number of live GPU owners.
         retired_.push_back(std::move(staged_));
         stagedRevision_=0;
         return true;
@@ -108,14 +108,19 @@ public:
     // On failure do NOT destroy this owner or its Scene pointers.
     bool shutdownAfterGpuIdle(gfx::Device& dev) {
         if(!dev.waitForResourceIdle())return false;
-        if(!cancelStage()&&staged_)return false;
-        if(active_) {
-            if(retired_.size()>=kMaxRetainedScenes)return false;
-            retired_.push_back(std::move(active_));
+        // Explicitly retain any owner whose shutdown refuses the barrier.
+        // No scene objects are destroyed until their shutdown returns.
+        if(staged_) {
+            try {staged_->shutdown(dev);}catch(...) {return false;}
+            staged_.reset();stagedRevision_=0;
         }
-        activeRevision_=0;
+        if(active_) {
+            try {active_->shutdown(dev);}catch(...) {return false;}
+            active_.reset();activeRevision_=0;
+        }
         return collectAfterGpuIdle(dev);
     }
+
 private:
     std::unique_ptr<render::GeometryScene> active_;
     std::unique_ptr<render::GeometryScene> staged_;
