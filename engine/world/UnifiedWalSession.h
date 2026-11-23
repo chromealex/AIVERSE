@@ -16,13 +16,14 @@ class UnifiedWalSession {
     bool managed_=false;
     AsyncPersistenceIo io_;
     bool async_=false;
+    size_t asyncBudget_=0;
     enum class Pending { None, Append, Checkpoint } pending_=Pending::None;
     std::unique_ptr<UnifiedWorldReplay::State> prepared_;
     RegionCheckpointManifest preparedManifest_;
     uint64_t ticket_=0;
 public:
     using State=UnifiedWorldReplay::State;
-    enum class IoResult { Idle, Pending, Committed, Checkpointed, Failed };
+    enum class IoResult { Idle, Pending, Busy, Committed, Checkpointed, Failed };
     ~UnifiedWalSession(){close();}
     // Caller supplies a verified checkpoint and its exact nonempty identity
     // prefix, including a unified-format discriminator. Existing WAL only.
@@ -123,7 +124,7 @@ public:
     // checkpoint bytes; all ECS capture/replay and callbacks stay on owner.
     bool enableAsync(size_t bytes){
         if(async_||!managedReady()||!io_.start(bytes))return false;
-        async_=true;return true;
+        asyncBudget_=bytes;async_=true;return true;
     }
     bool asyncEnabled()const{return async_;}
     bool ioPending()const{return pending_!=Pending::None;}
@@ -131,8 +132,10 @@ public:
     IoResult queueCommit(RegionWalFrame frame,const DurableComponentCodecs& codecs,
         const UnifiedWorldReplay::Materializer& materialize,const UnifiedWorldReplay::Validator& validate={},
         const DurableResourceTransaction::Policy& resources={}){
-        if(ioPending())return IoResult::Pending;
+        if(ioPending())return IoResult::Busy;
         if(!async_||!managedReady()||ticket_==UINT64_MAX)return IoResult::Failed;
+        if(frame.payload.size()>RegionWalCodec::maxPayload||asyncBudget_<RegionWalCodec::headerSize||
+            frame.payload.size()>asyncBudget_-RegionWalCodec::headerSize)return IoResult::Failed;
         auto staged=std::make_unique<State>(*state_);
         if(!UnifiedWorldReplay::apply(staged,frame,codecs,materialize,validate,resources))return IoResult::Failed;
         const size_t bytes=frame.payload.size()+RegionWalCodec::headerSize;
@@ -144,15 +147,16 @@ public:
         return IoResult::Pending;
     }
     IoResult queueCheckpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
-        if(ioPending())return IoResult::Pending;
+        if(ioPending())return IoResult::Busy;
         if(!async_||!managedReady()||generation<=manifest_.generation||ticket_==UINT64_MAX)return IoResult::Failed;
         std::vector<uint8_t> bytes;
-        if(!UnifiedCheckpointSections::capture(*state_,manifest_.identity.world,adapters,budget,bytes))return IoResult::Failed;
+        if(!UnifiedCheckpointSections::capture(*state_,manifest_.identity.world,adapters,std::min(budget,asyncBudget_),bytes))return IoResult::Failed;
         RegionCheckpointManifest m;
         m.generation=generation;m.identity.world=manifest_.identity.world;
         m.identity.sequence=state_->sequence;m.identity.revision=state_->ledger.lastRevision();
         m.identity.digest=pack::sha256(bytes.data(),bytes.size());m.checkpointBytes=bytes.size();
-        auto submit=io_.submit(ticket_+1,bytes.size(),[this,m,dir=dir_,bytes=std::move(bytes)](){
+        const auto byteCount=bytes.size();
+        auto submit=io_.submit(ticket_+1,byteCount,[this,m,dir=dir_,bytes=std::move(bytes)](){
             writer_.close();
             if(RegionCheckpointPublisher::publish(dir,m,bytes,true)!=RegionCheckpointPublishResult::Ok)return false;
             std::vector<uint8_t> prefix;
@@ -220,6 +224,6 @@ public:
         return destinationSession.create(destination,newWorld,*recovered,adapters,budget);
     }
     const State* state()const{return ready_&&!ioPending()?state_.get():nullptr;}
-    void close(){io_.stop();async_=false;pending_=Pending::None;prepared_.reset();ticket_=0;ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
+    void close(){io_.stop();async_=false;asyncBudget_=0;pending_=Pending::None;prepared_.reset();ticket_=0;ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
 };
 }
