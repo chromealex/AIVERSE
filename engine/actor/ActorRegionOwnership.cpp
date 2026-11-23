@@ -130,8 +130,29 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     }
     ledger=target;
 
+    // Explicit opt-in contract: all canonical writes must use tracked World APIs
+    // or report dirty events. Never enable for vehicle/character graphs yet.
+    const bool lootOnly=journalReady && !journalOverflow && dirty &&
+        streamManifest_.getBool("regionDirtyOnlyLoot") &&
+        !streamManifest_.getBool("strictRegionJournalAudit") &&
+        view.countExisting<CharacterBody>()==0 && view.countExisting<Vehicle>()==0 &&
+        bodyChanges.entities.empty() && vehicleChanges.entities.empty() &&
+        view.resourceConst<RegionSeatIndex>() &&
+        view.resourceConst<RegionSeatIndex>()->carByMember.empty();
     // Snapshot before adding ECS tags. Stable order ignores sparse pool order.
     std::vector<Entity> tracked;
+    if(lootOnly) {
+        std::set<uint64_t> candidates=lootChanges.entities;
+        for(const auto& [id,flags]:dirty->entries) { (void)flags; candidates.insert(id-1); }
+        for(auto packed:candidates) {
+            const auto e=Entity::fromPacked(packed);
+            if(view.alive(e) && view.has<Loot>(e))tracked.push_back(e);
+            else if(const auto* record=ledger->find(packed+1);record && record->live) {
+                if(!stagedLedger.despawn(packed+1,record->owner))
+                    throw std::logic_error("regionOwnership: candidate retire failed");
+            }
+        }
+    } else {
     view.eachExistingConst<CharacterBody>([&](Entity e,const CharacterBody&) {
         if(view.alive(e))tracked.push_back(e);
     });
@@ -141,6 +162,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     view.eachExistingConst<Loot>([&](Entity e,const Loot&) {
         if(view.alive(e))tracked.push_back(e);
     });
+    }
     std::sort(tracked.begin(),tracked.end(),[](Entity a,Entity b) {
         return a.packed()<b.packed();
     });
@@ -320,8 +342,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // Iterate ONLY live IDs; historical tombstones may outnumber the hot
     // population by orders of magnitude in a long-running city.
     ledger=target;
-    const std::vector<world::RegionEntityId> live(
-        ledger->liveIds().begin(),ledger->liveIds().end());
+    const auto live=lootOnly?std::vector<world::RegionEntityId>{}:
+        std::vector<world::RegionEntityId>(ledger->liveIds().begin(),ledger->liveIds().end());
     for(const auto id:live) {
         ledger=target;
         if(present.contains(id))continue;
