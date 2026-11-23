@@ -45,6 +45,7 @@ export default function SpectraGraphAssetInspector({
       <small>{node?node.id:'No node selected'}</small>
     </header>
     {property==='meshes' ? <>
+      {meshSlots.length===0&&<small>MeshOutput has no valid mesh array; add a mesh using native graph node defaults before editing slots.</small>}
       {meshSlots.map((path,slot)=>{
         const entry=assets.find(a=>a.path&&'content/'+a.path===path);
         return <div key={slot} style={{display:'flex',alignItems:'center',gap:6,marginBlock:6}}>
