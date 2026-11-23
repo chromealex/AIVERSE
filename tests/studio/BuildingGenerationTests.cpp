@@ -45,6 +45,29 @@ int main(int argc,char** argv){
         auto out2=studioBuildingGenerate(engine,temp,req);
         CHECK(out2.getStr("path")!=out.getStr("path"));
         CHECK(out2.getStr("guid")!=out.getStr("guid"));
+        // Independent functional recipe: gates/door/roof are selected
+        // without a factory/barracks preset. The same recipe can change
+        // visual style without changing geometry, doors or bounds.
+        auto custom=Json::parseFile((engine/"engine/assets/building-recipes/multiuse-open.json").string());
+        custom.set("mode",Json::string("features"));
+        custom.set("style",Json::string("scifi"));
+        custom.set("setting",Json::string("scifi"));
+        auto recipePreview=studioBuildingInspect(engine,custom);
+        CHECK(recipePreview["triangles"].integer()>0);
+        CHECK(std::abs(recipePreview["width"].toDouble()-24.)<0.01);
+        CHECK(std::abs(recipePreview["height"].toDouble()-12.)<0.01);
+        CHECK(std::abs(recipePreview["depth"].toDouble()-18.)<0.01);
+        auto recipeAsset=studioBuildingGenerate(engine,temp,custom);
+        CHECK(recipeAsset.getStr("path").find("scifi-custom-7")!=std::string::npos);
+        CHECK(studioValidGuid(recipeAsset.getStr("guid")));
+        CHECK(fs::is_regular_file(studioMetaPath(content/recipeAsset.getStr("path"))));
+        custom.set("style",Json::string("modern"));
+        custom.set("setting",Json::string("modern"));
+        auto modernPreview=studioBuildingInspect(engine,custom);
+        CHECK(modernPreview["triangles"].integer()==recipePreview["triangles"].integer());
+        auto modernAsset=studioBuildingGenerate(engine,temp,custom);
+        CHECK(modernAsset.getStr("path").find("modern-custom-7")!=std::string::npos);
+        CHECK(studioValidGuid(modernAsset.getStr("guid")));
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;
