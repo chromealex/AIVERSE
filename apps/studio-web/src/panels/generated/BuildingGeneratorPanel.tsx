@@ -12,6 +12,7 @@ import {
   StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect
 } from '../../ui';
 import BuildingMaterialEditor from './BuildingMaterialEditor';
+import BuildingPlanPreview from './BuildingPlanPreview';
 import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
@@ -582,6 +583,16 @@ export default function BuildingGeneratorPanel({
           clearGenerated();
         }}/>
       </StudioSection>
+      {selectedSeed!==null&&variants.some(item=>item.seed===selectedSeed&&item.data?.sockets)&&
+        <StudioSection title="Generated layout and physical openings">
+          {variants.filter(item=>item.seed===selectedSeed&&item.data?.sockets)
+            .map(item=><BuildingPlanPreview key={item.seed} preview={item.data!}
+              onSelectFeature={index=>{
+                const target=document.getElementById('abg-feature-'+index+'-kind');
+                target?.scrollIntoView({behavior:'smooth',block:'center'});
+                target?.focus();
+              }}/>)}
+        </StudioSection>}
       {mode==='features'&&<StudioSection title="Functional properties">
         <div className="abg__property-list">
           {features.map((feature,i)=><div className="abg__property" key={i}>
