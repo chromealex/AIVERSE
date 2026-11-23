@@ -437,3 +437,55 @@ multi-graph adapter registration. Avoid duplicate lift door ownership:
 
 Stage 23B source committed without build/tests per user preference.
 Handoff: `docs/agent-handoffs/building-aperture-owner-stage23b-2026-11-23.md`.
+
+
+## Stage 23C — dynamic collision-backed navigation overlay
+
+Use `engine/buildings/BuildingDynamicNavSource.h` through
+`BuildingRuntime.h` to combine static `BuildingNavSource` floors
+with authoritative `BuildingApertureOwner` closed door/gate/roof
+colliders in the existing `SpatialWorld`. Do not bake movable
+`DoorLeaf`/`RoofPanel` graph solids into static NavMesh blocking;
+`BuildingNavSource::blocked` excludes them, while the overlay reads
+their real committed collision presence.
+
+Lifecycle: create a long-lived static `BuildingNavSource`, then a
+`BuildingDynamicNavSource dynamic(staticSource)`; attach the aperture
+owner to existing SpatialWorld and call
+`dynamic.synchronize(apertures,spatial,&error)`. Build
+`nav::Mesh` using `dynamic` and `dynamic.config()`. Both source
+objects must remain alive while the mesh refreshes. Register
+`buildingDynamicNavInvalidator(dynamic,apertures,spatial,mesh)`
+for `BuildingGraphDomain::Navigation` in the existing
+`BuildingGraphChangeRouter` BEFORE opening or closing an aperture.
+The callback re-snapshots owned closed colliders, validates their
+exact SpatialWorld AABB and marks only affected nav tiles dirty.
+The native navigation owner must then call `mesh.refresh(dynamic)`
+on its simulation/graph update phase before allowing path queries
+and re-resolve the building's room/off-mesh landing links.
+
+The source filters standing surfaces under closed apertures, checks
+dynamic obstruction at horizontal crossings and correctly translates
+filtered multi-storey span IDs back to static source IDs. An open
+aperture has no blocking dynamic collider. No fake portal is added
+across a shaft or a disconnected outside floor. The primitive is
+specific to generated aperture colliders; compose it with other
+collision/terrain owners at the game's existing nav source level.
+
+Every other applicable graph domain (Spatial, Hierarchy, Transport,
+Gameplay, Presentation, Audio, Simulation) must register its own
+`BuildingGraphChangeRouter` consumer, with its actual subsystem's
+dirty/rebuild function. The presence of a router does not prove these
+other owners have been integrated. Use a precise per-event mask:
+unregistered domains deliberately hold the event pending.
+A callback ACK means the owner has safely *accepted* the invalidation,
+not that its expensive graph rebuild is already completed.
+
+A dirty NavMesh is intentionally not queryable; do not claim traversable
+doors until mesh.refresh succeeds and current actor collision checks
+allow traversal. Source is conservative and cell-sampled; real PHYSIS
+movement remains authoritative for body volume, and other dynamic
+obstacles, terrain and actual renderer animation are not included.
+
+Tests deferred by user request. Handoff:
+`docs/agent-handoffs/building-dynamic-multigraph-stage23c-2026-11-23.md`.
