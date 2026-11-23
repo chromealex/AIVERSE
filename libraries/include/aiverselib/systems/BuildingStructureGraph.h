@@ -3,7 +3,6 @@
 // movable panels, and semantic sockets. No style/material, genre, editor, ECS
 // or renderer dependency. Distances are metres. Side coordinates run +X on
 // front/back and +Z on left/right (building-local axes).
-#include "BuildingStructure.h"
 #include <algorithm>
 #include <array>
 #include <cmath>

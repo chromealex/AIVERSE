@@ -5,6 +5,7 @@
 // collision and sliding roof panels; it does not dress a closed existing hull.
 // CPU-only; callable by both native Studio and shipping game code.
 #include "BuildingStructureGraph.h"
+#include "BuildingStructure.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
