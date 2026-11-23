@@ -291,3 +291,45 @@ unverified status), limitations and next step. Follow:
 - docs/handoffs/world-processes-stage17-morph-render-box3d-2026-11-23.md
 - docs/handoffs/world-processes-stage18-granular-terra-box3d-2026-11-23.md
 - docs/handoffs/world-processes-stage19-physical-native-host-2026-11-23.md
+
+## Stages 20–21: CROWD NavMesh route + IMPRINT movement trackers
+
+CROWD navigation:
+`aiverselib/world/CrowdRoutes.h` adds persistent `crowd.route`
+(`Route`, bounded quantized waypoints, cursor and navigation revision).
+`crowd::assignRoute` receives an authoritative route, while
+`crowd::advanceRoutes` selects the next waypoint ahead of the normal
+`crowd::advance` local avoidance system. The optional native
+`examples/world/world_processes_native/CrowdNavMeshBridge.h`
+`planCrowdNavRoute` runs the EXISTING engine `nav::Mesh::findPath`
+with real TerraWeave terrain heights, then converts Fixed metres into
+integer centimetres once and stores the path in ECS. The NavMesh is
+never cloned or updated by CROWD. A host re-plans following nav revisions.
+
+IMPRINT trace generation:
+`aiverselib/world/ImprintTrails.h` adds persistent
+`imprint.tracker` (`Tracker`), authoritative `sampleMotion` and
+`stampMotion`. A tracker records a source Entity and target
+`ImprintCell` plus spacing, trace rates and last sampled positions.
+`WorldProcessesSuite` runs `imprint.motion_trails` before IMPRINT
+diffusion. If both CROWD and IMPRINT are enabled, the optional
+`ImprintCrowdBridge.h` runs after CROWD movement and automatically
+feeds CROWD agents to their trackers. Trackers whose source is a
+non-CROWD Entity are left for their owning Box3D/ActorMotor game host
+to call `imprint::sampleMotion` on the ECS tick barrier.
+
+Studio Add Component supports `ImprintTracker`, with native-validated
+stable map-ID source picker (ANY authored entity) and target cell picker
+(only real `ImprintCell` components). Enabled link requires both IDs.
+Normal MapDoc Undo/Redo, Save and reference-protected delete apply.
+Live Inspector exposes read-only current `CrowdRoute` and
+`ImprintTracker` ECS fields.
+
+Actual feature commits/handoffs:
+`docs/handoffs/world-processes-stage20-crowd-navmesh-imprint-movement-2026-11-23.md`
+and
+`docs/handoffs/world-processes-stage21-imprint-tracker-studio-2026-11-23.md`.
+
+The user's test deferral is still active: NO current-stage compile,
+CTest, sanitizer, Mac GUI, real NavMesh path or screenshot has been
+verified. The previous Stage05 passes do not cover these changes.
