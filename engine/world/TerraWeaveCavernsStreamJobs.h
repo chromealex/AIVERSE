@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
 #include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
 #include "engine/world/TerraWeaveCavernsDistanceLod.h"
+#include "engine/world/TerraWeaveCavernsSdfSpatialIndex.h"
 #include <chrono>
 #include <future>
 #include <map>
@@ -36,24 +37,32 @@ public:
     // Wait for its ready future to be collected before launching the new one.
     bool dispatch(CaveResidencyTicket request,
                   std::shared_ptr<const CaveVolumeSnapshot> snapshot,
-                  uint32_t resolution,int32_t spacingCm){
+                  uint32_t resolution,int32_t spacingCm,
+                  std::shared_ptr<const CaveSnapshotSpatialIndex> indexed={}){
         if(request.action!=CaveResidencyAction::Build || !snapshot ||
            !request.sourceRevision || !request.generation ||
            snapshot->sourceRevision!=request.sourceRevision ||
            !resolution||resolution>64||spacingCm<=0||spacingCm>10000)
             throw std::invalid_argument("Caverns stream worker request");
+        if(indexed && (indexed->revision()!=request.sourceRevision ||
+                       indexed->frozenSnapshot()!=snapshot))
+            throw std::invalid_argument("Caverns streaming SDF index mismatch");
         if(jobs_.size()>=limit_ || jobs_.contains(request.key))return false;
         auto work=std::async(std::launch::async,
-            [snapshot,request,resolution,spacingCm](){
+            [snapshot,indexed,request,resolution,spacingCm](){
                 CaveStreamCpuResult out;
                 out.ticket=request;
-                out.collisionMesh=generateCaveSnapshotMesh(
-                    *snapshot,request.key,resolution,spacingCm);
+                out.collisionMesh=indexed
+                    ? generateCaveIndexedSnapshotMesh(*indexed,request.key,resolution,spacingCm)
+                    : generateCaveSnapshotMesh(*snapshot,request.key,resolution,spacingCm);
                 const auto visual=caveVisualLodMeshSpec(
                     resolution,spacingCm,request.lod);
                 if(request.lod==0)out.mesh=out.collisionMesh;
-                else out.mesh=generateCaveSnapshotMesh(
-                    *snapshot,request.key,visual.resolution,visual.spacingCm);
+                else out.mesh=indexed
+                    ? generateCaveIndexedSnapshotMesh(*indexed,request.key,
+                        visual.resolution,visual.spacingCm)
+                    : generateCaveSnapshotMesh(*snapshot,request.key,
+                        visual.resolution,visual.spacingCm);
                 return out;
             });
         jobs_.emplace(request.key,Job{request,std::move(work)});
