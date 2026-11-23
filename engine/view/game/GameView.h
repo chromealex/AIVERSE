@@ -193,6 +193,46 @@ class GameView : public view_adapter::ModelResourceProvider {
     friend class ::kingston::BulletFxHost;
     friend struct ::kingston::CabinResidentDraw;
 public:
+    // Owner-thread only, outside prepared animation transactions/draw. Copies
+    // diagnostic values; never returns an instance, graph or model pointer.
+    // The caller must establish the current world/entity generation.
+    Json animationGraphDiagnostic(uint64_t entityKey) const {
+        Json out=Json::object();
+        out.set("entity",Json::string(std::to_string(entityKey)));
+        out.set("viewFrame",Json::string(std::to_string(frame_)));
+        const auto it=anims_.find(entityKey);
+        if(it==anims_.end()||!it->second.initialized||it->second.dead||
+           it->second.genericViewPose||it->second.seen!=frame_||
+           !it->second.last.entity.valid()||it->second.last.entity.packed()!=entityKey||
+           !it->second.graph.graph()){
+            out.set("available",Json::fromBool(false));
+            out.set("reason",Json::string("No current legacy view graph instance for this entity; culled/generic/uninitialized instances are not reported."));
+            return out;
+        }
+        const auto& instance=it->second.graph;
+        const auto* graph=instance.graph();
+        out.set("available",Json::fromBool(true));
+        out.set("state",Json::string(instance.state()));
+        out.set("stateTime",Json::number(double(instance.stateTime()),6));
+        out.set("healthy",Json::fromBool(instance.healthy()));
+        out.set("errorMessage",Json::string(instance.error()));
+        out.set("poseValid",Json::fromBool(it->second.poseValid));
+        out.set("typeIndex",Json::number(int64_t(it->second.type)));
+        Json active=Json::array();
+        for(const auto& state:graph->states())if(state.id==instance.state()){
+            for(int index:state.program)active.push(Json::string(graph->nodes()[size_t(index)].id));
+            break;
+        }
+        out.set("activeProgram",active);
+        Json events=Json::array();
+        const auto& notifies=instance.notifies();
+        for(size_t i=0;i<notifies.size()&&i<32;++i){
+            Json n=Json::object();n.set("node",Json::string(notifies[i].node));n.set("name",Json::string(notifies[i].name));events.push(n);
+        }
+        out.set("notifyCount",Json::number(int64_t(notifies.size())));out.set("notifies",events);
+        out.set("note",Json::string("Last committed view state; animation LOD may defer evaluation. Active program is not a per-node execution trace."));
+        return out;
+    }
     GameView();
     ~GameView();
     GameView(const GameView&) = delete;
