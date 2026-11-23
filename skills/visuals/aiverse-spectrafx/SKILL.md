@@ -1827,3 +1827,7 @@ Native preview load accepts gpuBirthRandom:true to opt into Metal random graph r
 ## Stage 58 — preview opt-in and checkpoint RNG metadata
 
 HTML5 native preview exposes GPU birth random checkbox applied on Load and subsequent graph reload. In-memory GpuCheckpoint snapshots shaderBirthSeed, shaderBirthOrdinal and shaderBirthSeedEnabled at request time, copied from the pending async readback record rather than callback-time live state. Binary diagnostic V2 export is unchanged; restoration of the RNG stream is not implemented yet. No tests run.
+
+## Stage 59 — SPFX V3 RNG metadata
+
+Seeded checkpoints export diagnostic V3 with 12-byte seed/ordinal/enabled trailer covered by payload CRC32. Unseeded captures still emit V2. Validator and inspector accept V2/V3, decodeGpuCheckpointRng returns zero metadata for V2. This is read-only diagnostics, not a live GPU restore API. No tests run.
