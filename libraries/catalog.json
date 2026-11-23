@@ -3170,6 +3170,21 @@
         "aiverse_engine"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "geometry-algorithms",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
+      "skill": "skills/core/aiverse-geometry-algorithms/SKILL.md",
+      "summary": "Pure integer planar geometry predicates and convex hull",
+      "notes": "Coordinate bound ±1e9; no render dependencies.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_geometry_algorithms",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": []
     }
   ]
 }
