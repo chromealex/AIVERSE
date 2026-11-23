@@ -3,6 +3,7 @@
 #pragma once
 #include "MorphEcs.h"
 #include "CrowdEcs.h"
+#include "CrowdRoutes.h"
 #include "ImprintEcs.h"
 #include "CircuitEcs.h"
 #include "GranularEcs.h"
@@ -42,7 +43,7 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
     // Order is stable across game/server/editor builds. Integrations can
     // place their own producer systems before this opt-in installation.
     if(flags.morph)morph::install(sim);
-    if(flags.crowd)crowd::install(sim);
+    if(flags.crowd){crowd::installRoutes(sim);crowd::install(sim);}
     if(flags.imprint)imprint::install(sim);
     if(flags.circuit)circuit::install(sim);
     if(flags.granular)granular::install(sim);
