@@ -11,6 +11,7 @@ import {
   StudioPanel, StudioSection, StudioBadge, StudioAlert, StudioEmptyState,
   StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect
 } from '../../ui';
+import BuildingMaterialEditor from './BuildingMaterialEditor';
 import './BuildingGeneratorPanel.css';
 
 type Candidate = { seed:number; data?:StudioBuildingPreview; error?:string };
@@ -324,6 +325,9 @@ export default function BuildingGeneratorPanel({
             </StudioSelect>
           </StudioField>}
         </div>
+      </StudioSection>
+      <StudioSection title="PBR materials & textures">
+        <BuildingMaterialEditor projectLoaded={projectLoaded}/>
       </StudioSection>
       {mode==='features'&&<StudioSection title="Functional properties">
         <div className="abg__property-list">
