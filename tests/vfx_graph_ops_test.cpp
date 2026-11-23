@@ -231,6 +231,13 @@ int main() {
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
 
+    auto fullTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":1024,"nodes":[{"id":"height","op":"constant","inputs":[],"properties":{"value":0.5}},{"id":"normal","op":"normal","inputs":["height"]}],"outputs":{"normal":"normal"}})"));
+    const auto fullPlan=render::texture_graph::gpu::plan(fullTexture,1,1024);
+    require(fullPlan.twoPass&&fullPlan.scratchBytes==4*1024*1024,"full-size GPU height allocation plan incorrect");
+    require(fullPlan.first.msl.find("1024u")!=std::string::npos&&fullPlan.second.glsl.find("1024u")!=std::string::npos,"full-size GPU shader resolution mismatch");
+    require(fullPlan.scratchBytes/render::texture_graph::gpu::readbackBlockBytes==64,"full-size readback chunk count wrong");
+    require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"publish","request":"1","textureName":"forbidden_headless"})")).getBool("ok"),"headless GPU publication accepted");
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
