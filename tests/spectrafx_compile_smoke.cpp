@@ -5,6 +5,7 @@
 #include "engine/fx/SpectraFxCueBridge.h"
 #include "engine/fx/SpectraFxCueInbox.h"
 #include "engine/fx/SpectraFxSignificance.h"
+#include "engine/fx/SpectraFxAccelerationFields.h"
 #include "engine/fx/SpectraFxCuePriority.h"
 #include "engine/fx/SpectraFxCommandQueue.h"
 #include "engine/fx/SpectraFxSimulationBridge.h"
@@ -39,6 +40,8 @@ void spectraFxCompileSmoke() {
     SpectraFxGpuBudgetGovernor governor;
     SpectraFxSignificance priority;
     (void)priority;
+    SpectraFxAccelerationFields fields;
+    (void)fields;
     SpectraFxGpuLodSettings lod;
     SpectraFxHybridEmitter::Config emitter;
     SpectraFxGpuRouteAsset::Routes routes;
