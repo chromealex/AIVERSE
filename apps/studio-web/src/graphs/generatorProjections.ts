@@ -19,7 +19,19 @@ export function buildingRecipeProjection(recipe:GraphObject):GraphView {
  // Material and structure are independent owners. A separate visual binding node
  // represents authored material slots, not an alternate building solver.
  nodes.push(node('bindings','Material bindings',320,150,'material',null));
- return {nodes,links:[link('recipe','structure'),link('structure','mesh'),link('style','bindings')]};
+ const links=[link('recipe','structure'),link('structure','mesh'),link('style','bindings')];
+ if(Array.isArray(recipe.features))recipe.features.slice(0,48).forEach((feature,i)=>{
+  if(!object(feature))return;
+  const id='feature:'+i;
+  nodes.push(node(id,String(feature.kind??'Feature')+' · '+String(feature.side??''),40,260+i*70,null,'recipe'));
+  links.push(link(id,'structure'));
+ });
+ if(object(recipe.materialBindings))Object.entries(recipe.materialBindings).slice(0,32).forEach(([slot,material],i)=>{
+  const id='material:'+i;
+  nodes.push(node(id,slot+' → '+String(material),800,260+i*70,null,'material'));
+  links.push(link(id,'bindings'));
+ });
+ return {nodes,links};
 }
 export function caveSnapshotProjection(snapshot:GraphObject):GraphView {
  if(snapshot.version!==1||!object(snapshot.settings)||!Array.isArray(snapshot.stamps)||!Array.isArray(snapshot.entrances))throw new Error('Unsupported Caverns snapshot');
