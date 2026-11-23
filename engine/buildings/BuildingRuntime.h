@@ -30,3 +30,5 @@
 #include "engine/buildings/BuildingApertureFixedTick.h"
 #include "engine/buildings/BuildingAperturePresentation.h"
 #include "engine/buildings/BuildingApertureGameBridge.h"
+#include "engine/buildings/BuildingDualLeafOwner.h"
+#include "engine/buildings/BuildingApertureTextureAssets.h"
