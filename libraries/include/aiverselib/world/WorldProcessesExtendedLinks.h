@@ -4,6 +4,7 @@
 #pragma once
 #include "WorldProcessesExtendedAuthoring.h"
 #include "ImprintTrails.h"
+#include "CircuitDevices.h"
 #include "WorldProcessesLinkedAuthoring.h"
 #include <map>
 #include <string>
@@ -16,6 +17,7 @@ inline bool supports(std::string_view id){
            id=="CrowdSlot"||id=="CrowdPreference"||
            id=="ImprintLink"||id=="ImprintDeposit"||id=="ImprintTracker"||
            id=="CircuitWire"||id=="CircuitGate"||
+           id=="CircuitSwitch"||id=="CircuitDevice"||
            id=="GranularSource"||id=="EvolvePressure"||
            id=="SocietyContact"||id=="SocietyMessage";
 }
@@ -29,6 +31,8 @@ inline Json defaults(std::string_view id){
     if(id=="ImprintTracker")return Json::parse(R"({"source":"","cell":"","minimumDistance":25,"footprint":50,"scent":10,"residue":0,"enabled":false})");
     if(id=="CircuitWire")return Json::parse(R"({"from":"","to":"","bidirectional":true,"enabled":false})");
     if(id=="CircuitGate")return Json::parse(R"({"inputA":"","inputB":"","output":"","op":0,"enabled":false})");
+    if(id=="CircuitSwitch")return Json::parse(R"({"node":"","closed":false,"enabled":false})");
+    if(id=="CircuitDevice")return Json::parse(R"({"node":"","kind":0,"requireSignal":true,"enabled":false})");
     if(id=="GranularSource")return Json::parse(R"({"field":"","x":0,"y":0,"delta":0,"enabled":false})");
     if(id=="EvolvePressure")return Json::parse(R"({"region":"","wear":0,"recovery":0,"enrichment":0,"consumption":0,"contamination":0,"purification":0,"growth":0,"regression":0,"enabled":false})");
     if(id=="SocietyContact")return Json::parse(R"({"source":"","target":"","trust":1000,"enabled":false})");
@@ -48,6 +52,7 @@ inline std::string_view referenceTarget(std::string_view id,std::string_view key
     if(id=="ImprintTracker"&&key=="source")return "Entity";
     if(id=="CircuitWire"&&(key=="from"||key=="to"))return "CircuitNode";
     if(id=="CircuitGate"&&(key=="inputA"||key=="inputB"||key=="output"))return "CircuitNode";
+    if((id=="CircuitSwitch"||id=="CircuitDevice")&&key=="node")return "CircuitNode";
     if(id=="GranularSource"&&key=="field")return "GranularField";
     if(id=="EvolvePressure"&&key=="region")return "EvolveRegion";
     if(id=="SocietyContact"&&(key=="source"||key=="target"))return "SocietyPerson";
@@ -81,6 +86,11 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
     }
     if(id=="CircuitWire")return key=="bidirectional"&&v.type()==Json::Type::Bool;
     if(id=="CircuitGate")return key=="op"&&authoring::integerExact(v,0,3);
+    if(id=="CircuitSwitch")return key=="closed"&&v.type()==Json::Type::Bool;
+    if(id=="CircuitDevice"){
+        if(key=="requireSignal")return v.type()==Json::Type::Bool;
+        return key=="kind"&&authoring::integerExact(v,0,5);
+    }
     if(id=="GranularSource"){
         if(key=="x"||key=="y")return authoring::integerExact(v,0,granular::kMaxDimension-1);
         return key=="delta"&&authoring::integerExact(v,-granular::kMaxSourceRate,
@@ -139,6 +149,8 @@ inline bool hasExisting(const World& w,Entity e,std::string_view id){
     if(id=="ImprintTracker")return w.has<imprint::Tracker>(e);
     if(id=="CircuitWire")return w.has<circuit::Wire>(e);
     if(id=="CircuitGate")return w.has<circuit::Gate>(e);
+    if(id=="CircuitSwitch")return w.has<circuit::Switch>(e);
+    if(id=="CircuitDevice")return w.has<circuit::Device>(e);
     if(id=="GranularSource")return w.has<granular::Source>(e);
     if(id=="EvolvePressure")return w.has<evolve::Pressure>(e);
     if(id=="SocietyContact")return w.has<society::Contact>(e);
@@ -204,6 +216,16 @@ inline bool apply(World& w,Entity e,std::string_view id,const Json& doc,
     else if(id=="CircuitGate")
         w.add<circuit::Gate>(e,circuit::Gate{ref("inputA"),ref("inputB"),
             ref("output"),circuit::Op(std::uint8_t(n("op"))),enabled});
+    else if(id=="CircuitSwitch")
+        w.add<circuit::Switch>(e,circuit::Switch{
+            ref("node"),doc["closed"].boolean(),enabled});
+    else if(id=="CircuitDevice"){
+        circuit::Device device;
+        device.node=ref("node");device.enabled=enabled;
+        device.requireSignal=doc["requireSignal"].boolean();
+        device.kind=circuit::DeviceKind(std::uint8_t(n("kind")));
+        w.add<circuit::Device>(e,device);
+    }
     else if(id=="GranularSource")
         w.add<granular::Source>(e,granular::Source{ref("field"),
             std::uint16_t(n("x")),std::uint16_t(n("y")),n("delta"),enabled});
