@@ -1,16 +1,30 @@
 ---
 name: aiverse-terraweave-caverns
-description: Generate genre-independent deterministic underground 3D void volumes, chambers and tunnels by world-space integer coordinate queries and chunk sampling. TerraWeave subterranean geometry foundation.
+description: Generate deterministic genre-independent underground chambers, capsule tunnels, volume occupancy and smooth CPU cave meshes via world-space density and marching tetrahedra.
 ---
 
-# TerraWeave Caverns
+# TerraWeave Caverns — agent skill (stage 2)
 
-Read `engine/world/TerraWeaveCaverns.h` and `docs/agent-handoffs/caverns-stage1-2026-11-23.md`.
+Read `engine/world/TerraWeaveCaverns.h`, `engine/world/TerraWeaveCavernsMesh.h` and `docs/agent-handoffs/caverns-stage2-2026-11-23.md` before editing.
 
-Use `aiverse::terraweave::caverns::Settings`, `isVoid(settings, PointCm)` and `generateChunk(settings, ChunkKey3, resolution, spacingCm)`. All positions/sizes are integer **centimetres**. `isVoid` is authoritative for cave emptiness within the allowed vertical band. Sample output has X-fastest cell-center occupancy (1=air).
+## API
+- Namespace `aiverse::terraweave::caverns`.
+- `Settings` stores a seed, cell size, tunnel/chamber sizes and probabilities, min/max Y. Positions and geometry parameters use **integer centimetres**.
+- `isVoid(settings, PointCm)`: original binary analytic occupancy for block-world carving.
+- `caveFieldCm(settings, PointCm)`: signed, approximate smooth density, **positive inside cave** and negative in rock. It is not exact Euclidean SDF.
+- `generateChunk(settings, ChunkKey3, resolution, spacingCm)`: original X-fastest binary cell-center occupancy.
+- `generateCaveMesh(settings, ChunkKey3, resolution, spacingCm)`: independent CPU surface geometry `CaveMesh` with triangle-list indices and chunk-local **metre** vertices/normals; place at world origin `key * resolution * spacingCm / 100` metres.
+- Generated triangles are not welded; same-spacing neighbors sample the same world lattice, but different LODs require a seam transition system.
 
-Do not replace `VoxelGen`, `VoxelWorld`, TerraWeave heightfield or renderer with this module. Integrate via opt-in bridges: voxels can carve air using `isVoid` where a block is solid, volumetric SDF meshes can sample the same world function, collision/navmesh is built from generated geometry. Respect authored edits and game save revisions.
+## Ownership and restrictions
+- No dependencies on RTS/FPS or a renderer. CPU jobs create mesh; RHI uploads in a different layer; physics/navmesh should consume a durable mesh or bake.
+- Do not duplicate/replace TerraWeave heightfield, VoxelGen or VoxelWorld. Opt-in adapters only.
+- No persistent mesh cache or edits yet. Seed/settings + explicit generator version must be saved; **do not claim compatibility** after changing hash, surface extraction, or coordinate rounding.
+- Field and mesh generation are compute-heavy; avoid updating per frame. Implement caching/budgets in a separate integration layer.
+- Do not claim mesh is watertight or crack-free with arbitrary LOD differences without seam tests. No cave entrances, decorations, flora, cave lakes or collision in this stage.
+- After every stage create a dated handoff describing exact changed files, APIs, actual tests, constraints, branch/commit and next action.
 
-No RTS/FPS includes or global RNG. Generator version must be persisted alongside settings and seed. Runtime worker generation and ECS commit/render upload are separate stages. Do not imply this header performs smooth meshing, collision, fluid simulation, entrances or editing.
-
-After each stage write its own handoff with exact changed files, APIs, tests actually executed, limitations, branch/commit and next action.
+## Validation
+Standalone tests:
+`c++ -std=c++20 -O1 -I. tests/terraweave_caverns_mesh_test.cpp -o /tmp/cave_mesh_test && /tmp/cave_mesh_test`.
+Run in checked-out repository, plus engine CI and negative-key/neighbor seam tests before merge.
