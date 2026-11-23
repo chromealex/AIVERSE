@@ -3,6 +3,8 @@
 // Checks SAME-resolution shared-boundary edge segments, not LOD transitions.
 #include "engine/world/TerraWeaveCavernsMesh.h"
 #include <algorithm>
+#include <cmath>
+#include <compare>
 #include <array>
 #include <cstdint>
 #include <map>
