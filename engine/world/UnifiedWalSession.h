@@ -26,6 +26,31 @@ public:
         if(lock_.acquire(dir)!=RegionWorldLockResult::Ok)return RegionWalWrite::Busy;
         return recoverLocked(wal,identity,checkpoint,codecs,materialize,validate,repair);
     }
+    RegionWalWrite create(const std::filesystem::path& dir,const std::array<uint8_t,16>& world,
+        const State& initial,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
+        close();
+        std::error_code ec;
+        if(!std::filesystem::is_directory(dir,ec)||ec||!std::filesystem::is_empty(dir,ec)||ec)
+            return RegionWalWrite::InvalidFrame;
+        if(lock_.acquire(dir)!=RegionWorldLockResult::Ok)return RegionWalWrite::Busy;
+        // Recheck under lock: only the persistent lock file may exist.
+        for(std::filesystem::directory_iterator it(dir,ec),end;!ec&&it!=end;it.increment(ec)){
+            if(it->path().filename()!="world-session.lock"){close();return RegionWalWrite::InvalidFrame;}
+        }
+        if(ec){close();return RegionWalWrite::IoError;}
+        auto staged=std::make_unique<State>(initial);
+        staged->sequence=0;
+        RegionCheckpointManifest m;
+        if(UnifiedCheckpointPublisher::publish(dir,*staged,world,1,adapters,budget,m)!=RegionCheckpointPublishResult::Ok){
+            close();return RegionWalWrite::NeedsRecovery;
+        }
+        std::vector<uint8_t> prefix;
+        if(!UnifiedCheckpointPublisher::identity(m,prefix)){close();return RegionWalWrite::NeedsRecovery;}
+        auto result=writer_.open(dir/m.walName(),0,false,prefix);
+        if(result!=RegionWalWrite::Ok||writer_.lastSequence()!=0){close();return RegionWalWrite::NeedsRecovery;}
+        dir_=dir;manifest_=m;state_=std::move(staged);managed_=true;ready_=true;
+        return RegionWalWrite::Ok;
+    }
     RegionWalWrite openCheckpoint(const std::filesystem::path& dir,const std::array<uint8_t,16>& world,size_t budget,
         const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
         const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
