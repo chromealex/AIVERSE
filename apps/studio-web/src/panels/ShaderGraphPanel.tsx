@@ -37,7 +37,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  useEffect(()=>{
   let closed=false;
   setError('');
-  setPendingName('');setOperations([]);setSelectedOp('');
+  setOperations([]);setSelectedOp('');
   if(connected&&!projectPath){setNames([]);return;}
   setBusy(true);
   void Promise.all([invoke('studio.shaderGraphs',{}),invoke('studio.shaderGraphCatalog',{})])
@@ -125,7 +125,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
    <button className="icon-button" aria-label="Reload Shader Graphs"
-    disabled={busy||dirty} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
+    disabled={busy||dirty} onClick={()=>{setSelected('');setDocument(null);resetDraft(null);setNonce(n=>n+1)}}><RefreshCw size={15}/></button>
   </header>
   <p className="graph-readonly">Drag nodes to arrange the graph. Validate before explicit Save.
     Select an output, then an input to connect. GPU preview still requires the legacy editor.</p>
@@ -151,7 +151,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
      busy ? <div className="graph-empty">Compiling and loading graph…</div> :
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
-       <span>{document.nodes} nodes · {document.samples} texture samples</span>
+       <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
        <span>{dirty?'● Unsaved graph draft':'Saved'}</span>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
        <select className="graph-add-select" aria-label="Graph node operation"
@@ -160,8 +160,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        </select>
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <StudioButton size="sm" disabled={!activeNode||busy} onClick={duplicate}>Duplicate</StudioButton>
-       <StudioButton size="sm" disabled={!draft||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput('')}}>Undo</StudioButton>
-       <StudioButton size="sm" disabled={!draft||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput('')}}>Redo</StudioButton>
+       <StudioButton size="sm" disabled={!history.current?.canUndo()||busy} onClick={()=>{if(history.current)setDraft(history.current.undo());setPendingOutput('')}}>Undo</StudioButton>
+       <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput('')}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
