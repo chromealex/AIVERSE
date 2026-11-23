@@ -883,3 +883,34 @@ Stage 23J.1 is committed source only, NOT tested. In particular the
 game-side importer callback and actual Studio UI inspector/material
 asset picker remain integration work. See
 `docs/agent-handoffs/building-unified-materials-stage23j1-2026-11-23.md`.
+
+
+## Stage 23K — HTML5 PBR material + texture editor (Studio)
+
+The existing `apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx`
+now embeds `BuildingMaterialEditor.tsx`, using the shared
+`AssetReferencePicker` for image GUID selection, search, and internal
+Assets drag-and-drop. The editor uses `studio.materials` to load an
+existing project `materials.json` entry and **one**
+`studio.materialPatch` to save scalar PBR factors (metallic,
+roughness, normalScale, occlusionStrength, emissiveStrength) together
+with texture GUIDs (texture, normalMap, metallicRoughnessMap,
+occlusionMap, emissiveMap). It checks dirty state before discarding
+selection edits and does not pretend a browser-only session can write
+native files. Styling is in `BuildingMaterialEditor.css`.
+
+Important ownership distinction: `materials.json` is the existing
+Studio shared material library; portable building architectural
+`BuildingStyle.materials` uses separately authored style JSON.
+The UI currently edits the *shared material library* with native
+persistence. It does NOT yet connect a selected shared material name
+to a specific procedural building style slot. Never claim generated
+building GLB receives these changes automatically. Next implement a
+validated native style-material reference/override API, persist it
+using actual Studio project owner + conflict/undo rules, and wire the
+combined `BuildingMaterialAssets.h` resolver to the generator's
+real material/texture upload pipeline.
+
+No browser build/typecheck/native importer/GLB rendering tests were
+run at this stage (user asked to defer tests). Follow handoff at
+`docs/agent-handoffs/building-studio-pbr-materials-stage23k-2026-11-23.md`.
