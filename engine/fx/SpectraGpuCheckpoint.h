@@ -27,6 +27,11 @@ struct GpuCheckpoint {
     uint64_t frameSerial=0;
     uint32_t shaderBirthSeed=0, shaderBirthOrdinal=0;
     bool shaderBirthSeedEnabled=false;
+    // In-memory restore only; diagnostic SPFX does not serialize ownership.
+    std::vector<uint32_t> freeSlotOrder;
+    std::vector<uint64_t> sourceTokens;
+    std::array<float,8> birthParameters{};
+    bool hostStateComplete=false;
     bool complete=false; // all three GPU buffers were read successfully
 };
 } // namespace aiverse::spectra
