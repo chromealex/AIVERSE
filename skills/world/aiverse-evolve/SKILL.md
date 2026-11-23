@@ -200,3 +200,6 @@ Map hydration rounds Fixed positions to nearest cm instead of truncating; numeri
 
 ## Stage 56: TerraWeave consumer audit
 Canonical forest climate sampler rechecks live ECS Area and Region and current half-open bounds before applying climate. Rebuild sampler each ecology step to include newly added/enabled regions. Baseline and forest ownership unchanged. Production call-site audit and QA remain pending. See `docs/handoffs/world-processes-stage56-terraweave-consumer-2026-11-23.md`.
+
+## Stage 57: synchronous ecology adapter
+`WorldProcessGameplayHost::advanceEcology` builds a fresh ECS climate sampler per synchronous TerraWeave ecology call. Caller owns forest/roots and must restore both to the same completed tick after rollback. Production tick wiring and QA pending. See `docs/handoffs/world-processes-stage57-ecology-step-2026-11-23.md`.
