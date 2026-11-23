@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-stable-actor-identities",
+     "title": "Постоянные идентификаторы объектов мира",
+     "titleEn": "Persistent world object identities",
+     "text": "Независимые от ECS-индексов идентификаторы и адресация перемещений.",
+     "textEn": "Entity-index-independent identities and movement addressing.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-native-restart-state",
      "title": "Состояние перезапуска симуляции",
      "titleEn": "Simulation restart state",
