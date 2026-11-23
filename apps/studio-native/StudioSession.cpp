@@ -2672,19 +2672,26 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error(componentId+" cannot be removed");
                 // Deleting a target component must not silently leave a
                 // linked World Process referencing the same stable map ID.
-                if(lib::worldprocess::authoring::supports(componentId) && !source.id.empty()){
+                if(!source.id.empty()){
                     for(const auto& other:ws_.map.data.entities)
                         for(const char* kind:{"EchoPortal","EchoEmitter","EchoReceiver",
-                                            "FractureBond","AetherDuct","AetherFlux"}){
-                            if(lib::worldprocess::linked::targetType(kind)!=componentId)continue;
+                                            "FractureBond","AetherDuct","AetherFlux",
+                                            "MorphSpring","MorphForce","CrowdPreference",
+                                            "ImprintLink","ImprintDeposit","CircuitWire","CircuitGate",
+                                            "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}){
                             const auto& linkedDoc=other.extra["components"][kind];
                             if(!linkedDoc.isObject())continue;
-                            for(const auto& [key,value]:linkedDoc.members())
-                                if(lib::worldprocess::linked::isReference(kind,key) &&
+                            for(const auto& [key,value]:linkedDoc.members()){
+                                const auto target=lib::worldprocess::extendedLinks::supports(kind)?
+                                    lib::worldprocess::extendedLinks::referenceTarget(kind,key):
+                                    lib::worldprocess::linked::isReference(kind,key)?
+                                    lib::worldprocess::linked::targetType(kind):std::string_view{};
+                                if(target==componentId&&value.isString()&&
                                    value.str()==source.id)
                                     throw std::runtime_error(
                                         "This component is referenced by "+std::string(kind)+
                                         "; clear its link before removal");
+                            }
                         }
                 }
                 if(!source.extra["components"].has(id))throw std::runtime_error("Component is not on this entity");
