@@ -5,6 +5,7 @@
 // NEVER report completion of a dirty region before a successful host commit.
 #include "engine/world/TerraWeaveCavernsDirtyQueue.h"
 #include "engine/world/TerraWeaveCavernsSeamGate.h"
+#include "engine/data/Json.h"
 #include <chrono>
 #include <future>
 #include <map>
@@ -61,6 +62,26 @@ public:
         }
         prepared_.clear();
         snapshot_=std::move(snapshot);
+    }
+
+    // Optional explicit adapter for the Stage20 Workspace operation return.
+    // The editor caller forwards its successful result after MapDoc commit;
+    // this runtime object never accesses Workspace or mutable MapDoc.
+    bool consumeEditorResult(const Json& operationResult,
+                             std::shared_ptr<const CaveVolumeSnapshot> snapshot){
+        if(!operationResult.isObject() ||
+           !operationResult.getBool("ok",false) ||
+           !operationResult["dirtyBounds"].isObject())return false;
+        const Json& b=operationResult["dirtyBounds"];
+        const CaveDirtyBounds bounds{
+            b.getInt("minXcm"),b.getInt("minYcm"),b.getInt("minZcm"),
+            b.getInt("maxXcm"),b.getInt("maxYcm"),b.getInt("maxZcm")};
+        if(!snapshot ||
+           operationResult.getInt("revision",0)!=
+                int64_t(snapshot->sourceRevision))
+            throw std::invalid_argument("Caverns editor snapshot revision mismatch");
+        invalidate(bounds,std::move(snapshot));
+        return true;
     }
 
     // Provide an existing resident mesh for cross-chunk border certification.
