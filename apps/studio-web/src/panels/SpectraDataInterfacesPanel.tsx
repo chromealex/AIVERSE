@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, FilePlus2, GitBranch, GripVertical, Lock, LockOpen, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection } from '../ui';
+import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
 import {
   graphV2, providerNames, scalarParameters, validateInterfaces, putInterface,
-  dropInterface, putParameter, dropParameter, putNode, dropNode, safeGraphName,
+  dropInterface, putParameter, dropParameter, putNode, dropNode, putSpriteTexture, safeGraphName,
   type SpectraGraphV2, type FxDataInterface, type FxInstanceScalar, type GraphEdit
 } from './spectraDataInterfaceModel';
 import './SpectraDataInterfacesPanel.css';
@@ -44,6 +44,9 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   const [pinned,setPinned]=useState(false);
   const [search,setSearch]=useState('');
   const [providerSearch,setProviderSearch]=useState('');
+  const [images,setImages]=useState<string[]>([]);
+  const [imageSearch,setImageSearch]=useState('');
+  const [selectedOutput,setSelectedOutput]=useState('');
   const [binding,setBinding]=useState<FxDataInterface>(blankBinding);
   const [paramName,setParamName]=useState('');
   const [param,setParam]=useState<FxInstanceScalar>({slot:0,default:0,min:-100,max:100});
@@ -82,6 +85,17 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     void listAssets().catch(e=>{if(alive)setError(errorText(e));});
     return()=>{alive=false;};
   },[projectPath,listAssets]);
+  useEffect(()=>{
+    let active=true;
+    setImages([]);
+    if(!projectPath)return;
+    void invoke('studio.assets',{}).then(list=>{
+      if(!active)return;
+      setImages(list.files.map(item=>item.path).filter(path=>
+        /\.(png|jpe?g|tga)$/i.test(path)).sort());
+    }).catch(e=>{if(active)setError(errorText(e));});
+    return()=>{active=false;};
+  },[projectPath]);
   useEffect(()=>onNativeEvent(event=>{
     if(event==='workspace.changed') void listAssets().catch(()=>{});
   }),[listAssets]);
@@ -103,6 +117,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       const parsed=graphV2(r.graph);
       if(!parsed)throw new Error('This asset is not a Graph v2. Upgrade it using the graph tools first.');
       setSaved(parsed);setGraph(parsed);setSelected(item);
+      setSelectedOutput(parsed.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
       const first=Object.keys(parsed.instanceParameters??{})[0]??'';
       if(!pinned || !parsed.instanceParameters?.[selectedName])chooseParameter(first,parsed);
       else chooseParameter(selectedName,parsed);
@@ -119,6 +134,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       const parsed=graphV2(r.graph);
       if(!parsed||r.ok===false)throw new Error('Native editor did not return a Graph v2.');
       setSelected({name:newName,draft:true,valid:true});setSaved(null);setGraph(parsed);
+      setSelectedOutput(parsed.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
       setSelectedName('');setValidation(asRecord(r.validation));
       setStatus('New local graph created. Save Draft or Publish to create a file.');
     }catch(e){setError(errorText(e));}
@@ -292,6 +308,34 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
               </button>)}
             </div>
             <p className="spectra-di__hint">Drag a provider onto the binding form. Actual runtime availability is resolved by the host.</p>
+          </StudioSection>
+          <StudioSection title="Sprite texture — Assets picker">
+            <p className="spectra-di__hint">Only images indexed by the native project content/ Assets catalog can be assigned. Drag an image onto the output target or select it from the filtered list.</p>
+            <StudioField label="SpriteOutput node" htmlFor="spectra-texture-output">
+              <StudioSelect id="spectra-texture-output" value={selectedOutput}
+                onChange={e=>setSelectedOutput(e.target.value)}>
+                <option value="">Choose output…</option>
+                {graph.nodes.filter(n=>n.type==='SpriteOutput').map(node=>
+                  <option key={node.id} value={node.id}>{node.id} · {String(node.properties?.texture??'builtin:soft')}</option>)}
+              </StudioSelect>
+            </StudioField>
+            <StudioField label="Search images" htmlFor="spectra-image-search">
+              <StudioInput id="spectra-image-search" value={imageSearch} placeholder="Texture path…"
+                onChange={e=>setImageSearch(e.target.value)}/>
+            </StudioField>
+            <div className="spectra-di__providers spectra-di__image-list" role="list" aria-label="Asset textures">
+              {images.filter(path=>path.toLowerCase().includes(imageSearch.trim().toLowerCase())).map(path=>
+                <button type="button" key={path} draggable disabled={!selectedOutput}
+                  onDragStart={e=>e.dataTransfer.setData('text/x-aiverse-spectra-asset',path)}
+                  title={'content/'+path}
+                  onClick={()=>apply(putSpriteTexture(graph,selectedOutput,path,images))}>{path}</button>)}
+            </div>
+            <div className="spectra-di__drop" role="region" aria-label="Drop a texture asset here"
+              onDragOver={e=>{if(e.dataTransfer.types.includes('text/x-aiverse-spectra-asset'))e.preventDefault();}}
+              onDrop={e=>{const value=e.dataTransfer.getData('text/x-aiverse-spectra-asset');
+                if(value){e.preventDefault();apply(putSpriteTexture(graph,selectedOutput,value,images));}}}>
+              Drop a project image here · {selectedOutput||'select a SpriteOutput first'}
+            </div>
           </StudioSection>
           <StudioSection title="DataInterface nodes">
             <div className="spectra-di__items">
