@@ -239,6 +239,17 @@ public:
         worker_.registerResident(std::move(mesh));
     }
 
+    // Called only after external streaming retirement truly removed the
+    // GPU source, Box3D body, SpatialWorld IDs and relevant nav ownership.
+    // Forgetting a pending edited chunk is forbidden by residency leases.
+    bool forgetCommittedMesh(ChunkKey3 key,uint64_t renderRevision) {
+        if(!renderRevision || !geometry_.forgetCommittedSource(key,renderRevision))
+            return false;
+        (void)worker_.forgetResident(key);
+        physics_.erase(key); // external owner must have unloaded native bodies
+        return true;
+    }
+
     void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
     bool collectAfterGpuIdle(gfx::Device& device){
         return geometry_.collectAfterGpuIdle(device);
