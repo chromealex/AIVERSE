@@ -147,9 +147,9 @@ inline void registerGraphOps(Workspace& ws) {
             for(const auto& op:ws.ops())if(op.name=="graph_live_owner_watch")return ws.call(op.name,p,"graph");
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native editor watch owner unavailable in this host"));return r;
         }});
-    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[&ws](const Json&){auto r=graph_probe::capabilities();bool owner=false;for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")owner=true;r.set("nativeEditorSnapshotOwner",Json::fromBool(owner));r.set("liveSnapshotOperation",Json::string("graph_live_snapshot"));r.set("liveWatchOperation",Json::string("graph_live_watch"));r.set("isolatedDebugSessionOperation",Json::string("graph_debug_session"));return r;}});
+    ws.registerOp({"graph_runtime_capabilities","Discover isolated CPU probes and unavailable live telemetry. No GPU measurements.",Json::object(),[&ws](const Json&){auto r=graph_probe::capabilities();bool owner=false;for(const auto& op:ws.ops())if(op.name=="graph_live_owner_snapshot")owner=true;r.set("nativeEditorSnapshotOwner",Json::fromBool(owner));r.set("liveSnapshotOperation",Json::string("graph_live_snapshot"));r.set("liveWatchOperation",Json::string("graph_live_watch"));r.set("isolatedDebugSessionOperation",Json::string("graph_debug_session"));r.set("motionweaveNodeCpuProfile",Json::fromBool(true));return r;}});
     const auto probeSchema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"parameters":{"type":"object"}},"required":["domain","graph"],"additionalProperties":false})");
-    const auto debugSchema=Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","status","step","continue","breakpoints","stop"]},"session":{"type":"string"},"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"states":{"type":"array","items":{"type":"string"}},"nodes":{"type":"array","items":{"type":"string"}}},"required":["action"],"additionalProperties":false})");
+    const auto debugSchema=Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","status","step","continue","breakpoints","stop","profileEnable","profileDisable","profileReset","profileRead"]},"session":{"type":"string"},"domain":{"type":"string","enum":["motionweave","spectrafx"]},"graph":{"type":"object"},"steps":{"type":"integer","minimum":1,"maximum":60},"states":{"type":"array","items":{"type":"string"}},"nodes":{"type":"array","items":{"type":"string"}}},"required":["action"],"additionalProperties":false})");
     ws.registerOp({"graph_debug_session","Control one isolated CPU debug instance. Explicit bounded advancement; no live game controls.",debugSchema,[&ws,debugger](const Json& p){
         debugger->checkProject(ws);
         const auto action=p.getStr("action");
@@ -157,6 +157,7 @@ inline void registerGraphOps(Workspace& ws) {
         if(action=="start")return debugger->start(ws,p);
         if(action=="step"||action=="continue")return debugger->advance(p,action=="step");
         if(action=="breakpoints")return debugger->breakpoints(p);
+        if(action=="profileEnable"||action=="profileDisable"||action=="profileReset"||action=="profileRead")return debugger->profile(p);
         if(action=="stop"){debugger->requireSession(p);debugger->stop();return debugger->status();}
         throw std::invalid_argument("unknown debug session action");
     }});
