@@ -28,3 +28,15 @@ test('registry rejects duplicate domains and history clears redo on edit',()=>{
  assert.equal(h.undo(),2);assert.equal(h.undo(),1);assert.equal(h.undo(),1);
  h.push(7);assert.equal(h.redo(),7);
 });
+
+import {selectionRect,selectInRect,selectNode,moveGroup} from '../src/graphs/graphSelection.ts';
+test('selection rectangle and modifiers are deterministic',()=>{
+ const rect=selectionRect({x:100,y:100},{x:0,y:0});
+ assert.deepEqual(selectInRect([{id:'a',x:20,y:20,width:10,height:10},{id:'b',x:110,y:110,width:20,height:20}],rect),['a']);
+ assert.deepEqual(selectNode(['a'],'b',true),['a','b']);
+ assert.deepEqual(selectNode(['a','b'],'a',true),['b']);
+});
+test('group movement clamps without distorting relative spacing',()=>{
+ const next=moveGroup([{id:'a',x:10,y:20},{id:'b',x:100,y:120}],-100,5000);
+ assert.deepEqual(next,[{id:'a',x:0,y:1900},{id:'b',x:90,y:2000}]);
+});
