@@ -10,6 +10,7 @@ from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry
 from new_feature import scaffold
 from legacy_inventory import inventory
+from capability_inventory import capability_id, source_operations
 
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
 gate = importlib.util.module_from_spec(spec)
@@ -102,6 +103,16 @@ class GateTest(unittest.TestCase):
             self.assertFalse(result["errors"])
             self.assertTrue(all(row["verification"] == "not_run" for row in result["entries"]))
             self.assertEqual(result["entries"][0]["mcp_candidates"], ["world_get"])
+
+    def test_capability_identity_and_source(self):
+        self.assertEqual(capability_id("water", {"id": "flow", "name": "Flow"}), "water:flow")
+        self.assertEqual(capability_id("water", {"name": "Flow"}), capability_id("water", {"name": "Flow"}))
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / "apps/editor/core/WaterOps.cpp"
+            path.parent.mkdir(parents=True)
+            path.write_text('add("water_set", "description");\nws.registerOp({"water_get", "description"});')
+            self.assertEqual(set(source_operations(root)), {"water_set", "water_get"})
 
     def test_bad_shape(self):
         self.assertTrue(gate.validate([]))
