@@ -28,11 +28,42 @@ public:
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
         if(action=="status")return status();
+        if(action=="checkpointFileRead"){
+            const auto offset=input["offset"].integer(-1);
+            if(offset<0||uint64_t(offset)>fileExport_.size())return errorStatus("Invalid checkpoint offset");
+            static constexpr char hex[]="0123456789abcdef";
+            std::string chunk;
+            const size_t end=std::min(fileExport_.size(),size_t(offset)+size_t(32768));
+            for(size_t i=size_t(offset);i<end;++i){chunk+=hex[fileExport_[i]>>4];chunk+=hex[fileExport_[i]&15];}
+            Json out=status();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+        }
+        if(action=="checkpointFileBegin"){
+            if(checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint busy");
+            fileImport_.clear();return status();
+        }
+        if(action=="checkpointFileAppend"){
+            if(fileImportPending_)return errorStatus("Import pending");
+            const auto chunk=input.getStr("chunk");
+            if(chunk.empty()||chunk.size()>65536||chunk.size()%2||fileImport_.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return errorStatus("Invalid checkpoint chunk size");
+            if(input["offset"].integer(-1)!=int64_t(fileImport_.size()))return errorStatus("Checkpoint chunk offset mismatch");
+            auto digit=[](char c)->int{return c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:-1;};
+            std::vector<uint8_t> decoded;
+            for(size_t i=0;i<chunk.size();i+=2){int a=digit(chunk[i]),b=digit(chunk[i+1]);if(a<0||b<0)return errorStatus("Invalid checkpoint hex");decoded.push_back(uint8_t(a*16+b));}
+            fileImport_.insert(fileImport_.end(),decoded.begin(),decoded.end());return status();
+        }
+        if(action=="checkpointFileExport"){
+            if(!exportTimelineCheckpoint(fileExport_))return errorStatus("Save a fresh paused checkpoint first");
+            Json out=status();out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+        }
+        if(action=="checkpointFileImport"){
+            if(fileImport_.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return errorStatus("Import requires paused preview and uploaded bytes");
+            fileImportPending_=true;error_.clear();return status();
+        }
         if(action=="checkpointCancel"){
-            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;
+            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;fileImport_.clear();
             error_.clear();return status();
         }
-        if((checkpointRequest_||rollbackId_)&&action!="stop")
+        if((checkpointRequest_||rollbackId_||fileImportPending_)&&action!="stop")
             return errorStatus("Checkpoint operation pending; cancel or wait");
 
         if(action=="playback") {
@@ -71,7 +102,7 @@ public:
             // preview. GPU resources are retired while NO pass is open.
             device.waitForResourceIdle();
             runtime_.shutdown();
-            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
+            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;fileImport_.clear();fileExport_.clear();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
@@ -272,6 +303,7 @@ public:
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
+        if(fileImportPending_){fileImportPending_=false;auto bytes=std::move(fileImport_);fileImport_.clear();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
         if(rollbackId_){
             const auto id=std::exchange(rollbackId_,uint64_t(0));
             if(!runtime_.restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
@@ -407,7 +439,7 @@ public:
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
-        return ready_ && (checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
+        return ready_ && (fileImportPending_ || checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
                           restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
@@ -452,7 +484,7 @@ public:
         for(const auto& [id,clock]:checkpointTicks_){Json item=Json::object();item.set("id",Json::number(int64_t(id)));item.set("tick",Json::number(int64_t(clock.first)));checkpoints.push(std::move(item));}
         result.set("checkpoints",std::move(checkpoints));
         result.set("checkpointWaitFrames",Json::number(int64_t(checkpointWaitFrames_)));
-        result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_));
+        result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_||fileImportPending_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -490,6 +522,8 @@ private:
     bool hasPendingGpuAllocationSeed_=false;
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
+    std::vector<uint8_t> fileImport_,fileExport_;
+    bool fileImportPending_=false;
     bool checkpointRequest_=false;
     uint32_t checkpointWaitFrames_=0;
     uint64_t rollbackId_=0;
