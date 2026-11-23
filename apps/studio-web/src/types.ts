@@ -159,12 +159,17 @@ export interface StudioSpectraPreviewState {
   generation:number;alive:number;error:string;
   speed:number;loop:boolean;
   bursts:number;queuedBursts:number;clearing:boolean;
+  capture?:{
+    pending:boolean;ready:boolean;
+    width?:number;height?:number;mime?:'image/jpeg';
+    image?:string;error?:string;
+  };
   background:'dark'|'neutral'|'light'|'black';
   grid:boolean;axes:boolean;
 }
 export interface StudioParams {
   'studio.spectraPreview': {
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear'|'capture'|'captureStatus';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;
@@ -174,7 +179,7 @@ export interface StudioParams {
     background?:'dark'|'neutral'|'light'|'black';
     grid?:boolean;axes?:boolean;
     preset?:'perspective'|'front'|'side'|'top';
-    speed?:number;loop?:boolean;count?:number;
+    speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
   'studio.wind':Record<string,never>;
   'studio.windSet':Partial<WindSettings>;
