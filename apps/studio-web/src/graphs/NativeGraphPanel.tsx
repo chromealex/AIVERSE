@@ -2,6 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioAlert,StudioButton,StudioEmptyState,StudioInput,StudioPanel,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {Positioned} from './graphSelection';
@@ -142,6 +143,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
    disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
+   {!fx&&<AnimationParameters doc={draft} disabled={busy} onEdit={edit}/>}
    {entry&&<StudioSection title={'Selected: '+active}>
     {fx?<><pre>{JSON.stringify(entry,null,2)}</pre>
      {selectedLinks.map(link=><div className="au-row" key={link.id}><span>{link.from} → {link.to} ({link.input})</span><StudioButton size="sm" disabled={busy} onClick={()=>disconnect(link.id)}>Disconnect</StudioButton></div>)}
@@ -153,6 +155,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
        {Array.isArray(entry.transitions)&&entry.transitions.map((t,i)=>object(t)&&<StudioSection key={i} title={'Transition '+(i+1)+' → '+String(t.to)}>
         {(['fade','after'] as const).map(k=><StudioInput key={k} aria-label={k} disabled={busy} type="number" min="0" step="0.05" value={typeof t[k]==='number'?t[k]:k==='fade' ? .2 : 0}
          onChange={e=>{if(e.target.value.trim()==='')return;const next=editAnimationTransition(draft,active,i,{fade:typeof t.fade==='number'?t.fade:.2,after:typeof t.after==='number'?t.after:0,[k]:Number(e.target.value)});edit(next)}}/>)}
+        <AnimationConditions doc={draft} state={active} index={i} transition={t} disabled={busy} onEdit={edit}/>
         <StudioButton size="sm" disabled={busy} onClick={()=>edit(editAnimationTransition(draft,active,i,null))}>Remove transition</StudioButton>
        </StudioSection>)}
       </>}
