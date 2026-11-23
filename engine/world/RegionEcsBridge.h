@@ -137,6 +137,31 @@ public:
                              regionTransformPosition,error);
     }
 
+    // A coherent group can contain occupants whose previous home differs
+    // from the car's (boarding at a region edge). All current ledger owners
+    // are snapshotted and validated in one transaction; no partial transfer.
+    static bool transferGroupMixed(const World& world,RegionEntityLedger& ledger,
+                                   std::span<const Entity> entities,Cell destination,
+                                   const RegionPositionReader& position,
+                                   std::string* error=nullptr) {
+        if(entities.empty())return reject(error,"empty region transfer group");
+        std::vector<std::pair<RegionEntityId,Cell>> ids;
+        ids.reserve(entities.size());
+        for(Entity e:entities) {
+            if(!world.alive(e) || world.has<RegionDormant>(e) ||
+               !position || !position(world,e).has_value())
+                return reject(error,"missing or dormant group position");
+            const auto* tag=world.tryGetConst<RegionStableIdentity>(e);
+            if(!tag || !tag->id)return reject(error,"missing stable group identity");
+            const auto* entry=ledger.find(tag->id);
+            if(!entry || !entry->live)return reject(error,"missing group ledger owner");
+            ids.emplace_back(tag->id,entry->owner);
+        }
+        if(!ledger.transferGroup(ids,destination))
+            return reject(error,"group contains duplicate or stale owners");
+        return true;
+    }
+
     // Gameplay destruction; never call during an active ECS pool iteration.
     // A renderer or chunk streamer must never invoke this method.
     static bool retire(World& world,RegionEntityLedger& ledger,Entity entity,
