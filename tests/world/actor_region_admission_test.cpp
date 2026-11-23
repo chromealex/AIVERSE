@@ -389,10 +389,11 @@ void testImpossibleCollisionBudgetReportsError() {
 
 void testOriginalVehicleResetDestinationPreloaded() {
     Json rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,
-        "mode":"deathmatch","mechanics":{"enabled":true},
+        "mode":"bomb","mechanics":{"enabled":true},
         "weapon":{"range":20}},"regionOwnership":{}})");
     Json map=Json::parse(R"({"players":[{"team":1},{"team":2}],
         "spawns":[[4,2,4],[8,2,4]],"colliders":[],
+        "bombSites":[{"min":[1,0,1],"max":[3,3,3]}],
         "vehicles":[{"pos":[324,2,4],"speed":15}]})");
     map.set("world",worldManifest());
     auto sim=std::make_unique<Simulation>(
@@ -400,19 +401,26 @@ void testOriginalVehicleResetDestinationPreloaded() {
     sim->setup(rules,map);
     auto cars=actor::host(*sim).vehicleEntities(*sim);
     AIVERSE_TEST_CHECK(cars.size()==1);
-    // The live car is now nearby. No camera, live vehicle, player, projectile
-    // or queued teleport requires the distant original spawn.
+    // Live car near players. Its remote original spawn is NOT required
+    // during ordinary gameplay when no round reset can happen this tick.
     sim->world().get<actor::Vehicle>(cars[0]).pos={12_fx,2_fx,4_fx};
     std::atomic<bool> remote{false};
     actor::host(*sim).setContentReader(reader(remote));
+    progressOne(*sim);
+    AIVERSE_TEST_CHECK(sim->tick()==1);
+    AIVERSE_TEST_CHECK(actor::host(*sim).collisionAdmissionError().empty());
+    // Mark a due round reset. Its original remote spawn is now mandatory.
+    actor::host(*sim).state(*sim).match.end=sim->tick();
     const auto hash=sim->checksum();
     const auto rng=sim->rng().state();
     sim->step();
-    AIVERSE_TEST_CHECK(sim->tick()==0 && sim->checksum()==hash);
+    AIVERSE_TEST_CHECK(sim->tick()==1 && sim->checksum()==hash);
     AIVERSE_TEST_CHECK(sim->rng().state()==rng);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::Vehicle>(cars[0]).pos.x==12_fx);
     remote=true;
     progressOne(*sim);
-    AIVERSE_TEST_CHECK(sim->tick()==1);
+    AIVERSE_TEST_CHECK(sim->tick()==2);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::Vehicle>(cars[0]).pos.x==324_fx);
 }
 
 void testStaticAndOccupiedMove() {
