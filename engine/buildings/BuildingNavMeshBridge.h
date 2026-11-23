@@ -25,8 +25,14 @@ struct BuildingOffMeshLink {
     bool resolved=false;   // source/destination stand on actual nav polygons
     uint64_t navRevision=0;
 };
+struct BuildingNavRoomAnchor {
+    std::string roomId;
+    uint32_t polygon=nav::Mesh::kNone;
+    Vec3 point{};
+};
 struct BuildingNavLinkBatch {
     std::vector<BuildingOffMeshLink> links;
+    std::vector<BuildingNavRoomAnchor> rooms;
     uint64_t navRevision=0;
     std::string error;
     explicit operator bool()const noexcept{return error.empty();}
@@ -88,6 +94,10 @@ inline BuildingNavLinkBatch resolveBuildingOffMeshLinks(
         return out;
     }
     out.navRevision=mesh.revision();
+    for(const auto& room:graph.rooms){
+        auto point=buildingRoomNavLanding(mesh,room,width,depth,origin,yaw,tolerance);
+        if(point)out.rooms.push_back({room.id,point->first,point->second});
+    }
     for(const auto& edge:graph.connections){
         if(edge.kind==BuildingConnectionKind::Passage)continue;
         const auto from=std::find_if(graph.rooms.begin(),graph.rooms.end(),
@@ -117,6 +127,7 @@ struct BuildingNavRouteStep {
     std::string connectionId,fromRoom,toRoom;
     BuildingRouteAction action=BuildingRouteAction::WalkThrough;
     std::optional<Vec3> from,to;
+    std::vector<Vec3> corridor; // native nav::Mesh corridor for same-floor legs
     bool hasNavAnchors=false;
 };
 struct BuildingNavRoute {
@@ -149,7 +160,26 @@ inline BuildingNavRoute planBuildingNavRoute(
         output.fromRoom=step.fromRoom;
         output.toRoom=step.toRoom;
         output.action=step.action;
-        if(step.action!=BuildingRouteAction::WalkThrough){
+        if(step.action==BuildingRouteAction::WalkThrough){
+            const auto from=std::find_if(links.rooms.begin(),links.rooms.end(),
+                [&](const auto& room){return room.roomId==step.fromRoom;});
+            const auto to=std::find_if(links.rooms.begin(),links.rooms.end(),
+                [&](const auto& room){return room.roomId==step.toRoom;});
+            if(from==links.rooms.end()||to==links.rooms.end()){
+                result.steps.clear();
+                result.error="No actual navmesh surface for room passage: "+step.edgeId;
+                return result;
+            }
+            nav::Query query;
+            query.yTolerance=Fixed::fromRatio(2,5);
+            if(!mesh.findPath(from->point,to->point,query,output.corridor)){
+                result.steps.clear();
+                result.error="Native navmesh cannot traverse passage: "+step.edgeId;
+                return result;
+            }
+            output.from=from->point;output.to=to->point;
+            output.hasNavAnchors=true;
+        }else{
             const auto link=std::find_if(links.links.begin(),links.links.end(),
                 [&](const auto& l){return l.id==step.edgeId;});
             if(link==links.links.end()||!link->resolved||
