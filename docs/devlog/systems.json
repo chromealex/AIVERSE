@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-unified-backup-catalog",
+     "title": "Каталог резервных копий мира",
+     "titleEn": "World backup catalog",
+     "text": "Перечисление поколений сохранений и проверка восстановления ECS и журнала изменений.",
+     "textEn": "Enumerate save generations and validate ECS and change-log recovery.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-ecs-region-lifecycle",
      "title": "Жизненный цикл динамических сущностей регионов",
      "titleEn": "Dynamic region entity lifecycle",
