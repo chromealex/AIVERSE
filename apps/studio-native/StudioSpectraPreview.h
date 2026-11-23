@@ -27,6 +27,21 @@ public:
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
         if(action=="status")return status();
+        if(action=="playback") {
+            // Preview-only playback settings: no graph file or gameplay
+            // simulation writes. Apply even before the first graph is loaded.
+            if(!input["speed"].isNumber()||!input["loop"].isBool())
+                return errorStatus("Playback needs numeric speed and boolean loop");
+            const double speed=input["speed"].toDouble();
+            if(!std::isfinite(speed) || (speed!=0.25 && speed!=0.5 &&
+                speed!=1.0 && speed!=2.0 && speed!=4.0))
+                return errorStatus("Playback speed must be 0.25, 0.5, 1, 2 or 4");
+            speed_=float(speed);
+            loop_=input.getBool("loop");
+            phase_=0;
+            error_.clear();
+            return status();
+        }
         if(action=="stop") {
             stop(device);
             return status();
@@ -59,6 +74,7 @@ public:
             ready_=true;
             playing_=false;
             pendingRestart_=true;
+            phase_=0;
             timeTicks_=0;
             targetTicks_=0;
             stepsPending_=0;
@@ -70,15 +86,19 @@ public:
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
         if(action=="play") {error_.clear();playing_=true;return status();}
-        if(action=="pause") {playing_=false;targetTicks_=timeTicks_;stepsPending_=0;return status();}
+        if(action=="pause") {
+            playing_=false;targetTicks_=timeTicks_;stepsPending_=0;
+            phase_=0;return status();
+        }
         if(action=="restart") {
             error_.clear();
             playing_=input.getBool("play",false);
             pendingRestart_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
+            phase_=0;
             return status();
         }
         if(action=="step") {
-            playing_=false;
+            playing_=false;phase_=0;
             if(timeTicks_>=kMaxTicks)return errorStatus("Preview reached 60-second limit");
             // An explicit Step supersedes any earlier unfinished seek.
             error_.clear();
@@ -92,6 +112,7 @@ public:
                input["tick"].integer(-1)<0 || input["tick"].integer(-1)>kMaxTicks)
                 return errorStatus("Preview seek expects a tick in 0..3600");
             playing_=false;
+            phase_=0;
             error_.clear();
             targetTicks_=uint32_t(input["tick"].integer());
             stepsPending_=0;
@@ -141,15 +162,25 @@ public:
         }
         requestedParameters_.clear();
         if(!error_.empty())return;
+        // Fixed 60 Hz physics regardless of UI speed: speed affects only
+        // the number of entire simulation ticks executed per native frame.
+        // A bounded accumulator supports 1/4 and 1/2 rate without dt drift.
+        uint32_t playbackTicks=0;
+        if(playing_) {
+            phase_+=uint32_t(speed_*4.0f); // quarter-tick units
+            playbackTicks=phase_/4;
+            phase_%=4;
+        }
         const uint32_t remaining=kMaxTicks-timeTicks_;
-        const uint32_t ticks=std::min(remaining,playing_?1u:
+        const uint32_t requested=playing_?playbackTicks:
             targetTicks_>timeTicks_?
                 std::min(kSeekTicksPerFrame,targetTicks_-timeTicks_):
-                stepsPending_);
+                stepsPending_;
+        const uint32_t ticks=std::min(remaining,requested);
         stepsPending_=0;
         for(uint32_t i=0;i<ticks;++i) {
             if(!runtime_.step(kStep)) {
-                playing_=false;
+                playing_=false;phase_=0;
                 ready_=runtime_.backend()==spectra::ComputeBackend::Cpu ||
                        runtime_.gpuActive();
                 error_=runtime_.reason().empty()?
@@ -158,7 +189,17 @@ public:
             }
             ++timeTicks_;
         }
-        if(timeTicks_>=kMaxTicks)playing_=false;
+        if(timeTicks_>=kMaxTicks) {
+            if(playing_ && loop_ && error_.empty()) {
+                // Reset at the next frame's safe simulation update point.
+                // Never recursively call GPU clear() in an open pass.
+                pendingRestart_=true;
+                timeTicks_=targetTicks_=0;
+                phase_=0;
+            } else {
+                playing_=false;phase_=0;
+            }
+        }
     }
 
     // Draw only inside the SAME still-open native Scene pass (before PRISMA
@@ -180,6 +221,8 @@ public:
         result.set("tick",Json::number(int64_t(timeTicks_)));
         result.set("targetTick",Json::number(int64_t(targetTicks_)));
         result.set("timeSeconds",Json::number(double(timeTicks_)/60.0,3));
+        result.set("speed",Json::number(double(speed_),2));
+        result.set("loop",Json::fromBool(loop_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
@@ -190,7 +233,7 @@ public:
         device.waitForResourceIdle();
         runtime_.shutdown();
         ready_=false;playing_=false;pendingRestart_=false;
-        stepsPending_=timeTicks_=targetTicks_=0;
+        stepsPending_=timeTicks_=targetTicks_=phase_=0;
         requestedParameters_.clear();
         backend_.clear();error_.clear();
         ++generation_;
@@ -203,6 +246,9 @@ private:
     spectra::GraphRuntime runtime_;
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false;
+    bool loop_=true;
+    float speed_=1.0f;
+    uint32_t phase_=0;
     uint32_t timeTicks_=0,targetTicks_=0,stepsPending_=0;
     uint64_t generation_=1;
     std::string backend_,error_;
