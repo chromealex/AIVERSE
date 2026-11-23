@@ -6,6 +6,7 @@ import subprocess
 import sys
 from check_feature import ROOT, DIMENSIONS, validate
 from legacy_inventory import inventory
+from graph_inventory import inventory as graph_inventory
 
 PREFIX = "docs/features/"
 
@@ -56,6 +57,7 @@ def matrix(registry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
+    parser.add_argument("--graphs", action="store_true", help="Include known graph domain inventory")
     parser.add_argument("--legacy", action="store_true", help="Include catalog inventory without claiming runtime verification")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     args = parser.parse_args()
@@ -68,6 +70,9 @@ def main():
         if args.legacy:
             report["legacy_inventory"] = inventory(ROOT)
             errors.extend(report["legacy_inventory"]["errors"])
+        if args.graphs:
+            report["graph_inventory"] = graph_inventory(ROOT)
+            errors.extend(report["graph_inventory"]["errors"])
         report["errors"] = errors
         if args.format == "json":
             print(json.dumps(report, indent=2))
@@ -81,6 +86,12 @@ def main():
             if args.legacy:
                 print("\nLegacy catalog counts: " + json.dumps(report["legacy_inventory"]["counts"]))
                 print("Legacy rows are catalog references, not verified feature manifests.")
+            if args.graphs:
+                print("\nKnown graph domains: " + str(len(report["graph_inventory"]["graphs"])))
+                print("| Graph | Kind | MCP source matches | Studio IDs | Verification |")
+                print("|---|---|---|---|---|")
+                for row in report["graph_inventory"]["graphs"]:
+                    print("| " + " | ".join([row["id"], row["kind"], str(len(row["literal_mcp_matches"])), ", ".join(row["studio_matches"]) or "unknown", row["verification"]]) + " |")
             for error in errors:
                 print("- " + error)
         return int(bool(errors))
