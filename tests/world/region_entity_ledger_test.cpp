@@ -1,5 +1,6 @@
 #include "engine/world/RegionEntityLedger.h"
 #include "engine/world/UnifiedWalSession.h"
+#include "engine/world/UnifiedResourceSection.h"
 #include <chrono>
 #include <fstream>
 #include "engine/sim/Simulation.h"
@@ -398,7 +399,73 @@ static void checkUnifiedBackupCatalog() {
 #endif
 }
 
+
+struct WalFixtureResource { uint32_t value=0; };
+inline void io(Archive& ar,WalFixtureResource& r){ar(r.value);}
+
+static void checkResourceWal(){
+    using Replay=UnifiedWorldReplay;
+    using Delta=DurableResourceTransaction;
+    PersistentEcsRegistry registry;
+    registry.registerResource<WalFixtureResource>("test.world.resource",1);
+    Delta::Policy policy{&registry,{"test.world.resource"}};
+    auto current=std::make_unique<Replay::State>();
+    AIVERSE_TEST_CHECK(current->ledger.spawn(1,a));
+    current->world.setResource<WalFixtureResource>({10});
+    World after=current->world;
+    after.setResource<WalFixtureResource>({20});
+    std::vector<Delta::Record> changes;
+    AIVERSE_TEST_CHECK(Delta::captureChanges(registry,policy.selected,current->world,after,changes));
+    AIVERSE_TEST_CHECK(changes.size()==1);
+    std::vector<uint8_t> bytes;
+    AIVERSE_TEST_CHECK(Delta::encode(changes,bytes));
+    std::vector<Delta::Record> decoded;
+    AIVERSE_TEST_CHECK(Delta::decode(bytes,decoded)&&decoded.size()==1);
+    bytes.pop_back();
+    AIVERSE_TEST_CHECK(!Delta::decode(bytes,decoded)&&decoded.size()==1);
+    auto duplicate=changes;duplicate.push_back(changes.front());
+    AIVERSE_TEST_CHECK(!Delta::encode(duplicate,bytes));
+    DurableComponentCodecs codecs;
+    Replay::Materializer materialize=[](World&,const RegionEntityLedger&,const RegionEntityLedger&){return true;};
+    auto ledger=current->ledger;
+    RegionWalFrame frame;
+    {
+        RegionEntityLedger::Transaction tx(ledger,true);
+        AIVERSE_TEST_CHECK(tx.transfer(1,a,b));
+        AIVERSE_TEST_CHECK(UnifiedWorldTransaction::encode(tx,{},changes,1,frame));
+    }
+    AIVERSE_TEST_CHECK(frame.payload[4]==2);
+    auto old=current.get();
+    AIVERSE_TEST_CHECK(!Replay::apply(current,frame,codecs,materialize));
+    AIVERSE_TEST_CHECK(current.get()==old&&current->sequence==0&&current->ledger.find(1)->owner==a);
+    AIVERSE_TEST_CHECK(!Replay::apply(current,frame,codecs,materialize,
+        [](const Replay::State&){return false;},policy));
+    AIVERSE_TEST_CHECK(current.get()==old&&current->world.resourceConst<WalFixtureResource>()->value==10);
+    AIVERSE_TEST_CHECK(Replay::apply(current,frame,codecs,materialize,{},policy));
+    AIVERSE_TEST_CHECK(current->sequence==1&&current->ledger.find(1)->owner==b&&
+        current->world.resourceConst<WalFixtureResource>()->value==20);
+    after=current->world;after.eraseResource<WalFixtureResource>();
+    AIVERSE_TEST_CHECK(Delta::captureChanges(registry,policy.selected,current->world,after,changes)&&changes.size()==1);
+    ledger=current->ledger;
+    {
+        RegionEntityLedger::Transaction tx(ledger,true);
+        AIVERSE_TEST_CHECK(UnifiedWorldTransaction::encode(tx,{},changes,2,frame));
+    }
+    AIVERSE_TEST_CHECK(Replay::apply(current,frame,codecs,materialize,{},policy));
+    AIVERSE_TEST_CHECK(current->sequence==2&&!current->world.resourceConst<WalFixtureResource>());
+    AIVERSE_TEST_CHECK(Delta::captureChanges(registry,policy.selected,current->world,after,changes)&&changes.empty());
+    ledger=current->ledger;
+    {
+        RegionEntityLedger::Transaction tx(ledger,true);
+        AIVERSE_TEST_CHECK(tx.transfer(1,b,c));
+        AIVERSE_TEST_CHECK(UnifiedWorldTransaction::encode(tx,{},3,frame));
+    }
+    AIVERSE_TEST_CHECK(frame.payload[4]==1&&Replay::apply(current,frame,codecs,materialize));
+    AIVERSE_TEST_CHECK(current->sequence==3&&current->ledger.find(1)->owner==c);
+}
+
 int main() {
+    checkResourceWal();
     checkUnifiedBackupCatalog();
     checkLedger();
     checkEcsPersistence();
