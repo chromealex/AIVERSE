@@ -59,16 +59,23 @@
     },
     {
       "id": "spatial",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
-      "status": "engine-reference",
-      "source": "engine/game/GameCore.h",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Spatial.h",
       "skill": "skills/world/aiverse-spatial-queries/SKILL.md",
-      "summary": "Existing game spatial queries",
-      "notes": "Read current game query API; batch queries. Never infer visibility from presentation. New spatial index adapter remains planned.",
+      "summary": "Generic spatial grids, hashes, BVH and trees",
+      "notes": "Use common algorithms for new code; existing GameCore queries remain compatibility adapters pending migration. Integer AABB; floating distance queries not lockstep guaranteed.",
       "verifiedPlatforms": [],
-      "runtime": "none",
-      "cmakeTarget": null
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_spatial",
+      "linkDependencies": [],
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/Bvh.h",
+        "libraries/include/aiverselib/algorithms/SpatialTree.h",
+        "skills/core/aiverse-spatial/SKILL.md"
+      ]
     },
     {
       "id": "grid",
