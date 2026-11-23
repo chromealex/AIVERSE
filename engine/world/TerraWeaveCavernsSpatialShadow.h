@@ -20,22 +20,24 @@ public:
     bool prepare(const CaveCollisionPrepared& source,
                  uint32_t firstColliderId,
                  const world::SpatialWorld& spatial){
-        if(!source.revision||source.triangles.empty()||
-           source.triangles.size()>65534||!firstColliderId||
+        if(!source.revision||
+           source.triangles.size()>65534||
+           (!source.triangles.empty()&&!firstColliderId)||
            source.revision<=activeRevision_||
            (staged_&&source.revision<=stagedRevision_))
             return false;
         const uint64_t begin=firstColliderId;
         const uint64_t end=begin+source.triangles.size();
         if(end>uint64_t(UINT32_MAX)+1)return false;
-        if(activeCount_ && begin< uint64_t(activeId_)+activeCount_ &&
+        if(!source.triangles.empty() && activeCount_ &&
+           begin< uint64_t(activeId_)+activeCount_ &&
            uint64_t(activeId_)<end)return false;
         for(uint64_t id=begin;id<end;++id)
             if(spatial.colliders().contains(uint32_t(id)))return false;
         for(const auto& t:source.triangles)
             if(!world::SpatialWorld::validTriangle(t))return false;
         staged_=source.triangles;
-        stagedId_=firstColliderId;
+        stagedId_=source.triangles.empty()?0:firstColliderId;
         stagedRevision_=source.revision;
         return true;
     }
