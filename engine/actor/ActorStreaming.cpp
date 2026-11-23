@@ -8,7 +8,14 @@ void ActorHost::setContentReader(world::AssetReader reader) {
     if(streamManifest_.getBool("async"))streamedCollision_=std::make_unique<world::CollisionStream>(streamManifest_,std::move(reader),collision_);
 }
 bool ActorHost::readyToStep(Simulation& sim) {
-    if(!streamManifest_.getBool("async"))return true;
+    // A new command may queue a region move after this preflight. Only
+    // requests observed and admitted HERE may mutate positions this tick.
+    admittedRegionMoves_.clear();
+    if(!streamManifest_.getBool("async")) {
+        if(const auto* moves=sim.world().resourceConst<world::RegionMoveRequests>())
+            admittedRegionMoves_=moves->destinations;
+        return true;
+    }
     if(!streamedCollision_)return false;
     const Simulation& view=sim;const auto cars=vehicles(view);
     Fixed radius=64_fx;
@@ -50,6 +57,8 @@ bool ActorHost::readyToStep(Simulation& sim) {
         navigationReadinessError_.clear();
         navigationCollisionRevision_=streamedCollision_->revision();
     }
+    if(const auto* moves=sim.world().resourceConst<world::RegionMoveRequests>())
+        admittedRegionMoves_=moves->destinations;
     return true;
 }
 }
