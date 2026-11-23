@@ -1080,6 +1080,12 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
                         }else value=std::round(value/100.f)*100.f;
                     }
                     wpDrag_.value=value;
+                    if(handle.mode==worldprocess_edit::Handle::Mode::GroupCornerXZ){
+                        const auto& entity=map.data.entities[std::size_t(ownerIndex)];
+                        wpDrag_.valueZ=float(std::round((double(ground.z)-entity.z)*100.));
+                        if(wpDrag_.snap)
+                            wpDrag_.valueZ=std::round(wpDrag_.valueZ/100.f)*100.f;
+                    }
                     wpDrag_.previewPoint=ground;
                 }
             }
@@ -1143,6 +1149,53 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         const double half=current.key=="halfWidthCm"?
             areaPreview.halfWidth:areaPreview.halfDepth;
         params.set("value",Json::number(int64_t(std::lround(half*100.))));
+    }
+    if(current.component=="EvolveArea" &&
+       mode==worldprocess_edit::Handle::Mode::GroupCornerXZ){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()<2)return true;
+        const int index=map.findEntity(current.owner);
+        if(index<0)return true;
+        const auto& owner=map.data.entities[std::size_t(index)];
+        const auto& area=owner.extra["components"]["EvolveArea"];
+        const auto oldX=area.getInt("halfWidthCm",0);
+        const auto oldZ=area.getInt("halfDepthCm",0);
+        const auto centerX=area.getInt("offsetXcm",0);
+        const auto centerZ=area.getInt("offsetZcm",0);
+        if(oldX<50||oldZ<50)return true;
+        const auto newX=std::llround(std::abs(double(current.value)-centerX));
+        const auto newZ=std::llround(std::abs(double(current.valueZ)-centerZ));
+        if(newX<50||newZ<50)return true;
+        Json ids=Json::array();
+        for(const auto& id:selected)ids.push(Json::string(id));
+        Json batch=Json::object();
+        batch.set("entityIds",std::move(ids));
+        batch.set("axis",Json::string("both"));
+        const bool custom=wpCustomPivot_&&!current.symmetric;
+        batch.set("pivot",Json::string(current.symmetric?"individual":
+                                      (custom?"custom":"shared")));
+        if(custom){
+            batch.set("pivotXcm",Json::number(
+                std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+            batch.set("pivotZcm",Json::number(
+                std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+        }
+        batch.set("scaleNumerator",Json::number(newX));
+        batch.set("scaleDenominator",Json::number(oldX));
+        batch.set("scaleNumeratorZ",Json::number(newZ));
+        batch.set("scaleDenominatorZ",Json::number(oldZ));
+        const auto response=request("studio.worldProcessAreaBatchResize",std::move(batch));
+        if(response.has("error")){
+            Json error=Json::object();
+            error.set("message",Json::string(
+                "EVOLVE corner resize: "+response.getStr("error")));
+            sendEventPayload("assets.importError",error);
+        }else{
+            sendEvent("document.changed","");
+            sendEvent("selection.changed","");
+            rebuildOverlay();
+        }
+        return true;
     }
     // Group edge scaling is one atomic MapDoc operation. Shift selects
     // individual pivots; default group scaling uses the shared centroid.
