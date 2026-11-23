@@ -305,6 +305,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         throw std::runtime_error("A building export is already in progress");
     try {
         aiverse::lib::systems::buildingExport::Glb glb;
+        // Record the actual content hashes of embedded textures. Consumers
+        // can compare these fingerprints after Assets reimport/reindex to
+        // identify generated buildings that require material regeneration.
+        std::map<std::string,Json> textureDependencies;
         StudioAssetCatalog textureCatalog(project);
         textureCatalog.rebuild();
         glb.textureReader=[&](const std::string& guid,
@@ -330,7 +334,20 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             if(!in)return false;
             bytes.assign(std::istreambuf_iterator<char>(in),
                          std::istreambuf_iterator<char>());
-            return in.good()||in.eof();
+            if(!(in.good()||in.eof()))return false;
+            uint64_t digest=14695981039346656037ULL;
+            for(uint8_t byte:bytes){
+                digest^=byte;
+                digest*=1099511628211ULL;
+            }
+            Json dependency=Json::object();
+            dependency.set("guid",string(guid));
+            dependency.set("importer",string(entry->importer));
+            dependency.set("sourceBytes",Json::number(int64_t(bytes.size())));
+            dependency.set("contentFingerprint",string(std::to_string(digest)));
+            dependency.set("settings",entry->settings);
+            textureDependencies.emplace(guid,std::move(dependency));
+            return true;
         };
         glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
@@ -353,6 +370,14 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("width",Json::number(double(req.dimensions.width),3));
         saved.set("height",Json::number(double(req.dimensions.height),3));
         saved.set("depth",Json::number(double(req.dimensions.depth),3));
+        if(!textureDependencies.empty()){
+            Json dependencies=Json::array();
+            for(auto& [guid,dependency]:textureDependencies){
+                (void)guid;
+                dependencies.push(std::move(dependency));
+            }
+            saved.set("textureDependencies",std::move(dependencies));
+        }
         if(req.composeFeatures){
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
