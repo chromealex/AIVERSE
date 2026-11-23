@@ -50,6 +50,10 @@ export function readGradient(n:FxNode):GradientKey[]|null {
 }
 export function gradientCss(keys:readonly GradientKey[]):string {
   const safe=keys.filter(k=>bounded(k.t,0,1)&&validRgbaHex(k.color));
+  if(safe.length<2) {
+    const color=safe.length?rgba8(safe[0].color):'#ffffffff';
+    return `linear-gradient(90deg,${color} 0%,${color} 100%)`;
+  }
   return 'linear-gradient(90deg,'+safe.map(k=>
     `${rgba8(k.color)} ${(k.t*100).toFixed(2)}%`).join(',')+')';
 }
