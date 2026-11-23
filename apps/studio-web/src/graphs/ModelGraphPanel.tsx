@@ -2,6 +2,8 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,StudioSection,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import StrataAnalysisPanel from './StrataAnalysisPanel';
+import GraphDiagnostics from './GraphDiagnostics';
 import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
@@ -101,6 +103,8 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
    <GraphCanvas view={{...view,nodes:view.nodes.map(n=>({...n,...positions[mode+':'+n.id]}))}} selected={active} selection={selection} onSelection={setSelection}
     label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
+   <GraphDiagnostics view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
+   {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
    {graph&&(mode==='pose'||mode==='states')&&<AnimationParameters doc={graph} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>}
    {entry&&<StudioSection title={'Entry '+active}>{mode==='geometry'&&object(entry)&&object(entry.geometry)&&<>
     <StudioSelect aria-label="Source material" disabled={busy} value={String(entry.material??'')} onChange={e=>edit(bindModelMaterial(draft,active,e.target.value))}><option value="">Default material</option>{modelMaterialIds(draft).map(id=><option key={id} value={id}>{id}</option>)}</StudioSelect>
