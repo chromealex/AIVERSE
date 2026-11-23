@@ -133,6 +133,20 @@ inline void appendWorldProcessExtendedComponents(const World& world,Entity e,
                     {"op",num(static_cast<std::uint8_t>(v->operation))},
                     {"enabled",boo(v->enabled)}}));
 
+    if(const auto* v=world.tryGetConst<circuit::Switch>(e))
+        appendAuto(components,schemas,"CircuitSwitch","CIRCUIT · Switch",
+            fields({{"node",ent(v->node)},{"closed",boo(v->closed)},
+                    {"enabled",boo(v->enabled)}}));
+    if(const auto* v=world.tryGetConst<circuit::Device>(e))
+        appendAuto(components,schemas,"CircuitDevice","CIRCUIT · Device",
+            fields({{"node",ent(v->node)},
+                    {"kind",num(static_cast<std::uint8_t>(v->kind))},
+                    {"requireSignal",boo(v->requireSignal)},
+                    {"enabled",boo(v->enabled)},{"active",boo(v->active)},
+                    {"valid",boo(v->valid)},{"transition",num(v->transition)},
+                    {"sampledTick",num(v->sampledTick)},
+                    {"changedTick",num(v->changedTick)}}));
+
     if(const auto* v=world.tryGetConst<granular::Field>(e)){
         std::int64_t total=0,occupied=0;
         for(auto mass:v->mass){total+=mass;if(mass>0)++occupied;}
