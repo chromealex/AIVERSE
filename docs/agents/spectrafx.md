@@ -1,3 +1,22 @@
+## 2026-11-23 — Stage 11/12 HTML5 native embedded FX preview + MCP
+
+Native `StudioScene` now draws an isolated particle stage in the
+SpectraFX Graph HTML5 dock by moving the original native GPU surface,
+NOT by allocating another Device or delivering a fake browser bitmap.
+FX camera is independent, resettable and restored to map camera after
+Graph closes. Scene editing/picking/asset placement is forbidden while
+FX owns the viewport. In headless MCP all graph authoring operations
+remain supported; `fx_graph_preview` is additionally discoverable but
+requires a running Studio GPU owner for status/load/play/pause/step/
+seek/restart/stop/parameter/cameraReset/cameraOrbit/cameraZoom.
+MCP `load` supports inline graph or secure by-name source/draft lookup.
+Authenticated Studio agents and HTML5 UI use one
+`StudioHost::runSpectraPreview` method.
+**Do not assert new Apple Metal build/GUI passes yet.**
+Handoff docs: `docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 ## Stage 9 — SpectraFX Graph first-use UX (2026-11-23)
 
 User screenshot showed the `New Graph` form hidden below a scrolling asset list
