@@ -4,6 +4,8 @@
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraFxCueBridge.h"
 #include "engine/fx/SpectraFxCueInbox.h"
+#include "engine/fx/SpectraFxSignificance.h"
+#include "engine/fx/SpectraFxCuePriority.h"
 #include "engine/fx/SpectraFxCommandQueue.h"
 #include "engine/fx/SpectraFxSimulationBridge.h"
 #include "engine/fx/SpectraFxEmitterEvents.h"
@@ -35,6 +37,8 @@ namespace aiverse::fx {
 void spectraFxCompileSmoke() {
     SpectraFxCueInbox inbox;
     SpectraFxGpuBudgetGovernor governor;
+    SpectraFxSignificance priority;
+    (void)priority;
     SpectraFxGpuLodSettings lod;
     SpectraFxHybridEmitter::Config emitter;
     SpectraFxGpuRouteAsset::Routes routes;
