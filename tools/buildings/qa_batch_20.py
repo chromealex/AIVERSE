@@ -189,7 +189,7 @@ def main() -> int:
         commands = []
         if files:
             command = [str(viewer), *(str(p) for p in files),
-                       "--yaw", "30", "--pitch", "28", "--spacing", "14"]
+                       "--yaw", "30", "--pitch", "28", "--spacing", "4.2", "--distance", "26"]
             commands.append(shlex.join(command))
         else:
             commands.append(f"echo {shlex.quote('No successful models for ' + kind)}")
