@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-portable-actor-components",
+     "title": "Восстановление связей игровых объектов",
+     "titleEn": "Restore gameplay object relationships",
+     "text": "Контекстные кодеки компонентов и восстановление связей по постоянным идентификаторам.",
+     "textEn": "Contextual component codecs and relationship restoration through persistent identities.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-stable-actor-identities",
      "title": "Постоянные идентификаторы объектов мира",
      "titleEn": "Persistent world object identities",
