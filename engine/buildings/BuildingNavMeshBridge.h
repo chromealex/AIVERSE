@@ -34,6 +34,9 @@ struct BuildingNavLinkBatch {
     std::vector<BuildingOffMeshLink> links;
     std::vector<BuildingNavRoomAnchor> rooms;
     uint64_t navRevision=0;
+    float width=0,depth=0;
+    Vec3 origin{};
+    uint32_t yaw=0;
     std::string error;
     explicit operator bool()const noexcept{return error.empty();}
 };
@@ -94,6 +97,7 @@ inline BuildingNavLinkBatch resolveBuildingOffMeshLinks(
         return out;
     }
     out.navRevision=mesh.revision();
+    out.width=width;out.depth=depth;out.origin=origin;out.yaw=yaw;
     for(const auto& room:graph.rooms){
         auto point=buildingRoomNavLanding(mesh,room,width,depth,origin,yaw,tolerance);
         if(point)out.rooms.push_back({room.id,point->first,point->second});
@@ -189,10 +193,69 @@ inline BuildingNavRoute planBuildingNavRoute(
                 return result;
             }
             output.hasNavAnchors=true;
-            if(step.fromRoom==link->fromRoom){
+            const bool upward=step.fromRoom==link->fromRoom;
+            if(upward){
                 output.from=link->from;output.to=link->to;
             }else{
                 output.from=link->to;output.to=link->from;
+            }
+            if(step.action==BuildingRouteAction::ClimbStairs){
+                // Off-mesh walking across authored stair treads rather than
+                // a teleport or a fictional vertical nav::Portal.
+                // The physical motor must still validate clearance along
+                // the returned waypoints and may reject the traversal.
+                const auto tag=step.edgeId.rfind("vertical/",0)==0?
+                    step.edgeId.substr(9):std::string{};
+                const auto slash=tag.find('/');
+                uint32_t feature=0;
+                if(slash==std::string::npos||slash==0||slash>9){
+                    result.steps.clear();
+                    result.error="Malformed stair feature ID";
+                    return result;
+                }
+                for(size_t i=0;i<slash;++i){
+                    const char c=tag[i];
+                    if(c<'0'||c>'9'){result.steps.clear();
+                        result.error="Malformed stair feature ID";return result;}
+                    feature=feature*10u+uint32_t(c-'0');
+                }
+                const auto fromRoomIt=std::find_if(graph.rooms.begin(),graph.rooms.end(),
+                    [&](const auto& room){return room.id==step.fromRoom;});
+                const auto toRoomIt=std::find_if(graph.rooms.begin(),graph.rooms.end(),
+                    [&](const auto& room){return room.id==step.toRoom;});
+                if(fromRoomIt==graph.rooms.end()||toRoomIt==graph.rooms.end()){
+                    result.steps.clear();result.error="Stair references missing room";return result;
+                }
+                const float minY=std::min(fromRoomIt->y0,toRoomIt->y0)-0.1f;
+                const float maxY=std::max(fromRoomIt->y0,toRoomIt->y0)+0.1f;
+                struct StepPoint{float x,y,z;};
+                std::vector<StepPoint> points;
+                for(const auto& solid:graph.solids){
+                    if(solid.featureIndex!=feature||
+                       (solid.part!=BuildingGraphPart::StairTread&&
+                        solid.part!=BuildingGraphPart::StairLanding)||
+                       solid.y1<minY||solid.y1>maxY)continue;
+                    points.push_back({(solid.x0+solid.x1)*0.5f,solid.y1,
+                                      (solid.z0+solid.z1)*0.5f});
+                }
+                if(points.empty()){
+                    result.steps.clear();
+                    result.error="Stair has no physical tread geometry";
+                    return result;
+                }
+                std::stable_sort(points.begin(),points.end(),
+                    [](const StepPoint& a,const StepPoint& b){
+                        if(a.y!=b.y)return a.y<b.y;
+                        if(a.z!=b.z)return a.z<b.z;
+                        return a.x<b.x;
+                    });
+                if(!upward)std::reverse(points.begin(),points.end());
+                output.corridor.push_back(*output.from);
+                for(const auto& pt:points)
+                    output.corridor.push_back(buildingLocalToWorld(
+                        pt.x,pt.y,pt.z,links.width,links.depth,
+                        links.origin,links.yaw));
+                output.corridor.push_back(*output.to);
             }
         }
         result.steps.push_back(std::move(output));
