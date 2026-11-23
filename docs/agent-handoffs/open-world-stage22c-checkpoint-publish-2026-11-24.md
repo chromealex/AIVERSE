@@ -1,0 +1,3 @@
+# W1.22c — checkpoint publication
+
+RegionCheckpointPublish.h implements POSIX exclusive generation creation, publication lock, monotonic manifest validation, checkpoint and empty WAL fsync, directory sync, temporary manifest and atomic rename, final directory sync. Old generations remain; orphan generations require cleanup or a fresh generation number. Ambiguous final sync requires recovery. Caller must stop old WAL writer, hold save barrier, supply verified digest and private stable directory. Windows unsupported; Apple full sync and digest verification outstanding. No native tests run. Next recovery loader, digest binding, Windows backend. PR #116 Draft; no main merge.
