@@ -210,3 +210,8 @@ and runs native/cross-style tests. These changes have been committed but
 Stage 13 C++/TS/native/GPU test results have NOT been verified at the time
 of documentation. Do not merge or claim playable vertical navmesh until
 the existing PHYSIS/Navmesh/gameplay owners are integrated and visual QA passes.
+
+
+Stage 14: runtime navigation/lift control and dynamic collision:
+see docs/building-runtime-circulation.md. Static building geometry excludes
+the moveable cabin in game runtime; Studio previews include it.

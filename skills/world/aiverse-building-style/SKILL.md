@@ -135,3 +135,14 @@ room-cell containment and real slab apertures in BuildingStructureGraph.
 Vertical links are graph metadata, NOT automatically published navmesh.
 Static lift rails and starting platform only; runtime motion later.
 Handoff: docs/agent-handoffs/building-vertical-circulation-2026-11-23.md.
+
+
+Stage 14 circulation: portable BuildingCirculationRuntime.h plans room
+routes and owns revisioned integer-mm lift state; native game adapters are
+engine/buildings/BuildingNavMeshBridge.h, BuildingCirculationHost.h,
+BuildingLiftColliderOwner.h and BuildingLiftPlatformModel.h. Existing
+nav::Mesh provides horizontal A*; vertical links are an off-mesh overlay
+with genuine nav polygon anchors, not fake portals. Existing SpatialWorld
+owns dynamic cabin colliders and dirty navmesh tile publication. Dynamic
+platforms are omitted from STATIC runtime meshes. Tests explicitly deferred
+by user; never claim Mac/Metal or gameplay path pass.

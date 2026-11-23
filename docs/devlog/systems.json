@@ -1840,6 +1840,13 @@
           "titleEn": "Building StructureGraph: staircases, elevator shafts and real floor openings",
           "text": "Лестничные марши, площадки, шахты без перекрытий и вертикальные связи комнат, полностью жанронезависимо. Требуется runtime/navmesh интеграция.",
           "textEn": "Bounded stair flights, lift shaft with floor voids, and vertical room links; runtime/navmesh integration remains."
+        },
+        {
+          "status": "in-progress",
+          "title": "Runtime BuildingCirculation: переходы NavMesh, управление лифтом и динамические коллизии",
+          "titleEn": "Runtime BuildingCirculation: NavMesh links, lift control and dynamic collision",
+          "text": "Комнатный маршрут, off-mesh точки, физические ступени, лифтовый контроллер с integer state, переносимое GPU представление и публикация платформы в существующий SpatialWorld.",
+          "textEn": "Room routes, off-mesh anchors, physical stair waypoints, integer-state lift control, reusable GPU visual and dynamic platform publishing to existing SpatialWorld."
         }
       ],
       "core": true,

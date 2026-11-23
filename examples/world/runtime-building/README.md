@@ -80,3 +80,16 @@ RuntimeBuildingResult.structureGraph.connections now includes
 BuildingConnectionKind::Stair/Elevator across adjacent floors, and solids
 have physically absent upper slab sections. A gameplay owner must publish
 navmesh links and implement actual elevator platform motion separately.
+
+
+## Circulation runtime, Stage 14
+
+Native game client may include engine/buildings/BuildingRuntime.h.
+After generateRecipe(), call BuildingCirculationHost::initialize().
+For each lift, create runtimeLiftPlatformModel() ONCE and publish its
+unique dynamic collider through BuildingLiftColliderOwner. Build/refresh
+nav::Mesh, then host.rebuildNavigation() and host.route().
+Lift sequence: callLift(pickup), boardLift, requestLiftDestination,
+advance(deltaMs), publish platform movement in SpatialWorld owner phase,
+refresh navmesh and update the render instance transform, disembarkLift.
+Graph links alone are not actor traversal. See docs/building-runtime-circulation.md.
