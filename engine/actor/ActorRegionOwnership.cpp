@@ -6,11 +6,13 @@
 #include <set>
 #include <map>
 #include <stdexcept>
+#include <tuple>
 
 namespace aiverse::actor {
 namespace {
 // Derived World resource: follows rollback snapshots, is absent from native
 // disk schemas, and is rebuilt by the compatibility pass after disk load.
+struct RegionIdentityIndex { std::map<uint64_t,world::RegionEntityId> byHandle; };
 struct RegionSeatIndex {
     std::map<uint64_t,Entity> carByMember;
     std::map<uint64_t,std::set<uint64_t>> membersByCar;
@@ -68,6 +70,7 @@ bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
 void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
     auto& ecs=sim.world();
     ecs.eraseResource<RegionSeatIndex>();
+    ecs.eraseResource<RegionIdentityIndex>();
     ecs.eraseResource<world::RegionOwnershipDiagnostics>();
     ecs.resetComponentChanges<CharacterBody>();
     ecs.resetComponentChanges<Vehicle>();
@@ -120,44 +123,23 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         rollback.entities.pop_back();
         return false;
     };
-    // Keep transfers in canonical order after group validation, even for
-    // explicitly notified loot.
-    // Process known structural changes before the compatibility scan.
-    // Position changes remain handled by the full scan until every
-    // authoritative canonical-position writer emits a dirty event.
-    if(dirty) {
-        for(const auto& [id,flags]:dirty->entries) {
-            ledger=target;
-            (void)flags;
-            const Entity entity=Entity::fromPacked(id-1);
-            const bool tracked=view.alive(entity) &&
-                (view.has<CharacterBody>(entity) || view.has<Vehicle>(entity) ||
-                 view.has<Loot>(entity));
-            const auto* record=ledger->find(id);
-            if(!tracked) {
-                if(record && record->live &&
-                   !stagedLedger.despawn(id,record->owner))
-                    throw std::logic_error("regionOwnership: dirty retire failed");
-                continue;
-            }
-            const auto location=position(view,entity);
-            if(!location)
-                throw std::logic_error("regionOwnership: dirty actor lacks position");
-            if(!record) {
-                if(!bind(entity,id,grid.cell(*location)))
-                    throw std::logic_error("regionOwnership: dirty spawn failed");
-            }else if(!record->live) {
-                throw std::logic_error("regionOwnership: tombstoned dirty ID");
-            }
-
-        }
-    }
-    ledger=target;
-
+    // Dirty notifications carry runtime handles, never durable IDs. The
+    // previous derived index maps destruction notifications after tags vanish.
+    const auto* previousIdentity=view.resourceConst<RegionIdentityIndex>();
+    RegionIdentityIndex nextIdentity=previousIdentity?*previousIdentity:RegionIdentityIndex{};
+    auto retireHandle=[&](uint64_t packed){
+        auto it=nextIdentity.byHandle.find(packed);
+        if(it==nextIdentity.byHandle.end())return;
+        const auto id=it->second;
+        const auto* record=ledger->find(id);
+        if(record&&record->live&&!stagedLedger.despawn(id,record->owner))
+            throw std::logic_error("regionOwnership: candidate retire failed");
+        nextIdentity.byHandle.erase(it);
+    };
     // Explicit opt-in contract: all canonical writes must use tracked World APIs
     // or report dirty events. Never enable for vehicle graphs yet.
     const bool soloCharacters=streamManifest_.getBool("regionDirtyOnlySolo");
-    const bool lootOnly=journalReady && !journalOverflow && dirty &&
+    const bool lootOnly=journalReady && !journalOverflow && dirty && previousIdentity &&
         (streamManifest_.getBool("regionDirtyOnlyLoot") || soloCharacters) &&
         !streamManifest_.getBool("strictRegionJournalAudit") &&
         (soloCharacters || (view.countExisting<CharacterBody>()==0 && bodyChanges.entities.empty())) &&
@@ -173,10 +155,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         for(auto packed:candidates) {
             const auto e=Entity::fromPacked(packed);
             if(view.alive(e) && (view.has<Loot>(e) || (soloCharacters && view.has<CharacterBody>(e))))tracked.push_back(e);
-            else if(const auto* record=ledger->find(packed+1);record && record->live) {
-                if(!stagedLedger.despawn(packed+1,record->owner))
-                    throw std::logic_error("regionOwnership: candidate retire failed");
-            }
+            else retireHandle(packed);
         }
     } else {
     view.eachExistingConst<CharacterBody>([&](Entity e,const CharacterBody&) {
@@ -189,32 +168,44 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         if(view.alive(e))tracked.push_back(e);
     });
     }
-    std::sort(tracked.begin(),tracked.end(),[](Entity a,Entity b) {
-        return a.packed()<b.packed();
+    // Allocate new identities in semantic order (slot / object ID), not
+    // sparse pool or runtime handle order. Existing identities keep their IDs.
+    auto key=[&](Entity e)->std::pair<unsigned,uint64_t>{
+        if(const auto* tag=view.tryGetConst<world::RegionStableIdentity>(e))return {0,tag->id};
+        if(const auto* id=view.tryGetConst<CharacterId>(e))return {1,id->slot};
+        if(const auto* car=view.tryGetConst<Vehicle>(e))return {2,car->id};
+        if(const auto* loot=view.tryGetConst<Loot>(e))return {3,loot->id};
+        return {4,0};
+    };
+    std::sort(tracked.begin(),tracked.end(),[&](Entity a,Entity b){
+        return std::tuple{key(a),a.packed()}<std::tuple{key(b),b.packed()};
     });
     tracked.erase(std::unique(tracked.begin(),tracked.end()),tracked.end());
+    for(size_t i=0;i<tracked.size();++i){
+        auto k=key(tracked[i]);
+        if(!k.second||k.first==4||(i&&key(tracked[i-1])==k))
+            throw std::logic_error("regionOwnership: missing or duplicate identity key");
+    }
 
     std::set<world::RegionEntityId> present;
+    if(!lootOnly)nextIdentity.byHandle.clear();
     for(Entity entity:tracked) {
-        ledger=target;
-        if(entity.packed()==UINT64_MAX)
-            throw std::logic_error("regionOwnership: stable ID exhausted");
-        const auto stable=entity.packed()+1;
         const auto pos=position(view,entity);
         if(!pos)throw std::logic_error("regionOwnership: missing actor position");
         const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
+        const auto stable=tag?tag->id:ledger->nextIdentity();
         if(!tag) {
             if(!notified(entity))++uncoveredLifecycle;
-            if(!bind(entity,stable,grid.cell(*pos)))
-                throw std::logic_error("regionOwnership: cannot bind new actor");
-        }else if(tag->id!=stable) {
-            throw std::logic_error("regionOwnership: changed stable actor ID");
+            if(!stable||!bind(entity,stable,grid.cell(*pos)))
+                throw std::logic_error("regionOwnership: cannot allocate actor identity");
         }else{
             const auto* entry=ledger->find(stable);
             if(!entry || !entry->live)
                 throw std::logic_error("regionOwnership: invalid live actor ID");
         }
-        present.insert(stable);
+        if(!present.insert(stable).second)
+            throw std::logic_error("regionOwnership: duplicate stable actor ID");
+        nextIdentity.byHandle[entity.packed()]=stable;
     }
 
     // Reject orphaned car backlinks before migrating anyone. World-space
@@ -376,8 +367,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     }
 
 
-    // Destroyed entities retain tombstones: recycled ECS indices have
-    // distinct generation bits, so stable IDs cannot be reused.
+    // Destroyed entities retain tombstones; allocator never reuses them.
     // Iterate ONLY live IDs; historical tombstones may outnumber the hot
     // population by orders of magnitude in a long-running city.
     ledger=target;
@@ -386,7 +376,10 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     for(const auto id:live) {
         ledger=target;
         if(present.contains(id))continue;
-        if(!notified(Entity::fromPacked(id-1)))++uncoveredLifecycle;
+        bool reported=false;
+        if(previousIdentity)for(const auto& [packed,stable]:previousIdentity->byHandle)
+            if(stable==id){reported=notified(Entity::fromPacked(packed));break;}
+        if(!reported)++uncoveredLifecycle;
         const auto* entry=ledger->find(id);
         if(!entry || !entry->live ||
            !stagedLedger.despawn(id,entry->owner))
@@ -417,6 +410,8 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         stagedLedger.commit();
         rollback.committed=true;
     }
+    if(!previousIdentity||previousIdentity->byHandle!=nextIdentity.byHandle)
+        ecs.setResource<RegionIdentityIndex>(std::move(nextIdentity));
     // Avoid replacing the derived resource on ticks with unchanged membership.
     if(!previousSeats || previousSeats->carByMember!=carByMember) {
         RegionSeatIndex next=previousSeats?*previousSeats:RegionSeatIndex{};
