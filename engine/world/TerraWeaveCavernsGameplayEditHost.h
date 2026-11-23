@@ -138,8 +138,16 @@ public:
             if(!geometry_.stagePreparedEdits(device,candidates,
                                              snapshot_->generatorVersion,
                                              visualRevision,stagedShards_,
-                                             geometryOptions))
+                                             geometryOptions)) {
+                // GPU plan may discover mixed-LOD incompatibilities beyond
+                // the Stage16 loaded-neighbor gate, including OTHER shards.
+                // Promote those same-SDF boundary sources into the game's
+                // async dirty queue instead of retrying an impossible stage.
+                const auto& repairs=geometry_.lodRebuilds();
+                if(!repairs.empty())
+                    (void)worker_.requestLodRepairs(repairs);
                 throw std::runtime_error("Caverns GPU shard stage refused");
+            }
         } catch(...) {
             cancelPending();
             throw;
