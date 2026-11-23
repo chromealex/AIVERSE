@@ -7,6 +7,7 @@
 #include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -28,7 +29,19 @@ public:
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
         if(action=="status")return status();
+        const auto now=std::chrono::steady_clock::now();
+        if(importTransferId_&&!fileImportPending_&&now-importTouched_>std::chrono::seconds(30)){importTransferId_=0;fileImport_.clear();}
+        if(exportTransferId_&&now-exportTouched_>std::chrono::seconds(30)){exportTransferId_=0;fileExport_.clear();}
+        const auto transferId=input["transferId"].integer(-1);
+        if(action=="checkpointFileCancel"){
+            if(transferId>0&&uint64_t(transferId)==importTransferId_){fileImport_.clear();fileImportPending_=false;importTransferId_=0;}
+            else if(transferId>0&&uint64_t(transferId)==exportTransferId_){fileExport_.clear();exportTransferId_=0;}
+            else return errorStatus("Unknown transfer ID");
+            error_.clear();return status();
+        }
         if(action=="checkpointFileRead"){
+            if(transferId<=0||uint64_t(transferId)!=exportTransferId_)return errorStatus("Stale export transfer ID");
+            exportTouched_=now;
             const auto offset=input["offset"].integer(-1);
             if(offset<0||uint64_t(offset)>fileExport_.size())return errorStatus("Invalid checkpoint offset");
             static constexpr char hex[]="0123456789abcdef";
@@ -39,10 +52,13 @@ public:
         }
         if(action=="checkpointFileBegin"){
             if(checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint busy");
-            fileImport_.clear();return status();
+            if(importTransferId_)return errorStatus("Import transfer already active");
+            fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;error_.clear();
+            Json out=status();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
         }
         if(action=="checkpointFileAppend"){
-            if(fileImportPending_)return errorStatus("Import pending");
+            if(fileImportPending_||transferId<=0||uint64_t(transferId)!=importTransferId_)return errorStatus("Stale or pending import transfer");
+            importTouched_=now;
             const auto chunk=input.getStr("chunk");
             if(chunk.empty()||chunk.size()>65536||chunk.size()%2||fileImport_.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return errorStatus("Invalid checkpoint chunk size");
             if(input["offset"].integer(-1)!=int64_t(fileImport_.size()))return errorStatus("Checkpoint chunk offset mismatch");
@@ -52,10 +68,13 @@ public:
             fileImport_.insert(fileImport_.end(),decoded.begin(),decoded.end());return status();
         }
         if(action=="checkpointFileExport"){
+            if(exportTransferId_)return errorStatus("Export transfer already active");
             if(!exportTimelineCheckpoint(fileExport_))return errorStatus("Save a fresh paused checkpoint first");
-            Json out=status();out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+            exportTransferId_=nextTransferId_++;exportTouched_=now;error_.clear();
+            Json out=status();out.set("transferId",Json::number(int64_t(exportTransferId_)));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
         }
         if(action=="checkpointFileImport"){
+            if(transferId<=0||uint64_t(transferId)!=importTransferId_)return errorStatus("Stale import transfer ID");
             if(fileImport_.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return errorStatus("Import requires paused preview and uploaded bytes");
             fileImportPending_=true;error_.clear();return status();
         }
@@ -102,7 +121,7 @@ public:
             // preview. GPU resources are retired while NO pass is open.
             device.waitForResourceIdle();
             runtime_.shutdown();
-            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;fileImport_.clear();fileExport_.clear();
+            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;fileImport_.clear();fileExport_.clear();importTransferId_=exportTransferId_=0;
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
@@ -303,7 +322,7 @@ public:
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
-        if(fileImportPending_){fileImportPending_=false;auto bytes=std::move(fileImport_);fileImport_.clear();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
+        if(fileImportPending_){fileImportPending_=false;importTransferId_=0;auto bytes=std::move(fileImport_);fileImport_.clear();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
         if(rollbackId_){
             const auto id=std::exchange(rollbackId_,uint64_t(0));
             if(!runtime_.restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
@@ -523,6 +542,8 @@ private:
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
     std::vector<uint8_t> fileImport_,fileExport_;
+    uint64_t nextTransferId_=1,importTransferId_=0,exportTransferId_=0;
+    std::chrono::steady_clock::time_point importTouched_{},exportTouched_{};
     bool fileImportPending_=false;
     bool checkpointRequest_=false;
     uint32_t checkpointWaitFrames_=0;
