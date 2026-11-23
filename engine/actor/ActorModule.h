@@ -8,6 +8,7 @@
 #include "ActorComponents.h"
 #include "engine/world/CollisionStream.h"
 #include "engine/world/VehicleRegionTransfer.h"
+#include "engine/world/RegionMoveRequests.h"
 #include "engine/mechanics/Melee.h"
 #include "engine/mechanics/royale/BattleRoyale.h"
 #include "engine/systems/Gear.h"
@@ -169,11 +170,16 @@ public:
     // Run at a structural ECS tick boundary after actor and vehicle systems.
     // Opt-in only; tracks live spawn/retire/movement in the region ledger.
     void synchronizeRegionOwnership(Simulation& sim);
+    // Authoritative host-only staged movement. The destination is requested
+    // BEFORE a simulation tick; collision/nav admission runs in readyToStep.
+    bool requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
+                           std::string* error=nullptr);
 
     RoyaleView royaleView(Simulation&,uint8_t slot) const;
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
     bool racing() const { return race_!=nullptr; }   // this map has a race (map "race": vehicles::RaceState resource)
 private:
+    void applyRegionMoves(Simulation&);
     void tick(Simulation&);
     void shoot(Simulation&,CharacterRef);
     void spawnProjectile(Simulation&,Projectile);   // caller checks kMaxProjectiles
