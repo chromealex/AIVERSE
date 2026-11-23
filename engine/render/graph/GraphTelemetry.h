@@ -28,14 +28,14 @@ public:
         for(const auto* s:{&id.world,&id.entity,&id.program,&id.domain})
             if(s->empty()||s->size()>128)return false;
         if(!sequence||!frame.isObject()||frame.dump(-1).size()>maxFrameBytes)return false;
+        Json copy=frame;copy.set("sequence",Json::string(std::to_string(sequence)));
+        if(copy.dump(-1).size()>maxFrameBytes)return false;
         auto it=tracks_.find(id);
         if(it==tracks_.end()){
             if(tracks_.size()>=maxTracks)return false;
             it=tracks_.emplace(id,Track{}).first;
         }
         auto& t=it->second;if(sequence<=t.last)return false;
-        Json copy=frame;copy.set("sequence",Json::string(std::to_string(sequence)));
-        if(copy.dump(-1).size()>maxFrameBytes)return false;
         t.frames.push_back(std::move(copy));t.last=sequence;
         if(t.frames.size()>maxFrames)t.frames.pop_front();
         return true;
