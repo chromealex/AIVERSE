@@ -184,6 +184,13 @@ public:
                 ui::hint("Предпросмотр GPU рисует GeometryScene без STRATA. "
                          "Box3D, SpatialWorld и NavMesh НЕ изменяются; "
                          "в игре правки пока не опубликованы.");
+                ui::hint(("GPU preview: активных групп "+std::to_string(jobs.gpuActive)+
+                          ", подготовлено "+std::to_string(jobs.gpuStaged)+
+                          ", осталось загрузить "+std::to_string(jobs.gpuRemaining)+
+                          ", ожидают GPU idle "+std::to_string(jobs.gpuRetired)).c_str());
+                ui::hint(("GPU revision "+std::to_string(jobs.gpuPreviewRevision)+
+                          ", failures "+std::to_string(jobs.gpuUploadFailures)+
+                          ", retry frame "+std::to_string(jobs.gpuRetryAfterFrame)).c_str());
                 if(!jobs.diagnostic.empty())
                     ui::hint(("Caverns: "+jobs.diagnostic).c_str());
                 if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
