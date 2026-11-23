@@ -1819,3 +1819,7 @@ Native GraphRuntimeOptions and ComputeEmitterDesc expose gpuBirthRandom (default
 ## Stage 56 — Particle VM birthRandom
 
 Read-only expression `{ "var": "birthRandom" }` is supported by the CPU VM and by the Metal VM with gpuBirthRandom enabled. Field ID 32, MSL stream 1, stable for the lifetime of each particle. CPU uses UID hash; GPU uses seed/ordinal hash, so no parity guarantee. Existing field IDs 0..31 remain unchanged. No tests run.
+
+## Stage 57 — GPU shader replay seed
+
+Native preview load accepts gpuBirthRandom:true to opt into Metal random graph routing. replayPrepare and MCP fx_replay_prepare accept gpuShaderSeed uint32, mutually exclusive with seed/gpuAllocationSeed. Reset runs in render-owner frame using existing retry/readiness gate. HTML5 replay preset supports import/export and shader seed field. UI graph load opt-in toggle is still pending; a seed alone cannot make an ineligible graph GPU eligible. No tests run.
