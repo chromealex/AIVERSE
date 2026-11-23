@@ -1004,3 +1004,48 @@ no new graphics backend was created. Source-level support is not
 proof of Metal/Vulkan/GLES GPU results. As requested, no CMake, CTest,
 glTF validator or Studio web/native tests were run.
 See `docs/agent-handoffs/building-uv-import-revisions-stage23m-2026-11-23.md`.
+
+
+## Stage 23N — UV editing and source texture revision inspection
+
+The existing `apps/studio-web/src/panels/generated/BuildingMaterialEditor.tsx`
+now presents UV Scale and UV Offset (two comma-separated finite values),
+alongside the shared numeric PBR and texture selectors. The authoritative
+`apps/studio-native/StudioSession.cpp` bridge parses these strings with
+`parseStudioUvPair` in `StudioMaterialValidation.h` and emits the
+actual two-component JSON arrays accepted by the existing
+`material_set` operation. `materialSchema.ts` includes these keys,
+which survive native save/reload. The editable browser model resolves
+the native material library's `content/` texture paths to the same
+GUIDs used by the shared AssetReferencePicker before editing. Native
+`StudioBuildingGeneration.h` also recognizes these canonical project
+paths when binding material textures to building styles and resolves
+them through `StudioAssetCatalog::byPath`. Do not assume the project
+library stores GUID strings on disk: the native `studio.materialPatch`
+trust boundary converts GUID picker input into content paths.
+
+`apps/studio-native/StudioBuildingDependencies.h` checks the previously
+generated `.glb.recipe.json` textureDependencies manifest against
+current AssetCatalog GUID lookup, source image byte fingerprint and
+importer settings. `studioBuildingStaleMaterials(project)` lists
+outdated dependencies under `project/content/GeneratedBuildings`
+without overwriting generated GLBs, changing GUID identity or
+reuploading GPU resources. The existing `StudioSession.cpp` native
+bridge exposes it as `studio.buildingStaleMaterials`, and
+`BuildingGeneratorPanel.tsx` provides a manual check button and
+list of outdated recipe/source reasons. On saving a shared material,
+the BuildingGeneratorPanel refreshes its library choices.
+
+A changed image can require regenerating the GLB and replacing/reloading
+the Model through the EXISTING Renderer3D model lifetime and GPU
+retirement owners. **The checker does not do this automatically.**
+It is a safe source-level inspection API, not a filesystem watcher,
+shader hot reload or GPU uploader. The GLB image writer still accepts
+PNG/JPEG only; do not silently inject DDS/KTX2/EXR/TGA/WebP bytes with
+a fake MIME type. A converter needs existing importer decoding plus a
+genuine PNG/JPEG encoder or an explicit supported glTF extension.
+
+No C++/TypeScript compilation, CTest, native Studio invocation, actual
+import/decode, glTF parser, Metal/Vulkan/GLES graphics acceptance or
+runtime hot-reload QA was executed, per user deferral. See handoff
+`docs/agent-handoffs/building-material-reimport-stage23n-2026-11-23.md`.
