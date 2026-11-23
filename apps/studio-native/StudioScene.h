@@ -48,6 +48,28 @@ public:
                const StudioFacialPreviewBinding* facialBinding=nullptr);
     // Called only through StudioHost::onScene, between render-thread frames.
     // A real SpectraFX graph runs on the native Device in the Scene pass.
+    // The same native Scene CAMetalLayer can be hosted inside the HTML5
+    // SpectraFX Graph pane. Preserve the authored-map camera while the FX
+    // workspace uses its own isolated camera and never renders map entities.
+    void setSpectraDockMode(bool enabled) {
+        if (spectraDockMode_==enabled)return;
+        if (enabled) {
+            sceneCameraBeforeSpectra_=camera_;
+            sceneCameraInitializedBeforeSpectra_=cameraInitialized_;
+            camera_.target={0,1.0f,0};
+            camera_.distance=6.5f;
+            camera_.yaw=0.45f;camera_.pitch=0.23f;camera_.ortho=false;
+            cameraInitialized_=true;
+        } else {
+            camera_=sceneCameraBeforeSpectra_;
+            cameraInitialized_=sceneCameraInitializedBeforeSpectra_;
+        }
+        spectraDockMode_=enabled;
+        tween_.active=false;
+        lastFrameSignature_=0;
+        settleFrames_=30;
+    }
+    bool spectraDockMode() const {return spectraDockMode_;}
     Json spectraPreviewCommand(const Json& input,const std::string& project) {
         if(project!=spectraProject_ && spectraPreview_.active())
             spectraPreview_.stop(*device_);
@@ -194,6 +216,13 @@ private:
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
     StudioSpectraPreview spectraPreview_{};
+    // Not a second gfx device: the same Scene renderer is placed in the
+    // SpectraFX panel and switches between authored map and isolated FX.
+    bool spectraDockMode_=false;
+    bool sceneCameraInitializedBeforeSpectra_=false;
+    render::Camera sceneCameraBeforeSpectra_{};
+    void frameSpectraDock(int framebufferWidth,int framebufferHeight);
+
     std::string spectraProject_;
     std::string facialFramedGuid_; // character the camera was last framed on
     std::string thumbnailPath_;   // pending preset thumbnail capture
