@@ -1,0 +1,129 @@
+#pragma once
+// Optional native world-owner adapter. Wires the already-existing
+// SpatialWorld, nav::Mesh and BuildingCirculationHost without creating a
+// second entity store or a new navigation system. The authoritative game
+// calls update() during its world-owner phase. Rendering reads the returned
+// motion commands and moves a dedicated platform instance (no CPU remesh).
+#include "engine/buildings/BuildingCirculationHost.h"
+#include "engine/buildings/BuildingLiftColliderOwner.h"
+#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <map>
+#include <string>
+#include <vector>
+
+namespace aiverse::building {
+
+struct BuildingSceneUpdate {
+    BuildingCirculationTick tick;
+    bool published=true;
+    bool navDirty=false;
+    std::string error;
+};
+class BuildingCirculationScene {
+public:
+    BuildingCirculationHost& host()noexcept{return host_;}
+    const BuildingCirculationHost& host()const noexcept{return host_;}
+    const BuildingLiftColliderOwner& colliders()const noexcept{return colliders_;}
+
+    // All collider IDs come from the calling game's normal ECS/physics owner.
+    // Invalid/duplicate IDs are rejected by SpatialWorld::add. Do not
+    // silently borrow colliders from another building or owner.
+    bool attach(const RuntimeBuildingResult& generated,
+                world::SpatialWorld& spatial,nav::Mesh* navmesh,
+                const std::map<uint32_t,uint32_t>& colliderIds,
+                Vec3 origin,uint32_t yaw,std::string* error=nullptr){
+        if(attached_){if(error)*error="Scene already attached";return false;}
+        BuildingCirculationHost staged;
+        std::string problem;
+        if(!staged.initialize(generated,origin,yaw,&problem)){
+            if(error)*error=problem;return false;
+        }
+        const auto& lifts=staged.lifts();
+        if(colliderIds.size()!=lifts.size()){
+            if(error)*error="One unique collider id is required per elevator";
+            return false;
+        }
+        // Verify ids and complete registration before exposing the scene.
+        std::vector<uint32_t> registered;
+        const float W=generated.building.constructionSize.width;
+        const float D=generated.building.constructionSize.depth;
+        for(const auto& [feature,lift]:lifts){
+            const auto it=colliderIds.find(feature);
+            if(it==colliderIds.end()||it->second==0||
+               !colliders_.registerPlatform(spatial,navmesh,feature,it->second,
+                   lift.platformPose(),W,D,origin,yaw)){
+                for(const auto rollback:registered)
+                    (void)colliders_.remove(spatial,navmesh,rollback);
+                if(error)*error="Could not register dynamic elevator collider";
+                return false;
+            }
+            registered.push_back(feature);
+        }
+        host_=std::move(staged);
+        attached_=true;faulted_=false;
+        if(error)error->clear();
+        return true;
+    }
+
+    // Authoritative world update: after advancing one bounded tick, publish
+    // all dynamic platform collision positions. If any update fails, freeze
+    // lift commands (fail closed) rather than claiming a valid navmesh route.
+    // The caller must reconcile the source collider and reattach the scene.
+    BuildingSceneUpdate update(world::SpatialWorld& spatial,
+                               nav::Mesh* navmesh,uint32_t elapsedMs){
+        BuildingSceneUpdate result;
+        if(!attached_||faulted_||elapsedMs==0||elapsedMs>1000){
+            result.published=false;
+            result.error=(!attached_?"Circulation scene is not attached":
+                faulted_?"Circulation scene needs collision reconciliation":
+                "Tick delta must be 1..1000ms");
+            return result;
+        }
+        result.tick=host_.advance(elapsedMs);
+        for(const auto& motion:result.tick.platformMovements){
+            if(!colliders_.applyMovement(spatial,navmesh,motion)){
+                result.published=false;
+                result.error="Dynamic platform collider update rejected; navigation is invalid";
+                faulted_=true;
+                host_.takeLiftOffline(motion.featureIndex,true);
+                if(navmesh)navmesh->markAllDirty();
+                break;
+            }
+            result.navDirty=navmesh&&navmesh->dirty();
+        }
+        return result;
+    }
+
+    // Call after the caller has refreshed navmesh from its own authoritative
+    // collision-backed nav::Source. No implicit rebuilding on the render
+    // thread. A stale nav revision will otherwise reject route queries.
+    bool rebuildNavigation(const nav::Mesh& mesh,std::string* error=nullptr){
+        if(!attached_||faulted_||mesh.dirty()){
+            if(error)*error="Circulation scene unavailable or navmesh dirty";
+            return false;
+        }
+        return host_.rebuildNavigation(mesh,error);
+    }
+
+    // Removes exactly the registered dynamic collider IDs. Static generated
+    // building collision, assets and ECS entities remain owned by the game.
+    void detach(world::SpatialWorld& spatial,nav::Mesh* navmesh){
+        if(!attached_)return;
+        std::vector<uint32_t> ids;
+        for(const auto& [feature,lift]:host_.lifts()){
+            (void)lift;ids.push_back(feature);
+        }
+        for(const auto feature:ids)
+            (void)colliders_.remove(spatial,navmesh,feature);
+        host_.clear();
+        attached_=false;faulted_=false;
+    }
+    bool attached()const noexcept{return attached_;}
+    bool faulted()const noexcept{return faulted_;}
+
+private:
+    BuildingCirculationHost host_;
+    BuildingLiftColliderOwner colliders_;
+    bool attached_=false,faulted_=false;
+};
+} // namespace aiverse::building
