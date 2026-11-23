@@ -2,7 +2,6 @@
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
-#include "apps/studio-native/StudioBuildingPreview.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
 #include "apps/editor/core/BuildTool.h"
