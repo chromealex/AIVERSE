@@ -839,3 +839,47 @@ full PHYSIS sweep checks, cross-backend texture/UV verification,
 and C++/CTest/GPU QA before declaring these systems production-ready.
 Tests remain DEFERRED per user. Handoff:
 `docs/agent-handoffs/building-dual-leaf-pbr-stage23j-2026-11-23.md`.
+
+
+## Stage 23J.1 — materials and textures are ONE authored PBR resource
+
+User explicitly requested to manage materials and textures together,
+not in two disconnected workflows. Use the same
+`StyleMaterial` in `BuildingStyle.materials` for scalar PBR factors,
+emissive colour and the optional `textures` GUID group:
+`baseColor`, `metallicRoughness`, `normal`, `occlusion`,
+`emissive`. Each texture GUID is the 32-character lowercase ID from
+the existing `content/*.meta` asset catalog; older style JSONs with
+only numeric material parameters remain valid.
+
+Prefer `engine/buildings/BuildingMaterialAssets.h` and
+`bindBuildingStyleMaterials(render::Model&, vector<StyleMaterial>,
+resolveImageByGuid)` for a single all-material assignment; it builds
+complete Renderer3D PBR material factors AND their texture references
+and deduplicates reused image assets across multiple materials in one
+atomic operation. The runtime building-wide convenience is
+`runtimeTexturedBuildingModel(styledStructure,resolve,name,&error)`,
+for the complete generated building including shell/roof/interiors.
+For doors, gates and roof leaves use
+`BuildingApertureGameBridge::bindStyleMaterial(socket,style,
+materialIndex,resolve)` or
+`BuildingAperturePresentation::bindStyleMaterial(socket,
+style.materials[index],resolve)`. This guarantees an authored material
+and its texture channels are applied in the SAME operation, instead
+of separately calling PBR material and texture setters.
+
+`resolveImageByGuid` must use the real game or Studio asset importer
+and return an existing `render::Image`, respecting meta importer
+settings (sRGB on base colour, linear for data maps; platform
+compression/mipmaps) and normal asset/GPU lease ownership.
+`apps/studio-native/StudioBuildingTextureResolver.h` adapts
+`StudioAssetCatalog::byGuid` to an existing safe texture loader.
+These helpers never decode files, create a second GUID database,
+or upload textures on the simulation thread. Bind before GPU upload;
+if modifying an already uploaded Model, use the renderer's existing
+material reupload/lifetime protocol.
+
+Stage 23J.1 is committed source only, NOT tested. In particular the
+game-side importer callback and actual Studio UI inspector/material
+asset picker remain integration work. See
+`docs/agent-handoffs/building-unified-materials-stage23j1-2026-11-23.md`.
