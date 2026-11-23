@@ -214,6 +214,7 @@ bool ActorHost::typedRegionMoveGroup(const Simulation& sim,Entity car,
     // The typed vehicle's seat map is the authoritative passenger list.
     // Reject incomplete links and seats without definitions before any move.
     std::set<int64_t> assigned;
+    std::set<uint64_t> expectedHandles{car.packed()};
     for(const auto& [seat,slot]:drive->seats.occupants) {
         auto found=std::find_if(definition->seats.seats.begin(),
                                 definition->seats.seats.end(),
@@ -222,10 +223,19 @@ bool ActorHost::typedRegionMoveGroup(const Simulation& sim,Entity car,
            slot>int64_t(characterCount(sim)) || !assigned.insert(slot).second)
             return refuse("missing or duplicated typed car seat definition");
         const Entity passenger=characterEntity(sim,uint8_t(slot));
+        expectedHandles.insert(passenger.packed());
         const auto* body=ecs.tryGetConst<CharacterBody>(passenger);
         if(!body || body->vehicle!=state->id)
             return refuse("seat passenger is not bound to this car");
     }
+    if(drive->driver.valid() &&
+       !expectedHandles.contains(drive->driver.packed()))
+        return refuse("typed driver is not represented by a real seat");
+    for(Entity member:group.members)
+        if(!expectedHandles.contains(member.packed()))
+            return refuse("extra reverse-linked occupant is absent from seat map");
+    if(group.members.size()!=expectedHandles.size())
+        return refuse("typed car seat group has missing or duplicate ECS links");
     // The legacy ActorHost character backlink must never introduce a hidden
     // occupant omitted from the shared seat inventory.
     bool hidden=false;
