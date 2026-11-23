@@ -24,7 +24,8 @@
     "apps/studio-web/src/panels/ToolPanel.tsx",
     "apps/studio-web/tests/nativeGraphAdapters.test.mjs",
     "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
-    "apps/studio-native/StudioTools.h"
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/graphs/AnimationConditions.tsx"
   ],
   "traits": {
     "editable": true,
