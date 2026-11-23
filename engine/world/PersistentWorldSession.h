@@ -29,8 +29,10 @@ public:
             RegionEntityLedger staged;
             auto loaded=RegionCheckpointArchive::load(dir_,world,maxBytes,staged,repair);
             if(loaded.status!=RegionCheckpointLoadStatus::Ok){close();return PersistentWorldResult::NeedsRecovery;}
+            std::vector<uint8_t> identity;
+            if(!RegionCheckpointManifestCodec::encode(loaded.manifest,identity)){close();return PersistentWorldResult::Invalid;}
             auto opened=wal_.openFinalized(dir_/loaded.manifest.walName(),
-                loaded.manifest.identity.sequence,loaded.wal.lastSequence,staged,repair);
+                loaded.manifest.identity.sequence,loaded.wal.lastSequence,staged,repair,identity);
             if(opened!=RegionWalWrite::Ok){close();return PersistentWorldResult::NeedsRecovery;}
             ledger_=std::move(staged);manifest_=loaded.manifest;ready_=true;
             return PersistentWorldResult::Ok;
@@ -90,8 +92,10 @@ private:
         next.checkpointBytes=bytes.size();
         auto r=RegionCheckpointPublisher::publish(dir_,next,bytes);
         if(r!=RegionCheckpointPublishResult::Ok)return PersistentWorldResult::NeedsRecovery;
+        std::vector<uint8_t> identity;
+        if(!RegionCheckpointManifestCodec::encode(next,identity))return PersistentWorldResult::Invalid;
         if(wal_.openFinalized(dir_/next.walName(),next.identity.sequence,
-            next.identity.sequence,ledger_)!=RegionWalWrite::Ok)return PersistentWorldResult::NeedsRecovery;
+            next.identity.sequence,ledger_,false,identity)!=RegionWalWrite::Ok)return PersistentWorldResult::NeedsRecovery;
         manifest_=next;ready_=true;return PersistentWorldResult::Ok;
     }
 };
