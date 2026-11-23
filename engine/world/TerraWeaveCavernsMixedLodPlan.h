@@ -66,18 +66,20 @@ inline CaveMixedLodPlan planCaveMixedLodVisual(
             face.axis=axis;
             face.targetSpacingCm=std::min(first.spacingCm,second.spacingCm);
             face.targetResolution=uint32_t(span/face.targetSpacingCm);
-            if(first.sourceRevision!=second.sourceRevision){
-                // Mixed authored densities could have divergent contours even
-                // with identical LOD. Do not bridge unrelated SDF snapshots.
+            auto outcome=resolveCaveFaceLod({
+                &first.mesh,first.resolution,first.spacingCm,
+                &second.mesh,second.resolution,second.spacingCm});
+            face.decision=outcome.decision;
+            if(first.sourceRevision!=second.sourceRevision &&
+               outcome.decision!=CaveFaceDecision::ExactMatch){
+                // Crossing two authored SDF epochs is safe only when both
+                // actual boundary contours already match exactly. Otherwise
+                // rebuild from ONE snapshot; never stitch different fields.
                 plan.sourceConflict=true;
                 face.decision=CaveFaceDecision::RegenerateAtCommonLod;
                 plan.faces.push_back(face);
                 continue;
             }
-            auto outcome=resolveCaveFaceLod({
-                &first.mesh,first.resolution,first.spacingCm,
-                &second.mesh,second.resolution,second.spacingCm});
-            face.decision=outcome.decision;
             if(outcome.decision==CaveFaceDecision::Subdivided){
                 if(first.spacingCm>second.spacingCm)
                     first.mesh=std::move(outcome.firstMesh);
