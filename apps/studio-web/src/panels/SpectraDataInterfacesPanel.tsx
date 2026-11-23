@@ -10,7 +10,7 @@ import {
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
-import { createBurstStarter, nextUnusedGraphName } from './spectraStarterModel';
+import { createBlankGraph, createBurstStarter, nextUnusedGraphName } from './spectraStarterModel';
 import './SpectraDataInterfacesPanel.css';
 
 type AssetEntry = { name: string; draft: boolean; valid: boolean };
@@ -142,8 +142,8 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved,showScen
       const r=await nativeOp('fx_graph_edit',{action:'new'});
       const base=graphV2(r.graph);
       if(!base||r.ok===false)throw new Error('Native editor did not return a Graph v2.');
-      const next=starter?createBurstStarter(base):base;
-      if(!next)throw new Error('Native new Graph v2 unexpectedly contains nodes. Nothing was changed.');
+      const next=starter?createBurstStarter(base):createBlankGraph(base);
+      if(!next)throw new Error('Native new Graph v2 did not contain a playable starter chain. Nothing was changed.');
       let verified:NativeResponse|null=asRecord(r.validation);
       if(starter){
         verified=await nativeOp('fx_graph_validate',{graph:next});
