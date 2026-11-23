@@ -1915,6 +1915,56 @@ Json StudioSession::dispatchImpl(const Json& request) {
             r.set("files",std::move(entries));
             r.set("folders",std::move(folders));
             reply.set("result", std::move(r));
+        } else if (method == "studio.spectraAssetCheck") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            const std::string guid=params.getStr("guid");
+            if(!studioValidGuid(guid))throw std::runtime_error("Invalid asset GUID");
+            StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild();
+            const auto entry=catalog.byGuid(guid);
+            if(!entry||entry->directory)throw std::runtime_error("Asset missing from project index");
+            if(entry->importer!="model"&&entry->importer!="texture")
+                throw std::runtime_error("Expected model or texture asset");
+            const auto root=std::filesystem::path(ws_.project.dir)/"content";
+            uint64_t remaining=64ull*1024*1024;
+            render::FileReader reader=[&](const std::string& name,std::string& bytes){
+                const auto rel=std::filesystem::path(name).lexically_normal();
+                if(rel.empty()||rel.is_absolute())return false;
+                for(const auto& part:rel)if(part=="..")return false;
+                const auto indexed=catalog.byPath(rel.generic_string());
+                if(!indexed||indexed->directory||indexed->bytes<0||uint64_t(indexed->bytes)>remaining)return false;
+                std::error_code ec;
+                const auto file=root/rel;
+                auto walk=root;
+                for(const auto& part:rel){
+                    walk/=part;
+                    if(std::filesystem::is_symlink(std::filesystem::symlink_status(walk,ec))||ec)return false;
+                }
+                const auto size=std::filesystem::file_size(file,ec);
+                if(ec||size>remaining)return false;
+                std::ifstream stream(file,std::ios::binary);
+                if(!stream)return false;
+                bytes.resize(size_t(size));
+                if(size&&!stream.read(bytes.data(),std::streamsize(size)))return false;
+                remaining-=size;
+                return true;
+            };
+            Json result=Json::object();
+            result.set("guid",str(guid));
+            bool ok=false;
+            std::string detail;
+            try {
+                if(entry->importer=="model"){
+                    auto model=render::loadModel(entry->path,reader);
+                    ok=model&&!model->vertices.empty()&&!model->indices.empty();
+                }else{
+                    std::string bytes;render::Image image;
+                    ok=reader(entry->path,bytes)&&render::decodeImage(bytes,image);
+                }
+                detail=ok?"CPU decode succeeded":"CPU decode failed or geometry empty";
+            }catch(const std::exception& e){detail=e.what();}
+            result.set("ok",Json::fromBool(ok));result.set("detail",str(detail));
+            result.set("gpuVerified",Json::fromBool(false));
+            reply.set("result",std::move(result));
         } else if (method == "studio.assetMetaPatch") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string guid=params.getStr("guid");
