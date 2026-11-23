@@ -12,6 +12,7 @@
 #include "engine/mechanics/VehicleDrive.h"
 #include "engine/core/FixedMath.h"
 #include <algorithm>
+#include <set>
 namespace aiverse::actor {
 using namespace lib::mechanics;
 namespace vs = vehicles;
@@ -186,6 +187,116 @@ bool ActorHost::transferVehicleRegion(Simulation& sim,Entity vehicle,
     auto* mutableLedger=ecs.resource<world::RegionEntityLedger>();
     return world::VehicleRegionTransfer::transfer(
         ecs,*mutableLedger,vehicle,seatMap,from,to,regionPositionReader(),error);
+}
+
+bool ActorHost::typedRegionMoveGroup(const Simulation& sim,Entity car,
+                                     std::vector<Entity>& out,
+                                     std::string* error)const {
+    auto refuse=[&](const char* why){
+        if(error)*error=why;
+        return false;
+    };
+    const World& ecs=sim.world();
+    const auto* state=ecs.tryGetConst<Vehicle>(car);
+    const auto* drive=ecs.tryGetConst<vs::VehicleDrive>(car);
+    if(!state || !drive)
+        return refuse("typed car requires Vehicle and VehicleDrive");
+    const auto* definition=drive_.type(drive->type);
+    if(!definition)return refuse("typed car has no registered controller definition");
+    if(!vs::valid(*drive))
+        return refuse("invalid typed vehicle controller or seats");
+    if(drive->driver.valid() &&
+       (drive->player==0 || drive->player>characterCount(sim) ||
+        characterEntity(sim,drive->player)!=drive->driver))
+        return refuse("typed driver slot does not match ECS Entity");
+    world::VehicleRegionGroup group;
+    if(!vehicleRegionGroup(sim,car,group,error))return false;
+    // The typed vehicle's seat map is the authoritative passenger list.
+    // Reject incomplete links and seats without definitions before any move.
+    std::set<int64_t> assigned;
+    for(const auto& [seat,slot]:drive->seats.occupants) {
+        auto found=std::find_if(definition->seats.seats.begin(),
+                                definition->seats.seats.end(),
+                                [seat](const auto& item){return item.id==seat;});
+        if(found==definition->seats.seats.end() || slot<=0 ||
+           slot>int64_t(characterCount(sim)) || !assigned.insert(slot).second)
+            return refuse("missing or duplicated typed car seat definition");
+        const Entity passenger=characterEntity(sim,uint8_t(slot));
+        const auto* body=ecs.tryGetConst<CharacterBody>(passenger);
+        if(!body || body->vehicle!=state->id)
+            return refuse("seat passenger is not bound to this car");
+    }
+    // The legacy ActorHost character backlink must never introduce a hidden
+    // occupant omitted from the shared seat inventory.
+    bool hidden=false;
+    ecs.eachExistingConst<CharacterBody>(
+        [&](Entity e,const CharacterBody& body) {
+            if(body.vehicle==state->id &&
+               std::find(group.members.begin(),group.members.end(),e)==
+                   group.members.end())hidden=true;
+        });
+    if(hidden)return refuse("typed car is missing an occupied actor");
+    // Driver reverse components are optional for ActorHost seat manifests.
+    // A reverse component for another car was already rejected by gather().
+    out=std::move(group.members);
+    return true;
+}
+
+bool ActorHost::placeTypedRegionMove(Simulation& sim,Entity car,Vec3 destination,
+                                    std::string* error) {
+    auto refuse=[&](const char* why){
+        if(error)*error=why;
+        return false;
+    };
+    std::vector<Entity> members;
+    if(!typedRegionMoveGroup(sim,car,members,error))return false;
+    auto& ecs=sim.world();
+    const auto* current=ecs.tryGetConst<vs::VehicleDrive>(car);
+    const auto* definition=current?drive_.type(current->type):nullptr;
+    if(!definition)return refuse("missing controller before typed move commit");
+    // Preserve yaw/gear/lastTick, reset wheel/flight motion through the
+    // existing shared authoritative respawn function.
+    auto controller=current->controller;
+    lib::mechanics::respawnVehicle(definition->def,controller,destination,
+                                   controller.yaw);
+    if(!lib::mechanics::valid(controller))
+        return refuse("destination cannot be represented by vehicle state");
+    auto* vehicle=ecs.tryGet<Vehicle>(car);
+    auto* drive=ecs.tryGet<vs::VehicleDrive>(car);
+    if(!vehicle || !drive)return refuse("typed vehicle destroyed before commit");
+    drive->controller=controller;
+    vehicle->pos=controller.position;
+    vehicle->yaw=controller.yaw;
+    vehicle->velocity=controller.velocity;
+    // Keep existing seat assignments and authoritative character data.
+    // Reposition each occupied seat from the controller's new world frame,
+    // just as VehicleWorld::placed does during normal vehicle stepping.
+    for(const auto& [seat,slot]:drive->seats.occupants) {
+        const auto it=std::find_if(definition->seats.seats.begin(),
+                                   definition->seats.seats.end(),
+                                   [seat](const auto& s){return s.id==seat;});
+        const Entity occupant=characterEntity(sim,uint8_t(slot));
+        if(auto* body=ecs.tryGet<CharacterBody>(occupant)) {
+            body->pos=lib::mechanics::vehicleWorldPoint(
+                controller,it->entry)+Vec3{{},Fixed::fromRatio(1,2),{}};
+            body->velocity=controller.velocity;
+            body->grounded=true;
+        }
+    }
+    // The shared VehicleOccupant component is owned by the generic vehicle
+    // subsystem; its pose must not lag one tick behind teleportation.
+    for(Entity occupant:members) {
+        if(occupant==car)continue;
+        if(auto* back=ecs.tryGet<vs::VehicleOccupant>(occupant)) {
+            back->vehicle=car;
+            back->type=drive->type;
+            back->position=controller.position;
+            back->yaw=controller.yaw;
+            back->speed=lib::mechanics::vehicleForwardSpeed(controller);
+            back->deck=drive->deck;
+        }
+    }
+    return true;
 }
 
 bool ActorHost::vehicleRegionGroup(const Simulation& sim,Entity vehicle,
