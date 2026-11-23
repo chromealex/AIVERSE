@@ -493,6 +493,11 @@ bool AnimationGraphInstance::seekClipNode(const std::string& node,float seconds)
     }
     return false;
 }
+bool AnimationGraphInstance::copyExecutionProfileFrom(const AnimationGraphInstance& published) {
+    if(!graph_||graph_!=published.graph_||!published.executionProfile_)return false;
+    executionProfile_.emplace(*published.executionProfile_);
+    return true;
+}
 void AnimationGraphInstance::enableExecutionProfile(bool enabled) {
     if(!enabled){executionProfile_.reset();return;}
     if(!graph_)throw std::logic_error("execution profile requires a compiled graph");
