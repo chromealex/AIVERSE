@@ -32,6 +32,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // authoritative canonical-position writer emits a dirty event.
     if(dirty) {
         for(const auto& [id,flags]:dirty->entries) {
+            ledger=view.resourceConst<world::RegionEntityLedger>();
             (void)flags;
             const Entity entity=Entity::fromPacked(id-1);
             const bool tracked=view.alive(entity) &&
@@ -79,6 +80,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
     std::set<world::RegionEntityId> present;
     for(Entity entity:tracked) {
+        ledger=view.resourceConst<world::RegionEntityLedger>();
         if(entity.packed()==UINT64_MAX)
             throw std::logic_error("regionOwnership: stable ID exhausted");
         const auto stable=entity.packed()+1;
@@ -119,6 +121,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // shared VehicleDrive/VehicleOccupant model and the existing seat adapter.
     std::set<uint64_t> handled;
     for(Entity car:vehicleEntities(sim)) {
+        ledger=view.resourceConst<world::RegionEntityLedger>();
         const auto* carState=view.tryGetConst<Vehicle>(car);
         if(!carState)continue;
         std::vector<Entity> group;
@@ -180,6 +183,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
 
     // On-foot characters and loose durable objects move independently.
     for(Entity entity:tracked) {
+        ledger=view.resourceConst<world::RegionEntityLedger>();
         if(handled.contains(entity.packed()))continue;
         const auto* tag=view.tryGetConst<world::RegionStableIdentity>(entity);
         const auto* entry=ledger->find(tag->id);
@@ -198,9 +202,11 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // distinct generation bits, so stable IDs cannot be reused.
     // Iterate ONLY live IDs; historical tombstones may outnumber the hot
     // population by orders of magnitude in a long-running city.
+    ledger=view.resourceConst<world::RegionEntityLedger>();
     const std::vector<world::RegionEntityId> live(
         ledger->liveIds().begin(),ledger->liveIds().end());
     for(const auto id:live) {
+        ledger=view.resourceConst<world::RegionEntityLedger>();
         if(present.contains(id))continue;
         const auto* entry=ledger->find(id);
         if(!entry || !entry->live ||
