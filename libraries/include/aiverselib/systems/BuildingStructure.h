@@ -98,15 +98,17 @@ inline void addSweptHull(Mesher& m,int material,float cx,float y0,float cz,float
 }
 
 }
-inline StyledStructure dressStructure(const BuildingStyle& st,const std::string& kindId,uint64_t seed,Vec3 origin={},uint32_t yaw=0,StructureSize size={}){
+// Raw constructive geometry: preserve absolute thickness/steps/props. The public
+// exact-envelope entry point below solves for body proportions by regeneration.
+inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std::string& kindId,uint64_t seed,Vec3 origin={},uint32_t yaw=0,StructureSize body={}){
     using namespace buildingStyleDetail;
     StyledStructure out;const StructureKind* kp=st.structureKind(kindId);const auto& sm=st.structure;
     if(!kp||sm.hull<0||yaw>3)return out;
     const StructureKind& k=*kp;
-    const bool custom=size.width!=0||size.height!=0||size.depth!=0;
-    if(custom&&(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||
-        size.width<std::max(8.f,float(k.doors)*4.f+4.f)||size.width>160.f||
-        size.depth<8.f||size.depth>160.f||size.height<5.f||size.height>80.f))return out;
+    const bool custom=body.width!=0||body.height!=0||body.depth!=0;
+    if(custom&&(!std::isfinite(body.width)||!std::isfinite(body.height)||!std::isfinite(body.depth)||
+        body.width<=0||body.depth<=0||body.height<=0||
+        body.width>180.f||body.depth>180.f||body.height>90.f))return out;
     Random g(seed,0x57c7);
     auto u=[&]{return float(g.unit().toDouble());};
     out.mesh.materials=st.materials;
@@ -114,7 +116,7 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
         for(const auto& [m,c]:p){if(m<0||size_t(m)>=out.mesh.materials.size())continue;auto& mat=out.mesh.materials[size_t(m)];
             if(mat.emissive[0]+mat.emissive[1]+mat.emissive[2]>0)mat.emissive=c;else mat.color=c;}}
     Mesher m(out.mesh.materials.size());
-    const float W=custom?size.width:k.width,D=custom?size.depth:k.depth,Hh=custom?size.height:k.height.pick(g),pad=k.pad;
+    const float W=custom?body.width:k.width,D=custom?body.depth:k.depth,Hh=custom?body.height:k.height.pick(g),pad=k.pad;
     const float cut=custom?std::min(k.chamfer,std::min(W,D)*0.22f):k.chamfer;
     const float padH=0.35f;
     auto plateMat=[&]{return sm.team>=0&&u()<k.teamChance?sm.team:(sm.plate>=0?sm.plate:sm.hull);};
@@ -215,7 +217,11 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     }
     // 4. Gates on the front: a framed opening proud of the hull with slats, a light bar, hazard stripes and a ramp.
     for(uint32_t i=0;i<k.doors;++i){
-        float dw=std::min(k.doorWidth*W,(W-2*cut)/float(k.doors)-0.6f),dh=std::min(k.doorHeight*Hh,Hh-0.8f);if(dw<1.2f||dh<1.5f)break;
+        const float nominalWidth=k.doorWidth*k.width;
+        const float nominalHeight=k.doorHeight*(k.height.lo+k.height.hi)*0.5f;
+        float dw=std::min(custom?nominalWidth:k.doorWidth*W,(W-2*cut)/float(k.doors)-0.6f);
+        float dh=std::min(custom?nominalHeight:k.doorHeight*Hh,Hh-0.8f);
+        if(dw<1.2f||dh<1.5f)break;
         float cx=cut+(W-2*cut)*(float(i)+0.5f)/float(k.doors),x0=cx-dw/2,x1=cx+dw/2,y0=padH,y1=padH+dh,fr=0.35f,front=-0.45f,back=lean*(dh/Hh)+0.3f;
         m.box(sm.hull,x0-fr,y0,front,x0,y1+fr,back);m.box(sm.hull,x1,y0,front,x1+fr,y1+fr,back);m.box(sm.hull,x0-fr,y1,front,x1+fr,y1+fr*1.6f,back);
         m.box(sm.dark,x0,y0,front+0.25f,x1,y1,back);                                  // recessed door leaf
@@ -437,44 +443,87 @@ inline StyledStructure dressStructure(const BuildingStyle& st,const std::string&
     for(auto& gp:out.gates)gp=buildingDetail::turn(gp,yaw,Wf,Df)+origin;
     out.mesh.vertices=std::move(m.v);
     for(size_t i=0;i<m.perMaterial.size();++i)if(!m.perMaterial[i].empty())out.mesh.parts.push_back({int(i),std::move(m.perMaterial[i])});
-    if(custom&&!out.mesh.vertices.empty()){
-        // Size means the *final* overall visual envelope. Each requested model was
-        // freshly composed at its dimensions; this final fit also accounts for
-        // projecting pads, legs, antennas and roof props. Keep anchors in lockstep.
-        const float inMin[3]={out.mesh.boundsMin[0],out.mesh.boundsMin[1],out.mesh.boundsMin[2]};
-        const float inMax[3]={out.mesh.boundsMax[0],out.mesh.boundsMax[1],out.mesh.boundsMax[2]};
-        const float target[3]={yaw%2?size.depth:size.width,size.height,yaw%2?size.width:size.depth};
-        const float base[3]={ox,oy,oz};
-        float scale[3];
-        for(int i=0;i<3;++i){const float span=inMax[i]-inMin[i];if(span<=0.f||!std::isfinite(span))return {};scale[i]=target[i]/span;}
-        auto project=[&](Vec3 p){
-            const float at[3]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
-            auto fixed=[&](int i){return Fixed::fromRatio(int64_t(std::llround((base[i]+(at[i]-inMin[i])*scale[i])*1000.0)),1000);};
-            return Vec3{fixed(0),fixed(1),fixed(2)};
-        };
-        // Fit cannot silently crush a functional gate below a standing
-        // human's clearance. This is a geometry-level constraint only:
-        // sci-fi armoured hulls are not yet enterable.
-        if(k.doors>0){
-            const float originalWidth=std::min(k.doorWidth*W,
-                (W-2*cut)/float(k.doors)-0.6f);
-            const float originalHeight=std::min(k.doorHeight*Hh,Hh-0.8f);
-            const float horizontalScale=yaw%2?scale[2]:scale[0];
-            if(originalWidth*horizontalScale<1.6f ||
-               originalHeight*scale[1]<2.1f)return {};
-        }
-        for(auto& v:out.mesh.vertices){
-            float n2=0;
-            for(int i=0;i<3;++i){
-                v.pos[i]=base[i]+(v.pos[i]-inMin[i])*scale[i];
-                v.nrm[i]/=scale[i];n2+=v.nrm[i]*v.nrm[i];
-            }
-            if(n2>0){const float inv=1.f/std::sqrt(n2);for(float& n:v.nrm)n*=inv;}
-        }
-        for(auto& box:out.boxes){box.min=project(box.min);box.max=project(box.max);}
-        for(auto& point:out.gates)point=project(point);
-        for(int i=0;i<3;++i){out.mesh.boundsMin[i]=base[i];out.mesh.boundsMax[i]=base[i]+target[i];}
-    }
     return out;
+}
+
+// The requested Width/Height/Depth are bounds on the complete finished mesh.
+// Solve the *construction* dimensions, never scale the output geometry.
+// Door leaves, hazard strips, support thicknesses and roof props therefore
+// retain their world-space dimensions. Unachievable requests fail explicitly.
+inline StyledStructure dressStructure(const BuildingStyle& st,const std::string& kindId,
+                                     uint64_t seed,Vec3 origin={},uint32_t yaw=0,
+                                     StructureSize size={}){
+    StyledStructure empty;
+    const auto* kind=st.structureKind(kindId);
+    if(!kind||yaw>3)return empty;
+    if(size.width==0&&size.height==0&&size.depth==0)
+        return dressStructureGeometry(st,kindId,seed,origin,yaw);
+    if(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||
+       size.width<std::max(8.f,float(kind->doors)*4.f+4.f)||size.width>160.f||
+       size.depth<8.f||size.depth>160.f||size.height<5.f||size.height>80.f)
+        return empty;
+
+    // The hull occupies less than the final bounds: legs, side modules,
+    // chimneys, pylons, towers and foundations project out of the body.
+    StructureSize body{std::max(5.f,size.width*0.78f),
+                       std::max(2.6f,size.height*0.62f),
+                       std::max(5.f,size.depth*0.78f)};
+    const float targets[3]={yaw%2?size.depth:size.width,size.height,
+                            yaw%2?size.width:size.depth};
+    constexpr float tolerance=0.0015f;
+    for(int attempt=0;attempt<32;++attempt){
+        auto result=dressStructureGeometry(st,kindId,seed,{},yaw,body);
+        if(result.mesh.vertices.empty())return empty;
+        float delta[3]{};
+        bool aligned=true;
+        for(int i=0;i<3;++i){
+            const float extent=result.mesh.boundsMax[i]-result.mesh.boundsMin[i];
+            if(extent<=0.f||!std::isfinite(extent))return empty;
+            delta[i]=targets[i]-extent;
+            aligned&=std::abs(delta[i])<=tolerance;
+        }
+        if(aligned){
+            // A minimum practical gate aperture. Use *unscaled* dimensions;
+            // a 12-metre envelope cannot magically compress a five-metre
+            // industrial door without a physically different door design.
+            if(kind->doors){
+                const float cut=std::min(kind->chamfer,std::min(body.width,body.depth)*0.22f);
+                const float dw=std::min(kind->doorWidth*kind->width,
+                         (body.width-2*cut)/float(kind->doors)-0.6f);
+                const float dh=std::min(kind->doorHeight*(kind->height.lo+kind->height.hi)*0.5f,
+                         body.height-0.8f);
+                if(dw<1.6f||dh<2.1f)return empty;
+            }
+            const float translation[3]={
+                float(origin.x.toDouble())-result.mesh.boundsMin[0],
+                float(origin.y.toDouble())-result.mesh.boundsMin[1],
+                float(origin.z.toDouble())-result.mesh.boundsMin[2]
+            };
+            // Rigid translation only; no alteration of vertex normals or UVs.
+            for(auto& v:result.mesh.vertices)
+                for(int a=0;a<3;++a)v.pos[a]+=translation[a];
+            const Vec3 shift{
+                Fixed::fromRatio(int64_t(std::llround(double(translation[0])*1000.0)),1000),
+                Fixed::fromRatio(int64_t(std::llround(double(translation[1])*1000.0)),1000),
+                Fixed::fromRatio(int64_t(std::llround(double(translation[2])*1000.0)),1000)
+            };
+            for(auto& box:result.boxes){box.min+=shift;box.max+=shift;}
+            for(auto& gate:result.gates)gate+=shift;
+            for(int i=0;i<3;++i){
+                result.mesh.boundsMin[i]+=translation[i];
+                result.mesh.boundsMax[i]+=translation[i];
+            }
+            return result;
+        }
+        // Damped constructive fit: the XZ volume depends mainly on its base
+        // footprint, with weak cross-axis and protruding module effects.
+        // Damping preserves stability around seeded small-prop placement.
+        const float xdelta=yaw%2?delta[2]:delta[0];
+        const float zdelta=yaw%2?delta[0]:delta[2];
+        body.width=std::clamp(body.width+xdelta*0.72f,4.f,180.f);
+        body.depth=std::clamp(body.depth+zdelta*0.72f,4.f,180.f);
+        body.height=std::clamp(body.height+delta[1]*0.58f,2.4f,90.f);
+    }
+    return empty; // impossible envelope, discontinuous seeded layout or no convergence
 }
 }
