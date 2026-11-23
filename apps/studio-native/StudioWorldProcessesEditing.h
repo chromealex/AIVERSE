@@ -137,7 +137,7 @@ inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
         const auto& components=other.extra["components"];
         if(!components["EvolveRegion"].isObject())continue;
         const auto& area=components["EvolveArea"];
-        if(!area.isObject()||!area.getBool("enabled",true))continue;
+        if(!area.isObject()||!area["enabled"].boolean())continue;
         const auto half=area.getInt(x?"halfWidthCm":"halfDepthCm",0);
         if(half<50||half>evolve::kAreaMaxHalfExtentCm)continue;
         const double origin=x?double(owner.x):double(owner.z);
