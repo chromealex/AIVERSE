@@ -613,3 +613,7 @@ Native Scene now uses one group preview path for individual centers (Shift), sha
 ## Stage 46: numeric group authoring UI
 
 The HTML5 Studio shell now mounts `apps/studio-web/src/components/EvolveGroupNumeric.tsx` for multi-selection. It exposes exact integer X/Z scale percentages, pivot mode (shared, individual, custom) and optional world-centimetre pivot X/Z, calling `studio.worldProcessAreaBatchResize` with `axis:"both"` in one transaction. Native validates every selected EVOLVE region. UI is a compact overlay; numeric typing does not yet drive live Scene preview and no two-axis corner gizmo exists. No TS/C++ compilation or runtime QA performed (deferred). Handoff: `docs/handoffs/world-processes-stage46-numeric-studio-controls-2026-11-23.md`.
+
+## Stage 47: two-axis group corner gizmo
+
+For multi-selected EvolveArea regions, native Studio adds a +X/+Z corner drag handle (`GroupCornerXZ`) and stores X/Z drag coordinates separately. It renders transient candidate group rectangles and submits `studio.worldProcessAreaBatchResize` with `axis:"both"`, independent X/Z scale ratios and the selected shared/custom/individual pivot mode on release. Ctrl/Command snaps both coordinates to a 1m grid. Stage46 numeric input does not yet drive Scene preview while typing, and Shift individual-pivot corner preview needs parity work. Source-only; no compilation/runtime QA. Handoff: `docs/handoffs/world-processes-stage47-two-axis-corner-2026-11-23.md`.
