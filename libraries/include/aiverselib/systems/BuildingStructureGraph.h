@@ -127,8 +127,13 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
                 if(f.width<2.4f||f.depth<5.6f)
                     return "Switchback stairs require at least 2.4m width and 5.6m depth";
                 const float storey=(recipe.height-0.52f)/float(recipe.floors);
-                if(storey>8.5f||f.depth<0.55f+storey*0.78f)
-                    return "Stair run too short for storey height and safe tread pitch";
+                // Switchback: two flights, maximum 0.18m rise and minimum
+                // 0.24m run per tread, plus a 0.9m turning landing.
+                const float climb=storey+0.24f;
+                const int perFlight=int(std::ceil(climb/0.18f+0.0001f)+1)/2;
+                if(storey>8.5f||
+                   f.depth<0.9f+float(perFlight)*0.24f)
+                    return "Stair well too short for <=0.18m risers and >=0.24m treads";
             }else if(f.width<1.4f||f.depth<1.4f)
                 return "Lift platform requires at least 1.4 by 1.4 metres";
             if(f.width>recipe.width/float(recipe.roomsX)-0.7f||
@@ -447,7 +452,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             const float mid=bottom+climb*0.5f;
             const float lane=(core.x1-core.x0-0.18f)*0.5f;
             const float halfRun=core.z1-core.z0-0.9f;
-            const int steps=std::max(8,int(std::ceil(climb/0.4f)));
+            const int steps=std::max(8,int(std::ceil(climb/0.18f)));
             const int perFlight=(steps+1)/2;
             const float rise=climb/float(2*perFlight);
             for(int j=0;j<perFlight;++j){
