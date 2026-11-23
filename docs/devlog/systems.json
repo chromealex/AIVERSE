@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-native-finalized-wal",
+     "title": "Сохранение подтверждённых тиков мира",
+     "titleEn": "Finalized world tick persistence",
+     "text": "Точный захват изменений владения сущностями на подтверждённых тиках симуляции.",
+     "textEn": "Capture exact entity ownership changes at finalized simulation ticks.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-unified-resource-wal",
      "title": "Журнал изменений ресурсов мира",
      "titleEn": "World resource change log",
