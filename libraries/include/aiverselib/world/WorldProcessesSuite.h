@@ -6,6 +6,7 @@
 #include "CrowdRoutes.h"
 #include "ImprintEcs.h"
 #include "ImprintTrails.h"
+#include "ImprintCrowdBridge.h"
 #include "CircuitEcs.h"
 #include "GranularEcs.h"
 #include "EvolveEcs.h"
@@ -45,7 +46,11 @@ inline void installSuite(Simulation& sim,SuiteFlags flags) {
     // place their own producer systems before this opt-in installation.
     if(flags.morph)morph::install(sim);
     if(flags.crowd){crowd::installRoutes(sim);crowd::install(sim);}
-    if(flags.imprint){imprint::installTrails(sim);imprint::install(sim);}
+    if(flags.imprint){
+        if(flags.crowd)installCrowdFootprints(sim);
+        imprint::installTrails(sim);
+        imprint::install(sim);
+    }
     if(flags.circuit)circuit::install(sim);
     if(flags.granular)granular::install(sim);
     if(flags.evolve)evolve::install(sim);
