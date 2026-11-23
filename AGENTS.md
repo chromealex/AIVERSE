@@ -173,6 +173,20 @@ NavMesh and streaming, read
 World-space resource/streaming ownership lives under
 `engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
 `engine/render/TerraWeaveCaverns*.h`.
+Stage41 pathfinding owner rule: Caverns provides ONE shared immutable SDF
+navigation provider, 3D grid adjacency, HPA cluster portals, native
+nav::Source adapter, revisioned dirty-event bus and registered custom solver
+router. Read `engine/world/TerraWeaveCavernsNavigationData.h`,
+`TerraWeaveCavernsNavigationGraph.h`,
+`TerraWeaveCavernsNavigationAdapters.h`,
+`TerraWeaveCavernsNavigationInvalidation.h`,
+`TerraWeaveCavernsNavigationPublication.h` and
+`TerraWeaveCavernsPathRouter.h`. All algorithm implementations remain owned
+by the existing shared navigation/pathfinding libraries, not the cave system.
+The current MapGrid A*/HPA*/FlowField/Hybrid routines still use 2D grid
+state: adapt their common solver input APIs before claiming they search the
+3D cave graph. Custom C++ solvers register on the same immutable source
+revision; never silently create a genre-specific duplicate pathfinder.
 Stage40 native hookup: `apps/client/GameClient.{h,cpp}` now owns the
 optional visual-only `CaveClientVisualHost`; this path is shared by
 standalone AiverseGame and `apps/client/HostedClient` Editor Play. The
