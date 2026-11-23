@@ -284,6 +284,74 @@ inline bool previewArea(const editor::DocEntity& owner,Handle::Mode mode,
     result={worldX/100.,worldZ/100.,wx/100.,wz/100.};
     return true;
 }
+// Mirrors the Stage40 group resize ratio and pivot, without mutating MapDoc.
+// Invalid members reject the entire preview rather than drawing partial data.
+inline bool previewGroupResize(const editor::MapDoc& map,
+                               const std::vector<std::string>& selected,
+                               const std::string& ownerId,Handle::Mode mode,
+                               double proposedCm,bool individual,
+                               std::vector<AreaPreview>& output,
+                               render::float3& pivotPoint){
+    output.clear();
+    const bool x=mode==Handle::Mode::AreaWidth||
+                 mode==Handle::Mode::AreaWidthNegative;
+    const bool z=mode==Handle::Mode::AreaDepth||
+                 mode==Handle::Mode::AreaDepthNegative;
+    if((!x&&!z)||selected.size()<2||selected.size()>256)return false;
+    const int activeIndex=map.findEntity(ownerId);
+    if(activeIndex<0)return false;
+    const auto& active=map.data.entities[std::size_t(activeIndex)];
+    const auto& activeArea=active.extra["components"]["EvolveArea"];
+    if(!activeArea.isObject())return false;
+    AreaPreview activePreview;
+    if(!previewArea(active,mode,proposedCm,individual,activePreview))
+        return false;
+    const double oldHalf=double(activeArea.getInt(x?"halfWidthCm":"halfDepthCm",0));
+    const double newHalf=(x?activePreview.halfWidth:activePreview.halfDepth)*100.;
+    if(oldHalf<50||newHalf<50)return false;
+    const auto n=std::llround(newHalf),d=std::llround(oldHalf);
+    if(n<1||n>1000000||d<1||d>1000000)return false;
+    std::vector<const editor::DocEntity*> entities;
+    std::vector<std::int64_t> centers;
+    std::int64_t sum=0;
+    for(const auto& id:selected){
+        const int index=map.findEntity(id.rfind("entity:@",0)==0?id.substr(8):id);
+        if(index<0)return false;
+        const auto& e=map.data.entities[std::size_t(index)];
+        const auto& area=e.extra["components"]["EvolveArea"];
+        if(!area.isObject()||!e.extra["components"]["EvolveRegion"].isObject())
+            return false;
+        const auto center=std::llround(double(x?e.x:e.z)*100.)+
+            area.getInt(x?"offsetXcm":"offsetZcm",0);
+        entities.push_back(&e);centers.push_back(center);sum+=center;
+    }
+    const auto shared=std::llround(double(sum)/double(centers.size()));
+    pivotPoint=x?render::float3{float(shared)/100.f,.65f,active.z}:
+                 render::float3{active.x,.65f,float(shared)/100.f};
+    for(std::size_t i=0;i<entities.size();++i){
+        const auto& e=*entities[i];
+        const auto& area=e.extra["components"]["EvolveArea"];
+        const auto half=area.getInt(x?"halfWidthCm":"halfDepthCm",0);
+        const auto scaled=std::llround((long double)half*n/d);
+        if(scaled<50||scaled>evolve::kAreaMaxHalfExtentCm)return false;
+        const auto center=individual?centers[i]:
+            shared+std::llround((long double)(centers[i]-shared)*n/d);
+        AreaPreview preview;
+        preview.centerX=double(e.x)+double(area.getInt("offsetXcm",0))/100.;
+        preview.centerZ=double(e.z)+double(area.getInt("offsetZcm",0))/100.;
+        preview.halfWidth=double(area.getInt("halfWidthCm",0))/100.;
+        preview.halfDepth=double(area.getInt("halfDepthCm",0))/100.;
+        if(x){preview.centerX=double(center)/100.;preview.halfWidth=double(scaled)/100.;}
+        else {preview.centerZ=double(center)/100.;preview.halfDepth=double(scaled)/100.;}
+        if(preview.centerX*100.-preview.halfWidth*100.<-double(evolve::kAreaCoordinateCm)||
+           preview.centerX*100.+preview.halfWidth*100.>double(evolve::kAreaCoordinateCm)||
+           preview.centerZ*100.-preview.halfDepth*100.<-double(evolve::kAreaCoordinateCm)||
+           preview.centerZ*100.+preview.halfDepth*100.>double(evolve::kAreaCoordinateCm))
+            return false;
+        output.push_back(preview);
+    }
+    return true;
+}
 inline bool extent(const editor::DocEntity& owner,const Handle& handle,
                    render::float3 mouse,float& value) {
     if(!std::isfinite(mouse.x)||!std::isfinite(mouse.z))return false;
