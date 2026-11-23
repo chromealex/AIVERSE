@@ -90,7 +90,8 @@ public:
                !atLanding_(actor,cmd.liftFeature,cmd.floor))
                 return fail("Actor has not physically reached the exit zone");
             accepted=actorBridge_.exit(ecs_,scene_.host(),sceneId_,
-                actor,cmd.liftFeature,cmd.floor);
+                actor,cmd.liftFeature,cmd.floor,
+                width_,depth_,origin_,yaw_);
             break;
         }
         if(!accepted)return fail("Lift controller rejected action");
