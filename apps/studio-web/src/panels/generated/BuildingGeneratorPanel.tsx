@@ -18,14 +18,15 @@ const explain = (error:unknown) => error instanceof Error ? error.message : Stri
 const settingLabel = (id:string) => ({scifi:'Sci-fi',modern:'Modern'} as Record<string,string>)[id] ?? id;
 const asNumber = (raw:string) => raw.trim()==='' ? NaN : Number(raw);
 const makeFeature = (kind:StudioBuildingFeatureKind):StudioBuildingFeature => ({
-  kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:1.2,
-  height:kind==='large-gate'?4.5:kind==='small-gate'?2.9:kind==='sliding-roof'?0:2.35,
+  kind, side:'front', count:1, width:kind==='large-gate'?5:kind==='small-gate'?2.7:kind==='sliding-roof'?5:kind==='window'?1.6:1.2,
+  height:kind==='large-gate'?4.5:kind==='small-gate'?2.9:kind==='sliding-roof'?0:kind==='window'?1.1:2.35,
   depth:kind==='sliding-roof'?5:0, open:0,
-  position:-1, positionZ:-1, spacing:0.35
+  position:-1, positionZ:-1, spacing:0.35, floor:0, sill:0.9
 });
 const propertyLabels:Record<StudioBuildingFeatureKind,string> = {
   'large-gate':'Large vehicle gates', 'small-gate':'Small gates',
-  'personnel-door':'Personnel entrances', 'sliding-roof':'Retractable roof'
+  'personnel-door':'Personnel entrances', 'sliding-roof':'Retractable roof',
+  'window':'Windows / glazing'
 };
 
 export default function BuildingGeneratorPanel({
@@ -46,6 +47,9 @@ export default function BuildingGeneratorPanel({
   const [width,setWidth]=useState('24');
   const [height,setHeight]=useState('12');
   const [depth,setDepth]=useState('18');
+  const [floors,setFloors]=useState('1');
+  const [roomsX,setRoomsX]=useState('1');
+  const [roomsZ,setRoomsZ]=useState('1');
   const [seed,setSeed]=useState('482733');
   const [selectedSeed,setSelectedSeed]=useState<number|null>(null);
   const [variants,setVariants]=useState<Candidate[]>([]);
@@ -89,6 +93,14 @@ export default function BuildingGeneratorPanel({
       if(!Number.isFinite(value)||value<min||value>max)
         return name+' must be between '+min+' and '+max+' metres.';
     }
+    if(mode==='features'){
+      const f=asNumber(floors),rx=asNumber(roomsX),rz=asNumber(roomsZ);
+      if(!Number.isInteger(f)||f<1||f>8||!Number.isInteger(rx)||rx<1||rx>6||
+         !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
+        return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
+      if((asNumber(height)-0.52)/f<2.8||asNumber(width)/rx<2.5||asNumber(depth)/rz<2.5)
+        return 'Every storey requires 2.8m height; each room at least 2.5m on each side.';
+    }
     const n=asNumber(seed);
     if(!Number.isSafeInteger(n)||n<0||n>2147483645)
       return 'Seed must be an integer between 0 and 2147483645.';
@@ -118,10 +130,21 @@ export default function BuildingGeneratorPanel({
           if(!Number.isInteger(feature.count)||feature.count<1||feature.count>8)
             return 'Each entrance property requires 1 to 8 openings.';
           entrances+=feature.count;
-          if(entrances>16)return 'Maximum 16 total wall entrances.';
+          if(entrances>32)return 'Maximum 32 total wall apertures.';
           const maxWidth=feature.kind==='large-gate'?20:feature.kind==='small-gate'?8:3;
-          if(feature.width<0.85||feature.width>maxWidth||feature.height<2||feature.height>asNumber(height)-0.6)
-            return 'Invalid gate or personnel door dimensions for the requested height.';
+          const isWindow=feature.kind==='window';
+          const maxWidthForKind=isWindow?6:maxWidth;
+          const storey=(asNumber(height)-0.52)/asNumber(floors);
+          if(!Number.isInteger(feature.floor)||feature.floor<0||feature.floor>=asNumber(floors)||
+             (!isWindow&&feature.floor!==0))
+            return 'Selected floor is invalid for the opening.';
+          if(!Number.isFinite(feature.sill)||feature.sill<0||feature.sill>4)
+            return 'Window sill must be within 0–4m.';
+          if(feature.width<0.85||feature.width>maxWidthForKind||
+             feature.height<(isWindow?0.4:2)||
+             feature.height>(isWindow?3.5:storey-0.6)||
+             (isWindow&&(feature.sill<0.65||feature.sill+feature.height>storey-0.4)))
+            return 'Opening dimensions or window sill exceed the selected storey.';
           if(feature.position>=0){
             const span=feature.width*feature.count+(feature.count-1)*feature.spacing;
             const sideLength=(feature.side==='front'||feature.side==='back')?asNumber(width):asNumber(depth);
@@ -140,12 +163,13 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,
     features:mode==='features'?features:undefined,
-    width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed
+    width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
+    floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ)
   });
   const clearGenerated=()=>{setVariants([]);setSelectedSeed(null);setSaved(null);setThumbnail('');setStatus('');};
   const changeSetting=(value:string)=>{
@@ -330,10 +354,20 @@ export default function BuildingGeneratorPanel({
                   value={String(feature.spacing)} disabled={busy}
                   onChange={e=>setFeature(i,'spacing',Number(e.target.value))}/>
               </StudioField>:null}
-              <StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
+              {feature.kind==='window'&&<StudioField label="Floor (starting at 0)" htmlFor={"abg-feature-"+i+"-floor"}>
+                <StudioInput id={"abg-feature-"+i+"-floor"} type="number" min={0} max={7} step={1}
+                  value={String(feature.floor)} disabled={busy}
+                  onChange={e=>setFeature(i,'floor',Number(e.target.value))}/>
+              </StudioField>}
+              {feature.kind==='window'&&<StudioField label="Sill height, m" htmlFor={"abg-feature-"+i+"-sill"}>
+                <StudioInput id={"abg-feature-"+i+"-sill"} type="number" min={0.65} max={4} step={0.05}
+                  value={String(feature.sill)} disabled={busy}
+                  onChange={e=>setFeature(i,'sill',Number(e.target.value))}/>
+              </StudioField>}
+              {feature.kind!=='window'&&<StudioField label="Open (0–1)" htmlFor={"abg-feature-"+i+"-open"}>
                 <StudioInput id={"abg-feature-"+i+"-open"} type="number" min={0} max={1} step={0.1} value={String(feature.open)} disabled={busy}
                   onChange={e=>setFeature(i,'open',Number(e.target.value))}/>
-              </StudioField>
+              </StudioField>}
             </div>
           </div>)}
         </div>
@@ -345,6 +379,23 @@ export default function BuildingGeneratorPanel({
         </div>
         <small className="abg__note">Functionality is independent of setting. Entrances cut real wall openings;
           roof panels retract from a real roof aperture. Use Open to test different runtime states.</small>
+      </StudioSection>}
+      {mode==='features'&&<StudioSection title="Floors and rooms">
+        <div className="abg__dimensions">
+          <StudioField label="Floors" htmlFor="abg-floors">
+            <StudioInput id="abg-floors" type="number" min={1} max={8} step={1} value={floors}
+              onChange={setDimension(setFloors)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Rooms X" htmlFor="abg-rooms-x">
+            <StudioInput id="abg-rooms-x" type="number" min={1} max={6} step={1} value={roomsX}
+              onChange={setDimension(setRoomsX)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Rooms Z" htmlFor="abg-rooms-z">
+            <StudioInput id="abg-rooms-z" type="number" min={1} max={6} step={1} value={roomsZ}
+              onChange={setDimension(setRoomsZ)} disabled={busy}/>
+          </StudioField>
+        </div>
+        <small className="abg__note">Internal partition passages are generated on every floor. Stairs, lifts and inter-floor navmesh are not yet generated.</small>
       </StudioSection>}
       <StudioSection title="Dimensions">
         <div className="abg__dimensions">
