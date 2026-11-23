@@ -1,0 +1,55 @@
+name: SpectraFX importance focused contracts
+
+on:
+  push:
+    branches:
+      - feature/spectrafx-significance-data-20261123
+    paths:
+      - ".github/workflows/spectrafx-significance.yml"
+      - "engine/fx/**"
+      - "tests/spectrafx*"
+      - "CMakeLists.txt"
+  pull_request:
+    paths:
+      - ".github/workflows/spectrafx-significance.yml"
+      - "engine/fx/**"
+      - "tests/spectrafx*"
+      - "CMakeLists.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  priority-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Linux graphics headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev
+      - name: Configure focused SpectraFX contracts
+        run: |
+          cmake -S . -B build/spectrafx-importance -G Ninja \
+            -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_FETCH_TEMPLATES=OFF \
+            -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_SERVER=OFF \
+            -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_TOOLS=OFF
+      - name: Compile native SpectraFX contracts and header ABI
+        run: |
+          cmake --build build/spectrafx-importance --parallel 4 --target \
+            aiverse_spectrafx_contract_tests aiverse_spectrafx_header_smoke
+      - name: Test focused contracts and dependency boundary
+        run: |
+          ctest --test-dir build/spectrafx-importance \
+            -R '^(spectrafx_contract|spectrafx_architecture)$' \
+            --output-on-failure --no-tests=error
