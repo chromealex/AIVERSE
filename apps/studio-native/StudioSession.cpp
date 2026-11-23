@@ -12,6 +12,7 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioBuildingDependencies.h"
+#include "apps/studio-native/StudioBuildingRegeneration.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -1097,6 +1098,13 @@ Json StudioSession::dispatchImpl(const Json& request) {
         }
         if(method=="studio.buildingStaleMaterials") {
             reply.set("result",studioBuildingStaleMaterials(ws_.project.dir));
+            return reply;
+        }
+        if(method=="studio.buildingRegenerate") {
+            if(ws_.project.dir.empty())
+                throw std::runtime_error("Open a project before regeneration");
+            reply.set("result",studioBuildingRegenerate(
+                ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
             return reply;
         }
         if(method=="studio.buildingGenerate") {
