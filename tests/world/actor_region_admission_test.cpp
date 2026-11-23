@@ -231,20 +231,32 @@ void testTrustedStableIdGateway() {
     const Entity actor=host.characterEntity(*sim,1);
     const auto* identity=sim->world().tryGetConst<wd::RegionStableIdentity>(actor);
     AIVERSE_TEST_CHECK(identity && identity->id!=0);
-    const auto id=identity->id;
+    // Deliberately choose an identity unrelated to the current handle. This
+    // models a restored actor binding without changing its gameplay components.
+    auto* ledger=sim->world().resource<wd::RegionEntityLedger>();
+    const auto previous=identity->id;
+    const auto cell=ledger->find(previous)->owner;
+    const auto id=ledger->nextIdentity()+1000;
+    AIVERSE_TEST_CHECK(id!=actor.packed()+1);
+    AIVERSE_TEST_CHECK(ledger->despawn(previous,cell)&&ledger->spawn(id,cell));
+    sim->world().get<wd::RegionStableIdentity>(actor).id=id;
+    host.invalidateRegionOwnershipCaches(*sim);
+    host.synchronizeRegionOwnership(*sim);
     const auto original=sim->checksum();
     std::string error;
     AIVERSE_TEST_CHECK(!host.requestRegionMoveByStableId(
         *sim,0,{64_fx,2_fx,4_fx},&error));
     AIVERSE_TEST_CHECK(!host.requestRegionMoveByStableId(
         *sim,id+1000000,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(!host.requestRegionMoveByStableId(
+        *sim,previous,{64_fx,2_fx,4_fx},&error));
     AIVERSE_TEST_CHECK(sim->checksum()==original);
     AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
                         ->destinations.empty());
     AIVERSE_TEST_CHECK(host.requestRegionMoveByStableId(
         *sim,id,{68_fx,2_fx,4_fx},&error));
     const auto* queued=sim->world().resourceConst<wd::RegionMoveRequests>();
-    AIVERSE_TEST_CHECK(queued && queued->destinations.size()==1);
+    AIVERSE_TEST_CHECK(queued && queued->destinations.size()==1 && queued->destinations.contains(id));
     sim->step();
     AIVERSE_TEST_CHECK(sim->tick()==1);
     AIVERSE_TEST_CHECK(sim->world().get<actor::CharacterBody>(actor).pos.x>=64_fx);
