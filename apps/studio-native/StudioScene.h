@@ -152,7 +152,15 @@ public:
         return result;
     }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
-    void captureNextFrameTagged(gfx::Device::TaggedCaptureFn callback) {lastFrameSignature_=0;device_->captureNextFrameTagged(std::move(callback));}
+    using FxTaggedCaptureFn=std::function<void(uint64_t,int,int,std::vector<uint8_t>,Json)>;
+    void captureNextFrameTagged(FxTaggedCaptureFn callback) {
+        lastFrameSignature_=0;
+        device_->captureNextFrameTagged([this,callback=std::move(callback)](uint64_t serial,int w,int h,std::vector<uint8_t> pixels){
+            Json metadata;
+            for(const auto& entry:fxFrameProvenance_)if(entry.first==serial){metadata=entry.second;break;}
+            if(callback)callback(serial,w,h,std::move(pixels),std::move(metadata));
+        });
+    }
     uint64_t fxFrameSerial() const {return device_?device_->frameSerial():0;}
     uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
     uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
@@ -292,6 +300,7 @@ private:
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
     StudioSpectraPreview spectraPreview_{};
+    std::deque<std::pair<uint64_t,Json>> fxFrameProvenance_;
     // Not a second gfx device: the same Scene renderer is placed in the
     // SpectraFX panel and switches between authored map and isolated FX.
     bool spectraDockMode_=false;
