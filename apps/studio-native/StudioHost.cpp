@@ -1307,13 +1307,22 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
             metadata.set("frameExact",Json::fromBool(false));
             {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
             fxPreview_->captureNextFrameTagged(
-                [shot,maxSide](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba) {
+                [shot,maxSide,requireReplayReady](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba,Json frameMetadata) {
                     {std::lock_guard<std::mutex> lock(shot->mutex);
                      shot->provenance.set("capturedFrameSerial",Json::number(int64_t(capturedFrame)));
-                     shot->provenance.set("gpuFrameIdentified",Json::fromBool(capturedFrame!=0&&w>0&&h>0));}
+                     shot->provenance.set("gpuFrameIdentified",Json::fromBool(capturedFrame!=0&&w>0&&h>0));
+                     const bool matched=capturedFrame!=0&&w>0&&h>0&&frameMetadata.isObject();
+                     if(matched){
+                         for(const char* key:{"tick","generation","backend","camera","background","grid","axes","gpu","replayReady","projectPath"})
+                             shot->provenance.set(key,frameMetadata[key]);
+                         shot->provenance.set("sampling",Json::string("matched-rendered-frame"));
+                     }
+                     shot->provenance.set("frameExact",Json::fromBool(matched));}
                     std::string jpeg,error;
                     int ow=0,oh=0;
-                    if(w<=0||h<=0||w>8192||h>8192||
+                    if(requireReplayReady&&(!frameMetadata.isObject()||!frameMetadata.getBool("replayReady")))
+                        error="Captured frame has no matching replay-ready provenance";
+                    else if(w<=0||h<=0||w>8192||h>8192||
                        uint64_t(w)*uint64_t(h)*4>64ull*1024ull*1024ull ||
                        rgba.size()<uint64_t(w)*uint64_t(h)*4)
                         error="Invalid native FX GPU capture dimensions";
