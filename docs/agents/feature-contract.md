@@ -24,3 +24,7 @@ Run `python3 tools/agents/audit_compliance.py --base origin/main` on a clean che
 ## Integration references
 
 Every manifest declares integrations: skills (catalog IDs), mcp_tools (exact tool names), studio_panels (typed panel IDs), studio_methods (typed bridge methods). A PASS requires the respective nonempty list. Skill IDs and frontmatter, Studio panel registration/render case and typed bridge methods are statically checked. A placeholder or a typed method alone is not functional proof. For MCP, additionally run the actual built server audit: `python3 tools/mcp/audit_registry.py <binary> --engine . --feature-manifest docs/features/<id>.json`. This verifies headless tool registration; GUI-only tools require separate live editor evidence. Native Studio workflows, actual mutations, undo/save/reopen and GPU checks remain mandatory where applicable. CI structural checks do not replace these runtime checks.
+
+## Rule routing
+
+The root AGENTS.md routes mandatory common and area-specific contracts. The index in docs/agents/contracts/index.json records the extracted baseline sections. Run `python3 tools/agents/check_contracts.py` after editing routing; this checks existence, links and headings, not semantic preservation. Changes to contracts themselves require feature coverage and integrator review. Keep repository-root-relative path semantics in extracted text. Do not silently delete or weaken owner rules.
