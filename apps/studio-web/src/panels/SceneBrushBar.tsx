@@ -36,19 +36,27 @@ function Slider({ label, value, min, max, step, onCommit }: { label: string; val
  */
 function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const [state,setState]=useState<EvolveLiveState|null>(null);
+  const [historyRegion,setHistoryRegion]=useState('all');
   const [history,setHistory]=useState<{tick:number;fertility:number;pollution:number;succession:number;plants:number}[]>([]);
   useEffect(()=>{
     if(!state?.active){setHistory([]);return;}
     const tick=state.tick;
     if(tick===undefined||!state.regions.length)return;
-    const mean=(key:'fertility'|'pollution'|'succession')=>state.regions.reduce((sum,r)=>sum+r[key],0)/state.regions.length/1e7;
+    const selected=historyRegion==='all'?state.regions:state.regions.filter(r=>r.id===historyRegion);
+    if(!selected.length)return;
+    const mean=(key:'fertility'|'pollution'|'succession')=>selected.reduce((sum,r)=>sum+r[key],0)/selected.length/1e7;
     const point={tick,fertility:mean('fertility'),pollution:mean('pollution'),succession:mean('succession'),plants:state.plantCount??0};
     setHistory(old=>{
       const last=old[old.length-1];
       if(last&&tick===last.tick)return old;
       return [...(last&&tick<last.tick?[]:old),point].slice(-240);
     });
-  },[state]);
+  },[state,historyRegion]);
+  const exportHistory=(format:'csv'|'json')=>{
+    const body=format==='json'?JSON.stringify({region:historyRegion,samples:history},null,2):['tick,fertility,pollution,succession,plants',...history.map(p=>[p.tick,p.fertility,p.pollution,p.succession,p.plants].join(','))].join('\n');
+    const url=URL.createObjectURL(new Blob([body],{type:format==='json'?'application/json':'text/csv'}));
+    const a=document.createElement('a');a.href=url;a.download='evolve-history.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
   const [vegetation,setVegetation]=useState(true);
   const [climate,setClimate]=useState(false);
   const [nutrients,setNutrients]=useState(false);
@@ -96,6 +104,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
       {nutrients&&(state.logs??[]).map((c,i)=><circle key={i} cx={c.x} cy={c.z} r={Math.max(w,h)/120} fill="#956b43" fillOpacity={Math.max(.1,c.ratio)*opacity}><title>Deadwood remaining {Math.round(c.ratio*100)}%</title></circle>)}
       {vegetation&&(state.plants??[]).map((p,i)=><circle key={p.id??i} cx={p.x} cy={p.z} r={Math.max(w,h)/180} fill={p.dead?'#a36c55':p.fallen?'orange':p.mature===false?'#8ee9ef':'lightgreen'} fillOpacity={opacity}><title>{p.dead?'Dead':p.fallen?'Fallen':p.mature===false?'Juvenile':'Mature'} · age {p.ageTicks??'unknown'} · shade {p.shadeStress??'—'} · flood {p.floodStress??'—'} · drought {p.droughtStress??'—'}</title></circle>)}
     </svg>
+    <label>History region <select value={historyRegion} onChange={e=>{setHistory([]);setHistoryRegion(e.target.value);}}><option value="all">All regions</option>{regions.map(r=><option key={r.id} value={r.id}>{r.id}</option>)}</select></label>
     {history.length>1&&<div><small>Ecology history · last {history.length} samples</small>
       <svg viewBox="0 0 320 100" width="100%" height="100" aria-label="Ecology history">
         {([['fertility','#68c978'],['pollution','#ed7777'],['succession','#80aaff']] as const).map(([key,color])=>
@@ -105,7 +114,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
           }).join(' ')}/>)}
       </svg><small>Green: fertility · red: pollution · blue: succession</small>
       <small>Plants: {history[0].plants} → {history[history.length-1].plants}</small>
-      <button type="button" onClick={()=>setHistory([])}>Clear history</button>
+      <button type="button" onClick={()=>setHistory([])}>Clear history</button><button type="button" onClick={()=>exportHistory('csv')}>CSV</button><button type="button" onClick={()=>exportHistory('json')}>JSON</button>
     </div>}{nutrients&&<small>Absorbed: {state.absorbedUnits??"—"} · respired: {state.respiredUnits??"—"}</small>}{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
 }
 export function EcologyLayerPicker(){
