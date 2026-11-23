@@ -218,3 +218,6 @@ EVOLVE-aware TerraWeave registration requires nonempty species, exactly one prec
 
 ## Stage 62: forest demo fixture
 `examples/native/world_processes/evolve-forest-demo.json` provides healthy, polluted and recovery regions with typed areas and pressure sources. Concrete game must supply entity types, plant population and real PHYSIS links; not a runnable demo. No tests. See `docs/handoffs/world-processes-stage62-forest-demo-fixture-2026-11-23.md`.
+
+## Stage 63: native demo setup
+`EvolveForestDemo.h` stages real PHYSIS climate links and caller-authored rooted plants in existing World authority. Caller supplies resolved entities and anchors. No executable demo or tests yet. See `docs/handoffs/world-processes-stage63-demo-setup-2026-11-23.md`.
