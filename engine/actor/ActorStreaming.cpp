@@ -5,12 +5,14 @@ void ActorHost::setContentReader(world::AssetReader reader) {
     streamedCollision_.reset();
     navigationCollisionRevision_=UINT64_MAX;
     navigationReadinessError_.clear();
+    collisionAdmissionError_.clear();
     if(streamManifest_.getBool("async"))streamedCollision_=std::make_unique<world::CollisionStream>(streamManifest_,std::move(reader),collision_);
 }
 bool ActorHost::readyToStep(Simulation& sim) {
     // A new command may queue a region move after this preflight. Only
     // requests observed and admitted HERE may mutate positions this tick.
     admittedRegionMoves_.clear();
+    collisionAdmissionError_.clear();
     if(!streamManifest_.getBool("async")) {
         if(const auto* moves=sim.world().resourceConst<world::RegionMoveRequests>())
             admittedRegionMoves_=moves->destinations;
@@ -64,6 +66,8 @@ bool ActorHost::readyToStep(Simulation& sim) {
     // Collision assets must be present before deriving the bot navigation
     // meshes. Waiting happens before the authoritative tick consumes any
     // command, RNG or gameplay state (Simulation::step/readyToStep).
+    if(!streamedCollision_->canFitRegions(regions,&collisionAdmissionError_))
+        return false;
     if(!streamedCollision_->prepareRegions(regions))return false;
     if(botHost_ && navigationCollisionRevision_!=streamedCollision_->revision()) {
         std::string error;
