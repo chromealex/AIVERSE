@@ -1679,7 +1679,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraPreview_.prepare(fx::SpectraFxView::fromCamera(
-            view,viewProj,framebufferWidth,framebufferHeight));
+            view,viewProj,framebufferWidth,framebufferHeight),camera_.target);
     }
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
