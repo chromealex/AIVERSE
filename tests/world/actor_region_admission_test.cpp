@@ -207,6 +207,33 @@ void testLateGameplayCommandWaitsForNextAdmission() {
     AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()->applied==1);
 }
 
+void testTrustedStableIdGateway() {
+    auto sim=create(false);
+    auto& host=actor::host(*sim);
+    const Entity actor=host.characterEntity(*sim,1);
+    const auto* identity=sim->world().tryGetConst<wd::RegionStableIdentity>(actor);
+    AIVERSE_TEST_CHECK(identity && identity->id!=0);
+    const auto id=identity->id;
+    const auto original=sim->checksum();
+    std::string error;
+    AIVERSE_TEST_CHECK(!host.requestRegionMoveByStableId(
+        *sim,0,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(!host.requestRegionMoveByStableId(
+        *sim,id+1000000,{64_fx,2_fx,4_fx},&error));
+    AIVERSE_TEST_CHECK(sim->checksum()==original);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+    AIVERSE_TEST_CHECK(host.requestRegionMoveByStableId(
+        *sim,id,{68_fx,2_fx,4_fx},&error));
+    const auto* queued=sim->world().resourceConst<wd::RegionMoveRequests>();
+    AIVERSE_TEST_CHECK(queued && queued->destinations.size()==1);
+    sim->step();
+    AIVERSE_TEST_CHECK(sim->tick()==1);
+    AIVERSE_TEST_CHECK(sim->world().get<actor::CharacterBody>(actor).pos.x>=64_fx);
+    AIVERSE_TEST_CHECK(sim->world().resourceConst<wd::RegionMoveRequests>()
+                        ->destinations.empty());
+}
+
 void testQueuedDestinationSurvivesSave() {
     auto original=create(false);
     auto& host=actor::host(*original);
@@ -460,6 +487,7 @@ int main() {
     testFailedDestinationPreservesAuthoritativeState();
     testLateGameplayCommandWaitsForNextAdmission();
     testQueuedDestinationSurvivesSave();
+    testTrustedStableIdGateway();
     testStaticAndOccupiedMove();
     testOriginalVehicleResetDestinationPreloaded();
     testImpossibleCollisionBudgetReportsError();
