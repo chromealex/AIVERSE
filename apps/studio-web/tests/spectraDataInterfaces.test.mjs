@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   graphV2, safeGraphName, scalarParameters, validateInterfaces,
   putParameter, putInterface, dropParameter, dropInterface,
-  putNode, dropNode, providerNames
+  putNode, dropNode, providerNames, putSpriteTexture
 } from '../src/panels/spectraDataInterfaceModel.ts';
 
 const graph=()=>({
@@ -82,4 +82,25 @@ test('provider search is distinct from assets and only returns bound identifiers
   assert.deepEqual(providerNames(first,'snow'),[]);
   assert.equal(validateInterfaces({...first,nodes:[...first.nodes,{
     id:'di1',type:'DataInterface',properties:{name:'missing'}}]}).includes('matching'),true);
+});
+
+test('real Assets catalog is authoritative for SpriteOutput texture references',()=>{
+  const graphWithOutput={...graph(),nodes:[
+    {id:'spawn',type:'Spawn',properties:{burst:4}},
+    {id:'sprite',type:'SpriteOutput',properties:{texture:'builtin:soft',blend:'alpha'}}
+  ]};
+  const base=graphV2(graphWithOutput);assert.ok(base);
+  const images=['Textures/smoke.png','Actors/Portrait.JPG','Textures/ship.tga'];
+  for(const bad of ['Textures/unknown.png','../secrets.png','Textures/smoke.webp',
+    '/root/a.png','Textures\\smoke.png']){
+    const result=putSpriteTexture(base,'sprite',bad,images);
+    assert.ok(result.error);assert.equal(result.graph,base);
+  }
+  assert.ok(putSpriteTexture(base,'absent','Textures/smoke.png',images).error);
+  const next=putSpriteTexture(base,'sprite','Textures/smoke.png',images);
+  assert.equal(next.error,'');
+  assert.equal(next.graph.nodes[1].properties.texture,'content/Textures/smoke.png');
+  assert.equal(next.graph.nodes[1].properties.blend,'alpha');
+  assert.equal(base.nodes[1].properties.texture,'builtin:soft');
+  assert.equal(next.graph.nodes[0],base.nodes[0]);
 });
