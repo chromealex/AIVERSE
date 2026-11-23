@@ -119,6 +119,57 @@ void rejectPartialAndInvalidSave() {
     AIVERSE_TEST_CHECK(clean->checksum()==originalHash);
 }
 
+void regionWideActivation() {
+    auto sim=makeSim();
+    auto& world=sim->world();
+    auto actors=members(*sim);
+    auto* ledger=world.resource<RegionEntityLedger>();
+    auto* cold=world.resource<RegionColdStore>();
+    auto policy=controller();
+    std::string error;
+    const auto hotHash=sim->checksum();
+
+    // Entire region cold/hot, idempotent and independent of visibility.
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,home,false,&error));
+    const auto coldHash=sim->checksum();
+    AIVERSE_TEST_CHECK(coldHash!=hotHash && cold->size()==2);
+    AIVERSE_TEST_CHECK(world.alive(actors[0]) && world.alive(actors[1]));
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,home,false,&error));
+    AIVERSE_TEST_CHECK(sim->checksum()==coldHash);
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,home,true,&error));
+    AIVERSE_TEST_CHECK(sim->checksum()==hotHash);
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,home,true,&error));
+    AIVERSE_TEST_CHECK(sim->checksum()==hotHash);
+
+    // Each region can independently become cold. Move one active actor to an
+    // adjacent region using the same generic ECS ownership bridge.
+    const Cell next{1,0,0};
+    const std::array<Entity,1> passenger{actors[1]};
+    AIVERSE_TEST_CHECK(RegionEcsBridge::transferGroup(world,*ledger,passenger,home,next));
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,home,false,&error));
+    AIVERSE_TEST_CHECK(cold->size()==1 && world.has<RegionDormant>(actors[0]));
+    AIVERSE_TEST_CHECK(!world.has<RegionDormant>(actors[1]));
+    AIVERSE_TEST_CHECK(policy.setRegionActive(world,*ledger,*cold,next,false,&error));
+    AIVERSE_TEST_CHECK(cold->size()==2 && world.has<RegionDormant>(actors[1]));
+
+    const auto bothCold=sim->serialize();
+    auto mirror=makeSim();
+    AIVERSE_TEST_CHECK(mirror->deserialize(bothCold,&error));
+    auto& mirrorWorld=mirror->world();
+    auto* mirrorLedger=mirrorWorld.resource<RegionEntityLedger>();
+    auto* mirrorCold=mirrorWorld.resource<RegionColdStore>();
+    AIVERSE_TEST_CHECK(policy.setRegionActive(
+        mirrorWorld,*mirrorLedger,*mirrorCold,next,true,&error));
+    AIVERSE_TEST_CHECK(mirrorCold->size()==1 &&
+                       mirrorWorld.has<Brain>(actors[1]) &&
+                       !mirrorWorld.has<Brain>(actors[0]));
+    AIVERSE_TEST_CHECK(policy.setRegionActive(
+        mirrorWorld,*mirrorLedger,*mirrorCold,home,true,&error));
+    AIVERSE_TEST_CHECK(mirrorCold->size()==0);
+    AIVERSE_TEST_CHECK(mirrorWorld.has<Engine>(actors[0]) &&
+                       mirrorWorld.has<Engine>(actors[1]));
+}
+
 void basicRoundtrip() {
     auto sim=makeSim();
     auto& w=sim->world();
@@ -238,6 +289,7 @@ void rollbackAndRetirement() {
 } // namespace
 
 int main() {
+    regionWideActivation();
     rejectPartialAndInvalidSave();
     basicRoundtrip();
     rollbackAndRetirement();
