@@ -1,0 +1,2 @@
+# Stage 16
+Geometry2D.h: exact bounded integer orientation, inclusive segment intersection, monotone chain convex hull, even-odd polygon location. Coordinates ±1e9 prevent int64 cross overflow. Separate geometry-algorithms package from presentation geometry. Catalogs and skill added. No builds/tests. Next triangulation and contour simplification. Branch feature/world-processes-stage31-bidirectional-handles
