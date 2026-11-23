@@ -436,6 +436,14 @@ bool GraphRuntime::resetGpuAllocationSeed(uint32_t seed) {
     reason_.clear();return true;
 }
 
+bool GraphRuntime::resetGpuShaderSeed(uint32_t seed) {
+    if(!initialized_||sharedWorld_||!useComputeWrapper_||!gpu_.gpuActive()) {
+        reason_="GPU shader seed requires dedicated active Metal emitter";
+        return false;
+    }
+    if(!gpu_.resetGpuShaderSeed(seed)){reason_=gpu_.reason();return false;}
+    reason_.clear();return true;
+}
 bool GraphRuntime::resetDeterministicSeed(uint32_t seed) {
     if(!initialized_ || sharedWorld_ || useComputeWrapper_) {
         reason_="Deterministic replay seed requires a dedicated CPU ParticleSystem";
