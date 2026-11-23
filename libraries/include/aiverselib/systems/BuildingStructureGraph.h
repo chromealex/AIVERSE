@@ -14,7 +14,7 @@
 namespace aiverse::lib::systems {
 
 enum class BuildingFeatureKind : uint8_t {
-    LargeGate, SmallGate, PersonnelDoor, SlidingRoof
+    LargeGate, SmallGate, PersonnelDoor, SlidingRoof, Window
 };
 enum class BuildingFeatureSide : uint8_t { Front, Back, Left, Right };
 struct BuildingFeature {
@@ -27,14 +27,17 @@ struct BuildingFeature {
     // group centre along that wall; count>1 repeats with 'spacing' clear gap.
     // For roof: position = X centre, positionZ = Z centre.
     float position=-1.f,positionZ=-1.f,spacing=0.35f;
+    uint32_t floor=0;
+    float sill=0.9f;
 };
 struct FunctionalBuildingRecipe {
     float width=16.f,height=8.f,depth=12.f;
     uint64_t seed=1;
+    uint32_t floors=1,roomsX=1,roomsZ=1;
     std::vector<BuildingFeature> features;
 };
 enum class BuildingGraphPart : uint8_t {
-    Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel
+    Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel, WindowPane, Partition
 };
 struct BuildingGraphSolid {
     BuildingGraphPart part=BuildingGraphPart::Wall;
@@ -49,9 +52,13 @@ struct BuildingGraphSocket {
     float x=0,y=0,z=0;
     float width=0,height=0,depth=0,open=0;
 };
+struct BuildingGraphRoom {std::string id;uint32_t floor=0,x=0,z=0;float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;};
+struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=0,y=0,z=0,width=1.2f,height=2.2f;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
+    std::vector<BuildingGraphRoom> rooms;
+    std::vector<BuildingGraphConnection> connections;
     std::string error;
     explicit operator bool() const noexcept {return error.empty();}
 };
@@ -61,6 +68,7 @@ inline const char* buildingFeatureName(BuildingFeatureKind kind) {
       case BuildingFeatureKind::SmallGate:return "small-gate";
       case BuildingFeatureKind::PersonnelDoor:return "personnel-door";
       case BuildingFeatureKind::SlidingRoof:return "sliding-roof";
+      case BuildingFeatureKind::Window:return "window";
     }
     return "unknown";
 }
@@ -80,6 +88,11 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
        recipe.height<4.f||recipe.height>80.f)
         return "Functional building W/H/D must fit 8..160 / 4..80 / 8..160 metres";
     if(recipe.features.size()>24)return "Too many building properties (maximum 24)";
+    if(recipe.floors<1||recipe.floors>8||recipe.roomsX<1||recipe.roomsX>6||recipe.roomsZ<1||recipe.roomsZ>6||recipe.floors*recipe.roomsX*recipe.roomsZ>128)
+        return "Invalid floors or room counts";
+    const float storey=(recipe.height-0.52f)/float(recipe.floors);
+    if(storey<2.8f||recipe.width/float(recipe.roomsX)<2.5f||recipe.depth/float(recipe.roomsZ)<2.5f)
+        return "Storey or room dimensions too small";
     uint32_t roofs=0,portals=0;
     for(const auto& f:recipe.features){
         if(!finite(f.width)||!finite(f.height)||!finite(f.depth)||!finite(f.open)||
@@ -90,6 +103,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
            f.spacing<0.35f||f.spacing>8.f)
             return "Invalid feature count, placement, spacing or open fraction";
         if(f.kind==BuildingFeatureKind::SlidingRoof){
+            if(f.floor!=0)return "Roof floor must be zero";
             if(++roofs>1||f.count!=1||f.width<1||f.depth<1||
                f.width>recipe.width*0.48f||f.depth>recipe.depth*0.75f)
                 return "Sliding roof requires one aperture fitting inside the roof";
@@ -101,13 +115,18 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
                 return "Sliding roof Z position crosses its structural frame";
             continue;
         }
+        if(f.floor>=recipe.floors)return "Opening floor out of range";
+        const bool window=f.kind==BuildingFeatureKind::Window;
+        if(!window&&f.floor!=0)return "Entrances only on ground floor";
+        if(!std::isfinite(f.sill)||f.sill<0.f||f.sill>4.f)return "Invalid sill";
         portals+=f.count;
-        if(portals>16)return "Too many wall entrances (maximum 16)";
-        const float maxWidth=f.kind==BuildingFeatureKind::LargeGate?20.f:
+        if(portals>32)return "Too many wall apertures";
+        const float maxWidth=window?6.f:f.kind==BuildingFeatureKind::LargeGate?20.f:
                              f.kind==BuildingFeatureKind::SmallGate?8.f:3.f;
-        if(f.width<0.85f||f.width>maxWidth||f.height<2.f||
-           f.height>recipe.height-0.6f)
-            return "Door/gate dimensions do not fit the building or feature kind";
+        if(f.width<0.85f||f.width>maxWidth||
+           f.height<(window?0.4f:2.f)||f.height>(window?3.5f:storey-0.6f)||
+           (window&&(f.sill<0.65f||f.sill+f.height>storey-0.4f)))
+            return "Opening too large for selected storey";
         const float length=(f.side==BuildingFeatureSide::Front||
                             f.side==BuildingFeatureSide::Back)?recipe.width:recipe.depth;
         if(f.position>=0){
@@ -128,13 +147,15 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     graph.error=validateFunctionalRecipe(recipe);
     if(!graph.error.empty())return graph;
     const float W=recipe.width,H=recipe.height,D=recipe.depth;
-    constexpr float floorTop=0.24f,wall=0.36f,roofThickness=0.28f;
+    constexpr float floorTop=0.24f,wall=0.36f,roofThickness=0.28f,slabThick=0.24f;
+    const float storey=(H-floorTop-roofThickness)/float(recipe.floors);
     auto solid=[&](BuildingGraphPart p,float x0,float y0,float z0,
                    float x1,float y1,float z1,uint32_t owner=UINT32_MAX){
         if(x1-x0>0.0001f&&y1-y0>0.0001f&&z1-z0>0.0001f)
             graph.solids.push_back({p,x0,y0,z0,x1,y1,z1,owner});
     };
     solid(BuildingGraphPart::Floor,0,0,0,W,floorTop,D);
+    for(uint32_t f=1;f<recipe.floors;++f){const float y=floorTop+storey*float(f);solid(BuildingGraphPart::Floor,0,y,0,W,y+slabThick,D);}
     struct Hole {
         uint32_t feature=0,copy=0;
         BuildingFeature value;
@@ -237,29 +258,35 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         float cursor=0.f;
         for(const auto& hole:row){
             wallSection(BuildingGraphPart::Wall,cursor,hole.start,floorTop,H);
-            const float top=floorTop+hole.value.height;
-            wallSection(BuildingGraphPart::Wall,hole.start,hole.end,top,H);
+            const bool window=hole.value.kind==BuildingFeatureKind::Window;
+            const float bottom=window?floorTop+storey*float(hole.value.floor)+hole.value.sill:floorTop;
+            const float top=bottom+hole.value.height;
+            if(window)wallSection(side,hole.start,hole.end,floorTop,bottom);
+            wallSection(side,hole.start,hole.end,top,H);
             constexpr float frame=0.14f;
-            // Frame and leaf boundaries do not create a closed wall collider.
-            wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.start,floorTop,top,hole.feature);
-            wallSection(BuildingGraphPart::Trim,hole.end,hole.end+frame,floorTop,top,hole.feature);
+            wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.start,bottom,top,hole.feature);
+            wallSection(BuildingGraphPart::Trim,hole.end,hole.end+frame,bottom,top,hole.feature);
             wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.end+frame,top,top+0.15f,hole.feature);
-            const float half=hole.value.width*0.5f;
-            const float shift=half*hole.value.open;
-            if(hole.value.open<0.9999f){
-                wallSection(BuildingGraphPart::DoorLeaf,hole.start-shift,
-                            hole.start+half-shift,floorTop+0.05f,top-0.05f,hole.feature);
-                wallSection(BuildingGraphPart::DoorLeaf,hole.end-half+shift,
-                            hole.end+shift,floorTop+0.05f,top-0.05f,hole.feature);
+            if(window){
+                wallSection(BuildingGraphPart::WindowPane,hole.start+0.06f,hole.end-0.06f,
+                            bottom+0.06f,top-0.06f,hole.feature);
+            }else{
+                const float half=hole.value.width*0.5f,shift=half*hole.value.open;
+                if(hole.value.open<0.9999f){
+                    wallSection(BuildingGraphPart::DoorLeaf,hole.start-shift,hole.start+half-shift,
+                                bottom+0.05f,top-0.05f,hole.feature);
+                    wallSection(BuildingGraphPart::DoorLeaf,hole.end-half+shift,hole.end+shift,
+                                bottom+0.05f,top-0.05f,hole.feature);
+                }
             }
             const float longitudinal=(hole.start+hole.end)*0.5f;
             float px=longitudinal,pz=-1.f;
             if(side==1)pz=D+1.f;
             if(side==2){px=-1.f;pz=longitudinal;}
             if(side==3){px=W+1.f;pz=longitudinal;}
-            graph.sockets.push_back({"entrance/"+std::to_string(hole.feature)+"/"+
+            graph.sockets.push_back({(window?"window/":"entrance/")+std::to_string(hole.feature)+"/"+
                 std::to_string(hole.copy),hole.value.kind,BuildingFeatureSide(side),
-                hole.feature,hole.copy,px,0.f,pz,
+                hole.feature,hole.copy,px,window?bottom:0.f,pz,
                 hole.value.width,hole.value.height,0.f,hole.value.open});
             cursor=hole.end;
         }
