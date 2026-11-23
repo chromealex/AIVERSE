@@ -67,14 +67,25 @@ CollisionStream::CollisionStream(const Json& manifest,AssetReader reader,
     for(const auto& [cell,asset]:assets_.chunks)if(!stream_->add(cell,asset.bytes))throw JsonError("world: chunk exceeds staging budget");
 }
 CollisionStream::~CollisionStream(){stream_->shutdown([this](Cell c){retire(c);});}
-void CollisionStream::retire(Cell cell){auto it=ids_.find(cell);if(it!=ids_.end()){for(auto id:it->second)target_.remove(id);ids_.erase(it);}terrain_.erase(cell);}
+void CollisionStream::retire(Cell cell){
+    auto it=ids_.find(cell);
+    const bool hadPublished=it!=ids_.end()||terrain_.contains(cell);
+    if(it!=ids_.end()){
+        for(auto id:it->second)target_.remove(id);
+        ids_.erase(it);
+    }
+    terrain_.erase(cell);
+    if(hadPublished && revision_!=UINT64_MAX)++revision_;
+}
 bool CollisionStream::publish(Cell cell,const AsyncChunkStream::Payload& payload) {
     const auto& collision=static_cast<const Prepared&>(*payload).collision;
     if(!seams(cell,collision.terrain,terrain_))throw JsonError("world.terrain: neighbor resolution or edge heights differ");
     auto offset=assets_.origin(cell);auto id=assets_.chunks.at(cell).idBase;auto& ids=ids_[cell];ids.reserve(collision.boxes.size()+collision.triangles.size());
     for(auto box:collision.boxes){++id;box.min+=offset;box.max+=offset;if(target_.colliders().contains(id)||!target_.add({id,box})){retire(cell);return false;}ids.push_back(id);}
     for(auto triangle:collision.triangles){++id;triangle.a+=offset;triangle.b+=offset;triangle.c+=offset;if(target_.colliders().contains(id)||!target_.addTriangle(id,triangle)){retire(cell);return false;}ids.push_back(id);}
-    terrain_[cell]=collision.terrain;return true;
+    terrain_[cell]=collision.terrain;
+    if(revision_!=UINT64_MAX)++revision_;
+    return true;
 }
 bool CollisionStream::prepareRegions(std::span<const Bounds> regions,size_t requests,size_t publications) {
     auto pins=assets_.intersecting(regions);
