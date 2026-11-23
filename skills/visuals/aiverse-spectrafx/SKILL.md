@@ -5,6 +5,24 @@ description: Author and integrate AIVERSE SpectraFX visual effects: versioned gr
 
 # SpectraFX — universal AIVERSE visual effects
 
+## 2026-11-23 — Stage 3: read-only visual acceleration fields (native QA pending)
+
+Handoff: `docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
+`SpectraFxAccelerationFields` is a bounded, injected position→acceleration
+provider registry (max 16, weighted, validates finite outputs). Hosts may bind
+PHYSIS wind/gravity/turbulence presentation snapshots via
+`SpectraFxSceneHost::bindAccelerationField` after init. Dedicated Metal GPU
+and same-asset CPU twin emitters receive an identical per-frame additive
+acceleration correction without modifying the authored emitter asset, ECS,
+RHI ownership or source generation. With fields attached, new effects bypass
+homogeneous GPU shared pooling; existing pooled emitters are not migrated.
+Legacy `cpuEffect` fallback is not dynamically field-driven, and there is NO
+PHYSIS-specific adapter or HTML5 authoring UI in this stage. Native build,
+CTest and Metal parity **NOT YET VERIFIED**. The next agent must run focused
+CI and real hardware tests, then implement field data interfaces and graph
+integration without changing game authority or PRISMA/LENS ownership.
+
+
 ## 2026-11-23 — Opt-in camera significance for SpectraFX cues (UNVERIFIED native)
 
 Read the two mandatory handoffs:
