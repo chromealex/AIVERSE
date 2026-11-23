@@ -22,6 +22,12 @@ struct BuildingLiftDoorMesh {
     float leafWidth=0,height=2.3f,thickness=0.12f;
     std::unique_ptr<render::Model> model;
 };
+struct BuildingLiftVisualAssets {
+    // One platform and one shared leaf geometry per lift feature. Device
+    // upload/release is intentionally left to the Renderer3D resource owner.
+    std::map<uint32_t,std::unique_ptr<render::Model>> platforms;
+    std::map<uint32_t,BuildingLiftDoorMesh> leaves;
+};
 struct BuildingLiftVisualPose {
     BuildingLiftDoorKey key;
     bool left=false;
@@ -87,6 +93,23 @@ inline BuildingLiftDoorMesh runtimeLiftDoorLeafModel(
     model->batching.autoLod=false;
     if(!model->nodes.empty())model->nodes[0].runtimeMutable=true;
     return {feature,w,2.3f,0.12f,std::move(model)};
+}
+
+// Construct this at spawn, not per frame. The returned asset table is
+// suitable for the existing Renderer3D GPU upload and resource leases.
+// Platform meshes remain independent so their transform is mutable.
+inline BuildingLiftVisualAssets makeBuildingLiftVisualAssets(
+    const BuildingCirculationHost& host,const BuildingStyle& style){
+    BuildingLiftVisualAssets assets;
+    for(const auto& [feature,controller]:host.lifts()){
+        assets.platforms.emplace(feature,
+            runtimeLiftPlatformModel(controller.platformPose(),style,
+                "procedural-lift-platform-"+std::to_string(feature)));
+        const auto& pose=controller.platformPose();
+        assets.leaves.emplace(feature,
+            runtimeLiftDoorLeafModel(feature,pose.x1-pose.x0,style));
+    }
+    return assets;
 }
 
 inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
