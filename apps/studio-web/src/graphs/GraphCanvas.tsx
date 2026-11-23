@@ -8,7 +8,7 @@ import {graphGeometry,nodeWidth,samePort} from './graphGeometry';
 import type {PortRef} from './graphGeometry';
 import './GraphCanvas.css';
 
-export interface GraphCommand {id:string;label:string;disabled?:boolean;run:()=>void}
+export interface GraphCommand {id:string;label:string;shortcut?:string;disabled?:boolean;run:()=>void}
 export interface GraphCanvasProps {
  view:GraphView; selected:string; label:string; disabled?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
@@ -60,10 +60,10 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
   const delta=offsets[event.key];if(!delta)return;
   event.preventDefault();onSelect(node.id);onMove(node.id,node.x+delta[0],node.y+delta[1]);
  };
- const maxHeight=Math.max(320,...geometry.nodes.map(n=>n.y+n.height+36));
- const maxWidth=Math.max(520,...geometry.nodes.map(n=>n.x+nodeWidth+36));
+ const maxHeight=Math.max(320,...view.nodes.map(n=>n.y+(geometry.nodes.find(g=>g.id===n.id)?.height??54)+36));
+ const maxWidth=Math.max(520,...view.nodes.map(n=>n.x+nodeWidth+36));
  const curve=(x1:number,y1:number,x2:number,y2:number)=>`M ${x1} ${y1} C ${x1+55} ${y1}, ${x2-55} ${y2}, ${x2} ${y2}`;
- return <div className="au-graph-workspace" onContextMenu={e=>{if(commands?.length&&!disabled){e.preventDefault();setMenu(v=>!v)}}} onKeyDown={e=>{if(e.key==='Escape'){setMenu(false);onCancel?.();}}}>
+ return <div className="au-graph-workspace" onContextMenu={e=>{if(commands?.length&&!disabled){e.preventDefault();setMenu(v=>!v)}}} onKeyDown={e=>{if(e.key==='Escape'){setMenu(false);onCancel?.();return;}if(disabled||e.defaultPrevented)return;const target=e.target as HTMLElement;if(target.closest('input,textarea,select,[contenteditable=true]'))return;const chord=(e.metaKey||e.ctrlKey?'mod+':'')+(e.shiftKey?'shift+':'')+e.key.toLowerCase();const command=commands?.find(c=>c.shortcut===chord&&!c.disabled);if(command){e.preventDefault();e.stopPropagation();setMenu(false);command.run();}}}>
  <div className="au-row" aria-label="Graph zoom">
   <StudioButton size="sm" disabled={zoom<=.5} onClick={()=>setZoom(z=>Math.max(.5,z-.25))}>−</StudioButton>
   <StudioButton size="sm" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
@@ -73,7 +73,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
  {menu&&<div className="au-row au-graph-actions" aria-label="Graph actions">{commands?.map(c=><StudioButton key={c.id} size="sm" disabled={disabled||c.disabled} onClick={()=>{setMenu(false);c.run()}}>{c.label}</StudioButton>)}</div>}
  <div className="au-graph-canvas" ref={scroll}>
   <svg ref={svg} width={maxWidth*zoom} height={maxHeight*zoom} viewBox={`0 0 ${maxWidth} ${maxHeight}`}
-   role="group" aria-label={label}
+   role="group" tabIndex={0} aria-label={label}
    onPointerDown={event=>{
     if(disabled||drag.current||box.current||pan.current)return;
     if(event.button===1||(event.button===0&&event.altKey)){
@@ -82,7 +82,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
      event.currentTarget.setPointerCapture(event.pointerId);return;
     }
     if(event.button!==0||event.target!==event.currentTarget)return;
-    const p=point(event);if(!p)return;event.preventDefault();
+    const p=point(event);if(!p)return;event.preventDefault();event.currentTarget.focus();
     box.current={pointer:event.pointerId,origin:p,extend:event.shiftKey};
     setRect(selectionRect(p,p));event.currentTarget.setPointerCapture(event.pointerId);
    }}
@@ -104,6 +104,7 @@ export default function GraphCanvas({view,selected,label,disabled,pendingOutput,
     transform={`translate(${node.x} ${node.y})`} tabIndex={disabled?-1:0}
     role="group" aria-label={node.id+' '+node.label}
     onKeyDown={event=>key(event,node)}
+    onContextMenu={()=>{if(!ids.includes(node.id))updateSelection([node.id]);}}
     onPointerDown={event=>{
      if(disabled||event.button!==0||event.altKey||drag.current||box.current||pan.current)return;const p=point(event);if(!p)return;
      event.preventDefault();event.stopPropagation();event.currentTarget.focus();
