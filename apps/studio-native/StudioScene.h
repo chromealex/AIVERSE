@@ -30,6 +30,7 @@
 #include "engine/render/AdaptiveShadowResolution.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
+#include "apps/studio-native/StudioSpectraPreview.h"
 
 namespace aiverse::studio {
 class StudioScene final {
@@ -45,6 +46,21 @@ public:
                uint64_t previewRevision, float levelHeight = 1.5f,
                const std::string& projectPath = {}, const Json& rules = Json::object(),
                const StudioFacialPreviewBinding* facialBinding=nullptr);
+    // Called only through StudioHost::onScene, between render-thread frames.
+    // A real SpectraFX graph runs on the native Device in the Scene pass.
+    Json spectraPreviewCommand(const Json& input,const std::string& project) {
+        if(project!=spectraProject_ && spectraPreview_.active())
+            spectraPreview_.stop(*device_);
+        spectraProject_=project;
+        const Json result=spectraPreview_.command(*device_,input);
+        if(input.getStr("action")=="load" && result.getBool("ready")) {
+            camera_.target={0,1,0};camera_.distance=9.0f;
+            camera_.yaw=0.4f;camera_.pitch=0.2f;camera_.ortho=false;
+            cameraInitialized_=true;tween_.active=false;
+        }
+        lastFrameSignature_=0;settleFrames_=30;
+        return result;
+    }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
@@ -180,6 +196,8 @@ private:
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
+    StudioSpectraPreview spectraPreview_{};
+    std::string spectraProject_;
     std::string facialFramedGuid_; // character the camera was last framed on
     std::string thumbnailPath_;   // pending preset thumbnail capture
     bool thumbnailCrop_=true;
