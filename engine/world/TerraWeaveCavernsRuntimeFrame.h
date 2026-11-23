@@ -7,6 +7,8 @@
 // because that tick must never touch RHI or mutate out-of-band Box3D.
 #include "engine/world/TerraWeaveCavernsGameplayPhysicsBarrier.h"
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
+#include "engine/world/TerraWeaveCavernsStreamJobs.h"
+#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -88,12 +90,65 @@ public:
         syncStreamingEditPins();
         return residency_.pump();
     }
+    // Frame-limited streaming CPU dispatch. Returns retire intents which
+    // require owner-side native resource retirement. Build intents are sent
+    // to bounded immutable CPU workers; no GPU work starts on those threads.
+    std::vector<CaveResidencyTicket> dispatchStreamingCpu(
+        ChunkKey3 cameraChunk,uint32_t resolution=16,int32_t spacingCm=100) {
+        if(physicsBarrier_.status().recoveryRequired)return {};
+        setStreamCenter(cameraChunk);
+        auto source=host_.sourceSnapshot();
+        if(!source)return {};
+        syncStreamingEditPins();
+        std::vector<CaveResidencyTicket> retire;
+        for(const auto& request:residency_.pump()) {
+            if(request.action==CaveResidencyAction::Retire) {
+                pendingRetires_.insert_or_assign(request.key,request);
+                retire.push_back(request);
+            }else{
+                try {
+                    if(!streamJobs_.dispatch(request,source,resolution,spacingCm))
+                        (void)residency_.fail(request);
+                } catch(...) {
+                    (void)residency_.fail(request);
+                    throw;
+                }
+            }
+        }
+        return retire;
+    }
+    // Poll CPU completions at the owner frame boundary. The caller must
+    // stage/publish the exact returned ticket through all real native owners
+    // before calling acceptStreaming(ticket). Old generations are discarded.
+    std::vector<CaveStreamCpuResult> pollStreamingCpu(
+        CaveStreamJobStats* telemetry=nullptr) {
+        auto results=streamJobs_.poll(telemetry);
+        results.erase(std::remove_if(results.begin(),results.end(),
+            [this](const CaveStreamCpuResult& r){
+                return !residency_.current(r.ticket);
+            }),results.end());
+        return results;
+    }
+    std::vector<CaveResidencyTicket> outstandingStreamRetires()const {
+        std::vector<CaveResidencyTicket> result;
+        for(const auto& [key,ticket]:pendingRetires_){
+            (void)key;
+            if(residency_.current(ticket))result.push_back(ticket);
+        }
+        return result;
+    }
     bool acceptStreaming(CaveResidencyTicket ticket){
         if(physicsBarrier_.status().recoveryRequired)return false;
-        return residency_.acknowledge(ticket);
+        const bool confirmed=residency_.acknowledge(ticket);
+        if(confirmed && ticket.action==CaveResidencyAction::Retire)
+            pendingRetires_.erase(ticket.key);
+        return confirmed;
     }
     bool failStreaming(CaveResidencyTicket ticket){
-        return residency_.fail(ticket);
+        const bool failed=residency_.fail(ticket);
+        if(failed && ticket.action==CaveResidencyAction::Retire)
+            pendingRetires_.erase(ticket.key);
+        return failed;
     }
     uint64_t pinStreamChunk(ChunkKey3 key,CaveLeasePurpose purpose){
         if(physicsBarrier_.status().recoveryRequired)
@@ -113,7 +168,10 @@ public:
         return host_.collectAfterGpuIdle(device);
     }
     bool shutdownAfterGpuIdle(gfx::Device& device){
-        return host_.shutdownAfterGpuIdle(device);
+        streamJobs_.drain();
+        if(!host_.shutdownAfterGpuIdle(device))return false;
+        pendingRetires_.clear();editPins_.clear();
+        return true;
     }
     CaveGameplayEditStats stats()const{return host_.stats();}
     const CavePhysicsCommitStatus& physicsStatus()const noexcept{
@@ -139,6 +197,8 @@ private:
                 editPins_.emplace(key,residency_.pin(key,CaveLeasePurpose::Edit));
     }
     CaveWorldResidency residency_;
+    CaveWorldStreamJobs streamJobs_{2};
+    std::map<ChunkKey3,CaveResidencyTicket,KeyLess> pendingRetires_;
     std::map<ChunkKey3,uint64_t,KeyLess> editPins_;
     CaveGameplayEditHost host_;
     CaveGameplayPhysicsBarrier physicsBarrier_;
