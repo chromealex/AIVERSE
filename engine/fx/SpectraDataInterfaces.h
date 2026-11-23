@@ -119,13 +119,9 @@ public:
         const auto it=providers_.find(std::string(provider));
         if(it==providers_.end())return false;
         float result=0;
-        try {
-            if(!it->second(channel,position,result))return false;
-        } catch(...) {
-            // An unexpected host exception cannot leave half-initialized
-            // per-particle state. Treat it as unavailable instead.
-            return false;
-        }
+        // Providers must be nonthrowing (also required for -fno-exceptions
+        // mobile/Web targets); do not add C++ exception handling here.
+        if(!it->second(channel,position,result))return false;
         if(!std::isfinite(result)||std::abs(result)>1.0e7f)return false;
         value=result;
         return true;
