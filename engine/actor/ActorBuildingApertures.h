@@ -100,6 +100,48 @@ public:
             out.error="FPS dual leaf runtime is attached to another simulation";
             return out;
         }
+        // The FPS transport already authenticated each actor input and
+        // stored it in the ECS CharacterControl. The Interact action is
+        // mapped to the closest reachable generated socket, never to a
+        // client-supplied socket ID. Do not consume input twice.
+        for(size_t slot=1;slot<=host_->characterCount(sim);++slot){
+            const Entity entity=host_->characterEntity(sim,uint8_t(slot));
+            if(!sim.world().alive(entity))continue;
+            const auto* control=sim.world().tryGetConst<CharacterControl>(entity);
+            const auto* body=sim.world().tryGetConst<CharacterBody>(entity);
+            const auto* health=sim.world().tryGetConst<CharacterHealth>(entity);
+            if(!control||!body||!health||health->health<=0||
+               control->input.action!=Action::Interact||
+               !control->input.sequence)continue;
+            const uint64_t sequence=control->input.sequence;
+            if(interactions_.contains(entity.packed())&&
+               sequence<=interactions_.at(entity.packed()))continue;
+            interactions_[entity.packed()]=sequence;
+            std::string nearest;
+            Fixed best=Fixed::fromInt(1000000);
+            bool wasOpen=false;
+            for(const auto& pose:physics_.poses()){
+                if(pose.moving)continue;
+                const Vec3 mid{(pose.bounds.min.x+pose.bounds.max.x)/2,
+                    (pose.bounds.min.y+pose.bounds.max.y)/2,
+                    (pose.bounds.min.z+pose.bounds.max.z)/2};
+                const Fixed distance=(body->pos-mid).lengthSq();
+                if(distance<best&&distance<=Fixed::fromInt(16)){
+                    best=distance;nearest=pose.socketId;
+                    wasOpen=pose.open;
+                }
+            }
+            if(nearest.empty())continue;
+            building::BuildingApertureCommand command;
+            command.sceneId=sceneId_;
+            command.actor=entity;
+            command.sequence=sequence;
+            command.socketId=std::move(nearest);
+            command.open=!wasOpen;
+            command.graphDomains=building::buildingGraphBit(
+                building::BuildingGraphDomain::Spatial);
+            (void)session_.enqueue(sim.world(),command);
+        }
         out=session_.fixedTick(sim.world(),physics_,
              host_->buildingCollision(),router_,sim.tick(),100);
         return out;
@@ -127,11 +169,15 @@ public:
                       std::string* error=nullptr){
         return session_.bindMaterial(socket,material,resolve,error);
     }
+    template<class Callback>
+    bool forEachCpuModel(Callback&& callback){
+        return session_.forEachCpuModel(std::forward<Callback>(callback));
+    }
     bool submit(uint32_t ms,const building::BuildingDualLeafGameSession::SubmitLeaf& submit,
                 std::string* error=nullptr){
         return session_.submit(ms,submit,error);
     }
-    void retireActor(Entity actor){session_.retireActor(actor);}
+    void retireActor(Entity actor){session_.retireActor(actor);interactions_.erase(actor.packed());}
     uint64_t sceneId()const{return sceneId_;}
     uint64_t revision()const{return physics_.revision();}
     uint64_t spatialRevision()const{return spatialRevision_;}
@@ -143,6 +189,7 @@ public:
         session_.detach();physics_.detach(host_->buildingCollision());
         router_.forgetScene(sceneId_);
         sceneId_=0;spatialRevision_=0;sim_=nullptr;host_=nullptr;
+        interactions_.clear();
     }
 private:
     Simulation* sim_=nullptr;
@@ -151,6 +198,7 @@ private:
     building::BuildingDualLeafGameSession session_;
     building::BuildingGraphChangeRouter router_;
     uint64_t sceneId_=0,spatialRevision_=0;
+    std::map<uint64_t,uint64_t> interactions_;
     world::Bounds lastChanged_{};
 };
 
