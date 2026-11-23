@@ -19,7 +19,7 @@
 namespace aiverse::studio::worldprocess_edit {
 
 struct Handle {
-    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative,AreaCenterX,AreaCenterZ};
+    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative,AreaCenterX,AreaCenterZ,GroupPivotX,GroupPivotZ};
     Mode mode=Mode::Reference;
     std::string owner,component,key,targetType;
     render::float3 position{};
@@ -176,6 +176,28 @@ inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
         }
     }
     return best;
+}
+// Group pivot is editor-only, derived from stable authored areas.
+inline bool groupCentroid(const editor::MapDoc& map,
+                          const std::vector<std::string>& selected,
+                          render::float3& result){
+    if(selected.size()<2||selected.size()>256)return false;
+    long double x=0,z=0;
+    std::set<std::string> seen;
+    for(const auto& stable:selected){
+        const auto id=stable.rfind("entity:@",0)==0?stable.substr(8):stable;
+        if(!seen.insert(id).second)return false;
+        const int index=map.findEntity(id);
+        if(index<0)return false;
+        const auto& e=map.data.entities[std::size_t(index)];
+        const auto& area=e.extra["components"]["EvolveArea"];
+        if(!area.isObject()||!e.extra["components"]["EvolveRegion"].isObject())
+            return false;
+        x+=double(e.x)+double(area.getInt("offsetXcm",0))/100.;
+        z+=double(e.z)+double(area.getInt("offsetZcm",0))/100.;
+    }
+    result={float(x/selected.size()),.65f,float(z/selected.size())};
+    return true;
 }
 inline bool compatible(const editor::DocEntity& target,
                        std::string_view required){
