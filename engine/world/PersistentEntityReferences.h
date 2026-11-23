@@ -1,5 +1,5 @@
 #pragma once
-#include "RegionEntityLedger.h"
+#include "RegionEcsBridge.h"
 #include "engine/core/ECS.h"
 #include <map>
 namespace aiverse::world {
@@ -33,6 +33,33 @@ public:
         auto it=byId_.find(id);
         if(it==byId_.end()||!world.alive(it->second))return false;
         out=it->second;return true;
+    }
+    // Build privately and publish only a complete, conflict-free mapping.
+    // A live ledger record may be unmaterialized; that is not an error.
+    bool rebuild(const World& world,const RegionEntityLedger& ledger){
+        PersistentEntityReferences staged;
+        bool ok=true;
+        world.eachExistingConst<RegionStableIdentity>([&](Entity entity,const RegionStableIdentity& identity){
+            if(!ok)return;
+            const auto* record=ledger.find(identity.id);
+            if(!record||!record->live||!staged.bind(world,identity.id,entity))ok=false;
+        });
+        if(!ok)return false;
+        byId_.swap(staged.byId_);byHandle_.swap(staged.byHandle_);
+        return true;
+    }
+    enum class Resolution { Null, Materialized, Unmaterialized, Missing, Retired, Stale };
+    Resolution classify(const World& world,const RegionEntityLedger& ledger,RegionEntityId id,Entity& out)const{
+        if(!id){out=kNullEntity;return Resolution::Null;}
+        const auto* record=ledger.find(id);
+        if(!record)return Resolution::Missing;
+        if(!record->live)return Resolution::Retired;
+        auto it=byId_.find(id);
+        if(it==byId_.end())return Resolution::Unmaterialized;
+        if(!world.alive(it->second))return Resolution::Stale;
+        const auto* tag=world.tryGetConst<RegionStableIdentity>(it->second);
+        if(!tag||tag->id!=id)return Resolution::Stale;
+        out=it->second;return Resolution::Materialized;
     }
     void clear(){byId_.clear();byHandle_.clear();}
     size_t size()const{return byId_.size();}
