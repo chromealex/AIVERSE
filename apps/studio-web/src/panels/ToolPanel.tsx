@@ -11,6 +11,7 @@ import './ToolPanel.css';
 import { StudioLoader, StudioButton } from '../ui';
 import NativeGraphPanel from '../graphs/NativeGraphPanel';
 import ModelGraphPanel from '../graphs/ModelGraphPanel';
+import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
 /** Panels with a Scene brush and the brush tools each offers. */
 const BRUSHES: Partial<Record<ToolPanelId, BrushKind[]>> = {
@@ -138,6 +139,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
+      {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open/>
