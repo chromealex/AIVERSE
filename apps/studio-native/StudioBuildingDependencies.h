@@ -23,6 +23,14 @@ struct StudioBuildingDependencyReport {
     std::vector<StudioBuildingDependencyStatus> stale;
 };
 
+// Fingerprint authored material definitions as well as imported images.
+inline std::string studioBuildingMaterialFingerprint(const Json& material){
+    const std::string serialized=material.dump(-1);
+    uint64_t digest=14695981039346656037ULL;
+    for(unsigned char byte:serialized){digest^=byte;digest*=1099511628211ULL;}
+    return std::to_string(digest);
+}
+
 inline std::string studioBuildingFingerprint(const std::vector<uint8_t>& data){
     uint64_t digest=14695981039346656037ULL;
     for(uint8_t byte:data){digest^=byte;digest*=1099511628211ULL;}
@@ -51,6 +59,36 @@ inline StudioBuildingDependencyReport studioCheckBuildingDependencies(
         return report;
     }
     const auto root=studioContentRoot(project);
+    // Bound material comparisons to the same project-owned library.
+    if(recipe.has("materialDependencies")){
+        const auto& savedMaterials=recipe["materialDependencies"];
+        if(!savedMaterials.isArray()||savedMaterials.size()>64){
+            report.stale.push_back({"","Invalid PBR material dependency manifest"});
+            return report;
+        }
+        const auto materialFile=project/"materials.json";
+        std::error_code statusError;
+        const auto state=fs::symlink_status(materialFile,statusError);
+        if(statusError||!fs::is_regular_file(state)||fs::is_symlink(state)){
+            report.stale.push_back({"","Project materials.json is unavailable"});
+        }else{
+            const auto library=Json::parseFile(materialFile.string())["materials"];
+            for(const auto& dep:savedMaterials.items()){
+                if(!dep.isObject()||!dep["name"].isString()||
+                   !dep["fingerprint"].isString()){
+                    report.stale.push_back({"","Invalid authored PBR material dependency"});
+                    continue;
+                }
+                const auto name=dep.getStr("name");
+                if(!library[name].isObject()){
+                    report.stale.push_back({name,"Shared PBR material removed"});
+                }else if(studioBuildingMaterialFingerprint(library[name])!=
+                         dep.getStr("fingerprint")){
+                    report.stale.push_back({name,"Shared PBR material parameters changed"});
+                }
+            }
+        }
+    }
     for(const auto& dependency:dependencies.items()){
         const auto guid=dependency.getStr("guid");
         if(!dependency.isObject()||!studioValidGuid(guid)){
