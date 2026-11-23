@@ -368,6 +368,7 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     // Track the final setup state (races may reposition/seat cars). No
     // extra resources or save fields are added without the rules block.
     if(sim.world().resourceConst<world::RegionEntityLedger>())
+        sim.addStateRestoredHook([this](Simulation& s){invalidateRegionOwnershipCaches(s);});
         synchronizeRegionOwnership(sim);
     meleeAttacks_.clear();
     if(config_.melee.enabled){
