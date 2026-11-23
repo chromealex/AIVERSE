@@ -81,7 +81,7 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
-        "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
+        "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
     return methods;
 }
 } // namespace
@@ -1041,6 +1041,49 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         const double half=current.key=="halfWidthCm"?
             areaPreview.halfWidth:areaPreview.halfDepth;
         params.set("value",Json::number(int64_t(std::lround(half*100.))));
+    }
+    // Group edge scaling is one atomic MapDoc operation. Shift selects
+    // individual pivots; default group scaling uses the shared centroid.
+    if(current.component=="EvolveArea" &&
+       (mode==worldprocess_edit::Handle::Mode::AreaWidth||
+        mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+        mode==worldprocess_edit::Handle::Mode::AreaDepth||
+        mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()>1){
+            const int index=map.findEntity(current.owner);
+            if(index<0)return true;
+            const auto& owner=map.data.entities[std::size_t(index)];
+            const auto& area=owner.extra["components"]["EvolveArea"];
+            worldprocess_edit::AreaPreview candidate;
+            if(!worldprocess_edit::previewArea(owner,mode,
+                    double(current.value),current.symmetric,candidate))return true;
+            const bool x=current.key=="halfWidthCm";
+            const auto oldHalf=area.getInt(current.key.c_str(),0);
+            const auto newHalf=std::int64_t(std::llround(
+                (x?candidate.halfWidth:candidate.halfDepth)*100.));
+            if(oldHalf<50||newHalf<50)return true;
+            Json ids=Json::array();
+            for(const auto& id:selected)ids.push(Json::string(id));
+            Json batch=Json::object();
+            batch.set("entityIds",std::move(ids));
+            batch.set("axis",Json::string(x?"x":"z"));
+            batch.set("pivot",Json::string(current.symmetric?"individual":"shared"));
+            batch.set("scaleNumerator",Json::number(newHalf));
+            batch.set("scaleDenominator",Json::number(oldHalf));
+            const auto response=request("studio.worldProcessAreaBatchResize",std::move(batch));
+            if(response.has("error")){
+                Json error=Json::object();
+                error.set("message",Json::string(
+                    "EVOLVE group resize: "+response.getStr("error")));
+                sendEventPayload("assets.importError",error);
+            }else{
+                sendEvent("document.changed","");
+                sendEvent("selection.changed","");
+                rebuildOverlay();
+            }
+            return true;
+        }
     }
     // Multi-selected EVOLVE areas translate by the same center delta.
     // A dedicated RPC validates all candidates before one MapDoc Undo entry.
