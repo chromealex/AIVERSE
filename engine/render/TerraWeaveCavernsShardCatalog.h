@@ -128,6 +128,32 @@ private:
     std::map<ChunkKey3,CaveBatchChunk,KeyLess> source_;
     std::map<CaveShardKey,uint64_t,CaveShardLess> lastShardRevision_;
 };
+// Deterministic per-shard grouping of a complete multi-shard edit batch.
+// Each shard may later be staged independently, but a cross-shard game edit
+// must NOT be acknowledged until all affected shard owners commit.
+inline std::map<CaveShardKey,std::vector<CaveBatchChunk>,CaveShardLess>
+groupCaveEditsByShard(const std::vector<CaveBatchChunk>& edits,
+                      CaveShardConfig config={}) {
+    validateCaveShardConfig(config);
+    if(edits.empty())throw std::invalid_argument("Caverns empty edit group");
+    std::map<CaveShardKey,std::vector<CaveBatchChunk>,CaveShardLess> grouped;
+    std::set<ChunkKey3,KeyLess> seen;
+    for(const auto& chunk:edits){
+        if(!seen.insert(chunk.mesh.key).second||
+           !chunk.revision||!chunk.generatorVersion||
+           !chunk.resolution||chunk.resolution>64||
+           chunk.spacingCm<=0||chunk.spacingCm>10000||
+           (chunk.mesh.indices.empty()!=chunk.mesh.vertices.empty()))
+            throw std::invalid_argument("Caverns duplicate/invalid grouped edit");
+        auto& group=grouped[caveShardFor(chunk.mesh.key,config)];
+        group.push_back(chunk);
+        const size_t limit=size_t(config.chunksPerAxis)*
+                           config.chunksPerAxis*config.chunksPerAxis;
+        if(group.size()>limit)
+            throw std::length_error("Caverns grouped shard budget");
+    }
+    return grouped;
+}
 // The GPU owner can route a snapshot with 0 visible chunks to stageEmpty,
 // otherwise prepare one GeometryScene from the whole shard (not edited subset).
 inline CaveBatchPrepared prepareFullCaveShardPresentation(
