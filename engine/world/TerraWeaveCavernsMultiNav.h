@@ -50,10 +50,12 @@ inline nav::Config caveNavMeshConfig(const CaveNavConfig& c) {
 class CaveNavSource final:public nav::Source {
 public:
     using Height=std::function<int64_t(int64_t,int64_t)>;
+    using Density=std::function<int64_t(PointCm)>;
     CaveNavSource(Settings caveSettings,CaveNavConfig config,
-                  std::vector<Entrance> entrances,Height terrainHeight)
+                  std::vector<Entrance> entrances,Height terrainHeight,
+                  Density customDensity={})
         :caves_(caveSettings),cfg_(config),entrances_(std::move(entrances)),
-         height_(std::move(terrainHeight)) {
+         height_(std::move(terrainHeight)),density_(std::move(customDensity)) {
         validate(caves_);validateCaveNav(cfg_);
         if(!height_)throw std::invalid_argument("Caverns nav height callback");
     }
@@ -75,7 +77,9 @@ public:
     }
     const CaveNavConfig& config()const{return cfg_;}
 private:
-    int64_t field(PointCm p)const{return combinedFieldCm(caves_,entrances_,p);}
+    int64_t field(PointCm p)const{
+        return density_ ? density_(p) : combinedFieldCm(caves_,entrances_,p);
+    }
     void sampleFloors(int32_t x,int32_t z,std::vector<int64_t>& floors)const {
         floors.clear();
         const int64_t px=cfg_.originXcm+int64_t(x)*cfg_.columnCm+cfg_.columnCm/2;
@@ -99,5 +103,6 @@ private:
     CaveNavConfig cfg_;
     std::vector<Entrance> entrances_;
     Height height_;
+    Density density_;
 };
 } // namespace aiverse::terraweave::caverns
