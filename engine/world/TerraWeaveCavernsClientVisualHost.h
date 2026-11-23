@@ -85,7 +85,7 @@ public:
         // Retire one undesired source at a time using a complete new shard
         // manifest. Never remove the visual from just the CPU catalog:
         // the old GPU owner is retained until a real completed fence.
-        for(auto it=pendingRetire_.begin();it!=pendingRetire_.end();) {
+        if(!visualBatch_)for(auto it=pendingRetire_.begin();it!=pendingRetire_.end();) {
             const auto ticket=it->second;
             if(!residency_.current(ticket)){
                 it=pendingRetire_.erase(it);continue;
