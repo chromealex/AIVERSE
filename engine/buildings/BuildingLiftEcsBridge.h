@@ -6,6 +6,8 @@
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/core/ECS.h"
 #include <algorithm>
+#include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <map>
 #include <string>
