@@ -343,3 +343,46 @@ Tests are deferred. Stage 22 is source-only and not validated by
 compiler, native NavMesh tests, Mac/Metal/GL33 or in-game navigation.
 Handoff:
 `docs/agent-handoffs/building-native-nav-source-stage22-2026-11-23.md`.
+
+
+## Stage 23A — all relevant building-dependent graphs, not only NavMesh
+
+Use `engine/buildings/BuildingGraphChanges.h` (exported via
+`BuildingRuntime.h`) when interactive construction changes after an
+authoritative world/collider commit. `BuildingGraphChangeRouter` dispatches
+revisioned notifications across eight orthogonal domains:
+Navigation (native nav::Mesh), Spatial (building room/region connectivity),
+Hierarchy (MapGrid A*, HPA* and flow fields), Transport (RoadGraph/rail),
+Gameplay (ZoneGraph/quest/ability logic), Presentation (shader/material/VFX
+or scene dependencies), Audio (acoustics) and Simulation (power, utilities,
+damage/environment networks). These are **independent consumers**, not a
+claim that their graph formats are interchangeable or automatically rebuilt.
+
+Register each relevant owner with `registerConsumer(domain, callback)`.
+A callback MUST invalidate/recompute its real graph or enqueue an
+authoritative rebuild and return true only once the change is accepted;
+a failed/unregistered domain remains pending. For nav::Mesh use
+`buildingNavInvalidator(mesh)`, which calls the already existing
+`markBuildingNavCollisionChanged`. For all other domains, bind callbacks
+to the existing owner APIs; never instantiate duplicate pathfinding,
+network or renderer graphs. Call `publish(change)` with a monotonic
+scene revision and a conservative world-space bounds **after** the
+physical aperture state is successfully committed. Retry the same change
+while `pendingDomains(sceneId,revision)` is nonzero; never publish a newer
+revision before earlier domains are acknowledged. Choose a precise mask
+for the feature: DO NOT set `kBuildingGraphAll` unless every domain has a
+registered owner, or the event will deliberately remain pending.
+
+A change notification is not itself a physical door/gate/roof controller.
+Authoritative PHYSIS/SpatialWorld owns blocking geometry and collision,
+`BuildingStructureGraph` owns its physical opening topology,
+`BuildingCirculationScene` owns lift doors; presentation graphs remain
+read-only visual consumers. No client may use an event to bypass a door
+interlock. An absent graph subsystem does not need to be notified.
+Any changes to ZoneGraph connectivity or Roads require the appropriate
+existing game system to validate its semantics before commit.
+
+Tests are deferred per user instruction; this source-level graph router is
+not evidence of verified all-graph live integration.
+Handoff:
+`docs/agent-handoffs/building-multigraph-stage23a-2026-11-23.md`.
