@@ -15,3 +15,5 @@ Geometry3D.h: rayBox/raySphere return forward parameter intervals; rayPlane and 
 GeometryDistance.h: closestPoint for segment/triangle (including degenerate triangles), segmentDistanceSquared, capsule-sphere/capsule-capsule overlaps and 15-axis OBB SAT. OBB axes must be orthonormal. Closest point helpers require finite bounded input. Floating point, no lockstep guarantee. No tests yet.
 
 GeometryConvex.h: convexSupport, bounded convexIntersect (GJK, four-state result; tolerance contact), sweepSpheres constant velocity. Indeterminate must not be treated as separation. EPA not implemented. No build/tests.
+
+GeometryEPA.h: convexEPA accepts four actual Minkowski support vertices strictly enclosing origin; returns depth and outward A-B normal on convergence. Caller supplies simplex; current GJK API does not expose it. Invalid/Indeterminate are explicit. No tests.
