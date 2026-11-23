@@ -13,7 +13,7 @@ class TextureGraphGpuPreview {
     uint64_t fence_=0,serial_=0;
     std::optional<Program> program_;
     size_t target_=0;int size_=0;
-    std::string project_,state_="idle",reason_,backend_="none";
+    std::string project_,state_="idle",reason_,backend_="none",submittedBackend_;
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false;
     void fallback(const std::string& why){
@@ -42,7 +42,8 @@ public:
         else{auto it=program.outputs.find(p.getStr("output"));if(it!=program.outputs.end())target=it->second;}
         if(target>=program.nodes.size())throw std::invalid_argument("unknown preview target");
         if(serial_==~uint64_t{0})throw std::overflow_error("GPU preview identity exhausted");
-        ++serial_;size_=std::min(program.size,32);target_=target;program_=std::move(program);project_=project;
+        const int requested=render::texture_graph::integer(p["resolution"],32,8,render::texture_graph::gpu::maxPreviewSize);
+        ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;
         requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
@@ -68,7 +69,7 @@ public:
                         for(size_t i=0;i<data.size();++i)if(std::abs(int(data[i])-int(reference.rgba[i]))>1){valid=false;break;}
                     }catch(...){valid=false;}
                 }
-                if(valid){pixels_=std::move(data);state_="ready";backend_="metal";reason_="completed native readback; CPU reference within one RGBA8 unit";}
+                if(valid){pixels_=std::move(data);state_="ready";backend_=submittedBackend_;reason_="completed native readback; CPU reference within one RGBA8 unit";}
                 else fallback("GPU readback or CPU parity check failed");
             }
             // Callback means GPU command completed (success or failure).
@@ -76,11 +77,14 @@ public:
         }else if(!read_&&fence_&&dev.gpuCompletedFence()>=fence_&&dev.gpuHealthy())release(dev);
         if(!queued_)return;
         queued_=false;
-        if(dev.info().backend!=gfx::Backend::Metal||!dev.supportsCompute()||!dev.gpuHealthy()){fallback("Metal compute unavailable");return;}
+        const bool metal=dev.info().backend==gfx::Backend::Metal;
+        const bool vulkan=dev.info().backend==gfx::Backend::Vulkan;
+        if((!metal&&!vulkan)||!dev.supportsCompute()||!dev.gpuHealthy()){fallback("Metal/Vulkan compute unavailable");return;}
         auto source=render::texture_graph::gpu::compile(*program_,target_,size_);
         if(source.msl.empty()){fallback(source.reason);return;}
-        compute_=dev.createCompute({source.msl.c_str(),nullptr,"TextureGraph preview"});
-        if(!compute_.valid()){fallback("Metal pipeline rejected");return;}
+        submittedBackend_=metal?"metal":"vulkan";
+        compute_=dev.createCompute({metal?source.msl.c_str():nullptr,vulkan?source.glsl.c_str():nullptr,"TextureGraph preview"});
+        if(!compute_.valid()){fallback("Native compute pipeline rejected");return;}
         std::vector<uint32_t> zero(size_t(size_)*size_,0);
         gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.size=zero.size()*4;desc.data=zero.data();desc.label="TextureGraph preview RGBA8";
         buffer_=dev.createBuffer(desc);
@@ -88,9 +92,11 @@ public:
         fence_=dev.gpuSubmissionFence();
         if(!buffer_.valid()||!dev.beginCompute(compute_)){fallback("GPU buffer or encoder rejected");return;}
         dev.setComputeBuffer(0,buffer_);const bool encoded=dev.dispatchChecked(uint32_t(zero.size()));dev.endCompute();
-        if(!encoded||!dev.computeDispatchSucceeded()){fallback("GPU dispatch rejected");return;}
+        if(!encoded||(metal&&!dev.computeDispatchSucceeded())){fallback("GPU dispatch rejected");return;}
         auto read=std::make_shared<Read>();
-        if(!dev.readBufferRangeAsync(buffer_,0,desc.size,[read](std::vector<uint8_t> bytes){read->bytes=std::move(bytes);read->done=true;})){fallback("GPU readback request rejected");return;}
+        auto callback=[read](std::vector<uint8_t> bytes){read->bytes=std::move(bytes);read->done=true;};
+        const bool accepted=metal?dev.readBufferRangeAsync(buffer_,0,desc.size,callback):dev.readBufferAsync(buffer_,desc.size,callback);
+        if(!accepted){fallback("GPU readback request rejected");return;}
         read_=std::move(read);state_="pending";
     }
     // Called only after the existing native shutdown GPU idle barrier.
