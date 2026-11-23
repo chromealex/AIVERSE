@@ -96,6 +96,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
 StudioHost::~StudioHost() { shutdown(); }
 void StudioHost::shutdown() {
     *alive_ = false;
+    fxShot_.reset(); // completion callback retains its own immutable shared state
     if(session_)session_->workspace().setSpectraPreviewHandler({});
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
@@ -228,6 +229,7 @@ void StudioHost::webReady() {
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     projectLoading_ = true;
+    fxShot_.reset(); // a pending readback must not leak a previous project's pixels
     if (game_) game_->stop();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
@@ -288,7 +290,10 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
-    else if(surface == StudioSurface::Fx) { fxPlacement_={}; fxSurfaceVisible_=false; }
+    else if(surface == StudioSurface::Fx) {
+        fxPlacement_={};fxSurfaceVisible_=false;
+        fxShot_.reset(); // a detached floating FX tab owns no pending preview
+    }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
