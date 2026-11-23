@@ -30,13 +30,19 @@ public:
         if(physicsBarrier_.status().recoveryRequired)
             throw std::runtime_error("Caverns needs world recovery");
         host_.edited(bounds,std::move(snapshot));
+        readyStreamBuilds_.clear();
+        pendingRetires_.clear();
         syncStreamingEditPins();
     }
     bool onAuthoringOperation(const Json& response,
                              std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
         if(physicsBarrier_.status().recoveryRequired)return false;
         const bool accepted=host_.consumeAuthoringOperation(response,std::move(snapshot));
-        if(accepted)syncStreamingEditPins();
+        if(accepted){
+            readyStreamBuilds_.clear();
+            pendingRetires_.clear();
+            syncStreamingEditPins();
+        }
         return accepted;
     }
     // Runs on an owner frame boundary, not from a deterministic simulation
@@ -133,6 +139,15 @@ public:
                 }
                 return false;
             }),results.end());
+        for(auto& item:results)
+            readyStreamBuilds_.insert_or_assign(item.ticket.key,item);
+        // Keep completed CPU results alive until the actual GPU/Box3D/Nav
+        // owner has published them; never ACK here.
+        for(auto it=readyStreamBuilds_.begin();it!=readyStreamBuilds_.end();){
+            if(!residency_.current(it->second.ticket))
+                it=readyStreamBuilds_.erase(it);
+            else ++it;
+        }
         return results;
     }
     std::vector<CaveResidencyTicket> outstandingStreamRetires()const {
@@ -143,17 +158,68 @@ public:
         }
         return result;
     }
+    // Streaming owner-barrier publication. The game host must actually
+    // replace matching GPU, Box3D, SpatialWorld and nav resources BEFORE it
+    // reports success. The exclusive proof must represent held exclusion.
+    using StreamBuildCommit=std::function<bool(const CaveResidencyTicket&,
+                                              const CaveMesh&)>;
+    using StreamRetireCommit=std::function<bool(const CaveResidencyTicket&)>;
+    bool publishStreamBuild(
+        CaveResidencyTicket ticket,
+        const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+        const StreamBuildCommit& actualNativeCommit) {
+        const auto it=readyStreamBuilds_.find(ticket.key);
+        if(ticket.action!=CaveResidencyAction::Build ||
+           !exclusive || !exclusive() || !actualNativeCommit ||
+           it==readyStreamBuilds_.end() ||
+           !residency_.current(ticket) ||
+           it->second.ticket.generation!=ticket.generation ||
+           it->second.ticket.sourceRevision!=ticket.sourceRevision)
+            return false;
+        if(!actualNativeCommit(ticket,it->second.mesh))return false;
+        if(!residency_.acknowledge(ticket))
+            throw std::logic_error("Caverns streaming build ACK refused after native commit");
+        readyStreamBuilds_.erase(it);
+        return true;
+    }
+    bool publishStreamRetire(
+        CaveResidencyTicket ticket,
+        const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+        const StreamRetireCommit& actualNativeCommit) {
+        const auto it=pendingRetires_.find(ticket.key);
+        if(ticket.action!=CaveResidencyAction::Retire ||
+           !exclusive || !exclusive() || !actualNativeCommit ||
+           it==pendingRetires_.end() || !residency_.current(ticket) ||
+           it->second.generation!=ticket.generation ||
+           it->second.sourceRevision!=ticket.sourceRevision)
+            return false;
+        // Actual host must retire previous GeometryScene source/Box3D body/
+        // SpatialWorld range/NavMesh at an exclusive owner barrier. Never
+        // use an empty/dummy callback as proof of full retirement.
+        if(!actualNativeCommit(ticket))return false;
+        if(!residency_.acknowledge(ticket))
+            throw std::logic_error("Caverns streaming retirement ACK refused after native commit");
+        pendingRetires_.erase(it);
+        return true;
+    }
+
     bool acceptStreaming(CaveResidencyTicket ticket){
         if(physicsBarrier_.status().recoveryRequired)return false;
         const bool confirmed=residency_.acknowledge(ticket);
-        if(confirmed && ticket.action==CaveResidencyAction::Retire)
-            pendingRetires_.erase(ticket.key);
+        if(confirmed){
+            if(ticket.action==CaveResidencyAction::Retire)
+                pendingRetires_.erase(ticket.key);
+            else readyStreamBuilds_.erase(ticket.key);
+        }
         return confirmed;
     }
     bool failStreaming(CaveResidencyTicket ticket){
         const bool failed=residency_.fail(ticket);
-        if(failed && ticket.action==CaveResidencyAction::Retire)
-            pendingRetires_.erase(ticket.key);
+        if(failed){
+            if(ticket.action==CaveResidencyAction::Retire)
+                pendingRetires_.erase(ticket.key);
+            else readyStreamBuilds_.erase(ticket.key);
+        }
         return failed;
     }
     uint64_t pinStreamChunk(ChunkKey3 key,CaveLeasePurpose purpose){
@@ -176,7 +242,7 @@ public:
     bool shutdownAfterGpuIdle(gfx::Device& device){
         streamJobs_.drain();
         if(!host_.shutdownAfterGpuIdle(device))return false;
-        pendingRetires_.clear();editPins_.clear();
+        pendingRetires_.clear();readyStreamBuilds_.clear();editPins_.clear();
         return true;
     }
     CaveGameplayEditStats stats()const{return host_.stats();}
@@ -205,6 +271,7 @@ private:
     CaveWorldResidency residency_;
     CaveWorldStreamJobs streamJobs_{2};
     std::map<ChunkKey3,CaveResidencyTicket,KeyLess> pendingRetires_;
+    std::map<ChunkKey3,CaveStreamCpuResult,KeyLess> readyStreamBuilds_;
     std::map<ChunkKey3,uint64_t,KeyLess> editPins_;
     CaveGameplayEditHost host_;
     CaveGameplayPhysicsBarrier physicsBarrier_;
