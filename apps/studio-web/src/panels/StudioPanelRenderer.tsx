@@ -28,6 +28,7 @@ import RuntimePanel from './generated/RuntimePanel';
 import BuildPanel from './BuildPanel';
 import ConsolePanel from './ConsolePanel';
 import ToolPanel from './ToolPanel';
+import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import AgentPanel from './AgentPanel';
 import AnimationTimeline from './AnimationTimeline';
 import PostFxPanel from './PostFxPanel';
@@ -100,9 +101,11 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
       case 'effects': case 'lightbake': case 'models': case 'overlays': case 'branding':
-      case 'fields': case 'physis': case 'actor': case 'raid': case 'balance': case 'fx_graph': case 'fx_functions': case 'modeling':
+      case 'fields': case 'physis': case 'actor': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
       case 'anim_assets': case 'anim_graph': case 'anim_rig': case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
+        onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
       case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'scripts': return <ScriptsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'input': return <InputPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
