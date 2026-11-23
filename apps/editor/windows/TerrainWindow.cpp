@@ -270,7 +270,11 @@ public:
 
     void update(Editor& ed, double) override {
         if (ed.tool != Tool::Count) owner_ = false;
-        if (!owner_ || ed.playing() || !ed.sceneVisible()) { painting_ = false; return; }
+        if (!owner_ || ed.playing() || !ed.sceneVisible()) {
+            painting_ = false;
+            ed.cavernsBrushPreview.visible=false;
+            return;
+        }
         ImGuiIO& io = ImGui::GetIO();
         Viewport& vp = *ed.sceneViewport;
         if(caverns_ && vp.hovered) {
@@ -280,7 +284,13 @@ public:
                                      vp.pointsW,vp.pointsH,origin,direction)) {
                 const auto& saved=ed.doc().data.extra["terraweaveCaverns"];
                 try {
-                    auto snapshot=terraweave::caverns::caveSnapshotFromJson(saved);
+                    if(!caveCacheValid_ || saved!=caveCacheJson_) {
+                        auto newSnapshot=terraweave::caverns::caveSnapshotFromJson(saved);
+                        caveCacheJson_=saved;
+                        caveCacheSnapshot_=std::move(newSnapshot);
+                        caveCacheValid_=true;
+                    }
+                    const auto& snapshot=caveCacheSnapshot_;
                     constexpr double scale=double(1<<20);
                     const double dlen=std::sqrt(double(direction.x)*direction.x+
                         double(direction.y)*direction.y+double(direction.z)*direction.z);
@@ -298,6 +308,13 @@ public:
                 }catch(const std::exception&){}
             }
         }else caveHoverValid_=false;
+        ed.cavernsBrushPreview.visible=caverns_ && caveHoverValid_;
+        if(ed.cavernsBrushPreview.visible){
+            ed.cavernsBrushPreview.position={float(double(caveHoverCm_.x)/100.),
+                float(double(caveHoverCm_.y)/100.),float(double(caveHoverCm_.z)/100.)};
+            ed.cavernsBrushPreview.radiusMetres=float(caveRadiusCm_)*.01f;
+            ed.cavernsBrushPreview.fill=(io.KeyShift?1-caveAction_:caveAction_)==1;
+        }
         if (!io.MouseDown[0]) { painting_ = false; stamped_ = false; return; }
         if (stamped_) return;
         if (!painting_ && !(io.MouseClicked[0] && vp.hovered)) return;
@@ -448,6 +465,9 @@ private:
     bool sparse_=false;
     bool caverns_=false, caveHoverValid_=false;
     terraweave::caverns::PointCm caveHoverCm_{};
+    Json caveCacheJson_{};
+    terraweave::caverns::CaveVolumeSnapshot caveCacheSnapshot_{};
+    bool caveCacheValid_=false;
     int caveAction_=0,caveRadiusCm_=400,caveDepthCm_=1000;
     int sparseAction_=0,sparseChunkMetres_=256;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
