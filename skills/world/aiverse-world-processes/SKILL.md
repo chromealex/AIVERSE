@@ -122,3 +122,44 @@ Portal/Receiver/Emitter, FRACTURE Bond, AETHER Duct/Flux require a separate
 validated map-ref resolution stage and a Studio picker. No numeric index
 fallback. See
 `docs/handoffs/world-processes-stage08-native-hydration-2026-11-23.md`.
+
+## Stage 09: stable map-object connections (ECHO, FRACTURE, AETHER)
+
+Shared C++ validation/adapter:
+`aiverselib/world/WorldProcessesLinkedAuthoring.h`. Linked authored
+components with stable **map document IDs**, NOT numeric `Entity.index`:
+`EchoPortal(from,to,loss,bidirectional,enabled)`,
+`EchoEmitter(zone,intensity,enabled)`,
+`EchoReceiver(zone,threshold,enabled)`,
+`FractureBond(first,second,strength,damage,enabled)`,
+`AetherDuct(from,to,maximumPerTick,oneWay,enabled)`,
+`AetherFlux(cell,smoke,toxin,oxygen,enabled)`.
+New configs start disabled and unbound. For enabled links, all required
+targets must exist; two-ended links need distinct IDs. Numeric ranges and
+types are validated with exact integer parsing. Do not expose runtime-only
+`EchoHearing`, `FractureCollapse` or PHYSIS transient state as authoring.
+
+`WorldProcessesMapHydration.h` does a deterministic two-phase map
+preflight, checks unique stable IDs, live generation-safe ECS handle
+mapping and compatible endpoint components, then hydrates standalone
+components FIRST, linked components SECOND. The source of truth is still
+one World; mapping is a transient setup-time lookup, not serialized.
+Authored EchoReceiver automatically gets its authoritative
+`AcousticHearing` output component.
+
+HTML5 Studio: existing Inspector `componentCatalog/add/remove/setProperty/
+setProperties` accepts linked types. Reference fields expose native-backed
+options and the shared `EntityReferencePicker` (searchable object list,
+drag from Hierarchy via `application/x-aiverse-entity`,
+stable `entity:@id` values only). Native validates target ID and
+required component on each write. A multi-field link paste is staged
+atomically into one MapDoc Undo step. Referenced target components cannot
+be removed until incoming links are cleared. Entity *deletion* and map-ID
+renames still require a complete graph-aware authoring cleanup workflow;
+game setup will reject stale IDs rather than silently rebind.
+
+Tests: `tests/world_processes_linked_test.cpp` and extended
+`apps/studio-native/tests/StudioSessionTests.cpp`, plus CMake/CI.
+Until latest CI/native Mac builds and screenshots pass, label this stage
+**source implemented, not verified**. Handoff:
+`docs/handoffs/world-processes-stage09-linked-authoring-2026-11-23.md`.
