@@ -4,6 +4,7 @@ namespace aiverse::actor {
 void ActorHost::setContentReader(world::AssetReader reader) {
     streamedCollision_.reset();
     navigationCollisionRevision_=UINT64_MAX;
+    navigationReadinessError_.clear();
     if(streamManifest_.getBool("async"))streamedCollision_=std::make_unique<world::CollisionStream>(streamManifest_,std::move(reader),collision_);
 }
 bool ActorHost::readyToStep(Simulation& sim) {
@@ -34,7 +35,11 @@ bool ActorHost::readyToStep(Simulation& sim) {
     if(!streamedCollision_->prepareRegions(regions))return false;
     if(botHost_ && navigationCollisionRevision_!=streamedCollision_->revision()) {
         std::string error;
-        if(!rebuildBotNavigation(&error))return false;
+        if(!rebuildBotNavigation(&error)) {
+            navigationReadinessError_=std::move(error);
+            return false;
+        }
+        navigationReadinessError_.clear();
         navigationCollisionRevision_=streamedCollision_->revision();
     }
     return true;
