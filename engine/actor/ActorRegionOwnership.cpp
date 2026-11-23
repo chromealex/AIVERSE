@@ -200,6 +200,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     // it or reuse it across restore without rebuilding from canonical seats.
     std::map<uint64_t,Entity> carByMember;
     std::set<uint64_t> candidateCars;
+    std::set<uint64_t> crossingCars;
     const auto* previousSeats=view.resourceConst<RegionSeatIndex>();
     std::set<uint64_t> handled;
     for(Entity car:cars) {
@@ -248,7 +249,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             if(notified(member))candidateCars.insert(car.packed());
         }
         if(!changed)continue;
-        if(!candidateCars.contains(car.packed()))++uncoveredGroups;
+        crossingCars.insert(car.packed());
         if(streamManifest_.getBool("async")) {
             const world::Bounds required{
                 carState->pos-Vec3{2_fx,2_fx,2_fx},
@@ -283,6 +284,9 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
             if(!previousSeats->carByMember.contains(member))
                 candidateCars.insert(newCar.packed());
     }
+    // Evaluate coverage after expanding both old and new seat membership.
+    for(auto car:crossingCars)
+        if(!candidateCars.contains(car))++uncoveredGroups;
     // Apply migrations under the exclusive undo transaction.
     // Validate all seat graphs and collision admission before any group moves.
     for(const auto& pending:pendingGroups) {
@@ -352,7 +356,9 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         stagedLedger.commit();
         rollback.committed=true;
     }
-    ecs.setResource<RegionSeatIndex>(RegionSeatIndex{std::move(carByMember)});
+    // Avoid replacing the derived resource on ticks with unchanged membership.
+    if(!previousSeats || previousSeats->carByMember!=carByMember)
+        ecs.setResource<RegionSeatIndex>(RegionSeatIndex{std::move(carByMember)});
     (void)ecs.drainComponentChanges<CharacterBody>();
     (void)ecs.drainComponentChanges<Vehicle>();
     (void)ecs.drainComponentChanges<Loot>();
