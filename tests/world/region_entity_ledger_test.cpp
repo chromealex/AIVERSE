@@ -5,6 +5,8 @@
 #include "engine/world/UnifiedComponentSection.h"
 #include "engine/world/UnifiedResourceSection.h"
 #include <chrono>
+#include <atomic>
+#include <thread>
 #include <fstream>
 #include "engine/sim/Simulation.h"
 #include "tests/AlwaysCheck.h"
@@ -639,7 +641,47 @@ static void checkNativeFinality(bool restart=false){
 #endif
 }
 
+static void checkAsyncPersistenceMailbox(){
+#if !defined(__EMSCRIPTEN__)
+    using Io=AsyncPersistenceIo;
+    std::atomic<bool> release{false};
+    Io io;
+    AIVERSE_TEST_CHECK(io.start(32));
+    AIVERSE_TEST_CHECK(io.submit(1,33,[]{return true;})==Io::Submit::TooLarge);
+    // Scope release ensures an assertion/exception cannot strand the worker.
+    struct Release {std::atomic<bool>& flag;~Release(){flag.store(true);}} guard{release};
+    AIVERSE_TEST_CHECK(io.submit(1,32,[&]{
+        while(!release.load())std::this_thread::yield();
+        return true;
+    })==Io::Submit::Accepted);
+    AIVERSE_TEST_CHECK(io.submit(2,1,[]{return true;})==Io::Submit::Busy);
+    Io::Receipt receipt;
+    AIVERSE_TEST_CHECK(!io.take(receipt));
+    release.store(true);
+    auto take=[&](){
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+        while(!io.take(receipt)){
+            AIVERSE_TEST_CHECK(std::chrono::steady_clock::now()<deadline);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    };
+    take();
+    AIVERSE_TEST_CHECK(receipt.ticket==1&&receipt.bytes==32&&receipt.status==Io::Status::Durable);
+    AIVERSE_TEST_CHECK(io.submit(2,4,[]{return false;})==Io::Submit::Accepted);
+    take();
+    AIVERSE_TEST_CHECK(receipt.ticket==2&&receipt.status==Io::Status::Failed);
+    AIVERSE_TEST_CHECK(io.submit(3,1,[]{return true;})==Io::Submit::Stopped);
+    io.stop();
+    AIVERSE_TEST_CHECK(io.start(32));
+    std::atomic<bool> drained{false};
+    AIVERSE_TEST_CHECK(io.submit(4,1,[&]{drained.store(true);return true;})==Io::Submit::Accepted);
+    io.stop();
+    AIVERSE_TEST_CHECK(drained.load());
+#endif
+}
+
 int main() {
+    checkAsyncPersistenceMailbox();
     checkExactMutationCapture();
     checkNativeFinality();
     checkNativeFinality(true);
