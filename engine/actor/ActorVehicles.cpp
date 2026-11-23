@@ -134,6 +134,10 @@ world::RegionPositionReader ActorHost::regionPositionReader() {
             return actor->pos;
         if(const auto* vehicle=world.tryGetConst<Vehicle>(entity))
             return vehicle->pos;
+        if(const auto* loot=world.tryGetConst<Loot>(entity))
+            return loot->pos;
+        if(const auto* projectile=world.tryGetConst<Projectile>(entity))
+            return projectile->pos;
         return world::regionTransformPosition(world,entity);
     };
 }
