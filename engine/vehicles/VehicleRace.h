@@ -61,6 +61,10 @@ public:
     // Includes previous checkpoint/grid and the next checkpoint if crossed
     // on the coming tick; sorted and unique for deterministic pinning.
     std::vector<Vec3> possibleRespawnPositions(const World& w) const;
+    // Conservative next-tick subset. maxTravel is an upper bound on the
+    // distance that ANY accepted controller step can move in this tick.
+    // 0 disables pruning; old API keeps exact W1.11 behavior.
+    std::vector<Vec3> imminentRespawnPositions(const World& w,Fixed maxTravel)const;
     void after(World& w, RaceHost& host, const DriveRules& drive, uint32_t tick) const;
     int64_t racerOf(const World& w, Entity car) const;                // racer id, 0: not racing
     bool holds(const World& w, Entity car) const;                     // a racer during the race: nobody gets out
