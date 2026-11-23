@@ -312,8 +312,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             return (coordinate.raw*100)/Fixed::kOne;
         };
         auto area=sim.world().get<evolve::Area>(placed[i]);
-        area.centerXcm=quantized(position[0]);
-        area.centerZcm=quantized(position[position.size()==3?2:1]);
+        area.centerXcm=quantized(position[0])+area.centerXcm;
+        area.centerZcm=quantized(position[position.size()==3?2:1])+area.centerZcm;
         if(!evolve::valid(area))
             throw std::invalid_argument("World Processes: EVOLVE area exceeds world coordinate limits");
         sim.world().get<evolve::Area>(placed[i])=area;
