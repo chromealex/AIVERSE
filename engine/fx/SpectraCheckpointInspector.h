@@ -27,7 +27,7 @@ inline std::string_view gpuDiagnosticErrorString(GpuDiagnosticError code) {
     case GpuDiagnosticError::TruncatedHeader:return "truncated V2 header";
     case GpuDiagnosticError::TooLarge:return "diagnostic exceeds maximum size";
     case GpuDiagnosticError::BadMagic:return "not an SPFX file";
-    case GpuDiagnosticError::UnsupportedVersion:return "unsupported SPFX version (V2 only)";
+    case GpuDiagnosticError::UnsupportedVersion:return "unsupported SPFX version (V2/V3 only)";
     case GpuDiagnosticError::InvalidHeader:return "invalid SPFX V2 header";
     case GpuDiagnosticError::InvalidSlotCount:return "invalid physical slot count";
     case GpuDiagnosticError::PayloadLengthMismatch:return "declared payload length does not match slot ABI";
@@ -41,6 +41,8 @@ inline std::string_view gpuDiagnosticErrorString(GpuDiagnosticError code) {
 struct GpuDiagnosticInspection {
     GpuDiagnosticError error=GpuDiagnosticError::None;
     GpuCheckpointExportHeader header{};
+    GpuCheckpointRngTrailer rng{};
+    bool hasRngMetadata=false;
     uint32_t liveSlots=0, deadSlots=0;
     uint32_t nonFiniteLiveSlots=0;
     uint32_t invalidAgeSlots=0, invalidCpuLifetimeSlots=0;
@@ -72,7 +74,7 @@ inline GpuDiagnosticInspection inspectGpuCheckpointDiagnostic(
     if(out.header.magic!=0x58465053u) {
         out.error=GpuDiagnosticError::BadMagic;return out;
     }
-    if(out.header.version!=2) {
+    if(out.header.version!=2&&out.header.version!=3) {
         out.error=GpuDiagnosticError::UnsupportedVersion;return out;
     }
     if(out.header.headerBytes!=sizeof(GpuCheckpointExportHeader) ||
@@ -84,7 +86,7 @@ inline GpuDiagnosticInspection inspectGpuCheckpointDiagnostic(
         out.error=GpuDiagnosticError::InvalidSlotCount;return out;
     }
     const size_t bytesPerSlot=sizeof(GpuCheckpointParticle)+sizeof(float);
-    const size_t expected=slots*bytesPerSlot;
+    const size_t expected=slots*bytesPerSlot+(out.header.version==3?sizeof(GpuCheckpointRngTrailer):0);
     if(out.header.payloadBytes!=expected) {
         out.error=GpuDiagnosticError::PayloadLengthMismatch;return out;
     }
@@ -99,6 +101,11 @@ inline GpuDiagnosticInspection inspectGpuCheckpointDiagnostic(
         data+sizeof(GpuCheckpointExportHeader),expected)!=
         out.header.payloadCrc32) {
         out.error=GpuDiagnosticError::CrcMismatch;return out;
+    }
+    if(out.header.version==3){
+        std::memcpy(&out.rng,data+size-sizeof(out.rng),sizeof(out.rng));
+        if(out.rng.enabled>1){out.error=GpuDiagnosticError::InvalidHeader;return out;}
+        out.hasRngMetadata=true;
     }
     const size_t particleStart=sizeof(GpuCheckpointExportHeader);
     const size_t lifetimeStart=particleStart+
