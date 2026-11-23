@@ -50,13 +50,21 @@ export default function SpectraAssetPicker({
     if(disabled)return;
     // Drag data is untrusted. Resolve GUID against the indexed assets,
     // never accept an arbitrary external file path or spoofed GUID.
-    let candidate:unknown;
-    try {candidate=JSON.parse(event.dataTransfer.getData('application/x-aiverse-asset')||'null');}
-    catch {candidate=null;}
-    if(!isAsset(candidate)){setError('Drop an indexed Studio asset.');return;}
-    const resolved=assets.find(a=>a.guid.toLowerCase()===candidate.guid.toLowerCase()&&
-      (!kinds||kinds.includes(a.kind)));
-    if(!resolved){setError('Asset GUID is not in the current project index.');return;}
+    const projectPath=event.dataTransfer.getData('application/x-aiverse-content-path');
+    let resolved:SpectraIndexedAsset|undefined;
+    if(projectPath){
+      // AssetsPanel's established MIME carries a content-relative path.
+      // Resolve through our current GUID catalog; never trust the raw path.
+      resolved=assets.find(a=>a.path===projectPath&&(!kinds||kinds.includes(a.kind)));
+    } else {
+      let candidate:unknown;
+      try {candidate=JSON.parse(event.dataTransfer.getData('application/x-aiverse-asset')||'null');}
+      catch {candidate=null;}
+      if(isAsset(candidate))
+        resolved=assets.find(a=>a.guid.toLowerCase()===candidate.guid.toLowerCase()&&
+          (!kinds||kinds.includes(a.kind)));
+    }
+    if(!resolved){setError('Drop an asset from the current indexed project.');return;}
     choose(resolved);
   };
   const selected=assets.find(a=>a.guid.toLowerCase()===value?.guid.toLowerCase());
