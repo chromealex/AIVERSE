@@ -26,6 +26,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [autoReload,setAutoReload]=useState(false);
+  const [gpuBirthRandom,setGpuBirthRandom]=useState(false);
   const [reloadCycle,setReloadCycle]=useState(0);
   const mounted=useRef(false);
   useEffect(()=>{
@@ -98,7 +99,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       // Remember an attempted invalid revision so it does not enter an
       // infinite loop while the user edits another node.
       lastLoadedGraph.current=graphSignature;
-      void invoke('studio.spectraPreview',{action:'load',graph}).then(async next=>{
+      void invoke('studio.spectraPreview',{action:'load',graph,gpuBirthRandom}).then(async next=>{
         if(closed)return;
         if(!next.ready || next.error) {
           setState(next);
@@ -300,7 +301,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
 
   const command=async(action:Action,options:Partial<{
-    graph:Record<string,unknown>;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
+    graph:Record<string,unknown>;gpuBirthRandom:boolean;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
     preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean;count:number
   }>={})=>{
@@ -319,7 +320,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.
-    await command('load',{graph});
+    await command('load',{graph,gpuBirthRandom});
   };
   const setLiveValue=async()=>{
     const numeric=Number(value);
@@ -401,6 +402,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" variant="primary" disabled={!active||busy||disabled}
         onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
+      <StudioCheckbox label="GPU birth random (applies on Load)" checked={gpuBirthRandom} disabled={!active||busy}
+        onChange={e=>setGpuBirthRandom(e.target.checked)}/>
       <StudioCheckbox label="Auto-reload graph" checked={autoReload} disabled={!active||busy}
         onChange={e=>setAutoReload(e.target.checked)}/>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
