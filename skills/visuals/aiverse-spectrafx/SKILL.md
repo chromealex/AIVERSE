@@ -1779,3 +1779,9 @@ Native `SpectraAuthoring.h` declares `MeshOutput` default `{"meshes":["builtin:c
 The production `SpectraGraphAssetInspector` renders a per-slot indexed model picker when `property="meshes"`, with Add (after slot), Remove, Move Up, and Move Down. All operations call `editSpectraMeshSlot` in `spectraAssetBinding.ts`, which preserves graph immutability, requires a nonempty string array, forbids removing the final mesh, caps the list at 32, and validates added/replaced GUIDs against the authoritative Studio model index. Existing `content/`-prefixed paths remain intact. Add initially duplicates the current indexed slot (or first available indexed model), then users choose a replacement. Invalid/unresolved slots are shown but not automatically rewritten.
 
 The production panel's `onGraphChange` still routes through `apply()` and existing native Validate/Save Draft/Publish operations. No compile, UI or GPU tests have been executed.
+
+## Stage 48 — choose-first mesh insertion and runtime format caution
+
+`SpectraGraphAssetInspector.tsx` now opens a per-slot model picker when Add is clicked, and calls `editSpectraMeshSlot(...,'add',...)` **only after** the user chooses an indexed model. Cancel leaves the graph untouched. Pending insertion is cleared when the selected node or property changes. Existing reorder/remove/replace behavior remains.
+
+Native `engine/fx/FxEffect.h` declares `meshes` as `std::vector<std::string>` and documents built-in mesh names and model paths; this proves the data representation, **not** the availability of every importer format in the runtime renderer. Inspect the actual runtime mesh resource resolver before claiming FBX/glTF support. Do not infer that an indexed model is loadable solely from its importer category. No build/tests executed.
