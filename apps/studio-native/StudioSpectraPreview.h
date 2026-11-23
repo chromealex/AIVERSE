@@ -68,13 +68,13 @@ public:
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
             opts.preference=spectra::ComputePreference::Automatic;
             if(!runtime_.initGraph(&device,graph,Json::object(),opts)) {
-                ready_=false;playing_=false;pendingRestart_=false;
+                ready_=false;playing_=false;pendingRestart_=false;restartBurstPending_=false;
                 return errorStatus(runtime_.reason().empty()?
                     "SpectraFX preview backend unavailable":runtime_.reason());
             }
             ready_=true;
             playing_=false;
-            pendingRestart_=true;
+            pendingRestart_=true;restartBurstPending_=true;
             phase_=0;
             pendingClear_=false;
             burstsPending_=0;
@@ -107,7 +107,7 @@ public:
                     return errorStatus("Replay parameter outside authored range: "+name);
                 validated[name]=float(n);
             }
-            playing_=false;phase_=0;pendingRestart_=true;
+            playing_=false;phase_=0;pendingRestart_=true;restartBurstPending_=true;
             pendingClear_=false;burstsPending_=0;triggeredBursts_=0;
             stepsPending_=0;timeTicks_=0;
             targetTicks_=uint32_t(input["tick"].integer());
@@ -134,7 +134,7 @@ public:
             playing_=false;phase_=0;
             timeTicks_=targetTicks_=stepsPending_=0;
             burstsPending_=0;triggeredBursts_=0;
-            pendingRestart_=false;
+            pendingRestart_=false;restartBurstPending_=false;
             pendingClear_=true;
             error_.clear();
             return status();
@@ -147,7 +147,7 @@ public:
         if(action=="restart") {
             error_.clear();
             playing_=input.getBool("play",false);
-            pendingRestart_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
+            pendingRestart_=true;restartBurstPending_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
             phase_=0;
             pendingClear_=false;
             burstsPending_=0;triggeredBursts_=0;
@@ -173,7 +173,7 @@ public:
             targetTicks_=uint32_t(input["tick"].integer());
             stepsPending_=0;
             if(targetTicks_<timeTicks_) {
-                pendingRestart_=true;
+                pendingRestart_=true;restartBurstPending_=true;
                 timeTicks_=0;
             }
             return status();
@@ -207,21 +207,27 @@ public:
             runtime_.clear();
             timeTicks_=0;
             pendingRestart_=false;
-            // Native burst, NOT an HTML animation or placeholder quad.
+        }
+        // Apply replay uniforms BEFORE the initial native burst. Preserve
+        // failed values for diagnosis/retry instead of silently dropping them.
+        for(auto it=requestedParameters_.begin();it!=requestedParameters_.end();) {
+            if(!runtime_.setNamedProgramParameter(it->first,it->second,true)) {
+                playing_=false;
+                error_=runtime_.reason().empty()?"SpectraFX replay parameter rejected":runtime_.reason();
+                break;
+            }
+            it=requestedParameters_.erase(it);
+        }
+        if(!error_.empty())return;
+        if(restartBurstPending_) {
             if(!runtime_.burstAt({origin.x,origin.y+1.0f,origin.z})) {
                 playing_=false;
-                error_=runtime_.reason().empty()?
-                    "SpectraFX preview burst rejected":runtime_.reason();
+                error_=runtime_.reason().empty()?"SpectraFX preview burst rejected":runtime_.reason();
                 return;
             }
+            restartBurstPending_=false;
             ++triggeredBursts_;
         }
-        for(const auto& [name,value]:requestedParameters_) {
-            if(!runtime_.setNamedProgramParameter(name,value,true)) {
-                playing_=false;error_=runtime_.reason();break;
-            }
-        }
-        requestedParameters_.clear();
         if(!error_.empty())return;
         // Repeated one-shot triggers use the same validated emitter graph,
         // but create additional real particle bursts without recompilation.
@@ -324,7 +330,7 @@ private:
     }
     spectra::GraphRuntime runtime_;
     std::map<std::string,float> requestedParameters_;
-    bool ready_=false,playing_=false,pendingRestart_=false;
+    bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;
     bool loop_=true;
     bool pendingClear_=false;
     float speed_=1.0f;
