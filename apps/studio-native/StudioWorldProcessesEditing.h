@@ -18,7 +18,7 @@
 namespace aiverse::studio::worldprocess_edit {
 
 struct Handle {
-    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative};
+    enum class Mode:std::uint8_t {Reference,Radius,GridWidth,GridHeight,AreaWidth,AreaDepth,AreaWidthNegative,AreaDepthNegative,AreaCenterX,AreaCenterZ};
     Mode mode=Mode::Reference;
     std::string owner,component,key,targetType;
     render::float3 position{};
@@ -65,21 +65,29 @@ inline std::vector<Handle> handles(const editor::MapDoc& map,
     }
     // Native EVOLVE ecology now reads this exact ECS-persisted Area.
     if(const auto& area=components["EvolveArea"];area.isObject()){
+        const auto offsetX=area.getInt("offsetXcm",0);
+        const auto offsetZ=area.getInt("offsetZcm",0);
+        const float centerX=owner.x+float(offsetX)/100.f;
+        const float centerZ=owner.z+float(offsetZ)/100.f;
         const auto width=area.getInt("halfWidthCm",1000);
         const auto depth=area.getInt("halfDepthCm",1000);
         if(width>=50&&width<=evolve::kAreaMaxHalfExtentCm&&
            depth>=50&&depth<=evolve::kAreaMaxHalfExtentCm){
             out.push_back({Handle::Mode::AreaWidth,owner.id,"EvolveArea","halfWidthCm",
-                           {},{owner.x+float(width)/100.f,.35f,owner.z},0});
+                           {},{centerX+float(width)/100.f,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaDepth,owner.id,"EvolveArea","halfDepthCm",
-                           {},{owner.x,.35f,owner.z+float(depth)/100.f},0});
+                           {},{centerX,.35f,centerZ+float(depth)/100.f},0});
             // Each opposing edge is draggable independently. The area stays
             // centered on its map entity; either edge edits the same persisted
             // half-extent and creates one MapDoc Undo entry on mouse release.
             out.push_back({Handle::Mode::AreaWidthNegative,owner.id,"EvolveArea","halfWidthCm",
-                           {},{owner.x-float(width)/100.f,.35f,owner.z},0});
+                           {},{centerX-float(width)/100.f,.35f,centerZ},0});
             out.push_back({Handle::Mode::AreaDepthNegative,owner.id,"EvolveArea","halfDepthCm",
-                           {},{owner.x,.35f,owner.z-float(depth)/100.f},0});
+                           {},{centerX,.35f,centerZ-float(depth)/100.f},0});
+            out.push_back({Handle::Mode::AreaCenterX,owner.id,"EvolveArea","offsetXcm",
+                           {},{centerX,.35f,centerZ},0});
+            out.push_back({Handle::Mode::AreaCenterZ,owner.id,"EvolveArea","offsetZcm",
+                           {},{centerX,.55f,centerZ},0});
         }
     }else if(components["EvolveRegion"].isObject()){
         // Legacy visual-only rings remain editable for older maps until
@@ -172,17 +180,28 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
         if(!std::isfinite(radius))return false;
         value=std::clamp(float(radius),.5f,500.f);return true;
     }
+    if(handle.mode==Handle::Mode::AreaCenterX||
+       handle.mode==Handle::Mode::AreaCenterZ){
+        const double relative=handle.mode==Handle::Mode::AreaCenterX?
+            double(mouse.x-owner.x):double(mouse.z-owner.z);
+        value=float(std::clamp(std::round(relative*100.),
+            -double(evolve::kAreaCoordinateCm),double(evolve::kAreaCoordinateCm)));
+        return true;
+    }
+    const auto& area=owner.extra["components"]["EvolveArea"];
+    const double cx=double(owner.x)+double(area.getInt("offsetXcm",0))/100.;
+    const double cz=double(owner.z)+double(area.getInt("offsetZcm",0))/100.;
     if(handle.mode==Handle::Mode::AreaWidth||
        handle.mode==Handle::Mode::AreaWidthNegative){
         value=std::clamp(float(std::lround(
-            std::abs(double(mouse.x-owner.x))*100.)),50.f,
+            std::abs(double(mouse.x)-cx)*100.)),50.f,
             float(evolve::kAreaMaxHalfExtentCm));
         return true;
     }
     if(handle.mode==Handle::Mode::AreaDepth||
        handle.mode==Handle::Mode::AreaDepthNegative){
         value=std::clamp(float(std::lround(
-            std::abs(double(mouse.z-owner.z))*100.)),50.f,
+            std::abs(double(mouse.z)-cz)*100.)),50.f,
             float(evolve::kAreaMaxHalfExtentCm));
         return true;
     }
