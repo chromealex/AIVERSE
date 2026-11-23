@@ -249,6 +249,9 @@ private:
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
     std::string wpEcologyLayer_="combined";
+    bool wpLiveEcology_=false;
+    double wpLiveRefresh_=0;
+    Json wpLiveSnapshot_;
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;
