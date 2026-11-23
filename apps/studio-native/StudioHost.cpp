@@ -812,6 +812,19 @@ void StudioHost::rebuildOverlay() {
                 if(index>=0){
                     const auto origin=worldprocess_edit::point(
                         session_->workspace().map.data.entities[std::size_t(index)]);
+                    // Read-only candidate gameplay rectangle during drag.
+                    const auto& owner=session_->workspace().map.data.entities[std::size_t(index)];
+                    worldprocess_edit::AreaPreview areaPreview;
+                    if(wpDrag_.component=="EvolveArea" &&
+                       worldprocess_edit::previewArea(owner,
+                           static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                           double(wpDrag_.value),false,areaPreview) &&
+                       shapes.size()+4<1398){
+                        worldprocess_gizmos::rectangle(shapes,
+                            {float(areaPreview.centerX),.38f,float(areaPreview.centerZ)},
+                            float(areaPreview.halfWidth*2.),
+                            float(areaPreview.halfDepth*2.),100,255,160);
+                    }
                     shapes.push_back(worldprocess_gizmos::makeLine(
                         origin,wpDrag_.previewPoint,245,245,245,3.f));
                     shapes.push_back(worldprocess_gizmos::makePoint(
