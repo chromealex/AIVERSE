@@ -2910,6 +2910,13 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_library_building_tests PRIVATE AIVERSE::lib_building_gen)
     add_test(NAME library_building_gen COMMAND aiverse_library_building_tests)
 endif()
+# Universal functional building properties (doors, large/small gates, retractable roof)
+# do not depend on any genre module, Studio, GPU or legacy factory/barracks preset.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_building_feature_tests tests/libraries/building_feature_tests.cpp)
+    target_link_libraries(aiverse_library_building_feature_tests PRIVATE AIVERSE::lib_building_style)
+    add_test(NAME library_building_features COMMAND aiverse_library_building_feature_tests ${PROJECT_SOURCE_DIR})
+endif()
 # building-style (settings of generated buildings as style files) and its .glb exporter.
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_building_style_tests tests/libraries/building_style_tests.cpp)
