@@ -340,24 +340,15 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
             throw JsonError("regionOwnership: expected an empty object");
         world::registerRegionEntityLedger(sim);
         world::registerRegionStableIdentity(sim);
-        auto& ledger=sim.world().setResource<world::RegionEntityLedger>(
+        sim.world().setResource<world::RegionEntityLedger>(
             world::RegionEntityLedger{});
-        const auto position=regionPositionReader();
-        const world::SpatialWorld cells(32);
-        auto track=[&](Entity entity) {
-            const auto pos=position(sim.world(),entity);
-            if(!pos || entity.packed()==UINT64_MAX ||
-               !world::RegionEcsBridge::bindNew(
-                   sim.world(),ledger,entity,entity.packed()+1,
-                   cells.cell(*pos),position))
-                throw JsonError("regionOwnership: cannot register a live entity");
-        };
-        for(const Entity entity:sim.world().resourceConst<CharacterIndex>()->bySlot)
-            track(entity);
-        for(const Entity entity:vehicleEntities(sim))track(entity);
     }
     setupRace(sim,rules,map);
     setupBots(sim,map);
+    // Track the final setup state (races may reposition/seat cars). No
+    // extra resources or save fields are added without the rules block.
+    if(sim.world().resourceConst<world::RegionEntityLedger>())
+        synchronizeRegionOwnership(sim);
     meleeAttacks_.clear();
     if(config_.melee.enabled){
         const auto& m=config_.melee;auto total=m.windup+m.active+m.recovery;
@@ -376,6 +367,10 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         tickOrdinaryProjectiles(s);
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
+    if(sim.world().resourceConst<world::RegionEntityLedger>())
+        sim.addSystem("actor.regionOwnership",[this](Simulation& s){
+            synchronizeRegionOwnership(s);
+        });
 }
 void ActorHost::applyCommand(Simulation& sim,const Command& c) {
     Input input;
