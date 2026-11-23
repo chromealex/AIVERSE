@@ -3,6 +3,7 @@
 // generation-safe ECS Entity handles. No runtime ECS indices enter map files.
 #pragma once
 #include "WorldProcessesExtendedAuthoring.h"
+#include "ImprintTrails.h"
 #include "WorldProcessesLinkedAuthoring.h"
 #include <map>
 #include <string>
@@ -13,7 +14,7 @@ namespace aiverse::lib::worldprocess::extendedLinks {
 inline bool supports(std::string_view id){
     return id=="MorphSpring"||id=="MorphForce"||
            id=="CrowdSlot"||id=="CrowdPreference"||
-           id=="ImprintLink"||id=="ImprintDeposit"||
+           id=="ImprintLink"||id=="ImprintDeposit"||id=="ImprintTracker"||
            id=="CircuitWire"||id=="CircuitGate"||
            id=="GranularSource"||id=="EvolvePressure"||
            id=="SocietyContact"||id=="SocietyMessage";
@@ -25,6 +26,7 @@ inline Json defaults(std::string_view id){
     if(id=="CrowdPreference")return Json::parse(R"({"agent":"","slot0":"","slot1":"","slot2":"","slot3":"","enabled":false})");
     if(id=="ImprintLink")return Json::parse(R"({"a":"","b":"","transfer":0,"enabled":false})");
     if(id=="ImprintDeposit")return Json::parse(R"({"cell":"","footprint":0,"scent":0,"residue":0,"enabled":false})");
+    if(id=="ImprintTracker")return Json::parse(R"({"source":"","cell":"","minimumDistance":25,"footprint":50,"scent":10,"residue":0,"enabled":false})");
     if(id=="CircuitWire")return Json::parse(R"({"from":"","to":"","bidirectional":true,"enabled":false})");
     if(id=="CircuitGate")return Json::parse(R"({"inputA":"","inputB":"","output":"","op":0,"enabled":false})");
     if(id=="GranularSource")return Json::parse(R"({"field":"","x":0,"y":0,"delta":0,"enabled":false})");
@@ -42,6 +44,8 @@ inline std::string_view referenceTarget(std::string_view id,std::string_view key
     }
     if(id=="ImprintLink"&&(key=="a"||key=="b"))return "ImprintCell";
     if(id=="ImprintDeposit"&&key=="cell")return "ImprintCell";
+    if(id=="ImprintTracker"&&key=="cell")return "ImprintCell";
+    if(id=="ImprintTracker"&&key=="source")return "Entity";
     if(id=="CircuitWire"&&(key=="from"||key=="to"))return "CircuitNode";
     if(id=="CircuitGate"&&(key=="inputA"||key=="inputB"||key=="output"))return "CircuitNode";
     if(id=="GranularSource"&&key=="field")return "GranularField";
@@ -70,6 +74,11 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
         authoring::integerExact(v,0,imprint::kMaxRate);
     if(id=="ImprintDeposit")return (key=="footprint"||key=="scent"||key=="residue")&&
         authoring::integerExact(v,0,imprint::kMaxRate);
+    if(id=="ImprintTracker"){
+        if(key=="minimumDistance")return authoring::integerExact(v,0,1000000);
+        return (key=="footprint"||key=="scent"||key=="residue") &&
+            authoring::integerExact(v,0,imprint::kMaxRate);
+    }
     if(id=="CircuitWire")return key=="bidirectional"&&v.type()==Json::Type::Bool;
     if(id=="CircuitGate")return key=="op"&&authoring::integerExact(v,0,3);
     if(id=="GranularSource"){
@@ -127,6 +136,7 @@ inline bool hasExisting(const World& w,Entity e,std::string_view id){
     if(id=="CrowdPreference")return w.has<crowd::Preference>(e);
     if(id=="ImprintLink")return w.has<imprint::Link>(e);
     if(id=="ImprintDeposit")return w.has<imprint::Deposit>(e);
+    if(id=="ImprintTracker")return w.has<imprint::Tracker>(e);
     if(id=="CircuitWire")return w.has<circuit::Wire>(e);
     if(id=="CircuitGate")return w.has<circuit::Gate>(e);
     if(id=="GranularSource")return w.has<granular::Source>(e);
@@ -137,6 +147,7 @@ inline bool hasExisting(const World& w,Entity e,std::string_view id){
 }
 inline bool hasCompatible(const World& w,Entity e,std::string_view type){
     if(type=="CrowdSlot")return w.has<crowd::Slot>(e);
+    if(type=="Entity")return w.alive(e);
     return extended::hasExisting(w,e,type);
 }
 inline bool apply(World& w,Entity e,std::string_view id,const Json& doc,
@@ -179,6 +190,14 @@ inline bool apply(World& w,Entity e,std::string_view id,const Json& doc,
     else if(id=="ImprintDeposit")
         w.add<imprint::Deposit>(e,imprint::Deposit{ref("cell"),
             n("footprint"),n("scent"),n("residue"),enabled});
+    else if(id=="ImprintTracker"){
+        imprint::Tracker t;
+        t.source=ref("source");t.cell=ref("cell");
+        t.minimumDistance=n("minimumDistance");
+        t.footprint=n("footprint");t.scent=n("scent");
+        t.residue=n("residue");t.enabled=enabled;
+        w.add<imprint::Tracker>(e,t);
+    }
     else if(id=="CircuitWire")
         w.add<circuit::Wire>(e,circuit::Wire{ref("from"),ref("to"),
             doc["bidirectional"].boolean(),enabled});
