@@ -733,3 +733,60 @@ Its source assertions cannot be treated as passing test results.
 - C++ allocation failures during a multi-component commit are
   not guaranteed exception-atomic. Use the staged prevalidation
   at a safe ECS structural boundary.
+
+
+## Stage 11 — round reset and shared race-respawn collision admission
+
+Pre-tick admission now covers **engine-owned implicit teleports**, not just
+explicit `ActorHost::requestRegionMove` requests.
+
+The shared `vehicles::VehicleRace` API exposes
+`possibleRespawnPositions(const World&)`, a **read-only** set of world
+positions for every active racer. It combines the current respawn destination
+(the last passed checkpoint, or starting grid) with the **next checkpoint**
+that might be crossed during the coming tick. The race owner's
+`lm::raceRespawnPoint` is reused; this query never advances race progress,
+changes the controller, draws graphics, or consumes deterministic RNG. Results
+are sorted and deduplicated. Finished racers contribute no new requests.
+
+When `regionOwnership` is opted in on a streamed world-space game,
+`ActorHost::readyToStep` adds those positions to its existing
+`CollisionStream::prepareRegions` region demand. The same pre-tick
+query also includes `initialVehicles_`, the host-owned original map
+positions used by the round-reset logic. Ordinary character respawn
+positions were already pinned by the existing `spawns_` loop.
+A missing chunk in **any** of these requested destinations blocks the next
+simulation step *before* the ordinary ActorHost systems consume commands,
+tick or RNG.
+
+### API
+
+```cpp
+// No speculative simulation or mutation; host-only collision interest.
+const auto possible = race->possibleRespawnPositions(sim.world());
+// ActorHost::readyToStep pins these via its existing CollisionStream
+// whenever a world-space map opted into W1 regionOwnership.
+```
+
+The new pure-policy CTest `race_region_respawn_gate_test`
+(`tests/world/race_region_respawn_gate_test.cpp`, linking
+`aiverse_vehicles`) constructs real race state and checks current grid,
+next checkpoint, previous checkpoint, finished racer exclusion and
+no state mutation from asking for candidates.
+
+The existing `actor_region_admission_test` gains an opt-in real
+ActorHost + async collision fixture in which a vehicle begins at a
+remote original spawn and is then moved near the players. The original
+reset destination must still be prepared before a step can advance.
+These are **written tests, not passed test results**: Mac/KINGSTON
+build and execution are outstanding.
+
+This is intentionally a conservative **fail-closed** policy. Several
+distant checkpoints can be simultaneously required; on tight collision
+residency budgets, a race may stall rather than simulate a missing
+respawn destination. A bounded exact-next-respawn demand and capacity-aware
+admission policy are needed before production large-track scalability.
+The existing race/vehicle state machine still owns the actual respawn.
+Other direct movement writers (custom scripts, host-native teleports,
+some air insertion and nonstandard respawn systems) are **not** universally
+rerouted through the W1.9 staging API.
