@@ -1195,13 +1195,25 @@ Json StudioHost::assetThumbnail(const std::string& path) {
 Json StudioHost::captureSpectraFrame(const Json& params) {
     const std::string action=params.getStr("action");
     Json out=Json::object();
+    // Preserve the ordinary preview status envelope so the same typed
+    // Studio/MCP response can carry a capture result without resetting
+    // playback controls in React.
+    const respond=[&](Json capture) {
+        Json status=fxPreview_?onScene([&]{
+            return fxPreview_->spectraPreviewCommand(
+                Json::parse(R"({"action":"status"})"),
+                session_->workspace().project.dir);
+        }):Json::object();
+        status.set("capture",std::move(capture));
+        return status;
+    };
     if(action=="captureStatus") {
         const auto shot=fxShot_;
         if(!shot) {
             out.set("pending",Json::fromBool(false));
             out.set("ready",Json::fromBool(false));
             out.set("error",Json::string("No pending SpectraFX frame capture"));
-            return out;
+            return respond(std::move(out));
         }
         std::string jpeg,error;
         int w=0,h=0;
@@ -1222,11 +1234,11 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
                 out.set("pending",Json::fromBool(false));
                 out.set("ready",Json::fromBool(false));
                 out.set("error",Json::string("SpectraFX GPU capture timed out"));
-                return out;
+                return respond(std::move(out));
             }
             out.set("pending",Json::fromBool(true));
             out.set("ready",Json::fromBool(false));
-            return out;
+            return respond(std::move(out));
         }
         fxShot_.reset();
         out.set("pending",Json::fromBool(false));
@@ -1238,7 +1250,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
         if(!jpeg.empty()&&error.empty())
             out.set("image",Json::string("data:image/jpeg;base64,"+
                 editor::base64Encode(jpeg)));
-        return out;
+        return respond(std::move(out));
     }
     if(action!="capture")throw std::runtime_error("Unknown FX capture operation");
     if(!fxPreview_ || !fxPlacement_.visible ||
@@ -1302,7 +1314,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
     }
     out.set("pending",Json::fromBool(true));
     out.set("ready",Json::fromBool(false));
-    return out;
+    return respond(std::move(out));
 }
 Json StudioHost::runSpectraPreview(const Json& params) {
     if(projectLoading_ || session_->workspace().project.dir.empty())
