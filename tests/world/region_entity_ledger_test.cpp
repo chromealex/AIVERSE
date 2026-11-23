@@ -1,4 +1,7 @@
 #include "engine/world/RegionEntityLedger.h"
+#include "engine/world/UnifiedBackupCatalog.h"
+#include <chrono>
+#include <fstream>
 #include "engine/sim/Simulation.h"
 #include "tests/AlwaysCheck.h"
 #include <array>
@@ -265,7 +268,67 @@ static void checkEcsPersistence() {
     AIVERSE_TEST_CHECK(final->deserialize(saved,&error));
     AIVERSE_TEST_CHECK(final->checksum()==one->checksum());
 }
+
+static void checkUnifiedBackupCatalog() {
+    namespace fs=std::filesystem;
+    using Status=UnifiedBackupStatus;
+    struct TempDir {
+        fs::path path;
+        ~TempDir(){std::error_code ec;if(!path.empty())fs::remove_all(path,ec);}
+    } temp;
+    for(unsigned i=0;i<100;++i){
+        auto candidate=fs::temp_directory_path()/("aiverse-unified-catalog-"+
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+
+            "-"+std::to_string(i));
+        std::error_code ec;
+        if(fs::create_directory(candidate,ec)){temp.path=std::move(candidate);break;}
+    }
+    AIVERSE_TEST_CHECK(!temp.path.empty());
+    RegionCheckpointManifest active;
+    active.generation=5;active.checkpointBytes=1;
+    active.identity.world[0]=1;active.identity.digest[0]=1;
+    auto pair=[&](uint64_t generation,bool otherWorld,bool checkpoint,bool unified){
+        auto m=active;m.generation=generation;
+        if(otherWorld)m.identity.world[0]=2;
+        std::vector<uint8_t> prefix;
+        AIVERSE_TEST_CHECK(unified?UnifiedCheckpointPublisher::identity(m,prefix):
+            RegionCheckpointManifestCodec::encode(m,prefix));
+        std::ofstream wal(temp.path/m.walName(),std::ios::binary);
+        wal.write(reinterpret_cast<const char*>(prefix.data()),prefix.size());
+        AIVERSE_TEST_CHECK(wal.good());
+        if(checkpoint){
+            std::ofstream cp(temp.path/m.checkpointName(),std::ios::binary);
+            cp.put('x');AIVERSE_TEST_CHECK(cp.good());
+        }
+    };
+    pair(5,false,true,true);
+    pair(4,true,true,true);
+    pair(3,false,false,true);
+    pair(2,false,true,false);
+    pair(1,false,true,true);
+    std::ofstream(temp.path/"wal-01.bin").put('x');
+    std::ofstream(temp.path/"wal-0.bin").put('x');
+    UnifiedCheckpointSections::Adapters adapters{};
+    UnifiedCheckpointSections::Factory factory;
+    DurableComponentCodecs codecs;
+    UnifiedWorldReplay::Materializer materialize;
+    auto result=UnifiedBackupCatalog::list(temp.path,active,1024,adapters,factory,codecs,materialize);
+    AIVERSE_TEST_CHECK(result.complete && result.entries.size()==5);
+    AIVERSE_TEST_CHECK(result.entries[0].generation==5 && result.entries[0].active &&
+        result.entries[0].status==Status::MetadataOnly);
+    AIVERSE_TEST_CHECK(result.entries[1].status==Status::WrongWorld);
+    AIVERSE_TEST_CHECK(result.entries[2].status==Status::MissingCheckpoint);
+    AIVERSE_TEST_CHECK(result.entries[3].status==Status::InvalidMetadata);
+    AIVERSE_TEST_CHECK(result.entries[4].generation==1 && !result.entries[4].active &&
+        result.entries[4].status==Status::MetadataOnly);
+    auto verified=UnifiedBackupCatalog::list(temp.path,active,1024,adapters,factory,codecs,materialize,{},true);
+    AIVERSE_TEST_CHECK(verified.complete && verified.entries.size()==5);
+    AIVERSE_TEST_CHECK(verified.entries[0].status==Status::RecoveryFailed);
+    AIVERSE_TEST_CHECK(verified.entries[4].status==Status::RecoveryFailed);
+}
+
 int main() {
+    checkUnifiedBackupCatalog();
     checkLedger();
     checkEcsPersistence();
     std::cout<<"PASS region_entity_ledger (transfer, tombstone, archive, ECS v10, rollback, 100 crossings)\n";
