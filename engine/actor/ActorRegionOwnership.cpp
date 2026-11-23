@@ -1,6 +1,7 @@
 // Opt-in authoritative region ownership for world-space actor ECS.
 // Runs after gameplay movement; never reads render-camera observers.
 #include "ActorModule.h"
+#include "engine/world/RegionOwnershipDiagnostics.h"
 #include <algorithm>
 #include <set>
 #include <map>
@@ -67,6 +68,7 @@ bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
 void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
     auto& ecs=sim.world();
     ecs.eraseResource<RegionSeatIndex>();
+    ecs.eraseResource<world::RegionOwnershipDiagnostics>();
     ecs.resetComponentChanges<CharacterBody>();
     ecs.resetComponentChanges<Vehicle>();
     ecs.resetComponentChanges<Loot>();
@@ -432,6 +434,9 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
         }
         ecs.setResource<RegionSeatIndex>(std::move(next));
     }
+    ecs.setResource<world::RegionOwnershipDiagnostics>(world::RegionOwnershipDiagnostics{
+        tracked.size(),cars.size(),candidateCars.size(),pendingGroups.size(),
+        uncoveredCrossings,uncoveredGroups,uncoveredLifecycle,journalOverflow,lootOnly});
     (void)ecs.drainComponentChanges<CharacterBody>();
     (void)ecs.drainComponentChanges<Vehicle>();
     (void)ecs.drainComponentChanges<Loot>();
