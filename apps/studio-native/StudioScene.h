@@ -155,9 +155,9 @@ public:
     using FxTaggedCaptureFn=std::function<void(uint64_t,int,int,std::vector<uint8_t>,Json)>;
     void captureNextFrameTagged(FxTaggedCaptureFn callback) {
         lastFrameSignature_=0;
-        device_->captureNextFrameTagged([this,callback=std::move(callback)](uint64_t serial,int w,int h,std::vector<uint8_t> pixels){
+        device_->captureNextFrameTagged([history=fxFrameProvenance_,callback=std::move(callback)](uint64_t serial,int w,int h,std::vector<uint8_t> pixels){
             Json metadata;
-            for(const auto& entry:fxFrameProvenance_)if(entry.first==serial){metadata=entry.second;break;}
+            for(const auto& entry:*history)if(entry.first==serial){metadata=entry.second;break;}
             if(callback)callback(serial,w,h,std::move(pixels),std::move(metadata));
         });
     }
@@ -300,7 +300,7 @@ private:
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
     StudioSpectraPreview spectraPreview_{};
-    std::deque<std::pair<uint64_t,Json>> fxFrameProvenance_;
+    std::shared_ptr<std::deque<std::pair<uint64_t,Json>>> fxFrameProvenance_=std::make_shared<std::deque<std::pair<uint64_t,Json>>>();
     // Not a second gfx device: the same Scene renderer is placed in the
     // SpectraFX panel and switches between authored map and isolated FX.
     bool spectraDockMode_=false;
