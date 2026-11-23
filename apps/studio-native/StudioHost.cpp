@@ -1014,6 +1014,40 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
             areaPreview.halfWidth:areaPreview.halfDepth;
         params.set("value",Json::number(int64_t(std::lround(half*100.))));
     }
+    // Multi-selected EVOLVE areas translate by the same center delta.
+    // A dedicated RPC validates all candidates before one MapDoc Undo entry.
+    if(current.component=="EvolveArea" &&
+       (mode==worldprocess_edit::Handle::Mode::AreaCenterX||
+        mode==worldprocess_edit::Handle::Mode::AreaCenterZ)){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()>1){
+            const int index=map.findEntity(current.owner);
+            if(index<0)return true;
+            const auto& area=map.data.entities[std::size_t(index)]
+                                .extra["components"]["EvolveArea"];
+            const auto old=area.getInt(current.key.c_str(),0);
+            const auto delta=std::int64_t(std::lround(current.value))-old;
+            Json ids=Json::array();
+            for(const auto& id:selected)ids.push(Json::string(id));
+            Json batch=Json::object();
+            batch.set("entityIds",std::move(ids));
+            batch.set("axis",Json::string(
+                mode==worldprocess_edit::Handle::Mode::AreaCenterX?"x":"z"));
+            batch.set("deltaCm",Json::number(delta));
+            const auto reply=request("studio.worldProcessAreaBatchMove",std::move(batch));
+            if(reply.has("error")){
+                Json error=Json::object();
+                error.set("message",Json::string(
+                    "EVOLVE group move: "+reply.getStr("error")));
+                sendEventPayload("assets.importError",error);
+            }else{
+                sendEvent("document.changed","");
+                sendEvent("selection.changed","");
+                rebuildOverlay();
+            }
+            return true;
+        }
+    }
     const char* method=current.mode==static_cast<std::uint8_t>(
         worldprocess_edit::Handle::Mode::Reference)?
         "studio.setProperty":"studio.worldProcessAreaSet";
