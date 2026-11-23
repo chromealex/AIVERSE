@@ -52,6 +52,7 @@ public:
     virtual void setPaged(bool enabled) = 0;
     virtual void prepareParallelWrite() = 0;
     virtual size_t sharedPageCount() const = 0;
+    virtual size_t size() const = 0;
 };
 
 template <class T>
@@ -221,7 +222,7 @@ public:
     const T& get(uint32_t index) const {
         assert(has(index));return dataAt(indexOf(index));
     }
-    size_t size() const {return paged_?denseCow_->size():dense_.size();}
+    size_t size() const override {return paged_?denseCow_->size():dense_.size();}
     Entity entityAt(size_t i) const {
         return paged_?(*denseCow_)[i]:dense_[i];
     }
@@ -576,6 +577,17 @@ public:
     struct EntityState { std::vector<uint32_t> gens; std::vector<uint8_t> alive; std::vector<uint32_t> free; std::vector<Entity> pendingDestroy; };
     EntityState entityState() const { return {gens_, alive_, free_, pendingDestroy_}; }
     size_t poolCount() const { size_t n = 0; for (auto& p : pools_) if (p) ++n; return n; }
+    // Runtime-only storage inventory for explicit persistence coverage audits.
+    std::vector<uint32_t> activeComponentTypes()const{
+        std::vector<uint32_t> out;
+        for(size_t i=0;i<pools_.size();++i)if(pools_[i]&&pools_[i]->size())out.push_back(uint32_t(i));
+        return out;
+    }
+    std::vector<uint32_t> activeResourceTypes()const{
+        std::vector<uint32_t> out;
+        for(size_t i=0;i<resources_.size();++i)if(resources_[i])out.push_back(uint32_t(i));
+        return out;
+    }
     // Diagnostic counters: pools/resources shared with snapshots rather than copied.
     size_t sharedPoolCount() const {
         size_t count=0;
