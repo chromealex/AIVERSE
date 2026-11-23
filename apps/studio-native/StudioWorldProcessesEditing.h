@@ -120,6 +120,7 @@ struct EdgeSnap {
     bool found=false;
     float valueCm=0;
     std::string targetId;
+    float guideStart=0,guideEnd=0; // overlap along perpendicular world axis, metres
 };
 inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
                                 const editor::DocEntity& owner,
@@ -138,6 +139,24 @@ inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
         if(!components["EvolveRegion"].isObject())continue;
         const auto& area=components["EvolveArea"];
         if(!area.isObject()||!area["enabled"].boolean())continue;
+        // Only physically neighboring edge segments can attract a drag.
+        // Their perpendicular spans must overlap with positive length.
+        const auto& ownArea=owner.extra["components"]["EvolveArea"];
+        if(!ownArea.isObject())continue;
+        const auto ownHalf=ownArea.getInt(x?"halfDepthCm":"halfWidthCm",0);
+        const auto otherHalf=area.getInt(x?"halfDepthCm":"halfWidthCm",0);
+        if(ownHalf<50||otherHalf<50||
+           ownHalf>evolve::kAreaMaxHalfExtentCm||
+           otherHalf>evolve::kAreaMaxHalfExtentCm)continue;
+        const double ownCross=(x?double(owner.z):double(owner.x))*100.+
+            double(ownArea.getInt(x?"offsetZcm":"offsetXcm",0));
+        const double otherCross=(x?double(other.z):double(other.x))*100.+
+            double(area.getInt(x?"offsetZcm":"offsetXcm",0));
+        const double overlapStart=std::max(ownCross-double(ownHalf),
+                                           otherCross-double(otherHalf));
+        const double overlapEnd=std::min(ownCross+double(ownHalf),
+                                         otherCross+double(otherHalf));
+        if(overlapEnd<=overlapStart)continue;
         const auto half=area.getInt(x?"halfWidthCm":"halfDepthCm",0);
         if(half<50||half>evolve::kAreaMaxHalfExtentCm)continue;
         const double origin=x?double(owner.x):double(owner.z);
@@ -150,7 +169,8 @@ inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
             if(distance<bestDistance||
                (distance==bestDistance&&(!best.found||other.id<best.targetId))){
                 bestDistance=distance;
-                best={true,float(edge),other.id};
+                best={true,float(edge),other.id,
+                      float(overlapStart/100.),float(overlapEnd/100.)};
             }
         }
     }
