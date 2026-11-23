@@ -33,3 +33,4 @@
 #include "engine/buildings/BuildingDualLeafOwner.h"
 #include "engine/buildings/BuildingApertureTextureAssets.h"
 #include "engine/buildings/BuildingMaterialAssets.h"
+#include "engine/buildings/BuildingDualLeafGameSession.h"
