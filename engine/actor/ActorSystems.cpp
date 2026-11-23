@@ -310,7 +310,7 @@ void ActorHost::actorSystems(Simulation& sim,CharacterRef a,Input& input) {
         if(!frozen){v.yaw+=Fixed::fromRatio(input.right,1000)*sim.dt()/4;auto delta=direction(v.yaw,{})*v.speed*Fixed::fromRatio(input.forward,1000)*sim.dt();auto hit=collision_.cast(v.pos+Vec3{{},1_fx,{}},delta,{1_fx,1_fx,2_fx});v.pos+=delta*(hit.hit?fxMax(Fixed{},hit.fraction-Fixed::fromRatio(1,100)):1_fx);v.pos.x=fxClamp(v.pos.x,-config_.worldLimit,config_.worldLimit);v.pos.z=fxClamp(v.pos.z,-config_.worldLimit,config_.worldLimit);v.velocity=delta/sim.dt();}
         a.pos=v.pos+Vec3{{},1_fx,{}};a.velocity=v.velocity;
         if(!reportRegionMoveIfCrossed(sim,a.entity) ||
-           !reportRegionMoveIfCrossed(sim,e))
+           !reportRegionMoveIfCrossed(sim,vehicleEntity(sim,a.vehicle)))
             throw std::logic_error("regionOwnership: arcade driver/vehicle dirty report failed");
     }
     if(frozen||a.downed||a.vehicle){if(frozen||a.downed||!canFireFromVehicle(sim,a))input.buttons&=uint32_t(Prone);else input.buttons&=uint32_t(Fire|Aim|Reload|WeaponMask);if(frozen||a.vehicle)input.forward=input.right=0;}   // passengers / gunners may shoot
