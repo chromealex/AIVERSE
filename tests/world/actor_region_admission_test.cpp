@@ -54,6 +54,52 @@ std::unique_ptr<Simulation> create(bool streamed=true) {
     sim->setup(rules,map);
     return sim;
 }
+std::unique_ptr<Simulation> createTyped(bool streamed=true) {
+    // Actual ActorHost vehicleTypes -> shared VehicleDrive controller and
+    // two defined seat slots. No mocked GameModule or duplicate car physics.
+    Json rules=Json::parse(R"({"actor":{
+        "tickRate":60,"maxPlayers":2,"mode":"deathmatch",
+        "mechanics":{"enabled":true},
+        "vehicleTypes":{"vehicles":[
+            {"id":1,"kind":"wheeled","seats":[
+                {"id":1,"role":"driver","entryMilli":[-400,0,200]},
+                {"id":2,"role":"passenger","entryMilli":[400,0,200]}
+            ]}
+        ]},"weapon":{"range":20}},"regionOwnership":{}})");
+    Json map=Json::parse(R"({"players":[{"team":1},{"team":2}],
+        "spawns":[[4,2,4],[8,2,4]],"colliders":[],
+        "vehicles":[{"pos":[12,2,4],"type":1}]})");
+    if(streamed)map.set("world",worldManifest());
+    auto sim=std::make_unique<Simulation>(
+        SimConfig{73,60,0,true},std::make_unique<game::GameCore>());
+    sim->setup(rules,map);
+    return sim;
+}
+struct TypedActors {
+    Entity car=kNullEntity,driver=kNullEntity,passenger=kNullEntity;
+};
+TypedActors seatTyped(Simulation& sim) {
+    auto& host=actor::host(sim);
+    auto& ecs=sim.world();
+    const auto cars=host.vehicleEntities(sim);
+    AIVERSE_TEST_CHECK(cars.size()==1);
+    const Entity car=cars.front();
+    const Entity driver=host.characterEntity(sim,1);
+    const Entity passenger=host.characterEntity(sim,2);
+    auto* drive=ecs.tryGet<vehicles::VehicleDrive>(car);
+    auto* value=ecs.tryGet<actor::Vehicle>(car);
+    AIVERSE_TEST_CHECK(drive && value && value->id!=0);
+    drive->seats.occupants={{1,1},{2,2}};
+    vehicles::seatDriver(ecs,car,*drive,driver,1,0);
+    value->driver=1;
+    ecs.get<actor::CharacterBody>(driver).vehicle=value->id;
+    ecs.get<actor::CharacterBody>(passenger).vehicle=value->id;
+    // The passenger also has a real reverse link, not just a seat manifest.
+    vehicles::VehicleOccupant reverse;
+    reverse.vehicle=car;
+    ecs.add<vehicles::VehicleOccupant>(passenger,reverse);
+    return {car,driver,passenger};
+}
 wd::AssetReader reader(std::atomic<bool>& remote) {
     return [&remote](const std::string& path,std::string& out){
         auto it=kFiles.find(path);
@@ -185,6 +231,84 @@ void testQueuedDestinationSurvivesSave() {
     AIVERSE_TEST_CHECK(recovered->world().get<actor::CharacterBody>(actor).pos.x>=96_fx);
 }
 
+void testTypedVehicleAdmissionAndRestore() {
+    std::atomic<bool> remote{false};
+    auto a=createTyped(),b=createTyped();
+    auto actorsA=seatTyped(*a),actorsB=seatTyped(*b);
+    actor::host(*a).setContentReader(reader(remote));
+    actor::host(*b).setContentReader(reader(remote));
+    const Vec3 destination{324_fx,2_fx,4_fx};
+    std::string error;
+    AIVERSE_TEST_CHECK(actor::host(*a).requestRegionMove(
+        *a,actorsA.car,destination,&error));
+    AIVERSE_TEST_CHECK(actor::host(*b).requestRegionMove(
+        *b,actorsB.car,destination,&error));
+    AIVERSE_TEST_CHECK(!actor::host(*a).requestRegionMove(
+        *a,actorsA.passenger,{325_fx,2_fx,4_fx},&error));
+    const auto initialHash=a->checksum();
+    const auto initialTick=a->tick();
+    const auto initialRng=a->rng().state();
+    const auto old=vehicles::driveOf(a->world(),actorsA.car)->controller.position;
+    for(int i=0;i<6;++i) {
+        a->step();
+        AIVERSE_TEST_CHECK(a->tick()==initialTick);
+        AIVERSE_TEST_CHECK(a->rng().state()==initialRng);
+        AIVERSE_TEST_CHECK(a->checksum()==initialHash);
+        AIVERSE_TEST_CHECK(vehicles::driveOf(a->world(),actorsA.car)
+                            ->controller.position==old);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    remote=true;
+    progressOne(*a);
+    progressOne(*b);
+    AIVERSE_TEST_CHECK(a->checksum()==b->checksum());
+    auto& ecs=a->world();
+    const auto* drive=vehicles::driveOf(ecs,actorsA.car);
+    AIVERSE_TEST_CHECK(drive);
+    AIVERSE_TEST_CHECK(drive->controller.position.x>320_fx);
+    AIVERSE_TEST_CHECK(ecs.get<actor::Vehicle>(actorsA.car).pos.x>320_fx);
+    AIVERSE_TEST_CHECK(drive->controller.velocity.lengthSq()<1_fx);
+    AIVERSE_TEST_CHECK(drive->driver==actorsA.driver);
+    AIVERSE_TEST_CHECK(drive->seats.occupants.size()==2);
+    AIVERSE_TEST_CHECK(ecs.get<actor::CharacterBody>(actorsA.driver).pos.x>320_fx);
+    AIVERSE_TEST_CHECK(ecs.get<actor::CharacterBody>(actorsA.passenger).pos.x>320_fx);
+    const auto* reverse=ecs.tryGetConst<vehicles::VehicleOccupant>(actorsA.driver);
+    AIVERSE_TEST_CHECK(reverse && reverse->vehicle==actorsA.car);
+    AIVERSE_TEST_CHECK(reverse->position.x>320_fx);
+    const auto* ledger=ecs.resourceConst<wd::RegionEntityLedger>();
+    const wd::Cell region{10,0,0};
+    for(Entity entity:{actorsA.car,actorsA.driver,actorsA.passenger}) {
+        const auto* identity=ecs.tryGetConst<wd::RegionStableIdentity>(entity);
+        AIVERSE_TEST_CHECK(identity && ledger->find(identity->id));
+        AIVERSE_TEST_CHECK(ledger->find(identity->id)->owner==region);
+    }
+
+    // ActorHost's v10 disk serializer captures the real VehicleDrive
+    // controller + seat state, and the W1 ledger/queue native ECS resources.
+    const std::string saved=a->serialize();
+    AIVERSE_TEST_CHECK(!saved.empty());
+    auto loaded=createTyped();
+    actor::host(*loaded).setContentReader(reader(remote));
+    AIVERSE_TEST_CHECK(loaded->deserialize(saved,&error));
+    AIVERSE_TEST_CHECK(loaded->checksum()==a->checksum());
+    const auto* loadedDrive=vehicles::driveOf(loaded->world(),actorsA.car);
+    AIVERSE_TEST_CHECK(loadedDrive &&
+                       loadedDrive->controller.position==drive->controller.position);
+    AIVERSE_TEST_CHECK(loadedDrive->seats.occupants.size()==2);
+    loaded->world().enableCowSnapshots();
+    SimSnapshot snap;
+    loaded->saveState(snap);
+    const auto checksum=loaded->checksum();
+    AIVERSE_TEST_CHECK(actor::host(*loaded).requestRegionMove(
+        *loaded,actorsA.car,{6_fx,2_fx,4_fx},&error));
+    progressOne(*loaded);
+    AIVERSE_TEST_CHECK(loaded->checksum()!=checksum);
+    loaded->loadState(snap);
+    AIVERSE_TEST_CHECK(loaded->checksum()==checksum);
+    AIVERSE_TEST_CHECK(vehicles::driveOf(loaded->world(),actorsA.car)
+                        ->controller.position==loadedDrive->controller.position);
+}
+
 void testStaticAndOccupiedMove() {
     auto sim=create(false);
     auto& host=actor::host(*sim);
@@ -223,5 +347,6 @@ int main() {
     testLateGameplayCommandWaitsForNextAdmission();
     testQueuedDestinationSurvivesSave();
     testStaticAndOccupiedMove();
+    testTypedVehicleAdmissionAndRestore();
     std::cout<<"PASS staged region move admission, retry, save, and occupied group\n";
 }
