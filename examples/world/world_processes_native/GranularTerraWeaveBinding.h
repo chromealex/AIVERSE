@@ -80,6 +80,14 @@ inline GranularSurfacePatch bakeGranularSurface(
                         std::int64_t(firstX)*settings.cellSizeCm;
     const auto worldZcm=settings.originZcm+
                         std::int64_t(firstRow)*settings.cellSizeCm;
+    // This native Box3D Scene has a +/-100km world-coordinate gate.
+    // Validate the ENTIRE patch, not just its first corner.
+    constexpr std::int64_t kSceneLimitCm=10000000;
+    const auto endXcm=worldXcm+std::int64_t(columns)*settings.cellSizeCm;
+    const auto endZcm=worldZcm+std::int64_t(rows)*settings.cellSizeCm;
+    if(worldXcm< -kSceneLimitCm||endXcm>kSceneLimitCm||
+       worldZcm< -kSceneLimitCm||endZcm>kSceneLimitCm)
+        throw std::out_of_range("GRANULAR patch exceeds Box3D coordinate limit");
     const auto groundOriginCm=soil.sampleHeightCm(worldXcm,worldZcm);
     GranularSurfacePatch patch;
     patch.field=field;
@@ -92,6 +100,10 @@ inline GranularSurfacePatch bakeGranularSurface(
                          float(double(worldZcm)/100.)};
     std::uint64_t signature=14695981039346656037ull;
     signature=granularSignatureMix(signature,field.packed());
+    signature=granularSignatureMix(signature,
+        static_cast<std::uint64_t>(worldXcm));
+    signature=granularSignatureMix(signature,
+        static_cast<std::uint64_t>(worldZcm));
     signature=granularSignatureMix(signature,patch.soilRevision);
     signature=granularSignatureMix(signature,std::uint64_t(settings.cellSizeCm));
     signature=granularSignatureMix(signature,std::uint64_t(settings.maximumDepthCm));
