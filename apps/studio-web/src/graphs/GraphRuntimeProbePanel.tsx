@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSection,StudioSelect} from '../ui';
-import {object} from './nativeGraphAdapters';
+import {object,animationProjection} from './nativeGraphAdapters';
+import GraphCanvas from './GraphCanvas';
 import type {GraphObject} from './nativeGraphAdapters';
 
 export default function GraphRuntimeProbePanel({domain,graph,disabled}:{domain:'motionweave'|'spectrafx';graph:GraphObject;disabled:boolean}){
@@ -38,6 +39,7 @@ export default function GraphRuntimeProbePanel({domain,graph,disabled}:{domain:'
    <small>{String(r.completedSteps)} completed steps · Setup {String(r.setupMs)} ms · CPU updates {String(r.updateMs)} ms</small>
    {domain==='motionweave'&&<small>Pose evaluation: {String(r.evaluateMs)} ms · Healthy: {String(r.healthy)} · {String(r.errorMessage??'')}</small>}
    {frames.length>0&&<StudioSelect aria-label="Probe step" value={String(frame)} onChange={e=>setFrame(Number(e.target.value))}>{frames.map((f,i)=><option key={i} value={i}>Step {String(f.step)}</option>)}</StudioSelect>}
+   {current&&domain==='motionweave'&&<div style={{height:260,display:'flex',flexDirection:'column'}}><GraphCanvas view={animationProjection(graph,'pose')} highlighted={Array.isArray(current.activeProgram)?current.activeProgram.filter((id):id is string=>typeof id==='string'):[]} selected="" label="Isolated probe active pose program" disabled onSelect={()=>{}} onMove={()=>{}}/></div>}
    {current&&<pre>{JSON.stringify(current,null,2)}</pre>}
    {Array.isArray(r.stateChanges)&&<><small>Observed state changes</small><pre>{JSON.stringify(r.stateChanges,null,2)}</pre></>}
    <small>{String(r.note??'')}</small>
