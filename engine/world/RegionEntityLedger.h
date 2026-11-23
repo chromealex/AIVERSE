@@ -41,6 +41,7 @@ public:
         if(!id || records_.contains(id) || records_.size()>=kMaxEntities ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
         records_.emplace(id,RegionEntityRecord{owner,++lastRevision_,1});
+        liveIds_.insert(id);
         return true;
     }
     // Two-phase validation prevents half-moving an occupied car and its passengers.
@@ -104,6 +105,7 @@ public:
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
         it->second.live=0;
         it->second.revision=++lastRevision_;
+        liveIds_.erase(id);
         return true;
     }
     const RegionEntityRecord* find(RegionEntityId id) const {
@@ -112,6 +114,11 @@ public:
     }
     uint64_t lastRevision() const {return lastRevision_;}
     size_t size() const {return records_.size();}
+    // Derived active-ID index: tombstones are retained for archives/history,
+    // but a gameplay tick never needs to scan them to identify removals.
+    // Stable, ordered, copy-on-write safe; rebuilt on native ECS disk load.
+    const std::set<RegionEntityId>& liveIds() const {return liveIds_;}
+    size_t liveCount() const {return liveIds_.size();}
     // Iteration order is stable across platforms, including after save/restore.
     std::vector<RegionEntityId> activeIn(Cell cell) const {
         std::vector<RegionEntityId> result;
@@ -135,6 +142,7 @@ public:
 private:
     uint64_t lastRevision_=0;
     std::map<RegionEntityId,RegionEntityRecord> records_;
+    std::set<RegionEntityId> liveIds_; // never separately saved/hashed
     friend void io(Archive&,RegionEntityLedger&);
 };
 
@@ -150,6 +158,7 @@ inline void io(Archive& a,RegionEntityLedger& ledger) {
     if(!a.ok() || n>RegionEntityLedger::kMaxEntities){a.fail();return;}
     std::map<RegionEntityId,RegionEntityRecord> decoded;
     std::set<uint64_t> revisions;
+    std::set<RegionEntityId> live;
     if(a.writing()) {
         for(const auto& [id,record]:ledger.records_) {
             RegionEntityId copyId=id;
@@ -166,10 +175,12 @@ inline void io(Archive& a,RegionEntityLedger& ledger) {
         if(id==0 || record.live>1 || record.revision==0 ||
            record.revision>latest || !revisions.insert(record.revision).second ||
            !decoded.emplace(id,record).second){a.fail();break;}
+        if(record.live)live.insert(id);
     }
     if(a.ok()) {
         ledger.lastRevision_=latest;
         ledger.records_=std::move(decoded);
+        ledger.liveIds_=std::move(live);
     }
 }
 
