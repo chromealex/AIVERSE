@@ -46,3 +46,40 @@ Public interfaces: `aiverselib/world/AetherEcs.h`, optional `aiverselib/world/Ae
 To connect PHYSIS fire, call `aether::addPhysisFireSystem(sim)` after PHYSIS environment and after gas transport, during setup, when PHYSIS `State` and `HazardCell` exist. Attach `FireCoupling` to PHYSIS cell entities also containing `GasCell`. `applyPhysisFire(world)` reads current normalized fire intensity and creates smoke/consumes oxygen once per PHYSIS climate tick. It **does not extinguish or modify PHYSIS fire**; combustion chemistry, smoke light scattering and physical wind advection are not implemented. `FireCoupling` is a persistent opt-in `aether.fire_coupling` v1 component; do not register twice.
 
 Acceptance source `tests/ecs_aether_gas_test.cpp` / CTest `ecs_aether_gas_test`: conservation, deterministic cross-module hashes, invalid flux fail-closed, duplicate tick, stale generations, PHYSIS coupling, COW save/replay. Tests were authored, **not verified as compiled/passed** in this session. Handoff: `docs/handoffs/world-processes-stage04-aether-2026-11-23.md`. Follow the five-area WIP limit and do not enable 4th+ system before closing current ECHO/FRACTURE/AETHER gates.
+
+## Stage 07: bounded Studio map authoring with real Undo/Redo
+
+The approved Studio Scene Inspector uses `StudioSession::componentCatalog`,
+`studio.componentAdd`, `studio.componentRemove`, and
+`studio.setProperty` / `studio.setProperties`. MapDoc supplies
+single-step Undo/Redo and project serialization. The new pure, validated
+`libraries/include/aiverselib/world/WorldProcessesAuthoring.h` can author
+only three self-contained components initially:
+
+- `EchoZone`: `enabled` boolean.
+- `FractureMember`: `anchored` boolean. Runtime `broken`/`detached`
+  are simulation state and MUST NOT be editable as authoring data.
+- `AetherGasCell`: integer initial `smoke`, `toxin`, `oxygen`
+  (0..1,000,000,000), `enabled` boolean. `sampledTick` is a runtime value.
+
+Editing requires `components[ComponentId]` in real map DocEntity extras,
+and fails closed on wrong types, unknown keys, partial schemas, fractional
+or out-of-range numeric values. `StudioSessionTests` tests add/edit,
+batch rollback, Undo, Redo, save and reload.
+
+**Critical:** Editor authoring DOES NOT automatically install
+world-process ECS components into existing game modules. A native game's
+entity-spawn step must map its stable authored document ID to a
+generation-safe ECS Entity, then call
+`lib::worldprocess::authoring::apply(world, entity, componentId, json)`
+before registering/stepping the ECHO/FRACTURE/AETHER systems. This is
+explicitly opt-in and returns false on invalid data or duplicate
+components. The Live Inspector remains read-only. Do not claim
+end-to-end gameplay authoring until a concrete game module consumes
+these extras and a real scene verifies it.
+
+Tests: `world_processes_authoring_test` in focused CI plus the
+native `apps/studio-native/tests/StudioSessionTests.cpp` fixture
+and CMake/Studio test targets. Source added does not prove CI green
+until real logs are recorded. Follow handoff
+`docs/handoffs/world-processes-stage07-authoring-2026-11-23.md`.
