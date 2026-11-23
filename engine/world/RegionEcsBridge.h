@@ -71,7 +71,8 @@ public:
     // On a deterministic gameplay tick, tag an already-created live ECS entity.
     // Components are installed before updating the ledger so allocation failure
     // cannot create an unreachable authoritative identity.
-    static bool bindNew(World& world,RegionEntityLedger& ledger,Entity e,
+    template<class Ledger>
+    static bool bindNew(World& world,Ledger& ledger,Entity e,
                         RegionEntityId id,Cell owner,
                         const RegionPositionReader& position,std::string* error=nullptr) {
         if(!eligible(world,e,id,position,error))return false;
@@ -140,7 +141,8 @@ public:
     // A coherent group can contain occupants whose previous home differs
     // from the car's (boarding at a region edge). All current ledger owners
     // are snapshotted and validated in one transaction; no partial transfer.
-    static bool transferGroupMixed(const World& world,RegionEntityLedger& ledger,
+    template<class Ledger>
+    static bool transferGroupMixed(const World& world,Ledger& ledger,
                                    std::span<const Entity> entities,Cell destination,
                                    const RegionPositionReader& position,
                                    std::string* error=nullptr) {
