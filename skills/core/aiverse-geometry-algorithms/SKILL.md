@@ -25,3 +25,5 @@ convexPenetrationExpanded attempts a strict tetrahedron from 26 sampled directio
 convexContact uses sampled enclosing seed with support provenance and EPA barycentric witness interpolation. Check hasWitness independently of status; fallback may return penetration without witnesses. Witness pair is not a manifold. No build/tests.
 
 GeometryManifold.h: clipContactFaces clips caller-supplied convex planar incident face against reference side planes, projects witnesses and reduces to deepest plus farthest-spread contacts (default four). Incident convexity/planarity is caller precondition. No automatic face selection or persistent cache. No tests.
+
+GeometryContactCache.h: selectContactFace maximizes outward normal alignment; convexFaceManifold selects reference A and incident B from supplied face topology. ContactCache assigns monotonic IDs and matches witnesses one-to-one within radius in a stable common coordinate frame per pair. No solver warm-start, automatic edge-edge manifold, or tests.
