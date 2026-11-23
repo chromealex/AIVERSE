@@ -3,6 +3,7 @@
 #pragma once
 
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/studio-native/StudioBuildingDependencies.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/buildings/BuildingGlbWriter.h"
 #include "engine/buildings/BuildingPngEncoder.h"
@@ -299,6 +300,22 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
     const auto req=request(params);
     auto model=produce(engine,req);
     applyProjectMaterials(project,req,model);
+    Json materialDependencies=Json::array();
+    if(!req.materialBindings.empty()){
+        const Json library=Json::parseFile((project/"materials.json").string())["materials"];
+        std::set<std::string> uniqueNames;
+        for(const auto& [slot,name]:req.materialBindings){
+            (void)slot;
+            if(!uniqueNames.insert(name).second)continue;
+            if(!library[name].isObject())
+                throw std::runtime_error("Shared material disappeared during generation: "+name);
+            Json dependency=Json::object();
+            dependency.set("name",Json::string(name));
+            dependency.set("fingerprint",Json::string(
+                studioBuildingMaterialFingerprint(library[name])));
+            materialDependencies.push(std::move(dependency));
+        }
+    }
     const fs::path root=studioContentRoot(project);
     const fs::path folder=root/"GeneratedBuildings";
     std::error_code ec;
@@ -419,6 +436,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("width",Json::number(double(req.dimensions.width),3));
         saved.set("height",Json::number(double(req.dimensions.height),3));
         saved.set("depth",Json::number(double(req.dimensions.depth),3));
+        if(materialDependencies.size()>0)
+            saved.set("materialDependencies",std::move(materialDependencies));
         if(!textureDependencies.empty()){
             Json dependencies=Json::array();
             for(auto& [guid,dependency]:textureDependencies){
