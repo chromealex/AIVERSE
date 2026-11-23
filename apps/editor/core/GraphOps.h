@@ -115,7 +115,7 @@ inline void registerGraphOps(Workspace& ws) {
             const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
             if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
             if(id!="texture")ops.set("propertySchema",Json::string("graph_property_schema"));
-            else{ops.set("preview",Json::string("texture_graph_preview"));ops.set("bake",Json::string("texture_graph_bake"));}ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
+            else{ops.set("preview",Json::string("texture_graph_preview"));ops.set("bake",Json::string("texture_graph_bake"));ops.set("bakeSet",Json::string("texture_graph_bake_set"));ops.set("templates",Json::string("texture_graph_templates"));ops.set("propertySchema",Json::string("graph_property_schema"));}ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
             if(id=="motionweave"||id=="spectrafx")ops.set("runtimeProbe",Json::string("graph_runtime_probe"));
             row.set("operations",ops);items.push(row);
         }
@@ -129,10 +129,11 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_dependencies","List explicit schema references from a candidate. No filesystem writes or runtime inference.",schema,[](const Json& p){const auto& d=domain(p);const auto q=candidate(d,p);return envelope(d,"graph_dependencies",inspectDependencies(d,q[d.payload]));}});
     ws.registerOp({"graph_property_schema","Describe supported typed node properties; SpectraFX returns native catalog defaults, not inferred constraints.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);auto source=q[d.payload];
-        if(std::string(d.id)=="texture")throw std::invalid_argument("use texture_graph_catalog and native properties; typed property subset unavailable");
+        
         const auto& node=graph_draft::entry(source,"nodes",p.getStr("node"));
         Json result=Json::object();result.set("node",Json::string(node.getStr("id")));
         if(std::string(d.id)=="spectrafx"){result.set("catalog",invoke(ws,d.catalog,Json::object()));result.set("note",Json::string("Native defaults and ports; property validation belongs to fx_graph_edit and compiler."));}
+        else if(std::string(d.id)=="texture")result.set("fields",render::texture_graph::properties(node.getStr("op")));
         else result.set("fields",graph_properties::schema(d.id,node));
         return envelope(d,"graph_property_schema",result);
     }});
