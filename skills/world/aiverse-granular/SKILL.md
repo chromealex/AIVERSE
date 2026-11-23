@@ -1,18 +1,19 @@
 ---
 name: aiverse-granular
-description: Use AIVERSE GRANULAR when implementing Авторитетный 2D слой сыпучего материала с осыпанием, кистью Studio и передачей объёма в TerraWeave.
+description: Use AIVERSE GRANULAR for Bounded cellular loose solids, Studio grid painting and TerraWeave terrain mass transfer.
 ---
 # GRANULAR — AIVERSE skill
 
 ## When to activate
-Авторитетный 2D слой сыпучего материала с осыпанием, кистью Studio и передачей объёма в TerraWeave.
+Bounded cellular loose solids, Studio grid painting and TerraWeave terrain mass transfer.
 
-Typical request: песок, щебень, осыпание грунта, выемка/засыпка, холмы из сыпучих частиц. Use this skill only for this system; for cross-system configuration consult `skills/world/aiverse-world-processes/SKILL.md`.
+Typical requests: sand, soil settling, granular cells, dig and fill, loose debris. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
 
 ## Canonical code and API
 - **Gameplay headers:** `libraries/include/aiverselib/world/GranularEcs.h`, `libraries/include/aiverselib/world/GranularDocument.h`.
 - **Authoritative ECS:** `granular::Field, Source`.
 - **Lifecycle:** `aiverse::granular::install(sim)`; per-tick behavior: `granular::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
 - **Studio-authored components:** `GranularField, GranularSource`. These are map authoring fields, not a writable duplicate of live ECS output.
 - **Adjacent adapters:** `examples/world/world_processes_native/GranularTerraWeaveBinding.h`, `GranularWorldIntegration.h`, `GranularTerraWeaveTransfer.h`, `PhysicalSceneHost.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
 
