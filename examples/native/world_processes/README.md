@@ -12,9 +12,9 @@ No engine fork or genre-specific code is required.
 3. In HTML5 Studio Scene Inspector, select an ordinary authored map entity, click Add Component and choose EchoZone, FractureMember or AetherGasCell. Edit enabled/anchored/initial gas amounts, Save and Undo/Redo as usual.
 4. Build the game/editor with the project's native C++ sources. The module hydrates `MapDoc` components onto the *actual* ECS entities in `GameCore::mapPlaced`, registers only the required opt-in persistent schemas, and runs shared genre-neutral systems.
 
-The module is **not linked automatically into all existing games**; NativeModule compilation and a rules.json opt-in remain required. Other GameModule hosts can call `worldprocess::authoring::hydrateMap(sim,map,placed)` in their own setup.
+The module is **not linked automatically into all existing games**; NativeModule compilation and a rules.json opt-in remain required. Other GameModule hosts can call `worldprocess::authoring::hydrateMap(sim,map,placed)` in their own setup. Explicit suite flags are optional; authored component categories enable their systems automatically.
 
-Only these three self-contained component types currently hydrate automatically. ECHO portals, FRACTURE bonds, AETHER ducts, source/receiver references and actual debris/audio/VFX presentation are later authoring/integration stages. PHYSIS remains responsible for weather and primary natural fracture events.
+Originally this module handled three standalone types. It now hydrates all ten systems, including authored ECHO portals, FRACTURE bonds, AETHER ducts, and the additional seven mechanics with their stable-ID graph links. Actual debris bodies, advanced audio/VFX presentation, host-specific producer events and physics coupling remain separate integration work. PHYSIS remains responsible for weather and primary natural fracture events.
 
 A map with no supported components leaves the native ECS schema manifest unchanged. Invalid config, count mismatches, or an authored component attached to an entity that was not actually spawned fail with an explicit setup error.
 
