@@ -7,6 +7,7 @@
 #include "SocietyNpcHost.h"
 #include "EvolvePhysisHost.h"
 #include "EvolveTerraEcologyBridge.h"
+#include "engine/world/TerraWeaveForestEcologyEcs.h"
 #include <cstdint>
 #include <functional>
 #include <utility>
@@ -72,6 +73,47 @@ public:
             forest,rooted,completedTick,species,soilHeight,
             forestClimate(ecs,std::move(baseline)),settings);
     }
+    // Preferred authoritative path: TerraWeave already persists its forest
+    // history and rooted population through World COW. No extra checkpoint.
+    static terraweave::ForestEcologyEcsOutcome advanceEcologyEcs(
+            World& ecs,const terraweave::TerraWeaveEcsAuthorityConfig& cfg,
+            std::uint64_t tick,
+            const std::vector<terraweave::ForestEcologySpecies>& species,
+            terraweave::ForestEcologySettings settings={},
+            terraweave::ForestEcologyClimateOverride baseline={}){
+        const auto zones=evolve::extents(ecs);
+        return terraweave::advanceForestEcologyEcs(
+            ecs,cfg,tick,species,settings,
+            [&ecs,&zones,baseline=std::move(baseline)](
+                const terraweave::AnchoredPlant& plant,
+                terraweave::ForestEcologyClimate climate){
+                if(baseline)climate=baseline(plant,climate);
+                for(const auto& zone:zones){
+                    if(plant.anchor.xCm<zone.minXcm||plant.anchor.xCm>=zone.maxXcm||
+                       plant.anchor.zCm<zone.minZcm||plant.anchor.zCm>=zone.maxZcm)
+                        continue;
+                    const auto* region=ecs.tryGetConst<evolve::Region>(zone.region);
+                    if(region)climate=projectEvolutionClimate(*region,climate);
+                }
+                return climate;
+            });
+    }
+    // Register after EVOLVE and existing TerraWeave authority/water systems.
+    // Persistence registration remains with the TerraWeave owner.
+    static void addEcologyEcsSystem(
+            Simulation& sim,std::string name,
+            terraweave::TerraWeaveEcsAuthorityConfig cfg,
+            std::vector<terraweave::ForestEcologySpecies> species,
+            terraweave::ForestEcologySettings settings={},
+            terraweave::ForestEcologyClimateOverride baseline={}){
+        sim.addSystem(std::move(name),
+            [cfg=std::move(cfg),species=std::move(species),settings,
+             baseline=std::move(baseline)](Simulation& current){
+                advanceEcologyEcs(current.world(),cfg,current.tick(),
+                                  species,settings,baseline);
+            });
+    }
+    // Legacy standalone caller-owned checkpoint, not for ECS authority.
     // Caller-owned checkpoint: forest state and roots must travel together.
     struct EcologyCheckpoint {
         std::uint64_t completedTick=0;
