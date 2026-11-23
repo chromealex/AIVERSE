@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveCavernsVolumeSnapshot.h"
 #include <memory>
 #include <stdexcept>
+#include <utility>
 namespace aiverse::terraweave::caverns {
 // The callback owns the immutable snapshot for the full nav build/refresh
 // lifetime, including when a shadow nav::Mesh is prepared off-screen.
