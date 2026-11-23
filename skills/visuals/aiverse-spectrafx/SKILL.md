@@ -1755,3 +1755,9 @@ The adapter does not yet fetch on its own or mount the sub-inspector in the prod
 `bindResolvedSpectraAsset` resolves a selected GUID against the authoritative indexed entries and writes the **content-relative path string** to the node property (not a GUID object), matching the existing string-based native graph properties such as `SpriteOutput.properties.texture`. Optional importer-kind restrictions are enforced. The GUI can still use the GUID as stable identity for lookup.
 
 **Not yet mounted in the production VFX Graph Editor panel**. Before mounting, identify the actual node selection and graph mutation state and wire `onGraphChange` into the editor's native validation/draft workflow. The source has not been typechecked or run.
+
+## Stage 44 — production HTML5 VFX Graph asset picker mounted
+
+The actual Graph Editor is `apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx` (not `SpectraNativePreview`). Its SpriteOutput texture section now mounts `SpectraIndexedGraphAssetInspector`, which loads `studio.assets`, supports GUID-indexed search/drag, selection lock, and routes edits through the panel's existing `apply()` function. Existing `Validate`, `Save Draft`, and `Publish` use native `fx_graph_validate`, `fx_graph_draft_set`, and `fx_graph_set`; the picker does not bypass them.
+
+`bindResolvedSpectraAsset` stores `content/<asset-relative-path>` in the SpriteOutput texture property, as required by the established `putSpriteTexture` compiler contract, and rejects unsupported texture extensions. Existing path-only picker UI has been replaced. This stage has not been built or tested.
