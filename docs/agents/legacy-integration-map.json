@@ -44,6 +44,13 @@
       "studio": [
         "water",
         "nereid_flow"
+      ],
+      "mcp": [
+        "nereid_water_state",
+        "nereid_flow_set",
+        "water_set",
+        "water_delete",
+        "water_bake"
       ]
     },
     "strata": {
@@ -154,16 +161,39 @@
       ],
       "studio": [
         "shader_graph"
+      ],
+      "mcp": [
+        "shader_graph_catalog",
+        "shader_graph_list",
+        "shader_graph_get",
+        "shader_graph_validate",
+        "shader_graph_set",
+        "shader_graph_apply"
       ]
     },
     "lightbake": {
       "studio": [
         "lightbake"
+      ],
+      "mcp": [
+        "lightbake_get",
+        "lightbake_set",
+        "lightbake_clear"
       ]
     },
     "world": {
       "studio": [
         "roads"
+      ],
+      "skills": [
+        "aiverse-roads",
+        "aiverse-building-gen"
+      ],
+      "mcp": [
+        "road_network",
+        "road_add",
+        "road_node_set",
+        "road_edge_set"
       ]
     },
     "planets": {
@@ -172,6 +202,9 @@
       ],
       "studio": [
         "generate"
+      ],
+      "mcp": [
+        "planet_info"
       ]
     },
     "voxel": {
@@ -189,6 +222,9 @@
     "inputflow": {
       "studio": [
         "input"
+      ],
+      "skills": [
+        "aiverse-input"
       ]
     },
     "studio": {
@@ -214,11 +250,24 @@
     "build": {
       "studio": [
         "build"
+      ],
+      "skills": [
+        "aiverse-native-scaffold",
+        "aiverse-release-build"
+      ],
+      "mcp": [
+        "native_status",
+        "native_build",
+        "build_estimate"
       ]
     },
     "import": {
       "studio": [
         "project_import"
+      ],
+      "skills": [
+        "aiverse-port-game",
+        "aiverse-assets-import"
       ]
     },
     "render": {
@@ -237,6 +286,38 @@
         "inspector",
         "hierarchy"
       ]
-    }
+    },
+    "network": {
+      "skills": [
+        "aiverse-network-session"
+      ],
+      "mcp": [
+        "battle_net_simulate"
+      ]
+    },
+    "ui": {
+      "skills": [
+        "aiverse-ui-binding",
+        "aiverse-ui-patterns"
+      ],
+      "mcp": [
+        "ui_api",
+        "ui_screen_list",
+        "ui_screen_create",
+        "ui_validate",
+        "ui_preview"
+      ]
+    },
+    "audio": {
+      "skills": [
+        "aiverse-audio"
+      ]
+    },
+    "meta": {
+      "skills": [
+        "meta-client"
+      ]
+    },
+    "gameplay": {}
   }
 }
