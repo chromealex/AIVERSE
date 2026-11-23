@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "source": "46c374c95abac1ed88747009e34324d61464be5c",
+  "sections": {
+    "AGENTS.md": [
+      "## Area rules — read the file for your area before changing it",
+      "## Mandatory feature delivery gate"
+    ],
+    "docs/agents/contracts/release-site.md": [
+      "## Current release: 3.0.0 released, 3.1.0 in preparation (2026-11-22)",
+      "## Ход разработки на сайте — обязательная запись (2026-11-21, указание пользователя)",
+      "## 8. Published builds (`builds` branch)",
+      "## 11. README: keep it current when you ship a feature"
+    ],
+    "docs/agents/contracts/architecture-common.md": [
+      "## NO GENRE SPLIT — EVER (owner rule, 2026-11-21, highest priority for every agent)",
+      "## Все объекты сцены — Entity (обязательное правило, 2026-11-20)",
+      "## AIVERSE View — canonical scene for EVERY genre (2026-11-18)",
+      "## Mandatory universal ECS mechanic contract (2026-11-18)",
+      "## 1. What this is",
+      "## Engine naming (all agents)",
+      "## 2. Layout",
+      "## 3. Non-negotiable rules",
+      "## 6. Code style"
+    ],
+    "docs/agents/contracts/world-ownership.md": [
+      "## Terra-first game creation (user policy, 2026-11-20)",
+      "## Water ownership for all new worlds (user policy, 2026-11-20)",
+      "## City block authoring",
+      "## Rigid-body physics",
+      "## Cross-agent ownership: PHYSIS / NEREID / TerraWeave (2026-11-18)"
+    ],
+    "docs/agents/contracts/workflow-parallel.md": [
+      "## Finish before starting: WIP limit, priorities, main gate (owner rule, 2026-11-21)",
+      "## Mandatory per-stage handoff protocol (2026-11-18, user instruction)",
+      "## 5. Working in parallel",
+      "## 7. Commits",
+      "## Missing capability requests from user projects"
+    ],
+    "docs/agents/contracts/studio-contract.md": [
+      "## HTML5 Studio UI design system (all future editor windows)"
+    ],
+    "docs/agents/contracts/render-contract.md": [
+      "## Rendering ownership contract — PRISMA vs SpectraFX (MANDATORY)",
+      "## PRISMA post-processing rules (short reference)"
+    ],
+    "docs/agents/contracts/build-testing.md": [
+      "## 4. Build, test, verify",
+      "## Unified test runner — mandatory for all agents (2026-11-18)",
+      "## Release-mode test assertion contract (2026-11-19)",
+      "## Build storage — user instruction 2026-11-20",
+      "## Размер клиентской сборки и выбор модулей движка"
+    ],
+    "docs/agents/contracts/reuse-skills.md": [
+      "## 9. Reuse libraries before implementing algorithms",
+      "## 10. Reuse meta-game policies before generating code",
+      "## Meta generation with minimal context",
+      "## Adding and updating repository skills",
+      "## Skill orchestration and isolated builds"
+    ],
+    "docs/agents/contracts/mcp-contract.md": [
+      "## MCP coverage checks (2026-11-23)"
+    ]
+  }
+}
