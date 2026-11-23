@@ -107,6 +107,16 @@ public:
                     return errorStatus("Replay parameter outside authored range: "+name);
                 validated[name]=float(n);
             }
+            if(!input["seed"].isNull()) {
+                const Json& seed=input["seed"];
+                if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
+                   seed.integer(-1)<0 || seed.integer(-1)>2147483647)
+                    return errorStatus("Replay seed must be integer 0..2147483647");
+                if(runtime_.backend()!=spectra::ComputeBackend::Cpu)
+                    return errorStatus("Seeded replay currently requires CPU backend");
+                if(!runtime_.resetDeterministicSeed(uint32_t(seed.integer())))
+                    return errorStatus(runtime_.reason());
+            }
             playing_=false;phase_=0;pendingRestart_=true;restartBurstPending_=true;
             pendingClear_=false;burstsPending_=0;triggeredBursts_=0;
             stepsPending_=0;timeTicks_=0;
