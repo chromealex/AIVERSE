@@ -62,7 +62,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const [nutrients,setNutrients]=useState(false);
   const [controlBusy,setControlBusy]=useState(false);
   const [controlError,setControlError]=useState('');
-  const control=async(action:'pause'|'resume'|'step')=>{if(controlBusy)return;setControlBusy(true);setControlError('');try{await invoke('studio.gameControl',{action});}catch(e){setControlError(message(e));}finally{setControlBusy(false);}};
+  const control=async(action:'pause'|'resume'|'step'|'speed1'|'speed2'|'speed5'|'speed10'|'speed25'|'speed50'|'speed100')=>{if(controlBusy)return;setControlBusy(true);setControlError('');try{await invoke('studio.gameControl',{action});}catch(e){setControlError(message(e));}finally{setControlBusy(false);}};
   const [opacity,setOpacity]=useState(.65);
   const [error,setError]=useState('');
   useEffect(()=>{
@@ -86,7 +86,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   const h=Math.max(1,Math.max(...regions.map(r=>r.maxZcm))-z);
   const u=(n:number)=>Math.round(255*Math.max(0,Math.min(1,n/1e9)));
   return <div><small>Live ecology · tick {state.tick}</small>
-    <div aria-label="Simulation time controls">{(['pause','resume','step'] as const).map(action=><button key={action} type="button" disabled={controlBusy} onClick={()=>void control(action)}>{action==='step'?'Single tick':action==='pause'?'Pause':'Resume'}</button>)}<small>Controls the entire local simulation.</small>{controlError&&<span role="alert">{controlError}</span>}</div>
+    <div aria-label="Simulation time controls">{(['pause','resume','step'] as const).map(action=><button key={action} type="button" disabled={controlBusy} onClick={()=>void control(action)}>{action==='step'?'Single tick':action==='pause'?'Pause':'Resume'}</button>)}<label>Speed <select disabled={controlBusy} defaultValue="" onChange={e=>void control(e.target.value as 'speed1'|'speed2'|'speed5'|'speed10'|'speed25'|'speed50'|'speed100')}><option value="" disabled>Set speed</option>{[1,2,5,10,25,50,100].map(n=><option key={n} value={'speed'+n}>{n}×</option>)}</select></label><small>Controls the entire local simulation.</small>{controlError&&<span role="alert">{controlError}</span>}</div>
     <div><label><input type="checkbox" checked={vegetation} onChange={e=>setVegetation(e.target.checked)}/>Vegetation</label>
       <label><input type="checkbox" checked={climate} onChange={e=>setClimate(e.target.checked)}/>Climate</label>
       <label><input type="checkbox" checked={nutrients} onChange={e=>setNutrients(e.target.checked)}/>Deadwood / nutrients</label>
