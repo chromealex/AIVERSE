@@ -382,7 +382,7 @@ inline bool previewGroupScale2D(
     std::int64_t numeratorX,std::int64_t denominatorX,
     std::int64_t numeratorZ,std::int64_t denominatorZ,
     std::int64_t pivotXcm,std::int64_t pivotZcm,
-    std::vector<AreaPreview>& output){
+    std::vector<AreaPreview>& output,bool individual=false){
     output.clear();
     if(selected.size()<2||selected.size()>256||
        numeratorX<1||denominatorX<1||numeratorZ<1||denominatorZ<1||
@@ -408,9 +408,9 @@ inline bool previewGroupScale2D(
                                     numeratorX/denominatorX);
         const auto hz=std::llround((long double)area.getInt("halfDepthCm",0)*
                                     numeratorZ/denominatorZ);
-        const auto nx=pivotXcm+std::llround((long double)(cx-pivotXcm)*
+        const auto nx=(individual?cx:pivotXcm)+std::llround((long double)(cx-(individual?cx:pivotXcm))*
                                             numeratorX/denominatorX);
-        const auto nz=pivotZcm+std::llround((long double)(cz-pivotZcm)*
+        const auto nz=(individual?cz:pivotZcm)+std::llround((long double)(cz-(individual?cz:pivotZcm))*
                                             numeratorZ/denominatorZ);
         if(hx<50||hx>evolve::kAreaMaxHalfExtentCm||
            hz<50||hz>evolve::kAreaMaxHalfExtentCm||
