@@ -1,5 +1,6 @@
 import {useRef} from 'react';
 import type {KeyboardEvent,PointerEvent} from 'react';
+import './GraphCanvas.css';
 
 export interface CanvasDiagram {
  width:number; height:number;
@@ -25,7 +26,7 @@ export default function GraphCanvas({diagram,selected,label,disabled,onSelect,on
   const delta=offsets[event.key];if(!delta)return;
   event.preventDefault();onSelect(node.id);onMove(node.id,node.x+delta[0],node.y+delta[1]);
  };
- return <div className="graph-canvas-scroll">
+ return <div className="au-graph-canvas">
   <svg ref={svg} width={diagram.width} height={diagram.height} viewBox={`0 0 ${diagram.width} ${diagram.height}`}
    role="group" aria-label={label}
    onPointerMove={event=>{
@@ -35,7 +36,7 @@ export default function GraphCanvas({diagram,selected,label,disabled,onSelect,on
    {diagram.edges.map(edge=><path key={edge.key}
     d={`M ${edge.x1} ${edge.y1} C ${edge.x1+55} ${edge.y1}, ${edge.x2-55} ${edge.y2}, ${edge.x2} ${edge.y2}`}
     fill="none" stroke="var(--au-accent)" strokeWidth="2"/>)}
-   {diagram.nodes.map(node=><g key={node.id} className="graph-draggable"
+   {diagram.nodes.map(node=><g key={node.id} className="au-graph-node"
     transform={`translate(${node.x} ${node.y})`} tabIndex={disabled?-1:0}
     role="button" aria-label={node.id+' '+node.op} aria-pressed={selected===node.id}
     onKeyDown={event=>key(event,node)}
