@@ -1183,6 +1183,10 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
     }
+    if(key==K::Escape&&wpDrag_.active){
+        wpDrag_={};mouse_={};rebuildOverlay();
+        return true; // cancel with no authored MapDoc edit
+    }
     const double scale = mods.shift ? 3.0 : 1.0;
     const bool plain = !mods.ctrl && !mods.alt && !mods.command;
     // Delete / Command+D act on the whole Scene selection (one undo step).
