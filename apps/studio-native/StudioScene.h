@@ -152,6 +152,10 @@ public:
         return result;
     }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    uint64_t fxFrameSerial() const {return device_?device_->frameSerial():0;}
+    uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
+    uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
+    uint64_t fxCompletedFence() const {return device_?device_->gpuCompletedFence():0;}
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
     void setWindPreview(const StudioWindState& state) { wind_ = state; }
