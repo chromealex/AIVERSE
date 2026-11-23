@@ -125,7 +125,13 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     out.constructionSize={W,Hh,D};
     const float cut=custom?std::min(k.chamfer,std::min(W,D)*0.22f):k.chamfer;
     const float padH=0.35f;
-    auto plateMat=[&]{return sm.team>=0&&u()<k.teamChance?sm.team:(sm.plate>=0?sm.plate:sm.hull);};
+    // When solving an explicit envelope, the number of armour plates changes
+    // with body dimensions. Keep that decorative RNG on an independent stream,
+    // otherwise every size iteration randomly moves major modules/props.
+    // Legacy unsized generation retains its original single-stream sequence.
+    Random details(seed,0x57c7d37a);
+    auto detailU=[&]{return custom?float(details.unit().toDouble()):u();};
+    auto plateMat=[&]{return sm.team>=0&&detailU()<k.teamChance?sm.team:(sm.plate>=0?sm.plate:sm.hull);};
     auto addBox=[&](float x0,float y0,float z0,float x1,float y1,float z1){out.boxes.push_back({{Fixed::fromRatio(int64_t(std::lround(x0*1000)),1000),Fixed::fromRatio(int64_t(std::lround(y0*1000)),1000),Fixed::fromRatio(int64_t(std::lround(z0*1000)),1000)},
         {Fixed::fromRatio(int64_t(std::lround(x1*1000)),1000),Fixed::fromRatio(int64_t(std::lround(y1*1000)),1000),Fixed::fromRatio(int64_t(std::lround(z1*1000)),1000)}});};
     // An armoured block: cut-corner plan, walls leaning in by `lean` metres over their height, armour belts
@@ -148,7 +154,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
                 for(int q=0;q<pieces;++q){
                     float s0=float(q)/float(pieces),s1=float(q+1)/float(pieces);
                     float sh=gap/2/std::max(len,0.1f);s0+=q?sh:sh*0.5f;s1-=q+1<pieces?sh:sh*0.5f;
-                    float proud=0.05f+0.1f*u();
+                    float proud=0.05f+0.1f*detailU();
                     // Outward = away from the plan centre (horizontal), plates sit `proud` outside the wall.
                     auto pt=[&](const std::vector<P3>& r,float t,float off){P3 p{r[e][0]+(r[f][0]-r[e][0])*t,r[e][1],r[e][2]+(r[f][2]-r[e][2])*t};
                         float dx=r[f][2]-r[e][2],dz=-(r[f][0]-r[e][0]);float l=std::hypot(dx,dz);dx/=l;dz/=l;
@@ -159,7 +165,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             }
         }
         // A glowing strip under the roof rim on some blocks.
-        if(sm.glow>=0&&u()<0.5f){float yl=y1-0.22f,l=lean*(yl-y0)/h-0.2f;m.prism(sm.glow,cutRect(x0+l,z0+l,x1-l,z1-l,c,yl),cutRect(x0+l,z0+l,x1-l,z1-l,c,yl+0.07f),false);}
+        if(sm.glow>=0&&detailU()<0.5f){float yl=y1-0.22f,l=lean*(yl-y0)/h-0.2f;m.prism(sm.glow,cutRect(x0+l,z0+l,x1-l,z1-l,c,yl),cutRect(x0+l,z0+l,x1-l,z1-l,c,yl+0.07f),false);}
         // Roof: a dark rim, then a raised armoured deck.
         float r0=lean+0.25f;
         m.prism(sm.hull,cutRect(x0+lean-0.05f,z0+lean-0.05f,x1-lean+0.05f,z1-lean+0.05f,c,y1),cutRect(x0+r0,z0+r0,x1-r0,z1-r0,c,y1+rise*0.4f));
