@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Dices, RefreshCw, WandSparkles } from 'lucide-react';
-import { invoke, nativeConnected } from '../../bridge';
+import { invoke, nativeConnected, onNativeEvent } from '../../bridge';
 import type {
   StudioSnapshot, StudioBuildingRequest, StudioBuildingStyle,
   StudioBuildingPreview, StudioBuildingGenerated,
@@ -66,6 +66,10 @@ export default function BuildingGeneratorPanel({
   const [status,setStatus]=useState('');
   const [staleMaterials,setStaleMaterials]=useState<Array<{recipe:string;changes:Array<{guid:string;reason:string}>}>>([]);
   const [checkingMaterials,setCheckingMaterials]=useState(false);
+  const [regeneratingRecipe,setRegeneratingRecipe]=useState('');
+  const [autoRegenerate,setAutoRegenerate]=useState(false);
+  const regeneratedThisSession=useRef(new Set<string>());
+
 
   useEffect(() => {
     if(!projectLoaded){setMaterialLibrary({library:{}});return;}
@@ -255,6 +259,76 @@ export default function BuildingGeneratorPanel({
     finally{setCheckingMaterials(false);}
   };
 
+  const regenerateRecipe=async (recipe:string)=>{
+    if(!projectLoaded||!nativeConnected()||busy||regeneratingRecipe)return;
+    setRegeneratingRecipe(recipe);setError('');setStatus('');
+    try{
+      const generated=await invoke('studio.buildingRegenerate',{recipe});
+      regeneratedThisSession.current.add(recipe);
+      setSaved(generated);
+      setStatus('Updated copy created: '+generated.path+'. Original building and GUID were preserved.');
+      window.dispatchEvent(new Event('studio:assets-changed'));
+      void invoke('studio.windowBroadcast',{
+        event:'ui.assetsChanged',payload:{path:generated.path}
+      }).catch(()=>{});
+      const report=await invoke('studio.buildingStaleMaterials',{});
+      setStaleMaterials(report.stale);
+    }catch(e){setError(explain(e));}
+    finally{setRegeneratingRecipe('');}
+  };
+
+  // Automatic *detection* responds to existing Assets updates. Automatic
+  // *generation* is explicitly opt-in and creates new assets only.
+  useEffect(()=>{
+    if(!projectLoaded||!nativeConnected())return;
+    let active=true;
+    let inflight=false;
+    const check=async()=>{
+      if(inflight)return;
+      inflight=true;
+      try{
+        const report=await invoke('studio.buildingStaleMaterials',{});
+        if(!active)return;
+        setStaleMaterials(report.stale);
+        if(autoRegenerate && report.stale.length){
+          // One bounded create-only update per source recipe this session;
+          // the old recipe remains stale because its GLB is immutable.
+          const candidate=report.stale.find(item=>
+            !regeneratedThisSession.current.has(item.recipe));
+          if(candidate){
+            regeneratedThisSession.current.add(candidate.recipe);
+            try{
+              const generated=await invoke('studio.buildingRegenerate',{
+                recipe:candidate.recipe
+              });
+              if(!active)return;
+              setSaved(generated);
+              setStatus('Auto-generated new copy: '+generated.path+'. Existing GLB unchanged.');
+              window.dispatchEvent(new Event('studio:assets-changed'));
+              void invoke('studio.windowBroadcast',{
+                event:'ui.assetsChanged',payload:{path:generated.path}
+              }).catch(()=>{});
+            }catch(e){
+              if(active)setError(explain(e));
+            }
+          }
+        }
+      }catch(e){if(active)setError(explain(e));}
+      finally{inflight=false;}
+    };
+    const onAssets=()=>void check();
+    window.addEventListener('studio:assets-changed',onAssets);
+    const off=onNativeEvent(event=>{
+      if(event==='ui.assetsChanged'||event==='document.changed')void check();
+    });
+    void check();
+    return ()=>{
+      active=false;
+      off();
+      window.removeEventListener('studio:assets-changed',onAssets);
+    };
+  },[projectLoaded,snapshot?.project.path,autoRegenerate]);
+
   const preview=async()=>{
     if(parameterError||busy)return;
     setBusy(true);setError('');setStatus('');setSaved(null);setThumbnail('');
@@ -388,13 +462,25 @@ export default function BuildingGeneratorPanel({
             <RefreshCw size={15}/> {checkingMaterials?'Checking…':'Check generated material dependencies'}
           </StudioButton>
         </div>
+        <label className="abg__note">
+          <input type="checkbox" checked={autoRegenerate}
+            onChange={e=>setAutoRegenerate(e.target.checked)}
+            disabled={busy||Boolean(regeneratingRecipe)}/>
+          Auto-create updated copies when Assets change (existing GLBs are never overwritten)
+        </label>
         {staleMaterials.map(item=><div className="abg__property" key={item.recipe}>
           <strong>{item.recipe}</strong>
           {item.changes.map((change,index)=><small key={index} className="abg__note">
             {change.guid||'Asset'}: {change.reason}
           </small>)}
+          <div className="abg__actions">
+            <StudioButton variant="secondary" disabled={busy||Boolean(regeneratingRecipe)}
+              onClick={()=>void regenerateRecipe(item.recipe)}>
+              {regeneratingRecipe===item.recipe?'Regenerating…':'Create updated copy'}
+            </StudioButton>
+          </div>
         </div>)}
-        <small className="abg__note">Checks embedded texture source bytes and .meta importer settings. Existing GLBs are not overwritten; regenerate explicitly to create a new asset after reimport.</small>
+        <small className="abg__note">Automatically detects changes notified by Studio Assets. Optional auto-update creates at most one new copy per stale source recipe per Studio session; the original GLB and GUID are retained. Replacing a scene instance requires its existing renderer owner.</small>
       </StudioSection>
       <StudioSection title="PBR materials & textures">
         <BuildingMaterialEditor projectLoaded={projectLoaded} onSaved={()=>{
