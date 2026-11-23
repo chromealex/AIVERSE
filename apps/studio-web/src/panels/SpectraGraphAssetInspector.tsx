@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
-import { bindResolvedSpectraAsset } from './spectraAssetBinding';
+import { bindResolvedSpectraAsset, editSpectraMeshSlot } from './spectraAssetBinding';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 
 /** Asset-reference sub-inspector for a selected graph node.
@@ -34,20 +34,47 @@ export default function SpectraGraphAssetInspector({
     property==='meshes'&&Array.isArray(raw)&&typeof raw[0]==='string'?raw[0]:null;
   const selected=currentPath?assets.find(a=>a.path&&'content/'+a.path===currentPath):undefined;
   const current=selected?{guid:selected.guid,path:selected.path}:null;
+  const meshSlots=property==='meshes'&&Array.isArray(raw)?raw.filter((v):v is string=>typeof v==='string'):[];
+  const commit=(result:{graph:SpectraGraphV2;error:string})=>{
+    if(result.error){setError(result.error);return;}
+    setError('');onGraphChange(result.graph);
+  };
   return <section aria-label="SpectraFX node asset reference">
     <header style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <strong>{property} asset</strong>
       <small>{node?node.id:'No node selected'}</small>
     </header>
-    <SpectraAssetPicker assets={assets} value={current} kinds={kinds}
+    {property==='meshes' ? <>
+      {meshSlots.map((path,slot)=>{
+        const entry=assets.find(a=>a.path&&'content/'+a.path===path);
+        return <div key={slot} style={{display:'flex',alignItems:'center',gap:6,marginBlock:6}}>
+          <small style={{minWidth:36}}>#{slot+1}</small>
+          <div style={{flex:1}}>
+            <SpectraAssetPicker assets={assets}
+              value={entry?{guid:entry.guid,path:entry.path}:null} kinds={kinds}
+              disabled={disabled||!node} locked={locked} onLockChange={setLocked}
+              onChange={asset=>node&&commit(editSpectraMeshSlot(graph,node.id,'replace',slot,asset,assets))}/>
+          </div>
+          <button type="button" disabled={disabled||!node||slot===0}
+            onClick={()=>node&&commit(editSpectraMeshSlot(graph,node.id,'up',slot))}>↑</button>
+          <button type="button" disabled={disabled||!node||slot===meshSlots.length-1}
+            onClick={()=>node&&commit(editSpectraMeshSlot(graph,node.id,'down',slot))}>↓</button>
+          <button type="button" disabled={disabled||!node||meshSlots.length<=1}
+            onClick={()=>node&&commit(editSpectraMeshSlot(graph,node.id,'remove',slot))}>Remove</button>
+          <button type="button" disabled={disabled||!node||meshSlots.length>=32}
+            onClick={()=>{if(!node)return;
+              const seed=entry??assets.find(a=>(!kinds||kinds.includes(a.kind))&&a.path);
+              if(!seed){setError('No indexed model available for a new slot.');return;}
+              commit(editSpectraMeshSlot(graph,node.id,'add',slot,seed,assets));
+            }}>Add</button>
+        </div>;
+      })}
+    </> : <SpectraAssetPicker assets={assets} value={current} kinds={kinds}
       disabled={disabled||!node} locked={locked} onLockChange={setLocked}
       onChange={asset=>{
         if(!node)return;
-        const result=bindResolvedSpectraAsset(graph,node.id,property,asset,assets,kinds);
-        if(result.error){setError(result.error);return;}
-        setError('');
-        onGraphChange(result.graph);
-      }}/>
+        commit(bindResolvedSpectraAsset(graph,node.id,property,asset,assets,kinds));
+      }}/>}
     {locked&&<small>Selection locked to this graph node</small>}
     {error&&<small role="alert">{error}</small>}
   </section>;
