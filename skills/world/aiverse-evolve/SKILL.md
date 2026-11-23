@@ -179,3 +179,7 @@ Native host RPC `studio.worldProcessGroupPivot` returns current group pivot X/Z 
 ## Stage 50: shared scale math and preview ownership
 
 `aiverselib/world/EvolveAreaScaleMath.h` provides pure integer-centimetre `evolve::scale_math::transform`, reused by numeric group preview and `studio.worldProcessAreaBatchResize` commit. Numeric custom pivot changes update the transient native Scene pivot marker. Numeric preview/clear requests now carry per-window owner tokens; native host applies per-owner revision checks and prevents inactive-window clear from erasing active preview. This is last-active-window ownership, not simultaneous multi-window compositing. No C++/TS compilation or runtime QA performed. Handoff: `docs/handoffs/world-processes-stage50-shared-math-preview-ownership-2026-11-23.md`.
+
+## Stage 51: preview lifecycle and typed validation
+
+Repaired the malformed Stage49 React numeric preview effect and ensured invalid input sends revisioned, owner-scoped clear requests. Native host now lets the active owner clear even after selection changes, rejects other owners' clears, and invalidates numeric preview on selection change. Numeric preview validates authored `EvolveArea` through `lib::worldprocess::extended::validate`, matching the Stage42 commit eligibility better. Multi-window lifecycle and full transaction parity still require work. Source-only; no TS/C++ build or runtime QA. Handoff: `docs/handoffs/world-processes-stage51-preview-lifecycle-validation-2026-11-23.md`.
