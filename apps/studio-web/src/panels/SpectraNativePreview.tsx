@@ -248,7 +248,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         const next=await invoke('studio.spectraPreview',{action:'status'});
         if(next.error||!next.ready)throw new Error(next.error||'Replay backend unavailable');
         setState(next);
-        if(next.tick===replayPreset.tick){settled=true;break;}
+        if(next.tick===replayPreset.tick&&!next.gpuSeedPending&&!next.clearing){settled=true;break;}
         if(next.tick>replayPreset.tick)throw new Error('Replay overshot requested tick');
         await new Promise<void>(resolve=>window.setTimeout(resolve,100));
       }
