@@ -24,3 +24,4 @@
 #include "engine/buildings/BuildingNavSource.h"
 #include "engine/buildings/BuildingGraphChanges.h"
 #include "engine/buildings/BuildingApertureOwner.h"
+#include "engine/buildings/BuildingDynamicNavSource.h"
