@@ -1803,3 +1803,7 @@ Use `fx_asset_check {guid}` in native Studio MCP or typed `studio.spectraAssetCh
 ## Stage 52 — Metal shader RNG primitive
 
 ComputeParticles::resetGpuShaderSeed(seed) performs checked reset and initializes independent birth seed/ordinal state. Birth state carries two 16-bit seed halves and a 24-bit ordinal in size.yzw; size.x remains billboard size. MSL birthRandomBits/birthRandom01 implement stateless integer hashing. The primitive is not yet consumed by VM/material operations, exposed in GraphRuntime/Studio, or proven checkpoint-safe. Do not claim deterministic visual replay or CPU/GPU parity. Tests deferred.
+
+## Stage 53 — reserved Metal material random lane
+
+MSL materialSource code 2 now computes birthRandom01(p,71u). The existing GPU material eligibility gate still rejects authored `random`, because CPU prand(uid) semantics differ. This is internal shader wiring only; no authored graph can yet select this lane through the normal compiler. GPU VM random remains outstanding. Add explicit opt-in semantics and seed lifecycle before enabling routing. No tests run.
