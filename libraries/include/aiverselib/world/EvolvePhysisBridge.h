@@ -41,13 +41,16 @@ inline bool applyClimate(World& world){
     const World& read=world;
     if(read.countExisting<ClimateLink>()>kMaxClimateLinks)return false;
     std::vector<std::pair<Entity,Pressure>> staged;
+    std::size_t activeLinks=0;
     read.eachExistingConst<ClimateLink>([&](Entity e,const ClimateLink& v){
         if(!read.alive(e))return;
+        ++activeLinks;
         if(!valid(v))return;
         const auto* pressure=read.tryGetConst<Pressure>(e);
         if(!pressure)return;
         staged.push_back({e,*pressure});
     });
+    if(staged.size()!=activeLinks)return false;
     std::sort(staged.begin(),staged.end(),
         [](const auto& a,const auto& b){return a.first.packed()<b.first.packed();});
     // Validate all sources before touching persistent fields.
@@ -63,8 +66,11 @@ inline bool applyClimate(World& world){
         // PHYSIS quantities are Fixed (Q47.16). Integer permille
         // conversion is safe for signed and negative temperatures.
         const auto permille=[](Fixed value){
-            return std::clamp((value.raw*1000)/Fixed::kOne,
-                              int64_t(-1000000),int64_t(1000000));
+            // Saturate before multiplying: corrupt/extreme Fixed raw input
+            // must never produce undefined signed overflow.
+            constexpr int64_t bound=1000*Fixed::kOne;
+            const int64_t raw=std::clamp(value.raw,-bound,bound);
+            return (raw*1000)/Fixed::kOne;
         };
         const I rain=std::clamp(permille(air->rain),I(0),I(1000));
         const I wet=std::clamp(permille(ground->wetness),I(0),I(1000));
