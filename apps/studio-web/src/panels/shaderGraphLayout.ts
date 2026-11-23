@@ -108,3 +108,55 @@ export function duplicateShaderNode(source:GraphSource,id:string):GraphSource {
  const copy={...structuredClone(node),id:copyId,position:[clamp((node.position?.[0]??0)+25),clamp((node.position?.[1]??0)+25)]};
  return {...source,nodes:[...nodes,copy]};
 }
+
+export interface ShaderClipboard {domain:string;nodes:GraphNode[]}
+export function copyShaderNodes(source:GraphSource,ids:readonly string[]):ShaderClipboard {
+ const selected=new Set(ids);
+ return {domain:source.domain??'material',nodes:structuredClone((source.nodes??[]).filter(n=>selected.has(n.id)))};
+}
+export function pasteShaderNodes(source:GraphSource,clip:ShaderClipboard,ops:readonly ShaderNodeOperation[]):{graph:GraphSource;ids:string[]} {
+ const nodes=source.nodes??[];
+ if(!clip.nodes.length||nodes.length+clip.nodes.length>128||clip.domain!==(source.domain??'material'))return {graph:source,ids:[]};
+ if(clip.nodes.some(n=>!ops.some(o=>o.id===n.op&&o.domains.includes(clip.domain))))return {graph:source,ids:[]};
+ const remap=new Map<string,string>(),used=new Set(nodes.map(n=>n.id));
+ let serial=1;
+ for(const n of clip.nodes){
+  if(remap.has(n.id))return {graph:source,ids:[]};
+  while(used.has('node'+serial))serial++;
+  const id='node'+serial++;used.add(id);remap.set(n.id,id);
+ }
+ const copies=clip.nodes.map(n=>({...structuredClone(n),id:remap.get(n.id)!,
+  inputs:n.inputs?.map(input=>remap.get(input)??''),
+  position:[clamp((n.position?.[0]??0)+32),clamp((n.position?.[1]??0)+32)]}));
+ return {graph:{...source,nodes:[...nodes,...copies]},ids:copies.map(n=>n.id)};
+}
+export function moveShaderNodes(source:GraphSource,positions:readonly {id:string;x:number;y:number}[]):GraphSource {
+ if(!positions.length||positions.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return source;
+ const map=new Map(positions.map(p=>[p.id,p]));
+ return {...source,nodes:(source.nodes??[]).map(n=>{
+  const p=map.get(n.id);return p?{...n,position:[clamp(p.x),clamp(p.y)]}:n;
+ })};
+}
+/** Layout acyclic dependencies in columns; refuse cyclic or oversized layouts without mutation. */
+export function arrangeShaderNodes(source:GraphSource):GraphSource {
+ const nodes=source.nodes??[];
+ if(!nodes.length||nodes.length>128)return source;
+ const byId=new Map(nodes.map(n=>[n.id,n])),depth=new Map<string,number>(),visiting=new Set<string>();
+ if(byId.size!==nodes.length)return source;
+ const visit=(id:string):number=>{
+  if(depth.has(id))return depth.get(id)!;
+  if(visiting.has(id))throw new Error('Cycle');
+  visiting.add(id);let d=0;
+  for(const input of byId.get(id)?.inputs??[])if(byId.has(input))d=Math.max(d,visit(input)+1);
+  visiting.delete(id);depth.set(id,d);return d;
+ };
+ try{for(const n of nodes)visit(n.id);}catch{return source;}
+ const rows=new Map<number,number>(),positions=[];
+ for(const n of nodes){
+  const d=depth.get(n.id)!,r=rows.get(d)??0;rows.set(d,r+1);
+  const x=24+d*180,y=24+r*190;
+  if(x>2000||y>2000)return source;
+  positions.push({id:n.id,x,y});
+ }
+ return moveShaderNodes(source,positions);
+}
