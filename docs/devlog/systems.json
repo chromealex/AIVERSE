@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-async-persistence",
+     "title": "Асинхронная запись мира",
+     "titleEn": "Asynchronous world persistence",
+     "text": "Ограниченная очередь дисковых операций, подтверждение после записи и барьер checkpoint.",
+     "textEn": "Bounded disk operation queue, durable acknowledgement and checkpoint barrier.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-authority-runtime-persistence",
      "title": "Сохранение в авторитетном серверном цикле",
      "titleEn": "Authoritative server persistence",
