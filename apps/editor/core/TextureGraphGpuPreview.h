@@ -2,6 +2,7 @@
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
 #include "MaterialOps.h"
+#include <chrono>
 #include <memory>
 #include <optional>
 
@@ -22,7 +23,16 @@ class TextureGraphGpuPreview {
     size_t reusedOutputs_=0;
     bool setIncomplete()const{return setBake_&&!published_&&setImages_.size()<setOutputs_.size();}
     bool setPending()const{return setIncomplete()&&state_!="failed"&&state_!="cancelled";}
+    using Clock=std::chrono::steady_clock;
+    Clock::time_point deadline_{};
+    int timeoutMs_=60000;
     uint64_t fence_=0,serial_=0;
+    bool active()const{return queued_||state_=="pending"||setPending();}
+    // Discard results now; keep submitted resources until owner retirement.
+    void discard(const char* state,const char* why){
+        queued_=false;state_=state;reason_=why;backend_="none";pixels_.clear();
+        setImages_.clear();setBackends_.clear();program_.reset();sourceGraph_=Json();overrides_=Json();
+    }
     std::optional<Program> program_;
     size_t target_=0;int size_=0;
     std::string project_,state_="idle",reason_,backend_="none",submittedBackend_,output_;
@@ -82,7 +92,9 @@ public:
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
         r.set("request",Json::string(std::to_string(serial_)));r.set("reason",Json::string(reason_));
-        r.set("busy",Json::fromBool(queued_||inFlight_||state_=="pending"||setPending()));
+        r.set("busy",Json::fromBool(active()||inFlight_));
+        r.set("draining",Json::fromBool(inFlight_&&(state_=="cancelled"||state_=="failed")));
+        r.set("timeoutMs",Json::number(int64_t(timeoutMs_)));
         r.set("encodedPasses",Json::number(int64_t(passes_)));r.set("plannedScratchBytes",Json::number(int64_t(scratchBytes_)));
         r.set("bake",Json::fromBool(bake_));r.set("setBake",Json::fromBool(setBake_));
         r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
@@ -109,6 +121,8 @@ public:
         if(target>=program.nodes.size())throw std::invalid_argument("unknown texture target");
         if(serial_==~uint64_t{0})throw std::overflow_error("GPU texture identity exhausted");
         const int requested=bake?program.size:render::texture_graph::integer(p["resolution"],32,8,render::texture_graph::gpu::maxPreviewSize);
+        timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
+        deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
@@ -116,7 +130,13 @@ public:
         passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
-        if(!project_.empty()&&project_!=project){queued_=false;state_="cancelled";pixels_.clear();setImages_.clear();setBackends_.clear();project_.clear();}
+        if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
+    }
+    Json cancel(const Json& p,const std::string& project){
+        checkProject(project);
+        if(project_.empty()||p.getStr("request")!=std::to_string(serial_)||published_||
+            (!active()&&state_!="ready"))throw std::runtime_error("no matching cancellable GPU texture request");
+        discard("cancelled","cancelled by caller");return status();
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
@@ -131,6 +151,8 @@ public:
     // owns only its bytes and is delivered on the owner thread.
     void tick(gfx::Device& dev,const std::string& project){
         checkProject(project);
+        // Request-wide monotonic deadline, evaluated at owner frame boundaries.
+        if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
         if(ownsResources()&&!dev.gpuHealthy()){
             abandon();
             if(state_=="pending")fallback("GPU device unhealthy");
@@ -194,6 +216,6 @@ public:
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
-    void shutdownAfterIdle(gfx::Device& dev){queued_=false;state_="cancelled";pixels_.clear();setImages_.clear();setBackends_.clear();if(dev.gpuHealthy())release(dev);else abandon();}
+    void shutdownAfterIdle(gfx::Device& dev){discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev);else abandon();}
 };
 } // namespace aiverse::editor
