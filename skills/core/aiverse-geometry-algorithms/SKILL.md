@@ -21,3 +21,5 @@ GeometryEPA.h: convexEPA accepts four actual Minkowski support vertices strictly
 convexIntersect optionally exports a strict enclosing tetrahedron; convexPenetration automatically invokes EPA when available. Lower-dimensional or early tolerance contacts may yield Indeterminate for penetration even when intersection is known. Witness points remain unimplemented. No tests.
 
 convexPenetrationExpanded attempts a strict tetrahedron from 26 sampled directions on Indeterminate. This is incomplete and can still fail. convexSupportPair returns extreme points, not contact witnesses. No tests.
+
+convexContact uses sampled enclosing seed with support provenance and EPA barycentric witness interpolation. Check hasWitness independently of status; fallback may return penetration without witnesses. Witness pair is not a manifold. No build/tests.
