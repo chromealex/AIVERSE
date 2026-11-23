@@ -8,6 +8,7 @@
 #include "SpectraGpuParticles.h"
 #include "SpectraBatchWorld.h"
 #include "SpectraInstanceParameters.h"
+#include "SpectraDataInterfaces.h"
 #include <array>
 #include <cstdint>
 #include <deque>
@@ -88,6 +89,14 @@ public:
     bool setNamedProgramParameter(const std::string& name,float value,
                                   bool affectExisting=false);
     const InstanceParameterTable& instanceParameters() const {return namedParams_;}
+    const DataInterfaceBindings& dataInterfaceBindings() const {return dataBindings_;}
+    // Non-owning, strictly presentation-thread registry. Call after initGraph,
+    // before burstAt(). Null restores optional fallbacks and makes required
+    // bindings reject a burst. The host owns the registry and its snapshots.
+    void setDataInterfaceRegistry(const DataInterfaceRegistry* registry) {
+        dataRegistry_=registry;
+    }
+    const DataInterfaceSampleStats& dataInterfaceStats() const {return dataStats_;}
     bool burstAt(fx::float3 worldPosition,
                  fx::float3 direction = {0,1,0},
                  fx::float4 tint = {1,1,1,1});
@@ -133,6 +142,7 @@ public:
     }
 private:
     bool initCpu(gfx::Device*, const fx::EffectDef&, fx::FxQuality);
+    bool applyDataInterfaces(fx::float3 position);
     bool initialized_ = false;
     bool useComputeWrapper_ = false;
     BatchWorld* sharedWorld_ = nullptr;
@@ -143,6 +153,9 @@ private:
     std::array<float,8> paramValues_{};
     std::array<bool,8> paramSet_{};
     InstanceParameterTable namedParams_;
+    DataInterfaceBindings dataBindings_;
+    const DataInterfaceRegistry* dataRegistry_=nullptr;
+    DataInterfaceSampleStats dataStats_{};
     ComputeBackend backend_ = ComputeBackend::Cpu;
     fx::ParticleSystem cpu_;
     ComputeParticles gpu_;
