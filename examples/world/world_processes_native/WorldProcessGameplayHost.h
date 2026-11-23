@@ -56,6 +56,22 @@ public:
         return makeEvolveForestClimateSampler(ecs,std::move(regions),
                                               std::move(baseline));
     }
+    // Synchronous ecology entry point: rebuild the region identity snapshot
+    // from the completed ECS tick on every call, including after rollback.
+    // TerraWeave owns the forest resource and its transactional update.
+    terraweave::ForestEcologyResult advanceEcology(
+            const World& ecs,
+            terraweave::ForestEcologyResource& forest,
+            std::vector<terraweave::AnchoredPlant>& rooted,
+            std::uint64_t completedTick,
+            const std::vector<terraweave::ForestEcologySpecies>& species,
+            const terraweave::ForestEcologySoilSampler& soilHeight,
+            terraweave::ForestEcologyClimateSampler baseline={},
+            terraweave::ForestEcologySettings settings={})const{
+        return terraweave::advanceForestEcology(
+            forest,rooted,completedTick,species,soilHeight,
+            forestClimate(ecs,std::move(baseline)),settings);
+    }
     // Rollback invalidates only transient host deduplication, not ECS.
     void resetAfterRollback(){
         circuits_.resetAfterRollback();
