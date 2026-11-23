@@ -8,6 +8,8 @@ import './SpectraNativePreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
 import { compareSpectraCaptures } from './spectraPixelDiff';
 import type { SpectraPixelDiff } from './spectraPixelDiff';
+import { parseSpectraReplayPreset } from './spectraReplayPreset';
+import type { SpectraReplayPreset } from './spectraReplayPreset';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -44,7 +46,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [compareMode,setCompareMode]=useState<'side'|'split'>('side');
   const [splitPosition,setSplitPosition]=useState(50);
   const [lockedCamera,setLockedCamera]=useState<StudioSpectraCameraSnapshot|null>(null);
-  const [replayPreset,setReplayPreset]=useState<{camera:StudioSpectraCameraSnapshot;tick:number;speed:number;loop:boolean;background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;graphSignature:string;projectPath:string}|null>(null);
+  const [replayPreset,setReplayPreset]=useState<SpectraReplayPreset|null>(null);
+  const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [captureMetaA,setCaptureMetaA]=useState<Record<string,unknown>|null>(null);
   const [captureMetaB,setCaptureMetaB]=useState<Record<string,unknown>|null>(null);
   const pendingMeta=useRef<Record<string,unknown>|null>(null);
@@ -62,7 +65,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCapturePending(false);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
-    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);
+    setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
@@ -179,9 +182,32 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
   const saveReplayPreset=()=>{
     if(!state?.ready||!state.camera)return;
-    setReplayPreset({camera:{...state.camera},tick:state.tick,speed:state.speed,
+    setReplayPreset({format:'aiverse.spectrafx.replay',version:1,parameters:{...liveScalars},
+      camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
       graphSignature,projectPath});
+  };
+  const exportReplayPreset=()=>{
+    if(!replayPreset)return;
+    const blob=new Blob([JSON.stringify(replayPreset,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;link.download='spectrafx-replay.json';
+    link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  const importReplayPreset=async(file:File|undefined)=>{
+    if(!file)return;
+    try{
+      if(file.size>65536)throw new Error('Replay preset exceeds 64 KiB');
+      const preset=parseSpectraReplayPreset(await file.text());
+      if(preset.projectPath!==projectPath||preset.graphSignature!==graphSignature)
+        throw new Error('Preset project or graph revision mismatch');
+      for(const [name,value] of Object.entries(preset.parameters)){
+        const spec=graph.instanceParameters?.[name];
+        if(!spec||value<spec.min||value>spec.max)
+          throw new Error('Invalid scalar for current graph: '+name);
+      }
+      setReplayPreset(preset);setError('');
+    }catch(e){setError(message(e));}
   };
   const restoreReplayPreset=async()=>{
     if(!replayPreset||!active||busy||disabled||capturePending)return;
@@ -198,7 +224,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           grid:replayPreset.grid,axes:replayPreset.axes},
         {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
         {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'seek' as const,tick:replayPreset.tick}
+        {action:'seek' as const,tick:replayPreset.tick},
+        ...Object.entries(replayPreset.parameters).map(([name,value])=>({action:'parameter' as const,name,value}))
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
@@ -206,6 +233,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if(result.error||!result.ready)throw new Error(result.error||'Native replay restore failed');
       }
       setState(result);setSeek(replayPreset.tick);
+      setLiveScalars({...replayPreset.parameters});
     }catch(e){setError(message(e));}
     finally{setBusy(false);}
   };
@@ -254,6 +282,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       setError('Select a named parameter and enter a finite value.');return;
     }
     await command('parameter',{name:parameter,value:numeric});
+    setLiveScalars(previous=>({...previous,[parameter]:numeric}));
   };
   return <StudioSection title="Particle Preview">
     <SpectraDockViewport/>
@@ -380,6 +409,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={saveReplayPreset}>Save replay preset</StudioButton>
       <StudioButton size="sm" disabled={!replayPreset||busy||capturePending||!state?.ready}
         onClick={()=>void restoreReplayPreset()}>Restore replay preset</StudioButton>
+      <StudioButton size="sm" disabled={!replayPreset} onClick={exportReplayPreset}>Export preset</StudioButton>
+      <label>Import preset <input type="file" accept=".json,application/json"
+        disabled={busy||capturePending} onChange={e=>{
+          void importReplayPreset(e.target.files?.[0]);e.target.value='';
+        }}/></label>
       {replayPreset&&<small>Preset tick {replayPreset.tick} · {replayPreset.speed}× ·
         camera and stage stored in memory</small>}
       <StudioButton size="sm" disabled={!state?.camera||busy}
