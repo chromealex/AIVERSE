@@ -307,7 +307,13 @@ bool GraphRuntime::setProgramParameter(uint32_t slot,float value,
     if(useComputeWrapper_) {
         const bool ok=gpu_.setProgramParameter(slot,value,affectExisting);
         if(!ok)reason_="Metal VM parameter not supported by this GPU effect";
-        else reason_.clear();
+        else {
+            // Mirror the accepted GPU uniform so Data Interface retries and
+            // rollback use actual prior values rather than stale CPU zeros.
+            paramValues_[slot]=value;
+            paramSet_[slot]=true;
+            reason_.clear();
+        }
         return ok;
     }
     paramValues_[slot]=value;
