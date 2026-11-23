@@ -7,6 +7,7 @@
 #include "SocietyNpcHost.h"
 #include "EvolvePhysisHost.h"
 #include "EvolveTerraEcologyBridge.h"
+#include "aiverselib/world/EvolveSpatialIndex.h"
 #include "engine/world/TerraWeaveForestEcologyEcs.h"
 #include <cstdint>
 #include <functional>
@@ -81,20 +82,17 @@ public:
             const std::vector<terraweave::ForestEcologySpecies>& species,
             terraweave::ForestEcologySettings settings={},
             terraweave::ForestEcologyClimateOverride baseline={}){
-        const auto zones=evolve::extents(ecs);
+        const evolve::SpatialIndex zones(ecs);
         return terraweave::advanceForestEcologyEcs(
             ecs,cfg,tick,species,settings,
             [&ecs,&zones,baseline=std::move(baseline)](
                 const terraweave::AnchoredPlant& plant,
                 terraweave::ForestEcologyClimate climate){
                 if(baseline)climate=baseline(plant,climate);
-                for(const auto& zone:zones){
-                    if(plant.anchor.xCm<zone.minXcm||plant.anchor.xCm>=zone.maxXcm||
-                       plant.anchor.zCm<zone.minZcm||plant.anchor.zCm>=zone.maxZcm)
-                        continue;
+                zones.query(plant.anchor.xCm,plant.anchor.zCm,[&](const evolve::Extent& zone){
                     const auto* region=ecs.tryGetConst<evolve::Region>(zone.region);
                     if(region)climate=projectEvolutionClimate(*region,climate);
-                }
+                });
                 return climate;
             });
     }
