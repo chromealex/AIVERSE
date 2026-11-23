@@ -273,7 +273,7 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
                           "MorphNode","CrowdAgent","ImprintCell","CircuitNode",
                           "GranularField","EvolveRegion","SocietyPerson",
                           "MorphSpring","MorphForce","CrowdSlot","CrowdPreference",
-                          "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate",
+                          "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate","CircuitSwitch","CircuitDevice",
                           "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}) {
         const bool present=comps.has(name);
         item(name,name,"World Processes",
@@ -2682,7 +2682,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         for(const char* kind:{"EchoPortal","EchoEmitter","EchoReceiver",
                                             "FractureBond","AetherDuct","AetherFlux",
                                             "MorphSpring","MorphForce","CrowdPreference",
-                                            "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate",
+                                            "ImprintLink","ImprintDeposit","ImprintTracker","CircuitWire","CircuitGate","CircuitSwitch","CircuitDevice",
                                             "GranularSource","EvolvePressure","SocietyContact","SocietyMessage"}){
                             const auto& linkedDoc=other.extra["components"][kind];
                             if(!linkedDoc.isObject())continue;
