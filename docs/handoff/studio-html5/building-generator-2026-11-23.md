@@ -25,6 +25,15 @@ Stacked on `feature/aiv20261122_building_styles`, behind current main.
   real thumbnail if available, and asset GUID/path.
 - `src/components/AssetsPanel.tsx`: refreshes when generated asset event
   arrives; no alternative asset store.
+- Follow-up panel integration now offers **Reveal in Assets** (waits for the
+  dock mount before revealing the real path), and **Place in Scene** via
+  existing `studio.assetPlace` creating a normal authored StaticModel
+  entity (standard editor Undo/Redo). The native host requires a compatible
+  scenery type in rules.json, and rejects unsupported world-space maps.
+  Follow-up commit: `1cd6ecc21350698df8a211197e8fdd21c8feb4cc`.
+- Catalog follow-up hides facade-only styles from structure selection:
+  `43add932aa515063a4ccfb5df825cc239c19582a`.
+
 - `tests/studio/BuildingGenerationTests.cpp`: native catalog, GUID,
   no-overwrite and invalid-input tests. Included in focused GitHub workflow.
 - Docs: `docs/building-style.md`, building-style skill, Studio UI guide.
