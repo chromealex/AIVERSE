@@ -41,21 +41,39 @@ inline Kind outputKind(const std::string& name){
 }
 struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;};
 struct Program {int size=256;std::vector<Node> nodes;std::vector<size_t> order;std::map<std::string,size_t> outputs;};
+inline Json properties(const std::string& id){
+    Json result=Json::object();
+    auto field=[&](const char* key,const char* type,const Json& value,double lo=0,double hi=1){
+        Json p=Json::object();p.set("type",Json::string(type));p.set("default",value);
+        p.set("min",Json::number(lo));p.set("max",Json::number(hi));result.set(key,p);
+    };
+    auto options=[&](const char* key,const std::string& value,const std::vector<std::string>& values){
+        Json p=Json::object(),list=Json::array();p.set("type",Json::string("enum"));p.set("default",Json::string(value));
+        for(const auto& v:values)list.push(Json::string(v));p.set("options",list);result.set(key,p);
+    };
+    if(id=="constant")field("value","number",Json::number(.5));
+    if(id=="color")field("value","rgb",Json::parse("[0.5,0.5,0.5]"));
+    if(id=="noise"||id=="fbm"||id=="voronoi"){
+        field("period","integer",Json::number(int64_t(8)),1,256);
+        field("seed","integer",Json::number(int64_t(1)),0,4294967295.0);
+        if(id=="fbm")field("octaves","integer",Json::number(int64_t(4)),1,6);
+    }
+    if(id=="gradient")options("axis","y",{"x","y"});
+    if(id=="pattern"||id=="patternMask"){
+        options("pattern","brick",texturePatterns());field("scale","integer",Json::number(int64_t(8)),1,64);
+        field("seed","integer",Json::number(int64_t(1)),0,4294967295.0);
+    }
+    if(id=="threshold")field("threshold","number",Json::number(.5));
+    if(id=="remap"){field("low","number",Json::number(0.0));field("high","number",Json::number(1.0));}
+    if(id=="normal")field("strength","number",Json::number(2.0),0,16);
+    return result;
+}
 inline void validateParameters(const Node& n){
     const std::string id=n.info->id;const auto& p=n.parameters;
-    auto allowed=[&](const std::string& key){
-        if(id=="constant"||id=="color")return key=="value";
-        if(id=="noise"||id=="fbm"||id=="voronoi")return key=="period"||key=="seed"||(id=="fbm"&&key=="octaves");
-        if(id=="gradient")return key=="axis";
-        if(id=="pattern"||id=="patternMask")return key=="pattern"||key=="scale"||key=="seed";
-        if(id=="threshold")return key=="threshold";
-        if(id=="remap")return key=="low"||key=="high";
-        if(id=="normal")return key=="strength";
-        return false;
-    };
-    for(const auto& [key,value]:p.members()){(void)value;require(allowed(key),"unknown texture node property");}
+    const auto fields=properties(id);
+    for(const auto& [key,value]:p.members()){require(fields.has(key)&&!value.isNull(),"unknown or null texture node property");}
     if(id=="constant")scalar(p["value"],.5f);
-    if(id=="color"){require(p["value"].isArray()&&p["value"].size()==3,"color requires RGB triple");for(const auto& v:p["value"].items())scalar(v,0);}
+    if(id=="color"){require(p["value"].isArray()&&p["value"].size()==3,"color requires RGB triple");for(const auto& v:p["value"].items()){require(v.isNumber(),"RGB channel must be number");scalar(v,0);}}
     if(id=="noise"||id=="fbm"||id=="voronoi"){integer(p["period"],8,1,256);seed(p["seed"]);if(id=="fbm")integer(p["octaves"],4,1,6);}
     if(id=="gradient")require(!p.has("axis")||p.getStr("axis")=="x"||p.getStr("axis")=="y","gradient axis must be x or y");
     if(id=="pattern"||id=="patternMask"){auto patterns=texturePatterns();require(std::find(patterns.begin(),patterns.end(),p.getStr("pattern"))!=patterns.end(),"unknown native pattern");integer(p["scale"],8,1,64);seed(p["seed"]);}
@@ -92,10 +110,11 @@ inline Program compile(const Json& g){
 inline float clamp(float x){return std::clamp(x,0.f,1.f);}
 inline Pixel gray(float x){return {x,x,x};}
 inline Pixel mix(Pixel a,Pixel b,float t){return {a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t};}
-inline Image evaluate(const Program& p,size_t target,int resolution=0){
-    const int n=resolution?resolution:p.size;require(target<p.nodes.size()&&n>=8&&n<=p.size,"invalid texture evaluation target or resolution");
+inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t>& targets,int resolution=0){
+    const int n=resolution?resolution:p.size;require(!targets.empty()&&targets.size()<=9&&n>=8&&n<=p.size,"invalid texture evaluation target or resolution");
+    for(auto target:targets)require(target<p.nodes.size(),"invalid target");
     std::vector<std::vector<Pixel>> images(p.nodes.size());
-    std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto dep:p.nodes[i].inputs)mark(dep);};mark(target);
+    std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto dep:p.nodes[i].inputs)mark(dep);};for(auto target:targets)mark(target);
     const size_t count=size_t(n)*n;
     for(auto i:p.order){
         if(!needed[i])continue;
@@ -134,13 +153,17 @@ inline Image evaluate(const Program& p,size_t target,int resolution=0){
             for(float& c:r)c=clamp(c);out[k]=r;
         }
     }
-    Image img;img.width=img.height=n;img.name="generated:texture-graph";img.rgba.resize(count*4,255);
-    for(size_t i=0;i<count;++i)for(size_t c=0;c<3;++c)img.rgba[i*4+c]=uint8_t(std::lround(clamp(images[target][i][c])*255.f));
-    return img;
+    std::vector<Image> result;result.reserve(targets.size());
+    for(auto target:targets){Image img;img.width=img.height=n;img.name="generated:texture-graph";img.rgba.resize(count*4,255);
+        for(size_t i=0;i<count;++i)for(size_t c=0;c<3;++c)img.rgba[i*4+c]=uint8_t(std::lround(clamp(images[target][i][c])*255.f));
+        result.push_back(std::move(img));}
+    return result;
+}
+inline Image evaluate(const Program& p,size_t target,int resolution=0){return std::move(evaluateMany(p,{target},resolution).front());
 }
 inline Json describeCatalog(){
     Json r=Json::object(),nodes=Json::array();
-    for(const auto& o:catalog()){Json n=Json::object(),inputs=Json::array();n.set("id",Json::string(o.id));n.set("output",Json::string(kindName(o.output)));for(auto k:o.inputs)inputs.push(Json::string(kindName(k)));n.set("inputs",inputs);nodes.push(n);}
-    r.set("ok",Json::fromBool(true));r.set("nodes",nodes);r.set("outputs",Json::parse(R"(["color","normal","height","roughness","metallic","metallicRoughness","ao","emissive","mask"])"));return r;
+    for(const auto& o:catalog()){Json n=Json::object(),inputs=Json::array();n.set("id",Json::string(o.id));n.set("output",Json::string(kindName(o.output)));for(auto k:o.inputs)inputs.push(Json::string(kindName(k)));n.set("inputs",inputs);n.set("properties",properties(o.id));nodes.push(n);}
+    r.set("ok",Json::fromBool(true));r.set("nodes",nodes);r.set("outputs",Json::parse(R"(["color","normal","height","roughness","metallic","metallicRoughness","ao","emissive","mask"])"));Json outputTypes=Json::object();for(const auto& v:r["outputs"].items())outputTypes.set(v.str(),Json::string(kindName(outputKind(v.str()))));r.set("outputTypes",outputTypes);return r;
 }
 } // namespace aiverse::render::texture_graph
