@@ -156,6 +156,10 @@ public:
     bool hostPaused() const;
     bool hostCanStep() const;
     bool setHostPaused(bool paused);
+    bool setHostSpeed(double speed);
+private:
+    double hostSpeed_=0;
+public:
     bool requestHostStep();
 
 private:
