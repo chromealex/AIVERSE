@@ -48,7 +48,7 @@ inline Json named(const Json& p) {
 }
 inline Json candidate(const Domain& d,const Json& p) {
     if(!p[d.payload].isObject())throw std::invalid_argument(std::string("object required: ")+d.payload);
-    Json q=Json::object();q.set(d.payload,p[d.payload]);return q;
+    Json q=Json::object();q.set(d.payload,p[d.payload]);if(std::string(d.id)=="texture"&&p.has("overrides"))q.set("overrides",p["overrides"]);return q;
 }
 inline bool failed(const Json& r) {
     return r.has("error")||(r.has("ok")&&!r.getBool("ok"));
@@ -100,7 +100,7 @@ inline Json inspectDependencies(const Domain& d,const Json& source) {
 inline void registerGraphOps(Workspace& ws) {
     using namespace graph_ops;
     auto debugger=std::make_shared<graph_debug::Session>();
-    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling","texture"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"domain":{"type":"string","enum":["shader","spectrafx","motionweave","modeling","texture"]},"name":{"type":"string"},"node":{"type":"string"},"graph":{"type":"object"},"document":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"integer"},"overrides":{"type":"object"},"allowUnversionedWrite":{"type":"boolean"},"edit":{"type":"object"},"edits":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}}},"required":["domain"],"additionalProperties":false})");
     ws.registerOp({"graph_catalog","Discover actual registered graph domain operations, payload formats and save constraints.",Json::object(),[&ws](const Json&){
         Json r=Json::object(),items=Json::array();
         for(const auto& d:domains){
@@ -115,7 +115,7 @@ inline void registerGraphOps(Workspace& ws) {
             const bool editable=registered(ws,d.validate)&&(id!="spectrafx"||registered(ws,d.edit));
             if(editable){ops.set("genericEdit",Json::string("graph_edit"));row.set("editActions",Json::parse(actions));row.set("maxBatch",Json::number(int64_t(64)));}
             if(id!="texture")ops.set("propertySchema",Json::string("graph_property_schema"));
-            else{ops.set("preview",Json::string("texture_graph_preview"));ops.set("bake",Json::string("texture_graph_bake"));ops.set("bakeSet",Json::string("texture_graph_bake_set"));ops.set("templates",Json::string("texture_graph_templates"));ops.set("propertySchema",Json::string("graph_property_schema"));}ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
+            else{ops.set("preview",Json::string("texture_graph_preview"));ops.set("bake",Json::string("texture_graph_bake"));ops.set("bakeSet",Json::string("texture_graph_bake_set"));ops.set("templates",Json::string("texture_graph_templates"));ops.set("cache",Json::string("texture_graph_cache"));ops.set("materialVariant",Json::string("texture_graph_material_variant"));ops.set("propertySchema",Json::string("graph_property_schema"));}ops.set("assetDependencies",Json::string("graph_asset_dependencies"));
             if(id=="motionweave"||id=="spectrafx")ops.set("runtimeProbe",Json::string("graph_runtime_probe"));
             row.set("operations",ops);items.push(row);
         }
