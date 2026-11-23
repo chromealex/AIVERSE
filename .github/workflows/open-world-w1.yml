@@ -49,6 +49,7 @@ jobs:
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_FETCH_TEMPLATES=OFF \
             2>&1 | tee w1-configure.log
       - name: Build all W1 source and integration fixtures
         shell: bash
