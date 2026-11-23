@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/buildings/BuildingGlbWriter.h"
 #include "engine/buildings/BuildingPngEncoder.h"
+#include "engine/buildings/BuildingMaterialAssets.h"
 #include "engine/render/Model.h"
 #include <aiverselib/systems/BuildingFeatureGenerator.h>
 #include "engine/data/Json.h"
@@ -277,6 +278,65 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
     out.set("styles",std::move(styles));
     return out;
 }
+// Temporary GPU preview requests use exactly the native geometry and
+// project PBR material override path. No disk writes, sidecar or new GUID.
+inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
+    const std::filesystem::path& engine,const std::filesystem::path& project,
+    const Json& params){
+    namespace fs=std::filesystem;
+    using namespace buildingStudioDetail;
+    if(project.empty())throw std::runtime_error("Open a project before previewing");
+    const auto req=request(params);
+    auto building=produce(engine,req);
+    applyProjectMaterials(project,req,building);
+    StudioAssetCatalog catalog(project);
+    catalog.rebuild();
+    const auto content=studioContentRoot(project);
+    building::BuildingImageByGuid resolver=[&](
+        const std::string& guid,render::Image& image,std::string& issue){
+        const auto entry=catalog.byGuid(guid);
+        if(!entry||entry->directory||entry->importer!="texture"){
+            issue="Building preview texture GUID does not resolve";return false;
+        }
+        const fs::path relative(entry->path);
+        if(relative.empty()||relative.is_absolute()){
+            issue="Invalid building preview texture path";return false;
+        }
+        fs::path source=content;
+        for(const auto& component:relative){
+            if(component=="."||component==".."||component.empty()){
+                issue="Unsafe preview texture reference";return false;
+            }
+            source/=component;
+            std::error_code ec;
+            if(fs::is_symlink(fs::symlink_status(source,ec))||ec){
+                issue="Preview texture path must not be symlinked";return false;
+            }
+        }
+        std::error_code ec;
+        if(!fs::is_regular_file(source,ec)||ec||
+           fs::file_size(source,ec)>16u*1024u*1024u||ec){
+            issue="Preview texture source is missing or too large";return false;
+        }
+        std::ifstream input(source,std::ios::binary);
+        if(!input){issue="Cannot open preview texture";return false;}
+        const std::string bytes{
+            std::istreambuf_iterator<char>(input),
+            std::istreambuf_iterator<char>()};
+        if(!(input.good()||input.eof())||
+           !render::decodeImage(bytes,image)){
+            issue="Cannot decode preview texture";return false;
+        }
+        return true;
+    };
+    std::string error;
+    auto model=building::runtimeTexturedBuildingModel(
+        building,resolver,"studio/generated-building-preview",&error);
+    if(!model)throw std::runtime_error(error.empty()?
+        "Building preview CPU Model failed":error);
+    return model;
+}
+
 inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json& params) {
     using namespace buildingStudioDetail;
     auto req=request(params);
