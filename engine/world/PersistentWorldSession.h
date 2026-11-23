@@ -1,5 +1,6 @@
 #pragma once
 #include "RegionWorldSessionLock.h"
+#include "RegionCheckpointRetention.h"
 #include "RegionCheckpointArchive.h"
 #include "RegionWalFinality.h"
 namespace aiverse::world {
@@ -73,6 +74,14 @@ public:
         auto next=manifest_;next.generation=generation;next.identity.sequence=wal_.sequence();
         ready_=false;wal_.close();
         return publish(next);
+    }
+    RegionRetentionPlan retentionPlan(RegionRetentionPolicy policy)const {
+        if(!ready()||!lock_.held())return {};
+        return RegionCheckpointRetention::plan(dir_,manifest_,policy);
+    }
+    RegionRetentionCleanup cleanupRetention(RegionRetentionPolicy policy){
+        if(!ready()||!lock_.held())return {};
+        return RegionCheckpointRetention::cleanup(dir_,manifest_,policy);
     }
     void close()noexcept{ready_=false;wal_.close();lock_.close();}
 private:
