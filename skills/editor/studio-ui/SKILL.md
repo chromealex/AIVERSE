@@ -89,6 +89,9 @@ One CompoundEdit is owned by the Scene stroke from press to release. No history 
 ## Saved project document history (S6c.2)
 Project owns a separate bounded history (64 entries / 16 MiB of retained plan payload). Only explicit rules_set/merge/delete and compatible set_manifest saves are labelled; other changed owner saves clear the stack, and rules-source/module changes require reopening. No-op saves preserve redo. Use project_history_status/project_history_step or native studio.projectHistory/studio.projectHistoryStep with direction and exact expectedVersion. Target bytes are composed and validated using the owner loaders before applying the reversible file plan. MapDoc history is not navigated. Asset changes, topology changes, crash durability and cross-scope agent Undo all remain outside coverage. UI integration must provide explicit scope and use one-step navigation, not simulate a multi-file jump by issuing unreviewed commands.
 
+## HTML5 project history (S6c.3)
+Use the existing HistoryPanel with explicit Map / Project scope. Map rows keep native map jumps; project rows are non-interactive and navigation uses one owner-authorized step with exact expectedVersion. Never change global map Undo/Redo shortcuts to select a project scope implicitly. Use shared StudioButton/Alert/EmptyState/Skeleton, show native blocked/conflict reasons and retained payload counters. Demo mode is explicitly unavailable for project writes. Snapshot project.historyVersion invalidates saved Rules and Build views; other snapshot-driven panels refresh via document.changed. Native host sends document.changed on stroke begin/end; native stroke guard remains authoritative. Do not claim asset history, a unified timeline, durable recovery or agent cross-scope Undo all.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

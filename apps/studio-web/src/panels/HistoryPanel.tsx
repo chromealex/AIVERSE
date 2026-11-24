@@ -24,7 +24,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
   const latest = useRef({ snapshot, scope });
   latest.current = { snapshot, scope };
   const project = snapshot?.project.path ?? '';
-  const history = loaded?.source === snapshot && loaded.scope === scope ? loaded.value : null;
+  const history = loaded && loaded.source === snapshot && loaded.scope === scope ? loaded.value : null;
   const error = failure?.project === project && failure.scope === scope ? failure.message : '';
   const projectHistory = history?.scope === 'project' ? history as StudioProjectHistory : null;
 

@@ -149,10 +149,13 @@ void projectHistoryContract(){
     AIVERSE_TEST_CHECK(!call(R"({"id":1,"method":"studio.rulesSet","params":{"path":"types.tree.health.max","value":300}})").has("error"));
     const auto hs=call(R"({"id":2,"method":"studio.projectHistory","params":{}})")["result"];
     AIVERSE_TEST_CHECK(hs.getStr("scope")=="project"&&hs.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(call(R"({"id":4,"method":"studio.snapshot","params":{}})")["result"]["project"].getStr("historyVersion")==hs.getStr("version"));
     Json req=Json::parse(R"({"id":3,"method":"studio.projectHistoryStep","params":{"direction":"undo"}})");
     req.find("params")->set("expectedVersion",Json::string(hs.getStr("version")));
     const auto result=session.dispatch(req);
     AIVERSE_TEST_CHECK(!result.has("error")&&result["result"]["snapshot"].isObject());
+    AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("historyVersion")==result["result"].getStr("version"));
+    AIVERSE_TEST_CHECK(result["result"].getStr("version")!=hs.getStr("version"));
     AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
     fs::remove_all(root);
 }

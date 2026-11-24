@@ -65,3 +65,13 @@ test('demo inspector groups entity fields into components and reorder keeps enti
   assert.deepEqual([...after].sort(), [...before].sort());
   assert.equal(moved.inspector?.id, 'player');
 });
+
+test('project history in demo is explicitly unavailable and cannot mutate files', async () => {
+  const h = await mockInvoke('studio.projectHistory', {});
+  assert.equal(h.scope,'project');
+  assert.deepEqual(h.steps,[]);
+  assert.equal(h.canUndo,false);
+  assert.equal(h.canRedo,false);
+  assert.match(h.blockedReason,/native Studio/);
+  await assert.rejects(mockInvoke('studio.projectHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
+});
