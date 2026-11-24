@@ -599,6 +599,8 @@ StudioScene::~StudioScene() {
         terrainRetirement_.retireBuffer(*device_,terrain_.vb);
         terrainRetirement_.retireBuffer(*device_,terrain_.ib);
         (void)terrainRetirement_.completeForShutdown(*device_);
+        sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
+        (void)sparseTerrainRetirement_.completeForShutdown(*device_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
         nereid_.shutdown(*device_);
@@ -1635,7 +1637,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
             lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
-                terrainCavernsAuthored_?&terrainCpu_:nullptr);
+                (terrainCavernsAuthored_||sparseTerrain)?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
                 prepareModelUpload(*lightingModel_);
@@ -1690,7 +1692,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         constexpr int kSettleFrames=30;
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
-        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || !thumbJobs_.empty() ||
+        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
@@ -1865,6 +1867,14 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const float w=std::max(1.0f,std::min(W,H)*0.0015f);
         o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
         o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
+    }
+    if(sparseTerrain&&!cavernsPreview_.isolate()){
+        try {
+            if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
+            const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
+            sparseTerrainPreview_.draw(*device_,renderer_,doc,cm(camera_.target.x),cm(camera_.target.z),retireSparse,true);
+            sparseTerrainError_.clear();
+        }catch(const std::exception& e){sparseTerrainError_=e.what();}
     }
     cavernsPreview_.draw(renderer_);
     gfx::PassDesc pass;
