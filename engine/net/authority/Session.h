@@ -5,6 +5,7 @@
 #include <deque>
 #include <filesystem>
 #include <array>
+#include <optional>
 
 namespace aiverse::actor { class ActorPersistentSession; }
 
@@ -43,6 +44,10 @@ public:
     RecoveryStatus pollPersistenceRecovery();
     RecoveryProgress persistenceRecoveryProgress()const;
     void cancelPersistenceRecovery();
+    // Required startup gate for persistent streamed worlds. No ticks or
+    // peers before the restored positions' collision/navigation are ready.
+    bool pollPersistenceContent();
+    const std::string& persistenceContentError()const{return persistenceContentError_;}
     bool persistenceFailed()const{return persistenceFailed_;}
     bool checkpointWorld();
     bool pollWorldCheckpoint();
@@ -64,6 +69,12 @@ private:
     SnapshotStats stats_;
     std::vector<Peer> peers_;
     std::unique_ptr<actor::ActorPersistentSession> persistence_;
+    std::string persistenceIdentity_,persistenceContentError_;
+    std::optional<world::WorldAssets> persistenceAssets_;
+    world::AssetReader persistenceReader_;
+    bool contentPending_=false;
+    bool verifyPersistenceContent();
+    void failPersistenceContent(std::string);
     bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false,publishingFinalized_=false,recoveringPersistence_=false;
 };
 class Client {
