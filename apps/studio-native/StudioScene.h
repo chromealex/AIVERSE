@@ -203,6 +203,7 @@ private:
     editor::TerraWeaveSparsePreview sparseTerrainPreview_;
     render::NativePresentationRetirement sparseTerrainRetirement_;
     std::string sparseTerrainProject_;
+    std::string planetChartIdentity_;
     std::string sparseTerrainError_;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<render::Model> materialSphere_;
