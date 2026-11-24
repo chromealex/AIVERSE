@@ -415,8 +415,11 @@ bool Renderer3D::appendGraphImageRoots(const Model& model,std::vector<std::span<
     }
     return true;
 }
+bool Renderer3D::canDetachCompletedGraphImageReplay()const noexcept{
+    return !capture_&&!modelPacketTap_&&!geometryPacketTap_;
+}
 bool Renderer3D::detachCompletedGraphImageReplay()noexcept{
-    if(capture_||modelPacketTap_||geometryPacketTap_)return false;
+    if(!canDetachCompletedGraphImageReplay())return false;
     // This discards CPU replay/diagnostic references, not submitted GPU work.
     // The existing image retirement queue still fences all previous use.
     discardSceneSubmission();

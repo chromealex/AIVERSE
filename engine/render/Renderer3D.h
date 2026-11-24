@@ -765,6 +765,9 @@ public:
     // Explicit host contract: final CPU submission and all replay/provenance
     // consumers of the scene are finished. Invalidates the old scene only,
     // never destroys GPU resources or waits for GPU completion.
+    // Non-mutating preflight for hosts with more than one renderer. All
+    // participants must agree before any previous-scene state is discarded.
+    bool canDetachCompletedGraphImageReplay() const noexcept;
     bool detachCompletedGraphImageReplay() noexcept;
     // Hierarchical wind masks (WindRigShader.h). Scene wind drives every
     // rigged draw that does not supply its own vertexParameters; the debug

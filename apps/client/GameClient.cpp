@@ -351,6 +351,10 @@ void GameClient::setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRoo
             // Caller explicitly certified that no later CPU consumer will
             // replay the prior frame. No GPU work is destroyed here.
             if(detachCompletedReplay){
+                // Both owner-thread renderers must be ready before mutating
+                // either. A capture on the inset must not discard main replay.
+                if(!r3d_.canDetachCompletedGraphImageReplay()||
+                   (insetR3d_&&!insetR3d_->canDetachCompletedGraphImageReplay()))return false;
                 if(!r3d_.detachCompletedGraphImageReplay())return false;
                 if(insetR3d_&&!insetR3d_->detachCompletedGraphImageReplay())return false;
                 lensModelSnapshot_.clear();
