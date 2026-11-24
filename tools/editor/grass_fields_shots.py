@@ -28,7 +28,8 @@ sock = connect(); buf = b""; seq = 0
 
 def _hello():
     global buf
-    path = os.path.expanduser("~/.aiverse/agent-link/%d.token" % port)
+    directory = os.environ.get("AIVERSE_AGENT_LINK_DIR", os.path.expanduser("~/.aiverse/agent-link"))
+    path = os.path.join(directory, "%d.token" % port)
     for _ in range(120):
         if os.path.exists(path): break
         time.sleep(1)
@@ -40,7 +41,8 @@ def _hello():
             if not chunk: sys.exit("editor closed the link during hello")
             buf += chunk
         line, buf = buf.split(b"\n", 1)
-        print("hello:", line[:200], flush=True)
+        if not json.loads(line).get("result", {}).get("ok"):
+            raise RuntimeError("Editor authentication failed")
 _hello()
 
 def call(_tool, **args):
@@ -57,6 +59,8 @@ def call(_tool, **args):
         reply = json.loads(line)
         if reply.get("id") == seq:
             r = reply.get("result", reply.get("error", {}))
+            if _tool != "view_screenshot" and (not isinstance(r, dict) or "error" in r):
+                raise RuntimeError(f"{_tool}: {r}")
             short = {k: v for k, v in r.items() if k != "png_base64"} if isinstance(r, dict) else r
             print(f"{_tool}: {json.dumps(short, ensure_ascii=False)[:400]}", flush=True)
             return r if isinstance(r, dict) else {}
@@ -105,8 +109,12 @@ def cams():
     ]
 
 for mode in modes:
+    # Exercise the persisted map setting and the same auto mode used by old maps.
+    if mode not in ("auto", "legacy"):
+        call("terraweave_meadow_set", preset=mode)
+        assert call("terraweave_meadow_get")["meadow"] == mode
     call("view_wind", forest=False, nature=True, grass=True, flames=False, sound=False,
-         playing=True, windSpeed=0.5, windDirection=25, grassQuality=2, grassMeadow=mode, debug="off")
+         playing=True, windSpeed=0.5, windDirection=25, grassQuality=2, grassMeadow=("legacy" if mode == "legacy" else "auto"), debug="off")
     call("view_focus", x=cx, z=cz, distance=30)
     time.sleep(10)  # grass patches upload (bounded uploads per frame)
     for tag, cam in cams():
