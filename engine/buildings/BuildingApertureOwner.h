@@ -65,8 +65,12 @@ public:
             e.pose.socketId=socket.id;
             e.pose.featureIndex=socket.featureIndex;
             e.pose.kind=socket.kind;
-            e.pose.open=socket.open>=0.9999f;
-            e.pose.physicalPermille=e.pose.open?1000:0;
+            // The authored functional recipe may start a door partially
+            // open (0..1). It stays collision-blocked unless fully open;
+            // retain the initial physical fraction for dual-panel owners.
+            e.pose.physicalPermille=uint16_t(std::clamp(
+                int(std::lround(socket.open*1000.f)),0,1000));
+            e.pose.open=e.pose.physicalPermille==1000;
             e.pose.revision=1;
             e.colliderId=it->second;
             // Treat each aperture as one conservative full-width closed
