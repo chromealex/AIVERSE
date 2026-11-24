@@ -127,7 +127,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37C in progress: shared live snapshot material publication, stable model/appearance target identities, explicit frame-boundary editor application; preserve existing owner and rollback.",
+      "note": "Stage 37C shared live-snapshot material adoption and explicit editor frame-boundary target/application integrated in source; session-only compatibility adapter, other native runtime host integration and hardware acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -197,7 +197,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 37B isolated exact-blob C++20 request budget policy PASS on Linux GCC 14.2 and Clang 17; synthetic resident-owner and real RHI mip fixtures authored NOT RUN. Full build/CTest, actual Metal/Vulkan, Studio and Mac merged-tree gate pending.",
+      "note": "Stage 37C exact-blob isolated identity/64-bit decimal transport fixture PASS with GCC 14.2 and Clang 17. Integrated appearance and resident-owner fixtures extended, headless refusal authored NOT RUN; source operation schemas parsed, full native build, MCP runtime audit, Studio build, GPU and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
