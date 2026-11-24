@@ -22,6 +22,7 @@ public:
     explicit StudioSession(const std::string& engineRoot, const std::string& project = {});
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     const editor::Workspace& workspace() const { return ws_; }
+    void setBuildingGraphReader(std::function<Json(uint64_t)> reader){ws_.buildingGraphDiagnosticsProvider=std::move(reader);}
     int selectedEntityIndex() const;
     const std::string& selectedObjectId() const { return selected_; }
     // Multi-selection (primary = selectedObjectId(), always last) and editor-only
