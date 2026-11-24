@@ -144,7 +144,7 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
     fs::path p=root;
     for(const auto& segment:rel){
         const auto name=segment.string();
-        const bool historyCache=(relative==".aiverse-cache/project-history.json"&&p==root&&name==".aiverse-cache")||
+        const bool historyCache=((relative==".aiverse-cache/project-history.json"||relative==".aiverse-cache/asset-history.json")&&p==root&&name==".aiverse-cache")||
             (mapCheckpoint&&name==".aiverse-cache"&&p/segment==root/rel.parent_path());
         if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache&&!(trashMeta&&p==root))||name==".git"||
            name.starts_with(".aiverse-save-")||name.find('\0')!=std::string::npos)
