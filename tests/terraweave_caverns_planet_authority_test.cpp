@@ -1,4 +1,5 @@
 #include "engine/world/TerraWeaveCavernsEcsCommand.h"
+#include "engine/world/TerraWeaveCavernsPlanetBodyCut.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -43,8 +44,48 @@ static std::unique_ptr<Simulation> make(Json doc){
     Json map=Json::object();map.set(kPlanetCaveMapKey,std::move(doc));
     sim->setup(Json::object(),map);return sim;
 }
+static void checkBodyCut(const std::shared_ptr<const game::Surface>& surface){
+    const auto set=decodePlanetCaveMap(regions(),surface);
+    CavePlanetBodyCutPlan body;
+    body.bodyId="planet";body.surfaceRevision=7;body.surfaceEpoch=9;
+    for(const auto& entry:set.regions){
+        auto plan=std::make_shared<CavePlanetCutPlan>();
+        plan->anchor=entry.region.anchor;plan->surfaceRevision=7;
+        plan->surfaceEpoch=9;plan->authorityRevision=entry.authority.volume.sourceRevision;
+        const auto frame=CavePlanetFrame::make(surface,plan->anchor);
+        const auto one=Fixed::fromInt(1),minus=Fixed::fromInt(-1);
+        const world::Triangle local{{minus,{},minus},{minus,{},one},{one,{},minus}};
+        const world::Triangle native{frame.toBody(local.a),frame.toBody(local.b),frame.toBody(local.c)};
+        CavePlanetCutSlot slot;slot.key={plan->anchor.face,0,0,1,0};
+        slot.originalBody.push_back(native);slot.bodyTriangles.push_back(native);
+        slot.chartTriangles.push_back(local);
+        plan->slots.emplace(slot.key,slot);
+        body.regions.emplace(entry.id,std::move(plan));
+    }
+    check(collectPlanetBodyCutSlots(body).size()==2,"aggregate leaf count");
+    check(certifyPlanetBodyCut(body,surface).size()==2,"aggregate certificate");
+    auto broken=body;
+    auto conflict=std::make_shared<CavePlanetCutPlan>(*body.regions.at(9));
+    conflict->slots.clear();
+    const auto first=body.regions.at(2)->slots.begin()->second;
+    conflict->slots.emplace(first.key,first);broken.regions[9]=conflict;
+    bool refused=false;
+    try{(void)collectPlanetBodyCutSlots(broken);}catch(const std::invalid_argument&){refused=true;}
+    check(refused,"duplicate leaf accepted");
+    broken=body;conflict=std::make_shared<CavePlanetCutPlan>(*body.regions.at(9));
+    conflict->surfaceEpoch=8;broken.regions[9]=conflict;refused=false;
+    try{(void)collectPlanetBodyCutSlots(broken);}catch(const std::invalid_argument&){refused=true;}
+    check(refused,"mixed surface epoch accepted");
+    broken=body;conflict=std::make_shared<CavePlanetCutPlan>(*body.regions.at(9));
+    conflict->slots.begin()->second.bodyTriangles.clear();
+    conflict->slots.begin()->second.chartTriangles.clear();
+    broken.regions[9]=conflict;refused=false;
+    try{(void)certifyPlanetBodyCut(broken,surface);}catch(const std::invalid_argument&){refused=true;}
+    check(refused,"missing exterior accepted");
+}
 int main(){
     const auto surface=makeSurface();
+    checkBodyCut(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;
