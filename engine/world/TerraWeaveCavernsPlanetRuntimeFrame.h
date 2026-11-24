@@ -93,6 +93,14 @@ public:
             active.sources.contains(id)&&active.current(ecs,generation_)&&
             active.cut->surfaceRevision==planet_.caveSurfaceRevision();
     }
+    // Borrow only the immutable, actually published region cut.
+    std::shared_ptr<const CavePlanetCutPlan> committedRegionCut(const World& ecs,uint64_t id)const{
+        if(!regionReady(ecs,id))return {};
+        const auto* entry=findPlanetCaveRegion(ecs,id);
+        const auto& regions=cohorts_.at(entry->region.anchor.bodyId).active->cut->regions;
+        const auto it=regions.find(id);
+        return it==regions.end()?nullptr:it->second;
+    }
     // Host-thread capture only. No live runtime pointer is captured by the
     // provider; route workers get immutable data. Supply a fresh environment
     // revision whenever PHYSIS/NEREID inputs or mapping change.

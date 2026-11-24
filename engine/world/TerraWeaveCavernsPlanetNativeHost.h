@@ -4,6 +4,7 @@
 // All native methods execute at the host's existing exclusive frame barrier.
 #include "engine/world/TerraWeaveCavernsPlanetGiViewFrame.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
+#include "engine/world/TerraWeaveCavernsPlanetTravel.h"
 #include "engine/render/GiMainCpuBridge.h"
 #include "engine/render/GiMainGpuBridge.h"
 #include "engine/render/Renderer3D.h"
@@ -113,6 +114,7 @@ public:
     CavePlanetRuntimeProgress beforeFrame(const World& world,render::Renderer3D& renderer,
             std::span<const CavePlanetObserver> observers,const std::set<uint64_t>& pins,
             size_t jobs=2){
+        const auto required=cavePlanetTravelPins(world,pins);
         const bool wasCoherent=frameCoherent_;
         frameCoherent_=false;
         CavePlanetRuntimeProgress result;
@@ -133,7 +135,7 @@ public:
         // before entering the runtime's irreversible publication barrier.
         if(!target_.ready()||!giReady_()||(!scene_.current()&&!publication_.providesBaseline())||scene_.hasPendingChanges()){
             result.phase=CavePlanetRuntimePhase::WaitingCoverage;
-            result.pinsReady=runtime_->requiredRegionsReady(world,pins);
+            result.pinsReady=runtime_->requiredRegionsReady(world,required);
             // A busy fence alone does not invalidate an unchanged published
             // cohort. The actual bridge still decides if its atlas can bind.
             frameCoherent_=wasCoherent&&!restored&&!notice_.pending()&&
@@ -142,7 +144,7 @@ public:
             result.diagnostic="Caverns waiting for shared GI owner/fence";
             return result;
         }
-        result=runtime_->pump(world,observers,pins,jobs);
+        result=runtime_->pump(world,observers,required,jobs);
         frameCoherent_=result.allDemandReady&&!runtime_->recoveryRequired()&&!notice_.pending()&&publication_.current();
         return result;
     }
@@ -151,7 +153,7 @@ public:
     // visibility, GPU readiness or a local lease as a lockstep checksum.
     bool admitNativeTick(const World& world,const std::set<uint64_t>& pins)const{
         return !closed_&&!notice_.pending()&&!runtime_->recoveryRequired()&&
-            runtime_->requiredRegionsReady(world,pins);
+            runtime_->requiredRegionsReady(world,cavePlanetTravelPins(world,pins));
     }
     // Call after canonical capture and immediately before the existing
     // native motor consumes steering. Refresh only when the admitted
@@ -160,8 +162,9 @@ public:
         if(!exclusive_()||!admitNativeTick(world,required))return false;
         const auto* epoch=world.resourceConst<CavePlanetEnvironmentEpoch>();
         if(!epoch||!epoch->revision)return false;
+        const auto all=cavePlanetTravelPins(world,required);
         const auto current=[&](){
-            for(auto id:required)
+            for(auto id:all)
                 if(!runtime_->committedNavigationLease(world,id,epoch->revision))return false;
             return true;
         };

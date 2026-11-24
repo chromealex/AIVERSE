@@ -85,6 +85,20 @@ static void checkOrientedMotor(){
     check(!physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),{{0,0,0},0}),"invalid quaternion refused");
     check(state.position.x==before.x&&state.position.y==before.y&&state.position.z==before.z,"invalid orientation moved character");
 }
+static void checkTravelRim(){
+    Entrance mouth;mouth.id=7;mouth.radiusCm=200;
+    CaveSurfaceRim rim;rim.entranceId=7;
+    for(const Vec3 p:std::array<Vec3,4>{{{-1_fx,0_fx,-1_fx},{1_fx,0_fx,-1_fx},
+                {1_fx,0_fx,1_fx},{-1_fx,0_fx,1_fx}}})rim.ring.push_back(surfaceVertexKey(p));
+    check(crossesCavePlanetRim(rim,mouth,{0_fx,1_fx,0_fx},{0_fx,-1_fx,0_fx},
+        Fixed::fromRatio(1,4),true),"entry crosses committed rim");
+    check(crossesCavePlanetRim(rim,mouth,{0_fx,-1_fx,0_fx},{0_fx,1_fx,0_fx},
+        Fixed::fromRatio(1,4),false),"exit crosses committed rim");
+    check(!crossesCavePlanetRim(rim,mouth,{1_fx,1_fx,0_fx},{1_fx,-1_fx,0_fx},
+        Fixed::fromRatio(1,4),true),"rim clearance refusal");
+    check(!crossesCavePlanetRim(rim,mouth,{0_fx,-1_fx,0_fx},{0_fx,1_fx,0_fx},
+        Fixed::fromRatio(1,4),true),"wrong crossing direction");
+}
 static void checkVolumeSweep(){
     physics::Scene scene;
     physics::BodyDesc ceiling;ceiling.motion=physics::Motion::Static;
@@ -231,6 +245,7 @@ int main(){
     checkGiPublication();
     checkDrive();
     checkVolumeSweep();
+    checkTravelRim();
     checkOrientedMotor();
     checkCandidateIdentity();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
