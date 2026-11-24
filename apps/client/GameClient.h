@@ -56,6 +56,8 @@
 namespace Rml { class ElementDocument; class Element; }
 typedef struct lua_State lua_State;
 
+namespace aiverse::terraweave::caverns {class CaveClientVisualHost;}
+
 namespace aiverse::client {
 
 using namespace aiverse::render;
@@ -99,6 +101,7 @@ class GameClient {
     struct ScriptUiApi;     // ClientScriptUi.cpp: scripthost.event / send for engine/ui/lib/scriptui.lua
     friend struct ScriptUiApi;
 public:
+    ~GameClient(); // out-of-line: owns an optional incomplete-type Caverns GPU host
     // Embedded GameClient shares its editor's gfx::Device generation.
     // Standalone client creates an epoch automatically during initStep(0).
     void setGpuDeviceLease(render::RenderDeviceLifetime::Lease lease) {
@@ -129,6 +132,10 @@ public:
     // instead of the screen; the host also sets platform::setHostedView around every call.
     void setHostTarget(gfx::TextureHandle color, gfx::TextureHandle depth, int w, int h) { hostColor_ = color; hostDepth_ = depth; hostW_ = w; hostH_ = h; }
     Simulation* simulation() { return sim_.get(); }
+    // Editor Play/hosted clients: update visual cave SDF without restarting
+    // the current match. This is presentation-only, never a physics ACK.
+    bool updateCavernsVisual(const Json& authored);
+
     // Host "Play from here" (Studio): the first camera of the next match (target x, z; distance; pitch and
     // yaw in degrees) instead of the fitted one. Applied once, then cleared.
     void setStartCamera(float x, float z, float distance, float pitchDeg, float yawDeg) {
@@ -380,6 +387,10 @@ private:
     bool lensCamerasActive_=false;
     // streamed static world (map "streamedWorld": {"async": true, ...}, docs/large-worlds.md): chunks around the camera
     std::unique_ptr<world::WorldScene> worldScene_;
+    // Shared native GameClient and Editor Play visual-only cave presentation.
+    // No physics or NavMesh authority is claimed by this optional owner.
+    std::unique_ptr<terraweave::caverns::CaveClientVisualHost> cavernsVisual_;
+    Json lastCavernsVisualJson_;
     // Stage41: ordered nonblocking CPU/GPU samples only when the streamed
     // world's Horizon adaptive presentation quality is explicitly enabled.
     terraweave::HorizonFrameTimingBridge horizonFrameTiming_;

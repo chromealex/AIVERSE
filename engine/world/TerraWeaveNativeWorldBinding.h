@@ -188,7 +188,7 @@ public:
         return world_.synchronize(scene,runtime_);
     }
     bool groundReady()const{return initialized_ &&
-                                    runtime_.pendingTiles()==0;}
+                                    runtime_.pendingTiles()==0&&runtime_.surfaceGroupReady();}
     // Host must stop submitting old dynamic terrain while resetting.
     void detach(world::WorldScene& scene){
         world_.reset(scene);

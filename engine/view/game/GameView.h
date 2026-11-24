@@ -667,6 +667,10 @@ public:
     const PlanetCamera& planetCamera() const { return planetCam_; }
     PlanetRenderer& planets() { return planets_; }
     const PlanetRenderer& planets() const { return planets_; }
+    // Non-owning native world presentation callback; detach before owner teardown.
+    using PlanetCaveDraw=std::function<void(render::Renderer3D&,const render::SphereViewFrame&,double)>;
+    void setPlanetCaveDraw(PlanetCaveDraw draw){planetCaveDraw_=std::move(draw);}
+    bool hasPlanetCaveDraw()const noexcept{return bool(planetCaveDraw_);}
     // Per frame before beginScene: orbit camera smoothing; returns the Camera to render with (view world).
     const render::Camera& updatePlanetCamera(double seconds, float dt, int viewH);
     // Screen point -> body + body-local surface point (terrain / ocean picking).
@@ -1107,6 +1111,7 @@ private:
     render::float3 camPos_;
     // planets
     PlanetRenderer planets_;
+    PlanetCaveDraw planetCaveDraw_;
     GamePlanetGroundFx planetGroundFx_;   // territory, rock, roads, lanes on sphere faces
     PlanetFlora planetFlora_;            // TerraWeave trees and rocks on planet bodies
     void rebuildPlanetFlora();

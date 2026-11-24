@@ -6,6 +6,7 @@
 #include "../core/FixedMath.h"
 #include "gen/MapGen.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegionSet.h"
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
@@ -40,6 +41,10 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     aiConfig_ = aiKind_ && aiKind_->load ? aiKind_->load(rulesJson["ai"], mapIn, rules_) : nullptr;   // rules ai.<controller> + map "ai"
     matchMap_ = mapIn;
     setupMap(sim, mapIn);
+    // The actual generated spherical Surface is already built by setupMap.
+    // Planetary regions are opt-in native ECS state, not Studio preview data.
+    terraweave::caverns::registerPlanetCaveMap(sim,
+        mapIn[terraweave::caverns::kPlanetCaveMapKey],state(sim).surface);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
     raid_ = std::make_unique<Raid>();   // extraction raids (rules "raid"); nothing without them

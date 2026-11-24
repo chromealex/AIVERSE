@@ -240,6 +240,12 @@ bool HostedClient::stepOnce() {
     if (!canStep()) return false;
     Scope scope(*this);return client_->requestHostStep();
 }
+bool HostedClient::updateCavernsVisual(const Json& authored) {
+    if(!client_||step_<kSteps||!client_->inMatch())return false;
+    Scope scope(*this);
+    return client_->updateCavernsVisual(authored);
+}
+
 bool HostedClient::inMatch() const { return client_ && step_ >= kSteps && client_->inMatch(); }
 std::optional<size_t> HostedClient::currentMapIndex() const {
     return inMatch()?std::optional<size_t>(client_->hostMapIndex()):std::nullopt;

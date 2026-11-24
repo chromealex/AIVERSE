@@ -711,3 +711,66 @@ CTest `terraweave_micro_nutrient`. **Its source and CMake target
 were committed, but have NOT been built or executed in this authoring
 environment**. See [Stage70 agent handoff](../../../docs/terrain/stage-70-sparse-micro-nutrients-handoff.md)
 for exact commits, testing commands and integration gates.
+
+## Planetary Caverns: native host frame
+
+Include `engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h` in a native host already owning a GameView, a Box3D Scene and a SpatialWorld in Surface simulation-anchor coordinates. Link the existing game view/models/world and optional `AIVERSE::physics` targets. Register `registerPlanetCaveMap` during simulation setup if the host does not already load this ECS resource.
+
+Construct one `CavePlanetRuntimeFrame` for the world, supplying the actual device, view, physics scene, spatial world, globally reserved `CaveColliderLeasePool`, immutable Surface and `CavePlanetRuntimeHooks`. The hooks must connect to the game's existing coverage registry, cell allocator, reader exclusion and navigation/GI transaction. Do not supply unconditional success callbacks.
+
+At the existing frame boundary, outside render passes and with simulation/physics/navigation readers paused:
+
+```cpp
+// These are existing game-owned objects/inputs, not new worlds or solvers.
+// observers: body index + simulation-anchor position, not orbit coordinates.
+// required: region IDs occupied by or needed for imminent actor movement.
+const auto progress = caves.pump(sim.world(), observers, required);
+if (progress.phase == terraweave::caverns::CavePlanetRuntimePhase::Recovery) {
+    // Keep the actual host barrier closed and recover the world.
+} else if (progress.pinsReady &&
+           caves.requiredRegionsReady(sim.world(), required)) {
+    // The existing host may resume its normal movement/physics tick.
+    // Its motor remains the sole position writer.
+}
+```
+
+Call `invalidateAfterRestore()` at the host restore boundary before another reader is admitted. On teardown, retain the owner until `shutdown()` succeeds. A body cohort whose leaf set changes needs proof that the old cave is unoccupied and its restored ground can be released safely. The host must retain its regular exterior terrain coverage. This example is a native API integration recipe, not a standalone playable map or tested traversal.
+
+## Planetary cave route consumption (native physics host)
+
+Register PHYSIS/NEREID authority and persistence first. Install `installCanonicalCavePlanetNavigation` before the existing motor system. Configure `CavePlanetRuntimeHooks::navigationInputs` with `canonicalCavePlanetNavigationInputs(surface, policyRevision)`. At the actual native boundary after the environment capture, refresh managed leases using `refreshNavigationEnvironment` under host reader exclusion. In the existing character motor, include `engine/physics/TerraWeaveCavernsPlanetMotorBridge.h` and call `stepAdmittedCavePlanetCharacter` with the same runtime-owned Scene, actor, chart, capsule parameters, character state, proxy and simulation tick duration. A false result leaves the candidate state unpublished; the host must apply its explicit fallback (not unrestricted movement into an uncommitted cave). The bridge accepts ground traversal only and schedules the existing proxy/push operations; the host still steps the scene exactly once and owns state publication. No native float state is added to deterministic lockstep by this adapter. Full native transaction and playable host verification are pending.
+
+### Planetary GI cohort publication (Stage56a)
+
+Include `engine/world/TerraWeaveCavernsPlanetGiPublication.h`. Construct `CavePlanetGiPublication<render::GiMainGpuBridge>` (or the existing CPU bridge type) from the host's **same** published `GiGeometryScene`, actual bridge and `CavePlanetGiBindings`. The existing planet GI owner must provide exact baseline leaf IDs, reserved disjoint volume IDs, the same stable body-to-GI-space projection, actual diffuse material callback and resource-ready proof. First publish the uncut baseline into the same scene. Bind after setting canonical `navigationInputs` and before constructing `CavePlanetRuntimeFrame`; the GI object must outlive the runtime. `bind(hooks)` refuses to overwrite existing external nav/GI owners. Run all hooks under actual host reader exclusion; other producers may not mutate leased leaf/volume IDs. GI preparation copies the scene's immutable chunk owners and builds changed BVHs privately. Only native commit calls the real target; retire stages original uncut leaves and removes volumes before native teardown. If the target rejects after native physics becomes irreversible, quarantine via the existing native recovery barrier; do not resume readers or bind stale indirect lighting. No GI object or second ECS authority is created in headless simulation. Orbital/rebase projection changes require coordinated retirement/republication (this stage does not implement per-frame moving-body GI). Native GameCore wiring and playable QA remain pending.
+
+### Native host lifecycle (Stage56b)
+
+The optional PhysicsIntegration.h now exposes `engine/world/TerraWeaveCavernsPlanetNativeHost.h`. During the existing simulation module setup call `installPlanetCavesInNativeSimulation` with the map's `terraweavePlanetCaverns` document, actual Surface, shared router and existing motor name (after PHYSIS/NEREID and before persistence seals). A nonempty valid authored map registers the existing authority and canonical capture/repath/steering pipeline. Construct `CavePlanetCpuNativeHost` or `CavePlanetGpuNativeHost` with the same Simulation, Device, GameView, Box3D Scene, SpatialWorld, collider lease pool, shared GI scene and bridge. Supply the existing baseline GI IDs/projection/materials and real exclusive/coverage/allocator proofs; leave nav/GI callbacks empty so the composition binds them. It owns only derived Caverns state.
+
+Owner frame: stop readers, call `beforeFrame(world, renderer, observers, pins)` outside passes; pins include occupied and requested regions. Before the existing native tick use `admitNativeTick`; after canonical environment capture and before its single existing motor call `beforeMotor` with all required charts, then use `stepAdmittedCavePlanetCharacter(host.runtime(), ...)` where appropriate. Do not step Box3D twice or feed native float state into lockstep. The restore hook signals a native generation invalidation without GPU calls from Simulation. The existing host updates its GI bridge then calls `bindIndirect(renderer)`; it clears stale overlay during rebuild/refusal/recovery. Before destroying the host, call `shutdown(renderer)` under real exclusion; retain the owner on failure. This composition is a native integration entry point, not automatic default GameClient/GameCore migration. The latter has no existing native planetary Scene or GI leaf owner to pass in. A real baseline GI producer and moving-body/rebase handling remain needed.
+
+
+## Stage56d — native terrain GI source and view coordinates
+
+Opt-in `CavePlanetGiBindings::baselineUnowned` + `baselineAlbedo` use exact `PlanetRenderer::captureCaveSurfaceSlots` before native staging; existing baseline geometry must match and missing leaves require host-reserved IDs and proof of no overlapping GI producer. Refusal retains the candidate for retry; restored terrain remains the host's ordinary GI coverage, so the host owns its eviction and ID lifecycle. `CavePlanetGiViewFrame::capture(planet.world(), frame, seconds)` captures the same LENS frame and orbit centers as the terrain renderer. Use `projector()` at construction and `remapFrom(previous, bodyForChunk)` at reprojectGi; the host maps every other GI chunk explicitly (including other independently moving objects via its own callback), coordinates lighting and retains the accepted frame until publication succeeds. No default GameClient adoption; actual native physics host and end-to-end GPU acceptance remain open.
+
+
+## Stage56e — native volumetric locomotion
+
+`physics::sweepCharacterVelocityOriented` reuses Box3D's capsule mover, true-plane sweep and velocity clipping, with no ground snap, gravity or Scene step. `stepAdmittedCavePlanetVolume` admits current scoped Flying/Swimming routes, checks the actual native proxy/Scene/environment lease, applies the route cap, sweeps, validates the resulting segment and publishes the same proxy/state once. Flying requires the existing host's read-only velocity proposal (zero-G chart orientation supported); Swimming reuses `LocomotionModes` and NEREID depth compatible with PHYSIS up, with caller-owned existing locomotion state, committed only after collision admission. No second ECS position writer, independent flight policy, water solver or new save schema. Host must choose one motor per tick; stateful flight proposals stage state until success. Surface/swim exits, climbing and actual playable host wiring remain separate; native tests not run.
+
+
+## Stage57a — native cave travel handoff
+
+Opt in to `registerCavePlanetTravel(sim)` before sealing the save schema. `CavePlanetTravel` records occupied region and pending mouth separately from route scope; `cavePlanetTravelPins` augments native host admission and streaming, even after route arrival or cancel. `requestCavePlanetCrossing` is a gameplay command; the existing motor chooses exactly one `cavePlanetTravelMotor` (exterior/interior/crossing). `commitCavePlanetCrossing` uses authoritative position readback, committed cut rim, capsule clearance, current native navigation lease and the actual collision owner's swept-body/exterior-coverage proof, then switches existing route scope without writing transforms. Refusal retains pins; cancel requires safe original-side occupancy proof. `changeCavePlanetTraversal` validates the new profile at current position and goal before replacing the existing route. Native API is not lockstep admission. Optional component changes save manifest; no old-save migration claimed. Actual exterior motor integration and live crossing QA remain pending.
+
+
+## Stage57b — multi-tick crossing receipts
+
+`CavePlanetTravel` schema v2 retains approach/clearance phase, last accepted tick and authored SDF revision of cap crossing. `advanceCavePlanetCrossing` takes actual swept movement and whole-capsule side proof from the existing motor owner, returns Refused/Approaching/Clearing/Completed. Keep exterior and cave coverage until Completed; refusal requires halt/recovery. A cap crossing alone cannot release occupancy. Entering additionally needs a traversable landing and goal; exiting requires whole-body destination clearance. Reverse crossing resets progress; changed SDF invalidates prior evidence. Use `cavePlanetCrossingGuidance` for chart-local rim approach/clearance targets; not a movement or path solver. No teleport, no native epoch persisted. New save manifest v2, migration/restore verification pending. No default client integration. The legacy one-step commit is for whole-body cleared steps only; use explicit multi-tick API for normal travel.
+
+
+## Stage57c — staged native motor and traversal selection
+
+`chooseCavePlanetTraversalGoal` selects legal ground/swim/flight for the actual start and goal using committed provider, PHYSIS gravity, NEREID immersion and explicit project capabilities (swim hysteresis; no granted flight). The existing pathfinder still computes the route. `CavePlanetNativeHost::stepCrossing` / `stepAdmittedCavePlanetCrossing` run the existing oriented ground motor or velocity sweep against the same Box3D proxy; require host proof of complete swept envelope and exterior coverage; classify the real capsule; submit motion only after receipt preflight. An irreversible proxy or ECS publication failure quarantines runtime; no false rollback claim. Caller owns exactly one Scene step, authoritative position and staged policy state. No new saved fields. Actual exterior coverage owner, playable host integration, automatic mixed-mode path planning and real QA remain pending.

@@ -1,28 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mountain, RefreshCw } from 'lucide-react';
 import { invoke, onNativeEvent } from '../../bridge';
-import type { StudioSnapshot } from '../../types';
+import type { StudioSnapshot, StudioCavernsPreview, StudioCavernsBudgets } from '../../types';
 import { CaveNativeInspection, CaveInspectionImport } from '../../graphs/CaveStructureGraphView';
-import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge } from '../../ui';
+import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../../ui';
 
 type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: number; mode: 'carve' | 'fill' };
 type Entrance = { id: string; xCm: number; zCm: number; caveYcm: number; surfaceYcm: number; radiusCm: number };
-type Document = { revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
+type PlanetAnchor = {version:1;body:string;face:number;aQ16:number;bQ16:number;halfExtentCm:number};
+type PlanetBody = {id:string;faceSize:number;maxExtentCm:number};
+type PlanetRegion = {id:string;anchor:PlanetAnchor;revisionText:string};
+type Document = { planetary:boolean; activeRegionId:string; planetRegions:PlanetRegion[]; planetAnchor?:PlanetAnchor; planetBodies:PlanetBody[]; mapRevision: string; revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
 const name = 'terraweave_caverns_paint';
 const decimal = (x: unknown): x is string => typeof x === 'string' && /^[0-9]+$/.test(x);
 function decode(value: unknown): Document {
-  const r = value as { revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
-  if (!decimal(r?.revisionText) || !decimal(r.seedText) || !decimal(r.generatorVersionText) ||
+  const r = value as { planetary?:boolean;planetAnchor?:PlanetAnchor;planetBodies?:PlanetBody[];planetRegions?:PlanetRegion[];activeRegionId?:string;mapRevisionText?: unknown; revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
+  if (!decimal(r?.mapRevisionText) || !decimal(r.revisionText) || !decimal(r.seedText) || !decimal(r.generatorVersionText) ||
       !r.snapshot?.settings || !Array.isArray(r.snapshot.stamps) || !Array.isArray(r.snapshot.entrances) ||
       !Array.isArray(r.stampIds) || !Array.isArray(r.entranceIds) ||
       r.stampIds.length !== r.snapshot.stamps.length || r.entranceIds.length !== r.snapshot.entrances.length ||
       !r.stampIds.every(decimal) || !r.entranceIds.every(decimal)) throw new Error('Caverns native document contract unavailable. Integrate the Caverns branch.');
   const ids = r.stampIds as string[], entranceIds = r.entranceIds as string[];
-  return { revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
+  return { planetary:r.planetary===true,activeRegionId:r.activeRegionId??(r.planetAnchor?'1':''),planetRegions:r.planetRegions??[],planetAnchor:r.planetAnchor,planetBodies:r.planetBodies??[],mapRevision:r.mapRevisionText, revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
     stamps:r.snapshot.stamps.map((s,i)=>({...s,id:ids[i]})), entrances:r.snapshot.entrances.map((e,i)=>({...e,id:entranceIds[i]})) };
 }
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const fields = ['xCm','yCm','zCm','radiusCm'] as const;
+const recipeFields = ['cellCm','tunnelRadiusCm','chamberRadiusCm','tunnelChance','chamberChance','minYcm','maxYcm'] as const;
+const budgetFields = ['perSourceBytes','perShardBytes','deviceBytes','perSourceUploadBytes','perShardUploadBytes','deviceUploadBytes'] as const;
+const budgetLabels = ['Source index MiB','Shard index MiB','Device index MiB','Source upload MiB/frame','Shard upload MiB/frame','Device upload MiB/frame'];
+const entranceFields = ['xCm','zCm','surfaceYcm','caveYcm','radiusCm'] as const;
+const int = (s:string) => s.trim()!=='' && Number.isSafeInteger(Number(s));
 export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot)=>void }) {
   const project = snapshot?.project.path ?? '';
   const [doc,setDoc] = useState<Document|null>(null);
@@ -36,6 +44,17 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const [pickMode,setPickMode] = useState<'surface'|'plane'>('surface');
   const [armed,setArmed] = useState(false);
   const [page,setPage] = useState(0);
+  const [recipe,setRecipe] = useState<Record<string,string>>({});
+  const [entrance,setEntrance] = useState({xCm:'0',zCm:'0',surfaceYcm:'0',caveYcm:'-500',radiusCm:'400'});
+  const [entranceId,setEntranceId] = useState('');
+  const [entrancePage,setEntrancePage] = useState(0);
+  const [planet,setPlanet] = useState({body:'',face:'2',a:'0',b:'0',extent:'400'});
+  const [shaftDepth,setShaftDepth] = useState('200');
+  const [globeBody,setGlobeBody] = useState('');
+  const [globeRegion,setGlobeRegion] = useState('');
+  const [preview,setPreview] = useState<StudioCavernsPreview|null>(null);
+  const [previewError,setPreviewError] = useState('');
+  const [budgets,setBudgets] = useState<Record<string,string>>({});
   const epoch=useRef(0);
   const locked=useRef(false);
   const currentProject=useRef(project);
@@ -59,7 +78,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     finally {locked.current=false;if(serial===epoch.current)setBusy(false);}
   }
   useEffect(()=>{
-    ++epoch.current;setDoc(null);setSelected('');setError('');setStatus('');setBusy(false);
+    ++epoch.current;setDoc(null);setSelected('');setError('');setStatus('');setBusy(false);setPreview(null);setPreviewError('');
     // Explicit refresh avoids using an earlier map or unsaved document after a switch.
     return ()=>{++epoch.current;};
   },[project,snapshot?.scene.name,snapshot?.history.canUndo,snapshot?.history.canRedo]);
@@ -70,10 +89,39 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     }
     if(event==='document.changed'){setDoc(null);setSelected('');}
   }),[]);
+  useEffect(()=>{setGlobeBody('');setGlobeRegion('');},[project,snapshot?.scene.name]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event!=='caverns.globePicked'||!payload||typeof payload!=='object'||!doc||!globeBody)return;
+    const p=payload as {project?:string;map?:string;mapRevisionText?:string;body?:string;face?:number;aQ16?:number;bQ16?:number;regionId?:string};
+    if(p.project!==project||p.map!==map||p.mapRevisionText!==doc.mapRevision||p.body!==globeBody||
+       !Number.isInteger(p.face)||!Number.isInteger(p.aQ16)||!Number.isInteger(p.bQ16))return;
+    setPlanet(v=>({...v,body:globeBody,face:String(p.face),a:String(p.aQ16!/65536),b:String(p.bQ16!/65536)}));
+    setGlobeRegion(p.regionId??'');
+    setStatus(p.regionId?'Existing chart selected on globe. Open the chart to edit.':'Globe location selected. Set extent and create a chart.');
+  }),[doc,globeBody,project,map]);
+  useEffect(()=>{if(doc){setRecipe({seedText:doc.seed,...Object.fromEntries(recipeFields.map(k=>[k,String(doc.settings[k])]))});setEntranceId('');setEntrancePage(0);}},[doc]);
+  const recipeValid=decimal(recipe.seedText) && recipeFields.every(k=>int(recipe[k]??'')) && Number(recipe.cellCm)>=100 && Number(recipe.cellCm)<=10000 && Number(recipe.tunnelRadiusCm)>=1 && Number(recipe.tunnelRadiusCm)<=Math.floor(Number(recipe.cellCm)/3) && Number(recipe.chamberRadiusCm)>=1 && Number(recipe.chamberRadiusCm)<=Math.floor(Number(recipe.cellCm)/2) && ['tunnelChance','chamberChance'].every(k=>Number(recipe[k])>=0&&Number(recipe[k])<=1000) && Math.abs(Number(recipe.minYcm))<=1000000000 && Math.abs(Number(recipe.maxYcm))<=1000000000 && Number(recipe.minYcm)<Number(recipe.maxYcm);
+  const entranceValid=entranceFields.every(k=>int(entrance[k])) && entranceFields.slice(0,4).every(k=>Math.abs(Number(entrance[k]))<=1000000000) && Number(entrance.surfaceYcm)>Number(entrance.caveYcm) && Number(entrance.radiusCm)>=1 && Number(entrance.radiusCm)<=1000000;
   const values=Object.fromEntries(fields.map(k=>[k,Number(form[k])])) as Record<typeof fields[number],number>;
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
-  const editable=Boolean(doc && project && snapshot?.mode==='edit' && !busy);
+  const regionEditable=Boolean(doc && project && snapshot?.mode==='edit' && !busy && (!doc.planetary||doc.planetAnchor));
+  const editable=regionEditable&&!globeBody;
+  const canCreate=Boolean(doc?.planetary&&doc.planetRegions.length<32&&project&&snapshot?.mode==='edit'&&!busy&&!armed);
+  const selectedBody=doc?.planetBodies.find(b=>b.id===planet.body);
+  const anchorValid=!!selectedBody&&int(planet.face)&&Number(planet.face)>=0&&Number(planet.face)<=5&&[planet.a,planet.b].every(s=>s.trim()!==''&&Number.isFinite(Number(s))&&Number(s)>=0&&Number(s)<=selectedBody.faceSize)&&int(planet.extent)&&Number(planet.extent)>=100&&Number(planet.extent)<=selectedBody.maxExtentCm;
+  const budgetBytes=Object.fromEntries(budgetFields.map(k=>[k,Number(budgets[k])*1048576])) as unknown as StudioCavernsBudgets;
+  const budgetValid=budgetFields.every(k=>Number.isSafeInteger(budgetBytes[k])&&budgetBytes[k]>=4&&budgetBytes[k]<=2147483648&&budgetBytes[k]%4===0) && budgetBytes.perSourceBytes<=budgetBytes.perShardBytes && budgetBytes.perShardBytes<=budgetBytes.deviceBytes && budgetBytes.perSourceUploadBytes<=budgetBytes.perShardUploadBytes && budgetBytes.perShardUploadBytes<=budgetBytes.deviceUploadBytes;
+  async function updatePreview(patch: {enabled?:boolean;isolate?:boolean;paging?:boolean;budgets?:StudioCavernsBudgets;globeBody?:string} = {}){
+    if(!doc||!project||locked.current)return;
+    locked.current=true;setBusy(true);setPreviewError('');
+    const serial=epoch.current;
+    try{
+      const next=await invoke('studio.cavernsPreview',{expectedProject:project,expectedMap:map,...patch});
+      if(serial===epoch.current&&currentProject.current===project){setPreview(next);setGlobeBody(next.globeBody??'');if(patch.globeBody!==undefined)setGlobeRegion('');if(next.budgets)setBudgets(Object.fromEntries(budgetFields.map(k=>[k,String(next.budgets[k]/1048576)])));}
+    }catch(e){if(serial===epoch.current&&currentProject.current===project)setPreviewError(message(e));}
+    finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
+  }
   async function armScene(enable:boolean){
     if(locked.current||(!editable&&enable))return;
     locked.current=true;setBusy(true);setError('');
@@ -84,17 +132,30 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     }catch(e){setError(message(e));}
     finally{locked.current=false;setBusy(false);}
   }
+  async function armShaft(){
+    if(!editable||!doc?.planetAnchor||locked.current)return;
+    locked.current=true;setBusy(true);setError('');
+    try{
+      const b=await invoke('studio.sceneBrush',{kind:'caverns',armed:true,expectedProject:project,expectedMap:map,
+        radius:Number(entrance.radiusCm)/100,caveMode:'shaft',caveDepth:Number(shaftDepth)/100,caveSurface:true});
+      setArmed(b.armed&&b.kind==='caverns');
+      setStatus('Click the actual chart surface to add one shaft per stroke.');
+    }catch(e){setError(message(e));}
+    finally{locked.current=false;setBusy(false);}
+  }
   async function edit(params: Record<string,unknown>) {
-    if(!editable || !doc || locked.current)return;
+    const regionAction=params.mode==='planet_region'||params.mode==='planet_select_region'||params.mode==='planet_delete_region';
+    if((!(regionAction?regionEditable:editable)&&!(canCreate&&params.mode==='planet_region')) || !doc || locked.current || (regionAction&&armed))return;
     locked.current=true;
     const serial=++epoch.current;
     setBusy(true);setError('');setStatus('');
     try {
-      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRevision:doc.revision}});
+      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRegionId:doc.activeRegionId,expectedRevision:doc.revision,expectedMapRevision:doc.mapRevision}});
+      if(regionAction&&globeBody){await invoke('studio.cavernsPreview',{expectedProject:project,expectedMap:map,globeBody:''});setGlobeBody('');setGlobeRegion('');}
       const next=await read(project,map);
       const snap=await invoke('studio.snapshot',{});
       if(serial===epoch.current && currentProject.current===project && snap.project.path===project){
-        setDoc(next);setSelected('');setStatus('Map edit committed. Native preview readiness is not reported.');commitSnapshot(snap);
+        setDoc(next);setSelected('');setPage(0);setPreview(null);setStatus('Map edit committed. The native Scene rebuilds asynchronously.');commitSnapshot(snap);
       }
     }catch(e){if(serial===epoch.current && currentProject.current===project){setError(message(e));setDoc(null);}}
     finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
@@ -108,28 +169,93 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
       {status && <StudioAlert title="Authoring">{status}</StudioAlert>}
       {armed && <StudioButton variant="danger" disabled={busy} onClick={()=>void armScene(false)}>Disarm Scene brush</StudioButton>}
       {project && !doc && <StudioButton disabled={busy} onClick={()=>void refresh()}>Load cave document</StudioButton>}
-      {doc && <>
+      {doc?.planetary && <StudioSection title="Planetary regions">
+        <StudioField label="Active region" htmlFor="cave-region"><StudioSelect id="cave-region" value={doc.activeRegionId} disabled={!regionEditable||armed} onChange={e=>void edit({mode:'planet_select_region',regionId:e.target.value})}><option value="" disabled>Choose chart</option>{doc.planetRegions.map(r=><option key={r.id} value={r.id}>#{r.id} · {r.anchor.body} · face {r.anchor.face}</option>)}</StudioSelect></StudioField>
+        {doc.activeRegionId && <StudioButton variant="danger" disabled={!editable||armed} onClick={()=>{if(window.confirm('Delete the selected region and all its cave edits? You can undo this action.'))void edit({mode:'planet_delete_region',regionId:doc.activeRegionId});}}>Delete selected region</StudioButton>}
+        <div>{doc.planetRegions.length} / 32 regions · one active native preview</div>
+        {doc.planetAnchor ? <StudioAlert title={doc.planetAnchor.body+' · face '+doc.planetAnchor.face}>Local tangent chart ±{doc.planetAnchor.halfExtentCm} cm. Coordinates are relative to the reference radius, not the orbit centre. Anchor immutable.</StudioAlert> : null}
+        <>
+          <StudioField label="Body" htmlFor="cave-body"><StudioSelect id="cave-body" value={planet.body} disabled={busy||armed||snapshot?.mode!=='edit'} onChange={e=>{const b=doc.planetBodies.find(b=>b.id===e.target.value);setPlanet(p=>({...p,body:e.target.value,a:String((b?.faceSize??0)/2),b:String((b?.faceSize??0)/2),extent:String(b?.maxExtentCm??0)}));}}><option value="">Choose planet or moon</option>{doc.planetBodies.map(b=><option key={b.id} value={b.id}>{b.id}</option>)}</StudioSelect></StudioField>
+          {(['face','a','b','extent'] as const).map(k=><StudioField key={k} label={k==='extent'?'Half extent (cm)':k==='face'?'Cube face (0–5)':'Face coordinate '+k} htmlFor={'planet-cave-'+k}><StudioInput id={'planet-cave-'+k} type="number" value={planet[k]} disabled={!canCreate} onChange={e=>setPlanet(p=>({...p,[k]:e.target.value}))}/></StudioField>)}
+          <StudioButton variant="primary" disabled={!canCreate||!anchorValid} onClick={()=>void edit({mode:'planet_region',anchor:{version:1,body:planet.body,face:Number(planet.face),aQ16:Math.round(Number(planet.a)*65536),bQ16:Math.round(Number(planet.b)*65536),halfExtentCm:Number(planet.extent)}})}>Create chart</StudioButton>
+        </>
+        <div className="au-row">
+          <StudioButton disabled={!selectedBody||busy||armed||snapshot?.mode!=='edit'} onClick={()=>void updatePreview({globeBody:planet.body})}>Open globe</StudioButton>
+          <StudioButton disabled={!globeBody||busy} onClick={()=>void updatePreview({globeBody:''})}>Return to chart</StudioButton>
+        </div>
+        {globeBody && <>
+          <StudioAlert title="Globe overview">Drag to orbit; wheel to zoom. Click the surface to set the new chart anchor or select an existing chart footprint. The overview is bounded and can be coarser than the local terrain.</StudioAlert>
+          <StudioButton disabled={!regionEditable||!globeRegion} onClick={()=>void edit({mode:'planet_select_region',regionId:globeRegion})}>Open picked region {globeRegion?'#'+globeRegion:''}</StudioButton>
+          <StudioButton disabled={busy} onClick={()=>void updatePreview()}>Refresh globe status</StudioButton>
+          {preview?.globeError && <StudioAlert tone="warning" title="Globe">{preview.globeError}</StudioAlert>}
+        </>}
+        <StudioAlert title="Local chart editor">Carve, fill and shafts use local chart axes. Only the selected region is resident; other regions remain saved.</StudioAlert>
+      </StudioSection>}
+      {doc && !globeBody && (!doc.planetary||doc.planetAnchor) && <>
         <StudioSection title="SDF brush">
           <StudioField label="Operation" htmlFor="cave-mode"><StudioSelect id="cave-mode" value={mode} disabled={!editable} onChange={e=>setMode(e.target.value as 'carve'|'fill')}><option value="carve">Carve — create void</option><option value="fill">Fill — solid material</option></StudioSelect></StudioField>
           {fields.map(k=><StudioField key={k} label={k==='radiusCm'?'Radius (cm)':k[0].toUpperCase()+' (cm)'} htmlFor={'cave-'+k}><StudioInput id={'cave-'+k} type="number" step={1} value={form[k]} disabled={!editable} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></StudioField>)}
           <StudioButton variant="primary" disabled={!editable||!valid} onClick={()=>void edit({mode,...values})}>Apply {mode} stamp</StudioButton>
           <StudioField label="Scene picking" htmlFor="cave-pick"><StudioSelect id="cave-pick" value={pickMode} disabled={busy} onChange={e=>setPickMode(e.target.value as 'surface'|'plane')}><option value="surface">SDF surface</option><option value="plane">Depth plane (Y above)</option></StudioSelect></StudioField>
           <StudioButton variant="primary" disabled={!editable||!valid||values.radiusCm<25||values.radiusCm>6400} onClick={()=>void armScene(true)}>{armed?'Update Scene brush':'Arm Scene brush'}</StudioButton>
-          <StudioAlert title="Scene authoring">Plain left drag paints; Alt orbits, Esc disarms. Surface picks the native SDF; depth plane uses Y. A drag is one History step. Cave mesh preview is not yet connected to Studio.</StudioAlert>
+          <StudioAlert title="Scene authoring">Plain left drag paints; Alt orbits, Esc disarms. Surface picks the native SDF; depth plane uses Y. A drag is one History step. Native Scene streams nearby cave meshes.</StudioAlert>
         </StudioSection>
         <StudioSection title={'Stamps · '+doc.stamps.length}>
           {doc.stamps.slice(page*32,page*32+32).map(s=><StudioButton key={s.id} variant={selected===s.id?'primary':'secondary'} disabled={busy} onClick={()=>{setSelected(s.id);setForm({xCm:String(s.xCm),yCm:String(s.yCm),zCm:String(s.zCm),radiusCm:String(s.radiusCm)});setMode(s.mode);}}>{s.mode} #{s.id} · r {s.radiusCm} cm</StudioButton>)}
           <div className="au-row"><StudioButton disabled={page===0} onClick={()=>setPage(p=>p-1)}>Previous</StudioButton><StudioButton disabled={(page+1)*32>=doc.stamps.length} onClick={()=>setPage(p=>p+1)}>Next</StudioButton></div>
           <StudioButton variant="danger" disabled={!editable||!doc.stamps.some(s=>s.id===selected)} onClick={()=>void edit({mode:'erase',stampIdText:selected})}>Erase selected stamp</StudioButton>
         </StudioSection>
-        <StudioSection title="Generator · read only">
-          <div>Revision: {doc.revision}</div><div>Generator: {doc.generator}</div><div>Seed: {doc.seed}</div>
-          {Object.entries(doc.settings).filter(([k])=>k!=='seed').map(([k,v])=><div key={k}>{k}: {v}</div>)}
+        <StudioSection title="Native Scene preview">
+          <StudioButton disabled={busy} onClick={()=>void updatePreview()}>Refresh preview diagnostics</StudioButton>
+          {previewError && <StudioAlert tone="warning" title="Scene unavailable">{previewError}</StudioAlert>}
+          {preview && <>
+            <StudioCheckbox label="Preview cave geometry" checked={preview.enabled} onChange={e=>void updatePreview({enabled:e.target.checked})}/>
+            <StudioCheckbox label="Isolate underground geometry" checked={preview.isolate} onChange={e=>void updatePreview({isolate:e.target.checked})}/>
+            <StudioCheckbox label="STRATA index paging (restart preview)" checked={preview.paging} onChange={e=>void updatePreview({paging:e.target.checked})}/>
+            {preview.paging && <>
+              {budgetFields.map((k,i)=><StudioField key={k} label={budgetLabels[i]} htmlFor={'cave-budget-'+k}><StudioInput id={'cave-budget-'+k} type="number" min={0.00390625} max={2048} step="any" value={budgets[k]??''} disabled={busy} onChange={e=>setBudgets(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+              <StudioButton disabled={busy||!budgetValid} onClick={()=>void updatePreview({budgets:budgetBytes})}>Apply budgets and restart preview</StudioButton>
+              <StudioAlert title="Shared device budget">All live STRATA owners must agree on the device limits. Initial root uploads are outside the incremental page upload budget.</StudioAlert>
+            </>}
+            {preview.error && <StudioAlert tone="danger" title="Native preview">{preview.error}</StudioAlert>}
+            <StudioBadge tone={preview.visible?'accent':'neutral'}>{preview.visible?'Visual owner open':'No active preview source'}</StudioBadge>
+            <div>Terrain openings: {preview.terrainCutEntrances ?? '—'} · rejected: {preview.terrainRejectedEntrances ?? '—'}</div>
+            <div>Terrain triangles: {preview.terrainTriangles ?? '—'}</div>
+            <div>Sparse terrain: {preview.sparseTerrainResident ?? '—'} resident / {preview.sparseTerrainAuthored ?? '—'} authored</div>
+            <div>Sparse surface plan: {preview.sparsePlannedOpenings ?? '—'} openings · {preview.sparseCertifiedEdges ?? '—'} certified tile edges</div>
+            {preview.rimGroupPending && <StudioBadge tone="neutral">Preparing matched volume and terrain rim</StudioBadge>}
+            {preview.rimGroupReady && <StudioBadge tone="success">Exact volume rim group active</StudioBadge>}
+            {preview.rimDiagnostic && <StudioAlert tone="warning" title="Rim transition">{preview.rimDiagnostic}</StudioAlert>}
+            {preview.sparseTerrainDiagnostic && <StudioAlert tone="warning" title="Sparse terrain">{preview.sparseTerrainDiagnostic}</StudioAlert>}
+            {preview.terrainCutSupported===false && <StudioAlert title="Terrain source">Legacy heightfield cuts are unavailable. Explicit sparse terrain uses a whole-footprint surface plan. Matched constrained volume transition is required before opening the surface; unsupported cases retain solid terrain. Arbitrary entity mesh assets are unchanged.</StudioAlert>}
+            {preview.terrainCutDiagnostic && <StudioAlert tone="warning" title="Surface cut">{preview.terrainCutDiagnostic}</StudioAlert>}
+            <div>Ready chunks: {preview.ready ?? '—'} / {preview.tracked ?? '—'}</div>
+            <div>CPU jobs: {preview.pendingCpu ?? '—'}</div>
+            {preview.planetaryChart && <div>Chart slots: {preview.chartSlots ?? '—'} · exact: {preview.exactChartSlots ?? '—'} · finest fallback: {preview.chartLodFallback?'yes':'no'}</div>}
+            <div>GPU shards: {preview.activeShards ?? '—'} active / {preview.stagedShards ?? '—'} staged</div>
+            <div>Retired scenes: {preview.retiredScenes ?? '—'}</div>
+            <div>Source bytes (active / staged / retired): {preview.activeSourceBytes ?? '—'} / {preview.stagedSourceBytes ?? '—'} / {preview.retiredSourceBytes ?? '—'}</div>
+            <div>STRATA arena bytes (active / staged / retired): {preview.activeStrataArenaBytes ?? '—'} / {preview.stagedStrataArenaBytes ?? '—'} / {preview.retiredStrataArenaBytes ?? '—'}</div>
+            <div>Page transfer bytes / deferrals: {preview.pageTransfers ?? '—'} / {preview.pageDeferrals ?? '—'}</div>
+          </>}
+          <StudioAlert title="Visual preview only">The same clipped heightfield supplies ordinary and PBR terrain geometry. Isolation hides terrain and the composite lighting mesh; other authored models remain. Counters describe native visual residency and estimates, not gameplay collision, NavMesh or measured driver VRAM.</StudioAlert>
+        </StudioSection>
+        <StudioSection title="Generator">
+          <div>Revision: {doc.revision} · Generator: {doc.generator}</div>
+          <StudioField label="Seed (decimal)" htmlFor="cave-seed"><StudioInput id="cave-seed" value={recipe.seedText??''} disabled={!editable} onChange={e=>setRecipe(v=>({...v,seedText:e.target.value}))}/></StudioField>
+          {recipeFields.map(k=><StudioField key={k} label={k} htmlFor={'cave-recipe-'+k}><StudioInput id={'cave-recipe-'+k} type="number" step={1} value={recipe[k]??''} disabled={!editable} onChange={e=>setRecipe(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+          <StudioButton variant="primary" disabled={!editable||!recipeValid} onClick={()=>void edit({mode:'settings',settings:{seedText:recipe.seedText,...Object.fromEntries(recipeFields.map(k=>[k,Number(recipe[k])]))}})}>Apply generator settings</StudioButton>
+          <StudioAlert title="Regeneration">Changes the procedural base, preserves stamps and shafts, and requires regeneration of the loaded region. Undo restores the previous recipe.</StudioAlert>
         </StudioSection>
         <StudioSection title={'Entrances · '+doc.entrances.length}>
-          {doc.entrances.slice(0,32).map(e=><div key={e.id}>#{e.id} · ({e.xCm}, {e.zCm}) · {e.caveYcm} → {e.surfaceYcm} cm</div>)}
-          {doc.entrances.length>32 && <div>Showing first 32 entrances.</div>}
-          <StudioAlert title="Native diagnostics">Viewport mesh, collision, streaming and paging telemetry are not exposed by this Studio build. Settings and entrances are read only here.</StudioAlert>
+          {doc.entrances.slice(entrancePage*32,entrancePage*32+32).map(e=><StudioButton key={e.id} variant={entranceId===e.id?'primary':'secondary'} disabled={busy} onClick={()=>{setEntranceId(e.id);setEntrance({xCm:String(e.xCm),zCm:String(e.zCm),surfaceYcm:String(e.surfaceYcm),caveYcm:String(e.caveYcm),radiusCm:String(e.radiusCm)});}}>#{e.id} · ({e.xCm}, {e.zCm})</StudioButton>)}
+          <div className="au-row"><StudioButton disabled={entrancePage===0} onClick={()=>setEntrancePage(p=>p-1)}>Previous</StudioButton><StudioButton disabled={(entrancePage+1)*32>=doc.entrances.length} onClick={()=>setEntrancePage(p=>p+1)}>Next</StudioButton></div>
+          {entranceFields.map(k=><StudioField key={k} label={k} htmlFor={'cave-entrance-'+k}><StudioInput id={'cave-entrance-'+k} type="number" step={1} value={entrance[k]} disabled={!editable} onChange={e=>setEntrance(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+          {doc.planetary && <><StudioField label="Depth below actual coarse surface (cm)" htmlFor="planet-shaft-depth"><StudioInput id="planet-shaft-depth" type="number" value={shaftDepth} onChange={e=>setShaftDepth(e.target.value)} disabled={!editable}/></StudioField><StudioButton disabled={!editable||!int(shaftDepth)||Number(shaftDepth)<=0||!int(entrance.xCm)||!int(entrance.zCm)||!int(entrance.radiusCm)||Number(entrance.radiusCm)<=0} onClick={()=>void edit({mode:'planet_entrance',xCm:Number(entrance.xCm),zCm:Number(entrance.zCm),radiusCm:Number(entrance.radiusCm),depthCm:Number(shaftDepth)})}>Add shaft from surface</StudioButton><StudioButton disabled={!editable||!int(shaftDepth)||Number(shaftDepth)<=0||!int(entrance.radiusCm)||Number(entrance.radiusCm)<25||Number(entrance.radiusCm)>6400} onClick={()=>void armShaft()}>Place shaft in Scene</StudioButton></>}
+          <StudioButton disabled={!editable||!entranceValid} onClick={()=>void edit({mode:'entrance_add',...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Add entrance</StudioButton>
+          <StudioButton disabled={!editable||!entranceValid||!entranceId} onClick={()=>void edit({mode:'entrance_update',entranceIdText:entranceId,...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Update selected entrance</StudioButton>
+          <StudioButton variant="danger" disabled={!editable||!entranceId} onClick={()=>void edit({mode:'entrance_erase',entranceIdText:entranceId})}>Remove selected entrance</StudioButton>
+          <StudioAlert title="Shaft authoring">Surface Y and cave Y are explicit centimetre coordinates. Valid shafts automatically subtract openings from the legacy Studio heightfield. Fill, mismatched elevation or unsupported terrain can prevent a cut; check diagnostics. The SDF shaft mesh is approximate and gameplay collision is separate.</StudioAlert>
         </StudioSection>
       </>}
       {project && <CaveNativeInspection scope={snapshot?.graphDocument}/>}
