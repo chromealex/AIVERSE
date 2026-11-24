@@ -110,6 +110,15 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
   {message&&<p role="status" className="materials-notice">{message}</p>}
+  {library.publicationInspectionError&&<p role="alert" className="materials-error">Publication inspection: {library.publicationInspectionError}</p>}
+  {!!library.pendingPublications?.length&&<details className="materials-warning">
+   <summary>Pending material publications ({library.pendingPublications.length})</summary>
+   <p>Read-only recovery inspection. Another editor may still be publishing. No files are removed automatically.</p>
+   {library.pendingPublications.map(p=><div key={p.name}>
+    <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
+    {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':'texture and GUID present'}</div>)}
+   </div>)}
+  </details>}
   <div className="materials-main">
    <aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}

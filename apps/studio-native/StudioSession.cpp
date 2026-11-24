@@ -1847,6 +1847,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json library=editor::loadMaterialLibrary(ws_);
             Json result=Json::object();
             result.set("library",library);
+            try { result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir)); }
+            catch(const std::exception& e){result.set("publicationInspectionError",str(e.what()));}
             reply.set("result",std::move(result));
         } else if(method=="studio.nereidFlow"||method=="studio.nereidFlowSet"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");

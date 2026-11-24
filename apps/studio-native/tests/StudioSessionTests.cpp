@@ -28,6 +28,10 @@ void projectFileRecoveryWorkflow() {
         studio::StudioMaterialPublicationJournal publication(project,"fixture_pending");
         const auto pending=studio::StudioMaterialPublicationJournal::inspect(project);
         AIVERSE_TEST_CHECK(pending.size()==1 && pending[size_t(0)].getStr("status")=="incomplete_or_active");
+        publication.assets(Json::parse(R"([{"path":"GeneratedBuildingMaterials/fixture_pending/base-color.png","guid":"fixture"}])"));
+        const auto checked=studio::StudioMaterialPublicationJournal::inspect(project);
+        AIVERSE_TEST_CHECK(checked[size_t(0)]["assets"].size()==1);
+        AIVERSE_TEST_CHECK(!checked[size_t(0)]["assets"][size_t(0)].getBool("present"));
         publication.finish();
         AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(project).size()==0);
     }

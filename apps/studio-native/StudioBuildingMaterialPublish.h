@@ -99,6 +99,7 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
         }
         Json result=Json::object();result.set("name",Json::string(name));
         result.set("path",Json::string(folder.lexically_relative(root).generic_string()));
+        journal.assets(assets);
         result.set("assets",std::move(assets));
         // Last potentially failing operation: canonical MaterialOps save.
         journal.candidate(material);

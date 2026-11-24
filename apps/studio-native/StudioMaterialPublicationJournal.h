@@ -28,6 +28,7 @@ public:
         catch(...) { finish();throw; }
     }
     void candidate(const Json& material) { write("candidate.json",material); }
+    void assets(const Json& entries) { write("assets.json",entries); }
     void finish() noexcept { std::error_code ec;std::filesystem::remove_all(dir_,ec); }
     static Json inspect(const std::filesystem::path& project) {
         namespace fs=std::filesystem;
@@ -50,7 +51,32 @@ public:
                 const auto candidate=Json::parseFile(file.string());
                 if(library[name].isObject())status=library[name]==candidate?"material_committed":"material_conflict";
             }
-            row.set("status",Json::string(status));rows.push(std::move(row));
+            row.set("status",Json::string(status));
+            // Only inspect fixed, transaction-owned output names. Never follow links.
+            const auto folder=project/"content"/"GeneratedBuildingMaterials"/name;
+            const auto assetsFile=entry.path()/"assets.json";
+            Json checks=Json::array();
+            if(fs::is_regular_file(assetsFile)&&!fs::is_symlink(assetsFile)&&fs::file_size(assetsFile)<=65536){
+                const auto entries=Json::parseFile(assetsFile.string());
+                if(entries.isArray()&&entries.size()<=4)for(const auto& asset:entries.items()){
+                    const auto rel=asset.getStr("path");
+                    const auto filename=fs::path(rel).filename().string();
+                    if(filename!="base-color.png"&&filename!="metallic-roughness.png"&&filename!="normal.png"&&filename!="occlusion.png")continue;
+                    if(rel!="GeneratedBuildingMaterials/"+name+"/"+filename)continue;
+                    const auto physical=folder/filename,meta=fs::path(physical.string()+".meta");
+                    const bool safe=!fs::is_symlink(project/"content")&&!fs::is_symlink(folder.parent_path())&&!fs::is_symlink(folder);
+                    const bool present=safe&&!fs::is_symlink(physical)&&fs::is_regular_file(physical);
+                    const bool metaPresent=present&&!fs::is_symlink(meta)&&fs::is_regular_file(meta);
+                    bool guidMatches=false;
+                    if(metaPresent&&fs::file_size(meta)<=65536)try{
+                        guidMatches=!asset.getStr("guid").empty()&&Json::parseFile(meta.string()).getStr("guid")==asset.getStr("guid");
+                    }catch(...){}
+                    Json check=Json::object();check.set("path",Json::string(rel));
+                    check.set("present",Json::fromBool(present));check.set("metadataPresent",Json::fromBool(metaPresent));
+                    check.set("guidMatches",Json::fromBool(guidMatches));checks.push(std::move(check));
+                }
+            }
+            row.set("assets",std::move(checks));rows.push(std::move(row));
         }
         return rows;
     }
