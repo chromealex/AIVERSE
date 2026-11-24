@@ -1811,6 +1811,86 @@ AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
     return decodeAssetHistory(project,editor::readProjectFileBytes(path));
 }
 namespace {
+struct AssetResetReview {
+    std::optional<std::string> checkpoint,marker;
+    std::string token,reason;
+};
+AssetResetReview reviewAssetResetLocked(const fs::path& root){
+    checkTrashJournal(root);
+    const auto cache=assetHistoryCache(root,true);
+    if(existsOrSymlink(cache/"project-document-journal"))
+        throw std::runtime_error("Pending project document recovery; reopen project first");
+    const auto read=[&](const fs::path& path,size_t limit)->std::optional<std::string>{
+        if(!existsOrSymlink(path))return {};
+        if(!fs::is_regular_file(fs::symlink_status(path))||fs::file_size(path)>limit)
+            throw std::runtime_error("Unsafe or oversized recovery file; inspect manually");
+        auto bytes=editor::readProjectFileBytes(path);
+        if(bytes.size()>limit)throw std::runtime_error("Recovery file exceeds budget");
+        return bytes;
+    };
+    AssetResetReview review;
+    review.checkpoint=read(cache/"asset-history.json",AssetCheckpointMaxBytes);
+    review.marker=read(cache/"asset-history.dirty",65536);
+    if(review.marker)review.reason="Interrupted legacy asset history publication";
+    else if(review.checkpoint){
+        try{(void)decodeAssetHistory(root,*review.checkpoint);}
+        catch(const std::exception& e){review.reason=e.what();}
+    }
+    // Never discard healthy history or another session's valid cursor.
+    if(review.reason.empty())throw std::runtime_error("No damaged asset history to reset; reopen to load valid history");
+    Json identity=Json::object();
+    identity.set("project",Json::string(root.generic_string()));
+    identity.set("checkpoint",Json::string(review.checkpoint?"file:"+historyHash(*review.checkpoint):"absent"));
+    identity.set("marker",Json::string(review.marker?"file:"+historyHash(*review.marker):"absent"));
+    identity.set("action",Json::string("archive-and-reset-asset-history-v1"));
+    review.token=historyHash(identity.dump(-1));
+    return review;
+}
+}
+Json studioReviewAssetHistoryReset(const fs::path& project){
+    const auto root=fs::canonical(project);
+    editor::project_file_detail::Lock lock(assetHistoryCache(root,true)/"asset-history.lock");
+    const auto review=reviewAssetResetLocked(root);
+    Json out=Json::object();out.set("token",Json::string(review.token));
+    out.set("reason",Json::string(review.reason));
+    out.set("checkpointBytes",Json::number(int64_t(review.checkpoint?review.checkpoint->size():0)));
+    out.set("legacyMarker",Json::fromBool(review.marker.has_value()));
+    return out;
+}
+void studioApplyAssetHistoryReset(const fs::path& project,const std::string& token){
+    const auto root=fs::canonical(project),cache=assetHistoryCache(root,true);
+    editor::project_file_detail::Lock lock(cache/"asset-history.lock");
+    const auto review=reviewAssetResetLocked(root);
+    if(token.empty()||review.token!=token)throw std::runtime_error("Asset history reset review changed");
+    // Archive before publishing. An interruption may leave an extra archive,
+    // but cannot discard the only copy of the damaged history.
+    const auto archives=cache/"asset-history-recovery";
+    editor::project_file_detail::directory(archives);
+    const auto folder=archives/nonce();
+    if(!fs::create_directory(folder))throw std::runtime_error("Cannot reserve history archive");
+    if(review.checkpoint)writeAssetCheckpoint(folder/"asset-history.json",*review.checkpoint);
+    if(review.marker)writeAssetCheckpoint(folder/"asset-history.dirty",*review.marker);
+    Json manifest=Json::object();
+    manifest.set("token",Json::string(review.token));manifest.set("reason",Json::string(review.reason));
+    manifest.set("checkpointHash",Json::string(review.checkpoint?historyHash(*review.checkpoint):""));
+    manifest.set("markerHash",Json::string(review.marker?historyHash(*review.marker):""));
+    writeAssetCheckpoint(folder/"record.json",manifest.dump(2)+"\n");
+    StudioMoveJournal::syncPath(folder);StudioMoveJournal::syncPath(archives);
+    StudioMoveJournal::syncPath(cache);
+    const auto after=encodeAssetHistory(root,AssetHistory{});
+    editor::ProjectFileEdit edit{cache/"asset-history.json",review.checkpoint.value_or(""),after,{},0,!review.checkpoint};
+    editor::applyProjectFileEdits(root,{edit});
+    // Remove the old fence only after the empty checkpoint is durable.
+    // If interrupted here, repeating the explicit reviewed reset is safe.
+    if(review.marker){
+        const auto marker=cache/"asset-history.dirty";
+        if(editor::readProjectFileBytes(marker)!=*review.marker)
+            throw std::runtime_error("Legacy history marker changed; retained archive and fence");
+        if(!fs::remove(marker))throw std::runtime_error("Cannot retire legacy history marker");
+        StudioMoveJournal::syncPath(cache);
+    }
+}
+namespace {
 using BatchState=std::map<std::string,std::string>; // absent = empty, f/d prefix + digest
 bool batchOverlap(const std::string& a,const std::string& b){
     return a==b||a.starts_with(b+"/")||b.starts_with(a+"/");
