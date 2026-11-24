@@ -15,9 +15,15 @@ struct ProjectFileEdit {
     // this mode; the Studio move journal owns streaming publication.
     std::string tailDigest{};
     uint64_t tailBytes=0;
+    // Save-only output: target must be absent, even if after is empty.
+    // Not a reversible history edit or an asset resource edit.
+    bool createOnly=false;
 };
 inline std::vector<ProjectFileEdit> reverseProjectFileEdits(std::vector<ProjectFileEdit> edits) {
-    for(auto& e:edits) std::swap(e.before,e.after);
+    for(auto& e:edits){
+        if(e.createOnly)throw std::runtime_error("Save-only creation cannot enter reversible history");
+        std::swap(e.before,e.after);
+    }
     return edits;
 }
 inline std::string readProjectFileBytes(const std::filesystem::path& p) {
