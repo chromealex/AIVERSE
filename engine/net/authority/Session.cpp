@@ -83,16 +83,27 @@ bool recordsSnapshot(const lib::delta::RecordSet& records,Snapshot& out) {
     out.locomotion=std::move(locomotion);return true;
 }
 Server::Server(const Json& rules,const Json& map,uint64_t seed,world::AssetReader reader):
-    simulation_({seed,actor::readConfig(rules).tickRate,0,false},std::make_unique<game::GameCore>()),content_(contentId(rules,map)) {persistenceSupported_=rules.has("regionOwnership")&&!map["world"].getBool("async");simulation_.setup(rules,map);if(map["world"].getBool("async")){if(!reader)throw JsonError("world: server content reader required");module().setContentReader(std::move(reader));}}
+    simulation_({seed,actor::readConfig(rules).tickRate,0,false},std::make_unique<game::GameCore>()),content_(contentId(rules,map)) {
+    persistenceSupported_=rules.has("regionOwnership");
+    persistenceIdentity_="aiverse.actor.portable.v1:"+std::to_string(content_);
+    if(map["world"].getBool("async")){
+        if(!reader)throw JsonError("world: server content reader required");
+        if(persistenceSupported_){
+            persistenceAssets_=world::WorldAssets::parse(map["world"]);
+            persistenceIdentity_=world::WorldAssets::persistenceIdentity(rules,map);
+            persistenceReader_=reader;
+        }
+    }
+    simulation_.setup(rules,map);
+    if(map["world"].getBool("async"))module().setContentReader(std::move(reader));
+}
 Server::~Server()=default;
 bool Server::enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,bool resume,size_t budget,bool async){
     if(persistence_||persistenceFailed_||!persistenceSupported_||simulation_.tick()!=0||!peers_.empty())return false;
     try{
-        // Static inline map content is bound by the existing canonical content
-        // hash. External streaming assets need an immutable manifest digest.
-        persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),
-            "aiverse.actor.portable.v1:"+std::to_string(content_),budget);
-        if(persistence_->start(directory,uuid,resume,async))return true;
+        if(!verifyPersistenceContent())return false;
+        persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),persistenceIdentity_,budget);
+        if(persistence_->start(directory,uuid,resume,async)){contentPending_=bool(persistenceAssets_);return true;}
     }catch(...){}
     persistenceFailed_=true;return false;
 }
@@ -100,8 +111,8 @@ Server::RecoveryStatus Server::beginPersistenceRecovery(const std::filesystem::p
     const std::array<uint8_t,16>& uuid,size_t budget,bool async){
     if(persistence_||persistenceFailed_||!persistenceSupported_||simulation_.tick()!=0||!peers_.empty())return RecoveryStatus::Busy;
     try{
-        persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),
-            "aiverse.actor.portable.v1:"+std::to_string(content_),budget);
+        if(!verifyPersistenceContent())return RecoveryStatus::Failed;
+        persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),persistenceIdentity_,budget);
         const auto result=persistence_->beginRecovery(directory,uuid,async);
         if(result==actor::ActorPersistentSession::RecoveryResult::Loading){
             recoveringPersistence_=true;return RecoveryStatus::Loading;
@@ -117,7 +128,7 @@ Server::RecoveryStatus Server::pollPersistenceRecovery(){
         using R=actor::ActorPersistentSession::RecoveryResult;
         if(result==R::Loading)return RecoveryStatus::Loading;
         recoveringPersistence_=false;
-        if(result==R::Ready)return RecoveryStatus::Ready;
+        if(result==R::Ready){contentPending_=bool(persistenceAssets_);return RecoveryStatus::Ready;}
         persistenceFailed_=true;
         return result==R::Cancelled?RecoveryStatus::Cancelled:RecoveryStatus::Failed;
     }catch(...){recoveringPersistence_=false;persistenceFailed_=true;return RecoveryStatus::Failed;}
@@ -142,8 +153,41 @@ Server::RecoveryProgress Server::persistenceRecoveryProgress()const{
 void Server::cancelPersistenceRecovery(){
     if(recoveringPersistence_)persistence_->cancelRecovery();
 }
+void Server::failPersistenceContent(std::string error){
+    persistenceContentError_=std::move(error);persistenceFailed_=true;
+    for(auto& peer:peers_)peer.conn->close();
+}
+bool Server::verifyPersistenceContent(){
+    if(!persistenceAssets_)return true;
+    std::string error;
+    if(!persistenceAssets_->verifyAll(persistenceReader_,&error)){
+        failPersistenceContent(std::move(error));return false;
+    }
+    return true;
+}
+bool Server::pollPersistenceContent(){
+    if(persistenceFailed_||recoveringPersistence_)return false;
+    if(!contentPending_)return true;
+    try{
+        const bool ready=module().readyToStep(simulation_);
+        if(module().streamedContentIntegrityFailed()){
+            failPersistenceContent("persistent world asset read/hash failure");return false;
+        }
+        if(!module().collisionAdmissionError().empty()){
+            failPersistenceContent(module().collisionAdmissionError());return false;
+        }
+        if(!module().navigationReadinessError().empty()){
+            failPersistenceContent(module().navigationReadinessError());return false;
+        }
+        if(const auto* status=module().streamingStatus();status&&status->selection.failed){
+            failPersistenceContent(status->error.empty()?"persistent collision preparation failed":status->error);return false;
+        }
+        if(ready)contentPending_=false;
+        return ready;
+    }catch(const std::exception& e){failPersistenceContent(e.what());return false;}
+}
 bool Server::checkpointWorld(){
-    if(!persistence_||persistenceFailed_||recoveringPersistence_||inputsStaged_)return false;
+    if(!persistence_||persistenceFailed_||recoveringPersistence_||contentPending_||inputsStaged_)return false;
     if(persistence_->checkpoint())return true;
     persistenceFailed_=true;
     for(auto& peer:peers_)peer.conn->close();
@@ -163,11 +207,11 @@ bool Server::pollWorldCheckpoint(){
 }
 bool Server::occupied(uint8_t slot) const {for(const auto& p:peers_)if(p.slot==slot&&p.conn->state()!=ConnState::Closed)return true;return false;}
 bool Server::attach(uint8_t slot,std::unique_ptr<Conn> conn) {
-    if(persistenceFailed_||recoveringPersistence_||(persistence_&&persistence_->tickPending())||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
+    if(persistenceFailed_||recoveringPersistence_||contentPending_||(persistence_&&persistence_->tickPending())||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
     Peer peer;peer.slot=slot;peer.conn=std::move(conn);peer.lastReceived=module().character(std::as_const(simulation_),slot).lastSequence;peers_.push_back(std::move(peer));return true;
 }
 void Server::poll(uint64_t now) {
-    if(persistenceFailed_||recoveringPersistence_)return;
+    if(persistenceFailed_||recoveringPersistence_||contentPending_)return;
     if(persistence_&&persistence_->tickPending()){
         for(auto& p:peers_)p.conn->update(now);
         return; // no gameplay reads or input acknowledgements from an uncommitted tick
@@ -204,9 +248,26 @@ void Server::poll(uint64_t now) {
 }
 bool Server::step() {
     if(persistenceFailed_||recoveringPersistence_)return false;
-    if(!pollWorldCheckpoint())return false;
+    if(!pollPersistenceContent()||!pollWorldCheckpoint())return false;
     const bool awaiting=persistence_&&persistence_->tickPending();
-    if(!awaiting&&!module().readyToStep(simulation_))return false;
+    if(!awaiting){
+        const bool ready=module().readyToStep(simulation_);
+        if(persistence_&&persistenceAssets_){
+            if(module().streamedContentIntegrityFailed()){
+                failPersistenceContent("persistent world asset read/hash failure");return false;
+            }
+            if(!module().collisionAdmissionError().empty()){
+                failPersistenceContent(module().collisionAdmissionError());return false;
+            }
+            if(!module().navigationReadinessError().empty()){
+                failPersistenceContent(module().navigationReadinessError());return false;
+            }
+            if(const auto* status=module().streamingStatus();status&&status->selection.failed){
+                failPersistenceContent(status->error.empty()?"persistent collision preparation failed":status->error);return false;
+            }
+        }
+        if(!ready)return false;
+    }
     // If Simulation's second readiness check refuses, keep the already
     // staged input batch; never inject a second batch for that same tick.
     if(!awaiting&&!inputsStaged_){
@@ -236,7 +297,7 @@ bool Server::step() {
     return true;
 }
 void Server::broadcast() {
-    if(persistenceFailed_||recoveringPersistence_||(persistence_&&(!publishingFinalized_||simulation_.tick()!=persistence_->finalizedTick())))return;
+    if(persistenceFailed_||recoveringPersistence_||contentPending_||(persistence_&&(!publishingFinalized_||simulation_.tick()!=persistence_->finalizedTick())))return;
     const auto actors=module().snapshots(simulation_);
     world::SpatialWorld index(64);
     const auto projectiles=module().projectiles(simulation_);const auto loot=module().loot(simulation_);const auto vehicles=module().vehicles(simulation_);
