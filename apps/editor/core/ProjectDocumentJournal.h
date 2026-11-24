@@ -284,7 +284,7 @@ private:
         std::set<fs::path> paths;std::vector<Step> steps;size_t bytes=0;
         for(const auto& row:state["files"].items()){
             if(!row.isObject()||!row["path"].isString())throw std::runtime_error("Invalid project journal entry");
-            if(version==2&&!row["createOnly"].isBool())throw std::runtime_error("Invalid creation marker");
+            if(version==2&&row["createOnly"].type()!=Json::Type::Bool)throw std::runtime_error("Invalid creation marker");
             const bool createOnly=version==2&&row.getBool("createOnly");
             const auto target=safeTarget(root_,row.getStr("path"),createOnly);
             if(!paths.insert(target).second)throw std::runtime_error("Duplicate project recovery target");
