@@ -1177,7 +1177,14 @@ Json StudioSession::dispatch(const Json& request) {
                 if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
-                if(entry.move){
+                if(entry.move&&entry.move->quarantine){
+                    const auto& f=entry.move->files.front();
+                    const auto check=[&]{
+                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,{{f.from,f.directory}});
+                        if(studioDocumentNamesAsset(editor::loadMaterialLibrary(ws_),f.from,f.directory))throw std::runtime_error("Asset is referenced by materials");
+                    };
+                    studioReplayAssetQuarantine(ws_.project.dir,*entry.move,redo,check);
+                }else if(entry.move){
                     // Recheck known read-only rules references before reversing paths.
                     const auto check=[&]{
                         StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
@@ -2118,6 +2125,24 @@ Json StudioSession::dispatchImpl(const Json& request) {
             detail.set("bytes",Json::number(updated.bytes));
             detail.set("settings",updated.settings);
             reply.set("result",std::move(detail));
+        } else if (method == "studio.assetDelete") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||
+               params.getStr("expectedVersion")!=assetHistoryVersion()||!params.getBool("confirmed"))
+                throw std::runtime_error("Confirm deletion in the current project and refresh asset history");
+            const auto path=params.getStr("path"),guid=params.getStr("guid");
+            StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+            const auto current=catalog.byGuid(guid);
+            if(!current||current->path!=path)throw std::runtime_error("Asset identity changed");
+            const auto check=[&]{
+                studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,{{path,current->directory}});
+                if(studioDocumentNamesAsset(editor::loadMaterialLibrary(ws_),path,current->directory))throw std::runtime_error("Asset is referenced by materials");
+            };
+            auto plan=studioQuarantineAsset(ws_.project.dir,path,guid,check);
+            const auto backup=plan.files.front().to;
+            assetHistory_.recordMove(std::move(plan),"Delete asset: "+path);agentHistoryUnsafe_=true;
+            pendingAssetTransfer_.reset();
+            Json r=Json::object();r.set("path",str(path));r.set("backup",str(backup));r.set("historyRecorded",Json::fromBool(assetHistory_.canUndo()));
+            reply.set("result",std::move(r));
         } else if (method == "studio.assetFolderCreate") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string path=studioCreateContentFolder(ws_.project.dir,

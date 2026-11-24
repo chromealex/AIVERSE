@@ -21,6 +21,7 @@ public:
     struct MovePlan {
         std::vector<MoveFile> files; // content-relative exact file/sidecar pairs
         std::optional<std::string> materialsBefore,materialsAfter;
+        bool quarantine=false; // content-relative from, project-relative trash destination
     };
     struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; };
     const std::vector<Step>& steps() const noexcept {return steps_;}

@@ -54,6 +54,11 @@ private:
 void studioReplayAssetMove(const std::filesystem::path& project,
                            const editor::ProjectHistory::MovePlan& plan,bool redo,
                            const std::function<void()>& validateReferences = {});
+// Soft-delete one asset to persistent project-local quarantine; never purge it on history eviction.
+editor::ProjectHistory::MovePlan studioQuarantineAsset(const std::filesystem::path& project,
+    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences={});
+void studioReplayAssetQuarantine(const std::filesystem::path& project,
+    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={});
 std::string studioCreateContentFolder(const std::filesystem::path& project,
                                      const std::string& parent,const std::string& name);
 }

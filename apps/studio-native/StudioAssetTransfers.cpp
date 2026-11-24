@@ -625,4 +625,99 @@ void studioReplayAssetMove(const fs::path& project,
         std::rethrow_exception(failure);
     }
 }
+namespace {
+fs::path quarantineFolder(const fs::path& project,const std::string& relative) {
+    const fs::path p(relative);
+    const auto parent=p.parent_path();
+    const auto id=parent.filename().string();
+    if(parent.parent_path().generic_string()!=".aiverse-cache/studio-asset-trash"||
+       id.size()!=24||id.find_first_not_of("0123456789abcdef")!=std::string::npos||p.filename()!="asset")
+        throw std::runtime_error("Invalid asset quarantine identity");
+    fs::path current=fs::canonical(project);
+    for(const auto& component:parent){
+        current/=component;
+        if(!fs::is_directory(fs::symlink_status(current)))throw std::runtime_error("Unsafe asset quarantine directory");
+    }
+    return current;
+}
+}
+void studioReplayAssetQuarantine(const fs::path& project,
+    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences){
+    if(!plan.quarantine||plan.files.size()!=2)throw std::runtime_error("Invalid asset quarantine plan");
+    const auto& asset=plan.files[0];const auto& meta=plan.files[1];
+    if(meta.from!=asset.from+".meta"||meta.to!=asset.to+".meta"||asset.digest.empty())
+        throw std::runtime_error("Invalid asset quarantine pair");
+    const auto root=studioContentRoot(project);
+    const auto trash=quarantineFolder(project,asset.to);
+    const auto relative=fs::path(asset.from);
+    validateSegment(relative.filename().string());
+    const auto parent=relative.parent_path().generic_string();
+    const auto live=checkedFolder(project,parent=="."?"":parent)/relative.filename();
+    const auto stored=trash/"asset";
+    const auto guid=Json::parse(meta.bytes).getStr("guid");
+    if(!studioValidGuid(guid))throw std::runtime_error("Invalid quarantined GUID");
+    StudioAssetCatalog catalog(project);catalog.rebuild(false);
+    const auto indexed=catalog.byGuid(guid);
+    if(deleted?(!indexed||indexed->path!=asset.from||indexed->directory!=asset.directory):bool(indexed))
+        throw std::runtime_error("Asset quarantine GUID conflict");
+    const auto source=deleted?live:stored,destination=deleted?stored:live;
+    if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination))||
+       !matchesMoveFile(source,asset)||!matchesMoveFile(studioMetaPath(source),meta))
+        throw std::runtime_error("Asset quarantine source or destination changed");
+    if(deleted&&validateReferences)validateReferences();
+    const std::string liveRel="content/"+asset.from;
+    const std::vector<StudioMoveJournalOperation> operations=deleted?
+        std::vector<StudioMoveJournalOperation>{{liveRel,asset.to},{liveRel+".meta",meta.to}}:
+        std::vector<StudioMoveJournalOperation>{{asset.to,liveRel},{meta.to,liveRel+".meta"}};
+    StudioMoveJournal journal(project);journal.begin(operations,true);
+    try{
+        for(size_t i=0;i<operations.size();++i){
+            const auto from=project/operations[i].from,to=project/operations[i].to;
+            if(existsOrSymlink(to)||!matchesMoveFile(from,plan.files[i]))
+                throw std::runtime_error("Asset quarantine changed during replay");
+            fs::rename(from,to);
+            StudioMoveJournal::syncPath(from.parent_path());StudioMoveJournal::syncPath(to.parent_path());
+        }
+        catalog.rebuild(false);
+        const auto after=catalog.byGuid(guid);
+        if(deleted?bool(after):(!after||after->path!=asset.from))
+            throw std::runtime_error("Asset quarantine index mismatch");
+        journal.commit();
+    }catch(...){
+        const auto failure=std::current_exception();
+        try{journal.restoreOrCleanup();catalog.rebuild(false);}
+        catch(const std::exception& e){throw std::runtime_error(std::string("Asset quarantine recovery incomplete: ")+e.what());}
+        std::rethrow_exception(failure);
+    }
+}
+editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
+    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences){
+    const auto source=checkedSource(project,path);
+    StudioAssetCatalog catalog(project);catalog.rebuild(false);
+    const auto current=catalog.byGuid(expectedGuid);
+    if(!current||current->path!=path)throw std::runtime_error("Asset changed; refresh before deleting");
+    const auto root=project/".aiverse-cache"/"studio-asset-trash";
+    if(!existsOrSymlink(root))fs::create_directory(root);
+    if(!fs::is_directory(fs::symlink_status(root)))throw std::runtime_error("Unsafe asset quarantine root");
+    const auto id=nonce();
+    const auto folder=root/id;
+    if(!fs::create_directory(folder))throw std::runtime_error("Cannot reserve asset quarantine");
+    const auto relative=".aiverse-cache/studio-asset-trash/"+id+"/asset";
+    editor::ProjectHistory::MovePlan plan;plan.quarantine=true;
+    const auto meta=studioMetaPath(source);
+    if(fs::file_size(meta)>1024*1024)throw std::runtime_error("Asset metadata too large for history");
+    plan.files.push_back({path,relative,{},moveDigest(source,current->directory),current->directory});
+    plan.files.push_back({path+".meta",relative+".meta",editor::readProjectFileBytes(meta),{},false});
+    Json recovery=Json::object();
+    recovery.set("path",Json::string(path));recovery.set("guid",Json::string(expectedGuid));
+    recovery.set("directory",Json::fromBool(current->directory));
+    recovery.set("digest",Json::string(plan.files.front().digest));
+    const auto record=folder/"record.json";
+    {std::ofstream out(record,std::ios::binary);out<<recovery.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write asset quarantine record");}
+    StudioMoveJournal::syncPath(record);StudioMoveJournal::syncPath(folder);StudioMoveJournal::syncPath(root);
+    // Leave the record and any payload on disk even if the in-memory history is
+    // later evicted. Manual recovery is always possible; no automatic purge.
+    studioReplayAssetQuarantine(project,plan,true,validateReferences);
+    return plan;
+}
 } // namespace aiverse::studio

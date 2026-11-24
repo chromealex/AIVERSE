@@ -62,8 +62,13 @@ public:
 #endif
     }
 
-    void begin(const std::vector<StudioMoveJournalOperation>& operations) {
+    void begin(const std::vector<StudioMoveJournalOperation>& operations,bool quarantine=false) {
         if (operations.empty()) return;
+        if(operations.size()>128)throw std::runtime_error("Too many Studio journal operations");
+        for(const auto& operation:operations){
+            validateRelative(operation.from);validateRelative(operation.to);
+            if(quarantine)validateQuarantinePair(operation.from,operation.to);
+        }
         // Existing journal must never be overwritten by a new transaction.
         if (fs::exists(folder_))
             throw std::runtime_error("A previous Studio asset transfer needs recovery before another move");
@@ -80,7 +85,7 @@ public:
                 throw std::runtime_error("Cannot inspect material library before move");
             if (fs::is_symlink(materialStatus))
                 throw std::runtime_error("Material library symlinks are not supported by move journal");
-            const bool existed=fs::exists(materialStatus);
+            const bool existed=!quarantine&&fs::exists(materialStatus);
             if (existed) {
                 if (!fs::is_regular_file(materialStatus))
                     throw std::runtime_error("Invalid material library before move");
@@ -88,7 +93,7 @@ public:
                 syncPath(folder_/"materials.backup");
             }
             Json state=Json::object();
-            state.set("version",Json::number(int64_t(1)));
+            state.set("version",Json::number(int64_t(quarantine?2:1)));
             state.set("materialExisted",Json::fromBool(existed));
             Json rows=Json::array();
             for (const auto& operation:operations) {
@@ -103,7 +108,7 @@ public:
             // Manifest is published atomically before the first asset rename.
             writeFile(folder_/"pending.tmp",state.dump(2)+"\n");
             fs::rename(folder_/"pending.tmp",folder_/"pending.json");
-            syncPath(folder_);
+            syncPath(folder_);syncPath(cache);
         } catch (...) {
             std::error_code ec;
             fs::remove_all(folder_,ec);
@@ -147,10 +152,11 @@ public:
             !fs::is_regular_file(pending))
             throw std::runtime_error("Unsafe Studio pending transaction manifest");
         const Json state=Json::parseFile(pending.string());
-        if (state["version"].integer()!=1 || !state["operations"].isArray() ||
+        const auto version=state["version"].integer();
+        if ((version!=1&&version!=2) || !state["operations"].isArray() ||
             state["operations"].size()>128)
             throw std::runtime_error("Invalid Studio move recovery manifest");
-        const fs::path root=studioContentRoot(project_);
+        const fs::path root=version==2?fs::canonical(project_):studioContentRoot(project_);
         const auto& operations=state["operations"].items();
         struct RestoreStep { fs::path source,destination; bool moveBack; };
         std::vector<RestoreStep> steps;
@@ -163,6 +169,7 @@ public:
                 throw std::runtime_error("Invalid Studio recovery operation");
             const auto from=operation.getStr("from"),to=operation.getStr("to");
             validateRelative(from);validateRelative(to);
+            if(version==2)validateQuarantinePair(from,to);
             if (from==to) throw std::runtime_error("Invalid no-op Studio recovery entry");
             const fs::path source=root/fs::path(from);
             const fs::path destination=root/fs::path(to);
@@ -184,6 +191,7 @@ public:
                 syncPath(it->destination.parent_path());
         }
         const fs::path material=project_/"materials.json";
+        if(version==2){fs::remove_all(folder_);return;} // quarantine does not own materials
         if (state.getBool("materialExisted")) {
             const fs::path backup=folder_/"materials.backup";
             if (!fs::is_regular_file(backup) || fs::is_symlink(fs::symlink_status(backup)))
@@ -222,6 +230,20 @@ private:
             if (segment.empty() || segment=="." || segment==".." || segment.find(':')!=std::string::npos)
                 throw std::runtime_error("Unsafe Studio recovery asset segment");
         }
+    }
+    static void validateQuarantinePair(const std::string& from,const std::string& to) {
+        const auto content=[](const std::string& p){return p.starts_with("content/")&&p.size()>8;};
+        const auto trash=[](const std::string& p){
+            const std::string prefix=".aiverse-cache/studio-asset-trash/";
+            if(!p.starts_with(prefix))return false;
+            const auto rest=p.substr(prefix.size());
+            const auto slash=rest.find('/');
+            if(slash!=24)return false;
+            for(size_t i=0;i<slash;++i)if(!((rest[i]>='0'&&rest[i]<='9')||(rest[i]>='a'&&rest[i]<='f')))return false;
+            return rest.substr(slash+1)=="asset"||rest.substr(slash+1)=="asset.meta";
+        };
+        if(!((content(from)&&trash(to))||(trash(from)&&content(to))))
+            throw std::runtime_error("Unsafe asset quarantine recovery pair");
     }
     static void safePath(const fs::path& root,const fs::path& target) {
         fs::path current=root;
