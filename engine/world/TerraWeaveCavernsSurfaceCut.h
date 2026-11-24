@@ -219,7 +219,7 @@ inline TerrainPatch cutCaveTerrainPatch(TerrainPatch patch,
             throw std::invalid_argument("Caverns quantized terrain fragment invalid");
         triangles.push_back(tri);
     }
-    if(triangles.empty())throw std::invalid_argument("Caverns fully removed terrain tile unsupported");
+    if(triangles.empty()&&!certifiedEntrances)throw std::invalid_argument("Caverns empty tile requires whole-footprint certification");
     patch.collision.swap(triangles);
     patch.clippedSurface=true;
     for(const auto& e:accepted){const auto b=entranceBounds(e);patch.surfaceHoles.push_back({b.minX,b.minZ,b.maxX,b.maxZ});}
