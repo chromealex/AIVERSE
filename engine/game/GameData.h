@@ -95,6 +95,7 @@ struct WeaponDef {
     Fixed minRange{};
     Fixed damage = Fixed::fromInt(5);
     Fixed cooldown = Fixed::fromInt(1);
+    bool preciseCooldown = false; // opt-in fractional cadence, preserving legacy timing by default
     uint8_t targets = kLayerGround;
     uint64_t targetTags = 0, ignoreTags = 0;
     Fixed projectileSpeed{};
