@@ -16,14 +16,16 @@ class CameraModelSnapshot {
         std::vector<mat4> nodeWorld;
         std::vector<Material> materials;
         std::vector<int> nodeMaterial;
+        std::vector<uint8_t> materialMask;
         std::vector<NodePose> pose;
         BakedSample baked{};
         bool hasNodeWorld=false,hasMaterials=false,hasNodeMaterial=false;
-        bool hasPose=false,hasBaked=false;
+        bool hasPose=false,hasBaked=false,hasMaterialMask=false;
     };
     struct PreparedEntry {
         Entry source;
         view::Object object;
+        std::vector<Entry> attachments;
         const view::View* viewSource=nullptr;
     };
     std::vector<Entry> entries_;
@@ -38,18 +40,18 @@ public:
         entries_.clear();prepared_.clear();geometry_.clear();geometryMeshes_.clear();
         preparedDrawIds_.clear();dropped_=0;
     }
-    // Inspect owned material copies, including pre-LOD packets. Prepared
-    // attachments still borrow their source material vector; never dereference
-    // it here. The owner must detach that replay or certify it separately.
+    // All retained override materials, including prepared attachments,
+    // are owned copies. Model/View and GPU resource lifetime still belongs
+    // to the host; this is not a resource lease for those objects.
     bool appendGraphImageRoots(const Model& model,std::vector<std::span<const Material>>& roots)const{
-        for(const auto& entry:prepared_)
-            for(const auto& attachment:entry.object.attachments)
-                if(attachment.draw.model==&model&&attachment.draw.materials)return false;
         auto add=[&](const Entry& entry){
             if(entry.draw.model==&model&&entry.hasMaterials)roots.emplace_back(entry.materials);
         };
         for(const auto& entry:entries_)add(entry);
-        for(const auto& entry:prepared_)add(entry.source);
+        for(const auto& entry:prepared_){
+            add(entry.source);
+            for(const auto& attachment:entry.attachments)add(attachment);
+        }
         return true;
     }
     size_t size()const{return entries_.size();}
@@ -67,6 +69,11 @@ public:
         prepared.source=copyDraw(packet.draw);
         prepared.object=packet;
         prepared.object.draw=prepared.source.draw;
+        prepared.attachments.reserve(packet.attachments.size());
+        for(size_t i=0;i<packet.attachments.size();++i){
+            prepared.attachments.push_back(copyDraw(packet.attachments[i].draw));
+            prepared.object.attachments[i].draw=prepared.attachments.back().draw;
+        }
         prepared.viewSource=&source;
         const uint64_t drawId=packet.draw.persistentId?
             packet.draw.persistentId:packet.id;
@@ -82,8 +89,9 @@ public:
         if(source.nodeMaterial){e.nodeMaterial=*source.nodeMaterial;e.hasNodeMaterial=true;}
         if(source.pose){e.pose=*source.pose;e.hasPose=true;}
         if(source.baked){e.baked=*source.baked;e.hasBaked=true;}
+        if(source.materialMask){e.materialMask=*source.materialMask;e.hasMaterialMask=true;}
         e.draw.nodeWorld=nullptr;e.draw.materials=nullptr;
-        e.draw.nodeMaterial=nullptr;e.draw.pose=nullptr;e.draw.baked=nullptr;
+        e.draw.nodeMaterial=nullptr;e.draw.pose=nullptr;e.draw.baked=nullptr;e.draw.materialMask=nullptr;
         return e;
     }
     static ModelDraw ownedDraw(const Entry& e) {
@@ -93,6 +101,7 @@ public:
         if(e.hasNodeMaterial)d.nodeMaterial=&e.nodeMaterial;
         if(e.hasPose)d.pose=&e.pose;
         if(e.hasBaked)d.baked=&e.baked;
+        if(e.hasMaterialMask)d.materialMask=&e.materialMask;
         return d;
     }
     void record(const ModelDraw& source) {
@@ -153,6 +162,8 @@ public:
             if(!entry.viewSource)continue;
             view::Object packet=entry.object;
             packet.draw=ownedDraw(entry.source);
+            for(size_t i=0;i<entry.attachments.size();++i)
+                packet.attachments[i].draw=ownedDraw(entry.attachments[i]);
             fn(*entry.viewSource,packet);
         }
     }

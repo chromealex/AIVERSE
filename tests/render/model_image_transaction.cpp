@@ -477,6 +477,22 @@ int main(){
             AIVERSE_TEST_CHECK(transaction.commit()==1);
         };
         publish("#texture-graph/first/color");
+        // The shared cache must never borrow or promote a procedural slot.
+        auto invalid=makeImage("#texture-graph/forged/color");
+        invalid.textureKey="textures/forged.png";invalid.textureCache=shared;
+        AIVERSE_TEST_CHECK(!shared->borrowResident(invalid));
+        bool cacheRejected=false;
+        try{shared->upload(device,invalid);}catch(const std::invalid_argument&){cacheRejected=true;}
+        AIVERSE_TEST_CHECK(cacheRejected&&shared->gpuCount()==0);
+        AIVERSE_TEST_CHECK(addImage(device,generated,std::move(invalid))==-1);
+        bool duplicateRejected=false;
+        try{
+            render::ModelImageUploadTransaction duplicate(device,pool,epoch.lease());
+            auto image=makeImage("#texture-graph/first/color");
+            image.proceduralGraphImage=true;image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+            duplicate.stage(generated,std::move(image));
+        }catch(const std::invalid_argument&){duplicateRejected=true;}
+        AIVERSE_TEST_CHECK(duplicateRejected&&generated.images.size()==1);
         const auto reference=referenceGraphMaterialImage(published,&render::Material::baseTex);
         AIVERSE_TEST_CHECK(published.baseTex==0&&generated.images.size()==1);
         auto held=acquirePublishedGraphImage(generated,reference);

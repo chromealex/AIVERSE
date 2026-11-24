@@ -377,6 +377,7 @@ bool readModelImage(const std::string& path, const FileReader& reader, Image& ou
 
 bool ModelTextureCache::read(const std::string& path, const FileReader& reader, Image& out) {
     const auto key = std::filesystem::path(path).lexically_normal().generic_string();
+    if(key.rfind("#texture-graph/",0)==0||runtimeGraphImage(out))return false;
     std::lock_guard lock(mutex_);
     auto it = decoded_.find(key);
     if (it == decoded_.end()) {
@@ -697,7 +698,7 @@ std::string ModelTextureCache::gpuKey(const Image& image) const {
 }
 
 bool ModelTextureCache::borrowResident(Image& image) const {
-    if(image.textureKey.empty())return false;
+    if(runtimeGraphImage(image)||image.textureKey.empty())return false;
     const auto key=gpuKey(image);
     const auto it=gpu_.find(key);
     if(it==gpu_.end() || !it->second.tex.valid())return false;
@@ -710,6 +711,8 @@ bool ModelTextureCache::borrowResident(Image& image) const {
 }
 
 void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
+    if(runtimeGraphImage(image))
+        throw std::invalid_argument("runtime graph image cannot enter shared file texture cache");
     const auto key=gpuKey(image);
     auto it = gpu_.find(key);
     if (it == gpu_.end()) {
@@ -752,7 +755,7 @@ ModelTextureCache::prepareGpuPromotion(
     // Both existing scratch Model images and future material-override slots
     // participate in ONE preallocated set of GPU-cache owner nodes.
     const auto include=[&](const Image& image,Model* target,size_t index) {
-        if(image.textureCache.get()!=this || image.borrowedTexture ||
+        if(runtimeGraphImage(image)||image.textureCache.get()!=this || image.borrowedTexture ||
            !image.tex.valid() || image.textureKey.empty())
             return;
         const auto key=gpuKey(image);
@@ -807,8 +810,9 @@ std::vector<Image> ModelTextureCache::PreparedGpuPromotion::commit() {
     // Validate all indices BEFORE mutating shared GPU residency.
     for(const auto& binding:bindings_)
         if(!binding.model ||
-           binding.index>=binding.model->images.size())
-            throw std::logic_error("speculative material image was not committed");
+           binding.index>=binding.model->images.size()||
+           runtimeGraphImage(binding.model->images[binding.index]))
+            throw std::logic_error("speculative file image was not committed or changed ownership");
     // Merging preallocated std::map nodes does not create a new GPU object.
     // Image* pointers into moved map nodes remain stable.
     cache_->gpu_.merge(pending_);
@@ -1034,6 +1038,14 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu,
         if(material.alpha!=AlphaMode::Opaque&&material.baseTex>=0&&size_t(material.baseTex)<pickAlpha.size())pickAlpha[size_t(material.baseTex)]=true;
     size_t imageIndex=0;
     for (auto& img : m.images) {
+        if(img.proceduralGraphRetired){++imageIndex;continue;}
+        // Resident procedural outputs are exclusively owned. Never reupload
+        // or substitute a shared file texture under the same generation.
+        if(runtimeGraphImage(img)){
+            if(!img.tex.valid()||img.textureCache||img.borrowedTexture||img.textureLease||
+               !img.textureKey.empty())return false;
+            ++imageIndex;continue;
+        }
         const auto previousTexture = img.tex;
         // Reduced VT fallbacks are per-Image resources and must not borrow
         // the full-resolution shared texture cache entry. Speculative model
@@ -1145,9 +1157,12 @@ bool uploadStandaloneImage(gfx::Device& dev, Image& image) {
 }
 
 int addImage(gfx::Device& dev, Model& m, Image img) {
-    for (size_t i = 0; i < m.images.size(); ++i)
-        if (!img.name.empty() && m.images[i].name == img.name)
+    if(runtimeGraphImage(img))return -1; // use graph publication transaction
+    for(size_t i=0;i<m.images.size();++i)
+        if(!img.name.empty()&&m.images[i].name==img.name){
+            if(runtimeGraphImage(m.images[i]))return -1;
             return int(i);
+        }
     // Preallocate Model storage before allocating a GPU texture; a vector
     // growth failure after createTexture could otherwise drop a live handle.
     m.images.reserve(m.images.size()+1);

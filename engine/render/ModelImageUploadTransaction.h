@@ -117,9 +117,16 @@ public:
     int stage(Model& model,Image image) {
         checkDevice();
         if(committed_)throw std::logic_error("image transaction already committed");
+        if(runtimeGraphImage(image)&&(!image.proceduralGraphImage||image.proceduralGraphRetired||
+            !image.proceduralGraphPin||image.textureCache||image.borrowedTexture||
+            image.textureLease||!image.textureKey.empty()))
+            throw std::invalid_argument("invalid exclusive procedural image staging");
         for(size_t i=0;i<model.images.size();++i)
-            if(!image.name.empty() && model.images[i].name==image.name)
+            if(!image.name.empty()&&model.images[i].name==image.name){
+                if(runtimeGraphImage(image)||runtimeGraphImage(model.images[i]))
+                    throw std::invalid_argument("procedural image name collision");
                 return int(i);
+            }
         Entry* entry=nullptr;
         for(auto& e:entries_)if(e.model==&model){entry=&e;break;}
         if(!entry) {
@@ -127,8 +134,11 @@ public:
             entry=&entries_.back();
         }
         for(size_t i=0;i<entry->images.size();++i)
-            if(!image.name.empty() && entry->images[i].name==image.name)
+            if(!image.name.empty()&&entry->images[i].name==image.name){
+                if(runtimeGraphImage(image)||runtimeGraphImage(entry->images[i]))
+                    throw std::invalid_argument("procedural staged image name collision");
                 return int(entry->indices[i]);
+            }
         const size_t index=reserveIndex(*entry,image);
         // Allocate the CPU slot BEFORE allocating a GPU image, so a failed
         // vector growth cannot orphan a newly created texture.

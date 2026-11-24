@@ -369,6 +369,12 @@ inline void setImportedMaterialImage(Material& material,int Material::* slot,int
     }
     material.*slot=index;
 }
+// Runtime generated images are never file-cache identities, even if a
+// malformed native descriptor supplies a file key or forgets its flag.
+inline bool runtimeGraphImage(const Image& image)noexcept{
+    return image.proceduralGraphImage||image.proceduralGraphRetired||
+           bool(image.proceduralGraphPin)||image.name.rfind("#texture-graph/",0)==0;
+}
 inline const Image* resolveMaterialImageIndex(const Model& model,int index,
         const GraphImagePin* original=nullptr) noexcept {
     if(index<0||size_t(index)>=model.images.size())return nullptr;
