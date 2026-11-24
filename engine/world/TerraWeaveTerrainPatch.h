@@ -105,7 +105,7 @@ inline TerrainPatch bakeEarthworksTerrainPatch(
 inline bool validTerrainPatchTopology(const TerrainPatch& patch) {
     if(patch.resolution<2||patch.resolution>129)return false;
     if(patch.clippedSurface)return patch.surfaceEpoch&&!patch.presentationOnly&&
-        !patch.surfaceHoles.empty()&&!patch.collision.empty()&&patch.collision.size()<=65534;
+        !patch.surfaceHoles.empty()&&patch.collision.size()<=65534;
     return patch.surfaceHoles.empty()&&patch.collision.size()==size_t(patch.resolution-1)*size_t(patch.resolution-1)*2;
 }
 
@@ -131,8 +131,8 @@ public:
     void publish(world::SpatialWorld& spatial,const TerrainPatch& patch,
                  uint32_t firstId) {
         const size_t count=patch.collision.size();
-        if(!firstId || !count || count>65534u ||
-           uint64_t(firstId)+count-1>UINT32_MAX)
+        if(!firstId || (!count&&!patch.clippedSurface) || count>65534u ||
+           (count&&uint64_t(firstId)+count-1>UINT32_MAX))
             throw std::invalid_argument("TerraWeave terrain collider ID range");
         if(patch.presentationOnly)
             throw std::invalid_argument(
@@ -141,7 +141,7 @@ public:
             throw std::invalid_argument("TerraWeave invalid terrain topology");
         const uint64_t limit=uint64_t(firstId)+count;
         for(const auto& [tile,old]:active_) {
-            if(tile==patch.cell)continue;
+            if(tile==patch.cell||!count||!old.count)continue;
             const uint64_t a=old.firstId,b=a+old.count;
             if(uint64_t(firstId)<b && a<limit)
                 throw std::invalid_argument("TerraWeave overlapping terrain collider ranges");
