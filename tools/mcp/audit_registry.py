@@ -23,6 +23,7 @@ REQUIRED = {
     "geometry": ("geometry_catalog", "strata_capabilities"),
     "human": ("human_schema", "human_create"),
     "mcp": ("mcp_registry",),
+    "building": ("building_graph_diagnostics",),
 }
 
 def main():
