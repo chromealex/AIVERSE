@@ -4,6 +4,7 @@
 #include "apps/studio-native/StudioPlanetMorphSnapshot.h"
 #include "apps/studio-native/StudioPlanetEchoSnapshot.h"
 #include "apps/studio-native/StudioPlanetCrowdSnapshot.h"
+#include "apps/studio-native/StudioPlanetCircuitSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -1005,6 +1006,49 @@ static void checkAetherStratification(){
     AIVERSE_TEST_CHECK(!aether::advanceWithStratification(ecs,&surface,7));
     AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).sampledTick==6);
 }
+static void checkPlanetLiveCircuit(){
+    using aiverse::studio::samplePlanetCircuit;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto gen=ecs.create(),load=ecs.create(),remote=ecs.create(),wire=ecs.create(),cross=ecs.create();
+    const auto sw=ecs.create(),device=ecs.create(),gate=ecs.create();
+    const auto place=[&](Entity e,int bi,int x){
+        Transform t{};t.pos=surface.cellCenter(surface.gridCell(bi,0,x,3));ecs.add<Transform>(e,t);
+    };
+    place(gen,0,2);place(load,0,4);place(remote,1,2);place(sw,0,2);place(device,0,4);place(gate,0,3);
+    circuit::Node n{};n.supply=10;ecs.add<circuit::Node>(gen,n);
+    n.supply=0;n.demand=3;ecs.add<circuit::Node>(load,n);ecs.add<circuit::Node>(remote,n);
+    ecs.add<circuit::Wire>(wire,circuit::Wire{gen,load,false,true});
+    ecs.add<circuit::Wire>(cross,circuit::Wire{gen,remote,false,true});
+    ecs.add<circuit::Switch>(sw,circuit::Switch{gen,true,true});
+    ecs.add<circuit::Gate>(gate,circuit::Gate{gen,kNullEntity,load,circuit::Op::Not,true});
+    circuit::Device d{};d.node=load;d.kind=circuit::DeviceKind::Light;d.requireSignal=true;
+    ecs.add<circuit::Device>(device,d);
+    AIVERSE_TEST_CHECK(circuit::synchronizeSwitches(ecs));
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,7));
+    AIVERSE_TEST_CHECK(circuit::updateDevices(ecs,7));
+    const auto before=samplePlanetCircuit(ecs,surface,7);
+    AIVERSE_TEST_CHECK(before.getBool("available")&&before["nodes"].size()==3);
+    AIVERSE_TEST_CHECK(before.getInt("powered")==3&&before.getInt("high")==2);
+    AIVERSE_TEST_CHECK(before["wires"].size()==2&&before.getInt("crossBody")==1);
+    AIVERSE_TEST_CHECK(before["wires"][size_t(0)].getBool("bothPowered"));
+    AIVERSE_TEST_CHECK(!before["wires"][size_t(1)].getBool("placed"));
+    AIVERSE_TEST_CHECK(before["devices"][size_t(0)].getBool("active"));
+    AIVERSE_TEST_CHECK(before["devices"][size_t(0)].getInt("transition")==1);
+    AIVERSE_TEST_CHECK(before["gates"][size_t(0)].getBool("outputSignal"));
+    const auto stale=samplePlanetCircuit(ecs,surface,8);
+    AIVERSE_TEST_CHECK(stale.getInt("staleOutputs")==4&&!stale["devices"][size_t(0)].getBool("outputAvailable"));
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,8)&&circuit::updateDevices(ecs,8));
+    const auto after=samplePlanetCircuit(ecs,surface,8);
+    AIVERSE_TEST_CHECK(!after["devices"][size_t(0)].getBool("active"));
+    AIVERSE_TEST_CHECK(after["devices"][size_t(0)].getInt("transition")==2);
+    AIVERSE_TEST_CHECK(after["devices"][size_t(0)].getInt("changedTick")==8);
+    AIVERSE_TEST_CHECK(!after["gates"][size_t(0)].getBool("outputSignal"));
+    const auto cap=samplePlanetCircuit(ecs,surface,8,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["nodes"].size()==1);
+    AIVERSE_TEST_CHECK(ecs.get<circuit::Device>(device).transition==2);
+}
 static void checkCircuitSurfaceWiring(){
     game::Surface surface;game::BodyDef body;
     body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
@@ -1152,6 +1196,7 @@ int main(){
     checkAuthoredPlanetDemo();
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
+    checkPlanetLiveCircuit();
     checkAetherStratification();
     checkPlanetLiveAether();
     checkMorphGravity();
