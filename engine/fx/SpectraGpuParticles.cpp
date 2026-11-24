@@ -1377,7 +1377,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
-    const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
+    const bool cull=!desc_.volumeMaterial.enabled&&viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
     if(cull){
         std::memcpy(u.cullViewProj,viewProj_.m,sizeof(u.cullViewProj));
         u.cullControl={1.f,float(viewWidth_),float(viewHeight_),0.f};
@@ -1466,6 +1466,12 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     }
     u.right[0]=right_.x;u.right[1]=right_.y;u.right[2]=right_.z;
     u.up[0]=up_.x;u.up[1]=up_.y;u.up[2]=up_.z;
+    if(desc_.volumeMaterial.enabled){
+        const auto& m=desc_.volumeMaterial;
+        u.params[3]=float(uint32_t(m.shape));
+        u.right[0]=m.axes.x;u.right[1]=m.axes.y;u.right[2]=m.axes.z;
+        u.up[0]=m.noiseFrequency;u.up[1]=m.noiseStrength;u.up[2]=float(m.noiseOctaves);
+    }
     device_->setPipeline(pipeline_);
     device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);

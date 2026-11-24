@@ -62,13 +62,23 @@ inline constexpr size_t gpuBillboardGeometryBytes(uint32_t capacity,bool procedu
     return procedural?size_t(capacity)*40u+12u:
         size_t(capacity)*(160u+6u*(gpuEmitterUsesWideIndices(capacity)?4u:2u));
 }
+enum class VolumetricParticleShape : uint8_t { Sphere, Ellipsoid, Box, Capsule };
 struct VolumetricParticleMaterial {
     bool enabled=false;
     float density=2,emission=0;
     uint32_t steps=12;
+    VolumetricParticleShape shape=VolumetricParticleShape::Sphere;
+    render::float3 axes{1,1,1}; // radii relative to particle half-size
+    float noiseFrequency=3,noiseStrength=0;
+    uint32_t noiseOctaves=3;
     bool valid()const{
         return std::isfinite(density)&&density>=0&&density<=100&&
-            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32;
+            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32&&uint32_t(shape)<=3&&
+            std::isfinite(axes.x)&&std::isfinite(axes.y)&&std::isfinite(axes.z)&&
+            axes.x>=.1f&&axes.x<=4&&axes.y>=.1f&&axes.y<=4&&axes.z>=.1f&&axes.z<=4&&
+            (shape!=VolumetricParticleShape::Sphere||(axes.x==1&&axes.y==1&&axes.z==1))&&
+            std::isfinite(noiseFrequency)&&noiseFrequency>=.1f&&noiseFrequency<=32&&
+            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4;
     }
 };
 struct ComputeEmitterDesc {

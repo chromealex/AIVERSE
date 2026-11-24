@@ -200,7 +200,7 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     // Compact deterministic fingerprint; two independently seeded 64-bit lanes.
     uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
     if(actual.gpuOwnedAllocation)restoreIdentity_+="\nallocator=owned-v2";
-    if(actual.volumeMaterial.enabled)restoreIdentity_+="\nvolume="+std::to_string(actual.volumeMaterial.density)+","+std::to_string(actual.volumeMaterial.emission)+","+std::to_string(actual.volumeMaterial.steps);
+    if(actual.volumeMaterial.enabled)restoreIdentity_+="\nvolume="+std::to_string(actual.volumeMaterial.density)+","+std::to_string(actual.volumeMaterial.emission)+","+std::to_string(actual.volumeMaterial.steps)+","+std::to_string(uint32_t(actual.volumeMaterial.shape))+","+std::to_string(actual.volumeMaterial.axes.x)+","+std::to_string(actual.volumeMaterial.axes.y)+","+std::to_string(actual.volumeMaterial.axes.z)+","+std::to_string(actual.volumeMaterial.noiseFrequency)+","+std::to_string(actual.volumeMaterial.noiseStrength)+","+std::to_string(actual.volumeMaterial.noiseOctaves);
     for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
     for(const auto& [path,bytes]:sdfDependencies){
         for(unsigned char c:path){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
