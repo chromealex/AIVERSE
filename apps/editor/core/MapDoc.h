@@ -148,6 +148,10 @@ public:
     std::vector<ProjectFileEdit> stageSave(const std::filesystem::path& project,const std::string& file,bool allowCreation);
     std::shared_ptr<void> beginStagedSave(){return beginHistorySave(path);}
     void finishStagedSave(){dirty=false;saveHistoryCheckpoint();}
+    // Atomic Studio save: caller retains the map lock through journal commit.
+    std::shared_ptr<void> lockAtomicSave();
+    ProjectFileEdit stageHistoryCheckpoint(const std::vector<ProjectFileEdit>& mapEdits);
+    void finishAtomicSave(){dirty=false;historyPersistenceWarning_.clear();}
     // Big maps carry their corners as terrain.cornersFile + an in-memory terrain.cornersBlob (what the
     // simulation loader reads); save() writes the blob to the .r16 file and never into the JSON.
     Json toJson() const;
@@ -231,6 +235,10 @@ private:
     static std::string newHistoryEpoch();
     std::string historyEpoch_=newHistoryEpoch();
     std::string historyPersistenceWarning_;
+    // Exact bytes observed by the loader, represented by SHA-256 per file.
+    // Independent of mutable map data and the history snapshot codec.
+    std::map<std::filesystem::path,std::string> savedFileHashes_;
+    bool savedFileBaselineValid_=false;
     std::vector<HistoryEntry> undo_,redo_;
     uint64_t lastHistoryId_=0;
     std::optional<MapData> compoundBefore_;
