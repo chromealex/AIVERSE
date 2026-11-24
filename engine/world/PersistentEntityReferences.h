@@ -62,7 +62,7 @@ public:
     Resolution classify(const World& world,const RegionEntityLedger& ledger,RegionEntityId id,Entity& out)const{
         if(!id){out=kNullEntity;return Resolution::Null;}
         const auto* record=ledger.find(id);
-        if(!record)return Resolution::Missing;
+        if(!record)return ledger.isRetired(id)?Resolution::Retired:Resolution::Missing;
         if(!record->live)return Resolution::Retired;
         auto it=byId_.find(id);
         if(it==byId_.end())return Resolution::Unmaterialized;
