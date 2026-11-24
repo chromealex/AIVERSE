@@ -8,6 +8,7 @@
 #include <charconv>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 namespace aiverse::editor {
@@ -24,6 +25,30 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
       }
     })");
     Workspace* w=&ws;
+    struct PickCache {std::string document;std::shared_ptr<const terraweave::caverns::CaveSnapshotSpatialIndex> index;};
+    auto cache=std::make_shared<PickCache>();
+    ws.registerOp({"terraweave_caverns_pick","Read-only SDF surface raycast in cm and normalized Q20 direction.",
+        Json::parse(R"({"properties":{"xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},"dxQ20":{"type":"integer"},"dyQ20":{"type":"integer"},"dzQ20":{"type":"integer"}}})"),
+        [w,cache](const Json& p)->Json {
+            using namespace terraweave::caverns;
+            if(w->project.dir.empty()||w->map.data.planet())throw std::invalid_argument("Caverns flat-world project required");
+            const auto& authored=w->map.data.extra["terraweaveCaverns"];
+            const auto text=authored.dump(-1);
+            if(!cache->index||cache->document!=text){
+                auto snapshot=std::make_shared<const CaveVolumeSnapshot>(caveSnapshotFromJson(authored));
+                cache->index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);cache->document=text;
+            }
+            const auto field=[&](const char* key,int64_t limit){
+                if(!p[key].isNumber())throw std::invalid_argument("Caverns ray coordinate missing");
+                const auto n=p.getInt(key);if(n< -limit||n>limit)throw std::out_of_range("Caverns ray coordinate");return n;
+            };
+            CaveRayCm ray{{field("xCm",kLimitCm),field("yCm",kLimitCm),field("zCm",kLimitCm)},
+                int32_t(field("dxQ20",1<<20)),int32_t(field("dyQ20",1<<20)),int32_t(field("dzQ20",1<<20))};
+            const auto hit=raycastCaveSurface(*cache->index,ray,50000,100);
+            Json result=Json::object();result.set("hit",Json::fromBool(bool(hit)));
+            if(hit){result.set("xCm",Json::number(hit->point.x));result.set("yCm",Json::number(hit->point.y));result.set("zCm",Json::number(hit->point.z));}
+            return result;
+        }});
     ws.registerOp({"terraweave_caverns_paint",
         "Author carve/fill spherical cave SDF stamps in signed world centimetres. "
         "Use erase with stampId or get to inspect. MapDoc persistence, undo/redo, "
