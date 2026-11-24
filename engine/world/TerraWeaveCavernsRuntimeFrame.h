@@ -235,6 +235,11 @@ public:
         const auto published=navigationBus_.active();
         if(!published || published->revision()!=query.sourceRevision)
             return {};
+        // Custom solvers can depend on external dynamic state not captured by
+        // the common environment epoch. Do not memoize them implicitly.
+        if(pathRouter_.hasSolver(name) &&
+           pathRouter_.backend(name)==CavePathBackend::Custom)
+            return pathRouter_.query(name,query,navigationBus_);
         return pathCache_.get(name,query,published->environmentRevision(),
             [&]{return pathRouter_.query(name,query,navigationBus_);});
     }
