@@ -1,4 +1,5 @@
 #include "engine/world/RegionEntityLedger.h"
+#include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/UnifiedWalSession.h"
 #include "engine/world/NativeWorldFinality.h"
 #include "engine/world/UnifiedEntitySection.h"
@@ -741,7 +742,26 @@ static void checkLedgerCompaction(){
     AIVERSE_TEST_CHECK(reader.ok()&&legacy.nextIdentity()==78&&legacy.historyFloor()==0&&legacy.retiredFloor()==0);
 }
 
+static void checkWorldPersistenceDiagnostics(){
+    RegionEntityLedger ledger;
+    World world;
+    constexpr uint64_t large=9007199254740993ull;
+    AIVERSE_TEST_CHECK(ledger.spawn(large,a)&&ledger.spawn(large+1,b)&&ledger.despawn(large+1,b));
+    auto e=world.create();world.add<RegionStableIdentity>(e,RegionStableIdentity{large});
+    AIVERSE_TEST_CHECK(ledger.compactRetired(ledger.lastRevision())==1);
+    auto stats=ledgerStatus(ledger,world);
+    AIVERSE_TEST_CHECK(stats.getStr("retiredFloor")==std::to_string(large+1));
+    AIVERSE_TEST_CHECK(stats.getStr("nextIdentity")==std::to_string(large+2));
+    AIVERSE_TEST_CHECK(stats.getInt("live")==1&&stats.getInt("materialized")==1&&stats.getInt("tombstones")==0);
+    AIVERSE_TEST_CHECK(ledgerPage(ledger,0,10).getBool("resetRequired"));
+    AIVERSE_TEST_CHECK(ledgerPage(ledger,0,10,true,ledger.lastRevision()-1).getBool("resetRequired"));
+    auto page=ledgerPage(ledger,0,10,true,ledger.lastRevision());
+    AIVERSE_TEST_CHECK(!page.getBool("resetRequired")&&page["records"].size()==1);
+    AIVERSE_TEST_CHECK(page["records"][0].getStr("id")==std::to_string(large));
+}
+
 int main() {
+    checkWorldPersistenceDiagnostics();
     checkLedgerCompaction();
     checkAsyncPersistenceMailbox();
     checkExactMutationCapture();
