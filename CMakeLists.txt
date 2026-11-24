@@ -2197,6 +2197,7 @@ endif()
 if(TARGET aiverse_editor_core) # lighting agent: light_* / lighting_set operations
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightOps.cpp apps/editor/core/PhysisOps.cpp)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/PlanetOps.cpp apps/editor/core/PlanetDetailOps.cpp)   # planet-render agent: planet sculpt / paint
+    target_include_directories(aiverse_editor_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libraries/include) # shared planetary forest document validator
 endif()
 if(TARGET aiverse_tests) # lighting agent: GPU-free lighting logic under test
     target_sources(aiverse_tests PRIVATE engine/view/game/GameLightsData.cpp engine/render/QualityGovernor.cpp)

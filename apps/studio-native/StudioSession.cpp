@@ -3571,11 +3571,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result", inspectorFor(params.getStr("entityId")));
         } else if(method=="studio.planetForest"||method=="studio.planetForestSet"||method=="studio.planetForestPlant"||method=="studio.planetForestMove"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
-            if(method=="studio.planetForestSet")
-                editStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
-            if(method=="studio.planetForestPlant")placeStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
-            if(method=="studio.planetForestMove")moveStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
-            reply.set("result",studioPlanetForestDocument(ws_.map,ws_.project.rulesJson));
+            const auto op=method=="studio.planetForestSet"?"planet_forest_set":method=="studio.planetForestPlant"?"planet_forest_plant":method=="studio.planetForestMove"?"planet_forest_move":"planet_forest_get";
+            const auto result=ws_.call(op,params,"studio");
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            reply.set("result",result);
         } else if (method == "studio.rules" || method == "studio.rulesSet") {
             // Rules form: unit types as written (own fields) and resolved (with "extends").
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

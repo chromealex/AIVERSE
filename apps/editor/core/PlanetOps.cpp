@@ -1,4 +1,5 @@
 #include "PlanetOps.h"
+#include "PlanetForestDocument.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -197,6 +198,39 @@ int planetMaterial(MapDoc& doc, const std::string& id, float3 dir, float radius,
 void registerPlanetOps(Workspace& ws) {
     Workspace* w = &ws;
     auto needMap = [w] { if (w->project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
+    // Shared native authoring API: standalone MCP and Studio use these exact
+    // same document validators and the MapDoc history owner.
+    ws.registerOp({"planet_forest_get","Read the authored planetary forest, catalogue, marker/body IDs and current revision. Not live ECS.",Json::parse(R"({"type":"object","properties":{},"additionalProperties":false})"),
+        [w,needMap](const Json&){needMap();return studioPlanetForestDocument(w->map,w->project.rulesJson);}});
+    const auto forestEdit=[w,needMap](const Json& p,const std::string& action){
+        needMap();
+        const auto before=w->map.revision;
+        if(action=="set")editStudioPlanetForest(w->map,w->project.rulesJson,p);
+        else if(action=="plant")placeStudioPlanetForest(w->map,w->project.rulesJson,p);
+        else if(action=="move")moveStudioPlanetForest(w->map,w->project.rulesJson,p);
+        else if(action=="remove")removeStudioPlanetForest(w->map,w->project.rulesJson,p);
+        const bool changed=w->map.revision!=before;
+        const std::string label="Planet forest: "+action;
+        if(changed){
+            if(w->map.undoDepth())w->map.setHistoryLabel(w->map.undoId(w->map.undoDepth()-1),label);
+            w->note({Change::Map,0,0,-1,-1,-1,label});
+        }
+        auto out=studioPlanetForestDocument(w->map,w->project.rulesJson);
+        out.set("changed",Json::fromBool(changed));out.set("summary",Json::string(changed?label:"Planet forest unchanged"));
+        return out;
+    };
+    const auto addForest=[&](const char* name,const char* description,const char* schema,const char* action){
+        ws.registerOp({name,description,Json::parse(schema),
+            [forestEdit,action=std::string(action)](const Json& p){return forestEdit(p,action);}});
+    };
+    addForest("planet_forest_set","Replace complete forest ecology/weather/plant config and ARBOR catalogue atomically; null inherits/removes. Read current mapPath/revision with planet_forest_get first.",
+        R"({"type":"object","properties":{"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"forest":{"type":["object","null"]},"catalog":{"type":["object","null"]}},"required":["mapPath","expectedRevision","forest","catalog"],"additionalProperties":false})","set");
+    addForest("planet_forest_plant","Create one authored plant at face-local coordinates or existing surface marker, allocating a stable key. Not a live spawn.",
+        R"({"type":"object","properties":{"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"species":{"type":"integer","minimum":1,"maximum":1000000},"habit":{"type":"string","enum":["tree","shrub"]},"ageTicks":{"type":"integer","minimum":0,"maximum":1000000000},"entity":{"type":"string"},"at":{"type":"object","properties":{"body":{"type":"string"},"face":{"type":"integer","minimum":0,"maximum":5},"x":{"type":"number","minimum":0},"y":{"type":"number","minimum":0}},"required":["body","face","x","y"],"additionalProperties":false}},"required":["mapPath","expectedRevision","species"],"oneOf":[{"required":["at"]},{"required":["entity"]}],"additionalProperties":false})","plant");
+    addForest("planet_forest_move","Move one direct-coordinate authored plant by species/key; marker-bound plants require explicit conversion via set.",
+        R"({"type":"object","properties":{"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"species":{"type":"integer","minimum":1,"maximum":1000000},"key":{"type":"integer","minimum":1,"maximum":1000000000},"at":{"type":"object","properties":{"body":{"type":"string"},"face":{"type":"integer","minimum":0,"maximum":5},"x":{"type":"number","minimum":0},"y":{"type":"number","minimum":0}},"required":["body","face","x","y"],"additionalProperties":false}},"required":["mapPath","expectedRevision","species","key","at"],"additionalProperties":false})","move");
+    addForest("planet_forest_remove","Remove exactly one authored plant by species/key; never delete its shared marker entity or modify live ECS.",
+        R"({"type":"object","properties":{"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"species":{"type":"integer","minimum":1,"maximum":1000000},"key":{"type":"integer","minimum":1,"maximum":1000000000}},"required":["mapPath","expectedRevision","species","key"],"additionalProperties":false})","remove");
     // wrap an existing op: with `body` it edits that planet, otherwise the original op runs unchanged
     auto wrap = [&ws](const char* name, const char* extraDesc, const char* extraProps, Workspace::OpFn planetFn) {
         const Workspace::Op* orig = nullptr;
