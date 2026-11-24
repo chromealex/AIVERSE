@@ -115,6 +115,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
       method === 'studio.assetTransferCommit') {
     throw Error('Project asset operations require the native AIVERSE host');
   }
+  if (method === 'studio.assetDependencyPage') throw new Error('Dependency pages require a native project');
   if (method === 'studio.assetReferences') {
     // Demo cannot inspect an actual project's materials/rules.
     return [];

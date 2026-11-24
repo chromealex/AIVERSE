@@ -9,7 +9,7 @@ import {
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type {
   StudioAsset, StudioAssetList, StudioAssetTransferPlan,
-  StudioAssetConflictAction, StudioAssetTransferItem, StudioAssetReference
+  StudioAssetConflictAction, StudioAssetTransferItem, StudioDependencyPage
 } from '../types';
 import AssetThumb from './AssetThumb';
 import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
@@ -138,18 +138,30 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   // Usage: files no project data names (filter) and "Find References" for one asset.
   const [unusedOnly,setUnusedOnly]=useState(false);
   const [unused,setUnused]=useState<Set<string>|null>(null);
-  const [mentions,setMentions]=useState<{path:string;project:string;rows:Array<{file:string;line:number;text:string}>;edges:StudioAssetReference[];graphError:string}|null>(null);
+  const [mentions,setMentions]=useState<{path:string;project:string;rows:Array<{file:string;line:number;text:string}>;graph:StudioDependencyPage|null;graphError:string}|null>(null);
   const [referencePage,setReferencePage]=useState(0);
   const [referenceDirection,setReferenceDirection]=useState<'incoming'|'outgoing'>('incoming');
   const referenceRequest=useRef(0);
+  const [referenceLoading,setReferenceLoading]=useState(false);
   const findReferences=async(path:string)=>{
     const request=++referenceRequest.current;
-    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetReferences',{path,depth:16})]);
+    setReferenceLoading(true);
+    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetDependencyPage',{expectedProject:projectPath,path,depth:16,direction:'incoming',offset:0,limit:50})]);
     if(request!==referenceRequest.current)return;
-    setReferencePage(0);
+    setReferencePage(0);setReferenceDirection('incoming');setReferenceLoading(false);
     if(usage.status==='rejected')setError(String(usage.reason));
     setMentions({path,project:projectPath,rows:usage.status==='fulfilled'?usage.value.mentions??[]:[],
-      edges:graph.status==='fulfilled'?graph.value:[],graphError:graph.status==='rejected'?String(graph.reason):''});
+      graph:graph.status==='fulfilled'?graph.value:null,graphError:graph.status==='rejected'?String(graph.reason):''});
+  };
+  const loadReferencePage=async(direction:'incoming'|'outgoing',page:number)=>{
+    if(!mentions?.graph||referenceLoading)return;
+    const request=++referenceRequest.current, snapshot=mentions;
+    setReferenceLoading(true);
+    try{
+      const graph=await invoke('studio.assetDependencyPage',{expectedProject:projectPath,path:snapshot.path,depth:16,direction,offset:page*50,limit:50,expectedToken:snapshot.graph!.token});
+      if(request===referenceRequest.current){setMentions({...snapshot,graph,graphError:''});setReferenceDirection(direction);setReferencePage(page);}
+    }catch(e){if(request===referenceRequest.current)setMentions({...snapshot,graphError:String(e)});}
+    finally{if(request===referenceRequest.current)setReferenceLoading(false);}
   };
   const toggleUnused=async()=>{
     if(unusedOnly){setUnusedOnly(false);return;}
@@ -207,7 +219,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);++referenceRequest.current;},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -550,16 +562,16 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     </footer>
     {mentions&&mentions.project===projectPath&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
       <header><Link2 size={13}/><b>content/{mentions.path}</b><span>Asset dependencies</span>
-        <button type="button" aria-label="Close" onClick={()=>{++referenceRequest.current;setMentions(null);}}><X size={13}/></button></header>
+        <button type="button" aria-label="Close" onClick={()=>{++referenceRequest.current;setMentions(null);setReferenceLoading(false);}}><X size={13}/></button></header>
       <div className="studio-assets-dependency-body">
-        {mentions.graphError?<p role="alert">Dependency graph unavailable: {mentions.graphError}</p>:<>
+        {mentions.graphError?<><p role="alert">Dependency graph unavailable: {mentions.graphError}</p><button type="button" disabled={referenceLoading} onClick={()=>void findReferences(mentions.path)}>Refresh graph</button></>:<>
           <div className="studio-assets-dependency-tabs">
             {(['incoming','outgoing'] as const).map(direction=><button key={direction} type="button"
-              aria-pressed={referenceDirection===direction} onClick={()=>{setReferenceDirection(direction);setReferencePage(0);}}>
-              {direction==='incoming'?'Used by':'Depends on'} ({mentions.edges.filter(r=>r.direction===direction).length})
+              aria-pressed={referenceDirection===direction} disabled={referenceLoading} onClick={()=>void loadReferencePage(direction,0)}>
+              {direction==='incoming'?'Used by':'Depends on'} ({direction==='incoming'?mentions.graph?.incoming??0:mentions.graph?.outgoing??0})
             </button>)}
           </div>
-          <ul>{mentions.edges.filter(r=>r.direction===referenceDirection).slice(referencePage*50,referencePage*50+50).map((r,i)=>{
+          <ul>{(mentions.graph?.items??[]).map((r,i)=>{
             const endpoint=referenceDirection==='incoming'?r.document:r.path;
             const path=endpoint.startsWith('content/')?endpoint.slice(8):'';
             const canNavigate=!!path&&catalog.files.some(asset=>asset.path===path);
@@ -569,11 +581,12 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
             </li>;
           })}</ul>
           <div className="studio-assets-dependency-tabs">
-            <button type="button" disabled={referencePage===0} onClick={()=>setReferencePage(p=>p-1)}>Previous</button>
+            <button type="button" disabled={referenceLoading||referencePage===0} onClick={()=>void loadReferencePage(referenceDirection,referencePage-1)}>Previous</button>
             <span>Page {referencePage+1}</span>
-            <button type="button" disabled={(referencePage+1)*50>=mentions.edges.filter(r=>r.direction===referenceDirection).length} onClick={()=>setReferencePage(p=>p+1)}>Next</button>
+            <button type="button" disabled={referenceLoading||(referencePage+1)*50>=(mentions.graph?.total??0)} onClick={()=>void loadReferencePage(referenceDirection,referencePage+1)}>Next</button>
           </div>
-          <p>Known edges up to 16 hops. Cycle labels mark closing edges within the explored graph. Dynamic and binary dependencies are not resolved.</p>
+          {mentions.graph&&<><p>Known edges up to 16 hops · {mentions.graph.unresolved} unresolved GUID occurrences. Cycle labels mark closing edges.</p>
+          <p>Scanned models: {mentions.graph.coverage.gltf} glTF · {mentions.graph.coverage.glb} GLB · {mentions.graph.coverage.obj} OBJ · {mentions.graph.coverage.dae} DAE. Coverage gaps: {mentions.graph.coverage.opaqueGlb} opaque GLB, {mentions.graph.coverage.unsupportedModels} other models, {mentions.graph.coverage.unsupportedUris} unsupported URIs, {mentions.graph.coverage.missingLibraries} missing MTL, {mentions.graph.coverage.symlinks} symlinks.</p><p>{mentions.graph.coverage.note}</p></>}
         </>}
         <h4>Text mentions ({mentions.rows.length})</h4>
         <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>

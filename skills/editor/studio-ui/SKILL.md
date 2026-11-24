@@ -161,6 +161,9 @@ Registry exposes studioLinkOnly independently of guiOnly. Use studio_agent_histo
 ## Model format coverage (S6g.4)
 The existing model resource graph now scans GLB v2 JSON chunks without reading BIN chunks, and Wavefront OBJ mtllib + supported MTL map slots using the engine's OBJ-relative resolution. Opaque non-GLB placeholders remain outside coverage. Model-resource preview rows identify final native validation rather than treating every multi-selection as an unconditional blocker. Native owner still rejects any changed supported URI resolution before journal publication; no source URI rewrite or arbitrary format coverage is promised.
 
+## Dependency coverage and paging (S6g.5)
+Existing XML parser and shared BOM conversion discover COLLADA library_images init_from/ref file candidates (conservative even if unused). Native studio.assetDependencyPage returns at most 100 selected rows, direction counts, coverage diagnostics and graph token. The token hashes known selected edges and scan counts; pass it when changing pages, refresh on mismatch. Existing array endpoint is retained. Linked studio_asset_dependencies supports expectedToken and direction with depth, retains direct mode without depth. Dynamic references, opaque/unsupported formats and skipped URIs are not complete coverage; no URI repair in this stage.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

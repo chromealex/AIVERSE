@@ -4,6 +4,9 @@
 #pragma once
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "engine/data/Json.h"
+#include "engine/render/Xml.h"
+#include "engine/pack/Sha256.h"
+#include <iterator>
 #include <map>
 #include <algorithm>
 #include <cctype>
@@ -115,11 +118,12 @@ inline bool studioReferenceMatchesPath(const std::string& value,const std::strin
     return value==path||(directory&&value.starts_with(path+"/"));
 }
 inline bool studioIsGltfResourceReference(const StudioAssetReference& ref){
-    return ref.document.starts_with("content/")&&(ref.owner=="glTF resource"||ref.owner=="OBJ resource");
+    return ref.document.starts_with("content/")&&(ref.owner=="glTF resource"||ref.owner=="OBJ resource"||ref.owner=="DAE resource");
 }
 struct StudioReferenceRelocation {std::string from,to;bool directory=false;};
 inline std::string studioGltfResourcePath(const std::string& source,const std::string& uri);
 inline std::string studioObjResourcePath(const std::string& source,const std::string& name);
+inline std::string studioDaeResourcePath(const std::string& source,const std::string& uri);
 inline std::string studioRelocatedReferencePath(const std::string& path,
     const std::vector<StudioReferenceRelocation>& moves){
     for(const auto& move:moves)
@@ -141,7 +145,8 @@ inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
     if(ref.uri.empty())return false;
     if(std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
        (ref.uri.find("..")!=std::string::npos||ref.uri.find('%')!=std::string::npos))return false;
-    const auto resolved=ref.owner=="OBJ resource"?studioObjResourcePath(owner,ref.uri):studioGltfResourcePath(owner,ref.uri);
+    const auto resolved=ref.owner=="OBJ resource"?studioObjResourcePath(owner,ref.uri):
+        ref.owner=="DAE resource"?studioDaeResourcePath(owner,ref.uri):studioGltfResourcePath(owner,ref.uri);
     return resolved==target;
 }
 // Resolve the set of known dependencies affected by an internal move.
@@ -381,8 +386,32 @@ inline void studioVisitWavefront(const std::filesystem::path& path,std::uintmax_
     }
     if(input.bad())throw std::runtime_error("Cannot finish Wavefront dependency read");
 }
+inline std::string studioDaeResourcePath(const std::string& source,const std::string& uri){
+    const auto first=uri.find_first_not_of(" \t\r\n"),last=uri.find_last_not_of(" \t\r\n");
+    if(first==std::string::npos)return {};
+    auto name=uri.substr(first,last-first+1);
+    // The renderer strips file URI prefixes before reading. Never resolve
+    // machine-specific absolute paths or remote resources in the editor.
+    if(name.starts_with("file:///"))name.erase(0,8);
+    else if(name.starts_with("file://"))name.erase(0,7);
+    else if(name.starts_with("file:"))return {};
+    return studioGltfResourcePath(source,name);
+}
+struct StudioDependencyCoverage{
+    size_t gltf=0,glb=0,obj=0,dae=0,opaqueGlb=0,unsupportedModels=0,symlinks=0,unsupportedUris=0,missingLibraries=0,embedded=0;
+    Json json()const{
+        Json out=Json::object();
+        const auto count=[&](const char* name,size_t value){out.set(name,Json::number(int64_t(value)));};
+        count("gltf",gltf);count("glb",glb);count("obj",obj);count("dae",dae);count("opaqueGlb",opaqueGlb);
+        count("unsupportedModels",unsupportedModels);count("symlinks",symlinks);count("unsupportedUris",unsupportedUris);
+        count("missingLibraries",missingLibraries);count("embedded",embedded);
+        out.set("complete",Json::fromBool(false));
+        out.set("note",Json::string("Known typed edges and conservative map candidates only. DAE includes declared images; dynamic references and unhandled formats are not resolved."));
+        return out;
+    }
+};
 inline std::vector<StudioAssetReference> studioCollectGltfReferences(
-    const std::filesystem::path& project,const std::map<std::string,std::string>& guids){
+    const std::filesystem::path& project,const std::map<std::string,std::string>& guids,StudioDependencyCoverage* coverage=nullptr){
     namespace fs=std::filesystem;
     const auto root=fs::canonical(project),content=root/"content";
     std::vector<StudioAssetReference> refs;
@@ -393,13 +422,16 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
     for(auto it=fs::recursive_directory_iterator(content);it!=fs::recursive_directory_iterator();++it){
         if(++entries>100000)throw std::runtime_error("glTF dependency directory budget exceeded");
         const auto status=it->symlink_status();
-        if(fs::is_symlink(status)){it.disable_recursion_pending();continue;}
+        if(fs::is_symlink(status)){if(coverage)++coverage->symlinks;it.disable_recursion_pending();continue;}
         const auto name=it->path().filename().string();
         if(name==".aiverse-cache"||name.starts_with(".aiverse-save-")){it.disable_recursion_pending();continue;}
         if(!fs::is_regular_file(status))continue;
         auto ext=it->path().extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        if(ext!=".gltf"&&ext!=".glb"&&ext!=".obj")continue;
+        if(ext!=".gltf"&&ext!=".glb"&&ext!=".obj"&&ext!=".dae"){
+            if(coverage&&(ext==".fbx"||ext==".3ds"||ext==".3do"||ext==".mdl"||ext==".mdx"||ext==".w3d"||ext==".ply"||ext==".vox"))++coverage->unsupportedModels;
+            continue;
+        }
         if(models.size()>=2048)throw std::runtime_error("glTF dependency file budget exceeded");
         models.push_back(it->path());
     }
@@ -410,17 +442,47 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto source=model.lexically_relative(root).generic_string();
         const auto append=[&](const std::string& owner,const std::string& field,const std::string& name,const std::string& target){
-            if(target.empty())return;
+            if(target.empty()){
+                if(coverage&&!name.empty()){
+                    if(name.starts_with("data:"))++coverage->embedded;else ++coverage->unsupportedUris;
+                }
+                return;
+            }
             const auto found=guids.find(target);
             if(refs.size()>=32768)throw std::runtime_error("Model dependency result budget exceeded");
             refs.push_back({source,owner,field,target,found==guids.end()?std::string{}:found->second,false,name});
         };
+        if(ext==".dae"){
+            if(coverage)++coverage->dae;
+            studioAccountModelJson(fs::file_size(model),bytes);
+            std::ifstream input(model,std::ios::binary);
+            if(!input)throw std::runtime_error("Cannot read DAE dependency");
+            const std::string data{std::istreambuf_iterator<char>(input),{}};
+            const auto doc=render::xml::parse(render::xml::toUtf8(data));
+            if(doc.name!="COLLADA")throw std::runtime_error("Invalid DAE dependency root");
+            // Conservative declared image candidates (even unused effects);
+            // do not confuse surface init_from IDs with image file paths.
+            size_t index=0;
+            doc.each("library_images",[&](const render::xml::Element& library){
+                library.each("image",[&](const render::xml::Element& image){
+                    const auto field="/library_images/image/"+std::to_string(index++)+"/init_from";
+                    const auto* init=image.child("init_from");
+                    if(!init){if(coverage)++coverage->embedded;return;}
+                    const auto* ref=init->child("ref");
+                    const auto name=ref?ref->text:init->text;
+                    append("DAE resource",field,name,studioDaeResourcePath(source,name));
+                });
+            });
+            continue;
+        }
         if(ext==".obj"){
+            if(coverage)++coverage->obj;
             studioVisitWavefront(model,bytes,[&](const std::string& key,const std::string& name,size_t line){
                 if(key!="mtllib")return;
                 const auto mtl=studioObjResourcePath(source,name);
                 append("OBJ resource","line "+std::to_string(line)+" / mtllib",name,mtl);
-                if(mtl.empty()||!studioSafeModelResourceFile(root,mtl))return;
+                if(mtl.empty())return;
+                if(!studioSafeModelResourceFile(root,mtl)){if(coverage)++coverage->missingLibraries;return;}
                 bool material=false;
                 studioVisitWavefront(root/mtl,bytes,[&](const std::string& slot,const std::string& rest,size_t row){
                     if(slot=="newmtl"){material=true;return;}
@@ -433,7 +495,8 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
             continue;
         }
         const auto parsed=studioReadModelJson(model,bytes,ext==".glb");
-        if(!parsed)continue;
+        if(!parsed){if(coverage)++coverage->opaqueGlb;continue;}
+        if(coverage){if(ext==".glb")++coverage->glb;else ++coverage->gltf;}
         const auto& doc=*parsed;
         if(!doc.isObject())throw std::runtime_error("Invalid glTF dependency document");
         for(const char* group:{"buffers","images"}){
@@ -441,10 +504,9 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
             size_t index=0;
             for(const auto& item:doc[group].items()){
                 const auto field=std::string("/")+group+"/"+std::to_string(index++)+"/uri";
-                if(!item.has("uri"))continue;
+                if(!item.has("uri")){if(coverage)++coverage->embedded;continue;}
                 if(!item["uri"].isString())throw std::runtime_error("Invalid glTF resource URI");
                 const auto path=studioGltfResourcePath(source,item.getStr("uri"));
-                if(path.empty())continue;
                 append("glTF resource",field,item.getStr("uri"),path);
             }
         }
@@ -516,7 +578,8 @@ inline void studioAppendMapReferences(const Json& value,const std::string& docum
 }
 inline std::vector<StudioAssetReference> studioCollectProjectAssetReferences(
     const std::filesystem::path& project,const Json& materials,const Json& rules,
-    const Json& currentMap,const Json& manifest,const std::vector<StudioAssetEntry>& assets){
+    const Json& currentMap,const Json& manifest,const std::vector<StudioAssetEntry>& assets,
+    StudioDependencyCoverage* coverage=nullptr){
     auto refs=studioCollectAssetReferences(materials,rules,assets);
     if(refs.size()>32768)throw std::runtime_error("Asset reference result budget exceeded");
     const auto guids=studioReferenceGuids(assets);
@@ -525,7 +588,7 @@ inline std::vector<StudioAssetReference> studioCollectProjectAssetReferences(
     studioVisitSavedMaps(project,manifest,[&](const Json& doc,const std::string& name){
         studioAppendMapReferences(doc,name,"",guids,refs,visited);
     });
-    auto gltf=studioCollectGltfReferences(project,guids);
+    auto gltf=studioCollectGltfReferences(project,guids,coverage);
     if(gltf.size()>32768-refs.size())throw std::runtime_error("Asset reference result budget exceeded");
     refs.insert(refs.end(),gltf.begin(),gltf.end());
     return refs;
@@ -621,6 +684,52 @@ inline Json studioDependencyTraversalJson(const std::vector<StudioAssetReference
         }
     }
     return out;
+}
+
+// Page only the selected direction while hashing the complete selected graph
+// and coverage. A subsequent page cannot silently mix two graph snapshots.
+inline Json studioDependencyPage(const std::vector<StudioAssetReference>& refs,
+    const std::string& path,bool directory,size_t depth,const std::string& direction,
+    size_t offset,size_t limit,const Json& coverage,const std::string& expectedToken){
+    if(depth>16||limit<1||limit>100||offset>65536||
+       (direction!="all"&&direction!="incoming"&&direction!="outgoing")||
+       (depth==0&&direction!="all"))throw std::runtime_error("Invalid dependency page");
+    pack::Sha256 hash;
+    const auto add=[&](const std::string& value){
+        const auto len=std::to_string(value.size())+":";
+        hash.update(len.data(),len.size());hash.update(value.data(),value.size());
+    };
+    add(path);add(std::to_string(depth));add(directory?"folder":"file");add(coverage.dump(-1));
+    Json rows=Json::array();
+    size_t total=0,incoming=0,outgoing=0,unresolved=0;
+    const auto emit=[&](const StudioAssetReference& ref,const char* side,size_t hop,bool cycle){
+        auto row=studioReferenceGraphJson({ref})[0];
+        if(hop){
+            row.set("direction",Json::string(side));row.set("depth",Json::number(int64_t(hop)));
+            row.set("cycle",Json::fromBool(cycle));
+        }
+        add(row.dump(-1));add(ref.uri);
+        if(ref.guid.empty())++unresolved;
+        if(std::string(side)=="incoming")++incoming;
+        if(std::string(side)=="outgoing")++outgoing;
+        if(direction=="all"||direction==side){
+            if(total>=offset&&rows.size()<limit)rows.push(std::move(row));
+            ++total;
+        }
+    };
+    if(depth==0){
+        for(const auto& ref:studioAssetDependencyEdges(refs,path,directory))emit(ref,"all",0,false);
+    }else{
+        for(bool reverse:{true,false})
+            for(const auto& visit:studioTraverseAssetDependencies(refs,path,directory,reverse,depth))
+                emit(refs[visit.edge],reverse?"incoming":"outgoing",visit.depth,visit.cycle);
+    }
+    const auto digest=hash.finish();const auto token=pack::toHex(digest.data(),digest.size());
+    if(!expectedToken.empty()&&expectedToken!=token)throw std::runtime_error("Dependency graph changed; refresh from page one");
+    Json out=Json::object();out.set("items",std::move(rows));out.set("token",Json::string(token));
+    out.set("total",Json::number(int64_t(total)));out.set("incoming",Json::number(int64_t(incoming)));
+    out.set("outgoing",Json::number(int64_t(outgoing)));out.set("unresolved",Json::number(int64_t(unresolved)));
+    out.set("coverage",coverage);out.set("depth",Json::number(int64_t(depth)));return out;
 }
 
 } // namespace aiverse::studio

@@ -183,6 +183,33 @@ int main(){
             fs::remove_all(project/"content"/"Group");fs::remove(studioMetaPath(project/"content"/"Group"));db.rebuild(false);
         }
 
+        // S6g.5: DAE images, coverage and stable native page tokens.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            fs::create_directories(project/"content"/"Collada");
+            const auto folder=project/"content"/"Collada";
+            write(folder/"scene.dae",R"(<COLLADA xmlns="urn:collada"><library_images><image id="img"><init_from>red%20paint.png</init_from></image><image id="next"><init_from><ref>missing.png</ref></init_from></image></library_images><library_effects><effect><surface><init_from>img</init_from></surface></effect></library_effects></COLLADA>)");
+            write(folder/"red paint.png","texture");
+            write(folder/"unsupported.fbx","opaque");db.rebuild();
+            StudioDependencyCoverage coverage;
+            const auto refs=studioCollectGltfReferences(project,studioReferenceGuids(db.all()),&coverage);
+            const auto edges=studioAssetDependencyEdges(refs,"Collada/scene.dae",false);
+            AIVERSE_TEST_CHECK(edges.size()==2&&coverage.dae==1&&coverage.unsupportedModels>=1);
+            AIVERSE_TEST_CHECK(edges[0].path=="content/Collada/red paint.png"&&!edges[0].guid.empty());
+            AIVERSE_TEST_CHECK(edges[1].path=="content/Collada/missing.png"&&edges[1].guid.empty());
+            const auto page=studioDependencyPage(refs,"Collada/scene.dae",false,16,"outgoing",0,1,coverage.json(),"");
+            AIVERSE_TEST_CHECK(page["items"].size()==1&&page.getInt("total")==2&&page.getInt("unresolved")==1);
+            const auto next=studioDependencyPage(refs,"Collada/scene.dae",false,16,"outgoing",1,1,coverage.json(),page.getStr("token"));
+            AIVERSE_TEST_CHECK(next["items"][0].getStr("path")=="content/Collada/missing.png");
+            auto changed=refs;changed[0].guid="changed";
+            bool refused=false;try{(void)studioDependencyPage(changed,"Collada/scene.dae",false,16,"outgoing",1,1,coverage.json(),page.getStr("token"));}
+            catch(const std::runtime_error&){refused=true;}
+            // Changed selected edge (the source order also includes opaque test GLB placeholders).
+            AIVERSE_TEST_CHECK(refused);
+            fs::remove_all(folder);fs::remove(studioMetaPath(folder));db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

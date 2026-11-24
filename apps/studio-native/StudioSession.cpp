@@ -656,12 +656,11 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
             if(name=="studio_asset_dependencies"){
                 const auto entry=selected();
                 const auto offset=integer("offset",0,0,65536),limit=integer("limit",50,1,100);
-                params.set("path",str(entry.path));
-                if(args.has("depth"))params.set("depth",num(integer("depth",1,1,16)));
-                const auto refs=invoke("studio.assetReferences",params);
-                Json out=Json::object(),rows=Json::array();
-                for(size_t i=size_t(offset);i<refs.size()&&rows.size()<size_t(limit);++i)rows.push(refs[i]);
-                out.set("items",std::move(rows));out.set("total",num(int64_t(refs.size())));
+                params.set("path",str(entry.path));params.set("offset",num(offset));params.set("limit",num(limit));
+                params.set("depth",num(args.has("depth")?integer("depth",1,1,16):0));
+                if(args.has("direction"))params.set("direction",args["direction"]);
+                if(args.has("expectedToken"))params.set("expectedToken",args["expectedToken"]);
+                auto out=invoke("studio.assetDependencyPage",params);
                 out.set("guid",str(entry.guid));out.set("path",str(entry.path));
                 out.set("version",str(assetHistoryVersion()));
                 return out;
@@ -2635,6 +2634,30 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 out.set("unused",unused);out.set("scannedFiles",num(int64_t(files.size())));
             }
             reply.set("result",std::move(out));
+        } else if (method=="studio.assetDependencyPage"){
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Dependency project changed");
+            const auto read=[&](const char* key,int64_t def,int64_t min,int64_t max){
+                if(!params.has(key))return def;
+                const auto v=params.getInt(key,-1);
+                if(!params[key].isNumber()||params[key].numberLiteral()!=std::to_string(v)||v<min||v>max)
+                    throw std::runtime_error("Invalid dependency page parameter");
+                return v;
+            };
+            StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+            const auto entry=catalog.byPath(params.getStr("path"));
+            if(!params["path"].isString()||!entry)throw std::runtime_error("Dependency asset is not indexed");
+            if((params.has("direction")&&!params["direction"].isString())||
+               (params.has("expectedToken")&&!params["expectedToken"].isString()))
+                throw std::runtime_error("Invalid dependency page selection");
+            const auto depth=read("depth",16,0,16),offset=read("offset",0,0,65536),limit=read("limit",50,1,100);
+            StudioDependencyCoverage coverage;
+            const auto refs=studioCollectProjectAssetReferences(ws_.project.dir,editor::loadMaterialLibrary(ws_),
+                ws_.project.rulesJson,ws_.map.toJson(),ws_.project.manifest,catalog.all(),&coverage);
+            auto result=studioDependencyPage(refs,entry->path,entry->directory,size_t(depth),params.getStr("direction","all"),
+                size_t(offset),size_t(limit),coverage.json(),params.getStr("expectedToken"));
+            result.set("path",str(entry->path));result.set("guid",str(entry->guid));
+            reply.set("result",std::move(result));
         } else if (method == "studio.assetReferences") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             StudioAssetCatalog catalog(ws_.project.dir);

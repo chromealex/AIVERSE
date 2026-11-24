@@ -84,3 +84,6 @@ All require authenticated Studio and expectedProject from `studio_asset_history`
 
 ### S6g.4 — GLB and Wavefront dependencies
 Dependency queries include GLB external JSON resources and OBJ material libraries/MTL texture slots actually read by the engine. Multi-item move preview distinguishes final native resource validation from unconditional read-only document blockers; commit validates actual destinations including selected conflict decisions. No URI rewrite.
+
+### S6g.5 — paged graph and diagnostics
+Linked dependency query now returns native bounded pages, token and coverage summary; optional expectedToken fences changed selected graphs and direction requires depth. COLLADA declared image paths are conservative candidates. Unknown formats and dynamic references remain explicit coverage gaps.
