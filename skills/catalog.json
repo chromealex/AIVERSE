@@ -7706,6 +7706,28 @@
         "sampling"
       ],
       "contentPackages": []
+    },
+    {
+      "id": "aiverse-noise",
+      "package": "noise",
+      "path": "skills/core/aiverse-noise/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic periodic value and cellular noise",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_noise",
+      "dependencies": [
+        "aiverse-random"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/algorithms/Noise.h",
+      "keywords": [
+        "noise",
+        "worley",
+        "tileable"
+      ],
+      "contentPackages": []
     }
   ]
 }
