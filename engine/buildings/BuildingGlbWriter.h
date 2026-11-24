@@ -4,6 +4,7 @@
 #include <engine/systems/BuildingStructure.h>
 #include "engine/buildings/BuildingPngEncoder.h"
 #include "engine/buildings/BuildingTextureAtlas.h"
+#include "engine/buildings/BuildingVisualGroups.h"
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -166,7 +167,7 @@ struct Glb{
         sep(materials);materials+=root.dump(-1);
         return nMat++;
     }
-    void addAtlas(const BuildingAtlas& atlas,const std::string& name){
+    void addAtlas(const BuildingAtlas& atlas,const std::string& name,const StyledStructure* source=nullptr){
         for(size_t i=0;i<atlas.maps.size();++i){
             const auto& map=atlas.maps[i];
             const auto bytes=aiverse::building::encodeBuildingPngRgba(map.rgba,map.width,map.height);
@@ -178,20 +179,37 @@ struct Glb{
             sep(textures);textures+="{\"source\":"+std::to_string(id)+"}";
             cachedTextures.emplace("unique-atlas:"+std::to_string(id),id);activeAtlas[i]=id;
         }
-        try{add(atlas.mesh,name);}catch(...){activeAtlas.fill(-1);throw;}
+        try{add(atlas.mesh,name,source);}catch(...){activeAtlas.fill(-1);throw;}
         activeAtlas.fill(-1);
     }
-    void add(const StyledMesh& m,const std::string& name){
+    void add(const StyledMesh& m,const std::string& name,const StyledStructure* source=nullptr){
         if(m.vertices.empty())return;
         std::vector<float> pos,nrm,uv;for(const auto& v:m.vertices){pos.insert(pos.end(),v.pos,v.pos+3);nrm.insert(nrm.end(),v.nrm,v.nrm+3);uv.insert(uv.end(),v.uv,v.uv+2);}
         auto bounds=",\"min\":["+num(m.boundsMin[0])+","+num(m.boundsMin[1])+","+num(m.boundsMin[2])+"],\"max\":["+num(m.boundsMax[0])+","+num(m.boundsMax[1])+","+num(m.boundsMax[2])+"]";
         int p=accessor(view(pos.data(),pos.size()*4,34962),5126,m.vertices.size(),"VEC3",bounds),n=accessor(view(nrm.data(),nrm.size()*4,34962),5126,m.vertices.size(),"VEC3"),t=accessor(view(uv.data(),uv.size()*4,34962),5126,m.vertices.size(),"VEC2");
         std::vector<int> mats;for(const auto& mt:m.materials)mats.push_back(material(mt));
-        std::string prims;
-        for(const auto& part:m.parts){int i=accessor(view(part.indices.data(),part.indices.size()*4,34963),5125,part.indices.size(),"SCALAR");sep(prims);
-            prims+="{\"attributes\":{\"POSITION\":"+std::to_string(p)+",\"NORMAL\":"+std::to_string(n)+",\"TEXCOORD_0\":"+std::to_string(t)+"},\"indices\":"+std::to_string(i)+",\"material\":"+std::to_string(mats[size_t(part.material)])+"}";}
-        sep(meshes);meshes+="{\"name\":"+quoted(name)+",\"primitives\":["+prims+"]}";
-        sep(nodes);nodes+="{\"name\":"+quoted(name)+",\"mesh\":"+std::to_string(nMesh++)+"}";nNode++;
+        auto emit=[&](const std::string& nodeName,const auto& parts){
+            std::string prims;
+            for(const auto& [materialId,indices]:parts){
+                if(indices.empty())continue;
+                if(materialId<0||size_t(materialId)>=mats.size()||indices.size()%3)
+                    throw std::invalid_argument("Invalid GLB primitive");
+                int i=accessor(view(indices.data(),indices.size()*4,34963),5125,indices.size(),"SCALAR");sep(prims);
+                prims+="{\"attributes\":{\"POSITION\":"+std::to_string(p)+",\"NORMAL\":"+std::to_string(n)+",\"TEXCOORD_0\":"+std::to_string(t)+"},\"indices\":"+std::to_string(i)+",\"material\":"+std::to_string(mats[size_t(materialId)])+"}";
+            }
+            if(prims.empty())return;
+            sep(meshes);meshes+="{\"name\":"+quoted(nodeName)+",\"primitives\":["+prims+"]}";
+            sep(nodes);nodes+="{\"name\":"+quoted(nodeName)+",\"mesh\":"+std::to_string(nMesh++)+"}";nNode++;
+        };
+        if(source&&!source->roomVisualRanges.empty()){
+            for(const auto& group:buildingVisualGroups(*source,m))emit(group.name,group.indices);
+        }else{
+            // Preserve the existing primitive order, including repeated materials.
+            std::vector<std::pair<int,std::vector<uint32_t>>> parts;
+            parts.reserve(m.parts.size());
+            for(const auto& part:m.parts)parts.emplace_back(part.material,part.indices);
+            emit(name,parts);
+        }
     }
     void addLights(const std::vector<StyledBuildingLight>& lights){
         for(const auto& l:lights){

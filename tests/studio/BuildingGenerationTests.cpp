@@ -191,6 +191,16 @@ int main(int argc,char** argv){
         vertical.set("setting",Json::string("modern"));
         auto modernStairs=studioBuildingInspect(engine,vertical);
         CHECK(modernStairs["triangles"].integer()==stairPreview["triangles"].integer());
+        // Synthetic room ownership on a real generated mesh; GLB must share
+        // vertex accessors/materials while preserving every triangle exactly.
+        auto partitioned=buildingStudioDetail::produce(engine,buildingStudioDetail::request(req));
+        const auto& mesh=partitioned.mesh;
+        CHECK(!mesh.parts.empty()&&!mesh.vertices.empty());
+        const auto groups=aiverse::lib::systems::buildingVisualGroups(partitioned,mesh);
+        CHECK(groups.size()==1);
+        size_t groupedTriangles=0;
+        for(const auto& group:groups)for(const auto& [mat,idx]:group.indices){(void)mat;groupedTriangles+=idx.size()/3;}
+        CHECK(groupedTriangles==mesh.triangles());
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;

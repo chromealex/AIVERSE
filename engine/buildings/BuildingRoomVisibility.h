@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/buildings/BuildingMaterialAssets.h"
 #include "engine/systems/BuildingInstances.h"
+#include "engine/buildings/BuildingVisualGroups.h"
 #include <set>
 #include <map>
 namespace aiverse::building {
@@ -16,31 +17,13 @@ inline std::unique_ptr<render::Model> runtimeRoomPartitionedBuildingModel(
     auto base=building;base.visualLods.clear();
     auto model=runtimeTexturedBuildingModel(base,resolve,name,error,surfaces);
     if(!model||building.roomVisualRanges.empty())return model;
-    std::map<std::string,size_t> roomIndex;
-    for(const auto& r:building.roomVisualRanges)roomIndex.try_emplace(r.roomId,0);
-    size_t next=1;for(auto& [id,index]:roomIndex){(void)id;index=next++;}
-    if(next>129)throw std::invalid_argument("Room partition budget exceeded");
-    std::vector<size_t> owner(building.mesh.vertices.size(),0);
-    for(const auto& r:building.roomVisualRanges){
-        if(r.roomId.empty()||r.firstVertex>owner.size()||r.vertexCount>owner.size()-r.firstVertex)
-            throw std::invalid_argument("Invalid room visual range");
-        for(size_t i=r.firstVertex;i<size_t(r.firstVertex)+r.vertexCount;++i){
-            if(owner[i])throw std::invalid_argument("Overlapping room visual ranges");
-            owner[i]=roomIndex.at(r.roomId);
-        }
-    }
-    std::vector<std::map<int,std::vector<uint32_t>>> groups(next);
-    for(const auto& p:building.mesh.parts)for(size_t i=0;i<p.indices.size();i+=3){
-        const auto a=p.indices[i],b=p.indices[i+1],c=p.indices[i+2];
-        if(a>=owner.size()||b>=owner.size()||c>=owner.size()||owner[a]!=owner[b]||owner[a]!=owner[c])
-            throw std::invalid_argument("Room triangle crosses visual owners");
-        auto& dst=groups[owner[a]][p.material];dst.insert(dst.end(),{a,b,c});
-    }
+    const auto groups=buildingVisualGroups(building,building.mesh);
     model->meshes.clear();model->indices.clear();model->nodes.clear();
-    auto append=[&](size_t i,const std::string& id){
-        if(groups[i].empty())return;
+    auto append=[&](const BuildingVisualGroup& group){
+        if(group.indices.empty())return;
+        const auto& id=group.name;
         render::MeshDef mesh;mesh.name=id;
-        for(const auto& [material,indices]:groups[i]){
+        for(const auto& [material,indices]:group.indices){
             render::Primitive p;p.material=material;p.firstIndex=uint32_t(model->indices.size());
             p.indexCount=uint32_t(indices.size());p.firstVertex=0;p.vertexCount=uint32_t(model->vertices.size());
             model->indices.insert(model->indices.end(),indices.begin(),indices.end());mesh.primitives.push_back(std::move(p));
@@ -48,8 +31,7 @@ inline std::unique_ptr<render::Model> runtimeRoomPartitionedBuildingModel(
         render::Node node;node.name=id;node.mesh=int(model->meshes.size());
         model->meshes.push_back(std::move(mesh));model->nodes.push_back(std::move(node));
     };
-    append(0,"building-shell");
-    for(const auto& [id,index]:roomIndex)append(index,id);
+    for(const auto& group:groups)append(group);
     for(size_t i=0;i<building.lights.size();++i){
         const auto& l=building.lights[i];render::Node node;node.name=l.id;node.light=int(i);
         node.t={l.position[0],l.position[1],l.position[2]};model->nodes.push_back(std::move(node));

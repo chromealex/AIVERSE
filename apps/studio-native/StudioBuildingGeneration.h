@@ -10,6 +10,7 @@
 #include "engine/buildings/BuildingGlbWriter.h"
 #include "engine/buildings/BuildingPngEncoder.h"
 #include "engine/buildings/BuildingMaterialAssets.h"
+#include "engine/buildings/BuildingRoomVisibility.h"
 #include "engine/render/Model.h"
 #include <engine/systems/BuildingFeatureGenerator.h>
 #include "engine/data/Json.h"
@@ -416,7 +417,7 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
         return true;
     };
     std::string error;
-    auto model=building::runtimeTexturedBuildingModel(
+    auto model=building::runtimeRoomPartitionedBuildingModel(
         built,resolver,"studio/generated-building-preview",&error);
     if(!model)throw std::runtime_error(error.empty()?
         "Building preview CPU Model failed":error);
@@ -437,6 +438,16 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
     out.set("width",Json::number(double(model.mesh.boundsMax[0]-model.mesh.boundsMin[0]),3));
     out.set("height",Json::number(double(model.mesh.boundsMax[1]-model.mesh.boundsMin[1]),3));
     out.set("depth",Json::number(double(model.mesh.boundsMax[2]-model.mesh.boundsMin[2]),3));
+    if(!model.roomVisualRanges.empty()){
+        Json groups=Json::array();
+        for(const auto& group:buildingVisualGroups(model,model.mesh)){
+            size_t triangles=0;for(const auto& [material,indices]:group.indices){(void)material;triangles+=indices.size()/3;}
+            if(!triangles)continue;
+            Json item=Json::object();item.set("id",string(group.name));
+            item.set("triangles",Json::number(int64_t(triangles)));groups.push(std::move(item));
+        }
+        out.set("visualGroups",std::move(groups));
+    }
     // Inspect the exact functional structure graph and generated apertures,
     // not a browser-invented approximation of door positions.
     if(req.composeFeatures){
@@ -710,8 +721,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         };
         if(req.uniqueAtlas){
             const auto atlas=buildUniqueBuildingAtlas(model.mesh);
-            glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind);
-        }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
+            glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind,&model);
+        }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind,&model);
         glb.addLights(model.lights);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
