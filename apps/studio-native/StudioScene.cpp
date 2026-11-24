@@ -2566,6 +2566,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
         if(useLiveTerrain)lightingStatus_+=" · surface grid step "+std::to_string(planetLiveTerrainGrid_.getInt("step"));
         lightingStatus_+=" · "+std::to_string(planetLiveSnapshot_["forest"]["plants"].size())+"/"+std::to_string(planetLiveSnapshot_["forest"].getInt("focusPlantCount"))+" sampled plants";
+        if(planetLiveSnapshot_["forest"].getBool("cameraPrioritized"))lightingStatus_+=" · camera priority";
     }
     if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
     if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||!planetForestRejectedLogs_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";

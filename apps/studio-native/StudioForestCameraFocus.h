@@ -3,6 +3,8 @@
 #include "engine/render/Math3D.h"
 #include <cmath>
 #include <string>
+#include <optional>
+#include <limits>
 #include <tuple>
 namespace aiverse::studio {
 struct StudioForestCameraFocus {
@@ -19,15 +21,19 @@ struct StudioForestCameraFocus {
     }
     // Conservative ranking only: not visibility culling. Behind-horizon or
     // offscreen plants may still be included if spare capacity remains.
-    std::tuple<int,float,float> rank(render::float3 p,float radius)const{
+    render::mat4 viewProjection()const{return camera.proj(float(width)/float(height),false)*camera.view();}
+    std::tuple<int,float,float> rank(render::float3 p,float radius,const render::mat4& clip)const{
         const auto eye=camera.eye(),toEye=camera.ortho?eye-camera.target:eye-p;
         const float d2=render::dot(p-eye,p-eye);
         const float target2=render::dot(p-camera.target,p-camera.target);
         const float horizon=render::dot(render::normalize(p),render::normalize(toEye));
         const bool facing=render::dot(eye,eye)<=radius*radius||horizon>=-.08f;
-        render::float2 screen{};
-        const bool projected=camera.worldToScreen(p,float(width),float(height),screen);
-        const bool onScreen=projected&&screen.x>=-32&&screen.y>=-32&&screen.x<=width+32&&screen.y<=height+32;
+        const auto projected=clip*render::float4{p.x,p.y,p.z,1.f};
+        const bool positive=projected.w>.0001f;
+        const float x=positive?(projected.x/projected.w*.5f+.5f)*width:0.f;
+        const float y=positive?(1.f-(projected.y/projected.w*.5f+.5f))*height:0.f;
+        const bool onScreen=positive&&x>=-32&&y>=-32&&x<=width+32&&y<=height+32;
+        if(!std::isfinite(d2)||!std::isfinite(target2))return {2,std::numeric_limits<float>::max(),std::numeric_limits<float>::max()};
         return {facing&&onScreen?0:facing?1:2,d2,target2};
     }
 };

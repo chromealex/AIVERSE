@@ -55,6 +55,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     };
     std::vector<RankedPlant> ranked;ranked.reserve(roots->rooted.size());
     size_t nearView=0;
+    const auto cameraClip=cameraRank?camera->viewProjection():render::mat4{};
     for(const auto& plant:roots->rooted){
         RankedPlant entry;entry.plant=&plant;
         if(cameraRank){
@@ -80,7 +81,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
                     }
                     const auto local=point-anchor;
                     const render::float3 p{float(local.x.toDouble()),float(local.y.toDouble()),float(local.z.toDouble())};
-                    const auto [group,distance,targetDistance]=camera->rank(p,float(surface.bodies[size_t(frame->body)].radius.toDouble()));
+                    const auto [group,distance,targetDistance]=camera->rank(p,float(surface.bodies[size_t(frame->body)].radius.toDouble()),cameraClip);
                     const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),id,
                         [](const auto& r,auto key){return r.id<key;});
                     const bool retired=(log!=wood->ledger.logs.end()&&log->id==id&&!log->remainingUnits)||
