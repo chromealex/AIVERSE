@@ -138,6 +138,14 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 
 Set `"preciseCooldown": true` on a weapon with a positive `cooldown` in seconds. The shared fixed-point cadence policy carries a crossed-zero remainder into the next accepted shot and permits multiple targeted shots during one simulation tick. It discards unused credit at the tick boundary (idle, invalid target, stun, or blocked fire) and limits each weapon to 32 accepted shots per tick. Accuracy is subject to the existing fixed-point simulation timestep and that safety budget. Charged weapons retain their existing charging gate and are limited to one shot per tick. Without the opt-in, old timing remains unchanged. The existing Combat cooldown array stores the next remaining time; precise weapon slots are also included in the checksum. Targeted combat and TopDown free-fire share one pre-movement cadence advance for opt-in slots. Arsenal has one shared hand cooldown across weapon selection and uses the same policy, with finite ammo and held-fire burst limits; a queued single tap authorizes one shot. Its opt-in save extension is tagged ACW1 and legacy Arsenal saves without precise weapons retain their old layout. Native ECS Weapon Launch can opt in with `WeaponParametersComponent.firePeriod` (positive seconds); the owner persists and hashes `WeaponStateComponent.remainingCooldown`. A single native intent authorizes the current tick's burst; zero period keeps integer `fireInterval`. ActorModule's separate FPS firing adapter remains integer-based.
 
+### Fitted weapon projectile arcs
+
+```json
+{"projectileSpeed":12,"flight":{"arc":true,"arcHeightPerDistance":0.3,"homing":true,"maxDistance":60}}
+```
+
+A weapon flight can opt in to a target-fitted arc without manually calculating gravity. `arcHeight` sets a constant apex offset, `arcHeightPerDistance` sets a proportional offset, and both may be added together. The default ratio is 0.25 if no constant is specified. Flight fits to the initial ground distance and effective projectile speed, with a minimum duration of 0.1 s. Homing updates the aim while keeping the original deadline. Swept collisions and range/lifetime limits can end the flight sooner. Flat maps and same-body planetary surfaces use the existing projectile program; no new save layout is needed. See docs/projectile-programs.md for branch and compatibility behavior.
+
 ### Weapon-scaled damage and healing
 
 Damage and heal effects can use `weaponDamage` instead of a fixed `amount` or `percent`. It is a nonnegative multiplier (0–1000) of the selected weapon's authored damage times the caster's current authoritative Damage stat. Optional `weaponIndex` selects an authored weapon slot, zero-based (default 0; not the implicitly equipped/triggering weapon). Example:
