@@ -1,6 +1,9 @@
 // SpectraFX editor/MCP graph authoring end-to-end regression.
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "cloth/FakeDevice.h"
+#include <set>
 #include "engine/render/graph/GraphTelemetry.h"
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
@@ -20,7 +23,57 @@ static void require(bool yes, const char* reason) {
     if (!yes) throw std::runtime_error(reason);
 }
 
+// A synthetic readback fixture verifies only scheduling and owner lifecycle,
+// not actual shader execution. The authored scalar graph evaluates to white.
+struct DagFixtureDevice : FakeDevice {
+    std::set<uint32_t> pipelines;
+    BufferReadFn pending;
+    size_t readBytes=0;
+    uint64_t completed=0;
+    bool reject=false;
+    DagFixtureDevice(){info_.backend=gfx::Backend::Vulkan;computeEnabled=true;beginFrame(1,1);}
+    uint64_t gpuSubmissionFence()const override{return 1;}
+    uint64_t gpuCompletedFence()const override{return completed;}
+    gfx::ComputeHandle createCompute(const gfx::ComputeDesc& d)override{
+        auto h=FakeDevice::createCompute(d);if(h.valid())pipelines.insert(h.id);return h;
+    }
+    void destroyCompute(gfx::ComputeHandle h)override{pipelines.erase(h.id);}
+    bool dispatchChecked(uint32_t x,uint32_t y=1)override{
+        if(reject)return false;dispatch(x,y);return true;
+    }
+    bool readBufferRangeAsync(gfx::BufferHandle h,size_t offset,size_t size,BufferReadFn fn)override{
+        if(pending||!buffers.contains(h.id)||offset+size>buffers.at(h.id).size())return false;
+        pending=std::move(fn);readBytes=size;return true;
+    }
+    void deliver(){auto fn=std::move(pending);pending={};fn(std::vector<uint8_t>(readBytes,255));}
+};
+static void checkMaterializedOwner(){
+    DagFixtureDevice dev;
+    editor::TextureGraphGpuPreview owner;
+    const auto args=Json::parse(R"({"action":"start","materialized":true,"requireGpu":true,"bakeSet":true,"graph":{"version":1,"size":8,"nodes":[{"id":"a","op":"constant","inputs":[],"properties":{"value":1}},{"id":"b","op":"multiply","inputs":["a","a"]}],"outputs":{"ao":"a","height":"b","roughness":"a"}}})");
+    owner.start(args,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getInt("materializedNodePasses")==2&&owner.status().getInt("materializedPackPasses")==1&&bool(dev.pending),"materialized owner did not encode DAG and first pack");
+    require(!dev.buffers.empty()&&!dev.pipelines.empty(),"materialized resources not retained for pending read");
+    dev.deliver();owner.tick(dev,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getInt("materializedNodePasses")==2&&owner.status().getInt("materializedPackPasses")==2&&bool(dev.pending),"second output recomputed shared DAG");
+    dev.deliver();owner.tick(dev,"fixture");
+    auto status=owner.status();
+    require(status.getStr("state")=="ready"&&status.getInt("completedOutputs")==3&&status.getInt("reusedOutputs")==1,"materialized output set failed");
+    require(dev.buffers.empty()&&dev.pipelines.empty(),"completed materialized resources not released");
+    auto started=owner.start(args,"fixture");owner.tick(dev,"fixture");
+    Json cancel=Json::object();cancel.set("request",started["request"]);
+    owner.cancel(cancel,"fixture");
+    require(owner.status().getBool("draining")&&!dev.buffers.empty(),"cancel freed in-flight GPU storage");
+    dev.deliver();owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"cancel did not retire materialized storage");
+    dev.reject=true;owner.start(args,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getStr("state")=="failed"&&owner.status().getBool("draining")&&!dev.buffers.empty(),"partial dispatch rejection lost retirement");
+    dev.completed=1;owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"failed dispatch fence did not retire");
+    owner.shutdownAfterIdle(dev);
+}
 int main() {
+    checkMaterializedOwner();
     {
         using namespace render::texture_graph;
         const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[1,0,0]}},{"id":"s","op":"constant","inputs":[],"properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));

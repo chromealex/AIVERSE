@@ -4,6 +4,8 @@
 #include "engine/render/graph/TextureGraphPipelineCache.h"
 #include "engine/render/graph/TextureGraphSharedScratch.h"
 #include "engine/render/graph/TextureGraphPassSchedule.h"
+#include "engine/render/graph/TextureGraphMaterializedDispatch.h"
+#include <array>
 #include <limits>
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/view/AppearanceAssetRegistry.h"
@@ -19,6 +21,14 @@ class TextureGraphGpuPreview {
     struct Read {bool done=false;size_t offset=0,expected=0;std::vector<uint8_t> bytes;};
     std::shared_ptr<Read> read_;
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
+    // Materialized resources belong to this SAME frame-boundary owner.
+    // They never enter the fused idle cache and are retained until readback/fence retirement.
+    std::optional<render::texture_graph::gpu::MaterializedSources> matSources_;
+    std::vector<gfx::BufferHandle> matSlots_;
+    std::vector<gfx::ComputeHandle> matNodes_,matPacks_;
+    uint64_t matSerial_=0;
+    size_t matBytes_=0,matNodePasses_=0,matPackPasses_=0;
+    bool matRequested_=false,matFailed_=false,matEncoded_=false;
     using PipelineKey=render::texture_graph::gpu::PipelineCacheKey;
     using PipelineCache=render::texture_graph::gpu::IdlePipelineCache<gfx::ComputeHandle>;
     PipelineKey activeKey_;
@@ -61,11 +71,12 @@ class TextureGraphGpuPreview {
     std::string project_,state_="idle",reason_,backend_="none",submittedBackend_,output_;
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false;
-    bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid();}
+    bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0;}
-    void abandon(){sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
-    void release(gfx::Device& dev){clearIdle(dev);if(compute_.valid())dev.destroyCompute(compute_);if(secondCompute_.valid())dev.destroyCompute(secondCompute_);if(buffer_.valid())dev.destroyBuffer(buffer_);if(scratch_.valid())dev.destroyBuffer(scratch_);abandon();}
+    void abandon(){matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void release(gfx::Device& dev){for(auto h:matNodes_)if(h.valid())dev.destroyCompute(h);for(auto h:matPacks_)if(h.valid())dev.destroyCompute(h);for(auto h:matSlots_)if(h.valid())dev.destroyBuffer(h);clearIdle(dev);if(compute_.valid())dev.destroyCompute(compute_);if(secondCompute_.valid())dev.destroyCompute(secondCompute_);if(buffer_.valid())dev.destroyBuffer(buffer_);if(scratch_.valid())dev.destroyBuffer(scratch_);abandon();}
     void fallback(const std::string& why){
+        if(matRequested_)matFailed_=true;
         sharedScratch_.invalidate();reusedScratch_=false;
         reason_=why;queued_=false;backend_="none";
         if(requireGpu_){state_="failed";pixels_.clear();return;}
@@ -80,7 +91,7 @@ class TextureGraphGpuPreview {
             if(ref.rgba.size()!=pixels_.size())valid=false;
             else for(size_t i=0;i<pixels_.size();++i)if(std::abs(int(pixels_[i])-int(ref.rgba[i]))>1){valid=false;break;}
         }catch(...){valid=false;}
-        if(valid){sharedScratch_.accept();if(reusedScratch_)++sharedScratchHits_;activePlanAccepted_=true;state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
+        if(valid){sharedScratch_.accept();if(reusedScratch_)++sharedScratchHits_;activePlanAccepted_=!matRequested_;state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
         else fallback("GPU readback or CPU parity check failed");
     }
     // Collect only a completed output. Multiple named outputs pointing to
@@ -113,6 +124,86 @@ class TextureGraphGpuPreview {
         if(!dev.readBufferRangeAsync(buffer_,read->offset,read->expected,callback))return false;
         read_=std::move(read);fence_=dev.gpuSubmissionFence();inFlight_=true;return true;
     }
+    // Called only when no previous readback/submission is outstanding.
+    // RHI barriers order the node dispatches within the frame. All materialized
+    // slots remain pinned until the last packed output is accepted or retired.
+    void submitMaterialized(gfx::Device& dev,bool metal){
+        using namespace render::texture_graph::gpu;
+        try{
+            const auto token=dev.gpuSubmissionFence();
+            if(!token){fallback("materialized DAG requires a native submission fence");return;}
+            const bool first=!matSources_;
+            if(first){
+                // Drop idle fused allocations before admitting the 32 MiB DAG.
+                if(ownsResources())release(dev);
+                std::vector<size_t> targets;
+                if(setBake_){for(const auto& pair:setOutputs_)targets.push_back(pair.second);}
+                else targets.push_back(target_);
+                matSources_=compileMaterializedDag(*program_,targets,size_);
+                matSerial_=serial_;
+                auto& sources=*matSources_;
+                matSlots_.resize(sources.plan.schedule.slotBytes.size());
+                matNodes_.resize(sources.nodes.size());
+                matPacks_.resize(sources.packs.size());
+                // Any partial creation or submission belongs to this fence.
+                fence_=token;inFlight_=true;
+                auto create=[&](const Source& source){
+                    return dev.createCompute({metal?source.msl.c_str():nullptr,metal?nullptr:source.glsl.c_str(),"TextureGraph materialized"});
+                };
+                for(const auto& pass:sources.plan.schedule.passes){
+                    auto& h=matNodes_.at(pass.pipeline);
+                    h=create(sources.nodes.at(pass.pipeline));
+                    if(!h.valid())throw std::runtime_error("materialized node pipeline rejected");
+                }
+                for(size_t i=0;i<matPacks_.size();++i){
+                    matPacks_[i]=create(sources.packs[i]);
+                    if(!matPacks_[i].valid())throw std::runtime_error("materialized packing pipeline rejected");
+                }
+                gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.label="TextureGraph materialized slot";
+                for(size_t i=0;i<matSlots_.size();++i){
+                    desc.size=sources.plan.schedule.slotBytes[i];
+                    matSlots_[i]=dev.createBuffer(desc);
+                    if(!matSlots_[i].valid())throw std::runtime_error("materialized slot allocation rejected");
+                    matBytes_+=desc.size;
+                }
+                desc.size=sources.resultBytes;desc.label="TextureGraph packed result";
+                buffer_=dev.createBuffer(desc);
+                if(!buffer_.valid())throw std::runtime_error("materialized result allocation rejected");
+                capacity_=desc.size;
+            }
+            auto& sources=*matSources_;
+            if(matSerial_!=serial_||(!first&&!matEncoded_))throw std::logic_error("stale materialized execution");
+            const size_t index=setBake_?setImages_.size():0;
+            if(index>=sources.packs.size())throw std::logic_error("invalid materialized output ordinal");
+            const auto pixels=uint32_t(sources.resultBytes/4);
+            // Allocate CPU output before encoding work; failures still retain
+            // any newly created handles through the owner retirement path.
+            pixels_.assign(sources.resultBytes,0);
+            submittedBackend_=metal?"metal":"vulkan";
+            plannedPasses_=(first?sources.plan.schedule.passes.size():0)+1;
+            plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
+            fence_=token;inFlight_=true;
+            if(first){
+                const auto result=encodePassSchedule(sources.plan.schedule,materializedBudgetBytes-sources.resultBytes,[&](const ScheduledPass& pass){
+                    std::array<gfx::BufferHandle,3> inputs{};
+                    if(pass.inputs.size()>inputs.size())return false;
+                    for(size_t i=0;i<pass.inputs.size();++i)inputs[i]=matSlots_.at(pass.inputs[i]);
+                    if(!dispatchMaterializedPass(dev,matNodes_.at(pass.pipeline),matSlots_.at(pass.output),
+                            std::span<const gfx::BufferHandle>(inputs.data(),pass.inputs.size()),pixels,metal))return false;
+                    ++passes_;++matNodePasses_;return true;
+                });
+                if(!result.complete)throw std::runtime_error("materialized node dispatch rejected");
+                matEncoded_=true;
+            }
+            const std::array<gfx::BufferHandle,1> input{matSlots_.at(sources.plan.outputSlots.at(index))};
+            if(!dispatchMaterializedPass(dev,matPacks_.at(index),buffer_,
+                    std::span<const gfx::BufferHandle>(input),pixels,metal))
+                throw std::runtime_error("materialized output packing rejected");
+            ++passes_;++matPackPasses_;
+            state_="pending";
+            if(!queueRange(dev))fallback("materialized readback request rejected");
+        }catch(const std::exception& e){fallback(e.what());}
+    }
 public:
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
@@ -134,7 +225,11 @@ public:
         r.set("idlePipelinePlans",Json::number(int64_t(idlePipelines_.size())));
         r.set("reusedScratch",Json::fromBool(reusedScratch_));
         r.set("sharedScratchHits",Json::number(int64_t(sharedScratchHits_)));
-        r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
+        r.set("materializedRequested",Json::fromBool(matRequested_));
+        r.set("materializedFailed",Json::fromBool(matFailed_));
+        r.set("materializedNodePasses",Json::number(int64_t(matNodePasses_)));
+        r.set("materializedPackPasses",Json::number(int64_t(matPackPasses_)));
+        r.set("retainedBufferBytes",Json::number(int64_t(matBytes_+capacity_*(scratch_.valid()?2:1))));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
             // Full-size images never cross the JSON bridge.
@@ -156,6 +251,7 @@ public:
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
+        matRequested_=p.getBool("materialized");matFailed_=false;matNodePasses_=matPackPasses_=0;
         ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
@@ -228,13 +324,19 @@ public:
                 }
             }else release(dev);
         }else if(inFlight_&&!read_&&fence_&&dev.gpuCompletedFence()>=fence_&&dev.gpuHealthy())release(dev);
+        if(!inFlight_&&matSources_&&(matSerial_!=serial_||!matRequested_||matFailed_||!active()))release(dev);
         if(project_.empty()&&!inFlight_&&ownsResources())release(dev);
         if(setBake_&&state_=="failed"){setImages_.clear();setBackends_.clear();}
-        if(setPending()&&state_=="ready"&&!inFlight_){advanceSet();return;}
+        if(setPending()&&state_=="ready"&&!inFlight_){advanceSet();if(!setPending()&&matSources_)release(dev);return;}
         if(!queued_)return;
         queued_=false;
         const bool metal=dev.info().backend==gfx::Backend::Metal,vulkan=dev.info().backend==gfx::Backend::Vulkan;
         if((!metal&&!vulkan)||!dev.supportsCompute()||!dev.gpuHealthy()){fallback("Metal/Vulkan compute unavailable");return;}
+        if(matRequested_){
+            if(matFailed_)fallback("materialized request previously failed; CPU fallback");
+            else submitMaterialized(dev,metal);
+            return;
+        }
         auto plan=render::texture_graph::gpu::plan(*program_,target_,size_,setBake_);
         if(plan.first.msl.empty()){fallback(plan.first.reason);return;}
         scratchBytes_=plan.scratchBytes;submittedBackend_=metal?"metal":"vulkan";

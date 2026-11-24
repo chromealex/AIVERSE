@@ -108,7 +108,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34D in progress: opt-in native materialized dispatch through existing owner, bounded request lifetime and ordered output packing.",
+      "note": "Stage 34D opt-in native materialized DAG dispatch integrated through existing preview owner; actual GPU/compiler and integrated host validation pending.",
       "evidence": []
     },
     "architecture": {
@@ -178,7 +178,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 34C isolated exact-blob C++20 kernel ABI/source test PASS (GCC 14.2, -Wall -Wextra -Werror); integrated source fixture, shader compiler, native/Studio/GPU and Mac gate NOT RUN.",
+      "note": "Stage 34D exact-source standalone C++20 mock dispatch adapter PASS on GCC 14.2 and Clang 17 (-Wall -Wextra -Werror); integrated synthetic owner fixture authored, NOT RUN; hardware/Studio/MCP/merged-tree gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
