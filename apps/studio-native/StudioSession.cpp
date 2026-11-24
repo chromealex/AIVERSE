@@ -31,6 +31,7 @@
 #include "engine/character/vivid/MetaHumanAdapter.h"
 #include <algorithm>
 #include "apps/editor/core/MaterialOps.h"
+#include "libraries/include/aiverselib/mechanics/SpectraSourceDocument.h"
 #include <cctype>
 #include <cmath>
 #include <functional>
@@ -175,6 +176,15 @@ Json genericField(const std::string& key,const Json& value) {
 }
 // Map "facing" is clockwise degrees seen from above; Transform rotation Y is
 // right-handed (counter-clockwise). Both normalized to [0,360).
+// Validate a published graph through the shared Workspace compiler before
+// writing a source declaration. Preview-only drafts are not placeable.
+void requireStudioSpectraGraph(editor::Workspace& ws,const std::string& name){
+    if(!lib::mechanics::validSpectraSourceName(name))throw std::runtime_error("Invalid SpectraFX effect name");
+    Json args=Json::object();args.set("name",str(name));
+    const auto result=ws.call("fx_graph_get",args,"studio");
+    if(result.has("error")||!result["validation"].getBool("ok")||result["graph"].getInt("version")!=2)
+        throw std::runtime_error("Choose a published valid SpectraFX Graph v2");
+}
 double studioFacingToYaw(double facing){double y=std::fmod(360.0-std::fmod(facing,360.0),360.0);return y<0?y+360.0:y;}
 bool studioModelAssetPath(const std::string& path) {
     if(path.rfind("content/",0)!=0 || path.size()>512 || path.find("..")!=std::string::npos || path.find('\\')!=std::string::npos)
@@ -215,6 +225,8 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
     item("MeshRenderer","Mesh Renderer","Rendering","Model and material slots (built-in cube by default)","native",
         !comps.has("StaticModel") && !water,comps.has("StaticModel")?"Already on this entity":water?"Water entities are drawn by NEREID":
         (editor::authoredEntity(e)?"":"Replaces the look from rules.json for this entity only"));
+    item("SpectraSource","VFX Renderer","Rendering","Authored SpectraFX source (native host presentation binding required)","native",
+        !comps.has("SpectraSource"),comps.has("SpectraSource")?"Already on this entity":"");
     item("Light","Point Light","Rendering","Adds a light entity at this position","light",true,"");
     item("NereidWater","NEREID Water","World","Rivers, lakes and sea are authored in World › NEREID Water","water",false,"Create water from the NEREID Water panel");
     item("Unit","Unit","Gameplay","Type, owner and stats come from rules.json","native",false,"Defined by the entity type");
@@ -342,6 +354,17 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             components.push(component("Unit","Unit",unit));
             for(const auto& [name,value]:comps.members()) {
                 if(name=="Transform"||name=="StaticModel")continue;
+                if(name=="SpectraSource"){
+                    Json fields=Json::array();
+                    fields.push(prop("effect","Effect","text",value["effect"]));
+                    auto scale=numericProp("scale","Effect scale",value["scale"]);
+                    scale.set("min",Json::number(.001));scale.set("max",Json::number(100.0));fields.push(scale);
+                    fields.push(prop("enabled","Enabled","boolean",value["enabled"]));
+                    fields.push(prop("killOnDetach","Kill on detach","boolean",value["killOnDetach"]));
+                    fields.push(readOnly(numericProp("revision","Revision",value["revision"],true)));
+                    components.push(component("SpectraSource","VFX Renderer",fields,"Authored source; runtime host binding required."));
+                    continue;
+                }
                 Json fields=Json::array();
                 if(value.isObject())for(const auto& [key,item]:value.members())fields.push(genericField(key,item));
                 else fields.push(genericField("value",value));
@@ -2180,13 +2203,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             if (ws_.map.data.worldSpace) throw std::runtime_error("This operation requires a map entity document");
             const std::string asset=params.getStr("asset");
+            const bool isFx=asset.rfind("spectrafx:",0)==0;
+            const std::string fxName=isFx?asset.substr(10):std::string();
+            if(isFx)requireStudioSpectraGraph(ws_,fxName);
             for(const char* key:{"x","z"}){const double v=params[key].toDouble(NAN);if(!std::isfinite(v)||std::abs(v)>1000000)throw std::runtime_error("Drop position out of range");}
             std::string type;
             for(const char* candidate:{"prop","props","decor","decoration","scenery","doodad","static"})
                 if(ws_.project.rules.findType(candidate)>=0){type=candidate;break;}
-            if(type.empty() && !selected_.empty() && selected_.compare(0,7,"entity:")==0)
+            if(!isFx && type.empty() && !selected_.empty() && selected_.compare(0,7,"entity:")==0)
                 type=ws_.map.data.entities.at(size_t(indexFor(selected_))).type;
-            if(type.empty())throw std::runtime_error("Add a scenery type (\"prop\") to rules.json, or select an entity whose type to use");
+            if(type.empty())throw std::runtime_error(isFx?"VFX placement requires a neutral scenery type (prop)":"Add a scenery type (\"prop\") to rules.json, or select an entity whose type to use");
             Json place=Json::object();place.set("type",str(type));place.set("x",params["x"]);place.set("z",params["z"]);place.set("owner",num(int64_t(0)));
             const size_t depth=ws_.map.undoDepth();
             try {
@@ -2194,10 +2220,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(placed.has("error"))throw std::runtime_error(placed.getStr("error"));
                 const int index=int(ws_.map.data.entities.size())-1;
                 auto candidate=promotedAuthored(index);
-                auto components=candidate.extra["components"];components.set("StaticModel",Json::object());candidate.extra.set("components",components);
+                auto components=candidate.extra["components"];
+                if(isFx){
+                    lib::mechanics::SpectraSourceComponent source;source.effect=fxName;
+                    components.set(lib::mechanics::kSpectraSourceDocumentKey,lib::mechanics::writeSpectraSourceDocument(source));
+                }else components.set("StaticModel",Json::object());
+                candidate.extra.set("components",components);
                 ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
                 const std::string id=studioDocumentId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(index)));
-                if(!asset.empty())setMeshRenderer(index,"asset",str(asset)); // validates the path
+                if(!isFx&&!asset.empty())setMeshRenderer(index,"asset",str(asset)); // validates the path
                 selectOnly(id);
             } catch(...) { ws_.map.abandonSince(depth); throw; }
             ws_.map.mergeUndoSince(depth);
@@ -2552,6 +2583,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const auto& source=ws_.map.data.entities[size_t(index)];
             auto candidate=source;
             if(method=="studio.componentAdd") {
+                if(componentId=="SpectraSource"){
+                    if(source.extra["components"].has("SpectraSource"))throw std::runtime_error("VFX Renderer is already on this entity");
+                    candidate=promotedAuthored(index);
+                    auto components=candidate.extra["components"];
+                    lib::mechanics::SpectraSourceComponent fx;fx.enabled=false;
+                    components.set(lib::mechanics::kSpectraSourceDocumentKey,lib::mechanics::writeSpectraSourceDocument(fx));
+                    candidate.extra.set("components",components);
+                    ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
+                    reply.set("result",snapshot());return reply;
+                }
                 if(componentId!="MeshRenderer")throw std::runtime_error("This component cannot be added here");
                 if(source.extra["components"].has("StaticModel"))throw std::runtime_error("Mesh Renderer is already on this entity");
                 if(source.extra["components"].has("NereidWater"))throw std::runtime_error("Water entities are drawn by NEREID");
@@ -2639,6 +2680,26 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (entityId.empty()) throw std::runtime_error("Missing document entity ID");
             const std::string key = params.getStr("key");
             const Json& value = params["value"];
+            if(params.getStr("componentId")=="SpectraSource"){
+                const int index=indexFor(entityId);
+                auto candidate=ws_.map.data.entities.at(size_t(index));
+                auto components=candidate.extra["components"];
+                auto doc=components["SpectraSource"];
+                if(!doc.isObject())throw std::runtime_error("VFX Renderer is not on this entity");
+                if(key!="effect"&&key!="scale"&&key!="enabled"&&key!="killOnDetach")
+                    throw std::runtime_error("Unknown VFX Renderer property");
+                if(doc[key]==value){reply.set("result",snapshot());return reply;}
+                doc.set(key,value);
+                auto source=lib::mechanics::readSpectraSourceDocument(doc);
+                if(key=="effect"&&!source.effect.empty())requireStudioSpectraGraph(ws_,source.effect);
+                if(source.enabled&&source.effect.empty())throw std::runtime_error("Choose an effect before enabling");
+                if(source.revision==UINT32_MAX)throw std::runtime_error("VFX revision exhausted");
+                ++source.revision;
+                components.set("SpectraSource",lib::mechanics::writeSpectraSourceDocument(source));
+                candidate.extra.set("components",components);
+                ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
+                reply.set("result",snapshot());return reply;
+            }
             if(params.getStr("componentId")=="MeshRenderer") {
                 reply.set("result",setMeshRenderer(indexFor(entityId),key,value));
                 return reply;

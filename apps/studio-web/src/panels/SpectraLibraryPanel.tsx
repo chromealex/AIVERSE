@@ -106,7 +106,14 @@ export default function SpectraLibraryPanel({projectPath,showPanel}:{projectPath
         {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
         <small>{loading?'Loading…':filtered.length+' effects'}</small>
         <div className="spectra-library__grid">
-          {filtered.map(entry=><div className="spectra-library__tile" key={id(entry)}>
+          {filtered.map(entry=><div className="spectra-library__tile" key={id(entry)}
+            draggable={!entry.draft&&entry.valid}
+            onDragStart={e=>{
+              if(entry.draft||!entry.valid){e.preventDefault();return;}
+              e.dataTransfer.effectAllowed='copy';
+              e.dataTransfer.setData('text/plain','aiverse-asset:spectrafx:'+entry.name);
+            }}>
+            {!entry.draft&&entry.valid&&<small>Drag to Scene (neutral scenery type required)</small>}
             <StudioButton variant="ghost" onClick={()=>setSelected(entry)}>{entry.name}</StudioButton>
             <small>{entry.draft?'Draft':'Published'} · {entry.valid?'Valid':'Check graph'}</small>
             <small>{(prefs[id(entry)]?.tags??[]).join(' · ')}</small>
