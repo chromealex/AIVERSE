@@ -199,7 +199,7 @@ export interface StudioParams {
   'studio.buildingRecipes': Record<string,never>;
   'studio.buildingReadRecipe': {recipe:string};
   'studio.buildingTextureProvenance': {guid:string};
-  'studio.buildingGraphOverlay': {sceneId:string};
+  'studio.buildingGraphOverlay': {sceneId:string;layers?:number};
   'studio.buildingInspect': StudioBuildingRequest & {routeQuery?:import('./graphs/buildingRoomTopology').BuildingRouteQuery};
   'studio.buildingPreview': StudioBuildingRequest;
   'studio.buildingPreviewStop': Record<string,never>;
