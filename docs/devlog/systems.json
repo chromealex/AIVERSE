@@ -1828,10 +1828,10 @@
           "textEn": "LENS owns attachment snapshots; runtime images isolated from file cache and name deduplication. Integrated verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38U (в работе)",
-          "text": "Проверка поколения при picking, VT feedback и создании impostor.",
-          "nameEn": "Texture Graph GPU — Stage 38U (in progress)",
-          "textEn": "Generation checks in picking, VT feedback and impostor sampling."
+          "name": "Texture Graph GPU — Stage 38U (частично)",
+          "text": "Picking, VT feedback и статический impostor проверяют поколение привязки. Добавлены регрессии устаревшего слота; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38U (partial)",
+          "textEn": "Picking, VT feedback and static impostors validate image generation. Stale-slot regression authored; integration pending."
         }
       ],
       "enables": [
