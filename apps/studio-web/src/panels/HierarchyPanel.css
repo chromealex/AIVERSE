@@ -1,4 +1,4 @@
-/* Dense Hierarchy: search always on top, 20px rows. Colors from --au-* tokens. */
+/* Dense Hierarchy: search always on top, compact rows. Colors from --au-* tokens. */
 .hier{display:flex;flex-direction:column;height:100%;min-height:0;font-size:var(--au-font-sm)}
 .hier__toolbar{display:flex;gap:4px;align-items:center;padding:4px;border-bottom:1px solid var(--au-line);flex:none}
 .hier__search{display:flex;align-items:center;gap:5px;flex:1;min-width:0;height:22px;padding:0 6px;
@@ -16,7 +16,7 @@
 .hier__error button{margin-left:auto;border:0;background:transparent;color:inherit;cursor:pointer}
 .hier__list{flex:1;min-height:0;overflow:auto;padding:2px 0}
 .hier__empty{margin:8px;color:var(--au-text-faint)}
-.hier__row{position:relative;display:flex;align-items:center;gap:5px;height:20px;padding-right:6px;
+.hier__row{position:relative;display:flex;align-items:center;gap:5px;height:25px;padding-right:6px;
   cursor:default;user-select:none;color:var(--au-text-soft);white-space:nowrap}
 .hier__row:hover{background:var(--au-hover)}
 .hier__row.is-selected{background:var(--au-active);color:var(--au-text)}
@@ -35,6 +35,6 @@
 .hier__row.is-selected:not(.is-primary){background:color-mix(in srgb,var(--studio-selection) 70%,transparent)}
 .hier__row.is-hidden .hier__name,.hier__row.is-hidden .hier__icon{opacity:.45}
 .hier__flag{width:18px;height:18px;flex:none;display:grid;place-items:center;border:0;border-radius:4px;background:none;color:var(--au-text-faint);cursor:pointer;opacity:0}
-.hier__row:hover .hier__flag,.hier__flag.is-on{opacity:1}
+.hier__row:hover .hier__flag,.hier__row:focus-within .hier__flag,.hier__flag.is-on{opacity:1}
 .hier__flag.is-on{color:var(--au-text-soft)}
 .hier__flag:hover{background:var(--au-hover);color:var(--au-text)}

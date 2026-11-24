@@ -10,6 +10,7 @@ import {
   saveWorkspaceDock, workspaceDockTree, type StudioWorkspace
 } from './workspaces';
 import type { CommandEntry } from './commandSearch';
+import { StudioDialog } from './ui';
 import CommandPalette from './components/CommandPalette';
 import PanelErrorBoundary from './components/PanelErrorBoundary';
 import { ProjectLoadingDialog, SceneLoadingStrip, sceneLoadingText, useProjectLoading } from './components/ProjectLoading';
@@ -505,7 +506,7 @@ export default function App() {
   const paletteEntries = useMemo<CommandEntry[]>(() => {
     const out: CommandEntry[] = [];
     for (const menu of menus) for (const item of menu.items()) {
-      if (item.caption || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
+      if (item.children || item.caption || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
       out.push({ id: 'menu:' + menu.id + ':' + item.id, kind: 'command', title: item.label, hint: menu.label,
         shortcut: item.shortcut, disabled: item.disabled, run: item.onSelect });
     }
@@ -605,8 +606,8 @@ export default function App() {
     {FLOAT ? <ProjectLoadingDialog state={loading} onClose={clearLoading}/> : <ProjectSplash state={loading} onClose={clearLoading} onHub={() => setHubOpen(true)}/>}
     {dockHover && <div className="dock-drop-hint" data-native-overlay role="status">Release to dock the window's tabs here</div>}
     {tourOpen && !FLOAT && <WelcomeTour onClose={() => setTourOpen(false)}/>}
-    {hubOpen && !FLOAT && <div className="hub-modal" role="dialog" aria-modal="true" aria-label="Project hub" data-native-overlay onMouseDown={e => { if (e.target === e.currentTarget) setHubOpen(false); }}>
-      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></div>}
+    {hubOpen && !FLOAT && <StudioDialog className="hub-modal" label="Project hub" onDismiss={() => setHubOpen(false)}>
+      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
     <StudioStatusBar snapshot={snapshot} connected={connected} game={game} action={sceneAction || sceneLoadingText(loading)}
       onOpenConsole={() => { showPanel('console');
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:console-filter', { detail: 'error' })), 0); }}/>

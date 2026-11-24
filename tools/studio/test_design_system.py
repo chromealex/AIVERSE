@@ -9,7 +9,7 @@ COMPONENTS=(
     "StudioPanel", "StudioButton", "StudioIconButton", "StudioSection",
     "StudioField", "StudioInput", "StudioSelect", "StudioTextarea",
     "StudioCheckbox", "StudioBadge", "StudioAlert", "StudioEmptyState",
-    "StudioSkeleton", "StudioTabs", "StudioListRow", "StudioProgress"
+    "StudioSkeleton", "StudioTabs", "StudioListRow", "StudioProgress", "StudioDialog"
 )
 SHARED_CLASSES=(
     "au-panel", "au-panel__header", "au-panel__body", "au-panel__footer",

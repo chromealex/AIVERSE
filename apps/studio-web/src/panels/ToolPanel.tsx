@@ -64,11 +64,13 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
       {open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
       <b>{opLabel(op.name, prefix)}</b>
       {op.readOnly && <span className="tool__tag">read</span>}
-
     </button>
     {open && <div className="tool__cardbody">
-      <code className="tool__op-name">{op.name}</code>
-      {op.description && <p className="tool__description">{op.description}</p>}
+      <details className="tool__reference">
+        <summary>Operation details</summary>
+        <code className="tool__op-name">{op.name}</code>
+        {op.description && <p className="tool__description">{op.description}</p>}
+      </details>
       {fields.length > 0 && <div className="tool__fields">
         {fields.map(f => <FieldInput key={f.key} field={f} value={drafts[f.key] ?? ''} error={errors[f.key]}
           onChange={v => setDrafts(d => ({ ...d, [f.key]: v }))}/>)}

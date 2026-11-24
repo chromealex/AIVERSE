@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 /** AIVERSE Studio UI: stable, genre-independent visual building blocks.
  * Import from "../ui" (path relative to panel). UI state lives in React;
  * engine data/actions MUST go via typed ../bridge, never via these components.
@@ -170,4 +171,23 @@ export function StudioProgress({value,max=100,label,className}:StudioProgressPro
     className={classes('au-progress',className)}>
     <div className="au-progress__bar" style={{width:safe+'%'}}/>
   </div>;
+}
+
+/** Window-sized overlay with browser-managed focus containment and restoration. */
+export function StudioDialog({ label, className, onDismiss, dismissOnBackdrop = true, children }: {
+  label: string; className: string; onDismiss: () => void; dismissOnBackdrop?: boolean; children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  return <dialog ref={ref} className={classes('au-dialog', className)} role="dialog"
+    aria-modal="true" aria-label={label} data-native-overlay
+    onCancel={event => { event.preventDefault(); onDismiss(); }}
+    onMouseDown={event => { if (dismissOnBackdrop && event.target === event.currentTarget) onDismiss(); }}
+    onKeyDown={event => event.stopPropagation()}>
+    {children}
+  </dialog>;
 }

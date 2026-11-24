@@ -63,3 +63,8 @@
   .tool__head p { flex: 1; }
   .tool__search { flex: 0 1 180px; }
 }
+
+.tool__reference summary { cursor: pointer; color: var(--au-text-muted); }
+.tool__reference[open] summary { margin-bottom: var(--au-space-2); }
+.tool__reference .tool__description { margin-top: var(--au-space-1); }
+.tbrush .ptp__seg { flex-wrap: wrap; max-width: 100%; }

@@ -133,3 +133,10 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 .nested-stack[data-narrow] .viewport-toolbar { position: relative; }
 .nested-stack[data-narrow] .scene-toolbar__marks-menu { left: var(--au-space-1); }
 .nested-stack[data-narrow] .anim .ptp__meta { white-space: normal; overflow-wrap: anywhere; }
+
+.nested-tab:not(.nested-active):not(:hover):not(:focus-within) .nested-tab-close {
+  visibility: hidden;
+}
+.hier__row.is-primary { box-shadow: inset 2px 0 var(--au-accent); }
+.insp-comp__head { min-height: 29px; }
+.insp-comp__body { padding-block: var(--au-space-2); }
