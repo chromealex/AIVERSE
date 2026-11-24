@@ -37,7 +37,8 @@ using CaveMovementCollision=std::function<bool(
 inline terraweave::caverns::PointCm caveTransformCm(
     const Transform& transform)noexcept {
     const auto convert=[](Fixed f)->int64_t {
-        return f.raw*100/Fixed::kOne;
+        // Divide first so even an out-of-domain Fixed value cannot overflow.
+        return (f.raw/Fixed::kOne)*100+(f.raw%Fixed::kOne)*100/Fixed::kOne;
     };
     return {convert(transform.pos.x),convert(transform.pos.y),
             convert(transform.pos.z)};
@@ -50,6 +51,11 @@ inline void setCaveTransformCm(Transform& transform,
         Fixed::fromRatio(p.y,100),
         Fixed::fromRatio(p.z,100)};
 }
+inline bool validCaveRoutePoint(terraweave::caverns::PointCm p) noexcept {
+    constexpr auto limit=terraweave::caverns::kLimitCm;
+    return p.x>=-limit&&p.x<=limit&&p.y>=-limit&&p.y<=limit&&
+           p.z>=-limit&&p.z<=limit;
+}
 // Routes enter the canonical ECS component on the owning game tick, not
 // into a per-genre actor list. The component must be serialized/hashed by
 // the host's deterministic state schema for rollback/save games.
@@ -58,7 +64,9 @@ inline bool assignCaveRoute(World& world,Entity entity,
     terraweave::caverns::CaveAgentProfile profile,
     uint32_t speedCmPerTick) {
     if(!world.alive(entity)||!path.reached||!path.sourceRevision||
-       path.waypoints.empty()||!speedCmPerTick||speedCmPerTick>10000)
+       path.waypoints.empty()||path.waypoints.size()>65536||
+       !std::all_of(path.waypoints.begin(),path.waypoints.end(),validCaveRoutePoint)||
+       !speedCmPerTick||speedCmPerTick>10000)
         return false;
     terraweave::caverns::CaveNavigationDataProvider::validateProfile(profile);
     CaveRouteFollower next;
@@ -100,6 +108,9 @@ inline CaveRouteTickStats updateCaveRouteFollowers(
         }
         PointCm now=caveTransformCm(transform);
         auto goal=route.waypoints[route.current];
+        if(!validCaveRoutePoint(now)||!validCaveRoutePoint(goal)){
+            route.needsRepath=true;++stats.blocked;return;
+        }
         if(now.x==goal.x&&now.y==goal.y&&now.z==goal.z){
             if(++route.current>=route.waypoints.size()){
                 route.arrived=true;++stats.arrived;
