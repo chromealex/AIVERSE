@@ -47,7 +47,10 @@
     "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
     "apps/studio-web/src/panels/FeatureReadinessPanel.tsx",
     "apps/studio-native/StudioSession.cpp",
-    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md"
+    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md",
+    "tools/agents/feature_automation.py",
+    "tools/agents/feature_api.py",
+    "docs/agents/feature-automation.json"
   ],
   "traits": {
     "editable": false,
@@ -58,7 +61,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stages 16–23 source implementation: dependency and roadmap policy, Skills/API checks, explicit agent claims, release report, MCP snapshot and Studio panel; execution and integration validation pending.",
+      "note": "Stages 24–36 in progress: report producer, filtered MCP, API checks, draft scaffolding, skill similarity, scheduler, active refs, impact, release selection, dependency visualization, architecture checks, history and task context. Verification deferred.",
       "evidence": []
     },
     "architecture": {
