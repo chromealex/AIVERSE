@@ -91,7 +91,7 @@ inline std::optional<BasicEntityBudgetBatch<Pending>> prepare(
     out.next.preferUrgent=state.preferUrgent;
     auto& pending=out.next.pending;
     pending.reserve(items.size());
-    // Merge sorted inputs. Drop removed/disabled regions, preserve the
+    // Merge sorted inputs. Drop removed/disabled entities, preserve the
     // oldest due tick and any pending wake across non-due phases.
     size_t old=0,w=0;
     for(const auto& item:items){
@@ -140,7 +140,7 @@ inline std::optional<BasicEntityBudgetBatch<Pending>> prepare(
         rt::WorkCursor cursor{next==lane.end()?0:size_t(next-lane.begin())};
         const auto result=rt::runBudget(lane,cursor,count,[&](uint64_t id,uint64_t){
             const auto i=std::lower_bound(pending.begin(),pending.end(),id,
-                [](const Pending& item,uint64_t key){return key(item).packed()<key;});
+                [&key](const Pending& item,uint64_t idKey){return key(item).packed()<idKey;});
             if(i==pending.end()||key(*i).packed()!=id)return false;
             const auto index=size_t(i-pending.begin());
             if(served[index])return false;
