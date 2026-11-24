@@ -196,3 +196,7 @@ Add opt-in moving planet demo with real Surface parent/orbit, one frozen LENS re
 ### Stage58d3 — IN PROGRESS (synchronized native checkpoint)
 
 Bounded native demo checkpoint joins Simulation serialization with exact airborne controller state, real proxy orientation and entity/tick/checksum identity; no saved native handles. Restore only outside readers and after actual physics step; validate payload, restore ECS and reapply one kinematic proxy, invalidate native generations/steering, block admission until owner proof and rebuilt coverage. Add scripted save/advance/restore smoke including pending portal receipt and swimmer state. Restore render frame from saved simulation tick via exact GI reprojection. Dynamic body/ground support restoration is outside this bounded example; no live acceptance until built/run.
+
+### Stage59a — IN PROGRESS (native acceptance wiring)
+
+Register optional desktop native demo smoke tests in CTest; exercise chamber, portal, swim, orbit and restore, require explicit scenario and teardown markers and a nonzero failure for premature exit. Enable the demo and smoke matrix in existing Caverns CI with software GL/Xvfb; keep native and Studio artifacts. Add KINGSTON-only Mac launcher and source fixes identified during review. No success until actual CI/merged-tree Mac evidence; main untouched.
