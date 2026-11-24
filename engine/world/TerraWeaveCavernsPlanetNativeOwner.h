@@ -44,6 +44,12 @@ public:
     bool ready()const noexcept{return activeRevision_&&!blocked_&&!recoveryRequired()&&planet_&&planet_->caveSurfaceCutEpoch(frame_.body())==surfaceEpoch();}
     bool staged()const noexcept{return pendingRevision_!=0;}
     size_t residentSlots()const noexcept{return activeSlots_.size();}
+    size_t residentRegions()const noexcept{return activePlan_?activePlan_->regions.size():0;}
+    uint64_t regionAuthorityRevision(uint64_t id)const noexcept{
+        if(!activePlan_)return 0;
+        const auto it=activePlan_->regions.find(id);
+        return it==activePlan_->regions.end()?0:it->second->authorityRevision;
+    }
     size_t collect(gfx::Device& device){return geometry_.collectCompletedWithoutIdle(device);}
 
     // Build the surface collision slots directly from the renderer's
