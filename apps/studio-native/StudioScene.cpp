@@ -197,7 +197,7 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     camera_.yaw = 0.55f;
 }
 void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; clearTransformPreview(); }
-void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
+void StudioScene::clearTransformPreview() { cancelPlanetRegionDrag(); drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -1903,6 +1903,100 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     // StudioFrameScope ends the pass and frame, including on exceptions.
 }
+bool StudioScene::beginPlanetRegionDrag(const std::string& id,float x,float y,float width,float height){
+    cancelPlanetRegionDrag();
+    if(!planetMode_||!planetPreview_||!planetDoc_||!gizmosVisible_||
+       hidden_.count(id)||locked_.count(id)||planetDoc_->revision!=planetRevision_)return false;
+    const auto chart=planetRegionChart(*planetDoc_,*planetPreview_,id);
+    if(!chart)return false;
+    const auto& body=planetDoc_->data.bodies[size_t(planetDoc_->data.findBody(chart->body))];
+    const auto view=viewCamera();
+    const float lift=std::clamp(planetPreview_->radius*.009f,.25f,3.f);
+    float best=11.f;std::optional<PlanetRegionHandle> hit;
+    for(auto handle:{PlanetRegionHandle::West,PlanetRegionHandle::East,PlanetRegionHandle::North,
+                     PlanetRegionHandle::South,PlanetRegionHandle::Center}){
+        const auto [cx,cz]=planetRegionHandleCoordinates(chart->area,handle);
+        const auto point=planetRegionHandlePosition(body,*chart,cx,cz,lift);
+        float2 p;if(!point||!view.worldToScreen(*point,width,height,p))continue;
+        float3 o,d;if(!view.screenRay(p.x,p.y,width,height,o,d))continue;
+        const float distance=dot(*point-o,d);
+        if(planetPreview_->terrainHit(o,d)+.05f<distance)continue;
+        const float error=std::hypot(x-p.x,y-p.y);
+        if(error<best){best=error;hit=handle;}
+    }
+    if(!hit)return false;
+    planetRegionDrag_=PlanetRegionDrag{*chart,*hit,planetRevision_,{}};
+    return true;
+}
+std::optional<Json> StudioScene::updatePlanetRegionDrag(float x,float y,float width,float height,
+        bool symmetric,bool snap,bool finish){
+    if(!planetRegionDrag_)return {};
+    auto& drag=*planetRegionDrag_;drag.candidate.reset();
+    if(planetMode_&&planetPreview_&&planetDoc_&&planetRevision_==drag.revision&&
+       planetDoc_->revision==drag.revision&&planetPreview_->bodyId==drag.chart.body&&
+       selectedId_==drag.chart.owner&&!locked_.count(drag.chart.owner)&&!hidden_.count(drag.chart.owner)){
+        float3 o,d;
+        if(viewCamera().screenRay(x,y,width,height,o,d)){
+            const float t=planetPreview_->terrainHit(o,d);
+            if(std::isfinite(t)){
+                const auto direction=normalize(o+d*t);
+                const auto local=planetRegionCoordinates(drag.chart,
+                    {StudioPlanetPreview::fixed(direction.x),StudioPlanetPreview::fixed(direction.y),StudioPlanetPreview::fixed(direction.z)});
+                if(local)drag.candidate=planetRegionDragArea(drag.chart,drag.handle,*local,symmetric,snap);
+            }
+        }
+    }
+    std::optional<Json> out;
+    if(finish){
+        if(drag.candidate)out=planetRegionEditPayload(drag.chart,*drag.candidate,drag.revision);
+        cancelPlanetRegionDrag();
+    }
+    return out;
+}
+void StudioScene::drawPlanetRegionHandles(const render::Camera& view,int width,int height,const editor::MapDoc& doc){
+    if(!planetPreview_||!gizmosVisible_||locked_.count(selectedId_)||hidden_.count(selectedId_))return;
+    auto chart=planetRegionChart(doc,*planetPreview_,selectedId_);
+    if(!chart)return;
+    if(planetRegionDrag_&&planetRegionDrag_->chart.owner==selectedId_&&planetRegionDrag_->candidate)
+        chart->area=*planetRegionDrag_->candidate;
+    const auto& body=doc.data.bodies[size_t(doc.data.findBody(chart->body))];
+    const float lift=std::clamp(planetPreview_->radius*.009f,.25f,3.f);
+    Overlay2D overlay{renderer_,view,float(width),float(height),view.ortho?.5f:view.zNear*1.6f};
+    const auto visible=[&](float3 p,float2& screen){
+        if(!view.worldToScreen(p,float(width),float(height),screen))return false;
+        float3 o,d;if(!view.screenRay(screen.x,screen.y,float(width),float(height),o,d))return false;
+        return planetPreview_->terrainHit(o,d)+.05f>=dot(p-o,d);
+    };
+    for(auto handle:{PlanetRegionHandle::West,PlanetRegionHandle::East,PlanetRegionHandle::North,
+                     PlanetRegionHandle::South,PlanetRegionHandle::Center}){
+        const auto [x,z]=planetRegionHandleCoordinates(chart->area,handle);
+        const auto point=planetRegionHandlePosition(body,*chart,x,z,lift);
+        float2 p;if(!point||!visible(*point,p))continue;
+        const bool hot=planetRegionDrag_&&planetRegionDrag_->handle==handle;
+        const auto color=hot?rgba(255,210,90):rgba(120,245,170);
+        const float r=handle==PlanetRegionHandle::Center?6.f:4.f;
+        overlay.segment(p.x-r,p.y,p.x+r,p.y,3.f,color);
+        overlay.segment(p.x,p.y-r,p.x,p.y+r,3.f,color);
+    }
+    if(!planetRegionDrag_||!planetRegionDrag_->candidate)return;
+    const auto& a=chart->area;
+    const std::array<std::pair<int64_t,int64_t>,4> corners{{
+        {a.centerXcm-a.halfWidthCm,a.centerZcm-a.halfDepthCm},
+        {a.centerXcm+a.halfWidthCm,a.centerZcm-a.halfDepthCm},
+        {a.centerXcm+a.halfWidthCm,a.centerZcm+a.halfDepthCm},
+        {a.centerXcm-a.halfWidthCm,a.centerZcm+a.halfDepthCm}}};
+    for(size_t edge=0;edge<4;++edge){
+        const auto [ax,az]=corners[edge];const auto [bx,bz]=corners[(edge+1)%4];
+        std::optional<float2> prev;
+        for(int i=0;i<=16;++i){
+            const auto point=planetRegionHandlePosition(body,*chart,(ax*(16-i)+bx*i)/16,(az*(16-i)+bz*i)/16,lift);
+            float2 p;if(!point||!visible(*point,p)){prev.reset();continue;}
+            if(prev)overlay.segment(prev->x,prev->y,p.x,p.y,2.f,rgba(255,210,90));
+            prev=p;
+        }
+    }
+}
+
 void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
                               const std::string& projectPath,const Json& rules){
     const bool entering=!planetMode_;
@@ -2021,6 +2115,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             }
         }
     }
+    drawPlanetRegionHandles(view,width,height,doc);
     if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
     renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;

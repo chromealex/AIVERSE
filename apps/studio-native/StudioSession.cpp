@@ -2886,7 +2886,36 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 throw std::runtime_error("World-process resize requires an editable entity");
             const int index=indexFor(entityId);
             const auto& source=ws_.map.data.entities[size_t(index)];
-            if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm"||
+            if(params.has("expectedRevision")&&
+               (!params["expectedRevision"].isNumber()||params["expectedRevision"].integer(-1)!=int64_t(ws_.map.revision)))
+                throw std::runtime_error("Stale world-process edit revision");
+            if(area=="EvolveArea"&&key=="bounds"){
+                if(!ws_.map.data.planet()||!source.at.isObject())
+                    throw std::runtime_error("Atomic surface bounds require a planet entity");
+                const auto& original=source.extra["components"]["EvolveArea"];
+                if(!lib::worldprocess::extended::validate("EvolveArea",original))
+                    throw std::runtime_error("EVOLVE spatial Area missing or malformed");
+                const auto& values=params["value"];
+                if(!values.isObject()||values.size()!=4)
+                    throw std::runtime_error("Expected four EVOLVE bounds");
+                Json next=original;
+                for(const char* field:{"offsetXcm","offsetZcm","halfWidthCm","halfDepthCm"}){
+                    const auto& v=values[field];
+                    if(!v.isNumber()||v.numberLiteral()!=std::to_string(v.integer()))
+                        throw std::runtime_error("Expected integer centimetres");
+                    next.set(field,v);
+                }
+                if(!lib::worldprocess::extended::validate("EvolveArea",next))
+                    throw std::runtime_error("Invalid EVOLVE surface bounds");
+                const evolve::Area bounds{next["offsetXcm"].integer(),next["offsetZcm"].integer(),
+                    next["halfWidthCm"].integer(),next["halfDepthCm"].integer(),next.getBool("enabled",true)};
+                if(!evolve::valid(bounds))throw std::runtime_error("EVOLVE bounds outside coordinate budget");
+                if(original!=next){
+                    auto candidate=source;Json components=candidate.extra["components"];
+                    components.set("EvolveArea",std::move(next));candidate.extra.set("components",std::move(components));
+                    ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
+                }
+            }else if(area=="EvolveArea"&&(key=="halfWidthCm"||key=="halfDepthCm"||
                                     key=="offsetXcm"||key=="offsetZcm")){
                 const Json& original=source.extra["components"]["EvolveArea"];
                 if(!lib::worldprocess::extended::validate("EvolveArea",original))

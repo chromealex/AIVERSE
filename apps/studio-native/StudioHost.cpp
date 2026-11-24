@@ -1107,6 +1107,28 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
     if(projectLoading_||!preview_||!session_||
        session_->workspace().project.dir.empty())return false;
     const auto& map=session_->workspace().map;
+    if(map.data.planet()){
+        if(phase==0){
+            wpDrag_={};
+            if(session_->selectedObjectIds().size()>1)return false;
+            const auto id=session_->selectedObjectId();
+            if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))return false;
+            if(!onScene([&]{return preview_->beginPlanetRegionDrag(id,float(x),float(y),float(w),float(h));}))return false;
+            wpDrag_.active=true;wpDrag_.component="PlanetEvolveArea";return true;
+        }
+        if(!wpDrag_.active||wpDrag_.component!="PlanetEvolveArea")return false;
+        auto params=onScene([&]{return preview_->updatePlanetRegionDrag(
+            float(x),float(y),float(w),float(h),symmetric,snap,phase==2);});
+        if(phase==2){
+            wpDrag_={};
+            if(params){
+                const auto reply=request("studio.worldProcessAreaSet",std::move(*params));
+                if(reply.has("error"))platform_.log("AIVERSE planet region: "+reply.getStr("error"));
+                else sendEvent("document.changed","");
+            }
+        }
+        return true;
+    }
     if(phase==0){
         wpDrag_={};
         const auto& selected=session_->selectedObjectId();
@@ -1701,6 +1723,7 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         return false;
     }
     if(key==K::Escape&&wpDrag_.active){
+        if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();});
         wpDrag_={};mouse_={};rebuildOverlay();
         return true; // cancel with no authored MapDoc edit
     }
