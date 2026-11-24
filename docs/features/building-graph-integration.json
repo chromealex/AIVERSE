@@ -95,7 +95,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Isolated exact-source candidate gate tests 4/4 PASS; strict gate TS PASS. Full owner panel/Studio typecheck, native operation and visual acceptance NOT RUN.",
+      "note": "Node v22.16.0 isolated buildingCandidateCapture.test.mjs: 4/4 PASS. Strict TypeScript 5.8.3 isolated gate PASS. Local git hash-object matches exact blobs on both branches. Ten shared source/test blobs verified identical. Full Studio typecheck/build, native operation, feature gate and visual QA NOT RUN.",
       "evidence": []
     },
     "handoff": {
