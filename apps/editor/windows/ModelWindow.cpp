@@ -151,17 +151,24 @@ public:
         // A type chosen in this panel might not occur on the open map.
         // Load it on demand and keep it resident while its preview is visible.
         ed.retainEditorType(uint16_t(type_));
-        const render::Model* current=ed.view().modelOf(uint16_t(type_));
-        // Explicit alternate INSPECTION mode: the imported static asset
-        // without game-type tint, graph, materials or transform overrides.
-        // Ordinary default portraits always retain their original path.
-        bool canShowRaw=current && current->clips.empty() &&
-            current->skins.empty() && !current->path.empty() &&
-            current->path.rfind("shape:",0)!=0;
-        if(canShowRaw) {
-            const std::filesystem::path path(current->path);
-            canShowRaw=path.is_relative();
-            for(const auto& part:path)if(part=="..")canShowRaw=false;
+        // Copy only the path before preview loading/rendering, not a Model
+        // pointer or a lease across any subsequent owner mutation.
+        std::string rawPath;
+        bool canShowRaw=false;
+        {
+            const auto read=ed.view().readModelOf(uint16_t(type_));
+            const auto* current=read.get();
+            // Explicit alternate INSPECTION mode: the imported static asset
+            // without game-type tint, graph, materials or transform overrides.
+            canShowRaw=current && current->clips.empty() &&
+                current->skins.empty() && !current->path.empty() &&
+                current->path.rfind("shape:",0)!=0;
+            if(canShowRaw) {
+                const std::filesystem::path path(current->path);
+                canShowRaw=path.is_relative();
+                for(const auto& part:path)if(part=="..")canShowRaw=false;
+                if(canShowRaw)rawPath=current->path;
+            }
         }
         if(canShowRaw)ImGui::Checkbox("Исходная 3D-модель (без overrides)",&rawMode_);
         else rawMode_=false;
@@ -224,9 +231,9 @@ public:
             else if(group.health==render::RenderResourceHealth::PendingGpuRetirement)
                 ImGui::TextDisabled("GPU завершает освобождение предыдущих моделей");
 #ifndef __EMSCRIPTEN__
-            if(admission && !rawModels_.resources().contains(current->path))
+            if(admission && !rawModels_.resources().contains(rawPath))
                 rawModels_.requestAsync(
-                    current->path,render::ModelLoadPriority::Interactive);
+                    rawPath,render::ModelLoadPriority::Interactive);
             if(admission)rawModels_.publishReady(ed.device(),1,1.0);
             const auto progress=rawModels_.cpuStats();
             if(progress.workerActive || progress.queued)
@@ -234,11 +241,11 @@ public:
                     progress.activeWorkers,progress.configuredWorkers,
                     progress.queued);
 #else
-            if(admission)rawModels_.load(ed.device(),current->path);
+            if(admission)rawModels_.load(ed.device(),rawPath);
 #endif
-            if(rawModels_.find(current->path))
+            if(rawModels_.find(rawPath))
                 rawDrawn=portrait_->renderStaticModel(
-                    rawModels_,current->path,0.5f);
+                    rawModels_,rawPath,0.5f);
             else ImGui::TextDisabled("Загрузка исходной модели...");
         }
         if(!rawDrawn)
@@ -252,7 +259,8 @@ public:
         const std::string& tid = types[size_t(type_)].id;
         for (const auto& w : ed.view().warnings())
             if (w.find("type '" + tid + "'") == 0) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
-        const render::Model* m = ed.view().modelOf(uint16_t(type_));
+        const auto read=ed.view().readModelOf(uint16_t(type_));
+        const render::Model* m=read.get();
         if (!m) return;
         ImGui::TextUnformatted(m->path.c_str());
         ImGui::PushStyleColor(ImGuiCol_Text, ui::pal().textDim);
@@ -319,7 +327,7 @@ public:
                                     for (size_t i = 0; i < types.size(); ++i) {
                                         if (types[i].id != id) continue;
                                         ed.retainEditorType(uint16_t(i));
-                                        if (const render::Model* m = ed.view().modelOf(uint16_t(i))) r = modelInfo(*m);
+                                        if (const auto read=ed.view().readModelOf(uint16_t(i)); read) r=modelInfo(*read.get());
                                         Json w = Json::array();
                                         for (const auto& s : ed.view().warnings()) if (s.find("type '" + id + "'") == 0) w.push(Json::string(s));
                                         r.set("warnings", w);

@@ -668,6 +668,11 @@ public:
         renderedTris_ = double(cameraTriangles); renderedShadowTris_ = double(shadowTriangles); renderedDraws_ = double(drawCalls);
     }
     bool geometryOnly() const { return geometryOnly_; }
+    // Owner-thread scoped inspection of a resident choice. Release before
+    // loading, publishing, trimming or rendering another transaction.
+    render::ModelReadLease readModelOf(uint16_t type, size_t choice = 0) const;
+    // Legacy borrowed identity; do not dereference or retain image indices/
+    // GPU handles across mutations. Prefer readModelOf for inspection.
     const render::Model* modelOf(uint16_t type, size_t choice = 0) const;
     const std::vector<ViewEvent>& events() const { return events_; }
     const std::vector<ViewEffect>& effects() const { return effects_; }

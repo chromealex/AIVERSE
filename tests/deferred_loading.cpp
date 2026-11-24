@@ -117,7 +117,17 @@ int aiverseMain(int, char**) {
     view.loadType(1);
     const auto beforeTrim = view.assetResidencyStats();
     check(beforeTrim.loadedTypes==2 && beforeTrim.cachedModels>=2,"resident models tracked");
+    {
+        const auto read=view.readModelOf(1);
+        check(read.valid() && view.activeModelReadLeases()==1,"choice reader must retain exact cache lease");
+        check(!view.readModelOf(65535) && !view.readModelOf(1,999),"invalid choices must not acquire reader");
+        check(view.activeModelReadLeases()==1,"invalid choice leaked a reader");
+        view.trimTypes(std::vector<bool>{true,false,false},true);
+        check(view.typeLoaded(1) && read.valid(),"trim must refuse before detaching live choice");
+    }
+    check(view.activeModelReadLeases()==0,"choice reader leaked after scope");
     view.trimTypes(std::vector<bool>{true,false,false},true);
+    check(!view.readModelOf(1),"trimmed choice remained readable");
     const auto afterTrim = view.assetResidencyStats();
     check(view.typeLoaded(0) && !view.typeLoaded(1) && view.modelOf(0)!=nullptr,
           "trimming unused type must not discard the currently edited map type");

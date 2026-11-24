@@ -117,6 +117,14 @@ void GameView::warn(const UnitType& t, const std::string& msg) {
     warnings_.push_back(std::move(w));
 }
 
+render::ModelReadLease GameView::readModelOf(uint16_t type, size_t choice) const {
+    // Validate the cache owner before reading choice storage. The temporary
+    // coarse scope is released on return; only the exact lease survives.
+    const auto scope=resources_.acquireFrameReadScope();
+    if(!scope)return {};
+    return resources_.acquireModelRead(modelOf(type,choice));
+}
+
 const Model* GameView::modelOf(uint16_t type, size_t choice) const {
     return type < looks_.size() && choice < looks_[type].models.size() ? looks_[type].models[choice].model : nullptr;
 }
@@ -432,7 +440,9 @@ bool GameView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
 }
 
 void GameView::trimTypes(const std::vector<bool>& keep, bool compact) {
-    if (!dev_ || keep.size()!=looks_.size()) return;
+    // Refuse before clearing TypeLooks or animation sources; the cache
+    // itself also rejects eviction while a scoped reader is active.
+    if (!dev_ || keep.size()!=looks_.size() || resources_.activeModelReaders()) return;
 #ifndef __EMSCRIPTEN__
     if (resources_.preparation().active()) return; // prepared models do not yet have looks
 #endif

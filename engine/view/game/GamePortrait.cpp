@@ -184,7 +184,7 @@ void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time,
     if (!dev_ || !color_.valid()) return;
     // frame the bind-pose bounds (look scale and fit are applied by the view; approximate with the model)
     float radius = 0.8f, height = 1.0f;
-    if (const Model* m = view.modelOf(type)) {
+    if (const auto read = view.readModelOf(type); const Model* m = read.get()) {
         const float3 e = m->boundsMax - m->boundsMin;
         height = std::max(0.3f, std::min(e.y, 4.0f));
         radius = std::max({e.x, e.y, e.z, 0.3f}) * 0.6f;
