@@ -4,6 +4,7 @@
 #include "apps/studio-native/StudioMaterialValidation.h"
 #include "apps/studio-native/StudioMaterialPublicationJournal.h"
 #include <functional>
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 
 namespace aiverse::studio {
 using BuildingMaterialPublishSave=std::function<void(const std::string&,const Json&)>;
@@ -13,6 +14,7 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     namespace fs=std::filesystem;
     using namespace buildingStudioDetail;
     if(project.empty()||!save)throw std::runtime_error("Open a project before publishing a material");
+    editor::ProjectAssetWriteLock projectLock(project);
     const auto id=params.getStr("style"),slot=params.getStr("slot"),name=params.getStr("name");
     if(!safeMaterialId(slot)||!validStudioMaterialName(name))
         throw std::runtime_error("Invalid material slot or publication name");

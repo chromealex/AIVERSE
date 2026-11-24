@@ -211,6 +211,7 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
 
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
     needProject(ws);
+    ProjectAssetWriteLock projectLock(ws.project.dir);
     if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
     (void)render::texture_graph::outputKind(output);
     if(image.width<8||image.width>1024||image.height!=image.width||image.rgba.size()!=size_t(image.width)*image.height*4)
@@ -236,7 +237,7 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
 }
 
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
-    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides);
+    needProject(ws);ProjectAssetWriteLock projectLock(ws.project.dir);const auto program=render::texture_graph::compile(graph,overrides);
     if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
     for(size_t i=0;i<images.size();++i){
         const auto& image=images[i];const auto& backend=backends[i];
@@ -496,7 +497,8 @@ void registerMaterialOps(Workspace& ws) {
     add("texture_graph_validate","Validate types, topology, parameters and work budget without evaluating or writing.",graphSchema,[](const Json& p){
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());Json r=okJson();r.set("nodes",Json::number(int64_t(program.nodes.size())));r.set("size",Json::number(int64_t(program.size)));return r;
     });
-    add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[graphPath,readGraph,publish](const Json& p){
+    add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[w,graphPath,readGraph,publish](const Json& p){
+        needProject(*w);ProjectAssetWriteLock projectLock(w->project.dir);
         render::texture_graph::compile(p["graph"]);auto file=graphPath(p.getStr("name"));
         bool exists=fs::exists(file);
         if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
@@ -565,6 +567,7 @@ void registerMaterialOps(Workspace& ws) {
         "material_apply (texture, normalMap, teamMask) and uvScale for tiling.",
         std::string(R"({"properties": )") + patternSchema().dump(-1) + R"(, "required": ["pattern"]})", [w](const Json& p) {
             needProject(*w);
+            ProjectAssetWriteLock projectLock(w->project.dir);
             render::Image img;
             render::generateTexture(p, img);
             std::string rel = p.getStr("path");

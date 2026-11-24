@@ -1,3 +1,4 @@
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #if defined(AIVERSE_WINSQLITE)
@@ -202,6 +203,7 @@ StudioAssetEntry StudioAssetCatalog::inspect(const fs::path& source,bool directo
     return e;
 }
 void StudioAssetCatalog::rebuild() {
+    editor::ProjectAssetWriteLock projectLock(project_);
     const fs::path root=studioContentRoot(project_);
     std::vector<StudioAssetEntry> scanned;
     std::error_code ec;
@@ -280,6 +282,7 @@ bool option(const std::string& candidate,std::initializer_list<const char*> vali
 }
 void validateMetaSetting(const std::string& importer,
                          const std::string& key,const Json& value){
+    editor::ProjectAssetWriteLock projectLock(project_);
     auto text=[&](std::initializer_list<const char*> allowed){
         if(!value.isString()||!option(value.str(),allowed))
             throw std::runtime_error("Unsupported importer option value: "+key);

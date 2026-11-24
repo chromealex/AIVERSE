@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioMaterialValidation.h"
 #include "engine/data/Json.h"
 #include "apps/editor/core/PublicationIntegrity.h"
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -35,6 +36,7 @@ public:
     // must have exclusive project access; no replacement of existing metadata.
     static void restoreMissingMetadata(const std::filesystem::path& project,const std::string& name,const std::string& filename){
         namespace fs=std::filesystem;
+        editor::ProjectAssetWriteLock projectLock(project);
         if(!validStudioMaterialName(name)||(filename!="base-color.png"&&filename!="metallic-roughness.png"&&filename!="normal.png"&&filename!="occlusion.png"))
             throw std::runtime_error("Invalid publication recovery identity");
         const auto dir=root(project)/name;

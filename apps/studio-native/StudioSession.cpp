@@ -20,6 +20,7 @@
 #include "apps/studio-native/StudioTools.h"
 #include "engine/view/AttachmentLayout.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include "apps/editor/EditorSceneNodes.h"
 #include "apps/studio-native/StudioDocumentIds.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
@@ -88,6 +89,7 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
     }
     if (directory.empty()) throw std::runtime_error(error.empty()?"Cannot resolve project":error);
     directory=std::filesystem::weakly_canonical(directory).string();
+    editor::ProjectAssetWriteLock projectLock(directory);
     StudioMoveJournal::recover(directory);
     return directory;
 }
@@ -1148,6 +1150,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
         if (!request.isObject() || !request["id"].isNumber()) throw std::runtime_error("Invalid request envelope");
         const std::string method = request.getStr("method");
         Json params = request["params"];
+        // Cover Studio content mutations including multi-step asset transfers.
+        std::unique_ptr<editor::ProjectAssetWriteLock> assetLock;
+        if(!ws_.project.dir.empty() && (method=="studio.assetFolderCreate"||method=="studio.assetTransferCommit"||method=="studio.assetMetaPatch"||method=="studio.buildingPublishMaterial"||method=="studio.materialCreate"||method=="studio.materialPatch"))
+            assetLock=std::make_unique<editor::ProjectAssetWriteLock>(ws_.project.dir);
         if((method=="studio.lightUpdate" || method=="studio.lightDelete") && params.has("entityId")) {
             if(!params["entityId"].isString())throw std::runtime_error("Invalid light entity ID");
             bool found=false;
