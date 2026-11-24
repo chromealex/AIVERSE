@@ -20,6 +20,7 @@
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
 #include "aiverselib/world/EvolvePlanetEcologySampling.h"
+#include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -335,6 +336,56 @@ static void checkPlanetCrowdSlots(){
     const auto excluded=crowd::planSurfaceSlots(ecs,surface,1,
         [&](Entity e){return e!=a;},pass);
     AIVERSE_TEST_CHECK(excluded&&excluded->intents.size()==2&&excluded->intents[0].agent==b);
+}
+static void checkPlanetRootClimate(){
+    using namespace evolve;
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    int b=0,f=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(seam,b,f,x,y)&&b==0&&f!=0);
+    const auto origin=surface.cellCenter(start),point=surface.cellCenter(seam);
+    const auto lunar=surface.cellCenter(surface.gridCell(1,f,x,y));
+    World ecs;
+    physis::Settings cfg;cfg.width=3;cfg.height=1;physis::initialize(ecs,cfg);
+    const auto a=physis::cellAt(ecs,0,0),c=physis::cellAt(ecs,1,0),m=physis::cellAt(ecs,2,0);
+    ecs.get<physis::Surface>(a).wetness=Fixed::fromRatio(1,4);
+    ecs.get<physis::Surface>(c).wetness=Fixed::fromRatio(1,2);
+    ecs.get<physis::Surface>(m).wetness=Fixed::fromRatio(3,4);
+    const auto region=ecs.create();Region r{};r.fertility=300000000;
+    ecs.add<Region>(region,r);
+    AIVERSE_TEST_CHECK(setSurfaceArea(ecs,surface,region,origin,Area{0,0,3000,3000,true}));
+    std::vector<PlanetWeatherMapping> sources{
+        {c,"terra",origin,Fixed::fromInt(40)},
+        {a,"terra",origin,Fixed::fromInt(40)},
+        {m,"moon",lunar,Fixed::fromInt(40)}};
+    std::vector<PlanetRootClimateSite> sites{
+        {"terra",point,{900,0,800,700},true,true},
+        {"moon",lunar,{900,0,800,700},true,true}};
+    const auto first=samplePlanetRootClimate(ecs,surface,sources,sites,0);
+    AIVERSE_TEST_CHECK(first&&first->sites.size()==2&&first->climateTick==0);
+    const auto winner=a.packed()<c.packed()?a:c;
+    AIVERSE_TEST_CHECK(first->sites[0].weather->cell==winner&&first->sites[0].climate.nutrientsPermille==300);
+    AIVERSE_TEST_CHECK(first->sites[0].climate.waterPermille==(winner==a?250u:500u));
+    AIVERSE_TEST_CHECK(first->sites[1].weather->cell==m&&first->sites[1].climate.waterPermille==750);
+    std::reverse(sources.begin(),sources.end());
+    const auto repeat=samplePlanetRootClimate(ecs,surface,sources,sites,0);
+    AIVERSE_TEST_CHECK(repeat&&repeat->sites[0].weather->cell==winner);
+    AIVERSE_TEST_CHECK(!samplePlanetRootClimate(ecs,surface,sources,sites,1));
+    const auto saved=sources;
+    sources.push_back(sources.front());
+    AIVERSE_TEST_CHECK(!samplePlanetRootClimate(ecs,surface,sources,sites,0));
+    sources=saved;sources.erase(std::remove_if(sources.begin(),sources.end(),[&](const auto& v){return v.cell==m;}),sources.end());
+    AIVERSE_TEST_CHECK(!samplePlanetRootClimate(ecs,surface,sources,sites,0));
+    sites[1].requireWeather=false;
+    const auto uncovered=samplePlanetRootClimate(ecs,surface,sources,sites,0);
+    AIVERSE_TEST_CHECK(uncovered&&!uncovered->sites[1].weather&&uncovered->sites[1].climate.waterPermille==800);
+    const auto orphan=ecs.create();ecs.add<physis::Cell>(orphan,physis::Cell{});
+    ecs.add<physis::Atmosphere>(orphan,physis::Atmosphere{});ecs.add<physis::Surface>(orphan,physis::Surface{});
+    sources.push_back({orphan,"terra",origin,Fixed::fromInt(40)});
+    AIVERSE_TEST_CHECK(!samplePlanetRootClimate(ecs,surface,sources,sites,0));
 }
 static void checkPlanetEcologySampling(){
     using namespace evolve;
@@ -1347,6 +1398,7 @@ int main(){
     checkPlanetCrowdSlots();
     checkPlanetLiveCrowd();
     checkPlanetEvolveRegions();
+    checkPlanetRootClimate();
     checkPlanetEcologySampling();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
