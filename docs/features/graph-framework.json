@@ -110,7 +110,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35B in progress: opt-in early-pack native executor, existing owner/fences, output-index parity and retirement. Parent typed pinned-output route requires reconciliation.",
+      "note": "Stage 35B experimental early-pack materialized native executor integrated in source behind explicit bakeSet opt-in; fused fallback and existing publication owner preserved. Parent pinned-output plan/source lowering requires reconciliation. Native build and runtime acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -180,7 +180,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35A isolated exact-blob C++20 ABI source test PASS on GCC 14.2; integrated node/DAG fixture authored NOT RUN. No GPU shader compilation or dispatch, full CTest, Studio or Mac gate.",
+      "note": "Stage 35B exact-blob standalone C++20 StepFence policy PASS (GCC 14.2.0); integrated headless refusal fixture authored NOT RUN. Native executor compilation, GPU dispatch/retirement/parity, full CTest, Studio, MCP audit and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
