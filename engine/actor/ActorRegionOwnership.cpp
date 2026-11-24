@@ -135,7 +135,7 @@ void ActorHost::synchronizeRegionOwnership(Simulation& sim) {
     ledger=target;
     struct NewIdentityRollback {
         World& ecs;
-        std::vector<Entity> entities;
+        std::vector<Entity> entities{};
         bool committed=false;
         ~NewIdentityRollback() {
             if(!committed)for(auto it=entities.rbegin();it!=entities.rend();++it)
