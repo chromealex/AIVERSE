@@ -1840,10 +1840,10 @@
           "textEn": "Checked VIVID/TerraWeave bindings and offline bake/wardrobe resource boundary. Integration verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38W (в работе)",
-          "text": "Изоляция HLOD, экспорта и нативный scoped-доступ к текстурам.",
-          "nameEn": "Texture Graph GPU — Stage 38W (in progress)",
-          "textEn": "HLOD/export ownership boundaries and scoped native image access."
+          "name": "Texture Graph GPU — Stage 38W (частично)",
+          "text": "Нативный scoped-доступ удерживает read lease и pin; HLOD, material palette и экспорт защищены от переноса живых процедурных поколений. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38W (partial)",
+          "textEn": "Scoped native access combines model reader and generation pin; HLOD, palette and offline export guard runtime images. Integration pending."
         }
       ],
       "enables": [
