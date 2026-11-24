@@ -86,6 +86,8 @@ std::string nonce() {
 bool existsOrSymlink(const fs::path& target) {
     std::error_code ec;
     const auto status=fs::symlink_status(target,ec);
+    if(ec && ec!=std::errc::no_such_file_or_directory)
+        throw std::runtime_error("Cannot inspect transfer destination: "+target.string()+": "+ec.message());
     return !ec && fs::exists(status);
 }
 fs::path keepBothName(const fs::path& dest,bool folder) {
@@ -475,6 +477,8 @@ void studioReplayAssetMove(const fs::path& project,
             throw std::runtime_error("Material library changed since asset move");
     };
     if(bool(materialBefore)!=bool(materialAfter))throw std::runtime_error("Unsupported material topology change");
+    if(materialAfter&&!Json::parse(*materialAfter)["materials"].isObject())
+        throw std::runtime_error("Invalid recorded material library");
     checkMaterial();
     StudioAssetCatalog catalog(project);catalog.rebuild(false);
     std::set<fs::path> reserved;
@@ -516,13 +520,20 @@ void studioReplayAssetMove(const fs::path& project,
     checkMaterial();
     StudioMoveJournal journal(project);journal.begin(operations);
     try{
-        for(const auto& op:operations){
+        for(size_t i=0;i<operations.size();++i){
+            const auto& op=operations[i];
             const auto from=root/op.from,to=root/op.to;
+            const auto& expected=plan.files[i].bytes;
+            if(fs::file_size(from)!=expected.size()||editor::readProjectFileBytes(from)!=expected)
+                throw std::runtime_error("Asset changed during history replay");
             if(existsOrSymlink(to))throw std::runtime_error("Asset move destination occupied");
             fs::rename(from,to);
             StudioMoveJournal::syncPath(from.parent_path());
             if(from.parent_path()!=to.parent_path())StudioMoveJournal::syncPath(to.parent_path());
         }
+        for(size_t i=0;i<operations.size();++i)
+            if(editor::readProjectFileBytes(root/operations[i].to)!=plan.files[i].bytes)
+                throw std::runtime_error("Asset bytes changed during replay");
         if(materialBefore)editor::applyProjectFileEdits(project,{{material,*materialBefore,*materialAfter}});
         else checkMaterial();
         catalog.rebuild(false);

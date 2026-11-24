@@ -63,13 +63,43 @@ int main(){
         AIVERSE_TEST_CHECK(db.byPath("Models/Ship.glb")->guid==stableGuid);
 
         // A GUID lookup follows internal file+meta move to a different folder.
+        const auto material=project/"materials.json";
+        const std::string materialBefore=R"({"materials":{"test":{"texture":"content/Models/Ship.glb"}}})";
+        const std::string materialAfter=R"({"materials":{"test":{"texture":"content/Other/Ship.glb"}}})";
+        write(material,materialBefore);
         auto move=StudioTransferPlan::internal(project,"Other",{"Models/Ship.glb"});
         AIVERSE_TEST_CHECK(move.describe()["items"][0].getStr("conflict").empty());
-        const auto moved=move.apply(move.token(),{});
+        std::optional<aiverse::editor::ProjectHistory::MovePlan> history;
+        const auto moved=move.apply(move.token(),{},[&]{write(material,materialAfter);},&history);
         AIVERSE_TEST_CHECK(moved["files"].size()==1);
         db.rebuild();
         AIVERSE_TEST_CHECK(!db.byPath("Models/Ship.glb"));
         AIVERSE_TEST_CHECK(db.byGuid(stableGuid)->path=="Other/Ship.glb");
+        AIVERSE_TEST_CHECK(history&&history->files.size()==2);
+        const auto metaBytes=read(project/"content"/"Other"/"Ship.glb.meta");
+        write(project/"content"/"Models"/"Ship.glb","collision");
+        bool undoRefused=false;
+        try{aiverse::studio::studioReplayAssetMove(project,*history,false);}catch(const std::runtime_error&){undoRefused=true;}
+        AIVERSE_TEST_CHECK(undoRefused&&read(project/"content"/"Models"/"Ship.glb")=="collision");
+        fs::remove(project/"content"/"Models"/"Ship.glb");
+        write(material,materialAfter+"\n");
+        undoRefused=false;
+        try{aiverse::studio::studioReplayAssetMove(project,*history,false);}catch(const std::runtime_error&){undoRefused=true;}
+        AIVERSE_TEST_CHECK(undoRefused&&read(material)==materialAfter+"\n");
+        write(material,materialAfter);
+        write(project/"content"/"Other"/"Ship.glb","different");
+        undoRefused=false;
+        try{aiverse::studio::studioReplayAssetMove(project,*history,false);}catch(const std::runtime_error&){undoRefused=true;}
+        AIVERSE_TEST_CHECK(undoRefused&&read(project/"content"/"Other"/"Ship.glb")=="different");
+        write(project/"content"/"Other"/"Ship.glb","replacement");
+        aiverse::studio::studioReplayAssetMove(project,*history,false);
+        AIVERSE_TEST_CHECK(read(material)==materialBefore&&read(project/"content"/"Models"/"Ship.glb")=="replacement");
+        AIVERSE_TEST_CHECK(read(project/"content"/"Models"/"Ship.glb.meta")==metaBytes);
+        db.rebuild();AIVERSE_TEST_CHECK(db.byGuid(stableGuid)->path=="Models/Ship.glb");
+        aiverse::studio::studioReplayAssetMove(project,*history,true);
+        AIVERSE_TEST_CHECK(read(material)==materialAfter&&read(project/"content"/"Other"/"Ship.glb.meta")==metaBytes);
+        db.rebuild();AIVERSE_TEST_CHECK(db.byGuid(stableGuid)->path=="Other/Ship.glb");
+        AIVERSE_TEST_CHECK(!fs::exists(project/".aiverse-cache"/"studio-move-journal"));
 
         // A cloned external sidecar is a GUID conflict even without a name collision.
         write(external/"Clone.glb","clone");

@@ -95,6 +95,9 @@ Use the existing HistoryPanel with explicit Map / Project scope. Map rows keep n
 ## Asset importer metadata history (S6c.4a)
 Use StudioAssetCatalog::patchSettings and native owner-generated exact .meta plans. GUID, importer, other identity fields and physical path must remain unchanged; reindex existing sidecars without generating unrelated metadata, refuse duplicate GUID or stale bytes. Restore through the catalog owner with index reconciliation and rollback on failure. HistoryPanel has a separate Assets scope (64 edits/16 MiB retained payload), native studio.assetHistory/Step with exact expectedVersion, and assets.changed refreshes Assets and pinned Import Settings. No asset payload or import/move undo yet; transfers invalidate this stack before applying. Do not expose arbitrary paths or merge the three timelines. Agent map Undo all remains conservative.
 
+## Bounded internal asset move history (S6c.4b)
+Use StudioTransferPlan::apply with optional native MovePlan capture; record actual final paths (including keep-both), exact bytes for regular files and their existing sidecars, and materials.json before/after. Undo/redo reuses StudioMoveJournal and the catalog owner, validates exact source bytes, GUID/path/importer, vacant destinations, matching material baseline and known read-only/current map/rules path references. No request-supplied move plans. Folder, oversized, unsupported topology or failed transfers are barriers, not silently undoable. No unified history or new standalone MCP endpoint. Do not claim complete reference graph, arbitrary rename UI, import/delete recovery or durable recovery beyond the existing move journal.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

@@ -1182,11 +1182,20 @@ Json StudioSession::dispatch(const Json& request) {
                     const auto check=[&]{
                         StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
                         const auto refs=studioCollectAssetReferences(editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,catalog.all());
+                        const auto mapText=ws_.map.toJson().dump(-1);
+                        const auto rulesText=ws_.project.rulesJson.dump(-1);
                         for(size_t i=0;i<entry.move->files.size();i+=2){
                             const auto& f=entry.move->files[i];
                             for(const auto& ref:refs)
                                 if(!ref.writable&&(ref.path=="content/"+f.from||ref.path=="content/"+f.to))
                                     throw std::runtime_error("Asset move history blocked by rules reference: "+ref.owner);
+                            for(const auto& path:{f.from,f.to}){
+                                for(const auto& value:{path,"content/"+path}){
+                                    const auto literal=Json::string(value).dump(-1);
+                                    if(mapText.find(literal)!=std::string::npos||rulesText.find(literal)!=std::string::npos)
+                                        throw std::runtime_error("Asset move history blocked by a current map/rules path reference: "+value);
+                                }
+                            }
                         }
                     };
                     studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check);
@@ -2213,8 +2222,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             Json result;
             try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory);}
             catch(...){assetHistory_.reset();throw;}
+            const auto beforeHistory=assetHistory_.version();
             if(moveHistory)assetHistory_.recordMove(std::move(*moveHistory),"Move assets");
             else if(result["files"].size()!=0||result["issues"].size()!=0)assetHistory_.reset();
+            result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
             pendingAssetTransfer_.reset();
             if (internal) result.set("repairedMaterialReferences",num(int64_t(repaired)));
             reply.set("result",std::move(result));
