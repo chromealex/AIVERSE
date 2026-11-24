@@ -930,7 +930,7 @@ int ParticleSystem::effect(const std::string& name) {
     if (!reader_) errors_.push_back(path + ": no file reader");
     else if (!reader_(path, text)) errors_.push_back(path + ": file not found");
     else {
-        try { ok = parseEffect(Json::parse(text), path, def, errors_); }
+        try { ok = parseEffect(Json::parse(text), path, def, errors_,reader_); }
         catch (const std::exception& ex) { errors_.push_back(path + ": " + ex.what()); }
     }
     if (!ok) {   // remembered as invalid: not retried every event

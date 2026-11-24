@@ -350,7 +350,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
         if(graph.getInt("version")!=2)return {};
         fx::EffectDef effect;
         std::vector<std::string> errors;
-        if(!fx::compileSpectraGraph(graph,effect,errors))return {};
+        if(!fx::compileSpectraGraph(graph,Json::object(),effect,errors,platform::readContentFile))return {};
         const std::string runtimeName="graph:live:"+name;
         if(ps_.define(runtimeName,effect)<0||
            !graphSources_->bindGraphDataInterfaces(runtimeName,graph,errors))return {};
@@ -365,6 +365,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
                    spectra::loadInstanceParameterTable(graph["instanceParameters"],schema,errors) &&
                    spectra::scenePoolDataCoverageCompatible(graph,emission)) {
                     spectra::GraphRuntimeOptions options;
+                    options.sdfReader=platform::readContentFile;
                     options.preference=spectra::ComputePreference::RequireGpu;
                     options.routePoolCollisionChildren=true;
                     options.gpuProgram=true;options.gpuIndirect=true;options.proceduralBillboards=true;

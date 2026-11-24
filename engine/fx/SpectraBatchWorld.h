@@ -36,7 +36,7 @@ public:
     // removed). Ids are never reused, so a later identical define gets a new id.
     bool releaseEffect(int effect);
     int defineGraph(const Json& graph,
-                    const Json& overrides = Json::object());
+                    const Json& overrides = Json::object(),const fx::SdfResourceReader& sdfReader = {});
     fx::FxHandle play(int effect, fx::float3 position,
                       fx::float3 direction = {0,1,0}, float scale = 1,
                       fx::float4 tint = {1,1,1,1});

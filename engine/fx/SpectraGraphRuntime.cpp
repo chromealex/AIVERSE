@@ -168,7 +168,15 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
         return false;
     }
     fx::EffectDef compiled;
-    if(!fx::compileSpectraGraph(graph,overrides,compiled,errors_)) {
+    std::map<std::string,std::string> sdfDependencies;
+    fx::SdfResourceReader reader;
+    if(options.sdfReader)reader=[&](const std::string& path,std::string& bytes){
+        const auto it=sdfDependencies.find(path);
+        if(it!=sdfDependencies.end()){bytes=it->second;return true;}
+        if(!options.sdfReader(path,bytes)||bytes.size()>fx::kSdfBinaryMaxBytes)return false;
+        sdfDependencies.emplace(path,bytes);return true;
+    };
+    if(!fx::compileSpectraGraph(graph,overrides,compiled,errors_,reader)) {
         reason_="SpectraFX graph compilation failed";
         return false;
     }
@@ -190,6 +198,10 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
     if(actual.gpuOwnedAllocation)restoreIdentity_+="\nallocator=owned-v2";
     for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
+    for(const auto& [path,bytes]:sdfDependencies){
+        for(unsigned char c:path){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
+        for(unsigned char c:bytes){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
+    }
     restoreIdentity_="SPFR1-fingerprint|"+std::to_string(a)+"|"+std::to_string(b);
     namedParams_=std::move(schema);
     dataBindings_=std::move(bindings);
@@ -213,7 +225,7 @@ bool GraphRuntime::initGraph(BatchWorld& shared, const Json& graph,
         return false;
     }
     fx::EffectDef compiled;
-    if (!fx::compileSpectraGraph(graph, overrides, compiled, errors_)) {
+    if (!fx::compileSpectraGraph(graph, overrides, compiled, errors_,options.sdfReader)) {
         reason_ = errors_.empty() ? "SpectraFX graph compile failed" : errors_.front();
         return false;
     }

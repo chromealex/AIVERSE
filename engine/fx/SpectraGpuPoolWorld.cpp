@@ -143,7 +143,7 @@ bool GpuPoolWorld::defineGraph(const std::string& name,const Json& graph,
         return false;
     }
     fx::EffectDef definition;
-    if(!fx::compileSpectraGraph(graph,overrides,definition,errors)) {
+    if(!fx::compileSpectraGraph(graph,overrides,definition,errors,options.sdfReader)) {
         reason_=errors.empty()?"SpectraFX graph compilation failed":errors.front();
         return false;
     }
@@ -198,6 +198,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     remembered.options=options;
     remembered.options.checkpointBudget.reset();
     remembered.options.allocationBudget.reset();
+    remembered.options.sdfReader={};
     remembered.named=named;
     remembered.defaults=next.defaults;
     remembered.dataBindings=dataBindings;

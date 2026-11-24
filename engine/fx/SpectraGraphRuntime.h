@@ -41,6 +41,7 @@ struct GraphRuntimeOptions {
     // Optional, for compatibility with single-emitter users.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
     std::shared_ptr<GpuAllocationBudget> allocationBudget;
+    fx::SdfResourceReader sdfReader; // compile-time only; host owns bounded IO
 };
 
 struct GraphGpuEligibility {
