@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -127,7 +128,10 @@ inline bool valid(const Force& f){
 }
 // All calculations are staged. Writes to the native pools occur only on success.
 // Graph edges hold full Entity generations; a stale link never rejoins a new node.
-inline bool advance(World& world,std::uint32_t tick){
+// A pure owner load resolver returns a staged continuous impulse in node
+// units per tick, or nullopt on invalid input. No ECS mutation from resolver.
+template<class LoadResolver>
+inline bool advanceWithLoad(World& world,std::uint32_t tick,const LoadResolver& load){
     const World& read=world;
     if(read.countExisting<Node>()>kMaxNodes||
        read.countExisting<Spring>()>kMaxSprings||
@@ -192,6 +196,19 @@ inline bool advance(World& world,std::uint32_t tick){
             a=limit(a+v[axis],kForceLimit);
         }
     }
+    // Additional continuous loads occur after authored forces, before
+    // one-shot impacts. Stable node order and existing saturation policy.
+    for(size_t i=0;i<nodes.size();++i){
+        const auto& item=nodes[i];
+        if(!item.value.enabled||item.value.anchored)continue;
+        const auto extra=load(read,item.id,item.value);
+        if(!extra)return false;
+        for(size_t axis=0;axis<3;++axis){
+            const I value=(*extra)[axis];
+            if(value< -kForceLimit||value>kForceLimit)return false;
+            acceleration[i][axis]=limit(acceleration[i][axis]+value,kForceLimit);
+        }
+    }
     // Apply scheduled one-shot contacts after continuous spring/Force terms.
     // Stage their acknowledgement; no authoritative pool is mutated until
     // all Nodes and pending Impact values have been validated.
@@ -242,6 +259,11 @@ inline bool advance(World& world,std::uint32_t tick){
     for(const auto& item:nodes)world.get<Node>(item.id)=item.value;
     for(const auto& [e,impact]:consumed)world.get<Impact>(e)=impact;
     return true;
+}
+inline bool advance(World& world,std::uint32_t tick){
+    return advanceWithLoad(world,tick,[](const World&,Entity,const Node&){
+        return std::optional<std::array<I,3>>{std::array<I,3>{}};
+    });
 }
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<Node>("morph.node",1);
