@@ -4,6 +4,7 @@
 #include "engine/view/AppearanceAssetRegistry.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
+#include "engine/render/EnvironmentIbl.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include "engine/render/GiModelGeometry.h"
 #include "apps/editor/SceneRenderable.h"
@@ -43,7 +44,9 @@ struct StudioScene::GraphPresentation {
     std::unique_ptr<Model> sample;
     Snapshot sampleAppearance;
     std::unique_ptr<Renderer3D> sampleRenderer;
-    gfx::TextureHandle color{},depth{};
+    gfx::TextureHandle color{},depth{},environment{};
+    std::string environmentPath;
+    float environmentYaw=0.f,environmentIntensity=1.f;
     std::shared_ptr<Capture> capture;
     bool draw=false;
     float yaw=.65f,pitch=.42f,zoom=1.f,light=1.25f,lightYaw=.6f;
@@ -80,12 +83,44 @@ struct StudioScene::GraphPresentation {
         if(sample){if(sampleRenderer)sampleRenderer->invalidateModelCachesFor(sample.get());sampleAppearance.reset();releaseModel(dev,*sample);sample.reset();}
         capture.reset();draw=false;
     }
+    void setEnvironment(gfx::Device& dev,const std::string& project,const std::string& relative,bool reload){
+        namespace fs=std::filesystem;
+        if(relative==environmentPath&&!reload)return;
+        if(relative.empty()){
+            if(environment.valid()){
+                if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
+                if(sampleRenderer)sampleRenderer->setModelEnvironment({});dev.destroyTexture(environment);
+            }
+            environment={};environmentPath.clear();return;
+        }
+        const fs::path rel(relative);
+        if(relative.size()>512||relative.find('\0')!=std::string::npos||relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos||rel.is_absolute()||rel.empty()||*rel.begin()!="content")throw std::invalid_argument("HDR environment must be inside project content");
+        auto path=fs::canonical(project);
+        for(const auto& part:rel){if(part==".."||part=="."||part.empty())throw std::invalid_argument("Invalid HDR environment path");path/=part;if(fs::is_symlink(path))throw std::invalid_argument("HDR environment symlink rejected");}
+        if(!fs::is_regular_file(path))throw std::runtime_error("HDR environment missing");
+        const auto bytes=fs::file_size(path);
+        if(!bytes||bytes>32u*1024u*1024u)throw std::runtime_error("HDR environment exceeds encoded file budget");
+        if(dev.maxFragmentTextureSlots()<14||!dev.supports(gfx::PixelFormat::RGBA16F))throw std::runtime_error("Native HDR environment unsupported by this GPU");
+        std::string encoded(size_t(bytes),'\0');std::ifstream stream(path,std::ios::binary);
+        if(!stream.read(encoded.data(),std::streamsize(encoded.size()))||stream.peek()!=std::char_traits<char>::eof())throw std::runtime_error("HDR environment changed during read");
+        RadianceImage hdr;std::string error;
+        if(!parseRadianceHdr(encoded,hdr,error,64u*1024u*1024u))throw std::runtime_error(error);
+        const auto atlas=environment_ibl::convolve(hdr);
+        // The old atlas remains visible until the replacement is successfully uploaded.
+        if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
+        auto candidate=uploadRadianceHdr(dev,atlas,error);
+        if(!candidate.valid())throw std::runtime_error(error);
+        if(sampleRenderer)sampleRenderer->setModelEnvironment({});
+        if(environment.valid())dev.destroyTexture(environment);
+        environment=candidate;environmentPath=relative;
+    }
     void shutdown(gfx::Device& dev){
         scene.clear();merged.clear();resetSample(dev);
         if(sampleRenderer){sampleRenderer->shutdown();sampleRenderer.reset();}
         if(color.valid())dev.destroyTexture(color);
         if(depth.valid())dev.destroyTexture(depth);
-        color={};depth={};(void)rollback.drain(dev);
+        if(environment.valid())dev.destroyTexture(environment);
+        environment={};environmentPath.clear();color={};depth={};(void)rollback.drain(dev);
     }
     static Json info(const Snapshot& s,size_t index){
         Json r=Json::object();r.set("ok",Json::fromBool(true));
@@ -106,6 +141,7 @@ struct StudioScene::GraphPresentation {
         Json r=Json::object();r.set("ok",Json::fromBool(true));
         r.set("capture",Json::string(std::to_string(captureSerial)));
         r.set("state",Json::string(capture?capture->state:"idle"));
+        r.set("environment",Json::string(environmentPath));
         if(capture){r.set("reason",Json::string(capture->error));if(capture->state=="ready"){
             r.set("width",Json::number(int64_t(capture->width)));r.set("height",Json::number(int64_t(capture->height)));r.set("rgbaHex",Json::string(capture->hex));
         }}
@@ -120,6 +156,8 @@ struct StudioScene::GraphPresentation {
         cam.target=(lo+hi)*.5f;cam.yaw=yaw;cam.pitch=pitch;cam.ortho=false;
         cam.distance=radius/std::sin(cam.fovY*.5f)*zoom;
         cam.zNear=std::max(.01f,cam.distance-radius*2.f);cam.zFar=cam.distance+radius*4.f;
+        if(!sampleRenderer->setModelEnvironment(environment,environmentYaw,environmentIntensity)){capture->state="failed";capture->error="Native HDR environment rejected";return;}
+        sampleRenderer->clearModelError();
         sampleRenderer->beginScene(cam,side,side);
         sampleRenderer->lighting=Lighting{};
         sampleRenderer->lighting.sunIntensity=light;
@@ -131,6 +169,7 @@ struct StudioScene::GraphPresentation {
         gfx::PassDesc pass;pass.colorTarget=color;pass.depthTarget=depth;
         pass.clearColor[0]=.075f;pass.clearColor[1]=.09f;pass.clearColor[2]=.12f;pass.clearColor[3]=1.f;
         sampleRenderer->render(pass);dev.endPass();
+        if(environment.valid()&&!sampleRenderer->modelError().empty()){capture->state="failed";capture->error=sampleRenderer->modelError();return;}
         auto result=capture;
         if(!dev.captureTexture(color,[result](int w,int h,std::vector<uint8_t> rgba){
             if(result->state!="pending")return;
@@ -697,7 +736,8 @@ Json StudioScene::textureGraphCapabilities() const {
     r.set("reason",Json::string(available?"Native offscreen GPU preview and validated bake":"Offscreen compute unavailable on current device"));
     r.set("residentApply",Json::fromBool(false));
     r.set("studioResidentApply",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
-    r.set("studioPbrPreview",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));return r;
+    r.set("studioPbrPreview",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
+    r.set("studioPbrEnvironment",Json::fromBool(available&&device_->maxFragmentTextureSlots()>=14&&device_->supports(gfx::PixelFormat::RGBA16F)));return r;
 }
 Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(!device_ || !deviceLifetime_ || !device_->supportsOffscreenFrames() || !device_->gpuHealthy())
@@ -769,7 +809,9 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
             if(!presentation.sampleRenderer){
                 auto renderer=std::make_unique<Renderer3D>();renderer->setGpuDeviceLease(lease);
                 if(!renderer->init(*device_)){renderer->shutdown();releaseModel(*device_,*model);throw std::runtime_error("PBR renderer unavailable");}
-                renderer->setShadowQuality(ShadowQuality::Off);presentation.sampleRenderer=std::move(renderer);
+                renderer->setShadowQuality(ShadowQuality::Off);renderer->setMaterialQuality(MaterialQuality::High);
+                renderer->setGpuAuthoredDrawEnabled(false);renderer->setModelMultiDrawEnabled(false);renderer->setModelInstancingEnabled(false);
+                presentation.sampleRenderer=std::move(renderer);
             }
             if(!presentation.color.valid()||!presentation.depth.valid()){
                 gfx::TextureDesc td;td.width=td.height=256;td.format=gfx::PixelFormat::RGBA8;td.renderTarget=true;td.label="Texture Graph PBR preview";
@@ -798,6 +840,9 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
             presentation.yaw=previewScalar(p["yaw"],.65f,-100.f,100.f);presentation.pitch=previewScalar(p["pitch"],.42f,-1.4f,1.4f);
             presentation.zoom=previewScalar(p["zoom"],1.f,.6f,3.f);presentation.light=previewScalar(p["light"],1.25f,0.f,8.f);
             presentation.lightYaw=previewScalar(p["lightYaw"],.6f,-6.3f,6.3f);
+            presentation.environmentYaw=previewScalar(p["environmentYaw"],0.f,-6.3f,6.3f);
+            presentation.environmentIntensity=previewScalar(p["environmentIntensity"],1.f,0.f,8.f);
+            presentation.setEnvironment(*device_,ws.project.dir,p.getStr("environment"),p.getBool("reloadEnvironment"));
             presentation.capture=std::make_shared<GraphPresentation::Capture>();++presentation.captureSerial;presentation.draw=true;
             return presentation.captureStatus();
         }

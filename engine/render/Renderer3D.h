@@ -1324,6 +1324,7 @@ public:
     }
     MaterialQuality materialQuality() const { return matQuality_; }
     static MaterialQuality defaultMaterialQualityFor(const gfx::Device& dev, bool mobile);
+    void clearModelError() { modelError_.clear(); }
     const std::string& modelError() const { return modelError_; }   // last model shader failure
 
     const mat4& viewProj() const { return viewProj_; }
