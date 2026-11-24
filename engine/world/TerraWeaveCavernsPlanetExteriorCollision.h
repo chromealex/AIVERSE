@@ -103,6 +103,17 @@ public:
             const auto slots=collectPlanetBodyCutSlots(plan);
             const int index=planet_.world().find(plan.bodyId);
             if(index<0)return false;
+            // A cave demand identifies the exact required physical leaves.
+            // Provision missing ordinary exterior leaves under the same
+            // ownership proof, before moving any live entry to the cohort.
+            // Bound insertion work to one missing leaf per owner frame.
+            for(const auto& [key,ref]:slots){
+                (void)ref;
+                if(!leaves_.contains({plan.bodyId,key})){
+                    (void)load(plan.bodyId,key);
+                    return false;
+                }
+            }
             std::set<world::Cell> cells;
             for(const auto& [key,ref]:slots){
                 const auto it=leaves_.find({plan.bodyId,key});
