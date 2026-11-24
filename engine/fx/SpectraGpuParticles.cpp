@@ -219,7 +219,7 @@ bool ComputeParticles::initGpu() {
                          graphChannels.data(),"SpectraFX GPU material vertex sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
-    const std::array<uint32_t,6> allocatorCounters{0,cap,0,0,0,0};
+    const std::array<uint32_t,7> allocatorCounters{0,cap,0,0,0,0,0};
     if(gpuAllocationActive_){
         const std::array<uint32_t,3> emptyDispatch{1,1,1};
         gpuAliveCurrent_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list A");
@@ -325,7 +325,7 @@ bool ComputeParticles::initGpu() {
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels)
-                    +(gpuAllocationActive_?size_t(cap)*20u+8u*sizeof(uint32_t):0u);
+                    +(gpuAllocationActive_?size_t(cap)*20u+9u*sizeof(uint32_t):0u);
     return true;
 }
 void ComputeParticles::releaseGpu() {
@@ -363,7 +363,7 @@ void ComputeParticles::releaseGpu() {
     killSlots_={};gpuSourceOwners_={};
     gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
     pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
-    gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=false;
+    gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=gpuCullViewUsed_=false;
     vertices_={};indices_={};texture_={};liveSlots_={};
     aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;proceduralActive_=false;
     seedProgramParams_={};stateProgramParams_={};gpuVmPayload_={};
@@ -460,7 +460,7 @@ bool ComputeParticles::tryClear() {
     if(allocatorOk&&gpuAllocationActive_){
         std::vector<uint32_t> free(cap);
         for(uint32_t i=0;i<cap;++i)free[i]=cap-1-i;
-        const std::array<uint32_t,6> counters{0,cap,0,0,0,0};
+        const std::array<uint32_t,7> counters{0,cap,0,0,0,0,0};
         const std::array<uint32_t,3> emptyDispatch{1,1,1};
         allocatorOk=device_->updateStorageBufferChecked(liveSlots_,free.data(),free.size()*sizeof(uint32_t))&&
             device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters))&&
@@ -651,6 +651,12 @@ bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
 }
 void ComputeParticles::setView(const fx::SpectraFxView& view) {
     if(!view.valid()) { viewReady_=false;return; }
+    if(gpuCullViewUsed_ && verticesReady_ &&
+       (std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0 ||
+        right_.x!=view.right.x || right_.y!=view.right.y || right_.z!=view.right.z ||
+        up_.x!=view.up.x || up_.y!=view.up.y || up_.z!=view.up.z)) {
+        verticesReady_=false; // old visible stream is not valid for a new camera
+    }
     viewProj_=view.viewProj;eye_=view.eye;right_=view.right;up_=view.up;
     viewReady_=true;
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
@@ -925,6 +931,11 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,desc_.capacity,count,0};
+    const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
+    if(cull){
+        std::memcpy(u.cullViewProj,viewProj_.m,sizeof(u.cullViewProj));
+        u.cullControl.x=1.f;
+    }
     const bool indirect=device_->supportsGpuComputeIndirect();
     auto dispatch=[&](uint32_t mode,uint32_t threads,bool list){
         u.meta[0]=mode;device_->setComputeUniforms(&u,sizeof(u));
@@ -954,6 +965,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
         reason_="GPU alive-list dispatch rejected; checked reset required";return false;
     }
     std::swap(gpuAliveCurrent_,gpuAliveNext_);
+    gpuCullViewUsed_=cull;
     gpuAllocationSubmitted_|=count!=0;
     if(count){
         gpuBirthEstimates_.push_back({gpuAllocationClock_+desc_.lifetime,count});
@@ -1013,17 +1025,17 @@ bool ComputeParticles::requestAllocationCounters(std::function<void(bool,Allocat
     const auto capacity=desc_.capacity;
     std::weak_ptr<uint64_t> lifetime(readbackLifetime_);
     asyncAllocationCountersPending_=true;
-    if(!device_->readBufferAsync(aliveCounter_,4*sizeof(uint32_t),
+    if(!device_->readBufferAsync(aliveCounter_,7*sizeof(uint32_t),
         [this,lifetime,revision,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes) mutable{
             if(!lifetime.lock())return;
             asyncAllocationCountersPending_=false;
             AllocationCounters result{};result.revision=revision;
-            bool ok=bytes.size()==4*sizeof(uint32_t);
+            bool ok=bytes.size()==7*sizeof(uint32_t);
             if(ok){
-                std::array<uint32_t,4> raw{};
+                std::array<uint32_t,7> raw{};
                 std::memcpy(raw.data(),bytes.data(),bytes.size());
-                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];
-                ok=result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
+                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];result.visible=raw[6];
+                ok=result.visible<=result.alive&&result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
                    result.admitted<=capacity-result.reservedBase&&result.alive==capacity-result.free;
             }
             callback(ok,result);

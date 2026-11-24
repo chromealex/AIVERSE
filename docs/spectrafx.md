@@ -1,6 +1,6 @@
-## Stage 111 — GPU billboard frustum culling (in progress; QA pending)
+## Stage 111 — GPU billboard frustum culling (source implemented; QA pending)
 
-Scope: GPU-owned Metal allocator only. Preserve full simulation and free/alive accounting for offscreen particles; compact visible billboard records and publish draw arguments from the visible count. Conservative clip-plane tests must retain partially intersecting billboards and bypass invalid views. No new authored graph fields or ECS authority. Acceptance: exact alive/free and visible counts, re-entry without respawn, zero-visible draw, both geometry layouts, no mandatory readback, unchanged host-owned paths. Native/Metal QA deferred.
+Scope: GPU-owned Metal allocator only. Preserve full simulation and free/alive accounting for offscreen particles; compact visible billboard records and publish draw arguments from the visible count. Conservative clip-plane tests must retain partially intersecting billboards and bypass invalid views. No new authored graph fields or ECS authority. Acceptance: exact alive/free and visible counts, re-entry without respawn, zero-visible draw, both geometry layouts, no mandatory readback, unchanged host-owned paths. Native/Metal QA deferred. The existing async allocation counter snapshot now reports `visible` separately from `alive`; no new authored property. Set the view before step; a changed camera invalidates the previous culled draw stream until step (including zero-dt refresh). Legacy host-owned paths remain unchanged.
 
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
 

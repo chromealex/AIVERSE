@@ -167,6 +167,8 @@ public:
     // Cancel pending births and queue an ordered GPU kill for submitted slots.
     // Slots cannot be reused until the next successful GPU step submission.
     bool killSourceParticles(uint64_t sourceToken);
+    // Set the frame view before step(); changing a previously culled view
+    // invalidates the compact geometry until the next step (dt=0 is valid).
     void setView(const fx::SpectraFxView& view);
     template<class Camera>
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
@@ -185,11 +187,12 @@ public:
     // Between completed frames only. Returns false when unavailable; failure
     // must never be interpreted as zero VM errors.
     bool readGpuVmErrors(uint32_t& count);
-    // Optional 16-byte async counter snapshot. Results describe the captured
+    // Optional 28-byte async counter snapshot (includes exact visible count). Results describe the captured
     // submission, not the current frame. No mandatory per-frame readback.
     struct AllocationCounters {
         uint32_t alive=0,free=0,reservedBase=0,admitted=0;
         uint64_t revision=0;
+        uint32_t visible=0; // actual draw population for the captured submission
     };
     bool requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback);
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
@@ -237,6 +240,8 @@ private:
     struct Uniforms {
         render::float4 gravityDt, rightSize, up;
         std::array<uint32_t,4> meta;
+        float cullViewProj[16]{};
+        render::float4 cullControl{}; // x: valid culling view
     };
     struct DrawUniforms {
         float viewProj[16];
@@ -247,7 +252,7 @@ private:
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
-    static_assert(sizeof(Uniforms)==64);
+    static_assert(sizeof(Uniforms)==144);
     static_assert(sizeof(DrawUniforms)==144);
 
     bool stepGpuAllocated(float dt);
@@ -287,6 +292,7 @@ private:
     double gpuAllocationClock_=0;
     uint64_t gpuEstimatedBirths_=0;
     bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
+    bool gpuCullViewUsed_=false; // camera-dependent compact stream
     struct KilledSlotAwaitingFrame {
         uint32_t slot=0;
         uint64_t submittedFrame=0;

@@ -384,6 +384,31 @@ int main() {
     check(!noIndirect.badOrder,"fallback gather RHI command order");
     fallbackGather.shutdown();
 
+    // GPU-owned culling uses the same submitted camera for step and draw.
+    RecordingMetalDevice cullDevice;
+    cullDevice.indirectAvailable=true;
+    spectra::ComputeParticles culled;
+    auto cullConfig=config;cullConfig.gpuOwnedAllocation=true;
+    check(culled.init(&cullDevice,cullConfig),"GPU-owned cull mock init");
+    check(culled.stats().gpuOwnedAllocation,"GPU-owned allocator not selected");
+    auto frameView=fx::SpectraFxView::fromCamera(cam,cam.proj(800.f/600.f,false)*cam.view(),800,600);
+    culled.setView(frameView);
+    cullDevice.beginFrame(800,600);
+    check(culled.burstAt({0,2,0})&&culled.step(0.f),"GPU-owned cull step");
+    check(cullDevice.stages==std::vector<uint32_t>({10,8,11,13,12,5}),"GPU-owned cull dispatch order");
+    culled.setView(frameView); // unchanged view must not invalidate
+    cullDevice.beginPass(gfx::PassDesc{});culled.draw();cullDevice.endPass();
+    check(cullDevice.indirectCalls==1,"same view did not draw");
+    frameView.viewProj.m[12]+=1.f;
+    culled.setView(frameView);
+    cullDevice.beginPass(gfx::PassDesc{});culled.draw();cullDevice.endPass();
+    check(cullDevice.indirectCalls==1,"stale culled camera drew");
+    check(culled.step(0.f),"frozen camera recull failed");
+    cullDevice.beginPass(gfx::PassDesc{});culled.draw();cullDevice.endPass();
+    check(cullDevice.indirectCalls==2,"recull did not restore draw");
+    cullDevice.endFrame();culled.shutdown();
+    check(!cullDevice.badOrder,"GPU-owned cull encoder ordering");
+
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;
     check(!emitter.init(nullptr,config),"RequireGpu should fail without a Device");

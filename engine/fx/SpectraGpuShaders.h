@@ -27,6 +27,8 @@ struct Uniforms {
                             // 4 atomic compact, 5 GPU-authored indirect args
                             // 6 scatter-kill by physical slot IDs
                             // y: capacity; z: births; w: host survivor count
+    float4x4 cullViewProj;
+    float4 cullControl;
 };
 struct DrawArgs {
     uint indexCount, instanceCount, firstIndex;
@@ -221,7 +223,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                      ) {
     uint id=gid.x;
 #ifdef SPECTRA_GPU_OWNED_ALLOCATION
-    // Counters: alive, free, reserved base, admitted, work, next alive.
+    // Counters: alive, free, reserved base, admitted, work, next alive, visible.
     // Kill marks entries in the old list; only update returns their slots.
     // Thus a killed slot cannot be reused while it is still in the input list.
     if(u.meta.x==9u){
@@ -300,6 +302,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         if(id==0u){
             uint count=min(atomic_load_explicit(&aliveCounter[5],memory_order_relaxed),u.meta.y);
             atomic_store_explicit(&aliveCounter[0],count,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[6],u.cullControl.x>0.5f?0u:count,memory_order_relaxed);
             dispatchArgs[0]=max(1u,(count+63u)/64u);
             dispatchArgs[1]=dispatchArgs[2]=1u;
         }
@@ -337,6 +340,9 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     if(u.meta.x==5u) {
         if(id==0u) {
             uint alive=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
+ #ifdef SPECTRA_GPU_OWNED_ALLOCATION
+            alive=min(atomic_load_explicit(&aliveCounter[6],memory_order_relaxed),alive);
+ #endif
             const bool procedural=u.gravityDt.w>0.5f;
             gpuDrawArgs[0].indexCount=procedural?6u:alive*6u;
             gpuDrawArgs[0].instanceCount=procedural?alive:1u;
@@ -395,12 +401,35 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         ordinal=atomic_fetch_add_explicit(&aliveCounter[0],1u,memory_order_relaxed);
         if(ordinal>=u.meta.y)return;
     }
-    uint base=ordinal*4u;
     float3 centre=p.positionAge.xyz;
     bool active=p.positionAge.w>=0.0f && p.velocityLife.w>0.0f;
     float halfSize=active?max(0.0f,p.size.x)*0.5f:0.0f;
     float3 right=u.rightSize.xyz*halfSize;
     float3 up=u.up.xyz*halfSize;
+#ifdef SPECTRA_GPU_OWNED_ALLOCATION
+    if(u.meta.x==12u&&u.cullControl.x>0.5f){
+        if(!active)return;
+        // Homogeneous plane support of the actual billboard quad. A quad
+        // is outside only if ALL corners are outside the SAME clip plane.
+        float4 c=u.cullViewProj*float4(centre,1.0f);
+        float4 r=u.cullViewProj*float4(right,0.0f);
+        float4 v=u.cullViewProj*float4(up,0.0f);
+        if(all(isfinite(c))&&all(isfinite(r))&&all(isfinite(v))){
+            // Use the wider [-w,w] depth interval to remain conservative
+            // across projection conventions; rasterization handles near z.
+            float3 hi=c.www-c.xyz+abs(r.www-r.xyz)+abs(v.www-v.xyz);
+            float3 lo=c.www+c.xyz+abs(r.www+r.xyz)+abs(v.www+v.xyz);
+            float eps=1e-5f*(1.0f+max(max(abs(c.x),abs(c.y)),max(abs(c.z),abs(c.w)))+
+                       max(max(abs(r.x),abs(r.y)),max(abs(r.z),abs(r.w)))+
+                       max(max(abs(v.x),abs(v.y)),max(abs(v.z),abs(v.w))));
+            if(isfinite(eps)&&all(isfinite(hi))&&all(isfinite(lo))&&
+               (any(hi < -eps)||any(lo < -eps)))return;
+        }
+        ordinal=atomic_fetch_add_explicit(&aliveCounter[6],1u,memory_order_relaxed);
+        if(ordinal>=u.meta.y)return;
+    }
+#endif
+    uint base=ordinal*4u;
     float3 positions[4]={centre-right-up,centre+right-up,centre+right+up,centre-right+up};
     float2 uv[4]={float2(0,1),float2(1,1),float2(1,0),float2(0,0)};
     float4 color=p.tint;
