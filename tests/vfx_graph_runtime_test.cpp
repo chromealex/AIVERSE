@@ -754,11 +754,16 @@ int main() {
         auto invalid=config;invalid.dimension=65;
         require(!volume.init(invalid)&&volume.cells().size()==512,"invalid config preserves existing grid");
         vol::Asset asset;asset.simulation=config;asset.sources={source};
+        asset.material.smokeDetail=.8f;asset.material.emberIntensity=1.5f;
         vol::Asset decoded;std::string why;
-        require(vol::readAsset(vol::writeAsset(asset),decoded,why)&&decoded.sources.size()==1,"volume asset roundtrip");
+        require(vol::readAsset(vol::writeAsset(asset),decoded,why)&&decoded.sources.size()==1&&
+                std::abs(decoded.material.smokeDetail-.8f)<.0001f&&
+                std::abs(decoded.material.emberIntensity-1.5f)<.0001f,"volume asset material roundtrip");
         vol::GasGrid second;require(vol::initAsset(decoded,second,why)&&second.step()&&second.stats().density>0,"native asset runtime");
         auto malformed=vol::writeAsset(asset);malformed.set("unknown",Json::number(int64_t(1)));
         require(!vol::readAsset(malformed,decoded,why)&&decoded.sources.size()==1,"strict asset rejection");
+        malformed=vol::writeAsset(asset);malformed.find("material")->set("emberIntensity",Json::number(11.0));
+        require(!vol::readAsset(malformed,decoded,why)&&decoded.sources.size()==1,"invalid ember intensity rejected");
         volume.clear();require(volume.stats().density==0&&volume.tick()==0&&volume.stats().solidCells==256,"clear transient field retains obstacle");
     }
     {

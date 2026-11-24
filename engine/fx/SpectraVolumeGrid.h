@@ -52,12 +52,37 @@ struct Stats {uint64_t ticks=0;size_t cells=0,solidCells=0;double density=0,temp
 struct Material {
     float3 smokeColor{.45f,.48f,.52f},fireColor{4.f,1.2f,.2f};
     float extinction=2,emission=1,emissionThreshold=.5f;
+    float smokeDetail=0,emberIntensity=0;
     bool valid()const{
         const auto positive=[](float3 v,float max){return bounded(v,max)&&v.x>=0&&v.y>=0&&v.z>=0;};
         return positive(smokeColor,16)&&positive(fireColor,64)&&between(extinction,0,100)&&
-            between(emission,0,100)&&between(emissionThreshold,0,kMaxScalar);
+            between(emission,0,100)&&between(emissionThreshold,0,kMaxScalar)&&
+            between(smokeDetail,0,1)&&between(emberIntensity,0,10);
     }
 };
+inline float volumeHash(float3 p){
+    const float v=std::sin(p.x*12.9898f+p.y*78.233f+p.z*37.719f)*43758.5453f;
+    return v-std::floor(v);
+}
+inline float volumeNoise(float3 p){
+    const float3 base{std::floor(p.x),std::floor(p.y),std::floor(p.z)};
+    float3 f{p.x-base.x,p.y-base.y,p.z-base.z};
+    f={f.x*f.x*(3.f-2.f*f.x),f.y*f.y*(3.f-2.f*f.y),f.z*f.z*(3.f-2.f*f.z)};
+    const auto mix=[](float a,float b,float t){return a+(b-a)*t;};
+    const auto plane=[&](float z){
+        return mix(mix(volumeHash(base+float3{0,0,z}),volumeHash(base+float3{1,0,z}),f.x),
+                   mix(volumeHash(base+float3{0,1,z}),volumeHash(base+float3{1,1,z}),f.x),f.y);
+    };
+    return mix(plane(0),plane(1),f.z);
+}
+inline float smokeDetailFactor(float3 p,float strength){
+    if(strength<=0)return 1;
+    const float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
+    return std::max(.1f,1.f+strength*((low-.5f)*1.4f+(high-.5f)*.8f));
+}
+inline float emberSample(float3 p){
+    return volumeHash({std::floor(p.x*8.f),std::floor(p.y*8.f),std::floor(p.z*8.f)});
+}
 struct RayResult {float3 radiance{};float alpha=0;uint32_t steps=0;};
 
 class GasGrid final {
@@ -181,11 +206,14 @@ public:
         for(uint32_t i=0;i<steps&&trans>1e-4f;++i){
             Cell c;const auto p=eye+direction*(start+(float(i)+.5f)*ds);
             if(!sample(p,c))continue;
-            const float sigma=c.density*material.extinction;
+            const float sigma=c.density*material.extinction*smokeDetailFactor(p,material.smokeDetail);
             const float opacity=-std::expm1(-sigma*ds);
             const float integral=sigma>1e-6f?opacity/sigma:ds;
             const float heat=std::max(0.f,c.temperature-material.emissionThreshold)*material.emission;
-            result.radiance=result.radiance+(material.smokeColor*opacity+material.fireColor*(heat*integral))*trans;
+            const float ember=std::max(0.f,emberSample(p)-.999f)*1000.f*material.emberIntensity*
+                std::min(1.f,c.density)*ds;
+            result.radiance=result.radiance+(material.smokeColor*opacity+material.fireColor*(heat*integral)+
+                float3{8.f,1.4f,.15f}*ember)*trans;
             trans*=1-opacity;++result.steps;
         }
         result.alpha=1-trans;out=result;return true;

@@ -92,7 +92,7 @@ public:
         const auto sun=sunValid?render::normalize(f.lighting.sunDir):float3{};
         u.sun={sun.x,sun.y,sun.z,sunValid?f.lighting.sunIntensity:0.f};
         u.sunColor={std::max(0.f,f.lighting.sunColor.x),std::max(0.f,f.lighting.sunColor.y),std::max(0.f,f.lighting.sunColor.z),0};
-        u.limits={float(settings.shadowSteps),float(settings.pointLights.size()),0,0};
+        u.limits={float(settings.shadowSteps),float(settings.pointLights.size()),material.smokeDetail,material.emberIntensity};
         for(size_t i=0;i<settings.pointLights.size();++i){
             const auto& l=settings.pointLights[i];
             u.pointPos[i]={l.position.x,l.position.y,l.position.z,l.radius};

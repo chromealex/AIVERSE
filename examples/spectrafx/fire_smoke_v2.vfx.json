@@ -4,51 +4,107 @@
     {
       "id": "volume_domain",
       "type": "VolumeDomain",
-      "position": [40, 320],
+      "position": [
+        40,
+        320
+      ],
       "properties": {
-        "dimension": 32,
-        "origin": [-2, -1, -2],
-        "cellSize": 0.125
+        "dimension": 64,
+        "origin": [
+          -5,
+          -2,
+          -4
+        ],
+        "cellSize": 0.25,
+        "wind": [
+          2,
+          0.5,
+          0
+        ]
       }
     },
     {
       "id": "volume_source",
       "type": "VolumeSource",
-      "position": [270, 320],
+      "position": [
+        270,
+        320
+      ],
       "properties": {
-        "position": [0, 0, 0],
-        "radius": 0.48,
-        "smoke": 9,
-        "temperature": 13,
-        "fuel": 8,
-        "acceleration": [0, 4, 0]
+        "position": [
+          -4,
+          -1,
+          0
+        ],
+        "radius": 0.55,
+        "smoke": 3,
+        "temperature": 20,
+        "fuel": 15,
+        "acceleration": [
+          0,
+          2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "volume_smoke",
+      "type": "VolumeSource",
+      "position": [
+        400,
+        390
+      ],
+      "properties": {
+        "position": [
+          -3.3,
+          -0.4,
+          0
+        ],
+        "radius": 0.42,
+        "smoke": 16,
+        "temperature": 3,
+        "fuel": 0,
+        "acceleration": [
+          8,
+          7,
+          0
+        ]
       }
     },
     {
       "id": "volume_advect",
       "type": "VolumeAdvection",
-      "position": [500, 320],
+      "position": [
+        500,
+        320
+      ],
       "properties": {
-        "buoyancy": 1.7,
-        "smokeDecay": 0.12,
-        "temperatureDecay": 1.1
+        "buoyancy": 1.8,
+        "smokeDecay": 0.04,
+        "temperatureDecay": 1.5
       }
     },
     {
       "id": "volume_burn",
       "type": "VolumeCombustion",
-      "position": [730, 320],
+      "position": [
+        730,
+        320
+      ],
       "properties": {
         "ignition": 0.3,
-        "burnRate": 6,
+        "burnRate": 7,
         "heatYield": 2,
-        "smokeYield": 1.3
+        "smokeYield": 1.5
       }
     },
     {
       "id": "volume_pressure",
       "type": "VolumePressure",
-      "position": [960, 320],
+      "position": [
+        960,
+        320
+      ],
       "properties": {
         "pressureIterations": 12
       }
@@ -56,22 +112,56 @@
     {
       "id": "volume_output",
       "type": "VolumeOutput",
-      "position": [1190, 320],
+      "position": [
+        1190,
+        320
+      ],
       "properties": {
-        "smokeColor": [0.18, 0.19, 0.22],
-        "fireColor": [4.5, 1.1, 0.08],
-        "extinction": 2.5,
-        "emission": 0.75,
-        "emissionThreshold": 0.55
+        "smokeColor": [
+          0.025,
+          0.024,
+          0.022
+        ],
+        "fireColor": [
+          9,
+          2,
+          0.12
+        ],
+        "extinction": 4.5,
+        "emission": 1.3,
+        "emissionThreshold": 0.7,
+        "smokeDetail": 1,
+        "emberIntensity": 0.5
       }
     }
   ],
   "links": [
-    {"from": "volume_domain", "to": "volume_source"},
-    {"from": "volume_source", "to": "volume_advect"},
-    {"from": "volume_advect", "to": "volume_burn"},
-    {"from": "volume_burn", "to": "volume_pressure"},
-    {"from": "volume_pressure", "to": "volume_output"}
+    {
+      "from": "volume_domain",
+      "to": "volume_source"
+    },
+    {
+      "from": "volume_source",
+      "to": "volume_smoke"
+    },
+    {
+      "from": "volume_smoke",
+      "to": "volume_advect"
+    },
+    {
+      "from": "volume_advect",
+      "to": "volume_burn"
+    },
+    {
+      "from": "volume_burn",
+      "to": "volume_pressure"
+    },
+    {
+      "from": "volume_pressure",
+      "to": "volume_output"
+    }
   ],
-  "outputs": ["volume_output"]
+  "outputs": [
+    "volume_output"
+  ]
 }

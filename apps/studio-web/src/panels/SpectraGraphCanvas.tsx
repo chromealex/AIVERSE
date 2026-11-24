@@ -14,7 +14,7 @@ const volumeFields:Record<string,Record<string,unknown>>={
   VolumeAdvection:{buoyancy:1,smokeWeight:0.1,velocityDecay:0.15,smokeDecay:0.25,temperatureDecay:0.6,fuelDecay:0.05,maxVelocity:20},
   VolumeCombustion:{ignition:0.5,burnRate:3,heatYield:2,smokeYield:0.5},
   VolumePressure:{pressureIterations:12},
-  VolumeOutput:{smokeColor:[0.45,0.48,0.52],fireColor:[4,1.2,0.2],extinction:2,emission:1,emissionThreshold:0.5},
+  VolumeOutput:{smokeColor:[0.45,0.48,0.52],fireColor:[4,1.2,0.2],extinction:2,emission:1,emissionThreshold:0.5,smokeDetail:0,emberIntensity:0},
 };
 interface Props {
   graph:SpectraGraphV2;

@@ -26,7 +26,7 @@ inline const std::vector<NodeInfo>& nodeCatalog() {
         {"VolumeAdvection","Volumes",R"({"buoyancy":1,"smokeDecay":0.25})","",true},
         {"VolumeCombustion","Volumes",R"({"ignition":0.5,"burnRate":3})","",true},
         {"VolumePressure","Volumes",R"({"pressureIterations":12})","",true},
-        {"VolumeOutput","Volumes",R"({"extinction":2,"emission":1})","",true},
+        {"VolumeOutput","Volumes",R"({"extinction":2,"emission":1,"smokeDetail":0,"emberIntensity":0})","",true},
         {"Spawn","Pipeline",R"({"burst":16})","",false},
         {"Initialize","Pipeline",R"({"life":1,"speed":1,"size":0.4})","speed|size|life|spread",false},
         {"Update","Pipeline",R"({})","",false},

@@ -34,6 +34,25 @@ float phase(float cosine,float g){
     float v=max(0.001f,1.0f+g*g-2.0f*g*cosine);
     return (1.0f-g*g)/(12.5663706f*v*sqrt(v));
 }
+float volumeHash(float3 q){
+    float v=sin(dot(q,float3(12.9898f,78.233f,37.719f)))*43758.5453f;
+    return fract(v);
+}
+float volumeNoise(float3 p){
+    float3 b=floor(p),f=p-b;
+    f=f*f*(3.0f-2.0f*f);
+    float a=mix(mix(volumeHash(b),volumeHash(b+float3(1,0,0)),f.x),
+                mix(volumeHash(b+float3(0,1,0)),volumeHash(b+float3(1,1,0)),f.x),f.y);
+    float c=mix(mix(volumeHash(b+float3(0,0,1)),volumeHash(b+float3(1,0,1)),f.x),
+                mix(volumeHash(b+float3(0,1,1)),volumeHash(b+float3(1,1,1)),f.x),f.y);
+    return mix(a,c,f.z);
+}
+float smokeDetailFactor(float3 p,float strength){
+    if(strength<=0.0f)return 1.0f;
+    float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
+    return max(0.1f,1.0f+strength*((low-0.5f)*1.4f+(high-0.5f)*0.8f));
+}
+float emberSample(float3 p){return volumeHash(floor(p*8.0f));}
 float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction FIELD_ARG){
     if(steps==0u||reach<=0.0f)return 1.0f;
     float2 hit=intersectBox(p,dir,domain.xyz,domain.xyz+float3(domain.w*float(n)),reach);
@@ -69,7 +88,7 @@ KERNEL_BEGIN
     for(uint i=0u;i<steps&&trans>0.0001f;++i){
         float3 p=eye+dir*(hit.x+(float(i)+0.5f)*ds);
         float2 field=fieldAt(p,u.domain,n FIELD_PASS);
-        float sigma=max(0.0f,field.x)*u.smoke.w;
+        float sigma=max(0.0f,field.x)*u.smoke.w*smokeDetailFactor(p,u.limits.z);
         float heat=max(0.0f,field.y-u.controls.x)*u.fire.w;
         if(sigma<=0.0f&&heat<=0.0f)continue;
         float tr=exp(-sigma*ds),opacity=1.0f-tr;
@@ -87,7 +106,8 @@ KERNEL_BEGIN
             float atten=shadow(p,lightDir,dist,u.domain,n,uint(u.limits.x),u.smoke.w FIELD_PASS);
             incident+=u.pointColor[l].xyz*(u.pointColor[l].w*falloff*phase(dot(dir,lightDir),u.controls.w)*atten);
         }
-        radiance+=trans*(u.smoke.xyz*incident*opacity+u.fire.xyz*(heat*integral));
+        float ember=max(0.0f,emberSample(p)-0.999f)*1000.0f*u.limits.w*min(1.0f,max(0.0f,field.x))*ds;
+        radiance+=trans*(u.smoke.xyz*incident*opacity+u.fire.xyz*(heat*integral)+float3(8.0f,1.4f,0.15f)*ember);
         trans*=tr;
     }
     WRITE_COLOR(id,float4(clamp(background.rgb*trans+radiance,float3(0.0f),float3(65504.0f)),background.a));

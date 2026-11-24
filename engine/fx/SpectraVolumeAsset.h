@@ -84,10 +84,12 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
         return fail("Invalid volume simulation settings");
     if(root.has("material")){
         const auto& m=root["material"];auto& a=next.material;
-        if(!keys(m,{"smokeColor","fireColor","extinction","emission","emissionThreshold"})||
+        if(!keys(m,{"smokeColor","fireColor","extinction","emission","emissionThreshold","smokeDetail","emberIntensity"})||
            !vector(m,"smokeColor",a.smokeColor)||!vector(m,"fireColor",a.fireColor)||
            !number(m,"extinction",a.extinction)||!number(m,"emission",a.emission)||
-           !number(m,"emissionThreshold",a.emissionThreshold)||!a.valid())return fail("Invalid volume material");
+           !number(m,"emissionThreshold",a.emissionThreshold)||
+           !number(m,"smokeDetail",a.smokeDetail)||!number(m,"emberIntensity",a.emberIntensity)||
+           !a.valid())return fail("Invalid volume material");
     }
     const auto parseSource=[](const Json& entry,Source& a){
         return keys(entry,{"position","radius","smoke","temperature","fuel","acceleration","radialAcceleration"})&&
@@ -131,7 +133,10 @@ inline Json writeAsset(const Asset& a){
     s.set("smokeYield",scalar(c.smokeYield));s.set("maxVelocity",scalar(c.maxVelocity));root.set("simulation",std::move(s));
     m.set("smokeColor",vec(a.material.smokeColor));m.set("fireColor",vec(a.material.fireColor));
     m.set("extinction",scalar(a.material.extinction));m.set("emission",scalar(a.material.emission));
-    m.set("emissionThreshold",scalar(a.material.emissionThreshold));root.set("material",std::move(m));
+    m.set("emissionThreshold",scalar(a.material.emissionThreshold));
+    if(a.material.smokeDetail!=0)m.set("smokeDetail",scalar(a.material.smokeDetail));
+    if(a.material.emberIntensity!=0)m.set("emberIntensity",scalar(a.material.emberIntensity));
+    root.set("material",std::move(m));
     const auto writeSource=[](const Source& x){
         Json j=Json::object();j.set("position",vec(x.position));j.set("radius",scalar(x.radius));
         j.set("smoke",scalar(x.smoke));j.set("temperature",scalar(x.temperature));j.set("fuel",scalar(x.fuel));

@@ -208,29 +208,35 @@ int aiverseMain(int,char**) { @autoreleasepool {
             if(!fire.getStr("error").empty())std::cerr<<"Fire load: "<<fire.dump()<<"\n";
             require(fire.getBool("ready")&&fire.getStr("error").empty()&&fire.getBool("volume"),
                     "fire and smoke graph failed native Studio load");
+            const auto camera=scene.spectraPreviewCommand(Json::parse(R"({"action":"cameraRestore","camera":{"yaw":0,"pitch":0,"distance":18,"targetX":1,"targetY":3,"targetZ":0,"ortho":false}})"),"");
+            require(camera.getStr("error").empty(),"fire and smoke camera setup failed");
+            scene.spectraPreviewCommand(Json::parse(R"({"action":"stage","background":"neutral","grid":true,"axes":false})"),"");
             [window setContentSize:NSMakeSize(512,512)];
             layer.frame=CGRectMake(0,0,512,512);
             layer.drawableSize=CGSizeMake(512,512);
             const auto fireFrame=[&]{scene.frame(512,512,map,false,"","",empty,0);};
             scene.spectraPreviewCommand(action("play"),"");
-            for(int i=0;i<120;++i)fireFrame();
+            for(int i=0;i<240;++i)fireFrame();
             const auto fireStatus=scene.spectraPreviewCommand(action("status"),"");
             if(!fireStatus.getBool("volumeRendered"))
                 std::cerr<<"Fire status: "<<fireStatus.dump()<<"\n";
             require(fireStatus.getBool("volumeRendered")&&fireStatus.getStr("error").empty(),
                     "fire and smoke HDR volume did not render");
-            bool capturedFire=false,validFire=false,visibleFire=false,visibleSmoke=false;
+            bool capturedFire=false,validFire=false,visibleFire=false,visibleSmoke=false,visibleEmbers=false;
             scene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels){
                 validFire=w==512&&h==512&&pixels.size()==size_t(w*h*4);
                 if(validFire){
-                    size_t warm=0,gray=0;
-                    for(int y=0;y<h/2;++y)for(int x=0;x<w;++x){
+                    size_t warm=0,dark=0,embers=0;
+                    for(int y=0;y<h;++y)for(int x=0;x<w;++x){
                         const size_t at=(size_t(y)*size_t(w)+size_t(x))*4;
                         const int r=pixels[at],g=pixels[at+1],b=pixels[at+2];
                         if(r>80&&r*100>g*115&&g*100>b*120)++warm;
-                        if(r>25&&std::abs(r-g)<20&&std::abs(g-b)<25)++gray;
+                        if(x>150&&y<300){
+                            if(r<20&&g<20&&b<20)++dark;
+                            if(r>70&&r*10>g*15&&g*10>b*12)++embers;
+                        }
                     }
-                    visibleFire=warm>1000;visibleSmoke=gray>1000;
+                    visibleFire=warm>1000;visibleSmoke=dark>5000;visibleEmbers=embers>5;
                 }
                 if(validFire)if(const char* path=std::getenv("AIVERSE_SPECTRA_FIRE_CAPTURE")){
                     std::ofstream image(path,std::ios::binary);
@@ -240,8 +246,8 @@ int aiverseMain(int,char**) { @autoreleasepool {
                 capturedFire=true;
             });
             for(int i=0;i<10&&!capturedFire;++i){fireFrame();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
-            require(capturedFire&&validFire&&visibleFire&&visibleSmoke,
-                    "fire and smoke GPU frame did not contain both warm emission and gray plume");
+            require(capturedFire&&validFire&&visibleFire&&visibleSmoke&&visibleEmbers,
+                    "fire and smoke GPU frame lacked flame, dark plume or embers");
         }
         const auto independentIdentity=mapScene.spectraPreviewCommand(action("status"),"");
         require(independentIdentity["generation"].integer()!=replacement["generation"].integer(),
