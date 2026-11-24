@@ -359,7 +359,34 @@ public:
     bool collectAfterGpuIdle(gfx::Device& device){
         return geometry_.collectAfterGpuIdle(device);
     }
+    bool hasActivePhysics()const noexcept {
+        for(const auto& [key,owner]:physics_) {
+            (void)key;
+            if(owner&&(owner->spatialOwner().activeRevision()||
+                       owner->boxOwner().activeRevision()||
+                       owner->spatialOwner().candidateInstalled()||
+                       owner->boxOwner().candidateInstalled()))return true;
+        }
+        return false;
+    }
+    // All readers must already be stopped, and pending work canceled.
+    // Preflight every owner before irreversible retirement begins.
+    bool releaseOwnedPhysics(physics::Scene& scene,world::SpatialWorld& spatial) {
+        for(const auto& [key,owner]:physics_) {
+            (void)key;
+            if(!owner||!owner->boxOwner().canRetire(scene)||
+               !owner->spatialOwner().canRetire(spatial))return false;
+        }
+        for(auto& [key,owner]:physics_) {
+            (void)key;
+            owner->boxOwner().unload(scene);
+            owner->spatialOwner().unload(spatial);
+        }
+        physics_.clear();
+        return true;
+    }
     bool shutdownAfterGpuIdle(gfx::Device& device){
+        if(hasActivePhysics())return false;
         cancelPending();
         worker_.drain();
         return geometry_.shutdownAfterGpuIdle(device);
