@@ -5,6 +5,7 @@
 #include <array>
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -81,19 +82,35 @@ inline int buildingSurfaceHeight(
         ?65:138+coarse+grain/2;
     return 255;
 }
+inline bool validBuildingSurfaceResolution(int size){return size==128||size==256||size==512;}
+// Periodic bilinear height sampling with fine-scale seeded grain. Preserve
+// the material-scale pattern at higher resolution, not nearest-neighbour
+// enlargement of the original 128-pixel image.
+inline float buildingSurfaceSample(std::string_view pattern,int x,int y,uint32_t seed,int size){
+    const float sx=float(x)*128.f/size,sy=float(y)*128.f/size;
+    const int ix=int(std::floor(sx)),iy=int(std::floor(sy));
+    const float fx=sx-ix,fy=sy-iy;
+    auto at=[&](int a,int b){return float(buildingSurfaceHeight(pattern,a,b,seed));};
+    const float a=at(ix,iy)*(1-fx)+at(ix+1,iy)*fx;
+    const float b=at(ix,iy+1)*(1-fx)+at(ix+1,iy+1)*fx;
+    const int xx=(x%size+size)%size,yy=(y%size+size)%size;
+    const float grain=float(int(buildingSurfacePixelHash(seed^0xa53c9e1u,xx,yy)&15u)-7);
+    return a*(1-fy)+b*fy+grain*.35f;
+}
 inline BuildingSurfacePixels generateBuildingSurface(
     std::string_view pattern,std::string_view materialName,
-    uint32_t seed,BuildingSurfaceChannel channel) {
+    uint32_t seed,BuildingSurfaceChannel channel,int resolution=128) {
     BuildingSurfacePixels result;
-    if(!validBuildingSurfacePattern(pattern)||pattern.empty())return result;
+    if(!validBuildingSurfacePattern(pattern)||pattern.empty()||!validBuildingSurfaceResolution(resolution))return result;
+    result.width=result.height=resolution;
     result.rgba.resize(size_t(result.width)*size_t(result.height)*4u);
     seed=buildingSurfaceNameSeed(materialName,seed);
     const auto at=[&](int x,int y){
-        return buildingSurfaceHeight(pattern,x,y,seed);
+        return resolution==128?float(buildingSurfaceHeight(pattern,x,y,seed)):buildingSurfaceSample(pattern,x,y,seed,resolution);
     };
     for(int y=0;y<result.height;++y)for(int x=0;x<result.width;++x){
         const size_t index=(size_t(y)*size_t(result.width)+size_t(x))*4u;
-        const int height=at(x,y);
+        const int height=int(std::lround(at(x,y)));
         uint8_t* p=result.rgba.data()+index;
         if(channel==BuildingSurfaceChannel::BaseColor){
             // Neutral sRGB modulation multiplies authored linear PBR factor
@@ -106,11 +123,18 @@ inline BuildingSurfacePixels generateBuildingSurface(
             p[2]=255; // authored metallicFactor controls metalness
             p[3]=255;
         }else {
-            const int dx=at(x+1,y)-at(x-1,y);
-            const int dy=at(x,y+1)-at(x,y-1);
+            const int dx=int(std::lround((at(x+1,y)-at(x-1,y))*resolution/128.f));
+            const int dy=int(std::lround((at(x,y+1)-at(x,y-1))*resolution/128.f));
             p[0]=uint8_t(std::clamp(128-dx/3,0,255));
             p[1]=uint8_t(std::clamp(128-dy/3,0,255));
             p[2]=255;p[3]=255;
+            if(resolution>128){
+                const float nx=-float(dx)/384.f,ny=-float(dy)/384.f;
+                const float inv=1.f/std::sqrt(nx*nx+ny*ny+1.f);
+                p[0]=uint8_t(std::clamp(int(std::lround((nx*inv*.5f+.5f)*255.f)),0,255));
+                p[1]=uint8_t(std::clamp(int(std::lround((ny*inv*.5f+.5f)*255.f)),0,255));
+                p[2]=uint8_t(std::clamp(int(std::lround((inv*.5f+.5f)*255.f)),0,255));
+            }
         }
     }
     return result;

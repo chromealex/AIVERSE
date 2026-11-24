@@ -206,9 +206,13 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     // 1. Foundation pad with corner beacons.
     if(sm.pad>=0){
         m.prism(sm.pad,cutRect(-pad,-pad,W+pad,D+pad,cut+pad*0.6f,0),cutRect(-pad+0.25f,-pad+0.25f,W+pad-0.25f,D+pad-0.25f,cut+pad*0.6f,padH));
-        if(sm.beacon>=0)for(auto [x,z]:std::initializer_list<std::pair<float,float>>{{-pad+0.5f,-pad+0.5f},{W+pad-0.5f,-pad+0.5f},{W+pad-0.5f,D+pad-0.5f},{-pad+0.5f,D+pad-0.5f}}){
-            if(sm.glow>=0)m.box(sm.dark,x-0.18f,padH,z-0.18f,x+0.18f,padH+0.12f,z+0.18f);
-            m.box(sm.beacon,x-0.1f,padH+0.12f,z-0.1f,x+0.1f,padH+0.24f,z+0.1f);}
+        // A chamfer cuts the corner out of the pad. Place beacons on the
+        // *upper* ring, with the entire mounting foot inside the polygon.
+        const float chamfer=std::clamp(cut+pad*.6f,0.f,std::min(W+2*pad-.5f,D+2*pad-.5f)*.45f);
+        const float inset=.25f+chamfer*.5f+.23f;
+        if(sm.beacon>=0)for(auto [x,z]:std::initializer_list<std::pair<float,float>>{{-pad+inset,-pad+inset},{W+pad-inset,-pad+inset},{W+pad-inset,D+pad-inset},{-pad+inset,D+pad-inset}}){
+            m.box(sm.dark,x-.18f,padH-.02f,z-.18f,x+.18f,padH+.12f,z+.18f);
+            m.box(sm.beacon,x-.1f,padH+.10f,z-.1f,x+.1f,padH+.24f,z+.1f);}
     }
     // 2. Main hull.
     const bool profiled=k.body!=StructureBody::Armour;

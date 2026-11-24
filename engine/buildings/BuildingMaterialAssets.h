@@ -106,14 +106,14 @@ inline bool bindBuildingStyleMaterials(
                 if(!guids[i].empty())continue;
                 const std::string key="surface:"+source.id+":"+
                     source.surfacePattern+":"+
-                    std::to_string(source.surfaceSeed)+":"+
+                    std::to_string(source.surfaceSeed)+":"+std::to_string(source.surfaceResolution)+":"+
                     std::to_string(i);
                 if(const auto it=indices.find(key);it!=indices.end()){
                     *slots[i]=it->second;continue;
                 }
                 auto pixels=lib::systems::generateBuildingSurface(
                     source.surfacePattern,source.id,source.surfaceSeed,
-                    channels[i]);
+                    channels[i],source.surfaceResolution);
                 if(pixels.rgba.empty()){
                     if(error)*error="Invalid procedural PBR surface in "+source.id;
                     return false;

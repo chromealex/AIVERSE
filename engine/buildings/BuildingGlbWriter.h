@@ -63,13 +63,13 @@ struct Glb{
         if(source.surfacePattern.empty())return -1;
         const std::string key="surface:"+source.id+":"+
             source.surfacePattern+":"+
-            std::to_string(source.surfaceSeed)+":"+
+            std::to_string(source.surfaceSeed)+":"+std::to_string(source.surfaceResolution)+":"+
             std::to_string(channel);
         if(auto it=cachedTextures.find(key);it!=cachedTextures.end())
             return it->second;
         const auto generated=generateBuildingSurface(
             source.surfacePattern,source.id,source.surfaceSeed,
-            static_cast<BuildingSurfaceChannel>(channel));
+            static_cast<BuildingSurfaceChannel>(channel),source.surfaceResolution);
         if(generated.rgba.empty())
             throw std::runtime_error("Cannot generate authored PBR surface");
         const auto bytes=aiverse::building::encodeBuildingPngRgba(

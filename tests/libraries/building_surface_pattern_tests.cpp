@@ -39,6 +39,15 @@ int main(){
             REQUIRE(changed.rgba.size()==a.rgba.size());
             REQUIRE(changed.rgba!=a.rgba);
         }
+        for(int size:{256,512}){
+            const auto p=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::BaseColor,size);
+            REQUIRE(p.width==size&&p.height==size&&p.rgba.size()==size_t(size)*size*4u);
+            REQUIRE(p.rgba==generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::BaseColor,size).rgba);
+            const auto normal=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::Normal,size);
+            REQUIRE(normal.rgba.size()==p.rgba.size());
+            REQUIRE(buildingSurfaceSample("brick",0,15,421u,size)==buildingSurfaceSample("brick",size,15,421u,size));
+        }
+        REQUIRE(generateBuildingSurface("brick","hull",1u,BuildingSurfaceChannel::BaseColor,1024).rgba.empty());
         REQUIRE(generateBuildingSurface("unsupported","hull",1u,BuildingSurfaceChannel::BaseColor).rgba.empty());
         std::puts("building surface pattern contracts: PASS (16 patterns, 3 PBR maps)");
         return 0;

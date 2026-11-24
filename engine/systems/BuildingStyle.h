@@ -34,7 +34,7 @@ struct StyleMaterial{
     float normalScale=1.f,occlusionStrength=1.f;
     // Append new fields to preserve positional aggregate initializers across
     // native tools and existing game clients.
-    std::string surfacePattern; uint32_t surfaceSeed=0;
+    std::string surfacePattern; uint32_t surfaceSeed=0; int surfaceResolution=128;
     bool operator==(const StyleMaterial&)const=default;
 };
 struct StyleRange{float lo=0,hi=0;float pick(Random& g)const{return lo+(hi-lo)*float(g.unit().toDouble());}};
@@ -161,8 +161,19 @@ struct Mesher{
                  float l=std::sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);if(l>0)for(auto& x:r)x/=l;return r;};
              if(mat<0||size_t(mat)>=perMaterial.size())return;
              auto base=uint32_t(v.size());
+             float perimeter=0.f,arc=0.f,edge=0.f;
+             for(size_t k=0;k<n;++k){
+                 const auto& p=a[k];const auto& q=a[(k+1)%n];
+                 const float dx=q[0]-p[0],dy=q[1]-p[1],dz=q[2]-p[2];
+                 const float len=std::sqrt(dx*dx+dy*dy+dz*dz);
+                 perimeter+=len;if(k<i)arc+=len;if(k==i)edge=len;
+             }
+             (void)perimeter;
+             size_t corner=0;
              for(auto [q,centre]:{std::pair{a[i],ma},std::pair{a[j],ma},std::pair{b[j],mb},std::pair{b[i],mb}}){auto r=radial(q,centre);
-                 v.push_back({{q[0],q[1],q[2]},{r[0],r[1],r[2]},{0,0}});}
+                 const float u=arc+((corner==1||corner==2)?edge:0.f);
+                 const float t=corner>=2?al:0.f;
+                 v.push_back({{q[0],q[1],q[2]},{r[0],r[1],r[2]},{u,t}});++corner;}
              (void)ca;
              // winding: check against the radial direction of the first corner
              P3 e1{a[j][0]-a[i][0],a[j][1]-a[i][1],a[j][2]-a[i][2]},e2{b[i][0]-a[i][0],b[i][1]-a[i][1],b[i][2]-a[i][2]};
@@ -539,7 +550,7 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(!j["materials"].isObject()||j["materials"].members().empty())throw JsonError(path+".materials: expected object of materials");
     std::map<std::string,int> ids;
     for(const auto& [k,v]:j["materials"].members()){
-        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures","uvScale","uvOffset","uvRotation","normalScale","occlusionStrength","surfacePattern","surfaceSeed"});
+        auto p=path+".materials."+k;allow(v,p,{"color","metallic","roughness","emissive","emissiveStrength","textures","uvScale","uvOffset","uvRotation","normalScale","occlusionStrength","surfacePattern","surfaceSeed","surfaceResolution"});
         StyleMaterial mt;mt.id=k;if(v.has("color"))mt.color=rgb(v["color"],p+".color");if(v.has("metallic"))mt.metallic=num(v["metallic"],p+".metallic");
         if(v.has("roughness")){mt.roughness=num(v["roughness"],p+".roughness");}if(v.has("emissive"))mt.emissive=rgb(v["emissive"],p+".emissive");
         if(v.has("emissiveStrength"))mt.emissiveStrength=num(v["emissiveStrength"],p+".emissiveStrength");
@@ -576,6 +587,13 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
                !validBuildingSurfacePattern(v["surfacePattern"].str()))
                 throw JsonError(p+".surfacePattern: unknown generated PBR surface");
             mt.surfacePattern=v["surfacePattern"].str();
+        }
+        if(v.has("surfaceResolution")){
+            const auto& value=v["surfaceResolution"];
+            const double n=value.toDouble(-1);
+            if(!value.isNumber()||(n!=128&&n!=256&&n!=512))
+                throw JsonError(p+".surfaceResolution: expected 128, 256 or 512");
+            mt.surfaceResolution=int(n);
         }
         if(v.has("surfaceSeed")){
             const auto& value=v["surfaceSeed"];
