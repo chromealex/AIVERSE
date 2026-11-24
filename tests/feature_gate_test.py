@@ -479,5 +479,79 @@ class AutomationTest(unittest.TestCase):
             self.assertEqual({row[1] for row in report["headers"][0]["added"]},{"demo::work"})
 
 
+class NativeHostBuildTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("cmake") and shutil.which("ctest"), "CMake unavailable")
+    def test_registry_is_attached_only_to_game_hosts(self):
+        # Exercise the real CMake registration code with a minimal C++ registrar ABI.
+        build_rules = Path(__file__).resolve().parents[1] / "engine/game/native/Build.cmake"
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            game = root / "engine/game"
+            game.mkdir(parents=True)
+            (game / "Native.h").write_text(
+                '#pragma once\n#include <memory>\n#include <vector>\n#include <string>\n'
+                'namespace aiverse::game {\nstruct NativeModule {};\n'
+                'struct NativeDefinition { std::string id; unsigned version; '
+                'std::unique_ptr<NativeModule> (*create)(); };\n'
+                'struct NativeRegistrar { explicit NativeRegistrar(std::vector<NativeDefinition>); };\n'
+                'int count(); }\n')
+            (game / "Native.cpp").write_text(
+                '#include "Native.h"\nnamespace aiverse::game { static int n=0;\n'
+                'NativeRegistrar::NativeRegistrar(std::vector<NativeDefinition> defs) '
+                '{ n += int(defs.size()); } int count(){return n;} }\n')
+            (root / "stub.cpp").write_text("int fixture_stub(){return 0;}\n")
+            (root / "preview.cpp").write_text("int main(){return 0;}\n")
+            (root / "host.cpp").write_text(
+                '#include "engine/game/Native.h"\n'
+                'int main(){return aiverse::game::count()==EXPECTED_MODULES ? 0 : 1;}\n')
+            module = root / "project/native"
+            module.mkdir(parents=True)
+            (module / "CMakeLists.txt").write_text(
+                'aiverse_native_module(ID fixture VERSION 1 ENTRY makeFixture SOURCES fixture.cpp)\n')
+            (module / "fixture.cpp").write_text(
+                '#include "engine/game/Native.h"\n'
+                'std::unique_ptr<aiverse::game::NativeModule> makeFixture(){'
+                'return std::make_unique<aiverse::game::NativeModule>();}\n')
+            (root / "CMakeLists.txt").write_text(
+                'cmake_minimum_required(VERSION 3.20)\nproject(registry_fixture LANGUAGES CXX)\n'
+                'set(CMAKE_CXX_STANDARD 20)\nenable_testing()\n'
+                'add_library(aiverse_game STATIC stub.cpp)\n'
+                'target_include_directories(aiverse_game PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")\n'
+                'add_library(aiverse_runtime STATIC stub.cpp)\n'
+                'add_library(aiverse_client_runtime INTERFACE)\n'
+                'target_link_libraries(aiverse_client_runtime INTERFACE aiverse_runtime)\n'
+                'foreach(lib aiverse_game_view aiverse_net_game aiverse_editor_core aiverse_hosted_client aiverse_authority)\n'
+                '  add_library(${lib} INTERFACE)\n'
+                '  target_link_libraries(${lib} INTERFACE aiverse_game)\n'
+                'endforeach()\n'
+                'add_executable(preview preview.cpp)\n'
+                'target_link_libraries(preview PRIVATE aiverse_runtime)\n'
+                'add_executable(scene preview.cpp)\n'
+                'target_link_libraries(scene PRIVATE aiverse_client_runtime)\n'
+                'foreach(lib aiverse_game aiverse_game_view aiverse_net_game aiverse_editor_core aiverse_hosted_client aiverse_authority)\n'
+                '  add_executable(host_${lib} host.cpp)\n'
+                '  target_compile_definitions(host_${lib} PRIVATE EXPECTED_MODULES=${EXPECTED_MODULES})\n'
+                '  target_link_libraries(host_${lib} PRIVATE ${lib})\n'
+                '  add_test(NAME host_${lib} COMMAND host_${lib})\n'
+                'endforeach()\n'
+                + f'include("{build_rules.as_posix()}")\n'
+                + 'aiverse_native_configure()\n'
+                + 'add_test(NAME preview COMMAND preview)\nadd_test(NAME scene COMMAND scene)\n')
+            for count in (0, 1):
+                with self.subTest(modules=count):
+                    build = root / f"build-{count}"
+                    args = [f"-DEXPECTED_MODULES={count}"]
+                    if count:
+                        args.append(f"-DAIVERSE_NATIVE_DIR={module}")
+                    for command in (
+                        ["cmake", "-S", str(root), "-B", str(build), *args],
+                        ["cmake", "--build", str(build), "--config", "Debug", "--parallel", "2"],
+                        ["ctest", "--test-dir", str(build), "-C", "Debug", "--output-on-failure"],
+                    ):
+                        result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual((build/"gen/NativeRegistry.cpp").exists(), bool(count))
+
+
 if __name__ == "__main__":
     unittest.main()
