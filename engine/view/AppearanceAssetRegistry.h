@@ -532,7 +532,7 @@ public:
     // Native host only: at a joined frame boundary, with the mutable Model
     // still owned by the host and no readers touching its image vector.
     // Existing snapshots keep their original image indices. New textures are
-    // append-only; explicit host-certified reclamation leaves tombstones.
+    // append-only by default; explicitly certified tombstones may recycle after retirement.
     // The per-model live and historical caps bound repeated edits.
     static constexpr size_t maxProceduralImages=render::texture_graph::maxLiveProceduralImages;
     // Includes every currently registered snapshot for this Model. Caller

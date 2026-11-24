@@ -246,6 +246,31 @@ int main() {
     AIVERSE_TEST_CHECK(rollback.drain(device)&&device.textures.size()==5);
     AIVERSE_TEST_CHECK(publish(current->version,"after_collection"));
     AIVERSE_TEST_CHECK(registry.find("character")->materials[0].baseTex==25&&model.images.size()==26);
+    // Earlier default tombstones must never be reused. Only a new collection
+    // with the stronger raw-index proof can authorize slot recycling.
+    AIVERSE_TEST_CHECK(!render::ModelImageUploadTransaction::reusableGraphSlot(model.images[3],epoch.lease().generation(),rollback));
+    auto rawPin=render::texture_graph::pinPublishedGraphImage(model,0);
+    retainedCopy={};
+    const auto recycled=registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,0,roots,true,true});
+    AIVERSE_TEST_CHECK(recycled.detached==1&&model.images[1].proceduralGraphRetired);
+    AIVERSE_TEST_CHECK(!render::ModelImageUploadTransaction::reusableGraphSlot(model.images[1],epoch.lease().generation(),rollback));
+    AIVERSE_TEST_CHECK(rollback.drain(device));
+    AIVERSE_TEST_CHECK(render::ModelImageUploadTransaction::reusableGraphSlot(model.images[1],epoch.lease().generation(),rollback));
+    rawPin.reset();
+    const auto collectAgain=registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,0,roots,true,true});
+    AIVERSE_TEST_CHECK(collectAgain.detached==1&&model.images[0].proceduralGraphRetired);
+    AIVERSE_TEST_CHECK(rollback.drain(device));
+    const auto countBeforeReuse=model.images.size();
+    const auto oldMaterial=registry.find("character");
+    device.allocationsBeforeFailure=1;
+    AIVERSE_TEST_CHECK(!publish(oldMaterial->version,"reuse_abort"));
+    AIVERSE_TEST_CHECK(model.images[0].proceduralGraphRetired&&model.images[1].proceduralGraphRetired&&model.images.size()==countBeforeReuse);
+    AIVERSE_TEST_CHECK(rollback.drain(device));
+    device.allocationsBeforeFailure=-1;
+    AIVERSE_TEST_CHECK(publish(oldMaterial->version,"reuse_commit"));
+    AIVERSE_TEST_CHECK(model.images.size()==countBeforeReuse&&registry.find("character")->materials[0].occlusionTex==0&&registry.find("character")->materials[0].baseTex==1);
+    AIVERSE_TEST_CHECK(!model.images[0].proceduralGraphRetired&&!model.images[1].proceduralGraphRetired&&model.images[3].proceduralGraphRetired);
+    AIVERSE_TEST_CHECK(oldMaterial->materials[0].baseTex==25&&model.images[25].tex.valid());
     registry.clear();
     AIVERSE_TEST_CHECK(!registry.find("character"));
     // Caller-pinned snapshot remains renderable until the host detaches it

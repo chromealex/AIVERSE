@@ -222,12 +222,12 @@ public:
         // Reserve for ALL models BEFORE mutating the first Model. Any
         // bad_alloc leaves image counts and published material state intact.
         for(auto& entry:entries_) {
-            if(entry.model->images.size()!=entry.original||entry.model->materialRevision!=entry.revision)
+            if(entry.model->images.size()!=entry.original)
                 throw std::logic_error("Model images changed during transaction");
             size_t end=entry.original;
             for(auto index:entry.indices){
                 if(index<entry.original){
-                    if(!lease_.validFor(device_)||!reusableGraphSlot(entry.model->images[index],lease_.generation(),rollback_))
+                    if(entry.model->materialRevision!=entry.revision||!lease_.validFor(device_)||!reusableGraphSlot(entry.model->images[index],lease_.generation(),rollback_))
                         throw std::logic_error("procedural image slot no longer reusable");
                 }else{
                     if(index!=end)throw std::logic_error("noncontiguous image append reservation");
@@ -244,6 +244,8 @@ public:
                 else entry.model->images.push_back(std::move(entry.images[i]));
                 ++committed;
             }
+            if(std::any_of(entry.indices.begin(),entry.indices.end(),[&](size_t index){return index<entry.original;}))
+                entry.model->markMaterialChanged();
             entry.images.clear();
         }
         committed_=true;
