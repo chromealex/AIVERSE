@@ -170,9 +170,53 @@ static void checkPlanetImprint(){
     AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,7));
     AIVERSE_TEST_CHECK(!ecs.get<imprint::SurfaceTrailHistory>(tracker).initialized);
 }
+static void checkPlanetCrowdSlots(){
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;
+    surface.bodies.push_back(planet);planet.id="moon";surface.bodies.push_back(planet);
+    surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    int body=0,face=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(seam,body,face,x,y)&&body==0&&face!=0);
+    World ecs;
+    auto at=[&](int cell){
+        const auto e=ecs.create();Transform tr{};tr.pos=surface.cellCenter(cell);
+        ecs.add<Transform>(e,tr);return e;
+    };
+    const auto a=at(start),b=at(start),c=at(surface.gridCell(1,face,x,y));
+    for(auto e:{a,b,c})ecs.add<crowd::Agent>(e);
+    const auto local=at(seam),remote=at(surface.gridCell(1,face,x,y));
+    ecs.add<crowd::Slot>(local);ecs.add<crowd::Slot>(remote);
+    for(auto e:{a,b,c}){
+        crowd::Preference pref{};pref.agent=e;pref.options[0]=remote;pref.options[1]=local;
+        ecs.add<crowd::Preference>(ecs.create(),pref);
+    }
+    const auto allow=[](Entity){return true;};
+    const auto pass=[](Entity,const wp::SurfaceFrame&){return true;};
+    const auto plan=crowd::planSurfaceSlots(ecs,surface,1,allow,pass);
+    AIVERSE_TEST_CHECK(plan&&plan->intents.size()==2);
+    AIVERSE_TEST_CHECK(plan->intents[0].agent==a&&plan->intents[0].slot==local);
+    AIVERSE_TEST_CHECK(plan->intents[1].agent==c&&plan->intents[1].slot==remote);
+    const auto original=ecs.get<Transform>(a).pos;
+    ecs.enableCowSnapshots();const World before=ecs;
+    AIVERSE_TEST_CHECK(crowd::commitSurfaceSlots(ecs,*plan));
+    AIVERSE_TEST_CHECK(ecs.get<crowd::Agent>(b).allocated==kNullEntity);
+    AIVERSE_TEST_CHECK(ecs.get<Transform>(a).pos==original);
+    const auto repeated=crowd::planSurfaceSlots(ecs,surface,1,allow,pass);
+    AIVERSE_TEST_CHECK(repeated&&repeated->agents.empty()&&repeated->intents.empty());
+    ecs=before;
+    const auto blocked=crowd::planSurfaceSlots(ecs,surface,1,allow,
+        [&](Entity,const wp::SurfaceFrame& frame){return frame.cell!=seam;});
+    AIVERSE_TEST_CHECK(blocked&&blocked->intents.size()==1&&blocked->intents[0].agent==c);
+    const auto excluded=crowd::planSurfaceSlots(ecs,surface,1,
+        [&](Entity e){return e!=a;},pass);
+    AIVERSE_TEST_CHECK(excluded&&excluded->intents.size()==2&&excluded->intents[0].agent==b);
+}
 int main(){
     checkPlanetGravity();
     checkPlanetImprint();
+    checkPlanetCrowdSlots();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
     auto zone=placed(*sim,1),gas=placed(*sim,2);
