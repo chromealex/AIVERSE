@@ -17,6 +17,7 @@ inline CavePathResult findCaveNativeNavPath(
     std::shared_ptr<const CaveNavigationDataProvider> provider,
     const CaveNavConfig& config) {
     CavePathResult result;result.sourceRevision=query.sourceRevision;
+    result.environmentRevision=provider?provider->environmentRevision():0;
     if(!provider||provider->revision()!=query.sourceRevision||
        (query.agent.traversal!=CaveTraversal::Ground &&
         query.agent.traversal!=CaveTraversal::Climbing))
