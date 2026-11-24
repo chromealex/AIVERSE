@@ -115,6 +115,7 @@ export type WorldProcessDiagnosticLane = {available:false;error:string} | {
 };
 export type WorldProcessDiagnostics = {active:false} | {
   active:true;epoch:string;tick:number;observerAvailable:boolean;cellSizeCm:number;
+  topology?:'planet';focusSurface?:{body:string;face:number;x:number;y:number;gravityLocal:[number,number,number]}|null;
   config:{enabled:boolean;hotCells:number;warmCells:number;warmTicks:number;coldTicks:number};
   lanes:Record<'evolve'|'crowd'|'society',WorldProcessDiagnosticLane>;
 };
