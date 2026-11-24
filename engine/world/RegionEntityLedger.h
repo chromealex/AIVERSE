@@ -201,7 +201,7 @@ public:
     // MutationCapture, or while observers reference this ledger. Publish
     // only after the compacted checkpoint is durable.
     size_t compactRetired(uint64_t through,size_t limit=kMaxEntities){
-        if(through>lastRevision_||!limit)return 0;
+        if(through>lastRevision_||!limit||activeTransactions_)return 0;
         auto* capture=MutationCapture::active_;
         if(capture&&capture->owner_==this)return 0;
         size_t removed=0;
@@ -224,13 +224,14 @@ public:
     // Iteration order is stable across platforms, including after save/restore.
     std::vector<RegionEntityId> activeIn(Cell cell) const {
         std::vector<RegionEntityId> result;
-        for(const auto& [id,record]:records_)
-            if(record.live && record.owner==cell)result.push_back(id);
+        for(auto id:liveIds_)
+            if(records_.at(id).owner==cell)result.push_back(id);
         return result;
     }
     // Convergent latest-state changes: tombstones and moved-out records remain.
     // Caller persists this whole ledger, not only records active in a visible cell.
     std::vector<std::pair<RegionEntityId,RegionEntityRecord>> since(uint64_t revision) const {
+        if(revision<historyFloor_)throw std::logic_error("region history compacted: bootstrap required");
         std::vector<std::pair<RegionEntityId,RegionEntityRecord>> result;
         const auto first=revision==std::numeric_limits<uint64_t>::max()
             ? revisionIndex_.end():revisionIndex_.upper_bound(revision);
@@ -274,6 +275,7 @@ private:
         auto* capture=MutationCapture::active_;
         if(capture&&capture->owner_==this)capture->truncate(revision);
     }
+    inline static thread_local size_t activeTransactions_=0;
     uint64_t lastRevision_=0;
     RegionEntityId retiredFloor_=0;
     uint64_t historyFloor_=0;
@@ -313,10 +315,11 @@ class RegionEntityLedger::Transaction {
     }
 public:
     explicit Transaction(RegionEntityLedger& ledger,bool capture=false)
-        :ledger_(ledger),initialRevision_(ledger.lastRevision_),capture_(capture) {}
+        :ledger_(ledger),initialRevision_(ledger.lastRevision_),capture_(capture) {++activeTransactions_;}
     Transaction(const Transaction&)=delete;
     Transaction& operator=(const Transaction&)=delete;
     ~Transaction() noexcept {
+        --activeTransactions_;
         if(committed_)return;
         for(const auto& [id,old]:before_) {
             auto it=ledger_.records_.find(id);
@@ -375,6 +378,9 @@ public:
     explicit RegionChangeCursor(uint64_t after=0):last_(after){}
     uint64_t lastRevision()const{return last_;}
     void reset(uint64_t after=0){last_=after;}
+    bool requiresBootstrap(const RegionEntityLedger& ledger)const{
+        return last_<ledger.historyFloor()||last_>ledger.lastRevision();
+    }
 
     // Returns true once caught up; false for a refused callback, zero budget
     // or a remaining page. A load/rollback owner must call reset() because a
