@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {RefreshCw,Trash2,X} from 'lucide-react';
 import {invoke,onNativeEvent} from '../bridge';
-import type {StudioTrashAction,StudioTrashPage,StudioTrashReview,StudioTrashBatchReview} from '../types';
+import type {StudioTrashAction,StudioTrashPage,StudioTrashReview,StudioTrashBatchReview,StudioAssetHistoryResetReview} from '../types';
 import {StudioAlert,StudioButton,StudioIconButton,StudioEmptyState,StudioSkeleton,StudioInput} from '../ui';
 import './AssetTrashDialog.css';
 
@@ -19,6 +19,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
   const [busy,setBusy]=useState(false);
   const [review,setReview]=useState<StudioTrashReview|null>(null);
   const [confirm,setConfirm]=useState(false);
+  const [historyReset,setHistoryReset]=useState<StudioAssetHistoryResetReview|null>(null);
   const [quota,setQuota]=useState('0');
   const [selected,setSelected]=useState<string[]>([]);
   const [batch,setBatch]=useState<StudioTrashBatchReview|null>(null);
@@ -30,7 +31,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     if(event==='assets.changed'||event==='workspace.changed'){setReview(null);setConfirm(false);setRefresh(v=>v+1);}
   }),[]);
   useEffect(()=>{
-    let live=true;setPage(null);setSelected([]);setBatch(null);setConfirm(false);
+    let live=true;setPage(null);setSelected([]);setBatch(null);setHistoryReset(null);setConfirm(false);
     void invoke('studio.assetTrashList',{expectedProject:projectPath,offset,limit:PAGE})
       .then(r=>{if(live){if(offset>=r.total&&offset>0){setOffset(Math.max(0,Math.floor(Math.max(0,r.total-1)/PAGE)*PAGE));return;}setPage(r);}})
       .catch(e=>{if(live)setError(message(e));});
@@ -45,7 +46,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     finally{request.current=false;if(mounted.current)setBusy(false);}
   };
   const prepareBatch=async()=>{
-    if(request.current||!selected.length||page?.recoveryPending)return;
+    if(request.current||!selected.length||page?.recoveryPending||historyReset)return;
     request.current=true;setBusy(true);setError('');setReview(null);setBatch(null);setConfirm(false);
     try{const r=await invoke('studio.assetTrashBatchReview',{expectedProject:projectPath,ids:selected});if(mounted.current)setBatch(r);}
     catch(e){if(mounted.current)setError(message(e));}
@@ -61,7 +62,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     finally{request.current=false;if(mounted.current)setBusy(false);}
   };
   const prepare=async(id:string,action:StudioTrashAction)=>{
-    if(request.current||page?.recoveryPending)return;
+    if(request.current||page?.recoveryPending||historyReset)return;
     request.current=true;setBusy(true);setError('');setReview(null);setBatch(null);setConfirm(false);
     try{const r=await invoke('studio.assetTrashReview',{expectedProject:projectPath,id,action});if(mounted.current)setReview(r);}
     catch(e){if(mounted.current)setError(message(e));}
@@ -77,6 +78,22 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     }catch(e){if(mounted.current){setError(message(e));setReview(null);setConfirm(false);setRefresh(v=>v+1);}}
     finally{request.current=false;if(mounted.current)setBusy(false);}
   };
+  const reviewReset=async()=>{
+    if(request.current)return;
+    request.current=true;setBusy(true);setError('');setReview(null);setBatch(null);setConfirm(false);setHistoryReset(null);
+    try{const r=await invoke('studio.assetHistoryResetReview',{expectedProject:projectPath});if(mounted.current)setHistoryReset(r);}
+    catch(e){if(mounted.current)setError(message(e));}
+    finally{request.current=false;if(mounted.current)setBusy(false);}
+  };
+  const applyReset=async()=>{
+    if(request.current||!historyReset||!confirm)return;
+    request.current=true;setBusy(true);setError('');
+    try{
+      await invoke('studio.assetHistoryResetApply',{expectedProject:projectPath,token:historyReset.token,expectedVersion:historyReset.version,confirmed:true});
+      if(mounted.current){onChanged();reload();}
+    }catch(e){if(mounted.current){setError(message(e));setHistoryReset(null);setConfirm(false);setRefresh(v=>v+1);}}
+    finally{request.current=false;if(mounted.current)setBusy(false);}
+  };
   const items=(page?.items??[]).filter(row=>[row.path,row.kind,row.guid,row.id].some(value=>value?.toLowerCase().includes(filter.toLowerCase())));
   return <div className="studio-asset-dialog-overlay" data-native-overlay>
     <section className="studio-asset-dialog studio-trash" role="dialog" aria-modal="true" aria-label="Asset Trash and recovery">
@@ -87,6 +104,16 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
       <div className="studio-trash__body">
         {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
         {page?.recoveryPending&&<StudioAlert tone="warning">{page.recoveryReason??'Reopen the project to resolve the pending asset journal before restoring or purging.'}</StudioAlert>}
+        {page?.historyWarning&&<StudioAlert tone="warning">{page.historyWarning}</StudioAlert>}
+        {page&&(page.historyWarning||page.recoveryPending)&&<StudioButton size="sm" disabled={busy||!!historyReset} onClick={()=>void reviewReset()}>Review history recovery…</StudioButton>}
+        {historyReset&&<div className="studio-trash__review">
+          <StudioAlert tone="warning" title="Archive and reset damaged history">{historyReset.reason}. The previous checkpoint ({formatBytes(historyReset.checkpointBytes)}) and any legacy marker will be archived. Only Assets Undo/Redo will be reset. Live content and Trash payloads will not be changed.</StudioAlert>
+          <label className="au-checkbox"><input className="au-checkbox__input" type="checkbox" checked={confirm} disabled={busy} onChange={e=>setConfirm(e.target.checked)}/><span>Confirm archive and reset.</span></label>
+          <div className="studio-trash__actions">
+            <StudioButton size="sm" disabled={busy} onClick={()=>{setHistoryReset(null);setConfirm(false);}}>Cancel</StudioButton>
+            <StudioButton size="sm" variant="danger" disabled={busy||!confirm} onClick={()=>void applyReset()}>Archive and reset history</StudioButton>
+          </div>
+        </div>}
         {page?.truncated&&<StudioAlert tone="warning">Listing limited to 10,000 recovery records. No automatic cleanup is performed.</StudioAlert>}
         {page?.storageError&&<StudioAlert tone="warning">Storage accounting unavailable: {page.storageError}</StudioAlert>}
         {page?.storage&&<div className="studio-trash__review">
