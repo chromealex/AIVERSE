@@ -172,6 +172,7 @@ export interface StudioSpectraPreviewState {
   gpuSeedFailed?:boolean;
   gpuSeedRetries?:number;
   replayReady?:boolean;
+  replayPending?:boolean;
   capture?:{
     pending:boolean;ready:boolean;captureId?:number;cancelled?:boolean;
     width?:number;height?:number;mime?:'image/jpeg';
@@ -188,7 +189,7 @@ export interface StudioParams {
   'studio.spectraPreview': {
     expectedProjectPath?:string;
     expectedGeneration?:number;
-    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'checkpointFileBegin'|'checkpointFileAppend'|'checkpointFileExport'|'checkpointFileRead'|'checkpointFileImport'|'checkpointFileCancel'|'playback'|'burst'|'clear'|'capture'|'captureStatus'|'captureCancel';
+    action:'status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'cameraRestore'|'replayPrepare'|'replayRestore'|'replayCancel'|'checkpointSave'|'checkpointRestore'|'checkpointCancel'|'checkpointFileBegin'|'checkpointFileAppend'|'checkpointFileExport'|'checkpointFileRead'|'checkpointFileImport'|'checkpointFileCancel'|'playback'|'burst'|'clear'|'capture'|'captureStatus'|'captureCancel';
     graph?:Record<string,unknown>;
     tick?:number;
     name?:string;

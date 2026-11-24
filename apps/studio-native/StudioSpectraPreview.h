@@ -34,7 +34,17 @@ public:
         const auto now=std::chrono::steady_clock::now();
         importLease_.expire(now,fileImportPending_);
         exportLease_.expire(now);
+        if(replayPending()&&now-replayStarted_>=std::chrono::seconds(30)){
+            cancelReplay();
+            error_="Replay restore timed out";
+        }
         if(action=="status")return status();
+        if(action=="replayCancel"){
+            if(!replayPending())return transferStatus("No pending replay restore");
+            cancelReplay();error_.clear();return status();
+        }
+        if(replayPending()&&action!="stop")
+            return transferStatus("Replay restore pending; cancel or wait");
         const auto transferId=input["transferId"].integer(-1);
         if(action=="checkpointFileCancel"){
             if(transferId>0&&uint64_t(transferId)==importLease_.id){importLease_.reset();fileImportPending_=false;}
@@ -180,54 +190,60 @@ public:
             error_.clear();replayPrepared_=false;return status();
         }
         if(action=="replayPrepare") {
+            // Optional playback settings are part of the same native restore.
+            const bool hasPlayback=input.has("speed")||input.has("loop");
+            const double replaySpeed=input["speed"].toDouble();
+            if(hasPlayback&&(!input["speed"].isNumber()||input["loop"].type()!=Json::Type::Bool||
+                (replaySpeed!=0.25&&replaySpeed!=0.5&&replaySpeed!=1.0&&replaySpeed!=2.0&&replaySpeed!=4.0)))
+                return transferStatus("Invalid replay playback settings");
             // Validate every input before changing live preview state.
             if(!input["tick"].isNumber() ||
                input["tick"].numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                input["tick"].integer(-1)<0 || input["tick"].integer(-1)>kMaxTicks)
-                return errorStatus("Replay tick must be an integer in 0..3600");
+                return transferStatus("Replay tick must be an integer in 0..3600");
             if(!input["parameters"].isObject() || input["parameters"].size()>8)
-                return errorStatus("Replay parameters must be an object with at most 8 scalars");
+                return transferStatus("Replay parameters must be an object with at most 8 scalars");
             std::map<std::string,float> validated;
             for(const auto& [name,value]:input["parameters"].members()) {
                 const auto it=runtime_->instanceParameters().find(name);
                 if(it==runtime_->instanceParameters().end() || !value.isNumber())
-                    return errorStatus("Unknown replay parameter: "+name);
+                    return transferStatus("Unknown replay parameter: "+name);
                 const double n=value.toDouble();
                 if(!std::isfinite(n)||n<it->second.minimum||n>it->second.maximum)
-                    return errorStatus("Replay parameter outside authored range: "+name);
+                    return transferStatus("Replay parameter outside authored range: "+name);
                 validated[name]=float(n);
             }
             if(!input["gpuShaderSeed"].isNull() && (!input["seed"].isNull()||!input["gpuAllocationSeed"].isNull()))
-                return errorStatus("GPU shader seed must be requested independently");
+                return transferStatus("GPU shader seed must be requested independently");
             if(!input["seed"].isNull() && !input["gpuAllocationSeed"].isNull())
-                return errorStatus("CPU seed and GPU allocation seed cannot be combined");
+                return transferStatus("CPU seed and GPU allocation seed cannot be combined");
             if(!input["seed"].isNull()) {
                 const Json& seed=input["seed"];
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
-                    return errorStatus("Replay seed must be integer 0..2147483647");
+                    return transferStatus("Replay seed must be integer 0..2147483647");
                 if(runtime_->backend()!=spectra::ComputeBackend::Cpu)
-                    return errorStatus("Seeded replay currently requires CPU backend");
+                    return transferStatus("Seeded replay currently requires CPU backend");
                 if(!runtime_->resetDeterministicSeed(uint32_t(seed.integer())))
-                    return errorStatus(runtime_->reason());
+                    return transferStatus(runtime_->reason());
             }
             if(!input["gpuShaderSeed"].isNull()) {
                 const Json& seed=input["gpuShaderSeed"];
                 if(!seed.isNumber()||seed.numberLiteral().find_first_of(".eE-")!=std::string::npos||seed.integer(-1)<0||seed.integer(-1)>4294967295LL)
-                    return errorStatus("GPU shader seed must be uint32");
-                if(!runtime_->gpuActive())return errorStatus("GPU shader seed requires Metal GPU backend");
+                    return transferStatus("GPU shader seed must be uint32");
+                if(!runtime_->gpuActive())return transferStatus("GPU shader seed requires Metal GPU backend");
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 pendingShaderSeedMode_=true;hasPendingGpuAllocationSeed_=true;
                 gpuSeedRetryCount_=0;gpuSeedFailed_=false;
             }
             if(!input["gpuAllocationSeed"].isNull()) {
-                pendingShaderSeedMode_=false;
                 const Json& seed=input["gpuAllocationSeed"];
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
-                    return errorStatus("GPU allocation seed must be integer 0..2147483647");
+                    return transferStatus("GPU allocation seed must be integer 0..2147483647");
                 if(!runtime_->gpuActive())
-                    return errorStatus("GPU allocation seed requires Metal GPU backend");
+                    return transferStatus("GPU allocation seed requires Metal GPU backend");
+                pendingShaderSeedMode_=false;
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 gpuSeedRetryCount_=0;
                 gpuSeedFailed_=false;
@@ -238,7 +254,9 @@ public:
             stepsPending_=0;timeTicks_=0;
             targetTicks_=uint32_t(input["tick"].integer());
             requestedParameters_=std::move(validated);
+            if(hasPlayback){speed_=float(replaySpeed);loop_=input.getBool("loop");}
             replayPrepared_=true;
+            replayStarted_=now;
             error_.clear();
             return status();
         }
@@ -491,6 +509,16 @@ public:
         timeTicks_=targetTicks_=tick;triggeredBursts_=bursts;phase_=0;replayPrepared_=false;error_.clear();return true;
     }
     uint32_t timeTicks() const {return timeTicks_;}
+    bool replayReady() const {
+        return replayPrepared_ && ready_ && error_.empty() &&
+            !playing_ && !pendingRestart_ && !restartBurstPending_ &&
+            !hasPendingGpuAllocationSeed_ && !pendingClear_ &&
+            requestedParameters_.empty() && targetTicks_==timeTicks_;
+    }
+    bool replayPending() const {
+        return replayPrepared_&&ready_&&!gpuSeedFailed_&&
+            (error_.empty()||hasPendingGpuAllocationSeed_)&&!replayReady();
+    }
     Json status() const {
         Json result=Json::object();
         result.set("ready",Json::fromBool(ready_));
@@ -507,10 +535,8 @@ public:
         result.set("gpuSeedPending",Json::fromBool(hasPendingGpuAllocationSeed_));
         result.set("gpuSeedFailed",Json::fromBool(gpuSeedFailed_));
         result.set("gpuSeedRetries",Json::number(int64_t(gpuSeedRetryCount_)));
-        result.set("replayReady",Json::fromBool(replayPrepared_ && ready_ && error_.empty() &&
-            !playing_ && !pendingRestart_ && !restartBurstPending_ &&
-            !hasPendingGpuAllocationSeed_ && !pendingClear_ &&
-            requestedParameters_.empty() && targetTicks_==timeTicks_));
+        result.set("replayReady",Json::fromBool(replayReady()));
+        result.set("replayPending",Json::fromBool(replayPending()));
         Json checkpoints=Json::array();
         for(const auto& [id,clock]:checkpointTicks_){Json item=Json::object();item.set("id",Json::number(int64_t(id)));item.set("tick",Json::number(int64_t(clock.first)));checkpoints.push(std::move(item));}
         result.set("checkpoints",std::move(checkpoints));
@@ -538,6 +564,15 @@ public:
         generation_=nextSpectraIdentity();
     }
 private:
+    void cancelReplay() {
+        replayPrepared_=false;playing_=false;phase_=0;
+        hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
+        gpuSeedFailed_=false;gpuSeedRetryCount_=0;
+        pendingRestart_=false;restartBurstPending_=false;
+        requestedParameters_.clear();
+        timeTicks_=targetTicks_=stepsPending_=burstsPending_=triggeredBursts_=0;
+        pendingClear_=true; // actual GPU clear on the next owner frame
+    }
     // Transport responses carry request-local errors without poisoning the
     // simulation error latch or clearing an existing runtime failure.
     Json transferStatus(const std::string& reason = {}) const {
@@ -560,6 +595,7 @@ private:
     static constexpr uint32_t kMaxGpuSeedRetries=8;
     uint32_t pendingGpuAllocationSeed_=0,gpuSeedRetryCount_=0;
     bool gpuSeedFailed_=false,replayPrepared_=false;
+    std::chrono::steady_clock::time_point replayStarted_{};
     bool hasPendingGpuAllocationSeed_=false;
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;

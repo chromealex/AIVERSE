@@ -84,6 +84,50 @@ public:
         if(project!=spectraProject_ && spectraPreview_.active())
             spectraPreview_.stop(*device_);
         spectraProject_=project;
+        if(action!="status"&&action!="stop"&&action!="replayCancel"&&spectraPreview_.replayPending()){
+            Json out=spectraPreview_.status();
+            out.set("error",Json::string("Replay restore pending; cancel or wait"));
+            return out;
+        }
+        if(action=="replayRestore") {
+            if(!spectraDockMode_)throw std::runtime_error("Replay restore requires FX stage");
+            const auto background=input.getStr("background");
+            if((background!="dark"&&background!="neutral"&&background!="light"&&background!="black")||
+               input["grid"].type()!=Json::Type::Bool||input["axes"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid replay stage");
+            const Json& c=input["camera"];
+            auto read=[&](const char* key,double limit){
+                const Json& v=c[key];
+                if(!v.isNumber()||!std::isfinite(v.toDouble())||std::abs(v.toDouble())>limit)
+                    throw std::runtime_error(std::string("Invalid replay camera field: ")+key);
+                return float(v.toDouble());
+            };
+            if(!c.isObject()||c["ortho"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid replay camera");
+            const float yaw=read("yaw",1000),pitch=read("pitch",1.56),distance=read("distance",100000);
+            const float x=read("targetX",1000000),y=read("targetY",1000000),z=read("targetZ",1000000);
+            if(distance<0.01f)throw std::runtime_error("Invalid replay camera distance");
+            const double speed=input["speed"].toDouble();
+            if(!input["speed"].isNumber()||input["loop"].type()!=Json::Type::Bool||
+               (speed!=0.25&&speed!=0.5&&speed!=1.0&&speed!=2.0&&speed!=4.0))
+                throw std::runtime_error("Invalid replay playback settings");
+            // Optional graph replacement is transactional itself (Stage 83).
+            // A later replay validation failure does not roll that load back.
+            if(input.has("graph")){
+                Json load=Json::object();load.set("action",Json::string("load"));
+                load.set("graph",input["graph"]);load.set("gpuBirthRandom",input["gpuBirthRandom"]);
+                const auto loaded=spectraPreview_.command(*device_,load);
+                if(!loaded.getBool("ready")||!loaded.getStr("error").empty())return loaded;
+            }
+            Json prepare=input;prepare.set("action",Json::string("replayPrepare"));
+            const auto prepared=spectraPreview_.command(*device_,prepare);
+            if(!prepared.getBool("ready")||!prepared.getStr("error").empty())return prepared;
+            fxBackground_=background;fxGrid_=input.getBool("grid");fxAxes_=input.getBool("axes");
+            camera_.yaw=yaw;camera_.pitch=pitch;camera_.distance=distance;
+            camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
+            tween_.active=false;lastFrameSignature_=0;settleFrames_=30;
+            return spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+        }
         if(action=="stage") {
             const auto background=input.getStr("background");
             if(background!="dark" && background!="neutral" &&

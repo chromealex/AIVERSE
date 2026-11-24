@@ -421,12 +421,18 @@ void StudioHost::tickFx() {
 void StudioHost::fxCameraOrbit(double dx,double dy) {
     if(!fxPreview_ || !fxPlacement_.visible)return;
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
-    onScene([&]{fxPreview_->orbit(float(dx),float(dy));});
+    onScene([&]{
+        if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
+            fxPreview_->orbit(float(dx),float(dy));
+    });
 }
 void StudioHost::fxCameraZoom(double wheel) {
     if(!fxPreview_ || !fxPlacement_.visible)return;
     if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
-    onScene([&]{fxPreview_->zoom(float(wheel));});
+    onScene([&]{
+        if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
+            fxPreview_->zoom(float(wheel));
+    });
 }
 void StudioHost::tick() {
     if (projectLoading_) return; // the background thread owns the session right now
@@ -1423,14 +1429,16 @@ Json StudioHost::dispatchSpectraPreview(const Json& params) {
        (!params["expectedProjectPath"].isString()||params.getStr("expectedProjectPath")!=project))
         throw std::runtime_error("Stale SpectraFX project");
     const std::string action=params.getStr("action");
+    const auto current=onScene([&]{
+        return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+    });
+    if(current.getBool("replayPending")&&action!="status"&&action!="stop"&&action!="replayCancel")
+        throw std::runtime_error("Replay restore pending; cancel or wait");
     if(params.has("expectedGeneration")) {
         const auto& expected=params["expectedGeneration"];
         if(!expected.isNumber()||expected.numberLiteral().find_first_of(".eE-")!=std::string::npos||
            expected.integer(-1)<0)
             throw std::runtime_error("Invalid SpectraFX expected generation");
-        const auto current=onScene([&]{
-            return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
-        });
         if(current["generation"].integer(-2)!=expected.integer(-1))
             throw std::runtime_error("Stale SpectraFX runtime generation");
     }
@@ -1438,7 +1446,7 @@ Json StudioHost::dispatchSpectraPreview(const Json& params) {
         return captureSpectraFrame(params);
     // Stopping and inspecting a ready runtime never require the view to
     // remain on screen. Load/play/step/seek need a drawable to advance.
-    if(action!="status" && action!="stop" &&
+    if(action!="status" && action!="stop" && action!="replayCancel" &&
        (!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx)))
         throw std::runtime_error("Open the dedicated SpectraFX native preview viewport");
     if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
@@ -1468,7 +1476,7 @@ Json StudioHost::dispatchSpectraPreview(const Json& params) {
         });
     }
     Json result=onScene([&]{return fxPreview_->spectraPreviewCommand(params,project);});
-    if(action=="stop"||(action=="load"&&result.getBool("ready")&&result.getStr("error").empty()))
+    if(action=="stop"||action=="replayRestore"||(action=="load"&&result.getBool("ready")&&result.getStr("error").empty()))
         cancelSpectraCapture();
     return result;
 }

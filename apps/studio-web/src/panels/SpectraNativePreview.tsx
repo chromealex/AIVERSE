@@ -66,6 +66,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [replayPreset,setReplayPreset]=useState<SpectraReplayPreset|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
+  const replayCancelled=useRef(false);
+  const replayGeneration=useRef<number|undefined>(undefined);
   const [replaySeed,setReplaySeed]=useState('');
   const [gpuAllocationSeed,setGpuAllocationSeed]=useState('');
   const [gpuShaderSeed,setGpuShaderSeed]=useState('');
@@ -269,32 +271,28 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     }
     setBusy(true);setReplayRestoring(true);setError('');
     try{
-      let expectedGeneration=state?.generation;
+      replayCancelled.current=false;
+      replayGeneration.current=undefined;
+      const restored=await invokePreview({action:'replayRestore',expectedGeneration:state?.generation,
+        ...(replayPreset.gpuBirthRandom===undefined?{}:{graph,gpuBirthRandom:replayPreset.gpuBirthRandom}),
+        camera:replayPreset.camera,tick:replayPreset.tick,parameters:replayPreset.parameters,
+        background:replayPreset.background,grid:replayPreset.grid,axes:replayPreset.axes,
+        speed:replayPreset.speed,loop:replayPreset.loop,
+        ...(replayPreset.seed===undefined?{}:{seed:replayPreset.seed}),
+        ...(replayPreset.gpuShaderSeed===undefined?{}:{gpuShaderSeed:replayPreset.gpuShaderSeed}),
+        ...(replayPreset.gpuAllocationSeed===undefined?{}:{gpuAllocationSeed:replayPreset.gpuAllocationSeed})});
+      if(restored.error||!restored.ready)throw new Error(restored.error||'Native replay restore failed');
+      const expectedGeneration=restored.generation;
+      replayGeneration.current=expectedGeneration;
+      setState(restored);
       if(replayPreset.gpuBirthRandom!==undefined){
-        const loaded=await invokePreview({action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom,expectedGeneration});
-        if(loaded.error||!loaded.ready)throw new Error(loaded.error||'Replay graph reload failed');
-        expectedGeneration=loaded.generation;
         setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
       }
-      // All commands are serialized. Stop playback before restoring tick/camera.
-      const actions=[
-        {action:'pause' as const},
-        {action:'stage' as const,background:replayPreset.background,
-          grid:replayPreset.grid,axes:replayPreset.axes},
-        {action:'playback' as const,speed:replayPreset.speed,loop:replayPreset.loop},
-        {action:'cameraRestore' as const,camera:replayPreset.camera},
-        {action:'replayPrepare' as const,tick:replayPreset.tick,parameters:replayPreset.parameters,...(replayPreset.seed===undefined?{}:{seed:replayPreset.seed}),
-          ...(replayPreset.gpuShaderSeed===undefined?{}:{gpuShaderSeed:replayPreset.gpuShaderSeed}),
-          ...(replayPreset.gpuAllocationSeed===undefined?{}:{gpuAllocationSeed:replayPreset.gpuAllocationSeed})}
-      ];
-      let result:StudioSpectraPreviewState|null=null;
-      for(const action of actions){
-        result=await invokePreview({...action,expectedGeneration});
-        if(result.error||!result.ready)throw new Error(result.error||'Native replay restore failed');
-      }
       let settled=false;
-      for(let attempt=0;attempt<160;++attempt){
+      for(let attempt=0;attempt<280;++attempt){
+        if(replayCancelled.current)return;
         const next=await invokePreview({action:'status',expectedGeneration});
+        if(replayCancelled.current)return;
         if(next.gpuSeedFailed)throw new Error(next.error||'GPU seed reset failed after retry budget');
         if((next.error&&!next.gpuSeedPending)||!next.ready)
           throw new Error(next.error||'Replay backend unavailable');
@@ -303,11 +301,21 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         if(next.tick>replayPreset.tick)throw new Error('Replay overshot requested tick');
         await new Promise<void>(resolve=>window.setTimeout(resolve,100));
       }
-      if(!settled)throw new Error('Replay seek did not settle within 16 seconds');
+      if(!settled){
+        await invokePreview({action:'replayCancel',expectedGeneration}).catch(()=>{});
+        throw new Error('Replay seek did not settle within the polling budget');
+      }
       setSeek(replayPreset.tick);
       setLiveScalars({...replayPreset.parameters});
-    }catch(e){setError(message(e));}
-    finally{setBusy(false);setReplayRestoring(false);}
+    }catch(e){if(!replayCancelled.current)setError(message(e));}
+    finally{replayGeneration.current=undefined;setBusy(false);setReplayRestoring(false);}
+  };
+  const cancelReplay=async()=>{
+    const expectedGeneration=replayGeneration.current;
+    if(expectedGeneration===undefined)return;
+    replayCancelled.current=true;
+    try{setState(await invokePreview({action:'replayCancel',expectedGeneration}));}
+    catch(e){setError(message(e));}
   };
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
@@ -469,6 +477,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       Load this graph and press Play. Orbit the camera in the viewport; no Scene tab or map placement is required.
     </p>
     {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+    {replayRestoring&&<div className="spectra-native__hint">
+      Replay restore: {state?.tick??0}/{replayPreset?.tick??0} ticks
+      <StudioButton size="sm" disabled={replayGeneration.current===undefined} onClick={()=>void cancelReplay()}>Cancel replay</StudioButton>
+    </div>}
     {state?.dispatch&&<small className="spectra-native__hint">Native dispatch #{state.dispatch.sequence} · {state.dispatch.action} · {state.dispatch.elapsedMs.toFixed(2)} ms · failed {state.dispatch.failed}</small>}
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" variant="primary" disabled={!active||!state||busy||disabled}

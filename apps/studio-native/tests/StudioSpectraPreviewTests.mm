@@ -107,6 +107,21 @@ int aiverseMain(int,char**) { @autoreleasepool {
         state=scene.spectraPreviewCommand(action("status"),"");
         require(state.getInt("tick")==25 && !state.getBool("playing"),
                 "bounded seek reached target and paused");
+        Json restore=Json::parse(R"JSON({"action":"replayRestore","tick":32,"parameters":{},"speed":1,"loop":false,"background":"dark","grid":true,"axes":true,"camera":{"yaw":0,"pitch":0,"distance":6,"targetX":0,"targetY":1,"targetZ":0,"ortho":false}})JSON");
+        auto replay=scene.spectraPreviewCommand(restore,"");
+        require(replay.getBool("replayPending"),"replay did not acquire native pending guard");
+        const auto blocked=scene.spectraPreviewCommand(action("play"),"");
+        require(!blocked.getStr("error").empty()&&!blocked.getBool("playing"),"play interrupted pending replay");
+        for(int i=0;i<12;++i)frame();
+        replay=scene.spectraPreviewCommand(action("status"),"");
+        require(replay.getBool("replayReady")&&!replay.getBool("replayPending")&&replay.getInt("tick")==32,
+                "replay did not settle at exact target");
+        restore.set("tick",Json::number(int64_t(200)));
+        require(scene.spectraPreviewCommand(restore,"").getBool("replayPending"),"second replay did not start");
+        require(!scene.spectraPreviewCommand(action("replayCancel"),"").getBool("replayPending"),"cancel left replay pending");
+        frame();
+        scene.spectraPreviewCommand(seek,"");
+        for(int i=0;i<5;++i)frame();
         bool captured=false,valid=false;
         std::vector<uint8_t> fxPixels;
         scene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels){

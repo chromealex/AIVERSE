@@ -431,15 +431,17 @@ void registerSpectraGraphOps(Workspace& ws) {
         "cameraPreset (perspective/front/side/top), stage (background/grid/axes), "
         "playback (speed 0.25..4 and loop), burst (count 1..8), "
         "clear (GPU-safe deferred reset), capture (maxSide 128..768), "
-        "captureStatus (one bounded native JPEG readback, not a stream). "
+        "captureStatus (one bounded native JPEG readback, not a stream), replayRestore, replayCancel. "
         "For load use a graph object or graphName with draft=true for a private draft. "
         "Optional expectedProjectPath and expectedGeneration reject stale commands. "
         "The preview is presentation only; no game ECS writes or offscreen fake renders. "
         "Requires the native Studio GPU viewport to be visible; standalone MCP "
         "returns a clear unavailable error.",
-        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom","cameraPreset","stage","playback","burst","clear","capture","captureStatus"]},
+        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom","cameraPreset","stage","playback","burst","clear","capture","captureStatus","replayRestore","replayCancel"]},
             "graph":{"type":"object"},"graphName":{"type":"string"},
             "expectedProjectPath":{"type":"string"},"expectedGeneration":{"type":"integer","minimum":0},
+            "camera":{"type":"object"},"parameters":{"type":"object"},"seed":{"type":"integer"},
+            "gpuShaderSeed":{"type":"integer"},"gpuAllocationSeed":{"type":"integer"},"gpuBirthRandom":{"type":"boolean"},
             "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
             "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"},
             "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"},
@@ -459,7 +461,7 @@ void registerSpectraGraphOps(Workspace& ws) {
                action!="cameraReset"&&action!="cameraOrbit"&&action!="cameraZoom"&&
                action!="cameraPreset"&&action!="stage"&&action!="playback"&&
                action!="burst"&&action!="clear"&&
-               action!="capture"&&action!="captureStatus")
+               action!="capture"&&action!="captureStatus"&&action!="replayRestore"&&action!="replayCancel")
                 throw std::runtime_error("unknown SpectraFX preview action");
             Json command=p;
             if(action=="load") {
