@@ -15,7 +15,7 @@ const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&
 const bounded=(v:unknown,min:number,max:number):v is number=>
   typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
 export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
-  if(text.length>65536)throw new Error('Replay preset exceeds 64 KiB');
+  if(new TextEncoder().encode(text).byteLength>65536)throw new Error('Replay preset exceeds 64 KiB');
   const v:unknown=JSON.parse(text);
   if(!record(v)||v.format!=='aiverse.spectrafx.replay'||v.version!==1)
     throw new Error('Unsupported replay preset format');
