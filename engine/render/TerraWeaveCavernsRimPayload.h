@@ -14,23 +14,12 @@ struct CaveRimReplacement {
     CaveCollisionPrepared collision;
     std::unique_ptr<render::Model> model;
 };
-inline CaveRimReplacement prepareCaveRimReplacement(
-        const CaveSurfaceRim& rim,const Entrance& entrance,
-        std::span<const world::Triangle> isolatedSource,Fixed plane,
-        uint64_t surfaceEpoch,uint64_t authorityRevision,uint64_t nativeRevision,
-        world::Cell ownerCell,Vec3 origin,uint32_t userData=0){
-    if(!nativeRevision)throw std::invalid_argument("Caverns rim native revision");
-    auto retained=trimOwnedSdfShaft(isolatedSource,plane);
-    auto collar=buildCaveRimTransition(rim,entrance,retained,plane,surfaceEpoch,authorityRevision);
-    if(retained.size()+collar.triangles.size()>65534)
-        throw std::length_error("Caverns rim replacement triangle budget");
-    CaveRimReplacement out;
-    out.entranceId=entrance.id;out.surfaceEpoch=surfaceEpoch;out.authorityRevision=authorityRevision;
-    out.collision.revision=nativeRevision;out.collision.cell=ownerCell;
-    out.collision.triangles=std::move(retained);
-    out.collision.triangles.insert(out.collision.triangles.end(),collar.triangles.begin(),collar.triangles.end());
-    out.collar=std::move(collar);
-    auto& body=out.collision.body;
+// Shared exact per-slot render/physics conversion, including empty slots.
+inline std::unique_ptr<render::Model> buildExactCavePayload(
+        CaveCollisionPrepared& collision,Vec3 origin,uint32_t userData=0){
+    if(!collision.revision||collision.triangles.size()>65534)
+        throw std::invalid_argument("Caverns exact payload budget");
+    auto& body=collision.body;
     body.motion=physics::Motion::Static;body.shape=physics::ShapeKind::Mesh;
     body.category=physics::kCategoryStatic;body.userData=userData;
     for(const auto p:{origin.x,origin.y,origin.z})if(std::abs(p.toDouble())>100000.)
@@ -71,7 +60,25 @@ inline CaveRimReplacement prepareCaveRimReplacement(
             mesh.vertices.push_back({p[i].x,p[i].y,p[i].z,n.x,n.y,n.z});
         }
     }
-    out.model=makeCaveGeometryModel(mesh);
+    return mesh.indices.empty()?nullptr:makeCaveGeometryModel(mesh);
+}
+inline CaveRimReplacement prepareCaveRimReplacement(
+        const CaveSurfaceRim& rim,const Entrance& entrance,
+        std::span<const world::Triangle> isolatedSource,Fixed plane,
+        uint64_t surfaceEpoch,uint64_t authorityRevision,uint64_t nativeRevision,
+        world::Cell ownerCell,Vec3 origin,uint32_t userData=0){
+    if(!nativeRevision)throw std::invalid_argument("Caverns rim native revision");
+    auto retained=trimOwnedSdfShaft(isolatedSource,plane);
+    auto collar=buildCaveRimTransition(rim,entrance,retained,plane,surfaceEpoch,authorityRevision);
+    if(retained.size()+collar.triangles.size()>65534)
+        throw std::length_error("Caverns rim replacement triangle budget");
+    CaveRimReplacement out;
+    out.entranceId=entrance.id;out.surfaceEpoch=surfaceEpoch;out.authorityRevision=authorityRevision;
+    out.collision.revision=nativeRevision;out.collision.cell=ownerCell;
+    out.collision.triangles=std::move(retained);
+    out.collision.triangles.insert(out.collision.triangles.end(),collar.triangles.begin(),collar.triangles.end());
+    out.collar=std::move(collar);
+    out.model=buildExactCavePayload(out.collision,origin,userData);
     return out;
 }
 // Prepare-time verification against the actual combined triangle soup.
