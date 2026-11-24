@@ -187,7 +187,8 @@
     "apps/editor/windows/StatsWindow.cpp",
     "tests/render/geometry_page_owners.cpp",
     "tests/render/device_epoch.cpp",
-    "tests/render/camera_client_adapter.cpp"
+    "tests/render/camera_client_adapter.cpp",
+    "apps/studio-web/src/graphs/TextureGraphPanel.css"
   ],
   "traits": {
     "editable": true,
@@ -223,7 +224,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. Stage 38AL: native Studio launch user-reported; stale web bundle lacked graph button. Fresh npm build failed with 9 TS errors. Rename diagnostic component to avoid case-insensitive extensionless resolution collision; explicitly type effective material as MaterialData. Full rebuild pending.",
+      "note": "Pending implementation or actual verification. Stage 38AL: native Studio launch user-reported; stale web bundle lacked graph button. Fresh npm build failed with 9 TS errors. Rename diagnostic component to avoid case-insensitive extensionless resolution collision; explicitly type effective material as MaterialData. Full rebuild pending. Stage 38AM: separate material workspaces, graph canvas with side inspector and preview, automatic catalog/read polling and advanced controls collapsed. Native Studio owner still missing; UI not built or visually verified.",
       "evidence": []
     },
     "inspector": {
