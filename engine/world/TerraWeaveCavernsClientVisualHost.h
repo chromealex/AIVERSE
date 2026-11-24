@@ -23,6 +23,14 @@ public:
         :residency_(stream),workers_(2) {
         geometry_.setUploadLimits({32ull*1024*1024,1,64});
     }
+    // Configure the existing STRATA/shard owner before opening a world.
+    void setGraphicsOptions(CaveBatchSpec options){
+        if(index_)throw std::logic_error("Caverns visual policy requires unopened host");
+        graphicsOptions_=options;
+    }
+    CaveGeometrySwapOwner::MemoryStats gpuMemoryStats()const noexcept{return geometry_.memoryStats();}
+    CaveShardGpuHost::GpuPreviewStats gpuStats()const noexcept{return geometry_.stats();}
+    CaveGpuUploadStats uploadStats()const noexcept{return geometry_.uploadStats();}
     // Initial snapshot must already be canonicalized by the map loader.
     void open(std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
         if(!snapshot||!snapshot->sourceRevision)
@@ -101,7 +109,7 @@ public:
             const auto sourceRevision=resident->revision;
             ++visualRevision_;
             if(!geometry_.stageVisualRetire(device,ticket.key,sourceRevision,
-                                             visualRevision_))
+                                             visualRevision_,graphicsOptions_))
                 break; // budget or pending GPU source: retry later
             const auto shard=caveShardFor(ticket.key,geometry_.catalog().config());
             if(!geometry_.activateVisualOnly({shard}))
@@ -160,7 +168,7 @@ public:
            batchCursor_<visualBatch_->snapshots.size()){
             const auto& shard=visualBatch_->snapshots[batchCursor_];
             if(geometry_.stagePlannedShard(
-                    device,shard,visualBatch_->visual)){
+                    device,shard,visualBatch_->visual,graphicsOptions_)){
                 stagedShards_.push_back(shard.shard);
                 ++batchCursor_;
             }
@@ -216,6 +224,7 @@ public:
     }
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
+    CaveBatchSpec graphicsOptions_{};
     CaveWorldResidency residency_;
     CaveWorldStreamJobs workers_;
     CaveShardGpuHost geometry_;
