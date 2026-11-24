@@ -46,7 +46,7 @@ GameFx::Binding GameFx::resolve(const Json& v, const std::string& where) {
     if (v.isString()) name = v.str();
     else if (v.isObject()) {
         for (auto& [k, x] : v.members())
-            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below" && k != "upright" && k != "clear")
+            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below" && k != "upright" && k != "clear" && k != "node" && k != "offset" && k != "inheritRotation" && k != "inheritScale" && k != "anchor")
                 warnings_.push_back(where + ": unknown field '" + k + "'");
         name = v["effect"].str();
         b.height = float(v.getFx("height").toDouble());
@@ -55,6 +55,19 @@ GameFx::Binding GameFx::resolve(const Json& v, const std::string& where) {
         b.teamColor = v.getBool("teamColor");
         b.upright = v.getBool("upright");
         b.clear = v.getBool("clear");
+        if(v.has("node") && !v["node"].isString())warnings_.push_back(where+": node must be a name");
+        else b.node=v.getStr("node");
+        if(v.has("offset")) {
+            const auto& o=v["offset"];
+            if(o.isArray()&&o.size()==3&&o[0].isNumber()&&o[1].isNumber()&&o[2].isNumber())
+                b.offset={fl(o[0].fx()),fl(o[1].fx()),fl(o[2].fx())};
+            else warnings_.push_back(where+": offset must be three numbers");
+        }
+        b.inheritRotation=v.getBool("inheritRotation");
+        b.inheritScale=v.getBool("inheritScale");
+        const auto anchor=v.getStr("anchor","subject");
+        b.targetNode=anchor=="target";
+        if(anchor!="subject"&&anchor!="target")warnings_.push_back(where+": anchor must be subject or target");
     }
     if (name.empty()) { warnings_.push_back(where + ": expected an effect name or { \"effect\": ... }"); return b; }
     const size_t before = ps_->errors().size();
@@ -168,12 +181,30 @@ const GameFx::Binding& GameFx::trailFor(int type, int weapon) const {
     return lookup(type, FxCue::Trail);
 }
 
-bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int owner) {
+bool GameFx::nodePlacement(const Binding& b, Entity entity, float3& pos, float3& dir, float& scale) const {
+    if(b.node.empty()||!node_||!entity.valid())return false;
+    render::mat4 frame;
+    if(!node_(entity,b.node,frame))return false;
+    pos=frame.transformPoint(b.offset);
+    const float3 axis{frame.at(0,1),frame.at(1,1),frame.at(2,1)};
+    if(b.inheritRotation&&render::length(axis)>1e-6f)dir=render::normalize(axis);
+    if(b.inheritScale) {
+        const float sx=render::length(float3{frame.at(0,0),frame.at(1,0),frame.at(2,0)});
+        const float sy=render::length(axis);
+        const float sz=render::length(float3{frame.at(0,2),frame.at(1,2),frame.at(2,2)});
+        scale*=(sx+sy+sz)/3.f;
+    }
+    return true;
+}
+
+bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int owner, Entity anchor) {
     if (!b.valid() || !ps_) return false;
     if (b.upright) dir = {0, 1, 0};
     float3 p = toF(pos);
     const bool air = type >= 0 && size_t(type) < rules_->types.size() && (rules_->types[size_t(type)].layer & kLayerAir);
-    if (place_) { // curved worlds: lift along the local up, directions given with +Y up turn with it
+    float scale=b.scale;
+    if (nodePlacement(b,anchor,p,dir,scale)) { /* already in particle space */ }
+    else if (place_) { // curved worlds: lift along the local up, directions given with +Y up turn with it
         float3 up;
         if (!place_(p, b.height + (air ? kAirHeight : 0.0f), p, up)) { ++rejected_; return false; }
         if (dir.y > 0.999f) dir = up;
@@ -184,7 +215,7 @@ bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int
     }
     float4 tint{1, 1, 1, 1};
     if (b.teamColor && owner > 0 && playerColor_) tint = playerColor_(owner);
-    if (!ps_->play(b.effect, p, dir, b.scale, tint).valid()) return false;
+    if (!ps_->play(b.effect, p, dir, scale, tint).valid()) return false;
     ++played_;
     return true;
 }
@@ -243,7 +274,8 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
         if (ev.a.valid() && ev.value >= 0 && ev.value < 255) { if (lastWeapon_.size() > 4096) lastWeapon_.clear(); lastWeapon_[ev.a.packed()] = uint8_t(ev.value); }
         const auto& binding=b?*b:lookup(t,FxCue::Attack);
         float3 muzzle,direction;
-        if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
+        if(!binding.node.empty())playAt(binding,ev.pos,t,toward(ev.a,ev.b),ev.player,binding.targetNode?ev.b:ev.a);
+        else if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
             float4 tint{1,1,1,1};
             if(binding.teamColor&&ev.player>0&&playerColor_)tint=playerColor_(ev.player);
             if(ps_->play(binding.effect,muzzle,direction,binding.scale,tint).valid())++played_;
@@ -264,28 +296,29 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
             if (last != lastWeapon_.end() && last->second < types_[size_t(src)].weapons.size() && types_[size_t(src)].weapons[last->second].hit.set) b = &types_[size_t(src)].weapons[last->second].hit;
             else for (auto& wf : types_[size_t(src)].weapons) if (wf.hit.set) { b = &wf.hit; break; }
         }
-        playAt(b ? *b : lookup(src, FxCue::Hit), ev.pos, typeOf(ev.a), toward(ev.a, ev.b), ev.player);
+        playAt(b ? *b : lookup(src, FxCue::Hit), ev.pos, typeOf(ev.a), toward(ev.a, ev.b), ev.player, ev.a);
         break;
     }
     case kEvMiss: playAt(lookup(typeOf(ev.a), FxCue::Miss), ev.pos, -1, up, ev.player); break;
-    case kEvDied: playAt(lookup(int(ev.value), FxCue::Died), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvSpawned: playAt(lookup(int(ev.value), FxCue::Spawned), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvTrainDone: playAt(lookup(int(ev.value), FxCue::Ready), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvBuildPlaced: playAt(lookup(int(ev.value), FxCue::BuildPlaced), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvBuildDone: playAt(lookup(int(ev.value), FxCue::BuildDone), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvGathered: playAt(lookup(typeOf(ev.a), FxCue::Gathered), ev.pos, -1, up, ev.player); break;
-    case kEvCaptured: playAt(lookup(typeOf(ev.a), FxCue::Captured), ev.pos, typeOf(ev.a), up, ev.player); break;
-    case kEvLevelUp: playAt(lookup(typeOf(ev.a), FxCue::LevelUp), ev.pos, typeOf(ev.a), up, ev.player); break;
+    case kEvDied: playAt(lookup(int(ev.value), FxCue::Died), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvSpawned: playAt(lookup(int(ev.value), FxCue::Spawned), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvTrainDone: playAt(lookup(int(ev.value), FxCue::Ready), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvBuildPlaced: playAt(lookup(int(ev.value), FxCue::BuildPlaced), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvBuildDone: playAt(lookup(int(ev.value), FxCue::BuildDone), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvGathered: playAt(lookup(typeOf(ev.a), FxCue::Gathered), ev.pos, -1, up, ev.player, ev.a); break;
+    case kEvCaptured: playAt(lookup(typeOf(ev.a), FxCue::Captured), ev.pos, typeOf(ev.a), up, ev.player, ev.a); break;
+    case kEvLevelUp: playAt(lookup(typeOf(ev.a), FxCue::LevelUp), ev.pos, typeOf(ev.a), up, ev.player, ev.a); break;
     case kEvAbility: {
         const int t = typeOf(ev.a);
         const Binding* b = nullptr;
         if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].abilities.size() && types_[size_t(t)].abilities[size_t(ev.value)].set)
             b = &types_[size_t(t)].abilities[size_t(ev.value)];
-        playAt(b ? *b : lookup(t, FxCue::Ability), ev.pos, -1, up, ev.player);
+        const auto& binding=b?*b:lookup(t,FxCue::Ability);
+        playAt(binding,ev.pos,-1,up,ev.player,binding.targetNode?ev.b:ev.a);
         break;
     }
-    case kEvUpgraded: playAt(lookup(int(ev.value), FxCue::Upgraded), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvSold: playAt(lookup(int(ev.value), FxCue::Sold), ev.pos, int(ev.value), up, ev.player); break;
+    case kEvUpgraded: playAt(lookup(int(ev.value), FxCue::Upgraded), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvSold: playAt(lookup(int(ev.value), FxCue::Sold), ev.pos, int(ev.value), up, ev.player, ev.a); break;
     case kEvRegionClaimed: playAt(lookup(-1, FxCue::RegionClaimed), ev.pos, -1, up, ev.player); break;
     case kEvWave: if (ev.player != 0) playAt(lookup(-1, FxCue::Wave), ev.pos, -1, up, ev.player); break;
     default: break;
@@ -346,9 +379,11 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
         if (!b.valid()) continue;
         auto it = damaged_.find(key);
         if (o.hp < b.below && o.hp > 0) {
-            float3 p = o.pos + up * b.height;
-            if (it == damaged_.end() || !ps_->playing(it->second.h)) damaged_[key] = {ps_->play(b.effect, p, up, b.scale), frame_};
-            else { it->second.frame = frame_; ps_->move(it->second.h, p); }
+            float3 p = o.pos + up * b.height, dir=up;
+            float scale=b.scale;
+            nodePlacement(b,o.entity,p,dir,scale);
+            if (it == damaged_.end() || !ps_->playing(it->second.h)) damaged_[key] = {ps_->play(b.effect, p, dir, scale), frame_};
+            else { it->second.frame = frame_; ps_->move(it->second.h, p, dir); }
         } else if (it != damaged_.end()) {
             ps_->stop(it->second.h);
             damaged_.erase(it);
