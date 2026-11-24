@@ -49,6 +49,16 @@ public:
         BuildingCirculationEcsScene<Transform>::AtLanding atLiftLanding;
         std::function<bool(Entity,uint32_t,uint32_t,BuildingLiftCommandKind)> authorizeLift;
         BuildingDualLeafOwner::SweptObstruction extraObstruction;
+        // Optional mirror of the exact committed shapes into the existing
+        // native PHYSIS Scene. Called on the physics owner barrier, not a
+        // second physics step. Empty maps mean retire this instance.
+        using PhysicalPublication=std::function<bool(
+            const std::map<uint32_t,world::Bounds>&,
+            const std::set<uint32_t>&,std::string*)>;
+        PhysicalPublication physicalPublication;
+        // Optional actual body/proxy sync after the canonical ECS lift
+        // delta; never apply the delta a second time in the body owner.
+        std::function<bool(const World&,Entity,Vec3,std::string*)> riderPublication;
         BuildingImageByGuid imageResolver;
         // Game's real actor/cargo/route evacuation gate, not a fake ACK.
         std::function<bool()> canUnload;
@@ -170,6 +180,8 @@ public:
                 return fail(error,"Regional nav must be exclusive and initially unbuilt");
             scene->domains|=buildingGraphBit(BuildingGraphDomain::Navigation);
         }
+        if(scene->def.physicalPublication)
+            scene->domains|=buildingGraphBit(BuildingGraphDomain::Simulation);
         if(!scene->domains)return fail(error,"At least one real graph consumer is required");
         scene->contentHash=buildingSceneContentIdentity(scene->def.sceneId,
             scene->def.instanceKey,styleId,scene->def.origin,scene->def.yaw,
@@ -699,7 +711,18 @@ private:
             });
         }
         for(const auto& [domain,consumer]:s.def.graphOwners)
-            s.router.registerConsumer(domain,consumer);
+            if(domain!=BuildingGraphDomain::Simulation||!s.def.physicalPublication)
+                s.router.registerConsumer(domain,consumer);
+        if(s.def.physicalPublication){
+            s.router.registerConsumer(BuildingGraphDomain::Simulation,
+                [this,&s](const BuildingGraphChange& change){
+                    if(change.kind==BuildingGraphChangeKind::Removed){
+                        if(!s.def.physicalPublication({}, {}, &lastError_))return false;
+                    }else if(!publishPhysical(s,&lastError_))return false;
+                    const auto it=s.def.graphOwners.find(BuildingGraphDomain::Simulation);
+                    return it==s.def.graphOwners.end()||it->second(change);
+                });
+        }
         return true;
     }
     // Physical lift owners share the scene lease; compare their exact
@@ -736,6 +759,35 @@ private:
         if(out)for(const auto& [id,b]:doors){(void)id;out->push_back(b);}
         return true;
     }
+    bool publishPhysical(Scene& s,std::string* error){
+        if(!s.def.physicalPublication)return true;
+        if(!ownsPhysical(s))return fail(error,"Building physical publication ownership mismatch");
+        auto shapes=s.statics;
+        std::set<uint32_t> movable;
+        const auto add=[&](const auto& bounds){
+            for(const auto& [id,b]:bounds){
+                if(!shapes.emplace(id,b).second)return false;
+                movable.insert(id);
+            }
+            return true;
+        };
+        if(!add(s.physics.closedColliderBounds())||
+           !add(s.circulation.scene().colliders().colliderBounds())||
+           !add(s.circulation.scene().doors().closedColliderBounds()))
+            return fail(error,"Duplicate building physical publication ID");
+        return s.def.physicalPublication(shapes,movable,error);
+    }
+    bool publishRiders(Scene& s,std::string* error){
+        if(!s.def.riderPublication)return true;
+        for(const auto& [actor,feature]:s.circulation.scene().host().riderBindings()){
+            (void)feature;
+            const auto e=Entity::fromPacked(actor);
+            const auto* transform=sim_->world().tryGetConst<Transform>(e);
+            if(!transform||!s.def.riderPublication(sim_->world(),e,transform->pos,error))
+                return fail(error,"Building rider body publication failed");
+        }
+        return true;
+    }
     bool attachCirculation(Scene& s,const BuildingCirculationCheckpoint* saved,
                            std::string* error){
         if(!s.circulation.attach(sim_->world(),*spatial_,nullptr,s.generated,s.platformIds,
@@ -755,7 +807,7 @@ private:
                 (s.def.extraObstruction&&s.def.extraObstruction(box->first,box->second,
                       ids->second.left,ids->second.right));
         });
-        return true;
+        return publishRiders(s,error);
     }
     bool publishLiftPresentation(Scene& s){
         if(s.liftLayout.empty())return true;
@@ -801,6 +853,7 @@ private:
     bool dropPhysical(Scene& s,std::string* error){
         if(!graphicsDetached(s)||!ownsPhysical(s))
             return fail(error,"Cannot drop building physical/GPU ownership");
+        if(s.def.physicalPublication&&!s.def.physicalPublication({}, {},error))return false;
         removeGeometry(s);
         if(s.def.regionalNavigation)*s.def.regionalNavigation=nav::Mesh{};
         releaseScene(s);return true;
@@ -878,6 +931,7 @@ private:
         const auto result=s.circulation.advance(*spatial_,nullptr,elapsed);
         BuildingCirculationCheckpoint after;
         if(!result.complete||!verifiedLiftBounds(s)||
+           !publishRiders(s,&lastError_)||
            !s.circulation.captureCheckpoint(after)){
             lastError_=result.error.empty()?"Lift physical/ECS checkpoint failed":result.error;
             return false;

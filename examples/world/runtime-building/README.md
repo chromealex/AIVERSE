@@ -568,3 +568,6 @@ rejection of old command epochs, exiting and independent scene unload/reload.
 The scripted actor motor is a test fixture, not a shipping game controller.
 Native GPU frame acceptance remains separate. Do not assert PASS until
 the executable actually builds and runs.
+
+## Stage 23W.3: PHYSIS native bodies
+Projects with an existing Box3D Scene may explicitly include engine/buildings/BuildingPhysisSceneBinding.h and call binding.configure(definition, filter, resolveExistingBody, bodyOriginOffset). Hold the binding until the world shuts down. It mirrors the same verified SpatialWorld bounds to static/kinematic Scene bodies at the physics owner barrier; never step the Scene twice. Existing actor motors must skip automatic platform ground carry while BuildingLiftPassenger is attached. Use query masks that include actual actors/cargo and appropriate environment obstacles. CPU-only and dedicated deterministic projects need not link Box3D.
