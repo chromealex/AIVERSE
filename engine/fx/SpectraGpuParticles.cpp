@@ -1,4 +1,6 @@
 #include "SpectraGpuParticles.h"
+#include "SpectraGpuVolumeGrid.h"
+#include "SpectraParticleVolumeShaders.h"
 #include "SpectraGpuShaders.h"
 #include "SpectraGpuFramePlan.h"
 #include "SpectraGpuProgram.h"
@@ -419,6 +421,7 @@ void ComputeParticles::releaseGpu() {
         if(pipeline_.valid())device_->destroyPipeline(pipeline_);
         if(vertexShader_.valid())device_->destroyShader(vertexShader_);
         if(compute_.valid())device_->destroyCompute(compute_);
+        if(volumeDragCompute_.valid())device_->destroyCompute(volumeDragCompute_);
         if(compactAllocationCompute_.valid())device_->destroyCompute(compactAllocationCompute_);
         if(states_.valid())device_->destroyBuffer(states_);
         if(seeds_.valid())device_->destroyBuffer(seeds_);
@@ -444,6 +447,7 @@ void ComputeParticles::releaseGpu() {
     sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
+    volumeDragCompute_={};
     pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
     killSlots_={};gpuSourceOwners_={};
     gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
@@ -786,6 +790,40 @@ void ComputeParticles::setView(const fx::SpectraFxView& view) {
     viewWidth_=view.width;viewHeight_=view.height;
     viewReady_=true;
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
+}
+bool ComputeParticles::stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond){
+    if(!finite(dt)||dt<0||!finite(dragPerSecond)||dragPerSecond<0||dragPerSecond>100||
+       !gpuActive()||gpuResetDirty_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()){
+        reason_="Invalid GPU volume coupling request";return false;
+    }
+    if(dt==0||dragPerSecond==0)return step(dt);
+    const auto field=gas.view();
+    if(!field.valid()||field.device!=device_){reason_="Volume coupling requires published same-device field";return false;}
+    if(!volumeDragCompute_.valid()){
+        volumeDragCompute_=device_->createCompute({volume_coupling::metal,volume_coupling::glsl,
+            "SpectraFX particle gas drag",gfx::VulkanComputeLayout::StorageUniforms,9});
+        if(!volumeDragCompute_.valid()){reason_="Volume coupling shader unavailable";return false;}
+    }
+    struct Params {render::float4 originCell,control;std::array<uint32_t,4> meta;};
+    static_assert(sizeof(Params)==48);
+    const Params u{{field.origin.x,field.origin.y,field.origin.z,field.cellSize},
+        {1.f-std::exp(-dragPerSecond*std::min(dt,.1f)),0,0,0},{allocatedCapacity(),field.dimension,0,0}};
+    if(!device_->beginCompute(volumeDragCompute_)){reason_="Volume coupling encoder unavailable";return false;}
+    markGpuAllocationUsed();
+    device_->setComputeBuffer(0,states_);
+    device_->setComputeBuffer(1,field.cells);
+    device_->setComputeBuffer(2,field.solid);
+    device_->setComputeUniforms(&u,sizeof(u));
+    const bool accepted=device_->dispatchChecked(allocatedCapacity());
+    device_->endCompute();
+    if(accepted)++stats_.gpuDispatches;
+    // A partial frame cannot safely apply drag again on retry.
+    if(!accepted||!step(dt)){
+        gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        ++vmFrameRevision_;lastCheckpoint_={};checkpointRevision_=0;
+        reason_="Volume coupling frame incomplete; checked reset required";return false;
+    }
+    return true;
 }
 bool ComputeParticles::step(float dt) {
     collisionReadable_=false;

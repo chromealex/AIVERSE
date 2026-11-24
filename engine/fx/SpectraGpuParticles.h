@@ -26,6 +26,7 @@
 #include <vector>
 
 namespace aiverse::spectra {
+namespace volume {class GpuGasGrid;}
 
 enum class ComputePreference : uint8_t {
     Automatic, CpuOnly, PreferGpu, RequireGpu
@@ -210,6 +211,9 @@ public:
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
         return setView(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
+    // Opt-in nearest-cell gas drag on existing GPU particles. Same Device,
+    // active frame, after gas step and before particle integration. No CPU fallback.
+    bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond);
     bool step(float dt);                    // once per presentation frame
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
@@ -334,7 +338,7 @@ private:
     ComputeBackend backend_ = ComputeBackend::Cpu;
     fx::ParticleSystem cpu_;
     int cpuEffect_ = -1;
-    gfx::ComputeHandle compute_,compactAllocationCompute_;
+    gfx::ComputeHandle compute_,compactAllocationCompute_,volumeDragCompute_;
     gfx::ShaderHandle vertexShader_;
     gfx::PipelineHandle pipeline_;
     gfx::BufferHandle states_, seeds_, slots_, vertices_, indices_, liveSlots_;
