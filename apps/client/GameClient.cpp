@@ -324,6 +324,11 @@ Json GameClient::runtimeTextureMaterialStatus()const{
     r.set("applicationState",Json::string(runtimeTextureState_));
     r.set("applicationReason",Json::string(runtimeTextureReason_));
     r.set("applicationRequest",Json::string(runtimeTextureRequest_));
+    const auto sweep=view_.automaticGraphImageCollectionStats();
+    r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
+    r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));
+    r.set("automaticCollectionDetached",Json::string(std::to_string(sweep.detached)));
+    r.set("automaticCollectionDeferred",Json::string(std::to_string(sweep.deferred)));
     return r;
 }
 bool GameClient::cancelRuntimeTextureMaterial(const std::string& request){
@@ -1269,6 +1274,11 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         r3d_.collectRetiredTargets();
     if(r3d_.hasPendingModelPipelineJobs())
         r3d_.pollPendingModelPipelineJobs();
+    if(view_.automaticGraphImageCollectionEnabled()&&!runtimeTextureTask_){
+        const auto graphState=runtimeTextureGraph_.status();
+        if(!graphState.getBool("busy")&&!graphState.getBool("gpuTextureSetReady")&&view_.collectAutomaticGraphImages())
+            runtimeTextureGraph_.invalidateOutputReuseReceipt();
+    }
     tickRuntimeTextureMaterial(dev);
     const auto frameStarted = std::chrono::steady_clock::now();
     if (mapLoading_) {

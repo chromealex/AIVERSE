@@ -437,6 +437,18 @@ public:
     // Includes road/shore Models AND SpriteMesh buffers so existing client/
     // editor frame hooks automatically poll every View-owned resource queue.
     size_t pendingModelRetirements() const;
+    // Opt-in native owner only. The callback certifies raw-index/handle
+    // consumers have been detached or are represented by the returned spans.
+    // Spans must remain valid through the synchronous sweep; no reentry.
+    using GraphImageRootProvider=std::function<bool(const render::Model&,std::vector<std::span<const render::Material>>&)>;
+    struct GraphImageSweepStats {uint64_t inspected=0,detached=0,deferred=0;};
+    void setAutomaticGraphImageCollection(GraphImageRootProvider provider){
+        graphImageRootProvider_=std::move(provider);graphImageSweepCursor_.clear();graphImageSweepStats_={};
+    }
+    bool automaticGraphImageCollectionEnabled()const noexcept{return bool(graphImageRootProvider_);}
+    GraphImageSweepStats automaticGraphImageCollectionStats()const noexcept{return graphImageSweepStats_;}
+    // Returns true only when at least one image was detached in this sweep.
+    bool collectAutomaticGraphImages();
     bool collectRetiredModels();
     size_t pendingRolledBackImages() const noexcept {
         return imageRollback_.pendingImages();
@@ -999,6 +1011,10 @@ private:
     bool gpuAppearancePending_=false; // retry only unfinished async compiler work
     AppearancePipelineValidator appearancePipelineValidator_;
     render::ModelImageRollbackPool imageRollback_;
+    GraphImageRootProvider graphImageRootProvider_;
+    std::string graphImageSweepCursor_;
+    GraphImageSweepStats graphImageSweepStats_{};
+    void appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const;
     render::ModelImageUploadTransaction* activeImageTransaction_ = nullptr; // borrowed during staging only
     // Unpublished Model owners during appearance reload: no model-cache
     // tombstones or speculative GPU residency until the outer transaction

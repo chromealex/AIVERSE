@@ -517,6 +517,9 @@ public:
         }
         queueTicket_.clear();queueRequest_.clear();queueError_.clear();return queueStatus();
     }
+    // Host calls only between requests after a Model image collection or
+    // other untracked mutation. Never certifies a pending incremental result.
+    void invalidateOutputReuseReceipt(){lastOutputReceipt_.reset();}
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
         r.set("request",Json::string(std::to_string(serial_)));r.set("reason",Json::string(reason_));

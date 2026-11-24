@@ -543,7 +543,7 @@ public:
         std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
         for(const auto& [key,asset]:assets_){(void)key;if(asset&&asset->model==&model)roots.emplace_back(asset->materials);}
         return render::texture_graph::reclaimGraphImages(model,device,lease,rollback,
-            {external.complete,external.activeReaders,roots});
+            {external.complete,external.activeReaders,roots,external.trackedOnly});
     }
     bool publishTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
             uint64_t expectedModelPublication,size_t materialIndex,

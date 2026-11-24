@@ -2417,6 +2417,11 @@ void Editor::frame(gfx::Device& dev, double dt) {
     pollAgentLink();
     applyChanges();
     graphGpuProfile_.checkProject(ws_.project.dir);
+    if(view_.automaticGraphImageCollectionEnabled()&&!pendingGraphMaterialApply_&&!clientPlaying()){
+        const auto graphState=textureGraphGpuPreview_.status();
+        if(!graphState.getBool("busy")&&!graphState.getBool("gpuTextureSetReady")&&view_.collectAutomaticGraphImages())
+            textureGraphGpuPreview_.invalidateOutputReuseReceipt();
+    }
     textureGraphGpuPreview_.tick(dev,ws_.project.dir,&graphGpuProfile_);
     // Poll changed presentation assets before any new frame submissions.
     // This runs even when every editor property/model window is closed.

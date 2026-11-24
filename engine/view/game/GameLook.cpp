@@ -988,6 +988,12 @@ render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialIma
         throw std::runtime_error("graph reclamation target or external root proof unavailable");
     auto& model=*looks_[type].models[choice].model;
     std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+    appendGraphImageRoots(model,roots);
+    return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
+        {true,resources_.activeModelReaders(),roots,external.trackedOnly});
+}
+
+void GameView::appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const{
     auto scan=[&](const ModelChoice& item){
         if(item.model==&model)roots.emplace_back(item.materials);
         if(item.appearanceSnapshot&&item.appearanceSnapshot->model==&model)roots.emplace_back(item.appearanceSnapshot->materials);
@@ -997,8 +1003,35 @@ render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialIma
         for(const auto& item:look.lods)scan(item);
         for(const auto& stage:look.stages)scan(stage.choice);
     }
-    return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
-        {true,resources_.activeModelReaders(),roots});
+}
+
+bool GameView::collectAutomaticGraphImages(){
+    if(!graphImageRootProvider_||!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
+       !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()||
+       strictAppearanceReload_||activeImageTransaction_||activeStagedModels_||cameraPreparedCapture_)return false;
+    // At most one resident model per owner frame. No borrowed Model pointer
+    // is retained across frames, and no GPU wait is explicitly added here.
+    if(imageRollback_.unrecoverableBatches()||imageRollback_.pendingImages()>=render::texture_graph::maxLiveProceduralImages)return false;
+    try{
+        const auto& models=resources_.models();if(models.empty()){graphImageSweepCursor_.clear();return false;}
+        auto it=models.upper_bound(graphImageSweepCursor_);if(it==models.end())it=models.begin();
+        graphImageSweepCursor_=it->first;
+        if(!it->second)return false;
+        auto& model=*it->second;++graphImageSweepStats_.inspected;
+        bool possible=false;
+        for(const auto& image:model.images)if(image.proceduralGraphImage&&!image.proceduralGraphRetired&&
+            render::graphImageUnpinned(image.proceduralGraphPin)){possible=true;break;}
+        if(!possible)return false;
+        std::vector<std::span<const render::Material>> roots;
+        if(!graphImageRootProvider_(model,roots)){++graphImageSweepStats_.deferred;return false;}
+        appendGraphImageRoots(model,roots);
+        const auto result=render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
+            {true,resources_.activeModelReaders(),roots,true});
+        graphImageSweepStats_.detached+=result.detached;return result.detached!=0;
+    }catch(const std::exception&){
+        // Optional collection cannot fail a frame on backpressure or refusal.
+        ++graphImageSweepStats_.deferred;return false;
+    }
 }
 
 void GameView::requestDetail(uint16_t type, bool detailed) {
