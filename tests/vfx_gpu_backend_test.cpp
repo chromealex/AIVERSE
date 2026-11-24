@@ -22,7 +22,20 @@ public:
     bool availableCompute=true,healthy=true,frame=false,pass=false,computing=false,badOrder=false;
     bool indirectAvailable=false,indirectAccepted=true;
     bool rejectStorageUpload=false;
-    bool storageCopyAvailable=false, rejectStorageCopy=false;
+    bool storageCopyAvailable=false, rejectStorageCopy=false,rejectAllocation=false;
+    bool asyncReadAvailable=false;
+    gfx::Device::BufferReadFn pendingRead;
+    uint32_t readRequests=0;
+    bool readBufferAsync(gfx::BufferHandle h,size_t bytes,gfx::Device::BufferReadFn cb)override{
+        if(!asyncReadAvailable||pendingRead||!frame||pass||computing||!h.valid()||bytes!=32)return false;
+        pendingRead=std::move(cb);++readRequests;return true;
+    }
+    void completeRead(std::array<uint32_t,8> counters){
+        auto cb=std::move(pendingRead);pendingRead={};
+        if(!cb)return;
+        std::vector<uint8_t> bytes(sizeof(counters));std::memcpy(bytes.data(),counters.data(),bytes.size());
+        cb(std::move(bytes));
+    }
     size_t copiedStorageBytes=0;
     bool supportsStorageBufferCopy()const override{return storageCopyAvailable;}
     bool copyStorageBufferChecked(gfx::BufferHandle src,gfx::BufferHandle dst,size_t size,size_t=0,size_t=0)override{
@@ -39,6 +52,7 @@ public:
 
     const gfx::DeviceInfo& info() const override{return description;}
     gfx::BufferHandle createBuffer(const gfx::BufferDesc& desc)override{
+        if(rejectAllocation)return {};
         const uint32_t id=next++;
         if(desc.label && std::strcmp(desc.label,"SpectraFX GPU live-slot gather map")==0)
             liveSlotHandle=id;
@@ -467,6 +481,34 @@ int main() {
     check(growthDevice.stages==std::vector<uint32_t>({14,15,10,8,11,13,12,5}),"growth publish ordering");
     check(growth.stats().gpuBytes>initialBytes&&growth.stats().gpuGrowthCopiedBytes==growthDevice.copiedStorageBytes,
           "growth accounting");
+    // Reset can reclaim without reading or copying live state.
+    const auto grownBytes=growth.stats().gpuBytes;
+    growthDevice.rejectAllocation=true;
+    check(growth.tryClear()&&growth.allocatedCapacity()==512&&growth.stats().gpuPhysicalShrinkFailures==1,
+          "failed shrink must preserve successful reset");
+    growthDevice.rejectAllocation=false;
+    check(growth.tryClear()&&growth.allocatedCapacity()==256&&growth.stats().gpuBytes==initialBytes&&
+          growth.stats().gpuReclaimedBytes==grownBytes-initialBytes,"reset shrink/accounting");
+    // Regrow and let host estimates expire. Estimates alone must not shrink.
+    for(int i=0;i<5;++i)check(growth.burstAt({0,2,0}),"regrowth birth");
+    check(growth.step(0.f)&&growth.allocatedCapacity()==512,"regrowth after reset shrink");
+    growthDevice.asyncReadAvailable=true;
+    for(int i=0;i<10;++i)check(growth.step(0.1f),"expire host estimates");
+    for(uint32_t i=0;i<spectra::kGpuIdleReclaimSteps;++i)check(growth.step(0.f),"idle wait");
+    check(growthDevice.readRequests==1&&growth.allocatedCapacity()==512,"idle shrink before proof");
+    // Snapshot can be stale even if GPU has since completed it: a newer
+    // submitted birth must invalidate it.
+    check(growth.burstAt({0,2,0})&&growth.step(0.f),"new birth after snapshot");
+    growthDevice.completeRead({0,512,0,0,0,0,0,0});
+    check(growth.step(0.f)&&growth.allocatedCapacity()==512,"stale empty proof discarded new birth");
+    for(int i=0;i<10;++i)check(growth.step(0.1f),"expire new host estimates");
+    for(uint32_t i=0;i<spectra::kGpuIdleReclaimSteps;++i)check(growth.step(0.f),"second idle wait");
+    check(growthDevice.readRequests==2,"missing idle proof retry");
+    growthDevice.completeRead({0,512,0,0,0,0,0,0});
+    check(growth.step(0.f)&&growth.allocatedCapacity()==256&&growth.stats().gpuPhysicalShrinks==2,
+          "confirmed empty GPU pool not reclaimed");
+    auto idleDispatches=growth.stats().gpuDispatches;
+    check(growth.step(0.f)&&growth.stats().gpuDispatches==idleDispatches,"empty pool continued dispatching");
     growthDevice.endFrame();growth.shutdown();
     check(!growthDevice.badOrder,"physical growth encoder ordering");
 

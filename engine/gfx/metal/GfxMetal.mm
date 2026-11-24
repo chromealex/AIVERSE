@@ -804,13 +804,14 @@ public:
     }
     bool readBufferAsync(BufferHandle h,size_t size,BufferReadFn callback) override {
         auto* b=buffers_.get(h.id);
-        if(!cmd_||enc_||compute_||!b||!size||size>b->size||size>65536||!callback||bufferReads_.size()>=32)return false;
+        if(!cmd_||enc_||compute_||gpuIcbEncoder_||!gpuHealthy_->load()||!b||!size||size>b->size||size>65536||!callback||bufferReads_.size()>=32)return false;
         id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];if(!dst)return false;
         auto read=std::make_shared<BufferRead>();read->bytes.resize(size);read->callback=std::move(callback);
         id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        if(!blit)return false;
         [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> cb){
-            if(cb.status==MTLCommandBufferStatusError)read->bytes.clear();else memcpy(read->bytes.data(),dst.contents,size);
+            if(cb.status!=MTLCommandBufferStatusCompleted)read->bytes.clear();else memcpy(read->bytes.data(),dst.contents,size);
             read->ready.store(true,std::memory_order_release);
         }];
         bufferReads_.push_back(std::move(read));return true;

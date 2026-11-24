@@ -367,6 +367,7 @@ void ComputeParticles::releaseGpu() {
     pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
     gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=gpuCullViewUsed_=false;
     gpuDemandGrowth_=false;physicalCapacity_=0;
+    gpuIdleSteps_=0;gpuBirthEpoch_=0;gpuEmptyProven_=false;
     vertices_={};indices_={};texture_={};liveSlots_={};
     aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;proceduralActive_=false;
     seedProgramParams_={};stateProgramParams_={};gpuVmPayload_={};
@@ -440,6 +441,7 @@ bool ComputeParticles::tryClear() {
     // simulation or a new burst until the entire reset is retried. Kill any
     // retained checkpoint immediately; a partial reset is never a snapshot.
     gpuResetDirty_=true;
+    ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;
     verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
     lastCheckpoint_={};checkpointRevision_=0;
     ++vmFrameRevision_;
@@ -494,6 +496,12 @@ bool ComputeParticles::tryClear() {
     stats_.gpuVmErrorsKnown=false;
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
+    // Reset succeeded independently of optional memory reclamation. Failure
+    // to allocate smaller buffers must not turn a completed clear into a failure.
+    if(gpuDemandGrowth_){
+        gpuEmptyProven_=true;
+        (void)shrinkEmptyGpuAllocation();
+    }
     reason_.clear();
     return true;
 }
@@ -920,6 +928,12 @@ bool ComputeParticles::growGpuAllocation(uint32_t required){
     if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy())return false;
     const uint32_t next=gpuNextPhysicalCapacity(old,required,desc_.capacity);
     if(!next||next<=old)return false;
+    return replaceGpuAllocation(next,false);
+}
+bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
+    const uint32_t old=physicalCapacity_;
+    if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !next||next>desc_.capacity||(empty?next>=old:next<=old))return false;
     struct Replacement {
         gfx::BufferHandle* owner;
         size_t stride;
@@ -948,14 +962,23 @@ bool ComputeParticles::growGpuAllocation(uint32_t required){
         for(auto& r:replacements)if(r.fresh.valid())device_->destroyBuffer(r.fresh);
         if(counters.valid())device_->destroyBuffer(counters);
         if(indices.valid())device_->destroyBuffer(indices);
-        ++stats_.gpuPhysicalGrowthFailures;
+        if(empty)++stats_.gpuPhysicalShrinkFailures;else ++stats_.gpuPhysicalGrowthFailures;
         return false;
     };
+    std::vector<uint32_t> emptyFree;
+    if(empty){
+        emptyFree.resize(next);
+        for(uint32_t i=0;i<next;++i)emptyFree[i]=next-1-i;
+    }
     for(auto& r:replacements){
-        r.fresh=buffer(*device_,gfx::BufferType::Storage,size_t(next)*r.stride,nullptr,r.label);
+        // Unused state is never visited by the dense alive list; births fully
+        // initialize the slot before it becomes visible to update/render.
+        const void* data=empty&&r.owner==&liveSlots_?emptyFree.data():nullptr;
+        r.fresh=buffer(*device_,gfx::BufferType::Storage,size_t(next)*r.stride,data,r.label);
         if(!r.fresh.valid())return discard();
     }
-    counters=buffer(*device_,gfx::BufferType::Storage,8*sizeof(uint32_t),nullptr,"SpectraFX grown allocator counters");
+    const std::array<uint32_t,8> emptyCounters{0,next,0,0,0,0,0,0};
+    counters=buffer(*device_,gfx::BufferType::Storage,sizeof(emptyCounters),empty?emptyCounters.data():nullptr,"SpectraFX replacement allocator counters");
     if(!counters.valid())return discard();
     const bool wide=gpuEmitterUsesWideIndices(desc_.capacity);
     if(!proceduralActive_){
@@ -971,7 +994,9 @@ bool ComputeParticles::growGpuAllocation(uint32_t required){
         indices=wide?build.operator()<uint32_t>():build.operator()<uint16_t>();
         if(!indices.valid())return discard();
     }
-    size_t copied=8*sizeof(uint32_t);
+    size_t copied=0;
+    if(!empty){
+    copied=8*sizeof(uint32_t);
     for(auto& r:replacements)if(r.preserve){
         const size_t bytes=size_t(old)*r.stride;
         if(!device_->copyStorageBufferChecked(*r.owner,r.fresh,bytes))return discard();
@@ -994,21 +1019,68 @@ bool ComputeParticles::growGpuAllocation(uint32_t required){
     device_->endCompute();
     if(!ok)return discard();
     stats_.gpuDispatches+=2;
+    }
     for(auto& r:replacements){device_->destroyBuffer(*r.owner);*r.owner=r.fresh;r.fresh={};}
     device_->destroyBuffer(aliveCounter_);aliveCounter_=counters;counters={};
     if(indices.valid()){device_->destroyBuffer(indices_);indices_=indices;indices={};}
     size_t bytesPerSlot=0;for(const auto& r:replacements)bytesPerSlot+=r.stride;
     if(!proceduralActive_)bytesPerSlot+=6u*(wide?4u:2u);
-    stats_.gpuBytes+=size_t(next-old)*bytesPerSlot;
-    stats_.gpuGrowthCopiedBytes+=copied;
-    ++stats_.gpuPhysicalGrowths;
+    if(empty){
+        const size_t reclaimed=size_t(old-next)*bytesPerSlot;
+        stats_.gpuBytes-=reclaimed;stats_.gpuReclaimedBytes+=reclaimed;
+        ++stats_.gpuPhysicalShrinks;
+    }else{
+        stats_.gpuBytes+=size_t(next-old)*bytesPerSlot;
+        stats_.gpuGrowthCopiedBytes+=copied;
+        ++stats_.gpuPhysicalGrowths;
+    }
     physicalCapacity_=next;
     verticesReady_=false;
     return true;
 }
+bool ComputeParticles::shrinkEmptyGpuAllocation(){
+    if(!gpuDemandGrowth_||!gpuEmptyProven_||gpuResetDirty_||gpuStagingDirty_||
+       !pendingStates_.empty()||!pendingGpuKills_.empty())return false;
+    const uint32_t target=gpuInitialPhysicalCapacity(desc_.capacity);
+    if(physicalCapacity_<=target)return true;
+    // Empty proof guarantees current dispatch args already describe zero
+    // alive (one guarded threadgroup). The next birth rewrites draw args.
+    return replaceGpuAllocation(target,true);
+}
+void ComputeParticles::serviceGpuIdleReclaim(uint32_t pendingBirths){
+    if(!gpuDemandGrowth_)return;
+    if(pendingBirths||!pendingGpuKills_.empty()){
+        gpuIdleSteps_=0;
+        if(pendingBirths)gpuEmptyProven_=false;
+        return;
+    }
+    if(gpuEmptyProven_){
+        gpuAllocationSubmitted_=false;
+        gpuBirthEstimates_.clear();gpuEstimatedBirths_=0;
+        if(physicalCapacity_>gpuInitialPhysicalCapacity(desc_.capacity)&&
+           ++gpuIdleSteps_>=kGpuIdleReclaimSteps){
+            gpuIdleSteps_=0;(void)shrinkEmptyGpuAllocation();
+        }
+        return;
+    }
+    // Estimates only schedule a bounded check; they NEVER authorize shrink.
+    if(gpuEstimatedBirths_||!gpuAllocationSubmitted_){gpuIdleSteps_=0;return;}
+    if(++gpuIdleSteps_<kGpuIdleReclaimSteps)return;
+    gpuIdleSteps_=0;
+    const auto epoch=gpuBirthEpoch_;
+    if(requestAllocationCounters([this,epoch](bool ok,AllocationCounters observed){
+        if(ok&&epoch==gpuBirthEpoch_&&!gpuResetDirty_&&!gpuStagingDirty_&&
+           observed.alive==0&&observed.free==physicalCapacity_){
+            gpuEmptyProven_=true;
+            // First attempt on the next owner step; subsequent failures cool down.
+            gpuIdleSteps_=kGpuIdleReclaimSteps-1;
+        }
+    }))++stats_.gpuIdleProofRequests;
+}
 bool ComputeParticles::stepGpuAllocated(float dt){
     stats_.hostActiveSlotVisits=stats_.hostOccupiedPages=0;
     const uint32_t count=uint32_t(pendingStates_.size());
+    serviceGpuIdleReclaim(count);
     if(!gpuAllocationSubmitted_&&!count&&pendingGpuKills_.empty()){
         drawCount_=0;verticesReady_=true;stats_.alive=stats_.submittedSlots=0;return true;
     }
@@ -1085,6 +1157,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     gpuCullViewUsed_=cull;
     gpuAllocationSubmitted_|=count!=0;
     if(count){
+        ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;
         gpuBirthEstimates_.push_back({gpuAllocationClock_+desc_.lifetime,count});
         gpuEstimatedBirths_+=count;stats_.gpuAllocationRequests+=count;
     }

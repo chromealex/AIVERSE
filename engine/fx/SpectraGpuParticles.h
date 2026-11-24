@@ -38,6 +38,7 @@ ComputeBackend chooseComputeBackend(gfx::Backend backend, bool computeAvailable,
 inline constexpr uint32_t kGpuEmitterMaxSlots=262144;
 inline constexpr uint32_t kGpuCheckpointCaptureMaxSlots=4096;
 inline constexpr uint32_t kGpuPhysicalPageSlots=256;
+inline constexpr uint32_t kGpuIdleReclaimSteps=120;
 inline constexpr uint32_t gpuInitialPhysicalCapacity(uint32_t limit){return limit<kGpuPhysicalPageSlots?limit:kGpuPhysicalPageSlots;}
 inline constexpr uint32_t gpuNextPhysicalCapacity(uint32_t current,uint32_t required,uint32_t limit){
     if(!current||current>limit||required>limit)return 0;
@@ -145,6 +146,8 @@ struct ComputeStats {
     // exact GPU alive count stays on GPU and is used as the draw argument.
     size_t gpuBytes = 0, uploadedBytes = 0;
     uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
+    uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
+    size_t gpuReclaimedBytes=0; // logical released buffer bytes, not driver residency
     size_t gpuGrowthCopiedBytes=0;
 };
 
@@ -270,6 +273,9 @@ private:
 
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
+    bool replaceGpuAllocation(uint32_t next,bool empty);
+    bool shrinkEmptyGpuAllocation();
+    void serviceGpuIdleReclaim(uint32_t pendingBirths);
     void bindGpuAllocationBuffers();
     bool initGpu();
     bool initCpu();
@@ -309,6 +315,9 @@ private:
     bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
     uint32_t physicalCapacity_=0;
     bool gpuDemandGrowth_=false;
+    uint32_t gpuIdleSteps_=0;
+    uint64_t gpuBirthEpoch_=0; // invalidates asynchronous empty proofs
+    bool gpuEmptyProven_=false;
     bool gpuCullViewUsed_=false; // camera-dependent compact stream
     int viewWidth_=1,viewHeight_=1;
     struct KilledSlotAwaitingFrame {
