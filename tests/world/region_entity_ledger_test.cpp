@@ -351,11 +351,26 @@ static void checkUnifiedBackupCatalog() {
     UnifiedWalSession session;
     UnifiedWalSession::State initial;
     AIVERSE_TEST_CHECK(initial.ledger.spawn(99,a));
+    AIVERSE_TEST_CHECK(initial.ledger.spawn(100,b)&&initial.ledger.despawn(100,b));
+    AIVERSE_TEST_CHECK(initial.ledger.spawn(101,c)&&initial.ledger.despawn(101,c));
     constexpr size_t budget=64*1024;
     const auto world=active.identity.world;
     AIVERSE_TEST_CHECK(session.create(managed,world,initial,adapters,budget)==RegionWalWrite::Ok);
-    AIVERSE_TEST_CHECK(session.checkpoint(3,adapters,budget)==RegionCheckpointPublishResult::Ok);
-    AIVERSE_TEST_CHECK(session.checkpoint(5,adapters,budget)==RegionCheckpointPublishResult::Ok);
+    AIVERSE_TEST_CHECK(session.checkpoint(3,adapters,budget,3)==RegionCheckpointPublishResult::Ok);
+    AIVERSE_TEST_CHECK(session.state()->ledger.retiredFloor()==100&&session.state()->ledger.find(101));
+    AIVERSE_TEST_CHECK(session.enableAsync(budget));
+    AIVERSE_TEST_CHECK(session.queueCheckpoint(5,adapters,budget,5)==UnifiedWalSession::IoResult::Pending);
+    AIVERSE_TEST_CHECK(!session.state()&&!session.manifest());
+    auto status=UnifiedWalSession::IoResult::Pending;
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+    while(status==UnifiedWalSession::IoResult::Pending){
+        AIVERSE_TEST_CHECK(std::chrono::steady_clock::now()<deadline);
+        status=session.pollIo();
+        if(status==UnifiedWalSession::IoResult::Pending)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    AIVERSE_TEST_CHECK(status==UnifiedWalSession::IoResult::Checkpointed);
+    AIVERSE_TEST_CHECK(session.state()->ledger.size()==1&&session.state()->ledger.nextIdentity()==102);
+    AIVERSE_TEST_CHECK(session.state()->ledger.historyFloor()==5&&session.state()->ledger.isRetired(101));
     AIVERSE_TEST_CHECK(session.checkpoint(7,adapters,budget)==RegionCheckpointPublishResult::Ok);
     // Corrupt an old checkpoint, inject a foreign-world pair and a future pair.
     std::ofstream(managed/"checkpoint-1.bin",std::ios::binary|std::ios::trunc).put('x');
@@ -398,6 +413,7 @@ static void checkUnifiedBackupCatalog() {
     AIVERSE_TEST_CHECK(forked.openCheckpoint(destination,forkWorld,budget,adapters,factory,codecs,materialize)
         ==RegionWalWrite::Ok);
     AIVERSE_TEST_CHECK(forked.state()->sequence==0&&forked.state()->ledger.find(99));
+    AIVERSE_TEST_CHECK(forked.state()->ledger.sameState(session.state()->ledger));
     AIVERSE_TEST_CHECK(session.state()->ledger.find(99)&&session.manifest()->generation==7);
     forked.close();session.close();
     AIVERSE_TEST_CHECK(!session.backups(budget,adapters,factory,codecs,materialize).complete);
