@@ -51,13 +51,19 @@ public:
         const std::string& name,
         const CavePathQuery& query,
         const CaveNavigationPublication& publication)const {
+        if(publication.hasPending())return {};
+        return queryWithProvider(name,query,publication.active());
+    }
+    // Deterministic authority can use its frozen ECS-derived provider
+    // without depending on the asynchronous native publication bus.
+    CavePathResult queryWithProvider(
+        const std::string& name,const CavePathQuery& query,
+        std::shared_ptr<const CaveNavigationDataProvider> provider)const {
         const auto it=solvers_.find(name);
-        if(it==solvers_.end() || publication.hasPending())
-            return {};
+        if(it==solvers_.end())return {};
         if(!query.maxVisits||query.maxVisits>1048576)
             throw std::invalid_argument("Caverns path search visit budget");
         CaveNavigationDataProvider::validateProfile(query.agent);
-        const auto provider=publication.active();
         if(!provider||provider->revision()!=query.sourceRevision)
             return {}; // obsolete query cannot use an earlier world epoch
         if(!provider->residentSegment(query.start,query.start,query.agent)||
