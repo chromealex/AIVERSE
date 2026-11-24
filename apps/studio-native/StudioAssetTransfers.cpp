@@ -1362,7 +1362,13 @@ Json studioAssetTrashList(const fs::path& project,size_t offset,size_t limit){
     out.set("items",std::move(rows));out.set("total",Json::number(int64_t(ids.size())));
     out.set("truncated",Json::fromBool(truncated));
     const auto cache=recoveryCache(project);
-    out.set("recoveryPending",Json::fromBool(existsOrSymlink(cache/"studio-move-journal")||existsOrSymlink(cache/"studio-history-batch")));
+    std::string reason;
+    if(existsOrSymlink(cache/"studio-history-batch"))reason="Pending coordinated asset transaction; reopen project to recover.";
+    else if(existsOrSymlink(cache/"studio-move-journal"))reason="Pending asset move transaction; reopen project to recover.";
+    else if(existsOrSymlink(cache/"project-document-journal"))reason="Pending project document transaction; reopen project to recover.";
+    else if(existsOrSymlink(cache/"asset-history.dirty"))reason="Interrupted legacy asset history publication; history is fenced. Recovery payloads are retained.";
+    out.set("recoveryPending",Json::fromBool(!reason.empty()));
+    if(!reason.empty())out.set("recoveryReason",Json::string(reason));
     try{out.set("storage",studioRecoveryStorage(project));}
     catch(const std::exception& e){out.set("storageError",Json::string(e.what()));}
     return out;
