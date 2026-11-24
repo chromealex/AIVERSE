@@ -228,7 +228,8 @@ def main():
     from capability_inventory import inventory as capabilities
     from graph_inventory import inventory as graphs
     from feature_automation import (read_config, discover_branches, impact_report, release_scope,
-                                    schedule_tasks, skill_similarity, architecture_report)
+                                    schedule_tasks, skill_similarity, architecture_report,
+                                    skill_freshness_candidates, conflict_plan)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
     parser.add_argument("--branch", action="append", default=[], help="Compare an explicit active branch ref to --base for overlap checks")
@@ -262,6 +263,8 @@ def main():
         automation = {
             "impact": impact_report(registry, policies, changed),
             "skill_similarity": skill_similarity(ROOT, read(ROOT, "skills/catalog.json")["skills"]),
+            "skill_freshness": skill_freshness_candidates(read(ROOT, "skills/catalog.json")["skills"], changed),
+            "conflict_plan": conflict_plan(policy["ownership"]["conflicts"], registry),
             "architecture": architecture,
             "schedule": schedule_tasks(readiness, policy["dependencies"], config["agents"],
                 {c["path"] for c in policy["ownership"]["conflicts"]}, registry),
