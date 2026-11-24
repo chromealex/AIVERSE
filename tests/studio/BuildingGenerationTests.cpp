@@ -1,5 +1,6 @@
 // Focused native Studio building generator acceptance: no browser-side asset writes.
 #include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingMaterialPublish.h"
 #include "apps/studio-native/StudioBuildingRegeneration.h"
 #include <chrono>
 #include <cstdio>
@@ -27,6 +28,28 @@ int main(int argc,char** argv){
                 CHECK(style["functions"].size()>=4);
             }
         CHECK(found);
+        const auto publishParams=Json::parse(R"({"style":"scifi","slot":"hull","name":"test_hull","resolution":128})");
+        Json publishedMaterial;
+        const auto published=studioBuildingPublishMaterial(engine,temp,publishParams,
+            [&](const std::string& name,const Json& m){CHECK(name=="test_hull");publishedMaterial=m;});
+        CHECK(published["assets"].size()==4&&publishedMaterial.getStr("texture").rfind("content/",0)==0);
+        {
+            StudioAssetCatalog index(temp);index.rebuild();
+            for(const auto& asset:published["assets"].items()){
+                const auto entry=index.byGuid(asset.getStr("guid"));
+                CHECK(entry&&entry->path==asset.getStr("path"));
+                CHECK(entry->settings.getBool("sRGB")== (asset.getStr("channel")=="texture"));
+            }
+        }
+        bool duplicate=false;
+        try{studioBuildingPublishMaterial(engine,temp,publishParams,[](const auto&,const auto&){});}
+        catch(const std::exception&){duplicate=true;}
+        CHECK(duplicate);
+        auto failedParams=publishParams;failedParams.set("name",Json::string("test_rollback"));
+        bool rolledBack=false;
+        try{studioBuildingPublishMaterial(engine,temp,failedParams,[](const auto&,const auto&){throw std::runtime_error("save rejected");});}
+        catch(const std::exception&){rolledBack=true;}
+        CHECK(rolledBack&&!fs::exists(studioContentRoot(temp)/"GeneratedBuildingMaterials/test_rollback"));
         // Twelve brand-new setting IDs must be enumerated by the native
         // loader, not accidentally grouped by a hard-coded prefix.
         for(const char* id:{"medieval-fantasy","dark-fantasy","steampunk",

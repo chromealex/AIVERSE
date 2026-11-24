@@ -21,7 +21,7 @@ import type {BuildingCandidateTicket} from '../../graphs/buildingCandidateCaptur
 import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
-function BuildingSurfacePreview({style,visible,resolution}:{style:StudioBuildingStyle|undefined;visible:boolean;resolution:128|256|512}){
+function BuildingSurfacePreview({style,visible,resolution,projectLoaded,onPublished}:{style:StudioBuildingStyle|undefined;visible:boolean;resolution:128|256|512;projectLoaded:boolean;onPublished:()=>void}){
   const slots=Object.keys(style?.surfaces??{}).filter(slot=>!!style?.surfaces?.[slot]?.pattern);
   const [selected,setSelected]=useState('');
   const slot=slots.includes(selected)?selected:slots[0]??'';
@@ -29,6 +29,21 @@ function BuildingSurfacePreview({style,visible,resolution}:{style:StudioBuilding
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const styleId=style?.id??'';
+  const [name,setName]=useState('');
+  const [publishing,setPublishing]=useState(false);
+  const [published,setPublished]=useState('');
+  const defaultName=('building-'+styleId+'-'+slot+'-'+resolution).slice(0,64);
+  const publishName=name||defaultName;
+  const publish=async()=>{
+    if(publishing||!projectLoaded||!slot||!nativeConnected())return;
+    setPublishing(true);setError('');setPublished('');
+    try{
+      const result=await invoke('studio.buildingPublishMaterial',{style:styleId,slot,name:publishName,resolution});
+      setPublished(result.name+' · '+result.assets.length+' new textures');onPublished();
+      window.dispatchEvent(new Event('studio:assets-changed'));
+      void invoke('studio.windowBroadcast',{event:'ui.assetsChanged',payload:{path:result.path}}).catch(()=>{});
+    }catch(e){setError(explain(e));}finally{setPublishing(false);}
+  };
   useEffect(()=>{
     setResult(null);setError('');setBusy(false);
     if(!visible||!styleId||!slot||!nativeConnected())return;
@@ -56,6 +71,14 @@ function BuildingSurfacePreview({style,visible,resolution}:{style:StudioBuilding
           <figcaption>{map.label}</figcaption>
         </figure>)}
       </div>}
+      <StudioField label="Reusable material name" htmlFor="abg-publish-material">
+        <StudioInput id="abg-publish-material" value={publishName} disabled={publishing} onChange={e=>setName(e.target.value)}/>
+      </StudioField>
+      <StudioButton disabled={!projectLoaded||publishing||!nativeConnected()||!/^[a-zA-Z0-9_-]{1,64}$/.test(publishName)} onClick={()=>void publish()}>
+        {publishing?'Publishing…':'Publish textures + material'}
+      </StudioButton>
+      {published&&<small>{published}</small>}
+      <small className="abg__note">Publishes the authored style slot, not a seed palette or project override. Existing names are never replaced.</small>
       <small className="abg__note">Actual native style maps (including material cavity AO) · {resolution} × {resolution} · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
     </>}
   </StudioSection>;
@@ -978,7 +1001,7 @@ export default function BuildingGeneratorPanel({
         </StudioField>
         <small className="abg__note">Applies to preview and exported GLB; imported project texture sizes are unchanged.</small>
       </StudioSection>
-      <BuildingSurfacePreview key={selectedStyle?.id??''} style={selectedStyle} visible={page==='materials'} resolution={textureResolution}/>
+      <BuildingSurfacePreview key={(snapshot?.project.path??'')+':'+(selectedStyle?.id??'')} style={selectedStyle} visible={page==='materials'} resolution={textureResolution} projectLoaded={projectLoaded} onPublished={()=>{void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));}}/>
       <StudioSection title="Architectural material bindings">
         <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
         <div className="abg__fields">

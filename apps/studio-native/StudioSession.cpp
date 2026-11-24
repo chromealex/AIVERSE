@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingMaterialPublish.h"
 #include "apps/studio-native/StudioBuildingDependencies.h"
 #include "apps/studio-native/StudioBuildingRegeneration.h"
 #include "apps/studio-native/StudioAssetReferences.h"
@@ -1173,6 +1174,22 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",studioBuildingRegenerate(
                 ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
             return reply;
+        }
+        if(method=="studio.buildingPublishMaterial") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            const auto name=params.getStr("name");
+            if(!validStudioMaterialName(name)||editor::loadMaterialLibrary(ws_).has(name))
+                throw std::runtime_error("Invalid or existing material name");
+            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,params,
+                [&](const std::string& published,const Json& material){
+                    if(editor::loadMaterialLibrary(ws_).has(published))
+                        throw std::runtime_error("Material already exists");
+                    Json request=Json::object();request.set("name",str(published));
+                    request.set("material",material);
+                    const auto saved=ws_.call("material_set",request,"studio");
+                    if(saved.has("error"))throw std::runtime_error(saved.getStr("error"));
+                });
+            reply.set("result",std::move(result));return reply;
         }
         if(method=="studio.buildingGenerate") {
             reply.set("result",studioBuildingGenerate(ws_.engineDir,ws_.project.dir,params));
