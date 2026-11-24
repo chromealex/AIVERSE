@@ -21,7 +21,7 @@
 #include "GamePlanet.h"
 #include "GamePlanetCamera.h"
 #include "GameTerrainRender.h"
-#include "engine/world/TerraWeaveCavernsPlanetCut.h"
+#include "engine/world/TerraWeaveCavernsPlanetBodyCut.h"
 #include <functional>
 
 namespace aiverse::game {
@@ -55,6 +55,11 @@ public:
         std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const;
     bool installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,
         const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady);
+    // Complete body-level lease. A native owner must first certify the
+    // chart frames and matching physical volume, then supply its live epoch.
+    bool installCaveBodyCut(int body,const terraweave::caverns::CavePlanetBodyCutPlan& plan,
+        uint64_t expectedEpoch,const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady);
+    bool clearCaveBodyCut(int body,uint64_t expectedEpoch,const std::function<bool()>& exclusive);
     bool clearCaveSurfaceCut(int body,const std::function<bool()>& exclusive);
     uint64_t caveSurfaceCutEpoch(int body)const noexcept;
     struct Options { bool orbits = true, atmosphere = true, sky = true; float lodRange = 48; };
@@ -119,6 +124,7 @@ private:
         std::vector<Chunk> chunks;          // [0..5]: face roots
         int levels = 1, grid = 16;
         uint64_t caveCutEpoch=0,caveCutWatermark=0;
+        bool caveCutAggregate=false;
         gfx::TextureHandle vision;
         std::vector<uint8_t> visionPx;
         bool fog = false;
