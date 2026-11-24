@@ -102,6 +102,8 @@ public:
     // Automatically select the complete padded volume slot set from the
     // frozen surface plan. The actual host chooses the lower trim planes
     // and the automatic configure path expands the current immutable dirty batch.
+    uint32_t volumeResolution()const noexcept{return chunkResolution_;}
+    int32_t volumeSpacingCm()const noexcept{return chunkSpacingCm_;}
     std::vector<CaveOwnedRimRequest> selectRimSurfaceRequests(const CaveSurfaceGroupPlan& plan,
             const std::map<uint64_t,Fixed>& lowerPlanes)const{
         auto snapshot=host_.sourceSnapshot();
