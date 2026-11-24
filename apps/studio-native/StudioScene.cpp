@@ -80,6 +80,11 @@ struct StudioScene::GraphPresentation {
         auto& result=merged[id];result=*authored;
         constexpr int Material::* slots[]={&Material::baseTex,&Material::normalTex,&Material::mrTex,&Material::occlusionTex,&Material::emissiveTex,&Material::teamTex};
         for(size_t i=0;i<std::min(result.size(),live.size());++i){
+            bool shaderOverride=false;for(const auto& pin:live[i].graphSourcePins)if(pin)shaderOverride=true;
+            if(shaderOverride){
+                result[i].shaderGraph=live[i].shaderGraph;result[i].graphSourcePins=live[i].graphSourcePins;
+                for(size_t c=0;c<4;++c)result[i].graphTextures[c]=live[i].graphTextures[c];
+            }
             if(!live[i].proceduralGraphPins)continue;
             for(size_t c=0;c<6;++c)if(const auto& pin=(*live[i].proceduralGraphPins)[c]){
                 result[i].*slots[c]=live[i].*slots[c];
@@ -877,7 +882,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
         }
         if(action=="studioHdrApplyPbr"||action=="studioHdrApplyModel"){
             const auto channel=p.getStr("channel","emissive");
-            if(channel!="color"&&channel!="emissive")throw std::invalid_argument("Invalid HDR material channel");
+            if(channel!="color"&&channel!="emissive"&&channel!="graph")throw std::invalid_argument("Invalid HDR material channel");
             Model* model=nullptr;GraphPresentation::Snapshot* snapshot=nullptr;size_t index=0;
             if(action=="studioHdrApplyPbr"){
                 if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR model first");
@@ -888,7 +893,14 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
                 model=found->second.get();snapshot=&presentation.target(*model);index=GraphPresentation::index(p,*model);
             }
             std::string error;
-            if(!owner.publishResidentRadianceColor(ws.project.dir,p.getStr("request"),*snapshot,GraphPresentation::stamp(p,index),*model,*device_,lease,presentation.rollback,channel=="color",&error))throw std::runtime_error(error);
+            const auto target=GraphPresentation::stamp(p,index);
+            bool applied=false;
+            if(channel=="graph"){
+                if(!p["shaderGraph"].isObject()||p["shaderGraph"].dump(-1).size()>256u*1024u)throw std::invalid_argument("Invalid HDR Shader Graph document");
+                const auto program=graph::compile(p["shaderGraph"],"material");
+                applied=owner.publishResidentRadianceGraph(ws.project.dir,p.getStr("request"),*snapshot,target,*model,*device_,lease,presentation.rollback,program,&error);
+            }else applied=owner.publishResidentRadianceColor(ws.project.dir,p.getStr("request"),*snapshot,target,*model,*device_,lease,presentation.rollback,channel=="color",&error);
+            if(!applied)throw std::runtime_error(error);
             if(action=="studioHdrApplyPbr")presentation.sampleRenderer->invalidateModelCachesFor(model);
             else{renderer_.invalidateModelCachesFor(model);presentation.merged.clear();lastFrameSignature_=0;}
             auto r=GraphPresentation::info(*snapshot,index);r.set("state",Json::string("applied"));return r;

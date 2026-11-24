@@ -624,6 +624,46 @@ public:
             },nullptr,error);
     }
 
+    // Explicit saved material graph with a single session resource @radiance.
+    // Other source paths must already be resident imported images on this model.
+    static bool publishRadianceGraphSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,
+            std::string_view generation,const render::graph::Program& graph,std::string* error=nullptr){
+        render::texture_graph::Program binding;binding.outputs.emplace("emissive",0); // one image transaction
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,rollback,binding,
+            [&](auto& transaction,const render::Material& base){
+                using namespace render::texture_graph;
+                require(graph.domain=="material"&&graph.textures.size()<=4,"invalid HDR material graph");
+                require(base.shading==render::ShadingModel::Pbr,"HDR graph binding requires PBR material");
+                require(graphGpuTextureCopyComplete(candidate,device),"HDR copy fence not complete");
+                const auto it=std::find(graph.textures.begin(),graph.textures.end(),"@radiance");
+                require(it!=graph.textures.end(),"Shader Graph must declare @radiance");
+                const size_t slot=size_t(it-graph.textures.begin());
+                require(bool(graph.linearRadianceSlots&(1u<<slot)),"@radiance requires linear sampling");
+                gfx::TextureInfo info{};
+                require(device.textureInfo(candidate.image.tex,info)&&(info.format==gfx::PixelFormat::RGBA16F||info.format==gfx::PixelFormat::RGBA32F),"invalid HDR source format");
+                auto result=base;result.shaderGraph=std::make_shared<const render::graph::Program>(graph);
+                result.graphSourcePins={};for(auto& index:result.graphTextures)index=-1;
+                for(size_t i=0;i<graph.textures.size();++i)if(i!=slot){
+                    for(size_t j=0;j<model.images.size();++j){
+                        const auto& image=model.images[j];
+                        if(!render::runtimeGraphImage(image)&&image.tex.valid()&&image.name==graph.textures[i]&&
+                           (!(graph.linearRadianceSlots&(1u<<i))||image.importedLinearRadiance)){
+                            result.graphTextures[i]=int(j);break;
+                        }
+                    }
+                    require(result.graphTextures[i]>=0,"Other Shader Graph textures must already be resident");
+                }
+                candidate.image.name=gpuGraphImageName(generation,"emissive")+"_shader";
+                candidate.image.proceduralGraphImage=true;candidate.image.proceduralLinearRadiance=true;
+                if(!candidate.image.proceduralGraphPin)candidate.image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+                result.graphSourcePins[slot]=candidate.image.proceduralGraphPin;
+                result.graphTextures[slot]=transaction.stageCompletedGpuImage(model,candidate.image,candidate.lease,candidate.fence);
+                candidate.encoded=false;candidate.fence=0;candidate.lease={};return result;
+            },nullptr,error);
+    }
+
     static bool publishRadianceEmissiveSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
             render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
             render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,

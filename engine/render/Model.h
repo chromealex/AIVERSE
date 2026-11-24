@@ -39,6 +39,7 @@ enum class TeamMode : uint8_t { None, Tint, Mask, BaseAlpha, VertexAlpha };
 struct Material {
     std::shared_ptr<const graph::Program> shaderGraph;
     int graphTextures[4] = {-1,-1,-1,-1};
+    std::array<GraphImagePin,4> graphSourcePins{}; // retained by material copies
     std::string name;
     ShadingModel shading = ShadingModel::Pbr;
     float4 baseColor{1, 1, 1, 1};          // linear
@@ -411,11 +412,13 @@ inline gfx::TextureHandle resolvedMaterialTexture(const Model& model,const Mater
     const auto* image=resolveMaterialImage(model,material,slot);
     return image&&image->tex.valid()?image->tex:fallback;
 }
-// Shader Graph sampler slots have no procedural generation pin in their
-// current ABI. Never sample a tracked graph image through a naked index.
+// Explicit HDR graph slots retain the original generation pin. Imported
+// sources have no pin, and naked procedural indices never resolve.
 inline gfx::TextureHandle resolvedGraphSourceTexture(const Model& model,const Material& material,
         size_t slot,gfx::TextureHandle fallback={}) noexcept {
-    const auto* image=slot<4?resolveMaterialImageIndex(model,material.graphTextures[slot]):nullptr;
+    const auto* image=slot<4?resolveMaterialImageIndex(model,material.graphTextures[slot],&material.graphSourcePins[slot]):nullptr;
+    if(image&&material.shaderGraph&&(material.shaderGraph->linearRadianceSlots&(1u<<slot))&&
+       !(image->proceduralLinearRadiance||image->importedLinearRadiance))return fallback;
     return image&&image->tex.valid()?image->tex:fallback;
 }
 inline gfx::TextureHandle resolvedMaterialAlphaCoverage(const Model& model,const Material& material) noexcept {

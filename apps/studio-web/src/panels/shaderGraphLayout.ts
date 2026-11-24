@@ -1,6 +1,6 @@
 // Pure display/layout adapter. Graphs are authored by AIVERSE, not executed in the browser.
 export interface GraphNode {
- id: string; op: string; inputs?: string[]; position?: number[]; value?: number[];
+ id: string; op: string; inputs?: string[]; position?: number[]; value?: number[]; texture?:string; srgb?:boolean;
 }
 export interface GraphSource {
  version?: number; domain?: string;
@@ -49,6 +49,7 @@ export function addShaderGraphNode(source:GraphSource,op:{id:string;inputs:numbe
  const node:GraphNode={id,op:op.id,inputs,position:[
   50+(source.nodes.length%5)*180,50+Math.floor(source.nodes.length/5)*110]};
  if(op.id==='constant'||op.id==='parameter')node.value=[.2,.6,1,1];
+ if(op.id==='sampleRadiance'||op.id==='sampleRadianceLod')node.texture='@radiance';
  return {...source,nodes:[...source.nodes,node]};
 }
 /** Reject deleting a node still referenced by inputs or outputs. */

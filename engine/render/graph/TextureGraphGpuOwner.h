@@ -927,6 +927,19 @@ public:
         }
         gpuCandidates_.clear();gpuAcceptedTextures_=0;published_=gpuPublished_=true;reason_=baseColor?"linear HDR base color adopted":"linear HDR emissive adopted";return true;
     }
+    bool publishResidentRadianceGraph(const std::string& scope,const std::string& request,
+            view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,const render::graph::Program& graph,std::string* error=nullptr){
+        if(!residentRadianceBpp_||!gpuCandidatesReady()||scope!=project_||request!=std::to_string(serial_)||
+           !lease.validFor(dev)||!gpuTransferLease_.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||gpuCandidates_.size()!=1){
+            if(error)*error="no matching completed resident HDR request";return false;
+        }
+        if(!view::AppearanceAssetRegistry::publishRadianceGraphSnapshot(live,target,model,dev,lease,rollback,*gpuCandidates_.front(),gpuGeneration_,graph,error)){
+            discard("failed","HDR Shader Graph publication rejected");return false;
+        }
+        gpuCandidates_.clear();gpuAcceptedTextures_=0;published_=gpuPublished_=true;reason_="linear HDR Shader Graph source adopted";return true;
+    }
     bool publishResidentRadianceEmissive(const std::string& scope,const std::string& request,
             view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
             render::Model& model,gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,

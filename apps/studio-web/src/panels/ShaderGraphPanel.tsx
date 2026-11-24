@@ -218,6 +218,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           if(next===draft&&from)setError('Invalid or unchanged connection.');else{editDraft(next);setError('');}
          }}><option value="">Disconnected</option>{draft.nodes?.filter(n=>n.id!==activeNode.id).map(n=><option key={n.id} value={n.id}>{n.id}</option>)}</StudioSelect>
         </div>)}
+        {['sampleTexture','sampleTextureLod','sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<label className="au-row"><span>Texture source</span><StudioInput aria-label="Shader texture source" placeholder="content/textures/example.exr or @radiance" value={activeNode.texture??''} onChange={e=>editDraft({...draft,nodes:draft.nodes?.map(n=>n.id===activeNode.id?{...n,texture:e.target.value}:n)})}/></label>}
+        {['sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<small>Linear HDR RGB and alpha; @radiance is bound explicitly by Texture Graph for this session.</small>}
         {['constant','parameter'].includes(activeNode.op)&&<div className="au-row">
          {['R','G','B','A'].map((label,i)=><StudioInput key={label} aria-label={label} type="number" step="any"
           value={activeNode.value?.[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>activeNode.value?.[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}

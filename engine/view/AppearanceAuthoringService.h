@@ -77,13 +77,14 @@ public:
             mt.baseColor={num(col[0],1),num(col[1],1),num(col[2],1),
                 col.size()>3?num(col[3],1):mt.baseColor.w};
         if(o.has("shaderGraph")) {
-            // No stale tail indices from a replaced or failed graph.
+            // No stale tail indices or retained generations after graph replacement.
+            mt.graphSourcePins={};
             for(auto& index:mt.graphTextures)index=-1;
             try {
                 mt.shaderGraph=std::make_shared<render::graph::Program>(
                     render::graph::compile(o["shaderGraph"],"material"));
                 for(size_t i=0;i<mt.shaderGraph->textures.size();++i)
-                    mt.graphTextures[i]=texture(mt.shaderGraph->textures[i]);
+                    if(mt.shaderGraph->textures[i]!="@radiance")mt.graphTextures[i]=texture(mt.shaderGraph->textures[i]);
             }catch(const std::exception& error) {
                 if(warn)warn(error.what());
                 mt.shaderGraph.reset();

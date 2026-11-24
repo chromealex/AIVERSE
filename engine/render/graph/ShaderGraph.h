@@ -14,6 +14,7 @@ struct Program {
     std::string domain;
     std::string vertexGlsl, vertexMsl;
     std::vector<std::string> textures;
+    unsigned linearRadianceSlots=0; // explicit HDR file or session source, never sRGB decode
     std::string glsl, msl; // statements inside a fragment function
     std::map<std::string, std::string> outputs;
     int nodes = 0, samples = 0;
@@ -27,6 +28,7 @@ struct Program {
 // sg_world/sg_object/sg_normal/sg_view (vec3), sg_time (float). Domains expose
 // only their supported data. Particle data = age, lifetime, stable random, unused.
 // Samplers: SG_SAMPLE(uv), SG_TEXTURE<n>(uv), SG_TEXTURE_LOD<n>(uv,lod).
+// Material sampleRadiance/sampleRadianceLod use these same slots; @radiance is an explicit session source.
 // vertexGlsl/vertexMsl contain only ancestors of vertexOffset/vertexNormal.
 // No user source strings are copied into shader code.
 Program compile(const Json& graph, const std::string& expectedDomain = {});

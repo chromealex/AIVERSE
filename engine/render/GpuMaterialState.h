@@ -29,7 +29,7 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
         if (g.domain != h.domain || g.vertexGlsl != h.vertexGlsl ||
             g.vertexMsl != h.vertexMsl || g.glsl != h.glsl ||
             g.msl != h.msl || g.outputs != h.outputs ||
-            g.textures != h.textures || g.minQuality != h.minQuality ||
+            g.textures != h.textures || g.linearRadianceSlots!=h.linearRadianceSlots || g.minQuality != h.minQuality ||
             g.usesVirtualTexture != h.usesVirtualTexture) return false;
     }
     auto state = [](const Material& m) {
@@ -73,7 +73,7 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
         str(g.domain); str(g.vertexGlsl); str(g.vertexMsl);
         str(g.glsl); str(g.msl); u(g.minQuality);
         u(g.usesVirtualTexture ? 1u : 0u);
-        u(g.textures.size());
+        u(g.textures.size());u(g.linearRadianceSlots);
         for (const auto& t : g.textures) str(t);
         u(g.outputs.size());
         for (const auto& [key, value] : g.outputs) { str(key); str(value); }
@@ -166,7 +166,7 @@ inline bool equivalentGpuIcbGraphPipelineMaterial(const Material& a,
            x.vertexMsl == y.vertexMsl &&
            x.outputs == y.outputs &&
            x.usesVirtualTexture == y.usesVirtualTexture &&
-           x.textures.size() == y.textures.size();
+           x.textures.size() == y.textures.size() && x.linearRadianceSlots==y.linearRadianceSlots;
 }
 inline uint64_t gpuIcbGraphPipelineHash(const Material& material) {
     uint64_t h=gpuIcbPbrPipelineHash(material);
@@ -181,7 +181,7 @@ inline uint64_t gpuIcbGraphPipelineHash(const Material& material) {
     str(g.domain);str(g.glsl);str(g.msl);
     str(g.vertexGlsl);str(g.vertexMsl);
     mix(uint64_t(g.minQuality));mix(g.usesVirtualTexture ? 1u : 0u);
-    mix(g.textures.size());
+    mix(g.textures.size());mix(g.linearRadianceSlots);
     for(const auto& [name,value]:g.outputs) {
         str(name);str(value);
     }
