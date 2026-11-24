@@ -131,6 +131,7 @@ public:
     std::vector<std::string> idsInRect(float x0, float y0, float x1, float y1, float width, float height,
                                        const editor::MapDoc& map, bool fpsProject) const;
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
+    bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     // Material slot names of a loaded content model (for the Inspector's Mesh Renderer).
     std::vector<std::string> modelMaterialSlots(const std::string& asset) const;
