@@ -25,7 +25,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     <svg role="img" aria-label="Generated building footprint, rooms and actual opening anchors"
       viewBox={`${sx} ${sz} ${planWidth} ${planDepth}`}
       preserveAspectRatio="xMidYMid meet">
-      {mask?.length?mask.flatMap((row,z)=>[...row].map((cell,x)=>cell==='1'?
+      {preview.footprintPolygon?.length?<polygon points={preview.footprintPolygon.map(p=>p.join(',')).join(' ')} fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>:mask?.length?mask.flatMap((row,z)=>[...row].map((cell,x)=>cell==='1'?
         <rect key={x+':'+z} x={width*x/(preview.roomsX??1)} y={depth*z/(preview.roomsZ??1)}
           width={width/(preview.roomsX??1)} height={depth/(preview.roomsZ??1)}
           fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>:null)):<>

@@ -164,6 +164,7 @@ export default function BuildingGeneratorPanel({
   const [footprint,setFootprint]=useState<string[]>([]);
   const [floorFootprints,setFloorFootprints]=useState<string[][]>([]);
   const [walkableSetbacks,setWalkableSetbacks]=useState(false);
+  const [cornerChamfers,setCornerChamfers]=useState<[number,number,number,number]>([0,0,0,0]);
   const [editFloor,setEditFloor]=useState(0);
   const shaped=footprint.some(row=>row.includes('0'))||floorFootprints.some(mask=>mask.some(row=>row.includes('0')));
   const editingMask=floorFootprints.length?floorFootprints[editFloor]??[]:footprint;
@@ -279,7 +280,7 @@ export default function BuildingGeneratorPanel({
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
-      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setEditFloor(0);
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setCornerChamfers(item.cornerChamfers??[0,0,0,0]);setEditFloor(0);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
       clearGenerated();
@@ -314,6 +315,10 @@ export default function BuildingGeneratorPanel({
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
       if(floorFootprints.length&&(floorFootprints.length!==f||floorFootprints.some(mask=>mask.length!==rz||mask.some(row=>row.length!==rx||!/^[01]+$/.test(row)))))return 'Floor footprint grid does not match dimensions.';
+      const maxCut=Math.min(4,.4*Math.min(asNumber(width)/rx,asNumber(depth)/rz));
+      if(cornerChamfers.some(c=>!Number.isFinite(c)||c<0||c>maxCut||(c>0&&c<.5)))return 'Corner cuts must be zero or 0.5–'+maxCut.toFixed(2)+'m.';
+      if(cornerChamfers.some(c=>c>0)&&(shaped||roofProfile!=='flat'||walkableSetbacks||features.some(f=>f.kind==='sliding-roof')))
+        return 'Chamfered corners require a rectangular footprint and flat non-retractable roof.';
       if(walkableSetbacks&&(!floorFootprints.length||f<2||
           !floorFootprints.some((mask,i)=>i>0&&mask.some((row,z)=>[...row].some((v,x)=>v==='0'&&floorFootprints[i-1][z]?.[x]==='1')))))
         return 'Walkable terraces require at least one supported upper-floor setback.';
@@ -430,7 +435,7 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks,cornerChamfers]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
@@ -442,7 +447,8 @@ export default function BuildingGeneratorPanel({
     floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ),
     footprint:mode==='features'&&!floorFootprints.length&&footprint.length?footprint:undefined,
     floorFootprints:mode==='features'&&floorFootprints.length?floorFootprints:undefined,
-    walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined
+    walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined,
+    cornerChamfers:mode==='features'&&cornerChamfers.some(c=>c!==0)?cornerChamfers:undefined
   });
   // A seed is not a request identity. Include all authoring inputs and the project.
   const draftKey=buildingDraftKey(snapshot?.project.path??'',request(asNumber(seed)));
@@ -497,7 +503,7 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
+    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);
     const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
     const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
     setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
@@ -901,7 +907,7 @@ export default function BuildingGeneratorPanel({
         <StudioField label="Footprint preset" htmlFor="abg-footprint-preset">
           <StudioSelect id="abg-footprint-preset" value="" disabled={busy} onChange={e=>{
             const patterns:Record<string,string[]>={L:['100','100','111'],T:['111','010','010'],U:['101','101','111'],H:['101','111','101'],courtyard:['111','101','111']};
-            setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
+            setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);
             if(e.target.value==='rect')setFootprint([]);
             else if(patterns[e.target.value]){
               const rows=patterns[e.target.value];setRoomsX('3');setRoomsZ('3');setFootprint(rows);
@@ -913,6 +919,18 @@ export default function BuildingGeneratorPanel({
             <option value="H">H shape</option><option value="courtyard">Courtyard</option>
           </StudioSelect>
         </StudioField>
+        <div className="abg__dimensions">
+          {['Front left','Front right','Back right','Back left'].map((label,i)=>
+            <StudioField key={i} label={label+' chamfer, m'} htmlFor={'abg-corner-cut-'+i}>
+              <StudioInput id={'abg-corner-cut-'+i} type="number" min={0} max={4} step={.1}
+                value={String(cornerChamfers[i])} disabled={busy} onChange={e=>{
+                  setCornerChamfers(old=>{const next:[number,number,number,number]=[...old];next[i]=Number(e.target.value);return next;});
+                  clearGenerated();
+                }}/>
+            </StudioField>)}
+        </div>
+        <StudioButton variant="secondary" disabled={busy} onClick={()=>{setCornerChamfers([0,0,0,0]);clearGenerated();}}>Reset corner cuts</StudioButton>
+        <small className="abg__note">Chamfer distances cut the actual shell, slabs and roof. Supported on rectangular plans with flat roofs; place openings away from cut corners. Physical strips approximate the exact diagonal.</small>
         <StudioField label="Floor plan mode" htmlFor="abg-floor-plan-mode">
           <StudioSelect id="abg-floor-plan-mode" value={floorFootprints.length?'per-floor':'shared'} disabled={busy} onChange={e=>{
             if(e.target.value==='per-floor'){

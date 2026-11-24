@@ -49,6 +49,8 @@ struct FunctionalBuildingRecipe {
     // Optional explicit masks, one per storey. Upper cells require support below.
     std::vector<std::vector<std::string>> floorFootprints;
     bool walkableSetbacks=false;
+    // Front-left, front-right, back-right, back-left cut distances in metres.
+    std::array<float,4> cornerChamfers{};
 };
 inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
     if(x<0||z<0||x>=int(r.roomsX)||z>=int(r.roomsZ)||floor>=r.floors)return false;
@@ -103,6 +105,7 @@ struct BuildingGraphSolid {
     uint32_t featureIndex=UINT32_MAX;
     // Optional graph-authored corner heights in x0z0,x1z0,x1z1,x0z1 order.
     std::array<float,4> roofTop{-1.f,-1.f,-1.f,-1.f};
+    bool collisionOnly=false;
 };
 struct BuildingGraphSocket {
     std::string id; // stable within one recipe: entrance/<feature>/<copy> or roof/<feature>
@@ -131,6 +134,7 @@ struct BuildingGraphTerrace {uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z
 struct BuildingGraphBalcony {std::string socketId;uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;BuildingBalconySupport support=BuildingBalconySupport::Cantilever;};
 struct BuildingTerraceAccess {std::string socketId,roomId;uint32_t floor=0,x=0,z=0;};
 struct BuildingRoofSection {float x0=0,z0=0,x1=0,z1=0,base=0,rise=0;bool ridgeAlongX=false;};
+struct BuildingGraphVisualPrism {BuildingGraphPart part;float y0,y1;std::vector<std::array<float,2>> polygon;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -142,6 +146,8 @@ struct BuildingStructureGraph {
     std::vector<BuildingTerraceAccess> terraceAccess;
     std::vector<BuildingGraphBalcony> balconies;
     std::vector<BuildingRoofSection> roofSections;
+    std::vector<BuildingGraphVisualPrism> visualPrisms;
+    std::vector<std::array<float,2>> footprintPolygon;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -215,6 +221,12 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         if(queue.size()!=count)return "Footprint cells must be edge-connected";
       }
     }
+    const bool chamfered=std::any_of(recipe.cornerChamfers.begin(),recipe.cornerChamfers.end(),[](float c){return c!=0.f;});
+    const float maxCut=std::min(4.f,.4f*std::min(recipe.width/recipe.roomsX,recipe.depth/recipe.roomsZ));
+    for(float c:recipe.cornerChamfers)if(!finite(c)||c<0.f||c>maxCut||(c>0.f&&c<.5f))
+        return "Corner cut must be zero or .5..4 metres and fit its corner room";
+    if(chamfered&&(nonRectangularFootprint(recipe)||recipe.roofProfile!=FunctionalRoofProfile::Flat||recipe.walkableSetbacks))
+        return "Chamfers currently require a rectangular room mask and flat roof";
     if(recipe.walkableSetbacks&&(recipe.floorFootprints.empty()||recipe.floors<2))
         return "Walkable setbacks require independent floors";
     if(recipe.walkableSetbacks){
@@ -248,7 +260,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
             f.balconyDepth<1.4f||f.balconyDepth>(f.balconySupport==BuildingBalconySupport::Cantilever?1.8f:3.f)))
             return "Balcony requires one upper personnel door, explicit inner facade and position, independent floors and bounded depth";
         if(f.kind==BuildingFeatureKind::SlidingRoof){
-            if(nonRectangularFootprint(recipe))return "Retractable roof requires a rectangular footprint";
+            if(nonRectangularFootprint(recipe)||chamfered)return "Retractable roof requires an uncut rectangular footprint";
             if(recipe.roofProfile!=FunctionalRoofProfile::Flat)return "Retractable roofs require the flat architectural profile";
             if(f.floor!=0)return "Roof floor must be zero";
             if(++roofs>1||f.count!=1||f.width<1||f.depth<1||
@@ -307,6 +319,106 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
     }
     return {};
 }
+// Convex polygon clipping in local X/Z. Used for both exact visible prisms
+// and bounded axis-aligned physical strips; no separate decorative facade.
+namespace buildingChamferDetail {
+using Point=std::array<float,2>;
+using Polygon=std::vector<Point>;
+inline Polygon clip(const Polygon& poly,float a,float b,float c){
+    Polygon out;if(poly.empty())return out;
+    auto distance=[&](Point p){return a*p[0]+b*p[1]-c;};
+    auto prev=poly.back();float d0=distance(prev);
+    for(auto cur:poly){
+        const float d1=distance(cur);
+        if((d0>=0)!=(d1>=0)){
+            const float t=d0/(d0-d1);
+            out.push_back({prev[0]+(cur[0]-prev[0])*t,prev[1]+(cur[1]-prev[1])*t});
+        }
+        if(d1>=0)out.push_back(cur);
+        prev=cur;d0=d1;
+    }
+    return out;
+}
+inline Polygon rectangle(float x0,float z0,float x1,float z1){return {{x0,z0},{x1,z0},{x1,z1},{x0,z1}};}
+inline float area(const Polygon& p){
+    float sum=0;for(size_t i=0;i<p.size();++i){const auto& a=p[i];const auto& b=p[(i+1)%p.size()];sum+=a[0]*b[1]-a[1]*b[0];}
+    return std::abs(sum)*.5f;
+}
+inline std::array<float,2> span(const Polygon& p,float x){
+    float lo=1e9f,hi=-1e9f;
+    for(size_t i=0;i<p.size();++i){
+        const auto a=p[i],b=p[(i+1)%p.size()];
+        if(std::abs(x-a[0])<.0001f){lo=std::min(lo,a[1]);hi=std::max(hi,a[1]);}
+        if(std::abs(b[0]-a[0])<.000001f||x<std::min(a[0],b[0])-.0001f||x>std::max(a[0],b[0])+.0001f)continue;
+        const float t=std::clamp((x-a[0])/(b[0]-a[0]),0.f,1.f),z=a[1]+(b[1]-a[1])*t;
+        lo=std::min(lo,z);hi=std::max(hi,z);
+    }
+    return {lo,hi};
+}
+inline bool apply(BuildingStructureGraph& graph,const FunctionalBuildingRecipe& r){
+    const float W=r.width,D=r.depth;
+    const auto& cuts=r.cornerChamfers;
+    const std::array<std::array<float,3>,4> planes{{{1,1,cuts[0]},{-1,1,cuts[1]-W},{-1,-1,cuts[2]-W-D},{1,-1,cuts[3]-D}}};
+    auto trim=[&](Polygon p){for(size_t i=0;i<4;++i)if(cuts[i]>0)p=clip(p,planes[i][0],planes[i][1],planes[i][2]);return p;};
+    graph.footprintPolygon=trim(rectangle(0,0,W,D));
+    // Preserve all aperture motion envelopes, even when the initial pose is open.
+    for(const auto& s:graph.sockets){
+        if(s.kind==BuildingFeatureKind::Stairs||s.kind==BuildingFeatureKind::Elevator)continue;
+        const bool alongX=s.side==BuildingFeatureSide::Front||s.side==BuildingFeatureSide::Back;
+        const float center=alongX?s.x:s.z;
+        const float startCut=s.side==BuildingFeatureSide::Front?cuts[0]:s.side==BuildingFeatureSide::Back?cuts[3]:
+            s.side==BuildingFeatureSide::Left?cuts[0]:cuts[1];
+        const float endCut=s.side==BuildingFeatureSide::Front?cuts[1]:s.side==BuildingFeatureSide::Back?cuts[2]:
+            s.side==BuildingFeatureSide::Left?cuts[3]:cuts[2];
+        const float reserve=s.kind==BuildingFeatureKind::Window?s.width*.5f+.15f:s.width+.15f;
+        if((startCut>0&&center-reserve<startCut+.36f)||(endCut>0&&center+reserve>(alongX?W:D)-endCut-.36f)){
+            graph.error="Opening or full door travel intersects a chamfered corner";return false;
+        }
+    }
+    auto original=std::move(graph.solids);graph.solids.clear();
+    auto append=[&](const BuildingGraphSolid& source,const Polygon& poly){
+        if(poly.size()<3||area(poly)<.00001f)return;
+        graph.visualPrisms.push_back({source.part,source.y0,source.y1,poly});
+        std::vector<float> xs;for(auto p:poly)xs.push_back(p[0]);
+        std::sort(xs.begin(),xs.end());xs.erase(std::unique(xs.begin(),xs.end(),[](float a,float b){return std::abs(a-b)<.00001f;}),xs.end());
+        for(size_t i=1;i<xs.size();++i){
+            const auto l=span(poly,xs[i-1]),h=span(poly,xs[i]);
+            const bool slope=std::abs(l[0]-h[0])>.0001f||std::abs(l[1]-h[1])>.0001f;
+            const int steps=slope?std::max(1,int(std::ceil((xs[i]-xs[i-1])/.08f))):1;
+            for(int j=0;j<steps;++j){
+                const float x0=xs[i-1]+(xs[i]-xs[i-1])*j/steps,x1=xs[i-1]+(xs[i]-xs[i-1])*(j+1)/steps;
+                const auto a=span(poly,x0),b=span(poly,x1);
+                // Walkable slabs are inscribed, never provide support beyond
+                // the exact visual outline. Walls use conservative coverage.
+                const bool floor=source.part==BuildingGraphPart::Floor;
+                const float z0=floor?std::max(a[0],b[0]):std::min(a[0],b[0]);
+                const float z1=floor?std::min(a[1],b[1]):std::max(a[1],b[1]);
+                if(x1-x0<.001f||z1-z0<.001f)continue;
+                auto s=source;s.x0=x0;s.x1=x1;s.z0=z0;s.z1=z1;s.collisionOnly=true;graph.solids.push_back(s);
+            }
+        }
+    };
+    for(const auto& s:original){
+        auto p=trim(rectangle(s.x0,s.z0,s.x1,s.z1));
+        if(std::abs(area(p)-(s.x1-s.x0)*(s.z1-s.z0))<.0001f){graph.solids.push_back(s);continue;}
+        if(s.featureIndex!=UINT32_MAX||s.part==BuildingGraphPart::Partition){
+            graph.error="Chamfer intersects a feature or internal partition";return false;
+        }
+        append(s,p);
+    }
+    // A true diagonal wall band follows each cut plane, extending inward
+    // by the perpendicular wall thickness and joining the straight walls.
+    for(size_t i=0;i<4;++i)if(cuts[i]>0){
+        const auto p=planes[i];
+        const auto band=clip(graph.footprintPolygon,-p[0],-p[1],-(p[2]+.36f*1.41421356f));
+        BuildingGraphSolid wall;wall.part=BuildingGraphPart::Wall;wall.y0=.24f;wall.y1=r.height;
+        append(wall,band);
+    }
+    if(graph.solids.size()>20000){graph.error="Chamfer physical strip budget exceeded";return false;}
+    return true;
+}
+} // namespace buildingChamferDetail
+
 // Every wall and roof SOLID, door leaf and socket is compiled from one graph.
 // Render/physics simply consume the same solids: openings cannot retain an
 // unseen closed collider. Sockets remain stable under palette changes.
@@ -919,6 +1031,8 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             BuildingFeatureKind::SlidingRoof,roof->side,roofIndex,0,
             cx,H,cz,roof->width,0.f,roof->depth,roof->open});
     }
+    if(std::any_of(recipe.cornerChamfers.begin(),recipe.cornerChamfers.end(),[](float c){return c>0.f;}))
+        buildingChamferDetail::apply(graph,recipe);
     return graph;
 }
 } // namespace aiverse::lib::systems

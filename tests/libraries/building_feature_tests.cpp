@@ -47,6 +47,21 @@ int main(int argc,char** argv){
         CHECK(!collisionAt(compound.building,12,10.5f,12));
         for(const auto& v:compound.building.mesh.vertices)
             CHECK(!(v.pos[1]>10.001f&&v.pos[0]>8.001f&&v.pos[0]<15.999f&&v.pos[2]>8.001f&&v.pos[2]<15.999f));
+        FunctionalBuildingRecipe bevel;bevel.width=24;bevel.depth=24;bevel.height=8;
+        bevel.roomsX=bevel.roomsZ=2;bevel.cornerChamfers={3,3,3,3};
+        const auto beveled=generateFunctionalBuilding(modern,bevel);
+        CHECK(beveled&&beveled.graph.footprintPolygon.size()==8);
+        CHECK(!collisionAt(beveled.building,.4f,1,.4f));
+        CHECK(collisionAt(beveled.building,1.65f,1,1.65f));
+        bool diagonal=false;
+        for(const auto& v:beveled.building.mesh.vertices){
+            CHECK(v.pos[0]+v.pos[2]>=2.999f);
+            CHECK(24.f-v.pos[0]+v.pos[2]>=2.999f);
+            CHECK(48.f-v.pos[0]-v.pos[2]>=2.999f);
+            CHECK(v.pos[0]+24.f-v.pos[2]>=2.999f);
+            diagonal|=std::abs(v.nrm[0])>.5f&&std::abs(v.nrm[2])>.5f;
+        }
+        CHECK(diagonal);
         const auto recipe=readFunctionalBuildingRecipe(Json::parse(readFile(root+"/engine/assets/building-recipes/multiuse-open.json")));
         CHECK(recipe.features.size()==4);
         CHECK(recipe.features[1].kind==BuildingFeatureKind::SmallGate&&recipe.features[1].count==2);

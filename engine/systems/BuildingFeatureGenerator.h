@@ -81,6 +81,11 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("cornerChamfers")){
+        const auto& cuts=json["cornerChamfers"];
+        if(!cuts.isArray()||cuts.size()!=4)throw JsonError(path+".cornerChamfers: expected four cut distances");
+        for(size_t i=0;i<4;++i)recipe.cornerChamfers[i]=number(cuts[i],path+".cornerChamfers");
+    }
     if(json.has("walkableSetbacks")){
         if(json["walkableSetbacks"].type()!=Json::Type::Bool)throw JsonError(path+".walkableSetbacks: expected boolean");
         recipe.walkableSetbacks=json.getBool("walkableSetbacks");
@@ -370,10 +375,16 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
           case BuildingGraphPart::ElevatorGuide:material=sm.dark>=0?sm.dark:hull;break;
         }
-        const bool dressed=dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim)||
+        const bool dressed=solid.collisionOnly||dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim)||
             dressFunctionalRoofCell(mesh,recipe,solid,style.roof>=0?style.roof:material);
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1,true,!dressed);
+    }
+    for(const auto& prism:graph.visualPrisms){
+        std::vector<P3> lower,upper;
+        for(const auto& p:prism.polygon){lower.push_back({p[0],prism.y0,p[1]});upper.push_back({p[0],prism.y1,p[1]});}
+        const int material=prism.part==BuildingGraphPart::Floor?ground:prism.part==BuildingGraphPart::Roof?(style.roof>=0?style.roof:trim):hull;
+        mesh.prism(material,lower,upper);
     }
     for(const auto& socket:graph.sockets){
         BuildingFeatureAnchor anchor;

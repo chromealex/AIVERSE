@@ -118,6 +118,16 @@ int main(){
         CHECK(intersects(columns,11.04f,1.f,10.26f,BuildingGraphPart::Trim));
         balcony.features[0].balconySupport=BuildingBalconySupport::Cantilever;
         CHECK(!buildFunctionalStructureGraph(balcony));
+        FunctionalBuildingRecipe octagon;octagon.width=24;octagon.depth=24;octagon.height=8;
+        octagon.roomsX=octagon.roomsZ=2;octagon.cornerChamfers={3,3,3,3};
+        const auto oct=buildFunctionalStructureGraph(octagon);CHECK(oct&&oct.footprintPolygon.size()==8);
+        CHECK(!oct.visualPrisms.empty());
+        CHECK(!intersects(oct,.4f,.12f,.4f,BuildingGraphPart::Floor));
+        CHECK(!intersects(oct,.4f,1,.4f,BuildingGraphPart::Wall));
+        CHECK(intersects(oct,1.65f,1,1.65f,BuildingGraphPart::Wall));
+        CHECK(intersects(oct,12,.12f,12,BuildingGraphPart::Floor));
+        BuildingFeature tooClose;tooClose.position=1.5f;octagon.features={tooClose};
+        CHECK(!buildFunctionalStructureGraph(octagon));
         FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
         disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;
