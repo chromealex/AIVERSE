@@ -66,12 +66,38 @@ public:
             throw std::invalid_argument("Caverns nav dirty bounds");
         const uint64_t old=active_?active_->revision():0;
         auto next=std::make_shared<const CaveNavigationDataProvider>(
-            std::move(committed),callbacks_);
+            std::move(committed),callbacks_,
+            active_?active_->environmentRevision():0);
         pending_.push_back({
             CaveNavigationChange{old,next->revision(),bounds,fullRebuild},
             std::move(next),0
         });
         active_=pending_.back().provider;
+        return dispatchPending();
+    }
+    // Commit a read-only new NEREID/PHYSIS/ECS snapshot while preserving the
+    // authored SDF epoch. This is an environment epoch, NOT a geometry edit:
+    // route costs and water passability may change without Carve/Fill.
+    bool publishEnvironment(uint64_t environmentEpoch,
+                            CaveNavigationCallbacks newCallbacks,
+                            CaveDirtyBounds affected,
+                            bool fullRebuild=false) {
+        if(!active_||!environmentEpoch ||
+           environmentEpoch<=active_->environmentRevision())return false;
+        if(!fullRebuild &&
+           (affected.maxX<=affected.minX||
+            affected.maxY<=affected.minY||
+            affected.maxZ<=affected.minZ))
+            throw std::invalid_argument("Caverns environment dirty bounds");
+        auto replacement=std::make_shared<const CaveNavigationDataProvider>(
+            active_->indexedSource(),newCallbacks,environmentEpoch);
+        pending_.push_back({
+            CaveNavigationChange{active_->revision(),active_->revision(),
+                                 affected,fullRebuild},
+            replacement,0
+        });
+        callbacks_=std::move(newCallbacks);
+        active_=std::move(replacement);
         return dispatchPending();
     }
     // A streamed chunk may appear/disappear WITHOUT changing authored SDF
