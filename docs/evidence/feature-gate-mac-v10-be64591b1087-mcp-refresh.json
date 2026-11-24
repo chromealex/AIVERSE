@@ -1,0 +1,14 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/qa-v10-20261124T112318Z-75240/logs/mcp-refresh.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native/aiversemcp",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/source",
+    "be64591b1087b94fa52311bc1b3065feec6c8545",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/qa-v10-20261124T112318Z-75240/logs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+  "sha256": "611fd1339f0cad619533e03e1d5962032c9aa205d0bc5a7f6af4bc276e2c9a10"
+}
