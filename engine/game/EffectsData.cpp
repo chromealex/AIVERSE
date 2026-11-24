@@ -93,6 +93,14 @@ void EffectParser::filter(const std::string& where, const Json& j, EffectDef& e)
     f.garrisons = j.getBool("garrisons", false);
     f.inTransit = j.getBool("inTransit", false);
     f.tags = tagsOf(j["tags"]);
+    if (j.has("ignoreTags")) {
+        if (!j["ignoreTags"].isArray()) fail(where, "ignoreTags must be an array");
+        for (const auto& tag : j["ignoreTags"].items()) {
+            const uint64_t bit = tag.isString() ? r.tagMask(tag.str()) : 0;
+            if (!bit) fail(where, "ignoreTags: unknown unit tag '" + tag.str() + "'");
+            f.ignoreTags |= bit;
+        }
+    }
     if (j.has("ofType")) f.type = typeRef(where, j.getStr("ofType"));
     if (const Json& lv = j["level"]; lv.isArray()) { f.minLevel = int(lv[0].integer(0)); f.maxLevel = int(lv[1].integer(1 << 20)); }
     f.maxTargets = int(j.getInt("maxTargets", 0));
