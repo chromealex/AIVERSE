@@ -289,7 +289,7 @@ static Json publishBcFile(Workspace& ws,const std::string& name,const std::strin
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(width)));
     r.set("format",Json::string(format));r.set("compressionBackend",Json::string(backend));r.set("mipLevels",Json::number(int64_t(encoded.levels)));
     r.set("compressedBytes",Json::number(int64_t(encoded.payload)));r.set("rgbaBytes",Json::number(int64_t(encoded.rgbaBytes)));
-    r.set("sRGB",Json::fromBool(kind==Kind::Color));return r;
+    r.set("sRGB",Json::fromBool(kind==render::texture_graph::Kind::Color));return r;
 }
 
 // Explicit external codec invocation. Stage is exclusive; only validated
