@@ -110,4 +110,11 @@ inline terraweave::caverns::CavePlanetDispatchResult dispatchPlanetCaveActor(
         physics::BodyHandle proxy,const terraweave::caverns::CavePlanetMotorDispatchInput& input){
     return host.dispatchMotor(sim,entity,params,state,proxy,input);
 }
+// Optional owner-loop tick: the module already has one registered motor
+// using dispatchPlanetCaveActor. Do not also call sim.step()/scene.step().
+template<class Target>
+inline auto stepPlanetCaveTick(terraweave::caverns::CavePlanetNativeHost<Target>& host,
+        const std::set<uint64_t>& extraPins={}){
+    return host.stepNativeTick(extraPins);
+}
 } // namespace aiverse::examples::terraweave_native

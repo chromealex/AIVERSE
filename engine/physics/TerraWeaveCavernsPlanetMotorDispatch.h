@@ -13,7 +13,7 @@ public:
     // tick without that step must not schedule the same proxy twice.
     bool claim(uint64_t physicsTick,uint32_t simulationTick,Entity entity,physics::BodyHandle proxy){
         if(proxy==physics::kNoBody)return false;
-        if(tick_&&physicsTick<*tick_)return false;
+        if(tick_&&(physicsTick<*tick_||(physicsTick>*tick_&&simulationTick<=simulationTick_)))return false;
         if(!tick_||physicsTick!=*tick_){
             entities_.clear();proxies_.clear();tick_=physicsTick;simulationTick_=simulationTick;
         }
@@ -31,6 +31,9 @@ private:
 struct CavePlanetMotorDispatchInput {
     CavePlanetTraversalCapabilities capabilities;
     bool automaticModeSelection=false;
+    // Called after the route profile changes to synchronize the existing
+    // controller state, not to run movement. Failure requires recovery.
+    std::function<bool(World&,Entity,CaveTraversal,CaveTraversal)> modeChanged;
     CavePlanetCrossingMotion crossing;
     CavePlanetCrossingCoverage crossingCoverage;
     std::optional<CavePlanetCrossingGoal> crossingGoal;
@@ -77,6 +80,9 @@ inline CavePlanetDispatchResult dispatchCavePlanetMotor(
     const auto recover=[&](){runtime.quarantineNativeMotion();return R::Recovery;};
     try{
         if(!cavePlanetDispatchPositionMatches(input.position,world,entity,state))return R::Refused;
+        Vec3 actualProxy,nativePosition;
+        if(!physics::physisVec3(scene.position(proxy),actualProxy)||!physics::physisVec3(state.position,nativePosition)||
+           (actualProxy-nativePosition).length()>Fixed::fromRatio(1,100))return R::Refused;
         const auto* travel=world.tryGetConst<CavePlanetTravel>(entity);
         if(!travel||!validCavePlanetTravel(*travel))return R::Refused;
         const auto motor=cavePlanetTravelMotor(world,entity);
@@ -114,7 +120,10 @@ inline CavePlanetDispatchResult dispatchCavePlanetMotor(
                         input.capabilities,current,*input.swimConfig,epoch->sphereSeconds);
                     if(!selected)return R::Held;
                     if(selected->agent.traversal!=current){
-                        if(!changeCavePlanetTraversal(runtime,world,entity,surface,input.position,*selected))return R::Refused;
+                        if(!input.modeChanged)return R::Held;
+                        published=true; // route replacement may partially mutate on allocation failure
+                        if(!changeCavePlanetTraversal(runtime,world,entity,surface,input.position,*selected))return recover();
+                        if(!input.modeChanged(world,entity,current,selected->agent.traversal))return recover();
                         return R::Repath;
                     }
                 }

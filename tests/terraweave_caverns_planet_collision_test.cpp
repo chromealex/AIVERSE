@@ -107,6 +107,7 @@ static void checkNativeDispatchGuard(){
     check(!guard.claim(4,10,b,1),"same proxy duplicate");
     check(!guard.claim(4,11,b,2),"simulation advanced without physics");
     check(guard.claim(4,10,b,2),"distinct actor same tick");
+    check(!guard.claim(5,10,a,1),"physics advanced without simulation");
     check(guard.claim(5,11,a,1),"next physics tick");
     check(!guard.claim(4,10,a,1),"old physics tick refused");
     guard.reset();

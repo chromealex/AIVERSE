@@ -196,6 +196,32 @@ public:
         return stepAdmittedCavePlanetCrossing(*runtime_,scene,world,entity,frame,params,state,proxy,
             motion,coverage,tick,dt,goal);
     }
+    // Optional single-threaded native tick driver for projects that have
+    // not already stepped either owner. Never combine with another driver.
+    enum class TickResult { Held,Advanced,Recovery };
+    TickResult stepNativeTick(const std::set<uint64_t>& pins={}){
+        if(recoveryRequired())return TickResult::Recovery;
+        if(closed_||!exclusive_()||!admitNativeTick(sim_.world(),pins))return TickResult::Held;
+        const auto simulationTick=sim_.tick();
+        const auto physicsTick=box_.tick();
+        if(simulationTick==UINT32_MAX||physicsTick==UINT64_MAX||
+           std::abs(float(sim_.dt().toDouble())-box_.dt())>.00002f)return TickResult::Held;
+        try{
+            sim_.step(); // includes the existing motor dispatch
+            if(recoveryRequired()||notice_.pending()||!exclusive_()||box_.tick()!=physicsTick){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            if(sim_.tick()==simulationTick)return TickResult::Held;
+            if(sim_.tick()!=simulationTick+1){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            box_.step();
+            if(box_.tick()!=physicsTick+1){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            return TickResult::Advanced;
+        }catch(...){runtime_->quarantineNativeMotion();return TickResult::Recovery;}
+    }
     // Call from the one registered native motor, after canonical capture.
     // The caller owns Simulation::step and Scene::step; no second scheduler.
     CavePlanetDispatchResult dispatchMotor(Simulation& sim,Entity entity,
