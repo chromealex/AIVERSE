@@ -18,6 +18,7 @@ public:
         return recovery_||owner_.recoveryRequired()||baseline_.recoveryRequired();
     }
     const CavePlanetBaselineCollision& baseline()const noexcept{return baseline_;}
+    bool matchesBaselinePlan(const CavePlanetBodyCutPlan& plan)const{return matchesBaseline(plan);}
     // Capture the actual uncut renderer leaves. The caller owns the global
     // coverage registry and must prove no independent baseline source
     // overlaps these leaves. Other terrain remains owned by that host.
