@@ -2193,6 +2193,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveSociety=livePlanet&&planetLiveSnapshot_["society"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["society"].isObject()){
+        lightingStatus_+=liveSociety?" · SOCIETY knowledge / trust / triggers":" · SOCIETY unavailable";
+        if(planetLiveSnapshot_["society"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveCircuit=livePlanet&&planetLiveSnapshot_["circuit"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["circuit"].isObject()){
         lightingStatus_+=liveCircuit?" · CIRCUIT power / logic state":" · CIRCUIT unavailable";
@@ -2340,6 +2345,61 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float len=std::min(marker,distance*.24f);
                     renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
                     renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveSociety){
+                const auto& data=planetLiveSnapshot_["society"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        renderer_.line(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["contacts"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const float trust=std::clamp(float(row.getInt("trust"))/1000.f,0.f,1.f);
+                    const bool eligible=row.getBool("eligibleNow");
+                    const auto color=eligible?rgba(uint8_t(155-65*trust),uint8_t(180+65*trust),160):rgba(120,125,145);
+                    if(!eligible){
+                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);
+                    }else renderer_.line(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(distance>.001f){
+                        const auto dir=delta*(1.f/distance),tip=*a+delta*.65f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
+                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"people","messages","triggers"}){
+                    count=0;const std::string kind=key;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=(kind=="people"?256u:128u))break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        uint32_t color=rgba(110,120,135);float scale=.75f;
+                        if(row.getBool("enabled")){
+                            if(kind=="people"&&row.getBool("knowledgeAvailable")){
+                                const float topics=std::clamp(float(row.getInt("topicCount"))/64.f,0.f,1.f);
+                                color=rgba(120,uint8_t(150+90*topics),245);scale=1.f+topics*.5f;
+                            }else if(kind=="messages"&&row.getBool("sourceValid"))color=rgba(255,195,90);
+                            else if(kind=="triggers"&&row.getBool("outputAvailable"))
+                                color=row.getBool("active")?rgba(110,235,155):row.getBool("fired")?rgba(185,145,245):rgba(170,175,190);
+                        }
+                        marker(*p,extent*scale,color);
+                        if(const auto q=readVec(row["personPosition"])){
+                            const auto d=*q-*p;
+                            for(int i=0;i<4;++i)renderer_.line(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                        }
+                    }
                 }
             }
             if(liveCircuit){

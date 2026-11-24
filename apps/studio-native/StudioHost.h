@@ -258,6 +258,7 @@ private:
     bool wpLiveEcho_=false;
     bool wpLiveCrowd_=false;
     bool wpLiveCircuit_=false;
+    bool wpLiveSociety_=false;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
     std::string wpLivePlanetProject_,wpLivePlanetMapPath_;

@@ -24,7 +24,7 @@ public:
     Json inspect(const std::string& epoch,const std::string& ref);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
-    Json ecologyState(int32_t granularCellCm=0,bool liveGravity=false,bool liveAether=false,bool liveFracture=false,bool liveMorph=false,bool liveEcho=false,bool liveCrowd=false,bool liveCircuit=false);
+    Json ecologyState(int32_t granularCellCm=0,bool liveGravity=false,bool liveAether=false,bool liveFracture=false,bool liveMorph=false,bool liveEcho=false,bool liveCrowd=false,bool liveCircuit=false,bool liveSociety=false);
     Json worldProcessDiagnostics(int cap,const std::string& focus);
 private:
     std::unique_ptr<gfx::Device> device_;
