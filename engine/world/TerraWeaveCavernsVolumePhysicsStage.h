@@ -20,9 +20,16 @@ public:
                  int32_t spacingCm,uint64_t sourceRevision,
                  uint32_t firstId,const world::SpatialWorld& spatial,
                  uint32_t userData=0) {
-        if(spatial_.prepared()||box_.prepared())return false;
         auto generated=prepareCaveVolumeCollision(surface,resolution,
             spacingCm,sourceRevision,userData);
+        return prepareExact(generated,firstId,spatial);
+    }
+    // The common fixed triangle payload is already prepared by the owned
+    // rim adapter. Do not round it back to centimetres via CaveMesh.
+    bool prepareExact(const CaveCollisionPrepared& generated,uint32_t firstId,
+                      const world::SpatialWorld& spatial){
+        const auto sourceRevision=generated.revision;
+        if(!sourceRevision||spatial_.prepared()||box_.prepared())return false;
         if(!spatial_.prepare(generated,firstId,spatial))return false;
         try {
             if(!box_.prepare(generated)){
