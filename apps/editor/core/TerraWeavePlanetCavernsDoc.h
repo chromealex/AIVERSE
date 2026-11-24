@@ -5,6 +5,9 @@
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsRaycast.h"
 #include <array>
+#include <charconv>
+#include <map>
+#include <limits>
 #include <cmath>
 
 namespace aiverse::editor {
@@ -28,10 +31,17 @@ inline void validateAnchor(const MapData& map,const CavePlanetAnchor& a){
         throw std::invalid_argument("Caverns planetary chart outside supported body bounds");
 }
 struct Region {CavePlanetAnchor anchor;CaveVolumeSnapshot volume;};
-inline Region read(const MapData& map){
-    const auto& j=map.extra[key];
-    if(!j.isObject()||j.getInt("version",0)!=1)
-        throw std::invalid_argument("Create a planetary Caverns region first");
+inline constexpr size_t maxRegions=32;
+inline uint64_t regionId(const Json& v){
+    if(!v.isString())throw std::invalid_argument("Caverns region ID must be decimal text");
+    const auto text=v.str();uint64_t n=0;
+    const auto p=std::from_chars(text.data(),text.data()+text.size(),n);
+    if(p.ec!=std::errc{}||p.ptr!=text.data()+text.size()||!n||n>uint64_t(INT64_MAX)||
+       std::to_string(n)!=text)throw std::invalid_argument("Caverns invalid region ID");
+    return n;
+}
+inline Json regionIdJson(uint64_t id){return Json::string(std::to_string(id));}
+inline Region decodeRegion(const MapData& map,const Json& j){
     Region r{cavePlanetAnchorFromJson(j["anchor"]),caveSnapshotFromJson(j["volume"])};
     validateAnchor(map,r.anchor);validateCavePlanetBounds(r.anchor,r.volume);return r;
 }
@@ -39,6 +49,82 @@ inline Json encode(const MapData& map,const Region& r){
     validateAnchor(map,r.anchor);validateCavePlanetBounds(r.anchor,r.volume);
     Json j=Json::object();j.set("version",Json::number(int64_t(1)));
     j.set("anchor",cavePlanetAnchorToJson(r.anchor));j.set("volume",caveSnapshotToJson(r.volume));return j;
+}
+struct RegionSet {
+    uint64_t active=0,next=1;
+    std::map<uint64_t,Region> regions;
+};
+inline std::string activeRegionId(const MapData& map){
+    const auto& j=map.extra[key];
+    if(j.isNull())return {};
+    if(!j.isObject())throw std::invalid_argument("Caverns planetary document");
+    if(j.getInt("version",0)==1)return "1";
+    if(j.getInt("version",0)!=2)throw std::invalid_argument("Caverns planetary document version");
+    const auto id=j.getStr("activeRegionId");
+    if(!id.empty())(void)regionId(j["activeRegionId"]);
+    return id;
+}
+inline RegionSet readRegions(const MapData& map){
+    const auto& j=map.extra[key];RegionSet out;
+    if(j.isNull())return out;
+    if(j.isObject()&&j.getInt("version",0)==1){
+        out.active=1;out.next=2;out.regions.emplace(1,decodeRegion(map,j));return out;
+    }
+    if(!j.isObject()||j.getInt("version",0)!=2||!j["regions"].isArray()||
+       j["regions"].size()>maxRegions||!j["activeRegionId"].isString())
+        throw std::invalid_argument("Caverns planetary region set");
+    out.next=regionId(j["nextRegionId"]);
+    if(!j.getStr("activeRegionId").empty())out.active=regionId(j["activeRegionId"]);
+    for(size_t i=0;i<j["regions"].size();++i){
+        const auto& item=j["regions"][i];const auto id=regionId(item["id"]);
+        if(id>=out.next||!out.regions.emplace(id,decodeRegion(map,item)).second)
+            throw std::invalid_argument("Caverns duplicate or future region ID");
+    }
+    if((out.regions.empty()&&out.active)||(!out.regions.empty()&&!out.regions.contains(out.active)))
+        throw std::invalid_argument("Caverns selected region missing");
+    return out;
+}
+inline Json encodeRegions(const MapData& map,const RegionSet& set){
+    if(set.regions.size()>maxRegions||!set.next||set.next>uint64_t(INT64_MAX)||
+       (set.regions.empty()?set.active!=0:!set.regions.contains(set.active)))
+        throw std::invalid_argument("Caverns planetary region set identity");
+    Json j=Json::object(),items=Json::array();j.set("version",Json::number(int64_t(2)));
+    j.set("activeRegionId",Json::string(set.active?std::to_string(set.active):std::string{}));
+    j.set("nextRegionId",regionIdJson(set.next));
+    for(const auto& [id,r]:set.regions){
+        if(!id||id>=set.next)throw std::invalid_argument("Caverns region ID range");
+        auto item=encode(map,r);item.set("id",regionIdJson(id));items.push(std::move(item));
+    }
+    j.set("regions",std::move(items));return j;
+}
+inline Region read(const MapData& map){
+    const auto id=activeRegionId(map);
+    if(id.empty())throw std::invalid_argument("Create a planetary Caverns region first");
+    const auto& j=map.extra[key];
+    if(j.getInt("version",0)==1)return decodeRegion(map,j);
+    // Fast selected-chart path for scene picking; mutations validate full set.
+    if(!j["regions"].isArray()||j["regions"].size()>maxRegions)
+        throw std::invalid_argument("Caverns planetary region list");
+    const Json* selected=nullptr;
+    for(size_t i=0;i<j["regions"].size();++i){
+        const auto& item=j["regions"][i];
+        if(item.getStr("id")==id){
+            if(selected)throw std::invalid_argument("Caverns duplicate selected region");
+            selected=&item;
+        }
+    }
+    if(!selected)throw std::invalid_argument("Caverns selected region missing");
+    return decodeRegion(map,*selected);
+}
+inline Json describeRegions(const RegionSet& set){
+    Json list=Json::array();
+    for(const auto& [id,r]:set.regions){
+        Json j=Json::object();j.set("id",regionIdJson(id));
+        j.set("anchor",cavePlanetAnchorToJson(r.anchor));
+        j.set("revisionText",Json::string(std::to_string(r.volume.sourceRevision)));
+        list.push(std::move(j));
+    }
+    return list;
 }
 inline Region create(const MapData& map,CavePlanetAnchor anchor){
     validateAnchor(map,anchor);
@@ -68,6 +154,25 @@ inline CavePlanetFrame frameForDocument(const MapData& map,const CavePlanetAncho
     auto tables=std::make_shared<game::SphereTables>();tables->cs.emplace_back(b.faceSize);
     surface->tab=std::move(tables);
     return CavePlanetFrame::make(std::move(surface),a);
+}
+// Reject even potentially overlapping rotated chart boxes across cube faces.
+// Circumscribed spheres are deliberately conservative, with a fixed-point
+// tolerance. Independent body IDs never share chart coordinates.
+inline bool regionsMayOverlap(const MapData& map,const CavePlanetAnchor& a,const CavePlanetAnchor& b){
+    if(a.bodyId!=b.bodyId)return false;
+    const auto pa=frameForDocument(map,a).originBody(),pb=frameForDocument(map,b).originBody();
+    const double x=pa.x.toDouble()-pb.x.toDouble(),y=pa.y.toDouble()-pb.y.toDouble(),z=pa.z.toDouble()-pb.z.toDouble();
+    const double radius=1.733*(double(a.halfExtentCm)+b.halfExtentCm)/100.+.05;
+    return x*x+y*y+z*z<=radius*radius;
+}
+inline uint64_t addRegion(const MapData& map,RegionSet& set,Region region){
+    if(set.regions.size()>=maxRegions||set.next>=uint64_t(INT64_MAX))
+        throw std::length_error("Caverns planetary region capacity");
+    for(const auto& [id,old]:set.regions){
+        (void)id;if(regionsMayOverlap(map,old.anchor,region.anchor))
+            throw std::invalid_argument("Caverns planetary region overlap or insufficient separation");
+    }
+    const auto id=set.next++;set.regions.emplace(id,std::move(region));set.active=id;return id;
 }
 inline CavePlanetSurfacePatch captureLocalSurface(const MapData& map,const CavePlanetAnchor& a,uint64_t revision){
     auto frame=frameForDocument(map,a);
