@@ -8,7 +8,7 @@ import './SpectraGraphCanvas.css';
 
 interface CatalogNode {type:string;group:string;ports:string[]}
 const volumeFields:Record<string,Record<string,unknown>>={
-  VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0},
+  VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0,attachment:'world'},
   VolumeSource:{mode:'continuous',position:[0,0,0],radius:0.5,smoke:3,temperature:8,fuel:4,acceleration:[0,2,0],radialAcceleration:0,duration:1},
   VolumeAdvection:{buoyancy:1,smokeWeight:0.1,velocityDecay:0.15,smokeDecay:0.25,temperatureDecay:0.6,fuelDecay:0.05,maxVelocity:20},
   VolumeCombustion:{ignition:0.5,burnRate:3,heatYield:2,smokeYield:0.5},
@@ -205,7 +205,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         </StudioField>
         {Array.isArray(fieldDefault)?<div className="spectra-canvas__connect">
           {volumeVector.map((v,i)=><StudioField key={i} label={['X / R','Y / G','Z / B'][i]}><StudioInput type="number" step="any" value={v} disabled={disabled||working} onChange={e=>setVolumeVector(old=>old.map((x,j)=>j===i?e.target.value:x))}/></StudioField>)}
-        </div>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
+        </div>:volumeProperty==='attachment'?<StudioField label="Volume attachment"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="world">World fixed</option><option value="follow">Follow source</option></StudioSelect></StudioField>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
         <StudioField label={volumeProperty==='obstacle'?'Project SDF path (content/*.sdfbin)':'Value'}>
           <StudioInput type={typeof fieldDefault==='number'?'number':'text'} step={typeof fieldDefault==='number'?'any':undefined} value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
         </StudioField>}

@@ -111,8 +111,8 @@ public:
                 const auto transform=editor::authoredLocalTransform(entity);
                 const auto p=transform.position;
                 if(auto it=volumeDefinitions_.find(source.effect);it!=volumeDefinitions_.end()){
-                    if(source.scale.raw!=(1_fx).raw){error_="Volume scene source requires unit scale";continue;}
                     spectra::volume::SceneVolumeSource row{identity,source.effect,source.revision,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},&it->second};
+                    row.scale=float(source.scale.toDouble());
                     if(auto hybrid=hybridDefinitions_.find(source.effect);hybrid!=hybridDefinitions_.end()){
                         row.hybrid=&hybrid->second;
                         for(const auto& [name,value]:source.parameters)row.parameters.emplace(name,float(value.toDouble()));

@@ -11,16 +11,19 @@
 namespace aiverse::spectra::volume {
 class VolumeInstance final {
 public:
-    bool init(gfx::Device& device,const Asset& asset,float3 anchor={},const fx::SdfResourceReader& reader={}){
-        if(!supportsVolumeRender(device)||!bounded(anchor,1e6f)||!between(asset.physisWindResponse,0,20)||!between(asset.physisGravityBlend,0,1)){error_="Invalid volume anchor or GPU backend";return false;}
-        Asset placed=asset;placed.simulation.origin=placed.simulation.origin+anchor;
-        for(auto& s:placed.sources)s.position=s.position+anchor;
-        if(placed.impulse)placed.impulse->position=placed.impulse->position+anchor;
+    bool init(gfx::Device& device,const Asset& asset,float3 anchor={},const fx::SdfResourceReader& reader={},float scale=1.f){
+        if(!between(scale,.001f,100.f)||(asset.attachment!="world"&&asset.attachment!="follow")||!supportsVolumeRender(device)||!bounded(anchor,1e6f)||!between(asset.physisWindResponse,0,20)||!between(asset.physisGravityBlend,0,1)){error_="Invalid volume anchor or GPU backend";return false;}
+        Asset placed=asset;placed.simulation.origin=placed.simulation.origin*scale+anchor;
+        placed.simulation.cellSize*=scale;
+        const auto place=[&](Source& s){s.position=s.position*scale+anchor;s.radius*=scale;};
+        for(auto& s:placed.sources)place(s);
+        if(placed.impulse)place(*placed.impulse);
         fx::StaticSdfVolume sdf;
         if(!placed.obstacle.empty()){
             if(!reader){error_="Volume obstacle requires a resource reader";return false;}
             if(!fx::loadSdfBinary(placed.obstacle,reader,sdf,error_))return false;
-            sdf.origin=sdf.origin+anchor;
+            sdf.origin=sdf.origin*scale+anchor;sdf.spacing*=scale;
+            // Only the sign is used to build the local solid mask.
         }
         if(!placed.simulation.valid()||!placed.material.valid()||placed.sources.size()>kMaxSources||
            (placed.impulse&&(!placed.impulse->valid()||!between(placed.impulseSeconds,.001f,1.f)))){
@@ -35,6 +38,22 @@ public:
             error_="Volume impulse rejected";return false;
         }
         renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);anchor_=anchor;deposits_.clear();error_.clear();return true;
+    }
+    // Transport the complete local field, not just its emitter. Existing
+    // particles remain world-space; no inertial or rotational correction.
+    bool follow(float3 anchor){
+        if(asset_.attachment!="follow")return true;
+        if(!grid_||!bounded(anchor,1e6f))return false;
+        const auto delta=anchor-anchor_;
+        if(delta.x==0&&delta.y==0&&delta.z==0)return true;
+        auto next=asset_;
+        next.simulation.origin=next.simulation.origin+delta;
+        if(!next.simulation.valid())return false;
+        for(auto& s:next.sources){s.position=s.position+delta;if(!s.valid())return false;}
+        if(next.impulse){next.impulse->position=next.impulse->position+delta;if(!next.impulse->valid())return false;}
+        // Transient deposits are explicitly world-space, not authored local sources.
+        if(!grid_->translate(delta))return false;
+        asset_=std::move(next);anchor_=anchor;return true;
     }
     void shutdown(){renderer_.shutdown();grid_.reset();asset_={};deposits_.clear();error_.clear();}
     bool step(){
@@ -113,6 +132,7 @@ struct SceneVolumeSource {
     const SceneHybridDefinition* hybrid=nullptr;
     float3 direction{0,1,0};
     std::map<std::string,float> parameters;
+    float scale=1.f;
 };
 // Fixed-anchor, bounded scene presentation pool. Source revision changes
 // recreate volume; ordinary moving poses do NOT reset the gas every frame.
@@ -127,11 +147,15 @@ public:
     size_t bytes()const{size_t n=0;for(const auto& [id,e]:entries_)n+=e.instance->bytes();return n;}
     void synchronize(gfx::Device& d,const std::vector<SceneVolumeSource>& rows,const fx::SdfResourceReader& reader){
         error_.clear();std::map<std::string,const SceneVolumeSource*> desired;
-        for(const auto& row:rows)if(!row.identity.empty()&&row.asset&&bounded(row.anchor,1e6f))desired.emplace(row.identity,&row);
+        for(const auto& row:rows)if(!row.identity.empty()&&row.asset&&bounded(row.anchor,1e6f)&&between(row.scale,.001f,100.f))desired.emplace(row.identity,&row);
         for(auto it=entries_.begin();it!=entries_.end();){
             auto found=desired.find(it->first);
             if(found==desired.end()||found->second->revision!=it->second.revision||
-               found->second->effect!=it->second.effect)it=entries_.erase(it);else ++it;
+               found->second->effect!=it->second.effect||found->second->scale!=it->second.scale)it=entries_.erase(it);
+            else {
+                if(!it->second.instance->follow(found->second->anchor)){error_="Invalid volume follow transform";it=entries_.erase(it);}
+                else ++it;
+            }
         }
         size_t attempts=0;
         for(const auto& [id,row]:desired){
@@ -139,7 +163,8 @@ public:
             if(attempts++>=capacity){error_="Scene volume admission work limit";break;}
             if(entries_.size()>=capacity){error_="Scene volume capacity reached";break;}
             auto instance=std::make_unique<VolumeInstance>();
-            if(!instance->init(d,*row->asset,row->anchor,reader)){error_=instance->error();continue;}
+            if(row->hybrid&&row->scale!=1.f){error_="Coupled scene particles require unit scale";continue;}
+            if(!instance->init(d,*row->asset,row->anchor,reader,row->scale)){error_=instance->error();continue;}
             std::unique_ptr<GraphRuntime> particles;
             ParticleVolumeCoupling coupling;
             if(row->hybrid){
@@ -158,7 +183,7 @@ public:
                     error_="Scene hybrid initial burst rejected";continue;
                 }
             }
-            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance),std::move(particles),coupling,false});
+            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance),std::move(particles),coupling,false,row->scale});
         }
     }
     // Explicit world-space particle deposit into a named resident volume.
@@ -212,7 +237,7 @@ public:
         return result==color?gfx::TextureHandle{}:result;
     }
 private:
-    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;std::unique_ptr<GraphRuntime> particles;ParticleVolumeCoupling coupling;bool failed;};
+    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;std::unique_ptr<GraphRuntime> particles;ParticleVolumeCoupling coupling;bool failed;float scale;};
     std::map<std::string,Entry> entries_;
     std::string error_;
 };

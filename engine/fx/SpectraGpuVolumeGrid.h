@@ -127,6 +127,18 @@ public:
         for(const auto& s:sources)if(!s.valid())return false;
         sources_=sources;return true;
     }
+    // Local-grid rigid translation: cell data and local solid mask remain
+    // unchanged; all authored continuous and pending impulse sources move.
+    bool translate(float3 delta){
+        if(!ready()||!finite(delta))return false;
+        Config next=cfg_;next.origin=next.origin+delta;
+        if(!next.valid())return false;
+        auto sources=sources_;
+        for(auto& s:sources){s.position=s.position+delta;if(!s.valid())return false;}
+        auto impulse=impulse_;
+        if(impulsePending_){impulse.position=impulse.position+delta;if(!impulse.valid())return false;}
+        cfg_=next;sources_=std::move(sources);impulse_=impulse;return true;
+    }
     bool setWind(float3 v){if(!ready()||!bounded(v,100))return false;cfg_.wind=v;return true;}
     bool setGravity(float3 v){if(!ready()||!bounded(v,100))return false;cfg_.gravity=v;return true;}
     // One queued impulse applied after transport/reaction on next accepted tick.

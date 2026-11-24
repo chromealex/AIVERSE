@@ -442,15 +442,16 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
         resolved.effect=graphSourceAsset(source->effect,allowGpu);
         if(const auto it=graphVolumeAssets_.find(source->effect);it!=graphVolumeAssets_.end()){
             // Only static, unit-scale flat-map anchors are admitted here.
-            if(allowVolumes&&source->scale.raw==(1_fx).raw&&dev_){
+            if(allowVolumes&&dev_){
                 spectra::volume::SceneVolumeSource row{std::to_string(object.entity.packed()),source->effect,source->revision,position,&it->second};
+                row.scale=float(source->scale.toDouble());
                 if(auto hybrid=graphHybridDefinitions_.find(source->effect);hybrid!=graphHybridDefinitions_.end()){
                     row.hybrid=&hybrid->second;row.direction=direction;
                     for(const auto& [name,value]:source->parameters)row.parameters.emplace(name,float(value.toDouble()));
                 }
                 volumes.push_back(std::move(row));
             }
-            else if(allowVolumes&&source->scale.raw!=(1_fx).raw)continue;
+
         }
         if(resolved.effect.empty())continue;
         rows.push_back({std::to_string(object.entity.packed()),std::move(resolved),position,direction});

@@ -17,6 +17,7 @@ struct Asset {
     float impulseSeconds=1;
     std::string obstacle;
     float physisWindResponse=0,physisGravityBlend=0;
+    std::string attachment="world";
 };
 namespace asset_detail {
 inline bool keys(const Json& value,std::initializer_list<const char*> allowed){
@@ -56,10 +57,15 @@ inline Json vec(float3 v){auto a=Json::array();a.push(scalar(v.x));a.push(scalar
 inline bool readAsset(const Json& root,Asset& output,std::string& error){
     using namespace asset_detail;
     const auto fail=[&](const char* reason){error=reason;return false;};
-    if(!keys(root,{"format","version","simulation","material","sources","obstacle","impulse","impulseSeconds","physisWindResponse","physisGravityBlend"})||
+    if(!keys(root,{"format","version","simulation","material","sources","obstacle","impulse","impulseSeconds","physisWindResponse","physisGravityBlend","attachment"})||
        root.getStr("format")!="aiverse.spectrafx.volume"||!root["version"].isNumber()||root["version"].toDouble()!=1)
         return fail("Expected SpectraFX volume asset v1");
     Asset next;
+    if(root.has("attachment")){
+        if(!root["attachment"].isString())return fail("Invalid volume attachment");
+        next.attachment=root["attachment"].str();
+        if(next.attachment!="world"&&next.attachment!="follow")return fail("Invalid volume attachment");
+    }
     if(!number(root,"physisWindResponse",next.physisWindResponse)||
        !number(root,"physisGravityBlend",next.physisGravityBlend)||
        !between(next.physisWindResponse,0,20)||!between(next.physisGravityBlend,0,1))
@@ -134,6 +140,7 @@ inline Json writeAsset(const Asset& a){
     for(const auto& x:a.sources)sources.push(writeSource(x));
     if(a.impulse){root.set("impulse",writeSource(*a.impulse));root.set("impulseSeconds",scalar(a.impulseSeconds));}
     root.set("sources",std::move(sources));
+    if(a.attachment!="world")root.set("attachment",Json::string(a.attachment));
     if(a.physisWindResponse!=0)root.set("physisWindResponse",scalar(a.physisWindResponse));
     if(a.physisGravityBlend!=0)root.set("physisGravityBlend",scalar(a.physisGravityBlend));
     if(!a.obstacle.empty())root.set("obstacle",Json::string(a.obstacle));
