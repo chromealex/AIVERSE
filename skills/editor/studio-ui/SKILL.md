@@ -146,6 +146,9 @@ The same native graph reads glTF buffers[].uri and images[].uri as local relativ
 ## Multi-hop dependency inspection (S6g.3)
 Optional studio.assetReferences {path,depth:1..16} returns incoming/outgoing edge rows with shortest hop and cycle-closing edge marks; omitted depth retains direct/full graph contract. Assets supports folder queries, direction tabs, 50-row display pages and indexed endpoint navigation. Native transfer owner checks actual final paths (including keep-both) and individual undo/redo: known glTF URI resolution must remain unchanged and no previously unresolved destination path may be adopted. Preview proves only a single conflict-free relocation; batch history/deletion stay conservative. No URI rewriting or complete dependency analysis.
 
+## Recovery storage budget (S6h.1)
+Asset Trash lists logical bytes of the full recovery store (including unlisted slots), asset checkpoint, asset journals and available filesystem bytes. Project-local versioned studio-recovery-policy.json sets quotaMiB (0 unlimited, default compatible); explicit Studio save compares prior quota under asset-history lock. Positive net retained growth on quarantine/replacement and coordinated history is refused above a configured quota. Net-reducing restore remains available; no automatic purge. Staging peak, other caches, record-only overhead and noncooperating writers are not hard limited. Pending coordinated journal blocks manual recovery actions. Keep explicit single-record digest/token/confirmation purge semantics.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

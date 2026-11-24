@@ -8,6 +8,7 @@
 #include <fstream>
 #include <exception>
 #include <map>
+#include <limits>
 #include <random>
 #include <set>
 #include <stdexcept>
@@ -145,6 +146,71 @@ bool existsOrSymlink(const fs::path& target) {
     if(ec && ec!=std::errc::no_such_file_or_directory)
         throw std::runtime_error("Cannot inspect transfer destination: "+target.string()+": "+ec.message());
     return !ec && fs::exists(status);
+}
+constexpr uint64_t RecoveryMiB=1024ull*1024;
+constexpr int64_t RecoveryMaxQuotaMiB=1024*1024;
+constexpr uint64_t RecoveryMaxAccountedBytes=1ull<<50;
+fs::path recoveryCache(const fs::path& project){
+    const auto cache=fs::canonical(project)/".aiverse-cache";
+    if(existsOrSymlink(cache)&&!fs::is_directory(fs::symlink_status(cache)))
+        throw std::runtime_error("Unsafe recovery cache");
+    return cache;
+}
+int64_t recoveryQuotaMiB(const fs::path& project){
+    const auto path=recoveryCache(project)/"studio-recovery-policy.json";
+    if(!existsOrSymlink(path))return 0;
+    if(!fs::is_regular_file(fs::symlink_status(path))||fs::file_size(path)>4096)
+        throw std::runtime_error("Invalid recovery quota policy");
+    const auto doc=Json::parseFile(path.string());
+    const auto quota=doc.getInt("quotaMiB",-1);
+    if(doc.getInt("version")!=1||!doc["quotaMiB"].isNumber()||
+       doc["quotaMiB"].numberLiteral()!=std::to_string(quota)||quota<0||quota>RecoveryMaxQuotaMiB)
+        throw std::runtime_error("Invalid recovery quota policy");
+    return quota;
+}
+uint64_t recoveryBytes(const fs::path& root,size_t& visited){
+    const auto status=fs::symlink_status(root);
+    if(!fs::exists(status))return 0;
+    uint64_t bytes=0;
+    const auto add=[&](const fs::path& path,const fs::file_status& type){
+        if(++visited>200000)throw std::runtime_error("Recovery accounting entry budget exceeded");
+        if(fs::is_directory(type))return;
+        if(!fs::is_regular_file(type))throw std::runtime_error("Unsafe recovery accounting entry");
+        const auto size=fs::file_size(path);
+        if(size>RecoveryMaxAccountedBytes-bytes)throw std::runtime_error("Recovery accounting byte budget exceeded");
+        bytes+=size;
+    };
+    add(root,status);
+    if(fs::is_directory(status))
+        for(const auto& item:fs::recursive_directory_iterator(root))add(item.path(),item.symlink_status());
+    return bytes;
+}
+bool inRecoveryTrash(const std::string& path){return path.starts_with(".aiverse-cache/studio-asset-trash/");}
+// Net retained bytes, not transient staging occupancy. Sources have already
+// been checked by their native owner. No deletion is performed to fit a quota.
+template<class Moves>
+void checkRecoveryGrowth(const fs::path& project,const Moves& moves){
+    const auto quota=recoveryQuotaMiB(project);
+    if(!quota)return;
+    int64_t delta=0;size_t visited=0;
+    for(const auto& move:moves){
+        const bool from=inRecoveryTrash(move.from),to=inRecoveryTrash(move.to);
+        if(from==to)continue;
+        const auto bytes=recoveryBytes(project/move.from,visited);
+        const auto signedBytes=static_cast<int64_t>(bytes);
+        if(to){
+            if(delta>std::numeric_limits<int64_t>::max()-signedBytes)throw std::runtime_error("Recovery quota arithmetic exceeded");
+            delta+=signedBytes;
+        }else{
+            if(delta<std::numeric_limits<int64_t>::min()+signedBytes)throw std::runtime_error("Recovery quota arithmetic exceeded");
+            delta-=signedBytes;
+        }
+    }
+    if(delta<=0)return; // recovery must be possible even while over quota
+    const auto used=recoveryBytes(recoveryCache(project)/"studio-asset-trash",visited);
+    const auto limit=uint64_t(quota)*RecoveryMiB;
+    if(used>=limit||uint64_t(delta)>limit-used)
+        throw std::runtime_error("Asset recovery quota exceeded; review Trash or raise the project quota");
 }
 fs::path keepBothName(const fs::path& dest,bool folder) {
     const auto ext=folder?std::string():dest.extension().string();
@@ -905,6 +971,7 @@ void studioReplayAssetQuarantine(const fs::path& project,
         operations.push_back(deleted?StudioMoveJournalOperation{liveRel+".meta",meta.to}:StudioMoveJournalOperation{meta.to,liveRel+".meta"});
     }
     if(deleted&&validateReferences)validateReferences();
+    if(!staged)checkRecoveryGrowth(project,operations);
     if(staged){
         for(size_t i=0;i<operations.size();++i){
             const auto& op=operations[i];const auto& f=plan.files[i];
@@ -992,6 +1059,7 @@ void studioReplayAssetReplacement(const fs::path& project,
         operations.push_back({"content/"+old.from,outgoing.to,outgoing.digest});
         operations.push_back({incoming.to,"content/"+old.from,incoming.digest});
     }
+    if(!staged)checkRecoveryGrowth(project,operations);
     if(staged){
         for(const auto& op:operations)staged->relocations.push_back({op.from,op.to,op.digest,false});
         for(size_t i=0;i<plan.files.size();i+=2){
@@ -1033,7 +1101,8 @@ std::string trashRelative(const std::string& id){
     return std::string(trashPrefix)+id+"/asset";
 }
 void checkTrashJournal(const fs::path& project){
-    if(existsOrSymlink(project/".aiverse-cache"/"studio-move-journal"))
+    if(existsOrSymlink(project/".aiverse-cache"/"studio-move-journal")||
+       existsOrSymlink(project/".aiverse-cache"/"studio-history-batch"))
         throw std::runtime_error("A pending asset journal needs recovery; reopen the project");
 }
 struct TrashRecord {
@@ -1146,7 +1215,10 @@ Json studioAssetTrashList(const fs::path& project,size_t offset,size_t limit){
     }
     out.set("items",std::move(rows));out.set("total",Json::number(int64_t(ids.size())));
     out.set("truncated",Json::fromBool(truncated));
-    out.set("recoveryPending",Json::fromBool(existsOrSymlink(project/".aiverse-cache"/"studio-move-journal")));
+    const auto cache=recoveryCache(project);
+    out.set("recoveryPending",Json::fromBool(existsOrSymlink(cache/"studio-move-journal")||existsOrSymlink(cache/"studio-history-batch")));
+    try{out.set("storage",studioRecoveryStorage(project));}
+    catch(const std::exception& e){out.set("storageError",Json::string(e.what()));}
     return out;
 }
 Json studioAssetTrashReview(const fs::path& project,const std::string& id,const std::string& action){
@@ -1357,6 +1429,37 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
     while(history.position()>size_t(position))history.advance(false);
     return history;
 }
+}
+Json studioRecoveryStorage(const fs::path& project){
+    const auto cache=recoveryCache(project);
+    const auto quota=recoveryQuotaMiB(project);
+    size_t visited=0;
+    const auto trash=recoveryBytes(cache/"studio-asset-trash",visited);
+    const auto checkpoint=recoveryBytes(cache/"asset-history.json",visited);
+    const auto journal=recoveryBytes(cache/"studio-move-journal",visited)+
+        recoveryBytes(cache/"studio-history-batch",visited)+
+        recoveryBytes(cache/"asset-history.tmp",visited)+recoveryBytes(cache/"asset-history.dirty",visited);
+    Json out=Json::object();
+    out.set("trashBytes",Json::number(int64_t(trash)));
+    out.set("checkpointBytes",Json::number(int64_t(checkpoint)));
+    out.set("journalBytes",Json::number(int64_t(journal)));
+    out.set("quotaMiB",Json::number(quota));
+    out.set("overQuota",Json::fromBool(quota>0&&trash>uint64_t(quota)*RecoveryMiB));
+    out.set("warning",Json::fromBool(trash>=(quota?uint64_t(quota)*RecoveryMiB*9/10:4ull*1024*RecoveryMiB)));
+    out.set("availableBytes",Json::number(int64_t(std::min<uintmax_t>(fs::space(fs::canonical(project)).available,RecoveryMaxAccountedBytes))));
+    return out;
+}
+Json studioSetRecoveryQuota(const fs::path& project,int64_t expectedMiB,int64_t quotaMiB){
+    if(quotaMiB<0||quotaMiB>RecoveryMaxQuotaMiB)throw std::runtime_error("Recovery quota must be 0–1048576 MiB");
+    const auto cache=assetHistoryCache(project,true);
+    editor::project_file_detail::Lock lock(cache/"asset-history.lock");
+    checkTrashJournal(project);
+    if(recoveryQuotaMiB(project)!=expectedMiB)throw std::runtime_error("Recovery quota changed; refresh Trash");
+    Json policy=Json::object();policy.set("version",Json::number(int64_t(1)));policy.set("quotaMiB",Json::number(quotaMiB));
+    const auto target=cache/"studio-recovery-policy.json",tmp=cache/"studio-recovery-policy.tmp";
+    writeAssetCheckpoint(tmp,policy.dump(-1)+"\n");
+    StudioMoveJournal::renamePath(tmp,target,true);StudioMoveJournal::syncPath(cache);
+    return studioRecoveryStorage(project);
 }
 static void beginAssetHistoryCheckpoint(const fs::path& project){
     checkTrashJournal(project);
@@ -1574,6 +1677,7 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
     if(existsOrSymlink(folder.parent_path()/"studio-move-journal"))throw std::runtime_error("Pending asset move journal");
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
+    checkRecoveryGrowth(root,moves);
     std::vector<editor::ProjectFileEdit> docs=documents;
     for(auto& f:docs)f.path=fs::canonical(f.path);
     validateBatchDocuments(root,timeline,docs);

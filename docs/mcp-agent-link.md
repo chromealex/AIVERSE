@@ -69,3 +69,6 @@ Existing linked move preview includes read-only external glTF buffer/image resou
 
 ### S6g.3 — bounded dependency traversal and relocation validation
 Native studio.assetReferences optional path/depth returns direct or multi-hop edges (incoming/outgoing, depth and cycle-closing mark); no standalone linked query yet. Existing linked move preview proves only a single conflict-free relocation with unchanged supported glTF URI resolution. Native transfer owner checks actual destinations and replay; no automatic rewrite. Coordinated history and deletion retain stricter fences.
+
+### S6h.1 — recovery storage policy
+Native Studio Asset Trash reports logical trash/checkpoint/journal bytes, free disk and configurable retained quota; positive net payload growth is refused above quota. Default unlimited; manual purge remains explicit. Standalone linked quota API deferred to S6i; no automatic cleanup.

@@ -94,6 +94,9 @@ private:
 editor::ProjectHistory studioLoadAssetHistoryCheckpoint(const std::filesystem::path& project);
 void studioRecoverAssetJournal(const std::filesystem::path& project);
 // Recovery browser: list persisted slots; review exact current identity before restore/purge.
+// Project-local logical-byte budget. Zero preserves the unlimited legacy policy.
+Json studioRecoveryStorage(const std::filesystem::path& project);
+Json studioSetRecoveryQuota(const std::filesystem::path& project,int64_t expectedMiB,int64_t quotaMiB);
 Json studioAssetTrashList(const std::filesystem::path& project,size_t offset,size_t limit);
 Json studioAssetTrashReview(const std::filesystem::path& project,const std::string& id,const std::string& action);
 void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken);

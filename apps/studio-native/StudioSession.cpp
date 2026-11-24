@@ -2576,6 +2576,15 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             detail.set("bytes",Json::number(updated.bytes));
             detail.set("settings",updated.settings);
             reply.set("result",std::move(detail));
+        } else if(method=="studio.assetRecoveryQuota"){
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Recovery project changed; reopen Trash");
+            const auto expected=params.getInt("expectedMiB",-1),quota=params.getInt("quotaMiB",-1);
+            if(!params["expectedMiB"].isNumber()||!params["quotaMiB"].isNumber()||
+               params["expectedMiB"].numberLiteral()!=std::to_string(expected)||
+               params["quotaMiB"].numberLiteral()!=std::to_string(quota))
+                throw std::runtime_error("Recovery quota requires integer MiB");
+            reply.set("result",studioSetRecoveryQuota(ws_.project.dir,expected,quota));
         } else if (method == "studio.assetTrashList" || method == "studio.assetTrashReview" || method == "studio.assetTrashApply") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Recovery project changed; reopen Trash");

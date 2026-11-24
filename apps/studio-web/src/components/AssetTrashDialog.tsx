@@ -19,6 +19,8 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
   const [busy,setBusy]=useState(false);
   const [review,setReview]=useState<StudioTrashReview|null>(null);
   const [confirm,setConfirm]=useState(false);
+  const [quota,setQuota]=useState('0');
+  useEffect(()=>{if(page?.storage)setQuota(String(page.storage.quotaMiB));},[page]);
   const request=useRef(false);
   const mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
@@ -33,6 +35,13 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     return()=>{live=false};
   },[projectPath,offset,refresh]);
   const reload=()=>{setError('');setReview(null);setConfirm(false);setRefresh(v=>v+1)};
+  const saveQuota=async()=>{
+    if(request.current||!page?.storage||!/^\d+$/.test(quota)||Number(quota)>1048576)return;
+    request.current=true;setBusy(true);setError('');
+    try{await invoke('studio.assetRecoveryQuota',{expectedProject:projectPath,expectedMiB:page.storage.quotaMiB,quotaMiB:Number(quota)});if(mounted.current)reload();}
+    catch(e){if(mounted.current)setError(message(e));}
+    finally{request.current=false;if(mounted.current)setBusy(false);}
+  };
   const prepare=async(id:string,action:StudioTrashAction)=>{
     if(request.current||page?.recoveryPending)return;
     request.current=true;setBusy(true);setError('');setReview(null);setConfirm(false);
@@ -61,6 +70,15 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
         {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
         {page?.recoveryPending&&<StudioAlert tone="warning">Reopen the project to resolve the pending asset journal before restoring or purging.</StudioAlert>}
         {page?.truncated&&<StudioAlert tone="warning">Listing limited to 10,000 recovery records. No automatic cleanup is performed.</StudioAlert>}
+        {page?.storageError&&<StudioAlert tone="warning">Storage accounting unavailable: {page.storageError}</StudioAlert>}
+        {page?.storage&&<div className="studio-trash__review">
+          <strong>Recovery storage</strong>
+          <p>Trash: {formatBytes(page.storage.trashBytes)} · Asset history: {formatBytes(page.storage.checkpointBytes)} · Journals: {formatBytes(page.storage.journalBytes)} · Free disk: {formatBytes(page.storage.availableBytes)}</p>
+          {page.storage.warning&&<StudioAlert tone="warning">{page.storage.overQuota?'Recovery quota exceeded. Growth is blocked.':'Recovery storage is approaching its budget.'} No automatic purge.</StudioAlert>}
+          <label>Trash quota (MiB, 0 = unlimited)<StudioInput aria-label="Trash quota in MiB" value={quota} onChange={e=>setQuota(e.target.value)} disabled={busy||!!page.recoveryPending}/></label>
+          <StudioButton size="sm" disabled={busy||!!page.recoveryPending||!/^\d+$/.test(quota)||Number(quota)>1048576||Number(quota)===page.storage.quotaMiB} onClick={()=>void saveQuota()}>Save quota</StudioButton>
+          <p>Logical retained bytes; temporary staging and other project caches are not limited by this quota.</p>
+        </div>}
         <StudioInput aria-label="Filter this recovery page" placeholder="Filter this page by path, GUID or kind" value={filter} onChange={e=>setFilter(e.target.value)} disabled={busy}/>
         {!page&&!error&&<StudioSkeleton/>}
         {page&&items.length===0&&<StudioEmptyState icon={<Trash2 size={24}/>} title="No matching recovery records"/>}

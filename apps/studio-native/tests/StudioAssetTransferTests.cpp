@@ -132,6 +132,32 @@ int main(){
             fs::remove_all(project/"content"/"Pack");fs::remove(studioMetaPath(project/"content"/"Pack"));db.rebuild(false);
         }
 
+        // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            write(project/"content"/"Quota.bin",std::string(2*1024*1024,'q'));
+            db.rebuild();
+            const auto guid=db.byPath("Quota.bin")->guid;
+            AIVERSE_TEST_CHECK(studioRecoveryStorage(project).getInt("quotaMiB")==0);
+            AIVERSE_TEST_CHECK(studioSetRecoveryQuota(project,0,1).getInt("quotaMiB")==1);
+            bool refused=false;
+            try{(void)studioQuarantineAsset(project,"Quota.bin",guid);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&fs::exists(project/"content"/"Quota.bin"));
+            AIVERSE_TEST_CHECK(studioSetRecoveryQuota(project,1,4).getInt("quotaMiB")==4);
+            auto plan=studioQuarantineAsset(project,"Quota.bin",guid);
+            AIVERSE_TEST_CHECK(studioRecoveryStorage(project).getInt("trashBytes")>=2*1024*1024);
+            AIVERSE_TEST_CHECK(studioSetRecoveryQuota(project,4,1).getBool("overQuota"));
+            studioReplayAssetQuarantine(project,plan,false);
+            AIVERSE_TEST_CHECK(fs::exists(project/"content"/"Quota.bin")&&!studioRecoveryStorage(project).getBool("overQuota"));
+            refused=false;try{(void)studioSetRecoveryQuota(project,4,0);}catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&studioRecoveryStorage(project).getInt("quotaMiB")==1);
+            (void)studioSetRecoveryQuota(project,1,0);
+            fs::remove(project/"content"/"Quota.bin");fs::remove(studioMetaPath(project/"content"/"Quota.bin"));
+            db.rebuild(false);
+        }
+
         // Preview name collision, skip by default and leave content unchanged.
         auto skip=StudioTransferPlan::external(project,"Models",{external/"Ship.glb"});
         AIVERSE_TEST_CHECK(skip.describe()["items"][0].getStr("conflict")=="name");
