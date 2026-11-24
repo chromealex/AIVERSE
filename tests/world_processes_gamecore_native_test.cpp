@@ -16,6 +16,7 @@
 #include "aiverselib/world/MorphPlanetModelFrame.h"
 #include "aiverselib/world/PlanetFractureDelivery.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
+#include "aiverselib/world/PlanetCharacterGravityFrame.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
@@ -77,6 +78,24 @@ static Entity placed(const Simulation& sim,std::size_t i){
     auto& game=static_cast<const g::GameCore&>(sim.module());
     AIVERSE_TEST_CHECK(game.mapPlaced().size()>i);
     return game.mapPlaced()[i];
+}
+static void checkPlanetCharacterGravityFrame(){
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;physis::GravitySettings settings;settings.baseline={-10_fx,0_fx,0_fx};
+    ecs.setResource<physis::GravitySettings>(settings);
+    const auto at=surface.cellCenter(surface.gridCell(1,0,3,3));
+    const auto frame=wp::planetCharacterGravityFrame(ecs,surface,at,"moon",{0_fx,0_fx,1_fx});
+    AIVERSE_TEST_CHECK(frame&&frame->body==1&&frame->allowGround&&frame->up.x>Fixed::fromRatio(99,100));
+    const auto basis=fxQuaternionBasis(frame->rotation);
+    AIVERSE_TEST_CHECK(basis&&basis->up.dot(frame->up)>Fixed::fromRatio(99,100));
+    AIVERSE_TEST_CHECK(!wp::planetCharacterGravityFrame(ecs,surface,at,"terra",{}));
+    ecs.resource<physis::GravitySettings>()->baseline={};
+    const auto zero=wp::planetCharacterGravityFrame(ecs,surface,at,"moon",{});
+    AIVERSE_TEST_CHECK(zero&&!zero->allowGround&&zero->magnitude==Fixed{});
+    ecs.resource<physis::GravitySettings>()->baseline={10_fx,0_fx,0_fx};
+    const auto reverse=wp::planetCharacterGravityFrame(ecs,surface,at,"moon",{1_fx,0_fx,0_fx});
+    AIVERSE_TEST_CHECK(reverse&&reverse->allowGround&&reverse->up.x<Fixed::fromRatio(-99,100));
 }
 static void checkPlanetGravitySupport(){
     const Vec3 up{Fixed{},Fixed::fromInt(1),Fixed{}};
@@ -1437,6 +1456,7 @@ int main(){
     checkPlanetProcessGeometry();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
+    checkPlanetCharacterGravityFrame();
     checkPlanetGravitySupport();
     checkPlanetGravity();
     checkPlanetLiveGravity();
