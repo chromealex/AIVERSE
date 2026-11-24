@@ -50,7 +50,8 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
   onMenu: (x: number, y: number) => void; onCreateMaterial: (name: string) => void;
 }) {
   const Icon = ICONS[component.id] ?? Puzzle;
-  const { rows, rest } = splitVectors(component.properties);
+  const { rows, rest } = component.id === 'SurfacePlacement'
+    ? { rows: [], rest: component.properties } : splitVectors(component.properties);
   const menuButton = useRef<HTMLButtonElement | null>(null);
   return <section className={'insp-comp' + (collapsed ? ' is-collapsed' : '')} aria-label={component.title}
     onContextMenu={event => { if ((event.target as HTMLElement).closest('.insp-comp__headrow')) { event.preventDefault(); onMenu(event.clientX, event.clientY); } }}>
@@ -91,7 +92,7 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
         const shown = missing ? { ...property, options: [...(property.options ?? []), { label: String(property.value) + ' (missing)', value: String(property.value) }] } : property;
         return <div key={entityId + component.id + property.key} className={missing ? 'insp-field is-missing' : 'insp-field'}>
           <PropertyField property={shown} disabled={busy || property.editable === false} onChange={value => onChange(property.key, value)}/>
-          {missing && <div className="insp-missing" role="alert">Not in materials.json ·
+          {missing && component.id === 'MeshRenderer' && <div className="insp-missing" role="alert">Not in materials.json ·
             <button type="button" disabled={busy} onClick={() => onCreateMaterial(String(property.value))}>Create “{String(property.value)}”</button>·
             <button type="button" disabled={busy} onClick={() => onChange(property.key, '')}>Use default</button></div>}
         </div>;
