@@ -1,5 +1,5 @@
-// Studio reference graph v1. Read-only discovery of documented asset-bearing
-// fields, independent of UI and genre runtime; no speculative string scanning.
+// Studio reference graph: typed material/rules slots and conservative exact
+// map path candidates, independent of UI and genre runtime.
 // materials.json stores project-relative paths; GUID is resolved via .meta index.
 #pragma once
 #include "apps/studio-native/StudioAssetCatalog.h"
@@ -15,9 +15,9 @@
 namespace aiverse::studio {
 
 struct StudioAssetReference {
-    std::string document; // materials.json or rules.json (logical merged rules)
-    std::string owner;    // library material name or rules type name
-    std::string field;    // explicitly documented asset-bearing slot
+    std::string document; // project document or current map
+    std::string owner;    // material/type name or map scope
+    std::string field;    // documented slot or JSON pointer
     std::string path;     // runtime-compatible project-relative path
     std::string guid;     // empty for unresolved/legacy paths
     bool writable = false; // currently only materials.json slots support repair
@@ -154,26 +154,27 @@ inline bool studioDocumentNamesAsset(const Json& document,const std::string& pat
     }
     return false;
 }
-inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
-    const Json& currentMap,const Json& rules,const Json& manifest,
-    const std::vector<std::pair<std::string,bool>>& paths){
+// Shared enumeration and byte budget for read-only discovery and mutation fences.
+template<class Visitor>
+inline void studioVisitSavedMaps(const std::filesystem::path& project,
+    const Json& manifest, Visitor&& visit){
     namespace fs=std::filesystem;
-    auto check=[&](const Json& doc,const std::string& label){
-        for(const auto& [path,directory]:paths)
-            if(studioDocumentNamesAsset(doc,path,directory))
-                throw std::runtime_error("Asset move blocked by "+label+" reference: "+path);
-    };
-    if(paths.empty())return;
-    check(currentMap,"current map");check(rules,"rules");
     const auto root=fs::canonical(project);
     std::set<fs::path> maps;
     const auto add=[&](const fs::path& path){
-        if(maps.size()>=512)throw std::runtime_error("Too many map documents to validate asset move");
         const auto canonical=fs::canonical(path);
         const auto relative=canonical.lexically_relative(root);
         if(relative.empty()||relative.is_absolute()||*relative.begin()==".."||
            !fs::is_regular_file(fs::symlink_status(path)))
             throw std::runtime_error("Unsafe saved map dependency");
+        if(!maps.count(canonical)&&maps.size()>=512)throw std::runtime_error("Too many map documents to validate asset references");
+        // Reject symlinked ancestors and paths outside the canonical project.
+        const auto lexical=path.lexically_normal().lexically_relative(root);
+        if(lexical.empty()||lexical.is_absolute()||*lexical.begin()=="..")
+            throw std::runtime_error("Unsafe saved map dependency");
+        auto cursor=root;
+        for(const auto& part:lexical){cursor/=part;if(fs::is_symlink(fs::symlink_status(cursor)))
+            throw std::runtime_error("Symlink in saved map dependency");}
         maps.insert(canonical);
     };
     for(const auto& map:manifest["maps"].items()){
@@ -195,8 +196,64 @@ inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     for(const auto& map:maps){
         const auto size=fs::file_size(map);
         if(size>64ull*1024*1024-bytes)throw std::runtime_error("Saved map validation budget exceeded");
-        bytes+=size;check(Json::parseFile(map.string()),map.lexically_relative(root).generic_string());
+        bytes+=size;visit(Json::parseFile(map.string()),map.lexically_relative(root).generic_string());
     }
+}
+inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
+    const Json& currentMap,const Json& rules,const Json& manifest,
+    const std::vector<std::pair<std::string,bool>>& paths){
+    auto check=[&](const Json& doc,const std::string& label){
+        for(const auto& [path,directory]:paths)
+            if(studioDocumentNamesAsset(doc,path,directory))
+                throw std::runtime_error("Asset move blocked by "+label+" reference: "+path);
+    };
+    if(paths.empty())return;
+    check(currentMap,"current map");check(rules,"rules");
+    studioVisitSavedMaps(project,manifest,check);
+}
+inline std::string studioReferencePointerSegment(const std::string& key){
+    std::string result;
+    for(char c:key){if(c=='~')result+="~0";else if(c=='/')result+="~1";else result+=c;}
+    return result;
+}
+// Conservative candidates, not schema-validated rewrite locations. Explicit
+// content/ paths (including missing assets) or exact existing catalog paths
+// are reported; arbitrary substrings and dynamic scripts are not interpreted.
+inline void studioAppendMapReferences(const Json& value,const std::string& document,
+    const std::string& pointer,const std::map<std::string,std::string>& guids,
+    std::vector<StudioAssetReference>& refs,size_t& visited,size_t depth=0){
+    if(depth>128||++visited>2000000||pointer.size()>8192)
+        throw std::runtime_error("Map reference traversal budget exceeded");
+    if(value.isString()){
+        const auto& raw=value.str();
+        const std::string path=raw.starts_with("content/")?raw:"content/"+raw;
+        const auto found=guids.find(path);
+        if((raw.starts_with("content/")&&raw.size()>8)||found!=guids.end()){
+            if(refs.size()>=32768||path.size()>8192)throw std::runtime_error("Asset reference result budget exceeded");
+            refs.push_back({document,"map",pointer.empty()?"/":pointer,path,
+                found==guids.end()?std::string{}:found->second,false});
+        }
+    }else if(value.isArray()){
+        size_t index=0;
+        for(const auto& child:value.items())
+            studioAppendMapReferences(child,document,pointer+"/"+std::to_string(index++),guids,refs,visited,depth+1);
+    }else if(value.isObject()){
+        for(const auto& [key,child]:value.members())
+            studioAppendMapReferences(child,document,pointer+"/"+studioReferencePointerSegment(key),guids,refs,visited,depth+1);
+    }
+}
+inline std::vector<StudioAssetReference> studioCollectProjectAssetReferences(
+    const std::filesystem::path& project,const Json& materials,const Json& rules,
+    const Json& currentMap,const Json& manifest,const std::vector<StudioAssetEntry>& assets){
+    auto refs=studioCollectAssetReferences(materials,rules,assets);
+    if(refs.size()>32768)throw std::runtime_error("Asset reference result budget exceeded");
+    const auto guids=studioReferenceGuids(assets);
+    size_t visited=0;
+    studioAppendMapReferences(currentMap,"current map","",guids,refs,visited);
+    studioVisitSavedMaps(project,manifest,[&](const Json& doc,const std::string& name){
+        studioAppendMapReferences(doc,name,"",guids,refs,visited);
+    });
+    return refs;
 }
 inline Json studioReferenceGraphJson(const std::vector<StudioAssetReference>& refs) {
     Json result = Json::array();

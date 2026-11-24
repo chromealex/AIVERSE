@@ -2516,10 +2516,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method == "studio.assetReferences") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             StudioAssetCatalog catalog(ws_.project.dir);
-            catalog.rebuild();
+            catalog.rebuild(false);
             const auto entries=catalog.all();
-            reply.set("result",studioReferenceGraphJson(studioCollectAssetReferences(
-                editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,entries)));
+            reply.set("result",studioReferenceGraphJson(studioCollectProjectAssetReferences(
+                ws_.project.dir,editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,
+                ws_.map.toJson(),ws_.project.manifest,entries)));
         } else if (method == "studio.assets") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             // Browser input cannot specify a filesystem directory. This scan
@@ -2629,8 +2630,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             Json preview=pendingAssetTransfer_->describe();
             StudioAssetCatalog catalog(ws_.project.dir);
             catalog.rebuild();
-            const auto dependencies=studioCollectAssetReferences(
-                editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,catalog.all());
+            const auto dependencies=studioCollectProjectAssetReferences(
+                ws_.project.dir,editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,
+                ws_.map.toJson(),ws_.project.manifest,catalog.all());
             preview.set("references",studioMoveReferenceImpact(preview,dependencies));
             reply.set("result",std::move(preview));
         } else if (method == "studio.assetTransferCommit") {

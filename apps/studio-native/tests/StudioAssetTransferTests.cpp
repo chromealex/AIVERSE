@@ -42,6 +42,30 @@ int main(){
         AIVERSE_TEST_CHECK(original);
         const auto stableGuid=original->guid;
 
+        // S6g: expose exact map path candidates before applying a move.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            fs::create_directories(project/"maps"/".aiverse-cache");
+            write(project/"maps"/"other.json",R"({"items":[{"model":"Models/Ship.glb"},{"model":"content/Missing.png"},{"note":"prefix content/Models/Ship.glb"}]})");
+            write(project/"maps"/".aiverse-cache"/"ignored.json","not JSON");
+            const auto current=Json::parse(R"({"a/b~c":"content/Models/Ship.glb"})");
+            const auto manifest=Json::parse(R"({"maps":[{"file":"maps/other.json"}]})");
+            const auto refs=studioCollectProjectAssetReferences(project,Json::object(),Json::object(),current,manifest,db.all());
+            AIVERSE_TEST_CHECK(refs.size()==3);
+            AIVERSE_TEST_CHECK(refs[0].document=="current map"&&refs[0].field=="/a~1b~0c"&&refs[0].guid==stableGuid&&!refs[0].writable);
+            AIVERSE_TEST_CHECK(refs[1].document=="maps/other.json"&&refs[1].field=="/items/0/model"&&refs[1].guid==stableGuid);
+            AIVERSE_TEST_CHECK(refs[2].path=="content/Missing.png"&&refs[2].guid.empty());
+            auto preview=StudioTransferPlan::internal(project,"Other",{"Models/Ship.glb"});
+            const auto impact=studioMoveReferenceImpact(preview.describe(),refs);
+            AIVERSE_TEST_CHECK(impact.size()==2&&!impact[0].getBool("writable")&&!impact[1].getBool("writable"));
+            bool refused=false;
+            try{studioCheckMapAssetPaths(project,current,Json::object(),manifest,{{"Models/Ship.glb",false}});}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused);
+            fs::remove_all(project/"maps");
+        }
+
         // Preview name collision, skip by default and leave content unchanged.
         auto skip=StudioTransferPlan::external(project,"Models",{external/"Ship.glb"});
         AIVERSE_TEST_CHECK(skip.describe()["items"][0].getStr("conflict")=="name");

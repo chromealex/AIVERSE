@@ -60,3 +60,6 @@ Agent Panel exposes reviewed Undo/Redo batches for fully tracked conversations (
 ### S6f.2 disjoint asset relocation batches
 
 Coordinated batch supports native staged move/rename, quarantine and replacement plans when their paths are disjoint across groups and do not overlap document edits. Native references and byte/digest checks remain authoritative. An outer project-local journal selects rollback or commit of relocations plus the nested existing-file transaction; reopen in Studio for recovery. Overlapping chains and dependencies requiring interleaved publication are refused. Only currently exposed agent operations can produce agent history links. Map remains unsaved and asset cursor checkpoint is separately fenced.
+
+### S6g.1 — asset move dependency preview
+Linked `studio_asset_move_preview` includes conservative read-only exact path candidates in the current map and saved JSON maps, alongside existing typed material/rules slots. `document`, `owner` and `field` identify the source (JSON pointer for map candidates); `writable: false` blocks a non-skip decision. Commit independently revalidates references. This is not a complete dynamic dependency analysis or a new mutation API.

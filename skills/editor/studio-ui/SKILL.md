@@ -137,6 +137,9 @@ StudioHistoryCoordinator validates exact ordered owner boundaries (max 64) and m
 ## Coordinated asset relocations (S6f.2)
 Native replay owners expose a staging-only path for internal moves, quarantine (create/import/delete) and replacement. Agent coordinator accepts disjoint relocation groups and validates their references against live and target map/project state; overlapping endpoints or document paths refuse before publication. studio-history-batch journal stores exact existing-file before/after snapshots and typed relocation digests, checks a unique prefix state and reverses pending moves and documents after recovering the nested document journal. The outer commit marker is authoritative. Recovery is called under the cooperating asset-history lock at Studio open; legacy Project::load refuses pending outer journal. Asset checkpoint still follows commit under its dirty marker; map changes remain unsaved. Do not claim arbitrary dependent path chains, all MCP asset operations, or atomic saved map/asset cursor recovery.
 
+## Map reference discovery (S6g.1)
+Use studioCollectProjectAssetReferences to extend the same native material/rules graph with read-only exact map path candidates and escaped JSON pointers from the current map and bounded saved maps. The shared saved-map visitor excludes history caches; explicit missing content paths have no GUID. Move preview (including linked MCP preview) displays blocking references before commit; commit retains its independent conservative reference fence. No arbitrary script/binary analysis or automatic map repair. The native graph query indexes existing sidecars only.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
