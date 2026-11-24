@@ -1784,6 +1784,12 @@
           "text": "Добавлены Vulkan scoped timestamps с асинхронной выдачей по fence. Изолированные тесты пройдены; аппаратная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38M",
           "textEn": "Vulkan scoped timestamps with fence-confirmed asynchronous delivery. Isolated tests passed; hardware verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38N (в работе)",
+          "text": "Учёт ссылок renderer caches и LENS при освобождении текстур.",
+          "nameEn": "Texture Graph GPU — Stage 38N (in progress)",
+          "textEn": "Renderer and LENS material root inspection for texture reclamation."
         }
       ],
       "enables": [
