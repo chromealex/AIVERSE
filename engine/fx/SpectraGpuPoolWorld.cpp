@@ -1,3 +1,4 @@
+#include <cstring>
 #include "SpectraGpuPoolWorld.h"
 #include "SpectraParticleProgram.h"
 #include <algorithm>
@@ -26,10 +27,11 @@ size_t releaseBelow(size_t threshold,uint32_t percentage) {
 
 bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     shutdown();
-    budgets.maxGpuGroups=std::min<uint32_t>(budgets.maxGpuGroups,64);
-    budgets.maxGroupCapacity=std::clamp<uint32_t>(budgets.maxGroupCapacity,1,4096);
-    budgets.maxBurstsPerFrame=std::min<uint32_t>(budgets.maxBurstsPerFrame,4096);
-    budgets.maxSources=std::clamp<uint32_t>(budgets.maxSources,1,65536);
+    // Safety ceilings, not preallocated storage. Admission also checks bytes.
+    budgets.maxGpuGroups=std::min<uint32_t>(budgets.maxGpuGroups,4096);
+    budgets.maxGroupCapacity=std::clamp<uint32_t>(budgets.maxGroupCapacity,1,kGpuEmitterMaxSlots);
+    budgets.maxBurstsPerFrame=std::min<uint32_t>(budgets.maxBurstsPerFrame,262144);
+    budgets.maxSources=std::clamp<uint32_t>(budgets.maxSources,1,1048576);
     if(budgets.loadShedding.enabled) {
         budgets.loadShedding.recoverBelowPercent=
             std::clamp<uint32_t>(
@@ -51,6 +53,12 @@ bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     checkpointBudget_=budgets_.sharedCheckpointBudget
         ?budgets_.sharedCheckpointBudget
         :std::make_shared<CheckpointReadbackBudget>(budgets_.checkpointReadback);
+    allocationBudget_=device_?device_->acquireGpuAllocationBudget(budgets_.sharedAllocationBudget,budgets_.maxGpuAllocationBytes):
+        (budgets_.sharedAllocationBudget?budgets_.sharedAllocationBudget:std::make_shared<GpuAllocationBudget>(budgets_.maxGpuAllocationBytes));
+    if(!allocationBudget_){
+        reason_="SpectraFX allocation budget conflicts with canonical Device ledger";cpu_.shutdown();device_=nullptr;return false;
+    }
+    if(device_)sharedSdfCache_=std::make_shared<SharedSdfGpuCache>(*device_,true);
     sourceWorldEpoch_=nextSourceWorldEpoch.fetch_add(1,std::memory_order_relaxed);
     initialized_=true;
     reason_.clear();
@@ -63,11 +71,14 @@ void GpuPoolWorld::shutdown() {
     resetAccepted_.clear();
     resetReport_={};
     bindings_.clear();
+    dataRegistry_=nullptr;dataStats_={};
     cpuDefinitionIds_.clear();
     definitions_.clear();
     sources_.clear();freeSourceSlots_.clear();
     sourceWorldEpoch_=0;nextBindingRevision_=1;nextSourceToken_=1;
     checkpointBudget_.reset();
+    sharedSdfCache_.reset();
+    allocationBudget_.reset();
     cpu_.shutdown();
     device_=nullptr;
     initialized_=frameOpen_=stepped_=drawn_=groupsDirty_=false;
@@ -80,15 +91,29 @@ void GpuPoolWorld::shutdown() {
 std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
                                   const GraphRuntimeOptions& options,
                                   uint32_t capacity) {
-    const std::string serialized=fx::effectToJson(effect).dump(-1);
+    const std::string serialized=fx::effectToJson(effect,false).dump(-1);
+    // A short identity avoids large JSON/CPU key storage. Exact sample
+    // equality is checked before accepting any matching group key.
+    uint64_t sdfHash=14695981039346656037ull;
+    if(effect.emitters.size()==1){
+        const auto& sdf=effect.emitters[0].collision.staticSdf;
+        const auto mix=[&](float value){uint32_t word;std::memcpy(&word,&value,sizeof(word));sdfHash=(sdfHash^word)*1099511628211ull;};
+        sdfHash=(sdfHash^sdf.dimension)*1099511628211ull;
+        mix(sdf.origin.x);mix(sdf.origin.y);mix(sdf.origin.z);mix(sdf.spacing);
+        for(float value:sdf.samples)mix(value);
+    }
     // Length prefix prevents ambiguous keys if authored shader graphs contain
     // textual substrings that resemble the policy suffix.
-    return std::to_string(serialized.size())+":"+serialized+
+    return std::to_string(serialized.size())+":"+serialized+"|sdf="+std::to_string(sdfHash)+
         "|capacity="+std::to_string(capacity)+
         "|quality="+std::to_string(unsigned(options.quality))+
         "|vm="+std::to_string(unsigned(options.gpuProgram))+
+        "|collisionEvents="+std::to_string(unsigned(options.reportCollisionEvents))+
+        "|collisionChildren="+std::to_string(unsigned(options.routePoolCollisionChildren))+
         "|material="+std::to_string(unsigned(options.gpuMaterial))+
         "|indirect="+std::to_string(unsigned(options.gpuIndirect))+
+        "|procedural="+std::to_string(unsigned(options.proceduralBillboards))+
+        "|gpuAllocation="+std::to_string(unsigned(options.gpuOwnedAllocation))+
         "|checkpointCadence="+std::to_string(options.checkpointEveryFrames)+
         "|adaptive="+std::to_string(unsigned(options.adaptiveCheckpoint.enabled))+
         "|adaptiveMax="+std::to_string(options.adaptiveCheckpoint.maxIntervalFrames)+
@@ -122,18 +147,20 @@ bool GpuPoolWorld::defineGraph(const std::string& name,const Json& graph,
         return false;
     }
     InstanceParameterTable named;
+    DataInterfaceBindings dataBindings;
     std::vector<std::string> errors;
     if(graph.getInt("version")==2 &&
-       !loadInstanceParameterTable(graph["instanceParameters"],named,errors)) {
+       (!loadInstanceParameterTable(graph["instanceParameters"],named,errors) ||
+        !loadDataInterfaceBindings(graph["dataInterfaces"],named,dataBindings,errors))) {
         reason_=errors.empty()?"invalid GPU pool instanceParameters":errors.front();
         return false;
     }
     fx::EffectDef definition;
-    if(!fx::compileSpectraGraph(graph,overrides,definition,errors)) {
+    if(!fx::compileSpectraGraph(graph,overrides,definition,errors,options.sdfReader)) {
         reason_=errors.empty()?"SpectraFX graph compilation failed":errors.front();
         return false;
     }
-    return defineCompiled(name,definition,options,named);
+    return defineCompiled(name,definition,options,named,dataBindings);
 }
 
 bool GpuPoolWorld::defineEffect(const std::string& name,
@@ -149,7 +176,8 @@ bool GpuPoolWorld::defineEffect(const std::string& name,
 bool GpuPoolWorld::defineCompiled(const std::string& name,
                                  const fx::EffectDef& effect,
                                  const GraphRuntimeOptions& options,
-                                 const InstanceParameterTable& named) {
+                                 const InstanceParameterTable& named,
+                                 const DataInterfaceBindings& dataBindings) {
     if(name.empty()||name.size()>128) {
         reason_="SpectraFX pool effect name must be 1..128 bytes";
         return false;
@@ -162,10 +190,12 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     // A pooled Device must use ONE limiter for all its GPU groups, including
     // groups with different checkpoint cadences.
     actual.checkpointBudget=checkpointBudget_;
-    const GraphGpuEligibility eligible=inspectGraphGpuEligibility(effect,actual);
+    actual.allocationBudget=allocationBudget_;
+    actual.sharedSdfCache=sharedSdfCache_;
+    std::string collisionChild;
+    const GraphGpuEligibility eligible=inspectPoolGraphGpuEligibility(effect,actual,&collisionChild);
     const bool wantsGpu=options.preference!=ComputePreference::CpuOnly;
-    const bool metalAvailable=device_&&device_->supportsCompute()&&
-        device_->info().backend==gfx::Backend::Metal &&
+    const bool gpuAvailable=device_&&supportsSpectraCompute(*device_,actual.gpuOwnedAllocation)&&
         actual.quality>=fx::FxQuality::Medium;
     Binding next;
     for(const auto& [paramName,definition]:named) {
@@ -173,6 +203,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         next.defaults[definition.slot]=definition.initial;
     }
     next.named=named;
+    next.dataBindings=dataBindings;
     // Preserve only authored/compiled CPU-side data so a new pool can
     // re-declare the effect after the host rebuilds gfx::Device.
     PoolRecoveryEffect remembered;
@@ -180,16 +211,21 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     remembered.effect=effect;
     remembered.options=options;
     remembered.options.checkpointBudget.reset();
+    remembered.options.allocationBudget.reset();
+    remembered.options.sdfReader={};
+    remembered.options.sharedSdfCache.reset();
     remembered.named=named;
     remembered.defaults=next.defaults;
+    remembered.dataBindings=dataBindings;
     next.usesRuntimeParams=effect.emitters.size()==1 &&
         (!effect.emitters[0].particleProgram.isNull() ||
          !effect.emitters[0].shaderGraph.isNull());
 
-    if(wantsGpu && eligible.eligible && metalAvailable) {
+    if(wantsGpu && eligible.eligible && gpuAvailable) {
         const std::string key=groupKey(effect,actual,actual.capacity);
         for(size_t i=0;i<gpuGroups_.size();++i)
-            if(gpuGroups_[i].live() && gpuGroups_[i].key==key) {
+            if(gpuGroups_[i].live() && gpuGroups_[i].key==key &&
+               gpuGroups_[i].particles->sameStaticSdf(eligible.gpu.staticSdf)) {
                 next.gpu=true;next.gpuIndex=i;
                 next.revision=nextBindingRevision_++;
                 bindings_[name]=std::move(next);
@@ -206,6 +242,8 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
             if(gpuGroups_[i].live())++liveGroups;
             else if(!gpuGroups_[i].particles && freeSlot==gpuGroups_.size())freeSlot=i;
         }
+        // ComputeParticles reserves actual physical envelope before creating
+        // resources. One shared owner covers active and retired allocations.
         if(liveGroups<budgets_.maxGpuGroups) {
             auto particles=std::make_unique<ComputeParticles>();
             ComputeEmitterDesc desc=eligible.gpu;
@@ -215,6 +253,9 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
                 if(freeSlot==gpuGroups_.size())
                     gpuGroups_.push_back({key,std::move(particles)});
                 else gpuGroups_[freeSlot]=Group{key,std::move(particles)};
+                auto& created=gpuGroups_[freeSlot];
+                created.collisionChild=std::move(collisionChild);
+                if(!created.collisionChild.empty())created.collisionInbox=std::make_shared<GpuCollisionBatch>();
                 next.revision=nextBindingRevision_++;
                 bindings_[name]=std::move(next);
                 definitions_[name]=remembered;
@@ -226,7 +267,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         } else reason_="SpectraFX max unique GPU resource groups reached";
     } else if(wantsGpu) {
         reason_=!eligible.eligible?eligible.reason:
-            "Metal compute or required quality unavailable for pooled GPU emitter";
+            "GPU compute or required quality unavailable for pooled GPU emitter";
     }
 
     if(options.preference==ComputePreference::RequireGpu) {
@@ -518,7 +559,8 @@ bool GpuPoolWorld::burstImpl(const std::string& effectName,fx::float3 position,
         return false;
     }
     const Binding& binding=it->second;
-    const auto& params=sourceParams?*sourceParams:binding.defaults;
+    const auto& baseParams=sourceParams?*sourceParams:binding.defaults;
+    auto params=baseParams;
     if(!validParams(params)) {
         ++stats_.rejectedBursts;
         reason_="nonfinite or unbounded SpectraFX pool instance parameters";
@@ -528,6 +570,16 @@ bool GpuPoolWorld::burstImpl(const std::string& effectName,fx::float3 position,
         if(!checkInstanceParameterValue(definition,params[definition.slot])) {
             ++stats_.rejectedBursts;
             reason_="out-of-range SpectraFX pooled runtime parameter '"+paramName+"'";
+            return false;
+        }
+    }
+    dataStats_={};
+    if(!binding.dataBindings.empty()) {
+        // Resolve the entire birth before touching any GPU parameter or CPU
+        // particle storage. The source/default snapshot is never overwritten.
+        if(!sampleDataInterfaces(binding.dataBindings,binding.named,dataRegistry_,
+                                 position,baseParams,params,reason_,&dataStats_)) {
+            ++stats_.rejectedBursts;
             return false;
         }
     }
@@ -571,6 +623,7 @@ bool GpuPoolWorld::beginPresentationFrame(const fx::SpectraFxView& view) {
     // Frame boundary: earlier frames' commands are committed and nothing of
     // this frame references a retired group yet.
     retireUnusedGroups();
+    if(allocationBudget_&&device_)allocationBudget_->collect(device_->gpuCompletedFence());
     frameOpen_=true;stepped_=drawn_=false;
     stats_.frameBursts=stats_.gpuDrawCalls=stats_.cpuDrawCalls=0;
     cpu_.setView(view);
@@ -599,6 +652,7 @@ void GpuPoolWorld::retireUnusedGroups() {
             if(gpuGroups_[i].live() && !used[i]) {
                 gpuGroups_[i].retired=true;
                 gpuGroups_[i].stepOk=false;
+                gpuGroups_[i].collisionInbox.reset();
             }
         stats_.gpuGroups=uint32_t(std::count_if(gpuGroups_.begin(),gpuGroups_.end(),
             [](const Group& group){return group.live();}));
@@ -779,6 +833,7 @@ bool GpuPoolWorld::step(float dt) {
     stepped_=true;
     cpu_.update(dt);
     bool allOk=true;
+    size_t childRequests=0;
     // Checkpoint cadence is per GPU group. Rotating the simulation submission
     // order gives later groups a chance when the shared readback budget fills.
     const size_t groupCount=gpuGroups_.size();
@@ -791,6 +846,12 @@ bool GpuPoolWorld::step(float dt) {
         if(!group.stepOk) {
             allOk=false;
             reason_="GPU pool group step: "+group.particles->reason();
+        } else if(dt>0&&childRequests<8&&!group.collisionChild.empty()) {
+            if(!group.collisionInbox)group.collisionInbox=std::make_shared<GpuCollisionBatch>();
+            const std::weak_ptr<GpuCollisionBatch> inbox=group.collisionInbox;
+            if(group.particles->requestGpuCollisionEvents([inbox](bool ok,GpuCollisionBatch batch){
+                if(auto target=inbox.lock();ok&&target)*target=std::move(batch);
+            })) {++childRequests;++stats_.collisionChildRequests;}
         }
     }
     stats_.gpuParticlesEstimated=0;
@@ -801,6 +862,12 @@ bool GpuPoolWorld::step(float dt) {
         stats_.gpuParticlesEstimated+=stats.alive;
         stats_.gpuBytes+=stats.gpuBytes;
     }
+    stats_.sharedSdfBytes=sharedSdfCache_?sharedSdfCache_->liveBytes():0;
+    stats_.sharedSdfEntries=sharedSdfCache_?sharedSdfCache_->liveEntries():0;
+    stats_.sharedSdfPayloadBytes=sharedSdfCache_?sharedSdfCache_->livePayloadBytes():0;
+    stats_.sdfAtlasBytes=sharedSdfCache_?sharedSdfCache_->atlasBytes():0;
+    stats_.sdfAtlasPages=sharedSdfCache_?sharedSdfCache_->atlasPages():0;
+    stats_.gpuBytes+=stats_.sharedSdfBytes;
     stats_.cpuParticles=uint32_t(cpu_.stats().particles);
     return allOk;
 }
@@ -834,6 +901,7 @@ bool GpuPoolWorld::resetForRollback() {
         resetAccepted_.assign(gpuGroups_.size(),0u);
         resetReport_.groupsAccepted=0;
     }
+    discardCollisionChildren();
     resetReport_.retryRequired=true;
     resetReport_.groupCount=uint32_t(gpuGroups_.size());
     resetReport_.failedGroup=std::numeric_limits<uint32_t>::max();
@@ -898,6 +966,7 @@ bool GpuPoolWorld::resetForRollback() {
         if(!source.exhausted)freeSourceSlots_.push_back(i);
     }
     stats_.activeSources=0;
+    dataRegistry_=nullptr;dataStats_={};
     groupsDirty_=true;
     resetReport_.retryRequired=false;
     resetReport_.failedGroup=std::numeric_limits<uint32_t>::max();
@@ -911,6 +980,7 @@ PoolRecoveryManifest GpuPoolWorld::exportRecoveryManifest() const {
     // The old per-device readback scheduler belongs to the old Device.
     // Import always provisions a fresh checkpoint budget.
     manifest.budgets.sharedCheckpointBudget.reset();
+    manifest.budgets.sharedAllocationBudget.reset();
     for(const auto& [name,definition]:definitions_) {
         (void)name;
         manifest.effects.push_back(definition);
@@ -933,9 +1003,10 @@ bool GpuPoolWorld::importRecoveryManifest(
     }
     PoolWorldBudgets requested=manifest.budgets;
     requested.sharedCheckpointBudget.reset();
+    requested.sharedAllocationBudget.reset();
     if(!init(recoveredDevice,requested))return false;
     for(const auto& entry:manifest.effects) {
-        if(!defineCompiled(entry.name,entry.effect,entry.options,entry.named)) {
+        if(!defineCompiled(entry.name,entry.effect,entry.options,entry.named,entry.dataBindings)) {
             const std::string why="SpectraFX failed to rebuild effect '"+entry.name+
                 "' on recovered Device: "+reason_;
             shutdown();
@@ -951,6 +1022,60 @@ bool GpuPoolWorld::importRecoveryManifest(
     return true;
 }
 
+void GpuPoolWorld::discardCollisionChildren(){
+    for(auto& group:gpuGroups_)group.collisionInbox.reset();
+}
+size_t GpuPoolWorld::drainCollisionChildren(fx::ParticleSystem& particles,size_t maxChildren){
+    if(!initialized_||presentationBlocked()||!device_)return 0;
+    size_t budget=std::min<size_t>(maxChildren,32),played=0;
+    fx::SpectraFxCommandQueue commands(32);
+    fx::SpectraFxEmitterEventRouter router;
+    const auto frame=device_->frameSerial();
+    for(size_t i=0;i<gpuGroups_.size();++i){
+        auto& group=gpuGroups_[i];
+        if(!group.live()||!group.collisionInbox||group.collisionChild.empty())continue;
+        auto batch=std::move(*group.collisionInbox);*group.collisionInbox={};
+        if(batch.events.empty())continue;
+        stats_.collisionChildrenDropped+=batch.dropped;
+        if(!budget||frame<batch.frameSerial||frame-batch.frameSerial>4){
+            stats_.collisionChildrenDropped+=batch.events.size();continue;
+        }
+        // Only a bounded one-shot child asset. Missing, looping, or recursive
+        // authored children are rejected rather than creating persistent FX.
+        const auto id=particles.effect(group.collisionChild);
+        const auto* def=particles.def(id);
+        if(!def||def->emitters.empty()||std::any_of(def->emitters.begin(),def->emitters.end(),
+            [](const fx::EmitterDef& e){return e.loop||e.ringBuffer||!e.subEmitters.empty();})){
+            stats_.collisionChildrenDropped+=batch.events.size();continue;
+        }
+        const uint64_t key=i+1;
+        router.link(key,fx::SpectraFxEmitterEvent::Impact,{0,group.collisionChild,1,true});
+        const size_t count=std::min(budget,batch.events.size());
+        for(size_t j=0;j<count;++j){
+            fx::SpectraFxEmitterEventRecord event;
+            event.emitterKey=key;event.type=fx::SpectraFxEmitterEvent::Impact;
+            event.position=batch.events[j].position;
+            // CPU authored collision child orientation: own +Y, not velocity.
+            event.direction={0,1,0};
+            if(router.publish(event))--budget;
+        }
+        stats_.collisionChildrenDropped+=batch.events.size()-count;
+        router.drain(commands,count);
+        router.unlink(key);
+    }
+    commands.flush(particles);
+    played=commands.stats().played;
+    stats_.collisionChildrenPlayed+=played;
+    stats_.collisionChildrenDropped+=commands.stats().failed;
+    return played;
+}
+
+bool GpuPoolWorld::requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback){
+    if(!initialized_||presentationBlocked()||!frameOpen_||!stepped_||
+       groupIndex>=gpuGroups_.size()||!gpuGroups_[groupIndex].live()||
+       !gpuGroups_[groupIndex].stepOk)return false;
+    return gpuGroups_[groupIndex].particles->requestGpuCollisionEvents(std::move(callback));
+}
 bool GpuPoolWorld::requestGpuCheckpoint(
     size_t groupIndex,std::function<void(bool)> completion) {
     if(!initialized_ || presentationBlocked() ||
@@ -980,7 +1105,7 @@ bool GpuPoolWorld::exportFreshCheckpoint(
     }
     const auto& group=gpuGroups_[groupIndex];
     if(!group.live() || !group.particles->gpuActive()) {
-        if(error)*error="SpectraFX checkpoint group has no Metal GPU simulation";
+        if(error)*error="SpectraFX checkpoint group has no active GPU simulation";
         return false;
     }
     return group.particles->exportFreshCheckpoint(bytes,maxBytes,error);
@@ -1010,9 +1135,7 @@ bool GpuPoolWorld::gpuGroupSummary(
 PoolCheckpointStats GpuPoolWorld::checkpointStats() const {
     PoolCheckpointStats result;
     if(checkpointBudget_)result.budget=checkpointBudget_->stats();
-    result.gpuDeviceHealthKnown=device_ &&
-        device_->info().backend==gfx::Backend::Metal &&
-        device_->supportsCompute();
+    result.gpuDeviceHealthKnown=device_&&supportsSpectraCompute(*device_,false);
     if(result.gpuDeviceHealthKnown)
         result.gpuDeviceHealthy=device_->gpuHealthy();
     for(const auto& group:gpuGroups_) {

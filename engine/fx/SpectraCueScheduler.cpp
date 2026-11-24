@@ -59,10 +59,10 @@ bool CueScheduler::registerEffect(const std::string& name, const fx::EffectDef& 
     return true;
 }
 bool CueScheduler::registerGraph(const std::string& name, const Json& graph,
-                                 const Json& overrides) {
+                                 const Json& overrides,const fx::SdfResourceReader& sdfReader) {
     fx::EffectDef compiled;
     std::vector<std::string> errors;
-    if(!fx::compileSpectraGraph(graph,overrides,compiled,errors)) {
+    if(!fx::compileSpectraGraph(graph,overrides,compiled,errors,sdfReader)) {
         error_=errors.empty()?"SpectraFX graph validation failed":errors.front();
         return false; // previous asset remains registered on bad hot-reload
     }

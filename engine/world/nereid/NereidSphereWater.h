@@ -99,10 +99,13 @@ inline SphereWaterSample sampleWaterSphere(Entity entity, const WaterSphereCompo
 
 // Highest priority wins, then the larger surface, then the smallest Entity id. Only bodies whose shell
 // (up to the surface) contains the probe or whose surface it is above are considered: the nearest sea.
-inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fixed seconds = {}) {
+// Optional exact simulation-centre filter for body-local presentation probes.
+// The canonical unfiltered query retains identical selection semantics.
+inline SphereWaterSample sampleSphereWaterFiltered(const World& world, Vec3 position, Fixed seconds,
+                                                   const Vec3* center) {
     SphereWaterSample best;
     world.eachExistingConst<WaterSphereComponent>([&](Entity entity, const WaterSphereComponent& s) {
-        if (!world.alive(entity)) return;
+        if (!world.alive(entity) || (center && !(s.center==*center))) return;
         const SphereWaterSample c = sampleWaterSphere(entity, s, position, world.tryGetConst<WaterSphereWavesComponent>(entity), seconds);
         if (!c.found) return;
         const bool better = !best.found || c.priority > best.priority ||
@@ -113,6 +116,9 @@ inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fi
         if (better) best = c;
     });
     return best;
+}
+inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fixed seconds = {}) {
+    return sampleSphereWaterFiltered(world,position,seconds,nullptr);
 }
 
 // Buoyancy along the radial up (the plane policy of computeWaterForces with "up" taken from the sample).

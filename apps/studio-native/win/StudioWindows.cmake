@@ -70,7 +70,7 @@ if(NOT MSVC)
     target_include_directories(aiverse_studio SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/win/mingw") # EventToken.h
 endif()
 target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime
-    aiverse_game_view aiverse_gfx_vulkan AIVERSE::vivid_human AIVERSE::libraries
+    aiverse_fx aiverse_game_view aiverse_gfx_vulkan AIVERSE::vivid_human AIVERSE::libraries
     ole32 oleaut32 uuid shell32 shlwapi user32 advapi32 dwmapi)
 target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
 target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}" _WIN32_WINNT=0x0A00)

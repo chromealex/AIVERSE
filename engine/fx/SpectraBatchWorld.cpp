@@ -61,10 +61,10 @@ bool BatchWorld::releaseEffect(int effect) {
     return false;
 }
 
-int BatchWorld::defineGraph(const Json& graph, const Json& overrides) {
+int BatchWorld::defineGraph(const Json& graph, const Json& overrides,const fx::SdfResourceReader& sdfReader) {
     fx::EffectDef definition;
     errors_.clear();
-    if (!fx::compileSpectraGraph(graph, overrides, definition, errors_)) {
+    if (!fx::compileSpectraGraph(graph, overrides, definition, errors_,sdfReader)) {
         error_ = errors_.empty() ? "SpectraFX graph compilation failed" : errors_.front();
         return -1;
     }

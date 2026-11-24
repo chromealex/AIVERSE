@@ -1,0 +1,49 @@
+{
+  "id": "2026-11-24-spectrafx-fire-smoke",
+  "date": "2026-11-24",
+  "system": "spectrafx",
+  "title": "Огонь с дымом в SpectraFX",
+  "summary": "Готовый граф SpectraFX показывает пламя и дым в одном объёмном эффекте. Его можно открыть в Studio и разместить в сцене через SpectraSource.",
+  "body": [
+    "Огонь рождается у основания объёма, нагретый газ поднимается, а дым расширяется над пламенем. Параметры источника, горения, движения и материала остаются редактируемыми узлами графа."
+  ],
+  "status": "in-progress",
+  "verified": "Показано в нативном предпросмотре Studio на macOS с Metal: кадры захвачены из работающего эффекта после прогрева симуляции.",
+  "limits": "Пока проверен нативный предпросмотр. Встраивание в конкретную игру, Vulkan и производительность множества источников не проверены.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "commit": "f1fa520cb",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-fire-smoke/01.png",
+      "caption": "Пламя в начале горения; дым только формируется.",
+      "captionEn": "Early flame as the smoke begins to form."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-fire-smoke/02.png",
+      "caption": "Поднявшийся дым над устойчивым пламенем.",
+      "captionEn": "Smoke rising above a sustained flame."
+    }
+  ],
+  "links": [
+    {
+      "title": "Fire and smoke graph",
+      "href": "examples/spectrafx/fire_smoke_v2.vfx.json"
+    },
+    {
+      "title": "Volumetrics guide",
+      "href": "docs/spectrafx-volumetrics.md"
+    },
+    {
+      "title": "Stage 156 handoff",
+      "href": "docs/agent-handoffs/spectrafx-stage156-fire-smoke-2026-11-24.md"
+    }
+  ],
+  "author": "SpectraFX",
+  "titleEn": "Fire and smoke in SpectraFX",
+  "summaryEn": "A ready-to-edit SpectraFX graph shows flame and smoke in one volumetric effect. It can be opened in Studio and placed in a scene through SpectraSource.",
+  "bodyEn": [
+    "The fire starts at the base of the volume; heated gas rises and smoke spreads above the flame. Source, combustion, motion and material settings remain editable graph nodes."
+  ],
+  "verifiedEn": "Shown in the native Studio preview on macOS with Metal; the frames were captured from the running effect after simulation warm-up.",
+  "limitsEn": "The native preview is verified. Integration into a specific game, Vulkan rendering and performance with many sources have not been verified."
+}

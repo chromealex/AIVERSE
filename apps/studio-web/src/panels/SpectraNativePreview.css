@@ -1,0 +1,38 @@
+/* Native SpectraFX playback controls. GPU particles are rendered in Scene,
+   not by this DOM. All UI colors/metrics use shared Studio tokens. */
+.spectra-native__toolbar {display:flex;align-items:center;flex-wrap:wrap;gap:var(--au-space-2);margin:var(--au-space-3) 0;}
+.spectra-native__status {display:flex;flex-wrap:wrap;gap:var(--au-space-3);align-items:center;font-size:var(--au-font-sm);color:var(--au-text-soft);}
+.spectra-native__timeline {display:flex;gap:var(--au-space-3);align-items:end;flex-wrap:wrap;margin:var(--au-space-3) 0;}
+.spectra-native__timeline .au-field {flex:1;min-width:min(100%,180px);}
+.spectra-native__timeline span {color:var(--au-text-muted);font-size:var(--au-font-xs);}
+.spectra-native__params {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:var(--au-space-3);align-items:end;}
+.spectra-native__hint {color:var(--au-text-muted);font-size:var(--au-font-sm);line-height:var(--au-line-height);}
+
+.spectra-native__camera {display:flex;align-items:center;gap:var(--au-space-2);
+  flex-wrap:wrap;padding:var(--au-space-2) 0;}
+.spectra-native__camera span {font-size:var(--au-font-xs);color:var(--au-text-muted);
+  margin-right:auto;}
+
+/* Native Stage controls are outside the CAMetalLayer overlap rectangle.
+ * Keep input controls fully clickable even with native child views on top. */
+.spectra-native__stage-controls {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));
+  align-items:end;
+  gap:var(--au-space-3);
+  padding:var(--au-space-3) 0;
+}
+.spectra-native__stage-controls .au-checkbox {
+  min-height:30px;
+  align-self:center;
+}
+
+/* Real on-demand GPU readback; thumbnail is captured once, never streamed. */
+.spectra-native__snapshot {display:flex;flex-direction:column;gap:var(--au-space-2);
+  padding:var(--au-space-3);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);
+  background:var(--au-panel);max-width:100%;min-width:0;}
+.spectra-native__snapshot img {display:block;max-width:min(100%,768px);
+  max-height:430px;width:auto;height:auto;object-fit:contain;border:1px solid var(--au-line-strong);
+  border-radius:var(--au-radius-sm);}
+.spectra-native__snapshot a {font-size:var(--au-font-sm);color:var(--au-accent);}
+.spectra-native__snapshot small {font-size:var(--au-font-xs);color:var(--au-text-muted);}

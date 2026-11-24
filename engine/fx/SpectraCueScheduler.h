@@ -75,7 +75,7 @@ public:
     // attached sources automatically restart on their next sync.
     bool registerEffect(const std::string& name, const fx::EffectDef& definition);
     bool registerGraph(const std::string& name, const Json& graph,
-                       const Json& overrides = Json::object());
+                       const Json& overrides = Json::object(),const fx::SdfResourceReader& sdfReader = {});
     bool bindCue(uint32_t type, const std::string& effectName);
     void unbindCue(uint32_t type);
 

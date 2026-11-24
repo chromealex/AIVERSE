@@ -2131,6 +2131,7 @@ void Renderer3D::renderObjectMotionVectors(PostProcess& post) {
 void Renderer3D::resolvePrisma() {
     if(dev_)checkGpuDevice(*dev_);
     if (!post_) {
+        sceneDepthConsumer_={};resolvedDepthSource_={};
         objectMotionStats_ = {};
         objectMotionStats_.reactiveCallbacksDropped =
             static_cast<uint32_t>(motionReactiveDraws_.size());
@@ -2140,6 +2141,10 @@ void Renderer3D::resolvePrisma() {
     PostProcess* post = post_;
     post_ = nullptr;
     dev_->endPass();
+    auto depthConsumer=std::move(sceneDepthConsumer_);
+    sceneDepthConsumer_={};
+    if(depthConsumer&&resolvedDepthSource_.valid())depthConsumer(*dev_,resolvedDepthSource_,viewProj_,camPos_);
+    resolvedDepthSource_={};
     renderObjectMotionVectors(*post);
     PostFrame f{viewProj_, camPos_, lighting,
                 sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(),
@@ -2239,6 +2244,7 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     postOut_ = screenPass;
     const int sw = sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sh = sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight();
     const gfx::PassDesc mainPass = post_ ? post_->scenePass(screenPass, sw, sh) : screenPass;
+    resolvedDepthSource_=post_?mainPass.depthTarget:gfx::TextureHandle{};
     hdrFrame_ = post_ && post_->linearScene();
     lights.setLinearScene(hdrFrame_);
     renderReflection();

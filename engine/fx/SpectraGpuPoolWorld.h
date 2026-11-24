@@ -52,7 +52,7 @@ struct PoolLoadSheddingPolicy {
 
 struct PoolWorldBudgets {
     uint32_t maxGpuGroups = 16;        // unique compiled graph + backend policy
-    uint32_t maxGroupCapacity = 1024;  // each ComputeParticles resource (1..4096)
+    uint32_t maxGroupCapacity = 1024;  // configurable allocation per group
     uint32_t maxBurstsPerFrame = 256;  // global presentation submission limit
     uint32_t maxSources = 4096;        // live per-source emitter handles
     PoolLoadSheddingPolicy loadShedding{};
@@ -62,6 +62,10 @@ struct PoolWorldBudgets {
     // using this Device. The defaults reserve RHI room for other readbacks.
     CheckpointReadbackLimits checkpointReadback{};
     std::shared_ptr<CheckpointReadbackBudget> sharedCheckpointBudget;
+    // Aggregate conservative physical allocation envelopes, including overlap.
+    // Zero inherits the Device limit; conflicting nonzero limits are rejected.
+    size_t maxGpuAllocationBytes=0;
+    std::shared_ptr<GpuAllocationBudget> sharedAllocationBudget;
 };
 
 struct PoolCheckpointStats {
@@ -126,11 +130,35 @@ struct PoolRecoveryEffect {
     GraphRuntimeOptions options{};
     InstanceParameterTable named;
     std::array<float,8> defaults{};
+    DataInterfaceBindings dataBindings{};
 };
 struct PoolRecoveryManifest {
     PoolWorldBudgets budgets{};
     std::vector<PoolRecoveryEffect> effects;
 };
+
+// Pooled-only approximation: one unconditional collision child, no inherited
+// attributes. Dedicated GraphRuntime still rejects authored sub-emitters.
+inline GraphGpuEligibility inspectPoolGraphGpuEligibility(const fx::EffectDef& effect,
+        GraphRuntimeOptions options,std::string* child=nullptr) {
+    if(child)child->clear();
+    if(!options.routePoolCollisionChildren||effect.emitters.size()!=1||effect.emitters[0].subEmitters.empty())
+        return inspectGraphGpuEligibility(effect,options);
+    const auto& e=effect.emitters[0];
+    if(e.collision.enabled&&e.subEmitters.size()==1){
+        const auto& sub=e.subEmitters.front();
+        if(sub.on==fx::FxSubEvent::Collision&&sub.chance==1.f&&
+           !sub.inheritColor&&!sub.inheritSize&&!sub.inheritRotation&&!sub.inheritLifetime&&!sub.inheritDuration&&
+           fx::vfxgraph_detail::nameOk(sub.effect)){
+            auto gpu=effect;gpu.emitters[0].subEmitters.clear();
+            options.reportCollisionEvents=true;
+            auto result=inspectGraphGpuEligibility(gpu,options);
+            if(result.eligible&&child)*child=sub.effect;
+            return result;
+        }
+    }
+    return inspectGraphGpuEligibility(effect,options);
+}
 
 struct PoolWorldStats {
     uint32_t gpuGroups = 0, cpuDefinitions = 0;
@@ -143,10 +171,13 @@ struct PoolWorldStats {
     uint64_t pressureHeldFrames=0;
     uint32_t sourceCapacity=0;
     uint64_t selectiveKillRequests=0;
+    uint64_t collisionChildRequests=0,collisionChildrenPlayed=0,collisionChildrenDropped=0;
     uint32_t submittedBursts = 0, rejectedBursts = 0, frameBursts = 0;
     uint32_t cpuDrawCalls = 0, gpuDrawCalls = 0;
     uint32_t cpuParticles = 0, gpuParticlesEstimated = 0;
-    size_t gpuBytes = 0;
+    size_t gpuBytes = 0; // private live groups plus unique shared SDF bytes
+    size_t sharedSdfBytes=0,sharedSdfEntries=0;
+    size_t sharedSdfPayloadBytes=0,sdfAtlasBytes=0,sdfAtlasPages=0;
 };
 
 class GpuPoolWorld final {
@@ -169,6 +200,13 @@ public:
                      const GraphRuntimeOptions& options = {});
     bool defineEffect(const std::string& name,const fx::EffectDef& effect,
                       const GraphRuntimeOptions& options = {});
+    // The registry and immutable provider snapshots are owned by the host.
+    // Bind between frames, after init/recovery. Successful rollback detaches it.
+    bool setDataInterfaceRegistry(const DataInterfaceRegistry* registry) {
+        if(!initialized_ || frameOpen_)return false;
+        dataRegistry_=registry;dataStats_={};return true;
+    }
+    const DataInterfaceSampleStats& dataInterfaceStats() const {return dataStats_;}
     bool setNamedParameter(const std::string& effectName,
                            const std::string& parameterName,float value);
     // Can be changed between frames. Never throttles manually submitted
@@ -262,6 +300,10 @@ public:
     // Enqueue only inside an open Device graphics frame, outside encoders.
     // The callback runs on the RHI owner thread after GPU completion and
     // reports transport completeness (not freshness of a later revision).
+    bool requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback);
+    // After primary view setup, before host CPU update. One-shot visual children only.
+    size_t drainCollisionChildren(fx::ParticleSystem& particles,size_t maxChildren=32);
+    void discardCollisionChildren();
     bool requestGpuCheckpoint(size_t groupIndex,
                               std::function<void(bool)> completion={});
     // Copies an existing CURRENT-revision GPU checkpoint for one pooled
@@ -273,6 +315,7 @@ public:
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget() const {
         return checkpointBudget_;
     }
+    std::shared_ptr<GpuAllocationBudget> allocationBudget() const {return allocationBudget_;}
     const BatchWorld& cpuBatchWorld() const {return cpu_;}
     bool isGpuEffect(const std::string& effectName) const;
 private:
@@ -282,6 +325,7 @@ private:
         bool gpu = false, usesRuntimeParams = false;
         std::array<float,8> defaults{};
         InstanceParameterTable named;
+        DataInterfaceBindings dataBindings;
         uint64_t revision=0;
     };
     struct Source {
@@ -313,11 +357,14 @@ private:
         bool retired=false;
         uint64_t retireToken=0;
         bool live() const {return particles && !retired;}
+        std::string collisionChild{};
+        std::shared_ptr<GpuCollisionBatch> collisionInbox{}; // one completed batch, weak callback lease
     };
     void retireUnusedGroups();
     bool defineCompiled(const std::string& name,const fx::EffectDef& effect,
                         const GraphRuntimeOptions& options,
-                        const InstanceParameterTable& named);
+                        const InstanceParameterTable& named,
+                        const DataInterfaceBindings& dataBindings = {});
     static std::string groupKey(const fx::EffectDef& effect,
                                 const GraphRuntimeOptions& options,
                                 uint32_t capacity);
@@ -330,11 +377,15 @@ private:
     Source* getSource(PoolSourceId source);
     const Source* getSource(PoolSourceId source) const;
 
+    const DataInterfaceRegistry* dataRegistry_=nullptr;
+    DataInterfaceSampleStats dataStats_{};
     gfx::Device* device_ = nullptr;
     BatchWorld cpu_;
     PoolWorldBudgets budgets_{};
     PoolWorldStats stats_{};
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget_;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget_;
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache_;
     std::vector<Group> gpuGroups_;
     PoolResetReport resetReport_{};
     std::vector<uint8_t> resetAccepted_; // per GPU group, retained across retries

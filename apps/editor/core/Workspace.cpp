@@ -227,6 +227,52 @@ Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); reg
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
+    // Discoverable, genre-independent SpectraFX native Studio tools.
+    // Headless MCP hosts retain the schemas but receive an explicit
+    // no-native-viewport error from spectraPreview().
+    registerOp({"fx_asset_check",
+        "Check an indexed model or texture GUID using native Studio CPU decoding; does not verify GPU upload.",
+        Json::parse(R"({"properties":{"guid":{"type":"string"}},"required":["guid"]})"),
+        [this](const Json& p)->Json {return spectraAssetCheck(p);}});
+    registerOp({"fx_replay_prepare",
+        "Prepare a native SpectraFX replay at an exact tick with optional CPU RNG seed, Metal allocation seed or Metal shader seed. Poll fx_replay_status until replayReady.",
+        Json::parse(R"({"properties":{"tick":{"type":"integer","minimum":0,"maximum":3600},"parameters":{"type":"object"},"seed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuAllocationSeed":{"type":"integer","minimum":0,"maximum":2147483647},"gpuShaderSeed":{"type":"integer","minimum":0,"maximum":4294967295}},"required":["tick"]})"),
+        [this](const Json& p)->Json {
+            Json request=p;request.set("action",Json::string("replayPrepare"));
+            return spectraPreview(request);
+        }});
+    registerOp({"fx_checkpoint_file",
+        "Transfer SPFT checkpoint in ordered 32 KiB hex chunks; import runs on render owner.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["checkpointFileBegin","checkpointFileAppend","checkpointFileExport","checkpointFileRead","checkpointFileImport","checkpointFileCancel"]},"offset":{"type":"integer","minimum":0,"maximum":1048600},"chunk":{"type":"string","maxLength":65536},"transferId":{"type":"integer","minimum":1}},"required":["action"]})"),
+        [this](const Json& p)->Json {
+            const auto action=p.getStr("action");
+            if(action!="checkpointFileBegin"&&action!="checkpointFileAppend"&&action!="checkpointFileExport"&&action!="checkpointFileRead"&&action!="checkpointFileImport"&&action!="checkpointFileCancel")throw std::runtime_error("Invalid checkpoint file action");
+            return spectraPreview(p);
+        }});
+    registerOp({"fx_checkpoint_timeline",
+        "Save or restore a paused Metal preview checkpoint; poll fx_replay_status for completion.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["checkpointSave","checkpointRestore","checkpointCancel","status"]},"checkpointId":{"type":"integer","minimum":1}},"required":["action"]})"),
+        [this](const Json& p)->Json {
+            const auto action=p.getStr("action");
+            if(action!="checkpointSave"&&action!="checkpointRestore"&&action!="checkpointCancel"&&action!="status")throw std::runtime_error("Invalid checkpoint action");
+            return spectraPreview(p);
+        }});
+    registerOp({"fx_replay_status",
+        "Read native SpectraFX replay readiness, tick, GPU seed retry state and backend. Requires a running Studio FX viewport.",
+        Json::parse(R"({"properties":{}})"),
+        [this](const Json&)->Json {
+            Json request=Json::object();request.set("action",Json::string("status"));
+            return spectraPreview(request);
+        }});
+    registerOp({"fx_replay_capture",
+        "Queue or poll a bounded native SpectraFX JPEG capture. Use action=capture with requireReplayReady=true; then action=captureStatus. Provenance is request-time, not exact GPU frame completion.",
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["capture","captureStatus","captureCancel"]},"maxSide":{"type":"integer","minimum":64,"maximum":1024},"requireReplayReady":{"type":"boolean"},"captureId":{"type":"integer","minimum":1}},"required":["action"]})"),
+        [this](const Json& p)->Json {
+            const std::string action=p.getStr("action");
+            if(action!="capture"&&action!="captureStatus"&&action!="captureCancel")
+                throw std::runtime_error("fx_replay_capture: invalid action");
+            return spectraPreview(p);
+        }});
 }
 Workspace::~Workspace() { if (buildThread_.joinable()) buildThread_.join(); }
 

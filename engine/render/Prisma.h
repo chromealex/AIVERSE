@@ -305,6 +305,16 @@ public:
     // Negative resumes the steady presentation clock; nonnegative freezes fog advection.
     void setLocalFogTime(double seconds) { fogTime_=seconds; }
     void setLocalFog(LocalFogSettings s) { fogSettings_=s; }
+    // One-shot external world-space scene radiance contribution. The caller
+    // owns all resources and must keep them alive until this frame resolves.
+    // No callback invoked across view/fence changes or configuration.
+    using SceneHdrContributor=std::function<gfx::TextureHandle(gfx::Device&,const PostFrame&,gfx::TextureHandle,gfx::TextureHandle)>;
+    bool setSceneHdrContributor(SceneHdrContributor contributor){
+        if(!dev_||!dev_->gpuSubmissionFence()||!contributor)return false;
+        sceneHdrContributor_=std::move(contributor);sceneHdrFence_=dev_->gpuSubmissionFence();
+        sceneHdrView_=viewId_;return true;
+    }
+    void clearSceneHdrContributor(){sceneHdrContributor_={};sceneHdrFence_=0;sceneHdrView_=0;}
     // heatHaze shockwaves of one view (replaces the previous list; at most 4 are drawn, the
     // strongest first). Empty clears. Only drawn when the view's profile has heatHaze.
     void setShockwaves(uint64_t viewId, std::vector<PrismaShockwave> waves);
@@ -645,6 +655,8 @@ private:
     // metadata may be unavailable. Updated by renderSizeForOutput each frame.
     std::map<uint64_t, std::pair<int,int>> requestedOutputSizes_;
     uint64_t viewId_ = 0;
+    SceneHdrContributor sceneHdrContributor_;
+    uint64_t sceneHdrFence_=0,sceneHdrView_=0;
     std::map<std::string, Lut> luts_;
     std::map<std::string, gfx::TextureHandle> images_;   // lensFlare dirt (invalid = failed)
     gfx::TextureHandle smaaArea_, smaaSearch_;

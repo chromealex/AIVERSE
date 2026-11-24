@@ -1,0 +1,27 @@
+{
+  "emitters": [
+    {
+      "burst": 12,
+      "life": [
+        0.15,
+        0.45
+      ],
+      "speed": [
+        2,
+        6
+      ],
+      "size": [
+        0.05,
+        0.12
+      ],
+      "spread": 100,
+      "gravity": [
+        0,
+        -4,
+        0
+      ],
+      "texture": "builtin:soft",
+      "blend": "additive"
+    }
+  ]
+}

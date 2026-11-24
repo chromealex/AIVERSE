@@ -155,6 +155,19 @@ void authoredEntityWorkflow() {
        for(const auto& row:snap["result"]["scene"]["entities"].items())
            if(row.getStr("id")=="entity:@second")AIVERSE_TEST_CHECK(!row.getBool("visible",true) && row.getBool("locked"));
        AIVERSE_TEST_CHECK(!call("studio.entityFlags",R"({"entityIds":["entity:@second"],"hidden":false})").has("error") && !session.hiddenIds().count("entity:@second"));
+       // The genre-neutral VFX source authoring contract uses the existing
+       // component fields and participates in document undo.
+       AIVERSE_TEST_CHECK(!call("studio.componentAdd",R"({"entityId":"entity:@second","componentId":"SpectraSource"})").has("error"));
+       const auto fxComponent=[&](){return map.data.entities[size_t(map.findEntity("second"))].extra["components"]["SpectraSource"];};
+       AIVERSE_TEST_CHECK(fxComponent().isObject()&&!fxComponent().getBool("enabled"));
+       AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"SpectraSource","key":"scale","value":2})").has("error"));
+       AIVERSE_TEST_CHECK(fxComponent().getInt("revision")==1&&fxComponent()["scale"].toDouble()==2);
+       AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"SpectraSource","key":"effect","value":"../bad"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"SpectraSource","key":"enabled","value":true})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&fxComponent()["scale"].toDouble()==1);
+       AIVERSE_TEST_CHECK(!call("studio.componentRemove",R"({"entityId":"entity:@second","componentId":"SpectraSource"})").has("error"));
+       AIVERSE_TEST_CHECK(!fxComponent().isObject());
+       AIVERSE_TEST_CHECK(call("studio.assetPlace",R"({"asset":"spectrafx:missing","x":5,"z":6})").has("error")&&map.data.entities.size()==before);
        // Asset drop needs a scenery type or a selected entity type; here the selection supplies "tree".
        AIVERSE_TEST_CHECK(!call("studio.select",R"({"id":"entity:@second"})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.assetPlace",R"({"asset":"content/rock.glb","x":5,"z":6})").has("error"));

@@ -1,0 +1,825 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "volume_domain",
+      "type": "VolumeDomain",
+      "position": [
+        40,
+        320
+      ],
+      "properties": {
+        "dimension": 96,
+        "origin": [
+          -6,
+          -2,
+          -8
+        ],
+        "cellSize": 0.16666666666666666,
+        "wind": [
+          2,
+          0.5,
+          0
+        ]
+      }
+    },
+    {
+      "id": "volume_source",
+      "type": "VolumeSource",
+      "position": [
+        270,
+        320
+      ],
+      "properties": {
+        "position": [
+          -4,
+          -1.45,
+          0
+        ],
+        "radius": 0.68,
+        "smoke": 2,
+        "temperature": 12,
+        "fuel": 6,
+        "acceleration": [
+          2,
+          3,
+          0
+        ],
+        "flickerHz": 1.65
+      }
+    },
+    {
+      "id": "volume_smoke",
+      "type": "VolumeSource",
+      "position": [
+        400,
+        390
+      ],
+      "properties": {
+        "position": [
+          -4,
+          -1.45,
+          0
+        ],
+        "radius": 0.84,
+        "smoke": 7,
+        "temperature": 0,
+        "fuel": 0,
+        "acceleration": [
+          8,
+          7,
+          0
+        ],
+        "flickerHz": 0.85,
+        "radialAcceleration": 5
+      }
+    },
+    {
+      "id": "smoke_near",
+      "type": "VolumeSource",
+      "position": [
+        430,
+        470
+      ],
+      "properties": {
+        "position": [
+          -2.9,
+          -0.45,
+          0.43
+        ],
+        "radius": 0.89,
+        "smoke": 2.8,
+        "temperature": 0,
+        "fuel": 0,
+        "acceleration": [
+          4,
+          3.4,
+          3.4
+        ],
+        "radialAcceleration": 2.8,
+        "flickerHz": 0.77
+      }
+    },
+    {
+      "id": "smoke_far",
+      "type": "VolumeSource",
+      "position": [
+        430,
+        580
+      ],
+      "properties": {
+        "position": [
+          -2.9,
+          -0.45,
+          -0.43
+        ],
+        "radius": 0.89,
+        "smoke": 2.8,
+        "temperature": 0,
+        "fuel": 0,
+        "acceleration": [
+          4,
+          3.4,
+          -3.4
+        ],
+        "radialAcceleration": 2.8,
+        "flickerHz": 1.04
+      }
+    },
+    {
+      "id": "volume_advect",
+      "type": "VolumeAdvection",
+      "position": [
+        500,
+        320
+      ],
+      "properties": {
+        "buoyancy": 1.8,
+        "smokeDecay": 0.04,
+        "temperatureDecay": 1.5
+      }
+    },
+    {
+      "id": "volume_burn",
+      "type": "VolumeCombustion",
+      "position": [
+        730,
+        320
+      ],
+      "properties": {
+        "ignition": 0.3,
+        "burnRate": 7,
+        "heatYield": 2,
+        "smokeYield": 1.5
+      }
+    },
+    {
+      "id": "volume_pressure",
+      "type": "VolumePressure",
+      "position": [
+        960,
+        320
+      ],
+      "properties": {
+        "pressureIterations": 12
+      }
+    },
+    {
+      "id": "volume_output",
+      "type": "VolumeOutput",
+      "position": [
+        1190,
+        320
+      ],
+      "properties": {
+        "smokeColor": [
+          0.135,
+          0.13,
+          0.125
+        ],
+        "fireColor": [
+          9,
+          2,
+          0.12
+        ],
+        "extinction": 2.45,
+        "emission": 0.35,
+        "emissionThreshold": 0.7,
+        "smokeDetail": 1,
+        "emberIntensity": 0,
+        "lights": [
+          {
+            "position": [
+              -4,
+              -1.15,
+              0
+            ],
+            "color": [
+              1,
+              0.45,
+              0.1
+            ],
+            "radius": 7,
+            "intensity": 100
+          },
+          {
+            "position": [
+              0.5,
+              4.8,
+              1.7
+            ],
+            "color": [
+              0.78,
+              0.86,
+              1
+            ],
+            "radius": 7,
+            "intensity": 38
+          }
+        ],
+        "smokeDetailVelocity": [
+          1.85,
+          1.15,
+          0.12
+        ]
+      }
+    },
+    {
+      "id": "spawn_smoke",
+      "type": "Spawn",
+      "position": [
+        30,
+        920
+      ],
+      "properties": {
+        "rate": 24,
+        "duration": 4,
+        "loop": true
+      }
+    },
+    {
+      "id": "init_smoke",
+      "type": "Initialize",
+      "position": [
+        280,
+        920
+      ],
+      "properties": {
+        "life": [
+          2.5,
+          3.5
+        ],
+        "speed": [
+          2.6,
+          4.2
+        ],
+        "size": [
+          1.4,
+          2.25
+        ],
+        "direction": [
+          0,
+          0.45,
+          1
+        ],
+        "spread": 32,
+        "shape": "sphere",
+        "radius": 0.38,
+        "offset": [
+          0,
+          -1.28,
+          -3.85
+        ],
+        "drag": 0.08,
+        "rotation": [
+          0,
+          360
+        ],
+        "spin": [
+          -22,
+          22
+        ],
+        "sizeOverLife": [
+          [
+            0,
+            0.45
+          ],
+          [
+            0.45,
+            1.25
+          ],
+          [
+            1,
+            2.1
+          ]
+        ],
+        "color": [
+          [
+            0,
+            "#33271d00"
+          ],
+          [
+            0.18,
+            "#52453766"
+          ],
+          [
+            0.65,
+            "#37322d94"
+          ],
+          [
+            1,
+            "#716e6a00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "out_smoke",
+      "type": "SpriteOutput",
+      "position": [
+        530,
+        920
+      ],
+      "properties": {
+        "texture": "engine/fx/physis/smoke_full_8x8.png",
+        "frames": [
+          8,
+          8
+        ],
+        "fps": 0,
+        "startFrame": [
+          0,
+          20
+        ],
+        "blend": "alpha",
+        "align": "camera"
+      }
+    },
+    {
+      "id": "spawn_embers",
+      "type": "Spawn",
+      "position": [
+        30,
+        1090
+      ],
+      "properties": {
+        "rate": 18,
+        "duration": 4,
+        "loop": true
+      }
+    },
+    {
+      "id": "init_embers",
+      "type": "Initialize",
+      "position": [
+        280,
+        1090
+      ],
+      "properties": {
+        "life": [
+          1.6,
+          2.5
+        ],
+        "speed": [
+          3.3,
+          4.6
+        ],
+        "size": [
+          0.085,
+          0.16
+        ],
+        "direction": [
+          0,
+          0.58,
+          1
+        ],
+        "spread": 13,
+        "shape": "sphere",
+        "radius": 0.16,
+        "offset": [
+          0,
+          -1.45,
+          -4
+        ],
+        "drag": 0.06,
+        "color": [
+          [
+            0,
+            "#fff4c4ff"
+          ],
+          [
+            0.55,
+            "#ffc55bff"
+          ],
+          [
+            0.85,
+            "#ff8833d8"
+          ],
+          [
+            1,
+            "#ff481800"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "drift_embers",
+      "type": "VelocityModule",
+      "position": [
+        440,
+        1090
+      ],
+      "properties": {
+        "space": "world",
+        "x": {
+          "curve": [
+            [
+              0.0,
+              -0.7
+            ],
+            [
+              0.0625,
+              -0.495
+            ],
+            [
+              0.125,
+              -0.0
+            ],
+            [
+              0.1875,
+              0.495
+            ],
+            [
+              0.25,
+              0.7
+            ],
+            [
+              0.3125,
+              0.495
+            ],
+            [
+              0.375,
+              0.0
+            ],
+            [
+              0.4375,
+              -0.495
+            ],
+            [
+              0.5,
+              -0.7
+            ],
+            [
+              0.5625,
+              -0.495
+            ],
+            [
+              0.625,
+              -0.0
+            ],
+            [
+              0.6875,
+              0.495
+            ],
+            [
+              0.75,
+              0.7
+            ],
+            [
+              0.8125,
+              0.495
+            ],
+            [
+              0.875,
+              0.0
+            ],
+            [
+              0.9375,
+              -0.495
+            ],
+            [
+              1.0,
+              -0.7
+            ]
+          ]
+        },
+        "y": {
+          "curve": [
+            [
+              0.0,
+              1.2
+            ],
+            [
+              0.0625,
+              0.849
+            ],
+            [
+              0.125,
+              0.0
+            ],
+            [
+              0.1875,
+              -0.849
+            ],
+            [
+              0.25,
+              -1.2
+            ],
+            [
+              0.3125,
+              -0.849
+            ],
+            [
+              0.375,
+              -0.0
+            ],
+            [
+              0.4375,
+              0.849
+            ],
+            [
+              0.5,
+              1.2
+            ],
+            [
+              0.5625,
+              0.849
+            ],
+            [
+              0.625,
+              0.0
+            ],
+            [
+              0.6875,
+              -0.849
+            ],
+            [
+              0.75,
+              -1.2
+            ],
+            [
+              0.8125,
+              -0.849
+            ],
+            [
+              0.875,
+              -0.0
+            ],
+            [
+              0.9375,
+              0.849
+            ],
+            [
+              1.0,
+              1.2
+            ]
+          ]
+        },
+        "z": {
+          "curve": [
+            [
+              0.0,
+              0.001
+            ],
+            [
+              0.0625,
+              -0.601
+            ],
+            [
+              0.125,
+              -0.85
+            ],
+            [
+              0.1875,
+              -0.602
+            ],
+            [
+              0.25,
+              -0.001
+            ],
+            [
+              0.3125,
+              0.601
+            ],
+            [
+              0.375,
+              0.85
+            ],
+            [
+              0.4375,
+              0.602
+            ],
+            [
+              0.5,
+              0.001
+            ],
+            [
+              0.5625,
+              -0.601
+            ],
+            [
+              0.625,
+              -0.85
+            ],
+            [
+              0.6875,
+              -0.602
+            ],
+            [
+              0.75,
+              -0.001
+            ],
+            [
+              0.8125,
+              0.601
+            ],
+            [
+              0.875,
+              0.85
+            ],
+            [
+              0.9375,
+              0.602
+            ],
+            [
+              1.0,
+              0.001
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "out_embers",
+      "type": "SpriteOutput",
+      "position": [
+        530,
+        1090
+      ],
+      "properties": {
+        "texture": "builtin:spark",
+        "blend": "additive",
+        "align": "velocity"
+      }
+    },
+    {
+      "id": "spawn_tongues",
+      "type": "Spawn",
+      "position": [
+        30,
+        1380
+      ],
+      "properties": {
+        "rate": 55,
+        "duration": 4,
+        "loop": true
+      }
+    },
+    {
+      "id": "init_tongues",
+      "type": "Initialize",
+      "position": [
+        280,
+        1380
+      ],
+      "properties": {
+        "life": [
+          0.75,
+          1.15
+        ],
+        "speed": [
+          1.15,
+          1.8
+        ],
+        "size": [
+          1.05,
+          1.68
+        ],
+        "direction": [
+          0,
+          1,
+          0.38
+        ],
+        "spread": 34,
+        "shape": "sphere",
+        "radius": 0.24,
+        "offset": [
+          0,
+          -1.45,
+          -4
+        ],
+        "drag": 0.45,
+        "aspect": [
+          1.12,
+          1.42
+        ],
+        "color": [
+          [
+            0,
+            "#ffc97600"
+          ],
+          [
+            0.15,
+            "#ffb95ec0"
+          ],
+          [
+            0.5,
+            "#ff782da8"
+          ],
+          [
+            1,
+            "#d3431400"
+          ]
+        ],
+        "sizeOverLife": [
+          [
+            0,
+            0.18
+          ],
+          [
+            0.22,
+            0.52
+          ],
+          [
+            0.58,
+            1
+          ],
+          [
+            1,
+            0.72
+          ]
+        ]
+      }
+    },
+    {
+      "id": "out_tongues",
+      "type": "SpriteOutput",
+      "position": [
+        530,
+        1380
+      ],
+      "properties": {
+        "texture": "engine/fx/physis/flame_tall_full_16x4.png",
+        "frames": [
+          16,
+          4
+        ],
+        "fps": 0,
+        "startFrame": [
+          0,
+          12
+        ],
+        "blend": "alpha",
+        "align": "velocity"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": "volume_domain",
+      "to": "volume_source"
+    },
+    {
+      "from": "volume_smoke",
+      "to": "smoke_near"
+    },
+    {
+      "from": "volume_advect",
+      "to": "volume_burn"
+    },
+    {
+      "from": "volume_burn",
+      "to": "volume_pressure"
+    },
+    {
+      "from": "volume_pressure",
+      "to": "volume_output"
+    },
+    {
+      "from": "spawn_smoke",
+      "to": "init_smoke"
+    },
+    {
+      "from": "init_smoke",
+      "to": "out_smoke"
+    },
+    {
+      "from": "spawn_embers",
+      "to": "init_embers"
+    },
+    {
+      "from": "init_embers",
+      "to": "drift_embers"
+    },
+    {
+      "from": "spawn_tongues",
+      "to": "init_tongues"
+    },
+    {
+      "from": "init_tongues",
+      "to": "out_tongues"
+    },
+    {
+      "from": "volume_source",
+      "to": "volume_smoke"
+    },
+    {
+      "from": "drift_embers",
+      "to": "out_embers"
+    },
+    {
+      "from": "smoke_near",
+      "to": "smoke_far"
+    },
+    {
+      "from": "smoke_far",
+      "to": "volume_advect"
+    }
+  ],
+  "outputs": [
+    "volume_output",
+    "out_smoke",
+    "out_embers",
+    "out_tongues"
+  ]
+}

@@ -178,7 +178,9 @@ export default function App() {
   useEffect(() => {
     void refresh();
     return onNativeEvent((event,payload) => {
-      if (event === 'material.preview') {
+      if(event==='spectrafx.packageStaged'){
+        showPanelEvent('fx_graph');
+      } else if (event === 'material.preview') {
         if (typeof payload === 'object' && payload !== null &&
             'message' in payload && String(payload.message)) {
           showPanelEvent('scene');
