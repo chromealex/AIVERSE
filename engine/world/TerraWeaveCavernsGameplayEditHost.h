@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <set>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -77,6 +78,32 @@ public:
         worker_.invalidate(bounds,copy);
         snapshot_=std::move(copy);
         runtimeEpoch_=snapshot_->sourceRevision;
+    }
+
+    // Full sparse rebuild of the edit-owned native projection. External
+    // streamed owners must first retire their leases via their own barrier.
+    void restoreAuthoredSnapshot(CaveDirtyBounds fallback,
+                                 std::shared_ptr<const CaveVolumeSnapshot> source,
+                                 uint32_t resolution,int32_t spacingCm,size_t budget) {
+        if(!source||!source->sourceRevision||runtimeEpoch_==UINT64_MAX)
+            throw std::invalid_argument("Caverns restore snapshot");
+        auto keys=geometry_.catalog().committedKeys();
+        for(const auto& key:keys)
+            if(!physics_.contains(key))
+                throw std::logic_error("Caverns external stream lease requires explicit restore");
+        for(const auto& key:worker_.dirtyKeys())keys.insert(key);
+        if(keys.empty())
+            for(const auto& key:dirtyCaveChunks(fallback,resolution,spacingCm,budget))
+                keys.insert(key);
+        if(keys.size()>budget)throw std::length_error("Caverns restore resident budget");
+        auto copy=std::make_shared<CaveVolumeSnapshot>(*source);
+        canonicalizeCaveSnapshot(*copy);
+        const auto next=std::max(runtimeEpoch_,copy->sourceRevision);
+        if(next==UINT64_MAX)throw std::overflow_error("Caverns restore epoch");
+        copy->sourceRevision=next+1;
+        cancelPending();
+        worker_.invalidateKeys(keys,copy);
+        snapshot_=std::move(copy);runtimeEpoch_=snapshot_->sourceRevision;
     }
 
     bool consumeAuthoringOperation(const Json& result,
