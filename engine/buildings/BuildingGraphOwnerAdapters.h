@@ -4,6 +4,7 @@
 // Register only after authoritative gameplay/physics state is committed.
 #include "engine/buildings/BuildingGraphChanges.h"
 #include "engine/game/MapGrid.h"
+#include "engine/data/Json.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -21,6 +22,27 @@ namespace aiverse::building {
 // flags/blocked/etc MUST have been changed by the owning game system
 // first. Building geometry is not silently projected into a 2D map.
 struct BuildingGridGraphAdapter {
+    // Host opts into grid.setPathTelemetryEnabled(true). These are cumulative
+    // grid-wide counters, not a claim that one building caused all work.
+    static Json telemetry(const game::MapGrid& grid){
+        const auto& t=grid.pathTelemetry();
+        Json out=Json::object();
+        auto work=[](const game::MapPathWorkCounter& c){
+            Json j=Json::object();
+            j.set("calls",Json::string(std::to_string(c.calls)));
+            j.set("items",Json::string(std::to_string(c.items)));
+            j.set("lastNs",Json::string(std::to_string(c.lastNs)));
+            j.set("totalNs",Json::string(std::to_string(c.totalNs)));return j;
+        };
+        out.set("scope",Json::string("grid-wide cumulative"));
+        out.set("cellInvalidations",Json::string(std::to_string(t.cellInvalidations)));
+        out.set("dirtyFlatHpaClusters",Json::number(int64_t(grid.dirtyFlatHpaClusters())));
+        out.set("cachedFlowFields",Json::number(int64_t(grid.flowCount())));
+        out.set("flatHpa",work(t.flatHpa));
+        out.set("fullFlowFields",work(t.flowFull));
+        out.set("flowClusterBlocks",work(t.flowCluster));
+        return out;
+    }
     using CommittedProjection=std::function<bool(const BuildingGraphChange&)>;
     static BuildingGraphChangeRouter::Consumer consumer(
         game::MapGrid& grid,CommittedProjection committed,
@@ -102,7 +124,9 @@ public:
         }
         rooms_=std::move(roomIndex);edges_=std::move(edges);
         adjacent_=std::move(adjacent);allowed_=std::move(allowed);
-        revision_=1;
+        revision_=1;changedRooms_=0;activeEdges_=0;
+        for(const auto& row:adjacent_)activeEdges_+=row.size();
+        activeEdges_/=2;
         if(error)error->clear();
         return true;
     }
@@ -119,6 +143,9 @@ public:
             std::sort(v.begin(),v.end());
             v.erase(std::unique(v.begin(),v.end()),v.end());
         }
+        changedRooms_=0;activeEdges_=0;
+        for(size_t i=0;i<next.size();++i){if(next[i]!=adjacent_[i])++changedRooms_;activeEdges_+=next[i].size();}
+        activeEdges_/=2;
         adjacent_=std::move(next);
         revision_=change.revision;
         return true;
@@ -145,6 +172,15 @@ public:
     }
     uint64_t revision()const noexcept{return revision_;}
     size_t roomCount()const noexcept{return rooms_.size();}
+    Json telemetry()const{
+        Json out=Json::object();
+        out.set("revision",Json::string(std::to_string(revision_)));
+        out.set("roomCount",Json::number(int64_t(rooms_.size())));
+        out.set("authoredConnections",Json::number(int64_t(edges_.size())));
+        out.set("activeUniqueRoomPairs",Json::number(int64_t(activeEdges_)));
+        out.set("changedRoomAdjacency",Json::number(int64_t(changedRooms_)));
+        return out;
+    }
 private:
     struct Edge{
         size_t from=0,to=0;
@@ -155,6 +191,7 @@ private:
     std::vector<std::vector<size_t>> adjacent_;
     CanTraverse allowed_;
     uint64_t revision_=0;
+    size_t changedRooms_=0,activeEdges_=0;
 };
 
 } // namespace aiverse::building
