@@ -57,6 +57,50 @@ int64_t perkId(Simulation& sim, const char* key) { for (auto& [id, d] : prog(sim
 int countUnits(Simulation& sim, const char* type, uint8_t owner) { return countType(sim, type, owner); }
 } // namespace
 
+TEST(progression_critical_hit_and_paid_bounty_metadata) {
+    std::string rules = kProgRules;
+    const std::string gold = R"("gold": {"start": 0})";
+    rules.replace(rules.find(gold), gold.size(), R"("gold": {"start": 7, "capped": true, "storage": 10}, "wood": {"start": 0})");
+    rules.replace(rules.find(R"(      {"id": 10, "key": "magnet")"), 0,
+        R"(      {"id": 11, "key": "guaranteed_crit", "effects": [{"stat": "critChance", "op": "add", "value": 1000}]},
+)");
+    const std::string mob = R"("mob": {"health": {"max": 10})";
+    rules.replace(rules.find(mob), mob.size(), R"("mob": {"bounty": {"gold": 25, "wood": 5}, "health": {"max": 10})");
+    auto sim = makeSimJson(rules, progMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"tank","owner":2,"pos":[24.5,8.5]},{"type":"mob","owner":2,"pos":[26.5,8.5]})"));
+    auto& m = mod(*sim);
+    const Entity hero = prog(*sim).heroOf(*sim,1), tank = findType(*sim,"tank",2), victim = findType(*sim,"mob",2);
+    CHECK(hero.valid() && tank.valid() && victim.valid());
+    m.dealDamage(*sim,tank,5_fx,game::kDamagePure,hero,1);
+    CHECK(sim->events().back().type == game::kEvHit);
+    CHECK(!(sim->events().back().flags & game::kHitCritical));
+    CHECK(prog(*sim).grantPerk(*sim,1,perkId(*sim,"guaranteed_crit"),-1));
+    const Fixed hp=sim->world().get<game::Unit>(tank).hp;
+    m.dealDamage(*sim,tank,5_fx,game::kDamagePure,hero,1);
+    CHECK(sim->events().back().type == game::kEvHit);
+    CHECK(sim->events().back().flags & game::kHitCritical);
+    CHECK(sim->events().back().value == (10_fx).raw);
+    CHECK(sim->world().get<game::Unit>(tank).hp == hp-10_fx);
+    m.dealDamage(*sim,victim,20_fx,game::kDamagePure,hero,1);
+    const uint64_t key=victim.packed();
+    sim->step();
+    const int goldId=m.rules().findResource("gold"), woodId=m.rules().findResource("wood");
+    CHECK(goldId>=0 && woodId>=0);
+    Fixed goldPaid{},woodPaid{}; int deaths=0,rewards=0;
+    for(const auto& e:sim->events()) if(e.subjectKey==key) {
+        if(e.type==game::kEvDied) { ++deaths; CHECK(e.value==m.rules().findType("mob")); }
+        if(e.type==game::kEvBounty) {
+            ++rewards; CHECK(e.player==1 && e.subjectOwner==2);
+            if(e.resource==goldId)goldPaid+=Fixed::fromRaw(e.value);
+            if(e.resource==woodId)woodPaid+=Fixed::fromRaw(e.value);
+        }
+    }
+    CHECK(deaths==1 && rewards==2 && goldPaid==3_fx && woodPaid==5_fx);
+    CHECK(m.state(*sim).players[1].stock[goldId]==10_fx);
+    CHECK(m.state(*sim).players[1].stock[woodId]==5_fx);
+    sim->step();
+    for(const auto& e:sim->events()) CHECK(e.type!=game::kEvBounty || e.subjectKey!=key);
+}
+
 TEST(progression_rules_parse_and_errors) {
     auto sim = makeSimJson(kProgRules, progMap(""));
     const auto& R = prog(*sim).rules();
