@@ -90,9 +90,9 @@ public:
         hooks.navigationInputs=canonicalCavePlanetNavigationInputs(surface,policyRevision,costs);
         if(!publication_.bind(hooks)||!hooks.valid())
             throw std::invalid_argument("Caverns native host binding");
+        notice_.attach(sim);
         runtime_=std::make_unique<CavePlanetRuntimeFrame>(device,view,box,spatial,colliders,
             std::move(surface),std::move(hooks),demand,workers);
-        notice_.attach(sim);
     }
     CavePlanetNativeHost(const CavePlanetNativeHost&)=delete;
     CavePlanetNativeHost& operator=(const CavePlanetNativeHost&)=delete;
@@ -102,15 +102,17 @@ public:
     CavePlanetRuntimeProgress beforeFrame(const World& world,render::Renderer3D& renderer,
             std::span<const CavePlanetObserver> observers,const std::set<uint64_t>& pins,
             size_t jobs=2){
+        const bool wasCoherent=frameCoherent_;
         frameCoherent_=false;
-        renderer.clearDynamicGiOverlay();
         CavePlanetRuntimeProgress result;
         if(closed_||!exclusive_()){
             result.phase=CavePlanetRuntimePhase::Refused;
             result.diagnostic="Caverns native host requires exclusive readers";
             return result;
         }
-        if(notice_.consume())runtime_->invalidateAfterRestore();
+        renderer.clearDynamicGiOverlay();
+        const bool restored=notice_.consume();
+        if(restored)runtime_->invalidateAfterRestore();
         if(runtime_->recoveryRequired()){
             result.phase=CavePlanetRuntimePhase::Recovery;
             result.diagnostic="Caverns native cohort quarantined";
@@ -121,6 +123,11 @@ public:
         if(!target_.ready()||!giReady_()||!scene_.current()||scene_.hasPendingChanges()){
             result.phase=CavePlanetRuntimePhase::WaitingCoverage;
             result.pinsReady=runtime_->requiredRegionsReady(world,pins);
+            // A busy fence alone does not invalidate an unchanged published
+            // cohort. The actual bridge still decides if its atlas can bind.
+            frameCoherent_=wasCoherent&&!restored&&!notice_.pending()&&
+                result.pinsReady&&runtime_->committedCohortsCurrent(world)&&
+                scene_.current()&&!scene_.hasPendingChanges()&&target_.ready();
             result.diagnostic="Caverns waiting for shared GI owner/fence";
             return result;
         }
@@ -166,9 +173,10 @@ public:
     // The host stops readers and submissions first. Failed shutdown retains
     // the owner, its leases and the recovery state; never drop live handles.
     bool shutdown(render::Renderer3D& renderer){
-        renderer.clearDynamicGiOverlay();frameCoherent_=false;
         if(closed_)return true;
-        if(!exclusive_()||!runtime_->shutdown())return false;
+        if(!exclusive_())return false;
+        renderer.clearDynamicGiOverlay();frameCoherent_=false;
+        if(!runtime_->shutdown())return false;
         if(publication_.activeBodies()||publication_.staged())return false;
         closed_=true;return true;
     }

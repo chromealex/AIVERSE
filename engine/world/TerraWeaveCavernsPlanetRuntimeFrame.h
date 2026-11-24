@@ -176,6 +176,18 @@ public:
     }
     // The host MUST use this readiness in its actual movement/admission gate;
     // render visibility is not permission to move through a cave.
+    // Existing committed cohorts may remain presentable while a GPU
+    // fence delays a new publication. Restore or changed SDF invalidates
+    // this proof even if the old native geometry still exists.
+    bool committedCohortsCurrent(const World& ecs)const{
+        if(closed_||recoveryRequired())return false;
+        for(const auto& [body,cohort]:cohorts_){
+            (void)body;
+            if(!cohort.active)continue;
+            for(auto id:cohort.ids)if(!regionReady(ecs,id))return false;
+        }
+        return true;
+    }
     bool requiredRegionsReady(const World& ecs,const std::set<uint64_t>& required)const{
         if(closed_||recoveryRequired())return false;
         for(auto id:required)if(!regionReady(ecs,id))return false;

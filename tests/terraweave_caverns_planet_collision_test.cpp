@@ -3,6 +3,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
 #include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
 #include "engine/world/TerraWeaveCavernsPlanetGiPublication.h"
+#include "engine/world/TerraWeaveCavernsPlanetNativeHost.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -159,6 +160,12 @@ static void checkGiPublication(){
     check(scene.current()->findChunk(99)==unrelated&&target.snapshot==scene.currentShared(),"GI shared owner identity");
 }
 int main(){
+    CavePlanetRestoreNotice notice;
+    check(!notice.pending()&&!notice.consume(),"initial restore notice");
+    notice.mark();notice.mark();
+    check(notice.pending()&&notice.consume()&&!notice.pending(),"coalesced native restore notice");
+    static_assert(!std::is_copy_constructible_v<CavePlanetCpuNativeHost>);
+    static_assert(!std::is_copy_constructible_v<CavePlanetGpuNativeHost>);
     checkGiPublication();
     checkDrive();
     checkOrientedMotor();
