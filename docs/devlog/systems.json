@@ -1774,10 +1774,10 @@
           "textEn": "Certified procedural image slots can be reused after GPU retirement. Append-only remains the default; isolated tests passed."
         },
         {
-          "name": "Texture Graph GPU — Stage 38L (в работе)",
-          "text": "GPU-профилирование отдельных вычислительных групп.",
-          "nameEn": "Texture Graph GPU — Stage 38L (in progress)",
-          "textEn": "GPU profiling of individual compute regions."
+          "name": "Texture Graph GPU — Stage 38L",
+          "text": "Добавлены опциональные замеры отдельных вычислительных групп с идентификаторами узлов. Изолированные тесты пройдены; аппаратные замеры ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38L",
+          "textEn": "Optional per-compute-region timings with authored node IDs. Isolated tests passed; hardware measurements pending."
         }
       ],
       "enables": [
