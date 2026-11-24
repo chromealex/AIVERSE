@@ -38,6 +38,14 @@ struct BuildingGridGraphAdapter {
         out.set("cellInvalidations",Json::string(std::to_string(t.cellInvalidations)));
         out.set("dirtyFlatHpaClusters",Json::number(int64_t(grid.dirtyFlatHpaClusters())));
         out.set("cachedFlowFields",Json::number(int64_t(grid.flowCount())));
+        Json cells=Json::array(),clusters=Json::array();
+        for(int id:t.recentCellIds)cells.push(Json::number(int64_t(id)));
+        for(int id:t.lastHpaClusterIds)clusters.push(Json::number(int64_t(id)));
+        out.set("recentCellIds",std::move(cells));
+        out.set("lastHpaClusterIds",std::move(clusters));
+        out.set("lastHpaLayer",Json::number(int64_t(t.lastHpaLayer)));
+        out.set("gridWidth",Json::number(int64_t(grid.w)));
+        out.set("gridHeight",Json::number(int64_t(grid.h)));
         out.set("flatHpa",work(t.flatHpa));
         out.set("fullFlowFields",work(t.flowFull));
         out.set("flowClusterBlocks",work(t.flowCluster));
@@ -124,7 +132,7 @@ public:
         }
         rooms_=std::move(roomIndex);edges_=std::move(edges);
         adjacent_=std::move(adjacent);allowed_=std::move(allowed);
-        revision_=1;changedRooms_=0;activeEdges_=0;
+        revision_=1;changedRooms_=0;activeEdges_=0;changedRoomIds_.clear();
         for(const auto& row:adjacent_)activeEdges_+=row.size();
         activeEdges_/=2;
         if(error)error->clear();
@@ -143,7 +151,8 @@ public:
             std::sort(v.begin(),v.end());
             v.erase(std::unique(v.begin(),v.end()),v.end());
         }
-        changedRooms_=0;activeEdges_=0;
+        changedRooms_=0;activeEdges_=0;changedRoomIds_.clear();
+        for(const auto& [id,index]:rooms_)if(next[index]!=adjacent_[index]&&changedRoomIds_.size()<128)changedRoomIds_.push_back(id);
         for(size_t i=0;i<next.size();++i){if(next[i]!=adjacent_[i])++changedRooms_;activeEdges_+=next[i].size();}
         activeEdges_/=2;
         adjacent_=std::move(next);
@@ -179,6 +188,8 @@ public:
         out.set("authoredConnections",Json::number(int64_t(edges_.size())));
         out.set("activeUniqueRoomPairs",Json::number(int64_t(activeEdges_)));
         out.set("changedRoomAdjacency",Json::number(int64_t(changedRooms_)));
+        Json ids=Json::array();for(const auto& id:changedRoomIds_)ids.push(Json::string(id));
+        out.set("changedRoomIds",std::move(ids));
         return out;
     }
 private:
@@ -192,6 +203,7 @@ private:
     CanTraverse allowed_;
     uint64_t revision_=0;
     size_t changedRooms_=0,activeEdges_=0;
+    std::vector<std::string> changedRoomIds_;
 };
 
 } // namespace aiverse::building
