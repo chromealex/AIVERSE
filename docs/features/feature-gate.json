@@ -46,7 +46,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
+      "note": "Stage 10 in progress: enforce Git provenance in manual readiness CLI and test stale reports; native and CI evidence pending.",
       "evidence": []
     },
     "architecture": {
