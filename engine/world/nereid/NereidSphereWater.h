@@ -10,6 +10,7 @@
 #include "engine/core/FixedMath.h"
 #include "engine/data/Json.h"
 #include <stdexcept>
+#include <functional>
 #include <vector>
 #include <string>
 #include <utility>
@@ -128,8 +129,10 @@ inline WaterForceComponent computeSphereWaterForces(const SphereWaterSample& sam
 }
 
 // Read: WaterSphere + WaterProbe. Write: WaterSphereContact only. Place after the probe system.
-inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name) {
-    sim.addSystem(std::move(name), [](Simulation& current) {
+using SphereWaterSampler=std::function<SphereWaterSample(const World&,Vec3,Fixed)>;
+inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name,
+                                         SphereWaterSampler sampler={}) {
+    sim.addSystem(std::move(name), [sampler=std::move(sampler)](Simulation& current) {
         World& world = current.world();
         if (!world.countExisting<WaterSphereContactComponent>()) return;
         auto* contacts = &world.pool<WaterSphereContactComponent>();   // detach the COW pool before writing
@@ -140,7 +143,8 @@ inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name) {
             const auto* probe = read.tryGetConst<WaterProbeComponent>(e);
             auto& contact = contacts->dataAt(i);
             const Fixed seconds = current.dt() * Fixed::fromInt(int64_t(current.tick()));
-            contact.sample = probe ? sampleSphereWater(read, probe->position, seconds) : SphereWaterSample{};
+            contact.sample = probe ? (sampler ? sampler(read,probe->position,seconds) :
+                sampleSphereWater(read, probe->position, seconds)) : SphereWaterSample{};
             contact.sampledTick = current.tick();
         }
     });

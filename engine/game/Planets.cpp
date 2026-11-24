@@ -3,6 +3,7 @@
 // here: every entry point is guarded by GameState::surface.
 #include "Internal.h"
 #include "PlanetSurfaceState.h"
+#include "PlanetTerrainWater.h"
 #include "engine/core/FixedMath.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
@@ -291,7 +292,16 @@ void GameCore::setupWorld(Simulation& sim, const Json& map) {
             nw::registerNereidBuoyancyPersistence(sim);
             nw::registerNereidSphereWaterPersistence(sim);
             nw::addWaterProbeFromTransformSystem(sim, "nereid.sphere.probe");
-            nw::addSphereWaterSamplingSystem(sim, "nereid.sphere.sample");
+            // Heightfield planets sample the live canonical terrain after
+            // each edit/rollback. Non-heightfield and standalone hosts keep
+            // the original shell policy.
+            nw::SphereWaterSampler sampler;
+            if(rules_.terrain.heightfield())sampler=[](const World& read,Vec3 position,Fixed seconds){
+                const auto* state=read.resourceConst<GameState>();
+                return state&&state->surface?samplePlanetTerrainWater(read,*state->surface,position,seconds):
+                    nw::SphereWaterSample{};
+            };
+            nw::addSphereWaterSamplingSystem(sim, "nereid.sphere.sample",std::move(sampler));
             nw::addSphereWaterBuoyancySystem(sim, "nereid.sphere.buoyancy");
             nw::registerNereidInteractionPersistence(sim);
             nw::registerNereidSphereInteractionPersistence(sim);

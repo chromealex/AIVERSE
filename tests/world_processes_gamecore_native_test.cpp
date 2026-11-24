@@ -27,6 +27,7 @@
 #include "aiverselib/world/EvolvePlanetEcologySampling.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
+#include "engine/game/PlanetTerrainWater.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -730,6 +731,36 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetTerrainWater(){
+    namespace nw=aiverse::lib::nereid;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto sea=ecs.create(),other=ecs.create();
+    nw::WaterSphereComponent ocean;ocean.center=game::Surface::anchor(0);
+    ocean.surfaceRadius=Fixed::fromInt(65);ocean.floorRadius=Fixed::fromInt(50);
+    ocean.currentSpeed=Fixed::fromInt(2);
+    ecs.add<nw::WaterSphereComponent>(sea,ocean);
+    ocean.center=game::Surface::anchor(1);ocean.priority=100;
+    ecs.add<nw::WaterSphereComponent>(other,ocean);
+    const auto dir=surface.cellDir(surface.gridCell(0,0,7,7));
+    const auto pos=game::Surface::anchor(0)+dir*Fixed::fromRatio(129,2);
+    const auto water=g::samplePlanetTerrainWater(ecs,surface,pos);
+    AIVERSE_TEST_CHECK(water.found&&water.body==sea&&water.submerged&&water.floorRadius==Fixed::fromInt(64));
+    auto raised=surface;
+    std::fill(raised.corners.begin(),raised.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(32));
+    AIVERSE_TEST_CHECK(!g::samplePlanetTerrainWater(ecs,raised,pos).found);
+    const auto moonPos=game::Surface::anchor(1)+dir*Fixed::fromRatio(129,2);
+    AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,raised,moonPos).body==other);
+    auto lower=surface;
+    std::fill(lower.corners.begin(),lower.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(-16));
+    const auto shore=g::samplePlanetShore(ecs,lower,pos,Fixed{},500,200,100);
+    AIVERSE_TEST_CHECK(shore&&shore->water.body==sea&&shore->forcing.wetContactPermille==1000);
+    AIVERSE_TEST_CHECK(shore->forcing.flow.y==Fixed{}&&nw::shoreFlowSpeedCmPerSec(shore->forcing.flow)>0);
+    const auto dry=g::samplePlanetShore(ecs,raised,pos,Fixed{});
+    AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
+    AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
 }
 static void checkPlanetRootSupport(){
     using namespace terraweave;
@@ -1613,6 +1644,7 @@ int main(){
     checkPlanetCollapseDelivery();
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
+    checkPlanetTerrainWater();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
