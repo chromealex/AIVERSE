@@ -192,3 +192,5 @@ Noise package 0.2.0: include `<aiverselib/algorithms/Noise.h>` and link `AIVERSE
 - Stage 46 (implemented, verification pending): Billow, periodic vector/Jacobian, domain warp and curl; preserve Stage 44/45 samples. See [delivery record](handoffs/algorithms-stage46-delivery.md).
 
 Noise 0.3.0 adds signed Billow, vector samples, domain warp with chain-rule derivatives, and curl in two and three dimensions. All use the same `AIVERSE::lib_noise` target and integer periods, and reject invalid or exceeded bounds. No legacy generation or persistence change. See the skill for precise units and limits.
+
+- Stage 47 (in progress): deterministic Simplex 2D/3D, analytical derivatives, skew-lattice tiling and fractal composition. See [delivery plan](handoffs/algorithms-stage47-delivery.md).
