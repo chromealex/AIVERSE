@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,StudioSection,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import {BuildingInspectionImport} from './BuildingStructureGraphView';
 import StrataAnalysisPanel from './StrataAnalysisPanel';
 import GraphDiagnostics from './GraphDiagnostics';
 import {AnimationConditions,AnimationParameters} from './AnimationConditions';
@@ -19,6 +20,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
  const [selection,setSelection]=useState<string[]>([]),[pending,setPending]=useState<PortRef|null>(null);
  const [positions,setPositions]=useState<Record<string,Positioned>>({}),[json,setJson]=useState('');
  const [modifierKind,setModifierKind]=useState('transform');
+ const [showBuilding,setShowBuilding]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const history=useRef<DraftHistory<GraphObject>|null>(null),epoch=useRef(0),lock=useRef(false);
  const dirty=!!draft&&!!original&&JSON.stringify(draft)!==JSON.stringify(original);
@@ -86,6 +88,9 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
  });
  const move=(p:Positioned[])=>setPositions(old=>({...old,...Object.fromEntries(p.map(n=>[mode+':'+n.id,n]))}));
  return <StudioPanel title="Model source graph" flush>
+  <div className="au-row"><StudioButton size="sm" onClick={()=>setShowBuilding(v=>!v)}>{showBuilding?'Hide building inspection':'Inspect building report'}</StudioButton></div>
+  {showBuilding&&<BuildingInspectionImport key={projectPath}/>}
+
   {!projectPath||!nativeConnected()?<StudioEmptyState title="Open a native project"/>:<>
   <div className="au-row" style={{flexWrap:'wrap'}}>
    <StudioSelect aria-label="Model asset" value={name} disabled={busy||dirty} onChange={e=>open(e.target.value)}><option value="">Choose model</option>{names.map(n=><option key={n} value={n}>{n}</option>)}</StudioSelect>

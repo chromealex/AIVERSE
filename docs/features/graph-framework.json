@@ -111,7 +111,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35A in progress: read-only native building recipe/inspection graph adapter; owner PR #114 remains separate.",
+      "note": "Stage 35A read-only Building Graph owner DTO projection and imported report inspector implemented; live BuildingGeneratorPanel wiring pending owner PR #114 integration.",
       "evidence": []
     },
     "architecture": {
@@ -181,7 +181,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 34D exact-source standalone C++20 mock dispatch adapter PASS on GCC 14.2 and Clang 17 (-Wall -Wextra -Werror); integrated synthetic owner fixture authored, NOT RUN; hardware/Studio/MCP/merged-tree gate NOT RUN.",
+      "note": "Stage 35A isolated Node 22.16.0 adapter tests 4/4 PASS; TypeScript 5.8.3 strict pure adapter check PASS. Exact tested source blobs confirmed; full Studio build, native Building Generator integration and GPU gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
