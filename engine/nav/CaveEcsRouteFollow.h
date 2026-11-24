@@ -7,6 +7,7 @@
 #include "engine/core/ECS.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/world/TerraWeaveCavernsNavigationData.h"
+#include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -47,6 +48,27 @@ inline void setCaveTransformCm(Transform& transform,
         Fixed::fromRatio(p.x,100),
         Fixed::fromRatio(p.y,100),
         Fixed::fromRatio(p.z,100)};
+}
+// Routes enter the canonical ECS component on the owning game tick, not
+// into a per-genre actor list. The component must be serialized/hashed by
+// the host's deterministic state schema for rollback/save games.
+inline bool assignCaveRoute(World& world,Entity entity,
+    const terraweave::caverns::CavePathResult& path,
+    terraweave::caverns::CaveAgentProfile profile,
+    uint32_t speedCmPerTick) {
+    if(!world.alive(entity)||!path.reached||!path.sourceRevision||
+       path.waypoints.empty()||!speedCmPerTick||speedCmPerTick>10000)
+        return false;
+    terraweave::caverns::CaveNavigationDataProvider::validateProfile(profile);
+    CaveRouteFollower next;
+    next.waypoints=path.waypoints;
+    next.agent=profile;
+    next.sourceRevision=path.sourceRevision;
+    next.speedCmPerTick=speedCmPerTick;
+    if(world.has<CaveRouteFollower>(entity))
+        world.get<CaveRouteFollower>(entity)=std::move(next);
+    else world.add<CaveRouteFollower>(entity,std::move(next));
+    return true;
 }
 // Call from the ACTUAL authoritative ECS game tick with a published SDF
 // provider and a collision callback from the same committed physics epoch.
