@@ -120,7 +120,7 @@ private:
     int fd_=-1;
 #endif
 };
-inline fs::path safeTarget(const fs::path& root,const std::string& relative){
+inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool allowCreation=false){
     const fs::path rel(relative);
     if(relative.empty()||relative.size()>2048||rel.is_absolute()||rel.has_root_name()||
        relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos)
@@ -131,6 +131,11 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative){
     const auto trashRest=relative.starts_with(trashPrefix)?relative.substr(trashPrefix.size()):std::string{};
     const bool trashMeta=trashRest.size()==24+11&&trashRest.substr(24)=="/asset.meta"&&
         trashRest.substr(0,24).find_first_not_of("0123456789abcdef")==std::string::npos;
+    if(allowCreation){
+        const auto ext=rel.extension().string();
+        if(!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat"))
+            throw std::runtime_error("Unsupported new save output");
+    }
     fs::path p=root;
     for(const auto& segment:rel){
         const auto name=segment.string();
@@ -140,6 +145,11 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative){
             throw std::runtime_error("Unsafe project document journal segment");
         p/=segment;
         if(fs::is_symlink(fs::symlink_status(p)))throw std::runtime_error("Symlink in project document journal target");
+    }
+    if(allowCreation&&!journalExists(p)){
+        if(!fs::is_directory(fs::symlink_status(p.parent_path()))||fs::canonical(p.parent_path())!=p.parent_path())
+            throw std::runtime_error("Unsafe new save output parent");
+        return p;
     }
     if(!fs::is_regular_file(fs::symlink_status(p))||fs::canonical(p)!=p)
         throw std::runtime_error("Invalid project document journal target: "+p.string());
@@ -163,19 +173,23 @@ public:
         Json rows=Json::array();
         for(const auto& edit:edits){
             if(!edit.tailDigest.empty()||edit.tailBytes)throw std::runtime_error("Streaming resource requires Studio move journal");
-            if(!fs::is_regular_file(fs::symlink_status(edit.path)))throw std::runtime_error("Invalid project document source");
-            const auto relative=fs::canonical(edit.path).lexically_relative(root_).generic_string();
-            const auto target=safeTarget(root_,relative);
-            if(!paths.insert(target).second||readProjectFileBytes(target)!=edit.before)
+            const auto absolute=fs::absolute(edit.path).lexically_normal();
+            const auto relative=absolute.lexically_relative(root_).generic_string();
+            const auto target=safeTarget(root_,relative,edit.createOnly);
+            if(!paths.insert(target).second||
+               (edit.createOnly?(journalExists(target)||!edit.before.empty()):readProjectFileBytes(target)!=edit.before))
                 throw std::runtime_error("Project document changed or duplicated: "+target.string());
             for(const auto size:{edit.before.size(),edit.after.size()}){
                 if(size>MaxBytes-bytes)throw std::runtime_error("Project document journal size limit");
                 bytes+=size;
             }
-            changed=changed||edit.before!=edit.after;
+            changed=changed||edit.createOnly||edit.before!=edit.after;
             Json row=Json::object();row.set("path",Json::string(relative));
             row.set("beforeHash",Json::string(digest(edit.before)));row.set("afterHash",Json::string(digest(edit.after)));
-            row.set("permissions",Json::number(int64_t(fs::status(target).permissions()&fs::perms::mask)));
+            const auto permission=edit.createOnly?(fs::perms::owner_read|fs::perms::owner_write):
+                (fs::status(target).permissions()&fs::perms::mask);
+            row.set("permissions",Json::number(int64_t(permission)));
+            row.set("createOnly",Json::fromBool(edit.createOnly));
             rows.push(std::move(row));
         }
         if(!changed)return false;
@@ -184,7 +198,7 @@ public:
             for(size_t i=0;i<edits.size();++i){
                 write(slot(i,"before"),edits[i].before);write(slot(i,"after"),edits[i].after);
             }
-            Json state=Json::object();state.set("version",Json::number(int64_t(1)));state.set("files",std::move(rows));
+            Json state=Json::object();state.set("version",Json::number(int64_t(2)));state.set("files",std::move(rows));
             write(folder_/"manifest.tmp",state.dump(2)+"\n");
             replace(folder_/"manifest.tmp",folder_/"pending.json");
             sync(folder_);sync(cache_);sync(root_);
@@ -198,20 +212,20 @@ public:
     void publish(size_t i){
         if(!prepared_) {
             prepared_=load();
-            for(const auto& s:*prepared_)if(readProjectFileBytes(s.path)!=s.before)
+            for(const auto& s:*prepared_)if(!matchesBefore(s))
                 throw std::runtime_error("Project document dependency changed before publication: "+s.path.string());
         }
         const auto& steps=*prepared_;
         if(i>=steps.size())throw std::runtime_error("Invalid project journal publication index");
         const auto& s=steps[i];
         validateTarget(s);
-        if(readProjectFileBytes(s.path)!=s.before)throw std::runtime_error("Project document changed before publication: "+s.path.string());
-        if(s.before!=s.after)put(s,s.after);
+        if(!matchesBefore(s))throw std::runtime_error("Project document changed before publication: "+s.path.string());
+        if(s.createOnly||s.before!=s.after)put(s,s.after);
     }
     void commit(){
         namespace fs=std::filesystem;using namespace project_file_detail;
         const auto steps=load(); // independently verify the durable snapshots
-        for(const auto& s:steps){validateTarget(s);if(readProjectFileBytes(s.path)!=s.after)
+        for(const auto& s:steps){validateTarget(s);if(!matchesAfter(s))
             throw std::runtime_error("Project document changed before commit: "+s.path.string());}
         replace(folder_/"pending.json",folder_/"committed.json");
         // Committed marker is durable on supported POSIX filesystems.
@@ -232,24 +246,27 @@ public:
         // Preflight the complete transaction before restoring even one file.
         for(const auto& s:steps){
             validateTarget(s);
-            const auto current=readProjectFileBytes(s.path);
-            if(current!=s.before&&current!=s.after)
+            const bool before=matchesBefore(s);
+            if(!before&&!matchesAfter(s))
                 throw std::runtime_error("Project recovery conflict; retained journal: "+s.path.string());
-            changed.push_back(current!=s.before);
+            changed.push_back(!before);
         }
         for(size_t i=steps.size();i>0;--i)if(changed[i-1]){
             const auto& s=steps[i-1];
-            if(readProjectFileBytes(s.path)!=s.after)throw std::runtime_error("Project recovery changed during rollback");
-            put(s,s.before);
+            if(!matchesAfter(s))throw std::runtime_error("Project recovery changed during rollback");
+            if(s.createOnly){
+                if(!fs::remove(s.path))throw std::runtime_error("Cannot remove created save output");
+                sync(s.path.parent_path());
+            }else put(s,s.before);
         }
-        for(const auto& s:steps)if(readProjectFileBytes(s.path)!=s.before)
+        for(const auto& s:steps)if(!matchesBefore(s))
             throw std::runtime_error("Project recovery baseline changed");
         // Retire the pending marker only after all original bytes are restored.
         replace(folder_/"pending.json",folder_/"rolledback.json");
         cleanup();return true;
     }
 private:
-    struct Step {std::filesystem::path path;std::string before,after;std::filesystem::perms permissions;};
+    struct Step {std::filesystem::path path;std::string before,after;std::filesystem::perms permissions;bool createOnly=false;};
     static std::filesystem::path lockPath(const std::filesystem::path& cache){
         project_file_detail::directory(cache);return cache/"project-document.lock";
     }
@@ -261,12 +278,15 @@ private:
            !fs::is_regular_file(fs::symlink_status(manifest))||fs::file_size(manifest)>16u*1024u*1024u)
             throw std::runtime_error("Invalid pending project document journal");
         const auto state=Json::parse(readProjectFileBytes(manifest));
-        if(state.getInt("version")!=1||!state["files"].isArray()||!state["files"].size()||state["files"].size()>MaxFiles)
+        const auto version=state.getInt("version");
+        if((version!=1&&version!=2)||!state["files"].isArray()||!state["files"].size()||state["files"].size()>MaxFiles)
             throw std::runtime_error("Invalid project document journal manifest");
         std::set<fs::path> paths;std::vector<Step> steps;size_t bytes=0;
         for(const auto& row:state["files"].items()){
             if(!row.isObject()||!row["path"].isString())throw std::runtime_error("Invalid project journal entry");
-            const auto target=safeTarget(root_,row.getStr("path"));
+            if(version==2&&!row["createOnly"].isBool())throw std::runtime_error("Invalid creation marker");
+            const bool createOnly=version==2&&row.getBool("createOnly");
+            const auto target=safeTarget(root_,row.getStr("path"),createOnly);
             if(!paths.insert(target).second)throw std::runtime_error("Duplicate project recovery target");
             const auto permission=row.getInt("permissions",-1);
             if(permission<0||permission>int64_t(fs::perms::mask))throw std::runtime_error("Invalid project document permissions");
@@ -280,14 +300,24 @@ private:
                 bytes+=text.size();return text;
             };
             auto before=read("before","beforeHash"),after=read("after","afterHash");
-            steps.push_back({target,std::move(before),std::move(after),fs::perms(permission)});
+            if(createOnly&&!before.empty())throw std::runtime_error("Invalid absent-file snapshot");
+            steps.push_back({target,std::move(before),std::move(after),fs::perms(permission),createOnly});
         }
         return steps;
     }
     void validateTarget(const Step& s)const{
-        const auto path=project_file_detail::safeTarget(root_,s.path.lexically_relative(root_).generic_string());
-        if(path!=s.path||(std::filesystem::status(path).permissions()&std::filesystem::perms::mask)!=s.permissions)
+        const auto path=project_file_detail::safeTarget(root_,s.path.lexically_relative(root_).generic_string(),s.createOnly);
+        if(path!=s.path||(project_file_detail::journalExists(path)&&
+           (std::filesystem::status(path).permissions()&std::filesystem::perms::mask)!=s.permissions))
             throw std::runtime_error("Project document path or permissions changed: "+s.path.string());
+    }
+    bool matchesBefore(const Step& s)const{
+        validateTarget(s);
+        return s.createOnly?!project_file_detail::journalExists(s.path):readProjectFileBytes(s.path)==s.before;
+    }
+    bool matchesAfter(const Step& s)const{
+        validateTarget(s);
+        return project_file_detail::journalExists(s.path)&&readProjectFileBytes(s.path)==s.after;
     }
     void put(const Step& s,const std::string& bytes){
         namespace fs=std::filesystem;using namespace project_file_detail;
@@ -302,7 +332,19 @@ private:
 #if !defined(_WIN32)
         sync(staged);
 #endif
-        replace(staged,s.path);
+        if(s.createOnly){
+            // Atomic no-clobber publish. Never replace a file that appeared
+            // after preflight, even if a noncooperating writer created it.
+#if defined(_WIN32)
+            if(!MoveFileExW(staged.c_str(),s.path.c_str(),MOVEFILE_WRITE_THROUGH))
+                throw std::runtime_error("Cannot create save output");
+#else
+            fs::create_hard_link(staged,s.path);
+            sync(s.path.parent_path());
+            fs::remove(staged);
+#endif
+            sync(s.path.parent_path());sync(folder_);
+        }else replace(staged,s.path);
     }
     void cleanup()noexcept{
         std::error_code ec;std::filesystem::remove_all(folder_,ec);
