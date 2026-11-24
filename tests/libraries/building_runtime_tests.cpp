@@ -28,10 +28,10 @@ int main(int argc,char** argv) {
         CHECK(!generator.registerStyleJson(buffer.str(),&error)&&!error.empty());
         CHECK(!generator.registerStyleJson("{oops}",&error)&&!error.empty());
         CHECK(generator.styleCount()==1); // registration failure cannot poison state
-        CHECK(generator.generate({"unknown","factory",3}).error==RuntimeBuildingError::UnknownStyle);
-        CHECK(generator.generate({"scifi","unknown",3}).error==RuntimeBuildingError::UnknownFunction);
-        CHECK(generator.generate({"scifi","factory",3,{10,0,12}}).error==RuntimeBuildingError::InvalidInput);
-        CHECK(generator.generate({"scifi","factory",3,{}, {},4}).error==RuntimeBuildingError::InvalidInput);
+        CHECK(generator.generate({"unknown","factory",3,{}, {},0,false,{}}).error==RuntimeBuildingError::UnknownStyle);
+        CHECK(generator.generate({"scifi","unknown",3,{}, {},0,false,{}}).error==RuntimeBuildingError::UnknownFunction);
+        CHECK(generator.generate({"scifi","factory",3,{10,0,12}, {},0,false,{}}).error==RuntimeBuildingError::InvalidInput);
+        CHECK(generator.generate({"scifi","factory",3,{}, {},4,false,{}}).error==RuntimeBuildingError::InvalidInput);
 
         for(const auto* kind:{"barracks","command","factory","depot"}) {
             for(const uint64_t seed:{3ull,7ull,42ull}) {
