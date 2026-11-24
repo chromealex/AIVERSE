@@ -131,10 +131,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   finally{setBusy(false);}
  };
  const save=async()=>{
-  if(!draft||!selected||busy||!dirty)return;
+  if(!draft||!document||!selected||busy||!dirty)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft});
+   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph});
    setDocument(result);resetDraft(structuredClone(result.graph));
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
