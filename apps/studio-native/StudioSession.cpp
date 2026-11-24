@@ -724,7 +724,9 @@ bool StudioSession::pollAgentLink() {
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         if(name=="open_game"||name=="open_project"||name=="create_game"||name=="create_project")assetHistory_.reset();
         const auto assetProjectBefore=ws_.project.dir;
+        if(!agentBatchOwnerVersion_.empty()&&agentBatchOwnerVersion_!=batchOwnerVersion())agentBatchFenced_=true;
         const Json result=agentLinkedCall(name,args);
+        agentBatchOwnerVersion_=batchOwnerVersion();
         if(assetProjectBefore!=ws_.project.dir){
             // The legacy open route bypasses the Studio journal recovery.
             // Never attach persisted history until native project open.
@@ -1041,12 +1043,16 @@ bool StudioSession::agentCanUndoAll() const{
     for(size_t i=0;i<agentEditIds_.size();++i)if(ws_.map.undoId(agentStartIds_.size()+i)!=agentEditIds_[i])return false;
     return true;
 }
+std::string StudioSession::batchOwnerVersion() const{
+    return historyVersion()+"|"+ws_.project.historyVersion()+"|"+assetHistoryVersion();
+}
 Json StudioSession::agentBatchPreview(bool redo) const{
     Json result=Json::object(),rows=Json::array();
     result.set("direction",str(redo?"redo":"undo"));
     result.set("available",Json::fromBool(false));
     try{
-        if(ws_.project.dir.empty()||stroking_||agentRun_.running()||agentBatchFenced_)
+        if(ws_.project.dir.empty()||stroking_||agentRun_.running()||agentBatchFenced_||
+           agentBatchOwnerVersion_!=batchOwnerVersion())
             throw std::runtime_error("Stop the agent and use a fully tracked conversation");
         std::map<std::string,HistoryBatchOwner> owners;
         auto& map=owners["map"];
@@ -1146,6 +1152,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     }
     pendingAssetTransfer_.reset();agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
     syncHistoryLabels();clearSelection();dropOrdinalFlags();agentHistoryUnsafe_=true;
+    agentBatchOwnerVersion_=batchOwnerVersion();
 }
 Json StudioSession::agentHistoryLink(Json c) const{
     const auto scope=c.getStr("scope"),id=c.getStr("historyId");
@@ -1185,7 +1192,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     else if(method=="studio.agentReset"){
         if(agentRun_.running())throw std::runtime_error("Stop the agent first");
         agentSession_.clear();agentLines_.clear();agentChanges_=Json::array();agentRunStart_=-1;
-        agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;agentBatchFenced_=false;
+        agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;agentBatchFenced_=false;agentBatchOwnerVersion_.clear();
         agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
     } else if(method=="studio.agentStart"){
         const std::string prompt=params.getStr("prompt");
@@ -1197,7 +1204,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         syncHistoryLabels();
         if(agentSession_.empty()||agentRunStart_<0){
             agentRunStart_=int64_t(undoLabels_.size());agentStartIds_.clear();agentEditIds_.clear();
-            agentHistoryProject_=ws_.project.dir;agentHistoryMap_=ws_.map.path;agentHistoryUnsafe_=false;agentBatchFenced_=false;
+            agentHistoryProject_=ws_.project.dir;agentHistoryMap_=ws_.map.path;agentHistoryUnsafe_=false;agentBatchFenced_=false;agentBatchOwnerVersion_=batchOwnerVersion();
             for(size_t i=0;i<ws_.map.undoDepth();++i)agentStartIds_.push_back(ws_.map.undoId(i));
         }
         const fs::path dir=fs::path(ws_.logsDir())/"studio-agent";

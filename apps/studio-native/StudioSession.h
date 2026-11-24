@@ -159,6 +159,8 @@ private:
     std::string agentHistoryProject_,agentHistoryMap_;
     bool agentHistoryUnsafe_=false;
     bool agentBatchFenced_=false;
+    std::string agentBatchOwnerVersion_;
+    std::string batchOwnerVersion() const;
     Json agentBatchPreview(bool redo) const;
     void applyAgentBatch(bool redo,const std::string& expectedToken);
     struct AgentShot { int client; Json id; };

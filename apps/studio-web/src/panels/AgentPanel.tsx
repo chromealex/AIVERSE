@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Square, Wrench, Undo2, Redo2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import type { StudioAgentInfo, StudioAgentChange, StudioSnapshot } from '../types';
-import { StudioIconButton } from '../ui';
+import type { StudioAgentInfo, StudioAgentChange, StudioAgentBatch, StudioSnapshot } from '../types';
+import { StudioIconButton, StudioButton, StudioAlert } from '../ui';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -11,7 +11,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 /**
  * In-editor agent: Claude Code driving this Studio through the aiverse MCP tools. Every map edit it makes is a
- * Owner-native History step when supported. Each action is linked to its own scope; bulk undo is map-only.
+ * Owner-native History step when supported. Reviewed batches coordinate supported map, project and metadata edits.
  */
 export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void }) {
   const projectPath = snapshot?.project.path ?? '';
@@ -21,6 +21,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [navigating,setNavigating]=useState(false);
+  const [batchReview,setBatchReview]=useState<StudioAgentBatch|null>(null);
   const navigation=useRef(false);
   const total = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
@@ -34,7 +35,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     try { apply(await invoke('studio.agentInfo', { from: total.current })); }
     catch (e) { setError(message(e)); }
   }, [apply]);
-  useEffect(() => { total.current = 0; setLines([]); if (projectPath) void poll(); }, [projectPath, poll]);
+  useEffect(() => { total.current = 0; setLines([]);setBatchReview(null); if (projectPath) void poll(); }, [projectPath, poll]);
+  useEffect(()=>{if(batchReview&&((batchReview.direction==='undo'?info?.batchUndo?.token:info?.batchRedo?.token)!==batchReview.token||info?.running))setBatchReview(null);},[info,batchReview]);
   useEffect(() => {
     if (!info?.running) return;
     const t = window.setInterval(() => void poll(), 700);
@@ -71,6 +73,25 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     }catch(e){setError(message(e));void poll();}
     finally{navigation.current=false;setNavigating(false);}
   };
+  const reviewBatch=async(direction:'undo'|'redo')=>{
+    if(navigation.current||info?.running)return;
+    navigation.current=true;setNavigating(true);setError('');
+    try{
+      const review=await invoke('studio.agentBatchPreview',{direction});
+      if(!review.available||!review.token)throw new Error(review.reason||'History batch unavailable');
+      setBatchReview(review);
+    }catch(e){setError(message(e));}
+    finally{navigation.current=false;setNavigating(false);}
+  };
+  const applyBatch=async()=>{
+    if(navigation.current||!batchReview?.token||info?.running)return;
+    navigation.current=true;setNavigating(true);setError('');
+    try{
+      const result=await invoke('studio.agentBatchApply',{direction:batchReview.direction,token:batchReview.token,confirmed:true});
+      setBatchReview(null);commitSnapshot(result);void poll();
+    }catch(e){setBatchReview(null);setError(message(e));void poll();}
+    finally{navigation.current=false;setNavigating(false);}
+  };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
   };
@@ -85,12 +106,22 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
         {info?.cli ? 'Claude Code' : 'claude not found'}</span>
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
+      <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchUndo?.available} title={info?.batchUndo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('undo')}><Undo2 size={13}/>Undo batch</StudioButton>
+      <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchRedo?.available} title={info?.batchRedo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('redo')}><Redo2 size={13}/>Redo batch</StudioButton>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!canUndoAll}
         title="Undo the agent-only map suffix; other scopes must be undone individually" onClick={() => void navigate()}>
         <RotateCcw size={13}/>Undo map run</button>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
     </div>
+    {batchReview&&<div className="agent__batch-review">
+      <StudioAlert tone="warning" title={batchReview.direction==='undo'?'Review batch undo':'Review batch redo'}>
+        {batchReview.steps?.length??0} tracked steps. The file transaction covers saved project documents and importer settings; map changes remain unsaved until you save the map.
+      </StudioAlert>
+      <div className="agent__batch-scopes">{(['map','project','assets'] as const).map(scope=><span key={scope}>{scope}: {batchReview.steps?.filter(s=>s.scope===scope).length??0}</span>)}</div>
+      <div className="agent__batch-actions"><StudioButton size="sm" disabled={navigating} onClick={()=>setBatchReview(null)}>Cancel</StudioButton>
+        <StudioButton size="sm" variant="primary" disabled={navigating||!!info?.running} onClick={()=>void applyBatch()}>Confirm {batchReview.direction}</StudioButton></div>
+    </div>}
     {error && <div className="agent__error" role="alert">{error}</div>}
     {lines.some(l => l.includes('Not logged in')) && !info?.running && <div className="agent__error" role="alert">
       Claude Code is not signed in on this Mac: open Terminal, run <code>claude</code>, type <code>/login</code>, then send again.</div>}
