@@ -85,7 +85,9 @@
     "tests/view/appearance_prepared.cpp",
     "engine/render/graph/TextureGraphPipelineCache.h",
     "tests/render/texture_graph_pipeline_cache.cpp",
-    "CMakeLists.txt"
+    "CMakeLists.txt",
+    "engine/render/graph/TextureGraphSharedScratch.h",
+    "tests/render/texture_graph_shared_scratch.cpp"
   ],
   "traits": {
     "editable": true,
@@ -96,7 +98,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 32A bounded pipeline cache and Studio status implemented; isolated cache policy test executed; integrated native and GPU verification pending.",
+      "note": "Stage 33A in progress: request-local shared scalar GPU scratch for normal and matching scalar outputs; preserve CPU parity and owner retirement.",
       "evidence": []
     },
     "architecture": {
