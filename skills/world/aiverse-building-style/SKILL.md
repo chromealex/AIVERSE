@@ -1590,3 +1590,46 @@ Draft PR #114; its base is currently feature/aiv20261122_building_styles,
 not main. The integrator must reconcile main and then run the full
 platform and GPU acceptance before merging. Handoff:
 docs/agent-handoffs/building-verification-stage23u-2026-11-24.md.
+
+## Stage 23U.1 — rollback and authored physical state hardening
+
+- `libraries/include/aiverselib/systems/BuildingStyle.h` now appends
+  `surfacePattern`/`surfaceSeed` after all legacy StyleMaterial
+  fields. This preserves the meaning of existing C++ positional
+  aggregate material constructors and old style data.
+- `engine/buildings/BuildingApertureOwner.h` maps a validated
+  functional recipe's authored initial `open` fraction 0..1
+  into 0..1000 authoritative `physicalPermille`, while retaining
+  conservative collision and granting passage only at 1000.
+- `engine/buildings/BuildingDualLeafOwner.h` initializes its two
+  independent SpatialWorld colliders at that exact authored physical
+  fraction and permits `attachRestored` from saved revision 0.
+  Revision zero is valid BEFORE the first motion; the fresh
+  BuildingEcsReconcile graph invalidation uses a nonzero revision
+  before restarting authority.
+- `engine/buildings/BuildingAperturePresentation.h` initializes
+  CPU visual interpolation at saved `physicalPermille` rather
+  than binary pose.open, so visually partial apertures are not
+  presented as fully closed on their first frame.
+- `tests/libraries/building_dual_leaf_restore_tests.cpp` now
+  exercises real SpatialWorld paired leaf colliders at 500/1000,
+  restoration at revision zero, one acked movement to 600 and
+  refusal when a sweep obstruction exists, including teardown
+  of both colliders. `.github/workflows/building-style-focused.yml`
+  compiles and executes this test with the real SpatialWorld.cpp.
+- `tests/render/runtime_building_model_compile.cpp` now includes
+  shared BuildingEcsObstruction, BuildingEcsReconcile and
+  BuildingRenderer3DScene headers with compile-time type contracts
+  for their public API, catching missing types and invalid includes
+  in the existing -fsyntax-only focused CI step.
+
+Important: these fixes/tests were committed to the active PR branch,
+but GH runners have remained queued and locally there is NO mounted
+AIVERSE checkout; they have NOT yet completed C++ compilation or GPU
+execution. The real final acceptance gate is successful Building Style
+Focused, HTML5 Studio (TS/Vite + Mac/Windows native), CI, explicit
+PHYSIS+rollback and at least one actual graphics capture. PR #114
+is still Draft and based on feature/aiv20261122_building_styles, not
+main. Do not claim release or merge readiness until the above passes.
+Handoff:
+`docs/agent-handoffs/building-stage23u1-final-hardening-2026-11-24.md`.
