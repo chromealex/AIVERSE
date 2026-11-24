@@ -93,7 +93,10 @@
     "engine/render/graph/TextureGraphPassSchedule.h",
     "tests/render/texture_graph_pass_schedule.cpp",
     "engine/render/graph/TextureGraphGpuSlots.h",
-    "tests/render/texture_graph_gpu_slots.cpp"
+    "tests/render/texture_graph_gpu_slots.cpp",
+    "engine/render/graph/TextureGraphGpuDag.h",
+    "engine/render/graph/TextureGraphGpuNodeAbi.h",
+    "tests/render/texture_graph_gpu_node_abi.cpp"
   ],
   "traits": {
     "editable": true,
@@ -104,7 +107,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34B bounded GPU slot allocation plan implemented in source; separate 34A pass schedule remains owner integration work. No GPU execution or allocation claimed.",
+      "note": "Stage 35A in progress: materialized per-node float4 kernel lowering using shared fused expression compiler, explicit pack kernels and slot plan; runtime dispatch remains separate.",
       "evidence": []
     },
     "architecture": {
