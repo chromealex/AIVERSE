@@ -98,6 +98,21 @@ public:
         }catch(...){physicsBarrier_.requireRecovery();throw;}
         return true;
     }
+    // Automatically select the complete padded volume slot set from the
+    // frozen surface plan. The actual host chooses the lower trim planes
+    // and must enqueue all these keys before calling configure.
+    std::vector<CaveOwnedRimRequest> selectRimSurfaceRequests(const CaveSurfaceGroupPlan& plan,
+            const std::map<uint64_t,Fixed>& lowerPlanes)const{
+        auto snapshot=host_.sourceSnapshot();
+        if(!snapshot)throw std::logic_error("Caverns rim selection requires open world");
+        return selectOwnedRimRequests(plan,*snapshot,lowerPlanes,chunkResolution_,chunkSpacingCm_);
+    }
+    bool configureRimSurfaceGroupAuto(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            const std::map<uint64_t,Fixed>& lowerPlanes,const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+        if(!plan||!exclusive||!exclusive()||closed_||physicsBarrier_.status().recoveryRequired)return false;
+        auto requests=selectRimSurfaceRequests(*plan,lowerPlanes);
+        return configureRimSurfaceGroup(std::move(plan),std::move(requests),exclusive);
+    }
     // Owner keeps the same exclusive world lease across volume staging,
     // surface publication and final downstream acknowledgement.
     bool finishRimSurfacePublication(const std::function<bool(const CaveSurfaceGroupPlan&)>& allOwnersReady,
