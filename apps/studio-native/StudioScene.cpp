@@ -792,12 +792,18 @@ void StudioScene::drawBrushCursor(const Camera& view,int width,int height) {
     const float w=std::max(1.5f,std::min(W,H)*0.002f);
     constexpr int N=48;
     float2 prev{};bool prevOk=false;
-    for(int i=0;i<=N;++i){
-        const float a=float(i)/N*6.2831853f;
-        const float3 p{brushCenter_.x+std::cos(a)*brushRadius_,brushCenter_.y+0.05f,brushCenter_.z+std::sin(a)*brushRadius_};
-        float2 s;const bool ok=view.worldToScreen(p,W,H,s);
-        if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,rgba(120,200,255,220));
-        prev=s;prevOk=ok;
+    const uint32_t ink=brushVolume_&&brushFill_?rgba(255,175,100,220):rgba(120,200,255,220);
+    for(int plane=0;plane<(brushVolume_?3:1);++plane){
+        prevOk=false;
+        for(int i=0;i<=N;++i){
+            const float a=float(i)/N*6.2831853f;
+            const float u=std::cos(a)*brushRadius_,v=std::sin(a)*brushRadius_;
+            const float3 offset=plane==0?float3{u,brushVolume_?0.f:.05f,v}:
+                                plane==1?float3{u,v,0}:float3{0,u,v};
+            float2 s;const bool ok=view.worldToScreen(brushCenter_+offset,W,H,s);
+            if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,ink);
+            prev=s;prevOk=ok;
+        }
     }
     float2 c;
     if(brushVisible_&&view.worldToScreen(brushCenter_,W,H,c)){o.segment(c.x-4,c.y,c.x+4,c.y,w,rgba(120,200,255,220));o.segment(c.x,c.y-4,c.x,c.y+4,w,rgba(120,200,255,220));}
