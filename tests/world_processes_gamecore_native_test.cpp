@@ -2,6 +2,7 @@
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
 #include "aiverselib/world/PlanetProcessGeometry.h"
+#include "aiverselib/world/PlanetFractureDelivery.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
@@ -479,6 +480,28 @@ static void checkPlanetSoilTransfer(){
     ecs=before;
     AIVERSE_TEST_CHECK(ecs.get<Field>(field).mass[8]==80&&ecs.resourceConst<PlanetSoilFixture>()->moon==2000);
 }
+static void checkPlanetCollapseDelivery(){
+    game::Surface surface;game::BodyDef body;
+    body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;const auto member=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(1,4,3,3));
+    ecs.add<Transform>(member,tr);ecs.add<fracture::Member>(member,fracture::Member{false,true,true});
+    const auto key=fracture::collapseEventKey(member,7);
+    ecs.add<fracture::Collapse>(member,fracture::Collapse{key,7,fracture::Delivery::Pending});
+    const fracture::Event event{member,key,7};
+    const auto projected=fracture::projectPlanetCollapse(ecs,surface,event);
+    AIVERSE_TEST_CHECK(projected&&projected->frame.body==1&&projected->frame.origin==tr.pos);
+    AIVERSE_TEST_CHECK(ecs.get<fracture::Collapse>(member).delivery==fracture::Delivery::Pending);
+    AIVERSE_TEST_CHECK(!fracture::projectPlanetCollapse(ecs,surface,{member,key,8}));
+    physis::NatureFractureOutboxComponent nature{};
+    nature.delivery=physis::NatureFractureDelivery::Pending;
+    ecs.add<physis::NatureFractureOutboxComponent>(member,nature);
+    AIVERSE_TEST_CHECK(!fracture::projectPlanetCollapse(ecs,surface,event));
+    ecs.remove<physis::NatureFractureOutboxComponent>(member);
+    AIVERSE_TEST_CHECK(fracture::acknowledge(ecs,event));
+    AIVERSE_TEST_CHECK(!fracture::projectPlanetCollapse(ecs,surface,event));
+}
 static void checkPlanetMorphContactFrame(){
     game::Surface surface;game::BodyDef body;
     body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -846,6 +869,7 @@ int main(){
     checkAetherStratification();
     checkMorphGravity();
     checkPlanetSoilTransfer();
+    checkPlanetCollapseDelivery();
     checkPlanetMorphContactFrame();
     checkPlanetProcessGeometry();
     checkPlanetGranular();
