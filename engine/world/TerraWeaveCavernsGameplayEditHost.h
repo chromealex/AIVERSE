@@ -154,6 +154,8 @@ public:
         rimBarrierClosed_=true;return true;
     }
     bool rimPublicationBlocked()const noexcept{return rimBarrierClosed_;}
+    bool ownsRimChunk(ChunkKey3 key)const noexcept{return activeRimKeys_.contains(key);}
+    const std::set<ChunkKey3,KeyLess>& activeRimKeys()const noexcept{return activeRimKeys_;}
     uint64_t committedRimSurfaceEpoch()const noexcept{return committedRimSurfaceEpoch_;}
     const CaveSurfaceGroupPlan* rimGroup()const noexcept{return rimPlan_.get();}
     // Native volume commit alone is NOT surface/GI/nav readiness. The
@@ -343,7 +345,7 @@ public:
                         stagedMeshes_,shards,physics_,navigation_,*snapshot_,
                         stagedVisualRevision_,rimPlan_.get()});
                 });
-        });
+        },true);
         if(!accepted)return false;
         committedRevision_=stagedRevision_;
         if(rimPlan_){activeRimKeys_.swap(stagedRimKeys_);committedRimSurfaceEpoch_=rimPlan_->surfaceEpoch;}
