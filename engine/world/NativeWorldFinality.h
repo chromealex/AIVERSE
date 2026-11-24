@@ -33,7 +33,7 @@ private:
         std::vector<Record> components;
     };
     static bool sameLedger(const RegionEntityLedger& a,const RegionEntityLedger& b){
-        return a.lastRevision()==b.lastRevision()&&a.records()==b.records();
+        return a.sameState(b);
     }
     static auto key(const Record& r){return std::tie(r.chunk.owner,r.chunk.schema);}
     static bool same(const Record& a,const Record& b){
