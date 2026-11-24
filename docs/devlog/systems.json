@@ -2423,7 +2423,7 @@
           "title": "Транзакции и история редактора",
           "titleEn": "Editor history and transactions",
           "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
-          "textEn": "S6f.3.2: moved-owner repair chains, virtual directional digests and coordinated journal v3; conservative exact-endpoint topology.",
+          "textEn": "S6f.3.3: mixed file history chains with replacement, quarantine and metadata identity tracking; directory and model topology fences retained.",
           "status": "in-progress"
         },
         {
