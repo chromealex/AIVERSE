@@ -21,7 +21,7 @@ struct StudioToolGroup { const char* panel; std::vector<const char*> ops; };
 
 inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
-        {"feature_readiness", {"feature_readiness_get"}},
+        {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
@@ -80,6 +80,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
+    if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
