@@ -646,7 +646,7 @@ public:
         graphMonitor_=std::move(monitor);publishGraphMonitor();
     }
     void publishGraphMonitor()const noexcept{
-        if(!graphMonitor_)return;
+        if(!graphMonitor_||shuttingDown_)return;
         // Diagnostics must not change simulation outcomes on allocation failure.
         try{for(const auto& [id,scene]:scenes_){(void)scene;graphMonitor_->publish(id,graphDiagnosticsSnapshot(id));}}catch(...){}
     }
