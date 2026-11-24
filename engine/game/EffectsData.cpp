@@ -350,6 +350,26 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
         if (e.amountMax < e.amount) fail(w, "amount range must be [min, max]");
     }
     else e.amount = ej.getFx("amount");
+    if (ej.has("weaponDamage")) {
+        if (e.kind != EffectKind::Damage && e.kind != EffectKind::Heal)
+            fail(w, "weaponDamage is only supported for damage or heal");
+        if (ej.has("amount") || ej.has("percent"))
+            fail(w, "weaponDamage cannot be combined with amount or percent");
+        if (!ej["weaponDamage"].isNumber() || ej["weaponDamage"].fx().raw < 0 ||
+            ej["weaponDamage"].fx() > Fixed::fromInt(1000))
+            fail(w, "weaponDamage must be a factor in [0, 1000]");
+        e.useWeaponDamage = true;
+        e.weaponDamage = ej["weaponDamage"].fx();
+        if (ej.has("weaponIndex")) {
+            const auto index = ej.getInt("weaponIndex", -1);
+            if (!ej["weaponIndex"].isNumber() || index < 0 || index > 126 ||
+                ej["weaponIndex"].fx() != Fixed::fromInt(index))
+                fail(w, "weaponIndex must be an integer in [0, 126]");
+            e.weaponIndex = uint16_t(index);
+        }
+    } else if (ej.has("weaponIndex") && (e.kind == EffectKind::Damage || e.kind == EffectKind::Heal)) {
+        fail(w, "weaponIndex requires weaponDamage");
+    }
     if (e.kind == EffectKind::Script) {
         e.scriptFn = ej.getStr("fn");
         if (e.scriptFn.empty()) fail(w, "needs 'fn' (a function of the game's scripts)");
