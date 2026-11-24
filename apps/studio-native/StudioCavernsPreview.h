@@ -71,18 +71,20 @@ public:
             if(!close(device)){error_="Previous Caverns preview retirement refused";return;}
             project_=project;map_=doc.path;planetary_=doc.data.planet();
         }
-        if(doc.data.extra[planetary_?editor::planet_caves::key:"terraweaveCaverns"].isNull()){
+        try{
+        if(planetary_?editor::planet_caves::activeRegionId(doc.data).empty():
+           doc.data.extra["terraweaveCaverns"].isNull()){
             if(owner_&&!close(device))error_="Caverns preview retirement refused";
             return;
         }
-        try{
-            const auto& authored=doc.data.extra[planetary_?editor::planet_caves::key:"terraweaveCaverns"];
+            const auto authored=planetary_?editor::planet_caves::encode(doc.data,editor::planet_caves::read(doc.data)):
+                doc.data.extra["terraweaveCaverns"];
             if(seenDoc_!=&doc||seenRevision_!=doc.revision||!owner_){
-                const auto bytes=authored.dump(-1);
+                const auto bytes=(planetary_?editor::planet_caves::activeRegionId(doc.data):std::string{})+":"+authored.dump(-1);
                 if(bytes!=document_||!owner_){
                     namespace cave=terraweave::caverns;
                     auto region=planetary_?std::optional{editor::planet_caves::read(doc.data)}:std::nullopt;
-                    const auto anchorBytes=region?cave::cavePlanetAnchorToJson(region->anchor).dump(-1):std::string{};
+                    const auto anchorBytes=region?editor::planet_caves::activeRegionId(doc.data)+":"+cave::cavePlanetAnchorToJson(region->anchor).dump(-1):std::string{};
                     if(owner_&&anchorBytes!=chartIdentity_){
                         if(!close(device))throw std::runtime_error("Caverns chart retirement refused");
                     }
