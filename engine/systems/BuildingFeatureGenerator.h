@@ -53,6 +53,13 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
     if(json.has("width"))recipe.width=number(json["width"],path+".width");
     if(json.has("height"))recipe.height=number(json["height"],path+".height");
     if(json.has("depth"))recipe.depth=number(json["depth"],path+".depth");
+    if(json.has("roofRise"))recipe.roofRise=number(json["roofRise"],path+".roofRise");
+    if(json.has("roofProfile")){
+        if(!json["roofProfile"].isString())throw JsonError(path+".roofProfile: expected string");
+        bool found=false;
+        for(int i=0;i<=int(FunctionalRoofProfile::Pagoda);++i){const auto p=FunctionalRoofProfile(i);if(json["roofProfile"].str()==functionalRoofProfileName(p)){recipe.roofProfile=p;found=true;break;}}
+        if(!found)throw JsonError(path+".roofProfile: unknown profile");
+    }
     if(json.has("seed")){
         const auto& value=json["seed"];
         if(!value.isNumber())throw JsonError(path+".seed: expected integer");
@@ -225,6 +232,28 @@ inline bool dressFunctionalWall(buildingStyleDetail::Mesher& mesh,
     return true;
 }
 
+inline bool dressFunctionalRoofCell(buildingStyleDetail::Mesher& mesh,const FunctionalBuildingRecipe& recipe,
+    const BuildingGraphSolid& s,int material){
+    using P3=buildingStyleDetail::P3;
+    const auto profile=recipe.roofProfile;
+    if(s.part!=BuildingGraphPart::Roof||profile==FunctionalRoofProfile::Flat||
+       profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda||
+       s.y0<functionalCoreHeight(recipe)-.0001f)return false;
+    auto top=[&](float x,float z)->P3{
+        const float f=functionalRoofFraction(profile,x*2.f/recipe.width-1.f,z*2.f/recipe.depth-1.f);
+        return {x,std::clamp(s.y0+f*recipe.roofRise,s.y0,s.y1),z};
+    };
+    const std::array<P3,4> a={P3{s.x0,s.y0,s.z0},P3{s.x1,s.y0,s.z0},P3{s.x1,s.y0,s.z1},P3{s.x0,s.y0,s.z1}};
+    const std::array<P3,4> b={top(s.x0,s.z0),top(s.x1,s.z0),top(s.x1,s.z1),top(s.x0,s.z1)};
+    // Split the top into planar triangles (curved profiles are not a planar quad).
+    mesh.poly(material,{b[0],b[1],b[2]},{0,1,0});
+    mesh.poly(material,{b[0],b[2],b[3]},{0,1,0});
+    const std::array<P3,4> outward={P3{0,0,-1},P3{1,0,0},P3{0,0,1},P3{-1,0,0}};
+    for(int i=0;i<4;++i){const int j=(i+1)%4;
+        mesh.poly(material,{a[i],a[j],b[j],b[i]},outward[i]);}
+    return true;
+}
+
 inline FunctionalBuildingResult generateFunctionalBuilding(
     const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
     Vec3 origin={},uint32_t yaw=0,
@@ -303,7 +332,8 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
           case BuildingGraphPart::ElevatorGuide:material=sm.dark>=0?sm.dark:hull;break;
         }
-        const bool dressed=dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim);
+        const bool dressed=dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim)||
+            dressFunctionalRoofCell(mesh,recipe,solid,style.roof>=0?style.roof:material);
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1,true,!dressed);
     }

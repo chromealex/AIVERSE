@@ -202,6 +202,26 @@ int main(int argc,char** argv){
         CHECK(viaRecipe&&sameGeometry(viaRecipe.building,staticScifi.building));
         CHECK(viaRecipe.building.boxes==staticScifi.building.boxes);
 
+        // Real roof caps reserve their height above the same room graph.
+        // Both visual mesh and physical bounds follow the explicit profile.
+        {
+            auto flat=recipe;
+            flat.features.erase(std::remove_if(flat.features.begin(),flat.features.end(),[](const auto& f){return f.kind==BuildingFeatureKind::SlidingRoof;}),flat.features.end());
+            const auto base=generateFunctionalBuilding(scifi,flat);
+            CHECK(base);
+            for(int i=1;i<=int(FunctionalRoofProfile::Pagoda);++i){
+                auto raised=flat;raised.height+=3;raised.roofRise=3;raised.roofProfile=FunctionalRoofProfile(i);
+                const auto a=generateFunctionalBuilding(modern,raised);
+                CHECK(a);
+                CHECK(a.graph.rooms.size()==base.graph.rooms.size());
+                CHECK(a.graph.sockets.size()==base.graph.sockets.size());
+                CHECK(a.graph.connections.size()==base.graph.connections.size());
+                CHECK(a.building.boxes.size()>base.building.boxes.size());
+                CHECK(std::abs(a.building.mesh.boundsMax[1]-raised.height)<.003f);
+                auto bad=recipe;bad.roofRise=3;bad.height+=3;bad.roofProfile=raised.roofProfile;
+                CHECK(!buildFunctionalStructureGraph(bad)); // sliding aperture cannot be sealed by cap
+            }
+        }
         // Contradictory features are REJECTED (never overlap two doors).
         auto impossible=recipe;
         impossible.width=8.f;

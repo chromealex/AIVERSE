@@ -30,6 +30,8 @@ struct RuntimeBuildingRequest {
     // New genre-free functionality. When composed, 'function' is not needed.
     bool composeFeatures=false;
     std::vector<BuildingFeature> features;
+    FunctionalRoofProfile roofProfile=FunctionalRoofProfile::Flat;
+    float roofRise=0.f;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -137,6 +139,7 @@ public:
             recipe.depth=request.size.depth;
             recipe.seed=request.seed;
             recipe.features=request.features;
+            recipe.roofProfile=request.roofProfile;recipe.roofRise=request.roofRise;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }
         const auto* kind=it->second.structureKind(request.function);

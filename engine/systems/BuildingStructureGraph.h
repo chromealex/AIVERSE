@@ -29,12 +29,45 @@ struct BuildingFeature {
     uint32_t floor=0;
     float sill=0.9f;
 };
+enum class FunctionalRoofProfile : uint8_t { Flat, Gable, Shed, Barrel, Hip, Dome, Terrace, Pagoda };
 struct FunctionalBuildingRecipe {
     float width=16.f,height=8.f,depth=12.f;
     uint64_t seed=1;
     uint32_t floors=1,roomsX=1,roomsZ=1;
     std::vector<BuildingFeature> features;
+    // Final height includes the optional cap. Existing recipes remain flat.
+    FunctionalRoofProfile roofProfile=FunctionalRoofProfile::Flat;
+    float roofRise=0.f;
 };
+inline const char* functionalRoofProfileName(FunctionalRoofProfile profile){
+    switch(profile){
+      case FunctionalRoofProfile::Flat:return "flat";
+      case FunctionalRoofProfile::Gable:return "gable";
+      case FunctionalRoofProfile::Shed:return "shed";
+      case FunctionalRoofProfile::Barrel:return "barrel";
+      case FunctionalRoofProfile::Hip:return "hip";
+      case FunctionalRoofProfile::Dome:return "dome";
+      case FunctionalRoofProfile::Terrace:return "terrace";
+      case FunctionalRoofProfile::Pagoda:return "pagoda";
+    }
+    return "unknown";
+}
+inline float functionalCoreHeight(const FunctionalBuildingRecipe& r){return r.height-r.roofRise;}
+inline float functionalRoofFraction(FunctionalRoofProfile profile,float x,float z){
+    // x,z are normalized to [-1,1]; integer grid stations include the
+    // summit. All profiles have a deterministic closed, supported cap.
+    const float ax=std::abs(x),az=std::abs(z);
+    switch(profile){
+      case FunctionalRoofProfile::Gable:return std::max(0.f,1.f-ax);
+      case FunctionalRoofProfile::Shed:return std::clamp((x+1.f)*.5f,0.f,1.f);
+      case FunctionalRoofProfile::Barrel:return std::max(0.f,1.f-x*x);
+      case FunctionalRoofProfile::Hip:return std::max(0.f,1.f-std::max(ax,az));
+      case FunctionalRoofProfile::Dome:return std::max(0.f,1.f-x*x-z*z);
+      case FunctionalRoofProfile::Terrace:return std::max(0.f,1.f-std::max(ax,az));
+      case FunctionalRoofProfile::Pagoda:return std::max(0.f,1.f-std::max(ax,az)*std::max(ax,az));
+      default:return 0.f;
+    }
+}
 enum class BuildingGraphPart : uint8_t {
     Floor, Wall, Trim, DoorLeaf, Roof, RoofPanel, WindowPane, Partition,
     StairTread, StairLanding, ElevatorPlatform, ElevatorGuide
@@ -95,10 +128,14 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
        recipe.width<8.f||recipe.width>160.f||recipe.depth<8.f||recipe.depth>160.f||
        recipe.height<4.f||recipe.height>80.f)
         return "Functional building W/H/D must fit 8..160 / 4..80 / 8..160 metres";
+    if(!finite(recipe.roofRise)||uint8_t(recipe.roofProfile)>uint8_t(FunctionalRoofProfile::Pagoda)||
+       (recipe.roofProfile==FunctionalRoofProfile::Flat?recipe.roofRise!=0.f:
+          (recipe.roofRise<.5f||recipe.roofRise>std::min(12.f,recipe.height*.45f))))
+        return "Invalid architectural roof profile or rise";
     if(recipe.features.size()>24)return "Too many building properties (maximum 24)";
     if(recipe.floors<1||recipe.floors>8||recipe.roomsX<1||recipe.roomsX>6||recipe.roomsZ<1||recipe.roomsZ>6||recipe.floors*recipe.roomsX*recipe.roomsZ>128)
         return "Invalid floors or room counts";
-    const float storey=(recipe.height-0.52f)/float(recipe.floors);
+    const float storey=(functionalCoreHeight(recipe)-0.52f)/float(recipe.floors);
     if(storey<2.8f||recipe.width/float(recipe.roomsX)<2.5f||recipe.depth/float(recipe.roomsZ)<2.5f)
         return "Storey or room dimensions too small";
     uint32_t roofs=0,portals=0,verticals=0;
@@ -111,6 +148,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
            f.spacing<0.35f||f.spacing>8.f)
             return "Invalid feature count, placement, spacing or open fraction";
         if(f.kind==BuildingFeatureKind::SlidingRoof){
+            if(recipe.roofProfile!=FunctionalRoofProfile::Flat)return "Retractable roofs require the flat architectural profile";
             if(f.floor!=0)return "Roof floor must be zero";
             if(++roofs>1||f.count!=1||f.width<1||f.depth<1||
                f.width>recipe.width*0.48f||f.depth>recipe.depth*0.75f)
@@ -129,7 +167,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
             if(f.kind==BuildingFeatureKind::Stairs){
                 if(f.width<2.4f||f.depth<5.6f)
                     return "Switchback stairs require at least 2.4m width and 5.6m depth";
-                const float storey=(recipe.height-0.52f)/float(recipe.floors);
+                const float storey=(functionalCoreHeight(recipe)-0.52f)/float(recipe.floors);
                 // Switchback: two flights, maximum 0.18m rise and minimum
                 // 0.24m run per tread, plus a 0.9m turning landing.
                 const float climb=storey+0.24f;
@@ -175,7 +213,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     BuildingStructureGraph graph;
     graph.error=validateFunctionalRecipe(recipe);
     if(!graph.error.empty())return graph;
-    const float W=recipe.width,H=recipe.height,D=recipe.depth;
+    const float W=recipe.width,H=functionalCoreHeight(recipe),D=recipe.depth;
     constexpr float floorTop=0.24f,wall=0.36f,roofThickness=0.28f,slabThick=0.24f;
     const float storey=(H-floorTop-roofThickness)/float(recipe.floors);
     auto solid=[&](BuildingGraphPart p,float x0,float y0,float z0,
@@ -508,7 +546,32 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         }
     }
     const float roofBase=H-roofThickness;
-    if(!roof)solid(BuildingGraphPart::Roof,0,roofBase,0,W,H,D);
+    if(!roof){
+        solid(BuildingGraphPart::Roof,0,roofBase,0,W,H,D);
+        const auto profile=recipe.roofProfile;
+        if(profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda){
+            const int levels=profile==FunctionalRoofProfile::Pagoda?3:4;
+            const float dy=recipe.roofRise/levels;
+            for(int level=0;level<levels;++level){
+                const float f=1.f-.19f*level;
+                const float x=W*(1-f)*.5f,z=D*(1-f)*.5f;
+                solid(BuildingGraphPart::Roof,x,H+dy*level,z,W-x,H+dy*(level+1),D-z);
+            }
+        }else if(profile!=FunctionalRoofProfile::Flat){
+            constexpr int nx=12;
+            const int nz=(profile==FunctionalRoofProfile::Dome||profile==FunctionalRoofProfile::Hip)?12:1;
+            auto norm=[](int i,int n){return 2.f*i/n-1.f;};
+            for(int z=0;z<nz;++z)for(int x=0;x<nx;++x){
+                float peak=0.f;
+                for(int dz:{0,1})for(int dx:{0,1})
+                    peak=std::max(peak,functionalRoofFraction(profile,norm(x+dx,nx),norm(z+dz,nz)));
+                // Collision is a conservative per-cell prism; the visible
+                // surface is clipped to the same cells by the mesh owner.
+                if(peak>0.f)solid(BuildingGraphPart::Roof,W*x/nx,H,D*z/nz,
+                    W*(x+1)/nx,H+recipe.roofRise*peak,D*(z+1)/nz);
+            }
+        }
+    }
     else {
         const float cx=roof->position>=0?roof->position:W*0.5f;
         const float cz=roof->positionZ>=0?roof->positionZ:D*0.5f;
