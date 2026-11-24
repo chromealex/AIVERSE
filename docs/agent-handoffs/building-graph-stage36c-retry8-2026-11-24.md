@@ -1,0 +1,7 @@
+# Stage 36C — retry 8: native registry linkage
+
+User quick Mac build excerpt: failed at 85%, CTest NOT RUN. aiverse_camera_client_adapter_tests reports undefined aiverse::game::NativeRegistrar constructor from generated NativeRegistry.cpp.o (x86_64). The actor/vehicle previous compiler failure is not present in the supplied excerpt. Full log and exact tested SHA not supplied; no full warning/notes count claimed.
+
+Repair 67d61a93dbba8bc40e0cc4e9c9013d38b4288906: engine/game/native/Build.cmake now selects actual game hosts, including aiverse_game_view (which publicly links aiverse_game), rather than generic presentation/platform runtimes. This avoids injecting project objects and the generated registry into standalone camera, GPU, renderer and scene-only executables. CMakeLists.txt explicitly links native modules for the Android game shared library (not the minimal scene client). tests/native_project_build.py extends its reused-cache configure regression to check direct game host, game view client, runtime-only and scene-only executable link properties in each configuration. docs/native-modules.md and the integration manifest record the corrected contract. No duplicate NativeRegistrar or dependency from renderer into game added.
+
+Source changes committed; actual CMake configure regression, Mac build/link, CTest and Android verification NOT RUN. Next: fast-forward this integration branch, verify HEAD, rerun quick gate on existing KINGSTON-backed build directory. Do not merge main until mandatory checks pass.
