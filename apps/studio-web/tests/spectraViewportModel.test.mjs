@@ -30,3 +30,24 @@ test('invalid dimensions are rejected safely before native GPU placement',()=>{
   const c=fxViewportRect(box(0,0,600,300),box(0,0,800,600),0.5,true);
   assert.equal(c.dpr,1);
 });
+
+
+import {parseSpectraReplayPreset} from '../src/panels/spectraReplayPreset.ts';
+
+const replay=()=>({format:'aiverse.spectrafx.replay',version:1,
+  graphSignature:'graph',projectPath:'Проект',tick:0,speed:1,loop:false,
+  background:'dark',grid:true,axes:false,parameters:{},
+  camera:{yaw:0,pitch:0,distance:5,targetX:0,targetY:0,targetZ:0,ortho:false}});
+test('Replay preset uses UTF-8 bytes at the 64 KiB boundary',()=>{
+  const v=replay();
+  const base=JSON.stringify(v);
+  const remaining=65536-Buffer.byteLength(base,'utf8');
+  v.graphSignature+='я'.repeat(Math.floor(remaining/2))+'x'.repeat(remaining%2);
+  const exact=JSON.stringify(v);
+  assert.equal(Buffer.byteLength(exact,'utf8'),65536);
+  assert.deepEqual(parseSpectraReplayPreset(exact),v);
+  v.graphSignature+='я';
+  const oversized=JSON.stringify(v);
+  assert.ok(oversized.length<65536);
+  assert.throws(()=>parseSpectraReplayPreset(oversized),/64 KiB/);
+});
