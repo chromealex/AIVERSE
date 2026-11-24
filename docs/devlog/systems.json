@@ -1814,6 +1814,12 @@
           "text": "Renderer3D и ICB проверяют поколение текстур материалов; устаревшие привязки используют резервные текстуры. Интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38R (partial)",
           "textEn": "Renderer3D and ICB validate material image generations; stale bindings fall back. Integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38S (в работе)",
+          "text": "Освобождение старых pin при переопределениях и проверка GI.",
+          "nameEn": "Texture Graph GPU — Stage 38S (in progress)",
+          "textEn": "Material override pin release and GI image validation."
         }
       ],
       "enables": [
