@@ -116,3 +116,7 @@ Use PHYSIS gravityAt as the sole field policy; expose exact local tangent motion
 ### Stage54v2a — IN PROGRESS
 
 Bind immutable planetary navigation sources to the actual complete volume cohort and current native publication, not the chart extent alone. Share existing SDF provider and solver APIs; sample NEREID in simulation-anchor coordinates and require explicit PHYSIS cell mapping for planetary environment costs. Preserve conservative chart-Y support until oriented clearance and solver acceptance are implemented. Acceptance: region/native/source/environment epoch fences, bounded coverage, rejection outside actual lattice, no live ECS capture by worker callbacks, flat compatibility and registered regression source. Native QA pending.
+
+### Stage54v2b — IN PROGRESS
+
+Extend the shared SDF provider with deterministic gravity-oriented ground clearance, support, swept residency and step checks; preserve flat defaults and use existing graph algorithms. Restrict existing chart-Y NavMesh to compatible samples and validate all native/resident route segments, including projections. Fence native mesh caches by immutable provider identity across regions. Add registered fixtures for floor/wall/ceiling/zero gravity and invalid routes. Native QA pending; no arbitrary-gravity 2.5D mesh or host migration claimed.
