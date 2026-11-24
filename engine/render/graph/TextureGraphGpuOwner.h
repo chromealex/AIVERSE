@@ -259,6 +259,12 @@ class TextureGraphGpuOwner {
     // Called only when no previous readback/submission is outstanding.
     // RHI barriers order the node dispatches within the frame. All materialized
     // slots remain pinned until the last packed output is accepted or retired.
+    static void beginProfileScope(std::optional<graph_gpu_profile::Scope>& scope,gfx::Device& dev,
+            graph_gpu_profile::Capture* profile,const char* label,uint64_t request,const char* output){
+        if(!profile||!profile->enabled())return;
+        // Optional diagnostics must not fail generation on CPU metadata allocation.
+        try{scope.emplace(dev,*profile,label,0,false,request,output);}catch(...){scope.reset();}
+    }
     // Capture is a borrowed optional host diagnostic; the owner never drains
     // the shared device timing queue. A refused scope does not refuse work.
     void submitMaterialized(gfx::Device& dev,bool metal,graph_gpu_profile::Capture* profile){
@@ -352,7 +358,7 @@ class TextureGraphGpuOwner {
             plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
             fence_=matLastFence_=token;inFlight_=true;
             std::optional<graph_gpu_profile::Scope> dispatchScope;
-            if(profile&&profile->enabled())dispatchScope.emplace(dev,*profile,"texture-graph-materialized-dispatch",0,false,serial_,output_.c_str());
+            beginProfileScope(dispatchScope,dev,profile,"texture-graph-materialized-dispatch",serial_,output_.c_str());
             if(first){
                 const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes,[&](const ScheduledPass& pass){
                     // The full schedule is preflighted. A clean dedicated slot
@@ -383,7 +389,7 @@ class TextureGraphGpuOwner {
                 const auto layout=gfx::rgba8CopyLayout(size_,size_);
                 const gfx::BufferTextureCopy2D copy{size_,size_,0,layout.rowPitchBytes,gpuTextureMipmaps_};
                 std::optional<graph_gpu_profile::Scope> copyScope;
-                if(profile&&profile->enabled())copyScope.emplace(dev,*profile,"texture-graph-texture-copy",0,false,serial_,output_.c_str());
+                beginProfileScope(copyScope,dev,profile,"texture-graph-texture-copy",serial_,output_.c_str());
                 if(!render::texture_graph::queueGraphGpuTextureCopy(dev,gpuTransferLease_,*program_,
                         gpuGeneration_,setOutputs_[index].first,buffer_,copy,*item))
                     throw std::runtime_error("materialized GPU texture copy rejected");
@@ -817,7 +823,7 @@ public:
         plannedPasses_=schedule.passes.size();
         plannedSlotBytes_=bytes*schedule.slotBytes.size();
         std::optional<graph_gpu_profile::Scope> dispatchScope;
-        if(profile&&profile->enabled())dispatchScope.emplace(dev,*profile,"texture-graph-fused-dispatch",0,false,serial_,output_.c_str());
+        beginProfileScope(dispatchScope,dev,profile,"texture-graph-fused-dispatch",serial_,output_.c_str());
         const auto encoded=encodePassSchedule(schedule,8u*1024u*1024u,[&](const ScheduledPass& pass){
             const auto pipeline=pass.pipeline==0?compute_:secondCompute_;
             const auto output=pass.output==0?buffer_:scratch_;

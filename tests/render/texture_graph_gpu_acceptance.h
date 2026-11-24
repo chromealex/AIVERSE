@@ -3,6 +3,8 @@
 #include "engine/render/graph/TextureGraphGpuOwner.h"
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <set>
 #include <stdexcept>
 #include <thread>
 
@@ -12,13 +14,17 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
     render::texture_graph::TextureGraphGpuOwner owner;
     const std::string project="texture-graph-rhi-fixture";
     const char* expected=backend==gfx::Backend::Metal?"metal":"vulkan";
+    graph_gpu_profile::Capture profile;
     auto require=[](bool ok,const char* what){if(!ok)throw std::runtime_error(what);};
     auto frame=[&]{
         dev.beginFrame(64,64);
-        try{owner.tick(dev,project);}catch(...){dev.endFrame();throw;}
+        try{owner.tick(dev,project,&profile);}catch(...){dev.endFrame();throw;}
         dev.endFrame();
         // Deliberate test-only barrier; owner itself remains asynchronous.
         require(dev.waitIdle(),"GPU frame idle failed");
+        // Test owns this Device exclusively: only completed real scopes enter the capture.
+        for(const auto& timing:dev.takeGpuScopeTimings())profile.complete(timing,dev.frameSerial());
+        profile.expire(dev.frameSerial());
     };
     auto drain=[&]{
         for(int i=0;i<128;++i){
@@ -41,6 +47,7 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
     try{
         require(dev.info().backend==backend&&dev.supportsCompute()&&dev.gpuHealthy(),"requested compute backend unavailable");
         std::printf("TextureGraph RHI: %s / %s\n",expected,dev.info().name.c_str());
+        profile.start(dev.info(),project);
         auto complete=[&]{
             const auto id=owner.start(request,project).getStr("request");
             drain();
@@ -143,6 +150,19 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         owner.releaseTicket(low,project,true);drain();
         require(owner.queueStatus().getStr("activeTicket").empty(),"queue result not released");
         require(dev.gpuHealthy(),"device unhealthy");
+        const auto report=profile.report();
+        std::set<std::string> scopes;
+        for(const auto& row:report["samples"].items()){
+            require(view::parseAppearanceIdentity(row.getStr("request"))!=0&&!row.getStr("output").empty(),
+                "GPU profile lost texture request identity");
+            require(row.getStr("view")=="0"&&row["milliseconds"].toDouble()>0,"invalid texture scope sample");
+            scopes.insert(row.getStr("scope"));
+        }
+        std::printf("TextureGraph GPU scope evidence: %s\n",report.dump(-1).c_str());
+        if(const auto* strict=std::getenv("AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS");strict&&std::string_view(strict)=="1"){
+            require(scopes.contains("texture-graph-fused-dispatch")&&scopes.contains("texture-graph-materialized-dispatch")&&
+                scopes.contains("texture-graph-texture-copy"),"strict GPU scope evidence missing");
+        }else if(scopes.empty())std::printf("GPU scope timing unavailable; no GPU timing evidence\n");
         result=0;
     }catch(const std::exception& e){std::fprintf(stderr,"FAIL texture graph RHI: %s\n",e.what());}
     if(dev.waitIdle())owner.shutdownAfterIdle(dev);
