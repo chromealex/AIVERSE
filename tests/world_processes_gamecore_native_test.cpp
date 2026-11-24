@@ -1868,7 +1868,7 @@ static void checkGameCorePlanetTerrainPersistence(){
     target.surfaceCell=base->cellAt(oldStation);
     const auto fp=wp::planetTerrainFootprint(*base,0,target.surfaceCell);
     AIVERSE_TEST_CHECK(fp);target.footprint=*fp;target.volumeBudgetCm3=UINT64_MAX;
-    const auto edit=granular::previewPlanetSoilGeometry(*base,target,1,-100,100);
+    const auto edit=granular::previewPlanetSoilGeometry(*base,target,16,-100,100);
     AIVERSE_TEST_CHECK(edit);
     AIVERSE_TEST_CHECK(core.stagePlanetTerrain(w,*base,0,*edit->surface));
     AIVERSE_TEST_CHECK(core.reconcilePlanetGroundUnits(w,*base));
