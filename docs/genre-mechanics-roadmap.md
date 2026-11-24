@@ -132,3 +132,7 @@ Optional native committed navigation lease set owned by each existing planetary 
 ### Stage54v2c3a — IN PROGRESS
 
 Derive canonical navigation environment revisions from actual frozen PHYSIS gravity/traction and NEREID water/flood/sphere state, with persistent deterministic monotonic change tracking, explicit policy version and simulation wave time. Use the actual PHYSIS grid projection and existing NEREID sphere sampling. Register a shared fixed-tick capture before scoped repath/steering and reuse unchanged providers. Native input callback reads the same committed environment state. Acceptance: static state does not churn revisions; relevant changes/restore invalidate; no native epoch in lockstep, no second environment or motor owner. Real host/native QA remains pending.
+
+### Stage54v2c3b — IN PROGRESS
+
+Native Box3D host adapter consumes only admitted region-scoped steering against the current canonical environment lease, reuses existing oriented character motor and proxy, and leaves the single scene step to the host. Add a fixed-tick native Simulation fixture for canonical capture, scoped route, environment change, persistence and rollback, with actual PHYSIS/NEREID owner schemas. Default GameCore migration and full native GPU/GI transaction QA remain separate.
