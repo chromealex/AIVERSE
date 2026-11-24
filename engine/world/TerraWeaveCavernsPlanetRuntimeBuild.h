@@ -17,6 +17,19 @@ struct CavePlanetBuildRegion {
     std::set<ChunkKey3,KeyLess> keys;
     std::map<ChunkKey3,CaveCertifiedChunk,KeyLess> chunks;
 };
+// Exact canonical snapshot equality without JSON serialization or transient
+// allocation on the movement-admission path.
+inline bool samePlanetRuntimeSnapshot(const CaveVolumeSnapshot& a,const CaveVolumeSnapshot& b){
+    const auto& x=a.settings;const auto& y=b.settings;
+    if(a.generatorVersion!=b.generatorVersion||a.sourceRevision!=b.sourceRevision||
+       x.seed!=y.seed||x.cellCm!=y.cellCm||x.tunnelRadiusCm!=y.tunnelRadiusCm||
+       x.chamberRadiusCm!=y.chamberRadiusCm||x.tunnelChance!=y.tunnelChance||
+       x.chamberChance!=y.chamberChance||x.minYcm!=y.minYcm||x.maxYcm!=y.maxYcm||
+       a.entrances!=b.entrances||a.stamps.size()!=b.stamps.size())return false;
+    for(size_t i=0;i<a.stamps.size();++i)
+        if(!authority_detail::sameStamp(a.stamps[i],b.stamps[i]))return false;
+    return true;
+}
 struct CavePlanetRuntimeCandidate {
     uint64_t generation=0,nativeRevision=0;
     std::shared_ptr<const CavePlanetBodyCutPlan> cut;
@@ -30,7 +43,7 @@ struct CavePlanetRuntimeCandidate {
             const auto it=cut->regions.find(id);
             if(!entry||!source||it==cut->regions.end()||!it->second||
                !sameCavePlanetAnchor(entry->region.anchor,it->second->anchor)||
-               caveSnapshotToJson(entry->authority.volume)!=caveSnapshotToJson(*source))return false;
+               !samePlanetRuntimeSnapshot(entry->authority.volume,*source))return false;
         }
         return true;
     }
@@ -214,7 +227,7 @@ public:
         for(const auto& r:regions_){
             const auto* entry=findPlanetCaveRegion(ecs,r.id);
             if(!entry||!sameCavePlanetAnchor(entry->region.anchor,r.frame.anchor())||
-               caveSnapshotToJson(entry->authority.volume)!=caveSnapshotToJson(*r.snapshot))return false;
+               !samePlanetRuntimeSnapshot(entry->authority.volume,*r.snapshot))return false;
         }
         return true;
     }
