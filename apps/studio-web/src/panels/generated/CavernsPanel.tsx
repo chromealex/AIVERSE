@@ -77,7 +77,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     if(locked.current||(!editable&&enable))return;
     locked.current=true;setBusy(true);setError('');
     try{
-      const b=await invoke('studio.sceneBrush',enable?{kind:'caverns',armed:true,
+      const b=await invoke('studio.sceneBrush',enable?{kind:'caverns',armed:true,expectedProject:project,expectedMap:map,
         radius:values.radiusCm/100,caveMode:mode,caveY:values.yCm/100,caveSurface:pickMode==='surface'}:{armed:false});
       setArmed(b.armed&&b.kind==='caverns');
     }catch(e){setError(message(e));}
