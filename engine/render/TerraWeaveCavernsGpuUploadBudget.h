@@ -15,12 +15,16 @@ struct CaveGpuUploadLimits {
     uint64_t maxSourceBytesPerFrame=32ull*1024*1024;
     uint32_t maxShardsPerFrame=1;
     uint32_t maxRetiredScenes=64;
+    uint64_t maxLiveSourceBytes=512ull*1024*1024;
+    uint32_t maxLiveScenes=256;
 };
 inline void validateCaveGpuUploadLimits(CaveGpuUploadLimits limits){
     if(!limits.maxSourceBytesPerFrame||
        limits.maxSourceBytesPerFrame>2ull*1024*1024*1024||
        !limits.maxShardsPerFrame||limits.maxShardsPerFrame>64||
-       !limits.maxRetiredScenes||limits.maxRetiredScenes>4096)
+       !limits.maxRetiredScenes||limits.maxRetiredScenes>4096||
+       !limits.maxLiveSourceBytes||limits.maxLiveSourceBytes>16ull*1024*1024*1024||
+       !limits.maxLiveScenes||limits.maxLiveScenes>65536)
         throw std::invalid_argument("Caverns GPU upload budget");
 }
 inline uint64_t estimateCaveSourceBytes(
@@ -29,7 +33,7 @@ inline uint64_t estimateCaveSourceBytes(
     for(const auto& chunk:chunks){
         const uint64_t v=chunk.mesh.vertices.size();
         const uint64_t i=chunk.mesh.indices.size();
-        const uint64_t stride=sizeof(MeshVertex);
+        const uint64_t stride=sizeof(render::ModelVertex);
         if(v>UINT64_MAX/stride || i>UINT64_MAX/sizeof(uint32_t))
             throw std::overflow_error("Caverns GPU source size overflow");
         const uint64_t count=v*stride+i*sizeof(uint32_t);
@@ -42,12 +46,20 @@ inline uint64_t estimateCaveSourceBytes(
 struct CaveGpuUploadStats {
     uint64_t frame=0,sourceBytes=0;
     uint32_t uploads=0;
-    uint64_t refusedBytes=0,refusedPressure=0;
+    uint64_t refusedBytes=0,refusedPressure=0,refusedLiveBudget=0;
 };
 class CaveGpuUploadBudget {
 public:
     explicit CaveGpuUploadBudget(CaveGpuUploadLimits limits={}):limits_(limits){
         validateCaveGpuUploadLimits(limits_);
+    }
+    bool admitLive(uint64_t currentBytes,size_t liveScenes,uint64_t candidateBytes){
+        if(candidateBytes&&(liveScenes>=limits_.maxLiveScenes||
+           currentBytes>limits_.maxLiveSourceBytes||
+           candidateBytes>limits_.maxLiveSourceBytes-currentBytes)){
+            ++stats_.refusedLiveBudget;return false;
+        }
+        return true; // empty retirement adds no GPU owner
     }
     // Reserve before GeometryScene::loadPrepared. Failed uploads still
     // consume the current frame's budget and can retry on a later frame.
