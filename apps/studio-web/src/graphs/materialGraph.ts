@@ -8,7 +8,8 @@ export type TextureChannel=typeof textureChannels[number][0];
 export type TextureOutput='color'|'normal'|'mask';
 export const generatedChannel:Record<TextureOutput,TextureChannel>={color:'texture',normal:'normalMap',mask:'teamMask'};
 export function materialGraph(name:string,material:MaterialData,patch:MaterialPatch={}):GraphView {
- const effective={...material,...patch},nodes:NodeView[]=[],links:Link[]=[];
+ const effective:MaterialData={...material,...patch};
+ const nodes:NodeView[]=[],links:Link[]=[];
  nodes.push({id:'material',label:name,x:560,y:150,inputs:[
   ...textureChannels.map(([id])=>({id,type:'texture'})),{id:'factors',type:'pbr'},{id:'shader',type:'shader'},{id:'base',type:'material'}
  ],outputs:[{id:'surface',type:'material'}]});
