@@ -25,7 +25,7 @@ public:
         gpuPresenter_.reset();gpuMirror_.clear();gpuPool_.shutdown();gpuDefinitions_.clear();
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
-        volumeWorld_.clear();volumeDefinitions_.clear();volumeOnly_.clear();
+        volumeWorld_.clear();volumeDefinitions_.clear();volumeOnly_.clear();hybridDefinitions_.clear();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
         dataRegistry_.reset();externalRegistry_=false;
         collisionRegistry_.reset();
@@ -112,7 +112,13 @@ public:
                 const auto p=transform.position;
                 if(auto it=volumeDefinitions_.find(source.effect);it!=volumeDefinitions_.end()){
                     if(source.scale.raw!=(1_fx).raw){error_="Volume scene source requires unit scale";continue;}
-                    volumes.push_back({identity,source.effect,source.revision,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},&it->second});
+                    spectra::volume::SceneVolumeSource row{identity,source.effect,source.revision,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},&it->second};
+                    if(auto hybrid=hybridDefinitions_.find(source.effect);hybrid!=hybridDefinitions_.end()){
+                        row.hybrid=&hybrid->second;
+                        for(const auto& [name,value]:source.parameters)row.parameters.emplace(name,float(value.toDouble()));
+                    }
+                    volumes.push_back(std::move(row));
+                    if(hybridDefinitions_.count(source.effect))continue;
                     if(volumeOnly_.count(source.effect))continue;
                 }
                 lib::mechanics::SpectraSourceSnapshot row{identity,source,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},{0,1,0}};
@@ -128,7 +134,7 @@ public:
     }
     void prepare(const fx::SpectraFxView& view,float dt){
         if(!ready_||!view.valid())return;
-        volumeWorld_.step(dt);
+        volumeWorld_.setView(view);volumeWorld_.step(dt);
         if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
@@ -145,7 +151,7 @@ public:
             if(!gpuPool_.step(dt)){error_=gpuPool_.reason();finish();}
         }
     }
-    void draw(){if(ready_)particles_.render({});if(gpuFrameOpen_)gpuPool_.draw();}
+    void draw(){if(ready_){particles_.render({});volumeWorld_.drawParticles();}if(gpuFrameOpen_)gpuPool_.draw();}
     void finish(){if(gpuFrameOpen_){gpuPool_.endPresentationFrame();gpuFrameOpen_=false;}}
 private:
     static constexpr uint32_t kStudioMaxGroupSlots=65536;
@@ -217,6 +223,11 @@ private:
         if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],named,errors)){
             error_=errors.empty()?"Invalid SpectraFX parameter schema":errors.front();return false;
         }
+        if(compiled.coupling.active()){
+            schemas_[name]=std::move(named);definitions_.insert(name);
+            hybridDefinitions_[name]={graph,compiled.coupling};
+            volumeDefinitions_[name]=std::move(compiled.volumeAsset);return true;
+        }
         if(particles_.define(name,def)<0){error_="Cannot define SpectraFX graph: "+name;return false;}
         if(!presenter_->bindGraphDataInterfaces(name,graph,errors)){
             error_=errors.empty()?"Invalid SpectraFX Data Interfaces":errors.front();return false;
@@ -270,6 +281,7 @@ private:
     spectra::volume::SceneVolumeWorld volumeWorld_;
     std::map<std::string,spectra::volume::Asset> volumeDefinitions_;
     std::set<std::string> volumeOnly_;
+    std::map<std::string,spectra::volume::SceneHybridDefinition> hybridDefinitions_;
     std::set<std::string> definitions_,gpuDefinitions_,hidden_;
     std::map<std::string,spectra::InstanceParameterTable> schemas_;
     std::string project_,mapPath_,error_;

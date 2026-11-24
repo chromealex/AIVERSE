@@ -188,7 +188,7 @@ void ClientFx::shutdown() {
 
 void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView& view, const game::MapGrid& grid) {
     clearGraphSources();shutdownGraphPool();
-    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();
+    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
     graphView_=&view;graphGrid_=&grid;
     // Read only the published GameView surface during the owner-thread FX
     // update. No capture survives stopMatch, no secondary physics world.
@@ -265,7 +265,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 
 void ClientFx::stopMatch() {
     clearGraphSources();shutdownGraphPool();
-    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();
+    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
     ps_.setSceneCollisionRegistry({});
     graphView_=nullptr;graphGrid_=nullptr;
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
@@ -356,6 +356,11 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
             if(!compiled.particles){graphVolumeAssets_[name]=std::move(compiled.volumeAsset);return {};}
             graph=compiled.particleGraph;
         }
+        if(compiled.coupling.active()){
+            graphHybridDefinitions_[name]={graph,compiled.coupling};
+            graphVolumeAssets_[name]=std::move(compiled.volumeAsset);
+            return {};
+        }
         auto& effect=compiled.particleEffect;
         const std::string runtimeName="graph:live:"+name;
         if(ps_.define(runtimeName,effect)<0||
@@ -437,8 +442,14 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
         resolved.effect=graphSourceAsset(source->effect,allowGpu);
         if(const auto it=graphVolumeAssets_.find(source->effect);it!=graphVolumeAssets_.end()){
             // Only static, unit-scale flat-map anchors are admitted here.
-            if(allowVolumes&&source->scale.raw==(1_fx).raw&&dev_)
-                volumes.push_back({std::to_string(object.entity.packed()),source->effect,source->revision,position,&it->second});
+            if(allowVolumes&&source->scale.raw==(1_fx).raw&&dev_){
+                spectra::volume::SceneVolumeSource row{std::to_string(object.entity.packed()),source->effect,source->revision,position,&it->second};
+                if(auto hybrid=graphHybridDefinitions_.find(source->effect);hybrid!=graphHybridDefinitions_.end()){
+                    row.hybrid=&hybrid->second;row.direction=direction;
+                    for(const auto& [name,value]:source->parameters)row.parameters.emplace(name,float(value.toDouble()));
+                }
+                volumes.push_back(std::move(row));
+            }
             else if(allowVolumes&&source->scale.raw!=(1_fx).raw)continue;
         }
         if(resolved.effect.empty())continue;
@@ -535,7 +546,7 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
     const auto view=fx::SpectraFxView::fromCamera(camera,viewProj,width,height);
     const bool gpu=allowed&&view.valid()&&!graphPoolResetPending_&&!graphPool_.presentationBlocked();
     presentGraphSources(sim,scene,camera,gpu,allowed&&view.valid());
-    if(allowed&&view.valid())graphVolumes_.step(dt);else graphVolumes_.clear();
+    if(allowed&&view.valid()){graphVolumes_.setView(view);graphVolumes_.step(dt);}else graphVolumes_.clear();
     graphSourcesPrepared_=true;
     if(!gpu||!graphGpuSources_||!graphPool_.ready())return;
     if(!graphPool_.beginPresentationFrame(view)) {
@@ -705,6 +716,7 @@ void ClientFx::addPreparedLights(render::LightSystem& lights) const {
 void ClientFx::render(const render::Lighting& lighting) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
     ps_.render({lighting.fogColor, lighting.fogDensity});
+    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
     if(graphPoolOpen_) {
         graphPool_.draw({lighting.fogColor,lighting.fogDensity});
         finishGraphGpuFrame();

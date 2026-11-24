@@ -163,6 +163,7 @@ private:
     std::map<std::string,std::string> graphSourceAssets_;
     std::map<std::string,spectra::volume::Asset> graphVolumeAssets_;
     spectra::volume::SceneVolumeWorld graphVolumes_;
+    std::map<std::string,spectra::volume::SceneHybridDefinition> graphHybridDefinitions_;
     spectra::GpuPoolWorld graphPool_;
     lib::mechanics::SpectraSourceMirror graphGpuMirror_;
     std::unique_ptr<spectra::GpuEcsAttachmentPresenter> graphGpuSources_;

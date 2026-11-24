@@ -2,6 +2,7 @@
 #pragma once
 #include "SpectraGpuVolumeRenderer.h"
 #include "SpectraVolumeGraph.h"
+#include "SpectraGraphRuntime.h"
 #include <map>
 #include <set>
 #include <memory>
@@ -80,11 +81,18 @@ private:
     float3 anchor_{};
     std::string error_;
 };
+struct SceneHybridDefinition {
+    Json graph;
+    ParticleVolumeCoupling coupling;
+};
 struct SceneVolumeSource {
     std::string identity,effect;
     uint32_t revision=0;
     float3 anchor{};
     const Asset* asset=nullptr; // borrowed only during synchronize
+    const SceneHybridDefinition* hybrid=nullptr;
+    float3 direction{0,1,0};
+    std::map<std::string,float> parameters;
 };
 // Fixed-anchor, bounded scene presentation pool. Source revision changes
 // recreate volume; ordinary moving poses do NOT reset the gas every frame.
@@ -112,7 +120,25 @@ public:
             if(entries_.size()>=capacity){error_="Scene volume capacity reached";break;}
             auto instance=std::make_unique<VolumeInstance>();
             if(!instance->init(d,*row->asset,row->anchor,reader)){error_=instance->error();continue;}
-            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance)});
+            std::unique_ptr<GraphRuntime> particles;
+            ParticleVolumeCoupling coupling;
+            if(row->hybrid){
+                coupling=row->hybrid->coupling;
+                GraphRuntimeOptions options;options.preference=ComputePreference::RequireGpu;
+                options.gpuProgram=true;options.sdfReader=reader;
+                particles=std::make_unique<GraphRuntime>();
+                if(!particles->initGraph(&d,row->hybrid->graph,Json::object(),options)||
+                   !particles->dataInterfaceBindings().empty()){
+                    error_="Scene hybrid requires a compatible dedicated GPU graph without live data interfaces";continue;
+                }
+                bool valid=true;
+                for(const auto& [name,value]:row->parameters)
+                    if(!particles->setNamedProgramParameter(name,value,false)){valid=false;break;}
+                if(!valid||!particles->burstAt(row->anchor,row->direction)){
+                    error_="Scene hybrid initial burst rejected";continue;
+                }
+            }
+            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance),std::move(particles),coupling,false});
         }
     }
     // Explicit world-space particle deposit into a named resident volume.
@@ -127,14 +153,24 @@ public:
         auto* grid=it->second.instance->grid();
         return grid?grid->view():GpuVolumeView{};
     }
+    void setView(const fx::SpectraFxView& view){
+        for(auto& [id,e]:entries_)if(e.particles)e.particles->setView(view);
+    }
+    void drawParticles(const fx::FxFog& fog={}){
+        for(auto& [id,e]:entries_)if(e.particles&&!e.failed)e.particles->draw(fog);
+    }
     void step(float dt){
         if(!std::isfinite(dt)||dt<0)return;
         for(auto& [id,e]:entries_){
+            if(e.failed)continue;
             e.phase=std::min(4.f*kTick,e.phase+std::min(dt,.1f));
             // Initialize a paused instance with an empty field; do not advance time.
             if(!e.instance->published()&&e.phase<kTick)continue;
             for(unsigned ticks=0;ticks<4&&e.phase>=kTick;++ticks){
                 if(!e.instance->step()){error_=e.instance->error();break;}
+                if(e.particles&&!e.particles->stepWithVolume(kTick,*e.instance->grid(),e.coupling.drag,e.coupling.deposit)){
+                    error_=e.particles->reason();e.failed=true;break;
+                }
                 e.phase-=kTick;
             }
         }
@@ -153,7 +189,7 @@ public:
         return result==color?gfx::TextureHandle{}:result;
     }
 private:
-    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;};
+    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;std::unique_ptr<GraphRuntime> particles;ParticleVolumeCoupling coupling;bool failed;};
     std::map<std::string,Entry> entries_;
     std::string error_;
 };
