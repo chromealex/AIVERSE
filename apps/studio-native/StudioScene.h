@@ -53,13 +53,17 @@ public:
         if(input.has("enabled")||input.has("isolate")||input.has("paging")||input.has("budgets")) {
             if(!device_||!cavernsPreview_.configure(*device_,input))
                 throw std::runtime_error("Caverns preview GPU retirement refused");
-            lastFrameSignature_=0;
+            lastFrameSignature_=0;planetCutDrawn_=false;
         }
         auto result=cavernsPreview_.stats();
-        result.set("terrainCutEntrances",Json::string(std::to_string(terrainCutStats_.cutEntrances)));
-        result.set("terrainRejectedEntrances",Json::string(std::to_string(terrainCutStats_.rejectedEntrances)));
-        result.set("terrainTriangles",Json::string(std::to_string(terrainCutStats_.triangles)));
-        result.set("terrainCutDiagnostic",Json::string(terrainCutStats_.cutDiagnostic));
+        const auto shown=planetCutDrawn_&&planetCutPlan_?planetCutPlan_->acceptedEntrances.size():size_t(0);
+        result.set("terrainCutEntrances",Json::string(std::to_string(terrainCutStats_.cutEntrances+shown)));
+        result.set("terrainRejectedEntrances",Json::string(std::to_string(terrainCutStats_.rejectedEntrances-
+            std::min(shown,terrainCutStats_.rejectedEntrances))));
+        result.set("terrainTriangles",Json::string(std::to_string(planetCutDrawn_?planetCutTriangles_:terrainCutStats_.triangles)));
+        const auto& rimDiagnostic=cavernsPreview_.planetRimDiagnostic();
+        result.set("terrainCutDiagnostic",Json::string(!planetCutError_.empty()?planetCutError_:
+            !rimDiagnostic.empty()?rimDiagnostic:planetCutDrawn_?"Paired chart surface and collar":terrainCutStats_.cutDiagnostic));
         result.set("terrainCutSupported",Json::fromBool(terrainCutStats_.handled));
         result.set("sparseTerrainResident",Json::string(std::to_string(sparseTerrainPreview_.residentCount())));
         result.set("sparseTerrainAuthored",Json::string(std::to_string(sparseTerrainPreview_.authoredCount())));
@@ -197,6 +201,12 @@ private:
     render::Mesh cube_;
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
+    render::Mesh planetCutTerrain_;
+    std::shared_ptr<const terraweave::caverns::CaveSurfaceGroupPlan> planetCutPlan_;
+    const editor::MapDoc* planetTerrainDoc_=nullptr; // identity only
+    std::string planetTerrainProject_,planetCutError_;
+    size_t planetCutTriangles_=0;
+    bool planetCutDrawn_=false;
     render::MeshBuilder terrainCpu_;
     TerrainPreviewStats terrainCutStats_;
     render::NativePresentationRetirement terrainRetirement_;

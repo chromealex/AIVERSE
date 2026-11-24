@@ -7,6 +7,7 @@
 #include "engine/render/Renderer3D.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsSurfaceCut.h"
+#include "apps/studio-native/StudioPlanetCavernsRim.h"
 #include <string>
 #include <limits>
 #include <vector>
@@ -89,24 +90,26 @@ inline TerrainPreviewStats buildPlanetChartPreview(const editor::MapData& map,
         stats.triangles=patch.chartTriangles.size();
         stats.quads=stats.triangles/2;
         stats.rejectedEntrances=region.volume.entrances.size();
-        if(stats.rejectedEntrances){
-            // Preflight is independent of the baseline draw. A refusal must
-            // leave the real coarse surface visible rather than clear it.
-            try{
-                const auto frame=editor::planet_caves::frameForDocument(map,region.anchor);
-                const auto cut=editor::planet_caves::planLocalSurfaceCut(frame,patch,region.volume,revision?revision:1);
-                stats.cutDiagnostic="Planet chart solid: "+std::to_string(cut.accepted.size())+
-                    " mouth candidate(s) certified by surface preflight; "+
-                    std::to_string(region.volume.entrances.size()-cut.accepted.size())+
-                    " refused or outside selected coverage. Matching collar publication pending.";
-            }catch(const std::exception& e){
-                stats.cutDiagnostic=std::string("Planet chart solid: cut preflight refused: ")+e.what();
-            }
-        }
+        if(stats.rejectedEntrances)stats.cutDiagnostic="Planet chart solid until matching collar is ready";
     }catch(const std::exception& e){
         out.clear();stats.cutDiagnostic=e.what();
     }
     return stats;
+}
+inline size_t buildPlanetChartCutPreview(const terraweave::caverns::CaveSurfaceGroupPlan& plan,
+        render::MeshBuilder& out){
+    if(plan.patches.size()!=1||plan.rims.empty())
+        throw std::invalid_argument("Caverns chart cut preview group");
+    const auto& triangles=plan.patches.begin()->second.collision;
+    const auto point=[](Vec3 v){return render::float3{float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};};
+    for(const auto& t:triangles){
+        const auto a=point(t.a),b=point(t.b),c=point(t.c);
+        const auto n=render::normalize(render::cross(b-a,c-a));
+        const auto color=render::rgba(86,122,98);
+        const auto i=out.addVertex(a,n,color),j=out.addVertex(b,n,color),k=out.addVertex(c,n,color);
+        out.addTriangle(i,j,k);
+    }
+    return triangles.size();
 }
 inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
                                                render::MeshBuilder& out,

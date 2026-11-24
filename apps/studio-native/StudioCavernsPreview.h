@@ -6,6 +6,7 @@
 #include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsClientVisualHost.h"
+#include "apps/studio-native/StudioPlanetCavernsRim.h"
 #if defined(AIVERSE_STRATA_STAGING_ENABLED)
 #include "engine/render/StrataStreamingCoordinator.h"
 #endif
@@ -101,6 +102,9 @@ public:
                         if(region){
                             // Four slots per axis, with a reserved gradient halo.
                             resolution_=8;spacingCm_=std::max(1,region->anchor.halfExtentCm/24);
+                            // Exact Q16 chunk spans require spacing divisible by 25
+                            // at resolution 8. Tiny charts keep ordinary preview only.
+                            if(spacingCm_>=25)spacingCm_=(spacingCm_/25)*25;
                             std::set<cave::ChunkKey3,cave::KeyLess> keys;
                             for(int z=-2;z<2;++z)for(int y=-2;y<2;++y)for(int x=-2;x<2;++x)keys.insert({x,y,z});
                             owner_->setChartPreviewDemand(std::move(keys));
@@ -111,6 +115,23 @@ public:
                     document_=bytes;
                     failed_=false;error_.clear();
                 }
+                // Terrain edits can change the surface while authored cave bytes
+                // stay identical. Recompute on the immutable document identity too.
+                planetPlan_.reset();planetPlanError_.clear();
+                if(planetary_&&owner_&&authoredSnapshot_&&!authoredSnapshot_->entrances.empty()){
+                    try{
+                        namespace pc=editor::planet_caves;
+                        const auto region=pc::read(doc.data);
+                        const auto frame=pc::frameForDocument(doc.data,region.anchor);
+                        const auto patch=pc::captureLocalSurface(doc.data,region.anchor,doc.revision);
+                        const auto cut=pc::planLocalSurfaceCut(frame,patch,region.volume,doc.revision?doc.revision:1);
+                        if(cut.rims.empty())throw std::invalid_argument("No certified chart mouths");
+                        if(cut.authorityRevision!=authoredSnapshot_->sourceRevision)
+                            throw std::invalid_argument("Caverns chart authored revision mismatch");
+                        planetPlan_=std::make_shared<const Group>(refinePlanetChartRim(cut,patch,
+                            owner_->sourceRevision(),resolution_,spacingCm_));
+                    }catch(const std::exception& e){planetPlanError_=e.what();}
+                }
                 seenDoc_=&doc;seenRevision_=doc.revision;
             }
         }catch(const std::exception& e){failed_=true;error_=e.what();}
@@ -120,14 +141,14 @@ public:
     // a conservative lower plane between the authored cave end and actual
     // lowest mouth vertex. Unsupported shaft topology falls back to solid.
     void syncRimGroup(std::shared_ptr<const Group> plan){
-        if(planetary_)return;
+        if(planetary_&&plan&&plan!=planetPlan_)return;
         if(plan&&plan->rims.empty())plan.reset();
         if(!owner_||!authoredSnapshot_)return;
         if(plan==rimPlan_|| (plan&&plan==rejectedRim_))return;
         try{
             std::map<uint64_t,Fixed> planes;
             if(plan){
-                if(plan->authorityRevision!=authoredSnapshot_->sourceRevision)
+                if(plan->authorityRevision!=(planetary_?owner_->sourceRevision():authoredSnapshot_->sourceRevision))
                     throw std::invalid_argument("Caverns preview terrain/volume revision mismatch");
                 for(const auto& rim:plan->rims){
                     const auto it=std::find_if(authoredSnapshot_->entrances.begin(),authoredSnapshot_->entrances.end(),
@@ -141,13 +162,15 @@ public:
                     planes.emplace(rim.entranceId,Fixed::fromRaw(low+(high-low)/2));
                 }
             }
-            owner_->setPreviewRimGroup(plan,planes);
+            owner_->setPreviewRimGroup(plan,planes,resolution_,spacingCm_);
             rimPlan_=std::move(plan);rejectedRim_.reset();rimError_.clear();
         }catch(const std::exception& e){
             rejectedRim_=plan;rimError_=e.what();rimPlan_.reset();
             try{owner_->setPreviewRimGroup({},{});}catch(...){failed_=true;error_="Caverns preview demand recovery refused";}
         }
     }
+    std::shared_ptr<const Group> planetRimPlan()const noexcept{return visible()?planetPlan_:nullptr;}
+    const std::string& planetRimDiagnostic()const noexcept{return planetPlanError_;}
     bool rimReady(const std::shared_ptr<const Group>& plan)const noexcept{
         return !plan||plan->rims.empty()||(visible()&&owner_->previewRimReady(*plan));
     }
@@ -181,7 +204,7 @@ public:
     void draw(render::Renderer3D& renderer){if(visible())owner_->draw(renderer);}
     bool close(gfx::Device& device) {
         if(owner_&&!owner_->closeAfterGpuIdle(device))return false;
-        owner_.reset();authoredSnapshot_.reset();rimPlan_.reset();rejectedRim_.reset();rimError_.clear();seenDoc_=nullptr;seenRevision_=0;document_.clear();chartIdentity_.clear();resolution_=16;spacingCm_=100;error_.clear();failed_=false;
+        owner_.reset();authoredSnapshot_.reset();rimPlan_.reset();rejectedRim_.reset();rimError_.clear();planetPlan_.reset();planetPlanError_.clear();seenDoc_=nullptr;seenRevision_=0;document_.clear();chartIdentity_.clear();resolution_=16;spacingCm_=100;error_.clear();failed_=false;
         return true;
     }
     // Last resort on a failed GPU-idle proof during device destruction:
@@ -220,7 +243,8 @@ private:
                                                 512u*1024,2u*1024*1024,8u*1024*1024,true};
     std::unique_ptr<Host> owner_;
     std::shared_ptr<const terraweave::caverns::CaveVolumeSnapshot> authoredSnapshot_;
-    std::shared_ptr<const Group> rimPlan_,rejectedRim_;
+    std::shared_ptr<const Group> rimPlan_,rejectedRim_,planetPlan_;
+    std::string planetPlanError_;
     std::string rimError_;
     const editor::MapDoc* seenDoc_=nullptr; // identity only, never dereferenced
     uint64_t seenRevision_=0;

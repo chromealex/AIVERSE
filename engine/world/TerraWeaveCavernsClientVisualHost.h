@@ -69,7 +69,8 @@ public:
     void setChartPreviewDemand(std::set<ChunkKey3,KeyLess> keys){
         if(!index_||previewRimPlan_||geometry_.catalog().committedKeys().size())
             throw std::logic_error("Caverns chart demand requires new visual host");
-        residency_.setExplicitVisualDemand(std::move(keys));
+        residency_.setExplicitVisualDemand(keys);
+        chartDemand_=std::move(keys);
     }
     // Studio only: use an exact bounded group instead of camera demand.
     // Caller shares the very same immutable CPU terrain plan with its
@@ -83,10 +84,14 @@ public:
         if(plan){
             requests=selectOwnedRimRequests(*plan,index_->snapshot(),lowerPlanes,resolution,spacingCm);
             if(requests.empty())throw std::invalid_argument("Caverns empty preview rim group");
-            for(const auto& r:requests)keys.insert(r.key);
+            for(const auto& r:requests){
+                if(chartDemand_&&!chartDemand_->contains(r.key))
+                    throw std::invalid_argument("Caverns rim outside bounded chart demand");
+                keys.insert(r.key);
+            }
         }
         cancelPendingVisualBatch();
-        residency_.setExplicitVisualDemand(plan?std::optional{keys}:std::nullopt);
+        residency_.setExplicitVisualDemand(plan?std::optional{keys}:chartDemand_);
         ready_.clear();pendingRetire_.clear();
         previewRimPlan_=std::move(plan);previewRimRequests_=std::move(requests);
         previewRimKeys_=std::move(keys);previewRimCommitted_=false;previewDemandChanging_=true;
@@ -277,7 +282,10 @@ public:
         workers_.drain();
         cancelPendingVisualBatch();
         if(!geometry_.shutdownAfterGpuIdle(dev))return false;
-        index_.reset();ready_.clear();pendingRetire_.clear();
+        index_.reset();ready_.clear();pendingRetire_.clear();chartDemand_.reset();
+        previewRimPlan_.reset();previewRimRequests_.clear();previewRimKeys_.clear();
+        previewRimCommitted_=false;previewDemandChanging_=false;
+        residency_.setExplicitVisualDemand(std::nullopt);
         return true;
     }
     size_t pendingCpu()const noexcept{return workers_.inFlight();}
@@ -294,6 +302,7 @@ public:
     }
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
+    std::optional<std::set<ChunkKey3,KeyLess>> chartDemand_;
     std::shared_ptr<const CaveSurfaceGroupPlan> previewRimPlan_;
     std::vector<CaveOwnedRimRequest> previewRimRequests_;
     std::set<ChunkKey3,KeyLess> previewRimKeys_;

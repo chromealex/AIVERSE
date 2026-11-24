@@ -807,3 +807,7 @@ Continue in `integration/caverns-studio-stage54c-20261124`. Planet MapDoc author
 - `CavePlanetSurfacePatch` retains the exact original outward body triangles and ordered source cells alongside the chart triangles. `editor::planet_caves::planLocalSurfaceCut` groups this frozen coarse source by face, validates projection identity, and calls the shared `planCavePlanetCut`. Editor face groups are NOT native PlanetRenderer leaf leases.
 - Studio reports certified candidate mouths versus refused/outside coverage while keeping the actual coarse terrain intact. Never expose a hole from this preflight alone. The matched, grid-refined collar and fenced surface publication remain pending. No schema or gameplay authority change.
 - Regression source in StudioTerrainGeometryTests; native compilation and QA not run. See the Stage54p handoff.
+
+## Stage54q — paired coarse planetary chart preview
+- Studio's `refinePlanetChartRim` converts the existing frozen cut into one chart-only storage patch, refines its exact grid rim and checks exterior edges. Never use this as native leaf or Earthworks authority.
+- The Studio scene keeps the solid baseline and a separately staged cut mesh; selects the cut only when the same immutable plan is ready in the existing collar visual host. Explicit chart demand is restored on refusal/clear; rim requests outside the bounded chart are refused. Q16-aligned lattice and only rim slots are supported in paired mode. No native or visual acceptance run.

@@ -47,6 +47,10 @@ int main() {
             (void)key;originalCount+=slot.originalBody.size();
         }
         AIVERSE_TEST_CHECK(originalCount==patch.bodyTriangles.size());
+        bool emptyRefused=false;
+        try{(void)refinePlanetChartRim(plan,patch,11,8,25);}
+        catch(const std::invalid_argument&){emptyRefused=true;}
+        AIVERSE_TEST_CHECK(emptyRefused);
         auto bad=patch;
         bad.chartTriangles.front().a.x=bad.chartTriangles.front().a.x+Fixed::fromInt(1);
         bool refused=false;

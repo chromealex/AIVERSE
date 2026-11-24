@@ -598,6 +598,8 @@ StudioScene::~StudioScene() {
             if (*primitive) { releasePreviewModel(**primitive); primitive->reset(); }
         terrainRetirement_.retireBuffer(*device_,terrain_.vb);
         terrainRetirement_.retireBuffer(*device_,terrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
         (void)terrainRetirement_.completeForShutdown(*device_);
         sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
         (void)sparseTerrainRetirement_.completeForShutdown(*device_);
@@ -1588,8 +1590,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
 
     const bool caveAuthored=planetaryChart||(!map.extra["terraweaveCaverns"].isNull()&&!map.planet());
     (void)terrainRetirement_.collectWithoutIdle(*device_);
+    const bool planetDocumentChanged=planetaryChart&&
+        (planetTerrainDoc_!=&doc||planetTerrainProject_!=projectPath);
     if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight ||
-        terrainWasShown_!=showTerrain || terrainCavernsAuthored_!=caveAuthored) {
+        terrainWasShown_!=showTerrain || terrainCavernsAuthored_!=caveAuthored||planetDocumentChanged) {
         // Preserve one exact CPU triangle source for both render paths.
         // Never debounce the PBR receiver across a changed cut epoch.
         if (terrainRevision_==doc.revision || caveAuthored || terrainCavernsAuthored_)
@@ -1618,6 +1622,31 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainLevelHeight_=levelHeight;
         terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
         terrainRevision_=doc.revision;
+        planetTerrainDoc_=planetaryChart?&doc:nullptr;
+        planetTerrainProject_=planetaryChart?projectPath:std::string{};
+    }
+    // Stage the replacement using exactly the refined CPU plan used by the
+    // collar owner. Do not drop the solid baseline on upload/refusal.
+    auto chartPlan=planetaryChart?cavernsPreview_.planetRimPlan():nullptr;
+    if(chartPlan!=planetCutPlan_){
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+        planetCutTerrain_={};planetCutPlan_=chartPlan;planetCutDrawn_=false;
+        planetCutTriangles_=0;planetCutError_.clear();
+        if(chartPlan)try{
+            if(terrainRetirement_.pending()>=64)throw std::runtime_error("Caverns chart surface retirement pressure");
+            MeshBuilder cut;
+            planetCutTriangles_=buildPlanetChartCutPreview(*chartPlan,cut);
+            if(cut.empty())throw std::runtime_error("Caverns empty chart cut mesh");
+            planetCutTerrain_=cut.upload(*device_);
+            if(!planetCutTerrain_.vb.valid()||!planetCutTerrain_.ib.valid())
+                throw std::runtime_error("Caverns chart cut upload failed");
+        }catch(const std::exception& e){
+            terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+            terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+            planetCutTerrain_={};planetCutError_=e.what();
+        }
+        lastFrameSignature_=0;
     }
     const Json& settings=lightingSettings_;
     const bool useLighting=useLighting_&&!planetaryChart;
@@ -1731,7 +1760,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }catch(const std::exception& e){sparseTerrainError_=e.what();}
     }
     auto surfaceGroup=sparsePrepared?sparseTerrainPreview_.surfaceGroup():nullptr;
-    cavernsPreview_.syncRimGroup(surfaceGroup);
+    const auto chartGroup=planetaryChart&&planetCutTerrain_.vb.valid()&&planetCutTerrain_.ib.valid()
+        ?planetCutPlan_:nullptr;
+    cavernsPreview_.syncRimGroup(planetaryChart?chartGroup:surfaceGroup);
     cavernsPreview_.beforeRender(*device_,brushVisible_&&brushVolume_?brushCenter_:camera_.target);
     if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
         const auto why=cavernsPreview_.rimError();
@@ -1741,6 +1772,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const bool pairedRimReady=cavernsPreview_.rimReady(surfaceGroup)&&
         (!surfaceGroup||surfaceGroup->rims.empty()||sparseTerrainPreview_.surfaceGroupUploaded());
+    const bool pairedPlanetReady=chartGroup&&cavernsPreview_.rimReady(chartGroup);
+    planetCutDrawn_=pairedPlanetReady&&!cavernsPreview_.isolate();
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
@@ -1775,6 +1808,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(showTerrain&&!cavernsPreview_.isolate()){
     if(lightingModel_) {
         // Terrain is already part of the lit preview model.
+    } else if (pairedPlanetReady) {
+        renderer_.drawMesh(planetCutTerrain_,mat4{}, {1,1,1,1},kDrawNoCastShadow);
     } else if (terrain_.vb.valid() && terrain_.ib.valid()) {
         renderer_.drawMesh(terrain_, mat4{}, {1,1,1,1}, kDrawNoCastShadow);
     } else if(!terrainCutStats_.handled&&!terrainCavernsAuthored_) {
@@ -1904,7 +1939,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if(sparseTerrain&&sparsePrepared&&!cavernsPreview_.isolate())
         sparseTerrainPreview_.submit(renderer_,pairedRimReady,true);
-    if(pairedRimReady)cavernsPreview_.draw(renderer_);
+    // The exact collar may only draw with its matching surface (or explicit
+    // isolate mode). During a refused/pending pair the host hides old collars.
+    if(pairedRimReady&&(!chartGroup||pairedPlanetReady||cavernsPreview_.rimRejected(chartGroup)))
+        cavernsPreview_.draw(renderer_);
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;
