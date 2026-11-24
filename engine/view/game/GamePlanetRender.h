@@ -29,6 +29,8 @@ public:
     void init(gfx::Device& dev, const TerrainLook& look, const render::FileReader& read, const std::string& contentBase);
     void shutdown(gfx::Device& dev);
     void setWorld(const PlanetWorld& w);
+    // Same topology only; used after owner height publication.
+    void bindSimSurface(std::shared_ptr<const Surface> surf) { world_.sim=std::move(surf); }
     const PlanetWorld& world() const { return world_; }
     bool active() const { return !world_.empty(); }
     const PlanetSurface* surface(int body) const { return body >= 0 && size_t(body) < bodies_.size() && bodies_[size_t(body)].surf ? &*bodies_[size_t(body)].surf : nullptr; }

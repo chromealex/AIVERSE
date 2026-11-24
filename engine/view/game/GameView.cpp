@@ -1190,6 +1190,8 @@ private:
 };
 
 void GameView::draw(Renderer3D& r, const GameScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    if(planets_.active()&&!syncSimPlanetTerrain(grid))
+        throw std::logic_error("GameView: stale planetary terrain topology");
     r.setModelLodScale(modelLodScale_);
     r.setShadowLodScale(shadowLodScale_);
     r.setReflectionCullPixels(reflectionCullPixels_);

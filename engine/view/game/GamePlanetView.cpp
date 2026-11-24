@@ -22,6 +22,7 @@ uint32_t ringColor(const SceneObject& o) { return o.selected ? (o.owner == 0 ? r
 }
 
 void GameView::setWorld(const Json& map) {
+    planetDetailBaseline_.clear();
     fog_.setBlur({});
     PlanetWorld w = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(w, map, read_, &warnings_);
@@ -90,6 +91,11 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     PlanetWorld visual = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(visual, map, read_, &warnings_);
     PlanetWorld w = planetWorldFromSim(std::move(surf), grid.flags, visual);
+    planetDetailBaseline_.clear();planetDetailBaseline_.resize(w.bodies.size());
+    for(size_t i=0;i<w.bodies.size();++i){
+        const auto& body=w.bodies[i];
+        if(!body.detail.empty())planetDetailBaseline_[i]={body.corners,body.detail,body.detailK};
+    }
     planets_.setWorld(w);
     planetVision_.clear();
     rebuildPlanetFlora();
@@ -97,6 +103,39 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     planetCam_.reset(planets_.world(), w.start, planets_.surface(w.start), 0);
 }
 
+bool GameView::syncSimPlanetTerrain(const MapGrid& grid){
+    const auto& current=planets_.world();
+    if(!current.sim)return true; // editor world has its own explicit update path
+    if(!grid.surf||!dev_||grid.surf->tab!=current.sim->tab)return false;
+    if(grid.surf==current.sim)return true;
+    auto next=planetWorldFromSim(grid.surf,grid.flags,current);
+    bool rebuild=false;
+    for(size_t i=0;i<next.bodies.size();++i){
+        auto& body=next.bodies[i];
+        if(body.corners==current.bodies[i].corners)continue;
+        if(i<planetDetailBaseline_.size()&&planetDetailBaseline_[i].scale>0){
+            // Explicit authored detail is absolute, not a delta. Avoid
+            // drawing stale fine relief over edited ground. Restore exact
+            // authored detail when rollback returns to its original corners.
+            const auto& base=planetDetailBaseline_[i];
+            if(body.corners==base.corners){body.detail=base.detail;body.detailK=base.scale;}
+            else {body.detail.clear();body.detailK=0;}
+            rebuild=true;
+        }
+    }
+    if(rebuild){
+        planets_.setWorld(next);planetVision_.clear();
+    }else{
+        for(size_t i=0;i<next.bodies.size();++i)
+            if(next.bodies[i].surface()&&next.bodies[i].corners!=current.bodies[i].corners)
+                planets_.updateHeights(int(i),next.bodies[i].corners);
+        planets_.bindSimSurface(grid.surf);
+    }
+    rebuildPlanetFlora(); // existing cosmetic scatter owner; not rooted ECS lifecycle
+    planetCam_.update(planets_.world(),planets_.surface(planetCam_.body()),planetSeconds_,0);
+    pframe_=planetCam_.frame();
+    return true;
+}
 bool GameView::simToBody(float3 sim, int& body, float3& local) {
     if (!onSphereF(sim)) return false;
     body = bodyAtF(sim);

@@ -50,6 +50,41 @@ bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
     gs->lanesDirty=true;
     return true;
 }
+bool GameCore::reconcilePlanetGroundUnits(World& staged,const Surface& previous) const {
+    const auto* gs=staged.resourceConst<GameState>();
+    if(systems_||!gs||!gs->surface||gs->surface->tab!=previous.tab)return false;
+    const auto next=gs->surface;
+    struct Move {Entity entity;Vec3 position;};
+    std::vector<Move> moves;
+    staged.eachExistingConst<Unit>([&](Entity e,const Unit& u){
+        if(u.type>=rules_.types.size()||u.hp.raw<=0||
+           (u.flags&(kUnitOffMap|kUnitInTransit|kUnitPossessed)))return;
+        const auto& type=rules_.types[u.type];
+        if(!(type.layer&(kLayerGround|kLayerSandOnly))||
+           (type.layer&(kLayerAir|kLayerOrbit|kLayerNaval)))return;
+        const auto* tr=staged.tryGetConst<Transform>(e);
+        const auto* authored=staged.tryGetConst<AuthoredPose>(e);
+        if(!tr||(authored&&authored->hasY)||!Surface::onSphere(tr->pos))return;
+        const int body=previous.bodyAt(tr->pos);
+        if(!previous.bodies[size_t(body)].hasSurface())return;
+        // Only terrain-attached units are moved. Preserve their radial
+        // offset and avoid teleporting arbitrary airborne owner states.
+        const auto oldHeight=previous.heightAt(tr->pos);
+        const auto newHeight=next->heightAt(tr->pos);
+        if(oldHeight==newHeight||fxAbs(previous.altitude(tr->pos)-oldHeight)>Fixed::fromRatio(1,8))return;
+        moves.push_back({e,tr->pos+previous.up(tr->pos)*(newHeight-oldHeight)});
+    });
+    // Validate before writing. Angular position, body and spatial bucket
+    // must remain stable; movement along a radius is not a new grid cell.
+    for(const auto& move:moves){
+        const auto old=staged.tryGetConst<Transform>(move.entity)->pos;
+        if(next->bodyAt(old)!=next->bodyAt(move.position)||
+           next->cellAt(old)!=next->cellAt(move.position)||
+           next->bucketOf(old)!=next->bucketOf(move.position))return false;
+    }
+    for(const auto& move:moves)staged.get<Transform>(move.entity).pos=move.position;
+    return true;
+}
 int GameCore::bodyOf(Simulation& sim, Vec3 p) const {
     const Surface* s = surface(sim);
     return s ? s->bodyAt(p) : 0;

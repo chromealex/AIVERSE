@@ -14,11 +14,24 @@ inline std::optional<PlanetSoilTransferResult> transferGameCorePlanetSoil(
        gs->planetTerrainRevision!=request.expectedTerrainRevision)return {};
     // Retain the original Surface across the staged World replacement.
     const auto surface=gs->surface;
-    return transferPlanetSoil(world,*surface,request,completedTick,
+    World stagedWorld=world;
+    auto result=transferPlanetSoil(stagedWorld,*surface,request,completedTick,
         [&](World& staged,const PlanetSoilTarget& target)->std::optional<PlanetSoilOwnerChange>{
             const auto preview=previewPlanetSoilGeometry(*surface,target,quanta,bedrock16,ceiling16);
             if(!preview||!core.stagePlanetTerrain(staged,*surface,target.expectedTerrainRevision,*preview->surface))return {};
             return PlanetSoilOwnerChange{target.expectedTerrainRevision,target.expectedTerrainRevision+1,preview->movedVolumeCm3};
         });
+    if(!result)return {};
+    if(result->terrain.movedVolumeCm3){
+        if(!core.reconcilePlanetGroundUnits(stagedWorld,*surface))return {};
+        // Non-Unit native fields also need to remain attached to the soil.
+        // Ground Unit fields were already reconciled above; do not move twice.
+        if(!stagedWorld.tryGetConst<game::Unit>(request.field)){
+            auto& tr=stagedWorld.get<Transform>(request.field);
+            const auto* next=stagedWorld.resourceConst<game::GameState>();
+            tr.pos=tr.pos+surface->up(tr.pos)*(next->surface->heightAt(tr.pos)-surface->heightAt(tr.pos));
+        }
+    }
+    world=std::move(stagedWorld);return result;
 }
 } // namespace aiverse::granular

@@ -1374,12 +1374,17 @@ static void checkGameCorePlanetTerrainPersistence(){
     SimSnapshot rollback;sim->saveState(rollback);
     granular::PlanetSoilTarget target;
     target.body=0;target.bodyId=base->bodies[0].id;
-    target.surfaceCell=base->gridCell(0,0,0,0);
+    const auto station=placed(*sim,0);
+    const auto oldStation=w.get<Transform>(station).pos;
+    target.surfaceCell=base->cellAt(oldStation);
     const auto fp=wp::planetTerrainFootprint(*base,0,target.surfaceCell);
     AIVERSE_TEST_CHECK(fp);target.footprint=*fp;target.volumeBudgetCm3=UINT64_MAX;
     const auto edit=granular::previewPlanetSoilGeometry(*base,target,1,-100,100);
     AIVERSE_TEST_CHECK(edit);
     AIVERSE_TEST_CHECK(core.stagePlanetTerrain(w,*base,0,*edit->surface));
+    AIVERSE_TEST_CHECK(core.reconcilePlanetGroundUnits(w,*base));
+    const auto newStation=w.get<Transform>(station).pos;
+    AIVERSE_TEST_CHECK(newStation!=oldStation&&edit->surface->cellAt(newStation)==target.surfaceCell);
     gs=w.resourceConst<g::GameState>();
     AIVERSE_TEST_CHECK(gs->planetTerrainRevision==1&&gs->surface==gs->grid.surf&&gs->surface==gs->hash.surf);
     AIVERSE_TEST_CHECK(gs->surface->corners==edit->surface->corners&&sim->checksum()!=initialHash);
@@ -1390,6 +1395,7 @@ static void checkGameCorePlanetTerrainPersistence(){
     AIVERSE_TEST_CHECK(peer->deserialize(saved,&error)&&peer->checksum()==sim->checksum());
     const auto* loaded=peer->world().resourceConst<g::GameState>();
     AIVERSE_TEST_CHECK(loaded->planetTerrainRevision==1&&loaded->surface->corners==edit->surface->corners&&loaded->surface==loaded->grid.surf&&loaded->surface==loaded->hash.surf);
+    AIVERSE_TEST_CHECK(peer->world().get<Transform>(station).pos==newStation);
     AIVERSE_TEST_CHECK(peer->deserialize(legacy,&error)&&peer->checksum()==initialHash);
     sim->loadState(rollback);
     AIVERSE_TEST_CHECK(sim->checksum()==initialHash&&w.resourceConst<g::GameState>()->surface==base);
