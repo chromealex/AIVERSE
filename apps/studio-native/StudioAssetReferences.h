@@ -596,10 +596,15 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
         if(!found)throw std::runtime_error("Unknown glTF repair slot");
     }
     std::vector<editor::ProjectFileEdit> result;
+    size_t afterBytes=0;
     for(auto& [path,edit]:pending){
         auto after=studioEncodeModelRepair(edit.doc);
-        if(after.size()>8u*1024u*1024u-bytes)throw std::runtime_error("glTF repair history budget exceeded");
-        bytes+=after.size();
+        // The same planner runs in both replay directions. Bound each side
+        // independently so a larger JSON chunk never makes undo impossible.
+        if(after.size()>StudioResourceEditBudget/2-afterBytes||
+           after.size()>StudioResourceEditBudget-bytes)
+            throw std::runtime_error("glTF repair history budget exceeded");
+        afterBytes+=after.size();bytes+=after.size();
         result.push_back({fs::path(path),std::move(edit.before),std::move(after)});
     }
     return result;

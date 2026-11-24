@@ -304,6 +304,16 @@ int main(){
             const auto changed=read(model);
             const auto parsed=studioDecodeModelRepair(model,changed);
             AIVERSE_TEST_CHECK(parsed.binary&&parsed.tail==doc.tail);
+            auto corrupt=changed;corrupt.back()^=1;
+            bool rejected=false;
+            try{studioValidateModelRepairBytes({fs::path("content/Models/Binary.glb"),original,corrupt});}
+            catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
+            const auto encoded=studioEncodeResourceEdit({fs::path("content/Models/Binary.glb"),original,changed});
+            AIVERSE_TEST_CHECK(encoded.getStr("encoding")=="hex"&&studioDecodeResourceEdit(Json::parse(encoded.dump(-1)),true).before==original);
+            rejected=false;try{(void)studioDecodeResourceEdit(encoded,false);}
+            catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
             AIVERSE_TEST_CHECK(parsed.json["images"][0].getStr("uri")=="../Other/binary.png");
             editor::ProjectHistory timeline;auto copy=*recorded;timeline.recordMove(std::move(copy),"Repair GLB");
             {StudioAssetHistoryPublication publication(project);publication.save(timeline);}

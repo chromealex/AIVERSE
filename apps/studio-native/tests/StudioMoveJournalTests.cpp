@@ -121,6 +121,9 @@ int main() {
             StudioMoveJournal journal(project);
             journal.begin({{"A/Moved.glb","B/Moved.glb"}},false,false,{{fs::path("content/A/Moved.glb"),before,after}});
             fs::rename(model,target);writeFile(target,after);
+            const auto pending=project/".aiverse-cache"/"studio-move-journal"/"pending.json";
+            const auto manifest=aiverse::Json::parse(readFile(pending));
+            expect(manifest.getInt("version")==6&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
             StudioMoveJournal::recover(project);
             expect(readFile(model)==before&&!fs::exists(target),"Binary resource exact recovery failed");
             StudioMoveJournal::recover(project);fs::remove(model);
