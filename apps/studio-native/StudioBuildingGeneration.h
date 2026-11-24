@@ -270,10 +270,16 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
             f.set("depth",Json::number(double(k.depth)));
             functions.push(std::move(f));
         }
-        Json slots=Json::array();
-        for(const auto& material:style.materials)
+        Json slots=Json::array(),surfaces=Json::object();
+        for(const auto& material:style.materials){
             slots.push(string(material.id));
+            Json surface=Json::object();
+            surface.set("pattern",string(material.surfacePattern));
+            surface.set("seed",Json::number(int64_t(material.surfaceSeed)));
+            surfaces.set(material.id,std::move(surface));
+        }
         s.set("materials",std::move(slots));
+        s.set("surfaces",std::move(surfaces));
         s.set("functions",std::move(functions));styles.push(std::move(s));
     }
     out.set("styles",std::move(styles));

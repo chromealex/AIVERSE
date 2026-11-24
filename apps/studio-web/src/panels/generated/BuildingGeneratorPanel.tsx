@@ -9,7 +9,7 @@ import type {
 import type { StudioPanel as PanelId } from '../../nestedDock';
 import {
   StudioPanel, StudioSection, StudioBadge, StudioAlert, StudioEmptyState,
-  StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect
+  StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect, StudioTabs
 } from '../../ui';
 import BuildingMaterialEditor from './BuildingMaterialEditor';
 import BuildingPlanPreview from './BuildingPlanPreview';
@@ -113,7 +113,20 @@ export default function BuildingGeneratorPanel({
   const [livePreview,setLivePreview]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
   const candidateGate=useRef(new BuildingCandidateGate<StudioBuildingRequest>());
-  const featureRoot=useRef<HTMLDivElement>(null);
+  const [page,setPage]=useState<'recipe'|'features'|'materials'|'graphs'|'runtime'>('recipe');
+  const focusId=useRef('');
+  useLayoutEffect(()=>{
+    if(!focusId.current)return;
+    const target=document.getElementById(focusId.current);
+    focusId.current='';
+    target?.scrollIntoView({block:'center'});
+    target?.focus();
+  },[page]);
+  const focusOn=(next:typeof page,id:string)=>{
+    if(next===page){const target=document.getElementById(id);target?.scrollIntoView({block:'center'});target?.focus();return;}
+    focusId.current=id;setPage(next);
+  };
+  const focusMaterial=(slot:string)=>focusOn('materials','abg-material-binding-'+slot);
 
   const regeneratedThisSession=useRef(new Set<string>());
   useEffect(()=>{
@@ -314,9 +327,7 @@ export default function BuildingGeneratorPanel({
   const activeCandidate=visibleVariants.find(item=>item.seed===selectedSeed&&item.data);
   const focusFeature=(index:number)=>{
     if(!activeCandidate||mode!=='features'||!Number.isInteger(index)||index<0||index>=features.length)return;
-    const target=featureRoot.current?.querySelector<HTMLElement>('#abg-feature-'+index+'-kind');
-    target?.scrollIntoView({behavior:'smooth',block:'center'});
-    target?.focus();
+    focusOn('features','abg-feature-'+index+'-kind');
   };
   const clearGenerated=()=>{invalidateCandidates();setSaved(null);setThumbnail('');setStatus('');};
   const setBinding=(slot:string,value:string)=>{
@@ -512,7 +523,7 @@ export default function BuildingGeneratorPanel({
       const firstGood=choices.find(x=>x.data);
       setSelectedSeed(firstGood?.seed??null);
       if(!firstGood)setError('No feasible building variant for these dimensions. Change the size or style.');
-      else setStatus('Three seed candidates evaluated from real procedural mesh geometry.');
+      else {setPage('graphs');setStatus('Three seed candidates evaluated from real procedural mesh geometry.');}
     }catch(e){if(!ticket||candidateGate.current.isCurrent(ticket))setError(explain(e));}
     finally{if(!ticket||candidateGate.current.finish(ticket))setBusy(false);}
   };
@@ -522,7 +533,7 @@ export default function BuildingGeneratorPanel({
     setBusy(true);setError('');setStatus('');setSaved(null);setThumbnail('');
     try{
       const result=await invoke('studio.buildingGenerate',activeCandidate?.recipe??request(asNumber(seed)));
-      setSaved(result);setStatus('New GLB saved to Assets with persistent GUID.');
+      setSaved(result);setPage('recipe');setStatus('New GLB saved to Assets with persistent GUID.');
       void reloadRecipes().catch(()=>{});
       // Existing browser windows can refresh their Assets lists on demand.
       window.dispatchEvent(new Event('studio:assets-changed'));
@@ -573,36 +584,44 @@ export default function BuildingGeneratorPanel({
       description="Generated models are saved as real .glb files in your project's content/ folder."/>
   </StudioPanel>;
 
-  return <StudioPanel title="Building Generator" eyebrow="WORLD / PROCEDURAL"
+  return <StudioPanel className="abg" title="Building Generator" eyebrow="WORLD / PROCEDURAL"
     subtitle={snapshot?.project.name??''}
     actions={<StudioIconButton icon={<RefreshCw size={15}/>} aria-label="Reload building styles"
       disabled={busy||loading} onClick={()=>void invoke('studio.buildingCatalog',{}).then(r=>setStyles(r.styles)).catch(e=>setError(explain(e)))}/>}
-    footer={<StudioBadge tone={error?'danger':saved?'success':'neutral'}>
+    footer={<div className="abg__footer"><StudioBadge tone={error?'danger':saved?'success':'neutral'}>
       {busy?'Generating…':error?'Check parameters':saved?'Saved in Assets':'Ready'}
-    </StudioBadge>}>
-    <div className="au-stack">
+    </StudioBadge>
+        <div className="abg__actions abg__primary-actions">
+          <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy||!nativeConnected()}
+            onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
+          <StudioButton variant="secondary" loading={previewBusy}
+            disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
+            onClick={()=>void previewNative3D()}>
+            Preview 3D in Scene
+          </StudioButton>
+          {livePreview&&<StudioButton variant="secondary" disabled={previewBusy}
+            onClick={()=>void closeNative3D()}>Close 3D preview</StudioButton>}
+          <StudioButton variant="primary" loading={busy}
+            disabled={Boolean(parameterError)||busy||!nativeConnected()}
+            onClick={()=>void generate()}>
+            <WandSparkles size={15}/> Generate GLB
+          </StudioButton>
+        </div>
+    </div>}>
+    <div className="au-stack abg__root">
       {!nativeConnected()&&<StudioAlert tone="warning">Open native AIVERSE Studio to generate and save 3D models. Browser demo cannot write project assets.</StudioAlert>}
       {error&&<StudioAlert tone="danger" title="Generator error">{error}</StudioAlert>}
       {status&&!error&&<StudioAlert tone="success">{status}</StudioAlert>}
       {loading&&<StudioAlert>Loading available building styles…</StudioAlert>}
       {!loading&&styles.length===0&&<StudioEmptyState title="No building styles"
         icon={<Building2 size={22}/>} description="Install engine/assets/building-styles or open native AIVERSE Studio."/>}
-      <p className="abg__note">Twelve built-in architecture settings share the same rooms, stairs, lifts, doors, physical openings and ECS runtime. PBR texture patterns are generated for each style; project texture GUIDs override them per channel.</p>
-      <StudioSection title="Saved generated buildings">
-        <p className="abg__note">Reopen a saved source recipe and edit its dimensions, architecture, doors, floors and PBR material bindings. Existing GLBs stay unchanged.</p>
-        <div className="abg__actions">
-          <StudioSelect aria-label="Saved building recipe" value={sourceRecipe}
-            disabled={busy||readingRecipe||savedRecipes.length===0}
-            onChange={e=>void loadRecipe(e.target.value)}>
-            <option value="">Choose a saved building…</option>
-            {savedRecipes.map(path=><option value={path} key={path}>{path}</option>)}
-          </StudioSelect>
-          <StudioButton variant="secondary" disabled={busy||readingRecipe||!nativeConnected()}
-            onClick={()=>void reloadRecipes().catch(e=>setError(explain(e)))}>
-            <RefreshCw size={15}/> Refresh
-          </StudioButton>
-        </div>
-      </StudioSection>
+      {parameterError&&<StudioAlert tone="warning" title="Parameters">{parameterError}</StudioAlert>}
+      <StudioTabs label="Building workspace" selected={page} onChange={setPage} items={[
+        {id:'recipe',label:'Recipe'},{id:'features',label:'Features'},{id:'materials',label:'Materials'},
+        {id:'graphs',label:'Graphs'},{id:'runtime',label:'Runtime'}
+      ]}/>
+      <div className="abg__page au-stack" hidden={page!=='recipe'}>
+        <div className="abg__recipe-grid">
       <StudioSection title="Building recipe">
         <div className="abg__fields">
           <StudioField label="Setting" htmlFor="abg-setting">
@@ -631,87 +650,82 @@ export default function BuildingGeneratorPanel({
           </StudioField>}
         </div>
       </StudioSection>
-      <StudioSection title="Architectural material bindings">
-        <p className="abg__note">Assign a project material to a named style slot. Generation applies its PBR factors and embeds its Assets PNG/JPEG textures into the exported GLB. Empty means use the original style material.</p>
-        <div className="abg__fields">
-          {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
-            label={slot} htmlFor={'abg-material-binding-'+slot}>
-            <StudioSelect id={'abg-material-binding-'+slot}
-              disabled={busy||!projectLoaded}
-              value={materialBindings[slot]??''}
-              onChange={e=>setBinding(slot,e.target.value)}>
-              <option value="">Use style material</option>
-              {Object.keys(materialLibrary.library).sort().map(material=>
-                <option value={material} key={material}>{material}</option>)}
-            </StudioSelect>
-          </StudioField>)}
+      <StudioSection title="Dimensions">
+        <div className="abg__dimensions">
+          <StudioField label="Width, m" htmlFor="abg-width">
+            <StudioInput id="abg-width" type="number" min={8} max={160} step={0.1} value={width}
+              onChange={setDimension(setWidth)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Height, m" htmlFor="abg-height">
+            <StudioInput id="abg-height" type="number" min={5} max={80} step={0.1} value={height}
+              onChange={setDimension(setHeight)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Depth, m" htmlFor="abg-depth">
+            <StudioInput id="abg-depth" type="number" min={8} max={160} step={0.1} value={depth}
+              onChange={setDimension(setDepth)} disabled={busy}/>
+          </StudioField>
+        </div>
+        <div className="abg__seed">
+          <StudioField label="Seed" htmlFor="abg-seed">
+            <StudioInput id="abg-seed" type="number" min={0} max={2147483645} step={1}
+              value={seed} onChange={setDimension(setSeed)} disabled={busy}/>
+          </StudioField>
+          <StudioIconButton icon={<Dices size={16}/>} aria-label="Generate random seed"
+            disabled={busy} onClick={randomize}/>
         </div>
       </StudioSection>
-      <BuildingMaterialDependenciesView key={snapshot?.project.path??''} bindings={materialBindings} library={materialLibrary}
-        onFocusSlot={slot=>document.getElementById('abg-material-binding-'+slot)?.focus()}
-        onRevealAsset={path=>{showPanel('assets');requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})));}}/>
-      <BuildingLiveGraphMonitor key={snapshot?.project.path??''}/>
-      <StudioSection title="Texture reimport dependencies">
+      {mode==='features'&&<StudioSection title="Floors and rooms">
+        <div className="abg__dimensions">
+          <StudioField label="Floors" htmlFor="abg-floors">
+            <StudioInput id="abg-floors" type="number" min={1} max={8} step={1} value={floors}
+              onChange={setDimension(setFloors)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Rooms X" htmlFor="abg-rooms-x">
+            <StudioInput id="abg-rooms-x" type="number" min={1} max={6} step={1} value={roomsX}
+              onChange={setDimension(setRoomsX)} disabled={busy}/>
+          </StudioField>
+          <StudioField label="Rooms Z" htmlFor="abg-rooms-z">
+            <StudioInput id="abg-rooms-z" type="number" min={1} max={6} step={1} value={roomsZ}
+              onChange={setDimension(setRoomsZ)} disabled={busy}/>
+          </StudioField>
+        </div>
+        <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
+      </StudioSection>}
+        </div>
+      {saved&&<StudioSection title="Generated asset">
+        <div className="abg__saved">
+          {thumbnail&&<img src={thumbnail} alt="Native model asset thumbnail" className="abg__thumbnail"/>}
+          <strong>{saved.path}</strong>
+          {saved.recipePath&&<small>Editable recipe: {saved.recipePath}</small>}
+          <small>GUID: {saved.guid}</small>
+          <small>{saved.triangles.toLocaleString()} triangles · {(saved.bytes/1024).toFixed(1)} KiB</small>
+          <div className="abg__actions">
+            <StudioButton onClick={reveal}>Reveal in Assets</StudioButton>
+            <StudioButton variant="primary" disabled={busy} loading={busy} onClick={()=>void place()}>Place in Scene</StudioButton>
+            <StudioButton variant="secondary" disabled={busy||!snapshot?.selectedId?.startsWith('entity:')}
+              onClick={()=>void applyToSelected()}>Use on Selected Object</StudioButton>
+          </div>
+        </div>
+      </StudioSection>}
+      <StudioSection title="Saved generated buildings">
         <div className="abg__actions">
-          <StudioButton variant="secondary" disabled={busy||checkingMaterials||!nativeConnected()}
-            onClick={()=>void checkMaterialDependencies()}>
-            <RefreshCw size={15}/> {checkingMaterials?'Checking…':'Check generated material dependencies'}
+          <StudioSelect aria-label="Saved building recipe" value={sourceRecipe}
+            disabled={busy||readingRecipe||savedRecipes.length===0}
+            onChange={e=>void loadRecipe(e.target.value)}>
+            <option value="">Choose a saved building…</option>
+            {savedRecipes.map(path=><option value={path} key={path}>{path}</option>)}
+          </StudioSelect>
+          <StudioButton variant="secondary" disabled={busy||readingRecipe||!nativeConnected()}
+            onClick={()=>void reloadRecipes().catch(e=>setError(explain(e)))}>
+            <RefreshCw size={15}/> Refresh
           </StudioButton>
         </div>
-        <label className="abg__note">
-          <input type="checkbox" checked={autoRegenerate}
-            onChange={e=>setAutoRegenerate(e.target.checked)}
-            disabled={busy||Boolean(regeneratingRecipe)}/>
-          Auto-create updated copies when Assets change (existing GLBs are never overwritten)
-        </label>
-        {staleMaterials.map(item=><div className="abg__property" key={item.recipe}>
-          <strong>{item.recipe}</strong>
-          {item.changes.map((change,index)=><small key={index} className="abg__note">
-            {change.guid||'Asset'}: {change.reason}
-          </small>)}
-          <div className="abg__actions">
-            <StudioButton variant="secondary" disabled={busy||Boolean(regeneratingRecipe)}
-              onClick={()=>void regenerateRecipe(item.recipe)}>
-              {regeneratingRecipe===item.recipe?'Regenerating…':'Create updated copy'}
-            </StudioButton>
-          </div>
-        </div>)}
-        <small className="abg__note">Automatically detects changes notified by Studio Assets. Optional auto-update creates at most one new copy per stale source recipe per Studio session; the original GLB and GUID are retained. Replacing a scene instance requires its existing renderer owner.</small>
       </StudioSection>
-      <StudioSection title="PBR materials & textures">
-        <BuildingMaterialEditor projectLoaded={projectLoaded} onSaved={()=>{
-          void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));
-          setStaleMaterials([]);
-          clearGenerated();
-        }}/>
-      </StudioSection>
-      {activeCandidate?.data&&<StudioSection title="Generated layout and structure">
-        {activeCandidate.data.sockets&&<BuildingPlanPreview
-          key={'plan:'+activeCandidate.batch+':'+activeCandidate.seed}
-          preview={activeCandidate.data} onSelectFeature={focusFeature}/>}
-        <BuildingStructureGraphView key={'graph:'+activeCandidate.batch+':'+activeCandidate.seed}
-          recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}
-          onRoute={async routeQuery=>(await invoke('studio.buildingInspect',{...activeCandidate.recipe,routeQuery})).route}
-          renderFeatureEditor={index=>features[index]?<GraphFeatureEditor key={index} feature={features[index]} disabled={busy}
-            onApply={patch=>{if(busy||!activeCandidate||mode!=='features')return;
-              setFeatures(old=>old.map((feature,i)=>i===index?{...feature,...patch}:feature));clearGenerated();}}/>:null}
-          renderMaterialInspector={slot=>{
-            const name=materialBindings[slot]??'',material=materialLibrary.library[name];
-            return <div className="au-stack">
-              <strong>Material slot · {slot}</strong>
-              <StudioSelect aria-label={'Graph material '+slot} value={name} disabled={busy||!projectLoaded} onChange={e=>setBinding(slot,e.target.value)}>
-                <option value="">Use style material</option>
-                {Object.keys(materialLibrary.library).sort().map(item=><option key={item} value={item}>{item}</option>)}
-              </StudioSelect>
-              {name&&!material&&<StudioAlert tone="warning">Project material not found in current library.</StudioAlert>}
-              {material&&['texture','normalMap','metallicRoughnessMap','occlusionMap','emissiveMap'].map(channel=><small key={channel}>{channel}: {typeof material[channel]==='string'&&material[channel]?String(material[channel]):'Not explicitly assigned'}</small>)}
-              <small>Current project material references only, not resolved exported GLB dependencies.</small>
-              <StudioButton size="sm" onClick={()=>document.getElementById('abg-material-binding-'+slot)?.focus()}>Focus source material binding</StudioButton>
-            </div>;
-          }}/>
-      </StudioSection>}
+      </div>
+      <div className="abg__page au-stack" hidden={page!=='features'}>
+        {mode!=='features'&&<StudioAlert>Switch to functional properties in Recipe to edit openings and vertical circulation.</StudioAlert>}
       {mode==='features'&&<StudioSection title="Functional properties">
-        <div className="abg__property-list" ref={featureRoot}>
+        <div className="abg__property-list">
           {features.map((feature,i)=><div className="abg__property" key={i}>
             <div className="abg__property-header">
               <strong>{propertyLabels[feature.kind]}</strong>
@@ -784,49 +798,64 @@ export default function BuildingGeneratorPanel({
         <small className="abg__note">Functionality is independent of setting. Entrances cut real wall openings;
           roof panels retract from a real roof aperture. Use Open to test different runtime states.</small>
       </StudioSection>}
-      {mode==='features'&&<StudioSection title="Floors and rooms">
-        <div className="abg__dimensions">
-          <StudioField label="Floors" htmlFor="abg-floors">
-            <StudioInput id="abg-floors" type="number" min={1} max={8} step={1} value={floors}
-              onChange={setDimension(setFloors)} disabled={busy}/>
-          </StudioField>
-          <StudioField label="Rooms X" htmlFor="abg-rooms-x">
-            <StudioInput id="abg-rooms-x" type="number" min={1} max={6} step={1} value={roomsX}
-              onChange={setDimension(setRoomsX)} disabled={busy}/>
-          </StudioField>
-          <StudioField label="Rooms Z" htmlFor="abg-rooms-z">
-            <StudioInput id="abg-rooms-z" type="number" min={1} max={6} step={1} value={roomsZ}
-              onChange={setDimension(setRoomsZ)} disabled={busy}/>
-          </StudioField>
+      </div>
+      <div className="abg__page au-stack" hidden={page!=='materials'}>
+      <StudioSection title="Architectural material bindings">
+        <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
+        <div className="abg__fields">
+          {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
+            label={slot} hint={selectedStyle?.surfaces?.[slot]?.pattern?'Generated · '+selectedStyle.surfaces[slot].pattern+' · 128 × 128':'Authored style factors / texture references'} htmlFor={'abg-material-binding-'+slot}>
+            <StudioSelect id={'abg-material-binding-'+slot}
+              disabled={busy||!projectLoaded}
+              value={materialBindings[slot]??''}
+              onChange={e=>setBinding(slot,e.target.value)}>
+              <option value="">Use style material</option>
+              {Object.keys(materialLibrary.library).sort().map(material=>
+                <option value={material} key={material}>{material}</option>)}
+            </StudioSelect>
+          </StudioField>)}
         </div>
-        <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
-      </StudioSection>}
-      <StudioSection title="Dimensions">
-        <div className="abg__dimensions">
-          <StudioField label="Width, m" htmlFor="abg-width">
-            <StudioInput id="abg-width" type="number" min={8} max={160} step={0.1} value={width}
-              onChange={setDimension(setWidth)} disabled={busy}/>
-          </StudioField>
-          <StudioField label="Height, m" htmlFor="abg-height">
-            <StudioInput id="abg-height" type="number" min={5} max={80} step={0.1} value={height}
-              onChange={setDimension(setHeight)} disabled={busy}/>
-          </StudioField>
-          <StudioField label="Depth, m" htmlFor="abg-depth">
-            <StudioInput id="abg-depth" type="number" min={8} max={160} step={0.1} value={depth}
-              onChange={setDimension(setDepth)} disabled={busy}/>
-          </StudioField>
-        </div>
-        <div className="abg__seed">
-          <StudioField label="Seed" htmlFor="abg-seed">
-            <StudioInput id="abg-seed" type="number" min={0} max={2147483645} step={1}
-              value={seed} onChange={setDimension(setSeed)} disabled={busy}/>
-          </StudioField>
-          <StudioIconButton icon={<Dices size={16}/>} aria-label="Generate random seed"
-            disabled={busy} onClick={randomize}/>
-        </div>
-        {parameterError&&<StudioAlert tone="warning" title="Parameters">{parameterError}</StudioAlert>}
       </StudioSection>
-      <StudioSection title="Variants">
+      <BuildingMaterialDependenciesView key={snapshot?.project.path??''} bindings={materialBindings} library={materialLibrary}
+        onFocusSlot={focusMaterial}
+        onRevealAsset={path=>{showPanel('assets');requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})));}}/>
+      <StudioSection title="Texture reimport dependencies">
+        <div className="abg__actions">
+          <StudioButton variant="secondary" disabled={busy||checkingMaterials||!nativeConnected()}
+            onClick={()=>void checkMaterialDependencies()}>
+            <RefreshCw size={15}/> {checkingMaterials?'Checking…':'Check generated material dependencies'}
+          </StudioButton>
+        </div>
+        <label className="abg__note">
+          <input type="checkbox" checked={autoRegenerate}
+            onChange={e=>setAutoRegenerate(e.target.checked)}
+            disabled={busy||Boolean(regeneratingRecipe)}/>
+          Auto-create updated copies when Assets change (existing GLBs are never overwritten)
+        </label>
+        {staleMaterials.map(item=><div className="abg__property" key={item.recipe}>
+          <strong>{item.recipe}</strong>
+          {item.changes.map((change,index)=><small key={index} className="abg__note">
+            {change.guid||'Asset'}: {change.reason}
+          </small>)}
+          <div className="abg__actions">
+            <StudioButton variant="secondary" disabled={busy||Boolean(regeneratingRecipe)}
+              onClick={()=>void regenerateRecipe(item.recipe)}>
+              {regeneratingRecipe===item.recipe?'Regenerating…':'Create updated copy'}
+            </StudioButton>
+          </div>
+        </div>)}
+        <small className="abg__note">Automatically detects changes notified by Studio Assets. Optional auto-update creates at most one new copy per stale source recipe per Studio session; the original GLB and GUID are retained. Replacing a scene instance requires its existing renderer owner.</small>
+      </StudioSection>
+      <StudioSection title="PBR materials & textures">
+        <BuildingMaterialEditor projectLoaded={projectLoaded} onSaved={()=>{
+          void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));
+          setStaleMaterials([]);
+          clearGenerated();
+        }}/>
+      </StudioSection>
+      </div>
+      <div className="abg__page au-stack" hidden={page!=='graphs'}>
+      {visibleVariants.length>0&&<StudioSection title="Variants">
         <div className="abg__actions">
           <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy||!nativeConnected()}
             onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
@@ -856,22 +885,38 @@ export default function BuildingGeneratorPanel({
             </button>)}
         </div>}
         <small className="abg__note">Variant evaluation measures native CPU geometry and reports real sockets. Use Preview 3D in Scene for the native Renderer3D model without writing an Asset. Generate GLB only when ready to persist the model.</small>
-      </StudioSection>
-      {saved&&<StudioSection title="Generated asset">
-        <div className="abg__saved">
-          {thumbnail&&<img src={thumbnail} alt="Native model asset thumbnail" className="abg__thumbnail"/>}
-          <strong>{saved.path}</strong>
-          {saved.recipePath&&<small>Editable recipe: {saved.recipePath}</small>}
-          <small>GUID: {saved.guid}</small>
-          <small>{saved.triangles.toLocaleString()} triangles · {(saved.bytes/1024).toFixed(1)} KiB</small>
-          <div className="abg__actions">
-            <StudioButton onClick={reveal}>Reveal in Assets</StudioButton>
-            <StudioButton variant="primary" disabled={busy} loading={busy} onClick={()=>void place()}>Place in Scene</StudioButton>
-            <StudioButton variant="secondary" disabled={busy||!snapshot?.selectedId?.startsWith('entity:')}
-              onClick={()=>void applyToSelected()}>Use on Selected Object</StudioButton>
-          </div>
-        </div>
       </StudioSection>}
+
+        {!activeCandidate?.data&&<StudioEmptyState title="Evaluate a building first" description="Evaluate 3 seeds to inspect the actual native geometry, rooms and routes. No graph is fabricated before evaluation."/>}
+      {activeCandidate?.data&&<StudioSection title="Generated layout and structure">
+        {activeCandidate.data.sockets&&<BuildingPlanPreview
+          key={'plan:'+activeCandidate.batch+':'+activeCandidate.seed}
+          preview={activeCandidate.data} onSelectFeature={focusFeature}/>}
+        <BuildingStructureGraphView key={'graph:'+activeCandidate.batch+':'+activeCandidate.seed}
+          recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}
+          onRoute={async routeQuery=>(await invoke('studio.buildingInspect',{...activeCandidate.recipe,routeQuery})).route}
+          renderFeatureEditor={index=>features[index]?<GraphFeatureEditor key={index} feature={features[index]} disabled={busy}
+            onApply={patch=>{if(busy||!activeCandidate||mode!=='features')return;
+              setFeatures(old=>old.map((feature,i)=>i===index?{...feature,...patch}:feature));clearGenerated();}}/>:null}
+          renderMaterialInspector={slot=>{
+            const name=materialBindings[slot]??'',material=materialLibrary.library[name];
+            return <div className="au-stack">
+              <strong>Material slot · {slot}</strong>
+              <StudioSelect aria-label={'Graph material '+slot} value={name} disabled={busy||!projectLoaded} onChange={e=>setBinding(slot,e.target.value)}>
+                <option value="">Use style material</option>
+                {Object.keys(materialLibrary.library).sort().map(item=><option key={item} value={item}>{item}</option>)}
+              </StudioSelect>
+              {name&&!material&&<StudioAlert tone="warning">Project material not found in current library.</StudioAlert>}
+              {material&&['texture','normalMap','metallicRoughnessMap','occlusionMap','emissiveMap'].map(channel=><small key={channel}>{channel}: {typeof material[channel]==='string'&&material[channel]?String(material[channel]):'Not explicitly assigned'}</small>)}
+              <small>Current project material references only, not resolved exported GLB dependencies.</small>
+              <StudioButton size="sm" onClick={()=>focusMaterial(slot)}>Focus source material binding</StudioButton>
+            </div>;
+          }}/>
+      </StudioSection>}
+      </div>
+      <div className="abg__page au-stack" hidden={page!=='runtime'}>
+      <BuildingLiveGraphMonitor key={snapshot?.project.path??''}/>
+      </div>
     </div>
   </StudioPanel>;
 }

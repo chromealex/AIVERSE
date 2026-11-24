@@ -9,7 +9,9 @@
         0.28
       ],
       "metallic": 0.75,
-      "roughness": 0.45
+      "roughness": 0.45,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6100
     },
     "plate": {
       "color": [
@@ -18,7 +20,9 @@
         0.37
       ],
       "metallic": 0.7,
-      "roughness": 0.5
+      "roughness": 0.5,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 6101
     },
     "rust": {
       "color": [
@@ -27,7 +31,9 @@
         0.06
       ],
       "metallic": 0.4,
-      "roughness": 0.7
+      "roughness": 0.7,
+      "surfacePattern": "rust",
+      "surfaceSeed": 6102
     },
     "trim": {
       "color": [
@@ -36,7 +42,9 @@
         0.07
       ],
       "metallic": 0.8,
-      "roughness": 0.4
+      "roughness": 0.4,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6103
     },
     "pipe": {
       "color": [
@@ -45,7 +53,9 @@
         0.18
       ],
       "metallic": 0.85,
-      "roughness": 0.35
+      "roughness": 0.35,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6104
     },
     "seam": {
       "color": [
@@ -54,7 +64,9 @@
         0.035
       ],
       "metallic": 0.3,
-      "roughness": 0.8
+      "roughness": 0.8,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6105
     },
     "inside": {
       "color": [
@@ -63,7 +75,9 @@
         0.24
       ],
       "metallic": 0.2,
-      "roughness": 0.75
+      "roughness": 0.75,
+      "surfacePattern": "concrete",
+      "surfaceSeed": 6106
     },
     "deck": {
       "color": [
@@ -72,7 +86,9 @@
         0.11
       ],
       "metallic": 0.5,
-      "roughness": 0.65
+      "roughness": 0.65,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6107
     },
     "hazardY": {
       "color": [
@@ -81,7 +97,9 @@
         0.03
       ],
       "metallic": 0.1,
-      "roughness": 0.55
+      "roughness": 0.55,
+      "surfacePattern": "paint",
+      "surfaceSeed": 6108
     },
     "hazardK": {
       "color": [
@@ -90,7 +108,9 @@
         0.02
       ],
       "metallic": 0.1,
-      "roughness": 0.6
+      "roughness": 0.6,
+      "surfacePattern": "paint",
+      "surfaceSeed": 6109
     },
     "glass": {
       "color": [
@@ -99,7 +119,9 @@
         0.03
       ],
       "metallic": 0.9,
-      "roughness": 0.1
+      "roughness": 0.1,
+      "surfacePattern": "glass",
+      "surfaceSeed": 6110
     },
     "glassLit": {
       "color": [
@@ -114,7 +136,9 @@
         0.55,
         0.12
       ],
-      "emissiveStrength": 2.5
+      "emissiveStrength": 2.5,
+      "surfacePattern": "glass",
+      "surfaceSeed": 6111
     },
     "warn": {
       "color": [
@@ -129,7 +153,9 @@
         0.45,
         0.05
       ],
-      "emissiveStrength": 5
+      "emissiveStrength": 5,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 6112
     },
     "red": {
       "color": [
@@ -144,7 +170,9 @@
         0.06,
         0.04
       ],
-      "emissiveStrength": 6
+      "emissiveStrength": 6,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 6113
     },
     "team": {
       "color": [
@@ -153,7 +181,9 @@
         0.04
       ],
       "metallic": 0.5,
-      "roughness": 0.45
+      "roughness": 0.45,
+      "surfacePattern": "paint",
+      "surfaceSeed": 6114
     },
     "exhaust": {
       "color": [
@@ -168,7 +198,9 @@
         0.35,
         0.05
       ],
-      "emissiveStrength": 4
+      "emissiveStrength": 4,
+      "surfacePattern": "metal",
+      "surfaceSeed": 6115
     }
   },
   "palettes": [

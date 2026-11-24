@@ -63,6 +63,15 @@ int main(int argc,char** argv){
         for(const char* id:{"scifi","modern"}){
             auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")),id);
             CHECK(style.id==id&&style.shell>=0&&!style.palettes.empty()&&style.proportions.window);
+            // Both legacy and modern defaults must ship real procedural PBR
+            // maps, including on the original Sci-Fi setting shown in Studio.
+            for(const auto& material:style.materials){
+                CHECK(!material.surfacePattern.empty());
+                for(auto channel:{BuildingSurfaceChannel::BaseColor,BuildingSurfaceChannel::MetallicRoughness,BuildingSurfaceChannel::Normal}){
+                    auto pixels=generateBuildingSurface(material.surfacePattern,material.id,material.surfaceSeed,channel);
+                    CHECK(pixels.width==128&&pixels.height==128&&pixels.rgba.size()==128u*128u*4u);
+                }
+            }
             size_t built=0;
             for(uint64_t seed=1;seed<=24;++seed){
                 BuildingDef t;t.floors=uint32_t(1+seed%5);t.width=Fixed::fromInt(int64_t(11+seed%12));t.depth=Fixed::fromInt(int64_t(10+seed%7));t.partition=seed%3!=0;

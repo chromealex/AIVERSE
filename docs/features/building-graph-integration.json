@@ -135,7 +135,9 @@
     "engine/buildings/BuildingLiftCommands.h",
     "tools/studio/verify_building_integration_mac.sh",
     "tools/mcp/test_building_diagnostics_stdio.py",
-    "apps/studio-native/StudioGameLaunch.h"
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.css",
+    "engine/assets/building-styles/scifi.json"
   ],
   "traits": {
     "editable": true,
@@ -171,7 +173,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending. Stage 37 native app build and selected automated Studio checks succeeded per runner completion. Real WKWebView visual/interaction acceptance NOT RUN.",
+      "note": "Stage 35D planned; integration verification pending. Stage 37 native app build and selected automated Studio checks succeeded per runner completion. Real WKWebView visual/interaction acceptance NOT RUN. Stage 38 user screenshots show excessive full-width forms and large empty dependency graphs. Reorganize workspace into Recipe/Features/Materials/Graphs/Runtime tabs, keep actions always visible and source controls focusable, present truthful empty graph state. Original scifi style had no surface patterns; author PBR patterns and seed per slot; expose native catalog surface metadata and test actual generated pixels. User requires textures generated with building; existing native preview and GLB writer use same generator; no new GPU or file owner. NOT RUN after changes.",
       "evidence": []
     },
     "inspector": {

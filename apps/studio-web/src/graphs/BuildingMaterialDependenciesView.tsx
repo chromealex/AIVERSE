@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {invoke,nativeConnected,onNativeEvent} from '../bridge';
 import type {StudioAsset} from '../types';
 import type {MaterialLibrary} from '../panels/materialSchema';
-import {StudioAlert,StudioButton,StudioSection} from '../ui';
+import {StudioAlert,StudioButton,StudioSection,StudioEmptyState} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {projectBuildingMaterialDependencies} from './buildingMaterialDependencies';
 import type {TextureProvenance} from './buildingMaterialDependencies';
@@ -38,9 +38,9 @@ export function BuildingMaterialDependenciesView({bindings,library,onRevealAsset
  return <StudioSection title="Building material and texture dependencies">
   <small>Explicit project bindings and catalog references. Inherited and bundled style defaults are not resolved here.</small>
   {catalogError&&<StudioAlert tone="warning">{catalogError}</StudioAlert>}
-  <div style={{height:320,display:'flex',flexDirection:'column',minWidth:0}}>
+  {data.view.nodes.length<=1?<StudioEmptyState title="No project overrides" description="Generated style textures are embedded automatically. Assign a project material to inspect its explicit Assets dependencies."/>:<div style={{height:320,display:'flex',flexDirection:'column',minWidth:0}}>
    <GraphCanvas view={data.view} label="Building material dependencies" selected={data.view.nodes.some(n=>n.id===selected)?selected:''} readOnly onSelect={setSelected} onMove={()=>{}}/>
-  </div>
+  </div>}
   {selected.startsWith('slot:')&&<StudioButton size="sm" onClick={()=>onFocusSlot(selected.slice(5))}>Focus material binding</StudioButton>}
   {data.materials.has(selected)&&<small>Project material · {data.materials.get(selected)}</small>}
   {texture&&<div className="au-stack"><small>Reference: {texture.reference}</small>
