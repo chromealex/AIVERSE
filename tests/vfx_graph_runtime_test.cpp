@@ -2,6 +2,8 @@
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/world/SpectraPhysisSnapshot.h"
+#include "engine/world/SpectraWaterSnapshot.h"
+#include "engine/world/SpectraTerrainProviders.h"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -325,5 +327,39 @@ int main() {
                 !registry.sample("physis","fire",{-50,0,-50},value),"unload removes provider");
     }
 
+    {
+        World water;
+        lib::nereid::WaterBodyComponent body;
+        body.footprint=lib::nereid::WaterFootprint::Infinite;
+        body.surfaceY=Fixed::fromInt(5);body.bottomY=Fixed::fromInt(-5);
+        water.add<lib::nereid::WaterBodyComponent>(water.create(),body);
+        world::SpectraFieldRegion region;region.origin={2,3,0};region.spacing=1;
+        auto plane=world::SpectraWaterSnapshot::capture(water,region,world::SpectraWaterGeometry::Plane,7);
+        sp::DataInterfaceRegistry registry;
+        require(plane && plane->tick()==7 && world::publishSpectraWater(registry,plane),"water snapshot");
+        float value=-1;
+        require(registry.sample("nereid","depth",{2,3,0},value)&&value==2,"plane depth");
+        require(!registry.sample("nereid","depth",{2,4,0},value),"outside snapshot");
+        lib::nereid::WaterSphereComponent sphere;
+        sphere.surfaceRadius=Fixed::fromInt(10);sphere.floorRadius=Fixed::fromInt(5);
+        water.add<lib::nereid::WaterSphereComponent>(water.create(),sphere);
+        region.origin={8,0,0};
+        auto radial=world::SpectraWaterSnapshot::capture(water,region,world::SpectraWaterGeometry::Sphere,8);
+        require(radial && world::publishSpectraWater(registry,radial),"sphere publication");
+        require(registry.sample("nereid","depth",{8,0,0},value)&&value==2,"radial depth");
+        require(registry.sample("nereid","up_x",{8,0,0},value)&&value==1,"radial up");
+        require(world::publishSpectraWater(registry,{})&&!registry.sample("nereid","depth",{8,0,0},value),"water unload");
+        auto height=std::make_shared<terraweave::AuthoredWorldHeightSnapshot>(10);
+        height->setTile(world::Cell{0,0,0},{2,{200,200,200,200}});
+        require(world::publishSpectraTerrain(registry,height),"terrain publication");
+        require(registry.sample("terraweave","clearance",{2,5,3},value)&&value==3,"terrain clearance");
+        require(!registry.sample("terraweave","height",{-5,0,0},value),"missing terrain tile");
+        world::SpectraPlanetTerrain planet;
+        planet.baseRadiusMeters=10;planet.terrain.baseHeightCm=200;planet.terrain.reliefCm=0;
+        require(world::publishSpectraPlanetTerrain(registry,planet),"planet terrain");
+        require(registry.sample("terraweave","clearance",{15,0,0},value)&&value==3,"radial terrain clearance");
+        require(registry.sample("terraweave","up_x",{15,0,0},value)&&value==1,"radial terrain up");
+        require(!registry.sample("terraweave","height",{0,0,0},value),"undefined planet centre");
+    }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }

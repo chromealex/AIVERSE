@@ -2,6 +2,7 @@
 // immutable copied samples on the SpectraFX owner thread. No ECS access at burst.
 #pragma once
 #include "engine/fx/SpectraDataInterfaces.h"
+#include "engine/world/SpectraFieldRegion.h"
 #include "engine/physis/PhysisPresentation.h"
 #include <array>
 #include <cmath>
@@ -10,47 +11,28 @@
 
 namespace aiverse::world {
 
-struct SpectraPhysisRegion {
-    render::float3 origin{}; // world metres, X/Y/Z; not planet-local altitude
-    float spacing=16;
-    std::array<unsigned,3> dimensions{1,1,1};
-};
+using SpectraPhysisRegion=SpectraFieldRegion;
 
 class SpectraPhysisSnapshot final {
 public:
-    static constexpr size_t kMaxSamples=4096;
+    static constexpr size_t kMaxSamples=SpectraFieldRegion::kMaxSamples;
     // One region per host publication. Invalid regions / uninitialized PHYSIS
     // return null; never publish a half-filled snapshot. Capture after ECS jobs.
     static std::shared_ptr<const SpectraPhysisSnapshot> capture(
             const World& world, const SpectraPhysisRegion& region) {
         const auto* state=world.resourceConst<physis::State>();
-        if(!state || !std::isfinite(region.spacing) ||
-           region.spacing<0.01f || region.spacing>1.0e6f)return {};
-        const std::array<float,3> origin{region.origin.x,region.origin.y,region.origin.z};
-        size_t count=1;
-        for(size_t axis=0;axis<3;++axis) {
-            const auto n=region.dimensions[axis];
-            if(n<1 || n>64 || count>kMaxSamples/n ||
-               !std::isfinite(origin[axis]) || std::abs(origin[axis])>1.0e7f ||
-               std::abs(double(origin[axis])+double(n-1)*region.spacing)>1.0e7)
-                return {};
-            count*=n;
-        }
+        const size_t count=region.count();
+        if(!state || !count)return {};
         auto result=std::shared_ptr<SpectraPhysisSnapshot>(new SpectraPhysisSnapshot);
         result->region_=region;
         result->tick_=state->tick;
         result->samples_.reserve(count);
-        const auto fixed=[](double metres) {
-            return Fixed::fromRaw(static_cast<int64_t>(std::llround(metres*Fixed::kOne)));
-        };
         for(unsigned z=0;z<region.dimensions[2];++z)
             for(unsigned y=0;y<region.dimensions[1];++y)
                 for(unsigned x=0;x<region.dimensions[0];++x) {
                     physis::NatureFieldSample value;
-                    const Vec3 point{
-                        fixed(double(origin[0])+double(x)*region.spacing),
-                        fixed(double(origin[1])+double(y)*region.spacing),
-                        fixed(double(origin[2])+double(z)*region.spacing)};
+                    const auto p=region.point(x,y,z);
+                    const Vec3 point{p[0],p[1],p[2]};
                     if(!physis::sampleNatureField(world,point,value) ||
                        value.tick!=result->tick_)return {};
                     result->samples_.push_back(value);
@@ -64,17 +46,9 @@ public:
     // No extrapolation outside this bounded 3D region; missing channels retain
     // the graph's normal required/fallback semantics. No live World pointer.
     bool sample(std::string_view channel,render::float3 position,float& output) const {
-        const std::array<float,3> origin{region_.origin.x,region_.origin.y,region_.origin.z};
-        const std::array<float,3> point{position.x,position.y,position.z};
-        std::array<size_t,3> index{};
-        for(size_t axis=0;axis<3;++axis) {
-            const double t=(double(point[axis])-origin[axis])/region_.spacing;
-            if(!std::isfinite(t) || t<-.5 ||
-               t>=double(region_.dimensions[axis])-.5)return false;
-            index[axis]=size_t(std::floor(t+.5));
-        }
-        const auto& s=samples_[(index[2]*region_.dimensions[1]+index[1])*
-                              region_.dimensions[0]+index[0]];
+        size_t index=0;
+        if(!region_.index(position,index))return false;
+        const auto& s=samples_[index];
         Fixed v{};
         if(channel=="wind_x")v=s.windVelocity.x;
         else if(channel=="wind_y")v=s.windVelocity.y;
