@@ -4,6 +4,7 @@
 #include "WorldProcessesPlanetBankPipeline.h"
 #include "EvolvePlanetForestEcology.h"
 #include "EvolvePlanetNutrients.h"
+#include "EvolvePlanetNaturalFalls.h"
 
 namespace aiverse::lib::worldprocess {
 struct PlanetForestPipelineState {
@@ -20,6 +21,8 @@ struct PlanetForestPipelineConfig {
     terraweave::ForestDeadwoodDecaySettings decay{};
     terraweave::ForestNutrientCycleSettings nutrient{};
     std::vector<evolve::PlanetWeatherMapping> weather;
+    uint32_t naturalFallPermille=0; // disabled for legacy maps
+    std::map<uint32_t,PlanetForestCapsuleRecipe> naturalFallBodies;
 };
 inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         uint32_t tick,const PlanetForestPipelineConfig& cfg){
@@ -95,6 +98,15 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
                 });
             if(!result||!add(report.decayed,result->decayedUnits))return reject();
         }
+        if(cfg.naturalFallPermille){
+            const auto fallen=evolve::reconcilePlanetNaturalFalls(staged,surface,tick,cfg.naturalFallPermille);
+            if(!fallen)return reject();
+            for(const auto& fall:fallen->falls){
+                const auto recipe=cfg.naturalFallBodies.find(fall.event.id.speciesId);
+                if(recipe!=cfg.naturalFallBodies.end()&&!deliverPlanetForestCapsule(staged,surface,fall,tick,recipe->second))
+                    return reject();
+            }
+        }
         if(nutrientDue){
             const auto result=evolve::advancePlanetNutrients(staged,surface,tick,cfg.nutrient,
                 [&](std::string_view body,Vec3 ground){
@@ -127,8 +139,9 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
     };
     for(const auto& [key,value]:json.members())
         if(key!="species"&&key!="plants"&&key!="weather"&&key!="growthInterval"&&key!="decayInterval"&&
-           key!="nutrientInterval"&&key!="maxPlants"&&key!="baselineNutrients")
+           key!="nutrientInterval"&&key!="maxPlants"&&key!="baselineNutrients"&&key!="naturalFallPermille")
             throw std::invalid_argument("planetForest unknown key: "+key);
+    cfg.naturalFallPermille=uint32_t(number(json,"naturalFallPermille",0,0,1000));
     cfg.ecology.intervalTicks=uint32_t(number(json,"growthInterval",32,1,100000));
     cfg.decay.intervalTicks=uint32_t(number(json,"decayInterval",64,1,100000));
     cfg.nutrient.intervalTicks=uint32_t(number(json,"nutrientInterval",256,1,100000));
@@ -149,6 +162,21 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
         validateForestEcologySpecies(s);
         if(!policies.emplace(s.speciesId,s).second)throw std::invalid_argument("planetForest duplicate species");
         cfg.species.push_back(s);
+        if(item.has("naturalFallBody")){
+            const auto& shape=item["naturalFallBody"];
+            if(!cfg.naturalFallPermille||!shape.isObject())
+                throw std::invalid_argument("planetForest naturalFallBody requires enabled natural fall");
+            for(const auto& [key,value]:shape.members())
+                if(key!="radiusCm"&&key!="halfHeightCm"&&key!="density"&&key!="frictionPermille")
+                    throw std::invalid_argument("planetForest naturalFallBody unknown key: "+key);
+            PlanetForestCapsuleRecipe recipe;
+            recipe.radius=Fixed::fromRatio(number(shape,"radiusCm",15,2,100000),100);
+            recipe.halfHeight=Fixed::fromRatio(number(shape,"halfHeightCm",200,2,100000),100);
+            recipe.density=Fixed::fromInt(number(shape,"density",600,1,1000000));
+            recipe.friction=Fixed::fromRatio(number(shape,"frictionPermille",500,0,10000),1000);
+            if(!validPlanetForestCapsule(recipe))throw std::invalid_argument("planetForest naturalFallBody invalid");
+            cfg.naturalFallBodies.emplace(s.speciesId,recipe);
+        }
     }
     const auto& authored=core.matchMap()["entities"];
     if(!authored.isArray()||authored.size()!=core.mapPlaced().size())
@@ -216,6 +244,8 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
     sim.registerPersistentResource<ForestEcologyResource>("terraweave.forest_ecology",1);
     if(!world.resourceConst<PlanetRootDeliveryResource>())registerPlanetRootDeliveryPersistence(sim);
     registerPlanetDeadwoodPersistence(sim);
+    if(!cfg.naturalFallBodies.empty()&&!world.resourceConst<PlanetConsequenceResource>())
+        registerPlanetConsequencePersistence(sim);
     sim.registerPersistentResource<PlanetForestPipelineState>("worldprocess.planet_forest_pipeline",1);
     world.setResource<TerraWeaveAuthorityResource>(std::move(authority));
     world.setResource<ForestEcologyResource>();

@@ -29,6 +29,7 @@
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "aiverselib/world/EvolvePlanetForestEcology.h"
 #include "aiverselib/world/EvolvePlanetNutrients.h"
+#include "aiverselib/world/EvolvePlanetNaturalFalls.h"
 #include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
@@ -996,6 +997,48 @@ static void checkPlanetForestEcology(){
     const auto retry=evolve::advancePlanetForestEcology(ecs,surface,1,{species},cfg);
     AIVERSE_TEST_CHECK(retry&&retry->born.size()==next->born.size());
 }
+static void checkPlanetNaturalFalls(){
+    using namespace terraweave;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);surface.build();
+    World ecs;TerraWeaveAuthorityResource authority;
+    AnchoredPlant tree;tree.anchor.speciesId=1;tree.anchor.plantKey=19;
+    tree.anchor.roots=defaultRootProfile(PlantHabit::Tree);
+    authority.rooted={tree};ecs.setResource<TerraWeaveAuthorityResource>(authority);
+    ecs.setResource<evolve::PlanetRootDeliveryResource>();
+    const auto pos=surface.cellCenter(surface.gridCell(0,0,3,3));
+    const evolve::PlanetRootBinding binding{{1,19},"terra",pos};
+    const std::vector<evolve::PlanetRootBinding> bindings{binding};
+    AIVERSE_TEST_CHECK(evolve::setPlanetRootBindings(ecs,surface,bindings));
+    ForestEcologyResource ecology;ForestEcologyPlantState history;history.id=binding.id;history.dead=true;
+    ecology.plants.push_back(history);ecs.setResource<ForestEcologyResource>(ecology);
+    AIVERSE_TEST_CHECK(evolve::initializePlanetDeadwood(ecs,surface));
+    auto wood=*ecs.resourceConst<evolve::PlanetDeadwoodResource>();
+    AIVERSE_TEST_CHECK(evolve::seedPlanetDeadwood(wood,surface,tree,binding,1));
+    ecs.setResource<evolve::PlanetDeadwoodResource>(wood);
+    ecs.setResource<wp::PlanetConsequenceResource>();
+    AIVERSE_TEST_CHECK(evolve::reconcilePlanetNaturalFalls(ecs,surface,2,500)->falls.empty());
+    auto& log=wood.ledger.logs.front();
+    const auto lost=log.remainingUnits-log.initialUnits/2;
+    log.remainingUnits-=lost;wood.ledger.totalRespiredUnits+=lost;
+    ecs.setResource<evolve::PlanetDeadwoodResource>(wood);
+    ecs.enableCowSnapshots();const World before=ecs;
+    AIVERSE_TEST_CHECK(evolve::reconcilePlanetNaturalFalls(ecs,surface,3,0)->falls.empty());
+    const auto result=evolve::reconcilePlanetNaturalFalls(ecs,surface,3,500);
+    AIVERSE_TEST_CHECK(result&&result->falls.size()==1);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<TerraWeaveAuthorityResource>()->rooted[0].fallen);
+    AIVERSE_TEST_CHECK(!before.resourceConst<TerraWeaveAuthorityResource>()->rooted[0].fallen);
+    AIVERSE_TEST_CHECK(evolve::reconcilePlanetNaturalFalls(ecs,surface,4,500)->falls.empty());
+    wp::PlanetForestCapsuleRecipe invalid;invalid.radius=Fixed{};
+    AIVERSE_TEST_CHECK(!wp::deliverPlanetForestCapsule(ecs,surface,result->falls[0],4,invalid));
+    AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).size()==1);
+    AIVERSE_TEST_CHECK(wp::deliverPlanetForestCapsule(ecs,surface,result->falls[0],4,{}));
+    AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).empty());
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wp::PlanetConsequenceResource>()->bodies.size()==1);
+    AIVERSE_TEST_CHECK(!wp::deliverPlanetForestCapsule(ecs,surface,result->falls[0],4,{}));
+    ecs=before;
+    AIVERSE_TEST_CHECK(evolve::reconcilePlanetNaturalFalls(ecs,surface,3,500)->falls.size()==1);
+}
 static void checkPlanetRootSupport(){
     using namespace terraweave;
     game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -1922,6 +1965,7 @@ int main(){
     checkPlanetCollapseDelivery();
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
+    checkPlanetNaturalFalls();
     checkPlanetForestEcology();
     checkPlanetDeadwood();
     checkPlanetNutrients();
