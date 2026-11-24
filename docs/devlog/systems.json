@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: нативная диагностика геометрии",
+     "titleEn": "Planetary forest: native geometry diagnostics",
+     "text": "Stage 161D2a: линии реального прототипа ARBOR, корневая опора и контур проектной капсулы на активном теле; отдельный лимит геометрии.",
+     "textEn": "Stage 161D2a: actual ARBOR prototype branches, root footprint and authored capsule outline on active body; independent geometry budget."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: редактирование размещения и выбор текстур",
      "titleEn": "Planetary forest: placement editing and texture folder picker",
      "text": "Stage 161D1: редактируемые body/face/x/y, переключение marker/direct, выбор папки content через Assets; сохранение и Undo через существующий валидатор. Геометрические оверлеи отдельно.",
