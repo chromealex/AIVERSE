@@ -117,6 +117,37 @@ int main() {
     check(!spectra::compileGraph(wrongPosition,effect,errors),
           "unbounded canvas coordinates accepted");
 
+    // V2 Data Interface authoring uses the same strict schema as the runtime
+    // and must not corrupt an unfinished graph or its non-binding nodes.
+    {
+        Json bindingsDraft=spectra::authoring::newGraphV2();
+        bindingsDraft.set("instanceParameters",Json::parse(
+            R"JSON({"wind_lift":{"slot":0,"default":2,"min":0,"max":25}})JSON"));
+        check(spectra::authoring::findInfo("DataInterface")!=nullptr,
+              "DataInterface node missing from editor node catalog");
+        check(!spectra::fieldsForNode("DataInterface").empty(),
+              "DataInterface typed inspector field missing");
+        std::string bindingError;
+        const Json good=Json::parse(
+            R"JSON({"provider":"weather","channel":"up","fallback":2})JSON");
+        check(spectra::authoring::setDataInterfaceBinding(
+                  bindingsDraft,"wind_lift",good,bindingError),
+              "valid data interface editor binding rejected");
+        const Json unchanged=bindingsDraft;
+        const Json bad=Json::parse(
+            R"JSON({"provider":"../unsafe","channel":"up","fallback":2})JSON");
+        check(!spectra::authoring::setDataInterfaceBinding(
+                  bindingsDraft,"wind_lift",bad,bindingError),
+              "editor accepted unsafe provider name");
+        check(bindingsDraft==unchanged,
+              "invalid Data Interface edit mutated graph");
+        check(spectra::authoring::removeDataInterfaceBinding(
+                  bindingsDraft,"wind_lift",bindingError),
+              "remove valid Data Interface binding failed");
+        check(!bindingsDraft["dataInterfaces"].has("wind_lift"),
+              "removed binding remained in graph");
+    }
+
     const Json override = Json::parse(R"JSON({"size":2})JSON");
     check(spectra::compileGraph(base,override,effect,errors), "override compile");
     check(effect.emitters[0].size.min==2.0f, "parameter override lost");

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cmath>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <map>
 #include <string>
@@ -101,6 +102,24 @@ public:
     // CPU wall time spent issuing commands, NOT asynchronous GPU time.
     void setCpuEncodeProfiling(bool enabled) {cpuEncodeProfiling_=enabled;}
     bool cpuEncodeProfiling() const {return cpuEncodeProfiling_;}
+    // Optional visual-field callback from a native host. Called once for
+    // each DEDICATED GPU/CPU-twin emitter at a safe pre-pass frame point.
+    // Pooled emitters cannot apply different per-source accelerations and
+    // therefore opt out of shared pooling while this callback is installed.
+    using AccelerationSampler=std::function<bool(render::float3,render::float3&)>;
+    void setAccelerationSampler(AccelerationSampler sampler) {
+        accelerationSampler_=std::move(sampler);
+    }
+    bool hasAccelerationSampler() const {return bool(accelerationSampler_);}
+    void sampleAcceleration(SpectraFxHybridEmitter& emitter) const {
+        render::float3 value{};
+        if(accelerationSampler_ && !accelerationSampler_(emitter.origin(),value))
+            value={0,0,0};
+        // Invalid callback results preserve the previous valid field only
+        // for this call; reset to zero instead of carrying stale weather.
+        if(!emitter.setExternalAcceleration(value))
+            emitter.setExternalAcceleration({0,0,0});
+    }
 
     // Project/host opt-in. Uses device's WHOLE-FRAME GPU time only as a
     // conservative spawn throttle, never as a claim about SpectraFX cost.
@@ -198,7 +217,8 @@ public:
         // Shared pools are explicit project opt-ins. Unsupported devices,
         // heterogeneous settings, or an exhausted pool use the existing
         // per-emitter HybridEmitter path with the authored CPU fallback.
-        if(!route->second.sharedPool.empty() && !forceCpuTwin_) {
+        if(!route->second.sharedPool.empty() && !forceCpuTwin_ &&
+           !accelerationSampler_) {
             PooledRef pooled;
             if(tryStartPooled(route->second,entry->config,cue,pooled)) {
                 if(!oneShot && !retireKey(cue.key)) {
@@ -321,6 +341,7 @@ public:
             if(pair.second->collectDeferredGpuRelease())
                 ++stats_.gpuDeferredReleaseCompleted;
             pair.second->setExternalSpawnScale(spawnScale);
+            sampleAcceleration(*pair.second);
             advanceGpu(*pair.second,dt);
         }
         for(size_t i=0;i<oneShots_.size();) {
@@ -337,6 +358,7 @@ public:
             if(shot.emitter->collectDeferredGpuRelease())
                 ++stats_.gpuDeferredReleaseCompleted;
             shot.emitter->setExternalSpawnScale(spawnScale);
+            sampleAcceleration(*shot.emitter);
             advanceGpu(*shot.emitter,dt);
             shot.elapsed+=dt;
             ++i;
@@ -954,6 +976,7 @@ private:
     uint64_t nextPoolTicket_=0;
     render::float3 lastCameraEye_{};
     bool cpuEncodeProfiling_=false;
+    AccelerationSampler accelerationSampler_{};
     bool forceCpuTwin_=false;
     SpectraFxGpuBudgetGovernor gpuGovernor_{};
     FxQuality globalQuality_=FxQuality::High;

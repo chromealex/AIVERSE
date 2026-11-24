@@ -17,7 +17,8 @@ namespace aiverse::fx {
 // Version-2 frontend is defined by SpectraGraphV2.h at the end of this
 // header to keep all existing v1 callers source-compatible.
 inline bool compileSpectraGraphV2(const Json& graph, const Json& overrides,
-                                 EffectDef& out, std::vector<std::string>& errors);
+                                 EffectDef& out, std::vector<std::string>& errors,
+                                 const SdfResourceReader& sdfReader = {});
 
 namespace vfxgraph_detail {
 inline bool fail(std::vector<std::string>& errors, const std::string& reason) {
@@ -95,11 +96,11 @@ inline bool resolve(const Json& input, const Json& defaults, const Json& overrid
 // Each output is a single-parent path; paths may fan out (multiple emitters).
 // Properties are existing FxEffect.h emitter fields; later nodes override earlier.
 // Nested module objects merge recursively. Unknown properties are rejected by parseEffect.
-// Graph validation does not perform any IO, shader compilation, or runtime mutation.
+// Graph validation uses only explicitly supplied SDF resource IO; no runtime mutation.
 inline bool compileSpectraGraph(const Json& graph, const Json& overrides, EffectDef& out,
-                            std::vector<std::string>& errors) {
+                            std::vector<std::string>& errors, const SdfResourceReader& sdfReader = {}) {
     if(graph.isObject() && graph.getInt("version")==2)
-        return compileSpectraGraphV2(graph,overrides,out,errors);
+        return compileSpectraGraphV2(graph,overrides,out,errors,sdfReader);
     errors.clear();
     out = {};
     if (!graph.isObject() || !graph["version"].isNumber() || graph.getInt("version") != 1)
@@ -236,7 +237,7 @@ inline bool compileSpectraGraph(const Json& graph, const Json& overrides, Effect
         compiled.set("forceFields", std::move(resolved));
     }
     EffectDef parsed;
-    if (!parseEffect(compiled, "vfx graph", parsed, errors)) {
+    if (!parseEffect(compiled, "vfx graph", parsed, errors,sdfReader)) {
         out = {};
         return false;
     }

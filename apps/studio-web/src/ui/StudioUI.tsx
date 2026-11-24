@@ -74,12 +74,13 @@ export function StudioSection({title,actions,className,children,...props}:Studio
   </section>;
 }
 export interface StudioFieldProps extends Omit<LabelHTMLAttributes<HTMLLabelElement>,'htmlFor'> {
-  label: string; htmlFor: string; hint?: string; error?: string;
+  label: string; htmlFor?: string; hint?: string; error?: string;
   children: ReactNode;
 }
 export function StudioField({label,htmlFor,hint,error,className,children,...props}:StudioFieldProps) {
   return <div className={classes('au-field',className)}>
-    <label {...props} htmlFor={htmlFor} className="au-field__label">{label}</label>
+    {htmlFor?<label {...props} htmlFor={htmlFor} className="au-field__label">{label}</label>:
+      <span className="au-field__label">{label}</span>}
     {children}
     {hint && <small className="au-field__hint">{hint}</small>}
     {error && <small className="au-field__error" role="alert">{error}</small>}

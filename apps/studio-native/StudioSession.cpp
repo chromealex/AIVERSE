@@ -10,6 +10,7 @@
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "engine/render/Model.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -30,6 +31,7 @@
 #include "engine/character/vivid/MetaHumanAdapter.h"
 #include <algorithm>
 #include "apps/editor/core/MaterialOps.h"
+#include "libraries/include/aiverselib/mechanics/SpectraSourceDocument.h"
 #include <cctype>
 #include <cmath>
 #include <functional>
@@ -90,6 +92,13 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
 }
 StudioSession::StudioSession(const std::string& engineRoot, const std::string& project) {
     ws_.engineDir = engineRoot;
+    ws_.setSpectraAssetCheckHandler([this](const Json& params){
+        Json request=Json::object();request.set("method",str("studio.spectraAssetCheck"));
+        request.set("params",params);request.set("id",num(0));
+        const Json response=dispatchImpl(request);
+        if(response.has("error"))throw std::runtime_error(response.getStr("error"));
+        return response["result"];
+    });
     if (!project.empty()) {
         const auto directory=recoveredProjectDir(ws_,project);
         std::string error;
@@ -167,6 +176,22 @@ Json genericField(const std::string& key,const Json& value) {
 }
 // Map "facing" is clockwise degrees seen from above; Transform rotation Y is
 // right-handed (counter-clockwise). Both normalized to [0,360).
+// Validate a published graph through the shared Workspace compiler before
+// writing a source declaration. Preview-only drafts are not placeable.
+Json requireStudioSpectraGraph(editor::Workspace& ws,const std::string& name){
+    if(!lib::mechanics::validSpectraSourceName(name))throw std::runtime_error("Invalid SpectraFX effect name");
+    Json args=Json::object();args.set("name",str(name));
+    const auto result=ws.call("fx_graph_get",args,"studio");
+    if(result.has("error")||!result["validation"].getBool("ok")||result["graph"].getInt("version")!=2)
+        throw std::runtime_error("Choose a published valid SpectraFX Graph v2");
+    return result["graph"];
+}
+spectra::InstanceParameterTable studioSpectraParameterSchema(const Json& graph){
+    spectra::InstanceParameterTable schema;std::vector<std::string> errors;
+    if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],schema,errors))
+        throw std::runtime_error(errors.empty()?"Invalid instance parameter schema":errors.front());
+    return schema;
+}
 double studioFacingToYaw(double facing){double y=std::fmod(360.0-std::fmod(facing,360.0),360.0);return y<0?y+360.0:y;}
 bool studioModelAssetPath(const std::string& path) {
     if(path.rfind("content/",0)!=0 || path.size()>512 || path.find("..")!=std::string::npos || path.find('\\')!=std::string::npos)
@@ -207,6 +232,8 @@ Json StudioSession::componentCatalog(const std::string& entityId) const {
     item("MeshRenderer","Mesh Renderer","Rendering","Model and material slots (built-in cube by default)","native",
         !comps.has("StaticModel") && !water,comps.has("StaticModel")?"Already on this entity":water?"Water entities are drawn by NEREID":
         (editor::authoredEntity(e)?"":"Replaces the look from rules.json for this entity only"));
+    item("SpectraSource","VFX Renderer","Rendering","Authored SpectraFX source (native host presentation binding required)","native",
+        !comps.has("SpectraSource"),comps.has("SpectraSource")?"Already on this entity":"");
     item("Light","Point Light","Rendering","Adds a light entity at this position","light",true,"");
     item("NereidWater","NEREID Water","World","Rivers, lakes and sea are authored in World › NEREID Water","water",false,"Create water from the NEREID Water panel");
     item("Unit","Unit","Gameplay","Type, owner and stats come from rules.json","native",false,"Defined by the entity type");
@@ -334,6 +361,37 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             components.push(component("Unit","Unit",unit));
             for(const auto& [name,value]:comps.members()) {
                 if(name=="Transform"||name=="StaticModel")continue;
+                if(name=="SpectraSource"){
+                    Json fields=Json::array();
+                    fields.push(prop("effect","Effect","text",value["effect"]));
+                    auto scale=numericProp("scale","Effect scale",value["scale"]);
+                    scale.set("min",Json::number(.001));scale.set("max",Json::number(100.0));fields.push(scale);
+                    fields.push(prop("enabled","Enabled","boolean",value["enabled"]));
+                    fields.push(prop("killOnDetach","Kill on detach","boolean",value["killOnDetach"]));
+                    const auto effect=value.getStr("effect");
+                    if(lib::mechanics::validSpectraSourceName(effect)){
+                        try{
+                            namespace fs=std::filesystem;
+                            const auto dir=fs::path(ws_.project.dir)/"fx";
+                            const auto file=dir/"graphs"/(effect+".vfx.json");
+                            if(!fs::is_symlink(fs::symlink_status(dir))&&!fs::is_symlink(fs::symlink_status(dir/"graphs"))&&
+                               fs::is_regular_file(fs::symlink_status(file))&&fs::file_size(file)<=512*1024){
+                                std::ifstream input(file,std::ios::binary);
+                                const auto graph=Json::parse(std::string(std::istreambuf_iterator<char>(input),{}));
+                                for(const auto& [name,def]:studioSpectraParameterSchema(graph)){
+                                    const auto key="parameter:"+name;
+                                    auto field=numericProp(key.c_str(),name.c_str(),value["parameters"].has(name)?value["parameters"][name]:Json::number(double(def.initial)));
+                                    field.set("min",Json::number(double(def.minimum)));
+                                    field.set("max",Json::number(double(def.maximum)));
+                                    fields.push(std::move(field));
+                                }
+                            }
+                        }catch(const std::exception&){/* invalid graph: keep base inspector accessible */}
+                    }
+                    fields.push(readOnly(numericProp("revision","Revision",value["revision"],true)));
+                    components.push(component("SpectraSource","VFX Renderer",fields,"Authored source; runtime host binding required."));
+                    continue;
+                }
                 Json fields=Json::array();
                 if(value.isObject())for(const auto& [key,item]:value.members())fields.push(genericField(key,item));
                 else fields.push(genericField("value",value));
@@ -1904,6 +1962,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 item.set("path", str(asset.path));
                 item.set("guid", str(asset.guid));
                 item.set("importer",str(asset.importer));
+                if(!asset.directory&&asset.importer=="model") {
+                    const bool native=render::isNativeModelFormat(asset.path);
+                    const auto converted=catalog.byPath(asset.path+".glb");
+                    item.set("modelLoadableFormat",Json::fromBool(native||(converted&&!converted->directory)));
+                }
                 item.set("bytes", Json::number(asset.bytes));
                 if(asset.directory)folders.push(std::move(item));
                 else entries.push(std::move(item));
@@ -1911,6 +1974,63 @@ Json StudioSession::dispatchImpl(const Json& request) {
             r.set("files",std::move(entries));
             r.set("folders",std::move(folders));
             reply.set("result", std::move(r));
+        } else if (method == "studio.spectraAssetCheck") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            const std::string guid=params.getStr("guid");
+            if(!studioValidGuid(guid))throw std::runtime_error("Invalid asset GUID");
+            StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild();
+            const auto entry=catalog.byGuid(guid);
+            if(!entry||entry->directory){
+                Json result=Json::object();result.set("guid",str(guid));result.set("ok",Json::fromBool(false));
+                result.set("code",str("missing"));result.set("detail",str("Asset missing from project index"));
+                result.set("gpuVerified",Json::fromBool(false));reply.set("result",std::move(result));return reply;
+            }
+            if(entry->importer!="model"&&entry->importer!="texture")
+                throw std::runtime_error("Expected model or texture asset");
+            const auto root=std::filesystem::path(ws_.project.dir)/"content";
+            uint64_t remaining=64ull*1024*1024;
+            render::FileReader reader=[&](const std::string& name,std::string& bytes){
+                const auto rel=std::filesystem::path(name).lexically_normal();
+                if(rel.empty()||rel.is_absolute())return false;
+                for(const auto& part:rel)if(part=="..")return false;
+                const auto indexed=catalog.byPath(rel.generic_string());
+                if(!indexed||indexed->directory||indexed->bytes<0||uint64_t(indexed->bytes)>remaining)return false;
+                std::error_code ec;
+                const auto file=root/rel;
+                auto walk=root;
+                for(const auto& part:rel){
+                    walk/=part;
+                    if(std::filesystem::is_symlink(std::filesystem::symlink_status(walk,ec))||ec)return false;
+                }
+                const auto size=std::filesystem::file_size(file,ec);
+                if(ec||size>remaining)return false;
+                std::ifstream stream(file,std::ios::binary);
+                if(!stream)return false;
+                bytes.resize(size_t(size));
+                if(size&&!stream.read(bytes.data(),std::streamsize(size)))return false;
+                remaining-=size;
+                return true;
+            };
+            Json result=Json::object();
+            result.set("guid",str(guid));
+            bool ok=false;
+            std::string detail,code="decode_failed";
+            try {
+                if(entry->importer=="model"&&!render::isNativeModelFormat(entry->path)&&!catalog.byPath(entry->path+".glb")){
+                    code="unsupported_format";detail="No native model loader or converted GLB";
+                }else if(entry->importer=="model"){
+                    auto model=render::loadModel(entry->path,reader);
+                    ok=model&&!model->vertices.empty()&&!model->indices.empty();
+                }else{
+                    std::string bytes;render::Image image;
+                    ok=reader(entry->path,bytes)&&render::decodeImage(bytes,image);
+                }
+                if(detail.empty())detail=ok?"CPU decode succeeded":"CPU decode failed or geometry empty";
+                if(ok)code="ok";
+            }catch(const std::exception& e){detail=e.what();}
+            result.set("ok",Json::fromBool(ok));result.set("detail",str(detail));result.set("code",str(code));
+            result.set("gpuVerified",Json::fromBool(false));
+            reply.set("result",std::move(result));
         } else if (method == "studio.assetMetaPatch") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string guid=params.getStr("guid");
@@ -2112,13 +2232,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             if (ws_.map.data.worldSpace) throw std::runtime_error("This operation requires a map entity document");
             const std::string asset=params.getStr("asset");
+            const bool isFx=asset.rfind("spectrafx:",0)==0;
+            const std::string fxName=isFx?asset.substr(10):std::string();
+            if(isFx)requireStudioSpectraGraph(ws_,fxName);
             for(const char* key:{"x","z"}){const double v=params[key].toDouble(NAN);if(!std::isfinite(v)||std::abs(v)>1000000)throw std::runtime_error("Drop position out of range");}
             std::string type;
             for(const char* candidate:{"prop","props","decor","decoration","scenery","doodad","static"})
                 if(ws_.project.rules.findType(candidate)>=0){type=candidate;break;}
-            if(type.empty() && !selected_.empty() && selected_.compare(0,7,"entity:")==0)
+            if(!isFx && type.empty() && !selected_.empty() && selected_.compare(0,7,"entity:")==0)
                 type=ws_.map.data.entities.at(size_t(indexFor(selected_))).type;
-            if(type.empty())throw std::runtime_error("Add a scenery type (\"prop\") to rules.json, or select an entity whose type to use");
+            if(type.empty())throw std::runtime_error(isFx?"VFX placement requires a neutral scenery type (prop)":"Add a scenery type (\"prop\") to rules.json, or select an entity whose type to use");
             Json place=Json::object();place.set("type",str(type));place.set("x",params["x"]);place.set("z",params["z"]);place.set("owner",num(int64_t(0)));
             const size_t depth=ws_.map.undoDepth();
             try {
@@ -2126,10 +2249,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(placed.has("error"))throw std::runtime_error(placed.getStr("error"));
                 const int index=int(ws_.map.data.entities.size())-1;
                 auto candidate=promotedAuthored(index);
-                auto components=candidate.extra["components"];components.set("StaticModel",Json::object());candidate.extra.set("components",components);
+                auto components=candidate.extra["components"];
+                if(isFx){
+                    lib::mechanics::SpectraSourceComponent source;source.effect=fxName;
+                    components.set(lib::mechanics::kSpectraSourceDocumentKey,lib::mechanics::writeSpectraSourceDocument(source));
+                }else components.set("StaticModel",Json::object());
+                candidate.extra.set("components",components);
                 ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
                 const std::string id=studioDocumentId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(index)));
-                if(!asset.empty())setMeshRenderer(index,"asset",str(asset)); // validates the path
+                if(!isFx&&!asset.empty())setMeshRenderer(index,"asset",str(asset)); // validates the path
                 selectOnly(id);
             } catch(...) { ws_.map.abandonSince(depth); throw; }
             ws_.map.mergeUndoSince(depth);
@@ -2484,6 +2612,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const auto& source=ws_.map.data.entities[size_t(index)];
             auto candidate=source;
             if(method=="studio.componentAdd") {
+                if(componentId=="SpectraSource"){
+                    if(source.extra["components"].has("SpectraSource"))throw std::runtime_error("VFX Renderer is already on this entity");
+                    candidate=promotedAuthored(index);
+                    auto components=candidate.extra["components"];
+                    lib::mechanics::SpectraSourceComponent fx;fx.enabled=false;
+                    components.set(lib::mechanics::kSpectraSourceDocumentKey,lib::mechanics::writeSpectraSourceDocument(fx));
+                    candidate.extra.set("components",components);
+                    ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
+                    reply.set("result",snapshot());return reply;
+                }
                 if(componentId!="MeshRenderer")throw std::runtime_error("This component cannot be added here");
                 if(source.extra["components"].has("StaticModel"))throw std::runtime_error("Mesh Renderer is already on this entity");
                 if(source.extra["components"].has("NereidWater"))throw std::runtime_error("Water entities are drawn by NEREID");
@@ -2571,6 +2709,40 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (entityId.empty()) throw std::runtime_error("Missing document entity ID");
             const std::string key = params.getStr("key");
             const Json& value = params["value"];
+            if(params.getStr("componentId")=="SpectraSource"){
+                const int index=indexFor(entityId);
+                auto candidate=ws_.map.data.entities.at(size_t(index));
+                auto components=candidate.extra["components"];
+                auto doc=components["SpectraSource"];
+                if(!doc.isObject())throw std::runtime_error("VFX Renderer is not on this entity");
+                if(key.rfind("parameter:",0)==0){
+                    const auto name=key.substr(10);
+                    const auto graph=requireStudioSpectraGraph(ws_,doc.getStr("effect"));
+                    const auto schema=studioSpectraParameterSchema(graph);
+                    const auto def=schema.find(name);
+                    if(def==schema.end()||!value.isNumber()||
+                       !spectra::checkInstanceParameterValue(def->second,float(value.toDouble())))
+                        throw std::runtime_error("Invalid SpectraFX instance parameter");
+                    auto overrides=doc["parameters"].isObject()?doc["parameters"]:Json::object();
+                    if(overrides[name]==value){reply.set("result",snapshot());return reply;}
+                    overrides.set(name,value);doc.set("parameters",overrides);
+                }else{
+                    if(key!="effect"&&key!="scale"&&key!="enabled"&&key!="killOnDetach")
+                        throw std::runtime_error("Unknown VFX Renderer property");
+                    if(doc[key]==value){reply.set("result",snapshot());return reply;}
+                    doc.set(key,value);
+                    if(key=="effect")doc.erase("parameters");
+                }
+                auto source=lib::mechanics::readSpectraSourceDocument(doc);
+                if(key=="effect"&&!source.effect.empty())requireStudioSpectraGraph(ws_,source.effect);
+                if(source.enabled&&source.effect.empty())throw std::runtime_error("Choose an effect before enabling");
+                if(source.revision==UINT32_MAX)throw std::runtime_error("VFX revision exhausted");
+                ++source.revision;
+                components.set("SpectraSource",lib::mechanics::writeSpectraSourceDocument(source));
+                candidate.extra.set("components",components);
+                ws_.map.beginEdit();ws_.map.data.entities[size_t(index)]=std::move(candidate);ws_.map.touched();
+                reply.set("result",snapshot());return reply;
+            }
             if(params.getStr("componentId")=="MeshRenderer") {
                 reply.set("result",setMeshRenderer(indexFor(entityId),key,value));
                 return reply;

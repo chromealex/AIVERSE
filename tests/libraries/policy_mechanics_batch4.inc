@@ -20,7 +20,7 @@ inline void watercraft(){
     AircraftInput pullUp{{},1_fx};bool stall=false;for(uint32_t t=122;t<=900&&!stall;++t)stall=stepAircraft(ac,a,pullUp,t,dt)->stalled;CHECK(stall);roundtrip(a);
 }
 inline void secrets(){
-    SecretState s;s.secret=0x1234;CHECK(addZone(s,{1,1,Visibility::Owner}));CHECK(addZone(s,{2,0,Visibility::Nobody,{},true}));CHECK(addZone(s,{3,0,Visibility::Everyone}));
+    SecretState s;s.secret=0x1234;CHECK(addZone(s,{1,1,Visibility::Owner,{}}));CHECK(addZone(s,{2,0,Visibility::Nobody,{},true}));CHECK(addZone(s,{3,0,Visibility::Everyone,{}}));
     for(int64_t c=1;c<=5;++c)CHECK(placeObject(s,c,2));CHECK(shuffleZone(s,2,99));
     std::vector<RevealEvent> rev;std::array<int32_t,2> seats{1,2};auto drawn=s.zoneObjects[2].back();CHECK(placeObject(s,drawn,1,&rev,seats));
     CHECK(rev.size()==1&&rev[0].seat==1&&rev[0].object==drawn);

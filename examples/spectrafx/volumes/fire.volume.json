@@ -1,0 +1,57 @@
+{
+  "format": "aiverse.spectrafx.volume",
+  "version": 1,
+  "simulation": {
+    "dimension": 32,
+    "origin": [
+      -2,
+      -2,
+      -2
+    ],
+    "cellSize": 0.125,
+    "pressureIterations": 12,
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "buoyancy": 2,
+    "ignition": 0.3,
+    "burnRate": 6,
+    "smokeDecay": 0.35,
+    "temperatureDecay": 1.2
+  },
+  "material": {
+    "smokeColor": [
+      0.3,
+      0.32,
+      0.35
+    ],
+    "fireColor": [
+      6,
+      1.4,
+      0.12
+    ],
+    "extinction": 2,
+    "emission": 1,
+    "emissionThreshold": 0.4
+  },
+  "sources": [
+    {
+      "position": [
+        0,
+        -1,
+        0
+      ],
+      "radius": 0.5,
+      "smoke": 3,
+      "temperature": 12,
+      "fuel": 8,
+      "acceleration": [
+        0,
+        3,
+        0
+      ]
+    }
+  ]
+}

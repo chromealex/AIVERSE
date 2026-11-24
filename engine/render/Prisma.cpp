@@ -553,6 +553,7 @@ void Prisma::releaseRetiredSizesAfterGpuIdle() {
     unfencedTargets_.clear();
 }
 void Prisma::shutdown() {
+    clearSceneHdrContributor();
     if (!dev_) return;
     checkGpuDevice(*dev_);
     if (gpuDeviceLease_.device() && !dev_->waitForResourceIdle())
@@ -649,6 +650,7 @@ void Prisma::setImageLoader(ImageLoader fn) {
 }
 
 void Prisma::configure(const Json& game, const Json& map, std::vector<std::string>* issues) {
+    clearSceneHdrContributor();
     std::vector<std::string> local;
     setSettings(parsePrisma(game, map, issues ? issues : &local));
     fogSettings_={};fogScene_.clear();fogTime_=fogEpoch_=-1;
@@ -1721,6 +1723,9 @@ void Prisma::draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const v
 
 void Prisma::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& f) {
     checkGpuDevice(dev);
+    SceneHdrContributor contribution;
+    if(sceneHdrFence_==dev.gpuSubmissionFence()&&sceneHdrView_==viewId_)contribution=std::move(sceneHdrContributor_);
+    clearSceneHdrContributor();
     stats_ = {};
     auto& effectReport = effectReports_[viewId_];
     ++effectReport.sequence;
@@ -1808,6 +1813,17 @@ void Prisma::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
                      fogTarget.tex,depthFor(set,w,h,true),triangle_,fogTime_>=0?fogTime_:now-fogEpoch_)) {
             scene=fogTarget;++stats_.passes;++stats_.effects;
         } else if(!fog_.lastError().empty())error_=fog_.lastError();
+    }
+
+    // SpectraFX (or another world-space radiance owner) contributes before
+    // exposure/bloom/tonemap. PRISMA only schedules and validates the output.
+    if(contribution&&hdrFrame_){
+        const auto result=contribution(dev,f,scene.tex,depthFor(set,w,h));
+        gfx::TextureInfo info{};
+        if(result.valid()&&result!=scene.tex&&dev.textureInfo(result,info)&&
+           info.width==w&&info.height==h&&info.format==gfx::PixelFormat::RGBA16F){
+            scene.tex=result;++stats_.passes;++stats_.effects;
+        }else error_="External HDR scene contribution rejected; retaining scene color";
     }
 
     // ---- 2026-11-22: screen-space AO and reflections change scene radiance, so they

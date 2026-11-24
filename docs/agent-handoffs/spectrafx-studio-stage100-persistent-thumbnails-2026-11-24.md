@@ -1,0 +1,5 @@
+# Stage 100 — persistent native frame thumbnails
+
+Parent `fdc8769d5be7d48f68ddb8d7c09936a4a58a7cdb`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Adds disposable IndexedDB cache, maximum 64 JPEG records plus existing 16-entry session cache. Keys include project/graph/draft, exact graph signature required on reads; bounded image and signature sizes. Persistence failures fall back to session memory. Library asynchronously loads matching cached frame, ignores stale async selection. Explicit Generate library thumbnail action loads a saved graph on an idle native viewport, seeks tick 24, requests a bounded 256px actual native capture and caches it only with matching generation provenance. Existing ready runtime is not silently replaced; user can stop or capture current frame. No second GPU device. Native GPU capture and persistence not hardware/browser tested. Pure Node tests for validation/eviction authored. Scene placement/ECS inspector integration remains separate: existing assetPlace creates StaticModel, and generic component inspector is read-only; no fake model or new genre-specific component was introduced. Main unchanged.

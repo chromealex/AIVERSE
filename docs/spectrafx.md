@@ -1,3 +1,186 @@
+## Stage 121 — Studio / MCP / skills integration audit (source implemented; QA deferred)
+
+Expose GPU-owned allocator opt-in in real native preview and replay recipes, report actual Metal/Vulkan/CPU backend and estimated versus physical diagnostics, extend MCP schema and preserve legacy eligibility keys. Audit remaining limitations honestly. No native, shader, JS or hardware tests until owner requests QA.
+
+## Stage 120B — Vulkan particle kernel and backend routing (source implemented; QA deferred)
+
+Port existing bounded GPU VM, all allocator/host gather modes, culling/LOD and live compaction to Vulkan GLSL using the new storage/uniform ABI. Activate only on capable Vulkan devices; retain complete CPU fallback. Expanded and procedural billboard modes share the same particle ABI. Keep legacy Metal paths and graph semantics. Native Vulkan/Metal tests deferred; source implementation not a parity claim.
+
+## Stage 120A — Vulkan allocator RHI prerequisites (source implemented; QA deferred)
+
+Add capability-gated storage-buffer/uniform compute layout (native slot 8 uniform, up to 18 storage descriptors), ordered immutable storage uploads/copies, indirect compute, ranged and blocking buffer reads with transfer budget. Preserve existing texture and push-constant layouts. No SpectraFX Vulkan activation until complete compatible shader/host routing is implemented. Native tests deferred.
+
+## Stage 119B — owned asynchronous checkpoint capture (source implemented; QA deferred)
+
+Reuse existing chunked capture, shared readback budget, cadence and callback lifetime. Capture seven streams for owned allocation, exact partition metadata, validate revision and mode; no publication after partial enqueue or invalid data. Register production checkpoint fixture for history, disk v2 and async completion. Native tests remain deferred. Seven streams reconstruct exact partition; default 512 KiB per-frame checkpoint quota may reject 4096-slot owned snapshots, which need a configured larger quota. Native capture/restore remains bounded to 4096 physical slots. File v2 remains same-build presentation-only; v1 is unchanged. CPU fallback refuses owned snapshots with process-local source tokens.
+
+## Stage 119A — GPU-owned allocator checkpoint format and blocking capture/restore (source implemented; async pending; QA deferred)
+
+Extend the existing bounded presentation checkpoint capture and restore path with exact GPU alive/free slot order and source ownership; preserve live particle state, VM params/attributes and RNG. Version 2 restore file adds alive order without breaking v1; external process-local owner tokens still rejected on file import/export. Keep asynchronous budgets and 4096-slot checkpoint ceiling independent of simulation capacity. Freshness follows particle mutation, not camera-only redraw. No authoritative ECS state.
+
+## Stage 118 — bounded temporary GPU transfer memory (source implemented; QA deferred)
+
+Separate Device-wide transfer envelope from persistent allocation ledger so candidate migration cannot consume all mandatory upload headroom. Charge checked storage uploads, buffer and full texture/color/depth readback staging before allocation; retain accepted asynchronous transfers through completed GPU fences, release unencoded failures immediately. Explicit native limit, zero unlimited, pressure returns checked failure without device loss. No driver-wide allocation claim. Native Device setGpuTransferBudget/gpuTransferBudgetStats configure and inspect this independent ledger. Checked storage uploads, buffer reads, full texture/depth/color reads are covered; legacy unchecked uploads, pixel probes, drawable capture and unrelated native driver allocations are not covered. Too-small configured limit can reject a required staging sequence; callers must provision transfer headroom.
+
+## Stage 117 — canonical Device allocation ledger (source implemented; QA deferred)
+
+Promote the existing envelope ledger to a generic RHI utility and let each Device own one canonical instance. All ComputeParticles and GpuPoolWorld owners acquire it automatically; explicit shared budget adoption before first use or when old ledger is fully unowned and uncharged, conflicting independent limits rejected, zero inherits. Keep fence charges across pool teardown, invalidate external references on Device destruction. No driver-wide accounting or new authored schema.
+
+## Stage 116 — live GPU pool compaction (source implemented; QA deferred)
+
+After 120 birth-idle steps, use exact asynchronous occupancy proof (unchanged birth/reset epoch). If at most one quarter occupied, shrink to a geometric capacity with at least twice observed live count, minimum 256. GPU migration preserves particle state, VM parameters/attributes and owner tokens, rebuilds dense alive/free partition. Candidate overlap remains budgeted; rejection preserves old pool. Physical IDs may relocate; Medium LOD selection may change once. No synchronous readback or new authoring fields.
+
+## Stage 115 — production Metal allocator acceptance (test source registered; NOT RUN)
+
+Exercise real ComputeParticles and Metal RHI, not mock GPU: 256/65536/262144 slots, both geometry paths, exact free/alive/visible/LOD counters and unique slot ownership, kill/reuse, growth, reset/idle shrink, memory budget fences. Register Mac CTest and repair older standalone smoke bindings to current shader ABI. Device absent is SKIP, not PASS. Record execution separately from source registration. New `spectrafx_metal_allocator` CTest links production RHI, reports exact partition/draw ownership via blocking QA-only `auditGpuAllocation`, includes capacity/LOD/memory cases. Updated legacy standalone compaction smoke to bind current VM/material/kill buffers and uniform ABI. Hardware run still required.
+
+## Stage 114 — shared adaptive GPU allocation budget (source implemented; QA pending)
+
+Scope: one owner-thread budget per pool, optionally shared by native worlds/graph runtimes on the same Device. Existing maxGpuAllocationBytes admits physical capacity rather than configured maximum; charge conservative per-allocation envelopes, candidate overlap, and old allocations until verified GPU completion. Growth budget denial keeps existing simulation running and bounds birth staging; no destructive eviction. Explicitly not a driver-wide VRAM limit. Acceptance: initial admission, overlapping replacement, failure, retirement fence, pressure recovery and bounded birth degradation. Native/Metal QA deferred. Pool maxGpuAllocationBytes now admits physical allocation envelopes rather than logical ceilings; optional sharedAllocationBudget/GraphRuntimeOptions::allocationBudget extend the same Device ledger across native owners. Replacement overlap is charged before allocation and retired by completed GPU fence; unknown completion remains charged. Budget pressure limits staged births while resident particles keep simulating. Conservative envelopes exclude unrelated renderer/driver allocation and transient RHI upload buffers; not a VRAM guarantee.
+
+## Stage 113B — empty GPU pool reclamation (source implemented; QA pending)
+
+Scope: shrink a demand-grown physical pool to its initial capacity only after a successful checked reset or a valid completed GPU counter snapshot proving all slots free, with no subsequent birth submission. Reuse the replacement transaction; do not migrate or discard live particles. Delay automatic checks until 120 idle presentation steps; failure preserves usable empty allocation and retries with cooldown. No synchronous readback; fixed-capacity and legacy backends unchanged. Acceptance: reset, idle proof, stale proof, failed shrink, regrowth and fence-safe release; native/Metal QA deferred. Checked reset attempts immediate shrink to min(256, limit); automatic reclaim waits 120 idle presentation steps and an exact 32-byte completed GPU counter snapshot. A newer submitted birth/reset invalidates the proof; missing/invalid proof never retires live state. Failed shrink keeps old empty buffers and retries after cooldown. Actual logical allocation falls; old command-buffer references can remain resident until completion. Shared peak residency budget remains Stage 114.
+
+## Stage 113A — demand-grown GPU physical capacity (source implemented; QA pending)
+
+Scope: Metal GPU-owned allocator with checked RHI GPU-to-GPU copies. Start with a small physical allocation, grow in page-aligned geometric increments up to the existing logical capacity. Preserve all live state, free-stack and alive-list ownership across ordered GPU copies; no readback or CPU simulation. Keep maximum-capacity reservation for pool admission, expose actual physical capacity and growth diagnostics. Failure before publishing replacement buffers must leave old resources intact. Shrink/retirement on empty or explicit reset and transient-budget policy are subsequent stages. Native/Metal QA deferred. Existing GPU-owned allocation on a copy-capable Metal RHI starts at up to 256 slots, doubles physical capacity on demand, and clamps at the configured maximum. New GPU buffers preserve live state with ordered copies; free-stack extension is GPU-authored. Physical allocation and maximum reservation are reported separately. This is contiguous replacement growth in page-sized increments, not sparse virtual memory. Shrink and transient-budget enforcement remain open.
+
+## Stage 112 — GPU billboard screen-size/distance LOD (source implemented; QA pending)
+
+Scope: existing Medium quality policy, GPU-owned Metal billboard stream only; High preserves Stage 111 visibility. Stable physical-slot sampling smoothly reduces tiny distant billboard density without modifying simulation, lifetime, owners or free lists. Use actual projected extent, viewport pixels, camera position and existing quality distance. Keep near/large and ambiguous projections, no new authored setting or mandatory readback. Acceptance: stable frozen views, viewport/camera recull, exact draw/LOD-rejected counters, both geometry layouts and unchanged legacy paths. Native/Metal QA deferred. Medium uses a soft transition from 30 to 120 world units (one quarter to full existing quality distance), and 2 to 8 projected pixels. Maximum target density reduction is 75%; stable physical-slot hashing selects retained particles. High retains all frustum-visible particles. No simulation or lifetime thinning, no per-slot storage added. Exact optional async diagnostics include `lodRejected`; `visible` is the post-LOD draw population. Camera position and viewport resize invalidate old Medium geometry until the next step.
+
+## Stage 111 — GPU billboard frustum culling (source implemented; QA pending)
+
+Scope: GPU-owned Metal allocator only. Preserve full simulation and free/alive accounting for offscreen particles; compact visible billboard records and publish draw arguments from the visible count. Conservative clip-plane tests must retain partially intersecting billboards and bypass invalid views. No new authored graph fields or ECS authority. Acceptance: exact alive/free and visible counts, re-entry without respawn, zero-visible draw, both geometry layouts, no mandatory readback, unchanged host-owned paths. Native/Metal QA deferred. The existing async allocation counter snapshot now reports `visible` separately from `alive`; no new authored property. Set the view before step; a changed camera invalidates the previous culled draw stream until step (including zero-dt refresh). Legacy host-owned paths remain unchanged.
+
+## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
+
+The independent SpectraFX Graph GPU preview has a one-shot **Capture
+Frame** action with native RHI readback, bounded 256/512/768px JPEG
+thumbnail, Save JPEG and async capture status. There is no continuous
+GPU-to-browser bitmap streaming. The existing authenticated MCP tool
+`fx_graph_preview` supports `{"action":"capture","maxSide":512}`
+and `{"action":"captureStatus"}`, with results under
+`capture:{pending,ready,width,height,mime,image?,error?}`.
+The native host enforces 128–768px max dimension, 600 KiB JPEG,
+one in-flight capture, ten-second timeout and callback-safe
+project-switch/close behavior. No gameplay ECS writes or untrusted
+disk path. **Current source intentionally not built or tested per
+user request; previous 2/2 CTest applies to older source only.**
+Agent handoff: `docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
+## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
+
+The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
+REPOSITIONS the map Scene drawable**. StudioHost now uses three
+`StudioSurface` values: `Scene`, `Game` and `Fx`. The native
+`Fx` viewport owns its own `StudioScene`, renderer, camera, gfx Device
+and native CAMetalLayer (macOS) / Win32 Vulkan child window (Windows).
+Both map Scene and FX are framed on the **same render-owner thread**
+using separate swapchains and can be displayed simultaneously.
+`studio.viewportRect {id:"fx"}` places ONLY the FX surface. The
+browser never draws fake particles or receives GPU handles.
+`studio.spectraPreview` and `aiversemcp fx_graph_preview` remain
+the shared playback/camera/parameter control surface, but target
+`fxPreview_` rather than the authored Scene. No native map brush,
+selection, asset drop, keyboard deletion or ECS mutation is permitted
+from the dedicated FX window. Independent map Scene camera/history
+are untouched. Both renderer/device lifetimes retire on the native
+owner thread.
+
+This supersedes Stage 11's **one shared native surface** limitation
+without replacing the established Stage 11 HTML5 dock rectangle.
+Metal CTest source now creates two real devices and captures different
+GPU frames; macOS Studio CI also compiles the full native host.
+**Full AppleClang/Metal, Windows Vulkan and WKWebView UI acceptance
+not yet observed as PASS.** Required agent handoff:
+`docs/agent-handoffs/spectrafx-studio-stage13-independent-gpu-targets-2026-11-23.md`.
+
+
+## 2026-11-23 — HTML5 Studio embedded GPU preview and MCP control (Stage 11/12, QA pending)
+
+The SpectraFX Graph HTML5 dock now hosts a real native particle preview
+directly inside the graph authoring surface. Its HTML rectangle repositions
+Studio's **existing render-thread-owned Scene GPU surface**, switching to
+an isolated FX stage/camera with a neutral dark grid and no game-map
+objects. The renderer, `spectra::GraphRuntime`, GPU fences and device
+retirement remain native. Scene camera is restored when the FX pane
+closes. This is NOT a fake React canvas, second graphics context, or
+browser video stream. When Scene and Graph are both visible, Graph
+temporarily takes priority for the shared native surface.
+
+The existing `aiversemcp` Workspace registry already supports graph
+list/get/node_catalog/edit/validate/set/delete/bake and draft
+list/get/set/publish. The new `fx_graph_preview` MCP tool controls
+the same real Studio runtime as the Graph tab:
+
+```json
+{"action":"load","graphName":"preview_fx"}
+{"action":"play"}
+{"action":"pause"}
+{"action":"step"}
+{"action":"seek","tick":120}
+{"action":"restart","play":false}
+{"action":"parameter","name":"wind_lift","value":3}
+{"action":"cameraOrbit","dx":12,"dy":-4}
+{"action":"cameraZoom","amount":15}
+{"action":"cameraReset"}
+{"action":"status"}
+{"action":"stop"}
+```
+
+`load` also accepts `graph` (inline JSON object) or
+`graphName` with `draft:true`. Only the active project's sanitized
+graph/draft paths are resolved. Standalone/headless MCP advertises this
+tool but returns a clear `requires an open native Studio GPU viewport`
+error; it never simulates or claims a fake GPU frame.
+Preview actions have no authoritative gameplay/ECS writes. Native
+camera gestures do not pick, delete, sculpt or alter map objects
+when the FX pane owns the surface.
+
+**QA:** source and regression tests are committed, but exact-SHA
+Node/Vite/Apple Metal/Windows/interactive UI tests have not passed as
+of this update. The older user's Metal 2/2 CTest PASS predates embedded
+preview. Read the detailed handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+and
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 # AIVERSE SpectraFX
 
 **SpectraFX** is the official name of the universal, genre-independent visual-effects system in AIVERSE. Its design is inspired by the authoring and event-driven workflow of Unreal Niagara, but it is **not** a copy of Unreal code, asset formats, or editor. `aiverse::spectra` is the public C++ API namespace.
@@ -7,6 +190,111 @@
 > **2026-11-22:** effects declared in data (rules/map/type/weapon/ability `"spectraFx"`) for every host, and one
 > asset running on the GPU kernel or its CPU twin with Metal parity tests: see
 > [spectrafx-entity-effects.md](spectrafx-entity-effects.md).
+
+## 2026-11-23 — SpectraScale cue significance and external acceleration fields (opt-in)
+
+The scene host exposes `configureCueSignificance()`, `setCueImportance()` and
+`cueSignificance()` to rank queued VFX cues by approximate camera-space size,
+distance and explicit host importance. For projects, `fx/gpu/routes.json`
+optionally declares `cuePriority` and per-route `importance`; omitted policy
+preserves the original FIFO order. Each keyed Play/Move/Stop/Kill sequence
+remains ordered; Stop/Kill gains lifecycle priority without skipping visibility
+or making any gameplay/authoritative simulation changes. Priority reorders
+**only the scene cue inbox**; it does not guarantee emitter or GPU spawn budgets.
+
+`SpectraFxAccelerationFields` is a bounded, read-only registry of native
+host-provided acceleration fields. Use
+`SpectraFxSceneHost::bindAccelerationField(id,weight,callback)` after host
+initialization to sample a PHYSIS (or another environment system) snapshot.
+Metal GPU and CPU-twin **dedicated** effects receive the same additional
+acceleration every render update; legacy `cpuEffect` fallback and already
+active homogeneous shared pools do not. While fields are bound, new sources
+avoid GPU shared pooling because per-source acceleration differs.
+Neither SpectraFX nor this API directly accesses PHYSIS/ECS internals.
+
+**Current verification:** focused Linux CMake smoke + `spectrafx_contract` and
+`spectrafx_architecture` 2/2 PASS for pre-field commits, but Stage 3 field
+integration has **not yet been accepted** on real Metal/GLES/Vulkan or macOS.
+See handoffs:
+`docs/agent-handoffs/spectrafx-significance-stage1-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-significance-stage2-routes-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
+Full plan: `docs/spectrafx-modernization-roadmap-2026-11-23.md`.
+
+## Graph v2 — read-only Data Interfaces (Stage 4, 2026-11-23)
+
+Graph v2 can now declare scalar **Data Interfaces** next to existing named
+`instanceParameters`. Every binding maps an existing, unique param slot
+(`param0`…`param7`) to a host-injected provider and channel; no new
+per-particle VM opcode or separate gameplay simulation is introduced.
+`DataInterface` nodes are runtime-only value nodes and must be consumed
+inside `ParticleProgramModule` expressions using `{"$runtime":"node_id"}`.
+Binding validation occurs during graph compilation (including editor/MCP
+`fx_graph_validate`) and again during runtime initialization.
+
+Example in `examples/spectrafx/data_interface_weather_v2.vfx.json`:
+
+```json
+{
+  "instanceParameters": {
+    "wind_lift": {"slot":0,"default":2,"min":0,"max":25}
+  },
+  "dataInterfaces": {
+    "wind_lift": {
+      "provider":"weather",
+      "channel":"vertical_acceleration",
+      "scale":1,
+      "offset":0,
+      "fallback":2,
+      "required":false
+    }
+  }
+}
+```
+
+For any native project, after `GraphRuntime::initGraph`:
+
+```cpp
+aiverse::spectra::DataInterfaceRegistry registry;
+registry.bind("weather",
+    [&stableWeather](std::string_view channel,aiverse::render::float3 point,
+                     float& sample) {
+        // stableWeather is YOUR immutable presentation snapshot, not an
+        // AIVERSE engine type; do not capture an updating ECS world.
+        if (channel != "vertical_acceleration") return false;
+        sample = stableWeather.accelerationAt(point).y;
+        return true;
+    });
+runtime.setDataInterfaceRegistry(&registry); // non-owning, after initGraph
+runtime.burstAt({0,2,0}); // sample once at this burst origin
+runtime.setDataInterfaceRegistry(nullptr); // detach before registry teardown
+```
+
+Bindings with `required:true` reject a burst if the provider/channel or
+transformed value is unavailable or out of declared bounds; optional bindings
+use the finite `fallback`. Every batch is validated before any runtime
+uniform is changed. Samples are taken **once per burst**, not per particle
+and not on every simulation frame. New bursts can read updated snapshot
+values while already-live particles retain their original values unless
+updated via the older explicit VM parameter APIs. CPU `ParticleSystem`,
+shared `BatchWorld`, and opt-in GPU VM paths reuse the same parameter slots;
+unsupported GPU programs still follow the conservative existing CPU
+fallback policy.
+
+`SpectraFxDataInterfaceRegistry` is deliberately **not** introduced: use
+`aiverse::spectra::DataInterfaceRegistry` from
+`engine/fx/SpectraDataInterfaces.h`. Provider names/channel names are
+bounded safe identifiers; providers are read-only and must be nonthrowing.
+There are at most 16 providers, 8 bindings per graph, and 8 scalar parameter
+slots. The editor authoring model offers a `DataInterface` node and
+`setDataInterfaceBinding` / `removeDataInterfaceBinding` transactional
+helpers. A complete HTML5 Studio panel for these bindings is **not yet
+implemented**; projects can use the validated JSON/MCP graph workflow.
+
+**Verification:** native graph-v2 compiler/runtime tests were added and the
+Linux/macOS focused CI workflow extended, but the current Stage 4 revision
+has not yet passed CI or GPU-device validation. See the exact handoff:
+`docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
 
 ## Integration boundary with PRISMA
 
@@ -3328,3 +3616,41 @@ volumes and viewport timing. Public graph-v1 assets remain supported.
 
 Native integration verification is recorded in
 `docs/agent-handoffs/inspector-spectrafx-main-2026-11-20.md`.
+
+
+Stage 121 exposes requested/active GPU-owned preview allocation, actual backend label, estimated alive, physical capacity, logical bytes, compaction and denial counters, replay compatibility and backend-neutral MCP eligibility aliases. No runtime verification performed. Historical sections describe earlier stage snapshots, not the current backend support matrix.
+
+## Layered fire and smoke preview (2026-11-24)
+
+`examples/spectrafx/fire_smoke_v2.vfx.json` combines a GPU gas volume with
+CPU sprite emitters in one Graph v2 asset. The volume provides transported
+smoke, combustion, depth and HDR light; flipbook particles add flame tongues,
+smoke billows and sparks. The Studio native FX dock resolves project textures
+relative to the project and `engine/fx/...` textures from the engine asset root.
+Paths must be relative image files without symlink traversal. Runtime CPU
+graphs can supply the same resolver through `GraphRuntimeOptions::textureLoader`.
+
+`VolumeOutput.lights` accepts up to four validated `{position, color, radius,
+intensity}` point lights. They move with a followed volume and illuminate the
+gas in the existing HDR raymarch. Existing assets omit the field and retain
+their earlier appearance. The example uses a 96³ grid; smaller assets retain
+the 64³ option. The FX dock enables PRISMA bloom for volume previews. The
+downloadable CC0 PHYSIS flipbooks are also available at full source resolution
+under `engine/assets/fx/physis/*_full_*`.
+
+The Metal preview was captured at 1024×576 with a light stage. The current
+effect is still an experimental look: it lacks the finely lit internal smoke
+and complex flame structure of the cinematic references. A successful native
+preview does not establish production GPU performance or Vulkan device parity.
+
+## Smoke trails from moving entities
+
+Select **Moving smoke trail** in the Studio graph editor to create this preset.
+
+Set the volume graph's `VolumeDomain.attachment` to `"trail"` and attach the graph to a
+moving `SpectraSource` entity. Source positions and volume lights follow its translation.
+Previously emitted smoke continues to advect and dissipate in the original world-space
+grid. Choose the domain origin and extent to cover the route: after a source moves
+outside the grid, only the part of its injection radius overlapping the grid contributes.
+Changing the source revision recreates the field. `world` keeps the original placement;
+`follow` carries the entire field. See [the example graph](../examples/spectrafx/moving_smoke_trail.vfx.json).

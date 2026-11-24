@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include "engine/fx/FxModelMesh.h"
+#include "engine/fx/VfxGraph.h"
+#include "engine/fx/SpectraScenePoolEmission.h"
+#include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/platform/Platform.h"
 #include "engine/game/GameCore.h"
 
@@ -184,6 +187,25 @@ void ClientFx::shutdown() {
 }
 
 void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView& view, const game::MapGrid& grid) {
+    clearGraphSources();shutdownGraphPool();
+    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
+    graphVolumetricParticleGraphs_.clear();graphVolumetricParticleDepth_.clear();
+    graphView_=&view;graphGrid_=&grid;
+    // Read only the published GameView surface during the owner-thread FX
+    // update. No capture survives stopMatch, no secondary physics world.
+    auto collisions=std::make_shared<fx::SceneCollisionRegistry>();
+    collisions->bind(1,fx::makeTerrainSweep([this](render::float3 p,fx::TerrainCollisionSample& s){
+        if(planet_) {
+            float relief=0;
+            return planet_->planetFxTerrain(p,relief,s.clearance,s.up);
+        }
+        if(!graphView_||!graphGrid_||graphGrid_->sphere()||
+           p.x<0||p.z<0||p.x>graphGrid_->w||p.z>graphGrid_->h)return false;
+        const float height=graphView_->heightAt(*graphGrid_,p.x,p.z);
+        s.clearance=p.y-height;s.up={0,1,0};
+        return std::isfinite(s.clearance);
+    }));
+    ps_.setSceneCollisionRegistry(std::move(collisions));
     ps_.clear();
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
@@ -243,6 +265,11 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 }
 
 void ClientFx::stopMatch() {
+    clearGraphSources();shutdownGraphPool();
+    graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
+    graphVolumetricParticleGraphs_.clear();graphVolumetricParticleDepth_.clear();
+    ps_.setSceneCollisionRegistry({});
+    graphView_=nullptr;graphGrid_=nullptr;
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
     entities_.reset(true);
     lightBuf_.clear();
@@ -261,11 +288,12 @@ void ClientFx::stopMatch() {
 
 void ClientFx::setPlanetView(const game::GameView* view) {
     if (!view || !view->planetMode()) {
-        if (planet_) { ps_.setViewSpace(nullptr); ps_.setUpFunction({}); ps_.setAltitudeFunction({}); bridge_.setPlaceFn({}); }
+        if (planet_) { clearGraphSources(); ps_.setViewSpace(nullptr); ps_.setUpFunction({}); ps_.setAltitudeFunction({}); bridge_.setPlaceFn({}); }
         planet_ = nullptr;
         return;
     }
     if (!planet_) {
+        clearGraphSources();
         // GPU billboards currently use flat world coordinates. Disable them
         // on planet views until the body-local transform API is supported.
         if(gpuPlayback_) gpuPlayback_->reset();
@@ -275,9 +303,306 @@ void ClientFx::setPlanetView(const game::GameView* view) {
         ps_.setAltitudeFunction([this](fx::float3 p) { return planet_->planetFxAltitude(p); });
         bridge_.setPlaceFn([this](fx::float3 sim, float lift, fx::float3& out, fx::float3& up) { return planet_->planetFxPlace(sim, lift, out, up); });
     }
-    if (view->planetFxBody() != planetBody_) { ps_.clear(); planetBody_ = view->planetFxBody(); }   // another body: its own space
+    if (view->planetFxBody() != planetBody_) { clearGraphSources(); ps_.clear(); planetBody_ = view->planetFxBody(); }   // another body: its own space
     space_ = view->planetFxSpace();
     ps_.setViewSpace(&space_);
+}
+
+void ClientFx::finishGraphGpuFrame() {
+    if(graphPoolOpen_)graphPool_.endPresentationFrame();
+    graphPoolOpen_=false;
+}
+void ClientFx::shutdownGraphPool() {
+    finishGraphGpuFrame();
+    graphGpuSources_.reset();
+    graphGpuMirror_.clear();
+    graphPool_.shutdown();
+    graphGpuSchemas_.clear();
+    graphPoolResetPending_=false;
+}
+void ClientFx::clearGraphSources() {
+    finishGraphGpuFrame();
+    graphVolumes_.clear();
+    graphVolumetricParticles_.clear();
+    if(graphPool_.ready()) {
+        graphPool_.discardCollisionChildren();
+        graphPool_.setDataInterfaceRegistry(nullptr);
+        graphPoolResetPending_=true;
+    }
+    graphGpuMirror_.clear();
+    graphSourcesPrepared_=false;
+    if(graphSources_)graphSources_->reset();
+    graphSourceMirror_.clear();
+    liveFields_.clear();
+    graphRegistry_.reset();
+    graphSourceHaveTick_=false;
+    // Explicit epoch boundary even if replacement sim has the same tick.
+    if(++graphSourceEpoch_==0)graphSourceEpoch_=1;
+}
+
+std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
+    if(const auto it=graphSourceAssets_.find(name);it!=graphSourceAssets_.end())return it->second;
+    if(!fx::vfxgraph_detail::nameOk(name)||graphSourceAssets_.size()>=256)return {};
+    // Cache failures for this match. Graph names use a separate namespace
+    // from legacy fx/<name>.json definitions.
+    auto [entry,inserted]=graphSourceAssets_.emplace(name,std::string{});
+    (void)inserted;
+    std::string text;
+    if(!platform::readContentFile("fx/graphs/"+name+".vfx.json",text)||text.size()>512u*1024u)return {};
+    try {
+        auto graph=Json::parse(text);
+        if(graph.getInt("version")!=2)return {};
+        spectra::volume::PresentationGraph compiled;
+        std::vector<std::string> errors;
+        if(!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,platform::readContentFile))return {};
+        if(compiled.particleMaterial.enabled){
+            if(compiled.volume){
+                graphHybridDefinitions_[name]={std::move(compiled.particleGraph),compiled.coupling,compiled.particleMaterial.depthAware};
+                graphVolumeAssets_[name]=std::move(compiled.volumeAsset);
+                return {};
+            }
+            graphVolumetricParticleGraphs_[name]=std::move(compiled.particleGraph);
+            graphVolumetricParticleDepth_[name]=compiled.particleMaterial.depthAware;
+            return {};
+        }
+        if(compiled.volume){
+            if(!compiled.particles){graphVolumeAssets_[name]=std::move(compiled.volumeAsset);return {};}
+            graph=compiled.particleGraph;
+        }
+        if(compiled.coupling.active()){
+            graphHybridDefinitions_[name]={graph,compiled.coupling};
+            graphVolumeAssets_[name]=std::move(compiled.volumeAsset);
+            return {};
+        }
+        auto& effect=compiled.particleEffect;
+        const std::string runtimeName="graph:live:"+name;
+        if(ps_.define(runtimeName,effect)<0||
+           !graphSources_->bindGraphDataInterfaces(runtimeName,graph,errors))return {};
+        entry->second=runtimeName;
+        if(compiled.volume)graphVolumeAssets_[name]=std::move(compiled.volumeAsset);
+        // Explicit pooled birth policy only. Never reinterpret a legacy
+        // looping effect, or replace a scaled CPU source with a unit GPU one.
+        if(allowGpu && dev_ && spectra::supportsSpectraCompute(*dev_,false)) {
+            try {
+                spectra::PoolContinuousEmission emission;
+                spectra::InstanceParameterTable schema;
+                if(spectra::readScenePoolEmission(graph,emission) &&
+                   spectra::loadInstanceParameterTable(graph["instanceParameters"],schema,errors) &&
+                   spectra::scenePoolDataCoverageCompatible(graph,emission)) {
+                    spectra::GraphRuntimeOptions options;
+                    options.sdfReader=platform::readContentFile;
+                    options.preference=spectra::ComputePreference::RequireGpu;
+                    options.routePoolCollisionChildren=true;
+                    options.gpuProgram=true;options.gpuIndirect=true;options.proceduralBillboards=true;
+                    options.gpuOwnedAllocation=graph.getBool("sceneGpuAllocation",false);
+                    options.capacity=16384;
+                    const auto& capacity=graph["scenePoolCapacity"];
+                    if(!capacity.isNull()) {
+                        const auto n=capacity.integer(-1);
+                        if(!capacity.isNumber()||capacity.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+                           n<1||n>65536)throw std::runtime_error("Invalid scenePoolCapacity");
+                        options.capacity=uint32_t(n);
+                    }
+                    if(spectra::inspectPoolGraphGpuEligibility(effect,options).eligible) {
+                        if(!graphPool_.ready()) {
+                            spectra::PoolWorldBudgets budgets;
+                            budgets.maxGpuGroups=64;budgets.maxGroupCapacity=65536;
+                            budgets.maxSources=4096;budgets.maxBurstsPerFrame=4096;
+                            if(graphPool_.init(dev_,budgets))
+                                graphGpuSources_=std::make_unique<spectra::GpuEcsAttachmentPresenter>(graphPool_);
+                        }
+                        if(graphGpuSources_&&graphPool_.defineGraph(runtimeName,graph,Json::object(),options)&&
+                           graphPool_.isGpuEffect(runtimeName)&&graphGpuSources_->bindEffect(runtimeName,emission))
+                            graphGpuSchemas_.emplace(runtimeName,std::move(schema));
+                    }
+                }
+            }catch(const std::exception& ex) {
+                std::fprintf(stderr,"SpectraFX pooled graph '%s': %s; CPU retained\n",name.c_str(),ex.what());
+            }
+        }
+        return runtimeName;
+    } catch(const std::exception& ex) {
+        std::fprintf(stderr,"SpectraFX live graph '%s': %s\n",name.c_str(),ex.what());
+        return {};
+    }
+}
+
+void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
+                                    const render::Camera& camera,bool allowGpu,bool allowVolumes) {
+    if(!attached_) {
+        if(graphSourceHaveTick_||graphSourceMirror_.size()||graphVolumes_.active()||graphVolumetricParticles_.active())clearGraphSources();
+        return;
+    }
+    const World& world=sim.world();
+    if(graphSourceHaveTick_&&sim.tick()<graphSourceTick_)clearGraphSources();
+    if(!graphSources_&&!world.countExisting<lib::mechanics::SpectraSourceComponent>())return;
+    if(!graphSources_)graphSources_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(ps_);
+    std::vector<lib::mechanics::SpectraSourceSnapshot> rows;
+    std::vector<spectra::volume::SceneVolumeSource> volumes;
+    std::vector<spectra::SceneVolumetricParticleSource> volumetricParticles;
+    size_t examined=0;
+    // Do not enumerate hidden authoritative entities to emit effects.
+    // The prepared presentation scene already resolved visibility and pose.
+    for(const auto& object:scene.objects) {
+        if(examined>=4096)break;
+        if(!object.entity.valid()||!object.visible||object.blip||!world.alive(object.entity))continue;
+        const auto* source=world.tryGetConst<lib::mechanics::SpectraSourceComponent>(object.entity);
+        if(!source||!source->enabled||source->effect.empty())continue;
+        auto position=object.pos,direction=object.facing;
+        if(planet_&&!planet_->planetFxObjectPose(object,position,direction))continue;
+        if(!std::isfinite(position.x)||!std::isfinite(position.y)||!std::isfinite(position.z))continue;
+        ++examined;
+        auto resolved=*source;
+        resolved.effect=graphSourceAsset(source->effect,allowGpu);
+        if(allowVolumes&&dev_){
+            const auto authored=graphVolumetricParticleGraphs_.find(source->effect);
+            if(authored!=graphVolumetricParticleGraphs_.end()){
+                spectra::SceneVolumetricParticleSource row;
+                row.identity=std::to_string(object.entity.packed());row.effect=source->effect;
+                row.revision=source->revision;row.position=position;row.direction=direction;
+                row.scale=float(source->scale.toDouble());row.graph=&authored->second;
+                row.depthAware=graphVolumetricParticleDepth_.at(source->effect);
+                for(const auto& [name,value]:source->parameters)row.parameters.emplace(name,float(value.toDouble()));
+                volumetricParticles.push_back(std::move(row));
+            }
+        }
+        if(const auto it=graphVolumeAssets_.find(source->effect);it!=graphVolumeAssets_.end()){
+            // Only static, unit-scale flat-map anchors are admitted here.
+            if(allowVolumes&&dev_){
+                spectra::volume::SceneVolumeSource row;
+                row.identity=std::to_string(object.entity.packed());row.effect=source->effect;
+                row.revision=source->revision;row.anchor=position;row.asset=&it->second;
+                row.scale=float(source->scale.toDouble());
+                if(auto hybrid=graphHybridDefinitions_.find(source->effect);hybrid!=graphHybridDefinitions_.end()){
+                    row.hybrid=&hybrid->second;row.direction=direction;
+                    for(const auto& [name,value]:source->parameters)row.parameters.emplace(name,float(value.toDouble()));
+                }
+                volumes.push_back(std::move(row));
+            }
+
+        }
+        if(resolved.effect.empty())continue;
+        rows.push_back({std::to_string(object.entity.packed()),std::move(resolved),position,direction});
+    }
+    if(allowVolumes&&dev_){
+        graphVolumes_.synchronize(*dev_,volumes,platform::readContentFile);
+        graphVolumetricParticles_.synchronize(*dev_,volumetricParticles,platform::readContentFile);
+    }
+    if(rows.empty()&&volumes.empty()&&volumetricParticles.empty()) {
+        graphSources_->setDataInterfaceRegistry(nullptr);
+        if(graphPool_.ready())graphPool_.setDataInterfaceRegistry(nullptr);
+        liveFields_.clear();graphRegistry_.reset();
+    } else {
+        // Quantized observer region limits cost and avoids a new capture for
+        // every interpolated camera movement in the same committed tick.
+        aiverse::world::SpectraFieldRegion region;
+        region.spacing=32.f;region.dimensions={9,5,9};
+        const auto snap=[](float v){return std::floor(v/32.f)*32.f;};
+        const auto target=planet_?space_.inverse().transformPoint(camera.target):camera.target;
+        region.origin={snap(target.x)-128.f,snap(target.y)-64.f,snap(target.z)-128.f};
+        const Vec3 offset=planet_?game::Surface::anchor(planetBody_):Vec3{};
+        const auto geometry=planet_?aiverse::world::SpectraWaterGeometry::Sphere:
+                                    aiverse::world::SpectraWaterGeometry::Plane;
+        const Fixed seconds=Fixed::fromRatio(sim.tick(),std::max<uint32_t>(1,sim.tickRate()));
+        const auto registry=liveFields_.publish(world,graphSourceEpoch_,sim.tick(),region,geometry,
+            planet_?seconds:Fixed{},offset,planet_?std::optional<Vec3>(offset):std::nullopt);
+        // CPU presenter samples at the exact prepared source pose. Copy only
+        // those terrain values; never retain a GameView or grid in a callback.
+        struct TerrainValue {float height=0,clearance=0;render::float3 up{0,1,0};};
+        using TerrainMap=std::map<std::array<float,3>,TerrainValue>;
+        auto terrain=std::make_shared<TerrainMap>();
+        for(const auto& row:rows) {
+            const auto p=row.position;
+            TerrainValue v;
+            if(planet_) {
+                if(!planet_->planetFxTerrain(p,v.height,v.clearance,v.up))continue;
+            } else {
+                if(!graphView_||!graphGrid_||graphGrid_->sphere()||
+                   p.x<0||p.z<0||p.x>graphGrid_->w||p.z>graphGrid_->h)continue;
+                v.height=graphView_->heightAt(*graphGrid_,p.x,p.z);
+                v.clearance=p.y-v.height;
+                if(!std::isfinite(v.height)||!std::isfinite(v.clearance))continue;
+            }
+            terrain->emplace(std::array<float,3>{p.x,p.y,p.z},v);
+        }
+        auto combined=registry?std::make_shared<spectra::DataInterfaceRegistry>(*registry):
+                               std::make_shared<spectra::DataInterfaceRegistry>();
+        combined->bind("terraweave",[terrain](std::string_view channel,render::float3 p,float& out){
+            const auto it=terrain->find({p.x,p.y,p.z});
+            if(it==terrain->end())return false;
+            const auto& v=it->second;
+            if(channel=="height")out=v.height;
+            else if(channel=="clearance")out=v.clearance;
+            else if(channel=="up_x")out=v.up.x;
+            else if(channel=="up_y")out=v.up.y;
+            else if(channel=="up_z")out=v.up.z;
+            else return false;
+            return true;
+        });
+        graphSources_->setDataInterfaceRegistry(combined.get());
+        if(graphPool_.ready())graphPool_.setDataInterfaceRegistry(combined.get());
+        graphRegistry_=std::move(combined);
+    }
+    std::vector<lib::mechanics::SpectraSourceSnapshot> cpuRows,gpuRows;
+    for(auto& row:rows) {
+        const auto schema=graphGpuSchemas_.find(row.source.effect);
+        std::array<float,8> parameters{};
+        if(allowGpu && graphPool_.ready()&&!graphPoolResetPending_&&
+           !graphPool_.presentationBlocked()&&schema!=graphGpuSchemas_.end()&&
+           graphPool_.isGpuEffect(row.source.effect)&&row.source.scale.raw==(1_fx).raw&&
+           lib::mechanics::resolveSpectraSourceParameters(row.source,schema->second,parameters))
+            gpuRows.push_back(std::move(row));
+        else cpuRows.push_back(std::move(row));
+    }
+    graphSourceMirror_.sync(cpuRows);
+    graphGpuMirror_.sync(gpuRows);
+    graphSourceTick_=sim.tick();graphSourceHaveTick_=true;
+}
+
+void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene,
+        const render::Camera& camera,const render::mat4& viewProj,int width,int height,float dt) {
+    finishGraphGpuFrame();
+    if(graphSourceHaveTick_&&sim.tick()<graphSourceTick_)clearGraphSources();
+    const bool allowed=attached_&&!planet_&&ps_.quality()>=fx::FxQuality::Medium;
+    if(!allowed&&graphPool_.ready()&&
+       (graphGpuMirror_.size()!=0||graphPool_.stats().activeSources!=0||
+        graphPool_.stats().gpuParticlesEstimated!=0))graphPoolResetPending_=true;
+    if(graphPoolResetPending_&&graphGpuSources_) {
+        if(graphGpuSources_->resetForRollback())graphPoolResetPending_=false;
+    }
+    // Keep the original post-GameView CPU placement on planets.
+    if(!allowed){graphVolumes_.clear();graphVolumetricParticles_.clear();}
+    if(planet_)return;
+    const auto view=fx::SpectraFxView::fromCamera(camera,viewProj,width,height);
+    const bool gpu=allowed&&view.valid()&&!graphPoolResetPending_&&!graphPool_.presentationBlocked();
+    presentGraphSources(sim,scene,camera,gpu,allowed&&view.valid());
+    if(allowed&&view.valid()){graphVolumes_.setView(view);graphVolumes_.applyEnvironment(graphRegistry_.get());graphVolumes_.step(dt);}else graphVolumes_.clear();
+    if(allowed&&view.valid())graphVolumetricParticles_.prepare(view,dt);
+    else graphVolumetricParticles_.clear();
+    graphSourcesPrepared_=true;
+    if(!gpu||!graphGpuSources_||!graphPool_.ready())return;
+    if(!graphPool_.beginPresentationFrame(view)) {
+        graphPoolResetPending_=true;return;
+    }
+    graphPoolOpen_=true;
+    if(!graphGpuSources_->syncCommitted(sim.tick(),graphGpuMirror_.world(),
+                                       lib::mechanics::SpectraSourceMirror::resolve)) {
+        // Fail closed: a failed source transition must not emit stale
+        // hidden sources. Reset before admitting new pooled births.
+        graphPoolResetPending_=true;finishGraphGpuFrame();return;
+    }
+    if(!graphPool_.step(std::clamp(dt,0.f,0.1f))) {
+        graphPoolResetPending_=true;finishGraphGpuFrame();
+    }
+}
+
+void ClientFx::contributeVolumes(render::Prisma& prisma){
+    if(!graphVolumes_.renderable()&&!graphVolumes_.hasDepthParticles()&&!graphVolumetricParticles_.hasDepth())return;
+    prisma.setSceneHdrContributor([this](gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle c,gfx::TextureHandle z){
+        const auto volume=graphVolumes_.compose(d,f,c,z);
+        const auto particles=graphVolumetricParticles_.composeDepth(d,f,volume.valid()?volume:c,z);
+        return particles.valid()?particles:volume;
+    });
 }
 
 void ClientFx::update(Simulation& sim, const game::GameScene& scene, const render::Camera& cam, const render::mat4& viewProj,
@@ -290,6 +615,10 @@ void ClientFx::update(Simulation& sim, const game::GameScene& scene, const rende
     if(gpuPlayback_ && !planet_) gpuPlayback_->playGpuImpactEffects(32);
     if (attached_ && dt > 0) bridge_.update(sim, &scene.objects, dt);
     if (attached_) presentEntityEffects(sim, scene, dt);
+    if(!graphSourcesPrepared_)presentGraphSources(sim,scene,cam);
+    graphSourcesPrepared_=false;
+    if(graphSources_)graphSources_->sync(graphSourceMirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
+    if(graphPoolOpen_&&!graphPoolResetPending_)graphPool_.drainCollisionChildren(ps_);
     ps_.update(dt);
     static const bool dbg = std::getenv("AIVERSE_FX_DEBUG") != nullptr;
     static int frames = 0;
@@ -421,6 +750,12 @@ void ClientFx::addPreparedLights(render::LightSystem& lights) const {
 void ClientFx::render(const render::Lighting& lighting) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
     ps_.render({lighting.fogColor, lighting.fogDensity});
+    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
+    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity});
+    if(graphPoolOpen_) {
+        graphPool_.draw({lighting.fogColor,lighting.fogDensity});
+        finishGraphGpuFrame();
+    }
 }
 
 void ClientFx::renderPrepared(const render::Camera3D& camera,

@@ -654,6 +654,9 @@ public:
     // keep the position as it is, e.g. a flyer); false on other bodies. Ground altitude of a body-local point.
     bool planetFxPlace(render::float3 sim, float lift, render::float3& out, render::float3& up) const;
     float planetFxAltitude(render::float3 local) const;
+    // Prepared body-local visual placement, same ground/sea policy as drawPlanets.
+    bool planetFxObjectPose(const SceneObject& o,render::float3& position,render::float3& direction) const;
+    bool planetFxTerrain(render::float3 local,float& relief,float& clearance,render::float3& up) const;
     // Object frame in the view world (columns: east, up, south, ground point); false when not on a body.
     bool planetPlacement(const SceneObject& o, render::mat4& out) const;
     void setFogLook(const FogLook& l) {

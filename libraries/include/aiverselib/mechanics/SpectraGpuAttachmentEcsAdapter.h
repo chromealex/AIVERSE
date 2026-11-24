@@ -61,6 +61,7 @@ public:
             uint32_t revision=0;
             int64_t scaleRaw=0;
             bool killOnDetach=false, hasPose=false;
+            std::map<std::string,Fixed> parameters;
         };
         std::map<uint64_t,Wanted> desired;
         world.eachExistingConst<lib::mechanics::SpectraSourceComponent>(
@@ -72,6 +73,7 @@ public:
                 w.revision=component.revision;
                 w.scaleRaw=component.scale.raw;
                 w.killOnDetach=component.killOnDetach;
+                w.parameters=component.parameters;
                 // Keep an entry even if rendering pose is temporarily missing.
                 w.hasPose=resolver(world,entity,w.position,w.direction);
                 desired[entity.packed()]=std::move(w);
@@ -111,6 +113,7 @@ public:
                    old->second.effect==want.effect &&
                    old->second.revision==want.revision &&
                    old->second.scaleRaw==want.scaleRaw &&
+                   old->second.parameters==want.parameters &&
                    old->second.policyRevision==policy->second.revision &&
                    pool_.sourceBindingCurrent(old->second.handle);
         };
@@ -140,8 +143,12 @@ public:
             entry.scaleRaw=want.scaleRaw;
             entry.policyRevision=policy->second.revision;
             entry.killOnDetach=want.killOnDetach;
+            entry.parameters=want.parameters;
             staged.emplace(key,entry);
-            bool ok=pool_.configureContinuous(id,policy->second.emission);
+            bool ok=want.parameters.size()<=8;
+            for(const auto& [name,value]:want.parameters)
+                if(ok)ok=pool_.setSourceNamedParameter(id,name,float(value.toDouble()));
+            if(ok)ok=pool_.configureContinuous(id,policy->second.emission);
             if(ok && want.hasPose)
                 ok=pool_.setSourceTransform(id,want.position,want.direction);
             if(ok && !want.hasPose)
@@ -293,6 +300,7 @@ private:
         uint32_t revision=0;
         int64_t scaleRaw=0;
         bool killOnDetach=false, pausedForMissingPose=false;
+        std::map<std::string,Fixed> parameters;
     };
 
     GpuPoolWorld& pool_;

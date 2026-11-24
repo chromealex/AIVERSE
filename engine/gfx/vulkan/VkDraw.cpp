@@ -671,7 +671,7 @@ VkPipeline VulkanDevice::pipelineFor(
     stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT; stages[0].module = vert; stages[0].pName = "main";
     stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT; stages[1].module = frag; stages[1].pName = "main";
 
-    VkVertexInputBindingDescription bind{0, d.stride, VK_VERTEX_INPUT_RATE_VERTEX};
+    VkVertexInputBindingDescription bind{0, d.stride, d.vertexPerInstance?VK_VERTEX_INPUT_RATE_INSTANCE:VK_VERTEX_INPUT_RATE_VERTEX};
     VkVertexInputAttributeDescription attrs[8];
     const int ac = std::min(d.attrCount, 8);
     for (int i = 0; i < ac; ++i) attrs[i] = {d.attrs[i].location, 0, attrFormat(d.attrs[i].format, uscaled_), d.attrs[i].offset};
@@ -1005,17 +1005,27 @@ bool VulkanDevice::copyColor(TextureHandle from, TextureHandle to) {
     if (!recording_ || inPass_) return false;
     VTexture* dst = textures_.get(to.id);
     if (!dst || dst->dimension != TextureDimension::Texture2D ||
-        dst->format != PixelFormat::RGBA8 || dst->levels != 1) return false;
+        (dst->format != PixelFormat::RGBA8 && dst->format != PixelFormat::RGBA16F) ||
+        dst->levels != 1) return false;
     VTexture* src = from.valid() ? textures_.get(from.id) : &back_;
     if (!src || src->dimension != TextureDimension::Texture2D ||
         src->depth || src->width != dst->width || src->height != dst->height) return false;
+    if (dst->format == PixelFormat::RGBA16F && src->format != PixelFormat::RGBA16F) return false;
     VkCommandBuffer cb = slots_[size_t(slot_)].main;
     barrierImage(cb, src->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     barrierImage(cb, dst->image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    VkImageBlit b{};   // a blit converts formats (sRGB / float sources), as glBlitFramebuffer
-    b.srcSubresource = b.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    b.srcOffsets[1] = b.dstOffsets[1] = {src->width, src->height, 1};
-    vkCmdBlitImage(cb, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_NEAREST);
+    if (dst->format == PixelFormat::RGBA16F) {
+        VkImageCopy region{};
+        region.srcSubresource = region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.extent = {uint32_t(src->width), uint32_t(src->height), 1};
+        vkCmdCopyImage(cb, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    } else {
+        VkImageBlit b{};   // a blit converts formats (sRGB / float sources), as glBlitFramebuffer
+        b.srcSubresource = b.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        b.srcOffsets[1] = b.dstOffsets[1] = {src->width, src->height, 1};
+        vkCmdBlitImage(cb, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_NEAREST);
+    }
     barrierImage(cb, dst->image, false, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     barrierImage(cb, src->image, false, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     return true;

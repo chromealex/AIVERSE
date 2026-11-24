@@ -60,7 +60,7 @@ public:
         }
         const uint64_t fileHash = hash(file);
         auto old = compiled_.find(variantKey);
-        if (old != compiled_.end() && old->second.sourceHash == fileHash) {
+        if (old != compiled_.end() && !old->second.hasDependencies && old->second.sourceHash == fileHash) {
             result.effect = old->second.id;
             return result;
         }
@@ -75,13 +75,29 @@ public:
             }
             return result;
         }
+        std::map<std::string,std::string> dependencies;
+        SdfResourceReader resolve=[&](const std::string& path,std::string& bytes){
+            const auto cached=dependencies.find(path);
+            if(cached!=dependencies.end()){bytes=cached->second;return true;}
+            if(!reader_(path,bytes)||bytes.size()>kSdfBinaryMaxBytes)return false;
+            dependencies.emplace(path,bytes);return true;
+        };
         EffectDef definition;
-        if (!compileSpectraGraph(json, overrides, definition, result.errors)) {
+        if (!compileSpectraGraph(json, overrides, definition, result.errors,resolve)) {
             if (old != compiled_.end()) {
                 result.effect = old->second.id;
                 result.fallback = true;
             }
             return result;
+        }
+        uint64_t dependencyHash=14695981039346656037ull;
+        for(const auto& [path,bytes]:dependencies){
+            dependencyHash=(dependencyHash^hash(path))*1099511628211ull;
+            dependencyHash=(dependencyHash^hash(bytes))*1099511628211ull;
+        }
+        if(old!=compiled_.end()&&old->second.sourceHash==fileHash&&
+           old->second.hasDependencies==!dependencies.empty()&&old->second.dependencyHash==dependencyHash){
+            result.effect=old->second.id;return result;
         }
         const int id = ps_.define(runtimeName, definition);
         if (id < 0) {
@@ -92,7 +108,7 @@ public:
             }
             return result;
         }
-        compiled_[variantKey] = {fileHash, id};
+        compiled_[variantKey] = {fileHash, id,!dependencies.empty(),dependencyHash};
         result.effect = id;
         result.recompiled = true;
         return result;
@@ -111,7 +127,7 @@ public:
     size_t variants() const { return compiled_.size(); }
 
 private:
-    struct Entry { uint64_t sourceHash; int id; };
+    struct Entry { uint64_t sourceHash; int id; bool hasDependencies; uint64_t dependencyHash; };
     static uint64_t hash(const std::string& value) {
         uint64_t h = 14695981039346656037ull;
         for (unsigned char c : value) {

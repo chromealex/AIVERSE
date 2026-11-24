@@ -50,7 +50,8 @@ static_assert(uint32_t(program::Field::Age)==0 &&
               uint32_t(program::Field::Attribute0)==16 &&
               uint32_t(program::Field::Attribute7)==23 &&
               uint32_t(program::Field::Param0)==24 &&
-              uint32_t(program::Field::Param7)==31,
+              uint32_t(program::Field::Param7)==31 &&
+              uint32_t(program::Field::BirthRandom)==32,
               "Metal VM field IDs changed: update vmRead/vmWrite");
 static_assert(uint32_t(program::Op::Constant)==0 &&
               uint32_t(program::Op::Read)==1 &&
@@ -65,7 +66,7 @@ static_assert(uint32_t(program::Action::Set)==0 &&
 
 // The Metal VM has a separate per-physical-slot 32-byte attribute buffer.
 // Rotation/uid and event-only stages still require additional GPU semantics.
-inline bool supportedField(program::Field field, bool target) {
+inline bool supportedField(program::Field field, bool target,bool allowBirthRandom=false) {
     using F=program::Field;
     switch(field) {
     case F::PositionX: case F::PositionY: case F::PositionZ:
@@ -75,6 +76,7 @@ inline bool supportedField(program::Field field, bool target) {
     case F::Attribute0: case F::Attribute1: case F::Attribute2: case F::Attribute3:
     case F::Attribute4: case F::Attribute5: case F::Attribute6: case F::Attribute7:
         return true;
+    case F::BirthRandom:return !target&&allowBirthRandom;
     case F::Age: case F::AgeNormalized: case F::Dt:
     case F::Param0: case F::Param1: case F::Param2: case F::Param3:
     case F::Param4: case F::Param5: case F::Param6: case F::Param7:
@@ -94,7 +96,7 @@ inline bool supportedOp(program::Op op) {
 }
 
 inline bool prepare(const program::Program& source, Payload& output,
-                    std::string& reason) {
+                    std::string& reason,bool allowBirthRandom=false) {
     Payload next{};
     reason.clear();
     const auto reject=[&](const char* why) {
@@ -127,7 +129,7 @@ inline bool prepare(const program::Program& source, Payload& output,
             for(const auto& ins:statement.code) {
                 if(!supportedOp(ins.op))
                     return reject("GPU VM unsupported arithmetic instruction");
-                if(ins.op==program::Op::Read && !supportedField(ins.field,false))
+                if(ins.op==program::Op::Read && !supportedField(ins.field,false,allowBirthRandom))
                     return reject("GPU VM unsupported input field");
                 if(ins.op==program::Op::Constant && !program::number(ins.constant))
                     return reject("GPU VM constant is not finite or bounded");
@@ -148,7 +150,7 @@ inline bool prepare(const program::Program& source, Payload& output,
 // Stage 22 executable Metal-subset validation. The ABI can represent more
 // instructions than the first GPU interpreter is allowed to evaluate.
 // This separate gate prevents a program from being partially executed.
-inline bool prepareForMetal(const Json& json,Payload& output,std::string& reason) {
+inline bool prepareForMetal(const Json& json,Payload& output,std::string& reason,bool allowBirthRandom=false) {
     output=Payload{};
     if(json.isNull()) {reason.clear();return true;}
     program::Program source;
@@ -157,7 +159,7 @@ inline bool prepareForMetal(const Json& json,Payload& output,std::string& reason
         reason=errors.empty()?"invalid CPU particle program":errors.front();
         return false;
     }
-    if(!prepare(source,output,reason))return false;
+    if(!prepare(source,output,reason,allowBirthRandom))return false;
     if(output.statementCount>24 || output.instructionCount>192) {
         reason="GPU VM executable budget: at most 24 statements and 192 instructions";
         output=Payload{};

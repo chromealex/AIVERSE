@@ -279,3 +279,11 @@ modify authoritative ECS state or create background GPU work.
 **Stage 43 verification:** GitHub file commits and source inspection
 only. The new ZIP writer, CLI packaging, editor UI and actual Metal
 readbacks have **NOT YET** been compiled, executed or hardware-tested.
+
+## Offline mesh SDF bake
+
+Build `aiverse_sdf_bake` with native tools enabled, then run:
+
+    ./aiverse_sdf_bake model.glb 16 collision.json
+
+Output is the object for `CollisionModule.properties.staticSdf`, not a whole VFX graph. Use a closed, consistently wound low-poly collision proxy; the current volume is at most 16 cubed and input complexity is capped. FBX availability follows the existing model loader. Identity transform in CLI; native adapter accepts an affine placement. Model geometry is read in bind pose. Output overwrites the named file.

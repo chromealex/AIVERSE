@@ -1,0 +1,89 @@
+{
+  "version": 2,
+  "description": "Analytic static sphere collision in particle simulation space, strict CPU/Metal/Vulkan subset. Emit from x=-3 toward the origin to see bounce.",
+  "parameters": {},
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 8
+      },
+      "position": [
+        30,
+        180
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 12,
+        "size": 0.35,
+        "spread": 0,
+        "gravity": [
+          0,
+          0,
+          0
+        ],
+        "drag": 0
+      },
+      "position": [
+        230,
+        180
+      ]
+    },
+    {
+      "id": "collision",
+      "type": "CollisionModule",
+      "properties": {
+        "ground": false,
+        "scene": false,
+        "staticSphereRadius": 1,
+        "staticSphereCenter": [
+          0,
+          0,
+          0
+        ],
+        "radius": 0.5,
+        "bounce": 0.8,
+        "dampen": 0.1
+      },
+      "position": [
+        450,
+        180
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive",
+        "align": "camera"
+      },
+      "position": [
+        680,
+        180
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "collision"
+    },
+    {
+      "from": "collision",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

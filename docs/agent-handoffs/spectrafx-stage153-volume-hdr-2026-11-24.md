@@ -1,0 +1,20 @@
+# Stage 153 — SpectraFX Volumetrics: native HDR ray marching
+
+Owner: SpectraFX continuation agent. Branch: feature/spectrafx-html5-data-interfaces-20261123
+Previous HEAD: bf750b86ba75c5476ba894ac737e7d2d70948488
+Plan: 8162d42c28e2df5e21eb856f0b866e431741a399
+Ray marching shaders: 8f83e53fa8dfe3a33957108722a7b35f412fb47e
+Renderer and composition hook: f71b65cebfd8251b216b6b7cac2e1f77a2cf2f35
+Fixtures and documentation: a403153d0f11a99e53ec1fe7266789cb58be0c49
+
+New engine/fx/SpectraGpuVolumeRenderer.h and SpectraVolumeRenderShaders.h: native compute ray integration from GpuGasGrid's published cells and solid mask directly into separate RGBA16F storage image. Same Metal/GLSL body, existing TextureResources layout, no new RHI descriptor model. World ray reconstructed from PostFrame inverse view-projection and backend flip/clip depth; AABB intersect and opaque depth clamp; trilinear density/heat, Beer-Lambert extinction, HDR heat emission, ambient/sun HG scattering, bounded density self-shadow integration, up to four explicit host-supplied point lights. Solid mask suppresses sampled density/temperature. Up to 128 primary samples and 8 shadow samples per light, 4,194,304 pixels, one volume per dispatch. Host must supply matching full-resolution linear HDR scene/depth and consume borrowed output in same ordered frame. Canonical Device allocation ledger charges 8 bytes/pixel, retirement recorded with last GPU fence, resize creates candidate before releasing old output. No voxel CPU readback in render path.
+
+PRISMA generic SceneHdrContributor one-shot callback scoped to current GPU submission fence and view ID. Host registers after setViewId in active frame, captures live grid/renderer, returns separate HDR result from draw; PRISMA consumes after local fog and before AO/SSR, exposure, bloom/tonemap. Example native invocation: prisma.setSceneHdrContributor([&](gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle c,gfx::TextureHandle z){return volumeRenderer.draw(d,grid,f,c,z,material,settings);});. Register only when HDR is active and host keeps resources alive. Callback discarded on configure/shutdown or mismatched resolve; rejected output retains scene color. No reverse render->fx dependency, no second postprocessing effect. Does not automatically enable HDR or create scene volume instances.
+
+Limits: no scene shadow-map occlusion (density self-shadow only), no automatic point-light extraction, no unified overlapping media, transparent depth clipping only as provided by opaque depth, no sparse/multi-volume renderer, temporal reconstruction, or CPU/GL/Web fallback. Composition order with AO/SSR/transparency is preliminary. Native API only; no automatic Studio/game host binding, unified graph or persisted volume instance. RHI texture barrier correctness and shader portability require hardware QA.
+
+Paths: engine/fx/{SpectraVolumeRenderShaders.h,SpectraGpuVolumeRenderer.h,SpectraFX.h}; engine/render/{Prisma.h,Prisma.cpp}; tests/{spectrafx_metal_allocator.mm,spectrafx_vulkan_allocator.cpp}; docs/spectrafx-volumetrics.md, docs/prisma.md, owning roadmap/agent/skill.
+
+Delivery evidence: source commits and expected-head non-force updates succeeded. Actual registered allocator fixture source uses native GPU simulation, renders HDR with emission above 1, opaque depth occlusion and empty volume, requests real RGBA16F readback and checks budget release. Vulkan shader compilation included in fixture source. No execution: CMake/CTest, Metal/Vulkan shader compile, dispatch, actual readback, screenshot, host integration, performance, CI and native consumer NOT RUN. User requested features first. No main sync/merge. Public API and docs source present; MCP and Studio renderer controls, unified graph and persistence NOT IMPLEMENTED. No feature-ready claim.
+
+Next Stage 154: typed volume/hybrid graph integration, live scene/Studio render owner, native preview controls, persistent authored instances and template selection. Then Stage 155 sparse/LOD, PHYSIS field and particle coupling; Stage 156 package/replay and acceptance. Earlier SDF workflow gaps remain.
