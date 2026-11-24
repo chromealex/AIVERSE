@@ -2,6 +2,7 @@
 // no independent simulation, geometry owner, or persistent state.
 #pragma once
 #include "aiverselib/world/PlanetProcessGeometry.h"
+#include "aiverselib/world/EvolveSurfaceRegions.h"
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <string>
@@ -128,6 +129,83 @@ inline Json samplePlanetGranular(const World& ecs,const game::Surface& surface,
     out.set("rejected",Json::number(int64_t(rejected)));
     out.set("tiles",Json::number(int64_t(tiles)));
     out.set("cells",std::move(rows));
+    return out;
+}
+// Live outline of the canonical ecological chart, not a planar rectangle
+// or a filled coverage claim at the antipodal cut.
+inline Json samplePlanetEvolve(const World& ecs,const game::Surface& surface,
+        uint32_t completedTick,size_t limit=64){
+    namespace wp=lib::worldprocess;
+    Json out=Json::object(),rows=Json::array();
+    limit=std::min(limit,size_t(64));
+    const auto total=ecs.countExisting<evolve::SurfaceArea>();
+    bool truncated=total>evolve::kMaxRegions||ecs.countExisting<evolve::Region>()>evolve::kMaxRegions;
+    size_t rejected=0,clipped=0;
+    if(!truncated&&completedTick!=UINT32_MAX){
+        std::vector<Entity> ids;
+        ids.reserve(total);
+        ecs.eachExistingConst<evolve::SurfaceArea>([&](Entity e,const evolve::SurfaceArea& area){
+            if(ecs.alive(e)&&area.local.enabled)ids.push_back(e);
+        });
+        std::sort(ids.begin(),ids.end(),[](Entity a,Entity b){return a.packed()<b.packed();});
+        for(const auto e:ids){
+            const auto* area=ecs.tryGetConst<evolve::SurfaceArea>(e);
+            const auto* region=ecs.tryGetConst<evolve::Region>(e);
+            if(!area||!region||ecs.has<evolve::Area>(e)||!evolve::valid(*area)||!evolve::valid(*region)){
+                ++rejected;continue;
+            }
+            if(!region->enabled)continue;
+            const auto frame=wp::surfaceFrame(&surface,area->origin);
+            if(region->sampledTick!=completedTick||!frame||frame->body!=area->body){
+                ++rejected;continue;
+            }
+            if(rows.size()>=limit){truncated=true;break;}
+            const auto& body=surface.bodies[size_t(frame->body)];
+            const auto anchor=game::Surface::anchor(frame->body);
+            const auto lift=fxMin(Fixed::fromInt(3),fxMax(Fixed::fromRatio(1,4),body.radius*Fixed::fromRatio(8,1000)));
+            const auto& a=area->local;
+            const int64_t x0=a.centerXcm-a.halfWidthCm,x1=a.centerXcm+a.halfWidthCm;
+            const int64_t z0=a.centerZcm-a.halfDepthCm,z1=a.centerZcm+a.halfDepthCm;
+            const std::array<std::pair<int64_t,int64_t>,4> corners{{{x0,z0},{x1,z0},{x1,z1},{x0,z1}}};
+            Json row=Json::object(),edges=Json::array();
+            bool chartClipped=false;
+            for(size_t edge=0;edge<4;++edge){
+                const auto [ax,az]=corners[edge];
+                const auto [bx,bz]=corners[(edge+1)%4];
+                Json points=Json::array();
+                for(int i=0;i<=16;++i){
+                    const auto x=Fixed::fromRatio(ax*(16-i)+bx*i,1600);
+                    const auto z=Fixed::fromRatio(az*(16-i)+bz*i,1600);
+                    const auto dir=evolve::surfaceRegionDirection(frame->up,frame->east,frame->south,body.radius,x,z);
+                    if(!dir){chartClipped=true;points.push(Json{});continue;}
+                    const auto pos=surface.project(anchor+*dir*body.radius,lift);
+                    const auto resolved=wp::surfaceFrame(&surface,pos);
+                    if(!resolved||resolved->body!=frame->body){chartClipped=true;points.push(Json{});continue;}
+                    const auto local=pos-anchor;
+                    Json xyz=Json::array();
+                    for(auto c:{local.x,local.y,local.z})xyz.push(Json::number(c.toDouble(),4));
+                    points.push(std::move(xyz));
+                }
+                edges.push(std::move(points));
+            }
+            if(chartClipped)++clipped;
+            row.set("id",Json::string(std::to_string(e.packed())));
+            row.set("body",Json::string(body.id));
+            row.set("fertility",Json::number(region->fertility));
+            row.set("pollution",Json::number(region->pollution));
+            row.set("succession",Json::number(region->succession));
+            row.set("durability",Json::number(region->durability));
+            row.set("chartClipped",Json::fromBool(chartClipped));
+            row.set("edges",std::move(edges));
+            rows.push(std::move(row));
+        }
+    }
+    out.set("sampleTick",Json::number(int64_t(completedTick)));
+    out.set("regionCount",Json::number(int64_t(total)));
+    out.set("truncated",Json::fromBool(truncated));
+    out.set("rejected",Json::number(int64_t(rejected)));
+    out.set("clipped",Json::number(int64_t(clipped)));
+    out.set("regions",std::move(rows));
     return out;
 }
 } // namespace aiverse::studio

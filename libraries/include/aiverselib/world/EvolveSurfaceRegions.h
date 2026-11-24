@@ -51,6 +51,23 @@ inline std::optional<Vec2> surfaceRegionOffset(const game::Surface& surface,
     if(direction.lengthSq().raw==0)direction=origin.east;
     return Vec2{direction.dot(origin.east)*arc,direction.dot(origin.south)*arc};
 }
+// Inverse of surfaceRegionOffset on the open azimuthal chart. The
+// canonical face axes are independently projected and not orthogonal.
+// Do not invent an inverse at the antipodal cut.
+inline std::optional<Vec3> surfaceRegionDirection(Vec3 up,Vec3 east,Vec3 south,
+        Fixed radius,Fixed x,Fixed z){
+    if(radius.raw<=0)return {};
+    const auto circumference=radius*game::kFxTwoPi;
+    if(circumference.raw<=0||fxAbs(x)>=circumference/2||fxAbs(z)>=circumference/2)return {};
+    const auto d=east.dot(south),den=Fixed::fromInt(1)-d*d;
+    if(den<Fixed::fromRatio(1,100))return {};
+    const auto tangent=east*((x-d*z)/den)+south*((z-d*x)/den);
+    const auto distance=tangent.length();
+    const auto turns=distance/circumference;
+    if(turns>=Fixed::fromRatio(1,2))return {};
+    if(distance.raw==0)return up;
+    return fxNormalize(up*fxCosTurns(turns)+(tangent/distance)*fxSinTurns(turns));
+}
 inline bool containsSurfacePoint(const game::Surface& surface,const SurfaceArea& area,
         const lib::worldprocess::SurfaceFrame& point){
     if(!valid(area)||!area.local.enabled||area.body!=point.body)return false;

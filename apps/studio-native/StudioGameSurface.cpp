@@ -106,6 +106,7 @@ Json StudioGameSurface::ecologyState(int32_t granularCellCm){
                 out.set(key,Json::array());
             if(host_->canControl()&&sim->tick()>0){
                 out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
+                out.set("evolve",samplePlanetEvolve(sim->world(),*surface,sim->tick()-1));
                 if(granularCellCm>0)
                     out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,granularCellCm));
             }

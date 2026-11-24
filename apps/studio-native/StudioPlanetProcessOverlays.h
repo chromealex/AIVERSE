@@ -4,7 +4,7 @@
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/editor/PhysisAuthoring.h"
 #include "engine/game/Surface.h"
-#include "libraries/include/aiverselib/world/EvolveArea.h"
+#include "libraries/include/aiverselib/world/EvolveSurfaceRegions.h"
 
 namespace aiverse::studio {
 struct PlanetProcessOverlayLine {
@@ -30,16 +30,7 @@ inline render::float3 surfacePoint(const editor::DocBody& body,
 // assuming they are perpendicular. The chart ends at the antipode.
 inline std::optional<Vec3> regionDirection(Vec3 up,Vec3 east,Vec3 south,
         Fixed radius,Fixed x,Fixed z){
-    if(radius.raw<=0)return {};
-    const auto d=east.dot(south),den=Fixed::fromInt(1)-d*d;
-    if(den<Fixed::fromRatio(1,100))return {};
-    const auto tangent=east*((x-d*z)/den)+south*((z-d*x)/den);
-    const auto distance=tangent.length();
-    const auto turns=distance/(radius*game::kFxTwoPi);
-    if(turns>=Fixed::fromRatio(1,2))return {};
-    if(distance.raw==0)return up;
-    return fxNormalize(up*fxCosTurns(turns)+
-        (tangent/distance)*fxSinTurns(turns));
+    return evolve::surfaceRegionDirection(up,east,south,radius,x,z);
 }
 }
 inline PlanetProcessOverlays buildPlanetProcessOverlays(

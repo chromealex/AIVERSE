@@ -2183,6 +2183,12 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetLiveProject_==projectPath&&planetLiveRevision_==doc.revision&&!doc.dirty;
     const bool liveImprint=livePlanet&&planetLiveSnapshot_["imprint"].isObject();
     const bool liveGranular=livePlanet&&planetLiveSnapshot_["granular"].getBool("available");
+    const bool liveEvolve=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["evolve"].isObject();
+    if(liveEvolve){
+        lightingStatus_+=" · live EVOLVE "+planetLiveLayer_+" tick "+std::to_string(planetLiveSnapshot_["evolve"].getInt("sampleTick"));
+        if(planetLiveSnapshot_["evolve"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+        if(planetLiveSnapshot_["evolve"].getInt("clipped")>0)lightingStatus_+=" (chart clipped)";
+    }
     if(liveGranular){
         lightingStatus_+=" · GRANULAR diagnostic "+std::to_string(planetLiveSnapshot_["granular"].getInt("cellSizeCm"))+" cm";
         if(planetLiveSnapshot_["granular"].getBool("truncated"))lightingStatus_+=" (sample capped)";
@@ -2218,6 +2224,34 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             for(const auto& line:planetProcessOverlays_.lines)
                 if(line.owner.empty()||!hidden_.count(line.owner))
                     renderer_.line(line.a,line.b,line.color);
+            if(liveEvolve){
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["evolve"]["regions"].items()){
+                    if(count>=64)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto u=[&](const char* key){return std::clamp(float(row.getInt(key))/1e9f,0.f,1.f);};
+                    float r=u("pollution"),g=u("fertility"),b=.35f;
+                    if(planetLiveLayer_=="fertility")r=.15f;
+                    if(planetLiveLayer_=="pollution")g=.15f;
+                    if(planetLiveLayer_=="succession"){r=.15f;g=u("succession");b=.85f;}
+                    if(planetLiveLayer_=="durability"){g=u("durability");r=1-g;}
+                    const auto color=rgba(uint8_t(r*255),uint8_t(g*255),uint8_t(b*255));
+                    const auto& edges=row["edges"].items();
+                    if(edges.size()!=4)continue;
+                    for(const auto& edge:edges){
+                        if(edge.size()!=17)continue;
+                        std::optional<render::float3> previous;
+                        for(const auto& point:edge.items()){
+                            const auto& xyz=point.items();
+                            if(xyz.size()!=3){previous.reset();continue;}
+                            const render::float3 current{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                            if(previous)renderer_.line(*previous,current,color);
+                            previous=current;
+                        }
+                    }
+                    ++count;
+                }
+            }
             if(liveGranular){
                 size_t count=0;
                 for(const auto& row:planetLiveSnapshot_["granular"]["cells"].items()){

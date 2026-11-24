@@ -577,6 +577,33 @@ static void checkPlanetProcessGeometry(){
     AIVERSE_TEST_CHECK(!aiverse::studio::samplePlanetGranular(ecs,surface,7,0).getBool("available"));
     const auto grainCap=aiverse::studio::samplePlanetGranular(ecs,surface,7,1000,1);
     AIVERSE_TEST_CHECK(grainCap.getBool("truncated")&&grainCap["cells"].size()==1);
+    const auto region=ecs.create();
+    evolve::Region ecology;ecology.fertility=800000000;ecology.pollution=200000000;ecology.sampledTick=7;
+    ecs.add<evolve::Region>(region,ecology);
+    AIVERSE_TEST_CHECK(evolve::setSurfaceArea(ecs,surface,region,t.pos,{100,-200,300,400,true}));
+    const auto frame=wp::surfaceFrame(&surface,t.pos);AIVERSE_TEST_CHECK(frame);
+    const auto dir=evolve::surfaceRegionDirection(frame->up,frame->east,frame->south,body.radius,
+        Fixed::fromInt(3),Fixed::fromInt(-2));
+    AIVERSE_TEST_CHECK(dir);
+    const auto target=wp::surfaceFrame(&surface,game::Surface::anchor(1)+*dir*body.radius);
+    AIVERSE_TEST_CHECK(target);
+    const auto offset=evolve::surfaceRegionOffset(surface,*frame,*target);
+    AIVERSE_TEST_CHECK(offset&&fxAbs(offset->x-Fixed::fromInt(3))<Fixed::fromRatio(1,10));
+    AIVERSE_TEST_CHECK(fxAbs(offset->y-Fixed::fromInt(-2))<Fixed::fromRatio(1,10));
+    const auto regions=aiverse::studio::samplePlanetEvolve(ecs,surface,7);
+    AIVERSE_TEST_CHECK(regions["regions"].size()==1&&!regions.getBool("truncated"));
+    const auto& eco=regions["regions"][size_t(0)];
+    AIVERSE_TEST_CHECK(eco.getStr("body")=="moon"&&eco.getInt("fertility")==800000000);
+    AIVERSE_TEST_CHECK(!eco.getBool("chartClipped")&&eco["edges"].size()==4);
+    AIVERSE_TEST_CHECK(eco["edges"][size_t(0)].size()==17);
+    AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetEvolve(ecs,surface,8)["regions"].size()==0);
+    AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetEvolve(ecs,surface,7,0).getBool("truncated"));
+    auto& area=ecs.get<evolve::SurfaceArea>(region);
+    area.local.centerXcm=100000;
+    const auto clipped=aiverse::studio::samplePlanetEvolve(ecs,surface,7);
+    AIVERSE_TEST_CHECK(clipped.getInt("clipped")==1&&clipped["regions"][size_t(0)].getBool("chartClipped"));
+    area.local.enabled=false;
+    AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetEvolve(ecs,surface,7)["regions"].size()==0);
 }
 static void checkPlanetGranular(){
     game::Surface surface;

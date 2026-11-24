@@ -1108,7 +1108,7 @@ void StudioHost::rebuildOverlay() {
         preview_->setOverlayShapes(std::move(shapes));
         preview_->setPlanetLiveSnapshot(wpLiveEcology_&&wpEcologyLayer_!="off"&&
             wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
-            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_);
+            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpEcologyLayer_);
     });
 }
 // World Processes: drag authored stable-ID references or area handles.

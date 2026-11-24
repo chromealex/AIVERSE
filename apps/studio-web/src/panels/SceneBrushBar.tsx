@@ -81,6 +81,9 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   if(error)return <span role="alert">{error}</span>;
   if(!state?.active)return <small>Live ecology: start Play mode</small>;
   if(state.topology==='planet')return <div><small>Planetary live snapshot · tick {state.tick}</small>
+    {state.evolve&&<div><small>EVOLVE: {state.evolve.regions.length} / {state.evolve.regionCount} regions · {layer}{state.evolve.truncated?' · capped':''} · clipped {state.evolve.clipped} · rejected {state.evolve.rejected}</small>
+      {state.evolve.regions.slice(0,12).map(r=><div key={r.id}><small>{r.body} · {r.id}{r.chartClipped?' · chart clipped':''} · F {(r.fertility/1e7).toFixed(1)}% · P {(r.pollution/1e7).toFixed(1)}% · S {(r.succession/1e7).toFixed(1)}% · D {(r.durability/1e7).toFixed(1)}%</small></div>)}
+      {state.evolve.regions.length>12&&<small>Showing first 12 sampled regions</small>}</div>}
     {state.imprint&&<small>IMPRINT: {state.imprint.cells.length} traces{state.imprint.truncated?' · capped':''}</small>}
     {state.granular&&<small>GRANULAR: {state.granular.cells.length} tops / {state.granular.fieldCount} fields · {state.granular.cellSizeCm} cm diagnostic scale{state.granular.truncated?' · capped':''} · rejected {state.granular.rejected}</small>}
     <div aria-label="Simulation time controls">{(['pause','resume','step'] as const).map(action=><button key={action} type="button" disabled={controlBusy} onClick={()=>void control(action)}>{action==='step'?'Single tick':action==='pause'?'Pause':'Resume'}</button>)}{controlError&&<span role="alert">{controlError}</span>}</div>
