@@ -97,6 +97,9 @@ if(_defs)
     ")
     target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
     target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+else()
+    # Reconfiguring a reused cache for an empty project must discard the old generated registry.
+    file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
 endif()
 # Every executable of this build that links a game host gets the project's modules (deferred to the end of the
 # top-level CMakeLists, so executables declared later are included too).
