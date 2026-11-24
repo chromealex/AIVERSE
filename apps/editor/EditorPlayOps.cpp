@@ -76,11 +76,8 @@ void Editor::applyQueuedGraphMaterial(){
     // Runs after asset hot reload/reclaim and before new view submissions.
     // Resolve again; a queued task never stores a borrowed Model pointer.
     std::string error;
-    const bool ok=view_.applyGraphMaterial(task.type,task.choice,task.target,
-        [&](auto& live,auto& mirror,auto& model,auto& device,const auto& lease,auto& rollback,std::string* why){
-            return textureGraphGpuPreview_.publishCompletedGpuSnapshot(task.project,task.request,
-                live,task.target,model,device,lease,rollback,&mirror,why);
-        },&error);
+    const bool ok=view_.applyCompletedGraphMaterial(task.type,task.choice,task.target,
+        textureGraphGpuPreview_,task.project,task.request,&error);
     graphMaterialApplyState_=ok?"applied":"failed";
     graphMaterialApplyReason_=ok?"accepted GPU textures adopted into live editor appearance":std::move(error);
 }

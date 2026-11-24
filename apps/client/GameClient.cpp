@@ -298,6 +298,62 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
     luaEmit("language", Json::string(loc_.language()));
 }
 
+Json GameClient::startRuntimeTextureMaterial(size_t type,size_t choice,size_t material,
+        const Json& graph,const Json& overrides,const render::texture_graph::ResidentMaterialOptions& options){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_)
+        throw std::runtime_error("runtime texture target unavailable or request active");
+    const auto current=view_.graphMaterialTarget(type,choice,material);
+    if(!current)throw std::runtime_error("runtime texture material not resident");
+    auto result=runtimeTextureGraph_.startResidentMaterial(graph,overrides,runtimeTextureScope_,gpuDeviceLease_,options);
+    runtimeTextureRequest_=result.getStr("request");
+    runtimeTextureTask_=view::RuntimeTextureGraphTask{runtimeTextureRequest_,type,choice,current->identity};
+    runtimeTextureState_="queued";runtimeTextureReason_.clear();return runtimeTextureMaterialStatus();
+}
+Json GameClient::runtimeTextureMaterialStatus()const{
+    auto r=runtimeTextureGraph_.status();
+    r.set("applicationState",Json::string(runtimeTextureState_));
+    r.set("applicationReason",Json::string(runtimeTextureReason_));
+    r.set("applicationRequest",Json::string(runtimeTextureRequest_));
+    return r;
+}
+bool GameClient::cancelRuntimeTextureMaterial(const std::string& request){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!runtimeTextureTask_||runtimeTextureTask_->request!=request)return false;
+    Json p=Json::object();p.set("request",Json::string(request));
+    runtimeTextureGraph_.cancel(p,runtimeTextureScope_);
+    runtimeTextureTask_.reset();runtimeTextureState_="cancelled";runtimeTextureReason_="cancelled by native caller";return true;
+}
+void GameClient::tickRuntimeTextureMaterial(gfx::Device& dev){
+    // No render encoders or Model read scopes are active at this frame hook.
+    // Cancel stale scene tasks before issuing more GPU work.
+    if(runtimeTextureTask_&&!inMatch()&&gpuDeviceLease_.validFor(dev)){
+        const auto request=runtimeTextureTask_->request;
+        const auto s=runtimeTextureGraph_.status();
+        if(s.getStr("request")==request&&(s.getStr("state")=="queued"||s.getStr("state")=="pending"||s.getStr("state")=="ready"))
+            cancelRuntimeTextureMaterial(request);
+    }
+    runtimeTextureGraph_.tick(dev,runtimeTextureScope_);
+    if(!runtimeTextureTask_)return;
+    const auto s=runtimeTextureGraph_.status();
+    using Decision=view::RuntimeTextureGraphDecision;
+    const auto decision=view::decideRuntimeTextureGraph(*runtimeTextureTask_,s.getStr("request"),s.getStr("state"),
+        s.getBool("busy"),s.getBool("gpuTextureSetReady"),inMatch());
+    if(decision==Decision::Wait){runtimeTextureState_="pending";return;}
+    if(decision==Decision::Cancel){cancelRuntimeTextureMaterial(runtimeTextureTask_->request);return;}
+    const auto task=*runtimeTextureTask_;
+    runtimeTextureTask_.reset();
+    if(decision==Decision::Failed){runtimeTextureState_="failed";runtimeTextureReason_=s.getStr("reason");return;}
+    std::string why;
+    const bool ok=view_.applyCompletedGraphMaterial(task.type,task.choice,task.target,
+        runtimeTextureGraph_,runtimeTextureScope_,task.request,&why);
+    runtimeTextureState_=ok?"applied":"failed";runtimeTextureReason_=std::move(why);
+    // A refused target must not leave a completed resident set holding the owner.
+    if(!ok){const auto after=runtimeTextureGraph_.status();
+        if(after.getStr("request")==task.request&&after.getStr("state")=="ready"&&!after.getBool("published")){
+            Json p=Json::object();p.set("request",Json::string(task.request));runtimeTextureGraph_.cancel(p,runtimeTextureScope_);
+        }
+    }
+}
+
 void GameClient::shutdown() {
     // Preserve the MotionWeave device lease and shutdown contract.
     // The additional camera resources must retire before Renderer3D dies.
@@ -322,6 +378,11 @@ void GameClient::shutdown() {
     audio_.shutdown();
     horizonFrameTiming_.detach(*dev_);
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
+    if(dev_){
+        if(!dev_->waitForResourceIdle())throw std::runtime_error("runtime texture graph shutdown: GPU idle barrier failed");
+        runtimeTextureGraph_.shutdownAfterIdle(*dev_);
+        runtimeTextureTask_.reset();runtimeTextureState_="idle";runtimeTextureReason_.clear();runtimeTextureRequest_.clear();
+    }
     view_.shutdown(*dev_);
     prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);
@@ -1191,6 +1252,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         r3d_.collectRetiredTargets();
     if(r3d_.hasPendingModelPipelineJobs())
         r3d_.pollPendingModelPipelineJobs();
+    tickRuntimeTextureMaterial(dev);
     const auto frameStarted = std::chrono::steady_clock::now();
     if (mapLoading_) {
         horizonFrameTiming_.discard();

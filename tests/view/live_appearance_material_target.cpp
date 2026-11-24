@@ -1,4 +1,5 @@
 #include "engine/view/LiveAppearanceMaterialTarget.h"
+#include "engine/view/RuntimeTextureGraphTask.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::view;
@@ -17,5 +18,14 @@ int main(){
     check(parseAppearanceIdentity("18446744073709551615")==UINT64_MAX);
     for(auto bad:{"","0","01","-1","+1"," 1","1 ","1.0","1x","18446744073709551616"})
         check(parseAppearanceIdentity(bad)==0);
+    const RuntimeTextureGraphTask task{"7",1,2,t};
+    using D=RuntimeTextureGraphDecision;
+    check(decideRuntimeTextureGraph(task,"7","queued",true,false,true)==D::Wait);
+    check(decideRuntimeTextureGraph(task,"7","ready",true,true,true)==D::Wait);
+    check(decideRuntimeTextureGraph(task,"7","ready",false,true,true)==D::Apply);
+    check(decideRuntimeTextureGraph(task,"7","ready",false,false,true)==D::Failed);
+    check(decideRuntimeTextureGraph(task,"8","ready",false,true,true)==D::Failed);
+    check(decideRuntimeTextureGraph(task,"7","failed",true,false,true)==D::Failed);
+    check(decideRuntimeTextureGraph(task,"7","pending",true,false,false)==D::Cancel);
     std::cout<<"PASS: exact publication identity, stale revision, material range, overflow and decimal transport\n";
 }

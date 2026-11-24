@@ -58,6 +58,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
+namespace aiverse::render::texture_graph { class TextureGraphGpuOwner; }
 namespace aiverse::view {
 class View;
 struct ModelPoseRetarget;
@@ -409,6 +410,14 @@ public:
         const render::RenderDeviceLifetime::Lease&,render::ModelImageRollbackPool&,std::string*)>;
     bool applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
         const GraphMaterialApply& apply,std::string* error=nullptr);
+    // Thin shared adapter for native hosts and editor, never owns GPU work.
+    bool applyCompletedGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        render::texture_graph::TextureGraphGpuOwner& owner,const std::string& scope,const std::string& request,
+        std::string* error=nullptr);
+    // Explicit external root proof required: the adapter only enumerates its
+    // own current choices, not renderer caches, external pins or packets.
+    render::texture_graph::GraphImageReclaimResult collectGraphMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
     bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
     bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
     void requestDetail(uint16_t type, bool detailed);

@@ -33,6 +33,8 @@
 #include "engine/render/CameraClientAdapter.h"
 #include "engine/render/CameraModelSnapshot.h"
 #include "engine/render/RenderDeviceLifetime.h"
+#include "engine/render/graph/TextureGraphGpuOwner.h"
+#include "engine/view/RuntimeTextureGraphTask.h"
 #include "engine/services/Store.h"
 #include "engine/sim/Simulation.h"
 #include "engine/ui/UiLayer.h"
@@ -113,6 +115,13 @@ public:
     bool mapLoading() const { return mapLoading_; }
     static float initWeight(int step);   // share of the loading progress bar
     void frame(gfx::Device& dev, double dt);
+    // Presentation-only native API. Invoke on the graphics owner thread;
+    // graph generation is asynchronous and the exact target is rechecked at commit.
+    Json startRuntimeTextureMaterial(size_t type,size_t choice,size_t material,
+        const Json& graph,const Json& overrides=Json::object(),
+        const render::texture_graph::ResidentMaterialOptions& options={});
+    Json runtimeTextureMaterialStatus() const;
+    bool cancelRuntimeTextureMaterial(const std::string& request);
     void event(const platform::Event& e);
     void shutdown();
     void autostart(size_t i) { startMatch(i); }
@@ -332,6 +341,13 @@ private:
     gfx::Device* dev_ = nullptr;
     std::unique_ptr<render::RenderDeviceLifetime> ownedGpuLifetime_;
     render::RenderDeviceLifetime::Lease gpuDeviceLease_;
+    // Separate presentation host from the editor Scene; never shares mutable
+    // Model snapshots or request handles with that host.
+    render::texture_graph::TextureGraphGpuOwner runtimeTextureGraph_;
+    std::optional<view::RuntimeTextureGraphTask> runtimeTextureTask_;
+    std::string runtimeTextureState_="idle",runtimeTextureReason_,runtimeTextureRequest_;
+    inline static constexpr const char* runtimeTextureScope_="game-client";
+    void tickRuntimeTextureMaterial(gfx::Device& dev);
     gfx::TextureHandle hostColor_, hostDepth_;   // setHostTarget: invalid = the screen
     int hostW_ = 0, hostH_ = 0;
     int fbW() const { return hostColor_.valid() ? hostW_ : dev_->framebufferWidth(); }

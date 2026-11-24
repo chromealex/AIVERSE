@@ -7,6 +7,7 @@
 #include "GameModelStreaming.h"
 #include "engine/view/AppearanceAuthoringService.h"
 #include "engine/view/AppearanceChoiceAuthoring.h"
+#include "engine/render/graph/TextureGraphGpuOwner.h"
 
 #include <algorithm>
 #include <chrono>
@@ -969,6 +970,35 @@ bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppe
     }catch(const std::exception& e){
         if(error)*error=e.what();return false;
     }
+}
+
+bool GameView::applyCompletedGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        render::texture_graph::TextureGraphGpuOwner& owner,const std::string& scope,const std::string& request,std::string* error){
+    return applyGraphMaterial(type,choice,target,[&](auto& live,auto& mirror,auto& model,auto& device,
+            const auto& lease,auto& rollback,std::string* why){
+        return owner.publishCompletedGpuSnapshot(scope,request,live,target,model,device,lease,rollback,&mirror,why);
+    },error);
+}
+
+render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
+    const auto current=graphMaterialTarget(type,choice,material);
+    if(!current||target.material!=material||target.publication!=current->identity.publication||target.version!=current->identity.version||
+       !external.complete||external.activeReaders!=0||cameraPreparedCapture_||activeStagedModels_)
+        throw std::runtime_error("graph reclamation target or external root proof unavailable");
+    auto& model=*looks_[type].models[choice].model;
+    std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+    auto scan=[&](const ModelChoice& item){
+        if(item.model==&model)roots.emplace_back(item.materials);
+        if(item.appearanceSnapshot&&item.appearanceSnapshot->model==&model)roots.emplace_back(item.appearanceSnapshot->materials);
+    };
+    for(const auto& look:looks_){
+        for(const auto& item:look.models)scan(item);
+        for(const auto& item:look.lods)scan(item);
+        for(const auto& stage:look.stages)scan(stage.choice);
+    }
+    return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
+        {true,resources_.activeModelReaders(),roots});
 }
 
 void GameView::requestDetail(uint16_t type, bool detailed) {
