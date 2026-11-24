@@ -1,0 +1,3 @@
+# Stage 55B — Building owner synchronization
+
+Branch feature/aiv20261124_graph_owner_inspection, draft PR #183. Merge commit 9b05a1d20beea0e3c0f24e74f17a0bf156f869c7, parents 85ebde9fb66afb9c7040966dff44608fdf1d7bc5 and acff5c4a0b6bfab4603ca8573bdb1198fbc5fdb9. Both descendants of a2755ee0994df13abbae2d8ea6b73ac79e2cee97 changed eight disjoint paths each; checked GitHub compare before combining exact text paths with the advanced owner tree. Preserves Building material publication, host/session changes and tests. No other refs updated. No build or test executed; no main merge. Next: reconcile current Caverns owner and Stage 53/54 changes on a full checkout; verify native/GUI and Mac gate.
