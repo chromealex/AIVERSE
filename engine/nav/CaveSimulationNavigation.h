@@ -6,6 +6,7 @@
 #include "engine/nav/CaveEcsRouteFollow.h"
 #include "engine/sim/Simulation.h"
 #include "engine/core/Archive.h"
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -65,6 +66,36 @@ inline void io(Archive& a,CaveRouteIntent& p){
        (p.algorithm.size()>128||p.retryTicks>100000||
         !p.maxVisits||p.maxVisits>1048576))a.fail();
 }
+// Submit a route destination into authoritative ECS state. Commands may
+// request any registered solver, including custom. No route is calculated
+// on the presentation/UI thread. The fixed-tick repath system resolves it.
+inline bool assignCaveGoal(
+    World& world,Entity entity,
+    terraweave::caverns::PointCm goal,
+    terraweave::caverns::CaveAgentProfile profile,
+    std::string algorithm="astar",uint32_t speedCmPerTick=25,
+    uint32_t maxVisits=8192) {
+    if(!world.alive(entity)||!world.has<Transform>(entity)||
+       algorithm.empty()||algorithm.size()>128||
+       !speedCmPerTick||speedCmPerTick>10000||
+       !maxVisits||maxVisits>1048576)
+        return false;
+    terraweave::caverns::validatePoint(goal);
+    terraweave::caverns::CaveNavigationDataProvider::validateProfile(profile);
+    CaveRouteIntent intent;
+    intent.goal=goal;intent.algorithm=std::move(algorithm);
+    intent.maxVisits=maxVisits;intent.repathNotBeforeTick=0;
+    CaveRouteFollower route;
+    route.agent=profile;route.speedCmPerTick=speedCmPerTick;
+    route.needsRepath=true;
+    if(world.has<CaveRouteIntent>(entity))
+        world.get<CaveRouteIntent>(entity)=std::move(intent);
+    else world.add<CaveRouteIntent>(entity,std::move(intent));
+    if(world.has<CaveRouteFollower>(entity))
+        world.get<CaveRouteFollower>(entity)=std::move(route);
+    else world.add<CaveRouteFollower>(entity,std::move(route));
+    return true;
+}
 // Functions below write to existing shared ECS components only; no separate
 // agent container, floating point, wall-clock time or random scheduling.
 inline CaveRepathTickStats repathCaveEntities(
@@ -83,8 +114,9 @@ inline CaveRepathTickStats repathCaveEntities(
             return;
         // Force a stale route to be re-planned in a bounded stable order.
         if(route.sourceRevision!=provider->revision()){
+            if(!route.needsRepath)
+                intent.repathNotBeforeTick=tick;
             route.needsRepath=true;
-            intent.repathNotBeforeTick=tick;
         }
         if(!route.needsRepath && !route.waypoints.empty() &&
            !route.arrived)return;
