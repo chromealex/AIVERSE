@@ -426,7 +426,15 @@ void GameCore::applyEffect(Simulation& sim, const EffectDef& e, int list, int in
         }
         return t;
     };
-    const Fixed amount = rollAmount(sim, e) * ctx.scale;
+    Fixed amount{};
+    if (e.useWeaponDamage) {
+        const auto damage = currentWeaponDamage(sim, ctx.caster, e.weaponIndex);
+        // An effect with no valid live source/slot cannot invent a weapon stat.
+        // Resolve at execution time, including delayed projectile/area delivery.
+        if (!damage) return;
+        amount = *damage * e.weaponDamage * ctx.scale;
+        if (amount.raw <= 0) return;
+    } else amount = rollAmount(sim, e) * ctx.scale;
     switch (e.kind) {
     case EffectKind::Damage: {
         for (Entity h : targets()) {
