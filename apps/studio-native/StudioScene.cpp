@@ -654,6 +654,9 @@ void StudioScene::clearPlanetForestFarMesh(){
 }
 void StudioScene::clearPlanetForestModels(){
     clearPlanetForestFarMesh();
+    if(device_&&planetForestBlendProxy_.vb.valid())device_->destroyBuffer(planetForestBlendProxy_.vb);
+    if(device_&&planetForestBlendProxy_.ib.valid())device_->destroyBuffer(planetForestBlendProxy_.ib);
+    planetForestBlendProxy_={};planetForestDetailWeights_.clear();planetForestBlendTime_={};planetForestBlendIdentity_.clear();
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [id,model]:planetForestLogModels_)if(model)releasePreviewModel(*model);
@@ -1007,25 +1010,91 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(index<0)return;
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
-    Json far=Json::array();
-    for(const auto& row:planetLiveSnapshot_["forest"]["farPlants"].items())far.push(row);
-    // Unavailable ARBOR prototypes must not permanently remove a standing
-    // plant from both tiers. The same current-tick pose drives its proxy.
-    size_t fallback=0;
-    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
-        if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent")||row.getBool("physical")||row.getBool("fallen")||row.getBool("harvested")||row.getStr("habit")=="grass")continue;
-        if(planetForestModels_.count(uint32_t(row.getInt("species"))))continue;
+    const auto now=std::chrono::steady_clock::now();
+    const std::string identity=planetLiveProject_+"\n"+planetLivePath_+"\n"+planetPreview_->bodyId+"\n"+
+        planetLiveSnapshot_.getStr("epoch")+"\n"+std::to_string(planetLiveRevision_);
+    const bool first=planetForestBlendIdentity_!=identity||planetForestBlendTime_==std::chrono::steady_clock::time_point{}||
+        now-planetForestBlendTime_>std::chrono::seconds(1);
+    if(first){planetForestDetailWeights_.clear();planetForestBlendIdentity_=identity;}
+    const float dt=first?0.f:std::clamp(std::chrono::duration<float>(now-planetForestBlendTime_).count(),0.f,.1f);
+    planetForestBlendTime_=now;
+    const auto visualId=[](const Json& row){return ForestVisualId{row.getInt("species"),row.getStr("key")};};
+    const auto standing=[&](const Json& row){
+        return row.getStr("body")==planetPreview_->bodyId&&!row.getBool("spent")&&!row.getBool("physical")&&
+            !row.getBool("fallen")&&!row.getBool("harvested")&&row.getStr("habit")!="grass";
+    };
+    const auto proxyRow=[](const Json& row){
         Json proxy=Json::object();
         for(const char* key:{"cell","species","key","position","up","east","sizePermille","foliagePermille"})proxy.set(key,row[key]);
-        proxy.set("shrub",Json::fromBool(row.getStr("habit")=="shrub"));far.push(std::move(proxy));++fallback;
+        proxy.set("shrub",Json::fromBool(row.getStr("habit")=="shrub"));return proxy;
+    };
+    // Shared unit silhouette. Transitional draws do not rebuild the cell mesh
+    // each frame and do not retain any previous ECS pose or retirement state.
+    if(!planetForestBlendProxy_.vb.valid()&&device_->waitForResourceIdle()){
+        render::MeshBuilder mesh;
+        for(const auto side:{render::float3{1,0,0},render::float3{0,0,1}}){
+            const auto n=render::normalize(render::cross(side,render::float3{0,1,0}));
+            const auto b=uint32_t(mesh.vertexCount());const auto c=render::rgba(255,255,255);
+            mesh.addVertex(side*(-1.f),n,c);mesh.addVertex(side,n,c);mesh.addVertex({0,1,0},n,c);
+            mesh.addTriangle(b,b+1,b+2);mesh.addTriangle(b+2,b+1,b);
+        }
+        auto next=mesh.upload(*device_);
+        if(next.vb.valid()&&next.ib.valid())planetForestBlendProxy_=next;
+        else{if(next.vb.valid())device_->destroyBuffer(next.vb);if(next.ib.valid())device_->destroyBuffer(next.ib);}
     }
+    const bool canBlend=planetForestBlendProxy_.vb.valid()&&planetForestBlendProxy_.ib.valid();
+    Json far=Json::array(),detail=Json::array();
+    std::map<ForestVisualId,float> nextWeights;
+    std::vector<std::pair<Json,float>> fadingProxies;
+    constexpr size_t maxTransitions=256;
+    constexpr float blendSeconds=.30f;
+    const auto weight=[&](const ForestVisualId& id,float target){
+        const auto it=planetForestDetailWeights_.find(id);
+        const float previous=it==planetForestDetailWeights_.end()?0.f:it->second;
+        if(first||!canBlend||fadingProxies.size()>=maxTransitions)return target;
+        return previous+std::clamp(target-previous,-dt/blendSeconds,dt/blendSeconds);
+    };
+    size_t fallback=0;
+    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+        if(!standing(row)){detail.push(row);continue;}
+        const auto id=visualId(row);
+        if(!planetForestModels_.count(uint32_t(id.first))){far.push(proxyRow(row));++fallback;continue;}
+        const float w=weight(id,1.f);nextWeights.emplace(id,w);
+        if(w<.999f){fadingProxies.emplace_back(proxyRow(row),1.f-w);}
+        detail.push(row);
+    }
+    for(const auto& row:planetLiveSnapshot_["forest"]["farPlants"].items()){
+        const auto id=visualId(row);
+        const float w=planetForestModels_.count(uint32_t(id.first))?weight(id,0.f):0.f;
+        if(w<=.001f){far.push(row);continue;}
+        nextWeights.emplace(id,w);
+        fadingProxies.emplace_back(row,1.f-w);
+        Json outgoing=row;
+        outgoing.set("body",Json::string(planetPreview_->bodyId));
+        outgoing.set("habit",Json::string(row.getBool("shrub")?"shrub":"tree"));
+        outgoing.set("dead",Json::fromBool(row.getInt("foliagePermille")==0));
+        detail.push(std::move(outgoing));
+    }
+    planetForestDetailWeights_=std::move(nextWeights);
     drawPlanetForestFarChunks(far,flora,width,height);
+    for(const auto& [row,opacity]:fadingProxies){
+        if(opacity<=.001f)continue;
+        const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+        const auto size=row.getInt("sizePermille");if(!p||!up||!east||size<=0||size>1000)continue;
+        const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+        const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+        const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+        const float w=h*(.035f+.24f*cover);
+        const render::float4 color=cover>0.f?render::float4{.13f,.31f,.10f,opacity}:render::float4{.27f,.15f,.08f,opacity};
+        renderer_.drawMesh(planetForestBlendProxy_,*frame*render::mat4::scale({w,h,w}),color,render::kDrawNoCastShadow);
+    }
     if(fallback)lightingStatus_+=" · prototype fallback "+std::to_string(fallback);
+    if(!fadingProxies.empty())lightingStatus_+=" · LOD blends "+std::to_string(fadingProxies.size());
     static const std::vector<uint8_t> barkOnly{1,0};
     planetForestSeasonMaterials_.clear();
     const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
     size_t rendered=0,missing=0;
-    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+    for(const auto& row:detail.items()){
         if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
         if(row.getBool("physical")){
             const auto& cap=row["capsule"];
@@ -1054,6 +1123,11 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
         if(model!=planetForestModels_.end()){
             render::ModelDraw draw;draw.model=model->second.get();
             draw.world=*frame*render::mat4::scale({factor,factor,factor});
+            const auto transition=planetForestDetailWeights_.find(visualId(row));
+            if(transition!=planetForestDetailWeights_.end()&&transition->second<.999f){
+                draw.tint.w=transition->second;draw.flags|=render::kDrawKeepShadow;
+            }
+            if(draw.tint.w<=.001f)continue;
             const auto foliage=std::clamp<int64_t>(row.getInt("foliagePermille",0),0,1000);
             int season=10;
             if(row["seasonPermille"].isNumber())season=int(std::clamp<int64_t>((row.getInt("seasonPermille")+1000)*10/2000,0,10));

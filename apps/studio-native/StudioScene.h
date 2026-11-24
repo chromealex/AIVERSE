@@ -253,6 +253,11 @@ private:
     std::map<int64_t,ForestFarChunk> planetForestFarChunks_;
     std::string planetForestFarBody_,planetForestFarProject_,planetForestFarPath_,planetForestFarEpoch_;
     uint64_t planetForestFarRevision_=0;
+    using ForestVisualId=std::pair<int64_t,std::string>;
+    std::map<ForestVisualId,float> planetForestDetailWeights_;
+    std::chrono::steady_clock::time_point planetForestBlendTime_{};
+    std::string planetForestBlendIdentity_;
+    render::Mesh planetForestBlendProxy_;
     void clearPlanetForestFarMesh();
     void drawPlanetForestFarChunks(const Json& rows,float flora,int width,int height);
     void clearPlanetForestModels();
