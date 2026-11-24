@@ -802,6 +802,7 @@ private:
         } ground;
         float yaw = 0, speed = 0, distance = 0, turnRate = 0, accel = 0, phase = 0;
         float eventAge[render::kProcEvCount] = {1e9f, 1e9f, 1e9f, 1e9f};
+        uint8_t pendingAttackWindups = 0; // presentation only; weapon slots 0..3
         render::float3 attackDirection{};          // last shot in the animation tangent frame
         float castAge = 1e9f;
         render::float3 lastPos;
