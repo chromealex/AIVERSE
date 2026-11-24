@@ -22,6 +22,8 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
   const [body,setBody]=useState(''),[filter,setFilter]=useState('');
   const [armPending,setArmPending]=useState(false);
+  const [action,setAction]=useState<'plant'|'pick'|'move'>('plant');
+  const [selectedPlant,setSelectedPlant]=useState<{species:number;key:number;direct:boolean;body:string}|null>(null);
   const [armed,setArmed]=useState(false),[plantSpecies,setPlantSpecies]=useState(''),[habit,setHabit]=useState<'tree'|'shrub'>('tree');
   const baseRef=useRef<StudioPlanetForestDocument|null>(null);
   const busyRef=useRef(false);
@@ -35,25 +37,26 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     try{const d=await invoke('studio.planetForest',{}),current=baseRef.current;
       if(!busyRef.current&&current&&(d.mapPath!==current.mapPath||d.revision!==current.revision||
          JSON.stringify(d.forest)!==JSON.stringify(current.forest)||JSON.stringify(d.catalog)!==JSON.stringify(current.catalog))){
-        setStale(true);setLive(null);
+        setStale(true);setLive(null);setSelectedPlant(null);
       }
     }catch{setStale(true);}
   }
   useEffect(()=>{void checkRevision();},[historyVersion]);
   useEffect(()=>onNativeEvent((event,payload)=>{if(event==='document.changed')void checkRevision();
     if(event==='planetForest.planted'){
-      setArmed(false);const result=payload as {document?:StudioPlanetForestDocument;error?:string};
+      setArmed(false);const result=payload as {document?:StudioPlanetForestDocument;error?:string;selected?:{species:number;key:number;direct:boolean;body:string}};
+      if(result?.selected){setSelectedPlant(result.selected);setBody(result.selected.body);setFilter('');}
       if(result?.document){accept(result.document);onChanged();}else if(result?.error)setError(result.error);
     }
   }),[]);
-  async function arm(next:boolean){
+  async function arm(next:boolean,mode:'plant'|'pick'|'move'='plant'){
     if(!base||armPending)return;
-    setArmPending(true);setError('');
+    setArmPending(true);setError('');setAction(mode);
     try{const r=await invoke('studio.planetForestArm',{armed:next,mapPath:base.mapPath,expectedRevision:base.revision,
-      species:Number(plantSpecies||rows(forest?.species)[0]?.id),habit});setArmed(r.armed);}
+      species:mode==='move'?selectedPlant?.species:Number(plantSpecies||rows(forest?.species)[0]?.id),key:mode==='move'?selectedPlant?.key:undefined,habit,action:mode});setArmed(r.armed);}
     catch(e){setArmed(false);setError(err(e));}finally{setArmPending(false);}
   }
-  function editForest(next:ForestRecord|null){setForest(next);setOverride(next!==null);setDirty(true);}
+  function editForest(next:ForestRecord|null){setSelectedPlant(null);setForest(next);setOverride(next!==null);setDirty(true);}
   function editCatalog(next:ForestRecord|null){setCatalog(next);setDirty(true);}
   async function apply(){if(!base)return;busyRef.current=true;setBusy(true);setError('');try{
     const d=await invoke('studio.planetForestSet',{mapPath:base.mapPath,expectedRevision:base.revision,forest:override?forest:null,catalog});
@@ -122,11 +125,15 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     <fieldset disabled={busy} className="rules__group"><legend>Rooted plants</legend>
       <label className="pf-row"><span>Plant species</span><select disabled={armed||armPending} className="au-input" value={plantSpecies||String(species[0]?.id??'')} onChange={e=>setPlantSpecies(e.target.value)}>{species.map((s,i)=><option key={i} value={String(s.id)}>{String(s.id)}</option>)}</select></label>
       <label className="pf-row"><span>Plant habit</span><select disabled={armed||armPending} className="au-input" value={habit} onChange={e=>setHabit(e.target.value as 'tree'|'shrub')}><option>tree</option><option>shrub</option></select></label>
-      <button disabled={armPending||(!armed&&(dirty||stale||!species.length))} onClick={()=>void arm(!armed)}>{armed?'Cancel planting':'Plant in Scene'}</button>{armed&&<p className="pf-note">Click planetary terrain once. Esc cancels. Save pending draft changes before planting.</p>}
+      <button disabled={armPending||(!armed&&(dirty||stale||!species.length))} onClick={()=>void arm(!armed)}>{armed?'Cancel Scene action':'Plant in Scene'}</button>
+      <button disabled={armed||armPending||dirty||stale||!plants.length} onClick={()=>void arm(true,'pick')}>Pick plant in Scene</button>
+      <button disabled={armed||armPending||dirty||stale||!selectedPlant?.direct} onClick={()=>void arm(true,'move')}>Move selected plant in Scene</button>
+      {selectedPlant&&<p className="pf-note">Selected: {selectedPlant.species}:{selectedPlant.key}{!selectedPlant.direct?' · convert marker binding to direct coordinates and Apply before moving':''}</p>}
+      {armed&&<p className="pf-note">{action==='pick'?'Click a visible authored plant trunk.':action==='move'?'Click destination terrain to relocate the selected plant.':'Click planetary terrain once.'} Esc cancels.</p>}
       <fieldset disabled={armed||armPending} className="rules__group"><legend>Plant placements</legend>
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
-      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??(row.at?String(object(row.at).body)+' / '+String(object(row.at).face):'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
+      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i} open={selectedPlant?.species===Number(row.species)&&selectedPlant?.key===Number(row.key)?true:undefined}><summary>{selectedPlant?.species===Number(row.species)&&selectedPlant?.key===Number(row.key)?'◆ ':''}{String(row.entity??(row.at?String(object(row.at).body)+' / '+String(object(row.at).face):'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
         {placementEditor('plants',row,i)}
         <label className="pf-row"><span>Species</span><select className="au-input" value={String(row.species??'')} onChange={e=>patch('plants',i,{species:Number(e.target.value)})}><option value="">Choose species</option>{species.map((r,j)=><option key={j} value={String(r.id)}>{String(r.id)}</option>)}</select></label>
         <Numbers data={row} specs={[['key','Stable plant key',1,1,1000000000],['ageTicks','Initial age (ticks; blank = mature)',0,0,1000000000]]} change={p=>patch('plants',i,p)}/>

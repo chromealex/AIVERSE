@@ -671,6 +671,33 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
 bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
     return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
 }
+std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision)const{
+    if(!planetMode_||!planetPreview_||!cameraInitialized_||!gizmosVisible_||planetModelProject_!=project||
+       planetMapPath_!=path||planetRevision_!=revision||w<2||h<2||x<0||y<0||x>w||y>h)return {};
+    if(planetLiveSnapshot_["forest"].getBool("active")&&planetLiveProject_==project&&
+       planetLivePath_==path&&planetLiveRevision_==revision)return {};
+    const auto view=viewCamera();
+    const PlanetForestPick* chosen=nullptr;float best=12.f,bestDepth=std::numeric_limits<float>::infinity();
+    for(const auto& pick:planetForestOverlays_.picks){
+        if(!pick.markerOwner.empty()&&(hidden_.count(pick.markerOwner)||locked_.count(pick.markerOwner)))continue;
+        float2 a,b;if(!view.worldToScreen(pick.ground,w,h,a)||!view.worldToScreen(pick.tip,w,h,b))continue;
+        const float dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;
+        const float t=len>1e-6f?std::clamp(((x-a.x)*dx+(y-a.y)*dy)/len,0.f,1.f):0.f;
+        const float sx=a.x+t*dx,sy=a.y+t*dy;
+        const float error=std::hypot(x-sx,y-sy);
+        if(error>best)continue;
+        float3 o,d;if(!view.screenRay(sx,sy,w,h,o,d))continue;
+        const auto p=pick.ground+(pick.tip-pick.ground)*t;
+        const float depth=dot(p-o,d);
+        if(depth<=0||planetPreview_->terrainHit(o,d)+.05f<depth)continue;
+        if(error==best&&depth>=bestDepth)continue;
+        chosen=&pick;best=error;bestDepth=depth;
+    }
+    if(!chosen)return {};
+    Json result=Json::object();result.set("species",Json::number(int64_t(chosen->species)));
+    result.set("key",Json::number(int64_t(chosen->key)));result.set("direct",Json::fromBool(chosen->direct));
+    result.set("body",Json::string(planetPreview_->bodyId));return result;
+}
 std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
     if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
        w<2||h<2||x<0||y<0||x>w||y>h)return {};
@@ -2298,7 +2325,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
         if(gizmosVisible_){
-            if(!liveForest)for(const auto& line:planetForestOverlays_.lines)renderer_.line(line.a,line.b,line.color);
+            if(!liveForest){
+                const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
+                    forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
+                const auto selectedForest=current?std::to_string(forestSelection_.getInt("species"))+":"+std::to_string(forestSelection_.getInt("key")):std::string{};
+                for(const auto& line:planetForestOverlays_.lines)
+                    renderer_.line(line.a,line.b,!selectedForest.empty()&&line.owner==selectedForest?render::rgba(255,225,90):line.color);
+            }
             for(const auto& line:planetProcessOverlays_.lines)
                 if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
                     renderer_.line(line.a,line.b,line.color);

@@ -138,6 +138,8 @@ public:
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
+    std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
+    void setForestSelection(Json selection){forestSelection_=std::move(selection);}
     std::optional<Json> forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision) const;
     bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
     std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
@@ -196,6 +198,7 @@ private:
     PlanetProcessOverlays planetProcessOverlays_;
     PlanetForestOverlays planetForestOverlays_;
     Json planetForestOverlayRecipe_;
+    Json forestSelection_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
     uint64_t planetLiveRevision_=0;

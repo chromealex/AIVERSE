@@ -138,4 +138,31 @@ inline void placeStudioPlanetForest(editor::MapDoc& doc,const Json& rules,const 
     Json patch=params;patch.set("forest",forest);patch.set("catalog",state["catalog"]);
     editStudioPlanetForest(doc,rules,patch);
 }
+// Stable identity, not row index. Moving a shared marker is deliberately forbidden.
+inline bool moveStudioPlanetForest(editor::MapDoc& doc,const Json& rules,const Json& params){
+    if(!params["mapPath"].isString()||!params["expectedRevision"].isString()||
+       params.getStr("mapPath")!=doc.path||params.getStr("expectedRevision")!=std::to_string(doc.revision))
+        throw std::invalid_argument("Stale forest relocation request");
+    const auto state=studioPlanetForestDocument(doc,rules);
+    auto forest=state["forest"];
+    const auto species=lib::worldprocess::planetBankInteger(params,"species",0,1,1000000);
+    const auto key=lib::worldprocess::planetBankInteger(params,"key",0,1,1000000000);
+    if(!species||!key||!forest.isObject()||!forest["plants"].isArray())
+        throw std::invalid_argument("Invalid forest relocation identity");
+    auto plants=forest["plants"];
+    Json* target=nullptr;
+    for(auto& row:plants.itemsMut()){
+        if(row.getInt("species")!=species||row.getInt("key")!=key)continue;
+        if(target)throw std::invalid_argument("Ambiguous forest identity");
+        target=&row;
+    }
+    if(!target)throw std::invalid_argument("Plant no longer exists");
+    if(target->has("entity")||!target->has("at"))
+        throw std::invalid_argument("Convert marker-bound plant to direct coordinates first");
+    if(!params["at"].isObject())throw std::invalid_argument("Missing destination surface");
+    if((*target)["at"]==params["at"])return false;
+    target->set("at",params["at"]);forest.set("plants",std::move(plants));
+    Json patch=params;patch.set("forest",forest);patch.set("catalog",state["catalog"]);
+    return editStudioPlanetForest(doc,rules,patch);
+}
 } // namespace aiverse::studio

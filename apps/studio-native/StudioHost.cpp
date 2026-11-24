@@ -78,7 +78,7 @@ const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
-        "studio.planetForestPlant", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
+        "studio.planetForestPlant", "studio.planetForestMove", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
         "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump",
@@ -1680,11 +1680,24 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
             if(arm.getStr("project")!=ws.project.dir||arm.getStr("mapPath")!=ws.map.path||
                arm.getStr("expectedRevision")!=std::to_string(ws.map.revision))
                 throw std::runtime_error("Forest planting cancelled: document changed");
+            const auto action=arm.getStr("action","plant");
+            if(action=="pick"){
+                const auto hit=onScene([&]{return preview_->forestPick(float(x),float(y),float(w),float(h),ws.project.dir,ws.map.path,ws.map.revision);});
+                if(!hit)throw std::runtime_error("No visible authored plant hit; enable Scene gizmos and disable live forest");
+                Json selected=*hit;selected.set("project",Json::string(ws.project.dir));selected.set("mapPath",Json::string(ws.map.path));
+                selected.set("expectedRevision",Json::string(std::to_string(ws.map.revision)));
+                onScene([&]{preview_->setForestSelection(selected);});
+                payload.set("selected",*hit);sendEventPayload("planetForest.planted",payload);return;
+            }
             const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
             if(!at)throw std::runtime_error("No current planetary surface hit");
             Json params=arm;params.set("at",*at);
-            const auto outcome=request("studio.planetForestPlant",params);
+            const auto outcome=request(action=="move"?"studio.planetForestMove":"studio.planetForestPlant",params);
             if(outcome.has("error"))throw std::runtime_error(outcome.getStr("error"));
+            if(action=="move"){
+                Json selected=arm;selected.set("expectedRevision",outcome["result"]["revision"]);
+                onScene([&]{preview_->setForestSelection(selected);});
+            }
             payload.set("document",outcome["result"]);sendEvent("document.changed","");
         }catch(const std::exception& e){payload.set("error",Json::string(e.what()));}
         sendEventPayload("planetForest.planted",payload);return;
@@ -2103,6 +2116,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if(method=="studio.planetForestArm")return answer([&]{
         Json out=Json::object();forestPlantArm_=Json{};
+        if(!params.getBool("armed",false)&&preview_)onScene([&]{preview_->setForestSelection(Json{});});
         if(params.getBool("armed",false)){
             if(projectLoading_||!session_||!preview_||session_->strokeActive()||brushArmed())
                 throw std::runtime_error("Finish the active Scene tool first");
@@ -2110,10 +2124,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if(!ws.map.data.planet()||params.getStr("mapPath")!=ws.map.path||
                params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
                 throw std::runtime_error("Reload the current forest document");
-            if(!params["species"].isNumber()||params["species"].integer()<1||params["species"].integer()>1000000||
-               params["species"].fx()!=Fixed::fromInt(params["species"].integer())||
-               (params.getStr("habit")!="tree"&&params.getStr("habit")!="shrub"))
-                throw std::runtime_error("Invalid planting species/habit");
+            const auto action=params.getStr("action","plant");
+            if(action!="plant"&&action!="pick"&&action!="move")throw std::runtime_error("Invalid forest Scene action");
+            if(action!="pick"&&(!params["species"].isNumber()||params["species"].integer()<1||params["species"].integer()>1000000||
+               params["species"].fx()!=Fixed::fromInt(params["species"].integer())))throw std::runtime_error("Invalid forest species");
+            if(action=="plant"&&params.getStr("habit")!="tree"&&params.getStr("habit")!="shrub")
+                throw std::runtime_error("Invalid planting habit");
+            if(action=="move"&&(!params["key"].isNumber()||params["key"].integer()<1||params["key"].integer()>1000000000||
+               params["key"].fx()!=Fixed::fromInt(params["key"].integer())))throw std::runtime_error("Invalid plant key");
             forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
@@ -2539,7 +2557,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
 void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     if (reply.has("error")) return;
     const std::string method = req.getStr("method");
-    if(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate")forestPlantArm_=Json{};
+    if(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"){
+        const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setForestSelection(Json{});});
+        if(armed){Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);}
+    }
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it
     if (preview_ && (method == "studio.openMap" || method == "studio.newMap")) {
         onScene([&] { preview_->resetCamera(); });

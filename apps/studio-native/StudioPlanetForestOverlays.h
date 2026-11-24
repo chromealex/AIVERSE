@@ -4,8 +4,10 @@
 #include "apps/studio-native/StudioPlanetForestDocument.h"
 
 namespace aiverse::studio {
+struct PlanetForestPick { uint32_t species=0;uint64_t key=0;render::float3 ground{},tip{};bool direct=false;std::string markerOwner; };
 struct PlanetForestOverlays {
     std::vector<PlanetProcessOverlayLine> lines;
+    std::vector<PlanetForestPick> picks;
     size_t plants=0,missingProfile=0,rejected=0;
     bool invalid=false,truncated=false;
 };
@@ -45,9 +47,10 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
         game::CubeSphere cube(body.faceSize);
         constexpr size_t lineBudget=8192;
         constexpr float tau=6.28318530718f;
+        std::string lineOwner;
         const auto add=[&](render::float3 a,render::float3 b,uint32_t color){
             if(out.lines.size()>=lineBudget){out.truncated=true;return;}
-            out.lines.push_back({a,b,color,{}});
+            out.lines.push_back({a,b,color,lineOwner});
         };
         const auto ring=[&](render::float3 center,render::float3 a,render::float3 b,float radius,uint32_t color){
             auto p=center+a*radius;
@@ -71,6 +74,9 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
             if(!(*at)["face"].isNumber()||face<0||face>5||(*at)["face"].fx()!=Fixed::fromInt(face)||
                !std::isfinite(x)||!std::isfinite(y)||x<0||y<0||x>body.faceSize||y>body.faceSize){++out.rejected;continue;}
             const auto id=uint32_t(wp::planetBankInteger(item,"species",0,1,1000000));
+            const auto key=uint64_t(wp::planetBankInteger(item,"key",0,1,1000000000));
+            if(!key){++out.rejected;continue;}
+            lineOwner=std::to_string(id)+":"+std::to_string(key);
             const auto policy=species.find(id);
             if(policy==species.end()){++out.rejected;continue;}
             const auto habit=item.getStr("habit","tree");
@@ -95,6 +101,10 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
                 float(tw::plantAppearance(plant.environment).sizePermille)/1000.f*(habit=="shrub"?.25f:1.f);
             const auto tree=trees.find(id);
             const auto roots=plant.anchor.roots;
+            const auto tip=ground+up*(tree!=trees.end()?float(tree->second.heightCm)*size*.01f:0.f);
+            std::string markerOwner;
+            if(item.has("entity")){const auto m=preview.authoredIds.find(item.getStr("entity"));if(m!=preview.authoredIds.end())markerOwner=m->second;}
+            out.picks.push_back({id,key,ground,tip,!item.has("entity"),std::move(markerOwner)});
             const auto rootColor=render::rgba(225,156,82);
             // Project the root footprint through the same tangent chart used by
             // planetary support; sample authored terrain across cube seams.
@@ -153,7 +163,7 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
             }
             ++out.plants;
         }
-    }catch(const std::exception&){out.invalid=true;out.lines.clear();out.plants=0;}
+    }catch(const std::exception&){out.invalid=true;out.lines.clear();out.picks.clear();out.plants=0;}
     return out;
 }
 } // namespace aiverse::studio
