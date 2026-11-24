@@ -354,7 +354,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
     Vec3 origin={},uint32_t yaw=0,
     bool includeInitialLiftPlatform=true,
-    bool includeDynamicPanels=true){
+    bool includeDynamicPanels=true,uint32_t visualDetail=0){
     using namespace buildingStyleDetail;
     FunctionalBuildingResult result;
     const auto reject=[&](const std::string& why){
@@ -363,6 +363,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         return result;
     };
     if(yaw>3)return reject("Invalid building yaw (expected 0..3)");
+    if(visualDetail>3)return reject("Invalid building visual detail level");
     auto graph=buildFunctionalStructureGraph(recipe);
     if(!graph)return reject(graph.error);
 
@@ -435,12 +436,14 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
             const int finish=style.interior>=0?style.interior:hull;
             const int detail=style.panels.accent>=0?style.panels.accent:trim;
             const float x=solid.x0,y=solid.y0,z=solid.z0,X=solid.x1,Y=solid.y1,Z=solid.z1;
-            buildingInteriorDetail::Form form{mesh,x,y,z,X-x,Y-y,Z-z};
-            buildingInteriorDetail::furniture(form,style,item.kind,finish,detail,dark);
+            if(visualDetail==0){
+                buildingInteriorDetail::Form form{mesh,x,y,z,X-x,Y-y,Z-z};
+                buildingInteriorDetail::furniture(form,style,item.kind,finish,detail,dark);
+            }else if(visualDetail<3)mesh.box(finish,x,y,z,X,Y,Z);
             addBox(material,x,y,z,X,Y,Z,true,false);
             continue;
         }
-        const bool dressed=solid.collisionOnly||(!solid.damageCut&&dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim))||
+        const bool dressed=solid.collisionOnly||(visualDetail<2&&!solid.damageCut&&dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim))||
             dressFunctionalRoofCell(mesh,recipe,solid,style.roof>=0?style.roof:material);
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1,true,!dressed);
@@ -453,12 +456,14 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     }
     for(const auto& light:graph.interiorLights){
         const int glow=sm.glow>=0?sm.glow:trim;
-        buildingInteriorDetail::Form form{mesh,light.x-.22f,light.ceiling-.16f,light.z-.22f,.44f,.16f,.44f};
-        buildingInteriorDetail::fixture(form,style,trim,glow);
+        if(visualDetail==0){
+            buildingInteriorDetail::Form form{mesh,light.x-.22f,light.ceiling-.16f,light.z-.22f,.44f,.16f,.44f};
+            buildingInteriorDetail::fixture(form,style,trim,glow);
+        }else if(visualDetail<3)mesh.box(glow,light.x-.22f,light.ceiling-.12f,light.z-.22f,light.x+.22f,light.ceiling,light.z+.22f);
         const auto pos=buildingDetail::turn(Vec3{fcoord(light.x),fcoord(light.y),fcoord(light.z)},yaw,fcoord(W),fcoord(D))+origin;
         result.building.lights.push_back({light.id,{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())},{light.color[0]*style.interiorGrammar.lightTint[0],light.color[1]*style.interiorGrammar.lightTint[1],light.color[2]*style.interiorGrammar.lightTint[2]},light.intensity*style.interiorGrammar.lightGain,light.range});
     }
-    for(const auto& item:graph.interiorDecor){
+    if(visualDetail==0)for(const auto& item:graph.interiorDecor){
         buildingInteriorDetail::Form form{mesh,item.x0,item.y0,item.z0,item.x1-item.x0,item.y1-item.y0,item.z1-item.z0};
         buildingInteriorDetail::decor(form,style,trim,style.panels.accent>=0?style.panels.accent:trim);
     }
@@ -513,6 +518,27 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
             result.building.mesh.parts.push_back({int(i),std::move(mesh.perMaterial[i])});
     result.building.constructionSize={W,H,D};
     return result;
+}
+
+// Optional semantic alternatives. Exact shell, roof, apertures and
+// gameplay graph stay identical; only decorative/interior presentation
+// changes. A level is emitted only if strictly cheaper than its predecessor.
+inline void generateFunctionalBuildingVisualLods(const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
+    FunctionalBuildingResult& base,Vec3 origin={},uint32_t yaw=0,bool includeInitialLiftPlatform=true,bool includeDynamicPanels=true){
+    if(!base)return;
+    base.building.visualLods.clear();
+    size_t previous=base.building.mesh.triangles(),vertices=base.building.mesh.vertices.size(),triangles=previous;
+    constexpr std::array<float,3> thresholds{220.f,100.f,45.f};
+    for(uint32_t level=1;level<=3;++level){
+        auto candidate=generateFunctionalBuilding(style,recipe,origin,yaw,includeInitialLiftPlatform,includeDynamicPanels,level);
+        if(!candidate||candidate.building.boxes!=base.building.boxes||
+           candidate.building.mesh.materials!=base.building.mesh.materials||
+           candidate.anchors.size()!=base.anchors.size())continue;
+        auto& mesh=candidate.building.mesh;
+        if(mesh.triangles()>=previous||vertices+mesh.vertices.size()>400000u||triangles+mesh.triangles()>450000u)continue;
+        previous=mesh.triangles();vertices+=mesh.vertices.size();triangles+=previous;
+        base.building.visualLods.push_back({level,thresholds[level-1],std::move(mesh)});
+    }
 }
 
 } // namespace aiverse::lib::systems

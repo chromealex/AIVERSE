@@ -42,6 +42,7 @@ struct RuntimeBuildingRequest {
     bool interiorLighting=false,interiorDecor=false;
     std::vector<BuildingRoomUseOverride> roomUses;
     std::vector<BuildingDamageZone> damageZones;
+    bool generateVisualLods=false; // opt-in CPU authoring; physics stays at full detail
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -155,7 +156,7 @@ public:
             recipe.walkableSetbacks=request.walkableSetbacks;recipe.cornerChamfers=request.cornerChamfers;
             recipe.interiorProfile=request.interiorProfile;recipe.furnitureDensity=request.furnitureDensity;recipe.roomUses=request.roomUses;recipe.damageZones=request.damageZones;
             recipe.interiorLighting=request.interiorLighting;recipe.interiorDecor=request.interiorDecor;
-            return generateRecipe(request.style,recipe,request.origin,request.yaw);
+            return generateRecipe(request.style,recipe,request.origin,request.yaw,request.generateVisualLods);
         }
         const auto* kind=it->second.structureKind(request.function);
         if(!kind)
@@ -186,7 +187,7 @@ public:
     // same shape features, independent of appearance and genre.
     RuntimeBuildingResult generateRecipe(const std::string& styleId,
                                          const FunctionalBuildingRecipe& recipe,
-                                         Vec3 origin={},uint32_t yaw=0) const {
+                                         Vec3 origin={},uint32_t yaw=0,bool visualLods=false) const {
         RuntimeBuildingResult result;
         auto it=styles_.find(styleId);
         if(it==styles_.end()){
@@ -199,6 +200,7 @@ public:
         // duplicated, immovable cabin geometry. Studio GLB export retains
         // the initial platform through the default generator argument.
         auto built=generateFunctionalBuilding(it->second,recipe,origin,yaw,false,false);
+        if(visualLods&&built)generateFunctionalBuildingVisualLods(it->second,recipe,built,origin,yaw,false,false);
         const bool valid=bool(built);
         result.featureAnchors=std::move(built.anchors);
         result.structureGraph=std::move(built.graph);

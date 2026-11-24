@@ -59,6 +59,21 @@ int main(int argc,char** argv){
             const auto result=generateFunctionalBuilding(style,interior);
             CHECK(result&&result.graph.furniture.size()==16&&result.graph.furnitureSockets.size()==16);
         }
+        FunctionalBuildingRecipe lodRecipe;lodRecipe.width=24;lodRecipe.depth=24;lodRecipe.height=8;
+        lodRecipe.roomsX=lodRecipe.roomsZ=2;lodRecipe.interiorProfile=BuildingInteriorProfile::Office;
+        lodRecipe.interiorLighting=true;lodRecipe.interiorDecor=true;lodRecipe.furnitureDensity=4;
+        auto lodBase=generateFunctionalBuilding(modern,lodRecipe);CHECK(lodBase);
+        const auto originalBoxes=lodBase.building.boxes;
+        generateFunctionalBuildingVisualLods(modern,lodRecipe,lodBase);
+        CHECK(!lodBase.building.visualLods.empty()&&lodBase.building.boxes==originalBoxes);
+        size_t tris=lodBase.building.mesh.triangles();float pixels=10000;
+        for(const auto& lod:lodBase.building.visualLods){
+            CHECK(lod.mesh.triangles()<tris&&lod.maxPixels<pixels);
+            CHECK(lod.mesh.materials==lodBase.building.mesh.materials);
+            tris=lod.mesh.triangles();pixels=lod.maxPixels;
+            const auto coarse=generateFunctionalBuilding(modern,lodRecipe,{},0,true,true,lod.detailLevel);
+            CHECK(coarse&&coarse.building.boxes==originalBoxes&&coarse.graph.rooms.size()==lodBase.graph.rooms.size());
+        }
         FunctionalBuildingRecipe composed;composed.width=24;composed.depth=24;composed.height=12;
         composed.roomsX=composed.roomsZ=3;composed.footprint={"111","101","111"};
         composed.roofProfile=FunctionalRoofProfile::Gable;composed.roofRise=2;

@@ -75,6 +75,42 @@ inline std::unique_ptr<render::Model> runtimeBuildingModel(
         render::Node node;node.name=source.id;node.t={source.position[0],source.position[1],source.position[2]};
         node.light=int(model->lights.size());model->lights.push_back(std::move(light));model->nodes.push_back(std::move(node));
     }
+    // Native authored LOD alternatives share the exact source palette;
+    // they never become independent scene nodes or gameplay objects.
+    float previousPixels=std::numeric_limits<float>::infinity();
+    size_t previousTriangles=mesh.triangles();
+    for(const auto& level:building.visualLods){
+        const auto& src=level.mesh;
+        if(!std::isfinite(level.maxPixels)||level.maxPixels<=0||level.maxPixels>=previousPixels||
+           src.triangles()>=previousTriangles||src.vertices.empty()||src.parts.empty()||src.materials.size()!=mesh.materials.size())
+            throw std::invalid_argument("Invalid authored building LOD");
+        for(size_t i=0;i<src.materials.size();++i)if(src.materials[i].id!=mesh.materials[i].id)
+            throw std::invalid_argument("Building LOD material slots differ");
+        if(model->vertices.size()+src.vertices.size()>std::numeric_limits<uint32_t>::max())
+            throw std::length_error("Building LOD vertex budget overflow");
+        const uint32_t baseVertex=uint32_t(model->vertices.size());
+        for(const auto& source:src.vertices){
+            render::ModelVertex vertex;vertex.pos={source.pos[0],source.pos[1],source.pos[2]};
+            vertex.nrm={source.nrm[0],source.nrm[1],source.nrm[2]};vertex.uv={source.uv[0],source.uv[1]};
+            model->vertices.push_back(vertex);
+        }
+        render::MeshDef alternative;alternative.name=name+"/lod"+std::to_string(level.detailLevel);
+        for(const auto& part:src.parts){
+            if(part.material<0||size_t(part.material)>=model->materials.size()||part.indices.empty()||part.indices.size()%3||
+               model->indices.size()+part.indices.size()>std::numeric_limits<uint32_t>::max())
+                throw std::invalid_argument("Invalid building LOD primitive");
+            render::Primitive p;p.material=part.material;p.firstIndex=uint32_t(model->indices.size());
+            p.indexCount=uint32_t(part.indices.size());p.firstVertex=baseVertex;p.vertexCount=uint32_t(src.vertices.size());
+            for(uint32_t index:part.indices){
+                if(index>=src.vertices.size())throw std::invalid_argument("Building LOD index out of range");
+                model->indices.push_back(baseVertex+index);
+            }
+            alternative.primitives.push_back(std::move(p));
+        }
+        const int meshIndex=int(model->meshes.size());
+        model->meshes.push_back(std::move(alternative));model->meshes[0].lods.push_back({meshIndex,level.maxPixels,{}});
+        previousPixels=level.maxPixels;previousTriangles=src.triangles();
+    }
     model->finalize(); // calculates primitive/node/model bounds on CPU
     return model;
 }
