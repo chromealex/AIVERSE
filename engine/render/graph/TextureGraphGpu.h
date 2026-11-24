@@ -256,7 +256,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             };
             level(sampling.a,"mipA");
             if(sampling.blend>0){level(sampling.b,"mipB");body+="float4 raw=mix(mipA,mipB,"+literal(sampling.blend)+");";}else body+="float4 raw=mipA;";
-            if(node.image->hdr()){
+            if(node.image->hdr()&&!isBufferSource(op)){
                 const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
                 body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
                 body+=node.parameters.getStr("hdrMapping","reinhard")=="reinhard"?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
@@ -272,8 +272,12 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             types.push_back(KernelValue::Vector);
             const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
             const bool reinhard=node.parameters.getStr("hdrMapping","reinhard")=="reinhard";
-            body+="float4 raw=input0[index];float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
-            body+=reinhard?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            body+="float4 raw=input0[index];";
+            if(isBufferSource(op))body+="float3 mapped=raw.xyz;";
+            else{
+                body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
+                body+=reinhard?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            }
             if(op=="imageAssetChannel"){
                 const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
                 body+="float3 value=float3("+std::string(shift==24?"clamp(raw.w,0.0f,1.0f)":shift==16?"mapped.x":shift==8?"mapped.y":"mapped.z")+");\n";

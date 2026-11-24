@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <sstream>
 #include <iterator>
+#include <map>
 #include <utility>
 #include <stdexcept>
 #include <string>
@@ -33,7 +34,11 @@ inline bool numeric(std::string_view token,float& result){
     if(!digit)return false;
     result=float(negative?-value:value);return true;
 }
-inline Program parse(const std::string& source,bool color){
+struct Bindings {
+    std::map<std::string,unsigned> samples;
+    std::map<std::string,float> parameters;
+};
+inline Program parse(const std::string& source,bool color,const Bindings& bindings={}){
     if(source.empty()||source.size()>maxCodeBytes)throw std::invalid_argument("custom compute code length");
     std::istringstream stream(source);std::string token;Program out;int depth=0;
     struct Op{std::string_view name;Code code;int arity;};
@@ -53,6 +58,8 @@ inline Program parse(const std::string& source,bool color){
         // Coordinates are two stack operands (u then v). The slot/channel
         // comes from a fixed allowlist, not user-provided shader syntax.
         unsigned sample=9;
+        const auto declared=bindings.samples.find(token);
+        if(declared!=bindings.samples.end())sample=declared->second;
         if(token=="sampleC")sample=6;
         else if(!color){
             if(token=="sampleA")sample=0;
@@ -66,6 +73,8 @@ inline Program parse(const std::string& source,bool color){
             if(depth<2)throw std::invalid_argument("custom resource sample stack underflow");
             --depth;out.push_back({Code::Sample,0,sample});continue;
         }
+        const auto parameter=bindings.parameters.find(token);
+        if(parameter!=bindings.parameters.end()){out.push_back({Code::Literal,parameter->second});++depth;continue;}
         float value=0;
         if(numeric(token,value)){out.push_back({Code::Literal,value});++depth;continue;}
         const auto it=std::find_if(std::begin(ops),std::end(ops),[&](const Op& o){return o.name==token;});

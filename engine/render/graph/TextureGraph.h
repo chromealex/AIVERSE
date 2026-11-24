@@ -20,7 +20,7 @@ inline const char* kindName(Kind k){switch(k){case Kind::Scalar:return "scalar";
 struct Op {const char* id;Kind output;std::vector<Kind> inputs;};
 inline const std::vector<Op>& catalog(){
     static const std::vector<Op> ops={
-        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"imageAssetChannel",Kind::Scalar,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
+        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"imageAssetChannel",Kind::Scalar,{}},{"bufferScalar",Kind::Scalar,{}},{"bufferColor",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
         {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"blur",Kind::Scalar,{Kind::Scalar}},{"erosion",Kind::Scalar,{Kind::Scalar}},{"warp",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"distort",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
     };return ops;
 }
@@ -139,7 +139,54 @@ inline bool readsCustomResources(const Node& n){
     return std::any_of(n.custom.begin(),n.custom.end(),[](const auto& program){return custom_compute::readsResources(program);});
 }
 inline bool isExternalImageSource(std::string_view id){return id=="imageAsset"||id=="imageAssetChannel";}
-inline bool isImageSource(std::string_view id){return id=="image"||isExternalImageSource(id);}
+inline bool isBufferSource(std::string_view id){return id=="bufferScalar"||id=="bufferColor";}
+inline bool isImageSource(std::string_view id){return id=="image"||isExternalImageSource(id)||isBufferSource(id);}
+inline ImageSource bufferSource(const std::string& id,const Json& q,size_t budget){
+    const auto values=q.has("values")?q["values"]:Json::parse(id=="bufferScalar"?"[0,0.5,1]":"[[0,0,0],[0.5,0.5,0.5],[1,1,1]]");
+    require(values.isArray()&&values.size()>=1&&values.size()<=4096&&values.size()<=budget/16,"invalid buffer extent or source budget");
+    ImageSource s;s.width=int(values.size());s.height=1;s.hasAlpha=true;s.rgba32f.reserve(values.size()*4);
+    auto channel=[](const Json& value){require(value.isNumber(),"buffer channel must be numeric");return scalar(value,0);};
+    for(const auto& v:values.items()){
+        if(id=="bufferScalar"){const float x=channel(v);s.rgba32f.insert(s.rgba32f.end(),{x,x,x,1.f});}
+        else{
+            require(v.isArray()&&v.size()==3,"bufferColor requires RGB triples");
+            s.rgba32f.insert(s.rgba32f.end(),{channel(v[0]),channel(v[1]),channel(v[2]),1.f});
+        }
+    }
+    return s;
+}
+inline custom_compute::Bindings customBindings(const Node& node){
+    custom_compute::Bindings out;const auto& q=node.parameters;
+    const auto& resources=q["resources"];
+    require(resources.isNull()||(resources.isObject()&&resources.size()<=3),"custom resources require at most three named ports");
+    std::array<bool,3> occupied{};
+    for(const auto& [name,decl]:resources.members()){
+        require(safeId(name)&&decl.isObject()&&decl.size()==2&&decl.has("slot")&&decl["slot"].isNumber()&&decl["kind"].isString(),"invalid custom resource declaration");
+        const auto slot=unsigned(integer(decl["slot"],0,0,2));
+        require(slot<node.info->inputs.size()&&!occupied[slot],"duplicate or invalid custom resource slot");
+        occupied[slot]=true;
+        const auto kind=node.info->inputs[slot];
+        require(decl.getStr("kind")==kindName(kind),"custom resource type mismatch");
+        const auto prefix="sample:"+name;
+        if(kind==Kind::Scalar)out.samples.emplace(prefix,slot*3);
+        else{
+            require(kind==Kind::Color,"unsupported custom resource kind");
+            for(unsigned i=0;i<3;++i)out.samples.emplace(prefix+"."+std::string(1,"rgb"[i]),slot*3+i);
+        }
+    }
+    const auto& params=q["uniforms"];
+    require(params.isNull()||(params.isObject()&&params.size()<=16),"custom uniforms require at most 16 declarations");
+    for(const auto& [name,decl]:params.members()){
+        require(safeId(name)&&decl.isObject()&&decl.size()==2&&decl["type"].isString()&&decl.has("value"),"invalid custom uniform declaration");
+        const auto type=decl.getStr("type");const auto& value=decl["value"];float v=0;
+        if(type=="float"){require(value.isNumber(),"float uniform must be numeric");v=scalar(value,0,-16,16);}
+        else if(type=="int"){require(value.isNumber(),"int uniform must be numeric");v=float(integer(value,0,-16,16));}
+        else if(type=="bool"){require(value.type()==Json::Type::Bool,"bool uniform must be boolean");v=value.boolean()?1.f:0.f;}
+        else throw std::invalid_argument("unsupported custom uniform type");
+        out.parameters.emplace("param:"+name,v);
+    }
+    return out;
+}
 inline unsigned imageChannelShift(const std::string& channel){
     if(channel=="red")return 16;
     if(channel=="green")return 8;
@@ -215,6 +262,7 @@ inline Json properties(const std::string& id){
         field("mipBias","number",Json::number(0.0),-8,8);
     }
     if(id=="imageAssetChannel")options("channel","alpha",{"red","green","blue","alpha"});
+    if(isBufferSource(id))field("values","json",Json::parse(id=="bufferScalar"?"[0,0.5,1]":"[[0,0,0],[0.5,0.5,0.5],[1,1,1]]"));
     if(id=="formula")field("expression","text",Json::string("a b *"));
     if(isCustomCompute(id)){
         if(id=="customScalar")field("code","compute",Json::string("a b c mix"));
@@ -226,6 +274,7 @@ inline Json properties(const std::string& id){
         for(const auto* key:{"p0","p1","p2","p3"})field(key,"number",Json::number(0.5),-16,16);
         options("resourceFilter","nearest",{"nearest","bilinear"});
         options("resourceAddress","clamp",{"clamp","repeat"});
+        field("resources","json",Json::object());field("uniforms","json",Json::object());
     }
     if(id=="constant")field("value","number",Json::number(.5));
     if(id=="color")field("value","rgb",Json::parse("[0.5,0.5,0.5]"));
@@ -298,12 +347,13 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
         require(j["inputs"].isArray()&&j["inputs"].size()==n.info->inputs.size(),"texture input arity mismatch");
         if(isCustomCompute(n.info->id)){
             const bool color=std::string_view(n.info->id)=="customColor";
+            const auto bindings=customBindings(n);
             constexpr const char* keys[]={"red","green","blue"};
             constexpr const char* defaults[]={"ar br c mix","ag bg c mix","ab bb c mix"};
             for(size_t channel=0;channel<(color?3u:1u);++channel){
                 const auto* key=color?keys[channel]:"code";
                 require(!n.parameters.has(key)||n.parameters[key].isString(),"custom compute code must be text");
-                n.custom[channel]=custom_compute::parse(n.parameters.getStr(key,color?defaults[channel]:"a b c mix"),color);
+                n.custom[channel]=custom_compute::parse(n.parameters.getStr(key,color?defaults[channel]:"a b c mix"),color,bindings);
                 customInstructions+=custom_compute::workUnits(n.custom[channel]);
             }
             require(customInstructions<=custom_compute::maxWork/(size_t(p.size)*p.size),"custom compute pixel-instruction budget exceeded");
@@ -314,6 +364,8 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                 data.width=integer(n.parameters["width"],1,1,maxEmbeddedImageSide);
                 data.height=integer(n.parameters["height"],1,1,maxEmbeddedImageSide);
                 data.rgb=imagePixels(n.parameters);
+            }else if(isBufferSource(n.info->id)){
+                data=bufferSource(n.info->id,n.parameters,maxImageSourceBytes-sourceBytes);
             }else{
                 require(bool(resolver),"external imageAsset requires an explicit host resolver");
                 data=resolver(n.parameters.getStr("asset"),n.parameters.getStr("revision"),maxImageSourceBytes-sourceBytes);
@@ -569,7 +621,7 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         const auto* imported=node.image.get();
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
         const unsigned imageShift=id=="imageAssetChannel"?imageChannelShift(q.getStr("channel","alpha")):0;
-        const bool hdr=imported&&imported->hdr();
+        const bool hdr=imported&&imported->hdr()&&!isBufferSource(id);
         const auto sampling=imported?imageSampling(*imported,q,n):ImageSampling{};
         const float hdrGain=hdr?std::ldexp(1.f,integer(q["hdrExposure"],0,-12,12)):1.f;
         const bool reinhard=q.getStr("hdrMapping","reinhard")=="reinhard";

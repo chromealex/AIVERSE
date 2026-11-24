@@ -256,6 +256,24 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto resourceId=owner.start(resources,project,lifetime.lease()).getStr("request");drain();
         const auto resourceStatus=owner.status();
         require(resourceStatus.getStr("request")==resourceId&&resourceStatus.getStr("state")=="ready"&&resourceStatus.getStr("backend")==expected,"custom resource GPU parity failed");
+        // Named declarations and independent float data sources reuse the typed slots.
+        auto named=Json::parse(R"JSON({"graph":{"version":1,"size":32,"nodes":[
+          {"id":"table","op":"bufferScalar","inputs":[],"properties":{"values":[0,0.25,0.5,1]}},
+          {"id":"palette","op":"bufferColor","inputs":[],"properties":{"values":[[1,0,0],[0,1,0]]}},
+          {"id":"zero","op":"constant","inputs":[],"properties":{"value":0}},
+          {"id":"scaled","op":"customScalar","inputs":["table","zero","zero"],"properties":{"resources":{"curve":{"slot":0,"kind":"scalar"}},"uniforms":{"gain":{"type":"float","value":0.5}},"code":"u v sample:curve param:gain *"}},
+          {"id":"rgb","op":"customColor","inputs":["palette","palette","scaled"],"properties":{"resources":{"palette":{"slot":0,"kind":"color"},"mask":{"slot":2,"kind":"scalar"}},"uniforms":{"enabled":{"type":"bool","value":true},"two":{"type":"int","value":2}},"red":"u v sample:palette.r param:enabled *","green":"u v sample:palette.g","blue":"u v sample:mask param:two *"}}
+        ],"outputs":{"height":"scaled","color":"rgb"}},"requireGpu":true,"bakeSet":true,"materialized":true,"fusePointwise":true})JSON");
+        const auto namedProgram=render::texture_graph::compile(named["graph"]);
+        const auto namedPixels=render::texture_graph::evaluate(namedProgram,namedProgram.outputs.at("height"));
+        require(namedPixels.rgba[0]==0&&namedPixels.rgba[31*4]==128&&render::texture_graph::imageSourceBytes(namedProgram)==96,"named buffer/uniform CPU mismatch");
+        auto wrongKind=named["graph"];
+        wrongKind.member("nodes").at(3).member("properties").member("resources").member("curve").set("kind",Json::string("color"));
+        bool rejectedKind=false;try{(void)render::texture_graph::compile(wrongKind);}catch(const std::invalid_argument&){rejectedKind=true;}
+        require(rejectedKind,"named resource type mismatch accepted");
+        const auto namedId=owner.start(named,project,lifetime.lease()).getStr("request");drain();
+        const auto namedStatus=owner.status();
+        require(namedStatus.getStr("request")==namedId&&namedStatus.getStr("state")=="ready"&&namedStatus.getStr("backend")==expected,"named resource GPU parity failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,
