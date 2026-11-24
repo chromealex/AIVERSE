@@ -47,8 +47,9 @@ public:
            !grid_.maxCells||grid_.maxCells>1048576)
             throw std::invalid_argument("Caverns navigation grid");
         CaveNavigationDataProvider::validateProfile(agent_);
-        const uint64_t count=uint64_t(grid_.width)*grid_.height*grid_.depth;
-        if(count>grid_.maxCells)
+        if(grid_.width>grid_.maxCells ||
+           grid_.height>grid_.maxCells/grid_.width ||
+           grid_.depth>grid_.maxCells/(uint64_t(grid_.width)*grid_.height))
             throw std::length_error("Caverns navigation grid node budget");
         const PointCm end{
             grid_.origin.x+int64_t(grid_.width)*grid_.cellCm,
