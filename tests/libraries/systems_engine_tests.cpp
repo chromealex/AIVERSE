@@ -12,6 +12,51 @@ using namespace aiverse;using namespace aiverse::lib::systems;
 #define CHECK(x) do{if(!(x)){std::cerr<<"failed "<<__LINE__<<": "<<#x<<'\n';std::exit(1);}}while(false)
 int main(){
     {
+        Simulation scaled(SimConfig{31,8,0,true},std::make_unique<game::GameCore>());
+        scaled.setup(Json::parse(R"({"victory":"noUnits","types":{"caster":{"health":{"max":100},"weapons":[{"damage":20},{"damage":8}],"abilities":[{"id":"cleave","effects":[{"type":"damage","weaponDamage":1.5}]},{"id":"heal","effects":[{"type":"heal","weaponDamage":1.25,"weaponIndex":1}]},{"id":"missing","effects":[{"type":"damage","weaponDamage":1,"weaponIndex":5}]},{"id":"zero","effects":[{"type":"damage","weaponDamage":0}]}]},"target":{"health":{"max":100}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"caster","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[6,6]}]})"));
+        auto& host=static_cast<game::GameCore&>(scaled.module());
+        Entity caster,target;
+        scaled.world().each<game::Unit>([&](Entity e,auto& unit){if(host.rules().types[unit.type].id=="caster")caster=e;else target=e;});
+        CHECK(caster.valid()&&target.valid());
+        CHECK(host.rules().advancedEffects);
+        const auto& abilities=host.rules().types[scaled.world().get<game::Unit>(caster).type].abilities;
+        CHECK(abilities.size()==4);
+        auto damage=host.currentWeaponDamage(scaled,caster);
+        CHECK(damage&&*damage==Fixed::fromInt(20));
+        CHECK(!host.currentWeaponDamage(scaled,target));
+        CHECK(!host.currentWeaponDamage(scaled,kNullEntity));
+        CHECK(!host.currentWeaponDamage(scaled,caster,5));
+        auto& buffs=scaled.world().get<game::Buffs>(caster);
+        game::upsertTimedBuff(buffs,{game::Stat::Damage,{},Fixed::fromInt(2),100,0});
+        damage=host.currentWeaponDamage(scaled,caster);
+        CHECK(damage&&*damage==Fixed::fromInt(40));
+        auto offhand=host.currentWeaponDamage(scaled,caster,1);
+        CHECK(offhand&&*offhand==Fixed::fromInt(16));
+        game::EffectCtx ctx;ctx.caster=caster;ctx.owner=1;ctx.target=target;
+        ctx.sourceType=scaled.world().get<game::Unit>(caster).type;
+        ctx.point=scaled.world().get<Transform>(target).pos;
+        ctx.origin=scaled.world().get<Transform>(caster).pos;
+        auto hp=[&]{return scaled.world().get<game::Unit>(target).hp;};
+        ctx.scale=Fixed::fromRatio(1,2);
+        host.applyPayload(scaled,abilities[0].payload,ctx);CHECK(hp()==Fixed::fromInt(70));
+        ctx.scale=Fixed::fromInt(1);
+        host.applyPayload(scaled,abilities[1].payload,ctx);CHECK(hp()==Fixed::fromInt(90));
+        host.applyPayload(scaled,abilities[2].payload,ctx);CHECK(hp()==Fixed::fromInt(90));
+        host.applyPayload(scaled,abilities[3].payload,ctx);CHECK(hp()==Fixed::fromInt(90));
+        ctx.caster=kNullEntity;
+        host.applyPayload(scaled,abilities[0].payload,ctx);CHECK(hp()==Fixed::fromInt(90));
+        ctx.caster=caster;
+        scaled.world().get<game::Buffs>(caster).list.clear();
+        host.applyPayload(scaled,abilities[0].payload,ctx);CHECK(hp()==Fixed::fromInt(60));
+        for(const char* invalid:{
+            R"({"types":{"unit":{"abilities":[{"effects":[{"type":"damage","weaponDamage":-1}]}]}}})",
+            R"({"types":{"unit":{"abilities":[{"effects":[{"type":"damage","weaponDamage":1,"amount":2}]}]}}})",
+            R"({"types":{"unit":{"abilities":[{"effects":[{"type":"stun","weaponDamage":1}]}]}}})",
+            R"({"types":{"unit":{"abilities":[{"effects":[{"type":"heal","weaponDamage":1,"weaponIndex":0.5}]}]}}})"}){
+            bool rejected=false;try{(void)game::loadRules(Json::parse(invalid));}catch(const std::runtime_error&){rejected=true;}CHECK(rejected);
+        }
+    }
+    {
         using namespace aiverse::lib::mechanics;
         NearestWeaponTargets nearest(2);
         nearest.consider(Entity{4,1},Fixed::fromInt(2));
