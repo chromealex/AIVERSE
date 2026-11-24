@@ -1092,6 +1092,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",studioBuildingCatalog(ws_.engineDir));
             return reply;
         }
+        if(method=="studio.buildingTextureProvenance") {
+            reply.set("result",studioBuildingTextureProvenance(ws_.project.dir,params));
+            return reply;
+        }
         if(method=="studio.buildingInspect") {
             reply.set("result",studioBuildingInspect(ws_.engineDir,params));
             return reply;
