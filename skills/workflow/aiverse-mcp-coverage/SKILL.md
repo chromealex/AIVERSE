@@ -1,6 +1,6 @@
 ---
 name: aiverse-mcp-coverage
-description: Audit the built AIVERSE MCP tool registry, compare required subsystem capabilities, inspect GUI-only restrictions and verify tools/call against an isolated editor project.
+description: Audit the built AIVERSE MCP tool registry, compare required subsystem capabilities, inspect GUI-only restrictions and verify MCP calls against an isolated editor project.
 ---
 
 # MCP registration and capability audit

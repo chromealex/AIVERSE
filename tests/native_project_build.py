@@ -12,6 +12,7 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
     (src / "engine/game").mkdir(parents=True)
     # The real selection/registration code is exercised; no renderer/toolchain is needed.
     (src / "engine/game/Native.cpp").write_text("")
+    (src / "engine/game/NativeRegistry.cpp").write_text("")
     (src / "stub.cpp").write_text("")
     module_cmake = (engine / "engine/game/native/Build.cmake").as_posix()
     protobuf_cmake = (engine / "engine/grpc/Protobuf.cmake").as_posix()

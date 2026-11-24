@@ -6067,6 +6067,21 @@
       ]
     },
     {
+      "id": "aiverse-terraweave-caverns",
+      "package": null,
+      "path": "skills/world/aiverse-terraweave-caverns/SKILL.md",
+      "domain": "workflow",
+      "summary": "Deterministic underground chambers, tunnels, cave meshes and planetary portals",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "engine/world/TerraWeaveCaverns.h",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-texture-rhi",
       "package": null,
       "path": "skills/visuals/aiverse-texture-rhi/SKILL.md",
