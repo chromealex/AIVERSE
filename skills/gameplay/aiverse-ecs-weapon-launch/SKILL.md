@@ -26,7 +26,13 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    damage resolves in its own ordered stage.
 4. The native game should map input, AI decisions or triggers to
    `FireIntentComponent.requested` and set its origin/direction.
-   A request is consumed once. Add magazine/reload, aim, team/friendly-fire
+   A request is consumed once. With a positive `WeaponParametersComponent.firePeriod`
+   (seconds), it authorizes up to 32 accepted shots in this tick as allowed by
+   fractional cooldown and ammo. Reissue intent every tick for held fire.
+   Zero period keeps the integer `fireInterval` contract. Keep configuration
+   immutable during a match; save/hash `WeaponStateComponent.remainingCooldown`
+   for fractional weapons, and keep `nextFireTick` for integer weapons.
+   Add magazine/reload, aim, team/friendly-fire
    filtering, spread and guided missiles as **optional components/systems**,
    not hardcoded `if (genre == FPS)` branches.
 5. Keep all gameplay state in ECS and serialize it, including the spawn
