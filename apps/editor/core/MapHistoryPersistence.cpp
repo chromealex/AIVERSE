@@ -2,6 +2,9 @@
 // not used as the history format (it quantizes positions and omits layers).
 #include "MapDoc.h"
 #include "ProjectDocumentJournal.h"
+#include "engine/game/MapGrid.h"
+#include <climits>
+#include <cmath>
 #include <bit>
 #include <limits>
 #include <type_traits>
@@ -14,7 +17,6 @@ namespace aiverse::editor {
 namespace {
 namespace fs=std::filesystem;
 constexpr size_t MaxBytes=256u*1024u*1024u;
-constexpr size_t MaxElements=MaxBytes/2;
 constexpr char Hex[]="0123456789abcdef";
 void budget(size_t n){if(n>MaxBytes)throw std::runtime_error("Map history exceeds disk budget");}
 uint8_t unhex(char c){
@@ -60,7 +62,9 @@ Json fp(float value){return Json::number(int64_t(std::bit_cast<uint32_t>(value))
 float getFloat(const Json& j,const char* key){
     const auto& v=j[key];const auto n=v.integer(-1);
     if(!v.isNumber()||n<0||n>UINT32_MAX)throw std::runtime_error("Invalid map history float");
-    return std::bit_cast<float>(uint32_t(n));
+    const float value=std::bit_cast<float>(uint32_t(n));
+    if(!std::isfinite(value))throw std::runtime_error("Non-finite map history value");
+    return value;
 }
 void object(const Json& j){if(!j.isObject())throw std::runtime_error("Invalid map history object");}
 void array(const Json& j,size_t max=1000000){if(!j.isArray()||j.size()>max)throw std::runtime_error("Invalid map history array");}
@@ -104,6 +108,14 @@ Json encode(const MapData& d){
     j.set("entities",std::move(entities));j.set("roads",std::move(roads));j.set("bodies",std::move(bodies));
     return j;
 }
+void validateSidecarName(const std::string& value){
+    if(value.empty())return;
+    const fs::path path(value);
+    if(value.size()>1024||path.is_absolute()||path.has_root_name()||value.find('\\')!=std::string::npos||value.find(':')!=std::string::npos)
+        throw std::runtime_error("Unsafe map history sidecar path");
+    for(const auto& segment:path)if(segment=="."||segment==".."||segment.empty())
+        throw std::runtime_error("Unsafe map history sidecar segment");
+}
 MapData decode(const Json& j){
     object(j);MapData d;
     d.worldSpace=j.getBool("worldSpace");d.name=string(j,"name");d.w=getInt(j,"w");d.h=getInt(j,"h");d.roadsOnly=j.getBool("roadsOnly");
@@ -113,6 +125,7 @@ MapData decode(const Json& j){
     d.detailScale=getInt(j,"detailScale");d.detail=layer<int16_t>(j["detail"]);d.detailSplat=layer<uint8_t>(j["detailSplat"]);
     d.detailFile=string(j,"detailFile");d.fieldRes=layer<int8_t>(j["fieldRes"]);d.fieldAmt=layer<uint8_t>(j["fieldAmt"]);
     d.regions=layer<char>(j["regions"]);d.extra=j["extra"];d.worldExtra=j["worldExtra"];object(d.extra);object(d.worldExtra);
+    validateSidecarName(d.cornersFile);validateSidecarName(d.detailFile);
     const size_t n=size_t(d.w)*size_t(d.h);
     auto flat=[&](size_t size){return size==n||(d.worldSpace&&size==0);};
     if(!flat(d.cells.size())||!flat(d.levels.size())||!flat(d.heights.size())||!flat(d.fieldRes.size())||
@@ -162,6 +175,7 @@ MapData decode(const Json& j){
         b.cornersFile=string(row,"cornersFile");b.meta=row["meta"];b.terrainExtra=row["terrainExtra"];object(b.meta);object(b.terrainExtra);
         array(row["faces"],6);for(const auto& f:row["faces"].items()){object(f);b.faceExtra.push_back(f);}
         b.detailScale=getInt(row,"detailScale");b.detail=layer<int16_t>(row["detail"]);b.detailFile=string(row,"detailFile");
+        validateSidecarName(b.cornersFile);validateSidecarName(b.detailFile);
         const size_t side=size_t(b.faceSize),cells=6*side*side;
         if(b.cells.size()!=cells||b.levels.size()!=cells||
            (side&&(b.corners.size()!=6*(side+1)*(side+1)||b.faceExtra.size()!=6))||
@@ -171,15 +185,18 @@ MapData decode(const Json& j){
     }
     return d;
 }
-struct HistoryLocation {fs::path cache,file,lock;};
+struct HistoryLocation {fs::path cache,file,lock,dirty;};
 HistoryLocation location(const std::string& path,bool create){
     using namespace project_file_detail;
-    const auto map=fs::canonical(path);
+    const auto input=fs::absolute(path).lexically_normal();
+    if(journalExists(input)&&!fs::is_regular_file(fs::symlink_status(input)))
+        throw std::runtime_error("Unsafe map history source");
+    const auto map=fs::canonical(input.parent_path())/input.filename();
     const auto cache=map.parent_path()/".aiverse-cache";
     if(create)directory(cache);
     else if(journalExists(cache)&&!fs::is_directory(fs::symlink_status(cache)))throw std::runtime_error("Unsafe map history cache");
     const auto key=digest(map.filename().generic_string());
-    return {cache,cache/("map-history-"+key+".json"),cache/("map-history-"+key+".lock")};
+    return {cache,cache/("map-history-"+key+".json"),cache/("map-history-"+key+".lock"),cache/("map-history-"+key+".dirty")};
 }
 std::string fingerprint(const std::string& path,const MapData& loaded){
     using namespace project_file_detail;
@@ -206,12 +223,22 @@ std::string MapDoc::historyLabel(uint64_t id)const{
     for(const auto* stack:{&undo_,&redo_})for(const auto& e:*stack)if(e.id==id)return e.label;
     return {};
 }
+std::shared_ptr<void> MapDoc::beginHistorySave(const std::string& file){
+    using namespace project_file_detail;
+    if(compoundBefore_)throw std::runtime_error("Cannot save an active compound edit");
+    const auto loc=location(file,true);
+    auto lock=std::make_shared<Lock>(loc.lock);
+    if(journalExists(loc.dirty)&&!fs::is_regular_file(fs::symlink_status(loc.dirty)))throw std::runtime_error("Unsafe map history marker");
+    write(loc.dirty,"Map save in progress\\n");sync(loc.cache);sync(loc.cache.parent_path());
+    return lock;
+}
 void MapDoc::saveHistoryCheckpoint(){
     using namespace project_file_detail;
     historyPersistenceWarning_.clear();
     try{
         if(compoundBefore_)throw std::runtime_error("Cannot persist active compound edit");
-        const auto loc=location(path,true);Lock lock(loc.lock);
+        const auto loc=location(path,true);
+        if(!fs::is_regular_file(fs::symlink_status(loc.dirty)))throw std::runtime_error("Missing map save marker");
         if(journalExists(loc.file)&&!fs::is_regular_file(fs::symlink_status(loc.file)))throw std::runtime_error("Unsafe map history checkpoint");
         // Read the actual published map and its sidecars, not rounded live state.
         MapDoc saved;std::string error;
@@ -235,6 +262,7 @@ void MapDoc::saveHistoryCheckpoint(){
         const auto tmp=fs::path(loc.file.string()+".tmp");
         if(journalExists(tmp)){if(!fs::is_regular_file(fs::symlink_status(tmp)))throw std::runtime_error("Unsafe map history staging file");fs::remove(tmp);}
         write(tmp,text);replace(tmp,loc.file);
+        fs::remove(loc.dirty);sync(loc.cache);
     }catch(const std::exception& e){historyPersistenceWarning_=e.what();}
 }
 void MapDoc::restoreHistoryCheckpoint(){
@@ -242,8 +270,10 @@ void MapDoc::restoreHistoryCheckpoint(){
     historyPersistenceWarning_.clear();
     try{
         const auto loc=location(path,false);
-        if(!journalExists(loc.cache)||!journalExists(loc.file))return;
+        if(!journalExists(loc.cache))return;
         Lock lock(loc.lock);
+        if(journalExists(loc.dirty))throw std::runtime_error("Interrupted map save; previous history fenced");
+        if(!journalExists(loc.file))return;
         if(!fs::is_regular_file(fs::symlink_status(loc.file))||fs::file_size(loc.file)>MaxBytes)
             throw std::runtime_error("Unsafe or oversized map history checkpoint");
         const auto envelope=Json::parse(readProjectFileBytes(loc.file));

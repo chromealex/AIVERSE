@@ -407,15 +407,19 @@ Json MapDoc::toJson() const {
 }
 
 bool MapDoc::save(const std::string& file, std::string* err) {
+    std::shared_ptr<void> historyLock;
+    try{historyLock=beginHistorySave(file);}
+    catch(const std::exception& e){if(err)*err=e.what();return false;}
     for (auto [a, b] : data.roads) // roads need ids on their endpoints
         for (int i : {a, b}) if (data.entities[size_t(i)].id.empty()) data.entities[size_t(i)].id = uniqueId(data.entities[size_t(i)].type);
     const std::string oldPath = path, oldCorners = data.cornersFile;
     path = file;  // the default corners file name follows the map file
     namespace fs = std::filesystem;
     std::error_code ec;
-    if (!oldPath.empty() && !fs::equivalent(oldPath, file, ec)) { // "save as": own files
+    const bool saveAs=!oldPath.empty()&&!fs::equivalent(oldPath,file,ec);
+    if (saveAs) { // "save as": own files
         data.cornersFile.clear(); data.detailFile.clear();
-        for (auto& b : data.bodies) b.detailFile.clear();
+        for (auto& b : data.bodies){b.cornersFile.clear();b.detailFile.clear();}
     }
     Json j = toJson();
     if (Json* t = j.find("terrain"); t && t->has("cornersBlob")) {
@@ -468,6 +472,7 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     f.close();
     if(!f){if(err)*err="cannot close map file";path=oldPath;return false;}
     dirty = false;
+    if(saveAs){undo_.clear();redo_.clear();historyEpoch_=newHistoryEpoch();}
     saveHistoryCheckpoint();
     return true;
 }

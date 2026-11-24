@@ -6,6 +6,7 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -218,6 +219,7 @@ private:
     struct HistoryEntry {MapData data;uint64_t id=0;std::string label;};
     bool loadImpl(const std::string& file,std::string* err,bool restoreHistory);
     void restoreHistoryCheckpoint();
+    std::shared_ptr<void> beginHistorySave(const std::string& file);
     void saveHistoryCheckpoint();
     static uint64_t nextHistoryId();
     static std::string newHistoryEpoch();

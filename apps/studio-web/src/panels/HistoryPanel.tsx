@@ -84,7 +84,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
       <StudioIconButton size="sm" variant="ghost" aria-label="Refresh history" title="Refresh history" disabled={pending} icon={<RefreshCw size={14}/>} onClick={reload}/>
     </div>
     <div className="history__description">
-      {scope === 'map' ? 'Scene edits only. Global Undo / Redo controls the map.'
+      {scope === 'map' ? 'Scene edits only. History is saved when you save this map. Global Undo / Redo controls the map.'
         : scope === 'project' ? 'Saved Rules and compatible Manifest edits. Project history survives reopening; other scopes are separate.'
         : 'Saved asset history includes importer settings, moves, renames, trash, imports and replacements.'}
     </div>
@@ -94,6 +94,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
     </div>}
     {error && <StudioAlert tone="danger" className="history__alert" title="History unavailable or edit refused">{error}</StudioAlert>}
     {history?.strokeActive && <StudioAlert tone="warning" className="history__alert">Finish or cancel the active Scene stroke first.</StudioAlert>}
+    {scope==='map'&&history?.persistenceWarning && <StudioAlert tone="warning" className="history__alert" title="Saved map history unavailable">{history.persistenceWarning}</StudioAlert>}
     {savedHistory?.persistenceWarning && <StudioAlert tone="warning" className="history__alert" title="Saved history unavailable">{savedHistory.persistenceWarning}</StudioAlert>}
     {savedHistory?.blockedReason && <StudioAlert tone="warning" className="history__alert">{savedHistory.blockedReason}</StudioAlert>}
     {loading && <div className="history__loading"><StudioSkeleton/><StudioSkeleton width="65%"/><span role="status">Reading history…</span></div>}

@@ -717,7 +717,7 @@ bool StudioSession::pollAgentLink() {
         syncHistoryLabels();
         const auto before=ws_.map.historyMark();const size_t entities=ws_.map.data.entities.size();
         const auto projectBefore=ws_.project.documentHistory.version(),assetBefore=assetHistory_.version();
-        const auto sourceMap=ws_.map.path;
+        const auto sourceMap=ws_.map.path,sourceEpoch=ws_.map.historyEpoch();
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         if(name=="open_game"||name=="open_project"||name=="create_game"||name=="create_project")assetHistory_.reset();
         const auto assetProjectBefore=ws_.project.dir;
@@ -730,9 +730,9 @@ bool StudioSession::pollAgentLink() {
         }
         const bool failed=result.has("error");
         const bool sameProject=assetProjectBefore==ws_.project.dir;
-        const bool sameMap=sameProject&&sourceMap==ws_.map.path;
+        const bool sameMap=sameProject&&sourceMap==ws_.map.path&&sourceEpoch==ws_.map.historyEpoch();
         std::vector<std::pair<std::string,std::string>> links;
-        labelNewHistory(before,"Agent · "+studioToolLabel(name));
+        if(sameMap)labelNewHistory(before,"Agent · "+studioToolLabel(name));else syncHistoryLabels();
         if(sameMap)for(size_t i=0;i<ws_.map.undoDepth();++i)if(ws_.map.undoId(i)>before){
             const auto id=ws_.map.undoId(i);
             if(!failed)links.emplace_back("map",std::to_string(id));
@@ -1269,7 +1269,8 @@ void StudioSession::syncHistoryLabels() {
     std::map<uint64_t,std::string> retained;
     auto label=[&](uint64_t id){
         const auto it=historyLabelsById_.find(id);
-        const auto name=it==historyLabelsById_.end()?std::string("Edit"):it->second;
+        const auto saved=ws_.map.historyLabel(id);
+        const auto name=it==historyLabelsById_.end()?(saved.empty()?std::string("Edit"):saved):it->second;
         retained.emplace(id,name);return name;
     };
     undoLabels_.clear();redoLabels_.clear();
@@ -1279,11 +1280,14 @@ void StudioSession::syncHistoryLabels() {
 }
 void StudioSession::labelNewHistory(uint64_t mark,const std::string& label){
     for(size_t i=0;i<ws_.map.undoDepth();++i)
-        if(ws_.map.undoId(i)>mark)historyLabelsById_[ws_.map.undoId(i)]=label;
+        if(ws_.map.undoId(i)>mark){
+            historyLabelsById_[ws_.map.undoId(i)]=label;
+            ws_.map.setHistoryLabel(ws_.map.undoId(i),label);
+        }
     syncHistoryLabels();
 }
 std::string StudioSession::historyVersion() const {
-    std::string v=ws_.project.dir+"|"+ws_.map.path+"|"+std::to_string(ws_.map.revision);
+    std::string v=ws_.project.dir+"|"+ws_.map.path+"|"+ws_.map.historyEpoch()+"|"+std::to_string(ws_.map.revision);
     for(size_t i=0;i<ws_.map.undoDepth();++i)v+=":u"+std::to_string(ws_.map.undoId(i));
     for(size_t i=0;i<ws_.map.redoDepth();++i)v+=":r"+std::to_string(ws_.map.redoId(i));
     return v;
@@ -1294,6 +1298,8 @@ Json StudioSession::historyJson() const {
     for(auto it=redoLabels_.rbegin();it!=redoLabels_.rend();++it){Json s=Json::object();s.set("label",str(*it));s.set("done",Json::fromBool(false));steps.push(std::move(s));}
     out.set("steps",steps);out.set("position",Json::number(int64_t(undoLabels_.size())));
     out.set("version",str(historyVersion()));out.set("scope",str("map"));out.set("strokeActive",Json::fromBool(stroking_));
+    out.set("persistent",Json::fromBool(!ws_.map.path.empty()));
+    if(!ws_.map.historyPersistenceWarning().empty())out.set("persistenceWarning",str(ws_.map.historyPersistenceWarning()));
     return out;
 }
 std::string StudioSession::assetHistoryVersion() const {
@@ -1482,8 +1488,9 @@ Json StudioSession::dispatch(const Json& request) {
     }
     syncHistoryLabels();
     const auto before=ws_.map.historyMark();
+    const auto beforeEpoch=ws_.map.historyEpoch();
     Json reply=dispatchImpl(request);
-    if(!reply.has("error")&&method!="studio.undo"&&method!="studio.redo"&&
+    if(!reply.has("error")&&beforeEpoch==ws_.map.historyEpoch()&&method!="studio.undo"&&method!="studio.redo"&&
        method!="studio.openMap"&&method!="studio.newMap"&&method!="studio.openProject")
         labelNewHistory(before,historyLabel(method,request["params"]));
     else syncHistoryLabels();
