@@ -136,17 +136,18 @@ using CaveActorRouteSolver=std::function<
 // and cannot create a second movement owner.
 inline CaveRepathTickStats repathCaveActorRoutes(
     Simulation& sim,
-    const terraweave::caverns::CaveNavigationDataProvider& provider,
+    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider> provider,
     uint32_t budget=8,CaveActorRouteSolver resolver={}) {
     using namespace terraweave::caverns;
     CaveRepathTickStats out;
+    if(!provider)return out;
     sim.world().each<CaveRouteIntent,CaveRouteFollower,actor::CharacterBody>(
         [&](Entity entity,CaveRouteIntent& intent,CaveRouteFollower& route,
             actor::CharacterBody& body) {
         (void)entity;
         if(!intent.active||out.attempted>=budget||body.vehicle)return;
-        if(route.sourceRevision!=provider.revision()||
-           route.environmentRevision!=provider.environmentRevision()){
+        if(route.sourceRevision!=provider->revision()||
+           route.environmentRevision!=provider->environmentRevision()){
             if(!route.needsRepath)intent.repathNotBeforeTick=sim.tick();
             route.needsRepath=true;
         }
@@ -166,16 +167,16 @@ inline CaveRepathTickStats repathCaveActorRoutes(
         request.start={cm(body.pos.x),cm(body.pos.y),cm(body.pos.z)};
         request.goal=intent.goal;
         request.agent=route.agent;
-        request.sourceRevision=provider.revision();
+        request.sourceRevision=provider->revision();
         request.maxVisits=intent.maxVisits;
-        auto borrowed=std::shared_ptr<const CaveNavigationDataProvider>(
-            &provider,[](const CaveNavigationDataProvider*){});
+        // Pass the TRUE immutable owner lease. A custom solver may retain
+        // this source asynchronously without a dangling borrowed pointer.
         auto path=resolver
-            ?resolver(intent.algorithm,request,borrowed)
-            :solveCaveGraph(request,borrowed,backend);
-        if(!path.reached || path.sourceRevision!=provider.revision() ||
+            ?resolver(intent.algorithm,request,provider)
+            :solveCaveGraph(request,provider,backend);
+        if(!path.reached || path.sourceRevision!=provider->revision() ||
            (path.environmentRevision &&
-            path.environmentRevision!=provider.environmentRevision()) ||
+            path.environmentRevision!=provider->environmentRevision()) ||
            path.waypoints.empty()){
             ++out.failed;
             if(intent.attempts<UINT32_MAX)++intent.attempts;
@@ -185,8 +186,8 @@ inline CaveRepathTickStats repathCaveActorRoutes(
             return;
         }
         route.waypoints=std::move(path.waypoints);
-        route.sourceRevision=provider.revision();
-        route.environmentRevision=provider.environmentRevision();
+        route.sourceRevision=provider->revision();
+        route.environmentRevision=provider->environmentRevision();
         route.current=0;
         route.arrived=false;route.needsRepath=false;
         intent.attempts=0;intent.repathNotBeforeTick=sim.tick();
