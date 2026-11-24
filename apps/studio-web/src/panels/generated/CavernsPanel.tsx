@@ -6,18 +6,18 @@ import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, Stu
 
 type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: number; mode: 'carve' | 'fill' };
 type Entrance = { id: string; xCm: number; zCm: number; caveYcm: number; surfaceYcm: number; radiusCm: number };
-type Document = { revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
+type Document = { mapRevision: string; revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
 const name = 'terraweave_caverns_paint';
 const decimal = (x: unknown): x is string => typeof x === 'string' && /^[0-9]+$/.test(x);
 function decode(value: unknown): Document {
-  const r = value as { revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
-  if (!decimal(r?.revisionText) || !decimal(r.seedText) || !decimal(r.generatorVersionText) ||
+  const r = value as { mapRevisionText?: unknown; revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
+  if (!decimal(r?.mapRevisionText) || !decimal(r.revisionText) || !decimal(r.seedText) || !decimal(r.generatorVersionText) ||
       !r.snapshot?.settings || !Array.isArray(r.snapshot.stamps) || !Array.isArray(r.snapshot.entrances) ||
       !Array.isArray(r.stampIds) || !Array.isArray(r.entranceIds) ||
       r.stampIds.length !== r.snapshot.stamps.length || r.entranceIds.length !== r.snapshot.entrances.length ||
       !r.stampIds.every(decimal) || !r.entranceIds.every(decimal)) throw new Error('Caverns native document contract unavailable. Integrate the Caverns branch.');
   const ids = r.stampIds as string[], entranceIds = r.entranceIds as string[];
-  return { revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
+  return { mapRevision:r.mapRevisionText, revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
     stamps:r.snapshot.stamps.map((s,i)=>({...s,id:ids[i]})), entrances:r.snapshot.entrances.map((e,i)=>({...e,id:entranceIds[i]})) };
 }
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -116,7 +116,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     const serial=++epoch.current;
     setBusy(true);setError('');setStatus('');
     try {
-      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRevision:doc.revision}});
+      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRevision:doc.revision,expectedMapRevision:doc.mapRevision}});
       const next=await read(project,map);
       const snap=await invoke('studio.snapshot',{});
       if(serial===epoch.current && currentProject.current===project && snap.project.path===project){
