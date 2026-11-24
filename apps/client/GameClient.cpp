@@ -422,6 +422,8 @@ void GameClient::tickRuntimeTextureMaterial(gfx::Device& dev){
 }
 
 void GameClient::shutdown() {
+    if(view_.modelMutationBlocked())
+        throw std::logic_error("GameClient shutdown: live Model read or graph transaction");
     // Preserve the MotionWeave device lease and shutdown contract.
     // The additional camera resources must retire before Renderer3D dies.
     // A failed GPU idle must not abort the rest of the shutdown (audio, net,

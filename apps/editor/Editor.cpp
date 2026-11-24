@@ -265,6 +265,8 @@ void Editor::retirePreviewModel(std::unique_ptr<render::Model>& model) noexcept 
 }
 
 void Editor::shutdown() {
+    if(view_.modelMutationBlocked())
+        throw std::logic_error("Editor shutdown: live Model read or graph transaction");
     graphGpuProfile_.clear();
     if (!dev_) return;
     // Invalidate any captureNextFrame callbacks still owned by the RHI.
@@ -431,7 +433,7 @@ void Editor::reloadRules() {
 // Unlike reloadRules(), do not reparse rules, restart FX or reset editor demand
 // history. The caller defers this transaction until after play mode.
 void Editor::reloadVisualAssets() {
-    if (!dev_ || playing() || clientPlaying() || view_.activeModelReadLeases()) return;
+    if (!dev_ || playing() || clientPlaying() || view_.modelMutationBlocked()) return;
     editSceneCacheValid_ = false;
     editSceneCache_.clear();
     view_.shutdown(*dev_);
@@ -452,7 +454,7 @@ void Editor::reloadVisualAssets() {
 
 size_t Editor::reloadVisualModelSources(
         const std::vector<std::string>& paths) {
-    if(!dev_ || playing() || clientPlaying() || paths.empty() || view_.activeModelReadLeases())return 0;
+    if(!dev_ || playing() || clientPlaying() || paths.empty() || view_.modelMutationBlocked())return 0;
     // The caller runs at the editor frame boundary, after the previous
     // render submission. TypeLook/animation sources are detached by GameView
     // before the independent resource owner destroys GPU allocations.
@@ -532,7 +534,7 @@ void Editor::pollVisualAssets(double dt) {
     // Changes are retained throughout editor/client play. GPU mutations
     // happen only here, before the first rendering pass of a new frame.
     // A blocked owner mutation is retryable, not an acknowledged edit.
-    if(!visualAssets_.pending() || playing() || clientPlaying() || view_.activeModelReadLeases())return;
+    if(!visualAssets_.pending() || playing() || clientPlaying() || view_.modelMutationBlocked())return;
     const auto impact=visualAssets_.impact();
     // A previous candidate may be waiting for native Metal/Vulkan shader
     // jobs already owned by Renderer3D. Do not rebuild scratch Models and

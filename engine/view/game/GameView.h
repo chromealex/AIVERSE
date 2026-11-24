@@ -33,6 +33,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include <future>
 #endif
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #include "../../render/Animation.h"
@@ -278,6 +279,11 @@ public:
     size_t activeModelReadLeases() const noexcept {
         return resources_.activeModelReaders();
     }
+    // Owner-thread host preflight. Callback scope is not a cache reader:
+    // trusted graph publication must still be able to commit its images.
+    bool modelMutationBlocked() const noexcept {
+        return resources_.activeModelReaders()!=0 || nativeGraphCallbackActive_ || strictAppearanceReload_;
+    }
     render::ModelResourceCache::ModelReadSafetyStats modelReadSafetyStats() const noexcept {
         return resources_.modelReadSafetyStats();
     }
@@ -394,6 +400,8 @@ public:
     // objects, not cache residents. Do not retain pointers/handles or reenter
     // View mutation, publication, frame or teardown APIs from this callback.
     void setAppearancePipelineValidator(AppearancePipelineValidator validator) {
+        if(nativeGraphCallbackActive_ || strictAppearanceReload_)
+            throw std::logic_error("appearance validator replacement during transaction");
         appearancePipelineValidator_=std::move(validator);
     }
     bool gpuAppearancePending() const noexcept {return gpuAppearancePending_;}
@@ -459,6 +467,8 @@ public:
     // Recycling additionally certifies that all stale raw index/handle
     // references are permanently detached; no future replay of them is legal.
     void setAutomaticGraphImageCollection(GraphImageRootProvider provider,bool recycleSlots=false){
+        if(nativeGraphCallbackActive_ || strictAppearanceReload_)
+            throw std::logic_error("graph root provider replacement during transaction");
         graphImageRootProvider_=std::move(provider);
         graphImageRecycleSlots_=bool(graphImageRootProvider_)&&recycleSlots;
         graphImageSweepCursor_.clear();graphImageSweepStats_={};
@@ -1031,6 +1041,7 @@ private:
     uint32_t drawTypeEpoch_ = 0;
     bool deferredLoading_ = false, streamingTypes_ = false;
     bool deferAppearanceVariants_ = true; // client default; editor disables
+    bool nativeGraphCallbackActive_ = false; // owner-thread synchronous callback/graph transaction
     bool strictAppearanceReload_ = false; // temporary CPU preflight during authored reload
     bool gpuAppearancePending_=false; // retry only unfinished async compiler work
     AppearancePipelineValidator appearancePipelineValidator_;

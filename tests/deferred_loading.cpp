@@ -166,6 +166,41 @@ int aiverseMain(int, char**) {
           "lazy editor type must expose every model variant");
     view.shutdown(dev);
     view.setDeferAppearanceVariants(true);
+    // Real cache/device-epoch setup, no GPU graph dispatch. A trusted apply
+    // callback may refuse or throw, but must not reenter the same View.
+    {
+        render::RenderDeviceLifetime lifetime(dev);
+        game::GameView guarded;
+        guarded.setGpuDeviceLease(lifetime.lease());
+        guarded.setDeferredLoading(true);
+        check(guarded.init(dev,rules,reader),"callback guard init");
+        guarded.loadType(0);
+        const auto target=guarded.graphMaterialTarget(0,0,0);
+        check(bool(target),"callback guard fixture target");
+        const auto generation=guarded.modelResources().generation();
+        bool invoked=false;
+        std::string error;
+        const bool applied=guarded.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,auto&,auto&,const auto&,auto&,std::string*) {
+                invoked=true;
+                check(guarded.modelMutationBlocked(),"callback mutation flag");
+                check(!guarded.readModelOf(0),"callback must refuse nested reader");
+                check(!guarded.graphMaterialTarget(0,0,0),"callback must refuse nested target");
+                check(!guarded.collectAutomaticGraphImages(),"callback must refuse nested sweep");
+                guarded.trimTypes(std::vector<bool>{false,false,false},true);
+                check(guarded.typeLoaded(0),"callback must not trim live target");
+                bool refused=false;
+                try { guarded.setAutomaticGraphImageCollection({}); }
+                catch(const std::logic_error&) { refused=true; }
+                check(refused,"callback must not replace root provider");
+                throw std::runtime_error("intentional callback refusal");
+                return false;
+            },&error);
+        check(invoked&&!applied&&error=="intentional callback refusal","callback refusal evidence");
+        check(!guarded.modelMutationBlocked()&&guarded.graphMaterialTarget(0,0,0)&&
+              guarded.modelResources().generation()==generation,"callback guard must unwind");
+        guarded.shutdown(dev);
+    }
     auto cache = std::make_shared<render::ModelTextureCache>();
     int imageReads = 0;
     auto images = [&](const std::string&, std::string& bytes) {

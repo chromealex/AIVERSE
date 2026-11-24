@@ -24,6 +24,18 @@ namespace aiverse::game {
 using namespace render;
 
 namespace {
+// Prevent synchronous native callbacks from recursively mutating this host.
+// This does not lock the GPU/cache or certify arbitrary external raw roots.
+struct NativeGraphCallbackScope final {
+    bool& active;
+    explicit NativeGraphCallbackScope(bool& flag):active(flag){
+        if(active)throw std::logic_error("nested native graph callback");
+        active=true;
+    }
+    NativeGraphCallbackScope(const NativeGraphCallbackScope&)=delete;
+    NativeGraphCallbackScope& operator=(const NativeGraphCallbackScope&)=delete;
+    ~NativeGraphCallbackScope(){active=false;}
+};
 constexpr float kDeg = 3.14159265358979f / 180.0f;
 // Keep one appearance of each initial model. Remaining material/body variants are appended later.
 std::vector<size_t> initialModelChoices(const Json& view) {
@@ -118,6 +130,7 @@ void GameView::warn(const UnitType& t, const std::string& msg) {
 }
 
 render::ModelReadLease GameView::readModelOf(uint16_t type, size_t choice) const {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)return {};
     // Validate the cache owner before reading choice storage. The temporary
     // coarse scope is released on return; only the exact lease survives.
     const auto scope=resources_.acquireFrameReadScope();
@@ -323,7 +336,7 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 bool GameView::prepareType(uint16_t type, bool allVariants) {
     // Do not consume a ready CPU result or advance its publication cursor
     // while an owner-thread Model reader is alive. Retry on the next tick.
-    if(resources_.activeModelReaders())return false;
+    if(modelMutationBlocked())return false;
 #ifndef __EMSCRIPTEN__
     if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeCurrent(type) && !allVariants)) return true;
     const auto& original = rules_->types[type];
@@ -396,7 +409,7 @@ size_t GameView::pendingModelVariants() const {
 }
 
 void GameView::streamModelVariants(double budgetMs) {
-    if (!rules_ || !dev_ || budgetMs <= 0 || resources_.activeModelReaders()) return;
+    if (!rules_ || !dev_ || budgetMs <= 0 || modelMutationBlocked()) return;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(int64_t(budgetMs * 1000));
     for (size_t type = 0; type < looks_.size(); ++type) {
         auto& look = looks_[type];
@@ -445,7 +458,7 @@ bool GameView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
 void GameView::trimTypes(const std::vector<bool>& keep, bool compact) {
     // Refuse before clearing TypeLooks or animation sources; the cache
     // itself also rejects eviction while a scoped reader is active.
-    if (!dev_ || keep.size()!=looks_.size() || resources_.activeModelReaders()) return;
+    if (!dev_ || keep.size()!=looks_.size() || modelMutationBlocked()) return;
 #ifndef __EMSCRIPTEN__
     if (resources_.preparation().active()) return; // prepared models do not yet have looks
 #endif
@@ -557,7 +570,7 @@ void GameView::rememberReloadPlayback(uint64_t key,const EntityAnim& state) noex
 // No affected Model/Graph pointers may survive the release barrier. Keep
 // unaffected TypeLooks and MotionWeave players alive to preserve their clocks.
 size_t GameView::reloadModelSources(const std::vector<std::string>& sources) {
-    if(!dev_ || !rules_ || sources.empty() || resources_.activeModelReaders())return 0;
+    if(!dev_ || !rules_ || sources.empty() || modelMutationBlocked())return 0;
     std::unordered_set<std::string> changed;
     for(const auto& source:sources)
         if(!source.empty())
@@ -653,7 +666,7 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                                     size_t* refreshed) {
     if(refreshed)*refreshed=0;
     // Preserve last-good materials, pending shader state and CPU preparation.
-    if(resources_.activeModelReaders() || strictAppearanceReload_)return false;
+    if(modelMutationBlocked())return false;
     gpuAppearancePending_=false;
     if(!dev_ || !rules_)return false;
 #ifndef __EMSCRIPTEN__
@@ -805,6 +818,7 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                 bool pending=false;
                 const auto warm=[&](const ModelChoice& choice) {
                     if(!choice.model)return;
+                    const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
                     const auto status=appearancePipelineValidator_(
                         *choice.model,choice.materials);
                     if(status==render::Renderer3D::PipelineWarmStatus::Failed)
@@ -929,7 +943,7 @@ std::optional<GameView::GraphMaterialTargetInfo> GameView::graphMaterialTarget(
         size_t type,size_t choice,size_t material) const {
     if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
        !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()!=0||
-       strictAppearanceReload_||activeImageTransaction_||
+       nativeGraphCallbackActive_||strictAppearanceReload_||activeImageTransaction_||
        type>std::numeric_limits<uint16_t>::max()||type>=looks_.size()||
        !typeCurrent(uint16_t(type))||choice>=looks_[type].models.size())return {};
     const auto& live=looks_[type].models[choice];
@@ -993,6 +1007,7 @@ bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppe
             prepared->generation=live.graph?live.modelGeneration:0;
             snapshot=std::move(prepared);
         }
+        const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
         if(!apply(snapshot,live.materials,*live.model,*dev_,gpuDeviceLease_,imageRollback_,error))
             return false;
         live.appearanceSnapshot=std::move(snapshot);
@@ -1019,6 +1034,7 @@ render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialIma
         throw std::runtime_error("graph reclamation target or external root proof unavailable");
     auto& model=*looks_[type].models[choice].model;
     std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+    const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
     if(inspectHost&&!inspectHost(model,roots))
         throw std::runtime_error("graph reclamation has unresolved host material roots");
     appendGraphImageRoots(model,roots);
@@ -1041,7 +1057,7 @@ void GameView::appendGraphImageRoots(const render::Model& model,std::vector<std:
 bool GameView::collectAutomaticGraphImages(){
     if(!graphImageRootProvider_||!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
        !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()||
-       strictAppearanceReload_||activeImageTransaction_||activeStagedModels_||cameraPreparedCapture_)return false;
+       nativeGraphCallbackActive_||strictAppearanceReload_||activeImageTransaction_||activeStagedModels_||cameraPreparedCapture_)return false;
     // At most one resident model per owner frame. No borrowed Model pointer
     // is retained across frames, and no GPU wait is explicitly added here.
     if(imageRollback_.unrecoverableBatches()||imageRollback_.pendingImages()>=render::texture_graph::maxLiveProceduralImages)return false;
@@ -1056,6 +1072,7 @@ bool GameView::collectAutomaticGraphImages(){
             render::graphImageUnpinned(image.proceduralGraphPin)){possible=true;break;}
         if(!possible)return false;
         std::vector<std::span<const render::Material>> roots;
+        const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
         if(!graphImageRootProvider_(model,roots)){++graphImageSweepStats_.deferred;return false;}
         appendGraphImageRoots(model,roots);
         const auto result=render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
@@ -1068,7 +1085,7 @@ bool GameView::collectAutomaticGraphImages(){
 }
 
 void GameView::requestDetail(uint16_t type, bool detailed) {
-    if(!rules_ || type>=requestedModels_.size())return;
+    if(!rules_ || type>=requestedModels_.size() || modelMutationBlocked())return;
     const auto& t=rules_->types[type];const auto coarse=t.view["streaming"].getStr("coarseModel");
     if(coarse.empty() || t.speed.raw!=0)return;
 #ifndef __EMSCRIPTEN__
@@ -1077,7 +1094,7 @@ void GameView::requestDetail(uint16_t type, bool detailed) {
     requestedModels_[type]=detailed ? std::string{} : coarse;
 }
 void GameView::loadType(uint16_t type) {
-    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type) || resources_.activeModelReaders()) return;
+    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type) || modelMutationBlocked()) return;
     const bool replacing=loadedTypes_[type];
     TypeLook ready;
     const auto path=requestedModels_[type].empty()?rules_->types[type].view["streaming"].getStr("detailModel"):requestedModels_[type];
