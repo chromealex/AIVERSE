@@ -143,6 +143,8 @@ void MapGrid::hpaCluster(HpaGraph& G, int c) {
 
 void MapGrid::hpaRefresh(HpaGraph& G) {
     if (!G.anyDirty) return;
+    const auto workStart=pathWorkStart();
+    size_t rebuilt=0;
     G.anyDirty = false;
     const int n = G.cw * G.ch;
     std::vector<uint8_t> rebuild(size_t(n), 0);
@@ -158,8 +160,9 @@ void MapGrid::hpaRefresh(HpaGraph& G) {
         if (cy > 0) rebuild[size_t(c - G.cw)] = 1;
         if (cy + 1 < G.ch) rebuild[size_t(c + G.cw)] = 1;
     }
-    for (int c = 0; c < n; ++c) if (rebuild[size_t(c)]) hpaCluster(G, c);
+    for (int c = 0; c < n; ++c) if (rebuild[size_t(c)]) {hpaCluster(G, c);++rebuilt;}
     std::fill(G.dirty.begin(), G.dirty.end(), 0);
+    recordPathWork(pathTelemetry_.flatHpa,rebuilt,workStart);
 }
 
 bool MapGrid::hpaPath(int sx, int sy, int gx, int gy, uint8_t layer, std::vector<int>& cells) {
