@@ -3,6 +3,7 @@
 #pragma once
 #include "TextureGraph.h"
 #include "TextureGraphDagLowering.h"
+#include "TextureGraphKernelSource.h"
 #include "TextureGraphGpuPatterns.h"
 #include "engine/gfx/Gfx.h"
 #include <sstream>
@@ -11,19 +12,14 @@
 #include <limits>
 
 namespace aiverse::render::texture_graph::gpu {
-struct Source {std::string msl,reason,glsl;};
 inline constexpr int maxPreviewSize=128,maxBakeSize=1024;
 inline constexpr size_t readbackBlockBytes=64*1024;
 inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());
     s<<std::scientific<<std::setprecision(std::numeric_limits<float>::max_digits10)<<v<<"f";return s.str();
 }
-inline Source compile(const Program& p,size_t target,int n,bool floatHeight=false){
-    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxBakeSize,"GPU texture resolution must be 8..1024");
-    std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto j:p.nodes[i].inputs)mark(j);};mark(target);
+inline std::string pointwiseCommon(){
     std::string msl=R"MSL(
-#include <metal_stdlib>
-using namespace metal;
 uint hash3(int x,int y,uint seed){uint h=uint(x)*374761393u+uint(y)*668265263u+seed*2246822519u;h=(h^(h>>13))*1274126177u;return h^(h>>16);}
 int wrapi(int i,int p){return ((i%p)+p)%p;}
 float rand01(int x,int y,uint seed){return float(hash3(x,y,seed)&0xffffffu)/float(0xffffffu);}
@@ -43,16 +39,11 @@ float cells(float2 uv,int p,uint seed){
 }
 )MSL";
     msl+=patternShader;
-    if(floatHeight)require(p.nodes[target].info->output==Kind::Scalar,"height pass requires scalar target");
-    // Normal is a terminal typed output. Re-evaluate its scalar DAG at four
-    // wrapped neighbors, preserving float precision (no intermediate RGBA8).
-    const bool normal=std::string(p.nodes[target].info->id)=="normal";
-    const size_t valueTarget=normal?p.nodes[target].inputs[0]:target;
-    msl+="float3 evaluatePoint(float2 uv){\n";
-    for(auto i:p.order){
-        if(!needed[i]||(normal&&i==target))continue;
-        const auto& node=p.nodes[i];const auto& q=node.parameters;const std::string id=node.info->id;
-        auto var=[&](size_t j){return "v"+std::to_string(node.inputs[j]);};
+    return msl;
+}
+template<class Port>
+inline std::string pointwiseExpression(const Node& node,int n,Port var){
+    const auto& q=node.parameters;const std::string id=node.info->id;
         auto a=[&](){return var(0)+".x";};auto b=[&](){return var(1)+".x";};
         auto f=[&](const char* key,float fallback,float lo=0,float hi=1){return literal(scalar(q[key],fallback,lo,hi));};
         std::string expr;
@@ -66,7 +57,7 @@ float cells(float2 uv,int p,uint seed){
             else expr="float3(fractal(uv,"+period+","+std::to_string(id=="fbm"?integer(q["octaves"],4,1,6):1)+","+random+"))";
         }else if(id=="pattern"||id=="patternMask"){
             const auto names=texturePatterns();const auto name=q.getStr("pattern");const auto it=std::find(names.begin(),names.end(),name);
-            if(it==names.end())return {"","unknown GPU pattern",{}};
+            if(it==names.end())throw std::invalid_argument("unknown GPU pattern");
             const auto palette=texturePatternColors(name);
             auto color=[&](size_t i){const auto& v=palette[std::min(i,palette.size()-1)];return "float3("+literal(float(v[size_t(0)].toDouble()))+","+literal(float(v[size_t(1)].toDouble()))+","+literal(float(v[size_t(2)].toDouble()))+")";};
             expr="patternValue(uv,"+std::to_string(it-names.begin())+","+std::to_string(integer(q["scale"],8,1,64))+","+std::to_string(seed(q["seed"]))+"u,"+std::to_string(n)+","+(id=="patternMask"?"true":"false")+","+color(0)+","+color(1)+","+color(2)+")";
@@ -80,7 +71,23 @@ float cells(float2 uv,int p,uint seed){
         else if(id=="blend"||id=="blendColor")expr="mix("+var(0)+","+var(1)+","+var(2)+".x)";
         else if(id=="colorize")expr="mix("+var(1)+","+var(2)+","+a()+")";
         else if(id=="metallicRoughness")expr="float3(1.0f,"+a()+","+b()+")";
-        else return {"","GPU pointwise preview unsupported node: "+id};
+        else throw std::invalid_argument("GPU pointwise preview unsupported node: "+id);
+    return expr;
+}
+inline Source compile(const Program& p,size_t target,int n,bool floatHeight=false){
+    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxBakeSize,"GPU texture resolution must be 8..1024");
+    std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto j:p.nodes[i].inputs)mark(j);};mark(target);
+    std::string msl="#include <metal_stdlib>\nusing namespace metal;\n"+pointwiseCommon();
+    if(floatHeight)require(p.nodes[target].info->output==Kind::Scalar,"height pass requires scalar target");
+    // Normal is a terminal typed output. Re-evaluate its scalar DAG at four
+    // wrapped neighbors, preserving float precision (no intermediate RGBA8).
+    const bool normal=std::string(p.nodes[target].info->id)=="normal";
+    const size_t valueTarget=normal?p.nodes[target].inputs[0]:target;
+    msl+="float3 evaluatePoint(float2 uv){\n";
+    for(auto i:p.order){
+        if(!needed[i]||(normal&&i==target))continue;
+        const auto& node=p.nodes[i];
+        const auto expr=pointwiseExpression(node,n,[&](size_t j){return "v"+std::to_string(node.inputs[j]);});
         msl+="float3 v"+std::to_string(i)+"=clamp("+expr+",0.0f,1.0f);\n";
     }
     msl+="return v"+std::to_string(valueTarget)+";}\n";
@@ -159,5 +166,62 @@ inline MaterializedDagPlan planMaterializedDag(const Program& p,
         bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
     }
     return lowerDagSlots(inputs,p.order,targets,bytes,budget,3);
+}
+inline KernelValue materializedValue(Kind kind){
+    return kind==Kind::Scalar?KernelValue::Scalar:KernelValue::Vector;
+}
+// Generate a typed node kernel from the SAME pointwise expression compiler
+// used by the fused path. Normal reads its already-materialized float field.
+inline Source compileMaterializedNode(const Program& p,size_t target,int n){
+    require(target<p.nodes.size()&&n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized node target");
+    const auto& node=p.nodes[target];
+    require(node.info&&node.inputs.size()==node.info->inputs.size()&&node.inputs.size()<=3,"invalid materialized node arity");
+    std::vector<KernelValue> types;
+    for(size_t j=0;j<node.inputs.size();++j){
+        const auto dep=node.inputs[j];
+        require(dep<p.nodes.size()&&p.nodes[dep].info&&p.nodes[dep].info->output==node.info->inputs[j],"invalid materialized input kind");
+        types.push_back(materializedValue(p.nodes[dep].info->output));
+    }
+    const auto output=materializedValue(node.info->output);
+    std::string body;
+    const bool normal=std::string(node.info->id)=="normal";
+    if(normal){
+        const auto strength=literal(scalar(node.parameters["strength"],2,0,16));
+        body="uint x=tid%n,y=tid/n;float k="+strength+"*float(n)/256.0f;\n"
+            "float dx=(input0[y*n+(x+1u)%n]-input0[y*n+(x+n-1u)%n])*k;\n"
+            "float dy=(input0[((y+1u)%n)*n+x]-input0[((y+n-1u)%n)*n+x])*k;\n"
+            "float len=sqrt(dx*dx+dy*dy+1.0f);\n"
+            "float3 value=clamp(float3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len),0.0f,1.0f);\n";
+    }else{
+        body="uint x=tid%n,y=tid/n;float2 uv=(float2(x,y)+0.5f)/float(n);\n";
+        for(size_t j=0;j<types.size();++j){
+            const auto i=std::to_string(j);
+            body+="float3 v"+i+"="+(types[j]==KernelValue::Scalar?"float3(input"+i+"[tid])":"input"+i+"[tid].xyz")+";\n";
+        }
+        const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);});
+        body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
+    }
+    body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
+    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon());
+}
+struct MaterializedSources {
+    MaterializedDagPlan plan;
+    std::vector<Source> nodes; // indexed by source node; unreachable entries empty
+    std::vector<Source> packs; // target order; shared result buffer reused
+    size_t resultBytes=0,totalBytes=0;
+};
+inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
+        int n,size_t budget=materializedBudgetBytes){
+    require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
+    MaterializedSources r;
+    r.resultBytes=size_t(n)*size_t(n)*4u;
+    require(r.resultBytes<budget,"materialized result exceeds budget");
+    r.plan=planMaterializedDag(p,targets,n,budget-r.resultBytes);
+    r.totalBytes=r.plan.allocatedBytes+r.resultBytes;
+    r.nodes.resize(p.nodes.size());
+    for(const auto& pass:r.plan.schedule.passes)
+        r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
+    for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
+    return r;
 }
 } // namespace aiverse::render::texture_graph::gpu

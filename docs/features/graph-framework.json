@@ -106,7 +106,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34C in progress: shared node expression compiler, typed Metal/Vulkan materialized kernels and RGBA8 pack source; native dispatch remains separate.",
+      "note": "Stage 34C shared expression and typed materialized shader source generation implemented; native materialized dispatch and hardware validation pending.",
       "evidence": []
     },
     "architecture": {
@@ -176,7 +176,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 34B isolated exact-source C++20 DAG lowering test PASS (GCC 14.2, -Wall -Wextra -Werror); native headless fixture, Studio typecheck/build, GPU and Mac gate NOT RUN.",
+      "note": "Stage 34C isolated exact-blob C++20 kernel ABI/source test PASS (GCC 14.2, -Wall -Wextra -Werror); integrated source fixture, shader compiler, native/Studio/GPU and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {

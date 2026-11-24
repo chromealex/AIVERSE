@@ -167,7 +167,8 @@ inline void registerGraphOps(Workspace& ws) {
                 std::vector<size_t> targets;std::vector<std::string> names;
                 if(p.getBool("bakeSet"))for(const auto& [name,index]:program.outputs){names.push_back(name);targets.push_back(index);}
                 else {const auto it=program.outputs.find(p.getStr("output"));require(it!=program.outputs.end(),"unknown plan output");names.push_back(it->first);targets.push_back(it->second);}
-                const auto plan=gpu::planMaterializedDag(program,targets,n);
+                const auto sources=gpu::compileMaterializedDag(program,targets,n);
+                const auto& plan=sources.plan;
                 Json r=Json::object(),slots=Json::array(),passes=Json::array(),outputs=Json::array();
                 for(auto bytes:plan.schedule.slotBytes)slots.push(Json::number(int64_t(bytes)));
                 for(const auto& pass:plan.schedule.passes){
@@ -181,7 +182,8 @@ inline void registerGraphOps(Workspace& ws) {
                 for(size_t i=0;i<names.size();++i){Json row=Json::object();row.set("name",Json::string(names[i]));row.set("slot",Json::number(int64_t(plan.outputSlots[i])));outputs.push(row);}
                 r.set("ok",Json::fromBool(true));r.set("state",Json::string("planned"));r.set("executed",Json::fromBool(false));
                 r.set("resolution",Json::number(int64_t(n)));r.set("slotBytes",slots);r.set("passes",passes);r.set("outputs",outputs);
-                r.set("allocatedBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
+                r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
+                r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
                 r.set("budgetBytes",Json::number(int64_t(gpu::materializedBudgetBytes)));
                 return r;
             }
