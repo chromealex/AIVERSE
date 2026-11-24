@@ -3,6 +3,7 @@
 #pragma once
 #include "TextureGraph.h"
 #include "TextureGraphDagLowering.h"
+#include "TextureGraphIncremental.h"
 #include "TextureGraphFusion.h"
 #include "TextureGraphKernelSource.h"
 #include "TextureGraphGpuPatterns.h"
@@ -157,7 +158,7 @@ inline PassPlan plan(const Program& p,size_t target,int n,bool shareScalar=false
 // The existing fused native dispatcher does NOT execute this plan yet.
 inline constexpr size_t materializedBudgetBytes=32u*1024u*1024u;
 inline MaterializedDagPlan planMaterializedDag(const Program& p,
-        const std::vector<size_t>& targets,int n,size_t budget=materializedBudgetBytes){
+        const std::vector<size_t>& targets,int n,size_t budget=materializedBudgetBytes,bool retainAll=false){
     require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
     std::vector<std::vector<size_t>> inputs;
     std::vector<size_t> bytes;
@@ -167,7 +168,7 @@ inline MaterializedDagPlan planMaterializedDag(const Program& p,
         inputs.push_back(node.inputs);
         bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
     }
-    return lowerDagSlots(inputs,p.order,targets,bytes,budget,3);
+    return lowerDagSlots(inputs,p.order,targets,bytes,budget,3,retainAll);
 }
 inline KernelValue materializedValue(Kind kind){
     return kind==Kind::Scalar?KernelValue::Scalar:KernelValue::Vector;
@@ -262,7 +263,8 @@ struct MaterializedSources {
     size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
-        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false){
+        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false,bool incremental=false){
+    require(!incremental||!fusePointwise,"incremental materialized mode currently requires unfused nodes");
     require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
     r.resultBytes=size_t(n)*size_t(n)*4u;
@@ -285,7 +287,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
         for(const auto& pass:r.plan.schedule.passes)
             r.nodes[pass.pipeline]=compileFusionRegion(p,fusion.regions.at(pass.pipeline),n);
     }else{
-        r.plan=planMaterializedDag(p,targets,n,budget-r.resultCapacityBytes);
+        r.plan=planMaterializedDag(p,targets,n,budget-r.resultCapacityBytes,incremental);
         r.reachableNodes=r.plan.schedule.passes.size();
         r.nodes.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes)

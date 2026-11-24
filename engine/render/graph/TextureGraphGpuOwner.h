@@ -25,6 +25,7 @@ struct ResidentMaterialOptions {
     ResidentAcceptance acceptance=ResidentAcceptance::CpuReference;
     bool mipmaps=true;
     bool fusePointwise=false;
+    bool incremental=false;
     int timeoutMs=60000;
 };
 class TextureGraphGpuOwner {
@@ -65,7 +66,11 @@ class TextureGraphGpuOwner {
     std::string matCacheProject_;
     uint64_t matLastFence_=0;
     size_t matPipelineHits_=0;
-    bool matBufferHit_=false,matFusion_=false;
+    bool matBufferHit_=false,matFusion_=false,matIncremental_=false;
+    std::vector<gpu::IncrementalNodeKey> matKeys_,matIdleKeys_;
+    std::vector<bool> matDirty_;
+    render::RenderDeviceLifetime::Lease matIdleLease_;
+    size_t matReusedNodes_=0;
     size_t matReachableNodes_=0,matFusedNodes_=0;
     bool activePlanAccepted_=false,cacheHit_=false;
     uint64_t cacheHits_=0;
@@ -83,11 +88,11 @@ class TextureGraphGpuOwner {
         for(auto b:entry.handles)if(b.valid())dev.destroyBuffer(b);
     }
     void clearMatIdle(gfx::Device& dev){
-        if(matCacheDevice_==&dev&&dev.gpuHealthy()){
+        if(matCacheDevice_==&dev&&dev.gpuHealthy()&&(!matIdleLease_.generation()||matIdleLease_.validFor(dev))){
             matIdleBuffers_.clear([&](auto& e){destroyMatBuffers(dev,e);});
             matIdlePipelines_.clear([&](auto& e){destroyPair(dev,e.first,e.second);});
         }else{matIdleBuffers_.abandon();matIdlePipelines_.abandon();}
-        matCacheDevice_=nullptr;matCacheProject_.clear();
+        matIdleKeys_.clear();matIdleLease_={};matCacheDevice_=nullptr;matCacheProject_.clear();
     }
     bool gpuCleanupPending()const{return !gpuCandidates_.empty()&&
         (published_||state_=="failed"||state_=="cancelled"||project_.empty());}
@@ -134,8 +139,8 @@ class TextureGraphGpuOwner {
     bool queued_=false,requireGpu_=false;
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
-    void abandonActive(){textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
-    void abandon(){abandonActive();gpuCandidates_.clear();gpuAcceptedTextures_=0;matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
+    void abandonActive(){matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void abandon(){matIdleKeys_.clear();matIdleLease_={};abandonActive();gpuCandidates_.clear();gpuAcceptedTextures_=0;matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
     void release(gfx::Device& dev,bool afterIdle=false){
         if(!clearGpuCandidates(dev,afterIdle))return;
         for(auto& e:matActivePipelines_)destroyPair(dev,e.first,e.second);
@@ -160,6 +165,8 @@ class TextureGraphGpuOwner {
         matSlots_.push_back(buffer_);buffer_={};
         matIdleBuffers_.put({std::move(matLayout_),std::move(matSlots_)},
             render::texture_graph::gpu::materializedBudgetBytes,[&](auto& e){destroyMatBuffers(dev,e);});
+        matIdleKeys_=matIncremental_?std::move(matKeys_):std::vector<gpu::IncrementalNodeKey>{};
+        matIdleLease_=matIncremental_?gpuTransferLease_:render::RenderDeviceLifetime::Lease{};
         for(auto& e:matActivePipelines_)
             matIdlePipelines_.put(std::move(e),[&](auto& old){destroyPair(dev,old.first,old.second);});
         abandonActive();return true;
@@ -234,7 +241,9 @@ class TextureGraphGpuOwner {
             if(first){
                 // Drop idle fused allocations before admitting the 32 MiB DAG.
                 if(ownsActiveResources()||idlePipelines_.size()!=0)release(dev);
-                if(matCacheDevice_!=&dev||matCacheProject_!=project_)clearMatIdle(dev);
+                if(matCacheDevice_!=&dev||matCacheProject_!=project_||
+                   (matIdleLease_.generation()&&(!matIdleLease_.validFor(dev)||
+                    (matIncremental_&&matIdleLease_.generation()!=gpuTransferLease_.generation()))))clearMatIdle(dev);
                 matCacheDevice_=&dev;matCacheProject_=project_;
                 std::vector<size_t> targets;
                 if(setBake_){for(const auto& pair:setOutputs_)targets.push_back(pair.second);}
@@ -242,7 +251,7 @@ class TextureGraphGpuOwner {
                 const auto budget=gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes;
                 if(gpuTransferRequested_&&(!gpuTransferLease_.validFor(dev)||!dev.supportsStorageBufferTextureCopy()))
                     throw std::runtime_error("GPU texture transfer requires a live native device and copy support");
-                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_);
+                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_,matIncremental_);
                 if(gpuTransferRequested_){
                     for(size_t i=0;i<setOutputs_.size();++i)if(render::texture_graph::materialSlot(setOutputs_[i].first)){
                         const auto kind=program_->nodes.at(targets[i]).info->output;
@@ -252,6 +261,9 @@ class TextureGraphGpuOwner {
                 matReachableNodes_=matSources_->reachableNodes;matFusedNodes_=matSources_->fusedNodes;
                 matSerial_=serial_;
                 auto& sources=*matSources_;
+                if(matIncremental_)matKeys_=incrementalKeys(sources.plan.schedule,[&](size_t node)->const std::string&{
+                    const auto& source=sources.nodes.at(node);return metal?source.msl:source.glsl;
+                });
                 matLayout_=sources.plan.schedule.slotBytes;
                 matLayout_.push_back(sources.resultCapacityBytes);
                 if(!RetiredBufferSet<gfx::BufferHandle>::admissible(matLayout_,materializedBudgetBytes))
@@ -278,8 +290,12 @@ class TextureGraphGpuOwner {
                 if(auto cached=matIdleBuffers_.take(matLayout_)){
                     matSlots_=std::move(cached->handles);buffer_=matSlots_.back();matSlots_.pop_back();
                     matBytes_=sources.plan.allocatedBytes;capacity_=sources.resultCapacityBytes;matBufferHit_=true;
+                    if(matIncremental_&&matIdleLease_.validFor(dev)&&matIdleLease_.generation()==gpuTransferLease_.generation())
+                        matDirty_=incrementalDirty(matIdleKeys_,matKeys_,sources.plan.schedule.passes.size());
+                    matIdleKeys_.clear();matIdleLease_={};
                 }else{
                     matIdleBuffers_.clear([&](auto& e){destroyMatBuffers(dev,e);});
+                    matIdleKeys_.clear();matIdleLease_={};
                     matSlots_.resize(sources.plan.schedule.slotBytes.size());
                     matSlots_.reserve(matSlots_.size()+1);
                     gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.label="TextureGraph materialized slot";
@@ -292,6 +308,7 @@ class TextureGraphGpuOwner {
                     if(!buffer_.valid())throw std::runtime_error("materialized result allocation rejected");
                     capacity_=desc.size;
                 }
+                if(matIncremental_&&matDirty_.empty())matDirty_.assign(sources.plan.schedule.passes.size(),true);
             }
             auto& sources=*matSources_;
             if(matSerial_!=serial_||(!first&&!matEncoded_))throw std::logic_error("stale materialized execution");
@@ -307,6 +324,9 @@ class TextureGraphGpuOwner {
             fence_=matLastFence_=token;inFlight_=true;
             if(first){
                 const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes,[&](const ScheduledPass& pass){
+                    // The full schedule is preflighted. A clean dedicated slot
+                    // contains the exact previously fence-retired value.
+                    if(matIncremental_&&!matDirty_.at(pass.output)){++matReusedNodes_;return true;}
                     std::array<gfx::BufferHandle,3> inputs{};
                     if(pass.inputs.size()>inputs.size())return false;
                     for(size_t i=0;i<pass.inputs.size();++i)inputs[i]=matSlots_.at(pass.inputs[i]);
@@ -359,6 +379,7 @@ public:
         p.set("gpuTextureTransfer",Json::fromBool(true));p.set("requireGpu",Json::fromBool(true));
         p.set("gpuTextureMipmaps",Json::fromBool(options.mipmaps));
         p.set("fusePointwise",Json::fromBool(options.fusePointwise));
+        p.set("incremental",Json::fromBool(options.incremental));
         p.set("gpuTextureFenceOnly",Json::fromBool(options.acceptance==ResidentAcceptance::FenceOnly));
         p.set("timeoutMs",Json::number(int64_t(options.timeoutMs)));
         return start(p,scope,lease);
@@ -386,6 +407,8 @@ public:
         r.set("materializedRequested",Json::fromBool(matRequested_));
         r.set("materializedFailed",Json::fromBool(matFailed_));
         r.set("materializedNodePasses",Json::number(int64_t(matNodePasses_)));
+        r.set("incrementalRequested",Json::fromBool(matIncremental_));
+        r.set("incrementalReusedNodes",Json::number(int64_t(matReusedNodes_)));
         r.set("fusionRequested",Json::fromBool(matFusion_));
         r.set("fusionReachableNodes",Json::number(int64_t(matReachableNodes_)));
         r.set("fusionElidedPasses",Json::number(int64_t(matFusedNodes_)));
@@ -421,7 +444,11 @@ public:
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
-        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag");
+        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag"),incremental=p.getBool("incremental");
+        if(incremental&&(!materialized||p.getBool("fusePointwise")))
+            throw std::invalid_argument("incremental requires unfused materialized DAG");
+        if(incremental&&(!lease.alive()||!lease.device()||!lease.validFor(*lease.device())))
+            throw std::invalid_argument("incremental requires native device lease");
         render::texture_graph::gpu::TextureRequestBudget transferBudget;
         if(mipmaps&&!transfer)throw std::invalid_argument("GPU texture mipmaps require texture transfer");
         if(transfer){
@@ -443,15 +470,15 @@ public:
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
-        matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
+        matIncremental_=incremental;matReusedNodes_=0;matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
         ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
-        gpuTransferLease_=transfer?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
+        gpuTransferLease_=(transfer||incremental)?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
         size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)if(!gpuFenceOnly_||render::texture_graph::materialSlot(pair.first))setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
@@ -568,7 +595,7 @@ public:
         checkProject(project);
         // Request-wide monotonic deadline, evaluated at owner frame boundaries.
         if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
-        if(gpuTransferRequested_&&!gpuTransferLease_.validFor(dev)){
+        if((gpuTransferRequested_||matIncremental_)&&!gpuTransferLease_.validFor(dev)){
             abandon();
             if(!published_&&state_!="cancelled"&&state_!="failed")discard("failed","GPU texture device generation expired");
             return;
@@ -579,7 +606,7 @@ public:
         }
         if(ownsResources()&&!dev.gpuHealthy()){
             abandon();
-            if(gpuTransferRequested_&&!published_)discard("failed","GPU texture device unhealthy");
+            if((gpuTransferRequested_||matIncremental_)&&!published_)discard("failed","GPU texture device unhealthy");
             else if(state_=="pending")fallback("GPU device unhealthy");
         }
         if(gpuFenceOnly_&&inFlight_&&!textureRead_&&!read_&&state_=="pending"){

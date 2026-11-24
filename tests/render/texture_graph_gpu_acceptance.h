@@ -120,6 +120,19 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         drain();
         require(owner.status().getStr("state")=="cancelled"&&!owner.status().getBool("gpuTextureSetReady"),
             "cancelled resident set became publishable");
+        auto inc=Json::parse(R"JSON({"graph":{"version":1,"size":32,"nodes":[
+            {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},
+            {"id":"b","op":"constant","inputs":[],"properties":{"value":0.5}},
+            {"id":"n","op":"normal","inputs":["a"],"properties":{"strength":4}}
+        ],"outputs":{"height":"a","ao":"b","normal":"n"}},"bakeSet":true,"materialized":true,"incremental":true})JSON");
+        auto runIncremental=[&](const Json& input,int dispatched,int reused){
+            owner.start(input,project,lifetime.lease());drain();const auto s=owner.status();
+            require(s.getStr("state")=="ready"&&s.getStr("backend")==expected,"incremental GPU request failed");
+            require(s["materializedNodePasses"].toDouble()==dispatched&&s["incrementalReusedNodes"].toDouble()==reused,"incorrect incremental reuse");
+        };
+        runIncremental(inc,3,0);runIncremental(inc,0,3);
+        auto modified=Json::parse(inc.dump(-1).replace(inc.dump(-1).find("0.25"),4,"0.75"));
+        runIncremental(modified,2,1);
         require(dev.gpuHealthy(),"device unhealthy");
         result=0;
     }catch(const std::exception& e){std::fprintf(stderr,"FAIL texture graph RHI: %s\n",e.what());}

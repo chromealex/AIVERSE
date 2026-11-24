@@ -1,4 +1,5 @@
 #include "engine/render/graph/TextureGraphDagLowering.h"
+#include "engine/render/graph/TextureGraphIncremental.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::render::texture_graph::gpu;
@@ -23,5 +24,17 @@ int main(){
     p=lowerDagSlots(chain,seq,{31},sizes,128);
     check(p.schedule.passes.size()==32&&p.schedule.slotBytes.size()==2&&p.allocatedBytes==128);
     for(size_t i=0;i<32;++i)check(p.schedule.passes[i].output==i%2);
+    p=lowerDagSlots(edges,order,{4},bytes,512,3,true);
+    check(p.allocatedBytes==512&&p.peakLive==5&&p.schedule.slotBytes.size()==5);
+    for(size_t i=0;i<5;++i)check(p.schedule.passes[i].output==i);
+    auto keys=incrementalKeys(p.schedule,[](size_t)->std::string_view{return "shader";});
+    check(keys.size()==5);auto changed=keys;changed[2].source="new shader";
+    check(incrementalDirty(keys,changed,5)==std::vector<bool>({false,false,true,true,true}));
+    check(incrementalDirty(keys,keys,5)==std::vector<bool>(5,false));
+    check(incrementalDirty({},keys,5)==std::vector<bool>(5,true));
+    changed=keys;changed[3].inputs={2,1};check(incrementalDirty(keys,changed,5)==std::vector<bool>({false,false,false,true,true}));
+    auto aliased=lowerDagSlots(edges,order,{4},bytes,384);
+    check(incrementalKeys(aliased.schedule,[](size_t)->std::string_view{return "shader";}).empty());
+    bad=false;try{(void)lowerDagSlots(edges,order,{4},bytes,511,3,true);}catch(const std::invalid_argument&){bad=true;}check(bad);
     std::cout<<"PASS: typed capacity, multi-input order, duplicate ports/targets, output pinning, pruning, budget, binding limit, slot reuse\n";
 }
