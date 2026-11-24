@@ -19,6 +19,8 @@ static void checkBaselineTransfer(){
         [](const auto&){return world::Cell{0,100,0};},[](const auto&){return true;},exclusive)&&
         exterior.publish(exclusive),"exterior baseline published");
     const auto mutation=spatial.mutationVersion();
+    physics::Scene foreignBox;CavePlanetBaselineCollision foreign(foreignBox,spatial,pool);
+    check(!exterior.transferSolidLeafTo(slot.key,foreign,exclusive),"foreign physics owner refused");
     check(!exterior.transferSolidLeafTo(slot.key,interior,[]{return false;}),"transfer requires barrier");
     check(exterior.transferSolidLeafTo(slot.key,interior,exclusive)&&interior.solidReady()&&
         exterior.phase()==CavePlanetBaselineCollision::Phase::Empty,"transfer actual solid leaf");

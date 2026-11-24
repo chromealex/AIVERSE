@@ -73,7 +73,8 @@ public:
                 else leaves_.erase(it);
                 return false;
             }
-            return baseline.solidReady();
+            if(!baseline.solidReady()){recovery_=true;return false;}
+            return true;
         }catch(...){return false;}
     }
     // Exact known leaf set only. Loaned coverage must be proven by the
@@ -148,9 +149,17 @@ public:
         if(it->second.loaned||!it->second.owner->shutdown(exclusive_))return false;
         leaves_.erase(it);return true;
     }
+    // The project may prefetch a batch of exact leaves at its frame barrier.
+    // Partial success remains ordinary exterior coverage, not a loan.
+    bool ensure(const std::string& body,std::span<const Key> keys){
+        if(keys.empty()||keys.size()>maxLeaves_||!exclusive_()||recoveryRequired())return false;
+        for(const auto& key:keys)if(!solid(body,key)&&!loaned(body,key)&&!load(body,key))return false;
+        return true;
+    }
     bool bind(CavePlanetRuntimeHooks& hooks){
-        if(hooks.borrowExteriorBaseline||hooks.returnExteriorBaseline||hooks.surfaceCell)return false;
+        if(hooks.borrowExteriorBaseline||hooks.returnExteriorBaseline||hooks.surfaceCell||hooks.exteriorHealthy)return false;
         hooks.surfaceCell=cells_;
+        hooks.exteriorHealthy=[this]{return !recoveryRequired();};
         hooks.borrowExteriorBaseline=[this](const auto& plan,auto& owner){return borrow(plan,owner);};
         hooks.returnExteriorBaseline=[this](const auto& plan,auto& owner){return giveBack(plan,owner);};
         return true;

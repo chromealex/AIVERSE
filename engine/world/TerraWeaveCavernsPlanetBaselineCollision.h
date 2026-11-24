@@ -140,6 +140,7 @@ public:
            recoveryRequired()||dest.recoveryRequired()||!solidReady())return false;
         const auto it=entries_.find(key);
         if(it==entries_.end()||dest.entries_.contains(key))return false;
+        if(dest.phase_==Phase::Empty&&!dest.entries_.empty())return false;
         if(dest.phase_!=Phase::Empty&&(!dest.solidReady()||dest.body_!=body_||
            dest.surfaceRevision_!=surfaceRevision_))return false;
         if(dest.entries_.size()>=64)return false;
