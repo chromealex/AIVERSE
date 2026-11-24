@@ -2231,13 +2231,30 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             throw std::runtime_error("Mixed model must be a valid glTF 2.0 document");
         // Unknown extension payloads may name external resources; don't
         // claim they are self-contained. Embedded BIN / data URI is allowed.
-        if((*doc).has("extensions")||(*doc)["extensionsUsed"].size()||(*doc)["extensionsRequired"].size())
-            throw std::runtime_error("Mixed model extensions require dependency review");
+        size_t nodes=0;
+        const auto rejectExtensions=[&](const auto& self,const Json& value,size_t depth)->void{
+            if(++nodes>2000000||depth>128)throw std::runtime_error("Mixed model inspection budget exceeded");
+            if(value.isObject()){
+                if(value.has("extensions"))throw std::runtime_error("Mixed model extensions require dependency review");
+                for(const auto& [key,child]:value.members()){
+                    if((key=="extensionsUsed"||key=="extensionsRequired")&&(!child.isArray()||child.size()))
+                        throw std::runtime_error("Mixed model extensions require dependency review");
+                    self(self,child,depth+1);
+                }
+            }else if(value.isArray())for(const auto& child:value.items())self(self,child,depth+1);
+        };
+        rejectExtensions(rejectExtensions,*doc,0);
+        const bool binary=ext==".glb"&&studioGlbMagicFile(file);
         for(const char* group:{"buffers","images"}){
             if(doc->has(group)&&!(*doc)[group].isArray())throw std::runtime_error("Invalid mixed model resource array");
-            for(const auto& entry:(*doc)[group].items())
-                if(entry.has("uri")&&(!entry["uri"].isString()||!entry.getStr("uri").starts_with("data:")))
-                    throw std::runtime_error("Mixed model has external resource dependencies");
+            for(const auto& entry:(*doc)[group].items()){
+                if(!entry.isObject())throw std::runtime_error("Invalid mixed model resource entry");
+                if(entry.has("uri")){
+                    if(!entry["uri"].isString()||!entry.getStr("uri").starts_with("data:"))
+                        throw std::runtime_error("Mixed model has external resource dependencies");
+                }else if(std::string(group)=="buffers"? !binary : !entry["bufferView"].isNumber())
+                    throw std::runtime_error("Mixed model resource has no embedded source");
+            }
         }
     };
     const auto nestedGuids=[&](const std::string& origin){

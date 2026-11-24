@@ -1219,6 +1219,40 @@ int main(){
             // An external model resource in a replacement candidate must
             // fail even when that candidate is currently in Trash.
             studioApplyHistoryBatch(p,studioPlanMixedAssetChain(p,reversed,false).relocations,{});
+            index.rebuild(false);
+            const auto textureGuid=index.byPath("A/Pack/Paint.png")->guid;
+            const auto oldMeta=read(source/"Paint.png.meta");
+            editor::ProjectHistory nestedSettings;
+            move=StudioTransferPlan::internal(p,"B",{"A/Pack"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            nestedSettings.recordMove(std::move(*plan),"Move folder for settings");
+            index.rebuild(false);index.patchSettings(textureGuid,"compression",Json::string("high"),&nestedSettings);
+            const auto newMeta=read(dest/"Paint.png.meta");
+            auto nestedUndo=nestedSettings.steps();std::reverse(nestedUndo.begin(),nestedUndo.end());
+            auto nested=studioPlanMixedAssetChain(p,nestedUndo,false);
+            AIVERSE_TEST_CHECK(nested.movingResources.size()==1);
+            studioApplyHistoryBatch(p,nested.relocations,nested.documents,nested.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Paint.png.meta")==oldMeta);
+            nested=studioPlanMixedAssetChain(p,nestedSettings.steps(),true);
+            studioApplyHistoryBatch(p,nested.relocations,nested.documents,nested.movingResources);
+            AIVERSE_TEST_CHECK(read(dest/"Paint.png.meta")==newMeta);
+            nested=studioPlanMixedAssetChain(p,nestedUndo,false);
+            studioApplyHistoryBatch(p,nested.relocations,nested.documents,nested.movingResources);
+
+            const std::string newModel=R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":4,"uri":"data:application/octet-stream;base64,AQIDBA=="}]})";
+            write(external/"Mesh.gltf",newModel);
+            auto embedded=StudioTransferPlan::external(p,"A/Pack",{external/"Mesh.gltf"});
+            (void)embedded.apply(embedded.token(),{{0,"replace"}},{},&plan);
+            AIVERSE_TEST_CHECK(plan&&plan->replacement);
+            editor::ProjectHistory embeddedVersions;embeddedVersions.recordMove(std::move(*plan),"Replace embedded model");
+            auto version=studioPlanMixedAssetChain(p,embeddedVersions.steps(),false);
+            studioApplyHistoryBatch(p,version.relocations,version.documents,version.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==model);
+            version=studioPlanMixedAssetChain(p,embeddedVersions.steps(),true);
+            studioApplyHistoryBatch(p,version.relocations,version.documents,version.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==newModel);
+            version=studioPlanMixedAssetChain(p,embeddedVersions.steps(),false);
+            studioApplyHistoryBatch(p,version.relocations,version.documents,version.movingResources);
             write(external/"Mesh.gltf",R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})");
             auto replace=StudioTransferPlan::external(p,"A/Pack",{external/"Mesh.gltf"});
             (void)replace.apply(replace.token(),{{0,"replace"}},{},&plan);
