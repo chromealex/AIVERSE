@@ -3,6 +3,7 @@
 #pragma once
 #include "engine/sim/Simulation.h"
 #include "WorldProcesses.h"
+#include "engine/core/Graphs.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>
@@ -93,32 +94,30 @@ inline bool propagate(World& world,std::uint32_t tick) {
     std::sort(portals.begin(),portals.end(),[](const auto& a,const auto& b){
         return a.entity.packed()<b.entity.packed();
     });
-    std::vector<lib::worldprocess::AcousticEdge> edges;
-    edges.reserve(portals.size()*2);
+    lib::WeightedGraph graph(zones.size());
     for(const auto& p:portals){
         const auto from=indices.find(p.data.from.packed());
         const auto to=indices.find(p.data.to.packed());
         if(from==indices.end()||to==indices.end())continue;
-        edges.push_back({from->second,to->second,p.data.loss});
+        graph[from->second].push_back({to->second,std::uint64_t(p.data.loss)});
         if(p.data.bidirectional)
-            edges.push_back({to->second,from->second,p.data.loss});
+            graph[to->second].push_back({from->second,std::uint64_t(p.data.loss)});
     }
 
-    struct SourceLevels {Entity entity;std::vector<Intensity> levels;};
-    std::vector<std::pair<Entity,AcousticEmitter>> emitters;
+    // Convert maximization of intensity - path loss into minimization of
+    // (kMaxIntensity - intensity) + path loss. A stronger source dominates
+    // every weaker source along a shared continuation; equal intensity
+    // chooses the smallest packed Entity ID, exactly as the previous scan.
+    std::vector<lib::WeightedSeed> seeds;
     read.eachExistingConst<AcousticEmitter>([&](Entity e,const AcousticEmitter& em){
-        if(read.alive(e)&&em.enabled&&em.intensity>0&&em.intensity<=kMaxIntensity
-           &&indices.contains(em.zone.packed()))emitters.push_back({e,em});
+        if(!read.alive(e)||!em.enabled||em.intensity<=0||em.intensity>kMaxIntensity)return;
+        const auto zone=indices.find(em.zone.packed());
+        if(zone!=indices.end())seeds.push_back({zone->second,
+            std::uint64_t(kMaxIntensity-em.intensity),e.packed()});
     });
-    std::sort(emitters.begin(),emitters.end(),[](const auto& a,const auto& b){
-        return a.first.packed()<b.first.packed();
-    });
-    std::vector<SourceLevels> levels;
-    levels.reserve(emitters.size());
-    for(const auto& [entity,em]:emitters){
-        levels.push_back({entity,lib::worldprocess::audibility(
-            zones.size(),indices.at(em.zone.packed()),em.intensity,edges)});
-    }
+    // Zero intensity is never audible; discard paths at or below it.
+    const auto levels=lib::multiSourceDijkstra(graph,seeds,std::uint64_t(kMaxIntensity-1));
+    if(!levels)return false;
 
     for(std::size_t i=0;i<outputs->size();++i){
         const Entity receiverEntity=outputs->entityAt(i);
@@ -130,16 +129,13 @@ inline bool propagate(World& world,std::uint32_t tick) {
         const auto zone=indices.find(receiver->zone.packed());
         if(zone==indices.end())continue;
         hearing->valid=true;
-        for(const auto& src:levels){
-            const Intensity value=src.levels[zone->second];
-            if(value<=0||value<receiver->threshold)continue;
-            if(!hearing->audible||value>hearing->intensity||
-               (value==hearing->intensity&&src.entity.packed()<hearing->source.packed())){
-                hearing->audible=true;
-                hearing->source=src.entity;
-                hearing->intensity=value;
-            }
-        }
+        const auto cost=levels->distance[zone->second];
+        if(cost==lib::kInfiniteCost)continue;
+        const Intensity value=kMaxIntensity-Intensity(cost);
+        if(value<receiver->threshold)continue;
+        hearing->audible=true;
+        hearing->source=Entity::fromPacked(levels->sourceId[zone->second]);
+        hearing->intensity=value;
     }
     return true;
 }
