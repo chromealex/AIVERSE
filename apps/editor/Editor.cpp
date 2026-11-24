@@ -2171,6 +2171,7 @@ void Editor::startPlay(int humanSlot) {
     gameFxBridge_.setHeightFn([this](float x, float z) { return sim_ ? view_.heightAt(simModule()->state(*sim_).grid, x, z) : 0.0f; });
     gameFxBridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
     gameFxBridge_.setAttackOriginFn([this](Entity e, fx::float3& pos, fx::float3& dir) { return view_.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
+    gameFxBridge_.setNodeFn([this](Entity e,const std::string& node,render::mat4& frame){return view_.effectNodeOf(e,node,frame);});
     gameFxBridge_.attach(*sim_, uint8_t(human_));
     fxTime_ = -1;
     bots_.clear();
