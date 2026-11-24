@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
+#include "apps/studio-native/StudioPlanetGlobe.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -52,6 +53,19 @@ int main() {
         regions.active=1;
         map.extra.set(pc::key,pc::encodeRegions(map,regions));
         AIVERSE_TEST_CHECK(pc::read(map).anchor.a==anchor.a);
+        const auto globe=StudioPlanetGlobe::capture(map,anchor.bodyId);
+        AIVERSE_TEST_CHECK(globe.divisions==64&&globe.triangles.size()==12u*64u*64u);
+        AIVERSE_TEST_CHECK(globe.markers.size()==2);
+        const auto dir=globe.cube.dirFromFace(anchor.face,anchor.a,anchor.b);
+        const render::float3 unit=render::normalize(render::float3{
+            float(dir.x.toDouble()),float(dir.y.toDouble()),float(dir.z.toDouble())});
+        const auto hit=globe.pick(unit*30.f,unit*(-1.f));
+        AIVERSE_TEST_CHECK(hit.has_value()&&hit->regionId=="1");
+        AIVERSE_TEST_CHECK(hit->face==anchor.face);
+        AIVERSE_TEST_CHECK(fxAbs(hit->a-anchor.a)<Fixed::fromRatio(1,8));
+        AIVERSE_TEST_CHECK(fxAbs(hit->b-anchor.b)<Fixed::fromRatio(1,8));
+        AIVERSE_TEST_CHECK(!globe.pick(unit*30.f,unit));
+        AIVERSE_TEST_CHECK(!globe.pick(unit*30.f,unit*2.f));
         const auto frame=pc::frameForDocument(map,anchor);
         const auto patch=pc::captureLocalSurface(map,anchor,7);
         AIVERSE_TEST_CHECK(!patch.cells.empty());
