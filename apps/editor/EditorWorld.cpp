@@ -12,6 +12,7 @@
 #include "EditorRuntimeEntityProvider.h"
 #include "core/SimTools.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
 
 namespace fs = std::filesystem;
 
@@ -489,6 +490,7 @@ void Editor::registerWorldOps() {
             result.set("mode",Json::string(worldLive_?"play":"preview"));
             result.set("tick",Json::number(int64_t(sim->tick())));
             result.set("durabilityKnown",Json::fromBool(false));
+            result.set("simulationLod",world::simulationLodDiagnosticsJson(sim->world().resourceConst<world::SimulationLodDiagnostics>()));
             return result;
         });
     add("world_entities",
