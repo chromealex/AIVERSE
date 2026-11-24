@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveCavernsRaycast.h"
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -15,13 +16,17 @@ namespace aiverse::editor {
 inline void registerTerraWeaveCavernsOps(Workspace& ws) {
     const Json schema=Json::parse(R"({
       "properties":{
-        "mode":{"type":"string","enum":["carve","fill","erase","get"]},
+        "mode":{"type":"string","enum":["carve","fill","erase","get","settings","entrance_add","entrance_update","entrance_erase"]},
         "xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},
         "radiusCm":{"type":"integer","minimum":1,"maximum":1000000},
         "stampId":{"type":"integer","minimum":1},
         "stampIdText":{"type":"string"},
         "expectedRevision":{"type":"string"},
-        "withinStroke":{"type":"boolean"}
+        "withinStroke":{"type":"boolean"},
+        "settings":{"type":"object","properties":{"seedText":{"type":"string"},"cellCm":{"type":"integer"},"tunnelRadiusCm":{"type":"integer"},"chamberRadiusCm":{"type":"integer"},"tunnelChance":{"type":"integer"},"chamberChance":{"type":"integer"},"minYcm":{"type":"integer"},"maxYcm":{"type":"integer"}}},
+        "entranceIdText":{"type":"string"},
+        "surfaceYcm":{"type":"integer"},
+        "caveYcm":{"type":"integer"}
       }
     })");
     Workspace* w=&ws;
@@ -51,7 +56,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
         }});
     ws.registerOp({"terraweave_caverns_paint",
         "Author carve/fill spherical cave SDF stamps in signed world centimetres. "
-        "Use erase with stampId or get to inspect. MapDoc persistence, undo/redo, "
+        "Use erase with stampId or get to inspect; settings changes the generator recipe, entrance_add/update/erase author shafts. MapDoc persistence, undo/redo, "
         "MCP and HTML5 share this operation. Caller owns runtime chunk invalidation.",
         schema,[w](const Json& p)->Json{
             if(w->project.dir.empty())
@@ -59,18 +64,19 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             if(w->map.data.planet())
                 throw std::invalid_argument("Caverns flat-world volume only");
             const auto mode=p.getStr("mode","carve");
-            if(mode!="carve"&&mode!="fill"&&mode!="erase"&&mode!="get")
+            if(mode!="carve"&&mode!="fill"&&mode!="erase"&&mode!="get"&&mode!="settings"&&
+               mode!="entrance_add"&&mode!="entrance_update"&&mode!="entrance_erase")
                 throw std::invalid_argument("Caverns paint mode");
             const Json& original=w->map.data.extra["terraweaveCaverns"];
             auto volume=terraweave::caverns::caveSnapshotFromJson(original);
             // Browser transports cannot safely represent every int64 ID.
-            const auto decimalId=[](const Json& value)->uint64_t {
+            const auto decimalId=[](const Json& value,bool allowZero=false)->uint64_t {
                 if(!value.isString())throw std::invalid_argument("Caverns decimal identity required");
                 const auto s=value.str();
                 uint64_t n=0;
                 const auto parsed=std::from_chars(s.data(),s.data()+s.size(),n);
                 if(parsed.ec!=std::errc{}||parsed.ptr!=s.data()+s.size()||
-                   !n||n>uint64_t(INT64_MAX))
+                   (!allowZero&&!n)||n>uint64_t(INT64_MAX))
                     throw std::invalid_argument("Caverns invalid decimal identity");
                 return n;
             };
@@ -80,7 +86,70 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             bool changed=false;
             uint64_t stampId=0;
             std::optional<terraweave::caverns::CaveSphereStamp> affected;
-            if(mode=="erase"){
+            using namespace terraweave::caverns;
+            const auto bounded=[](const Json& input,const char* key,int64_t lo,int64_t hi){
+                const auto& v=input[key];
+                const double d=v.toDouble();
+                if(!v.isNumber()||!std::isfinite(d)||std::trunc(d)!=d||d<double(lo)||d>double(hi))
+                    throw std::invalid_argument(std::string("Caverns invalid integer: ")+key);
+                return int64_t(d);
+            };
+            bool fullRebuild=false;
+            uint64_t entranceId=0;
+            std::optional<CaveDirtyBounds> entranceBounds;
+            const auto includeEntrance=[&](const Entrance& e){
+                const int64_t r=int64_t(e.radiusCm)+100;
+                CaveDirtyBounds b{e.xCm-r,e.caveYcm-r,e.zCm-r,e.xCm+r+1,e.surfaceYcm+r+1,e.zCm+r+1};
+                if(!entranceBounds)entranceBounds=b;
+                else {auto& a=*entranceBounds;a.minX=std::min(a.minX,b.minX);a.minY=std::min(a.minY,b.minY);a.minZ=std::min(a.minZ,b.minZ);
+                    a.maxX=std::max(a.maxX,b.maxX);a.maxY=std::max(a.maxY,b.maxY);a.maxZ=std::max(a.maxZ,b.maxZ);}
+            };
+            if(mode=="settings"){
+                const auto& cfg=p["settings"];
+                if(!cfg.isObject())throw std::invalid_argument("Caverns settings object required");
+                auto next=volume.settings;
+                next.seed=decimalId(cfg["seedText"],true);
+                next.cellCm=int32_t(bounded(cfg,"cellCm",100,10000));
+                next.tunnelRadiusCm=int32_t(bounded(cfg,"tunnelRadiusCm",1,10000));
+                next.chamberRadiusCm=int32_t(bounded(cfg,"chamberRadiusCm",1,10000));
+                next.tunnelChance=uint32_t(bounded(cfg,"tunnelChance",0,1000));
+                next.chamberChance=uint32_t(bounded(cfg,"chamberChance",0,1000));
+                next.minYcm=bounded(cfg,"minYcm",-kLimitCm,kLimitCm);
+                next.maxYcm=bounded(cfg,"maxYcm",-kLimitCm,kLimitCm);
+                validate(next);
+                const auto& old=volume.settings;
+                changed=next.seed!=old.seed||next.cellCm!=old.cellCm||next.tunnelRadiusCm!=old.tunnelRadiusCm||
+                    next.chamberRadiusCm!=old.chamberRadiusCm||next.tunnelChance!=old.tunnelChance||
+                    next.chamberChance!=old.chamberChance||next.minYcm!=old.minYcm||next.maxYcm!=old.maxYcm||original.isNull();
+                volume.settings=next;fullRebuild=changed;
+            }else if(mode=="entrance_add"||mode=="entrance_update"||mode=="entrance_erase"){
+                auto& list=volume.entrances;
+                auto it=list.end();
+                if(mode!="entrance_add"){
+                    entranceId=decimalId(p["entranceIdText"]);
+                    it=std::find_if(list.begin(),list.end(),[&](const auto& e){return e.id==entranceId;});
+                    if(it==list.end())throw std::out_of_range("Caverns entrance not found");
+                    includeEntrance(*it);
+                }
+                if(mode=="entrance_erase"){list.erase(it);changed=true;}
+                else {
+                    Entrance e{};
+                    e.xCm=bounded(p,"xCm",-kLimitCm,kLimitCm);
+                    e.zCm=bounded(p,"zCm",-kLimitCm,kLimitCm);
+                    e.surfaceYcm=bounded(p,"surfaceYcm",-kLimitCm,kLimitCm);
+                    e.caveYcm=bounded(p,"caveYcm",-kLimitCm,kLimitCm);
+                    e.radiusCm=int32_t(bounded(p,"radiusCm",1,1000000));
+                    if(e.surfaceYcm<=e.caveYcm)throw std::invalid_argument("Caverns entrance needs positive depth");
+                    if(mode=="entrance_add"){
+                        if(list.size()>=4096)throw std::length_error("Caverns entrance limit");
+                        entranceId=volume.sourceRevision;
+                        for(const auto& old:list)entranceId=std::max(entranceId,old.id);
+                        if(entranceId>=uint64_t(INT64_MAX))throw std::overflow_error("Caverns entrance ID");
+                        ++entranceId;e.id=entranceId;list.push_back(e);changed=true;
+                    }else {e.id=entranceId;changed=!(e==*it);*it=e;}
+                    includeEntrance(e);
+                }
+            }else if(mode=="erase"){
                 const auto legacy=p.getInt("stampId",0);
                 const uint64_t requested=p.has("stampIdText")?decimalId(p["stampIdText"]):
                     (legacy>0?uint64_t(legacy):0);
@@ -118,6 +187,7 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 changed=true;
             }
             if(changed){
+                if((fullRebuild||entranceId)&&p.getBool("withinStroke",false))throw std::invalid_argument("Caverns recipe/entrance edit requires its own undo step");
                 if(volume.sourceRevision>=uint64_t(INT64_MAX))
                     throw std::overflow_error("Caverns revision overflow");
                 ++volume.sourceRevision;
@@ -135,8 +205,11 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             result.set("stampCount",Json::number(int64_t(volume.stamps.size())));
             if(stampId){result.set("stampId",Json::number(int64_t(stampId)));
                 result.set("stampIdText",Json::string(std::to_string(stampId)));}
-            if(affected){
-                const auto bounds=terraweave::caverns::dirtyBoundsForStamp(*affected);
+            result.set("changed",Json::fromBool(changed));
+            result.set("fullRebuild",Json::fromBool(fullRebuild));
+            if(entranceId)result.set("entranceIdText",Json::string(std::to_string(entranceId)));
+            if(changed&&(affected||entranceBounds)){
+                const auto bounds=affected?dirtyBoundsForStamp(*affected):*entranceBounds;
                 Json dirty=Json::object();
                 dirty.set("minXcm",Json::number(bounds.minX));
                 dirty.set("minYcm",Json::number(bounds.minY));
