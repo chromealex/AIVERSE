@@ -5,6 +5,7 @@
 #include "engine/game/Components.h"
 #include "engine/physis/PhysisGravity.h"
 #include <type_traits>
+#include <cstdlib>
 
 namespace aiverse::studio {
 namespace planet_wp {
