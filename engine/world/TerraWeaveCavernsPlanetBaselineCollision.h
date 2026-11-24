@@ -44,6 +44,13 @@ public:
                    slot.bodyTriangles.size()>65534||slot.bodyTriangles.size()>131072-total){
                     discard();return false;
                 }
+                for(const auto& [old,entry]:entries_){
+                    (void)entry;
+                    if(k.face==old.face&&int64_t(k.x)<int64_t(old.x)+old.size&&
+                       int64_t(old.x)<int64_t(k.x)+k.size&&
+                       int64_t(k.z)<int64_t(old.z)+old.size&&
+                       int64_t(old.z)<int64_t(k.z)+k.size){discard();return false;}
+                }
                 const auto cell=cells(k);
                 if(!seenCells.insert(cell).second){discard();return false;}
                 auto& entry=entries_[k];
