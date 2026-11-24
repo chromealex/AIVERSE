@@ -61,8 +61,21 @@ fs::path directory(const Workspace& ws,const std::string& name,bool create){
 actor::Project readProject(const Workspace& ws){
     if(ws.project.dir.empty()||ws.project.rulesDirty||ws.map.dirty||ws.project.manifestDirty)
         throw std::runtime_error("save project documents before world maintenance");
-    const auto reader=aiverse::platform::makeContentReader(ws.project.dir);
-    return actor::readProject(reader);
+    // Match the server CLI: project rules and map are read from saved files;
+    // only the external asset reader may resolve content.rpak.
+    return actor::readProject([&](const std::string& name,std::string& out){
+        if(!wd::safeAssetPath(name))return false;
+        const auto root=fs::canonical(ws.project.dir);
+        const auto path=fs::weakly_canonical(root/name);
+        auto relative=path.lexically_relative(root);
+        if(relative.empty()||*relative.begin()==".."||relative.is_absolute())return false;
+        std::ifstream input(path,std::ios::binary|std::ios::ate);
+        if(!input)return false;
+        const auto size=input.tellg();
+        if(size<0||uint64_t(size)>32u*1024u*1024u)return false;
+        out.resize(size_t(size));input.seekg(0);
+        return bool(input.read(out.data(),std::streamsize(out.size())));
+    });
 }
 struct Offline {
     std::unique_ptr<Simulation> sim;
