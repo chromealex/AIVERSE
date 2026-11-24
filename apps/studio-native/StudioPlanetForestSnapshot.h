@@ -92,7 +92,8 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
                 // Rotate the native capsule local Y axis by its published quaternion.
                 const Vec3 axis{(q.x*q.y-q.w*q.z)*2,1_fx-(q.x*q.x+q.z*q.z)*2,(q.y*q.z+q.w*q.x)*2};
                 Json capsule=Json::object();capsule.set("center",xyz(record.motion.position-anchor));
-                capsule.set("axis",xyz(axis));capsule.set("radius",Json::number(record.dimensions.x.toDouble(),4));
+                const Vec3 right{1_fx-(q.y*q.y+q.z*q.z)*2,(q.x*q.y+q.w*q.z)*2,(q.x*q.z-q.w*q.y)*2};
+                capsule.set("right",xyz(right));capsule.set("axis",xyz(axis));capsule.set("radius",Json::number(record.dimensions.x.toDouble(),4));
                 capsule.set("halfHeight",Json::number(record.dimensions.y.toDouble(),4));
                 row.set("capsule",std::move(capsule));
             }

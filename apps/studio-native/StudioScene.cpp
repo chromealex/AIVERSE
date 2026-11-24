@@ -588,8 +588,9 @@ void StudioScene::syncDocumentModels(
 void StudioScene::clearPlanetForestModels(){
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
-    if(device_&&planetForestLogModel_)releasePreviewModel(*planetForestLogModel_);
-    planetForestRootModels_.clear();planetForestRejectedRoots_.clear();planetForestLogModel_.reset();planetForestLogRejected_=false;
+    if(device_)for(auto& [id,model]:planetForestLogModels_)if(model)releasePreviewModel(*model);
+    planetForestRootModels_.clear();planetForestRejectedRoots_.clear();planetForestLogModels_.clear();planetForestRejectedLogs_.clear();
+    planetForestTextureStamp_.clear();planetForestTextureCheck_={};
     planetForestModels_.clear();planetForestRejectedModels_.clear();planetForestEvergreen_.clear();planetForestSeasonMaterials_.clear();
     planetForestModelBytes_=0;planetForestModelCatalog_=Json{};planetForestModelProject_.clear();planetForestModelsPending_=false;
 }
@@ -628,20 +629,27 @@ uint32_t studioForestRootTier(const Json& row){
 void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath){
     namespace fs=std::filesystem;namespace tw=terraweave;
     const auto& catalog=doc.data.worldExtra["terraweaveForest"];
-    if(planetForestModelProject_!=projectPath||!(planetForestModelCatalog_==catalog)){
-        if((!planetForestModels_.empty()||!planetForestRootModels_.empty()||planetForestLogModel_)&&!device_->waitForResourceIdle())return;
-        clearPlanetForestModels();planetForestModelProject_=projectPath;planetForestModelCatalog_=catalog;
+    const auto now=std::chrono::steady_clock::now();
+    const bool identityChanged=planetForestModelProject_!=projectPath||!(planetForestModelCatalog_==catalog);
+    if(identityChanged||now>=planetForestTextureCheck_){
+        auto stamp=studioForestTextureStamp(projectPath,catalog);
+        if(identityChanged||stamp!=planetForestTextureStamp_){
+            if((!planetForestModels_.empty()||!planetForestRootModels_.empty()||!planetForestLogModels_.empty())&&!device_->waitForResourceIdle())return;
+            clearPlanetForestModels();planetForestModelProject_=projectPath;planetForestModelCatalog_=catalog;
+            planetForestTextureStamp_=std::move(stamp);
+        }
+        planetForestTextureCheck_=now+std::chrono::seconds(1);
     }
     planetForestModelsPending_=false;
     if(projectPath.empty()||!planetPreview_)return;
     const bool live=planetForestLiveCurrent(doc,projectPath);
     std::set<uint32_t> needed;
     std::set<ForestRootModelKey> rootsNeeded;
-    bool logNeeded=false;
+    std::set<uint32_t> logsNeeded;
     if(live){
         for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
             if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
-            if(row.getBool("physical")&&row["capsule"].isObject()){logNeeded=true;continue;}
+            if(row.getBool("physical")&&row["capsule"].isObject()){logsNeeded.insert(uint32_t(row.getInt("species")));continue;}
             if(row.getBool("fallen")||row.getBool("harvested"))continue;
             const auto id=uint32_t(row.getInt("species"));if(!id)continue;
             needed.insert(id);
@@ -651,20 +659,45 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
     const auto dir=catalog.getStr("botanicalTextures");
     constexpr size_t budget=192u*1024u*1024u;
     // Generate at most one new model per Scene frame. Shared renderer owns LOD and batching.
-    if(logNeeded&&!planetForestLogModel_&&!planetForestLogRejected_){
+    const auto read=studioForestTextureReader(projectPath);
+    for(const auto id:logsNeeded){
+        if(planetForestLogModels_.count(id)||planetForestRejectedLogs_.count(id))continue;
+        if(planetForestLogModels_.size()>=16||planetForestModelBytes_>=budget){planetForestRejectedLogs_.insert(id);continue;}
         std::unique_ptr<render::Model> model;
         try{
-            render::MeshBuilder mesh;mesh.color(render::rgba(255,255,255));
-            mesh.cylinder({0,-.5f,0},.5f,1.f,16,true);
-            render::Material bark;bark.name="Forest consequence log";bark.baseColor={.31f,.18f,.11f,1};bark.roughness=.9f;
-            model=render::modelFromParts("studio/forest/log",{{"Log",&mesh,bark,render::mat4{}}});
-            if(!model)throw std::runtime_error("Forest log mesh");
-            const size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            constexpr int segments=16;
+            render::MeshBuilder side,ends;
+            side.color(render::rgba(255,255,255));side.cylinder({0,-.5f,0},.5f,1.f,segments,false);
+            ends.color(render::rgba(255,255,255));
+            ends.disc({0,.5f,0},.5f,segments);
+            ends.transform(render::mat4::translate({0,-.5f,0})*render::mat4::rotateX(3.14159265359f)).disc({0,0,0},.5f,segments);
+            render::Material bark;bark.name="Forest consequence bark";bark.baseColor={.31f,.18f,.11f,1};bark.roughness=.9f;
+            render::Material wood;wood.name="Forest exposed wood";wood.baseColor={.61f,.41f,.22f,1};wood.roughness=.85f;
+            model=render::modelFromParts("studio/forest/log/"+std::to_string(id),{{"Bark",&side,bark,render::mat4{}},{"Wood ends",&ends,wood,render::mat4{}}});
+            if(!model||model->vertices.size()<size_t(segments)*4)throw std::runtime_error("Forest log mesh");
+            // MeshBuilder cylinder emits four independent vertices per segment.
+            // Unwrap the seam explicitly; leave end faces on their own material.
+            for(int i=0;i<segments;++i){
+                const float a=float(i)/segments,b=float(i+1)/segments;
+                auto* v=model->vertices.data()+i*4;
+                v[0].uv={a,0};v[1].uv={b,0};v[2].uv={a,1};v[3].uv={b,1};
+            }
+            render::generateTangents(model->vertices,model->indices,0,uint32_t(model->indices.size()));
+            if(!dir.empty()&&catalog["species"].isArray()&&catalog["species"].size()<=64){
+                for(const auto& def:catalog["species"].items())if(def.getInt("id")==int64_t(id)){
+                    const auto* preset=tw::findBotanicalPreset(def.getStr("preset"));
+                    if(preset)tw::applyBotanicalTexture(*model,0,dir,std::string(preset->barkMaterial),read);
+                    break;
+                }
+            }
+            size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            for(auto& image:model->images){bytes+=size_t(image.width)*size_t(image.height)*8u;image.name=(fs::path(projectPath)/"content"/image.name).generic_string();}
             if(bytes>budget-planetForestModelBytes_)throw std::length_error("Forest log cache budget");
+            model->path=projectPath+"/"+model->path;
             render::prepareModelUpload(*model);
             if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Forest log upload");
-            planetForestLogModel_=std::move(model);planetForestModelBytes_+=bytes;
-        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestLogRejected_=true;}
+            planetForestLogModels_.emplace(id,std::move(model));planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestRejectedLogs_.insert(id);}
         planetForestModelsPending_=true;return;
     }
     if(!catalog["species"].isArray()||catalog["species"].size()>64)return;
@@ -681,31 +714,6 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
             if(!model||model->vertices.size()>1000000||model->indices.size()>6000000)
                 throw std::length_error("Studio forest prototype geometry budget");
             if(recipe.preset&&!dir.empty()&&world::safeAssetPath(dir)){
-                const fs::path root=fs::path(projectPath)/"content";
-                // Match the Studio content containment policy. Accept bounded PNG texture families only.
-                const tw::BotanicalTextureReader read=[root](const std::string& name,std::string& out){
-                    if(!world::safeAssetPath(name)||name.size()>512)return false;
-                    std::error_code ec;
-                    const auto rootStatus=fs::symlink_status(root,ec);
-                    if(ec||fs::is_symlink(rootStatus)||!fs::is_directory(rootStatus))return false;
-                    fs::path file=root;
-                    for(const auto& part:fs::path(name)){
-                        if(part.empty()||part=="."||part=="..")return false;
-                        file/=part;const auto st=fs::symlink_status(file,ec);
-                        if(ec||fs::is_symlink(st))return false;
-                    }
-                    if(!fs::is_regular_file(file,ec))return false;
-                    const auto n=fs::file_size(file,ec);
-                    if(ec||n<24||n>16u*1024u*1024u)return false;
-                    std::ifstream input(file,std::ios::binary);if(!input)return false;
-                    unsigned char header[24]{};
-                    if(!input.read(reinterpret_cast<char*>(header),24))return false;
-                    const unsigned char sig[8]={137,80,78,71,13,10,26,10};
-                    if(!std::equal(sig,sig+8,header)||header[12]!='I'||header[13]!='H'||header[14]!='D'||header[15]!='R')return false;
-                    const auto be=[&](int i){return (uint32_t(header[i])<<24)|(uint32_t(header[i+1])<<16)|(uint32_t(header[i+2])<<8)|header[i+3];};
-                    if(!be(16)||!be(20)||be(16)>2048||be(20)>2048)return false;
-                    input.seekg(0);out.resize(size_t(n));return bool(input.read(out.data(),std::streamsize(n)));
-                };
                 tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),read);
                 tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),read);
             }
@@ -768,11 +776,13 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
             const auto& cap=row["capsule"];
             const auto center=studioForestVec(cap["center"]),axis=studioForestVec(cap["axis"]);
             const float radius=float(cap["radius"].toDouble()),half=float(cap["halfHeight"].toDouble());
-            if(!planetForestLogModel_||!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
-            const auto frame=studioForestFrame(*center,*axis,std::abs(axis->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0});
+            const auto log=planetForestLogModels_.find(uint32_t(row.getInt("species")));
+            if(log==planetForestLogModels_.end()||!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
+            const auto right=studioForestVec(cap["right"]);
+            const auto frame=studioForestFrame(*center,*axis,right.value_or(std::abs(axis->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
             if(!frame){++missing;continue;}
             // Wood proxy occupies the published capsule envelope; no inferred falling trajectory.
-            render::ModelDraw draw;draw.model=planetForestLogModel_.get();
+            render::ModelDraw draw;draw.model=log->second.get();
             draw.world=*frame*render::mat4::scale({radius*2,(half+radius)*2,radius*2});
             renderer_.drawModel(draw);++rendered;continue;
         }
@@ -789,15 +799,16 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
         if(model!=planetForestModels_.end()){
             render::ModelDraw draw;draw.model=model->second.get();
             draw.world=*frame*render::mat4::scale({factor,factor,factor});
-            const auto foliage=row.getInt("foliagePermille",0);
+            const auto foliage=std::clamp<int64_t>(row.getInt("foliagePermille",0),0,1000);
             int season=10;
             if(row["seasonPermille"].isNumber())season=int(std::clamp<int64_t>((row.getInt("seasonPermille")+1000)*10/2000,0,10));
             const bool evergreen=planetForestEvergreen_.count(id)&&planetForestEvergreen_.at(id);
             // Preview mapping of the actual PHYSIS seasonal signal, not an
             // independent climate or calendar. Quantized materials shared per species.
-            if(row.getBool("dead")||foliage==0||(!evergreen&&season==0))draw.materialMask=&barkOnly;
-            if(season<10&&model->second->materials.size()>1){
-                const auto materialKey=std::make_pair(id,season);
+            const int cover=int((foliage*(evergreen?1000:season*100)+99999)/100000);
+            if(row.getBool("dead")||cover==0)draw.materialMask=&barkOnly;
+            if((season<10||cover<10)&&model->second->materials.size()>1){
+                const auto materialKey=std::make_tuple(id,season,cover);
                 auto it=planetForestSeasonMaterials_.find(materialKey);
                 if(it==planetForestSeasonMaterials_.end()){
                     auto materials=model->second->materials;
@@ -805,6 +816,9 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
                     auto& leaf=materials[1];
                     if(evergreen){leaf.baseColor.x*=1.f-.10f*cold;leaf.baseColor.y*=1.f-.20f*cold;}
                     else{leaf.baseColor.x=std::min(1.f,leaf.baseColor.x*(1.f+.65f*cold));leaf.baseColor.y*=1.f-.58f*cold;leaf.baseColor.z*=1.f-.65f*cold;}
+                    // Same partial-coverage policy as ArborForestAdapter: alpha fade,
+                    // not opaque summer shadows. Fully bare trees skip the leaf primitive.
+                    if(cover>0&&cover<10){leaf.baseColor.w*=float(cover)*.1f;leaf.alpha=render::AlphaMode::Blend;leaf.transparent=true;leaf.castShadow=false;}
                     it=planetForestSeasonMaterials_.emplace(materialKey,std::move(materials)).first;
                 }
                 draw.materials=&it->second;
@@ -2514,7 +2528,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
     if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
-    if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||planetForestLogRejected_)lightingStatus_+=" · ARBOR preview budget or upload rejection";
+    if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||!planetForestRejectedLogs_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";

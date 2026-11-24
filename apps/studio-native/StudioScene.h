@@ -21,6 +21,7 @@
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetForestOverlays.h"
+#include "apps/studio-native/StudioPlanetForestTextures.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
@@ -204,12 +205,14 @@ private:
     std::map<uint32_t,std::unique_ptr<render::Model>> planetForestModels_;
     std::set<uint32_t> planetForestRejectedModels_;
     std::map<uint32_t,bool> planetForestEvergreen_;
-    std::map<std::pair<uint32_t,int>,std::vector<render::Material>> planetForestSeasonMaterials_;
+    std::map<std::tuple<uint32_t,int,int>,std::vector<render::Material>> planetForestSeasonMaterials_;
     using ForestRootModelKey=std::tuple<uint32_t,bool,uint32_t>;
     std::map<ForestRootModelKey,std::unique_ptr<render::Model>> planetForestRootModels_;
     std::set<ForestRootModelKey> planetForestRejectedRoots_;
-    std::unique_ptr<render::Model> planetForestLogModel_;
-    bool planetForestLogRejected_=false;
+    std::map<uint32_t,std::unique_ptr<render::Model>> planetForestLogModels_;
+    std::set<uint32_t> planetForestRejectedLogs_;
+    StudioForestTextureStamp planetForestTextureStamp_;
+    std::chrono::steady_clock::time_point planetForestTextureCheck_{};
     size_t planetForestModelBytes_=0;
     bool planetForestModelsPending_=false;
     void clearPlanetForestModels();
