@@ -137,7 +137,7 @@ private:
         out.blocked=!stats.published && scene.hasPendingChanges();
         out.giRevision=stats.revision;
         out.changedRegions=stats.changedRegions;
-        if(stats.published) {
+        if(stats.published||!scene.hasPendingChanges()) { // includes an already-absent empty tile
             for(const auto& [id,revision]:staged_) {
                 if(revision)committed_[id]=*revision;
                 else committed_.erase(id);
