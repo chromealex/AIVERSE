@@ -71,4 +71,22 @@ python3 tools/agents/feature_policy.py --base origin/main --release 3.1.0 --outp
 
 Omit --output to print JSON. --require-release-ready exits nonzero on release blockers. The release label is descriptive; all registered manifests remain in scope. Unknown historical coverage is not silently upgraded to PASS and does not itself block unrelated legacy features. Explicit ownership claims contain agent, branch, paths; repeat --branch <existing-ref> with --base to compare changed paths of active refs. This detects file overlap, not semantic conflicts; no automatic remote discovery or branch mutation. Coordinate shared-path overlaps with the integrator before changes.
 
-Studio panel Feature Readiness and MCP feature_readiness_get read the same fixed engine-root logs/feature-readiness.json snapshot (bounded size, no arbitrary path, no shell execution). Use the normal typed studio.op bridge. The report includes its source SHA but the native reader does not verify freshness; regenerate after any change. Missing reports are errors, not ready status. The release report never replaces independently reviewed CI, Mac merged-tree checks or release publication approval.
+Studio panel Feature Readiness and MCP feature_readiness_get read the same fixed engine-root logs/feature-readiness.json snapshot (bounded size, no arbitrary path). Snapshot reads never execute a shell; the separate refresh operation queues only the fixed repository report generator. Use the normal typed studio.op bridge. The report includes its source SHA but the native reader does not verify freshness; regenerate after any change. Missing reports are errors, not ready status. The release report never replaces independently reviewed CI, Mac merged-tree checks or release publication approval.
+
+## Automation workflow (Stages 24–36)
+
+`docs/agents/feature-automation.json` declares available agents (ID, owners, capacity 0–5), explicit release feature selections, and exact architecture-review exception paths. Empty agents means no assignments; do not invent active agents. Release selections are not official publication approval.
+
+```sh
+python3 tools/agents/feature_policy.py --base origin/main --discover-branches --release 3.1.0 --release-scope --output logs/feature-readiness.json
+python3 tools/agents/feature_automation.py history feature-gate
+python3 tools/agents/feature_automation.py history <capability-id> --capability
+python3 tools/agents/feature_automation.py context <task-id>
+python3 tools/agents/feature_automation.py draft <task-id> --output logs/feature-drafts
+python3 tools/agents/feature_automation.py assignments --output logs/agent-assignments
+python3 tools/agents/feature_api.py --old <baseline-checkout> --new <current-checkout> --header engine/<public-header>.h
+```
+
+The report includes direct/transitive declared feature impact, skill similarity/freshness review candidates, lexical architecture findings, conflict resolution proposals, a deterministic assignment proposal queue, and optional release scope including prerequisites. Unmerged local and fetched origin refs are discovered on explicit request; no fetch, remote worktree inspection, automatic merge or ownership transfer. Assignment export is a proposal packet requiring external acceptance. Draft scaffolds are unregistered `.in` files and must never count as implementations. Context and assignment commands require a current report SHA; verify a clean worktree and source evidence before use. History is historical declaration data, never current PASS. Clang API comparison takes two actual checkouts and equivalent compiler flags; removed compiler-parsed declarations are potential breaks, not ABI guarantees. Architecture checks are lexical review aids, not proof of ECS semantics or authority. The impact closure follows declared ownership/API paths and prerequisite edges, not every possible compiler dependency.
+
+Studio Feature Readiness supports read-only graph navigation, manual regeneration and opt-in minute refresh. `feature_readiness_refresh` queues a fixed local Python script via the existing exclusive background job runner; it does not build, run tests, edit a game, or accept arbitrary commands. The runner must be idle, Python and `origin/main` available. `feature_readiness_status_get` exposes the shared job state; `feature_readiness_query` pages features, tasks, dependencies, release blockers and assignment proposals (max 200 items). The snapshot may be stale; source SHA and independent evidence remain mandatory. The UI never launches external agents.
