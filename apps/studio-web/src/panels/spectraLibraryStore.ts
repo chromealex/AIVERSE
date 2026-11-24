@@ -1,4 +1,5 @@
 // Bounded session-local handoff and native capture cache. No second viewport.
+import {persistThumbnail,readThumbnail} from './spectraThumbnailCache';
 export interface LibraryGraphRequest {projectPath:string;name:string;draft:boolean}
 let pending:LibraryGraphRequest|null=null;
 export function requestLibraryGraph(request:LibraryGraphRequest) {
@@ -17,9 +18,16 @@ export function rememberLibraryFrame(projectPath:string,name:string,draft:boolea
   const id=key(projectPath,name,draft);
   thumbnails.delete(id);thumbnails.set(id,{signature,image});
   while(thumbnails.size>16)thumbnails.delete(thumbnails.keys().next().value!);
+  void persistThumbnail({id,signature,image,updated:Date.now()}).catch(()=>{/* session cache remains available */});
   window.dispatchEvent(new Event('spectrafx:library-frame'));
 }
 export function libraryFrame(projectPath:string,name:string,draft:boolean,signature:string):string {
   const thumb=thumbnails.get(key(projectPath,name,draft));
   return thumb?.signature===signature?thumb.image:'';
+}
+
+export async function loadLibraryFrame(projectPath:string,name:string,draft:boolean,signature:string):Promise<string>{
+  const cached=libraryFrame(projectPath,name,draft,signature);
+  if(cached||!signature)return cached;
+  try{return await readThumbnail(key(projectPath,name,draft),signature);}catch{return '';}
 }

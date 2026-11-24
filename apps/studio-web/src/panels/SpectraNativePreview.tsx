@@ -544,6 +544,42 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
     finally{setBusy(false);}
   };
 
+  // Explicit one-shot thumbnail workflow. Use the native renderer, not a
+  // synthetic browser image. Never replace or seek a live runtime silently.
+  const generateLibraryThumbnail=async()=>{
+    if(!libraryAsset||!active||busy||disabled||capturePending||!state||state.ready)return;
+    setBusy(true);setCaptureError('');setError('');
+    const request={...libraryAsset,signature:graphSignature};
+    let generation:number|undefined;
+    try{
+      const loaded=await invokePreview({action:'load',graph,gpuBirthRandom,expectedGeneration:state.generation});
+      if(!loaded.ready||loaded.error||typeof loaded.generation!=='number')
+        throw new Error(loaded.error||'Native graph load failed');
+      generation=loaded.generation;
+      loadedFrameIdentity.current={signature:request.signature,generation};
+      lastLoadedGraph.current=request.signature;
+      const sought=await invokePreview({action:'seek',tick:24,expectedGeneration:generation});
+      if(sought.error)throw new Error(sought.error);
+      let settled=false;
+      for(let n=0;n<100;++n){
+        const current=await invokePreview({action:'status',expectedGeneration:generation});
+        if(!current.ready||current.error)throw new Error(current.error||'Preview unavailable');
+        setState(current);
+        if(current.tick===24&&!current.playing){settled=true;break;}
+        await new Promise<void>(resolve=>window.setTimeout(resolve,100));
+      }
+      if(!settled)throw new Error('Thumbnail seek timed out');
+      const capture=await invokePreview({action:'capture',maxSide:256,expectedGeneration:generation});
+      if(capture.capture?.error||!capture.capture?.pending||!capture.capture.captureId)
+        throw new Error(capture.capture?.error||'Thumbnail capture could not start');
+      pendingLibraryFrame.current={...request,generation};
+      pendingMeta.current={projectPath,graphSignature:request.signature,tick:24,snapshotMaxSide:256};
+      setCaptureSlot(null);setCaptureId(capture.capture.captureId);setCapturePending(true);
+      setState(capture);
+    }catch(e){setCaptureError(message(e));pendingLibraryFrame.current=null;}
+    finally{setBusy(false);}
+  };
+
   const command=async(action:Action,options:Partial<{
     graph:Record<string,unknown>;gpuBirthRandom:boolean;checkpointId:number;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
@@ -740,6 +776,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
         onClick={()=>void captureFrame()}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
+      {libraryAsset&&<StudioButton size="sm" disabled={!active||!state||state.ready||busy||disabled||capturePending}
+        onClick={()=>void generateLibraryThumbnail()}>Generate library thumbnail</StudioButton>}
+      {libraryAsset&&state?.ready&&<small>Stop the active preview before generating a new thumbnail, or capture the current frame.</small>}
       {capturePending&&<StudioButton size="sm" onClick={()=>void invokePreview({action:'captureCancel',captureId}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
     </div>
     <div className="spectra-native__toolbar">

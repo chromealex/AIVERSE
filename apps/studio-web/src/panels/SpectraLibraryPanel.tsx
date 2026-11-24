@@ -3,7 +3,7 @@ import {invoke,nativeConnected,onNativeEvent} from '../bridge';
 import {StudioPanel,StudioSection,StudioInput,StudioSelect,StudioButton,StudioAlert} from '../ui';
 import type {StudioPanel as PanelId} from '../nestedDock';
 import {graphV2,safeGraphName} from './spectraDataInterfaceModel';
-import {libraryFrame,requestLibraryGraph} from './spectraLibraryStore';
+import {loadLibraryFrame,requestLibraryGraph} from './spectraLibraryStore';
 import './SpectraLibraryPanel.css';
 
 type Entry={name:string;draft:boolean;valid:boolean};
@@ -83,8 +83,14 @@ export default function SpectraLibraryPanel({projectPath,showPanel}:{projectPath
     if(category==='favorites'&&!p?.favorite||category==='drafts'&&!e.draft||category==='published'&&e.draft)return false;
     return [e.name,...(p?.tags??[])].join(' ').toLowerCase().includes(query.trim().toLowerCase());
   }),[entries,prefs,query,category]);
-  const thumb=useMemo(()=>selected?libraryFrame(projectPath,selected.name,selected.draft,signature):'',
-    [selected,projectPath,signature,thumbRevision]);
+  const [thumb,setThumb]=useState('');
+  useEffect(()=>{
+    let live=true;
+    setThumb('');
+    if(selected&&signature)void loadLibraryFrame(projectPath,selected.name,selected.draft,signature)
+      .then(image=>{if(live)setThumb(image);});
+    return()=>{live=false;};
+  },[selected,projectPath,signature,thumbRevision]);
   const open=(entry:Entry)=>{requestLibraryGraph({projectPath,name:entry.name,draft:entry.draft});showPanel('fx_graph');};
   return <StudioPanel title="SpectraFX Library" eyebrow="VFX · Project assets">
     <StudioSection title="Effects">
@@ -115,7 +121,7 @@ export default function SpectraLibraryPanel({projectPath,showPanel}:{projectPath
         {selected&&<div className="spectra-library__detail">
           <strong>{selected.name}</strong>
           {thumb?<img src={thumb} alt="Native SpectraFX captured frame"/>:
-            <small>No matching session capture. Open the saved graph, load and capture a frame.</small>}
+            <small>No matching cached frame. Open the saved graph and generate a thumbnail.</small>}
           <StudioInput placeholder="Tags, comma separated" value={tagText} onChange={e=>setTagText(e.target.value)}/>
           <StudioButton size="sm" onClick={()=>update(selected,{tags:[...new Set(tagText.split(',').map(s=>s.trim()).filter(Boolean).map(s=>s.slice(0,40)))].slice(0,12)})}>Save tags</StudioButton>
           <StudioButton size="sm" onClick={()=>open(selected)}>Open live preview</StudioButton>
