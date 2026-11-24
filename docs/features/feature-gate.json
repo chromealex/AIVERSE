@@ -46,7 +46,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 10 in progress: enforce Git provenance in manual readiness CLI and test stale reports; native and CI evidence pending.",
+      "note": "Stage 11 in progress: bind audit and readiness to clean checked-out Git tree; harden live MCP registry response checks. Execution pending.",
       "evidence": []
     },
     "architecture": {
