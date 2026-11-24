@@ -622,6 +622,17 @@ public:
     }
     Status status(uint64_t id)const{auto* s=find(id);return s?s->status:Status::Unloaded;}
     const std::string& lastError()const noexcept{return lastError_;}
+    // Read on the authoritative world thread or its existing owner barrier.
+    // A returned value is a detached snapshot; never expose the router itself.
+    std::optional<BuildingGraphDiagnostics> graphDiagnostics(uint64_t id)const{
+        const auto* s=find(id);
+        if(!s)return std::nullopt;
+        return s->router.diagnostics(id);
+    }
+    // Defined domains can differ from currently registered owners while unloaded.
+    std::optional<uint32_t> configuredGraphDomains(uint64_t id)const{
+        const auto* s=find(id);if(!s)return std::nullopt;return s->domains;
+    }
 
     // Render-thread/barrier methods. SceneView is the existing WorldScene
     // (template keeps this header independent of heavy WorldScene includes).
