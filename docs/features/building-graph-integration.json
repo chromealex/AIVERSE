@@ -62,7 +62,9 @@
     "tests/tests_navmesh.inc",
     "skills/world/aiverse-building-style/SKILL.md",
     ".github/workflows/building-style-focused.yml",
-    "libraries/include/aiverselib/systems/BuildingStyle.h"
+    "libraries/include/aiverselib/systems/BuildingStyle.h",
+    "tests/world/region_entity_ledger_test.cpp",
+    "CMakeLists.txt"
   ],
   "traits": {
     "editable": true,
@@ -143,7 +145,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN. Stage 35H.6 timing fixture extended; NOT RUN. Stage 35H.7 native nav/PHYSIS/example assertions authored; NOT RUN. Stage 35H.8 example registration assertion authored, NOT RUN. Stage 36A exact Git blobs 388dd1b51ec2c91ff1c6835239a519a1a011144e and 44b4b9844dd9a2ab8d73c5068897d76e3b7f2074 verified with git hash-object and executed on Node v22.16.0: 2/2 geometry tests PASS. Full native/HTML5/CI acceptance pending. Stage 36C user Mac quick build FAIL at BuildingStyle.h:13: stale BuildingGen.h include; CTest not reached. Rebuild pending.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN. Stage 35H.6 timing fixture extended; NOT RUN. Stage 35H.7 native nav/PHYSIS/example assertions authored; NOT RUN. Stage 35H.8 example registration assertion authored, NOT RUN. Stage 36A exact Git blobs 388dd1b51ec2c91ff1c6835239a519a1a011144e and 44b4b9844dd9a2ab8d73c5068897d76e3b7f2074 verified with git hash-object and executed on Node v22.16.0: 2/2 geometry tests PASS. Full native/HTML5/CI acceptance pending. Stage 36C user Mac quick build FAIL at BuildingStyle.h:13: stale BuildingGen.h include; CTest not reached. Rebuild pending. Stage 36C retry build(7).log: Building feature/style/runtime/export targets link successfully; full native build FAIL at 37% due to duplicate changes local in region_entity_ledger_test and missing aiverse_world link in region_ecs_bridge_test. CTest not reached.",
       "evidence": []
     },
     "handoff": {
