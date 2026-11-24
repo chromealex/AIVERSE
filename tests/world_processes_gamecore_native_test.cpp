@@ -1,5 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
+#include "aiverselib/world/WorldProcessGravity.h"
+#include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
 #include <cstdint>
@@ -54,7 +56,66 @@ static Entity placed(const Simulation& sim,std::size_t i){
     AIVERSE_TEST_CHECK(game.mapPlaced().size()>i);
     return game.mapPlaced()[i];
 }
+static void checkPlanetGravity(){
+    namespace wp=aiverse::lib::worldprocess;
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);
+    planet.id="moon";planet.radius=Fixed::fromInt(20);
+    surface.bodies.push_back(planet);surface.build();
+    World ecs;
+    physis::GravitySettings settings;settings.baseline={};
+    ecs.setResource<physis::GravitySettings>(settings);
+    const auto field=ecs.create();
+    physis::GravityField g;g.mode=physis::GravityMode::Attract;
+    g.center=game::Surface::anchor(0);g.radiusMeters=Fixed::fromInt(200);
+    g.radialMagnitude=Fixed::fromInt(10);g.overrideBaseline=true;
+    ecs.add<physis::GravityField>(field,g);
+    for(int face=0;face<6;++face){
+        const auto p=game::Surface::anchor(0)+surface.facePoint(0,face,Fixed::fromInt(4),Fixed::fromInt(4));
+        const auto frame=wp::surfaceFrame(&surface,p);
+        AIVERSE_TEST_CHECK(frame&&frame->body==0&&frame->cell>=0);
+        const auto gravity=wp::sampleGravity(ecs,*frame,p);
+        AIVERSE_TEST_CHECK(gravity.local.y<Fixed::fromInt(-1));
+        AIVERSE_TEST_CHECK(fxAbs(gravity.local.x)<Fixed::fromRatio(1,10));
+        AIVERSE_TEST_CHECK(fxAbs(gravity.local.z)<Fixed::fromRatio(1,10));
+        AIVERSE_TEST_CHECK(wp::granularGravityAxis(gravity.local)==wp::GravityAxis::Down);
+        const auto force=wp::morphGravityForce(field,gravity.local,Fixed::fromInt(10));
+        AIVERSE_TEST_CHECK(force&&force->y<0);
+    }
+    const auto a=wp::surfaceFrame(&surface,surface.cellCenter(surface.gridCell(0,0,7,3)));
+    const int neighbor=surface.neighbor(a->cell,0);
+    const auto seam=wp::surfaceFrame(&surface,surface.cellCenter(neighbor));
+    const auto moon=wp::surfaceFrame(&surface,surface.cellCenter(surface.gridCell(1,0,7,3)));
+    AIVERSE_TEST_CHECK(a&&seam&&moon&&wp::sameSurfaceBody(*a,*seam));
+    AIVERSE_TEST_CHECK(wp::surfaceGroundDistance(&surface,*a,*seam).has_value());
+    AIVERSE_TEST_CHECK(!wp::surfaceGroundDistance(&surface,*a,*moon));
+    AIVERSE_TEST_CHECK(!wp::surfaceFrame(&surface,game::Surface::anchor(0)));
+
+    granular::Field grains;grains.width=3;grains.height=3;grains.capacity=10;
+    grains.mass.assign(9,0);grains.solid.assign(9,0);
+    grains.mass[4]=10;
+    for(const auto& [accel,target]:std::array<std::pair<Vec3,size_t>,5>{{
+        {{Fixed{},Fixed::fromInt(-1),Fixed{}},7},
+        {{Fixed{},Fixed::fromInt(1),Fixed{}},1},
+        {{Fixed::fromInt(-1),Fixed{},Fixed{}},3},
+        {{Fixed::fromInt(1),Fixed{},Fixed{}},5},
+        {{},4}}}){
+        auto next=grains;
+        AIVERSE_TEST_CHECK(wp::settleWithGravity(next,1,accel));
+        AIVERSE_TEST_CHECK(next.mass[target]==10&&next.sampledTick==1);
+        AIVERSE_TEST_CHECK(next.width==3&&next.height==3&&next.solid==grains.solid);
+    }
+    const auto loose=ecs.create();ecs.add<granular::Field>(loose,grains);
+    AIVERSE_TEST_CHECK(!wp::advanceGranularWithGravity(ecs,2,
+        [](const World&,Entity)->std::optional<Vec3>{return {};}));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(loose).mass==grains.mass);
+    AIVERSE_TEST_CHECK(wp::advanceGranularWithGravity(ecs,2,
+        [](const World&,Entity)->std::optional<Vec3>{return Vec3{Fixed{},Fixed::fromInt(1),Fixed{}};}));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(loose).mass[1]==10);
+}
 int main(){
+    checkPlanetGravity();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
     auto zone=placed(*sim,1),gas=placed(*sim,2);
