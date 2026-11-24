@@ -857,11 +857,12 @@ std::optional<StudioForestCameraFocus> StudioHost::worldProcessForestCamera(){
     return onScene([&]{return preview_->planetForestCamera(ws.project.dir,ws.map.path,ws.map.revision,placement_.pixelsW,placement_.pixelsH);});
 }
 Json StudioHost::sampleWorldProcessLive(){
+    wpForestRenderSnapshot_=Json{};
     if(!game_||!wpLiveOptions_.live||(game_->planetMatch()&&!worldProcessPlanetMapCurrent()))return {};
     if(!wpLiveOptions_.forest)return game_->ecologyState(wpLiveOptions_);
     const auto camera=worldProcessForestCamera();
     const auto body=camera?camera->body:worldProcessSceneBody();
-    return game_->ecologyState(wpLiveOptions_,body,camera);
+    return game_->ecologyState(wpLiveOptions_,body,camera,&wpForestRenderSnapshot_);
 }
 Json StudioHost::planetSceneBodyRequest(const Json& params){
         if(projectLoading_||!session_||!preview_)throw std::runtime_error("Scene unavailable");
@@ -1245,9 +1246,13 @@ void StudioHost::rebuildOverlay() {
     }
     onScene([&] {
         preview_->setOverlayShapes(std::move(shapes));
-        preview_->setPlanetLiveSnapshot(wpLiveOptions_.live&&wpLiveOptions_.anyPlanetLayer()&&worldProcessPlanetMapCurrent()&&
+        Json sceneSnapshot=wpLiveOptions_.live&&wpLiveOptions_.anyPlanetLayer()&&worldProcessPlanetMapCurrent()&&
             wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
-            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpLiveOptions_.layer,wpLiveOptions_.aetherLayer);
+            ?wpLiveSnapshot_:Json{};
+        if(sceneSnapshot.getBool("active")&&wpLiveOptions_.forest&&wpForestRenderSnapshot_.getBool("active")&&
+           wpForestRenderSnapshot_.getInt("tick",-2)+1==sceneSnapshot.getInt("tick",-1))
+            sceneSnapshot.set("forest",wpForestRenderSnapshot_);
+        preview_->setPlanetLiveSnapshot(std::move(sceneSnapshot),wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpLiveOptions_.layer,wpLiveOptions_.aetherLayer);
     });
 }
 // World Processes: drag authored stable-ID references or area handles.

@@ -255,6 +255,7 @@ private:
     StudioWorldProcessLiveOptions wpLiveOptions_;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
+    Json wpForestRenderSnapshot_; // native-only; never returned by browser or MCP
     std::string wpLivePlanetProject_,wpLivePlanetMapPath_;
     uint64_t wpLivePlanetRevision_=0;
     bool worldProcessPlanetMapCurrent() const;

@@ -6,10 +6,12 @@
 #include "apps/studio-native/StudioPlanetForestWeather.h"
 #include "apps/studio-native/StudioForestCameraFocus.h"
 namespace aiverse::studio {
+inline constexpr size_t kStudioForestDiagnosticLimit=128;
+inline constexpr size_t kStudioForestRenderLimit=2048;
 inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128,
         const std::vector<evolve::PlanetWeatherMapping>& weather={},const std::string& focusBody={},
-        const std::optional<StudioForestCameraFocus>& camera={}){
-    limit=std::min(limit,size_t(128));
+        const std::optional<StudioForestCameraFocus>& camera={},bool renderPopulation=false){
+    limit=std::min(limit,renderPopulation?kStudioForestRenderLimit:kStudioForestDiagnosticLimit);
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
     Json out=Json::object(),rows=Json::array();
     const auto* roots=ecs.resourceConst<tw::TerraWeaveAuthorityResource>();
