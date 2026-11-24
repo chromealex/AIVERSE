@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-simulation-profiler",
+          "title": "Профилировщик симуляции",
+          "titleEn": "Simulation Profiler",
+          "text": "Ограниченный замер реального времени тиков и систем ECS в локальной игре.",
+          "textEn": "Bounded measurement of actual tick and ECS system wall time in a local match.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-world-explorer-live",
           "title": "Обзор регионов живого мира",
           "titleEn": "Live World Explorer",
