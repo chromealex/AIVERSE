@@ -95,7 +95,9 @@
     "engine/render/graph/TextureGraphDagLowering.h",
     "tests/render/texture_graph_dag_lowering.cpp",
     "engine/render/graph/TextureGraphKernelSource.h",
-    "tests/render/texture_graph_kernel_source.cpp"
+    "tests/render/texture_graph_kernel_source.cpp",
+    "engine/render/graph/TextureGraphMaterializedDispatch.h",
+    "tests/render/texture_graph_materialized_dispatch.cpp"
   ],
   "traits": {
     "editable": true,
@@ -106,7 +108,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34C shared expression and typed materialized shader source generation implemented; native materialized dispatch and hardware validation pending.",
+      "note": "Stage 34D in progress: opt-in native materialized dispatch through existing owner, bounded request lifetime and ordered output packing.",
       "evidence": []
     },
     "architecture": {
