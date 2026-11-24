@@ -54,18 +54,24 @@ private:
 };
 // Prepared relocation operations are project-relative, never browser input.
 struct StudioBatchRelocation {std::string from,to,digest;bool directory=false;};
+struct StudioBatchResourceEdit {
+    editor::ProjectFileEdit edit; // original project-relative physical path
+    std::string destination;      // final project-relative physical path
+};
 struct StudioBatchAssetPlan {
     std::vector<StudioBatchRelocation> relocations;
     std::vector<editor::ProjectFileEdit> documents;
+    std::vector<StudioBatchResourceEdit> movingResources;
 };
-// Plan ordinary move chains from retained byte identities. Stationary model
-// repairs are composed and checked against the complete projected graph.
+// Plan ordinary move chains using virtual directional file/tree digests.
+// Resource edits retain initial and projected final physical identities.
 StudioBatchAssetPlan studioPlanAssetMoveChain(const std::filesystem::path& project,
     const std::vector<editor::ProjectHistory::MovePlan>& ordered,bool redo);
 // Coordinator supports exact endpoint chains and disjoint document edits.
 void studioApplyHistoryBatch(const std::filesystem::path& project,
     const std::vector<StudioBatchRelocation>& relocations,
-    const std::vector<editor::ProjectFileEdit>& documents);
+    const std::vector<editor::ProjectFileEdit>& documents,
+    const std::vector<StudioBatchResourceEdit>& movingResources={});
 void studioRecoverHistoryBatch(const std::filesystem::path& project);
 // Replay a native recorded file or directory move, never a browser-supplied path list.
 void studioReplayAssetMove(const std::filesystem::path& project,

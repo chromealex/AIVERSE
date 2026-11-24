@@ -1806,6 +1806,78 @@ void validateBatchDocuments(const fs::path& root,const BatchTimeline& timeline,
         }
     }
 }
+// Resource paths may be inside a moved directory whose destination parent
+// does not exist until the move. Validate lexical paths separately from live
+// filesystem targets, and prove the destination by following the entire chain.
+std::string batchResourceDestination(std::string path,const std::vector<StudioBatchRelocation>& moves){
+    for(const auto& m:moves)
+        if(path==m.from||(m.directory&&path.starts_with(m.from+"/")))
+            path=m.to+path.substr(m.from.size());
+    return path;
+}
+void validateMovingBatchResources(const std::vector<StudioBatchRelocation>& moves,
+    const std::vector<StudioBatchResourceEdit>& resources){
+    if(resources.size()>32)throw std::runtime_error("Too many moving batch resource edits");
+    size_t bytes=0;std::set<std::string> sources,targets;
+    for(const auto& resource:resources){
+        const auto& edit=resource.edit;
+        const auto source=edit.path.generic_string();
+        const auto& target=resource.destination;
+        if(!source.starts_with("content/")||!target.starts_with("content/")||
+           source==target||!studioRepairModelExtension(edit.path)||!studioRepairModelExtension(fs::path(target))||
+           !sources.insert(source).second||!targets.insert(target).second||
+           batchResourceDestination(source,moves)!=target)
+            throw std::runtime_error("Invalid moving resource chain");
+        validateHistoryContentPath(source.substr(8));validateHistoryContentPath(target.substr(8));
+        studioValidateModelRepairBytes(edit);
+        for(const auto count:{edit.before.size(),edit.after.size()}){
+            if(count>StudioResourceEditBudget-bytes)throw std::runtime_error("Moving batch resource budget exceeded");
+            bytes+=count;
+        }
+    }
+}
+std::vector<editor::ProjectFileEdit> finalMovingBatchEdits(const fs::path& root,
+    const std::vector<StudioBatchResourceEdit>& resources){
+    std::vector<editor::ProjectFileEdit> result;
+    for(const auto& resource:resources){
+        auto edit=resource.edit;
+        edit.path=editor::project_file_detail::safeTarget(root,resource.destination);
+        result.push_back(std::move(edit));
+    }
+    return result;
+}
+// At the final relocation phase some resource writes may already have
+// committed. Reconstruct the original payload identity by streaming a reverse
+// overlay without changing any live file. Earlier phases have no byte edits.
+void checkFinalBatchPayloads(const fs::path& root,const BatchTimeline& timeline,
+    const std::vector<StudioBatchResourceEdit>& resources){
+    ResourceOverlay reverse;
+    for(auto edit:finalMovingBatchEdits(root,resources)){
+        if(studioResourceMatches(edit.path,edit))continue;
+        if(!studioResourceMatches(edit.path,edit,true))
+            throw std::runtime_error("Moving resource recovery conflict: "+edit.path.string());
+        std::swap(edit.before,edit.after);reverse.emplace(edit.path,std::move(edit));
+    }
+    for(const auto& [rel,expected]:timeline.phases.back()){
+        const auto path=batchPath(root,rel);
+        std::string actual;
+        if(existsOrSymlink(path)){
+            const auto status=fs::symlink_status(path);const bool directory=fs::is_directory(status);
+            if(!directory&&!fs::is_regular_file(status))throw std::runtime_error("Invalid final batch payload");
+            actual=std::string(directory?"d":"f")+moveDigest(path,directory,&reverse);
+        }
+        if(actual!=expected)throw std::runtime_error("Final batch payload identity changed: "+rel);
+    }
+}
+size_t batchPhaseWithResources(const fs::path& root,const BatchTimeline& timeline,
+    const std::vector<StudioBatchResourceEdit>& resources){
+    if(resources.empty())return batchPhase(root,timeline);
+    try{return batchPhase(root,timeline);}
+    catch(const std::runtime_error&){
+        checkFinalBatchPayloads(root,timeline,resources);
+        return timeline.phases.size()-1;
+    }
+}
 fs::path batchFolder(const fs::path& project){return fs::canonical(project)/".aiverse-cache"/"studio-history-batch";}
 void retireBatch(const fs::path& folder){
     // No pending marker remains once the outcome is known.
@@ -1814,11 +1886,19 @@ void retireBatch(const fs::path& folder){
 }
 void reverseBatch(const fs::path& root,const fs::path& folder,
                   const std::vector<StudioBatchRelocation>& moves,
-                  const std::vector<editor::ProjectFileEdit>& docs){
-    const auto timeline=batchTimeline(root,moves);const auto phase=batchPhase(root,timeline);
+                  const std::vector<editor::ProjectFileEdit>& docs,
+                  const std::vector<StudioBatchResourceEdit>& resources={}){
+    const auto timeline=batchTimeline(root,moves);
+    validateMovingBatchResources(moves,resources);
+    const auto phase=batchPhaseWithResources(root,timeline,resources);
     validateBatchDocuments(root,timeline,docs);
     std::vector<editor::ProjectFileEdit> reverse;
-    for(const auto& f:docs){
+    auto published=docs;
+    if(phase==moves.size()){
+        auto moved=finalMovingBatchEdits(root,resources);
+        published.insert(published.end(),moved.begin(),moved.end());
+    }
+    for(const auto& f:published){
         if(studioResourceMatches(f.path,f))continue;
         if(!studioResourceMatches(f.path,f,true))throw std::runtime_error("Coordinated document recovery conflict: "+f.path.string());
         auto undo=f;std::swap(undo.before,undo.after);reverse.push_back(std::move(undo));
@@ -1841,7 +1921,6 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     const auto root=fs::canonical(project);
     if(ordered.empty()||ordered.size()>64)throw std::runtime_error("Invalid ordinary move chain count");
     StudioBatchAssetPlan out;
-    HistoryFileBatch repairs;
     const auto bytesDigest=[](const std::string& bytes){
         pack::Sha256 hash;
         const auto field=[&](const std::string& value){
@@ -1851,58 +1930,107 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
         field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
-    std::set<std::string> assetEndpoints;
-    std::map<std::string,std::pair<std::string,bool>> expectedGuids;
+    std::set<std::string> endpoints,assetEndpoints;
+    size_t moveCount=0;
     for(const auto& plan:ordered){
         validateHistoryMove(root,plan);
         if(plan.quarantine||plan.replacement||plan.created)
             throw std::runtime_error("Ordinary move chain cannot include Trash or replacement");
+        if(plan.files.size()>256-moveCount)throw std::runtime_error("Too many coordinated relocations");
+        moveCount+=plan.files.size();
         for(size_t i=0;i<plan.files.size();++i){
             const auto& f=plan.files[i];
-            if(!f.digestAfter.empty())throw std::runtime_error("Moved model byte repair requires a separate history transaction");
-            const auto from="content/"+(redo?f.from:f.to),to="content/"+(redo?f.to:f.from);
-            const auto digest=i%2?bytesDigest(f.bytes):f.digest;
-            out.relocations.push_back({from,to,digest,f.directory});
-            if(i%2==0){
-                assetEndpoints.insert(from);assetEndpoints.insert(to);
-                const auto meta=Json::parse(plan.files[i+1].bytes);
-                const auto expected=std::make_pair(meta.getStr("guid"),f.directory);
-                // First encounter supplies the baseline identity; a later
-                // reuse of the same endpoint is validated by the timeline.
-                expectedGuids.emplace(from,expected);
-            }
+            const auto from="content/"+f.from,to="content/"+f.to;
+            endpoints.insert(from);endpoints.insert(to);
+            if(i%2==0){assetEndpoints.insert(from);assetEndpoints.insert(to);}
+        }
+    }
+    for(auto it=endpoints.begin();it!=endpoints.end();++it)
+        for(auto next=std::next(it);next!=endpoints.end();++next)
+            if(batchOverlap(*it,*next))throw std::runtime_error("Nested relocation endpoints require separate history navigation");
+    BatchState initial;
+    std::map<std::string,std::string> origins;
+    for(const auto& path:endpoints){
+        const auto identity=batchIdentity(batchPath(root,path));initial[path]=identity;
+        if(!identity.empty())origins.emplace(path,path);
+    }
+    StudioAssetCatalog catalog(root);catalog.rebuild(false);
+    ResourceOverlay overlay;
+    const auto physical=[&](const std::string& path){
+        for(const auto& endpoint:assetEndpoints){
+            if(path!=endpoint&&!path.starts_with(endpoint+"/"))continue;
+            const auto it=origins.find(endpoint);
+            if(it==origins.end())throw std::runtime_error("Resource owner absent in virtual history");
+            return it->second+path.substr(endpoint.size());
+        }
+        return path;
+    };
+    const auto checkDigest=[&](const std::string& origin,bool directory,const std::string& digest){
+        const auto& identity=initial.at(origin);
+        if(identity.empty()||identity.front()!=(directory?'d':'f')||
+           moveDigest(root/origin,directory,&overlay)!=digest)
+            throw std::runtime_error("Virtual move-chain payload digest changed: "+origin);
+    };
+    for(const auto& plan:ordered){
+        std::vector<StudioReferenceRelocation> forward;
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& f=plan.files[i];
+            forward.push_back({"content/"+f.from,"content/"+f.to,f.directory});
         }
         auto edits=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
-        for(auto& edit:edits)edit.path=root/edit.path;
-        repairs.append(edits);
+        // Resolve all edits to their original physical identity before moving
+        // any of this step's endpoints. Undo records use forward-source paths.
+        for(auto& edit:edits){
+            auto current=edit.path.generic_string();
+            if(!redo)current=studioRelocatedReferencePath(current,forward);
+            edit.path=root/physical(current);
+        }
+        for(size_t i=0;i<plan.files.size();++i){
+            const auto& f=plan.files[i];
+            const auto from="content/"+(redo?f.from:f.to),to="content/"+(redo?f.to:f.from);
+            const auto it=origins.find(from);
+            if(it==origins.end()||origins.count(to))throw std::runtime_error("Invalid virtual move-chain occupancy");
+            const auto origin=it->second;
+            const auto expected=i%2?bytesDigest(f.bytes):(!redo&&!f.digestAfter.empty()?f.digestAfter:f.digest);
+            checkDigest(origin,f.directory,expected);
+            if(i%2==0){
+                const auto meta=Json::parse(plan.files[i+1].bytes);
+                const auto indexed=catalog.byGuid(meta.getStr("guid"));
+                if(!indexed||"content/"+indexed->path!=origin||indexed->directory!=f.directory||
+                   indexed->importer!=meta.getStr("importer"))
+                    throw std::runtime_error("Asset chain GUID or type changed");
+            }
+            // Journal moves retain initial bytes. Only virtual digests advance
+            // with the retained repairs; the final overlay is published once.
+            out.relocations.push_back({from,to,initial.at(origin).substr(1),f.directory});
+            origins.erase(it);origins.emplace(to,origin);
+        }
+        for(auto& edit:edits){
+            const auto it=overlay.find(edit.path);
+            if(it==overlay.end()){
+                if(!studioResourceMatches(edit.path,edit))
+                    throw std::runtime_error("Resource chain initial bytes changed");
+                overlay.emplace(edit.path,std::move(edit));
+            }else{
+                if(it->second.after!=edit.before||it->second.tailDigest!=edit.tailDigest||
+                   it->second.tailBytes!=edit.tailBytes)
+                    throw std::runtime_error("Inconsistent virtual resource byte chain");
+                it->second.after=std::move(edit.after);
+            }
+        }
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& f=plan.files[i];
+            const auto destination="content/"+(redo?f.to:f.from);
+            checkDigest(origins.at(destination),f.directory,redo&&!f.digestAfter.empty()?f.digestAfter:f.digest);
+        }
     }
     const auto timeline=batchTimeline(root,out.relocations);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Ordinary move chain baseline changed");
-    StudioAssetCatalog catalog(root);catalog.rebuild(false);
-    for(const auto& [path,identity]:timeline.initial){
-        if(identity.empty()||!assetEndpoints.count(path))continue;
-        const auto expected=expectedGuids.find(path);
-        if(expected==expectedGuids.end())throw std::runtime_error("Missing initial asset identity");
-        const auto indexed=catalog.byGuid(expected->second.first);
-        if(!indexed||"content/"+indexed->path!=path||indexed->directory!=expected->second.second)
-            throw std::runtime_error("Asset chain GUID or type changed");
-    }
-    // Track each physical identity from its first live path to the final path.
-    // The full sequence is still retained by the crash-recovery journal.
-    std::map<std::string,std::string> origins;
-    for(const auto& [path,identity]:timeline.initial)
-        if(!identity.empty())origins.emplace(path,path);
-    for(const auto& move:out.relocations){
-        const auto it=origins.find(move.from);
-        if(it==origins.end()||origins.count(move.to))throw std::runtime_error("Invalid move chain identity");
-        auto origin=it->second;origins.erase(it);origins.emplace(move.to,std::move(origin));
-    }
     std::vector<StudioReferenceRelocation> net;
     for(const auto& [path,origin]:origins){
         if(path==origin||!assetEndpoints.count(origin))continue;
-        net.push_back({origin,path,timeline.initial.at(origin).front()=='d'});
+        net.push_back({origin,path,initial.at(origin).front()=='d'});
     }
-    // Do not transiently adopt a reference to an initially vacant waypoint.
     for(const auto& ref:studioCollectGltfReferences(root,{})){
         for(const auto& endpoint:assetEndpoints){
             if(!timeline.initial.at(endpoint).empty()||
@@ -1911,16 +2039,26 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
                 throw std::runtime_error("Move chain crosses an unresolved intermediate reference");
         }
     }
-    out.documents=repairs.plan();
-    validateBatchDocuments(root,timeline,out.documents);
-    auto retained=out.documents;
-    for(auto& edit:retained)edit.path=edit.path.lexically_relative(root);
+    std::vector<editor::ProjectFileEdit> retained;
+    for(auto& [path,edit]:overlay){
+        if(edit.before==edit.after)continue;
+        edit.path=path.lexically_relative(root);
+        retained.push_back(edit);
+        const auto source=edit.path.generic_string();
+        const auto destination=batchResourceDestination(source,out.relocations);
+        if(destination!=source)out.movingResources.push_back({edit,destination});
+        else{
+            auto absolute=edit;absolute.path=path;out.documents.push_back(std::move(absolute));
+        }
+    }
     std::sort(retained.begin(),retained.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
+    validateBatchDocuments(root,timeline,out.documents);
+    validateMovingBatchResources(out.relocations,out.movingResources);
     const auto generated=studioPlanGltfRepairs(root,net,&retained);
     if(generated.size()!=retained.size())throw std::runtime_error("Coordinated resource repair set changed");
     for(size_t i=0;i<retained.size();++i){
         const auto& saved=retained[i];const auto& expected=generated[i];
-        const auto path=saved.path.generic_string();
+        const auto path=batchResourceDestination(saved.path.generic_string(),out.relocations);
         if(saved.path!=expected.path||saved.before!=expected.before||
            saved.tailDigest!=expected.tailDigest||saved.tailBytes!=expected.tailBytes||
            studioCanonicalGltfRepair(path,saved.after,saved.tailDigest,saved.tailBytes)!=
@@ -1946,19 +2084,28 @@ void studioRecoverHistoryBatch(const fs::path& project){
         throw std::runtime_error("Invalid coordinated history journal");
     const auto envelope=Json::parseFile(pending.string());const auto payload=envelope.getStr("payload");
     const auto version=envelope.getInt("version");
-    if((version!=1&&version!=2)||historyHash(payload)!=envelope.getStr("sha256"))
+    if((version!=1&&version!=2&&version!=3)||historyHash(payload)!=envelope.getStr("sha256"))
         throw std::runtime_error("Coordinated journal checksum mismatch");
     const auto body=Json::parse(payload);
     if(!body["moves"].isArray()||body["moves"].size()>256||!body["documents"].isArray()||body["documents"].size()>4096)
         throw std::runtime_error("Invalid coordinated journal rows");
     std::vector<StudioBatchRelocation> moves;
     std::vector<editor::ProjectFileEdit> docs;
+    std::vector<StudioBatchResourceEdit> resources;
+    if(version==3){
+        if(!body["movingResources"].isArray()||body["movingResources"].size()>32)
+            throw std::runtime_error("Invalid moving resource journal rows");
+        for(const auto& row:body["movingResources"].items()){
+            if(!row["destination"].isString())throw std::runtime_error("Invalid moving resource destination");
+            resources.push_back({studioDecodeResourceEdit(row,true),row.getStr("destination")});
+        }
+    }else if(body.has("movingResources"))throw std::runtime_error("Moving resource journal version mismatch");
     for(const auto& row:body["moves"].items())
         moves.push_back({row.getStr("from"),row.getStr("to"),row.getStr("digest"),row.getBool("directory")});
     for(const auto& row:body["documents"].items()){
         if(!row["before"].isString()||!row["after"].isString())throw std::runtime_error("Invalid coordinated document snapshot");
         const auto path=editor::project_file_detail::safeTarget(root,row.getStr("path"));
-        if(version==2&&row.getBool("resource")){
+        if(version>=2&&row.getBool("resource")){
             auto edit=studioDecodeResourceEdit(row,true);edit.path=path;docs.push_back(std::move(edit));
         }else{
             if(row.has("encoding")||row.has("tailDigest")||row.has("tailBytes"))
@@ -1968,17 +2115,30 @@ void studioRecoverHistoryBatch(const fs::path& project){
     }
     // Resolve the nested existing-file journal before examining its baseline.
     editor::recoverProjectFileEdits(root);
-    reverseBatch(root,folder,moves,docs);
+    reverseBatch(root,folder,moves,docs,resources);
 }
 void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBatchRelocation>& moves,
-                            const std::vector<editor::ProjectFileEdit>& documents){
-    if(moves.empty()){editor::applyProjectFileEdits(project,documents);return;}
+                            const std::vector<editor::ProjectFileEdit>& documents,
+                            const std::vector<StudioBatchResourceEdit>& movingResources){
+    if(moves.empty()){
+        if(!movingResources.empty())throw std::runtime_error("Moving resources require relocation chain");
+        editor::applyProjectFileEdits(project,documents);return;
+    }
     const auto root=fs::canonical(project),folder=batchFolder(root);
     editor::project_file_detail::directory(folder.parent_path());
     if(existsOrSymlink(folder.parent_path()/"studio-move-journal"))throw std::runtime_error("Pending asset move journal");
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
     checkRecoveryGrowth(root,moves);
+    validateMovingBatchResources(moves,movingResources);
+    for(const auto& resource:movingResources){
+        const auto& edit=resource.edit;
+        const auto path=editor::project_file_detail::safeTarget(root,edit.path.generic_string());
+        if(!studioResourceMatches(path,edit))throw std::runtime_error("Moving resource baseline changed");
+        if(studioStreamingResource(edit)&&fs::space(root).available<
+           std::max<uint64_t>(edit.before.size(),edit.after.size())+edit.tailBytes+16ull*1024*1024)
+            throw std::runtime_error("Insufficient disk for moving streamed repair");
+    }
     std::vector<editor::ProjectFileEdit> docs=documents;
     for(auto& f:docs)f.path=fs::canonical(f.path);
     validateBatchDocuments(root,timeline,docs);
@@ -2008,7 +2168,15 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             files.push(std::move(row));
         }
         body.set("moves",std::move(rows));body.set("documents",std::move(files));
-        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(2)));
+        if(!movingResources.empty()){
+            Json resources=Json::array();
+            for(const auto& resource:movingResources){
+                auto row=studioEncodeResourceEdit(resource.edit);
+                row.set("destination",Json::string(resource.destination));resources.push(std::move(row));
+            }
+            body.set("movingResources",std::move(resources));
+        }
+        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(movingResources.empty()?2:3)));
         envelope.set("sha256",Json::string(historyHash(payload)));envelope.set("payload",Json::string(payload));
         const auto text=envelope.dump(-1)+"\n";
         if(text.size()>256u*1024u*1024u)throw std::runtime_error("Coordinated journal exceeds disk budget");
@@ -2022,7 +2190,13 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             StudioMoveJournal::renamePath(from,to);
         }
         if(batchPhase(root,timeline)!=moves.size())throw std::runtime_error("Coordinated relocation result mismatch");
-        StudioMoveJournal(root).applyResources(docs,true);
+        auto finalDocs=docs;
+        auto moved=finalMovingBatchEdits(root,movingResources);
+        finalDocs.insert(finalDocs.end(),moved.begin(),moved.end());
+        StudioMoveJournal(root).applyResources(finalDocs,true);
+        for(const auto& edit:finalDocs)
+            if(!studioResourceMatches(edit.path,edit,true))throw std::runtime_error("Coordinated final document identity changed");
+        if(!movingResources.empty())checkFinalBatchPayloads(root,timeline,movingResources);
         // The outer marker is authoritative even after the inner journal commits.
         StudioMoveJournal::renamePath(folder/"pending.json",folder/"committed.json");
     }catch(const std::exception& e){

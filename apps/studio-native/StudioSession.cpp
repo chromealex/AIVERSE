@@ -1232,6 +1232,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     std::unique_ptr<StudioAssetCatalog> catalog;
     HistoryFileBatch files;
     std::vector<StudioBatchRelocation> relocations;
+    std::vector<StudioBatchResourceEdit> movingResources;
     std::set<std::string> relocationEndpoints;
     std::vector<editor::ProjectHistory::MovePlan> ordinaryMoves;
     bool ordinaryChain=true;
@@ -1313,6 +1314,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     if(!ordinaryMoves.empty()){
         auto chain=studioPlanAssetMoveChain(ws_.project.dir,ordinaryMoves,redo);
         relocations=std::move(chain.relocations);files.append(chain.documents);
+        movingResources=std::move(chain.movingResources);
         studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,referencePaths,false);
     }
     // References must be safe in both the original and the prepared target
@@ -1338,7 +1340,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
             stagedProject->savedHistoryCheckpoint=checkpoint.after;stagedProject->historyPersistenceWarning.clear();
             plan.push_back(std::move(checkpoint));
         }
-        studioApplyHistoryBatch(ws_.project.dir,relocations,plan);
+        studioApplyHistoryBatch(ws_.project.dir,relocations,plan,movingResources);
     }catch(...){
         if(publication)finishAssetHistoryPublication(*publication,false);
         throw;
