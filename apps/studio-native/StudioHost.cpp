@@ -827,7 +827,7 @@ void StudioHost::brushAdjust(double factor, bool disarm) {
 bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && session_->sceneBrush().armed; }
 // Scene overlay: extension gizmos + spline handles (Roads / Water "Edit nodes").
 bool StudioHost::worldProcessPlanetMapCurrent() const {
-    if(projectLoading_||!session_||wpLivePlanetMapPath_.empty())return false;
+    if(projectLoading_||!session_||!game_||!game_->launchedMapCurrent()||wpLivePlanetMapPath_.empty())return false;
     const auto& ws=session_->workspace();
     return ws.project.dir==wpLivePlanetProject_&&ws.map.path==wpLivePlanetMapPath_&&
         ws.map.revision==wpLivePlanetRevision_&&!ws.map.dirty;

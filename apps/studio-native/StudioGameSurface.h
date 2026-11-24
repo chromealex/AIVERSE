@@ -27,6 +27,7 @@ public:
     Json mapEntityStates();
     Json ecologyState(const StudioWorldProcessLiveOptions& options={});
     bool planetMatch() const;
+    bool launchedMapCurrent() const;
     bool planetSnapshotCurrent(const Json& snapshot) const;
     Json worldProcessDiagnostics(int cap,const std::string& focus);
 private:

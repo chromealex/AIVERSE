@@ -104,8 +104,11 @@ bool StudioGameSurface::planetMatch() const {
         return game->surface(*sim)!=nullptr;
     return false;
 }
+bool StudioGameSurface::launchedMapCurrent() const {
+    return host_&&launch_.map.has_value()&&host_->currentMapIndex()==launch_.map;
+}
 bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
-    return host_&&host_->canControl()&&planetMatch()&&
+    return host_&&host_->canControl()&&planetMatch()&&launchedMapCurrent()&&
         snapshot.getBool("active")&&snapshot.getStr("topology")=="planet"&&
         snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
 }
