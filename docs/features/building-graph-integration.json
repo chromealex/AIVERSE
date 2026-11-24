@@ -49,7 +49,7 @@
     },
     "skill": {
       "status": "not_run",
-      "note": "Shared graph-authoring skill updated on separate graph branch; reconcile before integration.",
+      "note": "Common graph authoring skill documented 35F contracts at 6556de3971de15a8e1bb7da62fca49f62a5d15c2; skill catalog/integration acceptance pending.",
       "evidence": []
     },
     "mcp": {
@@ -74,7 +74,7 @@
     },
     "graphs": {
       "status": "not_run",
-      "note": "Exterior nodes are per socket, provenance only; native groups and planner remain authoritative. Shared branch reconciliation pending.",
+      "note": "Stage 35G reconciled four shared Building Graph blobs with feature/aiv20261123_feature_gate at 34c8533d422c083a1e14159a0dd9e4c6097da85c; native acceptance pending.",
       "evidence": []
     },
     "performance": {
@@ -109,7 +109,7 @@
     },
     "handoff": {
       "status": "not_run",
-      "note": "Stage 35F.1–35F.3 handoffs authored; integration verification pending.",
+      "note": "Stage 35G shared source reconciliation recorded; owner branch unavailable, final integration pending.",
       "evidence": []
     },
     "documentation": {
