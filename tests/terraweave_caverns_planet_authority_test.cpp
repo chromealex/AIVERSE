@@ -3,7 +3,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
-#include "engine/world/TerraWeaveCavernsPlanetEcsNavigation.h"
+#include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
 #include "engine/world/TerraWeaveCavernsNavigationGraph.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <iostream>
@@ -251,6 +251,46 @@ static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& 
     check(nav::assignScopedCaveMotorGoal(ecs,entity,9,wallGoal,agent),"switch scope");
     check(nav::caveRouteScope(ecs,entity)==9&&ecs.get<nav::CaveRouteFollower>(entity).waypoints.empty(),"scope switch discards old route");
 }
+static void checkEnvironmentEpoch(const std::shared_ptr<const game::Surface>& surface){
+    auto sim=make(regions());
+    auto& world=sim->world();
+    const auto first=advanceCavePlanetEnvironment(world,1,0_fx);
+    check(first.revision==1,"initial environment revision");
+    check(advanceCavePlanetEnvironment(world,1,1_fx).revision==first.revision,"static environment no churn");
+    physis::GravitySettings gravity;gravity.baseline={0_fx,0_fx,-10_fx};
+    world.setResource<physis::GravitySettings>(gravity);
+    const auto changed=advanceCavePlanetEnvironment(world,1,2_fx);
+    check(changed.revision==2,"gravity changes epoch");
+    physis::Settings weather;weather.width=1;weather.height=1;
+    physis::initialize(world,weather);
+    const auto climate=advanceCavePlanetEnvironment(world,1,2_fx);
+    auto cell=physis::cellAt(world,0,0);
+    world.get<physis::Surface>(cell).ice=1_fx;
+    const auto icy=advanceCavePlanetEnvironment(world,1,2_fx);
+    check(icy.revision==climate.revision+1,"traction changes epoch");
+    const auto water=world.create();
+    lib::nereid::WaterSphereComponent sea;
+    sea.center=game::Surface::anchor(0);sea.surfaceRadius=101_fx;sea.floorRadius=90_fx;
+    world.add<lib::nereid::WaterSphereComponent>(water,sea);
+    const auto flooded=advanceCavePlanetEnvironment(world,1,2_fx);
+    check(flooded.revision==icy.revision+1,"sphere water changes epoch");
+    const auto inputs=canonicalCavePlanetNavigationInputs(surface,1);
+    CavePlanetCanonicalNavigationSources sources;
+    sources.capture(world,surface,inputs,{});
+    const auto source=sources.get(world,2);
+    check(bool(source)&&source->scopeId()==2,"canonical source scope");
+    sources.capture(world,surface,inputs,{});
+    check(sources.get(world,2)==source,"unchanged provider reused");
+    const auto frame=CavePlanetFrame::make(surface,{"planet",0,8_fx,8_fx,800});
+    check(lib::nereid::sampleSphereWater(world,frame.toSimulation({})).submerged,"native sphere query");
+    world.get<lib::nereid::WaterSphereComponent>(water).surfaceRadius=99_fx;
+    const auto drained=advanceCavePlanetEnvironment(world,1,2_fx);
+    check(drained.revision==flooded.revision+1&&!sources.get(world,2),"old environment source refused");
+    sources.capture(world,surface,inputs,{});
+    check(sources.get(world,2)!=source,"changed environment source rebuilt");
+    sources.clear();
+    check(!sources.get(world,2),"restore clears derived provider");
+}
 int main(){
     const auto surface=makeSurface();
     checkBodyCut(surface);
@@ -258,6 +298,7 @@ int main(){
     checkPlanetMotion(surface);
     checkNavigationCoverage(surface);
     checkOrientedNavigation(surface);
+    checkEnvironmentEpoch(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;

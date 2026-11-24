@@ -122,4 +122,87 @@ inline CavePlanetNavigationInputSource canonicalCavePlanetNavigationInputs(
         return input;
     };
 }
+
+// Derived CPU provider set shared by the existing repath and steering
+// systems; never a persisted native lease or a competing density owner.
+class CavePlanetCanonicalNavigationSources {
+public:
+    void clear()noexcept{providers_.clear();}
+    void capture(const World& world,const std::shared_ptr<const game::Surface>& surface,
+            const CavePlanetNavigationInputSource& inputs,const CavePlanetDemandConfig& lattice){
+        const auto* set=world.resourceConst<CavePlanetAuthoritySet>();
+        if(!set){clear();return;}
+        std::map<uint64_t,std::shared_ptr<const CaveNavigationDataProvider>> next;
+        std::shared_ptr<const World> frozen;
+        for(const auto& entry:set->regions){
+            const auto input=inputs(world,entry.id);
+            if(!input)continue;
+            const auto old=providers_.find(entry.id);
+            if(old!=providers_.end()&&old->second->revision()==entry.authority.volume.sourceRevision&&
+               old->second->environmentRevision()==input->environmentRevision){
+                next.emplace(entry.id,old->second);continue;
+            }
+            if(!frozen)frozen=std::make_shared<const World>(world);
+            auto provider=captureCavePlanetAuthorityNavigation(surface,frozen,entry.id,
+                input->environmentRevision,lattice,input->physisCell,input->settings,input->policies,input->sphereSeconds);
+            if(provider)next.emplace(entry.id,std::move(provider));
+        }
+        providers_.swap(next);
+    }
+    std::shared_ptr<const CaveNavigationDataProvider> get(const World& world,uint64_t id)const{
+        const auto* entry=findPlanetCaveRegion(world,id);
+        const auto* epoch=world.resourceConst<CavePlanetEnvironmentEpoch>();
+        const auto it=providers_.find(id);
+        if(!entry||!epoch||it==providers_.end()||it->second->revision()!=entry->authority.volume.sourceRevision||
+           it->second->environmentRevision()!=epoch->revision)return {};
+        return it->second;
+    }
+private:
+    std::map<uint64_t,std::shared_ptr<const CaveNavigationDataProvider>> providers_;
+};
+// Host installs after its environment owners and existing motor have been
+// registered, before Simulation seals persistence. Capture -> repath ->
+// steering -> actual motor; there is still only one movement writer.
+inline std::shared_ptr<CavePlanetCanonicalNavigationSources> installCanonicalCavePlanetNavigation(
+        Simulation& sim,std::shared_ptr<const game::Surface> surface,
+        std::shared_ptr<const CavePathRouter> router,CaveSimulationPosition position,
+        const std::string& motorSystem,uint64_t policyRevision,
+        CavePlanetDemandConfig lattice={},CaveEnvironmentCostSettings settings={},
+        uint32_t maxRepairs=8,uint32_t maxSteered=65536){
+    if(!surface||!router||!position||!policyRevision||
+       !maxRepairs||maxRepairs>65536||!maxSteered||maxSteered>65536||
+       sim.world().resourceConst<CavePlanetEnvironmentEpoch>())
+        throw std::invalid_argument("Caverns canonical navigation setup");
+    std::optional<size_t> index;
+    for(size_t i=0;i<sim.systemCount();++i){
+        const auto& name=sim.systemName(i);
+        if(name=="caverns.navigation.capture"||name=="caverns.navigation.repath"||
+           name=="caverns.navigation.intent"||name=="caverns.navigation.follow")
+            throw std::logic_error("Caverns duplicate navigation owner");
+        if(name==motorSystem){
+            if(index)throw std::invalid_argument("Caverns ambiguous motor");
+            index=i;
+        }
+    }
+    if(!index)throw std::invalid_argument("Caverns missing motor");
+    const auto inputs=canonicalCavePlanetNavigationInputs(surface,policyRevision,settings);
+    auto sources=std::make_shared<CavePlanetCanonicalNavigationSources>();
+    sim.registerPersistentResource<CavePlanetEnvironmentEpoch>("caverns.navigation.environment",1);
+    (void)advanceCavePlanetEnvironment(sim.world(),policyRevision,sim.dt()*Fixed::fromInt(sim.tick()));
+    nav::CaveSimulationNavigationHooks hooks;
+    hooks.scopedSource=[sources](const World& world,Entity e){return sources->get(world,nav::caveRouteScope(world,e));};
+    hooks.scopedSearch=cavePlanetRouteSearch(std::move(router));
+    hooks.invalidateDerived=[sources]{sources->clear();};
+    hooks.maxRepairsPerTick=maxRepairs;
+    nav::installCaveMotorNavigationBefore(sim,std::move(hooks),
+        cavePlanetChartPosition(surface,std::move(position)),motorSystem,maxSteered);
+    sim.insertSystem(*index,"caverns.navigation.capture",
+        [sources,surface,inputs,lattice,policyRevision](Simulation& state){
+            try{
+                (void)advanceCavePlanetEnvironment(state.world(),policyRevision,state.dt()*Fixed::fromInt(state.tick()));
+                sources->capture(state.world(),surface,inputs,lattice);
+            }catch(const std::exception&){sources->clear();throw;}
+        });
+    return sources;
+}
 } // namespace aiverse::terraweave::caverns
