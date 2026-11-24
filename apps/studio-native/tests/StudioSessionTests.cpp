@@ -62,6 +62,35 @@ void projectFileEditContract(){
     AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A");
     fs::remove_all(root);
 }
+void projectOwnerSaveContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-owner-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
+    const std::string manifestBytes=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
+    const std::string rulesBytes=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
+    const std::string extraBytes=R"({ "types": {"tree": {"health":{"max":100}}} })";
+    std::ofstream(manifest)<<manifestBytes;std::ofstream(rules)<<rulesBytes;std::ofstream(extra)<<extraBytes;
+    Workspace ws;std::string error;
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+    AIVERSE_TEST_CHECK(ws.project.saveRules(&error)&&ws.project.saveManifest(&error));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==manifestBytes&&readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes);
+    const auto original=ws.project.rulesJson.dump();
+    std::ofstream(extra)<<extraBytes<<"\n";
+    const auto edit=Json::parse(R"({"path":"types.unit.health.max","value":200})");
+    AIVERSE_TEST_CHECK(ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson.dump()==original&&!ws.project.rulesDirty&&ws.changes.empty());
+    AIVERSE_TEST_CHECK(readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes+"\n");
+    std::ofstream(extra)<<extraBytes;
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["types"]["unit"]["health"]["max"].integer()==200);
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==extraBytes);
+    AIVERSE_TEST_CHECK(ws.changes.size()==1);
+    std::ofstream(manifest)<<manifestBytes<<"\n";
+    AIVERSE_TEST_CHECK(ws.call("set_manifest",Json::parse(R"({"path":"name","value":"New name"})")).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
+    fs::remove_all(root);
+}
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
@@ -700,6 +729,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

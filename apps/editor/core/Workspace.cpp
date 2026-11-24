@@ -123,12 +123,6 @@ bool erasePath(Json& j, const std::string& path) {
     if (last.index >= 0) { if (!parent->isArray() || size_t(last.index) >= parent->size()) return false; parent->eraseAt(size_t(last.index)); return true; }
     return parent->erase(last.key);
 }
-bool writeText(const std::string& f, const std::string& text, std::string* err) {
-    std::ofstream out(f, std::ios::binary);
-    if (!out) { if (err) *err = "cannot write " + f; return false; }
-    out << text;
-    return bool(out);
-}
 Json ok(Json extra = Json::object()) { extra.set("ok", Json::fromBool(true)); return extra; }
 Json str(const std::string& s) { return Json::string(s); }
 Json num(double v) { return Json::number(v, 3); }
@@ -176,7 +170,9 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 bool Project::load(const std::string& d, std::string* err) {
     try {
         auto manifestText = readProjectFileBytes(fs::path(d)/"game.json");
-        Json m = Json::parse(manifestText);
+        Json m;
+        try {m=Json::parse(manifestText);}
+        catch(const JsonError& e){throw JsonError(d+"/game.json: "+e.what());}
         JsonOrigin origin;
         Json r = composeJson(d + "/" + m.getStr("rules", "rules.json"), fileReader(), &origin);
         auto rawRulesText=origin.text;
@@ -232,7 +228,8 @@ std::vector<std::string> Project::rulesFiles() const {
 bool Project::saveManifest(std::string* err) {
     try {
         if(!savedManifestText)throw std::runtime_error("Project manifest must be loaded before saving");
-        auto next=manifest.dump()+"\n";
+        const auto normalized=manifest.dump();
+        auto next=Json::parse(*savedManifestText).dump()==normalized?*savedManifestText:normalized+"\n";
         applyProjectFileEdits(dir,{{fs::path(dir)/"game.json",*savedManifestText,next}});
         savedManifestText=std::move(next);manifestDirty=false;
         return true;
