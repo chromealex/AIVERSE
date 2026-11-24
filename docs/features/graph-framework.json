@@ -116,7 +116,10 @@
     "apps/studio-web/src/graphs/buildingRoomTopology.ts",
     "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
     "apps/studio-web/tests/buildingRoomTopology.test.mjs",
-    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx"
+    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
+    "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
+    "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -197,7 +200,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Mac QA at 3929953e: all 218 web tests including 62 graph tests, typecheck and bundle PASS; full native build/CTest incomplete.",
       "evidence": []
     },
     "handoff": {
