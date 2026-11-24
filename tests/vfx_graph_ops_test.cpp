@@ -245,6 +245,13 @@ int main() {
         require(normalPlan.twoPass&&normalPlan.scratchBytes==65536,"normal scratch plan wrong");
         require(normalPlan.first.glsl.find("floatBitsToUint")!=std::string::npos&&normalPlan.second.glsl.find("binding=13")!=std::string::npos,"normal plan ABI missing");
     }
+    const auto sharedTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":128,"nodes":[{"id":"h","op":"gradient","inputs":[]},{"id":"n","op":"normal","inputs":["h"]},{"id":"r","op":"constant","inputs":[]}],"outputs":{"height":"h","normal":"n","roughness":"r"}})"));
+    const auto sharedHeight=render::texture_graph::gpu::plan(sharedTexture,0,128,true);
+    const auto sharedNormal=render::texture_graph::gpu::plan(sharedTexture,1,128,true);
+    require(sharedHeight.twoPass&&sharedNormal.twoPass&&sharedHeight.scratchBytes==sharedNormal.scratchBytes,"shared scalar plan missing");
+    require(sharedHeight.first.msl==sharedNormal.first.msl&&sharedHeight.first.glsl==sharedNormal.first.glsl,"scalar producer differs");
+    require(sharedHeight.second.msl.find("height[tid]")!=std::string::npos&&sharedHeight.second.glsl.find("binding=13")!=std::string::npos,"scalar packing ABI missing");
+    require(!render::texture_graph::gpu::plan(sharedTexture,0,128).twoPass&&!render::texture_graph::gpu::plan(sharedTexture,2,128,true).twoPass,"independent scalar should stay fused");
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");
