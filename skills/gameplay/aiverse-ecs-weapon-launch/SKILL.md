@@ -50,6 +50,14 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    simulation/replay and published save/network formats, and retain legacy
    adapters until parity is proved. Document every migration commit.
 
+Attack timing: `engine/mechanics/AttackTiming.h` provides the shared per-slot
+`AttackTimingState` and pure begin/advance/cancel/release policy. The targeted
+GameCore adapter supports weapon `windup` and `backswing`, and emits
+`attack_start`, `attack` (release), `attack_cancelled` and
+`attack_recovery_end`. The generic ECS launch adapter still needs explicit
+integration; do not advertise phased firing there yet. Persist/hash phase state
+in the owning host. See docs/game-format.md.
+
 For each new mechanic repeat:
 **ECS components + independent configurable systems + reusable policies +
 canonical events + native-project API + cross-genre rollback tests.**
