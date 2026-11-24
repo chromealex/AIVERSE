@@ -391,6 +391,17 @@ private:
         ImGui::Checkbox("Звук##physisNature", &st.sound);
         static const char* kGrassQuality[] = {"низкое", "среднее", "высокое"};
         ImGui::Combo("Качество травы##physisNature", &st.grassQuality, kGrassQuality, 3);
+        {
+            static const char* kMeadow[] = {"auto", "meadow", "lushMeadow", "dryMeadow", "pasture",
+                                            "lawn", "steppe", "wetland", "legacy"};
+            int current = 0;
+            for (int i = 0; i < 9; ++i) if (st.grassMeadow == kMeadow[i]) current = i;
+            if (st.grassMeadow.empty() || st.grassMeadow.front() != '{') {
+                if (ImGui::Combo("Луг (виды травы)##physisNature", &current, kMeadow, 9)) st.grassMeadow = kMeadow[current];
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("auto — блок карты \"grass\": {\"meadow\": ...}, без блока — обычная трава; legacy — старая однородная трава.");
+            } else ImGui::TextDisabled("Луг: свой JSON (view_wind grassMeadow)");
+        }
         if (st.sound) ImGui::SliderFloat("Громкость##physisNature", &st.volume, 0.f, 1.f, "%.2f");
         ImGui::TextDisabled("тик %llu · ячейка %.0f м · очагов %zu · дым %zu · звуков %zu · патчей травы %zu · горит ≈%.0f м²",
             (unsigned long long)nature.tick(), nature.cellMeters(), nature.flames(), nature.smoke(),

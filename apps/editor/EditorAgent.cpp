@@ -376,7 +376,7 @@ void Editor::registerGuiOps() {
     add("view_wind", "Editor-only wind showcase: TerraWeave forest overlay (forest), hierarchical wind masks on its trees (hierarchical), "
         "PHYSIS nature preview grass and wind (nature, grass, flames, sound, windSpeed m/s, windDirection deg towards, playing) and "
         "the wind-mask debug view (debug: off|parts|depth|weight|skeleton), lodScale 0.25..4 for forest LOD distances, treeGeometry auto|merged|perBranch (near-tree draw merging), horizon (trees to 250 m + TerraWeave Horizon cluster forest to the horizon). Never edits the map.",
-        R"({"properties":{"forest":{"type":"boolean"},"hierarchical":{"type":"boolean"},"nature":{"type":"boolean"},"grass":{"type":"boolean"},"flames":{"type":"boolean"},"sound":{"type":"boolean"},"playing":{"type":"boolean"},"windSpeed":{"type":"number"},"windDirection":{"type":"number"},"grassQuality":{"type":"integer"},"lodScale":{"type":"number"},"treeGeometry":{"type":"string","enum":["auto","merged","perBranch"]},"horizon":{"type":"boolean"},"debug":{"type":"string","enum":["off","parts","depth","weight","skeleton"]}}})",
+        R"({"properties":{"forest":{"type":"boolean"},"hierarchical":{"type":"boolean"},"nature":{"type":"boolean"},"grass":{"type":"boolean"},"flames":{"type":"boolean"},"sound":{"type":"boolean"},"playing":{"type":"boolean"},"windSpeed":{"type":"number"},"windDirection":{"type":"number"},"grassQuality":{"type":"integer"},"grassMeadow":{"description":"auto | legacy | meadow | lushMeadow | dryMeadow | pasture | lawn | steppe | wetland, or a meadow JSON object"},"lodScale":{"type":"number"},"treeGeometry":{"type":"string","enum":["auto","merged","perBranch"]},"horizon":{"type":"boolean"},"debug":{"type":"string","enum":["off","parts","depth","weight","skeleton"]}}})",
         [this](const Json& p) {
             auto flag=[&](const char* key,bool current){
                 if(!p.has(key))return current;
@@ -400,6 +400,18 @@ void Editor::registerGuiOps() {
                 else throw std::runtime_error("debug must be off|parts|depth|weight|skeleton");
             }
             auto& nature=physisNaturePreview_.settings;
+            std::string meadowSetting = nature.grassMeadow;
+            if (p.has("grassMeadow")) {
+                const auto& value = p["grassMeadow"];
+                if (!value.isString() && !value.isObject())
+                    throw std::invalid_argument("grassMeadow requires a preset or object");
+                meadowSetting = value.isString() ? value.str() : value.dump(0);
+                if (meadowSetting.empty()) meadowSetting = "auto";
+                if (meadowSetting != "auto") {
+                    const Json config = meadowSetting.front() == '{' ? Json::parse(meadowSetting) : Json::string(meadowSetting);
+                    (void)terraweave::parseGrassMeadow(config, "grassMeadow");
+                }
+            }
             const float speed=number("windSpeed",nature.windSpeed,0,60);
             const float direction=number("windDirection",nature.windDirectionDeg,-360,360);
             const int quality=int(number("grassQuality",float(nature.grassQuality),0,2));
@@ -429,6 +441,7 @@ void Editor::registerGuiOps() {
             nature.sound=flag("sound",nature.sound);
             nature.playing=flag("playing",nature.playing);
             nature.windSpeed=speed;nature.windDirectionDeg=direction;nature.grassQuality=quality;
+            nature.grassMeadow = meadowSetting;
             r3d_.setWindRigDebugView(view);
             Json r=Json::object();
             r.set("forest",Json::fromBool(terraWeaveForestPreview_.enabled()));
@@ -436,6 +449,8 @@ void Editor::registerGuiOps() {
             r.set("forestInstances",Json::number(int64_t(terraWeaveForestPreview_.visibleInstances())));
             r.set("horizon",Json::fromBool(terraWeaveForestPreview_.horizon()));
             r.set("nature",Json::fromBool(nature.enabled));
+            r.set("grassMeadow",Json::string(nature.grassMeadow));
+            r.set("grassPatches",Json::number(int64_t(nature.grassPatches())));
             r.set("summary",Json::string("Ветер: "+std::to_string(int(speed))+" м/с"));
             return r;
         });
