@@ -91,9 +91,12 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Mac Studio/MCP native builds and readiness get/query/status calls PASS; refresh operation still needs live acceptance.",
-      "evidence": []
+      "status": "pass",
+      "note": "On Mac v10 actual built Workspace/MCP readiness refresh, status, get and dependency query exercised twice in one persistent process; successful completion and matching snapshot SHA verified. Other platforms and GUI timer not covered.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -104,13 +107,16 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Mac live registry 347 tools/13 families and four read-only smoke calls PASS; refresh operation not exercised.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v10 live registry 347 tools / 13 families, all four readiness tools registered and exercised successfully with two refresh cycles. No external-agent execution claimed.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.log.txt"
+      ]
     },
     "studio": {
       "status": "not_run",
-      "note": "Mac TypeScript/Vite, 218 web tests, 48 contracts and native build PASS; manual dashboard, refresh and screenshot still pending.",
+      "note": "Mac v7 native Studio launched; operator confirms Feature Readiness panel visible. Mac v10 native MCP report refresh works. UI filters, dependency graph interaction and auto timer not explicitly verified; dashboard screenshot not supplied.",
       "evidence": []
     },
     "inspector": {
@@ -158,11 +164,12 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Mac QA v7, tested 59558502: full desktop Debug CTest 487 passed, 0 failures, 1 opt-in LENS skip; Python 22/22, web 218/218, Studio contracts 48/48. Scope is automated Mac QA; standalone extra suites, manual UI/refresh, cross-platform and publishing remain unverified. Main synced with two site-only changes; strict provenance requires a fresh report, not a rewritten old SHA.",
+      "note": "Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only.",
       "evidence": [
-        "docs/evidence/feature-gate-mac-v7-python.log.txt",
-        "docs/evidence/feature-gate-mac-v7-ctest.log.txt",
-        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
       ]
     },
     "handoff": {
@@ -206,7 +213,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-mac-v7-python.json",
-    "docs/evidence/feature-gate-mac-v7-ctest.json"
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-contracts.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-audit.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-catalog.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-policy.json"
   ]
 }
