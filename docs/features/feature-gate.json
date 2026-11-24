@@ -46,7 +46,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 11 in progress: bind audit and readiness to clean checked-out Git tree; harden live MCP registry response checks. Execution pending.",
+      "note": "Stage 12 in progress: audit all declared MCP integrations by feature against live registry; add protocol regression fixtures and per-feature gap reporting.",
       "evidence": []
     },
     "architecture": {
