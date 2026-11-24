@@ -389,8 +389,18 @@ int main(int argc,char** argv){
         const uint32_t blockedTick=sim.tick();
         sim.step();CHECK(sim.tick()==blockedTick);
         net::Bytes pending;CHECK(!bridge.capture(1,pending));
+        const auto diagnostics=world.graphDiagnostics(1);
+        const auto gameplay=buildingGraphBit(BuildingGraphDomain::Gameplay);
+        CHECK(diagnostics&&diagnostics->lastChange);
+        CHECK((diagnostics->registeredDomains&gameplay)!=0);
+        CHECK((diagnostics->pendingDomains&gameplay)!=0);
+        CHECK((diagnostics->refusedDomains&gameplay)!=0);
+        CHECK(diagnostics->attempts>0);
         game->graphAvailable=true;
         step();
+        const auto settled=world.graphDiagnostics(1);
+        CHECK(settled&&settled->lastChange&&settled->pendingDomains==0);
+        CHECK((settled->acknowledgedDomains&gameplay)!=0);
         for(int i=0;i<80&&game->lift(sim).phase!=BuildingLiftPhase::Traveling;++i)step();
         CHECK(game->lift(sim).phase==BuildingLiftPhase::Traveling);
         for(int i=0;i<8;++i)step();
