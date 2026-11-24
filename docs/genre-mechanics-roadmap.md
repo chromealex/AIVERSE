@@ -84,3 +84,7 @@ Full bounded local chart volume, preserving non-rim slots during paired preview.
 ### Stage54s — IN PROGRESS
 
 Versioned multi-region planetary MapDoc, stable region IDs and explicit v1 migration, non-overlap across cube faces, region-scoped edit/readback and Studio selection with a single active chart owner (shared 64-slot preview budget). Acceptance: independent volumes and revisions, no stale cross-region brush writes, lossless save/undo and invalid edit refusal. Simultaneous same-body native cut publication is a separate runtime stage; do not imply it is supported. Native and frontend validation pending.
+
+### Stage54t — IN PROGRESS
+
+Native Studio single-body globe overview using bounded authored coarse surface triangles and the existing camera/Renderer3D. Acceptance: rotate/zoom, nearest hit against the exact displayed overview triangles, canonical cube-sphere anchor conversion, region selection and creation through existing validated Workspace operations, revision/project/map fences and local brush disabled in globe coordinates. Overview may downsample high-resolution bodies; full native CDLOD and runtime physics are separate. Register regression source and handoff; hardware/frontend QA pending.
