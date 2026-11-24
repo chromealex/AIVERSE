@@ -1816,10 +1816,10 @@
           "textEn": "Renderer3D and ICB validate material image generations; stale bindings fall back. Integration verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38S (в работе)",
-          "text": "Освобождение старых pin при переопределениях и проверка GI.",
-          "nameEn": "Texture Graph GPU — Stage 38S (in progress)",
-          "textEn": "Material override pin release and GI image validation."
+          "name": "Texture Graph GPU — Stage 38S (частично)",
+          "text": "Переопределения освобождают старые pin, GI проверяет поколение, добавлен тест освобождения и переиспользования слота. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38S (partial)",
+          "textEn": "Authored overrides release old pins, GI validates generations, transaction/reuse regression authored. Integrated verification pending."
         }
       ],
       "enables": [
