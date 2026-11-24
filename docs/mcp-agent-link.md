@@ -141,3 +141,6 @@ The native metadata patch, folder creation, quarantine deletion, external import
 
 ### S6f.4b.3b.2 — atomic internal move and rename recording
 Native transfer commit now stages internal Move/Rename alongside external import/replace. The actual resolved destinations (including keep-both) drive typed model URI repairs and indexed material reference remaps; existing material bytes and root metadata/digests are retained before publication. Journal v4/v5 commits payloads, repaired documents and Asset history together. Map/rules references remain conservative; explicit Trash recovery/purge retains its separate legacy path. No new MCP action.
+
+### S6h.3a — transactional Trash restore and history-safe cleanup
+Native explicit Trash restore now prepares a relocation plan and commits it with the cleared Asset checkpoint through the existing paired-cursor batch v4/v5. Single and batch purge require a valid current checkpoint (or an empty initial history), hold the asset lock and refuse all retained Undo/Redo slots. Purge of unprotected slots preserves the history; irreversible batch cleanup can still stop partway. Trash listing reports the specific pending journal or legacy dirty-marker reason. No new MCP action; native review/confirmation and project/version checks remain mandatory.
