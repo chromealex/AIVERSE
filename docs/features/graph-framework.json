@@ -101,7 +101,14 @@
     "engine/render/graph/TextureGraphGpuResourceCache.h",
     "tests/render/texture_graph_gpu_resource_cache.cpp",
     "engine/render/graph/TextureGraphFusion.h",
-    "tests/render/texture_graph_fusion.cpp"
+    "tests/render/texture_graph_fusion.cpp",
+    "engine/gfx/BufferTextureCopy.h",
+    "engine/gfx/Gfx.h",
+    "engine/gfx/metal/GfxMetal.mm",
+    "engine/gfx/vulkan/VkResources.cpp",
+    "engine/render/ModelImageUploadTransaction.h",
+    "engine/render/graph/TextureGraphGpuTextureTransfer.h",
+    "tests/render/texture_graph_gpu_texture_transfer.cpp"
   ],
   "traits": {
     "editable": true,
@@ -112,7 +119,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 36B bounded opt-in automatic pointwise fusion integrated in canonical typed planner, native owner, MCP and Studio; integrated/hardware acceptance pending.",
+      "note": "Stage 37A in progress: aligned GPU-only storage-to-RGBA8 texture transport, typed padded pack shader and fence-gated model image adoption; live owner wiring separate.",
       "evidence": []
     },
     "architecture": {
