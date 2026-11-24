@@ -367,14 +367,6 @@ bool GameCore::canCast(Simulation& sim, Entity caster, int index) const {
     return !st || st->readyAt[index] <= sim.tick();
 }
 
-namespace {
-void addBuff(Buffs& b, const Buff& nb) {
-    for (auto& x : b.list)
-        if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; return; } // refresh, don't stack
-    b.list.push_back(nb);
-}
-} // namespace
-
 void GameCore::castAbility(Simulation& sim, Entity caster, int index, Entity target, Vec3 point) {
     World& w = sim.world();
     if (!canCast(sim, caster, index)) return;
@@ -455,7 +447,7 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) b->stunUntil = std::max(b->stunUntil, until);
             break;
         case EffectKind::Buff:
-            for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) addBuff(*b, {ef.mod.stat, ef.mod.add, ef.mod.mul, until, casterType});
+            for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) upsertTimedBuff(*b, {ef.mod.stat, ef.mod.add, ef.mod.mul, until, casterType, ef.mod.stackingGroup});
             break;
         case EffectKind::Spawn:
             summons.push_back({ef.spawnType, ef.count, ef.duration.raw > 0 ? until : 0});
@@ -517,12 +509,12 @@ void GameCore::sysAbilities(Simulation& sim) {
                         uint8_t so = w.get<Owner>(s).player;
                         bool enemy = hostile(sim, o.player, so);
                         bool ally = so == o.player || (so != 0 && so != kHostileNeutral && o.player != kHostileNeutral && sim.allied(so, o.player));
-                        if ((enemy && ef.enemies) || (ally && ef.allies)) hits.push_back({s, {ef.mod.stat, ef.mod.add, ef.mod.mul, tick + 15, u.type}});
+                        if ((enemy && ef.enemies) || (ally && ef.allies)) hits.push_back({s, {ef.mod.stat, ef.mod.add, ef.mod.mul, tick + 15, u.type, ef.mod.stackingGroup}});
                     });
                 }
             }
         });
-        for (auto& h : hits) if (auto* b = w.tryGet<Buffs>(h.target)) addBuff(*b, h.buff);
+        for (auto& h : hits) if (auto* b = w.tryGet<Buffs>(h.target)) upsertTimedBuff(*b, h.buff);
     }
     // charges regenerate one per cooldown
     if (rules_.advancedEffects)
