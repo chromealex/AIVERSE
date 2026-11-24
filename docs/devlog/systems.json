@@ -1832,6 +1832,12 @@
           "text": "Picking, VT feedback и статический impostor проверяют поколение привязки. Добавлены регрессии устаревшего слота; интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38U (partial)",
           "textEn": "Picking, VT feedback and static impostors validate image generation. Stale-slot regression authored; integration pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38V (в работе)",
+          "text": "Проверка поколений VIVID, TerraWeave и offline bake.",
+          "nameEn": "Texture Graph GPU — Stage 38V (in progress)",
+          "textEn": "VIVID, TerraWeave and offline bake image generation boundaries."
         }
       ],
       "enables": [
