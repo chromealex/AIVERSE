@@ -5,10 +5,6 @@
 #include "engine/core/FixedMath.h"
 #include "engine/mechanics/EcsTimedMechanics.h"
 #include "engine/world/OrientedBox.h"
-#include "engine/nav/CaveActorMotorSteering.h"
-#include "engine/world/TerraWeaveCavernsNavigationRegionCache.h"
-#include "engine/world/TerraWeaveCavernsArchive.h"
-#include "engine/world/TerraWeaveCavernsVolumeCollision.h"
 #include <stdexcept>
 
 namespace aiverse::actor {
@@ -305,104 +301,6 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         auto id=integer(b,"id",0,1,UINT32_MAX);
         if(collision_.colliders().contains(uint32_t(id))||!collision_.add({uint32_t(id),{vector(b["min"]),vector(b["max"])}}))throw JsonError("actor.collider: invalid or duplicate box");
     }
-    // Opt-in world-space cave navigation. Generate authored collision from
-    // the SAME immutable SDF, install into this EXISTING SpatialWorld before
-    // character spawn/motor setup, never create a second actor controller.
-    caveNavigation_.reset();
-    caveRegionCache_.reset();
-    caveRouteResolver_={};
-    const auto& caveNavConfig=map["cavernsNavigation"];
-    if(caveNavConfig.isObject()&&caveNavConfig.getBool("enabled",false)){
-        using namespace terraweave::caverns;
-        const Json& authored=map["terraweaveCaverns"].isObject()
-            ?map["terraweaveCaverns"]:map["extra"]["terraweaveCaverns"];
-        if(!authored.isObject())
-            throw JsonError("actor.cavernsNavigation: missing authored SDF");
-        auto snapshot=std::make_shared<CaveVolumeSnapshot>(
-            caveSnapshotFromJson(authored));
-        auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
-        const auto& keys=caveNavConfig["collisionChunks"];
-        if(!keys.isArray()||keys.size()==0||keys.size()>64)
-            throw JsonError("actor.cavernsNavigation: 1..64 collisionChunks required");
-        const uint32_t resolution=uint32_t(
-            caveNavConfig.getInt("resolution",16));
-        const int32_t spacingCm=int32_t(
-            caveNavConfig.getInt("spacingCm",100));
-        uint32_t nativeId=0x60000000u;
-        for(const auto& tuple:keys.items()){
-            if(!tuple.isArray()||tuple.size()!=3)
-                throw JsonError("actor.cavernsNavigation: chunk [x,y,z] expected");
-            const ChunkKey3 key{
-                tuple[size_t(0)].integer(),
-                tuple[size_t(1)].integer(),
-                tuple[size_t(2)].integer()};
-            auto surface=generateCaveIndexedSnapshotMesh(
-                *indexed,key,resolution,spacingCm);
-            auto collision=prepareCaveVolumeCollision(
-                surface,resolution,spacingCm,snapshot->sourceRevision);
-            if(collision.triangles.size()>65534u ||
-               collision.triangles.size()>UINT32_MAX-nativeId)
-                throw JsonError("actor.cavernsNavigation: collider id budget");
-            for(const auto& triangle:collision.triangles)
-                if(!collision_.addTriangle(nativeId++,triangle))
-                    throw JsonError("actor.cavernsNavigation: invalid native collider");
-        }
-        caveNavigation_=std::make_shared<const CaveNavigationDataProvider>(
-            std::move(indexed));
-        // Optional persistent region cache for HPA/Flow route traffic.
-        // One region owns reusable adjacency and only dirty nodes rebuild
-        // on an explicitly confirmed native cave SDF publication.
-        const Json& region=caveNavConfig["region"];
-        if(region.isObject()){
-            CaveGraphGrid grid;
-            grid.origin={region.getInt("originXcm"),
-                         region.getInt("originYcm"),
-                         region.getInt("originZcm")};
-            const auto dimension=[&](const char* key)->uint32_t {
-                const int64_t n=region.getInt(key,0);
-                if(n<=0||n>1024)
-                    throw JsonError(std::string("actor.cavernsNavigation.region.")+key);
-                return uint32_t(n);
-            };
-            grid.width=dimension("width");
-            grid.height=dimension("height");
-            grid.depth=dimension("depth");
-            grid.cellCm=int32_t(region.getInt("cellCm",100));
-            grid.maxCells=uint32_t(region.getInt("maxCells",65536));
-            CaveAgentProfile profile;
-            const Json& agent=caveNavConfig["agent"];
-            if(agent.isObject()){
-                profile.radiusCm=int32_t(agent.getInt("radiusCm",30));
-                profile.heightCm=int32_t(agent.getInt("heightCm",180));
-                profile.maxStepCm=int32_t(agent.getInt("maxStepCm",45));
-                profile.sampleCm=int32_t(agent.getInt("sampleCm",25));
-                const auto traversal=agent.getStr("traversal","ground");
-                if(traversal=="fly")profile.traversal=CaveTraversal::Flying;
-                else if(traversal=="swim")profile.traversal=CaveTraversal::Swimming;
-                else if(traversal=="climb")profile.traversal=CaveTraversal::Climbing;
-                else if(traversal!="ground")
-                    throw JsonError("actor.cavernsNavigation.agent.traversal");
-            }
-            caveRegionCache_=std::make_shared<CaveNavigationRegionCache>(
-                caveNavigation_,grid,profile,
-                uint32_t(region.getInt("clusterCells",8)),
-                size_t(region.getInt("maxFlows",8)));
-            caveRouteResolver_=[cache=caveRegionCache_](
-                const std::string& name,const CavePathQuery& q,
-                std::shared_ptr<const CaveNavigationDataProvider> data){
-                CavePathBackend kind=CavePathBackend::AStar;
-                if(name=="hpa")kind=CavePathBackend::HPAStar;
-                else if(name=="flow")kind=CavePathBackend::FlowField;
-                else if(name=="hybrid")kind=CavePathBackend::Hybrid;
-                else if(name!="astar")return CavePathResult{};
-                auto result=cache->find(q,kind);
-                if(result.reached)return result;
-                // Outside cached region or blocked under its tighter
-                // profile: the shared standard 3D solver is still available.
-                return solveCaveGraph(q,std::move(data),kind);
-            };
-        }
-    }
     auto buildingLoot=buildMapBuildings(map);
     const auto& spawns=map["spawns"];
     if(!spawns.isArray()||spawns.size()<sim.players().size())throw JsonError("actor.spawns: one spawn per player required");
@@ -434,14 +332,6 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     setupVehicles(sim,map);
     setupRace(sim,rules,map);
     setupBots(sim,map);
-    if(caveNavigation_){
-        sim.registerPersistentComponent<nav::CaveRouteIntent>(
-            "caverns.route.intent",1);
-        sim.registerPersistentComponent<nav::CaveRouteFollower>(
-            "caverns.route",2);
-        // Actor's own "actor" system remains the ONLY character mover;
-        // route goals are assigned explicitly to entities by game commands.
-    }
     meleeAttacks_.clear();
     if(config_.melee.enabled){
         const auto& m=config_.melee;auto total=m.windup+m.active+m.recovery;
@@ -460,37 +350,6 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         tickOrdinaryProjectiles(s);
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
-}
-bool ActorHost::acceptCommittedCaveNavigation(
-    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
-        published,
-    const terraweave::caverns::CaveNavigationChange& change,
-    const std::function<bool()>& exclusive) {
-    if(!caveNavigation_||!published||!exclusive||!exclusive()||
-       change.toRevision!=published->revision()||
-       (change.fromRevision!=caveNavigation_->revision() &&
-        change.fromRevision!=change.toRevision))
-        return false;
-    // Refresh derived regional adjacency/portals first, so a failure keeps
-    // the old actor route source rather than exposing a new SDF and stale
-    // cached graph at once. Native collision must ALREADY be published.
-    if(caveRegionCache_)
-        caveRegionCache_->refresh(change,published);
-    caveNavigation_=std::move(published);
-    return true;
-}
-bool ActorHost::navigateCaveActor(
-    Simulation& sim,Entity entity,
-    terraweave::caverns::PointCm goal,
-    terraweave::caverns::CaveAgentProfile profile,
-    std::string algorithm,uint32_t speedCmPerTick,
-    uint32_t maxVisits) {
-    if(!caveNavigation_||!sim.world().alive(entity)||
-       !sim.world().has<CharacterBody>(entity))
-        return false;
-    return nav::assignCaveActorGoal(sim.world(),entity,goal,profile,
-                                    std::move(algorithm),speedCmPerTick,
-                                    maxVisits);
 }
 void ActorHost::applyCommand(Simulation& sim,const Command& c) {
     Input input;
@@ -542,9 +401,6 @@ void ActorHost::shoot(Simulation& sim,CharacterRef p) {
 // ---------------------------------------------------------------- tick
 void ActorHost::tick(Simulation& sim) {
     auto& s=state(sim);if(s.winner)return;
-    if(caveNavigation_)
-        (void)nav::repathCaveActorRoutes(sim,caveNavigation_,8,
-                                         caveRouteResolver_);
     // Programmed and ordinary projectiles have already advanced in the preceding stages.
     if(config_.systems.enabled)tickSystems(sim);
     tickRoyale(sim);
@@ -593,16 +449,6 @@ void ActorHost::tick(Simulation& sim) {
         }
         Input input=a.input;
         if(sim.tick()-a.lastInputTick>config_.inputTimeout){input.forward=input.right=0;input.buttons=0;input.action=Action::None;}
-        if(caveNavigation_&&!a.vehicle){
-            // Apply route steering AFTER stale network input is cleared;
-            // the existing moveActor motor alone owns character motion.
-            const Fixed perTick=config_.motor.speed*sim.dt();
-            const uint32_t maxCm=uint32_t(std::max<int64_t>(
-                1,perTick.raw*100/Fixed::kOne));
-            (void)nav::steerCaveActorMotor(
-                sim.world(),a.entity,input,*caveNavigation_,collision_,
-                {},maxCm);
-        }
         if(config_.systems.enabled)actorSystems(sim,a,input);
         if(!a.vehicle){
             if(config_.locomotion)moveActorModes(a,*sim.world().tryGet<LocomotionBody>(a.entity),input,config_.motor,*config_.locomotion,collision_,sim.dt(),config_.worldLimit);
