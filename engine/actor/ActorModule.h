@@ -20,7 +20,10 @@
 #include <utility>
 
 #include "../game/HostSystems.h"
-namespace aiverse::terraweave::caverns {class CaveNavigationDataProvider;}
+namespace aiverse::terraweave::caverns {
+class CaveNavigationDataProvider;
+class CaveNavigationRegionCache;
+}
 namespace aiverse::actor {
 constexpr uint32_t kBuildingColliderBase=0x40000000;
 constexpr uint32_t kRotatedColliderBase=0x50000000;   // triangles of map colliders with a "yaw" (12 per box)   // collider ids of map `buildings` (building-gen)
@@ -235,6 +238,8 @@ private:
     std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
         caveNavigation_;
     CaveRouteResolver caveRouteResolver_;
+    std::shared_ptr<terraweave::caverns::CaveNavigationRegionCache>
+        caveRegionCache_;
 
     std::vector<Vec3> spawns_;
     std::vector<bool> bots_;
