@@ -194,6 +194,43 @@ void checkpoint(gfx::Device& d,bool procedural){
     require(done&&ok&&p.checkpointStatus().restoreEligible,"owned async fresh");
     std::printf("PASS owned checkpoint procedural=%d\n",int(procedural));
 }
+void sharedSdf(gfx::Device& d){
+    auto budget=d.acquireGpuAllocationBudget();
+    require(bool(budget),"SDF canonical budget");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"SDF initial idle");
+    budget->collect(d.gpuCompletedFence());
+    const auto before=budget->stats().charged();
+    auto cache=std::make_shared<SharedSdfGpuCache>(d);
+    auto cfg=config(256,false);
+    cfg.sharedSdfCache=cache;cfg.allocationBudget=budget;
+    cfg.staticSdf.dimension=8;cfg.staticSdf.spacing=1;
+    cfg.staticSdf.origin={-4,-4,-4};cfg.staticSdf.samples.assign(512,1.f);
+    const size_t bytes=(9+512)*sizeof(uint32_t);
+    const auto privateCharge=estimateGpuEmitterAllocation(256,false);
+    ComputeParticles a,b,c;
+    require(a.init(&d,cfg)&&b.init(&d,cfg),"two SDF emitters initialize");
+    require(cache->liveEntries()==1&&cache->liveBytes()==bytes&&
+            a.stats().sharedSdfBytes==bytes&&b.stats().sharedSdfBytes==bytes,
+            "identical SDF shares one GPU buffer");
+    require(budget->stats().charged()==before+2*privateCharge+bytes,"one SDF ledger charge");
+    auto different=cfg;different.staticSdf.samples[0]=2.f;
+    require(c.init(&d,different)&&cache->liveEntries()==2&&cache->liveBytes()==2*bytes,
+            "different SDF is not aliased");
+    c.shutdown();require(cache->liveEntries()==1,"unused distinct payload released");
+    a.setView(view());b.setView(view());
+    {Frame frame(d);burst(a,64,1,{0,0,.5f});burst(b,64,2,{0,0,.5f});
+     require(a.step(.01f)&&b.step(.01f),"shared SDF compute dispatches");}
+    a.shutdown();
+    require(cache->liveEntries()==1&&cache->liveBytes()==bytes,"remaining emitter retains shared payload");
+    tick(d,b,.01f);
+    audit(d,b,64);
+    b.shutdown();
+    require(cache->liveEntries()==0&&cache->liveBytes()==0,"last lease releases payload");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"SDF final idle");
+    budget->collect(d.gpuCompletedFence());
+    require(budget->stats().charged()==before,"SDF budget restored after completion");
+    std::puts("PASS shared immutable SDF GPU payload");
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -235,6 +272,7 @@ int aiverseMain(int,char**){
                 liveCompaction(*d,procedural);
                 checkpoint(*d,procedural);
             }
+            sharedSdf(*d);
             memory(*d);
             std::puts("PASS production Metal allocator acceptance");return 0;
         }catch(const std::exception& e){

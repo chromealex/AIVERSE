@@ -15,7 +15,12 @@ public:
     SharedSdfGpuPayload& operator=(const SharedSdfGpuPayload&)=delete;
     ~SharedSdfGpuPayload(){
         if(buffer_.valid())device_.destroyBuffer(buffer_);
-        if(charged_){budget_->retire(bytes(),lastFence_);budget_->collect(device_.gpuCompletedFence());}
+        if(charged_){
+            // Vulkan may queue the initial upload before beginFrame. Without
+            // a later verified submission fence, do not credit those bytes.
+            const auto fence=uploadUntracked_&&!lastFence_?gfx::GpuAllocationBudget::unknownFence:lastFence_;
+            budget_->retire(bytes(),fence);budget_->collect(device_.gpuCompletedFence());
+        }
     }
     gfx::BufferHandle buffer()const{return buffer_;}
     size_t bytes()const{return words_.size()*sizeof(uint32_t);}
@@ -33,7 +38,7 @@ private:
     std::vector<uint32_t> words_;
     uint64_t hash_=0,lastFence_=0;
     gfx::BufferHandle buffer_{};
-    bool charged_=false;
+    bool charged_=false,uploadUntracked_=false;
 };
 class SharedSdfGpuCache final {
 public:
@@ -54,7 +59,7 @@ public:
         for(const auto& weak:entries_)if(auto item=weak.lock()){
             if(item->budget_==budget&&item->hash_==hash&&item->words_==words)return item;
         }
-        if(entries_.size()>=kMaxEntries)return {};
+        if(entries_.size()>=kMaxEntries||!device.canUpdateSharedBuffers())return {};
         auto item=std::shared_ptr<SharedSdfGpuPayload>(new SharedSdfGpuPayload(device,budget,words,hash));
         budget->collect(device.gpuCompletedFence());
         if(!budget->reserve(item->bytes()))return {};
@@ -64,6 +69,10 @@ public:
         desc.size=item->bytes();desc.data=item->words_.data();desc.label="SpectraFX shared immutable SDF";
         item->buffer_=device.createBuffer(desc);
         if(!item->buffer_.valid())return {};
+        if(device.info().backend==gfx::Backend::Vulkan){
+            item->lastFence_=device.gpuSubmissionFence();
+            item->uploadUntracked_=item->lastFence_==0;
+        }
         entries_.push_back(item);return item;
     }
     size_t liveBytes()const{
