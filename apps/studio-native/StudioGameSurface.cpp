@@ -63,6 +63,10 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
 }
+std::function<Json(uint64_t)> StudioGameSurface::buildingGraphReader(){
+    auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    return sim?sim->openDiagnosticSource("building.graph"):std::function<Json(uint64_t)>{};
+}
 Json StudioGameSurface::mapEntityStates() {
     Simulation* sim=host_ && host_->inMatch()?host_->simulation():nullptr;
     auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
