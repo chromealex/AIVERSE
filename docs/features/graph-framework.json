@@ -107,7 +107,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35A in progress: materialized per-node float4 kernel lowering using shared fused expression compiler, explicit pack kernels and slot plan; runtime dispatch remains separate.",
+      "note": "Stage 35A source lowering for materialized DAG implemented, shared fused expression compiler retained. Runtime dispatch/retirement and hardware acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -177,7 +177,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 34B isolated exact-blob C++20 slot planning PASS (GCC 14.2); full CTest, native GPU, Studio and Mac gate NOT RUN.",
+      "note": "Stage 35A isolated exact-blob C++20 ABI source test PASS on GCC 14.2; integrated node/DAG fixture authored NOT RUN. No GPU shader compilation or dispatch, full CTest, Studio or Mac gate.",
       "evidence": []
     },
     "handoff": {
