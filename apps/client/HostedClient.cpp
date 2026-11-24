@@ -97,7 +97,7 @@ void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const 
 }
 
 void HostedClient::setStartCamera(float x, float z, float distance, float pitchDeg, float yawDeg) {
-    if (client_) client_->setStartCamera(x, z, distance, pitchDeg, yawDeg);
+    if (client_ && currentEpochValid()) client_->setStartCamera(x, z, distance, pitchDeg, yawDeg);
 }
 
 void HostedClient::stop() {
@@ -120,7 +120,7 @@ void HostedClient::stop() {
 }
 
 size_t HostedClient::collectGpuRetirements() {
-    if (!currentEpochValid()) return 0;
+    if (retired_.empty() || !currentEpochValid()) return 0;
     if (!dev_->gpuHealthy()) {
         abandonOnDeviceLoss();
         return 0;
@@ -241,7 +241,7 @@ void HostedClient::place(float x,float y,float k,bool focused) {
     x_=x; y_=y; k_=k>0?k:1;
     const bool previous=focused_;
     focused_=focused;
-    if(previous==focused_ || !client_ || step_<kSteps) return;
+    if(previous==focused_ || !client_ || !currentEpochValid() || step_<kSteps) return;
     // Moving from Game to Inspector is not an OS focus event: release hosted input.
     if(!focused_) captured_=finger_=false;
     Event focus;
@@ -253,14 +253,14 @@ void HostedClient::place(float x,float y,float k,bool focused) {
 void HostedClient::suspendInput() {
     const bool held=focused_||captured_;
     focused_=captured_=finger_=false;
-    if(!held || !client_ || step_<kSteps)return;
+    if(!held || !client_ || !currentEpochValid() || step_<kSteps)return;
     Event e;e.type=EventType::FocusLost;
     Scope scope(*this);
     client_->event(e);
 }
 
 void HostedClient::event(const Event& in) {
-    if (!client_ || step_ < kSteps) return;
+    if (!client_ || !currentEpochValid() || step_ < kSteps) return;
     Event e = in;
     // A touch device profile gets touches, as on the phone (and as AIVERSE_TOUCH_EMULATE in PlatformLinux): the left button
     // is finger 1 (TouchBegin / Move / End, no hover moves), so the client's touch paths run - one-finger pan, touch
@@ -305,9 +305,9 @@ void HostedClient::event(const Event& in) {
 Simulation* HostedClient::simulation() { return client_ && step_ >= kSteps ? client_->simulation() : nullptr; }
 bool HostedClient::loading() const { return client_ && (step_ < kSteps || client_->mapLoading()); }
 std::string HostedClient::errorText() const { return client_ ? client_->errorText() : std::string(); }
-bool HostedClient::canControl() const { return client_ && step_ >= kSteps && client_->hostCanControl(); }
+bool HostedClient::canControl() const { return client_ && currentEpochValid() && step_ >= kSteps && client_->hostCanControl(); }
 bool HostedClient::paused() const { return client_ && step_ >= kSteps && client_->hostPaused(); }
-bool HostedClient::canStep() const { return client_ && step_ >= kSteps && client_->hostCanStep(); }
+bool HostedClient::canStep() const { return client_ && currentEpochValid() && step_ >= kSteps && client_->hostCanStep(); }
 bool HostedClient::setPaused(bool paused) {
     if (!canControl()) return false;
     Scope scope(*this);return client_->setHostPaused(paused);

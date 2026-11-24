@@ -225,7 +225,7 @@ static void verifyOwnerThreadMapReadContracts() {
         expectDenied([&]{(void)cache.publicationBackpressured();});
     });
     worker.join();
-    CHECK(denied==14);
+    CHECK(denied==15);
     CHECK(cache.find("models/read.glb")==resident);
     CHECK(constCache.find("models/read.glb")==resident);
     CHECK(cache.contains("models/read.glb"));
