@@ -244,6 +244,7 @@ void GameClient::startNetMatch() {
         Json rules = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
+        attachNoticeEvents(true);
         configurePrisma(map);
         natureStart(map);
     } catch (const std::exception& e) {
@@ -287,6 +288,7 @@ void GameClient::leaveNetMatch() {
     if (battle_) { net_.reset(); battle_ = false; }   // a battle has no lobby to return to
     natureStop();
     fx_.stopMatch();
+    noticeEvents_.reset();
     city_.reset(); sim_.reset();
     bots_.clear();
     selection_.clear();
