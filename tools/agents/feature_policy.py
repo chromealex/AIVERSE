@@ -18,6 +18,7 @@ def repo_path(path):
 
 def dependency_report(registry, policies, root):
     errors, unknown, edges = [], [], {}
+    invalid_deps = set()
     for ident in sorted(registry):
         if ident not in policies:
             unknown.append(ident)
@@ -26,10 +27,12 @@ def dependency_report(registry, policies, root):
         deps = policies[ident].get("requires")
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps) or len(set(deps)) != len(deps):
             errors.append(f"{ident}: invalid dependencies")
+            invalid_deps.add(ident)
             deps = []
         edges[ident] = sorted(d for d in deps if d in registry)
         for dep in sorted(set(deps) - registry.keys()):
             errors.append(f"{ident}: unknown dependency {dep}")
+            invalid_deps.add(ident)
     order, active, done, cyclic = [], [], set(), set()
     def visit(ident):
         if ident in active:
@@ -53,7 +56,7 @@ def dependency_report(registry, policies, root):
         pending = [d for d in DIMENSIONS if data.get("checks", {}).get(d, {}).get("status") not in ("pass", "not_applicable")]
         invalid = validate(data, root)
         blocked = [d for d in edges[ident] if states.get(d, {}).get("state") != "declared_ready"]
-        state = ("invalid" if invalid or ident in cyclic else
+        state = ("invalid" if invalid or ident in cyclic or ident in invalid_deps else
                  "unknown_dependencies" if ident in unknown else
                  "blocked" if blocked else "pending" if pending else "declared_ready")
         states[ident] = {"state": state, "requires": edges[ident], "blocked_by": blocked,
