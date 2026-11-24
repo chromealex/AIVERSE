@@ -154,6 +154,12 @@ export interface StudioWorldJob {
   cancelRequested?:boolean;cancelAllowed?:boolean;error?:string;result?:unknown;
   progress?:{checkpointBytes?:string;checkpointTotal?:string;walBytes?:string;frames?:string;sequence?:string;assetsRead?:string;assetsTotal?:string};
 }
+export interface StudioSimulationLodConfig {
+  enabled:boolean;hotCells:number;warmCells:number;warmTicks:number;coldTicks:number;
+}
+export interface StudioSimulationLodSettings extends StudioSimulationLodConfig {
+  authored:boolean;requiresRestart:boolean;
+}
 export interface StudioWorldOps {
   world_save_list:{params:Record<string,never>;result:{worlds:string[]}};
   world_save_create:{params:{world:string;seed:string};result:StudioWorldStatus};
