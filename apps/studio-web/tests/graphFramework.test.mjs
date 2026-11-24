@@ -56,7 +56,7 @@ test('multiple named output ports have distinct anchors and follow preview posit
  assert.equal(samePort({node:'a',port:'color'},{node:'a',port:'mask'}),false);
 });
 
-import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft} from '../src/graphs/textureGraphAuthoring.ts';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft,makeTextureFunctionAsset,linkTextureFunctionAsset,refreshTextureFunctionAsset,detachTextureFunctionAsset} from '../src/graphs/textureGraphAuthoring.ts';
 test('texture DAG layout orders dependencies and has bounded nonoverlapping positions',()=>{
  const g={nodes:['c','a','b'].map(node),links:[edge('1','a','b'),edge('2','b','c')]};
  const p=textureLayout(g);assert.ok(p.get('a')[0]<p.get('b')[0]);assert.ok(p.get('b')[0]<p.get('c')[0]);
@@ -129,4 +129,24 @@ test('function clipboard drafts cannot reference a deleted definition or bypass 
  const body=Array.from({length:33},(_,i)=>({id:'n'+i,op:'constant',inputs:[]}));
  const calls={...graph,functions:{missing:{nodes:body}},nodes:[...graph.nodes,{...graph.nodes[0],id:'call2'}]};
  assert.throws(()=>checkFunctionDraft(calls),/budget/);
+});
+
+test('standalone function assets link pinned snapshots and refresh compatible revisions',()=>{
+ const catalog=[{id:'constant',inputs:[],output:'scalar',properties:{value:{type:'number'}}},{id:'multiply',inputs:['scalar','scalar'],output:'scalar',properties:{}}];
+ const definition={inputs:[{id:'x',type:'scalar'}],nodes:[{id:'gain',op:'constant',inputs:[],properties:{value:.5}},{id:'out',op:'multiply',inputs:['x','gain']}],outputs:{value:'out'},parameters:{gain:{default:.5,bindings:[{node:'gain',property:'value'}]}}};
+ const [asset]=makeTextureFunctionAsset({functions:{scale:definition}},catalog,'scale');
+ assert.equal(asset.functionAsset.definition,'scale');assert.equal(asset.nodes.length,2);
+ const base={size:32,nodes:[{id:'source',op:'constant',inputs:[]}],outputs:{height:'source'}};
+ const linked=linkTextureFunctionAsset(base,'scale_asset',asset,catalog);
+ const call=addTextureFunctionCall(linked.graph,catalog,linked.alias,'value');
+ call.graph.nodes.at(-1).inputs=['source'];call.graph.nodes.at(-1).properties.arguments={gain:.3};
+ const revision=structuredClone(asset);revision.functions.scale.parameters.gain.default=.8;
+ const updated=refreshTextureFunctionAsset(call.graph,linked.alias,revision,catalog);
+ assert.equal(updated.functions.scale_asset.parameters.gain.default,.8);
+ assert.equal(call.graph.functions.scale_asset.parameters.gain.default,.5);
+ assert.deepEqual(updated.nodes,call.graph.nodes);assert.deepEqual(updated.outputs,base.outputs);
+ const incompatible=structuredClone(revision);incompatible.functions.scale.inputs[0].id='renamed';
+ assert.throws(()=>refreshTextureFunctionAsset(call.graph,linked.alias,incompatible,catalog),/Incompatible/);
+ assert.throws(()=>linkTextureFunctionAsset(linked.graph,'scale_asset',asset,catalog),/alias/);
+ const detached=detachTextureFunctionAsset(updated,linked.alias);assert.deepEqual(detached.functionLinks,{});assert.deepEqual(detached.functions,updated.functions);
 });

@@ -240,7 +240,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. Stage 38BC in progress: separately saved function assets via existing native texture graph document store, explicit pinned definition snapshots and compatibility-checked revision refresh; no implicit filesystem lookup in runtime compiler.",
+      "note": "Pending implementation or actual verification. Stage 38BC in progress: separately saved function assets via existing native texture graph document store, explicit pinned definition snapshots and compatibility-checked revision refresh; no implicit filesystem lookup in runtime compiler. Stage 38BC: standalone function asset carrier documents use existing project-scoped native list/get/set and expected-document publication. Linked graph stores source identity and pinned embedded snapshot, explicit compatibility-checked refresh retains call connections/arguments; detach preserves snapshot. Each named result is validated with a native probe before publish/link/refresh. Frontend and hardware tests NOT RUN. No automatic disk reload or new runtime dependency resolver.",
       "evidence": []
     },
     "graphs": {

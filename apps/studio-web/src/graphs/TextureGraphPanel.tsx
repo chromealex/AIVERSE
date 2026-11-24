@@ -4,7 +4,7 @@ import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {validateTopology,DraftHistory} from './graphFramework';
-import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionLibrary,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft} from './textureGraphAuthoring';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionLibrary,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft,textureFunctionLinks,makeTextureFunctionAsset,linkTextureFunctionAsset,refreshTextureFunctionAsset,detachTextureFunctionAsset} from './textureGraphAuthoring';
 import type {GraphView,NodeView,Link} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {MaterialKey,FieldValue} from '../panels/materialSchema';
@@ -42,6 +42,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit,active=true}:{projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [reuseName,setReuseName]=useState('');
+ const [functionAssetName,setFunctionAssetName]=useState(''),[functionAssetRecord,setFunctionAssetRecord]=useState<{name:string;graph:Obj}|null>(null);
  const [functionName,setFunctionName]=useState(''),[functionChoice,setFunctionChoice]=useState(''),[functionOutput,setFunctionOutput]=useState('');
  const [selection,setSelection]=useState<string[]>([]),[groupTitle,setGroupTitle]=useState(''),[snippet,setSnippet]=useState<Obj[]>([]);
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
@@ -69,7 +70,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [clipboard,setClipboard]=useState<Obj|null>(null),[thumbnails,setThumbnails]=useState<{key:string;images:Record<string,string>}>({key:'',images:{}});
  const history=useRef(new DraftHistory(JSON.stringify(template,null,2),64)),autoAttempt=useRef('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setSnippet([]);setSelection([]);setSelected('');setGroupTitle('');setReuseName('');setFunctionName('');setFunctionChoice('');setFunctionOutput('');setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setSnippet([]);setSelection([]);setSelected('');setGroupTitle('');setReuseName('');setFunctionAssetName('');setFunctionAssetRecord(null);setFunctionName('');setFunctionChoice('');setFunctionOutput('');setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -83,7 +84,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   setText(next);setPreview(null);setAsset(null);setAssets([]);setBakedSet('');setGpuReady(false);setResidentReady(false);
  };
  const edit=(value:Obj)=>changeText(JSON.stringify(value,null,2));
- const replaceDocument=(value:Obj)=>{const next=JSON.stringify(value,null,2);history.current=new DraftHistory(next,64);autoAttempt.current='';changeText(next,false);setSelected('');setSelection([]);setPending(null);setClipboard(null);setSnippet([]);setFunctionChoice('');setFunctionOutput('');};
+ const replaceDocument=(value:Obj)=>{const next=JSON.stringify(value,null,2);history.current=new DraftHistory(next,64);autoAttempt.current='';changeText(next,false);setSelected('');setSelection([]);setPending(null);setClipboard(null);setSnippet([]);setFunctionChoice('');setFunctionOutput('');setFunctionAssetName('');setFunctionAssetRecord(null);};
  const undo=()=>{if(history.current.canUndo()){changeText(history.current.undo(),false);setSelected('');setPending(null);}};
  const redo=()=>{if(history.current.canRedo()){changeText(history.current.redo(),false);setSelected('');setPending(null);}};
  const semantic=graph?texturePreviewKey(graph,overrideText,output,gpuResolution,[requireGpu,materialized,fusePointwise,incremental]):'';
@@ -109,6 +110,47 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
     setOriginal({name,graph:r.graph});replaceDocument(r.graph);setSelected('');setPending(null);return;
+   }
+   if(action==='inspectFunctionAsset'){
+    if(!functionAssetName)throw new Error('Choose a saved function asset');
+    const r=await op('texture_graph_get',{name:functionAssetName});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||!object(r.graph)||!object(r.graph.functionAsset)||r.graph.functionAsset.version!==1)throw new Error('Not a standalone function asset');
+    setFunctionAssetRecord({name:functionAssetName,graph:r.graph});setStatus('Loaded function asset revision '+functionAssetName);return;
+   }
+   if(action==='publishFunctionAsset'||action==='reviseFunctionAsset'){
+    if(!graph||!functionChoice||!/^[A-Za-z0-9_-]{1,64}$/.test(functionAssetName))throw new Error('Choose a definition and valid asset name');
+    const revise=action==='reviseFunctionAsset';
+    if(revise&&(!functionAssetRecord||functionAssetRecord.name!==functionAssetName))throw new Error('Inspect the saved revision before updating');
+    const probes=makeTextureFunctionAsset(graph,catalog,functionChoice);
+    if(!probes.length)throw new Error('Function asset has no result');
+    if(revise&&functionAssetRecord){
+     const oldMarker=functionAssetRecord.graph.functionAsset,newMarker=probes[0].functionAsset;
+     if(!object(oldMarker)||!object(newMarker)||oldMarker.definition!==newMarker.definition)throw new Error('Revision must retain the published definition name');
+    }
+    for(const probe of probes){const v=await op('texture_graph_validate',{graph:probe});if(token!==epoch.current)return;if(!object(v)||v.ok!==true)throw new Error('Native function validation failed');}
+    const r=await op('texture_graph_set',{name:functionAssetName,graph:probes[0],...(revise&&functionAssetRecord?{expected:functionAssetRecord.graph}:{})});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Function asset publication failed');
+    setFunctionAssetRecord({name:functionAssetName,graph:r.graph});setNames(old=>[...new Set([...old,functionAssetName])].sort());setStatus('Published function asset '+functionAssetName+'; linked graphs refresh explicitly.');return;
+   }
+   if(action==='linkFunctionAsset'||action==='refreshFunctionAsset'){
+    if(!graph)throw new Error('Open a texture graph');
+    const refresh=action==='refreshFunctionAsset';
+    const links=textureFunctionLinks(graph),link=Object.hasOwn(links,functionChoice)?links[functionChoice]:null;
+    const source=refresh&&object(link)?String(link.asset??''):functionAssetName;
+    if(!source)throw new Error('Select a function asset or linked definition');
+    const r=await op('texture_graph_get',{name:source});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||!object(r.graph)||!object(r.graph.functionAsset)||typeof r.graph.functionAsset.definition!=='string')throw new Error('Linked function asset unavailable; current snapshot retained');
+    for(const probe of makeTextureFunctionAsset(r.graph,catalog,r.graph.functionAsset.definition)){const v=await op('texture_graph_validate',{graph:probe});if(token!==epoch.current)return;if(!object(v)||v.ok!==true)throw new Error('Native function revision validation failed');}
+    if(refresh){
+     const next=refreshTextureFunctionAsset(graph,functionChoice,r.graph,catalog);
+     const v=await op('texture_graph_validate',{graph:next});if(token!==epoch.current)return;
+     if(!object(v)||v.ok!==true)throw new Error('Updated graph rejected; current snapshot retained');
+     edit(next);setStatus('Refreshed linked definition '+functionChoice+'; existing instances retained.');
+    }else{
+     const next=linkTextureFunctionAsset(graph,source,r.graph,catalog);
+     edit(next.graph);setFunctionChoice(next.alias);const def=textureFunctionLibrary(next.graph)[next.alias];setFunctionOutput(object(def)&&object(def.outputs)?Object.keys(def.outputs)[0]??'':'');setStatus('Linked '+source+' using an offline-safe snapshot.');
+    }
+    setClipboard(null);setSnippet([]);setFunctionAssetRecord({name:source,graph:r.graph});return;
    }
    if(action==='insertSavedGraph'){
     if(!graph||!reuseName)throw new Error('Select a saved reusable graph');
@@ -391,6 +433,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const current=rows.find(n=>n.id===selected);
  const spec=graph&&current?textureFunctionSpec(graph,current,catalog):undefined;
  const functionLibrary=graph?textureFunctionLibrary(graph):{};
+ const functionLinks=graph?textureFunctionLinks(graph):{};
+ const linkedChoice=Object.hasOwn(functionLinks,functionChoice);
  const chosenFunction=Object.hasOwn(functionLibrary,functionChoice)?functionLibrary[functionChoice]:null;
  const functionOutputs=object(chosenFunction)&&object(chosenFunction.outputs)?Object.keys(chosenFunction.outputs):[];
  const currentFunctionParameters=current?.op==='function'&&object(spec?.parameters)?Object.entries(spec.parameters):[];
@@ -459,6 +503,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
       <div className="au-row" style={{flexWrap:'wrap'}}><StudioInput aria-label="Group or comment title" placeholder="Group / comment" value={groupTitle} onChange={e=>setGroupTitle(e.target.value)}/><StudioButton size="sm" disabled={busy||disabled||!selectedIds.length||!groupTitle.trim()} onClick={groupSelection}>Group selection</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selectedIds.length} onClick={copySubgraph}>Copy subgraph</StudioButton><StudioButton size="sm" disabled={busy||disabled||!snippet.length||rows.length+snippet.length>64} onClick={pasteSubgraph}>Insert subgraph</StudioButton>{groups.map(g=><StudioButton key={g.id} size="sm" disabled={busy||disabled} onClick={()=>graph&&edit({...graph,editorGroups:groups.filter(x=>x.id!==g.id)})}>Remove group: {g.title}</StudioButton>)}</div>
       <div className="au-row" style={{flexWrap:'wrap'}}><StudioSelect aria-label="Reusable saved texture graph" value={names.includes(reuseName)?reuseName:''} disabled={busy||disabled} onChange={e=>setReuseName(e.target.value)}><option value="">Reusable saved graph</option>{names.map(n=><option key={n}>{n}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||!graph||!names.includes(reuseName)||rows.length>=64} onClick={()=>void run('insertSavedGraph')}>Insert saved graph</StudioButton><small>Independent copy · parameters preserved · connect outputs manually</small></div>
       <div className="au-row" style={{flexWrap:'wrap'}}><StudioInput aria-label="New texture function name" placeholder="Function name" value={functionName} disabled={busy||disabled} onChange={e=>setFunctionName(e.target.value)}/><StudioButton size="sm" disabled={busy||disabled||!selected||!functionName.trim()} onClick={captureFunction}>Define from selection</StudioButton><StudioSelect aria-label="Texture function definition" value={Object.hasOwn(functionLibrary,functionChoice)?functionChoice:''} disabled={busy||disabled} onChange={e=>{const name=e.target.value;setFunctionChoice(name);const d=functionLibrary[name];setFunctionOutput(object(d)&&object(d.outputs)?Object.keys(d.outputs)[0]??'':'');}}><option value="">Function library</option>{Object.keys(functionLibrary).sort().map(n=><option key={n}>{n}</option>)}</StudioSelect><StudioSelect aria-label="Function result" value={functionOutput} disabled={busy||disabled||!functionOutputs.length} onChange={e=>setFunctionOutput(e.target.value)}><option value="">Output</option>{functionOutputs.map(n=><option key={n}>{n}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||!functionOutputs.includes(functionOutput)} onClick={insertFunction}>Add function</StudioButton><StudioButton size="sm" disabled={busy||disabled||!functionChoice} onClick={deleteFunction}>Remove definition</StudioButton><small>Selected node is the result; boundary edges become typed inputs. Definitions are saved with the graph.</small></div>
+      <div className="au-row" style={{flexWrap:'wrap'}}><StudioInput aria-label="Function asset name" placeholder="Function asset name" value={functionAssetName} disabled={busy||disabled} onChange={e=>{setFunctionAssetName(e.target.value);setFunctionAssetRecord(null)}}/><StudioSelect aria-label="Saved function asset document" value={names.includes(functionAssetName)?functionAssetName:''} disabled={busy||disabled} onChange={e=>{setFunctionAssetName(e.target.value);setFunctionAssetRecord(null)}}><option value="">Saved documents</option>{names.map(n=><option key={n}>{n}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||!functionAssetName} onClick={()=>void run('inspectFunctionAsset')}>Inspect asset</StudioButton><StudioButton size="sm" disabled={busy||disabled||!functionChoice||!functionAssetName} onClick={()=>void run('publishFunctionAsset')}>Publish new asset</StudioButton><StudioButton size="sm" disabled={busy||disabled||!functionChoice||functionAssetRecord?.name!==functionAssetName} onClick={()=>void run('reviseFunctionAsset')}>Publish revision</StudioButton><StudioButton size="sm" disabled={busy||disabled||!functionAssetName||!graph} onClick={()=>void run('linkFunctionAsset')}>Link asset</StudioButton><StudioButton size="sm" disabled={busy||disabled||!linkedChoice} onClick={()=>void run('refreshFunctionAsset')}>Refresh linked</StudioButton><StudioButton size="sm" disabled={busy||disabled||!linkedChoice} onClick={()=>graph&&edit(detachTextureFunctionAsset(graph,functionChoice))}>Detach link</StudioButton><small>{linkedChoice?'Linked snapshot · refresh explicitly':'Function assets use project storage and explicit revisions'}</small></div>
       {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={id=>{setSelected(id);setSelection(id?[id]:[]);}} selection={selectedIds.length?selectedIds:(selected?[selected]:[])} onSelection={ids=>{setSelection(ids);setSelected(ids.at(-1)??'');}} onMoveGroup={moveNodes} groups={groups} onConnect={(from,to)=>connect(from.node,to.node,Number(to.port))} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} enhancedNavigation typedPorts onAddMenu={openSearch} commands={[{id:"add",label:"Search nodes",shortcut:"shift+a",run:openSearch},{id:"undo",label:"Undo",shortcut:"mod+z",disabled:!history.current.canUndo(),run:undo},{id:"redo",label:"Redo",shortcut:"mod+shift+z",disabled:!history.current.canRedo(),run:redo},{id:"duplicate",label:"Duplicate",shortcut:"mod+d",disabled:!selected||rows.length>=64,run:duplicate},{id:"copy",label:"Copy",shortcut:"mod+c",disabled:!selected,run:copyNode},{id:"paste",label:"Paste",shortcut:"mod+v",disabled:!clipboard||rows.length>=64,run:pasteNode},{id:"layout",label:"Auto layout",run:autoLayout},{id:"delete",label:"Remove",shortcut:"delete",disabled:!selected,run:removeNode}]} onMove={(id,x,y)=>moveNodes([{id,x,y}])}/></div>}
     {!catalog.length&&<div className="tg-empty">Loading native node catalog. Use Refresh if it is unavailable.</div>}
    </div>

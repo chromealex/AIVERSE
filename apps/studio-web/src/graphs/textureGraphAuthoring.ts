@@ -163,5 +163,95 @@ export function addTextureFunctionCall(graph:Obj,catalog:Obj[],name:string,outpu
 export function removeTextureFunction(graph:Obj,name:string):Obj {
  if(rows(graph.nodes).some(n=>n.op==='function'&&obj(n.properties)&&n.properties.function===name))throw new Error('Remove all function instances first');
  const library={...textureFunctionLibrary(graph)};delete library[name];
- return {...graph,functions:library};
+ const links={...textureFunctionLinks(graph)};delete links[name];
+ return {...graph,functions:library,functionLinks:links};
+}
+
+/** Project links retain immutable embedded definition snapshots. The engine can
+ * compile an offline graph; explicit refresh is the only operation that changes it.
+ */
+export function textureFunctionLinks(graph:Obj):Obj {
+ return obj(graph.functionLinks)?graph.functionLinks:{};
+}
+function assetDefinition(asset:Obj):{name:string;definition:Obj} {
+ const marker=asset.functionAsset;
+ if(!obj(marker)||marker.version!==1||!safeTextureId(marker.definition))throw new Error('Not a standalone texture function asset');
+ const library=textureFunctionLibrary(asset),name=marker.definition;
+ const definition=Object.hasOwn(library,name)?library[name]:undefined;
+ if(!obj(definition))throw new Error('Function asset definition missing');
+ return {name,definition};
+}
+function functionInterface(def:Obj,catalog:Obj[]):string {
+ if(!Array.isArray(def.inputs)||!obj(def.outputs)||!Object.keys(def.outputs).length)throw new Error('Invalid function interface');
+ const inputs=def.inputs.map(v=>{
+  if(!obj(v)||!safeTextureId(v.id)||typeof v.type!=='string'||!textureKinds.has(v.type))throw new Error('Invalid formal input');
+  return [v.id,v.type];
+ });
+ const outputs=Object.entries(def.outputs).sort(([a],[b])=>a.localeCompare(b)).map(([name,id])=>{
+  const node=rows(def.nodes).find(n=>n.id===id),kind=catalog.find(n=>n.id===node?.op)?.output;
+  if(!safeTextureId(name)||typeof kind!=='string'||!textureKinds.has(kind))throw new Error('Invalid function output');
+  return [name,kind];
+ });
+ const parameters=Object.entries(obj(def.parameters)?def.parameters:{}).sort(([a],[b])=>a.localeCompare(b)).map(([name,p])=>{
+  if(!safeTextureId(name)||!obj(p)||!Array.isArray(p.bindings)||!p.bindings.length)throw new Error('Invalid function parameter');
+  const types=p.bindings.map(b=>{
+   if(!obj(b)||typeof b.property!=='string')throw new Error('Invalid parameter binding');
+   const node=rows(def.nodes).find(n=>n.id===b.node),fields=catalog.find(n=>n.id===node?.op)?.properties;
+   const field=obj(fields)&&Object.hasOwn(fields,b.property)?fields[b.property]:undefined;
+   if(!obj(field)||typeof field.type!=='string')throw new Error('Unknown parameter property');
+   return field.type;
+  });
+  if(types.some(t=>t!==types[0]))throw new Error('Incompatible parameter bindings');
+  return [name,types[0]];
+ });
+ return JSON.stringify([inputs,outputs,parameters]);
+}
+/** Build ordinary native-validatable graph documents for all named results.
+ * The first document is the standalone saved asset; the rest are validation probes.
+ */
+export function makeTextureFunctionAsset(graph:Obj,catalog:Obj[],name:string):Obj[] {
+ const library=textureFunctionLibrary(graph),def=Object.hasOwn(library,name)?library[name]:undefined;
+ if(!obj(def)||!Array.isArray(def.inputs)||!obj(def.outputs))throw new Error('Select a valid function definition');
+ functionInterface(def,catalog);
+ const nodes:Obj[]=[],args:string[]=[];
+ def.inputs.forEach((input,i)=>{
+  if(!obj(input))throw new Error('Invalid function input');
+  const id='asset_input_'+i,scalarId=id+'_scalar';
+  if(input.type==='scalar')nodes.push({id,op:'constant',inputs:[],properties:{value:.5}});
+  else if(input.type==='color')nodes.push({id,op:'color',inputs:[],properties:{value:[.5,.5,.5]}});
+  else if(input.type==='normal'||input.type==='packed'){
+   nodes.push({id:scalarId,op:'constant',inputs:[],properties:{value:.5}});
+   nodes.push(input.type==='normal'?{id,op:'normal',inputs:[scalarId]}:{id,op:'metallicRoughness',inputs:[scalarId,scalarId]});
+  }else throw new Error('Unsupported function input kind');
+  args.push(id);
+ });
+ const channels:Record<string,string>={scalar:'height',color:'color',normal:'normal',packed:'metallicRoughness'};
+ return Object.keys(def.outputs).sort().map(output=>{
+  const call:Obj={id:'asset_result',op:'function',inputs:args,properties:{function:name,output,arguments:{}}};
+  const kind=textureFunctionSpec(graph,call,catalog)?.output;
+  if(typeof kind!=='string'||!Object.hasOwn(channels,kind))throw new Error('Invalid function output kind');
+  const asset={version:1,size:32,nodes:[...nodes,call],outputs:{[channels[kind]]:'asset_result'},functions:{[name]:copyJson(def)},functionAsset:{version:1,definition:name}};
+  checkFunctionDraft(asset);return asset;
+ });
+}
+export function linkTextureFunctionAsset(graph:Obj,assetName:string,asset:Obj,catalog:Obj[]):{graph:Obj;alias:string} {
+ if(!safeTextureId(assetName))throw new Error('Invalid function asset name');
+ const {name,definition}=assetDefinition(asset);functionInterface(definition,catalog);
+ const library=textureFunctionLibrary(graph),links=textureFunctionLinks(graph);
+ if(Object.hasOwn(library,assetName)||Object.hasOwn(links,assetName))throw new Error('Function alias exists; refresh the existing link or choose another asset');
+ const next={...graph,functions:{...library,[assetName]:copyJson(definition)},functionLinks:{...links,[assetName]:{asset:assetName,definition:name}}};
+ checkFunctionDraft(next);return {graph:next,alias:assetName};
+}
+export function refreshTextureFunctionAsset(graph:Obj,alias:string,asset:Obj,catalog:Obj[]):Obj {
+ const library=textureFunctionLibrary(graph),links=textureFunctionLinks(graph);
+ const link=Object.hasOwn(links,alias)?links[alias]:undefined,old=Object.hasOwn(library,alias)?library[alias]:undefined;
+ if(!obj(link)||!obj(old))throw new Error('Function is not linked');
+ const {name,definition}=assetDefinition(asset);
+ if(name!==link.definition||functionInterface(old,catalog)!==functionInterface(definition,catalog))throw new Error('Incompatible function revision: inputs, results or parameter types changed');
+ const next={...graph,functions:{...library,[alias]:copyJson(definition)}};
+ checkFunctionDraft(next);return next;
+}
+export function detachTextureFunctionAsset(graph:Obj,alias:string):Obj {
+ const links={...textureFunctionLinks(graph)};delete links[alias];
+ return {...graph,functionLinks:links};
 }
