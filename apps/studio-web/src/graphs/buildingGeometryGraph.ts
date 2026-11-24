@@ -34,7 +34,8 @@ export function projectBuildingGeometry(report:BuildingGeometryReport):GraphView
  add('static','Static parts: '+report.staticParts,230,230);link('structure','static');
  add('movable','Movable parts: '+report.movableParts,230,330);link('structure','movable');
  // Separate architectural lane: no link from preview to a committed-state router.
- add('commit','Runtime committed state',30,500);
+ add('physics','PHYSIS / SpatialWorld owner',30,400);
+ add('commit','Runtime committed state',30,500);link('physics','commit');
  add('router','Owner invalidation router',230,500);link('commit','router');
  buildingGraphOwners.forEach((o,i)=>{add(o.id,o.label,450,500+i*95);link('router',o.id)});
  return {nodes,links};
