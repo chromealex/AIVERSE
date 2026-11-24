@@ -71,11 +71,7 @@ bool adjacentOwned(const MapGrid& g, int c, uint8_t player) {
     return false;
 }
 
-void addBuffTo(Buffs& b, const Buff& nb) {
-    for (auto& x : b.list)
-        if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; return; }
-    b.list.push_back(nb);
-}
+void addBuffTo(Buffs& b, const Buff& nb) { upsertTimedBuff(b, nb); }
 constexpr uint16_t kSlapSource = kNoType - 1;
 } // namespace
 
