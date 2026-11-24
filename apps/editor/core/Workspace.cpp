@@ -463,6 +463,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
     std::error_code ec;
     dir = fs::weakly_canonical(dir, ec).string();
     if (!project.load(dir, err)) return false;
+    buildingGraphDiagnosticsProvider={}; // never expose the previous project's runtime
     {   // recent projects (shared with aiversemcp); the engine's own templates aren't user projects
         const std::string tpl = fs::weakly_canonical(fs::path(gamesDir()), ec).string();
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
