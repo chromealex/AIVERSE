@@ -284,6 +284,50 @@ int main() {
                    aiverse::Json::parseFile(manifestFile.string()).getStr("name")=="After",
                 "Joint save did not publish both owners");
         }
+        // S6f.4b.1: absent output is distinct from an existing empty file.
+        // Recover every publication prefix of a new map and manifest.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"NewMapSave";
+            fs::create_directories(p/"maps");
+            const auto manifest=p/"game.json",mapFile=p/"maps"/"new.json";
+            writeFile(manifest,"old");
+            MapDoc map;map.reset(16,16);map.data.name="New scene";
+            auto staged=map;
+            auto edits=staged.stageSave(p,mapFile.string(),true);
+            expect(edits.size()==1&&edits.front().createOnly,"Missing create-only map output");
+            const auto empty=p/"maps"/"empty.r16";
+            edits.push_back({empty,"","",{},0,true});
+            edits.push_back({manifest,"old","new"});
+            for(size_t phase=0;phase<=edits.size();++phase){
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare new output transaction");
+                for(size_t i=0;i<phase;++i)journal.publish(i);
+                expect(journal.recover(),"Cannot recover new output transaction");
+                expect(!fs::exists(mapFile)&&!fs::exists(empty)&&readFile(manifest)=="old",
+                    "New output recovery left partial save");
+            }
+            {
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare conflicting creation");
+                journal.publish(0);
+                writeFile(empty,"external");
+                bool refused=false;
+                try{journal.recover();}catch(const std::exception&){refused=true;}
+                expect(refused&&fs::exists(mapFile)&&readFile(empty)=="external",
+                    "Recovery overwrote or partially rolled back external conflict");
+                fs::remove(empty);
+                expect(journal.recover(),"Cannot retry new output recovery");
+            }
+            const auto lock=staged.beginStagedSave();
+            applyProjectFileEdits(p,edits);staged.finishStagedSave();
+            expect(!staged.dirty&&fs::exists(empty)&&readFile(empty).empty()&&readFile(manifest)=="new",
+                "New map transaction did not commit all outputs");
+            bool refused=false;
+            try{auto other=map;(void)other.stageSave(p,mapFile.string(),true);}
+            catch(const std::exception&){refused=true;}
+            expect(refused,"Save As silently overwrote an occupied map");
+        }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
     } catch (...) {
