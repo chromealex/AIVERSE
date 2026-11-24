@@ -258,6 +258,7 @@ inline Source compileFusionRegion(const Program& p,const FusionRegion& region,in
 struct MaterializedSources {
     MaterializedDagPlan plan;
     std::vector<Source> nodes; // indexed by source node; unreachable entries empty
+    std::vector<std::vector<size_t>> regionMembers; // authored node indices by pass root
     std::vector<Source> packs; // target order; shared result buffer reused
     size_t resultBytes=0,resultCapacityBytes=0,totalBytes=0;
     size_t reachableNodes=0,fusedNodes=0;
@@ -282,15 +283,20 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
         const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
         r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultCapacityBytes,3,incremental);
         r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
-        r.nodes.resize(p.nodes.size());
-        for(const auto& pass:r.plan.schedule.passes)
-            r.nodes[pass.pipeline]=compileFusionRegion(p,fusion.regions.at(pass.pipeline),n);
+        r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes){
+            const auto& region=fusion.regions.at(pass.pipeline);
+            r.nodes[pass.pipeline]=compileFusionRegion(p,region,n);
+            r.regionMembers[pass.pipeline]=region.nodes;
+        }
     }else{
         r.plan=planMaterializedDag(p,targets,n,budget-r.resultCapacityBytes,incremental);
         r.reachableNodes=r.plan.schedule.passes.size();
-        r.nodes.resize(p.nodes.size());
-        for(const auto& pass:r.plan.schedule.passes)
+        r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes){
             r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
+            r.regionMembers[pass.pipeline]={pass.pipeline};
+        }
     }
     r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes;
     for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));

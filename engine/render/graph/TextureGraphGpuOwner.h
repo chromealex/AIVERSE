@@ -289,10 +289,11 @@ class TextureGraphGpuOwner {
     // RHI barriers order the node dispatches within the frame. All materialized
     // slots remain pinned until the last packed output is accepted or retired.
     static void beginProfileScope(std::optional<graph_gpu_profile::Scope>& scope,gfx::Device& dev,
-            graph_gpu_profile::Capture* profile,const char* label,uint64_t request,const char* output){
+            graph_gpu_profile::Capture* profile,const char* label,uint64_t request,const char* output,
+            const graph_gpu_profile::TextureGroupScope* group=nullptr){
         if(!profile||!profile->enabled())return;
         // Optional diagnostics must not fail generation on CPU metadata allocation.
-        try{scope.emplace(dev,*profile,label,0,false,request,output);}catch(...){scope.reset();}
+        try{scope.emplace(dev,*profile,label,0,false,request,output,group);}catch(...){scope.reset();}
     }
     // Capture is a borrowed optional host diagnostic; the owner never drains
     // the shared device timing queue. A refused scope does not refuse work.
@@ -387,27 +388,42 @@ class TextureGraphGpuOwner {
             plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
             fence_=matLastFence_=token;inFlight_=true;
             std::optional<graph_gpu_profile::Scope> dispatchScope;
-            beginProfileScope(dispatchScope,dev,profile,"texture-graph-materialized-dispatch",serial_,output_.c_str());
+            const bool groupDetail=profile&&profile->textureGroups();
+            if(!groupDetail)beginProfileScope(dispatchScope,dev,profile,"texture-graph-materialized-dispatch",serial_,output_.c_str());
             if(first){
+                size_t ordinal=0;
                 const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes,[&](const ScheduledPass& pass){
+                    const size_t passOrdinal=ordinal++;
                     // The full schedule is preflighted. A clean dedicated slot
                     // contains the exact previously fence-retired value.
                     if(matIncremental_&&!matDirty_.at(pass.output)){++matReusedNodes_;return true;}
                     std::array<gfx::BufferHandle,3> inputs{};
                     if(pass.inputs.size()>inputs.size())return false;
                     for(size_t i=0;i<pass.inputs.size();++i)inputs[i]=matSlots_.at(pass.inputs[i]);
+                    std::optional<graph_gpu_profile::Scope> groupScope;
+                    if(groupDetail)try{
+                        graph_gpu_profile::TextureGroupScope meta;
+                        meta.ordinal=passOrdinal;meta.slot=pass.output;meta.slotBytes=sources.plan.schedule.slotBytes.at(pass.output);
+                        meta.root=program_->nodes.at(pass.pipeline).id;
+                        for(auto node:sources.regionMembers.at(pass.pipeline))meta.members.push_back(program_->nodes.at(node).id);
+                        beginProfileScope(groupScope,dev,profile,"texture-graph-materialized-group",serial_,output_.c_str(),&meta);
+                    }catch(...){groupScope.reset();}
                     if(!dispatchMaterializedPass(dev,matNodes_.at(pass.pipeline),matSlots_.at(pass.output),
                             std::span<const gfx::BufferHandle>(inputs.data(),pass.inputs.size()),pixels,metal))return false;
+                    if(groupScope)groupScope->finish();
                     ++passes_;++matNodePasses_;return true;
                 });
                 if(!result.complete)throw std::runtime_error("materialized node dispatch rejected");
                 matEncoded_=true;
             }
             const std::array<gfx::BufferHandle,1> input{matSlots_.at(sources.plan.outputSlots.at(index))};
+            std::optional<graph_gpu_profile::Scope> packScope;
+            if(groupDetail)beginProfileScope(packScope,dev,profile,"texture-graph-output-pack",serial_,output_.c_str());
             if(!dispatchMaterializedPass(dev,matPacks_.at(index),buffer_,
                     std::span<const gfx::BufferHandle>(input),pixels,metal))
                 throw std::runtime_error("materialized output packing rejected");
             ++passes_;++matPackPasses_;
+            if(packScope)packScope->finish();
             if(dispatchScope)dispatchScope->finish();
             state_="pending";
             if(gpuTransferRequested_&&render::texture_graph::materialSlot(setOutputs_.at(index).first)){
