@@ -367,7 +367,8 @@ void movePair(const fs::path& source,const fs::path& dest) {
 }
 }
 std::string studioCreateContentFolder(const fs::path& project,const std::string& parent,
-                                     const std::string& name,editor::ProjectHistory::MovePlan* history) {
+                                     const std::string& name,editor::ProjectHistory::MovePlan* history,StudioBatchAssetPlan* staged) {
+    if(staged&&!history)throw std::runtime_error("Staged folder creation requires history");
     validateSegment(name);
     const fs::path destination=checkedFolder(project,parent)/name;
     if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination)))
@@ -376,7 +377,7 @@ std::string studioCreateContentFolder(const fs::path& project,const std::string&
         editor::ProjectHistory::MovePlan plan;plan.quarantine=true;plan.created=true;
         const auto relative=parent.empty()?name:parent+"/"+name;
         stageCreatedAsset(project,relative,{},true,false,plan);
-        studioReplayAssetQuarantine(project,plan,false);
+        studioReplayAssetQuarantine(project,plan,false,{},staged);
         *history=std::move(plan);return relative;
     }
     if(!fs::create_directory(destination))
@@ -1099,7 +1100,7 @@ void studioReplayAssetQuarantine(const fs::path& project,
     }
 }
 editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
-    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences){
+    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences,StudioBatchAssetPlan* staged){
     const auto source=checkedSource(project,path);
     StudioAssetCatalog catalog(project);catalog.rebuild(false);
     const auto current=catalog.byGuid(expectedGuid);
@@ -1127,7 +1128,7 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
     StudioMoveJournal::syncPath(record);StudioMoveJournal::syncPath(folder);StudioMoveJournal::syncPath(root);
     // Leave the record and any payload on disk even if the in-memory history is
     // later evicted. Manual recovery is always possible; no automatic purge.
-    studioReplayAssetQuarantine(project,plan,true,validateReferences);
+    studioReplayAssetQuarantine(project,plan,true,validateReferences,staged);
     return plan;
 }
 void studioReplayAssetReplacement(const fs::path& project,
