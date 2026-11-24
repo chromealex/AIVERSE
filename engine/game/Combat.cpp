@@ -177,7 +177,7 @@ void GameCore::sysWeapons(Simulation& sim) {
             }
         }
         auto tryFire = [&] {
-        if (u.hp.raw <= 0 || (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand))) return;
+        if (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand)) return;
         if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStDisarm))) return;
         if (!w.alive(c.target) || !w.has<Unit>(c.target) || (w.get<Unit>(c.target).flags & kUnitOffMap)) { c.target = kNullEntity; return; }
@@ -226,6 +226,7 @@ void GameCore::sysWeapons(Simulation& sim) {
             const bool phased = wd.hasAttackTiming();
             const uint32_t budget = !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
             for (uint32_t shot = 0; shot < budget && cadenceReady(c.cooldown[i]); ++shot) {
+            if (phased && u.hp.raw <= 0) break;
             if ((phased || wd.preciseCooldown) && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
             if (wd.chargeTime.raw > 0 && phase.phase != AttackPhase::Windup) {
                 // charging shot: the weapon has to stay on the same target for chargeTime
