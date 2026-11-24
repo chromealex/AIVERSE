@@ -214,10 +214,16 @@ bool ComputeParticles::initGpu() {
         (vulkan||device_->info().backend==gfx::Backend::Metal);
     desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
     if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
+    if(desc_.sharedSdfCache&&desc_.staticSdf.dimension&&!desc_.depthCollision){
+        sharedSdfPayload_=desc_.sharedSdfCache->acquire(*device_,desc_.allocationBudget,graphPayload);
+        if(!sharedSdfPayload_){
+            ++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX shared SDF admission failed";return false;
+        }
+    }
     {
         auto& budget=*desc_.allocationBudget;
         budget.collect(device_->gpuCompletedFence());
-        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(graphPayload.size()-4)*sizeof(uint32_t)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(sharedSdfPayload_?0:(graphPayload.size()-4)*sizeof(uint32_t))+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
         if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
         gpuAllocationCharge_=charge;
     }
@@ -267,7 +273,8 @@ bool ComputeParticles::initGpu() {
     liveSlots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
                       gpuAllocationActive_?initialFree.data():nullptr,
                       gpuAllocationActive_?"SpectraFX persistent GPU free stack":"SpectraFX GPU live-slot gather map");
-    graphSources_=buffer(*device_,gfx::BufferType::Storage,graphPayload.size()*sizeof(uint32_t),
+    graphSources_=sharedSdfPayload_?sharedSdfPayload_->buffer():
+        buffer(*device_,gfx::BufferType::Storage,graphPayload.size()*sizeof(uint32_t),
                          graphPayload.data(),"SpectraFX immutable material and SDF sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
@@ -380,12 +387,14 @@ bool ComputeParticles::initGpu() {
                     + (proceduralActive_?size_t(cap)*40u+12u:size_t(cap)*(160u+6u*(wideIndices?4u:2u)))
                     +size_t(n*n*4)+sizeof(zero)+eventStorage.size()*sizeof(uint32_t)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
-                    +size_t(cap)*sizeof(ProgramAttributes)+graphPayload.size()*sizeof(uint32_t)
+                    +size_t(cap)*sizeof(ProgramAttributes)+(sharedSdfPayload_?0:graphPayload.size()*sizeof(uint32_t))
                     +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
+    stats_.sharedSdfBytes=sharedSdfPayload_?sharedSdfPayload_->bytes():0;
     return true;
 }
 void ComputeParticles::markGpuAllocationUsed(){
     if(!gpuAllocationCharge_||!device_)return;
+    if(sharedSdfPayload_)sharedSdfPayload_->markUsed();
     const auto fence=device_->gpuSubmissionFence();
     gpuAllocationLastFence_=fence?std::max(gpuAllocationLastFence_,fence):GpuAllocationBudget::unknownFence;
 }
@@ -416,7 +425,7 @@ void ComputeParticles::releaseGpu() {
         if(gpuDispatchArgs_.valid())device_->destroyBuffer(gpuDispatchArgs_);
         if(killSlots_.valid())device_->destroyBuffer(killSlots_);
         if(liveSlots_.valid())device_->destroyBuffer(liveSlots_);
-        if(graphSources_.valid())device_->destroyBuffer(graphSources_);
+        if(graphSources_.valid()&&!sharedSdfPayload_)device_->destroyBuffer(graphSources_);
         if(aliveCounter_.valid())device_->destroyBuffer(aliveCounter_);
         if(gpuDrawArgs_.valid())device_->destroyBuffer(gpuDrawArgs_);
         if(vmErrors_.valid())device_->destroyBuffer(vmErrors_);
@@ -428,6 +437,7 @@ void ComputeParticles::releaseGpu() {
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
     }
+    sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
@@ -1048,7 +1058,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     size_t candidateCharge=0;uint64_t candidateFence=0;
     if(desc_.allocationBudget){
         auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
-        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension&&!sharedSdfPayload_?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
         if(!budget.reserve(candidateCharge)){
             ++stats_.gpuAllocationBudgetDenied;
             if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}

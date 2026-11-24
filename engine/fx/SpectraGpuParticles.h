@@ -13,6 +13,7 @@
 #include "SpectraCheckpointFile.h"
 #include "SpectraCheckpointReadbackBudget.h"
 #include "SpectraGpuAllocationBudget.h"
+#include "SpectraSharedSdfGpuCache.h"
 #include "SpectraAdaptiveCheckpoint.h"
 #include "SpectraActiveParticlePages.h"
 #include <array>
@@ -99,6 +100,7 @@ struct ComputeEmitterDesc {
     fx::StaticSdfVolume staticSdf;
     bool reportCollisionEvents=false; // opt-in async visual contacts
     bool depthCollision=false; // native GPU-only opt-in, requires RequireGpu
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache; // optional same-Device immutable payload sharing
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -155,7 +157,8 @@ struct ComputeStats {
     bool gpuVmErrorsKnown = false; // unknown until a successful diagnostic read
     // In indirect mode submittedSlots/alive are CPU lifespan estimates;
     // exact GPU alive count stays on GPU and is used as the draw argument.
-    size_t gpuBytes = 0, uploadedBytes = 0;
+    size_t gpuBytes = 0, uploadedBytes = 0; // private bytes, excludes shared SDF payload
+    size_t sharedSdfBytes=0; // referenced bytes, not an additional private allocation
     uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
     uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
     uint32_t gpuLiveCompactions=0;
@@ -338,6 +341,7 @@ private:
     gfx::BufferHandle aliveCounter_, gpuDrawArgs_;
     gfx::BufferHandle seedProgramParams_, stateProgramParams_, gpuVmPayload_;
     gfx::BufferHandle graphSources_; // 4 material lanes + optional immutable SDF, slot 13
+    std::shared_ptr<SharedSdfGpuPayload> sharedSdfPayload_;
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
     gfx::TextureHandle texture_;

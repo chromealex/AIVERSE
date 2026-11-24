@@ -175,7 +175,8 @@ struct PoolWorldStats {
     uint32_t submittedBursts = 0, rejectedBursts = 0, frameBursts = 0;
     uint32_t cpuDrawCalls = 0, gpuDrawCalls = 0;
     uint32_t cpuParticles = 0, gpuParticlesEstimated = 0;
-    size_t gpuBytes = 0;
+    size_t gpuBytes = 0; // private live groups plus unique shared SDF bytes
+    size_t sharedSdfBytes=0,sharedSdfEntries=0;
 };
 
 class GpuPoolWorld final {
@@ -383,6 +384,7 @@ private:
     PoolWorldStats stats_{};
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget_;
     std::shared_ptr<GpuAllocationBudget> allocationBudget_;
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache_;
     std::vector<Group> gpuGroups_;
     PoolResetReport resetReport_{};
     std::vector<uint8_t> resetAccepted_; // per GPU group, retained across retries

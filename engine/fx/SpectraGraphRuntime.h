@@ -42,6 +42,7 @@ struct GraphRuntimeOptions {
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
     std::shared_ptr<GpuAllocationBudget> allocationBudget;
     fx::SdfResourceReader sdfReader; // compile-time only; host owns bounded IO
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache;
 };
 
 struct GraphGpuEligibility {

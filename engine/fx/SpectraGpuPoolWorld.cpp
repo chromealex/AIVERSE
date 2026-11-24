@@ -57,6 +57,7 @@ bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     if(!allocationBudget_){
         reason_="SpectraFX allocation budget conflicts with canonical Device ledger";cpu_.shutdown();device_=nullptr;return false;
     }
+    if(device_)sharedSdfCache_=std::make_shared<SharedSdfGpuCache>(*device_);
     sourceWorldEpoch_=nextSourceWorldEpoch.fetch_add(1,std::memory_order_relaxed);
     initialized_=true;
     reason_.clear();
@@ -75,6 +76,7 @@ void GpuPoolWorld::shutdown() {
     sources_.clear();freeSourceSlots_.clear();
     sourceWorldEpoch_=0;nextBindingRevision_=1;nextSourceToken_=1;
     checkpointBudget_.reset();
+    sharedSdfCache_.reset();
     allocationBudget_.reset();
     cpu_.shutdown();
     device_=nullptr;
@@ -178,6 +180,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     // groups with different checkpoint cadences.
     actual.checkpointBudget=checkpointBudget_;
     actual.allocationBudget=allocationBudget_;
+    actual.sharedSdfCache=sharedSdfCache_;
     std::string collisionChild;
     const GraphGpuEligibility eligible=inspectPoolGraphGpuEligibility(effect,actual,&collisionChild);
     const bool wantsGpu=options.preference!=ComputePreference::CpuOnly;
@@ -199,6 +202,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     remembered.options.checkpointBudget.reset();
     remembered.options.allocationBudget.reset();
     remembered.options.sdfReader={};
+    remembered.options.sharedSdfCache.reset();
     remembered.named=named;
     remembered.defaults=next.defaults;
     remembered.dataBindings=dataBindings;
@@ -846,6 +850,9 @@ bool GpuPoolWorld::step(float dt) {
         stats_.gpuParticlesEstimated+=stats.alive;
         stats_.gpuBytes+=stats.gpuBytes;
     }
+    stats_.sharedSdfBytes=sharedSdfCache_?sharedSdfCache_->liveBytes():0;
+    stats_.sharedSdfEntries=sharedSdfCache_?sharedSdfCache_->liveEntries():0;
+    stats_.gpuBytes+=stats_.sharedSdfBytes;
     stats_.cpuParticles=uint32_t(cpu_.stats().particles);
     return allOk;
 }

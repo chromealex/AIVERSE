@@ -23,6 +23,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     result.gpu.adaptiveCheckpoint=options.adaptiveCheckpoint;
     result.gpu.checkpointBudget=options.checkpointBudget;
     result.gpu.allocationBudget=options.allocationBudget;
+    result.gpu.sharedSdfCache=options.sharedSdfCache;
 
     const auto reject=[&](const char* why) {
         result.reason=why;
