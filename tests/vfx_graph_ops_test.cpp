@@ -5,6 +5,7 @@
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
 #include "engine/render/graph/TextureGraphGpu.h"
+#include "engine/render/graph/TextureGraphGpuDag.h"
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
@@ -263,6 +264,29 @@ int main() {
     require(sharedHeight.first.msl==sharedNormal.first.msl&&sharedHeight.first.glsl==sharedNormal.first.glsl,"scalar producer differs");
     require(sharedHeight.second.msl.find("height[tid]")!=std::string::npos&&sharedHeight.second.glsl.find("binding=13")!=std::string::npos,"scalar packing ABI missing");
     require(!render::texture_graph::gpu::plan(sharedTexture,0,128).twoPass&&!render::texture_graph::gpu::plan(sharedTexture,2,128,true).twoPass,"independent scalar should stay fused");
+    const auto materialized=render::texture_graph::compile(Json::parse(R"({
+        "version":1,"size":128,"nodes":[
+        {"id":"h","op":"fbm","inputs":[],"properties":{"period":8,"octaves":3,"seed":17}},
+        {"id":"c0","op":"color","inputs":[],"properties":{"value":[0.1,0.2,0.3]}},
+        {"id":"c1","op":"color","inputs":[],"properties":{"value":[0.9,0.7,0.5]}},
+        {"id":"color","op":"colorize","inputs":["h","c0","c1"]},
+        {"id":"rough","op":"invert","inputs":["h"]},
+        {"id":"packed","op":"metallicRoughness","inputs":["rough","h"]},
+        {"id":"normal","op":"normal","inputs":["h"]}],
+        "outputs":{"color":"color","height":"h","roughness":"rough","metallicRoughness":"packed","normal":"normal","mask":"h"}})"));
+    const std::vector<size_t> dagTargets{3,0,4,5,6,0};
+    const auto dag=render::texture_graph::gpu::compileMaterializedDag(materialized,dagTargets,128);
+    require(dag.ready()&&dag.nodeKernels.size()==7&&dag.slots.slotCount<=8,"materialized DAG plan incomplete");
+    for(size_t i=0;i<dag.slots.steps.size();++i){
+        const auto& step=dag.slots.steps[i];const auto& source=dag.nodeKernels[i];
+        require(!source.msl.empty()&&!source.glsl.empty(),"missing node kernel");
+        require(step.inputSlots.size()==materialized.nodes[step.node].inputs.size(),"input ABI count");
+        if(step.node==0)require(step.packOutputIndices==std::vector<size_t>({1,5}),"duplicate target fanout lost");
+        if(step.node==3)require(source.glsl.find("binding=15")!=std::string::npos&&source.msl.find("mix(v1,v2,v0.x)")!=std::string::npos,"three-port colorize lowering failed");
+        if(step.node==6)require(source.glsl.find("src0[((y+1u)%n)*n+x].x")!=std::string::npos,"normal neighborhood lowering failed");
+        if(step.node==5)require(source.msl.find("float3(1.0f,v0.x,v1.x)")!=std::string::npos,"packed PBR channels incorrect");
+    }
+    require(!render::texture_graph::gpu::compileMaterializedDag(materialized,dagTargets,128,1024).ready(),"overbudget source plan accepted");
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");
