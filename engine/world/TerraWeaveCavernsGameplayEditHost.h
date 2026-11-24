@@ -294,14 +294,61 @@ public:
         worker_.registerResident(std::move(mesh));
     }
 
+    // The edit host owns these leases, so external bookkeeping cannot
+    // discard them. Stage the replacement visual shard first, then retire
+    // the exact native leases inside its real activation callback.
+    bool retireOwnedChunk(gfx::Device& device,physics::Scene& scene,
+                          world::SpatialWorld& spatial,ChunkKey3 key,
+                          uint64_t expectedRenderRevision,
+                          uint64_t nextRenderRevision,
+                          const std::function<bool()>& exclusive,
+                          const std::function<bool()>& retireNavigation,
+                          CaveBatchSpec spec={}) {
+        if(!exclusive||!exclusive()||!retireNavigation||!expectedRenderRevision)
+            return false;
+        const auto it=physics_.find(key);
+        if(it==physics_.end()||!it->second)return false;
+        const auto dirty=worker_.dirtyKeys();
+        if(std::find(dirty.begin(),dirty.end(),key)!=dirty.end())return false;
+        auto& box=it->second->boxOwner();
+        auto& collision=it->second->spatialOwner();
+        if(!box.canRetire(scene)||!collision.canRetire(spatial))return false;
+        const auto* old=geometry_.catalog().find(key);
+        if(!old||old->revision!=expectedRenderRevision)return false;
+        const auto shard=caveShardFor(key,geometry_.catalog().config());
+        if(!geometry_.stageVisualRetire(device,key,expectedRenderRevision,
+                                       nextRenderRevision,spec))return false;
+        bool nativeChanged=false;
+        const bool committed=geometry_.activate(shard,[&](const auto&){
+            if(!exclusive()||!box.canRetire(scene)||!collision.canRetire(spatial))
+                return false;
+            // False means the nav callback made no live changes.
+            if(!retireNavigation())return false;
+            nativeChanged=true;
+            if(!exclusive())throw std::logic_error("Caverns lost retirement exclusion");
+            box.unload(scene);
+            collision.unload(spatial);
+            return true;
+        });
+        if(!committed){
+            if(nativeChanged)throw std::logic_error("Caverns GPU retirement failed after native mutation");
+            (void)geometry_.cancel(shard);
+            return false;
+        }
+        (void)worker_.forgetResident(key);
+        physics_.erase(it);
+        return true;
+    }
+
     // Called only after external streaming retirement truly removed the
     // GPU source, Box3D body, SpatialWorld IDs and relevant nav ownership.
     // Forgetting a pending edited chunk is forbidden by residency leases.
     bool forgetCommittedMesh(ChunkKey3 key,uint64_t renderRevision) {
+        // Owned native resources must use retireOwnedChunk instead.
+        if(physics_.contains(key))return false;
         if(!renderRevision || !geometry_.forgetCommittedSource(key,renderRevision))
             return false;
         (void)worker_.forgetResident(key);
-        physics_.erase(key); // external owner must have unloaded native bodies
         return true;
     }
 
