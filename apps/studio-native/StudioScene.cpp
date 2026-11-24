@@ -106,7 +106,7 @@ struct StudioScene::GraphPresentation {
         if(!stream.read(encoded.data(),std::streamsize(encoded.size()))||stream.peek()!=std::char_traits<char>::eof())throw std::runtime_error("HDR environment changed during read");
         RadianceImage hdr;std::string error;
         if(!parseRadianceHdr(encoded,hdr,error,64u*1024u*1024u))throw std::runtime_error(error);
-        const auto atlas=environment_ibl::convolve(hdr);
+        const auto atlas=environment_ibl::convolveWithBrdf(hdr);
         // The old atlas remains visible until the replacement is successfully uploaded.
         if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
         auto candidate=uploadRadianceHdr(dev,atlas,error);

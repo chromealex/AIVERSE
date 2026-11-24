@@ -59,6 +59,75 @@ inline WeightedDirection diffuseDirection(float u,float v){
     return {{s*std::cos(phi),s*std::sin(phi),std::sqrt(1.f-u)},1.f};
 }
 inline constexpr int specularSamples=256,diffuseSamples=128;
+// Independent split-sum BRDF integral. The LUT is stored below the five
+// radiance bands, with a one-texel clamp gutter, to avoid another sampler.
+inline constexpr int brdfSize=128,brdfSamples=512;
+inline constexpr int radianceHeight=bandHeight*bands,brdfHeight=brdfSize+2,combinedHeight=radianceHeight+brdfHeight;
+static_assert(brdfSize+2==bandWidth);
+inline float dot(Vec a,Vec b){return a.x*b.x+a.y*b.y+a.z*b.z;}
+inline float smithG1(float nd,float a2){
+    if(nd<=0.f)return 0.f;
+    return 2.f*nd/(nd+std::sqrt(a2+(1.f-a2)*nd*nd));
+}
+inline float fresnel5(float x){const float x2=x*x;return x2*x2*x;}
+inline std::vector<Vec> brdfHalfVectors(float roughness){
+    const float a=roughness*roughness,a2=a*a;
+    std::vector<Vec> samples;samples.reserve(brdfSamples);
+    for(int i=0;i<brdfSamples;++i){
+        const float u=(i+.5f)/float(brdfSamples),phi=2.f*pi*radicalInverse(uint32_t(i));
+        const float z=std::sqrt((1.f-u)/(1.f+(a2-1.f)*u)),s=std::sqrt(std::max(0.f,1.f-z*z));
+        samples.push_back({s*std::cos(phi),s*std::sin(phi),z});
+    }
+    return samples;
+}
+inline std::array<float,2> integrateBrdf(float ndv,float roughness,const std::vector<Vec>& halfVectors){
+    ndv=std::clamp(ndv,0.0001f,1.f);roughness=std::clamp(roughness,0.f,1.f);
+    if(roughness==0.f){const float f=fresnel5(1.f-ndv);return {1.f-f,f};}
+    const float a=roughness*roughness,a2=a*a;
+    const Vec v={std::sqrt(std::max(0.f,1.f-ndv*ndv)),0.f,ndv};
+    const float gv=smithG1(ndv,a2);double scale=0,bias=0;
+    for(const auto& h:halfVectors){
+        const float vdh=dot(v,h);
+        if(vdh<=0.f||h.z<=0.f)continue;
+        const float ndl=2.f*vdh*h.z-ndv;
+        if(ndl<=0.f)continue;
+        const float visibility=gv*smithG1(ndl,a2)*vdh/(h.z*ndv);
+        const float fc=fresnel5(1.f-std::clamp(vdh,0.f,1.f));
+        scale+=(1.f-fc)*visibility;bias+=fc*visibility;
+    }
+    // Divide by all samples, including rejected below-horizon directions.
+    const double count=double(halfVectors.size());
+    if(count==0)return {0.f,0.f};
+    return {float(std::clamp(scale/count,0.0,1.0)),float(std::clamp(bias/count,0.0,1.0))};
+}
+inline std::array<float,2> integrateBrdf(float ndv,float roughness){
+    roughness=std::clamp(roughness,0.f,1.f);
+    return integrateBrdf(ndv,roughness,brdfHalfVectors(roughness));
+}
+// Cached CPU pixels are independent of project/environment and immutable.
+inline const std::vector<uint16_t>& brdfLut(){
+    static const std::vector<uint16_t> lut=[]{
+        std::vector<uint16_t> pixels(size_t(bandWidth)*brdfHeight*4u);
+        for(int y=0;y<brdfSize;++y){
+            const float rough=(y+.5f)/brdfSize;
+            const auto vectors=brdfHalfVectors(rough);
+            for(int x=0;x<brdfSize;++x){
+                const auto ab=integrateBrdf((x+.5f)/brdfSize,rough,vectors);
+                const size_t i=(size_t(y+1)*bandWidth+x+1)*4;
+                pixels[i]=hdr_detail::toHalf(ab[0]);pixels[i+1]=hdr_detail::toHalf(ab[1]);
+                pixels[i+2]=0;pixels[i+3]=0x3c00u;
+            }
+        }
+        auto copy=[&](int dx,int dy,int sx,int sy){
+            const size_t d=(size_t(dy)*bandWidth+dx)*4,s=(size_t(sy)*bandWidth+sx)*4;
+            for(size_t c=0;c<4;++c)pixels[d+c]=pixels[s+c];
+        };
+        for(int y=1;y<=brdfSize;++y){copy(0,y,1,y);copy(brdfSize+1,y,brdfSize,y);}
+        for(int x=0;x<bandWidth;++x){copy(x,0,x,1);copy(x,brdfSize+1,x,brdfSize);}
+        return pixels;
+    }();
+    return lut;
+}
 inline RadianceImage convolve(const RadianceImage& source){
     if(source.width<2||source.height<1||source.width!=2*source.height||
        source.width>8192||source.rgba16f.size()!=size_t(source.width)*source.height*4)
@@ -105,5 +174,13 @@ inline RadianceImage convolve(const RadianceImage& source){
         for(int x=0;x<bandWidth;++x){copy(x,off,x,off+1);copy(x,off+height+1,x,off+height);}
     }
     return result;
+}
+// Keep legacy convolve() contract intact for native consumers. Studio opts
+// into the extended atlas; older borrowed atlases retain analytic BRDF.
+inline RadianceImage convolveWithBrdf(const RadianceImage& source){
+    auto atlas=convolve(source);
+    const auto& lut=brdfLut();
+    atlas.rgba16f.insert(atlas.rgba16f.end(),lut.begin(),lut.end());
+    atlas.height=combinedHeight;return atlas;
 }
 } // namespace aiverse::render::environment_ibl

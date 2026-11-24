@@ -147,6 +147,19 @@ void environmentConvolution(){
     for(int y=0;y<4;++y)for(int x=0;x<8;++x){
         const size_t i=size_t(y*8+x)*4;nonuniform.rgba16f[i]=x<4?0x4400u:0;nonuniform.rgba16f[i+3]=0x3c00u;
     }
+    const auto mirror=integrateBrdf(.5f,0.f);
+    require(std::abs(mirror[0]-.96875f)<.00001f&&std::abs(mirror[1]-.03125f)<.00001f,"mirror Schlick split sum");
+    const auto roughNormal=integrateBrdf(1.f,1.f);
+    require(std::abs(roughNormal[0]+roughNormal[1]-(1.f-std::log(2.f)))<.002f,"GGX Smith normal-incidence hemispherical integral");
+    const auto combined=convolveWithBrdf(image);
+    require(combined.width==bandWidth&&combined.height==combinedHeight&&combined.rgba16f.size()==size_t(bandWidth)*combinedHeight*4,"combined BRDF atlas geometry");
+    require(std::equal(atlas.rgba16f.begin(),atlas.rgba16f.end(),combined.rgba16f.begin()),"BRDF append must preserve radiance data");
+    const auto& lut=brdfLut();
+    for(size_t i=0;i<lut.size();i+=4)require(halfValue(lut[i])<=1.f&&halfValue(lut[i+1])<=1.f&&lut[i+2]==0&&lut[i+3]==0x3c00u,"finite BRDF LUT channels");
+    for(int y=1;y<=brdfSize;++y){
+        const size_t i=size_t(y)*bandWidth*4;
+        require(lut[i]==lut[i+4]&&lut[i+size_t(brdfSize+1)*4]==lut[i+size_t(brdfSize)*4],"BRDF horizontal clamp gutter");
+    }
     const auto filtered=convolve(nonuniform);
     const auto at=[&](int band,int x,int y){return filtered.rgba16f[(size_t(band*bandHeight+y)*bandWidth+x)*4];};
     require(at(0,16,32)>at(0,112,32),"directional radiance preserved");

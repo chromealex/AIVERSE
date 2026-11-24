@@ -1315,7 +1315,8 @@ public:
     bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
 
     void setMaterialQuality(MaterialQuality q);
-    // Borrowed linear RGBA16F EnvironmentIbl atlas; caller retains it until
+    // Borrowed linear RGBA16F EnvironmentIbl atlas (130x330 legacy or
+    // 130x460 with integrated BRDF LUT); caller retains it until
     // all renderer GPU reads complete. No ownership or scene-wide fallback.
     bool setModelEnvironment(gfx::TextureHandle atlas,float rotation=0.f,float intensity=1.f){
         if(atlas.valid()&&(!dev_||dev_->maxFragmentTextureSlots()<14||!dev_->supports(gfx::PixelFormat::RGBA16F)||

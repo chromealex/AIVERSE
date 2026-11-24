@@ -213,7 +213,12 @@ layout(std140) uniform U6 { vec4 u_environment; };
 vec3 environmentBand(vec3 d,float band) {
     float u=fract(atan(d.z,d.x)/6.28318530718+0.5+u_environment.x/6.28318530718);
     float v=acos(clamp(d.y,-1.0,1.0))/3.14159265359;
-    return texture(tex13,vec2((1.0+u*128.0)/130.0,(band*66.0+1.0+v*64.0)/330.0)).rgb*u_environment.y;
+    float atlasHeight=float(textureSize(tex13,0).y);
+    return texture(tex13,vec2((1.0+u*128.0)/130.0,(band*66.0+1.0+v*64.0)/atlasHeight)).rgb*u_environment.y;
+}
+vec2 environmentBrdf(float ndv,float rough,vec2 fallback) {
+    if(textureSize(tex13,0)!=ivec2(130,460))return fallback;
+    return texture(tex13,vec2((1.0+clamp(ndv,0.0,1.0)*128.0)/130.0,(331.0+clamp(rough,0.0,1.0)*128.0)/460.0)).rg;
 }
 #endif
 #if defined(LIGHTMAP)
@@ -466,6 +471,7 @@ void main() {
     // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
     float band=clamp(rough,0.0,1.0)*3.0,lo=floor(band);
     env=mix(environmentBand(R,lo),environmentBand(R,min(lo+1.0,3.0)),fract(band))*ambientVisibility;
+    AB=environmentBrdf(ndv,rough,AB);
 #endif
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
@@ -883,7 +889,11 @@ struct IcbPbrTextures {
 static float3 environmentBand(texture2d<float> env,sampler smp,float4 params,float3 d,float band){
     float u=fract(atan2(d.z,d.x)/6.28318530718f+0.5f+params.x/6.28318530718f);
     float v=acos(clamp(d.y,-1.0f,1.0f))/3.14159265359f;
-    return env.sample(smp,float2((1.0f+u*128.0f)/130.0f,(band*66.0f+1.0f+v*64.0f)/330.0f)).rgb*params.y;
+    return env.sample(smp,float2((1.0f+u*128.0f)/130.0f,(band*66.0f+1.0f+v*64.0f)/float(env.get_height()))).rgb*params.y;
+}
+static float2 environmentBrdf(texture2d<float> env,sampler smp,float ndv,float rough,float2 fallback){
+    if(env.get_width()!=130u||env.get_height()!=460u)return fallback;
+    return env.sample(smp,float2((1.0f+clamp(ndv,0.0f,1.0f)*128.0f)/130.0f,(331.0f+clamp(rough,0.0f,1.0f)*128.0f)/460.0f)).rg;
 }
 #endif
 fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
@@ -1162,6 +1172,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
     float band=clamp(rough,0.0f,1.0f)*3.0f,lo=floor(band);
     env=mix(environmentBand(tex13,s13,environment,R,lo),environmentBand(tex13,s13,environment,R,min(lo+1.0f,3.0f)),fract(band))*ambientVisibility;
+    AB=environmentBrdf(tex13,s13,ndv,rough,AB);
 #endif
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
