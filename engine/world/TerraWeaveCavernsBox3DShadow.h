@@ -14,7 +14,7 @@ public:
     uint64_t activeRevision()const noexcept{return activeRevision_;}
     physics::BodyHandle activeBody()const noexcept{return activeBody_;}
     bool prepare(const CaveCollisionPrepared& source) {
-        if(!source.revision||source.revision<=activeRevision_||
+        if(candidateInstalled_||!source.revision||source.revision<=activeRevision_||
            (staged_&&source.revision<=stagedRevision_)||
            (source.body.indices.empty()!=source.body.vertices.empty()))
             return false;
@@ -95,9 +95,14 @@ public:
         if(!staged_||revision!=stagedRevision_||candidateInstalled_)return false;
         staged_.reset();stagedRevision_=0;return true;
     }
+    bool canRetire(const physics::Scene& scene)const {
+        return !candidateInstalled_&&!staged_&&
+               (activeBody_==physics::kNoBody||scene.valid(activeBody_));
+    }
     void unload(physics::Scene& scene){
-        if(activeBody_!=physics::kNoBody&&scene.valid(activeBody_))
-            (void)scene.destroy(activeBody_);
+        if(!canRetire(scene))throw std::logic_error("Caverns Box3D retirement preflight failed");
+        if(activeBody_!=physics::kNoBody&&!scene.destroy(activeBody_))
+            throw std::runtime_error("Caverns Box3D retirement refused");
         activeBody_=physics::kNoBody;activeRevision_=0;
         staged_.reset();stagedRevision_=0;
     }
