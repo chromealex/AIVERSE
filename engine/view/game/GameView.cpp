@@ -346,6 +346,8 @@ void GameView::setRoadMap(const Json& map) {
 float4 GameView::playerColor(int p) { return overlayPlayerColor(p); }   // palette shared with the overlays
 
 bool GameView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
+    if(resources_.activeModelReaders() || strictAppearanceReload_)
+        throw std::logic_error("GameView init: active Model readers or appearance transaction");
     pendingSurfaceLease_.reset();
     framePublication_.invalidate();
     // Terrain, fog, roads, shores and overlays also own RHI handles when a
@@ -644,6 +646,9 @@ void GameView::drawNereidLegacyWater(Renderer3D& r,bool terrainReady) {
 }
 
 void GameView::shutdown(gfx::Device& dev) {
+    // Fail before clearing ANY host state or waiting on the GPU.
+    if(resources_.activeModelReaders() || strictAppearanceReload_)
+        throw std::logic_error("GameView shutdown: active Model readers or appearance transaction");
     // Private unpublished GPU candidates must be released BEFORE the
     // full-device idle boundary or owner kit shutdown.
     pendingSurfaceLease_.reset();

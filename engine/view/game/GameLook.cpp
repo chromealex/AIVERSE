@@ -321,6 +321,9 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 }
 
 bool GameView::prepareType(uint16_t type, bool allVariants) {
+    // Do not consume a ready CPU result or advance its publication cursor
+    // while an owner-thread Model reader is alive. Retry on the next tick.
+    if(resources_.activeModelReaders())return false;
 #ifndef __EMSCRIPTEN__
     if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeCurrent(type) && !allVariants)) return true;
     const auto& original = rules_->types[type];
@@ -393,7 +396,7 @@ size_t GameView::pendingModelVariants() const {
 }
 
 void GameView::streamModelVariants(double budgetMs) {
-    if (!rules_ || !dev_ || budgetMs <= 0) return;
+    if (!rules_ || !dev_ || budgetMs <= 0 || resources_.activeModelReaders()) return;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(int64_t(budgetMs * 1000));
     for (size_t type = 0; type < looks_.size(); ++type) {
         auto& look = looks_[type];
@@ -554,7 +557,7 @@ void GameView::rememberReloadPlayback(uint64_t key,const EntityAnim& state) noex
 // No affected Model/Graph pointers may survive the release barrier. Keep
 // unaffected TypeLooks and MotionWeave players alive to preserve their clocks.
 size_t GameView::reloadModelSources(const std::vector<std::string>& sources) {
-    if(!dev_ || !rules_ || sources.empty())return 0;
+    if(!dev_ || !rules_ || sources.empty() || resources_.activeModelReaders())return 0;
     std::unordered_set<std::string> changed;
     for(const auto& source:sources)
         if(!source.empty())
@@ -649,6 +652,8 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                                     bool reloadMaterialLibrary,
                                     size_t* refreshed) {
     if(refreshed)*refreshed=0;
+    // Preserve last-good materials, pending shader state and CPU preparation.
+    if(resources_.activeModelReaders() || strictAppearanceReload_)return false;
     gpuAppearancePending_=false;
     if(!dev_ || !rules_)return false;
 #ifndef __EMSCRIPTEN__
@@ -1072,7 +1077,7 @@ void GameView::requestDetail(uint16_t type, bool detailed) {
     requestedModels_[type]=detailed ? std::string{} : coarse;
 }
 void GameView::loadType(uint16_t type) {
-    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type)) return;
+    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type) || resources_.activeModelReaders()) return;
     const bool replacing=loadedTypes_[type];
     TypeLook ready;
     const auto path=requestedModels_[type].empty()?rules_->types[type].view["streaming"].getStr("detailModel"):requestedModels_[type];

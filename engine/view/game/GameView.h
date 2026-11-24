@@ -390,6 +390,9 @@ public:
             const render::Model&,const std::vector<render::Material>&)>;
     // The host owns GPU shader caches. Stage all candidate appearance
     // pipelines before committing new materials or Models to the live View.
+    // Synchronous trusted callback: candidate Model/materials may be scratch
+    // objects, not cache residents. Do not retain pointers/handles or reenter
+    // View mutation, publication, frame or teardown APIs from this callback.
     void setAppearancePipelineValidator(AppearancePipelineValidator validator) {
         appearancePipelineValidator_=std::move(validator);
     }
@@ -411,6 +414,9 @@ public:
     render::texture_graph::NativeGraphImageRead readGraphMaterialImage(
         size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
         std::string_view output) const;
+    // Trusted synchronous transaction adapter. Borrowed Model, mirror and
+    // device arguments must not escape; no View reentry or reader acquisition.
+    // The callback owns its transactional success/refusal semantics.
     using GraphMaterialApply=std::function<bool(view::AppearanceAssetRegistry::Snapshot&,
         std::vector<render::Material>&,render::Model&,gfx::Device&,
         const render::RenderDeviceLifetime::Lease&,render::ModelImageRollbackPool&,std::string*)>;

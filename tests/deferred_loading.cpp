@@ -124,6 +124,23 @@ int aiverseMain(int, char**) {
         check(view.activeModelReadLeases()==1,"invalid choice leaked a reader");
         view.trimTypes(std::vector<bool>{true,false,false},true);
         check(view.typeLoaded(1) && read.valid(),"trim must refuse before detaching live choice");
+        const auto generation=view.modelResources().generation();
+        const auto beforeAlive=dev.alive;
+        check(!view.prepareType(2),"reader must defer CPU preparation publication");
+        view.loadType(2);
+        check(!view.typeLoaded(2),"reader must defer type publication");
+        size_t refreshed=99;
+        check(!view.reloadAppearanceTypes({1},false,&refreshed)&&refreshed==0,
+              "reader must refuse appearance staging");
+        check(view.reloadModelSources({"b.obj"})==0,"reader must defer source reload");
+        bool initRefused=false,shutdownRefused=false;
+        try { (void)view.init(dev,rules,reader); }
+        catch(const std::logic_error&) { initRefused=true; }
+        try { view.shutdown(dev); }
+        catch(const std::logic_error&) { shutdownRefused=true; }
+        check(initRefused&&shutdownRefused,"reader must refuse init and shutdown");
+        check(read.valid()&&view.typeLoaded(1)&&view.modelResources().generation()==generation&&dev.alive==beforeAlive,
+              "refused mutations must preserve model generation and GPU owners");
     }
     check(view.activeModelReadLeases()==0,"choice reader leaked after scope");
     view.trimTypes(std::vector<bool>{true,false,false},true);
