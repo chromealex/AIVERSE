@@ -12,6 +12,7 @@
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
 #include "engine/buildings/BuildingGraphDiagnosticsJson.h"
+#include "engine/buildings/BuildingGraphMonitor.h"
 #include "engine/buildings/BuildingRenderer3DScene.h"
 #include "engine/scene/SceneCollisionNamespaces.h"
 #include <algorithm>
@@ -99,21 +100,24 @@ public:
         registerBuildingPhysicalExtentPersistence(sim);
         registerBuildingLiftCheckpointPersistence(sim);
         if(host->lockstep())registerBuildingLockstepPersistence(sim);
-        sim.addStepGate([weak](Simulation&){auto h=weak.lock();return h&&h->settleGraphs();});
+        sim.addStepGate([weak](Simulation&){auto h=weak.lock();if(!h)return false;
+            const bool ready=h->settleGraphs();h->publishGraphMonitor();return ready;});
         sim.addStateRestoredHook([weak](Simulation&){
             if(auto h=weak.lock()){
                 if(h->lockstep()){
                     h->recovering_=true;
                     if(!h->restoreLockstep(&h->lastError_))h->recovering_=true;
                 }else h->beginRecovery();
+                if(h->graphMonitor_)h->graphMonitor_->clear();
+                h->publishGraphMonitor();
             }
         });
         sim.addSetupCompletedHook([weak](Simulation& s){
             if(auto h=weak.lock()){
                 s.addSystem("building.world",[weak](Simulation& owner){
-                    if(auto active=weak.lock())active->advance(owner);
+                    if(auto active=weak.lock()){active->advance(owner);active->publishGraphMonitor();}
                 });
-                h->activateInitial();
+                h->activateInitial();h->publishGraphMonitor();
             }
         });
         if(error)error->clear();
@@ -635,6 +639,17 @@ public:
         const auto* s=find(id);if(!s)return std::nullopt;return s->domains;
     }
 
+    // Opt-in, on the world owner thread before use. Readers retain the
+    // monitor, never the world. A detached monitor is emptied on shutdown.
+    void setGraphMonitor(std::shared_ptr<BuildingGraphMonitor> monitor){
+        if(graphMonitor_)graphMonitor_->clear();
+        graphMonitor_=std::move(monitor);publishGraphMonitor();
+    }
+    void publishGraphMonitor()const noexcept{
+        if(!graphMonitor_)return;
+        // Diagnostics must not change simulation outcomes on allocation failure.
+        try{for(const auto& [id,scene]:scenes_){(void)scene;graphMonitor_->publish(id,graphDiagnosticsSnapshot(id));}}catch(...){}
+    }
     // Host may copy this value into a thread-safe diagnostic publication.
     // Unknown scene is null; no graph consumers are invoked by this read.
     Json graphDiagnosticsSnapshot(uint64_t id)const{
@@ -696,6 +711,7 @@ public:
     // resources. No renderer/physics work is hidden in a destructor.
     bool shutdown(std::string* error=nullptr){
         shuttingDown_=true;
+        if(graphMonitor_)graphMonitor_->clear();
         for(const auto& [id,s]:scenes_){
             (void)id;
             if(!graphicsDetached(*s)||!ownsPhysical(*s)||
@@ -1240,6 +1256,7 @@ private:
     bool initialReady_=false,recovering_=false,epochExhausted_=false,shuttingDown_=false;
     std::string lastError_;
     std::map<uint64_t,std::unique_ptr<Scene>> scenes_;
+    std::shared_ptr<BuildingGraphMonitor> graphMonitor_;
 };
 
 } // namespace aiverse::building
