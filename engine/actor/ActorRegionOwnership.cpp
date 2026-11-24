@@ -85,6 +85,9 @@ std::vector<uint32_t> ActorHost::portableDerivedResourceTypes(){
 
 void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
     admittedRegionMoves_.clear();
+    navigationCollisionRevision_=UINT64_MAX;
+    navigationReadinessError_.clear();
+    collisionAdmissionError_.clear();
     auto& ecs=sim.world();
     ecs.eraseResource<RegionSeatIndex>();
     ecs.eraseResource<RegionIdentityIndex>();
