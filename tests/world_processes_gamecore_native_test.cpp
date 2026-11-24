@@ -26,6 +26,7 @@
 #include "aiverselib/world/EvolveSurfaceEcology.h"
 #include "aiverselib/world/EvolvePlanetEcologySampling.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
+#include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -729,6 +730,35 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetRootSupport(){
+    using namespace terraweave;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    auto lowered=surface;
+    std::fill(lowered.corners.begin(),lowered.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(-32));
+    AnchoredPlant tree;tree.anchor.speciesId=1;tree.anchor.plantKey=10;
+    tree.anchor.roots=defaultRootProfile(PlantHabit::Tree);
+    auto moonTree=tree;moonTree.anchor.plantKey=11;
+    World ecs;TerraWeaveAuthorityResource authority;authority.rooted={tree,moonTree};
+    ecs.setResource<TerraWeaveAuthorityResource>(authority);ecs.enableCowSnapshots();
+    const World before=ecs;
+    std::vector<evolve::PlanetRootBinding> bindings{
+        {{1,10},"terra",surface.cellCenter(surface.gridCell(0,0,7,7))},
+        {{1,11},"moon",surface.cellCenter(surface.gridCell(1,0,7,7))}
+    };
+    auto wrong=bindings;wrong[1].bodyId="terra";
+    AIVERSE_TEST_CHECK(!evolve::reconcilePlanetRoots(ecs,lowered,wrong,1,7));
+    const auto result=evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7);
+    AIVERSE_TEST_CHECK(result&&result->falls.size()==1&&result->falls[0].bodyId=="terra");
+    AIVERSE_TEST_CHECK(result->falls[0].event.id.key==10&&result->falls[0].event.supportPermille==0);
+    const auto* current=ecs.resourceConst<TerraWeaveAuthorityResource>();
+    AIVERSE_TEST_CHECK(current->rooted[0].fallen&&!current->rooted[1].fallen);
+    AIVERSE_TEST_CHECK(current->stateRevision==1&&!before.resourceConst<TerraWeaveAuthorityResource>()->rooted[0].fallen);
+    const auto retry=evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7);
+    AIVERSE_TEST_CHECK(retry&&retry->falls.empty()&&retry->authorityRevision==1);
+    ecs=before;
+    AIVERSE_TEST_CHECK(evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7)->falls.size()==1);
 }
 static void checkPlanetFoundationLoss(){
     using namespace fracture;
@@ -1582,6 +1612,7 @@ int main(){
     checkPlanetSoilGeometry();
     checkPlanetCollapseDelivery();
     checkPlanetFoundationLoss();
+    checkPlanetRootSupport();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
