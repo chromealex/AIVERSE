@@ -360,6 +360,16 @@ int main(int argc,char** argv){
                 CHECK(std::abs((sized.mesh.boundsMax[2]-sized.mesh.boundsMin[2])-(turn%2?32.f:28.f))<0.002f);
             }
         }
+        for(uint32_t turn=0;turn<4;++turn){
+            const auto compact=dressStructure(st,"factory",3,{},turn,StructureSize{16.f,9.f,11.f});
+            CHECK(!compact.mesh.vertices.empty());
+            CHECK(compact.gates.size()==2);
+            const float expected[3]={turn%2?11.f:16.f,9.f,turn%2?16.f:11.f};
+            for(int axis=0;axis<3;++axis){
+                CHECK(std::abs(compact.mesh.boundsMin[axis])<0.002f);
+                CHECK(std::abs(compact.mesh.boundsMax[axis]-expected[axis])<0.002f);
+            }
+        }
         auto small=dressStructure(st,"factory",42,{},0,StructureSize{12.f,10.f,12.f});
         auto large=dressStructure(st,"factory",42,{},0,StructureSize{40.f,12.f,30.f});
         CHECK(!small.mesh.vertices.empty()&&!large.mesh.vertices.empty());

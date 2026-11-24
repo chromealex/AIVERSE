@@ -355,7 +355,13 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     auto top=profiled?architecturalBody():block(0,0,W,D,padH,Hh,cut,lean,k.bands,k.roofRise);
     // Data-chosen silhouettes: a function changes the large shapes, not just the roof props.
     const float rw=top.x1-top.x0,rd=top.z1-top.z0;
-    if(!profiled&&rw>2.5f&&rd>2.5f){
+    const float bayWidth=rw*0.37f,bayInsetZ=rd*0.08f;
+    // A compact, explicitly sized roof can still carry both bays. Dropping
+    // them mid-fit frees their footprint for much taller optional stacks.
+    const bool compactBays=!profiled&&custom&&k.massing==StructureMassing::TwinBay&&
+        std::min(bayWidth,rd-2.f*bayInsetZ)>=1.f;
+    const bool roofMassingFits=(rw>2.5f&&rd>2.5f)||compactBays;
+    if(!profiled&&roofMassingFits){
         switch(k.massing){
             case StructureMassing::Bastion: break;
             case StructureMassing::Spire:{
@@ -365,7 +371,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
                     (cap.x0+cap.x1)*0.5f+0.15f,cap.y+0.24f,(cap.z0+cap.z1)*0.5f+0.15f);
                 break;}
             case StructureMassing::TwinBay:{
-                const float w=rw*0.37f,z=top.z0+rd*0.08f,z1=top.z1-rd*0.08f;
+                const float w=bayWidth,z=top.z0+bayInsetZ,z1=top.z1-bayInsetZ;
                 for(int side=0;side<2;++side){
                     const float x=top.x0+rw*(side?0.56f:0.07f);
                     block(x,z,x+w,z1,top.y,Hh*0.22f,std::min(cut*0.3f,0.5f),
@@ -455,13 +461,13 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     std::vector<std::array<float,4>> taken;
     // Architecture occupies roof area before placing optional props. Otherwise
     // industrial tanks/dishes could spawn through the generated silhouette.
-    if(rw>2.5f&&rd>2.5f){
+    if(roofMassingFits){
         if(k.massing==StructureMassing::Spire)
             taken.push_back({top.x0+rw*0.31f,top.z0+rd*0.30f,top.x0+rw*0.69f,top.z0+rd*0.70f});
         else if(k.massing==StructureMassing::TwinBay){
             for(int side=0;side<2;++side){
                 const float x=top.x0+rw*(side?0.56f:0.07f);
-                taken.push_back({x,top.z0+rd*0.08f,x+rw*0.37f,top.z1-rd*0.08f});
+                taken.push_back({x,top.z0+bayInsetZ,x+bayWidth,top.z1-bayInsetZ});
             }
         }else if(k.massing==StructureMassing::Terraced)
             taken.push_back({top.x0+rw*0.17f,top.z0+rd*0.26f,
