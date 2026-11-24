@@ -1261,6 +1261,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Объёмные частицы в игровой сцене и Studio",
+     "titleEn": "Volumetric particles in game scenes and Studio",
+     "text": "Подключить граф частиц к нативной отрисовке сцены, обработке глубины и проверенному редакторскому просмотру.",
+     "textEn": "Connect particle graphs to native scene rendering, depth handling, and verified editor previews."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Полная связка GPU и CPU в продакшене",
      "titleEn": "Full GPU and CPU integration in production"
     },
