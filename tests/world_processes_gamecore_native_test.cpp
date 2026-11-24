@@ -27,6 +27,7 @@
 #include "aiverselib/world/EvolvePlanetEcologySampling.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
+#include "aiverselib/world/EvolvePlanetForestEcology.h"
 #include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
@@ -867,6 +868,39 @@ static void checkPlanetTerrainWater(){
     const auto dry=g::samplePlanetShore(ecs,raised,pos,Fixed{});
     AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
     AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
+}
+static void checkPlanetForestEcology(){
+    using namespace terraweave;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;TerraWeaveAuthorityResource authority;
+    AnchoredPlant tree;tree.anchor.speciesId=1;tree.anchor.plantKey=17;
+    tree.environment.ageTicks=10;tree.environment.matureTicks=10;tree.environment.lifespanTicks=100;
+    auto moon=tree;moon.anchor.plantKey=18;
+    authority.rooted={tree,moon};
+    ecs.setResource<TerraWeaveAuthorityResource>(authority);
+    ecs.setResource<evolve::PlanetRootDeliveryResource>();
+    std::vector<evolve::PlanetRootBinding> bindings{{{1,17},"terra",surface.cellCenter(surface.gridCell(0,0,7,7))},
+        {{1,18},"moon",surface.cellCenter(surface.gridCell(1,0,7,7))}};
+    AIVERSE_TEST_CHECK(evolve::setPlanetRootBindings(ecs,surface,bindings));
+    ForestEcologySpecies species;species.speciesId=1;species.matureTicks=10;species.lifespanTicks=100;
+    species.seedIntervalTicks=1;species.seedSpreadCm=2000;
+    ForestEcologySettings cfg;cfg.intervalTicks=1;cfg.maxPlantsPerStep=2;
+    const auto init=evolve::advancePlanetForestEcology(ecs,surface,0,{species},cfg);
+    AIVERSE_TEST_CHECK(init);
+    ecs.enableCowSnapshots();const World before=ecs;
+    const auto next=evolve::advancePlanetForestEcology(ecs,surface,1,{species},cfg);
+    AIVERSE_TEST_CHECK(next&&next->ecology.processed==2);
+    const auto* updated=ecs.resourceConst<TerraWeaveAuthorityResource>();
+    AIVERSE_TEST_CHECK(updated->rooted.size()==2+next->born.size());
+    AIVERSE_TEST_CHECK(ecs.resourceConst<evolve::PlanetRootDeliveryResource>()->bindings.size()==updated->rooted.size());
+    for(const auto& binding:next->born){
+        const auto frame=wp::surfaceFrame(&surface,binding.plantedPosition);
+        AIVERSE_TEST_CHECK(frame&&surface.bodies[size_t(frame->body)].id==binding.bodyId);
+    }
+    ecs=before;
+    const auto retry=evolve::advancePlanetForestEcology(ecs,surface,1,{species},cfg);
+    AIVERSE_TEST_CHECK(retry&&retry->born.size()==next->born.size());
 }
 static void checkPlanetRootSupport(){
     using namespace terraweave;
@@ -1794,6 +1828,7 @@ int main(){
     checkPlanetCollapseDelivery();
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
+    checkPlanetForestEcology();
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();
