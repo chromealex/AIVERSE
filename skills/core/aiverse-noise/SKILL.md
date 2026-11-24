@@ -1,6 +1,6 @@
 ---
 name: aiverse-noise
-description: Deterministic scalar, simplex, fractal, vector, domain-warp and curl noise for native C++ projects.
+description: Deterministic scalar, simplex, fractal, vector, domain-warp, curl and batch noise for native C++ projects.
 ---
 Use aiverselib/algorithms/Noise.h. Q16 coordinates and integer lattice periods (zero means nonperiodic). periodicValueNoise<2/3> returns signed Q16; cellularNoise<2/3> returns F1/F2 squared Q32, periodic feature images counted separately. Existing engine/game/gen/GenNoise.h remains authoritative for legacy gradient/FBM/ridge/warp sequences; do not replace saved-world generation. See registered `library_noise` fixture; Stage 44 alone had no tests.
 
@@ -24,7 +24,7 @@ auto warped = domainWarpNoiseSample<3>({-32768, 98304, 0}, 7, {16,16,16}, warp);
 auto flow = curlNoise<3>({-32768, 98304, 0}, 7, {16,16,16});
 ```
 
-Run `library_noise` and platform/native gates before claiming acceptance. Batch sampling and SIMD are separate future stages.
+Run `library_noise` and platform/native gates before claiming acceptance. SIMD is a separate future stage.
 
 Stage 47: use `simplexNoiseSample<N>(p, seed)` and `simplexNoise<N>(p, seed)` for Cartesian aperiodic simplex gradient noise in 2D/3D. Signed Q16 coordinates, values and derivatives; the scale is fixed at 48, not peak-normalized. The rational skew transform uses F=23988/65536 (2D) or 1/3 (3D), G=F/(1+N*F). Derivatives approximate the underlying continuous kernel, not the integer steps. `NoiseBasis::Simplex` is available in all fractal modes, vector, warp and curl; any nonzero Cartesian period is rejected for this basis. Existing bases and enum values are unchanged.
 
@@ -38,3 +38,19 @@ auto tile = simplexSkewNoiseSample<2>({-32768, 98304}, 7, {8, 8});
 ```
 
 Run the existing `library_noise` test; golden samples, derivative finite differences, seam and bound checks are included. Full platform and performance acceptance remains separate.
+
+Stage 48: include `<aiverselib/algorithms/NoiseBatch.h>` using the same `AIVERSE::lib_noise` target. Create a borrowed `NoiseBatchPoints<N>::aos(span<const array<int64_t,N>>)` or `::soa(array<span<const int64_t>,N>)`; input axes must have equal lengths and may alias each other. Supply caller-owned contiguous typed output (AoS for compound samples); no writable output or mask may overlap any input or each other. Every point uses the same seed, period and options, and results are in input order. Scalar `noiseBatchSamples` returns NoiseSample<N>, `noiseBatchValues` returns int64 Q16; select Value, Gradient, Simplex, SimplexSkew, Fractal or DomainWarp via NoiseScalarBatchOptions.kind. `noiseBatchCellular` returns CellularDistance Q32; `noiseBatchVectorSamples`, `noiseBatchVectors`, `noiseBatchCurl` use the existing fractal options. Cartesian Simplex still rejects nonzero Cartesian periods.
+
+`NoiseBatchPolicy::Atomic` (default) validates all elements in a read-only pass and evaluates again to write only if all are valid; optional full-length mask receives ones on success. `MarkInvalid` requires a full-length uint8_t mask for nonempty batches, evaluates once, writes only valid elements, and sets mask entries to 1/0. Invalid element output remains unchanged. Invalid shape/options/overlap writes nothing in either policy, including the mask. Report status, written, invalidCount, firstInvalid (size_t max if none); Atomic invalid-element report counts every invalid point, written=0. Empty valid batches succeed; config is still validated. Spans are synchronous and must remain alive and stable; no heap, SIMD or threading guarantee. Partition into disjoint spans for independent jobs; no concurrent mutation of input. Compound output is AoS, not SoA output. The existing scalar kernels define all bits.
+
+```cpp
+#include <aiverselib/algorithms/NoiseBatch.h>
+using namespace aiverse::lib::algorithms;
+std::array<std::array<int64_t,2>,2> p{{{0,0},{32768,-32768}}};
+std::array<int64_t,2> out{};
+NoiseScalarBatchOptions o{}; o.kind=NoiseScalarKind::Gradient;
+auto r=noiseBatchValues<2>(NoiseBatchPoints<2>::aos(p),out,7,{8,8},o);
+// r.complete() and r.written==2 on success.
+```
+
+Run `library_noise` for scalar parity, both layouts, atomic/partial errors, overlap and regressions. No new CMake target or dependency.

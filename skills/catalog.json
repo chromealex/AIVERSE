@@ -3769,7 +3769,7 @@
       "package": "noise",
       "path": "skills/core/aiverse-noise/SKILL.md",
       "domain": "gameplay",
-      "summary": "Deterministic value, gradient, simplex, cellular, fractal, vector, warp and curl noise",
+      "summary": "Deterministic scalar, simplex, cellular, fractal, vector, warp, curl and batch noise",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_noise",
@@ -3797,7 +3797,11 @@
         "jacobian",
         "simplex",
         "skew",
-        "lattice"
+        "lattice",
+        "batch",
+        "aos",
+        "soa",
+        "sampling"
       ],
       "contentPackages": []
     },

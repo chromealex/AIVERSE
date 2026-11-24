@@ -1,4 +1,5 @@
 #include <aiverselib/algorithms/Noise.h>
+#include <aiverselib/algorithms/NoiseBatch.h>
 #include <cstdlib>
 #include <iostream>
 
@@ -210,6 +211,127 @@ template<std::size_t N> void verifySimplex() {
     CHECK(!fractalNoiseSample(p,1,{},invalid));
 }
 
+
+template<std::size_t N> void verifyBatch() {
+    using Point=std::array<int64_t,N>;
+    constexpr std::size_t count=19;
+    std::array<Point,count> p{};
+    std::array<std::array<int64_t,count>,N> axes{};
+    std::array<std::span<const int64_t>,N> axisSpans{};
+    std::array<int32_t,N> period{};
+    Pcg32 rng(93);
+    for(std::size_t j=0;j<N;++j) {
+        period[j]=int32_t(j+3);
+        for(std::size_t i=0;i<count;++i) p[i][j]=axes[j][i]=int64_t(*rng.below(800000))-400000;
+        axisSpans[j]=axes[j];
+    }
+    auto aos=NoiseBatchPoints<N>::aos(p),soa=NoiseBatchPoints<N>::soa(axisSpans);
+    std::array<NoiseSample<N>,count> samples{},samples2{};
+    std::array<int64_t,count> values{},values2{};
+    std::array<uint8_t,count> mask{};
+    constexpr uint64_t seed=199;
+    const std::array<int32_t,N> zeroPeriod{};
+    for(auto kind:{NoiseScalarKind::Value,NoiseScalarKind::Gradient,NoiseScalarKind::Simplex,
+        NoiseScalarKind::SimplexSkew,NoiseScalarKind::Fractal,NoiseScalarKind::DomainWarp}) {
+        NoiseScalarBatchOptions o{}; o.kind=kind;
+        const auto tile=kind==NoiseScalarKind::Simplex?zeroPeriod:period;
+        auto a=noiseBatchSamples<N>(aos,samples,seed,tile,o);
+        CHECK(a.complete()&&a.written==count&&a.invalidCount==0);
+        CHECK(a.firstInvalid==std::numeric_limits<std::size_t>::max());
+        auto b=noiseBatchSamples<N>(soa,samples2,seed,tile,o,NoiseBatchPolicy::MarkInvalid,mask);
+        CHECK(b.complete()&&b.written==count&&samples==samples2);
+        CHECK(noiseBatchValues<N>(aos,values,seed,tile,o).complete());
+        CHECK(noiseBatchValues<N>(soa,values2,seed,tile,o,NoiseBatchPolicy::MarkInvalid,mask).complete());
+        for(std::size_t i=0;i<count;++i) {
+            std::optional<NoiseSample<N>> scalar;
+            switch(kind) {
+                case NoiseScalarKind::Value: scalar=periodicValueNoiseSample(p[i],seed,tile); break;
+                case NoiseScalarKind::Gradient: scalar=periodicGradientNoiseSample(p[i],seed,tile); break;
+                case NoiseScalarKind::Simplex: scalar=simplexNoiseSample(p[i],seed); break;
+                case NoiseScalarKind::SimplexSkew: scalar=simplexSkewNoiseSample(p[i],seed,tile); break;
+                case NoiseScalarKind::Fractal: scalar=fractalNoiseSample(p[i],seed,tile,o.fractal); break;
+                case NoiseScalarKind::DomainWarp: scalar=domainWarpNoiseSample(p[i],seed,tile,o.warp); break;
+            }
+            CHECK(scalar&&samples[i]==*scalar&&values[i]==scalar->value&&values2[i]==values[i]&&mask[i]==1);
+        }
+        // Independent batches and non-vector-width tails must preserve index order.
+        for(std::size_t i=0;i<count;i+=4) {
+            auto n=std::min<std::size_t>(4,count-i);
+            auto sub=NoiseBatchPoints<N>::aos(std::span<const Point>(p).subspan(i,n));
+            CHECK(noiseBatchSamples<N>(sub,std::span<NoiseSample<N>>(samples2).subspan(i,n),seed,tile,o).complete());
+        }
+        CHECK(samples==samples2);
+    }
+    std::array<CellularDistance,count> cells{};
+    CHECK(noiseBatchCellular<N>(soa,cells,seed,period).complete());
+    std::array<NoiseVectorSample<N>,count> vectors{};
+    std::array<Point,count> v{},c{};
+    NoiseFractalOptions fractal{}; fractal.basis=NoiseBasis::Simplex;
+    CHECK(noiseBatchVectorSamples<N>(aos,vectors,seed,{},fractal).complete());
+    CHECK(noiseBatchVectors<N>(soa,v,seed,{},fractal).complete());
+    CHECK(noiseBatchCurl<N>(soa,c,seed,{},fractal).complete());
+    for(std::size_t i=0;i<count;++i) {
+        auto cell=cellularNoise(p[i],seed,period);
+        CHECK(cell&&cell->firstSquared==cells[i].firstSquared&&cell->secondSquared==cells[i].secondSquared);
+        CHECK(vectors[i]==*vectorNoiseSample(p[i],seed,{},fractal));
+        CHECK(v[i]==*vectorNoise(p[i],seed,{},fractal));
+        CHECK(c[i]==*curlNoise(p[i],seed,{},fractal));
+    }
+    const auto sentinel=INT64_MIN;
+    values.fill(sentinel); mask.fill(42);
+    const auto untouched=[&]{for(std::size_t i=0;i<count;++i) CHECK(values[i]==sentinel&&mask[i]==42);};
+    auto o=NoiseScalarBatchOptions{}; o.kind=NoiseScalarKind::Value;
+    auto badAxes=axisSpans; badAxes[N-1]=badAxes[N-1].first(count-1);
+    auto bad=NoiseBatchPoints<N>::soa(badAxes);
+    CHECK(noiseBatchValues<N>(bad,values,seed,period,o,NoiseBatchPolicy::Atomic,mask).status==NoiseBatchStatus::InvalidShape);
+    CHECK(noiseBatchValues<N>(aos,std::span<int64_t>(values).first(count-1),seed,period,o).status==NoiseBatchStatus::InvalidShape);
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::MarkInvalid).status==NoiseBatchStatus::InvalidShape);
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::Atomic,std::span<uint8_t>(mask).first(1)).status==NoiseBatchStatus::InvalidShape);
+    auto invalidPeriod=period; invalidPeriod[0]=-1;
+    CHECK(noiseBatchValues<N>(aos,values,seed,invalidPeriod,o,NoiseBatchPolicy::Atomic,mask).status==NoiseBatchStatus::InvalidOptions);
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,o,static_cast<NoiseBatchPolicy>(255),mask).status==NoiseBatchStatus::InvalidOptions);
+    auto invalidOptions=o; invalidOptions.kind=static_cast<NoiseScalarKind>(255);
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,invalidOptions,NoiseBatchPolicy::Atomic,mask).status==NoiseBatchStatus::InvalidOptions);
+    invalidOptions.kind=NoiseScalarKind::Simplex;
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,invalidOptions,NoiseBatchPolicy::Atomic,mask).status==NoiseBatchStatus::InvalidOptions);
+    invalidOptions.kind=NoiseScalarKind::Fractal; invalidOptions.fractal.octaves=16; invalidOptions.fractal.lacunarity=8;
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,invalidOptions,NoiseBatchPolicy::MarkInvalid,mask).status==NoiseBatchStatus::InvalidOptions);
+    untouched();
+    // Byte ranges, not just same-type pointer equality. Input axes can alias.
+    const auto savedAxes=axes;
+    CHECK(noiseBatchValues<N>(soa,axes[0],seed,period,o).status==NoiseBatchStatus::Overlap);
+    CHECK(axes==savedAxes);
+    auto overlappingMask=std::span<uint8_t>(reinterpret_cast<uint8_t*>(values.data()),count);
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::Atomic,overlappingMask).status==NoiseBatchStatus::Overlap);
+    auto inputMask=std::span<uint8_t>(reinterpret_cast<uint8_t*>(p.data()),count);
+    const auto savedP=p;
+    CHECK(noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::Atomic,inputMask).status==NoiseBatchStatus::Overlap);
+    CHECK(p==savedP); untouched();
+    auto alias=axisSpans; alias.fill(axisSpans[0]);
+    CHECK(noiseBatchValues<N>(NoiseBatchPoints<N>::soa(alias),values,seed,period,o).complete());
+    for(std::size_t i=0;i<count;++i) {Point q{}; q.fill(axes[0][i]); CHECK(values[i]==*periodicValueNoise(q,seed,period));}
+    values.fill(sentinel); mask.fill(42);
+    p[1][0]=INT64_MAX; p[count-1][0]=INT64_MIN;
+    auto r=noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::Atomic,mask);
+    CHECK(r.status==NoiseBatchStatus::InvalidElement&&r.written==0&&r.invalidCount==2&&r.firstInvalid==1);
+    untouched();
+    r=noiseBatchValues<N>(aos,values,seed,period,o,NoiseBatchPolicy::MarkInvalid,mask);
+    CHECK(r.status==NoiseBatchStatus::Partial&&r.written==count-2&&r.invalidCount==2&&r.firstInvalid==1);
+    for(std::size_t i=0;i<count;++i) {
+        if(i==1||i==count-1) CHECK(mask[i]==0&&values[i]==sentinel);
+        else CHECK(mask[i]==1&&values[i]==*periodicValueNoise(p[i],seed,period));
+    }
+    auto empty=NoiseBatchPoints<N>::aos({});
+    CHECK(noiseBatchValues<N>(empty,{},seed,period,o,NoiseBatchPolicy::MarkInvalid).complete());
+    CHECK(noiseBatchValues<N>(empty,{},seed,period,invalidOptions).status==NoiseBatchStatus::InvalidOptions);
+    // Zero-strength warp ignores invalid displacement settings, like scalar API.
+    auto warp=NoiseScalarBatchOptions{}; warp.kind=NoiseScalarKind::DomainWarp;
+    warp.warp.strengthQ16=0; warp.warp.displacement.octaves=0;
+    CHECK(noiseBatchSamples<N>(soa,samples,seed,period,warp).complete());
+    warp.warp.strengthQ16=1;
+    CHECK(noiseBatchSamples<N>(soa,samples,seed,period,warp).status==NoiseBatchStatus::InvalidOptions);
+}
+
 int main() {
     verify<2>();
     verify<3>();
@@ -217,5 +339,7 @@ int main() {
     verifyComposition<3>();
     verifySimplex<2>();
     verifySimplex<3>();
-    std::cout << "Noise stage 47 checks passed\n";
+    verifyBatch<2>();
+    verifyBatch<3>();
+    std::cout << "Noise stage 48 checks passed\n";
 }

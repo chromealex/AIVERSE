@@ -197,4 +197,6 @@ Noise 0.3.0 adds signed Billow, vector samples, domain warp with chain-rule deri
 
 Noise 0.4.0 adds Cartesian `simplexNoiseSample` / `simplexNoise` and `simplexSkewNoiseSample` with exact skew-lattice periods. `NoiseBasis::Simplex` works in existing fractal, vector, warp and curl APIs only for aperiodic Cartesian inputs. Nonzero Cartesian periods fail closed. The fixed-point kernel evaluates N+1 vertices, with Q30 radial weights and Q16 public samples. Existing package dependencies and legacy GenNoise stay unchanged. Next: allocation-free batch sampling and SIMD parity/performance.
 
-- Stage 48 (in progress): allocation-free batch sampling with AoS/SoA input, typed caller-owned outputs and explicit invalid-element policies. See [delivery plan](handoffs/algorithms-stage48-delivery.md).
+- Stage 48 (implemented; isolated verification, full gate pending): allocation-free batch sampling with AoS/SoA input, typed caller-owned outputs and explicit invalid-element policies. See [delivery plan](handoffs/algorithms-stage48-delivery.md).
+
+Noise 0.5.0 provides `NoiseBatch.h` on `AIVERSE::lib_noise`: borrowed AoS/SoA points, typed contiguous caller outputs, exact scalar parity, Atomic (two-pass, all-or-nothing) and MarkInvalid (single pass, full byte mask, invalid results unchanged). Reject invalid shape/config/overlap without writes. See the skill for functions and examples. Scalar kernels and saved-world sequences unchanged. SIMD dispatch and measured throughput remain next stages.
