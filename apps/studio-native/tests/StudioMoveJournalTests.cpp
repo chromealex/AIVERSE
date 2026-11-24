@@ -132,6 +132,39 @@ int main() {
             expect(fs::exists(moved)&&fs::exists(movedMeta),"Quarantine partial rollback failed");
             expect(readFile(materials)=="external-material-change","Quarantine recovery modified unrelated materials");
         }
+        // v3 replacement: the same live path is used by two ordered moves.
+        const std::string oldSlot=".aiverse-cache/studio-asset-trash/111111111111111111111111/asset";
+        const std::string newSlot=".aiverse-cache/studio-asset-trash/222222222222222222222222/asset";
+        fs::create_directories((project/oldSlot).parent_path());
+        fs::create_directories((project/newSlot).parent_path());
+        writeFile(project/newSlot,"replacement");
+        const std::vector<StudioMoveJournalOperation> replacement{
+            {"content/B/Stone.png",oldSlot,aiverse::studio::studioAssetFileDigest(moved)},
+            {newSlot,"content/B/Stone.png",aiverse::studio::studioAssetFileDigest(project/newSlot)}
+        };
+        for(int phase=0;phase<3;++phase){
+            StudioMoveJournal journal(project);journal.begin(replacement,true,true);
+            if(phase>=1)fs::rename(moved,project/oldSlot);
+            if(phase>=2)fs::rename(project/newSlot,moved);
+            StudioMoveJournal::recover(project);
+            expect(readFile(moved)=="pixels","Replacement old bytes not restored");
+            expect(readFile(project/newSlot)=="replacement","Replacement staging bytes lost");
+            expect(!fs::exists(project/oldSlot),"Replacement outgoing slot not restored");
+            expect(readFile(materials)=="external-material-change","Replacement recovery changed materials");
+        }
+        // Recovery refuses a changed outgoing payload before touching any path.
+        {
+            StudioMoveJournal journal(project);journal.begin(replacement,true,true);
+            fs::rename(moved,project/oldSlot);
+            fs::rename(project/newSlot,moved);
+            writeFile(moved,"external");
+            bool rejected=false;
+            try{StudioMoveJournal::recover(project);}catch(const std::runtime_error&){rejected=true;}
+            expect(rejected&&readFile(moved)=="external","Replacement recovery overwrote external bytes");
+            writeFile(moved,"replacement");
+            StudioMoveJournal::recover(project);
+            expect(readFile(moved)=="pixels","Replacement retry failed");
+        }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
     } catch (...) {

@@ -107,6 +107,9 @@ Use native studio.assetDelete with current project, exact asset history version,
 ## Staged imports and folder creation (S6c.4c.2)
 Use the existing transfer preview and native picker. For non-replacing imports with history, stage into private project-local recovery slots outside live content; generate metadata with the existing catalog at the final filename, retain preserved sidecars only after GUID validation, sync payloads before publication, and publish the batch through journal v2. History created=true reverses quarantine direction: Undo removes, Redo restores staged bytes and exact sidecars without external source. Folder creation uses the same owner. Undo refuses known map/rules/material references. Explicit replacement remains a history barrier. Staged orphan records are retained for recovery; no automatic purge.
 
+## Reversible asset replacement (S6c.4c.3)
+Replace only a reviewed external regular-file name conflict. Preview binds source/target SHA-256, sidecar hash and target GUID; commit refuses changed identity. Stage incoming payload into a project recovery slot; journal v3 records paired live-to-outgoing and incoming-to-live moves with digests. Restore validates all chains and occupancy phases before any rollback. Preserve exact live sidecar and target GUID, never swap metadata. Asset history replacement steps toggle old/new payload without original picker source. Replacement-only batches are supported; mixed new-import/replacement selection must be split (UI and native refusal). Do not purge inactive payloads or promise cross-session undo.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

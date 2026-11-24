@@ -284,6 +284,52 @@ int main(){
         AIVERSE_TEST_CHECK(!fs::exists(project/"content"/"Other"/"NewFolder"));
         aiverse::studio::studioReplayAssetQuarantine(project,createdFolder,false);
         db.rebuild(false);AIVERSE_TEST_CHECK(db.byGuid(createdGuid)->path=="Other/NewFolder");
+        // Replace a target without touching its GUID/settings or reading the
+        // external source again during undo/redo.
+        write(project/"content"/"Other"/"Replace.png","old pixels");
+        write(external/"Replace.png","new pixels");
+        db.rebuild();
+        const auto replaceGuid=db.byPath("Other/Replace.png")->guid;
+        const auto live=project/"content"/"Other"/"Replace.png";
+        const auto sidecar=fs::path(live.string()+".meta");
+        const auto originalSidecar=read(sidecar);
+        auto staleReplace=StudioTransferPlan::external(project,"Other",{external/"Replace.png"});
+        AIVERSE_TEST_CHECK(staleReplace.describe()["items"][0].getBool("replacementAvailable"));
+        write(live,"external pixels");
+        bool replaceConflict=false;
+        std::optional<aiverse::editor::ProjectHistory::MovePlan> replaceHistory;
+        try{(void)staleReplace.apply(staleReplace.token(),{{0,"replace"}},{},&replaceHistory);}
+        catch(const std::runtime_error&){replaceConflict=true;}
+        AIVERSE_TEST_CHECK(replaceConflict&&read(live)=="external pixels"&&!replaceHistory);
+        write(live,"old pixels");
+        auto replacePlan=StudioTransferPlan::external(project,"Other",{external/"Replace.png"});
+        const auto replacement=replacePlan.apply(replacePlan.token(),{{0,"replace"}},{},&replaceHistory);
+        AIVERSE_TEST_CHECK(replacement["files"].size()==1&&replaceHistory&&replaceHistory->replacement);
+        AIVERSE_TEST_CHECK(read(live)=="new pixels"&&read(sidecar)==originalSidecar);
+        db.rebuild(false);AIVERSE_TEST_CHECK(db.byGuid(replaceGuid)->path=="Other/Replace.png");
+        fs::remove(external/"Replace.png");
+        const auto oldBackup=project/replaceHistory->files[0].to;
+        const auto newBackup=project/replaceHistory->files[1].to;
+        AIVERSE_TEST_CHECK(read(oldBackup)=="old pixels"&&!fs::exists(newBackup));
+        write(sidecar,originalSidecar+"\n");
+        replaceConflict=false;
+        try{aiverse::studio::studioReplayAssetReplacement(project,*replaceHistory,false);}
+        catch(const std::runtime_error&){replaceConflict=true;}
+        AIVERSE_TEST_CHECK(replaceConflict&&read(live)=="new pixels"&&read(oldBackup)=="old pixels");
+        write(sidecar,originalSidecar);
+        aiverse::studio::studioReplayAssetReplacement(project,*replaceHistory,false);
+        AIVERSE_TEST_CHECK(read(live)=="old pixels"&&read(newBackup)=="new pixels"&&!fs::exists(oldBackup));
+        aiverse::studio::studioReplayAssetReplacement(project,*replaceHistory,true);
+        AIVERSE_TEST_CHECK(read(live)=="new pixels"&&read(oldBackup)=="old pixels");
+        AIVERSE_TEST_CHECK(read(sidecar)==originalSidecar);
+        // A mixed creation/replacement batch is refused before any publication.
+        write(external/"Replace.png","another version");
+        write(external/"Fresh.png","fresh");
+        auto mixed=StudioTransferPlan::external(project,"Other",{external/"Replace.png",external/"Fresh.png"});
+        replaceConflict=false;
+        try{(void)mixed.apply(mixed.token(),{{0,"replace"},{1,"import"}},{},&replaceHistory);}
+        catch(const std::runtime_error&){replaceConflict=true;}
+        AIVERSE_TEST_CHECK(replaceConflict&&read(live)=="new pixels"&&!fs::exists(project/"content"/"Other"/"Fresh.png"));
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
