@@ -341,7 +341,7 @@ public:
     // to bounded immutable CPU workers; no GPU work starts on those threads.
     std::vector<CaveResidencyTicket> dispatchStreamingCpu(
         ChunkKey3 cameraChunk,uint32_t resolution=16,int32_t spacingCm=100) {
-        if(physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
         setStreamCenter(cameraChunk);
         auto source=host_.sourceSnapshot();
         auto indexed=host_.indexedSnapshot();
@@ -369,6 +369,7 @@ public:
     // via publishStreamBuild or publishOwnedStreamRetire. Old generations are discarded.
     std::vector<CaveStreamCpuResult> pollStreamingCpu(
         CaveStreamJobStats* telemetry=nullptr) {
+        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
         auto results=streamJobs_.poll(telemetry);
         results.erase(std::remove_if(results.begin(),results.end(),
             [this](const CaveStreamCpuResult& r){
@@ -550,7 +551,7 @@ public:
         chunkSpacingCm_=spacingCm;
     }
     void drawCommitted(render::Renderer3D& renderer){
-        if(!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
+        if(!closed_&&!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
     }
     size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
         return host_.collectGpuCompletedWithoutIdle(device);
@@ -567,6 +568,30 @@ public:
     }
     bool closeWorldAfterGpuIdle(gfx::Device& device){
         return shutdownAfterGpuIdle(device);
+    }
+    // Full native shutdown for edit-owned chunks. The host owns GPU idle
+    // and reader exclusion and releases its external navigation resources.
+    // Externally owned streaming leases must already have been retired.
+    bool closeWorldAfterGpuIdle(gfx::Device& device,physics::Scene& scene,
+                               world::SpatialWorld& spatial,
+                               const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+                               const std::function<bool()>& retireNavigation) {
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           !exclusive||!exclusive()||!retireNavigation)return false;
+        try {
+            streamJobs_.drain();
+            host_.cancelPending();
+            if(!host_.releaseOwnedPhysics(scene,spatial))return false;
+            if(!exclusive()||!retireNavigation()||!exclusive()||
+               !shutdownAfterGpuIdle(device)) {
+                physicsBarrier_.requireRecovery();
+                return false;
+            }
+            return true;
+        }catch(...) {
+            physicsBarrier_.requireRecovery();
+            throw;
+        }
     }
     bool closed()const noexcept{return closed_;}
     CaveGameplayEditStats stats()const{return host_.stats();}
