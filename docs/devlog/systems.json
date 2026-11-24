@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: MCP Live и камера",
+     "titleEn": "Planetary forest: linked MCP live and camera",
+     "text": "Stage 161D5d: авторизованные Live-снимки, выбор тела, камера; операции представления вне истории карты.",
+     "textEn": "Stage 161D5d: authenticated live snapshot, body and camera operations; transient view changes outside map history."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: MCP-редактирование",
      "titleEn": "Planetary forest: MCP authoring",
      "text": "Stage 161D5c: общие операции Workspace, проверка ревизии, создание, перемещение и удаление растений, полная конфигурация и история.",
