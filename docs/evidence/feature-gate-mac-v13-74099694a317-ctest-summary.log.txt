@@ -1,0 +1,40 @@
+100% tests passed, 0 tests failed out of 488
+
+Label Time Summary:
+AUDIO           =   1.25 sec*proc (2 tests)
+Architecture    =   0.50 sec*proc (4 tests)
+ECS             =   1.39 sec*proc (4 tests)
+EDITOR          =  55.62 sec*proc (37 tests)
+GPU             =   5.99 sec*proc (2 tests)
+IMPORT          =   0.83 sec*proc (1 test)
+LENS            =   6.96 sec*proc (2 tests)
+LIGHTING        =  10.19 sec*proc (1 test)
+Lighting        =   5.60 sec*proc (30 tests)
+MCP             =   0.43 sec*proc (1 test)
+Metal           =   3.67 sec*proc (2 tests)
+MetalGPU        =  31.68 sec*proc (6 tests)
+NEREID          =   0.71 sec*proc (1 test)
+NETWORK         =   0.80 sec*proc (2 tests)
+PERSISTENCE     =  18.17 sec*proc (10 tests)
+PHYSIS          =  50.73 sec*proc (39 tests)
+Prisma          =   0.21 sec*proc (2 tests)
+RENDER          =   7.10 sec*proc (1 test)
+RHI             =  34.50 sec*proc (5 tests)
+Renderer3D      =   7.57 sec*proc (3 tests)
+SECURITY        =   0.64 sec*proc (3 tests)
+SpectraFX       =  33.62 sec*proc (22 tests)
+TERRAWEAVE      =  17.77 sec*proc (7 tests)
+TOOLS           =   0.96 sec*proc (3 tests)
+VFX             =   4.91 sec*proc (3 tests)
+WIND            =   7.10 sec*proc (1 test)
+
+Total Test time (real) = 977.56 sec
+
+The following tests did not run:
+	314 - lens_metal_frame (Skipped)
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 1 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native/test-reports/20261124-125330-58759
+PASS: all selected test stages
