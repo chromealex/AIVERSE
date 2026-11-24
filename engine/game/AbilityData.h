@@ -105,7 +105,7 @@ struct TargetFilter {
     bool units = true, structures = true;
     bool garrisons = false;             // only structures with a garrison
     bool inTransit = false;             // only units walking to a structure (lanes, sends)
-    uint64_t tags = 0;
+    uint64_t tags = 0, ignoreTags = 0;
     uint16_t type = 0xFFFF;
     int minLevel = 0, maxLevel = 1 << 20;
     int maxTargets = 0;                 // 0: all
