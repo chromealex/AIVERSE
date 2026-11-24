@@ -140,6 +140,7 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         runIncremental(inc,3,0);runIncremental(inc,0,3);
         auto modified=Json::parse(inc.dump(-1).replace(inc.dump(-1).find("0.25"),4,"0.75"));
         runIncremental(modified,2,1);
+        cancel(owner.status().getStr("request"));drain();frame(); // cold fused layout
         auto fusedInc=Json::parse(R"JSON({"graph":{"version":1,"size":32,"nodes":[
             {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},
             {"id":"i","op":"invert","inputs":["a"]},

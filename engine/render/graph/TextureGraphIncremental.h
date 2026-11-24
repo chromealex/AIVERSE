@@ -23,7 +23,9 @@ std::vector<IncrementalNodeKey> incrementalKeys(const PassSchedule& schedule,Sou
     for(const auto& pass:schedule.passes){
         if(pass.output!=keys.size()||pass.inputs.size()>3)return {};
         for(auto input:pass.inputs)if(input>=pass.output)return {};
-        const std::string_view source=sourceFor(pass.pipeline);
+        // Keep an owning temporary alive if the callback returns a string.
+        auto&& raw=sourceFor(pass.pipeline);
+        const std::string_view source=raw;
         if(source.empty()||source.size()>incrementalKeyBudget-used)return {};
         used+=source.size();keys.push_back({std::string(source),pass.inputs});
     }
