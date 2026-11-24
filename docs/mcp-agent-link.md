@@ -132,3 +132,6 @@ Native Save and Save As use one creation-aware document journal transaction for 
 
 ### S6f.4b.2 — atomic Map history checkpoint
 Studio Save/Save As now stages the Map history checkpoint v2 with map JSON, terrain files, dirty Project documents and Project history. v2 binds the exact SHA-256 set of saved map/sidecar bytes; v1 checkpoints remain readable. Existing loaded map/sidecar hashes must match before staging; removed sidecars are guarded but not deleted. Legacy interrupted-save markers fence atomic save. Asset history checkpoint and standalone map_save remain separate. No new MCP action.
+
+### S6f.4b.3a — durable asset history navigation
+Native individual Asset Undo/Redo and coordinated agent history navigation now use the outer history journal v4 for paired current/next asset cursors. The prior checkpoint is verified against the current disk state. Before relocation it is retained durably; after file publication the new checkpoint is calculated from the actual final content/material/Trash state and staged with a transaction-bound readiness marker. The outer commit selects both payload and cursor; recovery restores both. Metadata-only navigation uses the same journal. New asset mutation recording still uses the existing dirty-marker publication and is not yet atomic with its cursor. No new MCP action.
