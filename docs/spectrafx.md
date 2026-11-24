@@ -1,3 +1,7 @@
+## Stage 121 — Studio / MCP / skills integration audit (in progress; QA deferred)
+
+Expose GPU-owned allocator opt-in in real native preview and replay recipes, report actual Metal/Vulkan/CPU backend and estimated versus physical diagnostics, extend MCP schema and preserve legacy eligibility keys. Audit remaining limitations honestly. No native, shader, JS or hardware tests until owner requests QA.
+
 ## Stage 120B — Vulkan particle kernel and backend routing (source implemented; QA deferred)
 
 Port existing bounded GPU VM, all allocator/host gather modes, culling/LOD and live compaction to Vulkan GLSL using the new storage/uniform ABI. Activate only on capable Vulkan devices; retain complete CPU fallback. Expanded and procedural billboard modes share the same particle ABI. Keep legacy Metal paths and graph semantics. Native Vulkan/Metal tests deferred; source implementation not a parity claim.
