@@ -140,7 +140,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 53 guarded shader/SpectraFX owner writes and planetary Caverns scoped read/projection added. Building/Caverns merged-tree integration and verification pending.",
+      "note": "Stage 53 guarded shader/SpectraFX owner writes and planetary Caverns scoped read/projection added. Building/Caverns merged-tree integration and verification pending. Stage 54 closes two filesystem target validation gaps.",
       "evidence": [
         "docs/agent-handoffs/feature-gate-stage53-guarded-graphs-2026-11-24.md"
       ]
@@ -186,7 +186,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Stage 53 replaces blind shader/SpectraFX writes with native cooperating-writer lock and original-document compare; draft publication guarded. Regression fixtures authored, execution pending.",
+      "note": "Stage 53 replaces blind shader/SpectraFX writes with native cooperating-writer lock and original-document compare; draft publication guarded. Regression fixtures authored, execution pending. Stage 54 rejects shader leaf aliases and non-regular transaction targets; regression fixtures authored, not executed.",
       "evidence": [
         "docs/agent-handoffs/feature-gate-stage53-guarded-graphs-2026-11-24.md"
       ]

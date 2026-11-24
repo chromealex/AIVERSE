@@ -13,9 +13,12 @@ fs::path graphPath(const Workspace& ws, const std::string& name) {
     if(name.empty() || name.size()>64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")!=std::string::npos)
         throw std::runtime_error("graph name: use 1..64 letters, digits, _ or -");
     const fs::path root=fs::weakly_canonical(ws.project.dir);
-    const fs::path path=fs::weakly_canonical(root/"shaders"/(name+".json"));
-    const auto relative=path.lexically_relative(root);
-    if(relative.empty() || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
+    const fs::path path=root/"shaders"/(name+".json");
+    // Preserve the requested leaf for Transaction's symlink check. Resolving
+    // it first would turn an in-project alias into an apparently regular file.
+    if(fs::is_symlink(fs::symlink_status(path))) throw std::runtime_error("graph path is a symlink");
+    const auto relative=fs::weakly_canonical(path).lexically_relative(root);
+    if(relative.empty() || relative=="." || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
     return path;
 }
 Json load(const Workspace& ws,const std::string& name) {

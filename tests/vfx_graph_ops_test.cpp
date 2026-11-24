@@ -163,7 +163,39 @@ int main() {
     checkGraphRequirement(call("shader_graph_set",shaderSave).getBool("ok"),"matching shader original rejected");
     checkGraphRequirement(call("shader_graph_set",shaderSave).has("error"),"stale shader original accepted");
     checkGraphRequirement(Json::parseFile(shaderFile.string())==shaderEdited["result"]["graph"],"stale shader save changed asset");
+    // An in-project leaf alias must not bypass the shared transaction guard.
+    const auto alias=root/"shaders"/"alias_shader.json";
+    std::error_code linkError;
+    fs::create_symlink(shaderFile.filename(),alias,linkError);
+    if (!linkError) {
+        Json aliasSave=shaderSave;
+        aliasSave.set("name",Json::string("alias_shader"));
+        aliasSave.set("expected",shaderEdited["result"]["graph"]);
+        aliasSave.set("graph",shaderDraft["graph"]);
+        checkGraphRequirement(call("shader_graph_set",aliasSave).has("error"),"shader alias overwrite accepted");
+        checkGraphRequirement(fs::is_symlink(fs::symlink_status(alias)),"shader alias replaced");
+        checkGraphRequirement(Json::parseFile(shaderFile.string())==shaderEdited["result"]["graph"],"shader alias changed target");
+        fs::remove(alias);
+    } else {
+        // Windows hosts may not grant the privilege to create symbolic links.
+        std::cout<<"Shader symlink fixture unavailable: "<<linkError.message()<<'\n';
+#ifndef _WIN32
+        checkGraphRequirement(false,"could not create shader symlink fixture");
+#endif
+    }
     fs::remove(shaderFile);fs::remove(root/"shaders");
+
+    // Deletion is a graph asset operation, never directory removal.
+    const auto directoryTarget=root/"fx"/"graphs"/"directory_target.vfx.json";
+    fs::create_directories(directoryTarget);
+    Json directoryArgs=Json::object();
+    directoryArgs.set("name",Json::string("directory_target"));
+    checkGraphRequirement(call("fx_graph_delete",directoryArgs).has("error"),"graph deletion accepted a directory");
+    checkGraphRequirement(fs::is_directory(directoryTarget),"graph deletion removed a directory");
+    directoryArgs.set("graph",graph);
+    checkGraphRequirement(call("fx_graph_set",directoryArgs).has("error"),"graph save accepted a directory");
+    checkGraphRequirement(fs::is_directory(directoryTarget),"graph save replaced a directory");
+    fs::remove(directoryTarget);
     auto badBatch=shaderDraft;badBatch.member("edits").push(Json::parse(R"({"action":"add","value":{"id":"tint","op":"constant"}})"));
     checkGraphRequirement(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
     const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind"}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");

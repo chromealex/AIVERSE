@@ -231,3 +231,7 @@ Historical Stage 5/11 descriptions of unversioned shader/SpectraFX saves are sup
 The scoped Caverns inspection bridge now uses the owner's read-only get on planetary documents. No region is absent; older incompatible owner is unsupported; invalid reports fail closed. Projection uses the native activeRegionId, planetAnchor, planetRegions, revisionText, seedText, generatorVersionText and decimal stamp/entrance IDs. It shows the active chart only and labels coordinates as chart-local, not world XYZ. Flat legacy safe-integer snapshots remain supported. No planetary generator, routing, runtime GPU or all-region graph evaluator is introduced. This adapter is prepared for the owner at 777dc8fabdebb3ec93dec1b4ac93fad1bc95555d; full native owner and GUI integration still requires reconciliation.
 
 New regression cases authored; build and tests NOT RUN per feature-first request. Prior Mac evidence refers to the earlier tree and is not current acceptance.
+
+## Stage 54 — graph asset target identity
+
+Shader graph path validation retains the requested leaf and rejects symbolic-link aliases, even when the alias resolves inside the project. Shared graph asset transactions reject non-regular existing targets, including directories named like graph assets, before acquiring a write lock. This protects guarded writes and explicit SpectraFX deletion without changing asset formats or adding a writer. Cooperating-writer scope only; no hostile concurrent filesystem mutation guarantee. Regression fixtures authored; native execution pending.
