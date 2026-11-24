@@ -764,6 +764,8 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
         if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
         auto& presentation=*graphPresentation_;
         if(action=="studioHdrApplyPbr"||action=="studioHdrApplyModel"){
+            const auto channel=p.getStr("channel","emissive");
+            if(channel!="color"&&channel!="emissive")throw std::invalid_argument("Invalid HDR material channel");
             Model* model=nullptr;GraphPresentation::Snapshot* snapshot=nullptr;size_t index=0;
             if(action=="studioHdrApplyPbr"){
                 if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR model first");
@@ -774,7 +776,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
                 model=found->second.get();snapshot=&presentation.target(*model);index=GraphPresentation::index(p,*model);
             }
             std::string error;
-            if(!owner.publishResidentRadianceEmissive(ws.project.dir,p.getStr("request"),*snapshot,GraphPresentation::stamp(p,index),*model,*device_,lease,presentation.rollback,&error))throw std::runtime_error(error);
+            if(!owner.publishResidentRadianceColor(ws.project.dir,p.getStr("request"),*snapshot,GraphPresentation::stamp(p,index),*model,*device_,lease,presentation.rollback,channel=="color",&error))throw std::runtime_error(error);
             if(action=="studioHdrApplyPbr")presentation.sampleRenderer->invalidateModelCachesFor(model);
             else{renderer_.invalidateModelCachesFor(model);presentation.merged.clear();lastFrameSignature_=0;}
             auto r=GraphPresentation::info(*snapshot,index);r.set("state",Json::string("applied"));return r;

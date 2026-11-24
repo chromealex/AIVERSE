@@ -337,7 +337,7 @@ void main() {
 #if defined(VIRTUAL_ALPHA_MASK)
     tb.a = texture(tex15, v_uv).r;
 #endif
-    vec4 base = PALETTE_BASE * vec4(toLinear(tb.rgb), tb.a);
+    vec4 base = PALETTE_BASE * vec4(mod(m_misc.w,32.0)>=16.0?clamp(tb.rgb,vec3(0.0),vec3(1.0)):toLinear(tb.rgb), tb.a);
     if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, mod(m_misc.w,8.0) > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
@@ -382,7 +382,7 @@ void main() {
     rough *= mr.g;
     metallic *= mr.b;
     vec3 emissiveSample=texture(tex5,v_uv).rgb;
-    emis *= m_misc.w>=8.0?max(emissiveSample,vec3(0.0)):toLinear(emissiveSample);
+    emis *= mod(m_misc.w,16.0)>=8.0?max(emissiveSample,vec3(0.0)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
@@ -1044,7 +1044,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #if defined(VIRTUAL_ALPHA_MASK)
     tb.a = tex15.sample(s15, in.uv).r;
 #endif
-    float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
+    float4 base = m.base * float4(fmod(m.misc.w,32.0f)>=16.0f?clamp(tb.rgb,float3(0.0f),float3(1.0f)):toLinear(tb.rgb), tb.a);
     if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, fmod(m.misc.w,8.0f) > 1.5 ? 1.0 : in.col.a);
     int teamMode = int(m.misc.y + 0.5);
     float teamW = 0.0;
@@ -1087,7 +1087,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     rough *= mr.g;
     metallic *= mr.b;
     float3 emissiveSample=tex5.sample(s5,in.uv).rgb;
-    emis *= m.misc.w>=8.0f?max(emissiveSample,float3(0.0f)):toLinear(emissiveSample);
+    emis *= fmod(m.misc.w,16.0f)>=8.0f?max(emissiveSample,float3(0.0f)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);

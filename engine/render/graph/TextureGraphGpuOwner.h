@@ -914,18 +914,24 @@ protected:
         r.set("backend",Json::string(backend_));r.set("request",Json::string(request));return r;
     }
 public:
-    bool publishResidentRadianceEmissive(const std::string& scope,const std::string& request,
+    bool publishResidentRadianceColor(const std::string& scope,const std::string& request,
             view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
             render::Model& model,gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
-            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+            render::ModelImageRollbackPool& rollback,bool baseColor,std::string* error=nullptr){
         if(!residentRadianceBpp_||!gpuCandidatesReady()||scope!=project_||request!=std::to_string(serial_)||
            !lease.validFor(dev)||!gpuTransferLease_.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||gpuCandidates_.size()!=1){
             if(error)*error="no matching completed resident HDR request";return false;
         }
-        if(!view::AppearanceAssetRegistry::publishRadianceEmissiveSnapshot(live,target,model,dev,lease,rollback,*gpuCandidates_.front(),gpuGeneration_,error)){
-            discard("failed","HDR emissive publication rejected");return false;
+        if(!view::AppearanceAssetRegistry::publishRadianceColorSnapshot(live,target,model,dev,lease,rollback,*gpuCandidates_.front(),gpuGeneration_,baseColor,error)){
+            discard("failed","HDR color publication rejected");return false;
         }
-        gpuCandidates_.clear();gpuAcceptedTextures_=0;published_=gpuPublished_=true;reason_="linear HDR emissive adopted";return true;
+        gpuCandidates_.clear();gpuAcceptedTextures_=0;published_=gpuPublished_=true;reason_=baseColor?"linear HDR base color adopted":"linear HDR emissive adopted";return true;
+    }
+    bool publishResidentRadianceEmissive(const std::string& scope,const std::string& request,
+            view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+        return publishResidentRadianceColor(scope,request,live,target,model,dev,lease,rollback,false,error);
     }
     bool isRadianceBake()const noexcept{return rawRadiance_;}
     // Native-only ownership transfer after the exact covering fence. Caller
