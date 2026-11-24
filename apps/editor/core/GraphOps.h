@@ -24,8 +24,8 @@ struct Domain {
     const char* concurrency;
 };
 inline constexpr std::array<Domain,5> domains{{
-    {"shader","shader_graph_list","shader_graph_get","shader_graph_validate","shader_graph_catalog","","shader_graph_set","graph","explicit-unversioned"},
-    {"spectrafx","fx_graph_list","fx_graph_get","fx_graph_validate","fx_graph_node_catalog","fx_graph_edit","fx_graph_set","graph","explicit-unversioned"},
+    {"shader","shader_graph_list","shader_graph_get","shader_graph_validate","shader_graph_catalog","","shader_graph_set","graph","expected-or-create"},
+    {"spectrafx","fx_graph_list","fx_graph_get","fx_graph_validate","fx_graph_node_catalog","fx_graph_edit","fx_graph_set","graph","expected-or-create"},
     {"motionweave","animation_graph_list","animation_graph_get","animation_graph_validate","","","animation_graph_set","graph","expected-document"},
     {"modeling","modeling_list","modeling_get","modeling_validate","modeling_catalog","","modeling_edit","document","expected-revision"},
     {"texture","texture_graph_list","texture_graph_get","texture_graph_validate","texture_graph_catalog","","texture_graph_set","graph","expected-document"}
@@ -258,8 +258,11 @@ inline void registerGraphOps(Workspace& ws) {
     ws.registerOp({"graph_save","Explicit native save; respects domain revision contracts. No apply, bake or runtime execution.",schema,[&ws](const Json& p){
         const auto& d=domain(p);auto q=candidate(d,p);q.set("name",named(p)["name"]);
         const std::string guard=d.concurrency;
-        if(guard=="explicit-unversioned"){
-            if(!p.getBool("allowUnversionedWrite"))throw std::invalid_argument("owner lacks revision lock; explicit allowUnversionedWrite required");
+        if(guard=="expected-or-create"){
+            if(p["expected"].isObject())q.set("expected",p["expected"]);
+            else if(!p["expected"].isNull() || (!p.has("expected") && !p.getBool("allowUnversionedWrite")))
+                throw std::invalid_argument("expected original document or explicit create-only consent required");
+            // Legacy consent is accepted for creation only; owner refuses overwrites without expected.
         }else if(guard=="expected-document"){
             if(!p["expected"].isObject()&&std::string(d.id)!="texture")throw std::invalid_argument("expected original graph required");
             q.set("expected",p["expected"]);
