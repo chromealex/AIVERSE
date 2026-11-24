@@ -378,6 +378,9 @@ private:
         // Recover already completed model-only GPU owners at this safe
         // staging boundary without waiting for device idle.
         (void)collectCompletedWithoutIdle(device);
+        // select=all can override instance flags in GeometryScene; disable
+        // STRATA for the entire shard containing any exact rim source.
+        for(const auto& chunk:snapshot.chunks)if(chunk.preserveExactSurface){spec.enableStrata=false;break;}
         auto prepared=prepareFullCaveShardPresentation(snapshot,spec,&visual);
         size_t retained=0;
         for(const auto& [key,owner]:owners_){
