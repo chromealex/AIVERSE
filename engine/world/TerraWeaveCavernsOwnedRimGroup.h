@@ -99,6 +99,8 @@ inline CaveOwnedRimGroup prepareOwnedRimGroup(
     const auto res=sources.front().resolution;const auto spacing=sources.front().spacingCm;
     if(!res||res>64||spacing<=0||spacing>10000)throw std::invalid_argument("Caverns group lattice");
     const int64_t spanCm=int64_t(res)*spacing;
+    // Uniform Q16 slot extents must add exactly across signed boundaries.
+    if((spanCm*Fixed::kOne)%100)throw std::invalid_argument("Caverns slot span not exactly representable in Q16");
     const auto extent=Fixed::fromRatio(spanCm,100);
     std::set<ChunkKey3,KeyLess> wanted(request.keys.begin(),request.keys.end());
     if(wanted.size()!=request.keys.size())throw std::invalid_argument("Caverns duplicate group slot");
