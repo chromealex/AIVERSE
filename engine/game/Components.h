@@ -346,7 +346,7 @@ struct Projectile {
     Fixed onHitChance{};
     uint16_t sourceType = 0xFFFF;
     Vec3 start{};
-    Fixed travel{}, total{};  // arc progress
+    Fixed travel{}, total{};  // legacy arc progress; fitted flight: peak and duration (zero duration = ballistic continuation)
     Fixed scale = Fixed::fromInt(1);
     ProjectileProgram program;
     int8_t weapon = -1;       // weapon index of sourceType (bonus damage, armor class, crew kills)
