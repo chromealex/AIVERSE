@@ -108,7 +108,10 @@
     "engine/gfx/vulkan/VkResources.cpp",
     "engine/render/ModelImageUploadTransaction.h",
     "engine/render/graph/TextureGraphGpuTextureTransfer.h",
-    "tests/render/texture_graph_gpu_texture_transfer.cpp"
+    "tests/render/texture_graph_gpu_texture_transfer.cpp",
+    "tests/render/texture_graph_gpu_copy_rhi.h",
+    "tests/render/texture_graph_gpu_copy_vulkan.cpp",
+    "tests/render/texture_graph_gpu_copy_metal.mm"
   ],
   "traits": {
     "editable": true,
@@ -119,7 +122,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37A in progress: aligned GPU-only storage-to-RGBA8 texture transport, typed padded pack shader and fence-gated model image adoption; live owner wiring separate.",
+      "note": "Stage 37A GPU-only storage-to-texture transport and fence-gated native appearance adoption implemented in source; no graph request/host call site yet. Single mip, opt-in native only. Hardware and integrated acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -189,7 +192,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 36B exact-source isolated fusion + canonical slot lowering C++20 PASS on Linux GCC 14.2 and Clang; integrated source/native/Studio/Metal/Vulkan tests NOT RUN.",
+      "note": "Stage 37A actual isolated exact-blob C++20 transfer layout and padded kernel source fixture PASS on GCC 14.2 and Clang 17. Synthetic appearance ownership and opt-in real RHI copy fixtures authored NOT RUN; native build, GPU, CTest and Mac merged-tree gate pending.",
       "evidence": []
     },
     "handoff": {
