@@ -1,3 +1,7 @@
+## Stage 118 — bounded temporary GPU transfer memory (in progress; QA deferred)
+
+Separate Device-wide transfer envelope from persistent allocation ledger so candidate migration cannot consume all mandatory upload headroom. Charge checked storage uploads, buffer and full texture/color/depth readback staging before allocation; retain accepted asynchronous transfers through completed GPU fences, release unencoded failures immediately. Explicit native limit, zero unlimited, pressure returns checked failure without device loss. No driver-wide allocation claim.
+
 ## Stage 117 — canonical Device allocation ledger (source implemented; QA deferred)
 
 Promote the existing envelope ledger to a generic RHI utility and let each Device own one canonical instance. All ComputeParticles and GpuPoolWorld owners acquire it automatically; explicit shared budget adoption before first use or when old ledger is fully unowned and uncharged, conflicting independent limits rejected, zero inherits. Keep fence charges across pool teardown, invalidate external references on Device destruction. No driver-wide accounting or new authored schema.
