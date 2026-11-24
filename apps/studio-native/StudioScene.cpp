@@ -576,6 +576,7 @@ StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
         discardReplayBackup();
+        spectraSources_.shutdown();
         spectraPreview_->stop(*device_); // before gfx Device and renderer are destroyed
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
@@ -1760,6 +1761,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     stepTween();
     const auto view=viewCamera();
+    spectraSources_.synchronize(*device_,doc,projectRoot,hidden_);
     {
         // Redraw only when something visible changed (like an editor viewport with
         // Realtime off), plus settle frames for temporal effects and a 1 s heartbeat.
@@ -1770,7 +1772,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
-            !thumbJobs_.empty() || spectraPreview_->needsFrame(); // native FX playback forces draw
+            !thumbJobs_.empty() || spectraPreview_->needsFrame() || spectraSources_.animated(); // native FX playback forces draw
         if(animated || signature!=lastFrameSignature_) settleFrames_=kSettleFrames;
         lastFrameSignature_=signature;
         if(settleFrames_>0) --settleFrames_;
@@ -1786,6 +1788,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraPreview_->prepare(fx::SpectraFxView::fromCamera(
             view,viewProj,framebufferWidth,framebufferHeight),camera_.target);
+    }
+    {
+        const float aspect=float(framebufferWidth)/float(framebufferHeight);
+        const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
+        spectraSources_.prepare(fx::SpectraFxView::fromCamera(view,viewProj,framebufferWidth,framebufferHeight),1.f/60.f);
     }
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -1963,6 +1970,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
     if(spectraPreview_->active())spectraPreview_->draw();
+    spectraSources_.draw();
     renderer_.resolvePrisma();
     lightingRuntime_.presented();
 

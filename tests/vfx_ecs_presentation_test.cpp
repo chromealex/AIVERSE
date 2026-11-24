@@ -1,5 +1,6 @@
 // Same VFX presenter consumes data-only ECS components in unrelated game styles.
 #include <aiverselib/mechanics/SpectraFX.h>
+#include <aiverselib/mechanics/SpectraSourceMirror.h>
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -101,7 +102,25 @@ static void scenario() {
     presenter.consumeTickEvents(39,{hit},bindings);
     check(presenter.lastPresentedTick()==39,"rollback reset did not clear event cursor");
 }
+static void mirrorScenario(){
+    fx::ParticleSystem ps;
+    check(ps.init(nullptr),"mirror headless init");
+    check(ps.define("flame",continuous())>=0,"mirror effect define");
+    lg::SpectraSourceMirror mirror;
+    lg::SpectraSourceComponent source;source.effect="flame";source.killOnDetach=true;
+    lg::SpectraPresentationSystem presenter(ps);
+    mirror.sync({{"a",source,{1,2,3}},{"b",source,{4,5,6}}});
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(presenter.activeAttachments()==2,"mirror must keep independent instances");
+    mirror.sync({{"a",source,{8,2,3}}});
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(mirror.size()==1&&presenter.activeAttachments()==1,"mirror failed to retire removed source");
+    mirror.clear();
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(presenter.activeAttachments()==0,"mirror clear retained attachments");
+}
 int main() {
+    mirrorScenario();
     scenario<SpaceUnit>();
     scenario<RacingVehicle>();
     std::cout << "PASS vfx_ecs_presentation_test (two genres, attaches, events, generation and reset)\n";

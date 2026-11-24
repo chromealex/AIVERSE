@@ -31,6 +31,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
 #include "apps/studio-native/StudioSpectraPreview.h"
+#include "apps/studio-native/StudioSpectraSources.h"
 
 namespace aiverse::studio {
 class StudioScene final {
@@ -342,7 +343,7 @@ public:
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
-    void resetCamera() { lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
@@ -378,6 +379,7 @@ private:
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
+    StudioSpectraSources spectraSources_;
     std::unique_ptr<StudioSpectraPreview> spectraPreview_=std::make_unique<StudioSpectraPreview>();
     std::unique_ptr<StudioSpectraPreview> spectraReplayBackup_;
     uint64_t replayAttemptGeneration_=0;
