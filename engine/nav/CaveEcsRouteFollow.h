@@ -108,7 +108,9 @@ inline CaveRouteTickStats updateCaveRouteFollowers(
         }
         PointCm now=caveTransformCm(transform);
         auto goal=route.waypoints[route.current];
-        if(!validCaveRoutePoint(now)||!validCaveRoutePoint(goal)){
+        if(!validCaveRoutePoint(now)||!validCaveRoutePoint(goal)||
+           !source.residentSegment(now,now,route.agent)||
+           !source.residentSegment(goal,goal,route.agent)){
             route.needsRepath=true;++stats.blocked;return;
         }
         if(now.x==goal.x&&now.y==goal.y&&now.z==goal.z){
