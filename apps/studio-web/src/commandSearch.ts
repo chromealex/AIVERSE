@@ -45,7 +45,7 @@ export function searchCommands(entries: CommandEntry[], raw: string, recent: str
     .filter(e => !only || only.includes(e.kind))
     .map(e => {
       const s = Math.max(fuzzyScore(text, e.title), fuzzyScore(text, e.keywords ?? '') - 50, fuzzyScore(text, e.hint ?? '') - 200);
-      const r = recent.indexOf(e.id);
+      const r = text ? -1 : recent.indexOf(e.id);
       return { e, ok: s >= 0, s: s + (r >= 0 ? 400 - r * 10 : 0) - (e.disabled ? 150 : 0) };
     })
     .filter(x => x.ok && (only || text || x.e.kind !== 'entity' && x.e.kind !== 'asset' || recent.includes(x.e.id)));
