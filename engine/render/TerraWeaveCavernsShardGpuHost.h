@@ -38,9 +38,12 @@ public:
     }
     size_t collectCompletedWithoutIdle(gfx::Device& device){
         size_t released=0;
-        for(auto& [key,gpu]:owners_){
-            (void)key;
+        for(auto it=owners_.begin();it!=owners_.end();){
+            auto& gpu=it->second;
             if(gpu)released+=gpu->collectCompletedWithoutIdle(device);
+            if((!gpu||gpu->emptyAndDrained())&&!pending_.contains(it->first))
+                it=owners_.erase(it);
+            else ++it;
         }
         return released;
     }
@@ -352,7 +355,8 @@ public:
 private:
     bool stageSnapshot(gfx::Device& device,const CaveShardSnapshot& snapshot,
                        const CaveMixedLodPlan& visual,CaveBatchSpec spec){
-        if(!snapshot.revision||pending_.contains(snapshot.shard)||
+        if(!snapshot.revision||snapshot.revision<=catalog_.lastShardRevision(snapshot.shard)||
+           pending_.contains(snapshot.shard)||
            snapshot.chunks.size()>spec.maxChunks)return false;
         // Recover already completed model-only GPU owners at this safe
         // staging boundary without waiting for device idle.
