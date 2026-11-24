@@ -188,6 +188,9 @@ Ordinary asset chains now simulate each recorded directional digest using virtua
 ## Mixed file-chain coordination (S6f.3.3)
 File-only mixed chains of texture/audio/.bin assets support import, ordinary move, metadata settings, replacement and reversible deletion/restoration. Virtual file/sidecar identity and GUID occupancy are validated in order; final metadata edits follow exact content or Trash sidecar endpoints, journal v3 retains those snapshots. Exact Trash asset.meta targets are allowed by the existing-document journal, not general cache writes. Quota arithmetic follows virtual source sizes. Model topology, model URI repairs in mixed chains, nested directory endpoints and ambiguous repeated states remain fenced; disjoint legacy operations retain their previous path.
 
+## Mixed directory and embedded model chains (S6f.3.4a)
+Mixed exact-endpoint directory moves/quarantine and self-contained glTF/GLB versions use virtual tree digests and nested GUID/importer checks. Both live and recovery payloads must contain only supported textures/audio/BIN or glTF 2.0 models with embedded resources and no declared extensions. Incoming known model references remain fenced. Nested relocation endpoints, nested Trash metadata edits, external-resource model transitions and mixed URI repairs remain unsupported. No new journal version or MCP action.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

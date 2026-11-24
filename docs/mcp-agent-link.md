@@ -111,3 +111,6 @@ Existing linked agent batch apply supports ordinary exact-endpoint chains with c
 
 ### S6f.3.3 — mixed file history chains
 Linked agent batch uses mixed file planner for supported texture/audio/.bin import, move, settings, replacement and quarantine chains. Sidecar identity follows content/Trash endpoints; v3 journal recovers exact metadata. Unsupported mixed model or nested-directory chains remain conservative.
+
+### S6f.3.4a — mixed directory and embedded model chains
+Existing linked agent batch may coordinate exact-endpoint directory moves/quarantine and self-contained glTF/GLB version transitions with nested GUID checks. External URI/extension topology, nested relocation endpoints and nested Trash metadata changes remain fenced.

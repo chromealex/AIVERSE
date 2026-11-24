@@ -67,8 +67,9 @@ struct StudioBatchAssetPlan {
 // Resource edits retain initial and projected final physical identities.
 StudioBatchAssetPlan studioPlanAssetMoveChain(const std::filesystem::path& project,
     const std::vector<editor::ProjectHistory::MovePlan>& ordered,bool redo);
-// File-only mixed history: ordinary moves, reversible Trash operations,
-// replacement versions and importer settings. No resource graph rewrites.
+// Mixed exact-endpoint history: ordinary moves, reversible Trash operations,
+// replacement versions and importer settings. Self-contained glTF/GLB and
+// bounded directory payloads supported; no resource graph rewrites.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered);
 StudioBatchAssetPlan studioPlanMixedAssetChain(const std::filesystem::path& project,
     const std::vector<editor::ProjectHistory::Step>& ordered,bool redo);

@@ -2089,16 +2089,16 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     }
     return out;
 }
-// A mixed file chain reuses the exact-endpoint journal and virtual byte
-// overlay. Model topology is deliberately left to the typed move planner:
-// a replacement/restoration may introduce new resource edges.
+// Mixed chains reuse exact-endpoint relocation and virtual identity. Model
+// transitions in this subset are limited to verified self-contained glTF/GLB.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered){
     if(ordered.empty()||ordered.size()>64)return false;
     const auto simple=[](const editor::ProjectHistory::MoveFile& file){
         auto ext=fs::path(file.from).extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto importer=studioImporterForPath(fs::path(file.from),false);
-        return !file.directory&&file.digestAfter.empty()&&(importer=="texture"||importer=="audio"||ext==".bin");
+        return file.digestAfter.empty()&&(file.directory||importer=="texture"||importer=="audio"||ext==".bin"||
+            ext==".gltf"||ext==".glb");
     };
     bool hasMove=false;
     for(const auto& step:ordered){
@@ -2111,8 +2111,8 @@ bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step
             if(!simple(file))return false;
             if(!move.quarantine&&!move.replacement){
                 auto destination=file;destination.from=file.to;
-                if(!simple(destination)||studioImporterForPath(fs::path(file.from),false)!=
-                    studioImporterForPath(fs::path(file.to),false))return false;
+                if(!simple(destination)||studioImporterForPath(fs::path(file.from),file.directory)!=
+                    studioImporterForPath(fs::path(file.to),file.directory))return false;
             }
         }
     }
@@ -2132,12 +2132,13 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
-    struct LogicalMove{std::string from,to,digest;};
+    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;};
+    struct MetaCheck{std::string path,bytes;bool directory=false;};
     struct LogicalStep{
         std::vector<LogicalMove> moves;
-        std::vector<std::pair<std::string,std::string>> metaChecks;
+        std::vector<MetaCheck> metaChecks;
         std::vector<editor::ProjectFileEdit> edits;
-        std::vector<std::string> paths;
+        std::vector<std::pair<std::string,bool>> paths;
     };
     std::vector<LogicalStep> steps;
     std::set<std::string> endpoints;
@@ -2151,23 +2152,22 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                 const auto live="content/"+asset.from;
                 if(plan.replacement){
                     const auto& outgoing=redo?asset:meta;const auto& incoming=redo?meta:asset;
-                    logical.moves.push_back({live,outgoing.to,outgoing.digest});
-                    logical.moves.push_back({incoming.to,live,incoming.digest});
-                    logical.metaChecks.emplace_back(live+".meta",asset.bytes);
-                    // Texture/audio replacement keeps its live path and GUID.
+                    logical.moves.push_back({live,outgoing.to,outgoing.digest,false,asset.from});
+                    logical.moves.push_back({incoming.to,live,incoming.digest,false,asset.from});
+                    logical.metaChecks.push_back({live+".meta",asset.bytes,false});
                 }else if(plan.quarantine){
                     const bool deleted=plan.created?!redo:redo;
                     const auto from=deleted?live:asset.to,to=deleted?asset.to:live;
-                    logical.moves.push_back({from,to,asset.digest});
-                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes)});
-                    logical.metaChecks.emplace_back(from+".meta",meta.bytes);
-                    logical.paths.push_back(live);
+                    logical.moves.push_back({from,to,asset.digest,asset.directory,asset.from});
+                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes),false,{}});
+                    logical.metaChecks.push_back({from+".meta",meta.bytes,asset.directory});
+                    logical.paths.emplace_back(live,asset.directory);
                 }else{
                     const auto from="content/"+(redo?asset.from:asset.to),to="content/"+(redo?asset.to:asset.from);
-                    logical.moves.push_back({from,to,asset.digest});
-                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes)});
-                    logical.metaChecks.emplace_back(from+".meta",meta.bytes);
-                    logical.paths.push_back(from);logical.paths.push_back(to);
+                    logical.moves.push_back({from,to,asset.digest,asset.directory,asset.from});
+                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes),false,{}});
+                    logical.metaChecks.push_back({from+".meta",meta.bytes,asset.directory});
+                    logical.paths.emplace_back(from,asset.directory);logical.paths.emplace_back(to,asset.directory);
                 }
             }
         }else{
@@ -2183,7 +2183,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         }
         steps.push_back(std::move(logical));
     }
-    // No file-tree nesting is allowed; all endpoints are individual files.
+    // Directory roots are supported, but relocation endpoints cannot nest.
     for(auto it=endpoints.begin();it!=endpoints.end();++it)
         for(auto next=std::next(it);next!=endpoints.end();++next)
             if(batchOverlap(*it,*next))throw std::runtime_error("Nested mixed history endpoints");
@@ -2191,7 +2191,6 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
     std::map<std::string,std::string> origins;
     for(const auto& path:endpoints){
         auto identity=batchIdentity(batchPath(root,path));
-        if(!identity.empty()&&identity.front()!='f')throw std::runtime_error("Mixed chain endpoint is not a file");
         initial.emplace(path,identity);if(!identity.empty())origins.emplace(path,path);
     }
     StudioAssetCatalog catalog(root);catalog.rebuild(false);
@@ -2199,10 +2198,15 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
     for(const auto& entry:catalog.all())liveGuids.emplace(entry.guid,"content/"+entry.path);
     ResourceOverlay overlay;
     const auto physical=[&](const std::string& rel)->fs::path{
-        if(!endpoints.count(rel))return root/rel;
-        const auto it=origins.find(rel);
-        if(it==origins.end())throw std::runtime_error("Mixed history source absent: "+rel);
-        return root/it->second;
+        for(const auto& endpoint:endpoints){
+            if(rel!=endpoint&&!rel.starts_with(endpoint+"/"))continue;
+            const auto it=origins.find(endpoint);
+            if(it==origins.end())throw std::runtime_error("Mixed history source absent: "+rel);
+            if(rel!=endpoint&&initial.at(it->second).front()!='d')
+                throw std::runtime_error("Mixed history descendant under a file");
+            return root/(it->second+rel.substr(endpoint.size()));
+        }
+        return root/rel;
     };
     const auto currentBytes=[&](const std::string& rel){
         const auto path=physical(rel);const auto it=overlay.find(path);
@@ -2211,15 +2215,70 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             throw std::runtime_error("Invalid mixed metadata source");
         return editor::readProjectFileBytes(path);
     };
+    std::map<std::pair<fs::path,std::string>,bool> verifiedPayloads;
+    std::uintmax_t modelBytes=0;
+    size_t treeEntries=0;
+    const auto verifyFile=[&](const fs::path& file,const fs::path& logical){
+        auto ext=logical.extension().string();
+        for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const auto importer=studioImporterForPath(logical,false);
+        if(importer=="texture"||importer=="audio"||ext==".bin")return;
+        if(ext!=".glb"&&ext!=".gltf")throw std::runtime_error("Unsupported mixed directory payload: "+logical.generic_string());
+        if(!verifiedPayloads.emplace(std::make_pair(file,ext),true).second)return;
+        const auto doc=studioReadModelJson(file,modelBytes,ext==".glb");
+        if(!doc||!doc->isObject()||!(*doc)["asset"].isObject()||
+           (*doc)["asset"].getStr("version")!="2.0")
+            throw std::runtime_error("Mixed model must be a valid glTF 2.0 document");
+        // Unknown extension payloads may name external resources; don't
+        // claim they are self-contained. Embedded BIN / data URI is allowed.
+        if((*doc).has("extensions")||(*doc)["extensionsUsed"].size()||(*doc)["extensionsRequired"].size())
+            throw std::runtime_error("Mixed model extensions require dependency review");
+        for(const char* group:{"buffers","images"}){
+            if(doc->has(group)&&!(*doc)[group].isArray())throw std::runtime_error("Invalid mixed model resource array");
+            for(const auto& entry:(*doc)[group].items())
+                if(entry.has("uri")&&(!entry["uri"].isString()||!entry.getStr("uri").starts_with("data:")))
+                    throw std::runtime_error("Mixed model has external resource dependencies");
+        }
+    };
+    const auto nestedGuids=[&](const std::string& origin){
+        std::vector<std::pair<std::string,std::string>> result;
+        const auto tree=root/origin;
+        std::set<std::string> guids;
+        for(const auto& entry:fs::recursive_directory_iterator(tree)){
+            if(++treeEntries>100000)throw std::runtime_error("Mixed directory inspection budget exceeded");
+            const auto status=entry.symlink_status();
+            const bool directory=fs::is_directory(status);
+            if(!directory&&!fs::is_regular_file(status))throw std::runtime_error("Unsupported mixed tree entry");
+            const auto rel=entry.path().lexically_relative(tree).generic_string();
+            if(!directory&&entry.path().extension()==".meta"){
+                const auto owner=entry.path().parent_path()/entry.path().stem();
+                if(!existsOrSymlink(owner))throw std::runtime_error("Orphan sidecar in mixed directory");
+                continue;
+            }
+            if(!directory)verifyFile(entry.path(),fs::path(rel));
+            const auto metaPath=studioMetaPath(entry.path());
+            const auto it=overlay.find(metaPath);
+            if(!fs::is_regular_file(fs::symlink_status(metaPath))||fs::file_size(metaPath)>1024u*1024u)
+                throw std::runtime_error("Missing or invalid nested asset sidecar");
+            const auto bytes=it==overlay.end()?editor::readProjectFileBytes(metaPath):it->second.after;
+            const auto meta=Json::parse(bytes);const auto guid=meta.getStr("guid");
+            if(!studioValidGuid(guid)||!guids.insert(guid).second||!meta["settings"].isObject()||
+               meta.getStr("importer")!=studioImporterForPath(fs::path(rel),directory))
+                throw std::runtime_error("Invalid nested asset GUID/importer");
+            result.emplace_back(guid,rel);
+        }
+        return result;
+    };
     for(auto& step:steps){
-        for(const auto& [path,expected]:step.metaChecks){
+        for(const auto& check:step.metaChecks){
+            const auto& path=check.path;const auto& expected=check.bytes;
             if(currentBytes(path)!=expected)throw std::runtime_error("Mixed history metadata baseline changed");
             const auto meta=Json::parse(expected);
             const auto guid=meta.getStr("guid");
             if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed history GUID");
             if(path.starts_with("content/")){
                 const auto live=path.substr(0,path.size()-5);
-                if(meta.getStr("importer")!=studioImporterForPath(fs::path(live),false))
+                if(meta.getStr("importer")!=studioImporterForPath(fs::path(live),check.directory))
                     throw std::runtime_error("Mixed history importer changed");
                 const auto it=liveGuids.find(guid);
                 if(it==liveGuids.end()||it->second!=live)throw std::runtime_error("Mixed history GUID changed");
@@ -2229,19 +2288,35 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             const auto it=origins.find(m.from);
             if(it==origins.end()||origins.count(m.to))throw std::runtime_error("Mixed history occupancy changed");
             const auto origin=it->second;
-            if(moveDigest(root/origin,false,&overlay)!=m.digest)throw std::runtime_error("Mixed virtual payload changed: "+m.from);
+            if(initial.at(origin).front()!=(m.directory?'d':'f')||
+               moveDigest(root/origin,m.directory,&overlay)!=m.digest)
+                throw std::runtime_error("Mixed virtual payload changed: "+m.from);
+            if(m.directory){
+                const auto children=nestedGuids(origin);
+                for(const auto& [guid,relative]:children){
+                    if(m.from.starts_with("content/")){
+                        const auto it=liveGuids.find(guid);
+                        if(it==liveGuids.end()||it->second!=m.from+"/"+relative)
+                            throw std::runtime_error("Nested GUID changed before mixed move");
+                        liveGuids.erase(it);
+                    }else if(liveGuids.count(guid))throw std::runtime_error("Nested restored GUID collision");
+                    if(m.to.starts_with("content/")&&!liveGuids.emplace(guid,m.to+"/"+relative).second)
+                        throw std::runtime_error("Nested destination GUID collision");
+                }
+            }else if(!m.logicalName.empty())verifyFile(root/origin,fs::path(m.logicalName));
             if(batchMetadataPath(m.from)&&batchMetadataPath(m.to)){
                 const auto meta=Json::parse(currentBytes(m.from));const auto guid=meta.getStr("guid");
                 if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed sidecar GUID");
                 if(m.from.starts_with("content/"))liveGuids.erase(guid);
                 if(m.to.starts_with("content/")){
                     const auto live=m.to.substr(0,m.to.size()-5);
-                    if(meta.getStr("importer")!=studioImporterForPath(fs::path(live),false)||
+                    const auto payload=origins.find(live);
+                    if(payload==origins.end()||meta.getStr("importer")!=studioImporterForPath(fs::path(live),initial.at(payload->second).front()=='d')||
                        !liveGuids.emplace(guid,live).second)
                         throw std::runtime_error("Mixed chain importer mismatch or duplicate GUID");
                 }
             }
-            out.relocations.push_back({m.from,m.to,initial.at(origin).substr(1),false});
+            out.relocations.push_back({m.from,m.to,initial.at(origin).substr(1),m.directory});
             origins.erase(it);origins.emplace(m.to,origin);
         }
         for(auto& edit:step.edits){
@@ -2254,6 +2329,10 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                currentBytes(rel)!=edit.before)
                 throw std::runtime_error("Mixed metadata history identity changed");
             const auto path=physical(rel);
+            // Nested sidecar changes ending in Trash need record-digest and
+            // generic document journal support; do not publish those yet.
+            if(inRecoveryTrash(path.lexically_relative(root).generic_string())&&
+               path.filename()!="asset.meta")throw std::runtime_error("Nested Trash metadata requires separate navigation");
             edit.path=path;
             auto it=overlay.find(path);
             if(it==overlay.end())overlay.emplace(path,std::move(edit));
@@ -2262,7 +2341,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         // Existing model dependencies must not be broken by deletion,
         // restoration or renaming in this mixed non-repairing topology.
         std::vector<std::pair<std::string,bool>> paths;
-        for(const auto& path:step.paths)paths.emplace_back(path.substr(8),false);
+        for(const auto& [path,directory]:step.paths)paths.emplace_back(path.substr(8),directory);
         studioCheckGltfAssetPaths(root,paths);
     }
     const auto timeline=batchTimeline(root,out.relocations);
@@ -2271,7 +2350,11 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         if(edit.before==edit.after)continue;
         const auto source=path.lexically_relative(root).generic_string();
         const auto destination=batchResourceDestination(source,out.relocations);
-        if(destination!=source){edit.path=fs::path(source);out.movingResources.push_back({edit,destination});}
+        if(destination!=source){
+            if(inRecoveryTrash(destination)&&!destination.ends_with("/asset.meta"))
+                throw std::runtime_error("Nested Trash metadata requires separate navigation");
+            edit.path=fs::path(source);out.movingResources.push_back({edit,destination});
+        }
         else out.documents.push_back(edit);
     }
     validateBatchDocuments(root,timeline,out.documents);

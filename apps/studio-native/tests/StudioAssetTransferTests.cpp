@@ -1186,6 +1186,48 @@ int main(){
             catch(const std::runtime_error&){refused=true;}
             AIVERSE_TEST_CHECK(refused&&fs::exists(p/deletedSlot));
         }
+        // S6f.3.4a: mixed directory move + quarantine tracks nested GUIDs.
+        // Self-contained models are checked in live and recovered payloads.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"MixedDirectory";
+            fs::create_directories(p/"content"/"A"/"Pack");fs::create_directories(p/"content"/"B");
+            const auto source=p/"content"/"A"/"Pack";
+            const auto dest=p/"content"/"B"/"Pack";
+            const std::string model=R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":4,"uri":"data:application/octet-stream;base64,AAAAAA=="}]})";
+            write(source/"Mesh.gltf",model);write(source/"Paint.png","pixels");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto folderGuid=index.byPath("A/Pack")->guid,modelGuid=index.byPath("A/Pack/Mesh.gltf")->guid;
+            editor::ProjectHistory history;std::optional<editor::ProjectHistory::MovePlan> plan;
+            auto move=StudioTransferPlan::internal(p,"B",{"A/Pack"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan);history.recordMove(std::move(*plan),"Move folder");
+            auto deletion=studioQuarantineAsset(p,"B/Pack",folderGuid);
+            const auto slot=deletion.files[0].to;
+            history.recordMove(std::move(deletion),"Delete folder");
+            auto reversed=history.steps();std::reverse(reversed.begin(),reversed.end());
+            const auto undo=studioPlanMixedAssetChain(p,reversed,false);
+            AIVERSE_TEST_CHECK(undo.relocations.size()==4);
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources);
+            index.rebuild(false);
+            AIVERSE_TEST_CHECK(index.byGuid(modelGuid)->path=="A/Pack/Mesh.gltf");
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==model);
+            const auto redo=studioPlanMixedAssetChain(p,history.steps(),true);
+            studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources);
+            AIVERSE_TEST_CHECK(read(p/slot/"Mesh.gltf")==model&&!fs::exists(dest));
+            index.rebuild(false);AIVERSE_TEST_CHECK(!index.byGuid(modelGuid));
+            // An external model resource in a replacement candidate must
+            // fail even when that candidate is currently in Trash.
+            studioApplyHistoryBatch(p,studioPlanMixedAssetChain(p,reversed,false).relocations,{});
+            write(external/"Mesh.gltf",R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})");
+            auto replace=StudioTransferPlan::external(p,"A/Pack",{external/"Mesh.gltf"});
+            (void)replace.apply(replace.token(),{{0,"replace"}},{},&plan);
+            editor::ProjectHistory versions;versions.recordMove(std::move(*plan),"Replace model");
+            bool refused=false;
+            try{(void)studioPlanMixedAssetChain(p,versions.steps(),false);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused);
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
