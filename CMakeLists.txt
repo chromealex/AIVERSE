@@ -2925,6 +2925,20 @@ if(AIVERSE_BUILD_TESTS)
     target_include_directories(aiverse_building_structure_graph_tests PRIVATE libraries/include)
     add_test(NAME library_building_structure_graph COMMAND aiverse_building_structure_graph_tests)
 endif()
+# Genre-neutral native integration executable: actual Simulation, world
+# collision, native navigation and admitted generic Replica loopback.
+if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND
+   NOT ANDROID AND NOT IOS AND TARGET aiverse_world AND TARGET aiverse_net_replica)
+    add_executable(aiverse_building_world_example examples/world/runtime-building/main.cpp)
+    target_link_libraries(aiverse_building_world_example PRIVATE
+        AIVERSE::lib_building_style aiverse_engine aiverse_world
+        aiverse_models aiverse_zstd_dec aiverse_net_replica)
+    if(AIVERSE_BUILD_TESTS)
+        add_test(NAME building_native_world_replica
+            COMMAND aiverse_building_world_example ${PROJECT_SOURCE_DIR})
+        set_tests_properties(building_native_world_replica PROPERTIES LABELS "ECS;NETWORK")
+    endif()
+endif()
 # building-style (settings of generated buildings as style files) and its .glb exporter.
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_building_style_tests tests/libraries/building_style_tests.cpp)

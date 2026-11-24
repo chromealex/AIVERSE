@@ -551,3 +551,20 @@ Clients receive scene content identity, epoch, tick, aperture state and
 lift snapshots through BuildingReplicaView; presentation may use these
 only as read-only authoritative samples. The game retains its transport
 admission and interest ownership; no automatic broadcast of passengers.
+
+## Stage 23V.7: native executable and CI acceptance
+
+Build the genre-free native reference host:
+
+    cmake --build build --target aiverse_building_world_example
+    ./build/aiverse_building_world_example .
+    ctest --test-dir build -R '^building_native_world_replica$' --output-on-failure
+
+The executable uses the actual GameModule/Simulation, existing SpatialWorld,
+SceneCollisionNamespaces, native nav::Mesh, existing Replica Server/Client
+over real loopback, and two generated buildings. It exercises peer identity,
+lift boarding and riding, graph ACK gating, save/restore in transit,
+rejection of old command epochs, exiting and independent scene unload/reload.
+The scripted actor motor is a test fixture, not a shipping game controller.
+Native GPU frame acceptance remains separate. Do not assert PASS until
+the executable actually builds and runs.

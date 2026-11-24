@@ -1726,3 +1726,15 @@ BuildingPhysicalExtent now has centreOffset for feet-based transforms;
 schema v2 explicitly migrates v1 to a zero offset. Restored lift rider
 maps are validated against the decoded ECS passenger generations before
 persistent load commits. Handoff: docs/agent-handoffs/buildings-stage-23v6.md.
+
+### Stage 23V.7 — executable native reference integration
+
+examples/world/runtime-building/main.cpp is now a real genre-free
+GameModule + Simulation integration executable, not a pseudocode-only
+README. CMake target aiverse_building_world_example and CTest
+building_native_world_replica exercise two generated scenes, actual
+SpatialWorld and NavMesh, generic Replica loopback identity, lift
+boarding/motion/exit, graph ACK gate, persistent mid-trip checkpoint
+and independent scene lifecycle. Focused CI also typechecks the source.
+No successful native execution or GPU result is claimed yet. Handoff:
+docs/agent-handoffs/buildings-stage-23v7.md.

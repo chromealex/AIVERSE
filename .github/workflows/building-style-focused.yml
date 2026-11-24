@@ -17,6 +17,9 @@ on:
       - 'tests/libraries/building_surface_pattern_tests.cpp'
       - 'tests/studio/BuildingGenerationTests.cpp'
       - 'engine/buildings/**'
+      - 'engine/sim/Simulation.*'
+      - 'examples/world/runtime-building/**'
+      - 'CMakeLists.txt'
       - 'apps/studio-native/StudioBuildingGeneration.h'
       - 'tests/studio/BuildingGenerationTests.cpp'
   workflow_dispatch:
@@ -130,6 +133,7 @@ jobs:
             engine/world/SpatialWorld.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
             -o /tmp/aiverse_building_dual_leaf_restore_tests
           g++ $FLAGS -fsyntax-only tests/render/runtime_building_model_compile.cpp
+          g++ $FLAGS -fsyntax-only examples/world/runtime-building/main.cpp
       - name: Run genre-neutral building regression tests
         shell: bash
         run: |
