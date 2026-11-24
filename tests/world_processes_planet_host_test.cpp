@@ -46,8 +46,23 @@ int main(){
         const auto tick=scene.tick();
         check(host.stepPhysics({})&&scene.tick()==tick+1,"single physical tick");
         check(!host.stepPhysics({}),"duplicate step rejected");
-        check(!host.recordContacts([](const auto&,auto){return false;}),"record retry");
-        check(host.recordContacts([](const auto& s,auto contacts){return s.completedTick==7&&contacts.empty();}),"record");
+        check(!host.recordContacts([](const auto&,auto){return true;}),"cannot discard debris motion");
+        PlanetDebrisState saved;
+        check(!host.recordPhysicsOutputs([&](const auto& s,auto contacts,auto states){
+            check(s.completedTick==7&&contacts.empty()&&states.size()==1,"output batch");
+            saved=states[0];return false;
+        }),"owner transaction retry");
+        check(host.recordPhysicsOutputs([&](const auto& s,auto contacts,auto states){
+            return s.completedTick==7&&contacts.empty()&&states.size()==1&&
+                states[0].event.key==key&&states[0].simulationPosition==saved.simulationPosition&&
+                states[0].linearVelocity.x==saved.linearVelocity.x;
+        }),"record frozen motion");
+        check(!host.recordPhysicsOutputs([](const auto&,auto,auto){return true;}),"duplicate record");
+        check(saved.bodyId=="terra"&&validPlanetDebrisMotion(saved),"valid owner checkpoint");
+        auto restored=debris;
+        auto invalid=saved;invalid.bodyId="moon";
+        check(!restorePlanetDebrisMotion(restored,invalid),"reject cross-body restore");
+        check(restorePlanetDebrisMotion(restored,saved),"merge checkpoint into owner shape");
         check(host.skipRender()&&host.phase()==PlanetProcessHost::Phase::Complete,"headless finish");
         check(!host.prepare(scene,world,surface,stamp,tiles,placements),"duplicate completed tick");
         world.get<granular::Field>(field).sampledTick=8;stamp.completedTick=8;
@@ -56,6 +71,11 @@ int main(){
         check(host.resetAfterRollback()&&scene.bodyCount()==0,"retire projected physics");
         stamp.epoch=2;stamp.completedTick=7;world.get<granular::Field>(field).sampledTick=7;
         check(host.prepare(scene,world,surface,stamp,tiles,placements),"restored epoch");
+        check(host.publishPhysics()&&host.publishDebris(restored),"recreate from owner checkpoint");
+        const auto restoredHandle=host.debrisHandle(member);
+        Vec3 restoredLocal{};
+        check(physics::physisVec3(scene.position(restoredHandle),restoredLocal)&&
+            restoredLocal+game::Surface::anchor(0)==saved.simulationPosition,"restored native position");
         check(host.shutdown()&&host.phase()==PlanetProcessHost::Phase::Idle,"shutdown");
         std::puts("planet process host fixture PASS");return 0;
     }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}

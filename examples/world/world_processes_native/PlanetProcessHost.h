@@ -63,7 +63,7 @@ public:
         frame_=std::move(frame);stamp_=std::move(stamp);
         scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;
         physical_.invalidateMorphPublications();
-        renderDone_=false;recorded_=false;contacts_.clear();
+        renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();
         phase_=Phase::Prepared;return true;
     }
     // Same immutable geometry drives both publishers. A partial owner error
@@ -131,16 +131,28 @@ public:
         }
         if(!physical_.collectPlanetMorphPhysicsInputs(*scene_,*snapshot_,*surface_,morphBodies,morphOwners,
             stamp_.completedTick+1,contacts_,contactConfig))return false;
+        if(!physical_.planetDebris().capture(*scene_,*snapshot_,*surface_,debrisStates_))return false;
         phase_=Phase::PhysicsStepped;return true;
     }
-    // Record in the existing authoritative replay/network input channel.
-    // Failure leaves copied inputs available for retry; callback must dedup
-    // by epoch/tick. It must not step or mutate this physics scene.
+    // Record both motion checkpoints and next-tick MORPH input in the existing
+    // native owner transaction, deduplicated by epoch/body/tick. No Box3D
+    // handles are persisted. On failure the same frozen batch can be retried.
+    // The callback must not step or mutate the physics scene.
+    template<class Record>
+    bool recordPhysicsOutputs(Record&& record){
+        if(phase_!=Phase::PhysicsStepped||recorded_||!sceneCurrent())return false;
+        if(!std::forward<Record>(record)(stamp_,std::span<const MorphContactInput>(contacts_),
+            std::span<const PlanetDebrisState>(debrisStates_)))return false;
+        recorded_=true;finish();return true;
+    }
+    // Compatibility for hosts with no live debris. Do not silently drop
+    // native owner motion when the physical step actually contains debris.
     template<class Record>
     bool recordContacts(Record&& record){
-        if(phase_!=Phase::PhysicsStepped||recorded_||!sceneCurrent())return false;
-        if(!std::forward<Record>(record)(stamp_,std::span<const MorphContactInput>(contacts_)))return false;
-        recorded_=true;finish();return true;
+        if(!debrisStates_.empty())return false;
+        return recordPhysicsOutputs([&](const auto& stamp,auto contacts,auto){
+            return std::forward<Record>(record)(stamp,contacts);
+        });
     }
     // Real GPU owner, outside active render encoding. Can run after physics.
     // A published snapshot is never replaced by a different ECS revision.
@@ -195,7 +207,7 @@ private:
     bool sceneCurrent()const{return scene_&&scene_->tick()==sceneTick_;}
     void finish(){if(phase_==Phase::PhysicsStepped&&renderDone_&&recorded_)phase_=Phase::Complete;}
     void clear(){
-        snapshot_.reset();surface_.reset();frame_={};stamp_={};contacts_.clear();
+        snapshot_.reset();surface_.reset();frame_={};stamp_={};contacts_.clear();debrisStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
         renderDone_=recorded_=false;phase_=Phase::Idle;
     }
@@ -211,5 +223,6 @@ private:
     std::shared_ptr<const game::Surface> surface_;
     GranularPreparedFrame frame_;
     std::vector<MorphContactInput> contacts_;
+    std::vector<PlanetDebrisState> debrisStates_;
 };
 } // namespace aiverse::examples::world_processes_native

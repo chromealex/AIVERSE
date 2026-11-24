@@ -13,7 +13,41 @@ struct PlanetDebrisProjection {
     std::string bodyId;
     Vec3 simulationPosition{}; // durable owner pose, canonical Fixed metres
     physics::BodyDesc description{}; // owner rotation/shape/velocities/material
+    bool awake=true; // restored owner sleep state, not a separate physics policy
 };
+// Handle-free owner checkpoint. Native authority only; never resample on
+// deterministic lockstep peers. Shape/material remain in the owner record.
+struct PlanetDebrisState {
+    fracture::Event event{};
+    std::string bodyId;
+    Vec3 simulationPosition{};
+    b3Quat rotation=b3Quat_identity;
+    b3Vec3 linearVelocity{},angularVelocity{};
+    bool awake=true;
+};
+inline bool validPlanetDebrisMotion(const PlanetDebrisState& state){
+    const auto finiteVelocity=[](b3Vec3 v){
+        return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z)&&
+            std::abs(v.x)<=1000&&std::abs(v.y)<=1000&&std::abs(v.z)<=1000;
+    };
+    const auto q=state.rotation;
+    const float norm=q.v.x*q.v.x+q.v.y*q.v.y+q.v.z*q.v.z+q.s*q.s;
+    return state.event.entity.valid()&&state.event.key&&!state.bodyId.empty()&&
+        std::isfinite(norm)&&std::abs(norm-1.f)<=.01f&&
+        finiteVelocity(state.linearVelocity)&&finiteVelocity(state.angularVelocity);
+}
+// Merge a saved motion checkpoint into the EXISTING owner shape record.
+// Identity mismatch cannot restore a different collapse or another planet.
+inline bool restorePlanetDebrisMotion(PlanetDebrisProjection& owner,const PlanetDebrisState& state){
+    if(!validPlanetDebrisMotion(state)||owner.event.entity!=state.event.entity||
+       owner.event.key!=state.event.key||owner.event.tick!=state.event.tick||
+       owner.bodyId!=state.bodyId)return false;
+    owner.simulationPosition=state.simulationPosition;
+    owner.description.rotation=state.rotation;
+    owner.description.linearVelocity=state.linearVelocity;
+    owner.description.angularVelocity=state.angularVelocity;
+    owner.awake=state.awake;return true;
+}
 class PlanetDebrisPublisher {
 public:
     // One selected body and one real physics scene. Source collider removal
@@ -46,6 +80,9 @@ public:
         // Let the existing PHYSIS bridge compensate native gravity once.
         const auto handle=scene.create(desc);
         if(handle==physics::kNoBody)return false;
+        if(!request.awake&&!scene.setAwake(handle,false)){
+            scene.destroy(handle);return false;
+        }
         try{
             entries_.emplace(id,Entry{request.event,handle});
             bodyId_=request.bodyId;
@@ -75,6 +112,31 @@ public:
             if(!physics::applyPhysisToBody(scene,world,entry.handle,material,offset_))return false;
         }
         return true;
+    }
+    // Copy all current motion in stable entity order after the sole scene step.
+    // Fail closed on a missing receipt, lost handle, out-of-body position or
+    // non-restorable native motion. Output is unchanged on failure.
+    bool capture(const physics::Scene& scene,const World& world,const game::Surface& surface,
+                 std::vector<PlanetDebrisState>& output)const{
+        if(scene_&&scene_!=&scene)return false;
+        std::vector<PlanetDebrisState> staged;staged.reserve(entries_.size());
+        for(const auto& [id,entry]:entries_){
+            (void)id;
+            if(!scene.valid(entry.handle)||scene.motion(entry.handle)!=physics::Motion::Dynamic||
+               !fracture::planetCollapseReceipt(world,entry.event))return false;
+            const auto p=scene.position(entry.handle);
+            Vec3 local{};
+            if(!physics::physisVec3(p,local)||std::abs(p.x)>100000||
+               std::abs(p.y)>100000||std::abs(p.z)>100000)return false;
+            PlanetDebrisState state{entry.event,bodyId_,local+offset_,
+                scene.rotation(entry.handle),scene.linearVelocity(entry.handle),
+                scene.angularVelocity(entry.handle),scene.awake(entry.handle)};
+            const auto frame=lib::worldprocess::surfaceFrame(&surface,state.simulationPosition);
+            if(!frame||surface.bodies[size_t(frame->body)].id!=bodyId_||
+               game::Surface::anchor(frame->body)!=offset_||!validPlanetDebrisMotion(state))return false;
+            staged.push_back(std::move(state));
+        }
+        output=std::move(staged);return true;
     }
     physics::BodyHandle handle(Entity e)const{
         const auto it=entries_.find(e.packed());
