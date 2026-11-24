@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
 from evidence import validate_report, checkout_errors
 from audit_compliance import covered_paths
-from feature_registry import regressions, matrix, load_registry
+from feature_registry import regressions, matrix, load_registry, owner_readiness
 from new_feature import scaffold
 from legacy_inventory import inventory
 from capability_inventory import capability_id, source_operations
@@ -171,6 +171,38 @@ class GateTest(unittest.TestCase):
             self.assertEqual(validate_report(report, root, False), [])
             self.assertTrue(any("tested tree differs" in error
                                 for error in validate_report(report, root, True)))
+
+    def test_owner_readiness(self):
+        registry = {"new": {"owner": "render", "checks": {}},
+                    "done": {"owner": "world", "checks": {
+                        key: {"status": "pass"} for key in gate.DIMENSIONS}}}
+        capabilities = {"capabilities": [{"id": "render:shader", "owner": "render"}],
+                        "tasks": [{"id": "audit:render:shader", "owner": "render",
+                                   "kind": "investigate"}], "errors": []}
+        graphs = {"graphs": [{"id": "shader", "owner": "render"}],
+                  "tasks": [{"id": "graph-audit:shader", "owner": "render",
+                             "kind": "investigate"}], "errors": []}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch("feature_registry.validate", side_effect=lambda data, root:
+                       ["fixture error"] if data["owner"] == "render" else []):
+                report = owner_readiness(registry, root, capabilities, graphs)
+                self.assertEqual(report["counts"], {"manifests": 2, "capabilities": 1,
+                                                    "graphs": 1, "tasks": 3})
+                render, world = report["owners"]
+                self.assertEqual(render["owner"], "render")
+                self.assertEqual(render["manifests"][0]["state"], "invalid")
+                self.assertEqual(render["tasks"][0]["kind"], "fix_manifest")
+                self.assertEqual(world["manifests"][0]["state"], "declared_ready")
+                self.assertEqual(world["tasks"], [])
+                filtered = owner_readiness(registry, root, capabilities, graphs, "render")
+                self.assertEqual(len(filtered["owners"]), 1)
+                self.assertEqual(filtered["counts"]["manifests"], 1)
+                self.assertTrue(owner_readiness(registry, root, capabilities, graphs,
+                                                "absent")["errors"])
+                graphs["tasks"].append(dict(graphs["tasks"][0]))
+                self.assertTrue(any("duplicate audit task" in e for e in
+                                    owner_readiness(registry, root, capabilities, graphs)["errors"]))
 
     def test_coverage(self):
         changed = {"engine/a.cpp", "apps/studio-web/a.ts", "docs/a.md"}
