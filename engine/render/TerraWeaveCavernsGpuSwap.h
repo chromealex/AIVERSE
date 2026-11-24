@@ -33,7 +33,7 @@ public:
     // GPU-owning scene when the device's idle barrier is unavailable.
     bool stage(gfx::Device& dev,CaveBatchPrepared prepared,
                uint64_t renderRevision,bool enableStrata,
-               size_t vertexBudget=2000000){
+               size_t vertexBudget=2000000,CaveStrataPaging paging={}){
         if((device_&&device_!=&dev)||!dev.gpuHealthy()||!vertexBudget||vertexBudget>16000000||prepared.models.empty()||stagedEmpty_)return false;
         const size_t liveOwners=retired_.size()+size_t(bool(active_))+size_t(bool(staged_));
         if(!caveCanStageScene(activeRevision_,stagedRevision_,renderRevision,
@@ -43,8 +43,7 @@ public:
             retired_.reserve(kMaxRetainedScenes);
         device_=&dev;
         auto candidate=std::make_unique<render::GeometryScene>();
-        candidate->setStrataStagingEnabled(enableStrata);
-        candidate->setStrataPortableRenderingEnabled(enableStrata);
+        configureCaveStrata(*candidate,enableStrata,paging);
         try {
             candidate->loadPrepared(dev,prepared.manifest,
                                     std::move(prepared.models),vertexBudget);
