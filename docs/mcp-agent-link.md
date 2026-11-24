@@ -138,3 +138,6 @@ Native individual Asset Undo/Redo and coordinated agent history navigation now u
 
 ### S6f.4b.3b.1 — atomic recording of staged asset operations
 The native metadata patch, folder creation, quarantine deletion, external import and replacement paths prepare a detached Asset history and file plan before publishing live bytes. Outer journal v5 supports first checkpoint creation; v4 remains the existing-checkpoint path. Internal move/rename with material repair and explicit Trash recovery/purge still use legacy dirty-marker recording. Private staging slots may survive a rejected operation. No new MCP action.
+
+### S6f.4b.3b.2 — atomic internal move and rename recording
+Native transfer commit now stages internal Move/Rename alongside external import/replace. The actual resolved destinations (including keep-both) drive typed model URI repairs and indexed material reference remaps; existing material bytes and root metadata/digests are retained before publication. Journal v4/v5 commits payloads, repaired documents and Asset history together. Map/rules references remain conservative; explicit Trash recovery/purge retains its separate legacy path. No new MCP action.
