@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 from check_feature import ROOT, validate
+from evidence import checkout_errors
 
 PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/", "docs/agents/contracts/")
 EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json", "docs/agents/graph-inventory.json"}
@@ -46,6 +47,9 @@ def main():
     parser.add_argument("--allow-partial", action="store_true")
     parser.add_argument("--format", choices=["text", "json"], default="text")
     args = parser.parse_args()
+    checkout = checkout_errors(ROOT, args.head, clean=not args.allow_partial)
+    if checkout:
+        parser.error("; ".join(checkout))
     try:
         changed = git_changed(args.base, args.head)
     except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
