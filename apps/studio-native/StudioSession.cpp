@@ -1385,26 +1385,22 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
         for(const auto& [path,directory]:removedPaths)if(studioDocumentNamesAsset(target,path,directory))
             throw std::runtime_error("Coordinated target material references removed asset");
     }
-    std::unique_ptr<StudioAssetHistoryPublication> publication;
-    if(stagedAssets)publication=std::make_unique<StudioAssetHistoryPublication>(ws_.project.dir);
-    try{
+    {
         if(stagedProject){
             auto checkpoint=editor::prepareProjectHistoryCheckpoint(ws_.project.dir,ws_.project.savedHistoryCheckpoint,stagedProject->documentHistory);
             if(!ws_.project.savedHistoryCheckpoint)ws_.project.savedHistoryCheckpoint=checkpoint.before;
             stagedProject->savedHistoryCheckpoint=checkpoint.after;stagedProject->historyPersistenceWarning.clear();
             plan.push_back(std::move(checkpoint));
         }
-        studioApplyHistoryBatch(ws_.project.dir,relocations,plan,movingResources);
-    }catch(...){
-        if(publication)finishAssetHistoryPublication(*publication,false);
-        throw;
+        studioApplyHistoryBatch(ws_.project.dir,relocations,plan,movingResources,
+            stagedAssets?&assetHistory_:nullptr,stagedAssets?&*stagedAssets:nullptr);
     }
     // Publish the prepared in-memory owners only after the file commit.
     if(stagedProject)ws_.project=std::move(*stagedProject);
     if(stagedMap)ws_.map=std::move(*stagedMap);
     if(stagedAssets){
         assetHistory_=std::move(*stagedAssets);
-        finishAssetHistoryPublication(*publication,true);
+        assetHistoryPersistenceWarning_.clear();
         try{catalog->rebuild(false);}
         catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
     }
