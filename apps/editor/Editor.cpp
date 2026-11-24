@@ -265,8 +265,8 @@ void Editor::retirePreviewModel(std::unique_ptr<render::Model>& model) noexcept 
 }
 
 void Editor::shutdown() {
-    if(view_.modelMutationBlocked())
-        throw std::logic_error("Editor shutdown: live Model read or graph transaction");
+    if(view_.modelMutationBlocked() || !clientHost_.canShutdown())
+        throw std::logic_error("Editor shutdown: live Model read, graph transaction or quarantined hosted client");
     graphGpuProfile_.clear();
     if (!dev_) return;
     // Invalidate any captureNextFrame callbacks still owned by the RHI.
@@ -279,6 +279,10 @@ void Editor::shutdown() {
     if(!dev_->waitForResourceIdle())
         throw std::runtime_error(
             "Editor shutdown: GPU completion barrier failed");
+    // Resolve hosted teardown before dismantling the editor's other owners.
+    // The full-device idle proof above covers archived and active clients.
+    clientHost_.stop();
+    clientHost_.drainAfterGpuIdle();
     pendingGraphMaterialApply_.reset();graphMaterialApplyProject_.clear();
     graphMaterialApplyRequest_.clear();graphMaterialApplyState_="idle";graphMaterialApplyReason_.clear();
     textureGraphGpuPreview_.shutdownAfterIdle(*dev_);
@@ -289,14 +293,7 @@ void Editor::shutdown() {
     spectraPreviewFrameOpen_=false;
     spectraPreviewRequest_.pending=false;
     spectraGpuTelemetry_=nullptr;
-    clientHost_.stop();
-    // A hosted GameClient may have submitted resources in an earlier GUI
-    // frame. Its GPU handles must survive until a true graphics completion
-    // signal; do not release them simply because the Game tab was closed.
-    if (dev_->gpuHealthy() && dev_->waitForSubmittedGpuWork())
-        clientHost_.drainAfterGpuIdle();
-    else if (!dev_->gpuHealthy())
-        clientHost_.abandonOnDeviceLoss();
+    // Hosted clients were drained at the initial GPU-idle boundary.
     gameFxBridge_.detach();
     // Nature preview retires grass Models through previewModelRetirement_
     // and stops its particles while gameFx_ is still alive.
@@ -2386,7 +2383,11 @@ void Editor::frame(gfx::Device& dev, double dt) {
         if (gpuRetirementLastFlushSucceeded_) {
             viewportRetirement_.drainAfterGpuIdle(dev);
             gpuResourceRetirement_.drainAfterGpuIdle(dev);
-            clientHost_.drainAfterGpuIdle();
+            try { clientHost_.drainAfterGpuIdle(); }
+            catch(const std::exception& e) {
+                gpuRetirementLastFlushSucceeded_=false;
+                ws_.log("view",std::string("Hosted client retirement deferred: ")+e.what(),true);
+            }
             prisma_.releaseRetiredSizesAfterGpuIdle();
             r3d_.drainObjectMotionAfterGpuIdle();
         }

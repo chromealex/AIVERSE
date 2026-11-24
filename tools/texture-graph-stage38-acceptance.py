@@ -21,6 +21,7 @@ TESTS = {
     "view_live_appearance_material_target": "aiverse_live_appearance_material_target_tests",
     "vulkan_scope_timing": "aiverse_vulkan_scope_timing_tests",
     "aiverse_deferred_loading_tests": "aiverse_deferred_loading_tests",
+    "aiverse_hosted_view_tests": "aiverse_hosted_view_tests",
 }
 for name in (
     "pipeline_cache", "shared_scratch", "liveness", "pass_schedule",

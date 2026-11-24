@@ -35,6 +35,7 @@ int aiverseMain(int, char**) {
         CHECK(host.simulation()==nullptr && !host.capturing());
         CHECK(!host.canControl() && !host.canStep() && !host.paused());
         CHECK(!host.setPaused(true) && !host.stepOnce());
+        CHECK(host.canShutdown());
         CHECK(host.pendingRetiredClients()==0);
         CHECK(host.collectGpuRetirements()==0 && host.drainAfterGpuIdle()==0);
     }

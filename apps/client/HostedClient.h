@@ -41,6 +41,8 @@ public:
     // a destroyed graphics device. Intentionally keep abandoned C++ owners
     // inert until process exit (no GPU destroy and no destructor callbacks).
     size_t abandonOnDeviceLoss();
+    // Non-mutating owner-thread preflight for full host teardown.
+    bool canShutdown() const noexcept;
     size_t pendingRetiredClients() const { return retired_.size(); }
     bool active() const { return client_ != nullptr; }
     bool loading() const;
@@ -75,6 +77,8 @@ private:
         gfx::Device* device = nullptr;
         uint64_t completionToken = 0; // zero means quarantine until GPU idle
         bool initialized = false;
+        // Unknown partial shutdown is not safe to retry or destroy.
+        bool shutdownFailed = false;
     };
     std::vector<RetiredClient> retired_;
     platform::HostedView view_;

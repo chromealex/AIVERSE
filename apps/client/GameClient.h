@@ -141,6 +141,7 @@ public:
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
     bool cancelRuntimeTextureMaterial(const std::string& request);
     void event(const platform::Event& e);
+    bool canShutdown() const noexcept { return !view_.modelMutationBlocked(); }
     void shutdown();
     void autostart(size_t i) { startMatch(i); }
     void forceLanguage(std::string tag) { forcedLanguage_ = std::move(tag); }
