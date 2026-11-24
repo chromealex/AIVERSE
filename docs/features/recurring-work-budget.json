@@ -51,10 +51,12 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The catalog audit passed. The documented budget planner returned the capped and uncapped visit counts for a population of 200000 via native MCP.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "skills/core/aiverse-work-budget/SKILL.md",
+        "skills/gameplay/aiverse-city-traffic/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
       ]
     },
     "mcp": {
@@ -172,6 +174,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-1748b1027.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json"
   ]
 }

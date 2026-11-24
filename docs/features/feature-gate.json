@@ -85,9 +85,12 @@
       "evidence": []
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "The feature-delivery skill routes to the strict feature contract. The audit of the skill catalog, checker regressions and native readiness refresh/query ran on this integration.",
+      "evidence": [
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
     },
     "mcp": {
       "status": "pass",
@@ -186,6 +189,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-1748b1027.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json"
   ]
 }

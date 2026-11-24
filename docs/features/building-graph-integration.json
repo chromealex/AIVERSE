@@ -283,9 +283,12 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Building style skill exists in skills/catalog.json; shared graph-authoring skill updated on common branch. Catalog generator/audit not yet executed.",
-      "evidence": []
+      "status": "pass",
+      "note": "The catalog audit passed and the documented native exporter generated four structure kinds across twenty size/seed cases and twelve style-specific GLBs.",
+      "evidence": [
+        "skills/world/aiverse-building-style/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
     },
     "mcp": {
       "status": "pass",
@@ -333,9 +336,12 @@
       "evidence": []
     },
     "headless": {
-      "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "The standalone exporter produced validated GLBs. An independent native Simulation hosted two live Building scenes and answered MCP diagnostic requests without a Studio window.",
+      "evidence": [
+        "examples/world/runtime-building/main.cpp",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -391,6 +397,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-1748b1027.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json"
   ]
 }

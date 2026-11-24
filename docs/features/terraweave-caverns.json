@@ -305,10 +305,11 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A standalone native MCP server authored, undid, redid and saved a cave. A second server reopened the project and returned the same authored snapshot and stable IDs.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "apps/editor/core/TerraWeaveCavernsOps.h",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
       ]
     },
     "examples": {
@@ -364,6 +365,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-1748b1027.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json"
   ]
 }

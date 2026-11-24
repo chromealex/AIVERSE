@@ -43,10 +43,11 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The Studio UI skill documents this panel and its native ownership. Its documented web suite, type checks and production build ran, and the strict skill catalog audit found zero errors.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "skills/editor/studio-ui/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
       ]
     },
     "mcp": {
@@ -157,6 +158,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-1748b1027.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json"
   ]
 }
