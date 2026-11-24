@@ -2415,7 +2415,7 @@
           "title": "Граф зависимостей ассетов",
           "titleEn": "Asset dependency graph",
           "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
-          "textEn": "S6g: bounded multi-hop dependency traversal with cycle-closing edges, navigable paged results and conservative URI relocation policy.",
+          "textEn": "S6g.4: GLB and Wavefront OBJ/MTL dependencies, coordinated URI-preserving multi-selection preview and native relocation validation.",
           "status": "in-progress"
         },
         {
