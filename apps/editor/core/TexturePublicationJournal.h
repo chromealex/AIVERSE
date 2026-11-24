@@ -30,12 +30,13 @@ public:
         dir_=parent/(output.empty()?"set-"+name:"image-"+name+"."+output);
         if(!fs::create_directory(dir_))throw std::runtime_error("Texture publication pending; inspect journal");
         try{
-            Json j=Json::object();j.set("version",Json::number(int64_t(1)));j.set("name",Json::string(name));j.set("output",Json::string(output));
+            Json j=Json::object();j.set("version",Json::number(int64_t(2)));j.set("name",Json::string(name));j.set("output",Json::string(output));
             std::ofstream stream(dir_/"intent.tmp",std::ios::binary);stream<<j.dump(2)<<"\n";stream.close();
             if(!stream)throw std::runtime_error("Cannot write texture publication intent");
             fs::rename(dir_/"intent.tmp",dir_/"intent.json");
         }catch(...){finish();throw;}
     }
+    Path stage() const {return dir_/"stage";}
     void evidence(const Json& files){
         namespace fs=std::filesystem;
         std::ofstream stream(dir_/"files.tmp",std::ios::binary);stream<<files.dump(2)<<"\n";stream.close();
@@ -50,6 +51,28 @@ public:
             if(row.getStr("status")!="destination_matches_evidence"||row.getBool("stagePresent"))
                 throw std::runtime_error("Texture publication not verified or staging remains");
             archivePublicationJournal(root(project)/id);return;
+        }
+        throw std::runtime_error("Unknown texture publication");
+    }
+    // Only v2 intents own a stage inside their journal. Legacy content stages
+    // may already be indexed or referenced, and are never moved by this API.
+    static std::string quarantine(const Path& project,const std::string& id){
+        namespace fs=std::filesystem;
+        ProjectAssetWriteLock lock(project);
+        const auto parent=root(project);
+        for(const auto& row:inspect(project).items()){
+            if(row.getStr("id")!=id)continue;
+            if(!row.getBool("quarantinable"))throw std::runtime_error("Publication is not eligible for isolated quarantine");
+            const auto active=parent/id,archive=parent.parent_path()/"texture-publications-quarantine";
+            if(fs::is_symlink(archive))throw std::runtime_error("Unsafe quarantine directory");
+            fs::create_directories(archive);
+            for(unsigned i=0;i<10000;++i){
+                const auto slot=archive/(id+"-"+std::to_string(i));
+                if(!fs::create_directory(slot))continue;
+                try{fs::rename(active,slot/"journal");return slot.filename().string();}
+                catch(...){std::error_code ec;fs::remove(slot,ec);throw;}
+            }
+            throw std::runtime_error("Texture quarantine exhausted");
         }
         throw std::runtime_error("Unknown texture publication");
     }
@@ -68,12 +91,14 @@ public:
             if(!fs::is_symlink(file)&&fs::is_regular_file(file)&&fs::file_size(file)<=4096)try{
                 const auto j=Json::parseFile(file.string());const auto name=j.getStr("name"),output=j.getStr("output");
                 const bool set=output.empty();
-                if(j.getInt("version")==1&&render::texture_graph::safeId(name)&&(set||validOutput(output))&&entry.path().filename()==(set?"set-"+name:"image-"+name+"."+output)){
+                if((j.getInt("version")==1||j.getInt("version")==2)&&render::texture_graph::safeId(name)&&(set||validOutput(output))&&entry.path().filename()==(set?"set-"+name:"image-"+name+"."+output)){
                     const auto dest=textures/(set?name:name+"_"+output+".png");
-                    const auto stage=set?textures/("."+name+".stage"):Path(dest.string()+".stage");
+                    const bool isolated=j.getInt("version")==2;
+                    const auto stage=isolated?entry.path()/"stage":(set?textures/("."+name+".stage"):Path(dest.string()+".stage"));
                     const bool published=!fs::is_symlink(dest)&&(set?fs::is_directory(dest):fs::is_regular_file(dest));
                     row.set("destination",Json::string(dest.lexically_relative(project).generic_string()));
                     row.set("stagePresent",Json::fromBool(fs::exists(stage)||fs::is_symlink(stage)));
+                    row.set("quarantinable",Json::fromBool(isolated&&!fs::exists(dest)&&!fs::is_symlink(dest)&&!fs::is_symlink(stage)));
                     row.set("status",Json::string(published?"destination_present_unverified":"incomplete_or_active"));
                     const auto evidence=entry.path()/"files.json";
                     if(published&&!fs::is_symlink(evidence)&&fs::is_regular_file(evidence)&&fs::file_size(evidence)<=16384){

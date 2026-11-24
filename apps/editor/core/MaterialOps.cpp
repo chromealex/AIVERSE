@@ -220,9 +220,12 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
     fs::create_directories(dir);
     const std::string rel="content/textures/"+name+"_"+output+".png";
-    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+    const auto dest=root/rel;
+    const auto legacyStage=fs::path(dest.string()+".stage");
+    if(fs::exists(legacyStage)||fs::is_symlink(legacyStage))throw std::runtime_error("Legacy staging requires offline inspection");
     if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture already exists");
     TexturePublicationJournal journal(root,name,output);
+    const auto stage=journal.stage();
     if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture staging busy");}
     struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
     std::string png;
@@ -247,9 +250,12 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
         const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
         if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
-        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
+        fs::create_directories(dir);const auto dest=dir/name;
+        const auto legacyStage=dir/("."+name+".stage");
+        if(fs::exists(legacyStage)||fs::is_symlink(legacyStage))throw std::runtime_error("Legacy staging requires offline inspection");
         if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture set exists");
         TexturePublicationJournal journal(root,name,"");
+        const auto stage=journal.stage();
         if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture set staging busy");}
         struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
         Json files=Json::array();size_t i=0;
@@ -484,6 +490,7 @@ void registerMaterialOps(Workspace& ws) {
     };
     add("texture_graph_publications_get","Inspect pending CPU/GPU texture publication intents; never delete or repair assets.",R"({"type":"object","additionalProperties":false})",[w](const Json&){needProject(*w);Json r=okJson();r.set("publications",TexturePublicationJournal::inspect(fs::canonical(w->project.dir)));return r;});
     add("texture_graph_publication_finalize","Archive verified texture publication journal; no asset deletion.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);TexturePublicationJournal::finalize(fs::canonical(w->project.dir),p.getStr("id"));return okJson();});
+    add("texture_graph_publication_quarantine","Move an isolated unpublished texture intent to project-local quarantine; never move published assets.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);Json r=okJson();r.set("quarantineId",Json::string(TexturePublicationJournal::quarantine(fs::canonical(w->project.dir),p.getStr("id"))));return r;});
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});

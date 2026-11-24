@@ -131,6 +131,17 @@ int main() {
         requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"].size()==0,"completed intent retained");
     }
     {
+        editor::TexturePublicationJournal intent(root,"quarantine_fixture","color");
+        fs::create_directory(intent.stage());
+        {std::ofstream out(intent.stage()/"payload",std::ios::binary);out<<"unfinished";}
+        const auto args=Json::parse(R"({"id":"image-quarantine_fixture.color"})");
+        const auto quarantined=call("texture_graph_publication_quarantine",args);
+        requireGraphTest(quarantined.getBool("ok"),"isolated quarantine rejected");
+        const auto saved=root/".aiverse-cache"/"texture-publications-quarantine"/quarantined.getStr("quarantineId")/"journal"/"stage"/"payload";
+        requireGraphTest(fs::is_regular_file(saved)&&!fs::exists(intent.stage()),"quarantine lost staged bytes");
+        requireGraphTest(!fs::exists(root/"content"/"textures"/"quarantine_fixture_color.png"),"quarantine published content");
+    }
+    {
         auto material=Json::parse(R"({"name":"fixture_material","material":{"roughness":0.5},"createOnly":true})");
         requireGraphTest(call("material_set",material).getBool("ok"),"create-only material failed");
         requireGraphTest(call("material_set",material).has("error"),"create-only overwrote existing material");
