@@ -228,10 +228,13 @@ void checkRecoveryGrowth(const fs::path& project,const Moves& moves){
     const auto quota=recoveryQuotaMiB(project);
     if(!quota)return;
     int64_t delta=0;size_t visited=0;
+    std::map<std::string,uint64_t> sizes;
     for(const auto& move:moves){
         const bool from=inRecoveryTrash(move.from),to=inRecoveryTrash(move.to);
+        const auto found=sizes.find(move.from);
+        const auto bytes=found==sizes.end()?recoveryBytes(project/move.from,visited):found->second;
+        sizes.erase(move.from);sizes[move.to]=bytes;
         if(from==to)continue;
-        const auto bytes=recoveryBytes(project/move.from,visited);
         const auto signedBytes=static_cast<int64_t>(bytes);
         if(to){
             if(delta>std::numeric_limits<int64_t>::max()-signedBytes)throw std::runtime_error("Recovery quota arithmetic exceeded");
@@ -1815,7 +1818,14 @@ std::string batchResourceDestination(std::string path,const std::vector<StudioBa
             path=m.to+path.substr(m.from.size());
     return path;
 }
-void validateMovingBatchResources(const std::vector<StudioBatchRelocation>& moves,
+bool batchMetadataPath(const std::string& path){
+    return path.ends_with(".meta")&&(path.starts_with("content/")||inRecoveryTrash(path));
+}
+void validateBatchMetadataPath(const fs::path& root,const std::string& path){
+    if(path.starts_with("content/"))validateHistoryContentPath(path.substr(8),true);
+    else validateHistorySlot(root,path,true);
+}
+void validateMovingBatchResources(const fs::path& root,const std::vector<StudioBatchRelocation>& moves,
     const std::vector<StudioBatchResourceEdit>& resources){
     if(resources.size()>32)throw std::runtime_error("Too many moving batch resource edits");
     size_t bytes=0;std::set<std::string> sources,targets;
@@ -1823,13 +1833,20 @@ void validateMovingBatchResources(const std::vector<StudioBatchRelocation>& move
         const auto& edit=resource.edit;
         const auto source=edit.path.generic_string();
         const auto& target=resource.destination;
-        if(!source.starts_with("content/")||!target.starts_with("content/")||
-           source==target||!studioRepairModelExtension(edit.path)||!studioRepairModelExtension(fs::path(target))||
-           !sources.insert(source).second||!targets.insert(target).second||
+        if(source==target||!sources.insert(source).second||!targets.insert(target).second||
            batchResourceDestination(source,moves)!=target)
             throw std::runtime_error("Invalid moving resource chain");
-        validateHistoryContentPath(source.substr(8));validateHistoryContentPath(target.substr(8));
-        studioValidateModelRepairBytes(edit);
+        if(batchMetadataPath(source)&&batchMetadataPath(target)){
+            validateBatchMetadataPath(root,source);validateBatchMetadataPath(root,target);
+            if(!edit.tailDigest.empty()||edit.tailBytes)throw std::runtime_error("Invalid metadata snapshot mode");
+            validateHistoryMetadata(edit);
+        }else{
+            if(!source.starts_with("content/")||!target.starts_with("content/")||
+               !studioRepairModelExtension(edit.path)||!studioRepairModelExtension(fs::path(target)))
+                throw std::runtime_error("Invalid moving model resource path");
+            validateHistoryContentPath(source.substr(8));validateHistoryContentPath(target.substr(8));
+            studioValidateModelRepairBytes(edit);
+        }
         for(const auto count:{edit.before.size(),edit.after.size()}){
             if(count>StudioResourceEditBudget-bytes)throw std::runtime_error("Moving batch resource budget exceeded");
             bytes+=count;
@@ -1890,7 +1907,7 @@ void reverseBatch(const fs::path& root,const fs::path& folder,
                   const std::vector<editor::ProjectFileEdit>& docs,
                   const std::vector<StudioBatchResourceEdit>& resources={}){
     const auto timeline=batchTimeline(root,moves);
-    validateMovingBatchResources(moves,resources);
+    validateMovingBatchResources(root,moves,resources);
     const auto phase=batchPhaseWithResources(root,timeline,resources);
     validateBatchDocuments(root,timeline,docs);
     std::vector<editor::ProjectFileEdit> reverse;
@@ -2055,7 +2072,7 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     }
     std::sort(retained.begin(),retained.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
     validateBatchDocuments(root,timeline,out.documents);
-    validateMovingBatchResources(out.relocations,out.movingResources);
+    validateMovingBatchResources(root,out.relocations,out.movingResources);
     const auto generated=studioPlanGltfRepairs(root,net,&retained);
     if(generated.size()!=retained.size())throw std::runtime_error("Coordinated resource repair set changed");
     for(size_t i=0;i<retained.size();++i){
@@ -2067,6 +2084,181 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
            studioCanonicalGltfRepair(path,expected.after,expected.tailDigest,expected.tailBytes))
             throw std::runtime_error("Coordinated resource chain no longer matches typed dependencies");
     }
+    return out;
+}
+// A mixed file chain reuses the exact-endpoint journal and virtual byte
+// overlay. Model topology is deliberately left to the typed move planner:
+// a replacement/restoration may introduce new resource edges.
+bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered){
+    if(ordered.empty()||ordered.size()>64)return false;
+    const auto simple=[](const editor::ProjectHistory::MoveFile& file){
+        auto ext=fs::path(file.from).extension().string();
+        for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const auto importer=studioImporterForPath(fs::path(file.from),false);
+        return !file.directory&&file.digestAfter.empty()&&(importer=="texture"||importer=="audio"||ext==".bin");
+    };
+    bool hasMove=false;
+    for(const auto& step:ordered){
+        if(!step.move){if(step.files.size()!=1)return false;continue;}
+        hasMove=true;
+        const auto& move=*step.move;
+        if(!move.resourceEdits.empty()||move.files.empty()||move.files.size()%2)return false;
+        for(size_t i=0;i<move.files.size();i+=2)
+            if(!simple(move.files[i]))return false;
+    }
+    return hasMove;
+}
+StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
+    const std::vector<editor::ProjectHistory::Step>& ordered,bool redo){
+    if(!studioCanPlanMixedAssetChain(ordered))throw std::runtime_error("Unsupported mixed asset chain topology");
+    const auto root=fs::canonical(project);
+    StudioBatchAssetPlan out;
+    const auto bytesDigest=[](const std::string& bytes){
+        pack::Sha256 hash;
+        const auto field=[&](const std::string& value){
+            const auto prefix=std::to_string(value.size())+":";
+            hash.update(prefix.data(),prefix.size());hash.update(value.data(),value.size());
+        };
+        field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
+        const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
+    };
+    struct LogicalMove{std::string from,to,digest;};
+    struct LogicalStep{
+        std::vector<LogicalMove> moves;
+        std::vector<std::pair<std::string,std::string>> metaChecks;
+        std::vector<editor::ProjectFileEdit> edits;
+        std::vector<std::string> paths;
+    };
+    std::vector<LogicalStep> steps;
+    std::set<std::string> endpoints;
+    size_t operationCount=0;
+    for(const auto& step:ordered){
+        LogicalStep logical;
+        if(step.move){
+            const auto& plan=*step.move;validateHistoryMove(root,plan);
+            for(size_t i=0;i<plan.files.size();i+=2){
+                const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
+                const auto live="content/"+asset.from;
+                if(plan.replacement){
+                    const auto& outgoing=redo?asset:meta;const auto& incoming=redo?meta:asset;
+                    logical.moves.push_back({live,outgoing.to,outgoing.digest});
+                    logical.moves.push_back({incoming.to,live,incoming.digest});
+                    logical.metaChecks.emplace_back(live+".meta",asset.bytes);
+                    // Texture/audio replacement keeps its live path and GUID.
+                }else if(plan.quarantine){
+                    const bool deleted=plan.created?!redo:redo;
+                    const auto from=deleted?live:asset.to,to=deleted?asset.to:live;
+                    logical.moves.push_back({from,to,asset.digest});
+                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes)});
+                    logical.metaChecks.emplace_back(from+".meta",meta.bytes);
+                    logical.paths.push_back(live);
+                }else{
+                    const auto from="content/"+(redo?asset.from:asset.to),to="content/"+(redo?asset.to:asset.from);
+                    logical.moves.push_back({from,to,asset.digest});
+                    logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes)});
+                    logical.metaChecks.emplace_back(from+".meta",meta.bytes);
+                    logical.paths.push_back(from);logical.paths.push_back(to);
+                }
+            }
+        }else{
+            auto edit=step.files.front();
+            validateHistoryMetadata(edit);
+            if(!redo)std::swap(edit.before,edit.after);
+            const auto rel=metadataRelative(root,edit.path);
+            edit.path=fs::path(rel);logical.edits.push_back(std::move(edit));
+        }
+        for(const auto& m:logical.moves){
+            if(++operationCount>256)throw std::runtime_error("Too many mixed asset relocations");
+            endpoints.insert(m.from);endpoints.insert(m.to);
+        }
+        steps.push_back(std::move(logical));
+    }
+    // No file-tree nesting is allowed; all endpoints are individual files.
+    for(auto it=endpoints.begin();it!=endpoints.end();++it)
+        for(auto next=std::next(it);next!=endpoints.end();++next)
+            if(batchOverlap(*it,*next))throw std::runtime_error("Nested mixed history endpoints");
+    BatchState initial;
+    std::map<std::string,std::string> origins;
+    for(const auto& path:endpoints){
+        auto identity=batchIdentity(batchPath(root,path));
+        if(!identity.empty()&&identity.front()!='f')throw std::runtime_error("Mixed chain endpoint is not a file");
+        initial.emplace(path,identity);if(!identity.empty())origins.emplace(path,path);
+    }
+    StudioAssetCatalog catalog(root);catalog.rebuild(false);
+    std::map<std::string,std::string> liveGuids;
+    for(const auto& entry:catalog.all())liveGuids.emplace(entry.guid,"content/"+entry.path);
+    ResourceOverlay overlay;
+    const auto physical=[&](const std::string& rel)->fs::path{
+        if(!endpoints.count(rel))return root/rel;
+        const auto it=origins.find(rel);
+        if(it==origins.end())throw std::runtime_error("Mixed history source absent: "+rel);
+        return root/it->second;
+    };
+    const auto currentBytes=[&](const std::string& rel){
+        const auto path=physical(rel);const auto it=overlay.find(path);
+        if(it!=overlay.end())return it->second.after;
+        if(!fs::is_regular_file(fs::symlink_status(path))||fs::file_size(path)>1024u*1024u)
+            throw std::runtime_error("Invalid mixed metadata source");
+        return editor::readProjectFileBytes(path);
+    };
+    for(auto& step:steps){
+        for(const auto& [path,expected]:step.metaChecks){
+            if(currentBytes(path)!=expected)throw std::runtime_error("Mixed history metadata baseline changed");
+            const auto meta=Json::parse(expected);
+            const auto guid=meta.getStr("guid");
+            if(path.starts_with("content/")){
+                const auto live=path.substr(0,path.size()-5);
+                const auto it=liveGuids.find(guid);
+                if(it==liveGuids.end()||it->second!=live)throw std::runtime_error("Mixed history GUID changed");
+            }else if(liveGuids.count(guid))throw std::runtime_error("Restored mixed asset GUID conflict");
+        }
+        for(const auto& m:step.moves){
+            const auto it=origins.find(m.from);
+            if(it==origins.end()||origins.count(m.to))throw std::runtime_error("Mixed history occupancy changed");
+            const auto origin=it->second;
+            if(moveDigest(root/origin,false,&overlay)!=m.digest)throw std::runtime_error("Mixed virtual payload changed: "+m.from);
+            if(batchMetadataPath(m.from)&&batchMetadataPath(m.to)){
+                const auto meta=Json::parse(currentBytes(m.from));const auto guid=meta.getStr("guid");
+                if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed sidecar GUID");
+                if(m.from.starts_with("content/"))liveGuids.erase(guid);
+                if(m.to.starts_with("content/")&&!liveGuids.emplace(guid,m.to.substr(0,m.to.size()-5)).second)
+                    throw std::runtime_error("Mixed chain creates duplicate GUID");
+            }
+            out.relocations.push_back({m.from,m.to,initial.at(origin).substr(1),false});
+            origins.erase(it);origins.emplace(m.to,origin);
+        }
+        for(auto& edit:step.edits){
+            const auto rel=edit.path.generic_string();
+            const auto live=rel.substr(0,rel.size()-5);
+            const auto meta=Json::parse(edit.before);
+            const auto guid=liveGuids.find(meta.getStr("guid"));
+            if(guid==liveGuids.end()||guid->second!=live||
+               meta.getStr("importer")!=studioImporterForPath(fs::path(live),false)||
+               currentBytes(rel)!=edit.before)
+                throw std::runtime_error("Mixed metadata history identity changed");
+            const auto path=physical(rel);
+            edit.path=path;
+            auto it=overlay.find(path);
+            if(it==overlay.end())overlay.emplace(path,std::move(edit));
+            else it->second.after=std::move(edit.after);
+        }
+        // Existing model dependencies must not be broken by deletion,
+        // restoration or renaming in this mixed non-repairing topology.
+        std::vector<std::pair<std::string,bool>> paths;
+        for(const auto& path:step.paths)paths.emplace_back(path.substr(8),false);
+        studioCheckGltfAssetPaths(root,paths);
+    }
+    const auto timeline=batchTimeline(root,out.relocations);
+    if(batchPhase(root,timeline)!=0)throw std::runtime_error("Mixed history baseline changed");
+    for(auto& [path,edit]:overlay){
+        if(edit.before==edit.after)continue;
+        const auto source=path.lexically_relative(root).generic_string();
+        const auto destination=batchResourceDestination(source,out.relocations);
+        if(destination!=source){edit.path=fs::path(source);out.movingResources.push_back({edit,destination});}
+        else out.documents.push_back(edit);
+    }
+    validateBatchDocuments(root,timeline,out.documents);
+    validateMovingBatchResources(root,out.relocations,out.movingResources);
     return out;
 }
 void studioRecoverHistoryBatch(const fs::path& project){
@@ -2099,7 +2291,14 @@ void studioRecoverHistoryBatch(const fs::path& project){
             throw std::runtime_error("Invalid moving resource journal rows");
         for(const auto& row:body["movingResources"].items()){
             if(!row["destination"].isString())throw std::runtime_error("Invalid moving resource destination");
-            resources.push_back({studioDecodeResourceEdit(row,true),row.getStr("destination")});
+            if(row.getBool("metadata")){
+                if(!row["path"].isString()||!row["before"].isString()||!row["after"].isString()||
+                   row.has("encoding")||row.has("tailDigest")||row.has("tailBytes"))
+                    throw std::runtime_error("Invalid moving metadata snapshot");
+                editor::ProjectFileEdit edit{fs::path(row.getStr("path")),row.getStr("before"),row.getStr("after")};
+                validateHistoryMetadata(edit);
+                resources.push_back({std::move(edit),row.getStr("destination")});
+            }else resources.push_back({studioDecodeResourceEdit(row,true),row.getStr("destination")});
         }
     }else if(body.has("movingResources"))throw std::runtime_error("Moving resource journal version mismatch");
     for(const auto& row:body["moves"].items())
@@ -2132,7 +2331,7 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
     checkRecoveryGrowth(root,moves);
-    validateMovingBatchResources(moves,movingResources);
+    validateMovingBatchResources(root,moves,movingResources);
     for(const auto& resource:movingResources){
         const auto& edit=resource.edit;
         const auto path=editor::project_file_detail::safeTarget(root,edit.path.generic_string());
@@ -2173,7 +2372,12 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
         if(!movingResources.empty()){
             Json resources=Json::array();
             for(const auto& resource:movingResources){
-                auto row=studioEncodeResourceEdit(resource.edit);
+                Json row=Json::object();
+                if(batchMetadataPath(resource.edit.path.generic_string())){
+                    row.set("metadata",Json::fromBool(true));
+                    row.set("path",Json::string(resource.edit.path.generic_string()));
+                    row.set("before",Json::string(resource.edit.before));row.set("after",Json::string(resource.edit.after));
+                }else row=studioEncodeResourceEdit(resource.edit);
                 row.set("destination",Json::string(resource.destination));resources.push(std::move(row));
             }
             body.set("movingResources",std::move(resources));

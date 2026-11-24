@@ -1236,14 +1236,17 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     std::set<std::string> relocationEndpoints;
     std::vector<editor::ProjectHistory::MovePlan> ordinaryMoves;
     bool ordinaryChain=true;
+    std::vector<editor::ProjectHistory::Step> orderedAssets;
     {
         auto probe=assetHistory_;
         for(const auto& row:preview["steps"].items())if(row.getStr("scope")=="assets"){
             const auto& entry=probe.next(redo);
+            orderedAssets.push_back(entry);
             if(!entry.move||entry.move->quarantine||entry.move->replacement||entry.move->created)ordinaryChain=false;
             probe.advance(redo);
         }
     }
+    const bool mixedChain=!ordinaryChain&&studioCanPlanMixedAssetChain(orderedAssets);
     std::vector<std::pair<std::string,bool>> referencePaths;
     std::vector<std::pair<std::string,bool>> removedPaths;
     for(const auto& row:preview["steps"].items()){
@@ -1257,6 +1260,34 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
         }else if(scope=="assets"){
             if(!stagedAssets){stagedAssets.emplace(assetHistory_);catalog=std::make_unique<StudioAssetCatalog>(ws_.project.dir);}
             const auto& entry=stagedAssets->next(redo);
+            if(mixedChain){
+                if(entry.move){
+                    const auto& move=*entry.move;
+                    if(!move.quarantine&&!move.replacement){
+                        const auto& before=redo?move.materialsBefore:move.materialsAfter;
+                        const auto& after=redo?move.materialsAfter:move.materialsBefore;
+                        const auto material=std::filesystem::path(ws_.project.dir)/"materials.json";
+                        if(bool(before)!=bool(after)||bool(before)!=std::filesystem::exists(material))
+                            throw std::runtime_error("Material topology changed since move");
+                        if(before){
+                            if(!Json::parse(*after)["materials"].isObject())throw std::runtime_error("Invalid recorded material library");
+                            files.append({{material,*before,*after}});
+                        }
+                    }
+                    for(size_t i=0;i<move.files.size();i+=2){
+                        const auto& f=move.files[i];
+                        if(move.replacement)continue;
+                        referencePaths.emplace_back(f.from,f.directory);
+                        if(!move.quarantine)referencePaths.emplace_back(f.to,f.directory);
+                        else if(move.created?!redo:redo){
+                            if(studioDocumentNamesAsset(editor::loadMaterialLibrary(ws_),f.from,f.directory))
+                                throw std::runtime_error("Asset is referenced by materials");
+                            removedPaths.emplace_back(f.from,f.directory);
+                        }
+                    }
+                }
+                stagedAssets->advance(redo);continue;
+            }
             if(entry.move){
                 const auto& move=*entry.move;StudioBatchAssetPlan staged;
                 if(ordinaryChain){
@@ -1311,6 +1342,12 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
             stagedAssets->advance(redo);
         }else throw std::runtime_error("Unknown batch owner");
     }
+    if(mixedChain){
+        auto chain=studioPlanMixedAssetChain(ws_.project.dir,orderedAssets,redo);
+        relocations=std::move(chain.relocations);files.append(chain.documents);
+        movingResources=std::move(chain.movingResources);
+        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,referencePaths,false);
+    }
     if(!ordinaryMoves.empty()){
         auto chain=studioPlanAssetMoveChain(ws_.project.dir,ordinaryMoves,redo);
         relocations=std::move(chain.relocations);files.append(chain.documents);
@@ -1323,7 +1360,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     if(!referencePaths.empty()){
         const auto& map=stagedMap?*stagedMap:ws_.map;
         const auto& project=stagedProject?*stagedProject:ws_.project;
-        studioCheckMapAssetPaths(project.dir,map.toJson(),project.rulesJson,project.manifest,referencePaths,ordinaryMoves.empty());
+        studioCheckMapAssetPaths(project.dir,map.toJson(),project.rulesJson,project.manifest,referencePaths,ordinaryMoves.empty()&&!mixedChain);
     }
     auto plan=files.plan(); // validate EVERY exact on-disk baseline before writes
     for(const auto& edit:plan)if(edit.path.filename()=="materials.json"){

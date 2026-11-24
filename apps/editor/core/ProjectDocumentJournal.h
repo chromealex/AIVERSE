@@ -125,11 +125,15 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative){
     if(relative.empty()||relative.size()>2048||rel.is_absolute()||rel.has_root_name()||
        relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos)
         throw std::runtime_error("Unsafe project document journal target");
+    const std::string trashPrefix=".aiverse-cache/studio-asset-trash/";
+    const auto trashRest=relative.starts_with(trashPrefix)?relative.substr(trashPrefix.size()):std::string{};
+    const bool trashMeta=trashRest.size()==24+11&&trashRest.substr(24)=="/asset.meta"&&
+        trashRest.substr(0,24).find_first_not_of("0123456789abcdef")==std::string::npos;
     fs::path p=root;
     for(const auto& segment:rel){
         const auto name=segment.string();
         const bool historyCache=relative==".aiverse-cache/project-history.json"&&p==root&&name==".aiverse-cache";
-        if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache)||name==".git"||
+        if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache&&!(trashMeta&&p==root))||name==".git"||
            name.starts_with(".aiverse-save-")||name.find('\0')!=std::string::npos)
             throw std::runtime_error("Unsafe project document journal segment");
         p/=segment;
