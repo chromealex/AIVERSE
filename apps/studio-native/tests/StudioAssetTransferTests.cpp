@@ -1216,8 +1216,8 @@ int main(){
             studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources);
             AIVERSE_TEST_CHECK(read(p/slot/"Mesh.gltf")==model&&!fs::exists(dest));
             index.rebuild(false);AIVERSE_TEST_CHECK(!index.byGuid(modelGuid));
-            // An external model resource in a replacement candidate must
-            // fail even when that candidate is currently in Trash.
+            // External version dependencies are resolved at the logical model
+            // path, including when the version is currently in Trash.
             studioApplyHistoryBatch(p,studioPlanMixedAssetChain(p,reversed,false).relocations,{});
             index.rebuild(false);
             const auto textureGuid=index.byPath("A/Pack/Paint.png")->guid;
@@ -1253,14 +1253,43 @@ int main(){
             AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==newModel);
             version=studioPlanMixedAssetChain(p,embeddedVersions.steps(),false);
             studioApplyHistoryBatch(p,version.relocations,version.documents,version.movingResources);
-            write(external/"Mesh.gltf",R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})");
+            const std::string externalModel=R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})";
+            write(external/"Mesh.gltf",externalModel);
             auto replace=StudioTransferPlan::external(p,"A/Pack",{external/"Mesh.gltf"});
             (void)replace.apply(replace.token(),{{0,"replace"}},{},&plan);
             editor::ProjectHistory versions;versions.recordMove(std::move(*plan),"Replace model");
+            auto externalUndo=studioPlanMixedAssetChain(p,versions.steps(),false);
+            studioApplyHistoryBatch(p,externalUndo.relocations,externalUndo.documents,externalUndo.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==model);
+            // Incoming recovery payload must be checked before any relocation.
+            fs::rename(source/"Paint.png",source/"MissingPaint.png");
             bool refused=false;
-            try{(void)studioPlanMixedAssetChain(p,versions.steps(),false);}
+            try{(void)studioPlanMixedAssetChain(p,versions.steps(),true);}
             catch(const std::runtime_error&){refused=true;}
-            AIVERSE_TEST_CHECK(refused);
+            AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
+            fs::rename(source/"MissingPaint.png",source/"Paint.png");
+            // Even if the resource exists, a chain that changes its endpoint
+            // is not in the stable-dependency subset.
+            move=StudioTransferPlan::internal(p,"B",{"A/Pack/Paint.png"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan);
+            editor::ProjectHistory resourceMove;
+            resourceMove.recordMove(std::move(*plan),"Move version dependency");
+            auto combined=resourceMove.steps();
+            const auto versionSteps=versions.steps();
+            combined.insert(combined.end(),versionSteps.begin(),versionSteps.end());
+            refused=false;
+            try{(void)studioPlanMixedAssetChain(p,combined,true);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
+            const auto moveUndo=studioPlanMixedAssetChain(p,resourceMove.steps(),false);
+            studioApplyHistoryBatch(p,moveUndo.relocations,moveUndo.documents,moveUndo.movingResources);
+            auto externalRedo=studioPlanMixedAssetChain(p,versions.steps(),true);
+            studioApplyHistoryBatch(p,externalRedo.relocations,externalRedo.documents,externalRedo.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==externalModel);
+            index.rebuild(false);
+            AIVERSE_TEST_CHECK(index.byGuid(modelGuid)->path=="A/Pack/Mesh.gltf");
+            AIVERSE_TEST_CHECK(index.byGuid(textureGuid)->path=="A/Pack/Paint.png");
         }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
