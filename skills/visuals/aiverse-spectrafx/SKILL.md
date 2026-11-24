@@ -1,11 +1,12 @@
-## Current runtime update — stages 116–121 (2026-11-24)
-
-The graph ComputeParticles runtime now has source implementations for Metal and capability-gated Vulkan, GPU-owned alive/free lists with demand growth and live shrink/compaction, a canonical per-Device allocation ledger, separate checked staging transfer budget and exact owned allocator checkpoint v2. Native compilation and hardware QA are deferred; do not claim parity or performance. CPU fallback remains the full authored effect. In Studio choose GPU-owned allocator and Load graph, or use `fx_graph_preview` with `{"action":"load","graphName":"...","gpuOwnedAllocation":true}`. Status reports actual backend, requested/active allocator, estimated alive, physical slots, logical bytes and budget denials. Legacy Metal eligibility fields remain schema-only aliases; prefer gpuEligible/gpuVmEligible. GPU-owned slot order is nondeterministic: use gpuShaderSeed, not gpuAllocationSeed. Checkpoint capture remains capped at 4096 physical slots and bounded by configured readback quotas. Device ledger covers ComputeParticles allocations, not entire driver VRAM. Unsupported Vulkan hardware and graph operations fall back to CPU; RequireGpu rejects. Historical sections below retain their original stage context.
-
 ---
 name: aiverse-spectrafx
 description: Author and integrate AIVERSE SpectraFX visual effects: versioned graphs, asset variants, ECS source components, event bindings, CPU fallback, editor previews and eventual GPU backends.
 ---
+
+## Current runtime update — stages 116–121 (2026-11-24)
+
+The graph ComputeParticles runtime now has source implementations for Metal and capability-gated Vulkan, GPU-owned alive/free lists with demand growth and live shrink/compaction, a canonical per-Device allocation ledger, separate checked staging transfer budget and exact owned allocator checkpoint v2. Native compilation and hardware QA are deferred; do not claim parity or performance. CPU fallback remains the full authored effect. In Studio choose GPU-owned allocator and Load graph, or use `fx_graph_preview` with `{"action":"load","graphName":"...","gpuOwnedAllocation":true}`. Status reports actual backend, requested/active allocator, estimated alive, physical slots, logical bytes and budget denials. Legacy Metal eligibility fields remain schema-only aliases; prefer gpuEligible/gpuVmEligible. GPU-owned slot order is nondeterministic: use gpuShaderSeed, not gpuAllocationSeed. Checkpoint capture remains capped at 4096 physical slots and bounded by configured readback quotas. Device ledger covers ComputeParticles allocations, not entire driver VRAM. Unsupported Vulkan hardware and graph operations fall back to CPU; RequireGpu rejects. Historical sections below retain their original stage context.
+
 
 ## 2026-11-23 — Studio Replay/Capture Stages 19–37 (features only; QA deferred)
 
@@ -109,7 +110,7 @@ and
 
 ## 2026-11-23 — Stage 18: real native SpectraFX frame capture (tests deferred)
 
-`apps/studio-native/StudioHost::captureSpectraFrame` now adds bounded
+`apps/studio-native/StudioHost.cpp` (method StudioHost::captureSpectraFrame) now adds bounded
 asynchronous one-shot readback of the dedicated native FX drawable,
 NOT a browser-generated screenshot. The existing `gfx::Device`
 `captureNextFrame` is scheduled on the native render owner and
@@ -199,7 +200,7 @@ This feature is on stacked draft PR #115, parent PR #113 remains a draft.
 ## 2026-11-23 — SpectraFX HTML5 graph canvas (Stage 6; QA pending)
 
 Read `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`.
-The existing `fx_graph` dock tab now includes a 2D node/link canvas implemented
+The existing “fx_graph” dock tab now includes a 2D node/link canvas implemented
 by `SpectraGraphCanvas.tsx` and `spectraGraphCanvasModel.ts`:
 node drag/layout, zoom, display typed/exec links, native catalog-driven
 Add/Delete and native `fx_graph_edit` Connect/Disconnect.
@@ -215,7 +216,7 @@ Never represent it as a real frame or change RHI simulation based on it.
 
 Read `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md` before
 changing this area. `apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx`
-now renders the existing `fx_graph` tab using the shared Studio UI kit.
+now renders the existing “fx_graph” tab using the shared Studio UI kit.
 It accesses native project graph assets ONLY through `studio.op` with
 `fx_graph_list/get/validate/set/draft_*`, and uses `studio.assets` to
 choose real SpriteOutput image references from `content/`. Do not write
