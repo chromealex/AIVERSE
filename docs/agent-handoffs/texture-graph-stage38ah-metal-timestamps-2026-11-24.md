@@ -15,3 +15,7 @@ Metal scope markers previously used empty blit encoders. The fix encodes a real 
 
 ## Next
 Fetch latest HEAD in a dedicated checkout, reconfigure the existing ARM64 build, build aiverse_texture_graph_metal_gpu_test, run CTest -R '^texture_graph_metal_gpu$' with AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS=1 and AIVERSE_METAL_SCOPE_DIAGNOSTICS=1, capture full output (including successful scope reports via -V). If strict test passes, rerun full consolidated 31-test suite. Material batches, live Studio/MCP and merged-tree Mac gate remain open.
+
+## Hardware rerun result
+
+Stage 38AH hardware rerun PASS: user-supplied texture-graph-metal(1).log explicitly checks out 36cdc0946; on Metal Apple M3 Ultra the strict single CTest fixture texture_graph_metal_gpu passed in 2.15 s (2.18 s total), 1/1. Aggregate profile available=true, 50 accepted, 0 rejected, 0 invalid, 0 pending: 10 fused-dispatch, 32 materialized-dispatch and 8 texture-copy samples. Detailed profile available=true, 6 accepted, 0 rejected, 0 invalid, 0 pending: 3 materialized-group (including a fused group) and 3 output-pack samples. Fixture final PASS covers parity, shared scratch, multi-block readback, cancellation, timeout, recovery and native fence-only resident lifecycle. Previous 30/31 suite passed all CPU/native non-Metal fixtures on earlier checkout; combined 31/31 on one post-fix checkout remains NOT RUN. No Vulkan hardware/live Studio/MCP/merged-tree quick gate claim.
