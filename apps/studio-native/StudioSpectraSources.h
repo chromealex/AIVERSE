@@ -161,6 +161,8 @@ private:
                 spectra::GraphRuntimeOptions options;
                 options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
                 options.proceduralBillboards=true;options.gpuIndirect=true;
+                // Opt-in until native GPU allocator parity/overflow tests pass.
+                options.gpuOwnedAllocation=graph.getBool("sceneGpuAllocation",false);
                 // Small default groups; opt in to larger allocations per graph.
                 const auto& poolCapacity=graph["scenePoolCapacity"];
                 options.capacity=16384;

@@ -1,6 +1,7 @@
 // SpectraFX CPU / GPU backend selection and CPU fallback headless regression.
 // GPU kernels remain gated by Metal/RHI and require a real-device test separately.
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraGpuFramePlan.h"
 #include <iostream>
 #include <cstring>
 #include <vector>
@@ -122,7 +123,15 @@ static void sparsePageOwnership(){
     pages.reset(128);
     check(pages.size()==0&&!pages.contains(65),"reset ownership");
 }
+static void gpuOwnedFramePlan(){
+    const auto plan=spectra::gpu_pipeline::gpuAllocationPlan(65536,128,true);
+    const std::vector<uint32_t> expected{3,7,8,1,3,4,5};
+    check(plan.count==expected.size(),"GPU allocation dispatch count");
+    for(size_t i=0;i<expected.size();++i)check(plan.dispatches[i].shaderMode==expected[i],"GPU allocation phase ordering");
+    check(!spectra::gpu_pipeline::gpuAllocationPlan(16,17,true).needsCompute(),"invalid birth budget accepted");
+}
 int main() {
+    gpuOwnedFramePlan();
     sparsePageOwnership();
     using spectra::ComputePreference;
     using spectra::ComputeBackend;

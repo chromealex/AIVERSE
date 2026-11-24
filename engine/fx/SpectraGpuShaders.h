@@ -201,7 +201,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                      device const Particle* spawns [[buffer(1)]],
                      device const uint* slots [[buffer(2)]],
                      device Vertex* vertices [[buffer(3)]],
-                     device const uint* liveSlots [[buffer(4)]],
+                     device uint* liveSlots [[buffer(4)]],
                      device atomic_uint* aliveCounter [[buffer(5)]],
                      device DrawArgs* gpuDrawArgs [[buffer(6)]],
                      device const VmParams* seedParams [[buffer(7)]],
@@ -211,8 +211,40 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                      device VmAttributes* stateAttributes [[buffer(11)]],
                      device atomic_uint* vmErrors [[buffer(12)]],
                      device const uint* graphSources [[buffer(13)]],
-                      device const uint* killSlots [[buffer(14)]]) {
+                      device const uint* killSlots [[buffer(14)]]
+#ifdef SPECTRA_GPU_OWNED_ALLOCATION
+                     ,device uint2* owners [[buffer(15)]]
+#endif
+                     ) {
     uint id=gid.x;
+#ifdef SPECTRA_GPU_OWNED_ALLOCATION
+    if(u.meta.x==9u){
+        if(id<u.meta.y&&particles[id].positionAge.w>=0.0f&&
+           all(owners[id]==uint2(u.meta.z,u.meta.w))){
+            particles[id].positionAge.w=-1.0f;owners[id]=uint2(0);
+        }
+        return;
+    }
+    if(u.meta.x==7u){
+        if(id<u.meta.y&&particles[id].positionAge.w<0.0f){
+            uint ordinal=atomic_fetch_add_explicit(&aliveCounter[0],1u,memory_order_relaxed);
+            if(ordinal<u.meta.y)liveSlots[ordinal]=id;
+        }
+        return;
+    }
+    if(u.meta.x==8u){
+        const uint freeCount=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
+        // One thread per admitted birth, unique list index; overflows drop.
+        if(id>=u.meta.z||id>=freeCount)return;
+        uint slot=liveSlots[id];
+        if(slot>=u.meta.y)return;
+        Particle p=spawns[id];VmParams params=seedParams[id];VmAttributes attrs{};
+        vmRun(vmProgram[0],0u,p,params,attrs,0.0f,vmErrors);
+        particles[slot]=p;stateParams[slot]=params;stateAttributes[slot]=attrs;
+        owners[slot]=uint2(slots[id*2u],slots[id*2u+1u]);
+        return;
+    }
+#endif
     if(u.meta.x==6u) {
         if(id>=u.meta.z)return; // z carries kill count for this dispatch
         uint slot=killSlots[id];

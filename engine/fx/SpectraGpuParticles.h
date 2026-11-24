@@ -60,6 +60,7 @@ struct ComputeEmitterDesc {
     // Experimental Metal-only option; no effect on existing CPU/host-gather
     // paths. Requires RHI supportsGpuAuthoredIndirectDraw().
     bool gpuIndirect = false;
+    bool gpuOwnedAllocation = false; // opt-in, requires GPU indirect; checkpoint v1 unavailable
     bool proceduralBillboards = false; // Metal compact records + indexed instancing
     // Experimental Metal GPU scalar VM (requires strict Stage-22 eligibility).
     // Off by default; unsupported stages/operations execute the full CPU VM.
@@ -107,6 +108,8 @@ struct GpuCheckpointStatus {
 struct ComputeStats {
     uint32_t alive = 0, dropped = 0;
     uint32_t gpuDispatches = 0, drawCalls = 0;
+    bool gpuOwnedAllocation = false; // alive is a conservative host estimate, not readback
+    uint32_t gpuAllocationRequests=0;
     uint32_t hostActiveSlotVisits = 0, hostOccupiedPages = 0; // latest step, no GPU readback
     uint32_t submittedSlots = 0; // dense GPU quads published from live-slot map
     uint32_t gpuFallbacks = 0, lostOnFallback = 0;
@@ -238,6 +241,7 @@ private:
     static_assert(sizeof(Uniforms)==64);
     static_assert(sizeof(DrawUniforms)==144);
 
+    bool stepGpuAllocated(float dt);
     bool initGpu();
     bool initCpu();
     void releaseGpu();
@@ -254,6 +258,7 @@ private:
     gfx::ShaderHandle vertexShader_;
     gfx::PipelineHandle pipeline_;
     gfx::BufferHandle states_, seeds_, slots_, vertices_, indices_, liveSlots_;
+    gfx::BufferHandle gpuSourceOwners_; // uint2 per physical slot, GPU-owned mode only
     gfx::BufferHandle killSlots_; // 4 bytes per dead physical slot, scatter mode 6
     gfx::BufferHandle aliveCounter_, gpuDrawArgs_;
     gfx::BufferHandle seedProgramParams_, stateProgramParams_, gpuVmPayload_;
@@ -266,6 +271,12 @@ private:
     uint32_t drawCount_ = 0; // dense vertices emitted this frame (<= alive)
     std::vector<uint32_t> freeSlots_, pendingSlots_, aliveSlots_;
     std::vector<uint32_t> pendingKillSlots_;
+    std::vector<uint64_t> pendingGpuOwners_,pendingGpuKills_;
+    struct BirthEstimate {double expires;uint32_t count;};
+    std::deque<BirthEstimate> gpuBirthEstimates_;
+    double gpuAllocationClock_=0;
+    uint64_t gpuEstimatedBirths_=0;
+    bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
     struct KilledSlotAwaitingFrame {
         uint32_t slot=0;
         uint64_t submittedFrame=0;

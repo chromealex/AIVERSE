@@ -13,6 +13,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     result.gpu.backend=options.preference;
     result.gpu.gpuIndirect=options.gpuIndirect;
     result.gpu.proceduralBillboards=options.proceduralBillboards;
+    result.gpu.gpuOwnedAllocation=options.gpuOwnedAllocation;
     result.gpu.gpuProgram=options.gpuProgram;
     result.gpu.gpuMaterial=options.gpuMaterial;
     result.gpu.gpuBirthRandom=options.gpuBirthRandom;

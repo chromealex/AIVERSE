@@ -91,6 +91,7 @@ std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
         "|material="+std::to_string(unsigned(options.gpuMaterial))+
         "|indirect="+std::to_string(unsigned(options.gpuIndirect))+
         "|procedural="+std::to_string(unsigned(options.proceduralBillboards))+
+        "|gpuAllocation="+std::to_string(unsigned(options.gpuOwnedAllocation))+
         "|checkpointCadence="+std::to_string(options.checkpointEveryFrames)+
         "|adaptive="+std::to_string(unsigned(options.adaptiveCheckpoint.enabled))+
         "|adaptiveMax="+std::to_string(options.adaptiveCheckpoint.maxIntervalFrames)+

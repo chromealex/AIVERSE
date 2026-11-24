@@ -8,7 +8,8 @@
 namespace aiverse::spectra::gpu_pipeline {
 
 enum class Phase : uint8_t {
-    ResetCounter, Spawn, Integrate, Compact, PublishIndirectArgs, Gather
+    ResetCounter, Spawn, Integrate, Compact, PublishIndirectArgs, Gather,
+    CollectFreeSlots, AllocateSpawn
 };
 struct Dispatch {
     Phase phase{};
@@ -16,7 +17,7 @@ struct Dispatch {
     uint32_t shaderMode=0;
 };
 struct FramePlan {
-    std::array<Dispatch,6> dispatches{};
+    std::array<Dispatch,8> dispatches{};
     uint32_t count=0;
     bool needsCompute() const {return count!=0;}
     bool push(Phase phase,uint32_t threads,uint32_t mode) {
@@ -49,6 +50,22 @@ inline FramePlan plan(uint32_t capacity,uint32_t births,
     } else if(survivors) {
         p.push(Phase::Gather,survivors,2);
     }
+    return p;
+}
+// GPU owns physical slots. Rebuild the free list before births, then reset
+// the shared counter before compaction. Source kills precede this plan.
+inline FramePlan gpuAllocationPlan(uint32_t capacity,uint32_t births,bool integrate){
+    FramePlan p;
+    if(!capacity||births>capacity)return p;
+    if(births){
+        p.push(Phase::ResetCounter,1,3);
+        p.push(Phase::CollectFreeSlots,capacity,7);
+        p.push(Phase::AllocateSpawn,births,8);
+    }
+    if(integrate)p.push(Phase::Integrate,capacity,1);
+    p.push(Phase::ResetCounter,1,3);
+    p.push(Phase::Compact,capacity,4);
+    p.push(Phase::PublishIndirectArgs,1,5);
     return p;
 }
 } // namespace aiverse::spectra::gpu_pipeline
