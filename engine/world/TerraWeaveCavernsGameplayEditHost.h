@@ -8,6 +8,7 @@
 #include "engine/world/TerraWeaveCavernsVolumePhysicsStage.h"
 #include "engine/world/TerraWeaveCavernsAuthoredNavStage.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include "engine/world/TerraWeaveCavernsOwnedRimChunk.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -38,6 +39,7 @@ struct CaveGameplayCommitView {
     CaveAuthoredNavStage& navigation;
     const CaveVolumeSnapshot& snapshot;
     uint64_t visualRevision;
+    const CaveSurfaceGroupPlan* rimGroup=nullptr;
 };
 
 class CaveGameplayEditHost {
@@ -78,6 +80,9 @@ public:
         worker_.invalidate(bounds,copy);
         snapshot_=std::move(copy);
         runtimeEpoch_=snapshot_->sourceRevision;
+        authoredRevision_=source->sourceRevision;
+        if(!activeRimKeys_.empty()||rimPlan_)rimBarrierClosed_=true;
+        rimPlan_.reset();rimRequests_.clear();
     }
 
     // Full sparse rebuild of the edit-owned native projection. External
@@ -104,6 +109,9 @@ public:
         cancelPending();
         worker_.invalidateKeys(keys,copy);
         snapshot_=std::move(copy);runtimeEpoch_=snapshot_->sourceRevision;
+        authoredRevision_=source->sourceRevision;
+        if(!activeRimKeys_.empty()||rimPlan_)rimBarrierClosed_=true;
+        rimPlan_.reset();rimRequests_.clear();
     }
 
     bool consumeAuthoringOperation(const Json& result,
@@ -118,6 +126,45 @@ public:
                 b.getInt("maxXcm"),b.getInt("maxYcm"),b.getInt("maxZcm")},
                std::move(source));
         return true;
+    }
+
+    // Caller owns the frozen surface plan and actual reader exclusion.
+    // One isolated rim per existing chunk slot; all old rim slots must be
+    // regenerated in this edit epoch (including removed entrances).
+    bool configureRimGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            std::vector<CaveOwnedRimRequest> requests,
+            const std::function<bool()>& exclusive){
+        if(!snapshot_||!plan||!exclusive||!exclusive()||stagedRevision_||gpuBatch_||
+           committedRevision_==snapshot_->sourceRevision||plan->authorityRevision!=authoredRevision_||
+           !plan->surfaceEpoch||plan->surfaceEpoch<=committedRimSurfaceEpoch_||
+           requests.size()!=plan->rims.size()||requests.size()>64)return false;
+        const auto dirty=worker_.dirtyKeys();
+        std::set<ChunkKey3,KeyLess> keys;
+        std::set<uint64_t> ids;
+        for(const auto& request:requests){
+            if(!keys.insert(request.key).second||!ids.insert(request.entranceId).second||
+               std::find(dirty.begin(),dirty.end(),request.key)==dirty.end()||
+               std::none_of(plan->rims.begin(),plan->rims.end(),[&](const auto& rim){return rim.entranceId==request.entranceId;}))return false;
+            // Never steal an externally streamed native slot.
+            if(geometry_.catalog().find(request.key)&&!physics_.contains(request.key))return false;
+        }
+        for(const auto& key:activeRimKeys_)
+            if(std::find(dirty.begin(),dirty.end(),key)==dirty.end())return false;
+        rimPlan_=std::move(plan);rimRequests_=std::move(requests);
+        rimBarrierClosed_=true;return true;
+    }
+    bool rimPublicationBlocked()const noexcept{return rimBarrierClosed_;}
+    uint64_t committedRimSurfaceEpoch()const noexcept{return committedRimSurfaceEpoch_;}
+    const CaveSurfaceGroupPlan* rimGroup()const noexcept{return rimPlan_.get();}
+    // Native volume commit alone is NOT surface/GI/nav readiness. The
+    // outer host proves ALL matching owners before unblocking readers.
+    bool finishRimGroup(const std::function<bool(const CaveSurfaceGroupPlan&)>& ready,
+                         const std::function<bool()>& exclusive){
+        if(!rimBarrierClosed_||!rimPlan_||!exclusive||!exclusive()||!ready||
+           committedRevision_!=stats().requestedRevision||
+           committedRimSurfaceEpoch_!=rimPlan_->surfaceEpoch||
+           !ready(*rimPlan_)||!exclusive())return false;
+        rimBarrierClosed_=false;return true;
     }
 
     // Optional game-owner budget: stage a full cross-shard batch over
@@ -147,13 +194,13 @@ public:
                     const ColliderIdAllocator& colliderIds,
                     uint64_t visualRevision,
                     CaveBatchSpec geometryOptions={}) {
-        if(!snapshot_ || !visualRevision || stagedRevision_)return false;
+        if(!snapshot_ || !visualRevision || stagedRevision_ || (rimBarrierClosed_&&!rimPlan_))return false;
         // Stage38 pacing: a single consistent batch is prepared once, then
         // its GPU shard uploads advance under the configured frame budget.
         if(gpuBatch_)
             return pumpGpuBatch(device,visualRevision,geometryOptions);
         if(!colliderIds || !terrainHeight)return false;
-        const auto candidates=worker_.certifiedCandidates();
+        auto candidates=worker_.certifiedCandidates();
         if(candidates.empty())return false;
         const uint64_t sourceRevision=snapshot_->sourceRevision;
         for(const auto& c:candidates)
@@ -161,17 +208,27 @@ public:
                c.dirty.sourceRevision!=sourceRevision)return false;
         // Prepare-only native physics. No Box3D body is created here.
         try {
+            std::vector<CaveRimReplacement> rims;
+            std::map<ChunkKey3,size_t,KeyLess> exact;
+            stagedRimKeys_.clear();
+            if(rimPlan_){
+                for(const auto& request:rimRequests_){
+                    auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.dirty.key==request.key;});
+                    if(it==candidates.end())throw std::logic_error("Caverns rim source is not in certified dirty batch");
+                    auto owned=prepareOwnedRimChunk(it->candidate,request,*rimPlan_,*snapshot_);
+                    it->candidate=std::move(owned.candidate);
+                    exact.emplace(request.key,rims.size());stagedRimKeys_.insert(request.key);
+                    rims.push_back(std::move(owned.replacement));
+                }
+                if(!preparedRimMatchesGroup(*rimPlan_,rims))throw std::invalid_argument("Caverns prepared rim group mismatch");
+            }
             for(const auto& c:candidates) {
                 auto& owner=physics_[c.dirty.key];
                 if(!owner)owner=std::make_unique<CaveVolumePhysicsStage>();
-                const auto collision=prepareCaveVolumeCollision(
-                    c.candidate.mesh,c.candidate.resolution,
-                    c.candidate.spacingCm,sourceRevision);
-                const uint32_t firstId=colliderIds(c.dirty.key,
-                                                    collision.triangles.size());
-                if(!owner->prepare(c.candidate.mesh,c.candidate.resolution,
-                                   c.candidate.spacingCm,sourceRevision,
-                                   firstId,spatial))
+                const auto found=exact.find(c.dirty.key);
+                const auto collision=found==exact.end()?prepareCaveVolumeCollision(c.candidate.mesh,c.candidate.resolution,c.candidate.spacingCm,sourceRevision):rims[found->second].collision;
+                const uint32_t firstId=colliderIds(c.dirty.key,collision.triangles.size());
+                if(!owner->prepareExact(collision,firstId,spatial))
                     throw std::runtime_error("Caverns collision stage refused");
                 preparedPhysics_.push_back(c.dirty.key);
             }
@@ -188,6 +245,7 @@ public:
                 chunk.generatorVersion=snapshot_->generatorVersion;
                 chunk.resolution=item.candidate.resolution;
                 chunk.spacingCm=item.candidate.spacingCm;
+                chunk.preserveExactSurface=stagedRimKeys_.contains(item.dirty.key);
                 chunks.push_back(std::move(chunk));
             }
             const auto groups=groupCaveEditsByShard(
@@ -282,12 +340,14 @@ public:
             return geometry_.activateGroup(stagedShards_,
                 [&](const std::vector<CaveShardSnapshot>& shards) {
                     return commitOwners(CaveGameplayCommitView{
-                        current,shards,physics_,navigation_,*snapshot_,
-                        stagedVisualRevision_});
+                        stagedMeshes_,shards,physics_,navigation_,*snapshot_,
+                        stagedVisualRevision_,rimPlan_.get()});
                 });
         });
         if(!accepted)return false;
         committedRevision_=stagedRevision_;
+        if(rimPlan_){activeRimKeys_.swap(stagedRimKeys_);committedRimSurfaceEpoch_=rimPlan_->surfaceEpoch;}
+        stagedRimKeys_.clear();
         stagedRevision_=stagedVisualRevision_=0;
         stagedMeshes_.clear();
         stagedShards_.clear();
@@ -306,7 +366,7 @@ public:
         preparedPhysics_.clear();
         if(snapshot_&&navigation_.staged(snapshot_->sourceRevision))
             (void)navigation_.abort(snapshot_->sourceRevision);
-        stagedMeshes_.clear();
+        stagedMeshes_.clear();stagedRimKeys_.clear();
         gpuBatch_.reset();gpuBatchIndex_=0;
         stagedRevision_=stagedVisualRevision_=0;
     }
@@ -335,7 +395,7 @@ public:
                           const std::function<bool()>& exclusive,
                           const std::function<bool()>& retireNavigation,
                           CaveBatchSpec spec={}) {
-        if(!exclusive||!exclusive()||!retireNavigation||!expectedRenderRevision)
+        if(activeRimKeys_.contains(key)||rimBarrierClosed_||!exclusive||!exclusive()||!retireNavigation||!expectedRenderRevision)
             return false;
         const auto it=physics_.find(key);
         if(it==physics_.end()||!it->second)return false;
@@ -383,7 +443,7 @@ public:
         return true;
     }
 
-    void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
+    void draw(render::Renderer3D& renderer){if(!rimBarrierClosed_)geometry_.draw(renderer);}
     size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
         return geometry_.collectCompletedWithoutIdle(device);
     }
@@ -413,7 +473,7 @@ public:
             owner->boxOwner().unload(scene);
             owner->spatialOwner().unload(spatial);
         }
-        physics_.clear();
+        physics_.clear();activeRimKeys_.clear();rimPlan_.reset();rimRequests_.clear();rimBarrierClosed_=false;
         return true;
     }
     bool shutdownAfterGpuIdle(gfx::Device& device){
@@ -453,6 +513,10 @@ private:
     CaveBatchSpec gpuBatchSpec_{};
     std::vector<ChunkKey3> preparedPhysics_;
     uint64_t stagedRevision_=0,stagedVisualRevision_=0,committedRevision_=0;
-    uint64_t runtimeEpoch_=0;
+    uint64_t runtimeEpoch_=0,authoredRevision_=0,committedRimSurfaceEpoch_=0;
+    std::shared_ptr<const CaveSurfaceGroupPlan> rimPlan_;
+    std::vector<CaveOwnedRimRequest> rimRequests_;
+    std::set<ChunkKey3,KeyLess> activeRimKeys_,stagedRimKeys_;
+    bool rimBarrierClosed_=false;
 };
 } // namespace aiverse::terraweave::caverns
