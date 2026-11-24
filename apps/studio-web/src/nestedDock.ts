@@ -133,8 +133,8 @@ export function defaultDockTree(): DockTree {
     split('split-body-left','horizontal',.19,
       stack('dock-left',['hierarchy','project'],'hierarchy'),
       split('split-body-right','horizontal',.72,
-        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','rules','build','scripts','snapshot_diff'],'scene'),
-        stack('dock-right',['inspector','human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'],'inspector'))),
+        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness'],'scene'),
+        stack('dock-right',['inspector','human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog'],'inspector'))),
     stack('dock-bottom',['assets','console','agent','frame_capture','texture_resources'],'assets')) };
 }
 function traverse(node: DockNode, visitor: (n: DockNode)=>void): void {
