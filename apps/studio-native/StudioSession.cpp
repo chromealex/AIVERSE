@@ -1265,7 +1265,10 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
                     const auto material=std::filesystem::path(ws_.project.dir)/"materials.json";
                     if(bool(before)!=bool(after)||bool(before)!=std::filesystem::exists(material))
                         throw std::runtime_error("Material topology changed since move");
-                    if(before)files.append({{material,*before,*after}});
+                    if(before){
+                        if(!Json::parse(*after)["materials"].isObject())throw std::runtime_error("Invalid recorded material library");
+                        files.append({{material,*before,*after}});
+                    }
                     for(size_t i=0;i<move.files.size();i+=2){
                         const auto& f=move.files[i];referencePaths.emplace_back(f.from,f.directory);
                         referencePaths.emplace_back(f.to,f.directory);

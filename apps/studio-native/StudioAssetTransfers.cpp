@@ -1852,6 +1852,7 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
     std::set<std::string> assetEndpoints;
+    std::map<std::string,std::pair<std::string,bool>> expectedGuids;
     for(const auto& plan:ordered){
         validateHistoryMove(root,plan);
         if(plan.quarantine||plan.replacement||plan.created)
@@ -1862,7 +1863,14 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
             const auto from="content/"+(redo?f.from:f.to),to="content/"+(redo?f.to:f.from);
             const auto digest=i%2?bytesDigest(f.bytes):f.digest;
             out.relocations.push_back({from,to,digest,f.directory});
-            if(i%2==0){assetEndpoints.insert(from);assetEndpoints.insert(to);}
+            if(i%2==0){
+                assetEndpoints.insert(from);assetEndpoints.insert(to);
+                const auto meta=Json::parse(plan.files[i+1].bytes);
+                const auto expected=std::make_pair(meta.getStr("guid"),f.directory);
+                // First encounter supplies the baseline identity; a later
+                // reuse of the same endpoint is validated by the timeline.
+                expectedGuids.emplace(from,expected);
+            }
         }
         auto edits=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
         for(auto& edit:edits)edit.path=root/edit.path;
@@ -1870,6 +1878,15 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     }
     const auto timeline=batchTimeline(root,out.relocations);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Ordinary move chain baseline changed");
+    StudioAssetCatalog catalog(root);catalog.rebuild(false);
+    for(const auto& [path,identity]:timeline.initial){
+        if(identity.empty()||!assetEndpoints.count(path))continue;
+        const auto expected=expectedGuids.find(path);
+        if(expected==expectedGuids.end())throw std::runtime_error("Missing initial asset identity");
+        const auto indexed=catalog.byGuid(expected->second.first);
+        if(!indexed||"content/"+indexed->path!=path||indexed->directory!=expected->second.second)
+            throw std::runtime_error("Asset chain GUID or type changed");
+    }
     // Track each physical identity from its first live path to the final path.
     // The full sequence is still retained by the crash-recovery journal.
     std::map<std::string,std::string> origins;
