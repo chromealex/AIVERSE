@@ -787,7 +787,8 @@ public:
     virtual void destroySampler(SamplerHandle) {}
     virtual bool updateTextureRegion(TextureHandle, const TextureUploadDesc&) { return false; }
     // Optional GPU-only transfer: copy the full level zero of an ordinary,
-    // single-mip RGBA8/RGBA8_sRGB 2D sampled texture from a Storage buffer.
+    // RGBA8/RGBA8_sRGB 2D sampled texture from a Storage buffer. A requested
+    // full mip chain must be allocated for generation; reject incomplete chains.
     // Inside a recording frame, outside encoders. Raw bytes, no conversion.
     // Source offset/row pitch follow BufferTextureCopy2D. Caller keeps both
     // resources live until the covering GPU fence has actually completed.
