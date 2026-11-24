@@ -60,13 +60,13 @@ The persistent ledger retains projectile tombstones under its existing capacity 
 
 ## Authoritative server persistence (W1.24f, experimental)
 
-Use `net::authority::Server::enablePersistence(directory, uuid, resume, budget)` before attaching any peer, with `rules.regionOwnership={}` and static inline map content. The authority owns `ActorPersistentSession`; it checks an explicit active ECS component/resource allowlist and rejects unmaterialized entities, unknown storage and undrained structural notifications. The ordinary client and rollback paths are not persistence owners. The content identity includes the existing canonical rules/map hash and an explicit portable schema tag. Async external asset manifests are refused until immutable content provenance is implemented.
+Use `net::authority::Server::enablePersistence(directory, uuid, resume, budget)` before attaching any peer, with `rules.regionOwnership={}` and either static inline map content or a verified hashed streamed manifest. The authority owns `ActorPersistentSession`; it checks an explicit active ECS component/resource allowlist and rejects unmaterialized entities, unknown storage and undrained structural notifications. The ordinary client and rollback paths are not persistence owners. The content identity includes the existing canonical rules/map hash and an explicit portable schema tag. W1.25c enables hashed streamed manifests after full declared-asset audit and admission.
 
 Native server CLI: `aiverse_fps_server --project DIR --world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N]`. The UUID is a nonzero 128-bit hex identifier. A new directory starts a world; an existing manifest is reopened before network listeners bind. Nonempty incomplete directories are refused, not overwritten. No automatic repair of corrupt or truncated WAL. An optional positive interval rotates checkpoints on finalized tick multiples; zero disables rotation. `--ticks` remains an absolute simulation tick ceiling.
 
 Every completed tick in synchronous mode appends its WAL frame before network snapshot publication; optional W1.25a async mode preserves the same acknowledgement barrier. Failed persistence closes peers and prevents future step/broadcast; the CLI exits nonzero. Only the finalized server step may broadcast. Network input queues not yet accepted into a committed simulation tick are volatile; reconnect from the last durable acknowledgement. Do not mutate the live simulation between durable ticks via ad hoc external calls. Call `checkpointWorld()` at a quiescent finalized boundary, not from speculative or client code.
 
-This is source-only integration, not an accepted production deployment. Full native builds, restart parity with clients, fault injection, asynchronous persistence, immutable streamed asset identity and long-duration ledger capacity remain outstanding.
+This is source-only integration, not an accepted production deployment. Full native builds, restart parity with clients, fault injection, asynchronous persistence, long-duration ledger capacity and native verification remain outstanding.
 
 ## Asynchronous durable IO (W1.25a, experimental)
 
@@ -86,7 +86,15 @@ Use `recoveryProgress()` for phase, checkpoint bytes/total, accepted WAL bytes, 
 
 ActorPersistentSession captures immutable identity, seed, tick rate and player slots/teams for offline checks, then runs configured ActorHost validation and stages NativeRestartState on the owner before loading live Simulation. Server API: beginPersistenceRecovery, persistenceRecoveryProgress, cancelPersistenceRecovery, pollPersistenceRecovery. While Loading, step/poll/attach/broadcast/checkpoint are blocked. Use a new Server instance after failed or cancelled startup. CLI: add `--world-background-load` to an existing world's command; progress is printed before listeners bind. May be combined with `--world-async`. New world creation remains synchronous.
 
-Offline structural/schema checks run per replay frame; configured host-specific validation runs on the recovered final state. Checkpoint reads are chunked, but the full encoded checkpoint/private ECS and replay working set must fit memory. No hot swap of a running server or streaming external asset support yet. Native builds/tests and performance measurements have not run.
+Offline structural/schema checks run per replay frame; configured host-specific validation runs on the recovered final state. Checkpoint reads are chunked, but the full encoded checkpoint/private ECS and replay working set must fit memory. No hot swap of a running server; W1.25c adds hashed streamed asset support. Native builds/tests and performance measurements have not run.
+
+## Streamed world persistence (W1.25c, experimental)
+
+The existing WorldAssets manifest already declares SHA-256 for each external asset. Use WorldAssets::verifyAll with the independent project reader before creating or recovering a persistent streamed world; this includes nonresident assets. It is a synchronous, one-file-at-a-time audit (reader limit 32 MiB per file), not a full resident asset cache. WorldAssets::persistenceIdentity binds length-delimited rules/map JSON, including the manifest and its expected hashes, to SHA-256 with an explicit portable schema tag. Static-world identity stays unchanged.
+
+Server enables persistence for opted-in streamed worlds using this identity. The existing CollisionStream verifies each asset again on load and records sticky read/hash failure. Persistent authority fails closed on content integrity, collision budget/preparation or navigation readiness failure; ordinary nonpersistent streaming retains its retry behavior. After successful ECS recovery, Server::pollPersistenceContent must complete the real ActorHost::readyToStep admission barrier before attaching peers or advancing a tick. CLI waits before binding listeners. No substitute Transform, collision or navigation owner is introduced. Derived navigation is invalidated after restore.
+
+Supported content is the existing hashed WorldAssets catalog and immutable rules/map. The startup audit verifies declared bytes, not every possible future semantic collision seam or arbitrary external assets outside the catalog. Files must remain immutable for the session; cached verified geometry can stay resident, while subsequent reads are checked. The audit is synchronous even with --world-background-load. No full native test or performance acceptance has run.
 
 ## Implementation
 
