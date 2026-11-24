@@ -14,7 +14,7 @@
     "test:web": "npm run test:dock && npm run test:shell && npm run test:fields && npm run test:lighting && npm run test:materials && npm run test:graphs && npm run test:mock && npm run test:scene && npm run test:facial && npm run test:assets && npm run test:bridge && npm run test:human",
     "test:lighting": "node --experimental-strip-types --test tests/lightingSchema.test.mjs",
     "test:materials": "node --experimental-strip-types --test tests/materialSchema.test.mjs",
-    "test:graphs": "node --experimental-strip-types --test tests/shaderGraphLayout.test.mjs tests/shaderGraphEdit.test.mjs tests/buildingGraphInspection.test.mjs tests/buildingCandidateCapture.test.mjs",
+    "test:graphs": "node --experimental-strip-types --test tests/shaderGraphLayout.test.mjs tests/shaderGraphEdit.test.mjs tests/buildingGraphInspection.test.mjs tests/buildingCandidateCapture.test.mjs tests/buildingRoomTopology.test.mjs",
     "test:mock": "node --experimental-strip-types --test tests/mock.test.mjs",
     "test:scene": "node --experimental-strip-types --test tests/sceneState.test.mjs tests/gameViewport.test.mjs tests/sceneCamera.test.mjs tests/keyboard.test.mjs",
     "test:bridge": "node --experimental-strip-types --test tests/bridge.test.mjs",

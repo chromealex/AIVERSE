@@ -28,12 +28,12 @@
     "editable": true,
     "simulation": false,
     "visible": true,
-    "runtime": false
+    "runtime": true
   },
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D owner panel source wired to exact captured native candidate request/response and shared GraphCanvas; no new native generator. Stage 35E planned: native room/connection DTO, structural component diagnostics using existing room planner, shared topology view.",
+      "note": "Stage 35E native topology v1 export and existing native planner component diagnostics; shared inspector in owner panel. Full native verification pending.",
       "evidence": []
     },
     "architecture": {
@@ -103,7 +103,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Node v22.16.0 isolated buildingCandidateCapture.test.mjs: 4/4 PASS. Strict TypeScript 5.8.3 isolated gate PASS. Local git hash-object matches exact blobs on both branches. Ten shared source/test blobs verified identical. Full Studio typecheck/build, native operation, feature gate and visual QA NOT RUN.",
+      "note": "Stage 35E native and TypeScript fixtures authored; execution pending.",
       "evidence": []
     },
     "handoff": {

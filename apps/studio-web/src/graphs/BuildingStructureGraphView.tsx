@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
 import {StudioAlert,StudioButton,StudioSection,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
+import {BuildingRoomTopologyView} from './BuildingRoomTopologyView';
 import {projectBuildingInspection} from './buildingGraphInspection';
 
 interface Props {
@@ -21,7 +22,7 @@ export function BuildingStructureGraphView({recipe,inspection,onSelectFeature}:P
  const feature=socket?.featureIndex??(active.startsWith('feature:')?Number(active.slice(8)):null);
  return <StudioSection title="Building structure graph">
   <small>Read-only owner inspection · seed {data.seed} · {data.triangles} triangles · {data.vertices} vertices</small>
-  {data.mode==='features'?<small>{data.floors} floors · {data.roomsX} × {data.roomsZ} room grid · {data.solids} solids · {data.sockets.length} sockets · {data.connectionCount} native connections (count only)</small>:<small>Preset mesh inspection; no functional structure graph returned.</small>}
+  {data.mode==='features'?<small>{data.floors} floors · {data.roomsX} × {data.roomsZ} room grid · {data.solids} solids · {data.sockets.length} sockets · {data.connectionCount} native connections</small>:<small>Preset mesh inspection; no functional structure graph returned.</small>}
   <div style={{height:320,display:'flex',flexDirection:'column',minWidth:0}}>
    <GraphCanvas view={data.view} label="Building recipe and native sockets" selected={active} readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
@@ -31,7 +32,8 @@ export function BuildingStructureGraphView({recipe,inspection,onSelectFeature}:P
    <small>Native outside anchor: {socket.outside.join(', ')} m</small>
   </div>}
   {feature!==null&&onSelectFeature&&<StudioButton size="sm" onClick={()=>onSelectFeature(feature)}>Select source feature</StudioButton>}
-  <StudioAlert>Links represent recipe and socket provenance, not room adjacency or live navigation. Material bindings are authored references, not resolved by native inspection.</StudioAlert>
+  <StudioAlert>Recipe links represent socket provenance, not live navigation. Material bindings are authored references, not resolved by native inspection.</StudioAlert>
+  {data.topology?<BuildingRoomTopologyView data={data.topology} onSelectSocket={onSelectFeature?(id=>{const s=data.sockets.find(item=>item.id===id);if(s)onSelectFeature(s.featureIndex)}):undefined}/>:data.mode==='features'&&<StudioAlert>Room topology unavailable in this owner report (legacy count-only response).</StudioAlert>}
  </StudioSection>;
 }
 

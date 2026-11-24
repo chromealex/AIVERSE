@@ -4,6 +4,7 @@
 
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioBuildingDependencies.h"
+#include "apps/studio-native/StudioBuildingTopology.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/buildings/BuildingGlbWriter.h"
 #include "engine/buildings/BuildingPngEncoder.h"
@@ -382,6 +383,7 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
+        out.set("topology",studioBuildingTopology(detailed.graph));
     }
     return out;
 }
