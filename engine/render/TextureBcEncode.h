@@ -108,6 +108,25 @@ inline std::vector<uint8_t> nextMip(std::span<const uint8_t> rgba,int w,int h,bo
     return dst;
 }
 struct Encoded {std::string dds;size_t payload=0,rgbaBytes=0;int levels=0;};
+inline Encoded wrapDds(int w,int h,Format f,bool color,const std::vector<std::vector<uint8_t>>& levels){
+    if(w<1||h<1||w>1024||h>1024||levels.empty()||levels.size()>11)throw std::invalid_argument("Invalid DDS block chain");
+    Encoded result;int lw=w,lh=h;
+    for(size_t i=0;i<levels.size();++i){
+        const auto expected=size_t((lw+3)/4)*((lh+3)/4)*bytes(f);
+        if(levels[i].size()!=expected||(lw==1&&lh==1&&i+1!=levels.size()))throw std::invalid_argument("Invalid DDS block level");
+        result.payload+=expected;result.rgbaBytes+=size_t(lw)*lh*4;
+        lw=std::max(1,lw/2);lh=std::max(1,lh/2);
+    }
+    result.levels=int(levels.size());result.dds.assign(148,'\0');
+    auto put=[&](size_t at,uint32_t v){for(int i=0;i<4;++i)result.dds[at+i]=char(v>>(i*8));};
+    result.dds.replace(0,4,"DDS ");put(4,124);
+    put(8,0x81007u|(levels.size()>1?0x20000u:0u));put(12,uint32_t(h));put(16,uint32_t(w));put(20,uint32_t(levels[0].size()));put(28,uint32_t(result.levels));
+    put(76,32);put(80,4);result.dds.replace(84,4,"DX10");put(108,0x1000u|(result.levels>1?0x400008u:0u));
+    put(128,f==Format::BC1?(color?72u:71u):f==Format::BC3?(color?78u:77u):f==Format::BC4?80u:83u);
+    put(132,3);put(140,1);put(144,f==Format::BC3?1u:3u);
+    for(const auto& level:levels)result.dds.append(reinterpret_cast<const char*>(level.data()),level.size());
+    return result;
+}
 inline Encoded encodeDds(std::span<const uint8_t> rgba,int w,int h,Format f,bool color,bool normal,bool mips){
     if(w<1||h<1||w>1024||h>1024||rgba.size()!=size_t(w)*h*4u)throw std::invalid_argument("Invalid BC source image");
     if((color&&(f==Format::BC4||f==Format::BC5))||(normal&&f==Format::BC4))throw std::invalid_argument("Incompatible BC channel format");
@@ -119,14 +138,6 @@ inline Encoded encodeDds(std::span<const uint8_t> rgba,int w,int h,Format f,bool
         if(!mips||(lw==1&&lh==1))break;
         pixels=nextMip(pixels,lw,lh,color,normal);lw=std::max(1,lw/2);lh=std::max(1,lh/2);
     }
-    result.levels=int(levels.size());result.dds.assign(148,'\0');
-    auto put=[&](size_t at,uint32_t v){for(int i=0;i<4;++i)result.dds[at+i]=char(v>>(i*8));};
-    result.dds.replace(0,4,"DDS ");put(4,124);
-    put(8,0x81007u|(mips?0x20000u:0u));put(12,uint32_t(h));put(16,uint32_t(w));put(20,uint32_t(levels[0].size()));put(28,uint32_t(result.levels));
-    put(76,32);put(80,4);result.dds.replace(84,4,"DX10");put(108,0x1000u|(result.levels>1?0x400008u:0u));
-    put(128,f==Format::BC1?(color?72u:71u):f==Format::BC3?(color?78u:77u):f==Format::BC4?80u:83u);
-    put(132,3);put(140,1);put(144,f==Format::BC3?1u:3u);
-    for(const auto& level:levels)result.dds.append(reinterpret_cast<const char*>(level.data()),level.size());
-    return result;
+    return wrapDds(w,h,f,color,levels);
 }
 } // namespace aiverse::render::bc_encode

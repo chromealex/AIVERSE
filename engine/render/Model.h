@@ -101,7 +101,8 @@ struct Image {
     bool repeat = true, nearest = false;
     gfx::TextureHandle tex;
     bool borrowedTexture = false; // owner must outlive this image; never released here
-    bool gpuCompressed = false;     // uploaded as GPU blocks (KTX2)
+    bool gpuCompressed = false;     // uploaded as GPU blocks
+    bool gpuNormalXY = false;       // native BC5 normal, reconstruct positive Z
     // Opt-in VT base-colour coarse fallback. When >0, uploadImage() uploads
     // ONLY a downsampled RGBA8 version, not the full source texture.
     // Configure before the first GPU upload and after packing the source
@@ -395,11 +396,16 @@ inline const Image* resolveMaterialImage(const Model& model,const Material& mate
     const auto channel=proceduralMaterialChannel(slot);
     if(channel>=6)return nullptr;
     const auto* pin=material.proceduralGraphPins?&(*material.proceduralGraphPins)[channel]:nullptr;
-    return resolveMaterialImageIndex(model,material.*slot,pin);
+    const auto* image=resolveMaterialImageIndex(model,material.*slot,pin);
+    return image&&image->gpuNormalXY&&slot!=&Material::normalTex?nullptr:image;
 }
 inline bool resolvedLinearColor(const Model& model,const Material& material,int Material::* slot) noexcept {
     const auto* image=resolveMaterialImage(model,material,slot);
     return image&&image->tex.valid()&&(image->proceduralLinearRadiance||image->importedLinearRadiance);
+}
+inline bool resolvedBc5Normal(const Model& model,const Material& material) noexcept {
+    const auto* image=resolveMaterialImage(model,material,&Material::normalTex);
+    return image&&image->tex.valid()&&image->gpuNormalXY;
 }
 inline bool resolvedLinearEmissive(const Model& model,const Material& material) noexcept {
     return resolvedLinearColor(model,material,&Material::emissiveTex);
@@ -417,6 +423,7 @@ inline gfx::TextureHandle resolvedMaterialTexture(const Model& model,const Mater
 inline gfx::TextureHandle resolvedGraphSourceTexture(const Model& model,const Material& material,
         size_t slot,gfx::TextureHandle fallback={}) noexcept {
     const auto* image=slot<4?resolveMaterialImageIndex(model,material.graphTextures[slot],&material.graphSourcePins[slot]):nullptr;
+    if(image&&image->gpuNormalXY)return fallback;
     if(image&&material.shaderGraph&&(material.shaderGraph->linearRadianceSlots&(1u<<slot))&&
        !(image->proceduralLinearRadiance||image->importedLinearRadiance))return fallback;
     return image&&image->tex.valid()?image->tex:fallback;

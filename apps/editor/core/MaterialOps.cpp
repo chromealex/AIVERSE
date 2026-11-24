@@ -269,16 +269,8 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
 }
 
-Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps){
-    needProject(ws);
-    using namespace render::bc_encode;
-    using render::texture_graph::Kind;
-    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+static Json publishBcFile(Workspace& ws,const std::string& name,const std::string& output,int width,const std::string& format,const render::bc_encode::Encoded& encoded,const char* backend){
     const auto kind=render::texture_graph::outputKind(output);
-    const auto f=parseFormat(format);
-    if(kind==Kind::Radiance||(f==Format::BC4&&kind!=Kind::Scalar)||(f==Format::BC5&&kind!=Kind::Normal))
-        throw std::invalid_argument("BC4 is scalar-only, BC5 is normal-only; radiance must remain HDR");
-    const auto encoded=encodeDds(image.rgba,image.width,image.height,f,kind==Kind::Color,kind==Kind::Normal,mipmaps);
     render::CompressedImage check;std::string error;
     if(!render::parseDdsTexture(encoded.dds,check,error)||check.levels.size()!=size_t(encoded.levels))throw std::runtime_error("BC DDS validation failed: "+error);
     const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
@@ -292,10 +284,31 @@ Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const s
     {std::ofstream stream(temp,std::ios::binary);stream.write(encoded.dds.data(),std::streamsize(encoded.dds.size()));stream.close();if(!stream)throw std::runtime_error("DDS write failed");}
     fs::create_hard_link(temp,dest);
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph BC bake: "+rel});
-    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));
-    r.set("format",Json::string(format));r.set("compressionBackend",Json::string("cpu"));r.set("mipLevels",Json::number(int64_t(encoded.levels)));
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(width)));
+    r.set("format",Json::string(format));r.set("compressionBackend",Json::string(backend));r.set("mipLevels",Json::number(int64_t(encoded.levels)));
     r.set("compressedBytes",Json::number(int64_t(encoded.payload)));r.set("rgbaBytes",Json::number(int64_t(encoded.rgbaBytes)));
     r.set("sRGB",Json::fromBool(kind==Kind::Color));return r;
+}
+
+Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps){
+    needProject(ws);
+    using namespace render::bc_encode;
+    using render::texture_graph::Kind;
+    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+    const auto kind=render::texture_graph::outputKind(output);
+    const auto f=parseFormat(format);
+    if(kind==Kind::Radiance||(f==Format::BC4&&kind!=Kind::Scalar)||(f==Format::BC5&&kind!=Kind::Normal))
+        throw std::invalid_argument("BC4 is scalar-only, BC5 is normal-only; radiance must remain HDR");
+    const auto encoded=encodeDds(image.rgba,image.width,image.height,f,kind==Kind::Color,kind==Kind::Normal,mipmaps);
+    return publishBcFile(ws,name,output,image.width,format,encoded,"cpu");
+}
+Json publishTextureGraphBcBlocks(Workspace& ws,const std::string& name,const std::string& output,int size,const std::string& format,std::span<const uint8_t> blocks){
+    needProject(ws);using namespace render::bc_encode;using render::texture_graph::Kind;
+    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+    const auto kind=render::texture_graph::outputKind(output);const auto f=parseFormat(format);
+    if(kind==Kind::Radiance||(f==Format::BC4&&kind!=Kind::Scalar)||(f==Format::BC5&&kind!=Kind::Normal))throw std::invalid_argument("Invalid GPU BC output");
+    const auto encoded=wrapDds(size,size,f,kind==Kind::Color,{std::vector<uint8_t>(blocks.begin(),blocks.end())});
+    return publishBcFile(ws,name,output,size,format,encoded,"gpu");
 }
 
 namespace {

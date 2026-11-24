@@ -106,7 +106,7 @@ Program compile(const Json& g, const std::string& expected) {
             if(path.find('\0')!=std::string::npos||path.size()>512)fail("invalid texture path");
             const bool session=path=="@radiance";
             if(session&&!hdr)fail("@radiance requires sampleRadiance");
-            if(hdr&&(n.getBool("srgb",false)||(!session&&!(path.ends_with(".exr")||path.ends_with(".hdr")))))fail("sampleRadiance requires linear EXR/RGBE or @radiance, without sRGB decode");
+            if(hdr&&(n.getBool("srgb",false)||(!session&&!(path.ends_with(".exr")||path.ends_with(".hdr")||path.ends_with(".dds")||path.ends_with(".ktx2")))))fail("sampleRadiance requires linear EXR/RGBE/BC6H DDS/KTX2 or @radiance, without sRGB decode");
             auto it=std::find(p.textures.begin(),p.textures.end(),path);
             if(it==p.textures.end()){
                 if(p.textures.size()>=4)fail("at most four independent textures are allowed");

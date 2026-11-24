@@ -274,6 +274,17 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto namedId=owner.start(named,project,lifetime.lease()).getStr("request");drain();
         const auto namedStatus=owner.status();
         require(namedStatus.getStr("request")==namedId&&namedStatus.getStr("state")=="ready"&&namedStatus.getStr("backend")==expected,"named resource GPU parity failed");
+        // BC output reads only compressed blocks from the GPU, validated by
+        // the owner against the CPU encoder; no raw RGBA transfer.
+        for(const std::string format:{"bc1","bc3","bc4","bc5"}){
+            auto bc=Json::parse(R"JSON({"graph":{"version":1,"size":16,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[0.5,0.25,0.8]}},{"id":"h","op":"gradient","inputs":[]},{"id":"n","op":"normal","inputs":["h"]}],"outputs":{"color":"c","height":"h","normal":"n"}},"bake":true,"requireGpu":true,"materialized":true,"fusePointwise":true})JSON");
+            bc.set("output",Json::string(format=="bc4"?"height":format=="bc5"?"normal":"color"));
+            bc.set("gpuBcFormat",Json::string(format));
+            const auto id=owner.start(bc,project,lifetime.lease()).getStr("request");drain();
+            const auto s=owner.status();
+            require(s.getStr("request")==id&&s.getStr("state")=="ready"&&s.getStr("backend")==expected&&s.getStr("resultFormat")==format&&s.getInt("receivedBytes")==16*(format=="bc1"||format=="bc4"?8:16),"GPU BC encode acceptance failed");
+            cancel(id);drain();
+        }
         // HDR values remain signed float through arithmetic, with explicit tone map.
         auto hdrGraph=Json::parse(R"JSON({"graph":{"version":1,"size":16,"nodes":[
           {"id":"light","op":"hdrConstant","inputs":[],"properties":{"radiance":[4,2,-1],"alpha":0.25}},

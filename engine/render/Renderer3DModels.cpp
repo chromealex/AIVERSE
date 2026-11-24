@@ -42,14 +42,14 @@ struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float 
 // per-command Metal ICB, without the actor reveal override (GPU ICB
 // excludes kDrawActorReveal). Keep byte parity across both paths.
 static_assert(sizeof(MaterialUniforms) == 36u*sizeof(float));
-inline MaterialUniforms packGpuPbrMaterialU2(const Material& mt,bool linearEmissive=false,bool linearBaseColor=false) {
+inline MaterialUniforms packGpuPbrMaterialU2(const Material& mt,bool linearEmissive=false,bool linearBaseColor=false,bool bc5Normal=false) {
         MaterialUniforms mu{};
         mu.base[0] = mt.baseColor.x; mu.base[1] = mt.baseColor.y; mu.base[2] = mt.baseColor.z; mu.base[3] = mt.baseColor.w;
         mu.emissive[0] = mt.emissive.x * mt.emissiveStrength; mu.emissive[1] = mt.emissive.y * mt.emissiveStrength; mu.emissive[2] = mt.emissive.z * mt.emissiveStrength;
         mu.emissive[3] = std::isfinite(mt.shadowDiffusion) ? std::clamp(mt.shadowDiffusion, 0.0f, 1.0f) : 0.0f;
         mu.pbr[0] = mt.metallic; mu.pbr[1] = mt.roughness; mu.pbr[2] = mt.normalScale; mu.pbr[3] = mt.occlusionStrength;
         mu.misc[0] = mt.alpha == AlphaMode::Mask ? mt.alphaCutoff : 0.0f;
-        mu.misc[1] = float(int(mt.team)); mu.misc[2] = mt.teamStrength; mu.misc[3] = (mt.vertexColors ? 1.0f : 0.0f) + (mt.vertexOcclusion ? 2.0f : 0.0f) + (mt.vertexOcclusion && mt.backOcclusion ? 4.0f : 0.0f) + (linearEmissive?8.0f:0.0f) + (linearBaseColor?16.0f:0.0f);
+        mu.misc[1] = float(int(mt.team)); mu.misc[2] = mt.teamStrength; mu.misc[3] = (mt.vertexColors ? 1.0f : 0.0f) + (mt.vertexOcclusion ? 2.0f : 0.0f) + (mt.vertexOcclusion && mt.backOcclusion ? 4.0f : 0.0f) + (linearEmissive?8.0f:0.0f) + (linearBaseColor?16.0f:0.0f)+(bc5Normal?32.0f:0.0f);
         mu.uv0[0] = mt.uvOffset.x; mu.uv0[1] = mt.uvOffset.y; mu.uv0[2] = mt.uvScale.x; mu.uv0[3] = mt.uvScale.y;
         mu.uv1[0] = mt.uvRotation;
         mu.uv1[1] = float(int(mt.shading));  // 0 PBR, 1 Unlit, 2 Skin, 3 Eye, 4 Hair (VIVID)
@@ -73,9 +73,9 @@ inline MaterialUniforms packGpuPbrMaterialU2(const Material& mt,bool linearEmiss
 // off the experimental ICB path below.
 struct ModelMaterialUniforms : MaterialUniforms { float eyeOptics[4]; };
 static_assert(sizeof(ModelMaterialUniforms) == 40u*sizeof(float));
-inline ModelMaterialUniforms packModelMaterialU2(const Material& mt,bool linearEmissive=false,bool linearBaseColor=false) {
+inline ModelMaterialUniforms packModelMaterialU2(const Material& mt,bool linearEmissive=false,bool linearBaseColor=false,bool bc5Normal=false) {
     ModelMaterialUniforms mu{};
-    static_cast<MaterialUniforms&>(mu)=packGpuPbrMaterialU2(mt,linearEmissive,linearBaseColor);
+    static_cast<MaterialUniforms&>(mu)=packGpuPbrMaterialU2(mt,linearEmissive,linearBaseColor,bc5Normal);
     mu.eyeOptics[0]=mt.eyeOptics.x;mu.eyeOptics[1]=mt.eyeOptics.y;
     mu.eyeOptics[2]=mt.eyeOptics.z;mu.eyeOptics[3]=mt.eyeOptics.w;
     return mu;
@@ -2157,7 +2157,7 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
     const bool actorRevealChanged = lastItem_ &&
         ((lastItem_->flags ^ it.flags) & kDrawActorReveal) != 0;
     if (materialStateChanged || actorRevealChanged) {
-        ModelMaterialUniforms mu=packModelMaterialU2(mt,resolvedLinearEmissive(*it.model,mt),resolvedLinearBaseColor(*it.model,mt));
+        ModelMaterialUniforms mu=packModelMaterialU2(mt,resolvedLinearEmissive(*it.model,mt),resolvedLinearBaseColor(*it.model,mt),resolvedBc5Normal(*it.model,mt));
         if (phase != 0 && geometryMainView_ && (it.flags & kDrawActorReveal) && actorReveal.w > 0) {
             mu.reveal[0]=actorReveal.x;mu.reveal[1]=actorReveal.y;mu.reveal[2]=actorReveal.z;mu.reveal[3]=actorReveal.w;
             const float3 centre{actorReveal.x,actorReveal.y,actorReveal.z};
@@ -3140,7 +3140,7 @@ void Renderer3D::prepareGpuModelDraws() {
                     if (pbrMode) {
                         const auto textures=gpuPbrSourceTextures(
                             *item.model,*item.mat,white_,black_,flatNormal_);
-                        const auto u2=packGpuPbrMaterialU2(*item.mat,resolvedLinearEmissive(*item.model,*item.mat),resolvedLinearBaseColor(*item.model,*item.mat));
+                        const auto u2=packGpuPbrMaterialU2(*item.mat,resolvedLinearEmissive(*item.model,*item.mat),resolvedLinearBaseColor(*item.model,*item.mat),resolvedBc5Normal(*item.model,*item.mat));
                         std::memcpy(ordinaryDescriptor.u2.data(),&u2,sizeof(u2));
                         ordinaryDescriptor.textures=textures;
                         if (item.mat->shaderGraph) {
@@ -4019,7 +4019,7 @@ void Renderer3D::renderModels(int phase) {
                     live.pbrEnabled=true;
                     live.pbrTextures=gpuPbrSourceTextures(
                         *item.model,*item.mat,white_,black_,flatNormal_);
-                    const auto u2=packGpuPbrMaterialU2(*item.mat,resolvedLinearEmissive(*item.model,*item.mat),resolvedLinearBaseColor(*item.model,*item.mat));
+                    const auto u2=packGpuPbrMaterialU2(*item.mat,resolvedLinearEmissive(*item.model,*item.mat),resolvedLinearBaseColor(*item.model,*item.mat),resolvedBc5Normal(*item.model,*item.mat));
                     std::memcpy(live.pbrU2.data(),&u2,sizeof(u2));
                     if (item.mat->shaderGraph) {
                         live.graphTextureCount=uint32_t(

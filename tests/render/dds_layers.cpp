@@ -1,5 +1,6 @@
 #include "engine/render/DdsTexture.h"
 #include "engine/render/TextureBcEncode.h"
+#include "engine/render/TextureBcGpu.h"
 #include "engine/render/TextureAsset.h"
 #include <algorithm>
 #include <cstdint>
@@ -123,6 +124,8 @@ int main() {
         for(size_t i=0;i<pixels.size();i+=4){pixels[i]=128;pixels[i+1]=64;pixels[i+2]=255;pixels[i+3]=255;}
         for(auto format:{Format::BC1,Format::BC3,Format::BC4,Format::BC5}){
             const auto encoded=encodeDds(pixels,8,8,format,false,format==Format::BC5,true);
+            const auto blocks=encodeLevel(pixels,8,8,format);
+            if(!validateGpuBc(pixels,8,format,blocks)||wrapDds(8,8,format,false,{blocks}).payload!=blocks.size())throw std::runtime_error("BC GPU block validation fixture failed");
             CompressedImage decoded;std::string error;
             if(!parseDdsTexture(encoded.dds,decoded,error)||decoded.levels.size()!=4||encoded.rgbaBytes!=340||encoded.payload!=size_t(7*bytes(format)))
                 throw std::runtime_error("BC export DDS mip round trip failed");

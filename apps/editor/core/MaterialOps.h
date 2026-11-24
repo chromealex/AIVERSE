@@ -15,6 +15,7 @@ render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& 
 // Native owner only: publish completed validated pixels as a new texture asset.
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image);
 Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps);
+Json publishTextureGraphBcBlocks(Workspace& ws,const std::string& name,const std::string& output,int size,const std::string& format,std::span<const uint8_t> blocks);
 Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
 Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
 // Images/backends in native Program::outputs sorted order; trusted native owner only.

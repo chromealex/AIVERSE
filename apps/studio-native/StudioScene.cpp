@@ -763,7 +763,7 @@ void StudioScene::syncDocumentModels(
                                     if(ec||fs::is_symlink(st))return -1;
                                 }
                                 // Explicit HDR and BC DDS assets; bound encoded bytes and retained slots.
-                                if(file.extension()!=".exr"&&file.extension()!=".hdr"&&file.extension()!=".dds")return -1;
+                                if(file.extension()!=".exr"&&file.extension()!=".hdr"&&file.extension()!=".dds"&&file.extension()!=".ktx2")return -1;
                                 if(!fs::is_regular_file(file,ec)||ec)return -1;
                                 const auto bytes=fs::file_size(file,ec);
                                 if(ec||!bytes||bytes>32u*1024u*1024u)return -1;

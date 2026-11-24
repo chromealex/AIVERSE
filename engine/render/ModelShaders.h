@@ -371,6 +371,7 @@ void main() {
         float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
         float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
         vec3 tn = textureGrad(tex3, v_uv, dx * normalFilter, dy * normalFilter).xyz * 2.0 - 1.0;
+        if(mod(m_misc.w,64.0)>=32.0)tn.z=sqrt(max(0.0,1.0-dot(tn.xy,tn.xy)));
         tn.xy *= m_pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -1076,6 +1077,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
         float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
         float3 tn = tex3.sample(s3, in.uv, gradient2d(dx * normalFilter, dy * normalFilter)).xyz * 2.0 - 1.0;
+        if(fmod(m.misc.w,64.0f)>=32.0f)tn.z=sqrt(max(0.0f,1.0f-dot(tn.xy,tn.xy)));
         tn.xy *= m.pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }

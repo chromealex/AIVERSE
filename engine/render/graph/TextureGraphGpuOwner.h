@@ -16,6 +16,7 @@
 #include <cstring>
 #include <span>
 #include "engine/render/CameraExr.h"
+#include "engine/render/TextureBcGpu.h"
 #include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include <utility>
@@ -208,13 +209,17 @@ class TextureGraphGpuOwner {
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false,rawRadiance_=false;
     size_t residentRadianceBpp_=0;
-    size_t resultByteCount()const{return size_t(size_)*size_*(rawRadiance_?16u:4u);}
-    bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
+    std::string gpuBcFormat_;
+    gfx::BufferHandle bcBuffer_{};gfx::ComputeHandle bcPipeline_{};
+    size_t resultByteCount()const{return gpuBcFormat_.empty()?size_t(size_)*size_*(rawRadiance_?16u:4u):bc_encode::gpuBlockCount(size_)*bc_encode::bytes(bc_encode::parseFormat(gpuBcFormat_));}
+    void releaseBc(gfx::Device& dev){if(bcBuffer_.valid())dev.destroyBuffer(bcBuffer_);if(bcPipeline_.valid())dev.destroyCompute(bcPipeline_);bcBuffer_={};bcPipeline_={};}
+    bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value()||bcBuffer_.valid()||bcPipeline_.valid();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
-    void abandonActive(){matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matImageInputs_.clear();matImageBytes_=0;matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void abandonActive(){bcBuffer_={};bcPipeline_={};matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matImageInputs_.clear();matImageBytes_=0;matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
     void abandon(){matIdleKeys_.clear();matIdleLease_={};abandonActive();gpuCandidates_.clear();gpuAcceptedTextures_=0;matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
     void release(gfx::Device& dev,bool afterIdle=false){
         if(!clearGpuCandidates(dev,afterIdle))return;
+        releaseBc(dev);
         for(auto& e:matActivePipelines_)destroyPair(dev,e.first,e.second);
         for(auto h:matSlots_)if(h.valid())dev.destroyBuffer(h);
         for(auto h:matImageInputs_)if(h.valid())dev.destroyBuffer(h);
@@ -235,6 +240,7 @@ class TextureGraphGpuOwner {
             !active()&&state_=="ready"&&project_==matCacheProject_&&matCacheDevice_==&dev&&
             (backend_=="metal"||backend_=="vulkan");
         if(!keep){release(dev);return true;}
+        releaseBc(dev);
         for(auto h:matImageInputs_)if(h.valid())dev.destroyBuffer(h);
         matImageInputs_.clear();matImageBytes_=0;
         matSlots_.push_back(buffer_);buffer_={};
@@ -255,6 +261,16 @@ class TextureGraphGpuOwner {
         catch(const std::exception& e){state_="failed";reason_=e.what();pixels_.clear();}
     }
     void finish(){
+        if(!gpuBcFormat_.empty()){
+            bool valid=received_==resultByteCount()&&pixels_.size()==received_;
+            if(valid)try{
+                const auto reference=evaluate(*program_,target_,size_);
+                valid=bc_encode::validateGpuBc(reference.rgba,size_,bc_encode::parseFormat(gpuBcFormat_),pixels_);
+            }catch(...){valid=false;}
+            if(valid){state_="ready";backend_=submittedBackend_;reason_="GPU BC blocks decoded-error validated against CPU encoder";}
+            else fallback("GPU BC block validation failed");
+            return;
+        }
         if(rawRadiance_){
             bool valid=received_==resultByteCount()&&pixels_.size()==received_;
             if(valid)try{
@@ -316,7 +332,7 @@ class TextureGraphGpuOwner {
             if(!token||token<=dev.gpuCompletedFence())return false;
             matLastFence_=token;
         }
-        if(!dev.readBufferRangeAsync(buffer_,read->offset,read->expected,callback))return false;
+        if(!dev.readBufferRangeAsync(bcBuffer_.valid()?bcBuffer_:buffer_,read->offset,read->expected,callback))return false;
         read_=std::move(read);fence_=dev.gpuSubmissionFence();inFlight_=true;return true;
     }
     // Called only when no previous readback/submission is outstanding.
@@ -420,7 +436,7 @@ class TextureGraphGpuOwner {
             const auto pixels=uint32_t(size_t(size_)*size_);
             // Allocate CPU output before encoding work; failures still retain
             // any newly created handles through the owner retirement path.
-            if(!gpuFenceOnly_)pixels_.assign(sources.resultBytes,0);
+            if(!gpuFenceOnly_)pixels_.assign(gpuBcFormat_.empty()?sources.resultBytes:resultByteCount(),0);
             submittedBackend_=metal?"metal":"vulkan";
             plannedPasses_=(first?sources.plan.schedule.passes.size():0)+1;
             plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
@@ -476,6 +492,19 @@ class TextureGraphGpuOwner {
             if(packScope)packScope->finish();
             if(dispatchScope)dispatchScope->finish();
             state_="pending";
+            if(!gpuBcFormat_.empty()){
+                const auto format=bc_encode::parseFormat(gpuBcFormat_);
+                const auto code=bc_encode::gpuBcSource(metal,size_,format);
+                bcPipeline_=dev.createCompute({metal?code.c_str():nullptr,metal?nullptr:code.c_str(),"TextureGraph BC encoder"});
+                gfx::BufferDesc bd;bd.type=gfx::BufferType::Storage;bd.usage=gfx::Usage::Immutable;bd.size=resultByteCount();bd.label="TextureGraph BC blocks";
+                bcBuffer_=dev.createBuffer(bd);
+                const std::array<gfx::BufferHandle,1> packedInput{buffer_};
+                if(!dispatchMaterializedPass(dev,bcPipeline_,bcBuffer_,std::span<const gfx::BufferHandle>(packedInput),uint32_t(bc_encode::gpuBlockCount(size_)),metal))
+                    throw std::runtime_error("GPU BC encoder dispatch rejected");
+                ++passes_;
+                if(!queueRange(dev))throw std::runtime_error("GPU BC readback rejected");
+                return;
+            }
             if(residentRadianceBpp_){
                 gpuCandidates_.push_back(std::make_unique<GpuCopy>());
                 const auto layout=gfx::rgbaCopyLayout(size_,size_,residentRadianceBpp_);
@@ -646,7 +675,8 @@ public:
         r.set("gpuTextureFenceOnly",Json::fromBool(gpuFenceOnly_));
         r.set("gpuTextureAcceptance",Json::string(gpuFenceOnly_?"fence_only":"cpu_reference"));
         r.set("fileExportAvailable",Json::fromBool(!gpuFenceOnly_));
-        r.set("resultFormat",Json::string(residentRadianceBpp_==8?"rgba16f-resident":residentRadianceBpp_==16?"rgba32f-resident":rawRadiance_?"rgba32f-linear":"rgba8"));
+        r.set("gpuBcFormat",Json::string(gpuBcFormat_));
+        r.set("resultFormat",Json::string(!gpuBcFormat_.empty()?gpuBcFormat_:residentRadianceBpp_==8?"rgba16f-resident":residentRadianceBpp_==16?"rgba32f-resident":rawRadiance_?"rgba32f-linear":"rgba8"));
         r.set("residentRadianceReady",Json::fromBool(residentRadianceBpp_&&gpuCandidatesReady()));
         r.set("gpuTextureGeneration",Json::string(gpuGeneration_));
         r.set("gpuTextureSetReady",Json::fromBool(!residentRadianceBpp_&&gpuCandidatesReady()));
@@ -680,7 +710,15 @@ private:
         if(setBake&&program.outputs.count("radiance")&&!fenceOnly)throw std::invalid_argument("export radiance as a separate HDR bake");
         if(rawRadiance&&(transfer||mipmaps||fenceOnly||p.getBool("incrementalOutputs")))throw std::invalid_argument("HDR raw bake does not support material texture transfer");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
-        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
+        const auto bcFormat=p.getStr("gpuBcFormat");
+        if(!bcFormat.empty()){
+            const auto f=bc_encode::parseFormat(bcFormat);
+            if(!bake||setBake||transfer||rawRadiance||p.getBool("incremental")||p.getBool("gpuBcMipmaps"))throw std::invalid_argument("GPU BC export requires a single non-HDR base-level bake");
+            const auto k=outputKind(p.getStr("output"));
+            if(k==Kind::Radiance||(f==bc_encode::Format::BC4&&k!=Kind::Scalar)||(f==bc_encode::Format::BC5&&k!=Kind::Normal))
+                throw std::invalid_argument("Incompatible GPU BC output");
+        }
+        const bool materialized=!bcFormat.empty()||p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)
             throw std::invalid_argument("incremental requires materialized DAG");
         if(incremental&&(!lease.alive()||!lease.device()||!lease.validFor(*lease.device())))
@@ -743,14 +781,14 @@ private:
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         matIncremental_=incremental;matReusedNodes_=0;matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
         outputReuseTarget_=reuseTarget;pendingOutputReceipt_=std::move(receipt);reusedOutputNames_=std::move(reusedNames);outputNoop_=noop;
-        ++serial_;rawRadiance_=rawRadiance;residentRadianceBpp_=residentBpp;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
+        ++serial_;gpuBcFormat_=bcFormat;rawRadiance_=rawRadiance;residentRadianceBpp_=residentBpp;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
         gpuTransferLease_=(transfer||incremental)?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
         size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)if(!gpuFenceOnly_||render::texture_graph::materialSlot(pair.first))setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=rawRadiance||transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=!bcFormat.empty()||rawRadiance||transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
         if(outputNoop_){backend_="reused";reason_="all material outputs unchanged; no GPU generation";}return status();
     }
 public:
@@ -896,7 +934,7 @@ protected:
     Json publishBaked(const std::string& scope,const std::string& request,
             PublishSet&& publishSet,PublishImage&& publishImage){
         checkProject(scope);
-        if(rawRadiance_)throw std::runtime_error("raw HDR bake requires radiance publication");
+        if(rawRadiance_||!gpuBcFormat_.empty())throw std::runtime_error("specialized bake requires format-specific publication");
         if(gpuFenceOnly_)throw std::runtime_error("fence-only GPU textures cannot be exported; use validated bake");
         if(!bake_||published_||state_!="ready"||request!=std::to_string(serial_)||inFlight_||matRetirementPending()||setIncomplete()||project_!=scope)
             throw std::runtime_error("no matching completed unpublished texture bake");
@@ -906,6 +944,15 @@ protected:
         published_=true;pixels_.clear();setImages_.clear();r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
     }
 protected:
+    template<class Publish>
+    Json publishBcBaked(const std::string& scope,const std::string& request,Publish&& publish){
+        checkProject(scope);
+        if(gpuBcFormat_.empty()||!bake_||published_||state_!="ready"||request!=std::to_string(serial_)||inFlight_||matRetirementPending()||project_!=scope||
+           pixels_.size()!=resultByteCount()||(backend_!="metal"&&backend_!="vulkan"))throw std::runtime_error("No matching completed GPU BC bake");
+        auto r=publish(size_,output_,gpuBcFormat_,std::span<const uint8_t>(pixels_));
+        published_=true;pixels_.clear();r.set("backend",Json::string(backend_));r.set("request",Json::string(request));return r;
+    }
+    bool isBcBake()const noexcept{return !gpuBcFormat_.empty();}
     template<class Publish>
     Json publishRadianceBaked(const std::string& scope,const std::string& request,Publish&& publish){
         auto rgba=readAcceptedRadiance(scope,request);

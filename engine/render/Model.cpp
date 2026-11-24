@@ -375,7 +375,7 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
 bool readModelImage(const std::string& path, const FileReader& reader, Image& out) {
     if (loadingTextures) return loadingTextures->read(path, reader, out);
     std::string bytes;
-    return reader(path, bytes) && decodeImage(bytes, out);
+    return reader(path, bytes) && decodeMaterialImage(bytes, out);
 }
 
 bool ModelTextureCache::read(const std::string& path, const FileReader& reader, Image& out) {
@@ -424,9 +424,17 @@ bool decodeMaterialImage(const std::string& bytes, Image& out) {
     const bool hdr=bytes.rfind("#?RADIANCE",0)==0||bytes.rfind("#?RGBE",0)==0;
     if(!exr&&!hdr){
         // Strict 2D DX10 material path retains authored BC mip chains.
-        if(bytes.size()>=148&&bytes.size()<=32u*1024u*1024u&&bytes.compare(0,4,"DDS ")==0&&bytes.compare(84,4,"DX10")==0){
+        const bool dds=bytes.size()>=148&&bytes.compare(0,4,"DDS ")==0&&bytes.compare(84,4,"DX10")==0;
+        const bool ktx=isKtx2(bytes);
+        if((dds||ktx)&&bytes.size()<=32u*1024u*1024u){
             auto ci=std::make_shared<CompressedImage>();std::string error;
-            if(!parseDdsTexture(bytes,*ci,error))return false;
+            if(!(dds?parseDdsTexture(bytes,*ci,error):parseKtx2(bytes,*ci,error)))return false;
+            const bool hdrBlocks=ci->format==BlockFormat::BC6H_UFloat||ci->format==BlockFormat::BC6H_SFloat;
+            if(hdrBlocks){
+                if(ci->depth!=1||ci->threeDimensional||ci->oneDimensional||ci->arrayLayers!=1||ci->faces!=1||ci->width>4096||ci->height>4096)return false;
+                out.width=ci->width;out.height=ci->height;out.rgba.clear();out.sharedRgba.reset();out.sharedRadiance16f.reset();
+                out.compressed=std::move(ci);out.importedLinearRadiance=true;out.preserveAlphaCoverage=false;return true;
+            }
             if(ci->depth==1&&!ci->threeDimensional&&!ci->oneDimensional&&ci->arrayLayers==1&&ci->faces==1&&
                (ci->format==BlockFormat::BC1||ci->format==BlockFormat::BC3||ci->format==BlockFormat::BC4||ci->format==BlockFormat::BC5||ci->format==BlockFormat::BC7)){
                 if(ci->width>4096||ci->height>4096||!decodeBlocks(*ci,0,out.rgba))return false;
@@ -551,6 +559,8 @@ gfx::PixelFormat gpuFormat(const CompressedImage& c) {
         case BlockFormat::BC1: return c.vkFormat == 131 || c.vkFormat == 132 ? gfx::PixelFormat::RGBA8 : gfx::PixelFormat::BC1;
         case BlockFormat::BC3: return gfx::PixelFormat::BC3;
         case BlockFormat::BC4: return gfx::PixelFormat::BC4;
+        case BlockFormat::BC6H_UFloat: return gfx::PixelFormat::BC6H_UFloat;
+        case BlockFormat::BC6H_SFloat: return gfx::PixelFormat::BC6H_SFloat;
         case BlockFormat::EAC_R11: return gfx::PixelFormat::EAC_R11;
         case BlockFormat::BC7: return gfx::PixelFormat::BC7;
         case BlockFormat::ASTC_4x4: return gfx::PixelFormat::ASTC_4x4;
@@ -561,7 +571,7 @@ gfx::PixelFormat gpuFormat(const CompressedImage& c) {
 
 void uploadImage(gfx::Device& dev, Image& img) {
     if (img.tex.valid()) return;
-    if(img.importedLinearRadiance){
+    if(img.importedLinearRadiance&&!img.compressed){
         if(!img.sharedRadiance16f||img.width<=0||img.height<=0||
            img.sharedRadiance16f->size()!=size_t(img.width)*size_t(img.height)*4u||
            !dev.supports(gfx::PixelFormat::RGBA16F)||img.virtualFallbackMaxDimension>0)return;
@@ -575,6 +585,7 @@ void uploadImage(gfx::Device& dev, Image& img) {
     // before upload; never replace shared/cached GPU texture handles.
     // Exact alpha cutouts and image reuse are checked by the opt-in
     // ModelVirtualTextureFallback.h asset policy.
+    if(img.importedLinearRadiance&&img.virtualFallbackMaxDimension>0)return;
     if (img.virtualFallbackMaxDimension > 0) {
         const auto& pixels = img.sharedRgba ? *img.sharedRgba : img.rgba;
         const size_t w0 = img.width > 0 ? size_t(img.width) : 0;
@@ -648,7 +659,8 @@ void uploadImage(gfx::Device& dev, Image& img) {
     if (img.compressed && !img.compressed->levels.empty()) {
         // keep KTX2 blocks compressed in VRAM when the GPU samples them (shaders decode sRGB themselves)
         const CompressedImage& c = *img.compressed;
-        const gfx::PixelFormat pf = gpuFormat(c);
+        const bool bc5=c.format==BlockFormat::BC5&&img.name.ends_with("_normal_bc5.dds");
+        const gfx::PixelFormat pf = bc5?gfx::PixelFormat::BC5:gpuFormat(c);
         if (pf != gfx::PixelFormat::RGBA8 && dev.supports(pf)) {
             std::vector<const void*> data;
             std::vector<size_t> sizes;
@@ -671,9 +683,12 @@ void uploadImage(gfx::Device& dev, Image& img) {
             td.label = img.name.c_str();
             img.tex = dev.createTexture(td);
             img.gpuCompressed = img.tex.valid();
+            img.gpuNormalXY=img.gpuCompressed&&bc5;
             if (img.tex.valid()) return;
         }
     }
+    if(img.importedLinearRadiance)return; // BC6H has no LDR fallback
+    img.gpuNormalXY=false;
     // Unsupported BC formats (including BC5 normal Z reconstruction)
     // retain authored mip levels on the decoded RGBA8 fallback.
     if(img.compressed&&img.compressed->levels.size()>1&&!img.nearest){
@@ -777,7 +792,7 @@ bool ModelTextureCache::borrowResident(Image& image) const {
     image.tex=it->second.tex;
     image.textureLease=it->second.textureLease;
     image.borrowedTexture=true;
-    image.gpuCompressed=it->second.gpuCompressed;
+    image.gpuCompressed=it->second.gpuCompressed;image.gpuNormalXY=it->second.gpuNormalXY;
     image.alphaCoverageMipmaps=it->second.alphaCoverageMipmaps;
     return true;
 }
@@ -818,7 +833,7 @@ void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
             it->second.compressed.reset();
         }
     }
-    image.textureLease = it->second.textureLease; image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true; image.alphaCoverageMipmaps=it->second.alphaCoverageMipmaps;
+    image.textureLease = it->second.textureLease; image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.gpuNormalXY=it->second.gpuNormalXY; image.borrowedTexture = true; image.alphaCoverageMipmaps=it->second.alphaCoverageMipmaps;
 }
 ModelTextureCache::PreparedGpuPromotion
 ModelTextureCache::prepareGpuPromotion(
@@ -903,7 +918,7 @@ std::vector<Image> ModelTextureCache::PreparedGpuPromotion::commit() {
         image.tex=owner.tex;
         image.textureLease=owner.textureLease;
         image.borrowedTexture=true;
-        image.gpuCompressed=owner.gpuCompressed;
+        image.gpuCompressed=owner.gpuCompressed;image.gpuNormalXY=owner.gpuNormalXY;
     }
     committed_=true;
     return std::move(redundant_);

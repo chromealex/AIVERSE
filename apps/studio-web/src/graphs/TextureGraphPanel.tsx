@@ -441,7 +441,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
       setStatus('Published '+r.files.length+' maps via '+String(r.backend)+'; configured '+configured+' importers.');return;
     }
     if(typeof r.path!=='string'||r.output!==output)throw new Error('Invalid single-output publication response');
-    setGpuReady(false);setResidentReady(false);setGpuRequest(null);setStatus('Published '+r.path+' via '+String(r.backend)+(typeof r.compressedBytes==='number'?' · CPU BC encoder · '+String(r.compressedBytes)+' / '+String(r.rgbaBytes)+' bytes':''));setAsset(null);
+    setGpuReady(false);setResidentReady(false);setGpuRequest(null);setStatus('Published '+r.path+' via '+String(r.backend)+(typeof r.compressedBytes==='number'?' · '+String(r.compressionBackend??'cpu').toUpperCase()+' BC encoder · '+String(r.compressedBytes)+' / '+String(r.rgbaBytes)+' bytes':''));setAsset(null);
     const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=index.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
     if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;
@@ -497,6 +497,14 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     setHdrCapturePending(false);
     if(r.state!=='ready'||typeof r.width!=='number'||typeof r.height!=='number'||typeof r.rgbaHex!=='string')throw new Error(String(r.error??'HDR diagnostic failed'));
     setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});setPreviewMode('texture');setPreviewKind('resident HDR mip diagnostic');return;
+   }
+   if(action==='gpuBcBake'){
+    if(!['bc1','bc3','bc4','bc5'].includes(bcFormat)||output==='radiance'||!outputs.includes(output))throw new Error('Select a compatible BC output format');
+    if(gpuPolling||gpuRequest?.bake||queueTicket||Object.keys(queueDrafts).length)throw new Error('Finish current GPU bake or queue first');
+    setAutoPreview(false);
+    const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,bake:true,requireGpu:true,materialized:true,fusePointwise:true,gpuBcFormat:bcFormat});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error('GPU BC request rejected');
+    setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:true,setBake:false});setGpuPolling(true);setGpuReady(false);setResidentReady(false);setGpuStatus('GPU BC encode · base mip only');return;
    }
    if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'){
     if(action==='gpuStart'){autoAttempt.current=semantic;}else setAutoPreview(false);
@@ -758,6 +766,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     <StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>
      {output!=='radiance'&&<div className="au-row"><StudioSelect aria-label="Texture export format" value={bcFormat} disabled={busy||disabled||gpuPolling} onChange={e=>setBcFormat(e.target.value)}><option value="png">PNG (lossless)</option><option value="bc1">BC1 DDS (opaque)</option><option value="bc3">BC3 DDS (RGBA)</option>{['height','roughness','metallic','ao','mask'].includes(output)&&<option value="bc4">BC4 DDS (scalar)</option>}{output==='normal'&&<option value="bc5">BC5 DDS (normal XY)</option>}</StudioSelect>{bcFormat!=='png'&&<label><input type="checkbox" checked={bcMips} disabled={busy||disabled} onChange={e=>setBcMips(e.target.checked)}/> Full mip chain</label>}</div>}
     <StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.includes(output)||gpuPolling} onClick={()=>void run('gpuBake')}>{output==='radiance'?'GPU HDR bake (RGBA32F)':'GPU output bake'}</StudioButton>
+     {output!=='radiance'&&['bc1','bc3','bc4','bc5'].includes(bcFormat)&&<StudioButton disabled={busy||disabled||gpuPolling||!!gpuRequest?.bake||!gpuCaps?.available||!outputs.includes(output)} onClick={()=>void run('gpuBcBake')}>GPU BC encode (base mip)</StudioButton>}
     <StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish GPU bake</StudioButton>
       <StudioButton disabled={busy||disabled||!textureName||!outputs.includes(output)} onClick={()=>void run('bake')}>{output==='radiance'?'Export linear EXR (CPU)':'Bake selected output ('+bcFormat.toUpperCase()+')'}</StudioButton>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.length} onClick={()=>void run('bakeSet')}>Bake all outputs</StudioButton>
