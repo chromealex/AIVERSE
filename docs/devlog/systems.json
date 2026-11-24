@@ -1906,9 +1906,9 @@
           "textEn": "Link the existing NativeRegistrar owner to the camera client adapter fixture."
         },
         {
-          "name": "Texture Graph GPU — Stage 38AH (Metal PASS)",
+          "name": "Texture Graph GPU — Stage 38AH (Metal PASS; 31/31 по подтверждению пользователя)",
           "text": "Исправление аппаратных Metal timestamp-маркеров после 30/31 тестов на M3 Ultra.",
-          "nameEn": "Texture Graph GPU — Stage 38AH (Metal PASS)",
+          "nameEn": "Texture Graph GPU — Stage 38AH (Metal PASS; user-reported 31/31)",
           "textEn": "Correct Metal hardware timestamp markers after 30/31 tests on M3 Ultra."
         }
       ],

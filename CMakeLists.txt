@@ -3730,7 +3730,8 @@ endif()
 
 if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     add_executable(aiverse_material_batches tests/render/material_batches.cpp $<TARGET_OBJECTS:aiverse_runtime>)
-    target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime)
+    # NativeRegistry.cpp is injected for runtime executables; link its existing owner.
+    target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime aiverse_game)
 endif()
 
 # Split rules files from Python tools: rules_io (read / write back) and split_rules.
