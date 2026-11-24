@@ -6,6 +6,7 @@
 #include "engine/buildings/BuildingGraphChanges.h"
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <cmath>
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <map>
