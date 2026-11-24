@@ -1460,6 +1460,47 @@ int main(){
             studioApplyHistoryBatch(p,{},history.next(false).files,{},&previous,&history);
             AIVERSE_TEST_CHECK(read(dest.string()+".meta")==settings&&studioLoadAssetHistoryCheckpoint(p).position()==2);
         }
+        // S6f.4b.3b: first checkpoint and staged asset mutations.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"AtomicAssetRecording";
+            fs::create_directories(p/"content");
+            StudioAssetCatalog index(p);index.rebuild();
+            editor::ProjectHistory history;
+            const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
+            StudioBatchAssetPlan folder;
+            editor::ProjectHistory::MovePlan recorded;
+            const auto name=studioCreateContentFolder(p,"","New",&recorded,&folder);
+            AIVERSE_TEST_CHECK(name=="New"&&!fs::exists(p/"content"/"New")&&!fs::exists(checkpoint));
+            auto next=history;next.recordMove(std::move(recorded),"Create folder");
+            studioApplyHistoryBatch(p,folder.relocations,folder.documents,folder.movingResources,&history,&next);
+            history=std::move(next);
+            AIVERSE_TEST_CHECK(fs::exists(p/"content"/"New")&&studioLoadAssetHistoryCheckpoint(p).position()==1);
+            write(external/"Atomic.png","pixels");
+            auto transfer=StudioTransferPlan::external(p,"New",{external/"Atomic.png"});
+            StudioBatchAssetPlan imported;
+            std::optional<editor::ProjectHistory::MovePlan> importHistory;
+            transfer.apply(transfer.token(),{},{},&importHistory,false,&imported);
+            AIVERSE_TEST_CHECK(importHistory&&!fs::exists(p/"content"/"New"/"Atomic.png"));
+            next=history;next.recordMove(std::move(*importHistory),"Import asset");
+            studioApplyHistoryBatch(p,imported.relocations,imported.documents,imported.movingResources,&history,&next);
+            history=std::move(next);
+            index.rebuild(false);
+            const auto guid=index.byPath("New/Atomic.png")->guid;
+            std::vector<editor::ProjectFileEdit> edits;
+            next=history;
+            const auto updated=index.patchSettings(guid,"compression",Json::string("high"),&next,&edits);
+            AIVERSE_TEST_CHECK(updated.settings.getStr("compression")=="high"&&read(edits.front().path)==edits.front().before);
+            studioApplyHistoryBatch(p,{},edits,{},&history,&next);history=std::move(next);
+            AIVERSE_TEST_CHECK(read(edits.front().path)==edits.front().after&&studioLoadAssetHistoryCheckpoint(p).position()==3);
+            StudioBatchAssetPlan deleted;
+            auto deletion=studioQuarantineAsset(p,"New/Atomic.png",guid,{},&deleted);
+            AIVERSE_TEST_CHECK(fs::exists(p/"content"/"New"/"Atomic.png"));
+            next=history;next.recordMove(std::move(deletion),"Delete asset");
+            studioApplyHistoryBatch(p,deleted.relocations,deleted.documents,deleted.movingResources,&history,&next);
+            AIVERSE_TEST_CHECK(!fs::exists(p/"content"/"New"/"Atomic.png")&&studioLoadAssetHistoryCheckpoint(p).position()==4);
+            AIVERSE_TEST_CHECK(!fs::exists(p/".aiverse-cache"/"asset-history.dirty"));
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
