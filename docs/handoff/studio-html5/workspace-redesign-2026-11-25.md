@@ -17,3 +17,31 @@ Local build and screenshots are under `/Volumes/KINGSTON/AIVERSE-builds/studio-w
 Code commit `0e92b7118`. StudioDialog uses the browser modal layer in WelcomeTour, ProjectHub, Save Layout, the asset reference picker and transfer preview. Keyboard events remain within the dialog. Native observation of Terrain led to wrapping sculpt operations and moving long API descriptions behind a disclosure. Hierarchy rows have larger targets and visible keyboard row actions. The material library empty state points to the creation command. Exact paths are listed by `git show --stat 0e92b7118`.
 
 The production bundle built and all 165 web tests passed. The Python design-system export contract includes StudioDialog; the broad Studio Python suite still has the baseline failures recorded above. Real browser tests on macOS exercised Escape and Cmd+K while the welcome tour was active. All 116 browser panel/size combinations rendered without a page exception; the final measured pass found zero panel-body horizontal overflow. The native copy on KINGSTON loaded the stage 2 bundle. The native per-panel acceptance run uses AppKit accessibility to open the command palette, read the typed query, confirm the requested panel group and capture the test window. Its final coverage and gate results follow.
+
+## Stage 3 — exact window selection and registry acceptance
+
+Code commit `7c1b741c257b0fb62e1dffd94707a1534f1638bd`. In the native Survivors fixture, opening NEREID Water and then entering the exact name Water could reactivate NEREID Water. The recent-item boost outranked an exact title. The fix in `commandSearch.ts` uses recency for browsing with an empty query. The additional regression case lives in the existing `workspaces.test.mjs` suite.
+
+On macOS, all 58 registered titles opened in the native WKWebView via command search and Enter. Automation confirmed the typed name, waited for the accessibility group matching the panel title, then captured the window. The run included Water after NEREID Water. Each panel also rendered at 1440×900 and 240×640 in the Chrome demo, where all 116 panel bodies fit horizontally. This verifies opening and layout in the observed states. The fixture has two scene objects and an empty content library. Creation, destructive operations, every data-dependent subview and Windows runtime interaction were outside this visual pass.
+
+| Surface | What the inspection covered |
+| --- | --- |
+| Hierarchy, Inspector, Scene, Game, Project | Selection hierarchy, editable field groups, a wrapping scene toolbar, the native Metal scene, map and play controls. |
+| Assets, Console, Agent, History, Build, Scripts, Rules, Input | Folder and file navigation, log controls, history, build targets, script editor, property rows and input tables. |
+| Materials, Lighting, Shader Graph, Post FX, Facial Rig, Animation | Library and detail columns, graph controls, parameter editors, timeline and links to related tools. |
+| Terrain, Water, Roads, Tiles, Generate, Fields, PHYSIS, Actors & Cameras, Raid, Balance | Brush controls, state disclosure, operation search, technical reference and read/apply forms. |
+| Effects, Light Bake, Models, Overlays, Branding, SpectraFX Graph, SpectraFX Functions, Modeling, Animation Clips, Animation Graph, Rig, Model Animation, Import Project | The same operation-card owner with domain-specific schemas and default expanded actions. |
+| Fog of War, Statistics, Snapshot Diff, Frame Capture, Texture Resources, Asset Audit, Extensions, Attachments | Dedicated control bars, readings, tables, filters and empty states. |
+| Runtime, NEREID Water, VIVID Appearance, Character Creator, Ветер, TerraWeave Generator, Catalog, World Persistence | Generated and specialist panel bodies, availability feedback, scrolling and the shared dock shell. |
+| Other windows and overlays | Main and floating workspace, command palette, welcome tour, project hub, save-layout form, asset chooser and transfer review. In Chrome, welcome step navigation, shortcut isolation, Escape, named layout save/readback, scale change and reset were exercised. |
+
+### Delivery evidence
+
+- Implementation, architecture, dependencies and documentation — PASS. Existing dock tree, renderer registry, Studio UI, style tokens and typed bridge remain the owners. No additional dependencies. Dialog API documented in `docs/studio-design-system.md`.
+- Studio, examples and Inspector presentation — PASS on the native macOS Survivors fixture for the stated window and layout checks. The same typed bridge supplied real operation forms. Native Scene pixels are visible in the first devlog capture.
+- Persistence — existing dock/preset tests passed, plus an actual named layout save/readback. No migration or data-model change.
+- Tests — `npm run build` and `npm run test:web` passed, 166 tests. The build includes `tsc --noEmit`. The Studio Python suite still reports the ten baseline failures/errors listed above. The unified Mac gate has its own report under the KINGSTON build.
+- Skill — the existing Studio UI workflow applies. Native runtime APIs, MCP operations, component schemas, graph runtimes, headless simulation and runtime performance budgets are not applicable to these presentation and interaction changes. No simulation or renderer hot path changed.
+- Publishing — bilingual devlog with two actual macOS captures. `python3.12 tools/site/build.py check` reported 49 entries and zero errors. Platform evidence covers macOS WKWebView and Chrome. Native Windows is NOT RUN.
+
+Build root `/Volumes/KINGSTON/AIVERSE-builds/studio-workspace-redesign`. The audit gallery is `audit/index.html`; source-independent capture names are `panel-<id>.png` for native windows and `<width>-<id>.png` for browser previews. Next step is the green merged-tree Mac quick gate and a single squash into main.

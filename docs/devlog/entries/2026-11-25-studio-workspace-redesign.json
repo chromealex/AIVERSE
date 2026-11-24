@@ -1,0 +1,38 @@
+{
+  "id": "2026-11-25-studio-workspace-redesign",
+  "date": "2026-11-25",
+  "system": "studio",
+  "title": "Поиск окон и работа в узких панелях Studio",
+  "summary": "В меню Window появился поиск по всем панелям. При изменении ширины дока инструменты сцены, поля и списки перестраиваются в пределах своего окна.",
+  "body": [
+    "Выберите Find Window в меню Window, введите имя панели и нажмите Enter. Открытая панель получит фокус. Вкладки одного дока переключаются стрелками, а Home и End ведут к первой и последней вкладке.",
+    "В узком Terrain кнопки кисти переходят на следующую строку. Параметры операции видны сразу, а её техническое описание можно раскрыть отдельно. В Assets дерево папок встаёт над файлами, в Scripts список файлов располагается над редактором."
+  ],
+  "status": "in-progress",
+  "verified": "На снимках открыт проект Survivors в Studio на macOS. Видны сцена, параметры кисти Terrain и поиск этого окна.",
+  "limits": "Нативная проверка на Windows ещё предстоит.",
+  "branch": "studio-workspace-redesign",
+  "commit": "7c1b741c2",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-workspace-redesign/01.png",
+      "caption": "Параметры Terrain рядом со сценой проекта Survivors",
+      "captionEn": "Terrain settings beside the Survivors scene"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-workspace-redesign/02.png",
+      "caption": "Поиск Terrain в списке окон Studio",
+      "captionEn": "Finding Terrain in the Studio window list"
+    }
+  ],
+  "links": [],
+  "author": null,
+  "titleEn": "Finding windows and working in narrow Studio panels",
+  "summaryEn": "Find any panel from the Window menu. Scene tools, forms and lists adapt to the width of their dock.",
+  "bodyEn": [
+    "Choose Find Window from the Window menu, type a panel name and press Enter. An open panel takes focus. The arrow keys switch between tabs in a dock, and Home and End select the first and last tab.",
+    "In a narrow Terrain panel, brush controls wrap onto another row. Editing fields stay visible and each operation has an expandable technical description. In Assets the folder tree moves above the files. In Scripts the file list moves above the editor."
+  ],
+  "verifiedEn": "The screenshots show the Survivors project in Studio on macOS, including the scene, Terrain brush settings and window search.",
+  "limitsEn": "Native Windows verification is pending."
+}
