@@ -37,6 +37,7 @@ inline std::unique_ptr<render::Model> makeEarthworksTerrainModel(
        patch.heightsCm.size()!=size_t(patch.resolution)*patch.resolution ||
        !std::isfinite(uvScale) || uvScale<=0.f || uvScale>16.f)
         throw std::invalid_argument("TerraWeave invalid render patch");
+    if(patch.collision.empty())return {}; // explicitly removed surface, no GPU model
     auto model=std::make_unique<render::Model>();
     model->path="terraweave/dynamic-terrain";
     model->batching.autoLod=false;
@@ -150,7 +151,7 @@ struct TerrainPatchDirtyRegion {
 // Actor colliders are never implicitly removed/reassigned by this adapter.
 class TerrainPatchResident {
 public:
-    bool resident() const {return bool(model_);}
+    bool resident() const {return resident_;}
     uint64_t revision() const {return revision_;}
     uint64_t surfaceEpoch()const{return surfaceEpoch_;}
     const std::vector<RectCm>& surfaceHoles()const{return surfaceHoles_;}
@@ -178,7 +179,7 @@ public:
                  float uvScale=0.05f,
                  const TerrainPatch* adaptiveVisual=nullptr,
                  std::array<uint32_t,4> neighbors={}) {
-        if(model_ && !(patch.cell==cell_))
+        if(resident_ && !(patch.cell==cell_))
             throw std::invalid_argument("TerraWeave resident owns a different tile");
         if(patch.presentationOnly)
             throw std::invalid_argument("TerraWeave collision patch must be authoritative");
@@ -196,11 +197,11 @@ public:
         const TerrainPatch& visual=adaptiveVisual?*adaptiveVisual:patch;
         auto candidate=makeEarthworksTerrainModel(
             visual,materialSource,uvScale);
-        render::prepareModelUpload(*candidate);
-        if(!render::uploadModel(device,*candidate) ||
-           !candidate->vb.valid() || !candidate->ib.valid()) {
-            render::releaseModel(device,*candidate);
-            return false;
+        if(candidate){
+            render::prepareModelUpload(*candidate);
+            if(!render::uploadModel(device,*candidate) || !candidate->vb.valid() || !candidate->ib.valid()){
+                render::releaseModel(device,*candidate);return false;
+            }
         }
         // Preallocate the navmesh/vegetation dirty notification BEFORE
         // committing collision. Memory allocation failure must not create
@@ -233,12 +234,12 @@ public:
                                                region.sourceRevision);
             collisions.publish(spatial,patch,firstColliderId);
         }catch(...){
-            render::releaseModel(device,*candidate);
+            if(candidate)render::releaseModel(device,*candidate);
             throw;
         }
         dirty_.swap(nextDirty);
         if(model_)render::releaseModel(device,*model_);
-        model_=std::move(candidate);
+        model_=std::move(candidate);resident_=true;
         cell_=patch.cell;
         cellSizeMetres_=patch.cellSizeMetres;
         visualResolution_=visual.resolution;
@@ -301,12 +302,11 @@ public:
             gfx::Device& device,world::SpatialWorld& spatial,
             TerrainCollisionPublisher& collisions) {
         std::vector<TerrainPatchDirtyRegion> undelivered;
-        undelivered.swap(dirty_);
-        if(!model_)return undelivered;
-        if(surfaceEpoch_&&!device.waitForResourceIdle())throw std::runtime_error("TerraWeave cut terrain shutdown requires GPU idle");
+        if(!resident_){undelivered.swap(dirty_);return undelivered;}
+        if(model_&&surfaceEpoch_&&!device.waitForResourceIdle())throw std::runtime_error("TerraWeave cut terrain shutdown requires GPU idle");
         collisions.unload(spatial,cell_);
-        render::releaseModel(device,*model_);
-        model_.reset();
+        if(model_)render::releaseModel(device,*model_);
+        model_.reset();resident_=false;undelivered.swap(dirty_);
         revision_=0;surfaceEpoch_=0;surfaceHoles_.clear();
         cellSizeMetres_=0;
         visualResolution_=0;
@@ -314,6 +314,7 @@ public:
         return undelivered;
     }
 private:
+    bool resident_=false;
     std::unique_ptr<render::Model> model_;
     world::Cell cell_{};
     int32_t cellSizeMetres_=0;
