@@ -14,10 +14,10 @@ function Profiler({projectPath}:{projectPath:string}){
   async function read(action:Action){
     if(lock.current||!projectPath||!connected)return;
     lock.current=true;const token=generation.current;
-    if(action!=='status')setPending(true);
+    setPending(true);
     try{
       const result=await invoke('studio.gameProfile',{expectedProject:projectPath,action,...(action==='start'?{steps:60}:{})});
-      if(token===generation.current){setData(result);setError('');}
+      if(token===generation.current){setData(result);if(action!=='status')setError('');}
     }catch(e){if(token===generation.current){setData(null);setError(e instanceof Error?e.message:String(e));}}
     finally{if(token===generation.current){lock.current=false;setPending(false);}}
   }
@@ -56,7 +56,7 @@ function Profiler({projectPath}:{projectPath:string}){
               <polyline points={points.map(p=>p.join(',')).join(' ')} className="simulation-profiler-trace"/>
               {points.map(([x,y],i)=><circle key={i} cx={x} cy={y} r="2" className="simulation-profiler-dot"><title>Step {i+1}: {ms(history[i])}</title></circle>)}
             </svg>
-            <small>Sample tick {d.tick} · epoch {d.epoch}. Wall time includes commands and ECS flush, excludes readiness check, rendering and idle time. Nominal interval is not a measured CPU budget.</small>
+            <small>Current simulation tick {d.tick} · epoch {d.epoch}. Wall time includes commands and ECS flush, excludes readiness check, rendering and idle time. Nominal interval is not a measured CPU budget.</small>
           </StudioSection>
           <StudioSection title="Systems (average per completed step)">
             {d.systemCount>d.rows.length&&<StudioAlert tone="warning">Showing {d.rows.length} of {d.systemCount} systems in schedule order before sorting. Totals cover all systems.</StudioAlert>}
