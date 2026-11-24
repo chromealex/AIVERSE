@@ -224,10 +224,13 @@ bool inRecoveryTrash(const std::string& path){return path.starts_with(".aiverse-
 // Net retained bytes, not transient staging occupancy. Sources have already
 // been checked by their native owner. No deletion is performed to fit a quota.
 template<class Moves>
-void checkRecoveryGrowth(const fs::path& project,const Moves& moves){
+void checkRecoveryGrowth(const fs::path& project,const Moves& moves,int64_t additional=0){
     const auto quota=recoveryQuotaMiB(project);
     if(!quota)return;
-    int64_t delta=0;size_t visited=0;
+    if(!additional&&std::none_of(moves.begin(),moves.end(),[](const auto& move){
+        return inRecoveryTrash(move.from)!=inRecoveryTrash(move.to);
+    }))return;
+    int64_t delta=additional;size_t visited=0;
     std::map<std::string,uint64_t> sizes;
     for(const auto& move:moves){
         const bool from=inRecoveryTrash(move.from),to=inRecoveryTrash(move.to);
@@ -2344,8 +2347,15 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
     if(existsOrSymlink(folder.parent_path()/"studio-move-journal"))throw std::runtime_error("Pending asset move journal");
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
-    checkRecoveryGrowth(root,moves);
     validateMovingBatchResources(root,moves,movingResources);
+    int64_t metadataGrowth=0;
+    for(const auto& resource:movingResources)if(inRecoveryTrash(resource.destination)){
+        // Payload relocation accounting uses original physical bytes. Add
+        // the exact final sidecar size difference for retained Trash data.
+        metadataGrowth+=static_cast<int64_t>(resource.edit.after.size())-
+                        static_cast<int64_t>(resource.edit.before.size());
+    }
+    checkRecoveryGrowth(root,moves,metadataGrowth);
     for(const auto& resource:movingResources){
         const auto& edit=resource.edit;
         const auto path=editor::project_file_detail::safeTarget(root,edit.path.generic_string());

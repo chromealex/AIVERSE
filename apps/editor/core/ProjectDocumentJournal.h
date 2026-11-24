@@ -125,6 +125,8 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative){
     if(relative.empty()||relative.size()>2048||rel.is_absolute()||rel.has_root_name()||
        relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos)
         throw std::runtime_error("Unsafe project document journal target");
+    // Mixed Studio history may update only an exact quarantined sidecar.
+    // Never admit arbitrary recovery payloads or cache documents here.
     const std::string trashPrefix=".aiverse-cache/studio-asset-trash/";
     const auto trashRest=relative.starts_with(trashPrefix)?relative.substr(trashPrefix.size()):std::string{};
     const bool trashMeta=trashRest.size()==24+11&&trashRest.substr(24)=="/asset.meta"&&
