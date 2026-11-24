@@ -1,6 +1,7 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/fx/SpectraStaticSphereCollision.h"
 #include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
 #include "engine/world/SpectraPhysisSnapshot.h"
@@ -98,6 +99,26 @@ int main() {
     alternate.emitters.push_back(basic.emitters[0]);
     require(!sp::inspectGraphGpuEligibility(alternate,options).eligible,
             "multi-emitter graph was silently flattened");
+
+    alternate=basic;
+    alternate.emitters[0].drag={0,0};
+    auto& sphereCollision=alternate.emitters[0].collision;
+    sphereCollision.enabled=true;sphereCollision.ground=false;
+    sphereCollision.staticSphereRadius=1;sphereCollision.staticSphereCenter={2,0,0};
+    sphereCollision.radius=0.5f;
+    const auto sphereEligibility=sp::inspectGraphGpuEligibility(alternate,options);
+    require(sphereEligibility.eligible&&sphereEligibility.gpu.staticSphereRadius==1&&
+            sphereEligibility.gpu.staticSphereCenter.x==2,"analytic sphere GPU eligibility");
+    sphereCollision.scene=true;
+    require(!sp::inspectGraphGpuEligibility(alternate,options).eligible,"host scene collision remains CPU");
+    sphereCollision.scene=false;sphereCollision.lifeLoss=0.1f;
+    require(!sp::inspectGraphGpuEligibility(alternate,options).eligible,"unsupported collision life loss rejected");
+    {
+        render::float3 end{5,0,0},velocity{60,0,0};
+        require(fx::resolveStaticSphere({-1,0,0},end,velocity,{2,0,0},1.25f,1,0)&&
+                std::abs(end.x-0.749f)<0.002f&&velocity.x<0,
+                "analytic sphere swept response");
+    }
 
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,

@@ -73,6 +73,7 @@ struct Uniforms {
     float4x4 cullViewProj;
     float4 cullControl;
     float4 lodEye;
+    float4 collisionSphere,collisionResponse;
 };
 struct DrawArgs {
     uint indexCount, instanceCount, firstIndex;
@@ -238,6 +239,32 @@ float materialSource(uint code,Particle p,VmParams params,VmAttributes attrs) {
         return 0.0f; // stable CPU UID random is intentionally GPU-ineligible
     }
 }
+void collideStaticSphere(thread Particle& p,float3 from,constant Uniforms& u,float dt) {
+    if(u.collisionSphere.w<=0.0f || dt<=0.0f)return;
+    float radius=u.collisionSphere.w+max(0.0f,p.size.x)*0.5f*u.collisionResponse.z;
+    float3 delta=p.positionAge.xyz-from,m=from-u.collisionSphere.xyz;
+    float len=length(delta),dist=length(m);
+    float3 n;
+    if(dist<radius) {
+        n=dist>0.000001f?m/dist:(len>0.000001f?-delta/len:float3(0,1,0));
+    }else{
+        if(len<=0.000001f)return;
+        float3 d=delta/len;
+        float b=dot(m,d);
+        if(b>=0.0f)return;
+        float c=dot(m,m)-radius*radius,disc=b*b-c;
+        if(disc<0.0f)return;
+        float travel=c/(-b+sqrt(disc));
+        if(travel<0.0f||travel>len)return;
+        float3 at=m+d*travel;
+        float norm=length(at);
+        if(norm<=0.000001f)return;
+        n=at/norm;
+    }
+    p.positionAge.xyz=u.collisionSphere.xyz+n*(radius+0.001f);
+    float vn=dot(p.velocityLife.xyz,n);
+    if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-n*vn)*(1.0f-u.collisionResponse.y)-n*(vn*u.collisionResponse.x);
+}
 uint packColor(float4 c) {
     uint4 bytes=uint4(clamp(c,0.0f,1.0f)*255.0f+0.5f);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -337,13 +364,14 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         bool dead=p.positionAge.w<0.0f;
         if(!dead&&u.up.w>0.5f){
             float dt=u.gravityDt.y;
+            float3 previousPosition=p.positionAge.xyz;
             p.velocityLife.y+=u.gravityDt.x*dt;
             p.velocityLife.xyz*=max(0.0f,1.0f-u.gravityDt.z*dt);
             p.positionAge.xyz+=p.velocityLife.xyz*dt;p.positionAge.w+=dt;
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);stateAttributes[slot]=attrs;
+                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);collideStaticSphere(p,previousPosition,u,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -419,6 +447,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         Particle p=particles[id];
         if(p.positionAge.w<0.0f)return;
         float dt=u.gravityDt.y;
+        float3 previousPosition=p.positionAge.xyz;
         p.velocityLife.y+=u.gravityDt.x*dt;
         p.velocityLife.xyz*=max(0.0f,1.0f-u.gravityDt.z*dt);
         p.positionAge.xyz+=p.velocityLife.xyz*dt;
@@ -437,6 +466,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);
+            collideStaticSphere(p,previousPosition,u,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;
@@ -634,7 +664,7 @@ layout(std430,set=0,binding=4) buffer LiveSlots {uint liveSlots[];};
 layout(std430,set=0,binding=5) buffer Counters {uint aliveCounter[];};
 layout(std430,set=0,binding=6) buffer DrawBuffer {DrawArgs gpuDrawArgs[];};
 layout(std430,set=0,binding=7) readonly buffer SeedParams {VmParams seedParams[];};
-layout(std140,set=0,binding=8) uniform Inputs {vec4 gravityDt,rightSize,up;uvec4 meta;mat4 cullViewProj;vec4 cullControl,lodEye;} u;
+layout(std140,set=0,binding=8) uniform Inputs {vec4 gravityDt,rightSize,up;uvec4 meta;mat4 cullViewProj;vec4 cullControl,lodEye,collisionSphere,collisionResponse;} u;
 layout(std430,set=0,binding=9) buffer StateParams {VmParams stateParams[];};
 layout(std430,set=0,binding=10) readonly buffer Program {VmPayload vmProgram;};
 layout(std430,set=0,binding=11) buffer Attributes {VmAttributes stateAttributes[];};
@@ -794,6 +824,32 @@ float materialSource(uint code,Particle p,VmParams params,VmAttributes attrs) {
         return 0.0; // stable CPU UID random is intentionally GPU-ineligible
     }
 }
+void collideStaticSphere(inout Particle p,vec3 from,float dt) {
+    if(u.collisionSphere.w<=0.0 || dt<=0.0)return;
+    float radius=u.collisionSphere.w+max(0.0,p.size.x)*0.5*u.collisionResponse.z;
+    vec3 delta=p.positionAge.xyz-from,m=from-u.collisionSphere.xyz;
+    float len=length(delta),dist=length(m);
+    vec3 n;
+    if(dist<radius) {
+        n=dist>0.000001?m/dist:(len>0.000001?-delta/len:vec3(0,1,0));
+    }else{
+        if(len<=0.000001)return;
+        vec3 d=delta/len;
+        float b=dot(m,d);
+        if(b>=0.0)return;
+        float c=dot(m,m)-radius*radius,disc=b*b-c;
+        if(disc<0.0)return;
+        float travel=c/(-b+sqrt(disc));
+        if(travel<0.0||travel>len)return;
+        vec3 at=m+d*travel;
+        float norm=length(at);
+        if(norm<=0.000001)return;
+        n=at/norm;
+    }
+    p.positionAge.xyz=u.collisionSphere.xyz+n*(radius+0.001);
+    float vn=dot(p.velocityLife.xyz,n);
+    if(vn<0.0)p.velocityLife.xyz=(p.velocityLife.xyz-n*vn)*(1.0-u.collisionResponse.y)-n*(vn*u.collisionResponse.x);
+}
 uint packColor(vec4 c) {
     uvec4 bytes=uvec4(clamp(c,0.0,1.0)*255.0+0.5);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -872,13 +928,14 @@ void main(){
         bool dead=p.positionAge.w<0.0;
         if(!dead&&u.up.w>0.5){
             float dt=u.gravityDt.y;
+            vec3 previousPosition=p.positionAge.xyz;
             p.velocityLife.y+=u.gravityDt.x*dt;
             p.velocityLife.xyz*=max(0.0,1.0-u.gravityDt.z*dt);
             p.positionAge.xyz+=p.velocityLife.xyz*dt;p.positionAge.w+=dt;
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(1u,p,params,attrs,dt);stateAttributes[slot]=attrs;
+                vmRun(1u,p,params,attrs,dt);collideStaticSphere(p,previousPosition,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -954,6 +1011,7 @@ void main(){
         Particle p=particles[id];
         if(p.positionAge.w<0.0)return;
         float dt=u.gravityDt.y;
+        vec3 previousPosition=p.positionAge.xyz;
         p.velocityLife.y+=u.gravityDt.x*dt;
         p.velocityLife.xyz*=max(0.0,1.0-u.gravityDt.z*dt);
         p.positionAge.xyz+=p.velocityLife.xyz*dt;
@@ -972,6 +1030,7 @@ void main(){
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(1u,p,params,attrs,dt);
+            collideStaticSphere(p,previousPosition,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;

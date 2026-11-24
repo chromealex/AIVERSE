@@ -65,8 +65,14 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     if(e.texture!="builtin:soft"||e.blend!=fx::FxBlend::Additive||
        e.align!=fx::FxAlign::Camera||e.shape!=fx::FxShape::Point)
         return reject("GPU v1 supports only additive soft camera-facing point sprites");
+    const auto& collision=e.collision;
+    const bool staticSphere=collision.enabled&&collision.staticSphereRadius>0;
+    if(collision.enabled&&(!staticSphere||collision.ground||collision.scene||!collision.planes.empty()||
+       collision.height!=0||collision.lifeLoss!=0||collision.minKillSpeed!=0||collision.maxKillSpeed!=0||
+       !e.particleProgram.isNull()||e.drag.min!=0))
+        return reject("GPU analytic sphere collision requires static sphere only, no drag, VM, scene/ground or lifetime response");
     if(e.hidden || e.noise.enabled() ||
-       e.collision.enabled || e.trail.enabled || e.light.enabled ||
+       e.trail.enabled || e.light.enabled ||
        e.trigger.enabled || !e.subEmitters.empty() || e.force.enabled ||
        e.velocityOverLife.enabled || e.inheritVelocity.enabled ||
        !e.meshes.empty() || !e.sprites.empty())
@@ -106,6 +112,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     supported.spread=0;
     supported.gravity=e.gravity;
     supported.drag=e.drag;
+    if(staticSphere)supported.collision=collision;
     // A full-program eligibility check above has already validated every
     // operation/stage. Keep it in the normalized effect comparison so other
     // authored emitter fields cannot disappear.
@@ -125,6 +132,13 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     result.gpu.size=e.size.min;
     result.gpu.gravityY=e.gravity.y;
     result.gpu.drag=e.drag.min;
+    if(staticSphere){
+        result.gpu.staticSphereRadius=collision.staticSphereRadius;
+        result.gpu.staticSphereCenter=collision.staticSphereCenter;
+        result.gpu.collisionBounce=collision.bounce;
+        result.gpu.collisionDampen=collision.dampen;
+        result.gpu.collisionRadiusScale=collision.radius;
+    }
     result.gpu.particleProgram=e.particleProgram;
     if(hasMaterial) {
         result.gpu.shaderGraph=e.shaderGraph;

@@ -431,7 +431,7 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
     if (e.has("collision")) {
         const Json& o = e["collision"];
         if (o.type() == Json::Type::Bool) d.collision.enabled = o.boolean();
-        else module(e, r, "collision", {"height", "bounce", "dampen", "lifeLoss", "minKillSpeed", "maxKillSpeed", "ground", "planes", "radius", "scene"},
+        else module(e, r, "collision", {"height", "bounce", "dampen", "lifeLoss", "minKillSpeed", "maxKillSpeed", "ground", "planes", "radius", "scene", "staticSphereRadius", "staticSphereCenter"},
                     [&](const Json& c, Reader& cr) {
             FxCollision& col = d.collision;
             col.enabled = true;
@@ -443,6 +443,8 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
             cr.number("maxKillSpeed", col.maxKillSpeed, 0, 100000);
             cr.boolean("ground", col.ground);
             cr.boolean("scene", col.scene);
+            cr.number("staticSphereRadius", col.staticSphereRadius, 0, 10000);
+            cr.vec3("staticSphereCenter", col.staticSphereCenter);
             cr.number("radius", col.radius, 0, 10);
             if (c.has("planes")) {
                 const Json& l = c["planes"];
@@ -744,6 +746,10 @@ void modulesToJson(const EmitterDef& d, Json& e) {
         if (c.maxKillSpeed) o.set("maxKillSpeed", numJ(c.maxKillSpeed));
         if (!c.ground) o.set("ground", Json::fromBool(false));
         if (c.scene) o.set("scene", Json::fromBool(true));
+        if (c.staticSphereRadius>0) {
+            o.set("staticSphereRadius",numJ(c.staticSphereRadius));
+            o.set("staticSphereCenter",vecJ(c.staticSphereCenter));
+        }
         if (c.radius) o.set("radius", numJ(c.radius));
         if (!c.planes.empty()) {
             Json a = Json::array();

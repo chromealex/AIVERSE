@@ -91,6 +91,9 @@ struct ComputeEmitterDesc {
     // share it. If absent, legacy independent checkpoint behavior is retained.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
     std::shared_ptr<GpuAllocationBudget> allocationBudget; // same Device only
+    float staticSphereRadius=0;
+    render::float3 staticSphereCenter{};
+    float collisionBounce=0.5f,collisionDampen=0,collisionRadiusScale=0;
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -272,6 +275,8 @@ private:
         float cullViewProj[16]{};
         render::float4 cullControl{}; // x: valid culling view; yz: viewport pixels; w: LOD far distance
         render::float4 lodEye{}; // xyz: camera position; w: LOD near distance
+        render::float4 collisionSphere{}; // centre xyz, obstacle radius (0 disables)
+        render::float4 collisionResponse{}; // bounce, dampen, particle radius scale
     };
     struct DrawUniforms {
         float viewProj[16];
@@ -282,7 +287,7 @@ private:
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
-    static_assert(sizeof(Uniforms)==160);
+    static_assert(sizeof(Uniforms)==192);
     static_assert(sizeof(DrawUniforms)==144);
 
     bool stepGpuAllocated(float dt);

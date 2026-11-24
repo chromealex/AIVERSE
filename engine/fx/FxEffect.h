@@ -190,6 +190,8 @@ struct FxCollision {
     std::vector<FxPlane> planes;                // effect space
     float radius = 0;                           // particle radius as a share of its size (Unity radius scale)
     bool scene = false;                         // opt-in host swept collision provider
+    float staticSphereRadius=0;                // 0 disables analytic SDF obstacle
+    float3 staticSphereCenter{0,0,0};           // particle simulation space, not emitter space
 };
 struct FxNoise {
     FxRange strength{0, 0};                     // over the lifetime

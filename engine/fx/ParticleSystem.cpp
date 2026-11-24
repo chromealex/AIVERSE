@@ -1,4 +1,5 @@
 #include "ParticleSystem.h"
+#include "SpectraStaticSphereCollision.h"
 #include "../gfx/GpuTier.h"
 #include <algorithm>
 #include <cmath>
@@ -582,6 +583,10 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
             const float rad = c.radius > 0 ? c.radius * 0.5f * p.size : 0.0f;
             const float before = render::length(p.vel);
             bool hit = false;
+            if(c.staticSphereRadius>0 && dt>0 && resolveStaticSphere(previousPosition,p.pos,p.vel,
+                    c.staticSphereCenter,c.staticSphereRadius+rad,c.bounce,c.dampen)) {
+                p.vtot=p.vel;hit=true;
+            }
             if(c.scene && sceneCollision && dt>0) {
                 if(sceneCollisionStats.queries>=sceneCollisionBudget)++sceneCollisionStats.budgetDenied;
                 else {

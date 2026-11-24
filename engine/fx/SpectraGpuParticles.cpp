@@ -53,6 +53,13 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     if(!finite(d.gravityY)||std::abs(d.gravityY)>1000.f)return fail("invalid gravity");
     if(!finite(d.drag)||d.drag<0||d.drag>50.f)return fail("invalid drag");
     if(d.burst>d.capacity)return fail("one burst exceeds available slots");
+    if(!finite(d.staticSphereRadius)||d.staticSphereRadius<0||d.staticSphereRadius>10000||
+       !finite(d.staticSphereCenter.x)||!finite(d.staticSphereCenter.y)||!finite(d.staticSphereCenter.z)||
+       std::abs(d.staticSphereCenter.x)>1e6f||std::abs(d.staticSphereCenter.y)>1e6f||std::abs(d.staticSphereCenter.z)>1e6f||
+       !finite(d.collisionBounce)||d.collisionBounce<0||d.collisionBounce>2||
+       !finite(d.collisionDampen)||d.collisionDampen<0||d.collisionDampen>1||
+       !finite(d.collisionRadiusScale)||d.collisionRadiusScale<0||d.collisionRadiusScale>10)
+        return fail("invalid analytic sphere collision");
     if(why)why->clear();
     return true;
 }
@@ -144,6 +151,14 @@ bool ComputeParticles::initCpu() {
     emitter.gravity={0,desc_.gravityY,0};
     emitter.drag={desc_.drag,desc_.drag};
     emitter.spread=0;
+    if(desc_.staticSphereRadius>0) {
+        emitter.collision.enabled=true;emitter.collision.ground=false;
+        emitter.collision.staticSphereCenter=desc_.staticSphereCenter;
+        emitter.collision.staticSphereRadius=desc_.staticSphereRadius;
+        emitter.collision.bounce=desc_.collisionBounce;
+        emitter.collision.dampen=desc_.collisionDampen;
+        emitter.collision.radius=desc_.collisionRadiusScale;
+    }
     emitter.color={{0.f,{1,1,1,1}},{1.f,{1,1,1,0}}};
     if(!desc_.particleProgram.isNull())emitter.particleProgram=desc_.particleProgram;
     if(!desc_.shaderGraph.isNull())emitter.shaderGraph=desc_.shaderGraph;
@@ -881,6 +896,8 @@ bool ComputeParticles::step(float dt) {
     device_->setComputeBuffer(14,killSlots_);
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
+    u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,0};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
@@ -1229,6 +1246,8 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     bindGpuAllocationBuffers();
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
+    u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,0};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
     const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
