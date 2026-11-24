@@ -885,3 +885,33 @@ Native Scene uses real Transform and canonical Surface body-local positions. Unp
 Stable packed-ID ordering and owner component caps; maximum 256 nodes, 512 wires and 128 each gates, switches and devices per snapshot. Counts of powered/high/active and rejected/omitted/cross-body refer to sampled candidates. Existing local Play, map/revision and selected-body guards, typed transient settings and native renderer reused; flat ecology unchanged. Browser shows bounded diagnostic lists and actual output states. No second simulation, persistence, physical device actuation, wire creation or economy changes.
 
 Source regression covers directed supply, deliberate cross-body logical power without spatial line, switch synchronization, one-tick NOT gate delay, device activation transitions, stale output and cap. Build, CTest, browser typecheck, interaction, actual captures and performance NOT RUN. Next SOCIETY live relationships, messages and NPC trigger diagnostics. No main merge.
+
+## Stage 116: planetary live SOCIETY knowledge and NPC triggers
+
+Enable Live 3D overlay and the independent SOCIETY knowledge / trust checkbox during local Play current map. Read canonical Person knowledge, credibility, acceptance, enabled state, directed Contact configuration, configured Message topics and actual NpcTrigger output. Person knowledge and trigger active/fired/transition require exact completed-tick stamps. Topic masks are decimal strings to preserve all 64 bits through JavaScript; population count is numeric. No interpretation of topic meaning or social identity.
+
+Current contact eligibility uses enabled endpoints and trust * source credibility >= destination acceptance, the existing solver's threshold. Source-only topics are the difference of current sampled masks, not measured transfers or historical message delivery. Trigger output is the actual ECS result and action ID; fired is not confirmation of external AI/quest execution. No repeated propagation, trigger evaluation, dispatch or persistence.
+
+Native Scene renders real body-local Transform positions, directed contact edges, current trust eligibility, configured message markers and trigger state. Blue people (size based on known-topic count), green eligible contacts, interrupted muted blocked contacts, amber configured messages, green active and purple fired triggers, grey unavailable. Unplaced rows remain numeric; cross-body logical relationships remain intact and numeric, not drawn across bodies. Stable packed-ID order and owner budgets, up to 256 people, 512 contacts, 128 messages and 128 triggers. Counts describe sampled candidates. Existing local Play/map/revision guards and renderer reused; planar ecology unchanged.
+
+Source regression covers one-hop across two ticks, low trust rejection, high-bit topic mask, cross-body logical propagation, one-shot trigger transition, stale output and cap. Build, CTest, browser typecheck, interaction, captures and performance NOT RUN.
+
+## Live planetary diagnostic coverage — source milestone
+
+Stages 106–116 now have source implementations for all eleven planned layers:
+
+| Stage | Layer | Read-only diagnostic |
+| --- | --- | --- |
+| 106 | IMPRINT | Canonical trace quads |
+| 107 | GRANULAR | Explicit diagnostic-scale occupied tops |
+| 108 | EVOLVE | SurfaceArea chart boundaries and region state |
+| 109 | PHYSIS | Effective gravity samples |
+| 110 | AETHER | Gas masses and isolated duct potentials |
+| 111 | FRACTURE | Member/bond state and durable events |
+| 112 | MORPH | Bound-node displacement and constraint residual |
+| 113 | ECHO | Acoustic graph and completed hearing |
+| 114 | CROWD | Native route and reservation state, gravity support |
+| 115 | CIRCUIT | Node and device outputs, logical topology |
+| 116 | SOCIETY | Knowledge, trust, messages and trigger output |
+
+This is 11/11 source coverage of the defined Live planetary diagnostics, NOT complete planetary gameplay, physical/render integration, or verified production readiness. Existing planar workflows were retained, not newly extended with all eleven overlays. No build/tests or main merge in this sequence. Next recommended work: consolidate transient layer options and shared snapshot/render helpers, review match/map lifecycle and global aggregate line/payload budgets, reconcile shared Studio changes with studio-html5, resolve owner integration gaps (planetary terrain mutation, granular physical scale/render/collider binding, ecology vegetation/weather, actual debris delivery, MORPH model stream binding and physical locomotion), then execute focused and merged-tree Mac quick acceptance when user lifts test deferral. Do not report all features complete on the basis of diagnostic coverage alone.

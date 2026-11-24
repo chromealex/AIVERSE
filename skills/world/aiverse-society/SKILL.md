@@ -54,3 +54,13 @@ Never duplicate quest graph, dialogue manager or NPC AI blackboard. 64-bit topic
 
 ## Stage 82: optional budgeted reports
 Include `aiverselib/world/WorldProcessBudgetedQueries.h`; `lib::worldprocess::prepareSocietyReports` accepts a pure owner position resolver returning optional world::Cell; missing position fails HOT. Use same coordinate grid as authoritative observers. No new social position store. Shared EntityBudgetState/Options support cap and wake; returned knowledge snapshots have request/sample ticks and may be stale. Do not throttle `society::advance` or NPC trigger delivery: one-hop-per-tick semantics must remain intact. Caller owns cache and staged next state. See stage82 handoff; tests not run.
+
+## Stage 116: planetary live SOCIETY knowledge and NPC triggers
+
+Enable Live 3D overlay and the independent SOCIETY knowledge / trust checkbox during local Play current map. Read canonical Person knowledge, credibility, acceptance, enabled state, directed Contact configuration, configured Message topics and actual NpcTrigger output. Person knowledge and trigger active/fired/transition require exact completed-tick stamps. Topic masks are decimal strings to preserve all 64 bits through JavaScript; population count is numeric. No interpretation of topic meaning or social identity.
+
+Current contact eligibility uses enabled endpoints and trust * source credibility >= destination acceptance, the existing solver's threshold. Source-only topics are the difference of current sampled masks, not measured transfers or historical message delivery. Trigger output is the actual ECS result and action ID; fired is not confirmation of external AI/quest execution. No repeated propagation, trigger evaluation, dispatch or persistence.
+
+Native Scene renders real body-local Transform positions, directed contact edges, current trust eligibility, configured message markers and trigger state. Blue people (size based on known-topic count), green eligible contacts, interrupted muted blocked contacts, amber configured messages, green active and purple fired triggers, grey unavailable. Unplaced rows remain numeric; cross-body logical relationships remain intact and numeric, not drawn across bodies. Stable packed-ID order and owner budgets, up to 256 people, 512 contacts, 128 messages and 128 triggers. Counts describe sampled candidates. Existing local Play/map/revision guards and renderer reused; planar ecology unchanged.
+
+Source regression covers one-hop across two ticks, low trust rejection, high-bit topic mask, cross-body logical propagation, one-shot trigger transition, stale output and cap. Build, CTest, browser typecheck, interaction, captures and performance NOT RUN.
