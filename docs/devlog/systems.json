@@ -1844,6 +1844,12 @@
           "text": "Нативный scoped-доступ удерживает read lease и pin; HLOD, material palette и экспорт защищены от переноса живых процедурных поколений. Интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38W (partial)",
           "textEn": "Scoped native access combines model reader and generation pin; HLOD, palette and offline export guard runtime images. Integration pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38X (в работе)",
+          "text": "Нативный scoped-доступ в Client и Editor, безопасная диагностика Studio/MCP.",
+          "nameEn": "Texture Graph GPU — Stage 38X (in progress)",
+          "textEn": "Client and Editor scoped image access and safe Studio/MCP diagnostics."
         }
       ],
       "enables": [
