@@ -86,7 +86,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
       </header>
       <div className="studio-trash__body">
         {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
-        {page?.recoveryPending&&<StudioAlert tone="warning">Reopen the project to resolve the pending asset journal before restoring or purging.</StudioAlert>}
+        {page?.recoveryPending&&<StudioAlert tone="warning">{page.recoveryReason??'Reopen the project to resolve the pending asset journal before restoring or purging.'}</StudioAlert>}
         {page?.truncated&&<StudioAlert tone="warning">Listing limited to 10,000 recovery records. No automatic cleanup is performed.</StudioAlert>}
         {page?.storageError&&<StudioAlert tone="warning">Storage accounting unavailable: {page.storageError}</StudioAlert>}
         {page?.storage&&<div className="studio-trash__review">
