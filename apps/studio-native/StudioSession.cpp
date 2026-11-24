@@ -611,8 +611,14 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
                     if(!entry||entry->path!=path)throw std::runtime_error("Preview asset identity changed");
                 }
                 const auto& decisions=args["decisions"];
-                if(!decisions.isArray()||decisions.size()>64)throw std::runtime_error("Invalid move decisions");
+                const auto count=agentAssetTransfer_->describe()["items"].size();
+                if(!decisions.isArray()||decisions.size()!=count||count>64)
+                    throw std::runtime_error("Explicit decisions required for every preview item");
+                std::set<int64_t> decided;
                 for(const auto& d:decisions.items()){
+                    const auto id=d.getInt("id",-1);
+                    if(!d["id"].isNumber()||id<0||size_t(id)>=count||!decided.insert(id).second)
+                        throw std::runtime_error("Invalid or repeated move decision");
                     const auto action=d.getStr("action");
                     if(action!="import"&&action!="keep-both"&&action!="skip")throw std::runtime_error("Only non-destructive moves are supported");
                 }
@@ -630,7 +636,10 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
                 agentAssetTransfer_.reset();Json out=Json::object();out.set("error",response["error"]);return out;
             }
             if(preview)agentAssetTransferVersion_=assetHistoryVersion();
-            else {agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();}
+            else {
+                agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+                if(response["result"]["files"].size())pendingAssetTransfer_.reset();
+            }
             return response["result"];
         }
         if(name=="studio_asset_history"){
@@ -735,7 +744,9 @@ bool StudioSession::pollAgentLink() {
         const std::string policy=studioAgentHistoryPolicy(name);
         const bool readOnly=policy=="read";
         // Known native asset no-ops do not invent an untracked mutation.
-        const bool nativeNoop=name=="studio_asset_meta_patch"&&assetHistory_.version()==assetBefore&&!failed;
+        const bool nativeNoop=(name=="studio_asset_meta_patch"||
+            (name=="studio_asset_move_commit"&&!result["files"].size()&&!result["issues"].size()))&&
+            assetHistory_.version()==assetBefore&&!failed;
         const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||assetHistory_.version()!=assetBefore;
         const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||(!readOnly&&!nativeNoop));
         if(edit||ownerChanged)changed=true;

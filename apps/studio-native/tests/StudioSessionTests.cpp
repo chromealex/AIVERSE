@@ -8,6 +8,8 @@
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/studio-native/StudioAgentHistoryPolicy.h"
+#include "apps/studio-native/StudioAssetCatalog.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -306,6 +308,42 @@ void agentScopedHistoryContract(){
     for(const auto& change:changes.items())if(change.getStr("scope")=="assets")assetEdit=change;
     AIVERSE_TEST_CHECK(assetEdit.getBool("canRedo"));
     AIVERSE_TEST_CHECK(!step(assetEdit,"redo",assetEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // Registry inventory uses explicit classifications, never name suffix guesses.
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("fake_get"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("heightmap_export"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("rules_get"))=="read");
+    const auto capabilities=agent("studio_history_capabilities",Json::object());
+    bool foundMove=false;
+    for(const auto& item:capabilities["operations"].items())
+        if(item.getStr("name")=="studio_asset_move_commit")foundMove=item.getStr("policy")=="assets";
+    AIVERSE_TEST_CHECK(foundMove&&capabilities.getStr("bulkUndo")=="map-only");
+    fs::create_directory(root/"content"/"Destination");
+    studio::StudioAssetCatalog catalog(root);catalog.rebuild();
+    const auto guid=catalog.byPath("AgentFolder")->guid;
+    assets=agent("studio_asset_history",Json::object());
+    Json move=Json::object(),guids=Json::array();guids.push(Json::string(guid));
+    move.set("guids",std::move(guids));move.set("destination",Json::string("Destination"));
+    move.set("expectedProject",assets["project"]);move.set("expectedVersion",assets["version"]);
+    const auto browser=call(R"({"id":10,"method":"studio.assetMovePreview","params":{"paths":["AgentFolder"],"destination":"Destination"}})");
+    AIVERSE_TEST_CHECK(!browser.has("error"));
+    const auto preview=agent("studio_asset_move_preview",move);
+    AIVERSE_TEST_CHECK(!preview.has("error")&&preview.getStr("token")!=browser["result"].getStr("token"));
+    Json commit=Json::object();commit.set("expectedProject",assets["project"]);commit.set("expectedVersion",assets["version"]);
+    commit.set("token",browser["result"]["token"]);
+    commit.set("decisions",Json::parse(R"([{"id":0,"action":"import"}])"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_move_commit",commit).has("error"));
+    commit.set("token",preview["token"]);
+    commit.set("decisions",Json::array());
+    AIVERSE_TEST_CHECK(agent("studio_asset_move_commit",commit).has("error"));
+    commit.set("decisions",Json::parse(R"([{"id":0,"action":"import"}])"));
+    const auto moved=agent("studio_asset_move_commit",commit);
+    AIVERSE_TEST_CHECK(!moved.has("error")&&moved.getBool("historyRecorded"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"Destination"/"AgentFolder"));
+    changes=info()["changes"];Json moveEdit;
+    for(const auto& change:changes.items())if(change.getStr("op")=="studio_asset_move_commit"&&change.getStr("scope")=="assets")moveEdit=change;
+    AIVERSE_TEST_CHECK(moveEdit.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(!step(moveEdit,"undo",moveEdit.getStr("historyVersion")).has("error"));
     AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
     client.close();session.openProject(root.string());
     AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));

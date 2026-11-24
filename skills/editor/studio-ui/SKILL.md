@@ -119,6 +119,9 @@ All existing-file ProjectFileEdits operations use one project-local journal in .
 ## Agent owner history (S6d.1)
 Record linked agent actions by native map ID or ProjectHistory entry ID, scope and source document. Project/asset entries have stable epoch-qualified IDs distinct from ordinal positions. Resolve current boundary and version on every navigation; studio.agentHistoryStep verifies membership, scope, direction and version before calling the same native owner. studio.agentUndoAll rechecks map-only agent suffix, never navigates a mixed project/assets run. Agent panel displays untracked/evicted edits as unavailable, not undoable. Four explicit linked Studio asset adapters are discoverable through MCP; local fallback fails closed. No arbitrary Studio RPC forwarding, destructive asset/purge exposure or cross-scope atomic undo. See docs/mcp-agent-link.md.
 
+## Agent MCP capability audit and internal moves (S6d.2)
+Use StudioAgentHistoryPolicy.h explicit policy, not suffix-based StudioToolReadOnly for agent history. studio_history_capabilities enumerates the entire live registry; unverified operations can execute but fence map-only bulk undo and disclose untracked effects even if a partial owner link exists. Agent internal move/rename requires project and asset version, existing GUIDs, independent preview token and explicit decisions. Native transfer owner revalidates dependencies and preserves GUID. No destructive/internal replace, external import or arbitrary Studio RPC. Do not claim the entire registry is audited for reversible side effects; unverified is an intentional fail-closed classification.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
