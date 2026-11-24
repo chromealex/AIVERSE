@@ -442,6 +442,10 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     lib::worldprocess::extendedLinks::validate(name,value);
                 const bool authorable=standalone||linked||extended||extendedLinked;
                 Json display=value;
+                if(extended&&name=="EvolveArea"){
+                    if(!display.has("offsetXcm"))display.set("offsetXcm",Json::number(int64_t(0)));
+                    if(!display.has("offsetZcm"))display.set("offsetZcm",Json::number(int64_t(0)));
+                }
                 if(extended&&name=="MorphNode"){
                     if(!display.has("gravityImpulseMilli"))display.set("gravityImpulseMilli",Json::number(int64_t(0)));
                     if(!display.has("gravityRelative"))display.set("gravityRelative",Json::fromBool(true));
@@ -3249,6 +3253,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Authoring applies only to map entities");
                 const int index=indexFor(entityId);
                 const auto& source=ws_.map.data.entities[size_t(index)];
+                if(ws_.map.data.planet()&&(componentId=="CrowdAgent"||componentId=="CrowdSlot")&&key!="enabled")
+                    throw std::runtime_error("Planet CROWD uses canonical placement and native movement; planar values are inactive");
                 const Json& existing=source.extra["components"][componentId];
                 if(!existing.isObject())throw std::runtime_error("Component is not authored on this object");
                 Json staged=existing;
@@ -3277,6 +3283,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         throw std::runtime_error(error);
                 } else if(!lib::worldprocess::authoring::edit(componentId,key,value,staged,&error))
                     throw std::runtime_error(error);
+                if(ws_.map.data.planet()&&componentId=="EvolveArea"){
+                    evolve::Area local{staged.getInt("offsetXcm",0),staged.getInt("offsetZcm",0),
+                        staged.getInt("halfWidthCm"),staged.getInt("halfDepthCm"),staged.getBool("enabled")};
+                    if(!evolve::valid(local))throw std::runtime_error("Planet EVOLVE local bounds exceed coordinate budget");
+                }
                 if(staged!=existing) {
                     auto candidate=source;
                     Json components=candidate.extra["components"];
