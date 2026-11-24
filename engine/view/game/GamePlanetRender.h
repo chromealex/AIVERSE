@@ -62,6 +62,7 @@ public:
     bool clearCaveBodyCut(int body,uint64_t expectedEpoch,const std::function<bool()>& exclusive);
     bool clearCaveSurfaceCut(int body,const std::function<bool()>& exclusive);
     uint64_t caveSurfaceCutEpoch(int body)const noexcept;
+    uint64_t caveSurfaceCutWatermark(int body)const noexcept;
     struct Options { bool orbits = true, atmosphere = true, sky = true; float lodRange = 48; };
     Options options;
     // Queues everything; the lighting of `r` gets the star direction of `lightBody`.
