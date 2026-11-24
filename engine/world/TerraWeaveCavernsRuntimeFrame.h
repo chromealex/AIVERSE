@@ -16,6 +16,7 @@
 #include "engine/nav/CaveSimulationNavigation.h"
 #include "engine/nav/CavePathQueryCache.h"
 #include "engine/world/TerraWeaveCavernsNavigationEnvironment.h"
+#include "engine/world/TerraWeaveCavernsNativeNavMeshCache.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -40,6 +41,7 @@ public:
             [this](const CaveNavigationChange&,
                    std::shared_ptr<const CaveNavigationDataProvider>){
                 pathCache_.invalidate();
+                nativeNavCache_.invalidate();
             });
     }
     // Explicit per-world entry point. Instances are single-world owners:
@@ -188,10 +190,18 @@ public:
     nav::CavePathCacheStats navigationCacheStats()const noexcept {
         return pathCache_.stats();
     }
-    void invalidateNavigationRouteCache(){pathCache_.invalidate();}
+    void invalidateNavigationRouteCache(){
+        pathCache_.invalidate();
+        nativeNavCache_.invalidate();
+    }
     bool registerNativeNavMeshSolver(CaveNavConfig config,
                                      const std::string& name="navmesh") {
-        return registerCaveNativeNavSolver(pathRouter_,config,name);
+        validateCaveNav(config);
+        return pathRouter_.registerSolver(name,CavePathBackend::NavMesh,
+            [this,config](const CavePathQuery& q,
+                          std::shared_ptr<const CaveNavigationDataProvider> src){
+                return nativeNavCache_.find(q,std::move(src),config);
+            });
     }
     // The ACTUAL authoritative ECS owner calls this on its fixed tick.
     // It must provide a real same-epoch Box3D/SpatialWorld collision
@@ -484,6 +494,7 @@ private:
     CaveNavigationPublication navigationBus_{nullptr};
     CavePathRouter pathRouter_;
     mutable nav::CavePathQueryCache pathCache_{};
+    mutable CaveNativeNavMeshCache nativeNavCache_{};
     CaveDirtyBounds navDirtyBounds_{};
     bool navDirty_=false;
     uint32_t chunkResolution_=16;
