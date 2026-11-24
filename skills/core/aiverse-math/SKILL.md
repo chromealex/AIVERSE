@@ -39,3 +39,5 @@ category is implemented when only its foundational API exists.
 
 Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
 it does not provide a separate runtime implementation. Pin the engine revision for that owner.
+
+FixedInterpolation.h extends existing engine math with clamped Q16 lerp (scalar/Vec3), six easing modes and cubic Bezier via de Casteljau. Endpoints bounded to ±2^60 raw; invalid endpoints return nullopt. No floating point. No builds/tests yet.
