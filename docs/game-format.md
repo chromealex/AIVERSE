@@ -62,6 +62,8 @@ tablets are always fullscreen, the web build fills the page). Editor: **Сбор
 | `macos`, `windows`, `linux` | objects with any of the keys above that override them on that platform |
 
 Runs with `AIVERSE_EXIT_AFTER_FRAMES` (screenshots, CI) and `--size WxH` stay windowed at the asked size.
+On macOS `AIVERSE_BACKGROUND=1` keeps such a run out of the way: no Dock icon, no activation or focus, the window is
+placed off every screen (it still renders and captures) and window modes are not applied; it gets no input.
 Code: `engine/platform/WindowSettings.h` (parser, checks), `AppConfig` window fields, `AppCallbacks::configure`.
 
 Optional `"ui"` block: how the in-game UI (RmlUi documents) blends.
