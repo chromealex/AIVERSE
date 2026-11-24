@@ -6,6 +6,7 @@
 #include "engine/mechanics/EcsTimedMechanics.h"
 #include "engine/world/OrientedBox.h"
 #include "engine/nav/CaveActorMotorSteering.h"
+#include "engine/world/TerraWeaveCavernsNavigationRegionCache.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsVolumeCollision.h"
 #include <stdexcept>
@@ -308,6 +309,8 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     // the SAME immutable SDF, install into this EXISTING SpatialWorld before
     // character spawn/motor setup, never create a second actor controller.
     caveNavigation_.reset();
+    caveRegionCache_.reset();
+    caveRouteResolver_={};
     const auto& caveNavConfig=map["cavernsNavigation"];
     if(caveNavConfig.isObject()&&caveNavConfig.getBool("enabled",false)){
         using namespace terraweave::caverns;
@@ -346,6 +349,59 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         }
         caveNavigation_=std::make_shared<const CaveNavigationDataProvider>(
             std::move(indexed));
+        // Optional persistent region cache for HPA/Flow route traffic.
+        // One region owns reusable adjacency and only dirty nodes rebuild
+        // on an explicitly confirmed native cave SDF publication.
+        const Json& region=caveNavConfig["region"];
+        if(region.isObject()){
+            CaveGraphGrid grid;
+            grid.origin={region.getInt("originXcm"),
+                         region.getInt("originYcm"),
+                         region.getInt("originZcm")};
+            const auto dimension=[&](const char* key)->uint32_t {
+                const int64_t n=region.getInt(key,0);
+                if(n<=0||n>1024)
+                    throw JsonError(std::string("actor.cavernsNavigation.region.")+key);
+                return uint32_t(n);
+            };
+            grid.width=dimension("width");
+            grid.height=dimension("height");
+            grid.depth=dimension("depth");
+            grid.cellCm=int32_t(region.getInt("cellCm",100));
+            grid.maxCells=uint32_t(region.getInt("maxCells",65536));
+            CaveAgentProfile profile;
+            const Json& agent=caveNavConfig["agent"];
+            if(agent.isObject()){
+                profile.radiusCm=int32_t(agent.getInt("radiusCm",30));
+                profile.heightCm=int32_t(agent.getInt("heightCm",180));
+                profile.maxStepCm=int32_t(agent.getInt("maxStepCm",45));
+                profile.sampleCm=int32_t(agent.getInt("sampleCm",25));
+                const auto traversal=agent.getStr("traversal","ground");
+                if(traversal=="fly")profile.traversal=CaveTraversal::Flying;
+                else if(traversal=="swim")profile.traversal=CaveTraversal::Swimming;
+                else if(traversal=="climb")profile.traversal=CaveTraversal::Climbing;
+                else if(traversal!="ground")
+                    throw JsonError("actor.cavernsNavigation.agent.traversal");
+            }
+            caveRegionCache_=std::make_shared<CaveNavigationRegionCache>(
+                caveNavigation_,grid,profile,
+                uint32_t(region.getInt("clusterCells",8)),
+                size_t(region.getInt("maxFlows",8)));
+            caveRouteResolver_=[cache=caveRegionCache_](
+                const std::string& name,const CavePathQuery& q,
+                std::shared_ptr<const CaveNavigationDataProvider> data){
+                CavePathBackend kind=CavePathBackend::AStar;
+                if(name=="hpa")kind=CavePathBackend::HPAStar;
+                else if(name=="flow")kind=CavePathBackend::FlowField;
+                else if(name=="hybrid")kind=CavePathBackend::Hybrid;
+                else if(name!="astar")return CavePathResult{};
+                auto result=cache->find(q,kind);
+                if(result.reached)return result;
+                // Outside cached region or blocked under its tighter
+                // profile: the shared standard 3D solver is still available.
+                return solveCaveGraph(q,std::move(data),kind);
+            };
+        }
     }
     auto buildingLoot=buildMapBuildings(map);
     const auto& spawns=map["spawns"];
