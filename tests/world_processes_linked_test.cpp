@@ -1,6 +1,7 @@
 // Linked map-authoring -> authoritative ECS references across all 3 systems.
 #include "aiverselib/world/WorldProcessesMapHydration.h"
 #include "aiverselib/world/EvolveSimulationLod.h"
+#include "aiverselib/world/EvolveRegionWorkBudget.h"
 #include <array>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
@@ -95,8 +96,55 @@ static void checkRegionLod(){
     AIVERSE_TEST_CHECK(plan.diagnostics.executed+plan.diagnostics.deferred==2);
     AIVERSE_TEST_CHECK(ecs.get<evolve::Region>(area).sampledTick==UINT32_MAX);
 }
+static void checkRegionBudget(){
+    World ecs;
+    std::vector<Entity> entities;
+    for(int i=0;i<5;++i)entities.push_back(ecs.create());
+    std::sort(entities.begin(),entities.end(),[](Entity a,Entity b){
+        return a.packed()<b.packed();
+    });
+    evolve::RegionWorkPlan plan;
+    plan.diagnostics.tick=1;
+    for(auto e:entities)plan.regions.push_back({e,{}});
+    evolve::RegionBudgetState state;
+    auto first=evolve::prepareRegionBudget(plan,state,2);
+    AIVERSE_TEST_CHECK(first&&first->selected.size()==2&&first->remaining==3);
+    AIVERSE_TEST_CHECK(first->selected[0].region==entities[0]);
+    AIVERSE_TEST_CHECK(first->selected[1].region==entities[1]);
+    AIVERSE_TEST_CHECK(!state.lastTick&&state.pending.empty());
+    state=first->next;
+    AIVERSE_TEST_CHECK(!evolve::prepareRegionBudget(plan,state,2));
+    plan.diagnostics.tick=2;
+    for(auto& item:plan.regions)item.lod.due=false;
+    const auto snapshot=state;
+    auto second=evolve::prepareRegionBudget(plan,state,2);
+    AIVERSE_TEST_CHECK(second&&second->selected.size()==2&&second->remaining==1);
+    AIVERSE_TEST_CHECK(second->selected[0].region==entities[2]);
+    AIVERSE_TEST_CHECK(second->selected[1].region==entities[3]);
+    AIVERSE_TEST_CHECK(second->selected[0].firstDueTick==1);
+    auto replay=evolve::prepareRegionBudget(plan,snapshot,2);
+    AIVERSE_TEST_CHECK(replay&&replay->selected[0].region==second->selected[0].region);
+    AIVERSE_TEST_CHECK(replay->next.lastServedId==second->next.lastServedId);
+    state=second->next;
+    plan.diagnostics.tick=3;
+    for(auto& item:plan.regions)item.lod.due=true;
+    auto paused=evolve::prepareRegionBudget(plan,state,0);
+    AIVERSE_TEST_CHECK(paused&&paused->selected.empty()&&paused->remaining==5&&paused->queued==4);
+    state=paused->next;
+    plan.diagnostics.tick=4;
+    // Region removed while pending; stable identity cursor must not shift.
+    plan.regions.erase(plan.regions.begin()+1);
+    auto wrapped=evolve::prepareRegionBudget(plan,state,2);
+    AIVERSE_TEST_CHECK(wrapped&&wrapped->removed==1&&wrapped->remaining==2);
+    AIVERSE_TEST_CHECK(wrapped->selected[0].region==entities[4]);
+    AIVERSE_TEST_CHECK(wrapped->selected[0].firstDueTick==1);
+    AIVERSE_TEST_CHECK(wrapped->selected[1].region==entities[0]);
+    plan.regions.push_back(plan.regions.back());
+    AIVERSE_TEST_CHECK(!evolve::prepareRegionBudget(plan,state,2));
+}
 int main(){
     checkRegionLod();
+    checkRegionBudget();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
