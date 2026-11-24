@@ -420,7 +420,9 @@ struct Demo {
             if(progress.pinsReady&&exterior->covers(host->runtime(),sim->world(),anchor.bodyId,keys)){
                 updateMovingFrame();
                 restoringCoverage=false;
-                accumulator+=fixedStep?1./tickRate:std::min(dt,.1);
+                // Smoke mode never accumulates a backlog while native admission is held.
+                if(fixedStep)accumulator=1./tickRate;
+                else accumulator+=std::min(dt,.1);
                 while(accumulator>=1./tickRate&&!arrived){
                     const auto tick=host->stepNativeTick({regionId});
                     if(tick==CavePlanetCpuNativeHost::TickResult::Recovery)throw std::runtime_error("native tick recovery");
