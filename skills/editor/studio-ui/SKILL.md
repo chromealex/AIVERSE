@@ -143,6 +143,9 @@ Use studioCollectProjectAssetReferences to extend the same native material/rules
 ## Direct asset dependencies (S6g.2)
 The same native graph reads glTF buffers[].uri and images[].uri as local relative resource edges; embedded data, remote URLs and unsupported URIs are not resolved. Project scan is bounded and never opens the referenced target. Existing studio.assetReferences accepts an optional indexed content-relative path and returns matching incoming/outgoing edges, including folder descendants. Assets Find References shows direct dependencies separately from heuristic text mentions. Known glTF resource edges are read-only: move preview and the shared history/delete fence conservatively refuse moving either endpoint, even if a coordinated folder move could preserve the URI. No automatic repair, GLB dependency parser or completeness guarantee.
 
+## Multi-hop dependency inspection (S6g.3)
+Optional studio.assetReferences {path,depth:1..16} returns incoming/outgoing edge rows with shortest hop and cycle-closing edge marks; omitted depth retains direct/full graph contract. Assets supports folder queries, direction tabs, 50-row display pages and indexed endpoint navigation. Native transfer owner checks actual final paths (including keep-both) and individual undo/redo: known glTF URI resolution must remain unchanged and no previously unresolved destination path may be adopted. Preview proves only a single conflict-free relocation; batch history/deletion stay conservative. No URI rewriting or complete dependency analysis.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

@@ -66,3 +66,6 @@ Linked `studio_asset_move_preview` includes conservative read-only exact path ca
 
 ### S6g.2 — glTF dependency edges
 Existing linked move preview includes read-only external glTF buffer/image resource edges; either endpoint may block the move. Native Studio graph query accepts an optional indexed asset path; no new standalone MCP tool in this stage. Embedded/remote/unsupported URIs, GLB, scripts and binary dependencies are outside coverage.
+
+### S6g.3 — bounded dependency traversal and relocation validation
+Native studio.assetReferences optional path/depth returns direct or multi-hop edges (incoming/outgoing, depth and cycle-closing mark); no standalone linked query yet. Existing linked move preview proves only a single conflict-free relocation with unchanged supported glTF URI resolution. Native transfer owner checks actual destinations and replay; no automatic rewrite. Coordinated history and deletion retain stricter fences.

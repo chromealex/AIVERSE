@@ -96,6 +96,42 @@ int main(){
             db.rebuild(false);
         }
 
+        // S6g.3: shortest paths, shared descendants, cycle-closing edge and depth cap.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            const std::vector<StudioAssetReference> edges={
+                {"content/A","glTF resource","/0","content/B","",false},
+                {"content/A","glTF resource","/1","content/C","",false},
+                {"content/B","glTF resource","/0","content/D","",false},
+                {"content/C","glTF resource","/0","content/D","",false},
+                {"content/D","glTF resource","/0","content/A","",false},
+                {"maps/map.json","map","/0","content/B","",false}};
+            const auto visits=studioTraverseAssetDependencies(edges,"A",false,false,16);
+            AIVERSE_TEST_CHECK(visits.size()==5);
+            size_t cycles=0;for(const auto& v:visits){cycles+=v.cycle?1:0;if(v.edge==4)AIVERSE_TEST_CHECK(v.depth==3);}
+            AIVERSE_TEST_CHECK(cycles==1);
+            AIVERSE_TEST_CHECK(studioTraverseAssetDependencies(edges,"A",false,false,1).size()==2);
+            const auto incoming=studioTraverseAssetDependencies(edges,"D",false,true,16);
+            AIVERSE_TEST_CHECK(incoming.size()==6);
+            const StudioAssetReference ref{"content/Pack/model.gltf","glTF resource","/images/0/uri","content/Pack/tex.png","",false,"tex.png"};
+            AIVERSE_TEST_CHECK(studioGltfRelocationSafe(ref,{{"content/Pack","content/Renamed",true}}));
+            AIVERSE_TEST_CHECK(studioGltfRelocationSafe(ref,{{"content/Pack/model.gltf","content/Pack/renamed.gltf",false}}));
+            AIVERSE_TEST_CHECK(!studioGltfRelocationSafe(ref,{{"content/Pack/tex.png","content/Pack/renamed.png",false}}));
+            AIVERSE_TEST_CHECK(!studioGltfRelocationSafe(ref,{{"content/Pack/model.gltf","content/Else/model.gltf",false}}));
+            fs::create_directories(project/"content"/"Pack");
+            write(project/"content"/"Pack"/"model.gltf",R"({"images":[{"uri":"tex.png"}]})");
+            write(project/"content"/"Pack"/"tex.png","texture");db.rebuild();
+            auto rename=StudioTransferPlan::rename(project,"Pack","Renamed");
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            AIVERSE_TEST_CHECK(studioMoveReferenceImpact(rename.describe(),studioCollectGltfReferences(project,{})).size()==0);
+            (void)rename.apply(rename.token(),{},{},&recorded);
+            AIVERSE_TEST_CHECK(recorded&&fs::exists(project/"content"/"Renamed"/"tex.png"));
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(fs::exists(project/"content"/"Pack"/"model.gltf"));
+            fs::remove_all(project/"content"/"Pack");fs::remove(studioMetaPath(project/"content"/"Pack"));db.rebuild(false);
+        }
+
         // Preview name collision, skip by default and leave content unchanged.
         auto skip=StudioTransferPlan::external(project,"Models",{external/"Ship.glb"});
         AIVERSE_TEST_CHECK(skip.describe()["items"][0].getStr("conflict")=="name");

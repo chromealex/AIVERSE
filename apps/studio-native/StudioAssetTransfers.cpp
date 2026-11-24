@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioAssetTransfers.h"
 #include "apps/studio-native/StudioContentDirectory.h"
+#include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/editor/core/ProjectDocumentJournal.h"
 #include "engine/pack/Sha256.h"
@@ -450,6 +451,11 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (a.rfind(b+"/",0)==0 || b.rfind(a+"/",0)==0)
                     throw std::runtime_error("Move selection contains a directory and its descendant");
             }
+        std::vector<StudioReferenceRelocation> referenceMoves;
+        for(const auto& [from,to]:planned)
+            referenceMoves.push_back({"content/"+from.lexically_relative(root).generic_string(),
+                "content/"+to.lexically_relative(root).generic_string(),fs::is_directory(fs::symlink_status(from))});
+        studioCheckGltfRelocations(project_,referenceMoves);
         // Root sidecars and material documents retain exact bytes; asset payloads
         // use a streaming digest, including complete directory trees.
         std::optional<editor::ProjectHistory::MovePlan> recorded;
@@ -801,6 +807,10 @@ void studioReplayAssetMove(const fs::path& project,
         }
     }
     if(validateReferences)validateReferences();
+    std::vector<StudioReferenceRelocation> referenceMoves;
+    for(size_t i=0;i<operations.size();i+=2)
+        referenceMoves.push_back({"content/"+operations[i].from,"content/"+operations[i].to,plan.files[i].directory});
+    studioCheckGltfRelocations(project,referenceMoves);
     checkMaterial();
     if(staged){
         for(size_t i=0;i<operations.size();++i){

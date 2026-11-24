@@ -1,6 +1,6 @@
 import { copyText } from '../clipboard';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
   FileAudio, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
@@ -137,8 +137,14 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [unusedOnly,setUnusedOnly]=useState(false);
   const [unused,setUnused]=useState<Set<string>|null>(null);
   const [mentions,setMentions]=useState<{path:string;project:string;rows:Array<{file:string;line:number;text:string}>;edges:StudioAssetReference[];graphError:string}|null>(null);
+  const [referencePage,setReferencePage]=useState(0);
+  const [referenceDirection,setReferenceDirection]=useState<'incoming'|'outgoing'>('incoming');
+  const referenceRequest=useRef(0);
   const findReferences=async(path:string)=>{
-    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetReferences',{path})]);
+    const request=++referenceRequest.current;
+    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetReferences',{path,depth:16})]);
+    if(request!==referenceRequest.current)return;
+    setReferencePage(0);
     if(usage.status==='rejected')setError(String(usage.reason));
     setMentions({path,project:projectPath,rows:usage.status==='fulfilled'?usage.value.mentions??[]:[],
       edges:graph.status==='fulfilled'?graph.value:[],graphError:graph.status==='rejected'?String(graph.reason):''});
@@ -199,7 +205,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);++referenceRequest.current;},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -374,8 +380,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {id:'delete',label:'Move to Trash…',disabled:!native||!projectPath||busy,onSelect:()=>void reviewDelete(target.path)},
     {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
-    ...(target.directory?[]:[{id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
-      onSelect:()=>void findReferences(target.path)} as StudioMenuItem]),
+    {id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
+      onSelect:()=>void findReferences(target.path)},
     {id:'folder',label:'New Folder Here',icon:<FolderPlus size={13}/>,separator:true,disabled:!native||!projectPath||busy,
       onSelect:()=>{if(target.directory)goTo(target.path);setAddingFolder(true)}},
     {id:'import',label:'Import Into Here…',icon:<Upload size={13}/>,disabled:!native||!projectPath||busy,
@@ -542,14 +548,30 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     </footer>
     {mentions&&mentions.project===projectPath&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
       <header><Link2 size={13}/><b>content/{mentions.path}</b><span>Asset dependencies</span>
-        <button type="button" aria-label="Close" onClick={()=>setMentions(null)}><X size={13}/></button></header>
+        <button type="button" aria-label="Close" onClick={()=>{++referenceRequest.current;setMentions(null);}}><X size={13}/></button></header>
       <div className="studio-assets-dependency-body">
         {mentions.graphError?<p role="alert">Dependency graph unavailable: {mentions.graphError}</p>:<>
-          <h4>Used by ({mentions.edges.filter(r=>r.path==='content/'+mentions.path).length})</h4>
-          <ul>{mentions.edges.filter(r=>r.path==='content/'+mentions.path).map((r,i)=><li key={i}><code>{r.document}</code><span title={r.field}>{r.owner} · {r.field}</span></li>)}</ul>
-          <h4>Depends on ({mentions.edges.filter(r=>r.document==='content/'+mentions.path).length})</h4>
-          <ul>{mentions.edges.filter(r=>r.document==='content/'+mentions.path).map((r,i)=><li key={i}><code>{r.path}</code><span title={r.field}>{r.field}{r.guid?'':' · No indexed GUID'}</span></li>)}</ul>
-          <p>Known direct edges only; dynamic and binary dependencies are not resolved.</p>
+          <div className="studio-assets-dependency-tabs">
+            {(['incoming','outgoing'] as const).map(direction=><button key={direction} type="button"
+              aria-pressed={referenceDirection===direction} onClick={()=>{setReferenceDirection(direction);setReferencePage(0);}}>
+              {direction==='incoming'?'Used by':'Depends on'} ({mentions.edges.filter(r=>r.direction===direction).length})
+            </button>)}
+          </div>
+          <ul>{mentions.edges.filter(r=>r.direction===referenceDirection).slice(referencePage*50,referencePage*50+50).map((r,i)=>{
+            const endpoint=referenceDirection==='incoming'?r.document:r.path;
+            const path=endpoint.startsWith('content/')?endpoint.slice(8):'';
+            const canNavigate=!!path&&catalog.files.some(asset=>asset.path===path);
+            return <li key={i}>
+              {canNavigate?<button type="button" onClick={()=>void findReferences(path)} title={'Inspect '+endpoint}>{endpoint}</button>:<code>{endpoint}</code>}
+              <span title={r.document+' · '+r.field}>Hop {r.depth??1} · {r.field}{r.cycle?' · Cycle closing edge':''}{referenceDirection==='outgoing'&&!r.guid?' · No indexed GUID':''}</span>
+            </li>;
+          })}</ul>
+          <div className="studio-assets-dependency-tabs">
+            <button type="button" disabled={referencePage===0} onClick={()=>setReferencePage(p=>p-1)}>Previous</button>
+            <span>Page {referencePage+1}</span>
+            <button type="button" disabled={(referencePage+1)*50>=mentions.edges.filter(r=>r.direction===referenceDirection).length} onClick={()=>setReferencePage(p=>p+1)}>Next</button>
+          </div>
+          <p>Known edges up to 16 hops. Cycle labels mark closing edges within the explored graph. Dynamic and binary dependencies are not resolved.</p>
         </>}
         <h4>Text mentions ({mentions.rows.length})</h4>
         <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>

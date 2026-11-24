@@ -74,6 +74,7 @@ export interface StudioAssetTransferResult {
 export interface StudioAssetReference {
   document: string; owner: string; field: string; path: string;
   guid: string; writable: boolean;
+  direction?: 'incoming' | 'outgoing'; depth?: number; cycle?: boolean;
 }
 export interface StudioAssetDetail extends StudioAsset {
   importer: string; guid: string; directory: boolean; settings: Record<string,unknown>;
@@ -368,7 +369,7 @@ export interface StudioParams {
   'studio.openProject': Record<string, never>;
   'studio.assets': Record<string, never>;
   'studio.assetByGuid': { guid: string };
-  'studio.assetReferences': { path?: string };
+  'studio.assetReferences': { path?: string; depth?: number };
   'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
   'studio.assetFolderCreate': { parent: string; name: string };
   'studio.assetDelete': { path:string; guid:string; expectedProject:string; expectedVersion:string; confirmed:boolean };

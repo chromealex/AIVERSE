@@ -23,6 +23,7 @@ struct StudioAssetReference {
     std::string path;     // runtime-compatible project-relative path
     std::string guid;     // empty for unresolved/legacy paths
     bool writable = false; // currently only materials.json slots support repair
+    std::string uri{}; // original glTF URI, native relocation validation only
 };
 
 inline constexpr const char* kStudioTextureFields[] = {
@@ -112,6 +113,31 @@ inline bool studioReferenceMatchesPath(const std::string& value,const std::strin
 inline bool studioIsGltfResourceReference(const StudioAssetReference& ref){
     return ref.document.starts_with("content/")&&ref.owner=="glTF resource";
 }
+struct StudioReferenceRelocation {std::string from,to;bool directory=false;};
+inline std::string studioGltfResourcePath(const std::string& source,const std::string& uri);
+inline std::string studioRelocatedReferencePath(const std::string& path,
+    const std::vector<StudioReferenceRelocation>& moves){
+    for(const auto& move:moves)
+        if(studioReferenceMatchesPath(path,move.from,move.directory))
+            return move.to+path.substr(move.from.size());
+    return path;
+}
+// Only allow unchanged local URI resolution. Refuse adopting an unresolved
+// destination reference, and do not guess about encoded or parent traversal
+// when the owner changes directories.
+inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
+    const std::vector<StudioReferenceRelocation>& moves){
+    const auto owner=studioRelocatedReferencePath(ref.document,moves);
+    const auto target=studioRelocatedReferencePath(ref.path,moves);
+    for(const auto& move:moves)
+        if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
+            return false;
+    if(owner==ref.document&&target==ref.path)return true;
+    if(ref.uri.empty())return false;
+    if(std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
+       (ref.uri.find("..")!=std::string::npos||ref.uri.find('%')!=std::string::npos))return false;
+    return studioGltfResourcePath(owner,ref.uri)==target;
+}
 // Resolve the set of known dependencies affected by an internal move.
 // This is a preview, not a rename executor. Exact paths and folder descendants
 // are matched; an unaffected resource in another folder must not match.
@@ -128,7 +154,13 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
         for (const auto& ref:references) {
             const bool targetMoves=studioReferenceMatchesPath(ref.path,source,folder);
             const bool ownerMoves=studioIsGltfResourceReference(ref)&&studioReferenceMatchesPath(ref.document,source,folder);
-            if(!targetMoves&&!ownerMoves)continue;
+            const bool gltf=studioIsGltfResourceReference(ref);
+            const bool destinationReference=gltf&&studioReferenceMatchesPath(ref.path,destination,folder);
+            if(!targetMoves&&!ownerMoves&&!destinationReference)continue;
+            // Preview only proves a single non-conflicting default relocation;
+            // the native transfer owner checks the actual complete plan again.
+            if(gltf&&transfer["items"].size()==1&&item.getStr("conflict").empty()&&
+               studioGltfRelocationSafe(ref,{{source,destination,folder}}))continue;
             Json row=Json::object();
             row.set("id",item["id"]);
             row.set("document",Json::string(ref.document));
@@ -277,7 +309,7 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
                 if(path.empty())continue;
                 const auto found=guids.find(path);
                 if(refs.size()>=32768)throw std::runtime_error("glTF dependency result budget exceeded");
-                refs.push_back({source,"glTF resource",field,path,found==guids.end()?std::string{}:found->second,false});
+                refs.push_back({source,"glTF resource",field,path,found==guids.end()?std::string{}:found->second,false,item.getStr("uri")});
             }
         }
     }
@@ -295,9 +327,16 @@ inline void studioCheckGltfAssetPaths(const std::filesystem::path& project,
                studioReferenceMatchesPath(ref.document,"content/"+path,directory))
                 throw std::runtime_error("Asset operation blocked by glTF resource: "+ref.document+" "+ref.field);
 }
+inline void studioCheckGltfRelocations(const std::filesystem::path& project,
+    const std::vector<StudioReferenceRelocation>& moves){
+    if(moves.empty())return;
+    for(const auto& ref:studioCollectGltfReferences(project,{}))
+        if(!studioGltfRelocationSafe(ref,moves))
+            throw std::runtime_error("Asset move would change glTF URI resolution: "+ref.document+" "+ref.field);
+}
 inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     const Json& currentMap,const Json& rules,const Json& manifest,
-    const std::vector<std::pair<std::string,bool>>& paths){
+    const std::vector<std::pair<std::string,bool>>& paths,bool checkGltf=true){
     auto check=[&](const Json& doc,const std::string& label){
         for(const auto& [path,directory]:paths)
             if(studioDocumentNamesAsset(doc,path,directory))
@@ -306,7 +345,7 @@ inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     if(paths.empty())return;
     check(currentMap,"current map");check(rules,"rules");
     studioVisitSavedMaps(project,manifest,check);
-    studioCheckGltfAssetPaths(project,paths);
+    if(checkGltf)studioCheckGltfAssetPaths(project,paths);
 }
 inline std::string studioReferencePointerSegment(const std::string& key){
     std::string result;
@@ -365,6 +404,58 @@ inline std::vector<StudioAssetReference> studioAssetDependencyEdges(
            studioReferenceMatchesPath(ref.document,target,directory))out.push_back(ref);
     return out;
 }
+// Bounded breadth-first traversal yields shortest edge distances. Only
+// asset documents are expanded; map/material/rules owners are terminal nodes.
+// Iterative DFS marks directed cycle-closing edges (not every edge in an SCC).
+struct StudioDependencyVisit {size_t edge=0,depth=0;bool cycle=false;};
+inline std::vector<StudioDependencyVisit> studioTraverseAssetDependencies(
+    const std::vector<StudioAssetReference>& refs,const std::string& path,bool directory,
+    bool reverse,size_t maxDepth){
+    if(maxDepth<1||maxDepth>16)throw std::runtime_error("Invalid dependency depth");
+    using Index=std::map<std::string,std::vector<size_t>>;
+    Index adjacency;
+    const auto root="content/"+path;
+    const auto source=[&](size_t i)->const std::string&{return reverse?refs[i].path:refs[i].document;};
+    const auto target=[&](size_t i)->const std::string&{return reverse?refs[i].document:refs[i].path;};
+    for(size_t i=0;i<refs.size();++i)
+        if(source(i).starts_with("content/"))adjacency[source(i)].push_back(i);
+    std::map<std::string,size_t> distance;
+    std::vector<std::string> queue;
+    const auto seed=[&](const std::string& node){if(distance.emplace(node,0).second)queue.push_back(node);};
+    if(directory){for(const auto& [node,edges]:adjacency){(void)edges;if(studioReferenceMatchesPath(node,root,true))seed(node);}}
+    else seed(root);
+    std::vector<StudioDependencyVisit> result;
+    std::map<size_t,size_t> included;
+    for(size_t q=0;q<queue.size();++q){
+        const auto node=queue[q];const auto d=distance.at(node);
+        if(d>=maxDepth)continue;
+        const auto it=adjacency.find(node);if(it==adjacency.end())continue;
+        for(size_t e:it->second){
+            if(!included.emplace(e,result.size()).second)continue;
+            result.push_back({e,d+1,false});
+            if(target(e).starts_with("content/")&&distance.emplace(target(e),d+1).second)queue.push_back(target(e));
+        }
+    }
+    std::map<std::string,int> color;
+    struct Frame{std::string node;size_t next=0;};
+    for(const auto& node:queue){
+        if(color[node])continue;
+        std::vector<Frame> stack{{node,0}};color[node]=1;
+        while(!stack.empty()){
+            auto& frame=stack.back();
+            const auto it=adjacency.find(frame.node);
+            if(it==adjacency.end()||frame.next>=it->second.size()){
+                color[frame.node]=2;stack.pop_back();continue;
+            }
+            const auto e=it->second[frame.next++];
+            const auto mark=included.find(e);if(mark==included.end()||!target(e).starts_with("content/"))continue;
+            const auto& next=target(e);
+            if(color[next]==1)result[mark->second].cycle=true;
+            else if(!color[next]){color[next]=1;stack.push_back({next,0});}
+        }
+    }
+    return result;
+}
 inline Json studioReferenceGraphJson(const std::vector<StudioAssetReference>& refs) {
     Json result = Json::array();
     for (const auto& ref : refs) {
@@ -378,6 +469,22 @@ inline Json studioReferenceGraphJson(const std::vector<StudioAssetReference>& re
         result.push(std::move(row));
     }
     return result;
+}
+
+inline Json studioDependencyTraversalJson(const std::vector<StudioAssetReference>& refs,
+    const std::string& path,bool directory,size_t depth){
+    Json out=Json::array();
+    for(bool reverse:{true,false}){
+        for(const auto& visit:studioTraverseAssetDependencies(refs,path,directory,reverse,depth)){
+            auto rows=studioReferenceGraphJson({refs[visit.edge]});
+            auto row=rows[0];
+            row.set("direction",Json::string(reverse?"incoming":"outgoing"));
+            row.set("depth",Json::number(static_cast<int64_t>(visit.depth)));
+            row.set("cycle",Json::fromBool(visit.cycle));
+            out.push(std::move(row));
+        }
+    }
+    return out;
 }
 
 } // namespace aiverse::studio

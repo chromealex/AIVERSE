@@ -1614,7 +1614,7 @@ Json StudioSession::dispatch(const Json& request) {
                                     (f.directory&&(ref.path.starts_with("content/"+f.from+"/")||ref.path.starts_with("content/"+f.to+"/")))))
                                     throw std::runtime_error("Asset move history blocked by rules reference: "+ref.owner);
                         }
-                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
+                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
                     };
                     studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check);
                 }else{
@@ -2525,7 +2525,16 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(!params["path"].isString())throw std::runtime_error("Invalid dependency asset path");
                 const auto selected=catalog.byPath(params.getStr("path"));
                 if(!selected)throw std::runtime_error("Dependency asset is not indexed");
+                if(params.has("depth")){
+                    const auto depth=params.getInt("depth",0);
+                    if(!params["depth"].isNumber()||depth<1||depth>16)
+                        throw std::runtime_error("Dependency depth must be 1–16");
+                    reply.set("result",studioDependencyTraversalJson(refs,selected->path,selected->directory,size_t(depth)));
+                    return reply;
+                }
                 refs=studioAssetDependencyEdges(refs,selected->path,selected->directory);
+            }else if(params.has("depth")){
+                throw std::runtime_error("Dependency traversal requires an asset path");
             }
             reply.set("result",studioReferenceGraphJson(refs));
         } else if (method == "studio.assets") {
@@ -2687,7 +2696,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     for(const auto& d:decisions)if(d.id==id)action=d.action;
                     if(action!="skip")paths.emplace_back(item.getStr("from"),item.getBool("directory"));
                 }
-                studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
+                studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
             }
             // Preload material document before touching assets, so malformed
             // JSON cannot trigger a partially completed internal move.
