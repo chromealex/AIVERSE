@@ -51,3 +51,5 @@ FixedMatrix.h: row-major 3x3/4x4, column-vector convention, bounded multiply, tr
 FixedCurves.h: cubic Hermite and derivative, uniform Catmull–Rom, uniform cubic B-spline, sampled arc length table and distance-to-parameter lookup. Bounded Q16 coordinates, 1–4096 samples; approximate constant speed, not exact arc length. No builds/tests.
 
 FixedNumerical.h: bounded trapezoid quadrature, bracketed bisection (continuous function precondition, explicit convergence), scalar Euler/midpoint/RK4 ODE step and constant-step position Verlet. Callbacks return optional<Fixed>; deterministic Q16, quantization limits apply. No build/tests.
+
+FixedLinear.h: bounded Gauss-Jordan with partial pivoting, multiple RHS, general inverse, packed pivoted LU and determinant (nullopt on singular/near-singular or range rejection). Dimensions 1–16, Q16 rounding; no accuracy guarantee for ill-conditioned matrices. No tests.
