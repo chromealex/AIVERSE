@@ -235,3 +235,7 @@ The native Studio bridge now calls the registered Caverns owner's get-only opera
 ## Stage 57 — guarded graph save port
 
 Port Stage 53/54 native transaction, Shader/SpectraFX owners, generic graph facade and native/Studio clients. Preserve Building and Caverns typed bridge methods and existing test changes. Existing graph assets require expected original, missing expected is create-only. Draft publish requires expectedDraft and expected published target where applicable. No format changes; cooperating-writer lock only. Fixtures authored, tests NOT RUN. Full owner merge and other client audit pending.
+
+## Stage 60 — complete Caverns owner source merge
+
+Pinned Caverns integration a5ca5ae18f39cd5cc0e9908d5bd832b501c18fe4 merged with Building/Graph integration. Full-tree verification retained every non-overlapping path; 15 divergent shared paths reconciled by three-way line merge and explicit resolutions. Existing Caverns native generation, editor scene preview and planetary authoring now share the graph scope/inspection with guarded shader and FX persistence. No new evaluator or duplicate owner. Native and web execution NOT RUN; do not claim readiness.
