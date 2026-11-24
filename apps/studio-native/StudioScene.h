@@ -63,7 +63,9 @@ public:
         result.set("terrainCutSupported",Json::fromBool(terrainCutStats_.handled));
         result.set("sparseTerrainResident",Json::string(std::to_string(sparseTerrainPreview_.residentCount())));
         result.set("sparseTerrainAuthored",Json::string(std::to_string(sparseTerrainPreview_.authoredCount())));
-        result.set("sparseTerrainDiagnostic",Json::string(sparseTerrainError_));
+        result.set("sparseTerrainDiagnostic",Json::string(sparseTerrainError_.empty()?sparseTerrainPreview_.surfaceGroupDiagnostic():sparseTerrainError_));
+        result.set("sparseCertifiedEdges",Json::string(std::to_string(sparseTerrainPreview_.certifiedSurfaceEdges())));
+        result.set("sparsePlannedOpenings",Json::string(std::to_string(sparseTerrainPreview_.plannedSurfaceOpenings())));
         return result;
     }
     const std::string& lightingStatus() const { return lightingStatus_; }
