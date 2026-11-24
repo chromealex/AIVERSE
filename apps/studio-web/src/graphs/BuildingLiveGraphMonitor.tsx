@@ -59,6 +59,13 @@ export function BuildingLiveGraphMonitor(){
  }):[];
  const timings=Array.isArray(snapshot?.callbackTimings)?snapshot.callbackTimings.filter(object).filter(t=>mask(t.domain)&&uint(t.calls)&&uint(t.lastNs)&&uint(t.totalNs)&&uint(t.maxNs)):[];
  const millis=(v:unknown)=>(Number(v)/1e6).toFixed(3)+' ms';
+ const maximum=Math.max(0,...timings.map(t=>Number(t.lastNs)));
+ const heat=Object.fromEntries(timings.flatMap(t=>{
+  const owner=buildingGraphOwners.find((_,i)=>(1<<i)===t.domain);
+  return owner&&maximum>0?[[owner.id,Number(t.lastNs)/maximum]]:[];
+ }));
+ const slowest=maximum>0?timings.find(t=>Number(t.lastNs)===maximum):undefined;
+ const slowestOwner=slowest?buildingGraphOwners.find((_,i)=>(1<<i)===slowest.domain):undefined;
  const toggleOverlay=async()=>{
   try{const r=await invoke('studio.buildingGraphOverlay',{sceneId:overlay?'':active});setOverlay(r.active);}
   catch(e){setError(String(e))}
@@ -74,15 +81,18 @@ export function BuildingLiveGraphMonitor(){
   {error&&<StudioAlert tone="warning">{error}</StudioAlert>}
   {snapshot&&<>
    <small>Scene {active} · physical revision {String(snapshot.physicalRevision)} · attempts {String(snapshot.attempts)}</small>
-   <div style={{height:320,display:'flex',flexDirection:'column',minWidth:0}}><GraphCanvas view={view} label="Live graph owner ACK states" selected={selected} readOnly onSelect={setSelected} onMove={()=>{}}/></div>
+   <div style={{height:320,display:'flex',flexDirection:'column',minWidth:0}}><GraphCanvas view={view} label="Live graph owner ACK states" heat={heat} selected={selected} readOnly onSelect={setSelected} onMove={()=>{}}/></div>
    {selectedOwner&&<small>{selectedOwner.detail}</small>}
+   {slowestOwner&&<small>Largest last measured callback: {slowestOwner.label} · {millis(maximum)}. Node intensity is relative to this sample, not a performance threshold.</small>}
    {timings.length>0&&<div className="au-stack"><strong>Measured invalidation callback duration</strong>{timings.map(t=><small key={String(t.domain)}>{buildingGraphOwners.find((_,i)=>(1<<i)===t.domain)?.label??String(t.domain)} · calls {String(t.calls)} · last {millis(t.lastNs)} · total {millis(t.totalNs)} · max {millis(t.maxNs)}</small>)}</div>}
    {change&&<div className="au-stack"><strong>Last committed change · revision {String(change.revision)}</strong><small>World bounds: {String(change.min)} → {String(change.max)}</small><small>Kind {kinds[Number(change.kind)]??String(change.kind)} · feature {String(change.featureIndex)} · open {String(change.open)}</small><StudioButton size="sm" onClick={()=>void toggleOverlay()}>{overlay?'Hide bounds in Scene':'Show bounds in Scene'}</StudioButton><small>World-space AABB in authoring Scene; runtime and authoring coordinates must correspond.</small></div>}
    <div className="au-row">
     <StudioSelect aria-label="History domain filter" value={domainFilter} onChange={e=>setDomainFilter(e.target.value)}><option value="all">All domains</option>{buildingGraphOwners.map((o,i)=><option key={o.id} value={String(1<<i)}>{o.label}</option>)}</StudioSelect>
     <StudioSelect aria-label="History change filter" value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">All changes</option>{kinds.map((k,i)=><option key={k} value={String(i)}>{k}</option>)}</StudioSelect>
    </div>
-   <details><summary>Published history ({history.length})</summary>{history.map((h,i)=><div key={i}><small>Revision {String(h.physicalRevision)} · pending {String(h.pendingDomains)} · ACK {String(h.acknowledgedDomains)} · attempts {String(h.attempts)}</small></div>)}</details>
+   <details><summary>Published history ({history.length})</summary>{history.map((h,i)=><div key={i}><small>Revision {String(h.physicalRevision)} · pending {String(h.pendingDomains)} · ACK {String(h.acknowledgedDomains)} · attempts {String(h.attempts)}</small>
+    {Array.isArray(h.callbackTimings)&&h.callbackTimings.filter(object).filter(t=>uint(t.lastNs)&&(domainFilter==='all'||String(t.domain)===domainFilter)).map(t=><div key={String(t.domain)}><small>{buildingGraphOwners.find((_,i)=>(1<<i)===t.domain)?.label??String(t.domain)}: {millis(t.lastNs)}</small></div>)}
+   </div>)}</details>
    {object(snapshot.ownerTelemetry)&&<div className="au-stack">
     <strong>Native algorithm work telemetry</strong>
     {Object.entries(snapshot.ownerTelemetry).slice(0,17).filter(([,v])=>object(v)).map(([name,value])=><details key={name}>
