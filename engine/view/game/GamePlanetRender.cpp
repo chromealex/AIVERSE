@@ -96,6 +96,55 @@ void PlanetRenderer::shutdown(gfx::Device& dev) {
 uint64_t PlanetRenderer::caveSurfaceCutEpoch(int body)const noexcept {
     return body>=0&&size_t(body)<bodies_.size()?bodies_[size_t(body)].caveCutEpoch:0;
 }
+std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> PlanetRenderer::selectCaveSurfaceSlots(
+        const terraweave::caverns::CavePlanetFrame& frame,terraweave::caverns::SurfaceRectCm footprint,size_t maxSlots)const{
+    namespace cave=terraweave::caverns;
+    const int body=frame.body();const int64_t cap=frame.anchor().halfExtentCm;
+    if(body<0||size_t(body)>=bodies_.size()||!bodies_[size_t(body)].surf||
+       world_.bodies[size_t(body)].id!=frame.anchor().bodyId||!maxSlots||maxSlots>64||
+       footprint.minX>=footprint.maxX||footprint.minZ>=footprint.maxZ||
+       footprint.minX< -cap||footprint.minZ< -cap||footprint.maxX>cap||footprint.maxZ>cap)
+        throw std::invalid_argument("Planet cave leaf selection bounds");
+    const auto& b=bodies_[size_t(body)];const auto& s=*b.surf;const int G=s.gridSize();
+    std::vector<cave::CavePlanetSurfaceSlotKey> out;
+    size_t samples=0;
+    const auto f=[](float x){
+        if(!std::isfinite(x)||std::abs(x)>100000.f)throw std::invalid_argument("Planet cave selection vertex");
+        return Fixed::fromRaw(int64_t(std::llround(double(x)*Fixed::kOne)));
+    };
+    const auto loX=Fixed::fromRatio(footprint.minX,100),hiX=Fixed::fromRatio(footprint.maxX,100);
+    const auto loZ=Fixed::fromRatio(footprint.minZ,100),hiZ=Fixed::fromRatio(footprint.maxZ,100);
+    const auto extent=Fixed::fromRatio(cap,100);
+    for(const auto& c:b.chunks){
+        if(c.child>=0)continue;
+        const auto centre=frame.vectorFromBody(Vec3{f(c.center.x),f(c.center.y),f(c.center.z)}-frame.originBody());
+        // Use the native chunk bound to avoid traversing far side samples.
+        const auto radius=f(c.boundR)+Fixed::fromRatio(1,10);
+        if(centre.x+radius<loX||centre.x-radius>hiX||centre.z+radius<loZ||centre.z-radius>hiZ||
+           centre.y+radius< -extent||centre.y-radius>extent)continue;
+        const int x1=std::min(c.x0+c.size,G),z1=std::min(c.y0+c.size,G),step=std::max(1,c.size/kGrid);
+        std::vector<int> xs,zs;
+        for(int x=c.x0;x<x1;x+=step)xs.push_back(x);xs.push_back(x1);
+        for(int z=c.y0;z<z1;z+=step)zs.push_back(z);zs.push_back(z1);
+        Vec3 minimum{Fixed::fromInt(100000),Fixed::fromInt(100000),Fixed::fromInt(100000)};
+        Vec3 maximum{Fixed::fromInt(-100000),Fixed::fromInt(-100000),Fixed::fromInt(-100000)};
+        for(int z:zs)for(int x:xs){
+            if(++samples>2000000)throw std::length_error("Planet cave leaf selection sample budget");
+            const auto p=s.gridPos(c.face,x,z);
+            const auto q=frame.vectorFromBody(Vec3{f(p.x),f(p.y),f(p.z)}-frame.originBody());
+            minimum={fxMin(minimum.x,q.x),fxMin(minimum.y,q.y),fxMin(minimum.z,q.z)};
+            maximum={fxMax(maximum.x,q.x),fxMax(maximum.y,q.y),fxMax(maximum.z,q.z)};
+        }
+        if(maximum.x<loX||minimum.x>hiX||maximum.z<loZ||minimum.z>hiZ||
+           maximum.y< -extent||minimum.y>extent)continue;
+        frame.checkLocal(minimum);frame.checkLocal(maximum);
+        if(out.size()>=maxSlots)throw std::length_error("Planet cave leaf group capacity");
+        out.push_back({c.face,c.x0,c.y0,c.size,c.level});
+    }
+    if(out.empty())throw std::invalid_argument("Planet cave footprint has no eligible leaf");
+    std::sort(out.begin(),out.end());
+    return out;
+}
 std::vector<terraweave::caverns::CavePlanetSurfaceSlot> PlanetRenderer::captureCaveSurfaceSlots(int body,
         std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const {
     namespace cave=terraweave::caverns;
@@ -149,7 +198,7 @@ bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::C
        !nativeOwnersReady||plan.anchor.bodyId!=world_.bodies[size_t(body)].id||
        plan.surfaceRevision!=caveSurfaceRevision_||!plan.surfaceEpoch||plan.slots.empty()||plan.slots.size()>64)return false;
     auto& b=bodies_[size_t(body)];const auto& pb=world_.bodies[size_t(body)];
-    if(!b.surf||plan.surfaceEpoch<=b.caveCutEpoch)return false;
+    if(!b.surf||plan.surfaceEpoch<=b.caveCutWatermark)return false;
     if(!dev_->waitForResourceIdle()||!exclusive())return false;
     std::vector<cave::CavePlanetSurfaceSlotKey> keys;
     for(const auto& [key,slot]:plan.slots){(void)slot;keys.push_back(key);}
@@ -238,7 +287,7 @@ bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::C
         for(auto& c:b.chunks)if(c.child>=0&&c.face==leaf.face&&c.x0<=leaf.x0&&c.y0<=leaf.y0&&
             c.x0+c.size>=leaf.x0+leaf.size&&c.y0+c.size>=leaf.y0+leaf.size)c.caveDescendant=true;
     }
-    b.caveCutEpoch=plan.surfaceEpoch;return true;
+    b.caveCutEpoch=plan.surfaceEpoch;b.caveCutWatermark=plan.surfaceEpoch;return true;
 }
 
 void PlanetRenderer::freeChunk(gfx::Device& dev, Chunk& c) {
