@@ -6573,7 +6573,7 @@
       "package": "work-budget",
       "path": "skills/core/aiverse-work-budget/SKILL.md",
       "domain": "gameplay",
-      "summary": "Deterministic round-robin work with operation budgets",
+      "summary": "Deterministic round-robin work and recurring decision budgets",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_work_budget",
