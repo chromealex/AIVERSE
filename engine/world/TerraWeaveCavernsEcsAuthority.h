@@ -188,16 +188,19 @@ inline std::shared_ptr<const CaveVolumeSnapshot> freezeCaveAuthority(
 // Only call for commands already authorized by the game (permissions,
 // ownership, tool reach, costs, rate limits). A rejected command mutates
 // no ECS state. The persistent stamp allocator never reuses removed IDs.
-inline CaveAuthorityChange applyAuthorizedCaveStampCommand(
-    World& world,const CaveAuthorityConfig& cfg,const CaveStampCommand& command,
-    uint32_t tick) {
-    const auto* old=world.resourceConst<CaveAuthorityResource>();
-    if(!old)throw std::logic_error("Caverns authority not initialized");
+// Shared transaction kernel. Work only on a detached candidate, allowing
+// flat and independently identified planetary regions to reuse one edit path.
+inline CaveAuthorityChange planAuthorizedCaveStampCommand(
+    const CaveAuthorityResource& previous,CaveAuthorityResource& next,
+    const CaveAuthorityConfig& cfg,const CaveStampCommand& command,
+    uint32_t tick,const CavePlanetAnchor* anchor=nullptr) {
+    if(&previous==&next)throw std::invalid_argument("Caverns candidate aliases authority");
+    const auto* old=&previous;
     requireCaveRecipe(*old,cfg);
     if(command.expectedRevision!=old->volume.sourceRevision||
        command.edits.empty()||command.edits.size()>cfg.maxEditsPerCommand)
         throw std::invalid_argument("Caverns stale or oversized command");
-    CaveAuthorityResource next=*old;
+    next=*old;
     CaveAuthorityChange change;
     change.tick=tick;change.oldRevision=change.newRevision=old->volume.sourceRevision;
     const auto dirty=[&](const CaveSphereStamp& stamp){
@@ -247,11 +250,19 @@ inline CaveAuthorityChange applyAuthorizedCaveStampCommand(
     (void)dirtyCaveChunks(change.bounds,cfg.resolution,cfg.spacingCm,cfg.maxDirtyChunks);
     ++next.volume.sourceRevision;change.newRevision=next.volume.sourceRevision;
     validateCaveAuthorityState(next);
-    if(const auto* planet=world.resourceConst<CavePlanetRegionResource>()){
-        if(planet->version!=1)throw std::invalid_argument("Caverns planetary region version");
-        validateCavePlanetBounds(planet->anchor,next.volume);
-    }
-    world.setResource<CaveAuthorityResource>(std::move(next));
+    if(anchor)validateCavePlanetBounds(*anchor,next.volume);
+    return change;
+}
+inline CaveAuthorityChange applyAuthorizedCaveStampCommand(
+    World& world,const CaveAuthorityConfig& cfg,const CaveStampCommand& command,
+    uint32_t tick) {
+    const auto* old=world.resourceConst<CaveAuthorityResource>();
+    if(!old)throw std::logic_error("Caverns authority not initialized");
+    const auto* planet=world.resourceConst<CavePlanetRegionResource>();
+    if(planet&&planet->version!=1)throw std::invalid_argument("Caverns planetary region version");
+    CaveAuthorityResource next;
+    auto change=planAuthorizedCaveStampCommand(*old,next,cfg,command,tick,planet?&planet->anchor:nullptr);
+    if(change.changed)world.setResource<CaveAuthorityResource>(std::move(next));
     return change;
 }
 } // namespace aiverse::terraweave::caverns
