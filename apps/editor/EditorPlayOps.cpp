@@ -49,6 +49,7 @@ Json Editor::graphMaterialOp(const Json& p){
         r.set("pendingImageRetirement",Json::number(int64_t(current->pendingImageRetirement)));
         const auto sweep=view_.automaticGraphImageCollectionStats();
         r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
+        r.set("automaticRecyclingEnabled",Json::fromBool(view_.automaticGraphImageRecyclingEnabled()));
         r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));
         r.set("automaticCollectionDetached",Json::string(std::to_string(sweep.detached)));
         r.set("automaticCollectionDeferred",Json::string(std::to_string(sweep.deferred)));

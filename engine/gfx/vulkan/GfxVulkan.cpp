@@ -1159,7 +1159,11 @@ void VulkanDevice::endFrame() {
     vkResetFences(device_, 1, &s.fence);
     const VkResult submitted=vkQueueSubmit(queue_,1,&si,s.fence);
     s.scopeSubmitted=s.scopeRecords.count()!=0;
-    if(submitted!=VK_SUCCESS){healthy_=false;collectScopeTiming(s,false);return;}
+    if(submitted!=VK_SUCCESS){
+        healthy_=false;collectScopeTiming(s,false);
+        if(readback){vkDestroyBuffer(device_,readback,nullptr);memory_.release(readAlloc);}
+        capture_=nullptr;swapAcquired_=false;return;
+    }
     s.serial = serial_;
     if (swapAcquired_) {
         auto pi = vkStruct<VkPresentInfoKHR>(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
