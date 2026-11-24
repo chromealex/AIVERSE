@@ -332,6 +332,8 @@ template<std::size_t N> void verifyBatch() {
     CHECK(noiseBatchSamples<N>(soa,samples,seed,period,warp).status==NoiseBatchStatus::InvalidOptions);
 }
 
+#include "noise_simd_tests.inc"
+
 int main() {
     verify<2>();
     verify<3>();
@@ -341,5 +343,9 @@ int main() {
     verifySimplex<3>();
     verifyBatch<2>();
     verifyBatch<3>();
-    std::cout << "Noise stage 48 checks passed\n";
+    verifySimd<2>();
+    verifySimd<3>();
+    std::cout << "Noise stage 49 checks passed; SSE2=" << noiseBatchBackendAvailable(NoiseBatchBackend::SSE2)
+              << " AVX2=" << noiseBatchBackendAvailable(NoiseBatchBackend::AVX2)
+              << " NEON=" << noiseBatchBackendAvailable(NoiseBatchBackend::NEON) << '\n';
 }

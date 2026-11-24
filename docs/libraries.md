@@ -201,4 +201,6 @@ Noise 0.4.0 adds Cartesian `simplexNoiseSample` / `simplexNoise` and `simplexSke
 
 Noise 0.5.0 provides `NoiseBatch.h` on `AIVERSE::lib_noise`: borrowed AoS/SoA points, typed contiguous caller outputs, exact scalar parity, Atomic (two-pass, all-or-nothing) and MarkInvalid (single pass, full byte mask, invalid results unchanged). Reject invalid shape/config/overlap without writes. See the skill for functions and examples. Scalar kernels and saved-world sequences unchanged. SIMD dispatch and measured throughput remain next stages.
 
-- Stage 49 (in progress): SIMD Value Noise batch interpolation with explicit backend selection and scalar parity. See [delivery plan](handoffs/algorithms-stage49-delivery.md).
+- Stage 49 (implemented; isolated x86 verification, full gate pending): SIMD Value Noise batch interpolation with explicit backend selection and scalar parity. See [delivery plan](handoffs/algorithms-stage49-delivery.md).
+
+Noise 0.6.0 provides optional SSE2/AVX2/NEON interpolation in Value-only `noiseBatchValues` (2D/3D) with automatic or explicit backend preference, scalar tails/fallback and executed-backend reporting. Lattice hash/fade are shared scalar preparation; derivatives and other kernels remain scalar. No throughput claim yet; SSE2/AVX2 and disabled-SIMD fallback verified on Linux x86, NEON execution pending. Next: reproducible throughput benchmarks, optimize remaining bottlenecks before expanding SIMD coverage.

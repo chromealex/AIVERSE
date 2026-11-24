@@ -24,7 +24,7 @@ auto warped = domainWarpNoiseSample<3>({-32768, 98304, 0}, 7, {16,16,16}, warp);
 auto flow = curlNoise<3>({-32768, 98304, 0}, 7, {16,16,16});
 ```
 
-Run `library_noise` and platform/native gates before claiming acceptance. SIMD is a separate future stage.
+Run `library_noise` and platform/native gates before claiming acceptance. SIMD Value batch interpolation is available in Stage 49.
 
 Stage 47: use `simplexNoiseSample<N>(p, seed)` and `simplexNoise<N>(p, seed)` for Cartesian aperiodic simplex gradient noise in 2D/3D. Signed Q16 coordinates, values and derivatives; the scale is fixed at 48, not peak-normalized. The rational skew transform uses F=23988/65536 (2D) or 1/3 (3D), G=F/(1+N*F). Derivatives approximate the underlying continuous kernel, not the integer steps. `NoiseBasis::Simplex` is available in all fractal modes, vector, warp and curl; any nonzero Cartesian period is rejected for this basis. Existing bases and enum values are unchanged.
 
@@ -41,7 +41,7 @@ Run the existing `library_noise` test; golden samples, derivative finite differe
 
 Stage 48: include `<aiverselib/algorithms/NoiseBatch.h>` using the same `AIVERSE::lib_noise` target. Create a borrowed `NoiseBatchPoints<N>::aos(span<const array<int64_t,N>>)` or `::soa(array<span<const int64_t>,N>)`; input axes must have equal lengths and may alias each other. Supply caller-owned contiguous typed output (AoS for compound samples); no writable output or mask may overlap any input or each other. Every point uses the same seed, period and options, and results are in input order. Scalar `noiseBatchSamples` returns NoiseSample<N>, `noiseBatchValues` returns int64 Q16; select Value, Gradient, Simplex, SimplexSkew, Fractal or DomainWarp via NoiseScalarBatchOptions.kind. `noiseBatchCellular` returns CellularDistance Q32; `noiseBatchVectorSamples`, `noiseBatchVectors`, `noiseBatchCurl` use the existing fractal options. Cartesian Simplex still rejects nonzero Cartesian periods.
 
-`NoiseBatchPolicy::Atomic` (default) validates all elements in a read-only pass and evaluates again to write only if all are valid; optional full-length mask receives ones on success. `MarkInvalid` requires a full-length uint8_t mask for nonempty batches, evaluates once, writes only valid elements, and sets mask entries to 1/0. Invalid element output remains unchanged. Invalid shape/options/overlap writes nothing in either policy, including the mask. Report status, written, invalidCount, firstInvalid (size_t max if none); Atomic invalid-element report counts every invalid point, written=0. Empty valid batches succeed; config is still validated. Spans are synchronous and must remain alive and stable; no heap, SIMD or threading guarantee. Partition into disjoint spans for independent jobs; no concurrent mutation of input. Compound output is AoS, not SoA output. The existing scalar kernels define all bits.
+`NoiseBatchPolicy::Atomic` (default) validates all elements in a read-only pass and evaluates again to write only if all are valid; optional full-length mask receives ones on success. `MarkInvalid` requires a full-length uint8_t mask for nonempty batches, evaluates once, writes only valid elements, and sets mask entries to 1/0. Invalid element output remains unchanged. Invalid shape/options/overlap writes nothing in either policy, including the mask. Report status, written, invalidCount, firstInvalid (size_t max if none); Atomic invalid-element report counts every invalid point, written=0. Empty valid batches succeed; config is still validated. Spans are synchronous and must remain alive and stable; no heap or threading guarantee. Partition into disjoint spans for independent jobs; no concurrent mutation of input. Compound output is AoS, not SoA output. The existing scalar kernels define all bits.
 
 ```cpp
 #include <aiverselib/algorithms/NoiseBatch.h>
@@ -54,3 +54,14 @@ auto r=noiseBatchValues<2>(NoiseBatchPoints<2>::aos(p),out,7,{8,8},o);
 ```
 
 Run `library_noise` for scalar parity, both layouts, atomic/partial errors, overlap and regressions. No new CMake target or dependency.
+
+Stage 49: `NoiseScalarBatchOptions.backend` is Auto (default), Scalar, SSE2, AVX2 or NEON. `noiseBatchBackendAvailable(backend)` reports compiled and CPU/OS-supported availability. Only `noiseBatchValues<N>` with kind Value uses SIMD interpolation; all derivative samples and other noise kernels remain scalar. Auto selects AVX2 for >=4 points, NEON or SSE2 for >=2, otherwise Scalar. Explicit unsupported or too-short preferences fall back to Scalar; invalid enum rejects without writes. AVX2 uses per-function target and runtime CPU/OS detection on GCC/Clang x86 with SSE2 baseline (not MSVC); SSE2 and AArch64 NEON require their compile-target baselines. No global ISA flags needed. Other targets use Scalar. Build-wide `AIVERSE_NOISE_DISABLE_SIMD` disables the SIMD paths (must agree in every translation unit). Full-width blocks only, scalar tail; report.backend is the SIMD kernel actually invoked or Scalar if none, including failed Atomic and all-invalid batches. It is not a promise every element ran SIMD. Only interpolation is vectorized; shared lattice preparation/hash/fade remain scalar. The SIMD signed Q16 quotient truncates toward zero exactly like scalar. Atomic Value validates point bounds without duplicating hashing. Batch masks, aliasing rules and result bits are unchanged. No measured throughput improvement is claimed yet; NEON not executed in the Linux x86 validation.
+
+```cpp
+o.kind=NoiseScalarKind::Value;
+o.backend=NoiseBatchBackend::Auto;
+auto result=noiseBatchValues<2>(NoiseBatchPoints<2>::aos(p),out,7,{8,8},o);
+// result.backend is Scalar for a batch shorter than the selected SIMD width.
+```
+
+Run `library_noise` on each ISA, and separately with `-DAIVERSE_NOISE_DISABLE_SIMD` for the fallback. Package 0.6.0. Performance and full platform gates remain separate.

@@ -16,14 +16,22 @@ inline int64_t noiseLerp(int64_t a,int64_t b,int64_t t){return a+(b-a)*t/noiseOn
 template<size_t N> inline bool noiseValid(std::array<int64_t,N> p,std::array<int32_t,N> period){
     for(size_t i=0;i<N;++i)if(p[i]<-(int64_t(1)<<46)||p[i]>(int64_t(1)<<46)||period[i]<0||period[i]>100000000)return false;return true;
 }
-template<size_t N> inline std::optional<int32_t> periodicValueNoise(std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={}){
-    static_assert(N==2||N==3);if(!noiseValid(p,period))return {};
-    std::array<int64_t,N> cell{},t{};for(size_t i=0;i<N;++i){cell[i]=noiseFloor(p[i]);t[i]=noiseFade(p[i]-cell[i]*noiseOne);}
-    std::array<int64_t,1<<N> values{};
+namespace noise_detail {
+// Shared scalar lattice preparation for single-point and SIMD interpolation.
+// Coordinates and periods must already have passed noiseValid.
+template<size_t N> inline void valueNoiseCorners(std::array<int64_t,N> p,uint64_t seed,
+    std::array<int32_t,N> period,std::array<int64_t,N>& t,std::array<int64_t,1<<N>& values){
+    std::array<int64_t,N> cell{};for(size_t i=0;i<N;++i){cell[i]=noiseFloor(p[i]);t[i]=noiseFade(p[i]-cell[i]*noiseOne);}
     for(size_t i=0;i<values.size();++i){
         std::array<int64_t,3> c{};for(size_t j=0;j<N;++j)c[j]=noiseWrap(cell[j]+((i>>j)&1),period[j]);
         values[i]=int64_t(noiseHash(c[0],c[1],c[2],seed)>>47)-noiseOne;
     }
+}
+} // namespace noise_detail
+template<size_t N> inline std::optional<int32_t> periodicValueNoise(std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={}){
+    static_assert(N==2||N==3);if(!noiseValid(p,period))return {};
+    std::array<int64_t,N> t{};std::array<int64_t,1<<N> values{};
+    noise_detail::valueNoiseCorners(p,seed,period,t,values);
     for(size_t j=0;j<N;++j)for(size_t i=0;i<values.size();i+=size_t(2)<<j)values[i]=noiseLerp(values[i],values[i+(size_t(1)<<j)],t[j]);
     return int32_t(values[0]);
 }
