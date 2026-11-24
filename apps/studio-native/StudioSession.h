@@ -98,6 +98,9 @@ private:
     Json dispatchImpl(const Json& request);
     // History panel: a label per MapDoc undo / redo snapshot (MapDoc keeps only snapshots).
     std::vector<std::string> undoLabels_, redoLabels_;
+    std::map<uint64_t,std::string> historyLabelsById_;
+    void labelNewHistory(uint64_t mark,const std::string& label);
+    std::string historyVersion() const;
     static std::string historyLabel(const std::string& method, const Json& params);
     void syncHistoryLabels();
     Json historyJson() const;
@@ -148,7 +151,7 @@ private:
     Json sceneBrushJson() const;
     Json strokePoints_=Json::array(); int strokeDabs_=0;
     double sceneFrameMs_=0; uint64_t sceneFrames_=0;
-    size_t strokeDepth_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;   // History position when the current conversation started (Undo all)
+    size_t strokeDepth_=0; uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;   // History position when the current conversation started (Undo all)
     Json agentRequest(const std::string& method, const Json& params);
 };
 Json hubTemplatesJson(const std::string& engineDir, const Json& params);

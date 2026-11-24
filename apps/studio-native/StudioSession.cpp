@@ -602,16 +602,12 @@ bool StudioSession::pollAgentLink() {
             continue;
         }
         syncHistoryLabels();
-        const size_t before=ws_.map.undoDepth(),entities=ws_.map.data.entities.size();
+        const auto before=ws_.map.historyMark();const size_t entities=ws_.map.data.entities.size();
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const Json result=ws_.call(name,args,"agent");
         const bool failed=result.has("error");
-        const bool undoable=ws_.map.undoDepth()>before;
-        if(undoable){
-            for(size_t i=before;i<ws_.map.undoDepth();++i)undoLabels_.push_back("Agent · "+studioToolLabel(name));
-            redoLabels_.clear();
-        }
-        syncHistoryLabels();
+        const bool undoable=ws_.map.historyMark()!=before&&ws_.map.canUndo();
+        labelNewHistory(before,"Agent · "+studioToolLabel(name));
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const bool edit=!failed&&(undoable||dirty!=wasDirty||!studioToolReadOnly(name));
@@ -699,7 +695,7 @@ Json StudioSession::splineHandles() {
 bool StudioSession::splineMove(const std::string& id, double x, double z, std::string* error) {
     if(!std::isfinite(x)||!std::isfinite(z)){if(error)*error="invalid position";return false;}
     syncHistoryLabels();
-    const size_t before=ws_.map.undoDepth();
+    const auto before=ws_.map.historyMark();
     Json r;std::string label;
     if(id.rfind("road:",0)==0){
         Json p=Json::object();p.set("node",num(int64_t(std::stoll(id.substr(5)))));
@@ -727,12 +723,7 @@ bool StudioSession::splineMove(const std::string& id, double x, double z, std::s
         r=ws_.call("water_set",p,"studio");label="Move river point";
     } else {if(error)*error="unknown handle";return false;}
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
-    if(ws_.map.undoDepth()>before){
-        ws_.map.mergeUndoSince(before);
-        while(undoLabels_.size()>before)undoLabels_.pop_back();
-        undoLabels_.push_back(label);redoLabels_.clear();
-    }
-    syncHistoryLabels();
+    labelNewHistory(before,label);
     return true;
 }
 Json StudioSession::sceneBrushJson() const {
@@ -820,7 +811,7 @@ bool StudioSession::strokeBegin(double x, double z, std::string* error,double y)
         return false;
     }
     syncHistoryLabels();
-    strokeDepth_=ws_.map.undoDepth();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
+    strokeDepth_=ws_.map.undoDepth();strokeHistoryMark_=ws_.map.historyMark();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
     strokeX_=x+1e9;strokeY_=z+1e9;   // the first dab always applies
     if(!strokeDab(x,z,error,y)){stroking_=false;return false;}
     return true;
@@ -839,10 +830,12 @@ bool StudioSession::strokeEnd(std::string* error) {
         if(r.has("error")){if(error)*error=r.getStr("error");ok=false;}
         else strokeDabs_=int(strokePoints_.size());
     }
-    if(ws_.map.undoDepth()>strokeDepth_){
-        ws_.map.mergeUndoSince(strokeDepth_);
-        while(undoLabels_.size()>strokeDepth_)undoLabels_.pop_back();
-        undoLabels_.push_back(brushLabel(b.kind));redoLabels_.clear();
+    if(ws_.map.historyMark()!=strokeHistoryMark_){
+        // Legacy cross-frame brush grouping remains depth-based; never merge
+        // across an evicted pre-stroke snapshot.
+        if(strokeDepth_==0||(strokeDepth_<=ws_.map.undoDepth()&&ws_.map.undoId(strokeDepth_-1)<=strokeHistoryMark_))
+            ws_.map.mergeUndoSince(strokeDepth_);
+        labelNewHistory(strokeHistoryMark_,brushLabel(b.kind));
         ws_.log("studio",std::string(brushLabel(b.kind))+(brushPathKind(b.kind)?" · "+std::to_string(strokeDabs_)+" points":" · "+std::to_string(strokeDabs_)+" dabs"));
     }
     syncHistoryLabels();
@@ -1052,18 +1045,35 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
     return "Edit";
 }
 void StudioSession::syncHistoryLabels() {
-    // Edits made outside this session (agent tools) or a trimmed MapDoc stack keep the counts honest.
-    const size_t u=ws_.map.undoDepth(),r=ws_.map.redoDepth();
-    while(undoLabels_.size()>u)undoLabels_.erase(undoLabels_.begin());
-    while(undoLabels_.size()<u)undoLabels_.insert(undoLabels_.begin(),"Edit");
-    while(redoLabels_.size()>r)redoLabels_.erase(redoLabels_.begin());
-    while(redoLabels_.size()<r)redoLabels_.insert(redoLabels_.begin(),"Edit");
+    // MapDoc owns history identity; label lookup no longer guesses by stack depth.
+    std::map<uint64_t,std::string> retained;
+    auto label=[&](uint64_t id){
+        const auto it=historyLabelsById_.find(id);
+        const auto name=it==historyLabelsById_.end()?std::string("Edit"):it->second;
+        retained.emplace(id,name);return name;
+    };
+    undoLabels_.clear();redoLabels_.clear();
+    for(size_t i=0;i<ws_.map.undoDepth();++i)undoLabels_.push_back(label(ws_.map.undoId(i)));
+    for(size_t i=0;i<ws_.map.redoDepth();++i)redoLabels_.push_back(label(ws_.map.redoId(i)));
+    historyLabelsById_=std::move(retained);
+}
+void StudioSession::labelNewHistory(uint64_t mark,const std::string& label){
+    for(size_t i=0;i<ws_.map.undoDepth();++i)
+        if(ws_.map.undoId(i)>mark)historyLabelsById_[ws_.map.undoId(i)]=label;
+    syncHistoryLabels();
+}
+std::string StudioSession::historyVersion() const {
+    std::string v=ws_.project.dir+"|"+ws_.map.path+"|"+std::to_string(ws_.map.revision);
+    for(size_t i=0;i<ws_.map.undoDepth();++i)v+=":u"+std::to_string(ws_.map.undoId(i));
+    for(size_t i=0;i<ws_.map.redoDepth();++i)v+=":r"+std::to_string(ws_.map.redoId(i));
+    return v;
 }
 Json StudioSession::historyJson() const {
     Json out=Json::object(),steps=Json::array();
     for(const auto& l:undoLabels_){Json s=Json::object();s.set("label",str(l));s.set("done",Json::fromBool(true));steps.push(std::move(s));}
     for(auto it=redoLabels_.rbegin();it!=redoLabels_.rend();++it){Json s=Json::object();s.set("label",str(*it));s.set("done",Json::fromBool(false));steps.push(std::move(s));}
     out.set("steps",steps);out.set("position",Json::number(int64_t(undoLabels_.size())));
+    out.set("version",str(historyVersion()));out.set("scope",str("map"));
     return out;
 }
 Json StudioSession::dispatch(const Json& request) {
@@ -1079,10 +1089,13 @@ Json StudioSession::dispatch(const Json& request) {
             syncHistoryLabels();
             if(method=="studio.historyJump") {
                 // Undo / redo until `position` steps are applied (one step per call of the MapDoc).
+                if(request["params"].has("expectedVersion")&&request["params"].getStr("expectedVersion")!=historyVersion())
+                    throw std::runtime_error("History changed; refresh before jumping");
                 const int64_t target=request["params"]["position"].integer(-1);
                 if(target<0||target>int64_t(undoLabels_.size()+redoLabels_.size()))throw std::runtime_error("Invalid history position");
-                while(int64_t(undoLabels_.size())>target && ws_.map.canUndo()){ws_.map.undo();redoLabels_.push_back(undoLabels_.back());undoLabels_.pop_back();}
-                while(int64_t(undoLabels_.size())<target && ws_.map.canRedo()){ws_.map.redo();undoLabels_.push_back(redoLabels_.back());redoLabels_.pop_back();}
+                while(int64_t(ws_.map.undoDepth())>target && ws_.map.canUndo())ws_.map.undo();
+                while(int64_t(ws_.map.undoDepth())<target && ws_.map.canRedo())ws_.map.redo();
+                syncHistoryLabels();
                 clearSelection();dropOrdinalFlags();
                 Json out=historyJson();out.set("snapshot",snapshot());
                 reply.set("result",std::move(out));
@@ -1091,18 +1104,12 @@ Json StudioSession::dispatch(const Json& request) {
         return reply;
     }
     syncHistoryLabels();
-    const size_t before=ws_.map.undoDepth();
+    const auto before=ws_.map.historyMark();
     Json reply=dispatchImpl(request);
-    if(reply.has("error"))return reply;
-    if(method=="studio.undo"){ if(!undoLabels_.empty()){redoLabels_.push_back(undoLabels_.back());undoLabels_.pop_back();} }
-    else if(method=="studio.redo"){ if(!redoLabels_.empty()){undoLabels_.push_back(redoLabels_.back());redoLabels_.pop_back();} }
-    else if(method=="studio.openMap"||method=="studio.newMap"||method=="studio.openProject"){undoLabels_.clear();redoLabels_.clear();}
-    else if(ws_.map.undoDepth()>before) {
-        // A new edit (one or more MapDoc snapshots) drops the redo branch.
-        for(size_t i=before;i<ws_.map.undoDepth();++i)undoLabels_.push_back(historyLabel(method,request["params"]));
-        redoLabels_.clear();
-    }
-    syncHistoryLabels();
+    if(!reply.has("error")&&method!="studio.undo"&&method!="studio.redo"&&
+       method!="studio.openMap"&&method!="studio.newMap"&&method!="studio.openProject")
+        labelNewHistory(before,historyLabel(method,request["params"]));
+    else syncHistoryLabels();
     return reply;
 }
 Json StudioSession::dispatchImpl(const Json& request) {
@@ -2127,15 +2134,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 selected_=next.back();next.pop_back();selection_=std::move(next);
             } else {
                 std::sort(indices.rbegin(),indices.rend()); // highest first: lower indices stay valid
-                const size_t depth=ws_.map.undoDepth();
+                editor::MapDoc::CompoundEdit batch(ws_.map);
                 try {
                     for(const int index:indices) {
                         Json args=Json::object(); args.set("index",num(index));
                         const Json result=ws_.call("entity_delete",args,"studio");
                         if (result.has("error")) throw std::runtime_error(result.getStr("error"));
                     }
-                } catch(...) { ws_.map.abandonSince(depth); throw; }
-                ws_.map.mergeUndoSince(depth);
+                } catch(...) { throw; }
+                batch.commit();
                 clearSelection();dropOrdinalFlags();
             }
             reply.set("result",snapshot());
@@ -2165,7 +2172,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 type=ws_.map.data.entities.at(size_t(indexFor(selected_))).type;
             if(type.empty())throw std::runtime_error("Add a scenery type (\"prop\") to rules.json, or select an entity whose type to use");
             Json place=Json::object();place.set("type",str(type));place.set("x",params["x"]);place.set("z",params["z"]);place.set("owner",num(int64_t(0)));
-            const size_t depth=ws_.map.undoDepth();
+            editor::MapDoc::CompoundEdit batch(ws_.map);
             try {
                 const Json placed=ws_.call("entity_place",place,"studio");
                 if(placed.has("error"))throw std::runtime_error(placed.getStr("error"));
@@ -2176,8 +2183,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 const std::string id=studioDocumentId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(index)));
                 if(!asset.empty())setMeshRenderer(index,"asset",str(asset)); // validates the path
                 selectOnly(id);
-            } catch(...) { ws_.map.abandonSince(depth); throw; }
-            ws_.map.mergeUndoSince(depth);
+            } catch(...) { throw; }
+            batch.commit();
             reply.set("result",snapshot());
         } else if (method == "studio.project") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -2592,7 +2599,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 const double target=mode.rfind("min",0)==0?lo:mode.rfind("max",0)==0?hi:(lo+hi)*.5;
                 for(const auto& i:items){Json v=Json::object();v.set(onX?"x":"z",Json::number(target,4));edits.push_back({i.id,v});}
             }
-            const size_t depth=ws_.map.undoDepth();
+            editor::MapDoc::CompoundEdit batch(ws_.map);
             try {
                 for(const auto& [id,values]:edits) for(const auto& [key,value]:values.members()) {
                     Json nested=Json::object(),input=Json::object();
@@ -2602,8 +2609,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     const auto updated=dispatchImpl(nested);
                     if(updated.has("error"))throw std::runtime_error(updated.getStr("error"));
                 }
-            } catch(...) { ws_.map.abandonSince(depth); throw; }
-            ws_.map.mergeUndoSince(depth);
+            } catch(...) { throw; }
+            batch.commit();
             reply.set("result",snapshot());
         } else if (method == "studio.setProperties") {
             // Several properties of one component as ONE undo step (paste / reset).
@@ -2614,7 +2621,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(params["entityIds"].isArray()){for(const auto& v:params["entityIds"].items())if(v.isString())targets.push_back(v.str());}
             else targets.push_back(params.getStr("entityId"));
             if(targets.empty() || targets.size()>10000)throw std::runtime_error("Invalid entity list");
-            const size_t depth=ws_.map.undoDepth();
+            editor::MapDoc::CompoundEdit batch(ws_.map);
             try {
                 for(const auto& target:targets) for(const auto& [key,value]:values.members()) {
                     Json nested=Json::object(),input=Json::object();
@@ -2625,8 +2632,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     const auto updated=dispatchImpl(nested);
                     if(updated.has("error"))throw std::runtime_error(key+": "+updated.getStr("error"));
                 }
-            } catch(...) { ws_.map.abandonSince(depth); throw; }
-            ws_.map.mergeUndoSince(depth);
+            } catch(...) { throw; }
+            batch.commit();
             reply.set("result",snapshot());
         } else if (method == "studio.setProperty") {
             const std::string entityId = params.getStr("entityId");

@@ -308,7 +308,7 @@ export interface StudioParams {
   'studio.history': Record<string,never>;
   'studio.assetThumbnail': { path: string };
   'studio.assetUsage': { path?: string };
-  'studio.historyJump': { position: number };
+  'studio.historyJump': { position: number; expectedVersion?:string };
   /** Tool panel ops (Terrain, Roads, PostFX, ...) with their JSON schemas. */
   'studio.ops': { panel: string };
   /** Run one Workspace op of a tool panel (validated, undoable like an agent edit). */
@@ -572,4 +572,4 @@ export interface MetaHumanReport { pending?:boolean; detected:boolean; score:num
   rig?: { halfJoints:number; twistJoints:number; jawJoint:boolean; eyeJoints:boolean } }
 export type StudioAlignMode = 'minX' | 'centerX' | 'maxX' | 'minZ' | 'centerZ' | 'maxZ' | 'distributeX' | 'distributeZ' | 'ground';
 /** Undo history: applied steps first (oldest → newest), then the redo branch; position = applied count. */
-export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number }
+export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map' }

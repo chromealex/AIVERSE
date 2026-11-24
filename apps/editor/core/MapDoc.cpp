@@ -4,6 +4,8 @@
 #include <cstring>
 #include "engine/view/game/GameTerrainDetail.h"
 #include <algorithm>
+#include <atomic>
+#include <stdexcept>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -465,18 +467,47 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     return true;
 }
 
-void MapDoc::beginEdit() {
-    ensureLayers(); // a map that was never created/loaded still has layers sized to w*h
-    undo_.push_back(data);
-    // whole-document snapshots: keep ~256 MB at most (a 2048x2048 map is ~36 MB per snapshot)
-    const size_t snap = size_t(data.w * data.h) * 8 + data.corners.size() * 2 + data.detail.size() * 2 + data.detailSplat.size() + 1024;
+void MapDoc::pushUndo(MapData&& before) {
+    // Process-unique editor-only IDs survive stack trimming, undo and redo.
+    static std::atomic<uint64_t> next{1};
+    const uint64_t id=next.fetch_add(1,std::memory_order_relaxed);
+    undo_.reserve(undo_.size()+1);
+    undo_.push_back({std::move(before),id});lastHistoryId_=id;
+    const size_t snap = size_t(data.w) * size_t(data.h) * 8 + data.corners.size() * 2 + data.detail.size() * 2 + data.detailSplat.size() + 1024;
     const size_t keep = std::clamp<size_t>((size_t(256) << 20) / snap, 4, 200);
     while (undo_.size() > keep) undo_.erase(undo_.begin());
     redo_.clear();
-    touched();
 }
-void MapDoc::undo() { if (undo_.empty()) return; redo_.push_back(data); data = undo_.back(); undo_.pop_back(); touched(); }
-void MapDoc::redo() { if (redo_.empty()) return; undo_.push_back(data); data = redo_.back(); redo_.pop_back(); touched(); }
+void MapDoc::beginCompound(){
+    if(compoundBefore_)throw std::logic_error("Nested map compound edit");
+    ensureLayers();
+    compoundBefore_.emplace(data);compoundDirty_=dirty;compoundChanged_=false;
+}
+void MapDoc::commitCompound(){
+    if(!compoundBefore_)throw std::logic_error("No map compound edit");
+    if(compoundChanged_)pushUndo(std::move(*compoundBefore_));
+    compoundBefore_.reset();compoundChanged_=false;
+}
+void MapDoc::cancelCompound() noexcept {
+    if(!compoundBefore_)return;
+    if(compoundChanged_){data=std::move(*compoundBefore_);dirty=compoundDirty_;++revision;}
+    compoundBefore_.reset();compoundChanged_=false;
+}
+void MapDoc::beginEdit() {
+    ensureLayers();
+    if(compoundBefore_){compoundChanged_=true;touched();return;}
+    MapData before=data;pushUndo(std::move(before));touched();
+}
+void MapDoc::undo() {
+    if(compoundBefore_)throw std::logic_error("Undo during compound edit");
+    if(undo_.empty())return;
+    redo_.push_back({data,undo_.back().id});data=std::move(undo_.back().data);undo_.pop_back();touched();
+}
+void MapDoc::redo() {
+    if(compoundBefore_)throw std::logic_error("Redo during compound edit");
+    if(redo_.empty())return;
+    undo_.push_back({data,redo_.back().id});data=std::move(redo_.back().data);redo_.pop_back();touched();
+}
 
 std::string MapDoc::uniqueId(const std::string& base) const {
     for (int i = 1;; ++i) {

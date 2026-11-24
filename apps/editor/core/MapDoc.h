@@ -6,6 +6,7 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -179,7 +180,22 @@ public:
     size_t undoDepth() const { return undo_.size(); }
     size_t redoDepth() const { return redo_.size(); }
     void mergeUndoSince(size_t depth) { if (undo_.size() > depth + 1) undo_.resize(depth + 1); }
-    void abandonSince(size_t depth) { if (depth < undo_.size()) { data = undo_[depth]; undo_.resize(depth); touched(); } }
+    void abandonSince(size_t depth) { if (depth < undo_.size()) { data = undo_[depth].data; undo_.resize(depth); touched(); } }
+    // Native synchronous compound edit: history is published only on commit.
+    // No document replacement or undo/redo is permitted inside this scope.
+    class CompoundEdit {
+        MapDoc& doc_;
+        bool done_=false;
+    public:
+        explicit CompoundEdit(MapDoc& doc):doc_(doc){doc_.beginCompound();}
+        CompoundEdit(const CompoundEdit&)=delete;
+        CompoundEdit& operator=(const CompoundEdit&)=delete;
+        ~CompoundEdit(){if(!done_)doc_.cancelCompound();}
+        void commit(){doc_.commitCompound();done_=true;}
+    };
+    uint64_t historyMark() const {return lastHistoryId_;}
+    uint64_t undoId(size_t i) const {return undo_.at(i).id;}
+    uint64_t redoId(size_t i) const {return redo_.at(i).id;}
     bool canUndo() const { return !undo_.empty(); }
     bool canRedo() const { return !redo_.empty(); }
     void undo();
@@ -195,7 +211,15 @@ private:
     void validateWorld(const game::Rules& rules, std::vector<Issue>& out) const;
     void mirror(bool point);
     void ensureLayers();
-    std::vector<MapData> undo_, redo_;
+    struct HistoryEntry {MapData data;uint64_t id=0;};
+    std::vector<HistoryEntry> undo_,redo_;
+    uint64_t lastHistoryId_=0;
+    std::optional<MapData> compoundBefore_;
+    bool compoundDirty_=false,compoundChanged_=false;
+    void beginCompound();
+    void commitCompound();
+    void cancelCompound() noexcept;
+    void pushUndo(MapData&& before);
 };
 
 } // namespace aiverse::editor

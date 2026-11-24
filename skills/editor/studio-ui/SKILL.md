@@ -80,6 +80,9 @@ The existing Runtime panel exposes only owner-approved Unit HP (strictly positiv
 ## Play Mode review (S5)
 Keep the existing HostedClient and independent scene document. Play requires saved project/map; Restart revalidates the saved launch mode. Review is paused local saved-map only, checks project/path/revision and actual match map index. Native preview calculates exact category counts without editing; native one-shot token binds captured entity states, epoch, tick and selected options. Apply rechecks the native snapshot and source, then commits the reviewed categories as one MapDoc History step. No browser-supplied rows, no direct title-bar keep shortcut, no automatic keep on Stop. Delete is explicitly opt-in. A successful change invalidates the launch revision; save/restart for another review. No transfer of runtime-spawned entities, HP/Energy, arbitrary components or remote worlds.
 
+## Map history transactions (S6a)
+Use the existing MapDoc owner, not a second undo stack. Synchronous compound operations use MapDoc::CompoundEdit; every nested beginEdit marks the transaction but does not push/trim history. Commit publishes one before-image, failure restores the original map/dirty state and preserves previous redo. History labels bind process-unique native entry IDs, not depth. History navigation sends expectedVersion and the panel describes the oldest retained entry, not necessarily the opened map. This is map-scoped, not project/rules/asset filesystem history. Cross-frame brush grouping is still a separate ownership concern; do not claim global transaction parity.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

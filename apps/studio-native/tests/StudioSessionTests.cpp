@@ -15,6 +15,31 @@
 #include <chrono>
 
 namespace {
+void mapCompoundHistoryContract(){
+    using namespace aiverse::editor;
+    MapDoc map;map.reset(8,8);
+    for(int i=0;i<200;++i){map.beginEdit();map.data.name=std::to_string(i);}
+    AIVERSE_TEST_CHECK(map.undoDepth()==200);
+    const auto oldest=map.undoId(0),mark=map.historyMark();
+    map.undo();
+    const auto before=map.data.name;const auto redo=map.redoId(0);const bool dirty=map.dirty;
+    {
+        MapDoc::CompoundEdit batch(map);
+        for(int i=0;i<250;++i){map.beginEdit();map.data.name="partial";}
+    }
+    AIVERSE_TEST_CHECK(map.data.name==before&&map.dirty==dirty&&map.undoDepth()==199&&map.redoId(0)==redo);
+    {
+        MapDoc::CompoundEdit batch(map);
+        for(int i=0;i<250;++i){map.beginEdit();map.data.name="committed";}
+        batch.commit();
+    }
+    AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.redoDepth()==0&&map.historyMark()>mark);
+    const auto id=map.undoId(199);
+    map.undo();AIVERSE_TEST_CHECK(map.data.name==before&&map.redoId(0)==id);
+    map.redo();AIVERSE_TEST_CHECK(map.data.name=="committed"&&map.undoId(199)==id);
+    map.beginEdit();map.data.name="trimmed";
+    AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.undoId(0)!=oldest&&map.undoId(199)>id);
+}
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
@@ -642,6 +667,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }
