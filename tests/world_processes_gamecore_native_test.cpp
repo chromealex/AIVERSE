@@ -2,6 +2,7 @@
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
 #include "apps/studio-native/StudioPlanetMorphSnapshot.h"
+#include "apps/studio-native/StudioPlanetEchoSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -723,6 +724,47 @@ static void checkPlanetGranular(){
     AIVERSE_TEST_CHECK(!granular::advanceSurfaceFields(ecs,surface,3));
     AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).sampledTick==2);
 }
+static void checkPlanetLiveEcho(){
+    using aiverse::studio::samplePlanetEcho;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto a=ecs.create(),b=ecs.create(),moon=ecs.create(),portal=ecs.create(),cross=ecs.create();
+    const auto emitter=ecs.create(),receiver=ecs.create(),reverse=ecs.create(),unplaced=ecs.create();
+    const auto place=[&](Entity e,int bi,int x){
+        Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(bi,0,x,3));ecs.add<Transform>(e,tr);
+    };
+    place(a,0,2);place(b,0,4);place(moon,1,2);place(emitter,0,2);place(receiver,0,4);place(reverse,0,2);
+    for(auto e:{a,b,moon})ecs.add<echo::AcousticZone>(e,echo::AcousticZone{});
+    ecs.add<echo::AcousticPortal>(portal,echo::AcousticPortal{a,b,25,false,true});
+    ecs.add<echo::AcousticPortal>(cross,echo::AcousticPortal{b,moon,10,false,true});
+    ecs.add<echo::AcousticEmitter>(emitter,echo::AcousticEmitter{a,100,true});
+    ecs.add<echo::AcousticReceiver>(receiver,echo::AcousticReceiver{b,50,true});
+    ecs.add<echo::AcousticReceiver>(reverse,echo::AcousticReceiver{a,101,true});
+    ecs.add<echo::AcousticReceiver>(unplaced,echo::AcousticReceiver{moon,50,true});
+    for(auto e:{receiver,reverse,unplaced})ecs.add<echo::AcousticHearing>(e,echo::AcousticHearing{});
+    AIVERSE_TEST_CHECK(echo::propagate(ecs,7));
+    const auto snapshot=samplePlanetEcho(ecs,surface,7);
+    AIVERSE_TEST_CHECK(snapshot.getBool("available")&&snapshot["zones"].size()==3&&snapshot["portals"].size()==2);
+    AIVERSE_TEST_CHECK(snapshot.getInt("crossBody")==1&&snapshot.getInt("unplaced")==1);
+    AIVERSE_TEST_CHECK(snapshot.getInt("audible")==2&&snapshot.getInt("staleHearing")==0);
+    bool found=false;
+    for(const auto& row:snapshot["receivers"].items())if(row.getStr("id")==std::to_string(receiver.packed())){
+        found=true;AIVERSE_TEST_CHECK(row.getBool("audible")&&row.getInt("intensity")==75);
+        AIVERSE_TEST_CHECK(row.getStr("source")==std::to_string(emitter.packed())&&row["sourcePosition"].size()==3);
+    }
+    AIVERSE_TEST_CHECK(found);
+    AIVERSE_TEST_CHECK(!snapshot["portals"][size_t(1)].getBool("placed"));
+    const auto stale=samplePlanetEcho(ecs,surface,8);
+    AIVERSE_TEST_CHECK(stale.getInt("staleHearing")==3&&stale.getInt("audible")==0);
+    ecs.get<echo::AcousticPortal>(portal).enabled=false;
+    AIVERSE_TEST_CHECK(echo::propagate(ecs,8));
+    const auto disabled=samplePlanetEcho(ecs,surface,8);
+    AIVERSE_TEST_CHECK(disabled.getInt("audible")==0&&!disabled["portals"][size_t(0)].getBool("active"));
+    const auto cap=samplePlanetEcho(ecs,surface,8,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["zones"].size()==1);
+    AIVERSE_TEST_CHECK(ecs.get<echo::AcousticHearing>(receiver).sampledTick==8);
+}
 static void checkPlanetLiveMorph(){
     using aiverse::studio::samplePlanetMorph;
     game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -1079,6 +1121,7 @@ int main(){
     checkPlanetLiveAether();
     checkMorphGravity();
     checkPlanetLiveMorph();
+    checkPlanetLiveEcho();
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();
     checkPlanetLiveFracture();
