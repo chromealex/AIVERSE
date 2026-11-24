@@ -7,6 +7,7 @@
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsSurfaceCut.h"
 #include <string>
+#include <limits>
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -96,7 +97,10 @@ inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
     if(!d.extra["terraweaveCaverns"].isNull()){
         try{
             snapshot=cave::caveSnapshotFromJson(d.extra["terraweaveCaverns"]);
-            size_t associations=0;
+            size_t associations=0,fillChecks=0;
+            std::vector<const cave::CaveSphereStamp*> fills;
+            for(const auto& stamp:snapshot.stamps)
+                if(stamp.mode==cave::CaveStampMode::Fill)fills.push_back(&stamp);
             const int64_t span=int64_t(step)*100;
             for(const auto& entrance:snapshot.entrances){
                 const auto bounds=cave::entranceBounds(entrance);
@@ -112,20 +116,32 @@ inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
                 if(count>maxAssociations-associations)throw std::length_error("Caverns terrain cut work budget");
                 associations+=count;
                 bool valid=true;
+                double loY=std::numeric_limits<double>::infinity(),hiY=-loY;
                 // All intersected planes must lie inside this authored
                 // shaft's vertical SDF extent. Reject the whole entrance,
                 // not a partial ring, on a mismatched surface elevation.
                 for(int iz=az;valid&&iz<=bz;++iz)for(int ix=ax;valid&&ix<=bx;++ix){
                     const auto v=cell(ix*step,iz*step);
+                    for(const auto& p:v){loY=std::min(loY,double(p.y)*100.);hiY=std::max(hiY,double(p.y)*100.);}
                     valid=cave::entranceIntersectsTriangleAtHeight({cm(v[0]),cm(v[2]),cm(v[1])},entrance,sides)&&
                           cave::entranceIntersectsTriangleAtHeight({cm(v[0]),cm(v[3]),cm(v[2])},entrance,sides);
+                }
+                // Fill wins over carve. Conservatively keep the terrain
+                // intact if a fill brush could seal any part of this mouth.
+                if(valid)for(const auto* stamp:fills){
+                    if(++fillChecks>maxAssociations)throw std::length_error("Caverns entrance fill work budget");
+                    const double r=stamp->radiusCm;
+                    const auto& p=stamp->center;
+                    if(double(p.x)+r>=bounds.minX&&double(p.x)-r<=bounds.maxX&&
+                       double(p.z)+r>=bounds.minZ&&double(p.z)-r<=bounds.maxZ&&
+                       double(p.y)+r>=loY&&double(p.y)-r<=hiY){valid=false;break;}
                 }
                 if(!valid){++stats.rejectedEntrances;continue;}
                 for(int iz=az;iz<=bz;++iz)for(int ix=ax;ix<=bx;++ix)
                     bins[size_t(iz)*nx+ix].push_back(&entrance);
                 ++stats.cutEntrances;
             }
-            if(stats.rejectedEntrances)stats.cutDiagnostic="Some shafts are outside the terrain or do not reach its heightfield";
+            if(stats.rejectedEntrances)stats.cutDiagnostic="Some shafts are outside the terrain, do not reach its heightfield, or may be sealed by Fill";
         }catch(const std::exception& e){
             // No partially cut output is published if planning fails.
             for(auto& bin:bins)bin.clear();
