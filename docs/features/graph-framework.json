@@ -115,7 +115,8 @@
     "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
     "apps/studio-web/src/graphs/buildingRoomTopology.ts",
     "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
-    "apps/studio-web/tests/buildingRoomTopology.test.mjs"
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
+    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -126,7 +127,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending.",
+      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending. Mac QA: repair case-insensitive diagnostic module collision and material projection typing.",
       "evidence": []
     },
     "architecture": {
