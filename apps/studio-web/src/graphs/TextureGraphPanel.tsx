@@ -102,7 +102,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='gpuPlan'){
      const r=await op('texture_graph_gpu_preview',{action:'plan',fusePointwise,graph,overrides,bakeSet:true,resolution:gpuResolution});if(token!==epoch.current)return;
      if(!object(r)||r.ok!==true||r.state!=='planned'||r.executed!==false||!Array.isArray(r.passes)||!Array.isArray(r.slotBytes))throw new Error('Materialized DAG plan rejected');
-     setStatus('Plan only · '+String(r.resolution)+' px · '+r.passes.length+' passes · '+r.slotBytes.length+' slots · '+String(r.allocatedBytes)+' / '+String(r.budgetBytes)+' logical bytes including result buffer · '+String(r.nodeShaderCount)+' node / '+String(r.packShaderCount)+' pack shaders; no GPU dispatch');return;
+     setStatus('Plan only · '+String(r.resolution)+' px · '+r.passes.length+' passes · '+r.slotBytes.length+' slots · '+String(r.allocatedBytes)+' / '+String(r.budgetBytes)+' logical bytes including result buffer · '+String(r.nodeShaderCount)+' node / '+String(r.packShaderCount)+' pack shaders · '+String(r.fusionElidedPasses??0)+' planned passes elided; no GPU dispatch');return;
     }
     if(action==='gpuPublish'){
     if(!gpuRequest?.bake||!gpuReady||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||(!gpuRequest.setBake&&gpuRequest.output!==output))throw new Error('No matching completed bake');
