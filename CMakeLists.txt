@@ -2937,6 +2937,18 @@ if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND
         add_test(NAME building_native_world_replica
             COMMAND aiverse_building_world_example ${PROJECT_SOURCE_DIR})
         set_tests_properties(building_native_world_replica PROPERTIES LABELS "ECS;NETWORK")
+        add_test(NAME building_native_world_lockstep
+            COMMAND aiverse_building_world_example ${PROJECT_SOURCE_DIR} --lockstep)
+        set_tests_properties(building_native_world_lockstep PROPERTIES LABELS "ECS;NETWORK;PERSISTENCE")
+    endif()
+    if(TARGET aiverse_physics)
+        target_link_libraries(aiverse_building_world_example PRIVATE AIVERSE::physics)
+        target_compile_definitions(aiverse_building_world_example PRIVATE AIVERSE_BUILDING_PHYSIS_EXAMPLE=1)
+        if(AIVERSE_BUILD_TESTS)
+            add_test(NAME building_native_world_physis
+                COMMAND aiverse_building_world_example ${PROJECT_SOURCE_DIR} --physis)
+            set_tests_properties(building_native_world_physis PROPERTIES LABELS "PHYSIS")
+        endif()
     endif()
 endif()
 # building-style (settings of generated buildings as style files) and its .glb exporter.

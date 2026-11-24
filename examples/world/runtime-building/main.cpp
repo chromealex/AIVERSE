@@ -4,6 +4,11 @@
 // A deterministic scripted actor stands in for the game's actual motor;
 // GPU/device acceptance is a separate native graphics test.
 #include "engine/buildings/BuildingReplicaBridge.h"
+#include "engine/buildings/BuildingReplicaRenderScene.h"
+#include "engine/net/Rollback.h"
+#if defined(AIVERSE_BUILDING_PHYSIS_EXAMPLE)
+#include "engine/buildings/BuildingPhysisSceneBinding.h"
+#endif
 #include "engine/net/Conn.h"
 #include "engine/sim/Simulation.h"
 #include <algorithm>
@@ -31,7 +36,7 @@ static std::string readText(const std::string& path){
 
 class NativeBuildingModule final:public GameModule{
 public:
-    explicit NativeBuildingModule(std::string root):root_(std::move(root)){}
+    explicit NativeBuildingModule(std::string root,bool lockstep=false):root_(std::move(root)),lockstep_(lockstep){}
     std::string name()const override{return "native-building-example";}
     void setup(Simulation& sim,const Json&,const Json&)override{
         std::string error;
@@ -49,9 +54,13 @@ public:
         CHECK(layout.lifts().size()==1);
         feature=layout.lifts().begin()->first;
         liftPose=layout.lifts().begin()->second.platformPose();
+        for(uint32_t floor=0;floor<layout.lifts().begin()->second.floorCount();++floor)
+            floorHeights.push_back(*layout.lifts().begin()->second.floorHeightMm(floor));
         width=recipe.width;depth=recipe.depth;
         buildings=BuildingWorldRuntime::install(sim,spatial,namespaces,0x6b01,
-                    BuildingWorldRuntime::commonOwnerPolicy(),&error);
+                    BuildingWorldRuntime::commonOwnerPolicy(),&error,
+                    lockstep_?BuildingWorldRuntime::RecoveryMode::DeterministicLockstep:
+                              BuildingWorldRuntime::RecoveryMode::AuthoritativeCheckpoint);
         CHECK(buildings);
 
         auto& ecs=sim.world();
@@ -85,6 +94,7 @@ public:
             // This headless module owns no extra route reservations. The
             // runtime separately checks real ECS body volumes on unload.
             d.canUnload=[](){return true;};
+            d.resetDerivedGraphs=[this,id](){graphRevisions.erase(id);return true;};
             d.graphOwners.emplace(BuildingGraphDomain::Gameplay,
                 [this](const BuildingGraphChange& c){
                     if(!graphAvailable)return false;
@@ -101,12 +111,9 @@ public:
             if(lift!=feature||floor>=2)return false;
             const auto* t=sim.world().tryGetConst<Transform>(actor);
             if(!t)return false;
-            const auto checkpoint=sim.world().resourceConst<BuildingLiftWorldCheckpoints>();
-            if(!checkpoint||!checkpoint->scenes.contains(1))return false;
-            const auto& state=checkpoint->scenes.at(1).lifts.at(feature).state;
-            if(state.currentFloor!=floor)return false;
+            if(floor>=floorHeights.size())return false;
             const auto landing=buildingLocalToWorld((liftPose.x0+liftPose.x1)*0.5f,
-                 float(state.platformYmm)/1000.f+liftPose.thickness,
+                 float(floorHeights[floor])/1000.f+liftPose.thickness,
                  liftPose.z0-0.8f,width,depth,{},0);
             return fxAbs(t->pos.x-landing.x)<=1_fx&&fxAbs(t->pos.z-landing.z)<=1_fx&&
                    fxAbs(t->pos.y-landing.y)<=Fixed::fromRatio(1,2);
@@ -158,17 +165,120 @@ public:
     Entity rider{},stranger{};
     uint32_t feature=0;
     BuildingLiftPlatformPose liftPose;
+    std::vector<int64_t> floorHeights;
     float width=0,depth=0;
     bool graphAvailable=true;
     std::map<uint64_t,uint64_t> graphRevisions;
     uint32_t unexpectedModuleCommands=0;
 private:
     std::string root_;
+    bool lockstep_=false;
 };
 
+static void verifyLockstep(const std::string& root){
+    auto module=std::make_unique<NativeBuildingModule>(root,true);
+    auto* game=module.get();
+    SimConfig cfg;cfg.tickRate=20;cfg.inputDelayTicks=1;
+    Simulation sim(cfg,std::move(module));
+    sim.setup(Json::object(),Json::parse(R"({"players":[{"name":"A"},{"name":"B"}]})"));
+    auto& runtime=*game->buildings;
+    CHECK(runtime.ready()&&runtime.lockstep());
+    game->move(sim,game->stranger,{88_fx,Fixed::fromRatio(6,25),-1_fx});
+    auto step=[&]{const auto tick=sim.tick();sim.step();CHECK(sim.tick()==tick+1);};
+    auto inject=[&](std::optional<Command> c){
+        CHECK(c);c->tick=sim.tick();c->seq=1;sim.inject(*c);
+    };
+    inject(runtime.makeLiftCommand(1,game->feature,0,game->rider,1,BuildingLiftCommandKind::Board));
+    inject(runtime.makeCommand(2,"entrance/0/0",game->stranger,2,true));
+    step();
+    CHECK(game->lift(sim).passengerCount==1);
+    inject(runtime.makeLiftCommand(1,game->feature,1,game->rider,1,BuildingLiftCommandKind::SelectFloor));
+    inject(runtime.makeCommand(2,"entrance/0/0",game->stranger,2,false));
+    step();
+    // Capture moving gate + queued opposite request, and occupied lift.
+    SimSnapshot saved;sim.saveState(saved);
+    const auto startHash=sim.checksum();
+    CHECK(sim.world().resourceConst<BuildingLockstepWorldState>()->scenes.at(2).motion.front().moving);
+    CHECK(!sim.world().resourceConst<BuildingLockstepWorldState>()->scenes.at(2).session.queue.empty());
+    for(int i=0;i<160;++i)step();
+    const auto expected=sim.checksum();
+    const auto expectedLift=game->lift(sim);
+    const auto expectedFeet=sim.world().get<Transform>(game->rider).pos;
+    sim.loadState(saved);
+    CHECK(runtime.ready()&&sim.checksum()==startHash);
+    for(int i=0;i<160;++i)step();
+    CHECK(sim.checksum()==expected);
+    CHECK(game->lift(sim)==expectedLift);
+    CHECK(sim.world().get<Transform>(game->rider).pos==expectedFeet);
+    CHECK(game->lift(sim).currentFloor==1);
+    CHECK(!runtime.canTraverse(2,"entrance/0/0"));
+
+    // Actual existing net::RollbackSession: predict no input, then a
+    // late confirmed building command changes the predicted history.
+    SimSnapshot beforePrediction;sim.saveState(beforePrediction);
+    const uint32_t first=sim.tick();
+    auto late=runtime.makeCommand(2,"entrance/0/0",game->stranger,2,true);
+    CHECK(late);late->tick=first;late->seq=1;
+    uint32_t target=first;
+    uint64_t predictedHash=0;
+    {
+        net::SessionConfig options;options.rollbackWindow=8;options.checksumInterval=1;
+        options.incrementalWorldSnapshots=true;
+        net::RollbackSession session(sim,options,{},
+            [](uint32_t,const std::vector<Command>&){},[](uint32_t,uint64_t){});
+        session.update(0.2,1000);
+        target=sim.tick();CHECK(target>first);
+        session.confirm(first,1,{*late});
+        session.update(0.0,1001);
+        CHECK(!session.broken()&&runtime.ready()&&session.stats().rollbacks==1);
+        CHECK(sim.tick()==target);
+        predictedHash=sim.checksum();
+    }
+    sim.loadState(beforePrediction);CHECK(runtime.ready());
+    sim.inject(*late);while(sim.tick()<target)step();
+    CHECK(sim.checksum()==predictedHash);
+    // Release the actual rider at its open landing before final teardown.
+    const auto& top=game->lift(sim);
+    game->move(sim,game->rider,buildingLocalToWorld((game->liftPose.x0+game->liftPose.x1)*0.5f,
+        float(top.platformYmm)/1000.f+game->liftPose.thickness,game->liftPose.z0-0.8f,
+        game->width,game->depth,{},0));
+    inject(runtime.makeLiftCommand(1,game->feature,1,game->rider,1,BuildingLiftCommandKind::Exit));
+    step();CHECK(game->lift(sim).passengerCount==0);
+    CHECK(runtime.shutdown());
+    std::puts("building deterministic checkpoint and late-input rollback: PASS");
+}
+#if defined(AIVERSE_BUILDING_PHYSIS_EXAMPLE)
+static void verifyPhysisBinding(){
+    physics::Scene physics;
+    BuildingPhysisSceneBinding binding(physics);
+    std::map<uint32_t,world::Bounds> shapes{
+        {1,{{0_fx,0_fx,0_fx},{4_fx,1_fx,4_fx}}},
+        {2,{{1_fx,1_fx,1_fx},{2_fx,3_fx,2_fx}}}};
+    CHECK(binding.synchronize(shapes,{2}));
+    CHECK(binding.bodyCount()==2&&physics.bodyCount()==2);
+    const auto leaf=binding.body(2);
+    shapes.at(2).min.x+=1_fx;shapes.at(2).max.x+=1_fx;
+    CHECK(binding.synchronize(shapes,{2})&&binding.body(2)==leaf);
+    CHECK(physics.position(leaf).x>2.4f&&physics.position(leaf).x<2.6f);
+    physics::BodyDesc cargo;cargo.position={2.5f,2.f,1.5f};
+    auto actor=physics.create(cargo);CHECK(actor);
+    physics::QueryFilter filter;filter.mask=physics::kCategoryDynamic;
+    CHECK(binding.occupied(shapes.at(2),shapes.at(2),filter));
+    CHECK(binding.synchronizeRider(Entity{},Vec3{5_fx,6_fx,7_fx},
+                                  [actor](Entity){return actor;}));
+    CHECK(physics.position(actor).y==6.f);
+    CHECK(binding.retire()&&physics.bodyCount()==1);
+    CHECK(physics.destroy(actor));
+    std::puts("building native PHYSIS body publication: PASS");
+}
+#endif
 int main(int argc,char** argv){
     try{
         const std::string root=argc>1?argv[1]:".";
+        if(argc>2&&std::string(argv[2])=="--lockstep"){verifyLockstep(root);return 0;}
+#if defined(AIVERSE_BUILDING_PHYSIS_EXAMPLE)
+        if(argc>2&&std::string(argv[2])=="--physis"){verifyPhysisBinding();return 0;}
+#endif
         auto module=std::make_unique<NativeBuildingModule>(root);
         auto* game=module.get();
         SimConfig cfg;cfg.tickRate=20;cfg.inputDelayTicks=1;
@@ -242,14 +352,33 @@ int main(int argc,char** argv){
         BuildingEcsWorldState record;uint64_t content=0;
         CHECK(world.captureApertureState(1,record,content));
         BuildingReplicaView view;
+        RuntimeBuildingGenerator remoteGenerator;
+        CHECK(remoteGenerator.registerStyleJson(readText(root+"/engine/assets/building-styles/scifi.json")));
+        const auto remoteRecipe=readFunctionalBuildingRecipe(Json::parse(
+            readText(root+"/engine/assets/building-recipes/vertical-circulation.json")));
+        BuildingReplicaRenderScene remote;
+        BuildingReplicaRenderScene::Definition remoteDef;
+        remoteDef.sceneId=1;remoteDef.instanceKey="instances/buildings/a";remoteDef.styleId="scifi";
+        remoteDef.graphDomains=buildingGraphBit(BuildingGraphDomain::Navigation)|
+                               buildingGraphBit(BuildingGraphDomain::Gameplay);
+        CHECK(remote.prepare(remoteDef,remoteGenerator,remoteRecipe,{}));
+        CHECK(remote.contentHash()==content);
         bool received=false;
         client.onMessage=[&](uint16_t channel,const net::Bytes& data){
-            if(channel==611)received=view.accept(data,1,content,record.leaves.size());
+            if(channel==611)received=view.accept(data,1,content,record.leaves.size())&&remote.accept(data);
         };
         CHECK(bridge.send(server,slot,1));
         for(int i=0;i<40&&!received;++i)pump();
         CHECK(received&&view.frame().hasCirculation);
         CHECK(view.frame().circulation.passengers.size()==1);
+        const auto leafFrame=remote.sampleApertures(0);
+        CHECK(leafFrame.valid&&leafFrame.leaves.size()==record.leaves.size()*2);
+        size_t liftDraws=0;
+        CHECK(remote.sampleLifts([&](const render::Model&,const std::string&,Vec3,uint32_t){
+            ++liftDraws;return true;
+        }));
+        CHECK(liftDraws==5); // one cabin + four landing leaves
+        CHECK(remote.clear());
 
         auto select=world.makeLiftCommand(1,game->feature,1,game->rider,1,BuildingLiftCommandKind::SelectFloor);
         CHECK(select);send(*select,3,true);CHECK(accepted==2);

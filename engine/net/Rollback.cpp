@@ -77,9 +77,9 @@ int32_t RollbackSession::drift(uint64_t nowMs) const {
 }
 
 bool RollbackSession::stepTick(bool resim) {
-    // Check readiness before consuming inputs or saving a predicted slot.
-    if(!sim_.readyToStep())return false;
+    // Readiness and input injection are one Simulation owner operation.
     const uint32_t s = sim_.tick();
+    const bool advanced=sim_.stepWithInput([&]{
     if (!resim) {
         // Close the frame for tick s + delay: everything issued until now executes then.
         const uint32_t f = s + cfg_.inputDelay;
@@ -105,9 +105,10 @@ bool RollbackSession::stepTick(bool resim) {
         ++stats_.predictedTicks;
     }
     for (auto& c : inputs) sim_.inject(c);
-    sim_.step();
+    });
+    if(!advanced)return false;
     const uint32_t now = sim_.tick();
-    if(now==s){broken_=true;return false;} // injected input cannot be retried twice
+    if(now==s){broken_=true;return false;}
     if (cfg_.checksumInterval && now % cfg_.checksumInterval == 0) hashes_[now] = sim_.checksum();
     if (!result_ && !candResult_) {
         if (int r = sim_.result()) { candResult_ = r; candTick_ = now; candHash_ = sim_.checksum(); }

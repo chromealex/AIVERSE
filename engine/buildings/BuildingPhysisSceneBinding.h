@@ -44,7 +44,7 @@ public:
         };
         for(const auto& [id,bounds]:shapes){
             const auto extent=bounds.max-bounds.min;
-            const auto center=(bounds.min+bounds.max)/2;
+            const auto center=(bounds.min+bounds.max)/2_fx;
             const bool moving=movable.contains(id);
             if(!id||extent.x<=Fixed{}||extent.y<=Fixed{}||extent.z<=Fixed{}){
                 rollback();return fail(error,"Invalid PHYSIS building bounds");
@@ -74,9 +74,9 @@ public:
         size_t moved=0;
         for(const auto& update:updates){
             if(!scene_->setTransform(update.handle,
-                 asFloat((update.newBounds.min+update.newBounds.max)/2),b3Quat_identity)){
+                 asFloat((update.newBounds.min+update.newBounds.max)/2_fx),b3Quat_identity)){
                 for(size_t i=0;i<moved;++i)scene_->setTransform(updates[i].handle,
-                   asFloat((updates[i].oldBounds.min+updates[i].oldBounds.max)/2),b3Quat_identity);
+                   asFloat((updates[i].oldBounds.min+updates[i].oldBounds.max)/2_fx),b3Quat_identity);
                 rollback();return fail(error,"PHYSIS shape update rejected");
             }
             // These are already committed fixed-tick poses, not future
@@ -103,8 +103,8 @@ public:
     bool occupied(const world::Bounds& first,const world::Bounds& second,
                   physics::QueryFilter filter={})const{
         const auto check=[&](const world::Bounds& bounds){
-            const auto hits=scene_->overlapBox(asFloat((bounds.min+bounds.max)/2),
-                   asFloat((bounds.max-bounds.min)/2),b3Quat_identity,filter);
+            const auto hits=scene_->overlapBox(asFloat((bounds.min+bounds.max)/2_fx),
+                   asFloat((bounds.max-bounds.min)/2_fx),b3Quat_identity,filter);
             for(auto h:hits){
                 bool owned=false;
                 for(const auto& [id,entry]:bodies_){(void)id;if(entry.handle==h){owned=true;break;}}

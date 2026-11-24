@@ -90,10 +90,12 @@ inline void advanceBuildingAgent(Simulation& sim,BuildingWorldRuntime& runtime,
         motor.stop(sim,e);return;
     }
     const auto move=[&](Vec3 target,BuildingAgentMoveKind kind){
-        if(buildingAgentAt(ecs,e,target))return true;
+        if(buildingAgentAt(ecs,e,target)){motor.stop(sim,e);return true;}
         const auto result=motor.move(sim,e,target,kind);
         if(result==BuildingAgentMoveResult::Blocked){blocked("Physical actor motor blocked");return false;}
-        return result==BuildingAgentMoveResult::Reached&&buildingAgentAt(ecs,e,target);
+        const bool reached=result==BuildingAgentMoveResult::Reached&&buildingAgentAt(ecs,e,target);
+        if(reached)motor.stop(sim,e);
+        return reached;
     };
     const auto request=[&](std::optional<Command> command){
         if(!command||sim.tick()<route.nextRequestTick)return;

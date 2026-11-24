@@ -571,3 +571,19 @@ the executable actually builds and runs.
 
 ## Stage 23W.3: PHYSIS native bodies
 Projects with an existing Box3D Scene may explicitly include engine/buildings/BuildingPhysisSceneBinding.h and call binding.configure(definition, filter, resolveExistingBody, bodyOriginOffset). Hold the binding until the world shuts down. It mirrors the same verified SpatialWorld bounds to static/kinematic Scene bodies at the physics owner barrier; never step the Scene twice. Existing actor motors must skip automatic platform ground carry while BuildingLiftPassenger is attached. Use query masks that include actual actors/cargo and appropriate environment obstacles. CPU-only and dedicated deterministic projects need not link Box3D.
+
+## Stage 23W.6 — integration modes
+
+All four shared runtime feature paths are now implemented in source:
+
+- remote-only client: BuildingReplicaRenderScene prepares the same recipe/style and verifies content hash, consumes existing Replica server frames, and registers the existing WorldScene renderer owner; retire before dropping CPU assets.
+- optional authoritative PHYSIS: BuildingPhysisSceneBinding configures native static/kinematic collision and absolute rider pose callbacks against the existing Scene.
+- native ECS AI: installBuildingAgentNavigation before movement, with buildingAgentLocomotionMotor and the project's real collision-swept threshold/stair motor. assignBuildingAgentGoal uses scene, room, goal and optional entrance.
+- fixed-point lockstep: BuildingWorldRuntime::RecoveryMode::DeterministicLockstep, all scenes resident, synchronous graph owners with explicit reset callbacks. No Box3D float publication in this mode.
+
+Acceptance targets (not yet executed here):
+
+    cmake --build build --target aiverse_building_world_example
+    ctest --test-dir build -R '^building_native_world_(replica|lockstep|physis)$' --output-on-failure
+
+PHYSIS case exists only with AIVERSE_ENABLE_PHYSICS=ON. Replica case now exercises remote CPU draw pose generation; actual GPU capture and shipping-project actor motor still need native acceptance. The lockstep case compares replay checksums and runs the existing RollbackSession late-input path.

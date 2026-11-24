@@ -93,6 +93,14 @@ public:
         }
         BuildingLiftPresentationFrame liftFrame;
         if(frame.hasCirculation){
+            const auto& old=view_.frame();
+            if(old.sceneId&&old.epoch==frame.epoch)
+                for(const auto& state:frame.circulation.lifts){
+                    const auto it=std::find_if(old.circulation.lifts.begin(),old.circulation.lifts.end(),
+                        [&](const auto& previous){return previous.featureIndex==state.featureIndex;});
+                    if(it==old.circulation.lifts.end()||state.revision<it->revision)
+                        return fail(error,"Replica lift revision moved backwards");
+                }
             BuildingCirculationCheckpoint saved;
             for(const auto& state:frame.circulation.lifts)
                 if(!saved.lifts.emplace(state.featureIndex,BuildingLiftCheckpoint{state,0}).second)
@@ -155,6 +163,9 @@ public:
     const BuildingReplicaSceneFrame& frame()const noexcept{return view_.frame();}
     // CPU readback for tests/tools; same poses used by Renderer3D.
     BuildingApertureVisualFrame sampleApertures(uint32_t ms){return apertures_.interpolate(ms);}
+    template<class Visitor> bool sampleLifts(Visitor&& visitor)const{
+        return lifts_.submit(std::forward<Visitor>(visitor));
+    }
 private:
     static bool fail(std::string* error,const std::string& message){if(error)*error=message;return false;}
     Definition def_;

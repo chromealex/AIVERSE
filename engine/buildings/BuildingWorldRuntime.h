@@ -166,7 +166,7 @@ public:
             scene->liftLayout.emplace(feature,lift.floorCount());
             liftShapes+=1+2*lift.floorCount();
         }
-        if(scene->liftLayout.size()>64||
+        if(scene->liftLayout.size()>32||
            (!scene->liftLayout.empty()&&(!scene->def.atLiftLanding||
              !scene->def.authorizeLift||sim_->tickRate()>1000)))
             return fail(error,"Lift recipe requires real landing/access guards and supported tick rate");
@@ -313,6 +313,8 @@ public:
     // Game host must retire graphics on the owning GPU thread first and
     // reset any external graph revision caches at this structural barrier.
     void beginRecovery(){
+        // Deterministic mode preserves command epoch and queued input.
+        if(lockstep()){recovering_=true;return;}
         recovering_=true;
         if(epoch_<INT64_MAX)++epoch_;
         else epochExhausted_=true;
@@ -1136,7 +1138,7 @@ private:
                state->second.leaves.size()!=s->poses.size()||
                cp->second.session.lastTick!=sim_->tick()||
                bool(cp->second.navRevision)!=bool(s->def.regionalNavigation)||
-               lifts->scenes.contains(id)!=!s->liftLayout.empty()||
+               (lifts->scenes.contains(id)!=(!s->liftLayout.empty()))||
                !ownsPhysical(*s))
                 return fail(error,"Invalid restored lockstep scene state or physical owner");
         }

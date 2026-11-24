@@ -142,6 +142,9 @@ public:
 
     // Advance exactly one fixed tick.
     void step();
+    // Atomically check readiness before network/replay input is injected.
+    // Callback runs exactly once only when the fixed tick can execute.
+    bool stepWithInput(const std::function<void()>& prepareInput);
     // Shared, opt-in engine extensions register during GameModule::setup.
     // The chosen command ID must be reserved by the project's command catalog.
     using SharedCommandHandler=std::function<void(Simulation&,const Command&)>;
