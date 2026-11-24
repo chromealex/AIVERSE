@@ -412,6 +412,7 @@ Json StudioSession::snapshot() const {
     Json project = Json::object();
     project.set("name", str(ws_.project.manifest.getStr("name", "No project opened")));
     project.set("path", str(ws_.project.dir));
+    project.set("historyVersion",str(ws_.project.historyVersion()));
     project.set("dirty", Json::fromBool(ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty));
     result.set("project", std::move(project));
     Json scene = Json::object();

@@ -892,6 +892,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
     onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
     const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
+    if (phase==0&&ok)sendEvent("document.changed", ""); // History controls observe stroke ownership immediately.
     if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
 }
