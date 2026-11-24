@@ -1177,10 +1177,25 @@ Json StudioSession::dispatch(const Json& request) {
                 if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
-                if(entry.files.size()!=1)throw std::runtime_error("Unsupported asset history entry");
-                const auto plan=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
-                StudioAssetCatalog catalog(ws_.project.dir);
-                catalog.applyMetadataEdit(plan.front());
+                if(entry.move){
+                    // Recheck known read-only rules references before reversing paths.
+                    const auto check=[&]{
+                        StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+                        const auto refs=studioCollectAssetReferences(editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,catalog.all());
+                        for(size_t i=0;i<entry.move->files.size();i+=2){
+                            const auto& f=entry.move->files[i];
+                            for(const auto& ref:refs)
+                                if(!ref.writable&&(ref.path=="content/"+f.from||ref.path=="content/"+f.to))
+                                    throw std::runtime_error("Asset move history blocked by rules reference: "+ref.owner);
+                        }
+                    };
+                    studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check);
+                }else{
+                    if(entry.files.size()!=1)throw std::runtime_error("Unsupported asset history entry");
+                    const auto plan=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
+                    StudioAssetCatalog catalog(ws_.project.dir);
+                    catalog.applyMetadataEdit(plan.front());
+                }
                 assetHistory_.advance(redo);agentHistoryUnsafe_=true;
             }
             auto result=assetHistoryJson();
@@ -2193,9 +2208,13 @@ Json StudioSession::dispatchImpl(const Json& request) {
             };
             const std::function<void()> commitHook =
                 internal ? std::function<void()>(repair) : std::function<void()>{};
-            // Until transfer plans have their own reversible history, do not cross this boundary.
-            assetHistory_.reset();agentHistoryUnsafe_=true;
-            Json result=pendingAssetTransfer_->apply(token,decisions,commitHook);
+            std::optional<editor::ProjectHistory::MovePlan> moveHistory;
+            agentHistoryUnsafe_=true;
+            Json result;
+            try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory);}
+            catch(...){assetHistory_.reset();throw;}
+            if(moveHistory)assetHistory_.recordMove(std::move(*moveHistory),"Move assets");
+            else if(result["files"].size()!=0||result["issues"].size()!=0)assetHistory_.reset();
             pendingAssetTransfer_.reset();
             if (internal) result.set("repairedMaterialReferences",num(int64_t(repaired)));
             reply.set("result",std::move(result));

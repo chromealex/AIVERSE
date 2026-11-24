@@ -7,12 +7,18 @@
 #include <cstddef>
 #include <vector>
 #include <string>
+#include <optional>
 
 namespace aiverse::editor {
 class ProjectHistory {
 public:
     static constexpr size_t MaxSteps=64, MaxBytes=16u*1024u*1024u;
-    struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; };
+    struct MoveFile { std::string from,to,bytes; };
+    struct MovePlan {
+        std::vector<MoveFile> files; // content-relative exact file/sidecar pairs
+        std::optional<std::string> materialsBefore,materialsAfter;
+    };
+    struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; };
     const std::vector<Step>& steps() const noexcept {return steps_;}
     size_t position() const noexcept {return position_;}
     size_t bytes() const noexcept {return bytes_;}
@@ -38,7 +44,23 @@ public:
             while(!steps_.empty()&&(steps_.size()>=MaxSteps||n>MaxBytes-bytes_)){
                 bytes_-=steps_.front().bytes;steps_.erase(steps_.begin());--position_;
             }
-            steps_.push_back({label.substr(0,256),std::move(files),n});
+            steps_.push_back({label.substr(0,256),std::move(files),n,{}});
+            bytes_+=n;position_=steps_.size();++version_;
+        }catch(...){reset();}
+    }
+    void recordMove(MovePlan&& move,const std::string& label) noexcept {
+        if(move.files.empty())return;
+        try {
+            size_t n=sizeof(Step)+std::min<size_t>(label.size(),256);
+            auto add=[&](size_t size){if(size>MaxBytes-n)throw std::length_error("Move history budget");n+=size;};
+            for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());}
+            if(move.materialsBefore)add(move.materialsBefore->size());
+            if(move.materialsAfter)add(move.materialsAfter->size());
+            while(steps_.size()>position_){bytes_-=steps_.back().bytes;steps_.pop_back();}
+            while(!steps_.empty()&&(steps_.size()>=MaxSteps||n>MaxBytes-bytes_)){
+                bytes_-=steps_.front().bytes;steps_.erase(steps_.begin());--position_;
+            }
+            steps_.push_back({label.substr(0,256),{},n,std::move(move)});
             bytes_+=n;position_=steps_.size();++version_;
         }catch(...){reset();}
     }

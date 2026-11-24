@@ -36,7 +36,8 @@ public:
     // The completion hook runs before the move is considered committed, so
     // dependent material writes can fail and trigger filesystem rollback.
     Json apply(const std::string& token,const std::vector<StudioTransferDecision>& decisions,
-               const std::function<void()>& beforeCommit = {});
+               const std::function<void()>& beforeCommit = {},
+               std::optional<editor::ProjectHistory::MovePlan>* history = nullptr);
     const std::string& token()const{return token_;}
 private:
     static StudioTransferPlan plan(const std::filesystem::path& project,
@@ -47,6 +48,10 @@ private:
     std::string token_;
     std::vector<StudioTransferEntry> entries_;
 };
+// Replay a native recorded regular-file move, never a browser-supplied path list.
+void studioReplayAssetMove(const std::filesystem::path& project,
+                           const editor::ProjectHistory::MovePlan& plan,bool redo,
+                           const std::function<void()>& validateReferences = {});
 std::string studioCreateContentFolder(const std::filesystem::path& project,
                                      const std::string& parent,const std::string& name);
 }

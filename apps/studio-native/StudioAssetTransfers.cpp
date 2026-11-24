@@ -228,7 +228,9 @@ Json StudioTransferPlan::describe() const {
 }
 Json StudioTransferPlan::apply(const std::string& token,
                          const std::vector<StudioTransferDecision>& decisions,
-                         const std::function<void()>& beforeCommit){
+                         const std::function<void()>& beforeCommit,
+                         std::optional<editor::ProjectHistory::MovePlan>* history){
+    if(history)history->reset();
     if(token!=token_)throw std::runtime_error("Transfer preview expired or changed");
     Json result=Json::object(),copied=Json::array(),errors=Json::array();
     if (type_==StudioTransferType::Move) {
@@ -284,6 +286,33 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (a.rfind(b+"/",0)==0 || b.rfind(a+"/",0)==0)
                     throw std::runtime_error("Move selection contains a directory and its descendant");
             }
+        // Capture only bounded regular-file moves with existing sidecars. Directory
+        // moves and large assets remain functional, but are explicit history barriers.
+        std::optional<editor::ProjectHistory::MovePlan> recorded;
+        if(history&&!planned.empty()){
+            try {
+                editor::ProjectHistory::MovePlan candidate;
+                size_t used=0;
+                const auto capture=[&](const fs::path& file){
+                    if(!fs::is_regular_file(fs::symlink_status(file)))throw std::runtime_error("Not a history file");
+                    const auto size=fs::file_size(file);
+                    if(size>editor::ProjectHistory::MaxBytes-used)throw std::runtime_error("Move history budget");
+                    auto bytes=editor::readProjectFileBytes(file);
+                    if(bytes.size()>editor::ProjectHistory::MaxBytes-used)throw std::runtime_error("Move history budget");
+                    used+=bytes.size();return bytes;
+                };
+                for(const auto& pair:planned)
+                    if(!fs::is_regular_file(fs::symlink_status(pair.first))||
+                       !fs::is_regular_file(fs::symlink_status(studioMetaPath(pair.first))))
+                        throw std::runtime_error("Move history requires regular file and sidecar");
+                for(const auto& op:operations)
+                    candidate.files.push_back({op.source.lexically_relative(root).generic_string(),
+                        op.destination.lexically_relative(root).generic_string(),capture(op.source)});
+                const auto material=project_/"materials.json";
+                if(existsOrSymlink(material))candidate.materialsBefore=capture(material);
+                recorded=std::move(candidate);
+            }catch(const std::exception&){recorded.reset();}
+        }
         StudioMoveJournal journal(project_);
         std::vector<StudioMoveJournalOperation> journalOps;
         journalOps.reserve(operations.size());
@@ -306,6 +335,21 @@ Json StudioTransferPlan::apply(const std::string& token,
             }
             StudioAssetCatalog catalog(project_); catalog.rebuild();
             if (beforeCommit) beforeCommit();
+            if(recorded){
+                try {
+                    const auto material=project_/"materials.json";
+                    if(existsOrSymlink(material)){
+                        if(fs::file_size(material)>editor::ProjectHistory::MaxBytes)
+                            throw std::runtime_error("Move history material budget");
+                        recorded->materialsAfter=editor::readProjectFileBytes(material);
+                    }
+                    if(bool(recorded->materialsBefore)!=bool(recorded->materialsAfter))
+                        recorded.reset(); // creation/deletion is not supported by this replay
+                    if(recorded)for(const auto& f:recorded->files)
+                        if(editor::readProjectFileBytes(root/f.to)!=f.bytes)
+                            throw std::runtime_error("Asset changed during move");
+                }catch(const std::exception&){recorded.reset();}
+            }
             journal.commit();
         } catch (...) {
             const std::exception_ptr failure=std::current_exception();
@@ -324,6 +368,7 @@ Json StudioTransferPlan::apply(const std::string& token,
         Json result=Json::object();
         result.set("files",std::move(completed));
         result.set("issues",Json::array());
+        if(history)*history=std::move(recorded);
         return result;
     }
 
@@ -414,5 +459,85 @@ Json StudioTransferPlan::apply(const std::string& token,
     result.set("files",std::move(copied));
     result.set("issues",std::move(errors));
     return result;
+}
+void studioReplayAssetMove(const fs::path& project,
+                           const editor::ProjectHistory::MovePlan& plan,bool redo,
+                           const std::function<void()>& validateReferences){
+    const auto root=studioContentRoot(project);
+    if(plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
+        throw std::runtime_error("Invalid recorded asset move");
+    const auto& materialBefore=redo?plan.materialsBefore:plan.materialsAfter;
+    const auto& materialAfter=redo?plan.materialsAfter:plan.materialsBefore;
+    const auto material=project/"materials.json";
+    const auto checkMaterial=[&]{
+        if(bool(materialBefore)!=existsOrSymlink(material)||
+           (materialBefore&&editor::readProjectFileBytes(material)!=*materialBefore))
+            throw std::runtime_error("Material library changed since asset move");
+    };
+    if(bool(materialBefore)!=bool(materialAfter))throw std::runtime_error("Unsupported material topology change");
+    checkMaterial();
+    StudioAssetCatalog catalog(project);catalog.rebuild(false);
+    std::set<fs::path> reserved;
+    std::vector<StudioMoveJournalOperation> operations;
+    auto checked=[&](const std::string& rel,bool sidecar,bool source){
+        const fs::path p(rel);
+        if(rel.empty()||p.is_absolute()||rel.size()>1024)throw std::runtime_error("Invalid recorded move path");
+        const auto parent=p.parent_path().generic_string();
+        const auto folder=checkedFolder(project,parent=="."?"":parent);
+        if(sidecar){
+            if(p.extension()!=".meta")throw std::runtime_error("Expected metadata sidecar");
+            validateSegment(p.stem().string());
+        }else validateSegment(p.filename().string());
+        const auto result=folder/p.filename();
+        if(!reserved.insert(result).second)throw std::runtime_error("Overlapping recorded move paths");
+        if(source?!fs::is_regular_file(fs::symlink_status(result)):existsOrSymlink(result))
+            throw std::runtime_error("Asset move history path changed or collides: "+rel);
+        return result;
+    };
+    for(size_t i=0;i<plan.files.size();i+=2){
+        const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
+        if(meta.from!=asset.from+".meta"||meta.to!=asset.to+".meta")
+            throw std::runtime_error("Recorded asset/metadata pair mismatch");
+        const auto doc=Json::parse(meta.bytes);
+        const auto indexed=catalog.byGuid(doc.getStr("guid"));
+        const auto& source=redo?asset.from:asset.to;
+        if(!indexed||indexed->directory||indexed->path!=source||indexed->importer!=doc.getStr("importer"))
+            throw std::runtime_error("Asset GUID or importer changed since move");
+        for(size_t j=i;j<i+2;++j){
+            const auto& f=plan.files[j];const auto& from=redo?f.from:f.to;const auto& to=redo?f.to:f.from;
+            const auto src=checked(from,j!=i,true);
+            (void)checked(to,j!=i,false);
+            if(fs::file_size(src)!=f.bytes.size()||editor::readProjectFileBytes(src)!=f.bytes)
+                throw std::runtime_error("Asset move history source bytes changed: "+from);
+            operations.push_back({from,to});
+        }
+    }
+    if(validateReferences)validateReferences();
+    checkMaterial();
+    StudioMoveJournal journal(project);journal.begin(operations);
+    try{
+        for(const auto& op:operations){
+            const auto from=root/op.from,to=root/op.to;
+            if(existsOrSymlink(to))throw std::runtime_error("Asset move destination occupied");
+            fs::rename(from,to);
+            StudioMoveJournal::syncPath(from.parent_path());
+            if(from.parent_path()!=to.parent_path())StudioMoveJournal::syncPath(to.parent_path());
+        }
+        if(materialBefore)editor::applyProjectFileEdits(project,{{material,*materialBefore,*materialAfter}});
+        else checkMaterial();
+        catalog.rebuild(false);
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
+            const auto indexed=catalog.byGuid(Json::parse(meta.bytes).getStr("guid"));
+            if(!indexed||indexed->path!=(redo?asset.to:asset.from))
+                throw std::runtime_error("Asset move history index reconciliation failed");
+        }
+        journal.commit();
+    }catch(...){
+        const auto failure=std::current_exception();
+        try{journal.restoreOrCleanup();catalog.rebuild(false);}
+        catch(const std::exception& e){throw std::runtime_error(std::string("Asset history recovery incomplete: ")+e.what());}
+        std::rethrow_exception(failure);
+    }
 }
 } // namespace aiverse::studio
