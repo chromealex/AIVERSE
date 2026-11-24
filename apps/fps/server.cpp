@@ -85,6 +85,13 @@ int main(int argc,char** argv) {
                 if(status!=Status::Ready)throw std::runtime_error("background world recovery refused");
             }else if(!server.enablePersistence(directory,uuid,resume,64u*1024u*1024u,worldAsync))
                 throw std::runtime_error("world persistence refused: unsupported content, invalid state, busy directory or recovery required");
+            // Recovered actors may be far from authored spawn positions.
+            // Use the real host preflight before exposing any network listener.
+            while(!server.pollPersistenceContent()){
+                if(server.persistenceFailed())
+                    throw std::runtime_error("persistent content admission refused: "+server.persistenceContentError());
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
             std::printf("Persistent world: %s at tick %u\n",resume?"recovered":"created",server.simulation().tick());
         }
         aiverse::net::UdpListener udp;aiverse::net::WsListener ws;
