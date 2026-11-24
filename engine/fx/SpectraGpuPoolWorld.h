@@ -355,8 +355,8 @@ private:
         bool retired=false;
         uint64_t retireToken=0;
         bool live() const {return particles && !retired;}
-        std::string collisionChild;
-        std::shared_ptr<GpuCollisionBatch> collisionInbox; // one completed batch, weak callback lease
+        std::string collisionChild{};
+        std::shared_ptr<GpuCollisionBatch> collisionInbox{}; // one completed batch, weak callback lease
     };
     void retireUnusedGroups();
     bool defineCompiled(const std::string& name,const fx::EffectDef& effect,
