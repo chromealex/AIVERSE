@@ -748,7 +748,7 @@ Json StudioTransferPlan::apply(const std::string& token,
 }
 void studioReplayAssetMove(const fs::path& project,
                            const editor::ProjectHistory::MovePlan& plan,bool redo,
-                           const std::function<void()>& validateReferences){
+                           const std::function<void()>& validateReferences,StudioBatchAssetPlan* staged){
     const auto root=studioContentRoot(project);
     if(plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
         throw std::runtime_error("Invalid recorded asset move");
@@ -802,6 +802,14 @@ void studioReplayAssetMove(const fs::path& project,
     }
     if(validateReferences)validateReferences();
     checkMaterial();
+    if(staged){
+        for(size_t i=0;i<operations.size();++i){
+            const auto& op=operations[i];const auto& f=plan.files[i];
+            staged->relocations.push_back({"content/"+op.from,"content/"+op.to,moveDigest(root/op.from,f.directory),f.directory});
+        }
+        if(materialBefore)staged->documents.push_back({material,*materialBefore,*materialAfter});
+        return;
+    }
     StudioMoveJournal journal(project);journal.begin(operations);
     try{
         for(size_t i=0;i<operations.size();++i){
@@ -851,7 +859,7 @@ fs::path quarantineFolder(const fs::path& project,const std::string& relative) {
 }
 }
 void studioReplayAssetQuarantine(const fs::path& project,
-    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences){
+    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences,StudioBatchAssetPlan* staged){
     if(!plan.quarantine||plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
         throw std::runtime_error("Invalid asset quarantine plan");
     const auto root=studioContentRoot(project);(void)root;
@@ -887,6 +895,13 @@ void studioReplayAssetQuarantine(const fs::path& project,
         operations.push_back(deleted?StudioMoveJournalOperation{liveRel+".meta",meta.to}:StudioMoveJournalOperation{meta.to,liveRel+".meta"});
     }
     if(deleted&&validateReferences)validateReferences();
+    if(staged){
+        for(size_t i=0;i<operations.size();++i){
+            const auto& op=operations[i];const auto& f=plan.files[i];
+            staged->relocations.push_back({op.from,op.to,moveDigest(project/op.from,f.directory),f.directory});
+        }
+        return;
+    }
     StudioMoveJournal journal(project);journal.begin(operations,true);
     try{
         for(size_t i=0;i<operations.size();++i){
@@ -944,7 +959,7 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
     return plan;
 }
 void studioReplayAssetReplacement(const fs::path& project,
-    const editor::ProjectHistory::MovePlan& plan,bool redo){
+    const editor::ProjectHistory::MovePlan& plan,bool redo,StudioBatchAssetPlan* staged){
     if(!plan.replacement||plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
         throw std::runtime_error("Invalid asset replacement plan");
     StudioAssetCatalog catalog(project);catalog.rebuild(false);
@@ -966,6 +981,14 @@ void studioReplayAssetReplacement(const fs::path& project,
             throw std::runtime_error("Asset replacement history conflict: "+old.from);
         operations.push_back({"content/"+old.from,outgoing.to,outgoing.digest});
         operations.push_back({incoming.to,"content/"+old.from,incoming.digest});
+    }
+    if(staged){
+        for(const auto& op:operations)staged->relocations.push_back({op.from,op.to,op.digest,false});
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& old=plan.files[i];
+            staged->documents.push_back({studioMetaPath(studioContentRoot(project)/old.from),old.bytes,old.bytes});
+        }
+        return;
     }
     StudioMoveJournal journal(project);journal.begin(operations,true,true);
     try{
@@ -1328,6 +1351,7 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
 static void beginAssetHistoryCheckpoint(const fs::path& project){
     checkTrashJournal(project);
     const auto cache=assetHistoryCache(project,true),marker=cache/"asset-history.dirty";
+    if(existsOrSymlink(cache/"studio-history-batch"))throw std::runtime_error("Pending coordinated history recovery; reopen project");
     writeAssetCheckpoint(marker,"Asset history publication in progress\n");
     StudioMoveJournal::syncPath(cache);StudioMoveJournal::syncPath(cache.parent_path());
 }
@@ -1367,6 +1391,7 @@ void studioRecoverAssetJournal(const fs::path& project){
     if(!existsOrSymlink(cache))return;
     editor::project_file_detail::Lock lock(cache/"asset-history.lock");
     StudioMoveJournal::recover(project);
+    studioRecoverHistoryBatch(project);
 }
 AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
     const auto cache=assetHistoryCache(project,false);
@@ -1379,5 +1404,204 @@ AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
     if(!fs::is_regular_file(fs::symlink_status(path))||fs::file_size(path)>AssetCheckpointMaxBytes)
         throw std::runtime_error("Unsafe or oversized asset history checkpoint");
     return decodeAssetHistory(project,editor::readProjectFileBytes(path));
+}
+namespace {
+using BatchState=std::map<std::string,std::string>; // absent = empty, f/d prefix + digest
+bool batchOverlap(const std::string& a,const std::string& b){
+    return a==b||a.starts_with(b+"/")||b.starts_with(a+"/");
+}
+fs::path batchPath(const fs::path& root,const std::string& rel){
+    if(rel.starts_with("content/")){
+        const auto value=rel.substr(8);
+        validateHistoryContentPath(value,value.ends_with(".meta"));
+    }else{
+        validateHistorySlot(root,rel,rel.ends_with(".meta"));
+    }
+    fs::path path=root;
+    for(const auto& segment:fs::path(rel)){
+        path/=segment;
+        if(existsOrSymlink(path)&&fs::is_symlink(fs::symlink_status(path)))throw std::runtime_error("Symlink in coordinated history path");
+    }
+    if(!fs::is_directory(fs::symlink_status(path.parent_path())))throw std::runtime_error("Missing coordinated history parent");
+    return path;
+}
+std::string batchIdentity(const fs::path& path){
+    if(!existsOrSymlink(path))return {};
+    const auto status=fs::symlink_status(path);
+    const bool directory=fs::is_directory(status);
+    if(!directory&&!fs::is_regular_file(status))throw std::runtime_error("Invalid coordinated history payload");
+    return std::string(directory?"d":"f")+moveDigest(path,directory);
+}
+struct BatchTimeline {
+    BatchState initial;
+    std::vector<BatchState> phases;
+};
+BatchTimeline batchTimeline(const fs::path& root,const std::vector<StudioBatchRelocation>& moves){
+    if(moves.empty()||moves.size()>256)throw std::runtime_error("Invalid coordinated relocation count");
+    BatchTimeline timeline;
+    BatchState simulated;
+    for(const auto& m:moves){
+        (void)batchPath(root,m.from);(void)batchPath(root,m.to);
+        if(m.from==m.to||!validHistoryDigest(m.digest)||
+           (!m.from.starts_with("content/")&&!m.to.starts_with("content/")))
+            throw std::runtime_error("Invalid coordinated relocation");
+        const auto identity=std::string(m.directory?"d":"f")+m.digest;
+        if(!simulated.count(m.from)){simulated[m.from]=identity;timeline.initial[m.from]=identity;}
+        if(!simulated.count(m.to)){simulated[m.to]="";timeline.initial[m.to]="";}
+        if(simulated.at(m.from)!=identity||!simulated.at(m.to).empty())
+            throw std::runtime_error("Inconsistent coordinated relocation chain");
+        simulated[m.from]="";simulated[m.to]=identity;
+    }
+    for(auto it=timeline.initial.begin();it!=timeline.initial.end();++it)
+        for(auto next=std::next(it);next!=timeline.initial.end();++next)
+            if(batchOverlap(it->first,next->first))throw std::runtime_error("Nested relocation endpoints require separate history navigation");
+    simulated=timeline.initial;timeline.phases.push_back(simulated);
+    for(const auto& m:moves){
+        simulated[m.to]=simulated[m.from];simulated[m.from]="";
+        timeline.phases.push_back(simulated);
+    }
+    return timeline;
+}
+size_t batchPhase(const fs::path& root,const BatchTimeline& timeline){
+    BatchState actual;
+    for(const auto& [path,identity]:timeline.initial){
+        (void)identity;actual[path]=batchIdentity(batchPath(root,path));
+    }
+    size_t phase=0;bool found=false;
+    for(size_t i=0;i<timeline.phases.size();++i)if(timeline.phases[i]==actual){
+        if(found)throw std::runtime_error("Ambiguous coordinated recovery phase");
+        found=true;phase=i;
+    }
+    if(!found)throw std::runtime_error("Coordinated recovery conflict: payload state changed");
+    return phase;
+}
+void validateBatchDocuments(const fs::path& root,const BatchTimeline& timeline,
+                            const std::vector<editor::ProjectFileEdit>& docs){
+    std::set<std::string> unique;size_t bytes=0;
+    if(docs.size()>4096)throw std::runtime_error("Too many coordinated document dependencies");
+    for(const auto& edit:docs){
+        const auto rel=edit.path.lexically_relative(root).generic_string();
+        (void)editor::project_file_detail::safeTarget(root,rel);
+        if(!unique.insert(rel).second)throw std::runtime_error("Duplicate coordinated document");
+        for(const auto& [endpoint,identity]:timeline.initial){
+            (void)identity;if(batchOverlap(rel,endpoint))throw std::runtime_error("Document overlaps relocation; navigate separately");
+        }
+        for(const size_t count:{edit.before.size(),edit.after.size()}){
+            if(count>128u*1024u*1024u-bytes)throw std::runtime_error("Coordinated document budget exceeded");
+            bytes+=count;
+        }
+    }
+}
+fs::path batchFolder(const fs::path& project){return fs::canonical(project)/".aiverse-cache"/"studio-history-batch";}
+void retireBatch(const fs::path& folder){
+    // No pending marker remains once the outcome is known.
+    std::error_code ec;fs::remove_all(folder,ec);
+    StudioMoveJournal::syncPath(folder.parent_path());
+}
+void reverseBatch(const fs::path& root,const fs::path& folder,
+                  const std::vector<StudioBatchRelocation>& moves,
+                  const std::vector<editor::ProjectFileEdit>& docs){
+    const auto timeline=batchTimeline(root,moves);const auto phase=batchPhase(root,timeline);
+    validateBatchDocuments(root,timeline,docs);
+    std::vector<editor::ProjectFileEdit> reverse;
+    for(const auto& f:docs){
+        const auto actual=editor::readProjectFileBytes(f.path);
+        if(actual!=f.before&&actual!=f.after)throw std::runtime_error("Coordinated document recovery conflict: "+f.path.string());
+        if(actual!=f.before)reverse.push_back({f.path,actual,f.before});
+    }
+    editor::applyProjectFileEdits(root,reverse);
+    for(size_t i=phase;i>0;--i){
+        const auto& m=moves[i-1];
+        const auto from=batchPath(root,m.to),to=batchPath(root,m.from);
+        if(batchIdentity(from)!=std::string(m.directory?"d":"f")+m.digest||existsOrSymlink(to))
+            throw std::runtime_error("Coordinated relocation changed during recovery");
+        StudioMoveJournal::renamePath(from,to);
+    }
+    if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated rollback not restored");
+    StudioMoveJournal::renamePath(folder/"pending.json",folder/"rolledback.json");
+    retireBatch(folder);
+}
+}
+void studioRecoverHistoryBatch(const fs::path& project){
+    const auto root=fs::canonical(project),folder=batchFolder(root);
+    if(!existsOrSymlink(folder))return;
+    if(!fs::is_directory(fs::symlink_status(folder)))throw std::runtime_error("Unsafe coordinated history journal");
+    const auto pending=folder/"pending.json",committed=folder/"committed.json",rolledback=folder/"rolledback.json";
+    if(existsOrSymlink(committed)||existsOrSymlink(rolledback)){
+        if(existsOrSymlink(pending))throw std::runtime_error("Ambiguous coordinated history journal");
+        retireBatch(folder);return;
+    }
+    if(!existsOrSymlink(pending)){retireBatch(folder);return;}
+    if(!fs::is_regular_file(fs::symlink_status(pending))||fs::file_size(pending)>256u*1024u*1024u)
+        throw std::runtime_error("Invalid coordinated history journal");
+    const auto envelope=Json::parseFile(pending.string());const auto payload=envelope.getStr("payload");
+    if(envelope.getInt("version")!=1||historyHash(payload)!=envelope.getStr("sha256"))
+        throw std::runtime_error("Coordinated journal checksum mismatch");
+    const auto body=Json::parse(payload);
+    if(!body["moves"].isArray()||body["moves"].size()>256||!body["documents"].isArray()||body["documents"].size()>4096)
+        throw std::runtime_error("Invalid coordinated journal rows");
+    std::vector<StudioBatchRelocation> moves;
+    std::vector<editor::ProjectFileEdit> docs;
+    for(const auto& row:body["moves"].items())
+        moves.push_back({row.getStr("from"),row.getStr("to"),row.getStr("digest"),row.getBool("directory")});
+    for(const auto& row:body["documents"].items()){
+        if(!row["before"].isString()||!row["after"].isString())throw std::runtime_error("Invalid coordinated document snapshot");
+        const auto path=editor::project_file_detail::safeTarget(root,row.getStr("path"));
+        docs.push_back({path,row.getStr("before"),row.getStr("after")});
+    }
+    // Resolve the nested existing-file journal before examining its baseline.
+    editor::recoverProjectFileEdits(root);
+    reverseBatch(root,folder,moves,docs);
+}
+void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBatchRelocation>& moves,
+                            const std::vector<editor::ProjectFileEdit>& documents){
+    if(moves.empty()){editor::applyProjectFileEdits(project,documents);return;}
+    const auto root=fs::canonical(project),folder=batchFolder(root);
+    const auto timeline=batchTimeline(root,moves);
+    if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
+    std::vector<editor::ProjectFileEdit> docs=documents;
+    for(auto& f:docs)f.path=fs::canonical(f.path);
+    validateBatchDocuments(root,timeline,docs);
+    for(const auto& f:docs)if(editor::readProjectFileBytes(f.path)!=f.before)
+        throw std::runtime_error("Coordinated document baseline changed");
+    if(existsOrSymlink(folder)||!fs::create_directory(folder))throw std::runtime_error("Previous coordinated history journal needs recovery");
+    try{
+        Json body=Json::object(),rows=Json::array(),files=Json::array();
+        for(const auto& m:moves){
+            Json row=Json::object();row.set("from",Json::string(m.from));row.set("to",Json::string(m.to));
+            row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));rows.push(std::move(row));
+        }
+        for(const auto& f:docs){
+            Json row=Json::object();row.set("path",Json::string(f.path.lexically_relative(root).generic_string()));
+            row.set("before",Json::string(f.before));row.set("after",Json::string(f.after));files.push(std::move(row));
+        }
+        body.set("moves",std::move(rows));body.set("documents",std::move(files));
+        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(1)));
+        envelope.set("sha256",Json::string(historyHash(payload)));envelope.set("payload",Json::string(payload));
+        const auto text=envelope.dump(-1)+"\n";
+        if(text.size()>256u*1024u*1024u)throw std::runtime_error("Coordinated journal exceeds disk budget");
+        writeAssetCheckpoint(folder/"pending.tmp",text);
+        StudioMoveJournal::renamePath(folder/"pending.tmp",folder/"pending.json");
+        StudioMoveJournal::syncPath(folder.parent_path());
+        for(const auto& m:moves){
+            const auto from=batchPath(root,m.from),to=batchPath(root,m.to);
+            if(batchIdentity(from)!=std::string(m.directory?"d":"f")+m.digest||existsOrSymlink(to))
+                throw std::runtime_error("Coordinated relocation changed during publication");
+            StudioMoveJournal::renamePath(from,to);
+        }
+        if(batchPhase(root,timeline)!=moves.size())throw std::runtime_error("Coordinated relocation result mismatch");
+        editor::applyProjectFileEdits(root,docs);
+        // The outer marker is authoritative even after the inner journal commits.
+        StudioMoveJournal::renamePath(folder/"pending.json",folder/"committed.json");
+    }catch(const std::exception& e){
+        const std::string reason=e.what();
+        if(existsOrSymlink(folder/"committed.json"))
+            throw std::runtime_error("Coordinated commit outcome uncertain; reopen project: "+reason);
+        try{studioRecoverHistoryBatch(root);}
+        catch(const std::exception& rollback){throw std::runtime_error(reason+"; coordinated recovery incomplete: "+rollback.what());}
+        throw std::runtime_error(reason);
+    }
+    // A cleanup failure after durable commit must not be reported as rollback.
+    try{retireBatch(folder);}catch(...){}
 }
 } // namespace aiverse::studio

@@ -52,17 +52,28 @@ private:
     std::string token_;
     std::vector<StudioTransferEntry> entries_;
 };
+// Prepared relocation operations are project-relative, never browser input.
+struct StudioBatchRelocation {std::string from,to,digest;bool directory=false;};
+struct StudioBatchAssetPlan {
+    std::vector<StudioBatchRelocation> relocations;
+    std::vector<editor::ProjectFileEdit> documents;
+};
+// Coordinator supports disjoint relocation groups and existing document edits.
+void studioApplyHistoryBatch(const std::filesystem::path& project,
+    const std::vector<StudioBatchRelocation>& relocations,
+    const std::vector<editor::ProjectFileEdit>& documents);
+void studioRecoverHistoryBatch(const std::filesystem::path& project);
 // Replay a native recorded file or directory move, never a browser-supplied path list.
 void studioReplayAssetMove(const std::filesystem::path& project,
                            const editor::ProjectHistory::MovePlan& plan,bool redo,
-                           const std::function<void()>& validateReferences = {});
+                           const std::function<void()>& validateReferences = {},StudioBatchAssetPlan* staged=nullptr);
 void studioReplayAssetReplacement(const std::filesystem::path& project,
-    const editor::ProjectHistory::MovePlan& plan,bool redo);
+    const editor::ProjectHistory::MovePlan& plan,bool redo,StudioBatchAssetPlan* staged=nullptr);
 // Soft-delete one asset to persistent project-local quarantine; never purge it on history eviction.
 editor::ProjectHistory::MovePlan studioQuarantineAsset(const std::filesystem::path& project,
     const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences={});
 void studioReplayAssetQuarantine(const std::filesystem::path& project,
-    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={});
+    const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={},StudioBatchAssetPlan* staged=nullptr);
 // Persistent asset timeline, separate from the recovery payload store.
 // A durable dirty marker fences interrupted publication; restore only exact
 // verified content/material/recovery-slot state, never infer missing history.
