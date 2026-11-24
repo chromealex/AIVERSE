@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-ledger-compaction",
+     "title": "Компактизация долгоживущего мира",
+     "titleEn": "Long-lived world compaction",
+     "text": "Ограничение накопления удалённых объектов без повторного использования идентификаторов.",
+     "textEn": "Bound retired-object accumulation without reusing persistent identities.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-streamed-persistence",
      "title": "Сохранение потоковых миров",
      "titleEn": "Streamed world persistence",
