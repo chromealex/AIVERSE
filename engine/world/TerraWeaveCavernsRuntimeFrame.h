@@ -556,10 +556,8 @@ public:
     void setNavigationChunkDimensions(uint32_t resolution,int32_t spacingCm){
         if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000)
             throw std::invalid_argument("Caverns nav chunk dimensions");
-        if(host_.sourceSnapshot()&&(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_))
-            throw std::logic_error("Caverns cannot change live collision chunk dimensions");
-        chunkResolution_=resolution;
-        chunkSpacingCm_=spacingCm;
+        if(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_)
+            throw std::logic_error("Caverns chunk dimensions fixed by frame constructor");
     }
     void drawCommitted(render::Renderer3D& renderer){
         if(!closed_&&!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
