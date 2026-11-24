@@ -809,6 +809,43 @@ TextureHandle VulkanDevice::createTexture(const TextureDesc& d) {
     return {textures_.add(t)};
 }
 
+// GPU storage writes -> transfer read -> sampled image. Keep the ordinary
+// texture's shader-readable layout contract; no CPU staging or mapping.
+bool VulkanDevice::copyStorageBufferToTexture2D(BufferHandle from,TextureHandle to,
+        const BufferTextureCopy2D& copy) {
+    const auto* src=buffers_.get(from.id);
+    const auto* dst=textures_.get(to.id);
+    if(!recording_||inPass_||activeComputeId_||!supportsStorageBufferTextureCopy()||
+       !src||src->type!=BufferType::Storage||!dst||!dst->image||dst->depth||
+       dst->compressed||dst->renderTarget||dst->storage||
+       dst->dimension!=TextureDimension::Texture2D||dst->volumeDepth!=1||
+       dst->layers!=1||dst->samples!=1||dst->levels!=1||
+       (dst->format!=PixelFormat::RGBA8&&dst->format!=PixelFormat::RGBA8_sRGB)||
+       !validBufferTextureCopy2D(copy,src->size,dst->width,dst->height)) {
+        error_="Vulkan: rejected storage buffer to RGBA8 texture copy";return false;
+    }
+    const VkBuffer source=resolveBuffer(from.id,serial_);
+    if(!source){error_="Vulkan: copy source unavailable";return false;}
+    VkCommandBuffer cb=slots_[size_t(slot_)].main;
+    auto before=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    before.srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT|VK_ACCESS_TRANSFER_WRITE_BIT|VK_ACCESS_HOST_WRITE_BIT;
+    before.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT|VK_PIPELINE_STAGE_HOST_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&before,0,nullptr,0,nullptr);
+    barrierImage(cb,dst->image,false,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,0,1);
+    VkBufferImageCopy region{};
+    region.bufferOffset=VkDeviceSize(copy.sourceOffset);
+    region.bufferRowLength=uint32_t(copy.rowPitchBytes/4);
+    region.bufferImageHeight=uint32_t(copy.height);
+    region.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};
+    region.imageExtent={uint32_t(copy.width),uint32_t(copy.height),1};
+    vkCmdCopyBufferToImage(cb,source,dst->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&region);
+    barrierImage(cb,dst->image,false,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,1,0,1);
+    return true;
+}
+
 bool VulkanDevice::readTextureAsync(TextureHandle h, TextureReadbackDesc request,
                                     TextureReadFn callback) {
     const VTexture* texture = textures_.get(h.id);
