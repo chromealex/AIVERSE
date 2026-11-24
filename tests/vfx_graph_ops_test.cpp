@@ -36,6 +36,17 @@ int main() {
         try{(void)prepareMaterialImages(p,images,"fixture_2");}catch(const std::invalid_argument&){rejected=true;}
         require(rejected,"incomplete texture pixels accepted");
     }
+    {
+        using namespace render::texture_graph;
+        const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"h","op":"gradient","inputs":[],"properties":{"axis":"x"}},{"id":"r","op":"multiply","inputs":["h","h"]},{"id":"n","op":"normal","inputs":["h"]},{"id":"a","op":"invert","inputs":["r"]}],"outputs":{"height":"h","normal":"n","ao":"a"}})"));
+        const auto h=p.outputs.at("height"),n=p.outputs.at("normal"),a=p.outputs.at("ao");
+        auto all=evaluateMany(p,{n,a,h,n});
+        require(all.size()==4,"lifetime output order or duplicates lost");
+        require(all[0].rgba==evaluate(p,n).rgba&&all[1].rgba==evaluate(p,a).rgba&&
+                all[2].rgba==evaluate(p,h).rgba&&all[3].rgba==all[0].rgba,
+                "lifetime multi-output pixels differ from individual outputs");
+        require(all[2].rgba[0]==16&&all[2].rgba[7*4]==239,"gradient output changed");
+    }
     const auto mark = std::chrono::steady_clock::now().time_since_epoch().count();
     const fs::path root = fs::temp_directory_path() / ("aiverse-spectrafx-ops-" + std::to_string(mark));
     struct Cleanup { fs::path path; ~Cleanup() { std::error_code e; fs::remove_all(path, e); } } cleanup{root};

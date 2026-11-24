@@ -1,6 +1,7 @@
 // Bounded, CPU-only procedural texture DAG. No GPU or filesystem dependencies.
 #pragma once
 #include "engine/render/TextureGen.h"
+#include "TextureGraphLiveness.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -151,10 +152,12 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
     const int n=resolution?resolution:p.size;require(!targets.empty()&&targets.size()<=9&&n>=8&&n<=p.size,"invalid texture evaluation target or resolution");
     for(auto target:targets)require(target<p.nodes.size(),"invalid target");
     std::vector<std::vector<Pixel>> images(p.nodes.size());
-    std::vector<bool> needed(p.nodes.size());std::function<void(size_t)> mark=[&](size_t i){if(needed[i])return;needed[i]=true;for(auto dep:p.nodes[i].inputs)mark(dep);};for(auto target:targets)mark(target);
+    std::vector<std::vector<size_t>> dependencies;dependencies.reserve(p.nodes.size());
+    for(const auto& node:p.nodes)dependencies.push_back(node.inputs);
+    const auto lifetime=planDagLifetime(dependencies,p.order,targets);
     const size_t count=size_t(n)*n;
-    for(auto i:p.order){
-        if(!needed[i])continue;
+    for(const auto& step:lifetime.steps){
+        const auto i=step.node;
         const auto& node=p.nodes[i];const auto& q=node.parameters;const std::string id=node.info->id;
         auto& out=images[i];out.resize(count);
         if(id=="pattern"||id=="patternMask"){
@@ -189,6 +192,8 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             }
             for(float& c:r)c=clamp(c);out[k]=r;
         }
+        // All pixels (including neighborhood samples) have been consumed.
+        for(auto dep:step.releaseAfter)std::vector<Pixel>{}.swap(images[dep]);
     }
     std::vector<Image> result;result.reserve(targets.size());
     for(auto target:targets){Image img;img.width=img.height=n;img.name="generated:texture-graph";img.rgba.resize(count*4,255);

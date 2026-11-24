@@ -100,7 +100,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33B in progress: dependency closure liveness plan and CPU evaluator intermediate release; GPU scheduler generalization remains separate.",
+      "note": "Stage 33B CPU dependency lifetime plan integrated in source; isolated exact-blob planner fixture PASS. General GPU scheduling and hardware acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -170,7 +170,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 32A isolated cache policy PASS; Stage 33A standalone exact-blob C++20 scratch identity/invalidation fixture PASS (Linux GCC 14.2). Native graph fixture, CTest, Studio, shader/device acceptance and merged-tree Mac gate NOT RUN.",
+      "note": "Stage 32A/33A standalone policy evidence retained in handoffs; Stage 33B standalone exact-source C++20 DAG liveness fixture PASS (Linux GCC 14.2); integrated parity fixture, CTest, native/Studio/GPU and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
