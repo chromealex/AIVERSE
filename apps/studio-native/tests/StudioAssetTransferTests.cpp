@@ -1333,6 +1333,64 @@ int main(){
             AIVERSE_TEST_CHECK(index.byGuid(textureGuid)->path=="B/Paint.png");
 
         }
+        // S6f.3.4b.2b: mixed settings and URI repairs compose over
+        // stationary owners and directory-carried streamed GLB snapshots.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"MixedUriRepair";
+            for(const auto& dir:{"A/Pack","B","C","Models"})fs::create_directories(p/"content"/dir);
+            const auto source=p/"content"/"A"/"Pack";
+            const auto destination=p/"content"/"B"/"Pack";
+            const auto stationary=p/"content"/"Models"/"Scene.gltf";
+            const std::string original=R"({"asset":{"version":"2.0"},"images":[{"uri":"../A/tex.png"}]})";
+            write(stationary,original);
+            write(p/"content"/"A"/"tex.png","texture");
+            write(source/"Paint.png","pixels");
+            const auto doc=Json::parse(R"({"asset":{"version":"2.0"},"images":[{"uri":"../tex.png"}],"buffers":[{"byteLength":2097152}]})");
+            std::string tail;studioGlbAppendU32(tail,2u*1024u*1024u);studioGlbAppendU32(tail,0x004e4942);
+            tail.append(2u*1024u*1024u,'x');
+            write(source/"Large.glb",studioEncodeGlbPrefix(doc,tail.size())+tail);
+            const auto initialGlb=studioAssetFileDigest(source/"Large.glb");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto guid=index.byPath("A/tex.png")->guid;
+            const auto paintGuid=index.byPath("A/Pack/Paint.png")->guid;
+            editor::ProjectHistory history;
+            std::optional<editor::ProjectHistory::MovePlan> plan;
+            auto move=StudioTransferPlan::internal(p,"B",{"A/Pack"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan&&plan->resourceEdits.size()==1&&studioStreamingResource(plan->resourceEdits[0]));
+            history.recordMove(std::move(*plan),"Move model folder");
+            move=StudioTransferPlan::internal(p,"C",{"A/tex.png"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan&&plan->resourceEdits.size()==2);
+            history.recordMove(std::move(*plan),"Move model resource");
+            index.rebuild(false);index.patchSettings(paintGuid,"compression",Json::string("high"),&history);
+            const auto final=read(stationary),finalGlb=studioAssetFileDigest(destination/"Large.glb");
+            auto reversed=history.steps();std::reverse(reversed.begin(),reversed.end());
+            const auto undo=studioPlanMixedAssetChain(p,reversed,false);
+            AIVERSE_TEST_CHECK(undo.documents.size()==1&&undo.movingResources.size()==2);
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources);
+            AIVERSE_TEST_CHECK(read(stationary)==original&&studioAssetFileDigest(source/"Large.glb")==initialGlb);
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(guid)->path=="A/tex.png");
+            // A forged edit may not change a non-URI field, even with a
+            // syntactically valid JSON snapshot.
+            auto forged=history.steps();
+            bool changed=false;
+            for(auto& step:forged)if(step.move)for(auto& edit:step.move->resourceEdits)
+                if(edit.path.generic_string()=="content/Models/Scene.gltf"){
+                    auto modified=Json::parse(edit.after);modified.set("name",Json::string("forged"));
+                    edit.after=modified.dump(-1);changed=true;
+                }
+            AIVERSE_TEST_CHECK(changed);
+            bool refused=false;
+            try{(void)studioPlanMixedAssetChain(p,forged,true);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(stationary)==original);
+            const auto redo=studioPlanMixedAssetChain(p,history.steps(),true);
+            studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources);
+            AIVERSE_TEST_CHECK(read(stationary)==final&&studioAssetFileDigest(destination/"Large.glb")==finalGlb);
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(guid)->path=="C/tex.png");
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
