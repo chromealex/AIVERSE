@@ -153,10 +153,21 @@ int main(int argc,char** argv){
         // materials/setting without changing the functional geometry.
         auto modernVariant=generateFunctionalBuilding(modern,recipe);
         CHECK(modernVariant);
-        CHECK(sameGeometry(opened.building,modernVariant.building));
+        CHECK(!sameGeometry(opened.building,modernVariant.building));
+        CHECK(modernVariant.graph.solids.size()==opened.graph.solids.size());
         CHECK(opened.building.boxes==modernVariant.building.boxes);
         CHECK(opened.building.mesh.materials.size()!=0);
         CHECK(modernVariant.building.mesh.materials.size()!=0);
+        for(const char* id:{"medieval-fantasy","dark-fantasy","steampunk","cyberpunk","scifi-space","alien-civilization","post-apocalypse","modern","ancient-civilizations","asian-historical","solarpunk","underwater"}){
+            const auto themed=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")));
+            const auto result=generateFunctionalBuilding(themed,recipe);
+            CHECK(result&&!sameGeometry(opened.building,result.building));
+            CHECK(result.building.boxes==opened.building.boxes);
+            CHECK(result.graph.sockets.size()==opened.graph.sockets.size());
+            CHECK(result.graph.connections.size()==opened.graph.connections.size());
+            for(const auto& v:result.building.mesh.vertices)for(int axis=0;axis<3;++axis)
+                CHECK(v.pos[axis]>=opened.building.mesh.boundsMin[axis]-.001f&&v.pos[axis]<=opened.building.mesh.boundsMax[axis]+.001f);
+        }
 
         // Rotations keep actual apertures and dimensions, never stretch them.
         for(uint32_t turn=1;turn<4;++turn){
@@ -253,7 +264,7 @@ int main(int argc,char** argv){
         CHECK(collisionAt(upper.building,7.f,0.24f+storey+0.04f,7.f));
         const auto modernUpper=generateFunctionalBuilding(modern,multi);
         CHECK(modernUpper);
-        CHECK(sameGeometry(upper.building,modernUpper.building));
+        CHECK(!sameGeometry(upper.building,modernUpper.building));
         CHECK(upper.building.boxes==modernUpper.building.boxes);
         auto invalidUpper=multi;
         for(auto& property:invalidUpper.features)
@@ -279,7 +290,7 @@ int main(int argc,char** argv){
         CHECK(stair==1&&lift==1);
         auto modernVertical=generateFunctionalBuilding(modern,verticalRecipe);
         CHECK(modernVertical);
-        CHECK(sameGeometry(vertical.building,modernVertical.building));
+        CHECK(!sameGeometry(vertical.building,modernVertical.building));
         CHECK(vertical.building.boxes==modernVertical.building.boxes);
         CHECK(vertical.graph.rooms.size()==modernVertical.graph.rooms.size());
         std::puts("building functional-feature tests passed");

@@ -110,7 +110,9 @@ int main(int argc,char** argv){
         custom.set("style",Json::string("modern"));
         custom.set("setting",Json::string("modern"));
         auto modernPreview=studioBuildingInspect(engine,custom);
-        CHECK(modernPreview["triangles"].integer()==recipePreview["triangles"].integer());
+        CHECK(modernPreview["triangles"].integer()>recipePreview["triangles"].integer());
+        CHECK(modernPreview["solids"]==recipePreview["solids"]);
+        CHECK(modernPreview["sockets"]==recipePreview["sockets"]);
         auto modernAsset=studioBuildingGenerate(engine,temp,custom);
         CHECK(modernAsset.getStr("path").find("modern-custom-7")!=std::string::npos);
         CHECK(studioValidGuid(modernAsset.getStr("guid")));

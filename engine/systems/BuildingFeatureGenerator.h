@@ -1,6 +1,6 @@
 #pragma once
 // Building FUNCTIONALITY is a recipe of independent properties, never a genre,
-// setting or role ("barracks"/"factory") switch. Style supplies only surfaces.
+// setting or role switch. Style supplies architectural presentation inside the same structural solids.
 // This path builds a genuinely apertured wall/roof shell with separate doors,
 // collision and sliding roof panels; it does not dress a closed existing hull.
 // CPU-only; callable by both native Studio and shipping game code.
@@ -135,6 +135,96 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
     return recipe;
 }
 
+// Style-specific relief is contained in the original graph-owned wall.
+// No decoration projects into apertures or navigable rooms. The conservative
+// collision boundary differs from the deepest visible surface by at most 9 cm.
+inline bool dressFunctionalWall(buildingStyleDetail::Mesher& mesh,
+    const BuildingStyle& style,const BuildingGraphSolid& s,float W,float D,uint64_t seed,int hull,int trim){
+    const auto* residence=style.structureKind("residence");
+    if(!residence||residence->body==StructureBody::Armour||s.part!=BuildingGraphPart::Wall)return false;
+    const auto profile=residence->body;
+    constexpr float e=.001f;
+    int side=-1;
+    if(s.z0<e&&s.z1<.37f)side=0;
+    else if(s.z1>D-e&&s.z0>D-.37f)side=1;
+    else if(s.x0<e&&s.x1<.37f)side=2;
+    else if(s.x1>W-e&&s.x0>W-.37f)side=3;
+    if(side<0)return false;
+    const float a=side<2?s.x0:s.z0,b=side<2?s.x1:s.z1;
+    const float span=b-a,h=s.y1-s.y0,thickness=side<2?s.z1-s.z0:s.x1-s.x0;
+    if(span<.45f||h<.35f||thickness<.19f)return false;
+    const float recess=std::min(.09f,thickness*.25f);
+    const int accent=style.panels.accent>=0?style.panels.accent:trim;
+    const int face=style.panels.material>=0?style.panels.material:hull;
+    const int frame=style.window.frame>=0?style.window.frame:trim;
+    auto piece=[&](int material,float l,float r,float bottom,float top,float depth){
+        l=std::clamp(l,a,b);r=std::clamp(r,a,b);
+        bottom=std::clamp(bottom,s.y0,s.y1);top=std::clamp(top,s.y0,s.y1);
+        if(r-l<.002f||top-bottom<.002f)return;
+        const float near=std::clamp(depth,0.f,recess-.005f),far=recess+.012f;
+        switch(side){
+          case 0:mesh.box(material,l,bottom,s.z0+near,r,top,s.z0+far);break;
+          case 1:mesh.box(material,l,bottom,s.z1-far,r,top,s.z1-near);break;
+          case 2:mesh.box(material,s.x0+near,bottom,l,s.x0+far,top,r);break;
+          default:mesh.box(material,s.x1-far,bottom,l,s.x1-near,top,r);break;
+        }
+    };
+    auto core=s;
+    if(side==0)core.z0+=recess;else if(side==1)core.z1-=recess;
+    else if(side==2)core.x0+=recess;else core.x1-=recess;
+    mesh.box(hull,core.x0,core.y0,core.z0,core.x1,core.y1,core.z1);
+    const float edge=std::min(.12f,span*.18f);
+    piece(frame,a,a+edge,s.y0,s.y1,0);piece(frame,b-edge,b,s.y0,s.y1,0);
+    piece(frame,a,b,s.y0,s.y0+edge,0);piece(frame,a,b,s.y1-edge,s.y1,0);
+    const int cols=std::clamp(int(span/((profile==StructureBody::Stacked||profile==StructureBody::Facet)?1.35f:2.5f)),1,24);
+    const int rows=std::clamp(int(h/2.8f),1,12);
+    Random detail(seed^uint64_t(std::llround(a*1000))^uint64_t(side+1)*0x9e3779b9ULL,0x666163616465ULL);
+    for(int row=0;row<rows;++row)for(int col=0;col<cols;++col){
+        const float x0=a+span*col/cols,x1=a+span*(col+1)/cols;
+        const float y0=s.y0+h*row/rows,y1=s.y0+h*(row+1)/rows;
+        const float w=x1-x0,ht=y1-y0,m=std::min({.10f,w*.13f,ht*.13f});
+        if(w<.22f||ht<.22f)continue;
+        piece(face,x0+m,x1-m,y0+m,y1-m,recess*.55f);
+        piece(frame,x0,x0+m,y0,y1,0);
+        switch(profile){
+          case StructureBody::Gable:case StructureBody::Pagoda:
+            piece(frame,x0,x1,y1-m,y1,0);
+            if(profile==StructureBody::Pagoda)piece(accent,x0+m,x1-m,y0+ht*.7f,y0+ht*.8f,0);
+            break;
+          case StructureBody::Spire:case StructureBody::Pyramid:case StructureBody::Ziggurat:
+            for(int q=1;q<=3;++q)piece(trim,x0,x1,y0+ht*q/4,y0+ht*q/4+m*.6f,0);
+            if(profile==StructureBody::Spire)for(int q=0;q<4;++q){
+                const float half=w*(.4f-.075f*q);
+                piece(accent,(x0+x1)*.5f-half,(x0+x1)*.5f+half,y0+ht*(.32f+.0325f*q),y0+ht*(.3525f+.0325f*q),0);
+            }
+            break;
+          case StructureBody::Barrel:case StructureBody::Dome:case StructureBody::Bulb:
+            piece(trim,x0,x1,y0+ht*.46f,y0+ht*.46f+m,0);
+            if(profile!=StructureBody::Barrel){
+                const float rad=std::min(w,ht)*.28f;
+                for(int q=0;q<8;++q){
+                    const float angle=6.2831853f*q/8;
+                    const float px=(x0+x1)*.5f+rad*std::cos(angle),py=(y0+y1)*.5f+rad*std::sin(angle);
+                    piece(accent,px-m*.5f,px+m*.5f,py-m*.5f,py+m*.5f,0);
+                }
+            }
+            break;
+          case StructureBody::Stacked:case StructureBody::Facet:case StructureBody::Flat:
+            piece(trim,x0,x1,y1-m,y1,0);
+            if(profile==StructureBody::Stacked&&detail.below(3)==0)piece(accent,x0+m,x1-m,y0+ht*.2f,y0+ht*.35f,0);
+            if(profile==StructureBody::Facet)piece(accent,x0+w*.3f,x0+w*.42f,y0+m,y1-m,0);
+            break;
+          case StructureBody::Greenhouse:case StructureBody::Terrace:
+            piece(trim,x0,x1,y0+ht*.22f,y0+ht*.22f+m,0);
+            piece(accent,x0+w*.22f,x1-w*.22f,y0+ht*.23f,y0+ht*.38f,0);break;
+          case StructureBody::Shed:
+            if(detail.below(2)==0)piece(accent,x0+m,x1-m,y0+ht*.45f,y0+ht*.45f+m,0);break;
+          default:break;
+        }
+    }
+    return true;
+}
+
 inline FunctionalBuildingResult generateFunctionalBuilding(
     const BuildingStyle& style,const FunctionalBuildingRecipe& recipe,
     Vec3 origin={},uint32_t yaw=0,
@@ -171,8 +261,8 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     }
     Mesher mesh(result.building.mesh.materials.size());
     auto addBox=[&](int material,float x0,float y0,float z0,
-                    float x1,float y1,float z1,bool collider=true){
-        mesh.box(material,x0,y0,z0,x1,y1,z1);
+                    float x1,float y1,float z1,bool collider=true,bool visible=true){
+        if(visible)mesh.box(material,x0,y0,z0,x1,y1,z1);
         if(collider&&x1>x0&&y1>y0&&z1>z0){
             auto f=[](float n){return Fixed::fromRatio(int64_t(std::llround(double(n)*1000.)),1000);};
             result.building.boxes.push_back({
@@ -213,8 +303,9 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
           case BuildingGraphPart::ElevatorGuide:material=sm.dark>=0?sm.dark:hull;break;
         }
+        const bool dressed=dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim);
         addBox(material,solid.x0,solid.y0,solid.z0,
-               solid.x1,solid.y1,solid.z1);
+               solid.x1,solid.y1,solid.z1,true,!dressed);
     }
     for(const auto& socket:graph.sockets){
         BuildingFeatureAnchor anchor;
