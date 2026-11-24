@@ -126,6 +126,8 @@ function stack(id: string, tabs: StudioPanel[], active: StudioPanel | null = tab
 function split(id: string, axis: DockAxis, ratio: number, first: DockNode, second: DockNode): DockSplit {
   return {kind:'split',id,axis,ratio,first,second};
 }
+/** Catalog, TerraWeave Generator and Texture Graph are on-demand tools.
+ * Keep them registered and reopenable without adding more default tabs. */
 export function defaultDockTree(): DockTree {
   return { version:3, root:split('root','vertical',.76,
     split('split-body-left','horizontal',.19,

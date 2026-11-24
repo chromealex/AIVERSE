@@ -6,14 +6,28 @@ import {
   resizeDockSplit, splitDockRoot, splitDockStack, migrateDockV2
 } from '../src/nestedDock.ts';
 
-test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
+const onDemandPanels=['catalog','terraweave_generator','texture_graph'];
+const defaultPanels=STUDIO_PANELS.filter(p=>!onDemandPanels.includes(p)).sort();
+
+test('default tree has 4 nested stacks and exactly one copy of each default panel',()=>{
   const t=defaultDockTree();const s=dockStacks(t);
   assert.equal(s.length,4);
-  assert.deepEqual(s.flatMap(x=>x.tabs).sort(),[...STUDIO_PANELS].sort());
+  assert.deepEqual(s.flatMap(x=>x.tabs).sort(),defaultPanels);
   assert.equal(panelStack(t,'scene'),'dock-center');
   assert.equal(panelStack(t,'assets'),'dock-bottom');
   assert.deepEqual(findDockStack(t,'dock-left')?.tabs,['hierarchy','project']);
   assert.deepEqual(findDockStack(t,'dock-bottom')?.tabs,['assets','console','agent','frame_capture','texture_resources']);
+});
+test('on-demand tools reopen in their registered home exactly once',()=>{
+  let t=defaultDockTree();
+  for(const p of onDemandPanels){
+    assert.equal(panelStack(t,p),null);
+    t=reopenTab(t,p);t=reopenTab(t,p);
+    assert.equal(panelStack(t,p),STUDIO_PANEL_HOME[p]);
+    assert.equal(findDockStack(t,STUDIO_PANEL_HOME[p]).active,p);
+    assert.equal(dockStacks(t).flatMap(s=>s.tabs).filter(x=>x===p).length,1);
+  }
+  assert.deepEqual(dockStacks(t).flatMap(s=>s.tabs).sort(),[...STUDIO_PANELS].sort());
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
@@ -34,7 +48,7 @@ test('closing and reopening recreates a panel only once',()=>{
 test('nested split adds a stack to left edge and preserves panels',()=>{
   const base=defaultDockTree();const t=splitDockStack(base,'inspector','dock-center','left');
   assert.equal(dockStacks(t).length,5);
-  assert.deepEqual(dockStacks(t).flatMap(s=>s.tabs).sort(),[...STUDIO_PANELS].sort());
+  assert.deepEqual(dockStacks(t).flatMap(s=>s.tabs).sort(),dockStacks(base).flatMap(s=>s.tabs).sort());
   assert.equal(panelStack(base,'inspector'),'dock-right');
 });
 test('window edge dock lifts a bottom tab into a full-height column',()=>{

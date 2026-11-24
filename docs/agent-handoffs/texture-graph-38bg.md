@@ -19,3 +19,6 @@ On Mac, use a clean checkout of final handoff HEAD with submodules initialized a
 
 ## Mac QA round 1
 User log confirms clean checkout 319bcd8923df95ad3e69464fa8974cc51663a576, macOS arm64, CMake 3.27.8, Node 22.23.4, npm install PASS. TypeScript failed at TextureGraphPanel.tsx(534,379) TS1005: missing closing JSX expression brace on onPointerMove. Fixed handler closure; no other changes to behavior. Web typecheck rerun and all downstream native/GPU/MCP tests remain pending. Reuse existing checkout (git fetch, checkout new SHA), not a new clone.
+
+## Mac QA round 2
+User log at 9b68acb549a5c12df6ac54d593fd4a24e0547ca1 confirms npm install and TypeScript typecheck PASS; docking 38/40, failures default tree and nested split expected all registry panels despite existing default layout omitting catalog, terraweave_generator and texture_graph. Decision: retain existing on-demand UX, document three intentionally closed tools, test exact default membership, test reopening each in registered home with no duplication and compare split to actual source layout. No tests removed or skipped. Rerun pending; remaining web suites and native/MCP/GPU not reached.
