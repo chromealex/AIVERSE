@@ -381,7 +381,7 @@ private:
         const bool ok=prepared.models.empty()
             ? gpu->stageEmpty(snapshot.revision)
             : gpu->stage(device,std::move(prepared),snapshot.revision,
-                         spec.enableStrata,spec.maxVertices);
+                         spec.enableStrata,spec.maxVertices,spec.paging);
         if(!ok)return false;
         try{pending_.emplace(snapshot.shard,snapshot);}
         catch(...){(void)gpu->cancelStage();throw;}
