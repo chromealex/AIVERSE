@@ -8,7 +8,7 @@ import sys
 import subprocess
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
-from evidence import validate_report
+from evidence import validate_report, checkout_errors
 from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry
 from new_feature import scaffold
@@ -65,13 +65,16 @@ class GateTest(unittest.TestCase):
             self.assertTrue(gate.validate(data, root, True))
     def test_ready_cli_requires_git_provenance(self):
         with tempfile.TemporaryDirectory() as folder:
-            manifest = Path(folder) / "manifest.json"
+            root = Path(folder)
+            manifest = root / "docs/features/manifest.json"
+            manifest.parent.mkdir(parents=True)
             manifest.write_text("{}")
             for flags, strict in (([], False), (["--ready"], True)):
                 with patch.object(sys, "argv", ["check_feature.py", str(manifest), *flags]):
-                    with patch.object(gate, "validate", return_value=[]) as validate:
-                        self.assertEqual(gate.main(), 0)
-                        validate.assert_called_once_with({}, ready=strict, verify_git=strict)
+                    with patch.object(gate, "ROOT", root), patch.object(gate, "checkout_errors", return_value=[]):
+                        with patch.object(gate, "validate", return_value=[]) as validate:
+                            self.assertEqual(gate.main(), 0)
+                            validate.assert_called_once_with({}, ready=strict, verify_git=strict)
 
     def test_git_evidence_staleness(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -95,7 +98,12 @@ class GateTest(unittest.TestCase):
             git("add", ".")
             git("commit", "-qm", "evidence only")
             self.assertEqual(validate_report(report, root, True), [])
+            self.assertEqual(checkout_errors(root), [])
+            self.assertTrue(checkout_errors(root, sha))
             source.write_text("version = 2\n")
+            self.assertTrue(checkout_errors(root))
+            self.assertEqual(checkout_errors(root, clean=False), [])
+            self.assertTrue(any("clean checkout" in error for error in validate_report(report, root, True)))
             git("add", ".")
             git("commit", "-qm", "source changed")
             self.assertEqual(validate_report(report, root, False), [])
