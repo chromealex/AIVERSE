@@ -72,6 +72,33 @@ public:
     virtual void moveTo(Simulation& sim, Entity e, Vec3 goal, Fixed radius) = 0;
     virtual void stopMoving(Simulation& sim, Entity e) = 0;
     virtual void addResource(Simulation& sim, uint8_t player, uint16_t res, Fixed amount) = 0;
+    // Called only by the existing kill reward owners after eligibility checks.
+    // Report actual stock changes after conversion, caps and goods storage.
+    void payUnitBounty(Simulation& sim, Entity victim, uint8_t recipient) {
+        auto& world = sim.world();
+        auto& players = state(sim).players;
+        if (!recipient || recipient >= players.size() || !world.alive(victim)) return;
+        const auto* unit = world.tryGetConst<Unit>(victim);
+        const auto* owner = world.tryGetConst<Owner>(victim);
+        const auto* transform = world.tryGetConst<Transform>(victim);
+        if (!unit || !owner || !transform || unit->type >= rules().types.size()) return;
+        const auto& bounty = rules().types[unit->type].bounty;
+        if (bounty.empty()) return;
+        const uint16_t type = unit->type, victimOwner = owner->player;
+        const Entity killer = unit->lastHitBy;
+        const Vec3 pos = transform->pos;
+        const auto before = players[recipient].stock;
+        for (const auto& amount : bounty) addResource(sim, recipient, amount.res, amount.value);
+        const auto& after = players[recipient].stock;
+        for (size_t res = 0; res < after.size() && res < before.size() && res < UINT16_MAX; ++res) {
+            const Fixed credited = after[res] - before[res];
+            if (credited.raw <= 0) continue;
+            SimEvent event{kEvBounty, recipient, victim, killer, credited.raw, pos};
+            event.resource = uint16_t(res); event.subjectType = type;
+            event.subjectOwner = victimOwner; event.subjectKey = victim.packed();
+            sim.emit(event);
+        }
+    }
     virtual void dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner,
                             const WeaponDef* wd = nullptr) = 0;
     virtual void addStatus(Simulation& sim, Entity target, int def, Fixed duration, const EffectCtx& ctx) = 0;
