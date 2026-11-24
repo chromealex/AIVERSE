@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-persistence-tools",
+     "title": "Инструменты сохранения мира",
+     "titleEn": "World persistence tools",
+     "text": "Диагностика, проверка резервных копий и управление сохранениями через общие операции Studio/MCP.",
+     "textEn": "Diagnostics, backup verification and save maintenance through shared Studio/MCP operations.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-ledger-compaction",
      "title": "Компактизация долгоживущего мира",
      "titleEn": "Long-lived world compaction",
