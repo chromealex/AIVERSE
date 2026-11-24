@@ -1,0 +1,21 @@
+# Shared Graph Framework — Stage 35B — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+User resume reference: 2fab276cb7a63e30a4491fbb23a39485ae4bc609 (Stage 34D).
+Actual parent handoff: d7853705f7b74fcfd36dddb7d174ac7052122a3d (Stage 35A Building Graph).
+Planning: 55064a51e8ad47543c8d5ddcf9cd098300e44fb8.
+Implementation: 9699d195529e74ad95b47aabdbea160cdf858b05.
+Caverns owner inspected: feature/terraweave-caverns-core-20261123 at 0319a4478ab0facc062cf0f758c93d9ae2821d9f, TerraWeaveCavernsArchive.h, TerraWeaveCavernsVolumeSnapshot.h, TerraWeaveCaverns.h and TerraWeaveCavernsOps.h. Parallel GPU acceptance and slots branches were identified and not modified.
+
+Added canonical v1 snapshot and native get-result inspection, strict safe integer IDs/revisions/counts/settings and signed-cm coordinates, stamp and entrance uniqueness in separate domains, validation of all rows including off-page entries, deterministic page/filter projection (24 entries + 2 owner nodes), and selected-entry inspector in shared GraphCanvas. Old caveSnapshotProjection delegates to the same implementation. Native stamp caps 16384 and entrance caps 4096 enforced; imported input capped at 4194304 characters. Canonical archive requires all emitted fields. Browser rejects unsafe 64-bit numeric identities rather than rounding them; no lossless 64-bit bridge change. Read-only imported native report in the existing TerraWeave Generator, explicitly unverified. No native operation call, project file mutation, alternate cave runtime, derived connectivity, physics publication, STRATA or navmesh inference. Fill-over-carve rule is described from owner source, not simulated.
+
+Changed files: apps/studio-web/src/graphs/caveGraphInspection.ts, CaveStructureGraphView.tsx, generatorProjections.ts; apps/studio-web/src/panels/generated/TerraweaveGeneratorPanel.tsx; apps/studio-web/tests/caveGraphInspection.test.mjs, nativeGraphAdapters.test.mjs; apps/studio-web/package.json; docs/agents/graph-framework.md; skills/workflow/aiverse-graph-authoring/SKILL.md; docs/features/graph-framework.json; docs/devlog/systems.json.
+
+Verification:
+- PASS isolated Node v22.16.0: node --experimental-strip-types --test tests/caveGraphInspection.test.mjs, 4/4, 0 failures (provenance/immutability, malformed/unsafe/stale inputs, paging/filter coverage, native caps and off-page invalid data). Local git hash-object values match the fetched GitHub implementation blobs: adapter 908d9f20c54fec6cdf10361143be584b7022950f; fixture a9a89cad9e33978a950dc78dc1009b04e96e3b7c.
+- PASS TypeScript 5.8.3: tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution bundler src/graphs/caveGraphInspection.ts, using only the unchanged GraphView/NodeView/Link/Port declaration subset from graphFramework.ts (not full checkout).
+- NOT RUN full npm run test:graphs, Studio React typecheck/build, visual capture/WKWebView, native Caverns operation, MCP registry/feature gate, full CMake/CTest, GPU parity/performance, merged-tree Mac KINGSTON gate. No full source checkout available in this task. Manifest tests remains not_run because repository-wide evidence gate is not satisfied. No readiness or main merge claim.
+
+At start main was 71aa5c93afa5993c4e45ba39f1bf5454343389ea; compare reported this feature branch one commit behind main and divergent. Main's extra commit is agent-rule documentation; it was read from the feature branch, but the branch was not merged/rebased against main in this connector-only stage. Reconcile main before integration; do not reset or force-push another agent's work.
+
+Next: after Caverns owner branch integration and actual MCP/Studio registration, mount the read-only graph against a fresh existing terraweave_caverns_paint {mode:get} result. Pin exact project/map identity and request epoch, invalidate on paint/undo/reopen/scene switch, reject late response, never mistake a default snapshot for an explicitly authored map. Keep all modifications in MapDoc owner, use its native brush tooling. For Building Graph mount Stage 35A component in owner panel after PR #114 compatibility; keep exact request with inspection. For GPU, coordinate existing acceptance/slots branches rather than duplicating. No main merge before mandatory gates.

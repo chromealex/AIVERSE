@@ -184,7 +184,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35B targeted fixtures authored, verification pending; full Studio/native/GPU gates NOT RUN.",
+      "note": "Stage 35B isolated Node v22.16.0 caveGraphInspection tests 4/4 PASS on exact adapter and fixture blob hashes; TypeScript 5.8.3 strict adapter check PASS against extracted unchanged GraphView/NodeView/Link/Port declarations. Full Studio suite, React typecheck/build, native Caverns operation, MCP and Mac/GPU gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
