@@ -102,6 +102,7 @@ StudioSession::StudioSession(const std::string& engineRoot, const std::string& p
         // A project opened from the CLI follows the same content policy as
         // projects chosen through the native Open Project panel.
         (void)studioContentRoot(ws_.project.dir);
+        try { const auto pending=StudioMaterialPublicationJournal::inspect(ws_.project.dir);if(pending.size())ws_.log("studio","Pending material publications: "+pending.dump(-1),true); } catch(const std::exception& e){ws_.log("studio",e.what(),true);}
     }
 }
 int StudioSession::indexFor(const std::string& id) const {
@@ -537,6 +538,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
+    try { const auto pending=StudioMaterialPublicationJournal::inspect(ws_.project.dir);if(pending.size())ws_.log("studio","Pending material publications: "+pending.dump(-1),true); } catch(const std::exception& e){ws_.log("studio",e.what(),true);}
     ++graphDocumentEpoch_; // reopening the same project is a different document lifetime
     pendingAssetTransfer_.reset();
     clearSelection();hidden_.clear();locked_.clear();

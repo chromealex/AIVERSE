@@ -6,6 +6,7 @@
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/studio-native/StudioMaterialPublicationJournal.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -23,6 +24,13 @@ void projectFileRecoveryWorkflow() {
     fs::create_directories(project/"content"/"A");
     fs::create_directories(project/"content"/"B");
     fs::create_directories(project/".aiverse-cache");
+    {
+        studio::StudioMaterialPublicationJournal publication(project,"fixture_pending");
+        const auto pending=studio::StudioMaterialPublicationJournal::inspect(project);
+        AIVERSE_TEST_CHECK(pending.size()==1 && pending[size_t(0)].getStr("status")=="incomplete_or_active");
+        publication.finish();
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(project).size()==0);
+    }
     std::ofstream(project/"game.json") << R"({"name":"Recovery fixture","module":"game","rules":"rules.json"})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     std::ofstream(project/"Fixture.aiverse") << R"({"format":1,"name":"Recovery fixture","manifest":"game.json"})";

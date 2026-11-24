@@ -2,6 +2,7 @@
 // Explicit create-only publication of one authored style slot. No browser paths.
 #include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioMaterialValidation.h"
+#include "apps/studio-native/StudioMaterialPublicationJournal.h"
 #include <functional>
 
 namespace aiverse::studio {
@@ -41,8 +42,11 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     if(!fs::exists(state))fs::create_directory(parent);
     const auto folder=parent/name;
     // Exclusive reservation; no overwriting a previous asset or following a link.
-    if(!fs::create_directory(folder))
+    StudioMaterialPublicationJournal journal(project,name);
+    if(!fs::create_directory(folder)) {
+        journal.finish();
         throw std::runtime_error("Material asset folder already exists; choose another name");
+    }
     try{
         StudioAssetCatalog catalog(project);
         catalog.rebuild();
@@ -97,13 +101,17 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
         result.set("path",Json::string(folder.lexically_relative(root).generic_string()));
         result.set("assets",std::move(assets));
         // Last potentially failing operation: canonical MaterialOps save.
+        journal.candidate(material);
         save(name,material);
+        journal.finish();
         return result;
     }catch(...){
         // Only our exclusively reserved folder and its catalog sidecar.
         ec.clear();fs::remove_all(folder,ec);
         ec.clear();fs::remove(studioMetaPath(folder),ec);
         try{StudioAssetCatalog repair(project);repair.rebuild();}catch(...){}
+        // Keep the journal when cleanup cannot be established.
+        if(!fs::exists(folder)&&!fs::exists(studioMetaPath(folder)))journal.finish();
         throw;
     }
 }
