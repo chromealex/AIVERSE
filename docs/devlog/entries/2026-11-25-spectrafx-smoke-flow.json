@@ -37,6 +37,11 @@
       "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/03.png",
       "caption": "Искры поднимаются от общего основания огня вдоль шлейфа.",
       "captionEn": "Sparks rise from a single fire base along the plume."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/04.png",
+      "caption": "Вид вдоль шлейфа: прежний дым слева, расширенный справа. Камера и момент симуляции совпадают.",
+      "captionEn": "Looking along the plume at the same simulation tick and camera angle. Previous smoke on the left, wider smoke on the right."
     }
   ],
   "links": [],

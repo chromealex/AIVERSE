@@ -11,9 +11,9 @@
       "properties": {
         "dimension": 96,
         "origin": [
-          -5,
+          -6,
           -2,
-          -4
+          -8
         ],
         "cellSize": 0.16666666666666666,
         "wind": [
@@ -36,10 +36,10 @@
           -1.45,
           0
         ],
-        "radius": 0.47,
+        "radius": 0.68,
         "smoke": 2,
-        "temperature": 14,
-        "fuel": 8,
+        "temperature": 12,
+        "fuel": 6,
         "acceleration": [
           2,
           3,
@@ -61,8 +61,8 @@
           -1.45,
           0
         ],
-        "radius": 0.53,
-        "smoke": 12,
+        "radius": 0.84,
+        "smoke": 7,
         "temperature": 0,
         "fuel": 0,
         "acceleration": [
@@ -70,7 +70,60 @@
           7,
           0
         ],
-        "flickerHz": 0.85
+        "flickerHz": 0.85,
+        "radialAcceleration": 5
+      }
+    },
+    {
+      "id": "smoke_near",
+      "type": "VolumeSource",
+      "position": [
+        430,
+        470
+      ],
+      "properties": {
+        "position": [
+          -2.9,
+          -0.45,
+          0.43
+        ],
+        "radius": 0.89,
+        "smoke": 2.8,
+        "temperature": 0,
+        "fuel": 0,
+        "acceleration": [
+          4,
+          3.4,
+          3.4
+        ],
+        "radialAcceleration": 2.8,
+        "flickerHz": 0.77
+      }
+    },
+    {
+      "id": "smoke_far",
+      "type": "VolumeSource",
+      "position": [
+        430,
+        580
+      ],
+      "properties": {
+        "position": [
+          -2.9,
+          -0.45,
+          -0.43
+        ],
+        "radius": 0.89,
+        "smoke": 2.8,
+        "temperature": 0,
+        "fuel": 0,
+        "acceleration": [
+          4,
+          3.4,
+          -3.4
+        ],
+        "radialAcceleration": 2.8,
+        "flickerHz": 1.04
       }
     },
     {
@@ -201,15 +254,15 @@
           4.2
         ],
         "size": [
-          1.05,
-          1.9
+          1.4,
+          2.25
         ],
         "direction": [
           0,
           0.45,
           1
         ],
-        "spread": 18,
+        "spread": 32,
         "shape": "sphere",
         "radius": 0.38,
         "offset": [
@@ -229,11 +282,15 @@
         "sizeOverLife": [
           [
             0,
-            0.5
+            0.45
+          ],
+          [
+            0.45,
+            1.25
           ],
           [
             1,
-            2.0
+            2.1
           ]
         ],
         "color": [
@@ -316,7 +373,7 @@
           0.58,
           1
         ],
-        "spread": 8,
+        "spread": 13,
         "shape": "sphere",
         "radius": 0.16,
         "offset": [
@@ -615,17 +672,17 @@
           1.8
         ],
         "size": [
-          0.85,
-          1.45
+          1.05,
+          1.68
         ],
         "direction": [
           0,
           1,
           0.38
         ],
-        "spread": 18,
+        "spread": 34,
         "shape": "sphere",
-        "radius": 0.14,
+        "radius": 0.24,
         "offset": [
           0,
           -1.45,
@@ -704,7 +761,7 @@
     },
     {
       "from": "volume_smoke",
-      "to": "volume_advect"
+      "to": "smoke_near"
     },
     {
       "from": "volume_advect",
@@ -749,6 +806,14 @@
     {
       "from": "drift_embers",
       "to": "out_embers"
+    },
+    {
+      "from": "smoke_near",
+      "to": "smoke_far"
+    },
+    {
+      "from": "smoke_far",
+      "to": "volume_advect"
     }
   ],
   "outputs": [
