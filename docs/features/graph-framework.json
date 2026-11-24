@@ -87,7 +87,9 @@
     "tests/render/texture_graph_pipeline_cache.cpp",
     "CMakeLists.txt",
     "engine/render/graph/TextureGraphSharedScratch.h",
-    "tests/render/texture_graph_shared_scratch.cpp"
+    "tests/render/texture_graph_shared_scratch.cpp",
+    "engine/render/graph/TextureGraphLiveness.h",
+    "tests/render/texture_graph_liveness.cpp"
   ],
   "traits": {
     "editable": true,
@@ -98,7 +100,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33A request-local shared scalar scratch implemented in source; accepted scalar producer reused between matching scalar and normal outputs; no general DAG cache or GPU-to-GPU binding. Integrated acceptance pending.",
+      "note": "Stage 33B in progress: dependency closure liveness plan and CPU evaluator intermediate release; GPU scheduler generalization remains separate.",
       "evidence": []
     },
     "architecture": {
