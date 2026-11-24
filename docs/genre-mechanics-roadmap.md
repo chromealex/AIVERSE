@@ -80,3 +80,7 @@ Connect the certified coarse chart cut to the existing exact collar owner and st
 ### Stage54r — IN PROGRESS
 
 Full bounded local chart volume, preserving non-rim slots during paired preview. Acceptance: chart-covering <=64 slot lattice with bounded presentation field, camera-distance per-slot LOD with hysteresis, exact rim slots forced to finest LOD, complete same-revision chart batch and conservative finest-lattice fallback on incompatible contours. No new authority, no gameplay field change; regression source and handoff required. Native/hardware acceptance pending.
+
+### Stage54s — IN PROGRESS
+
+Versioned multi-region planetary MapDoc, stable region IDs and explicit v1 migration, non-overlap across cube faces, region-scoped edit/readback and Studio selection with a single active chart owner (shared 64-slot preview budget). Acceptance: independent volumes and revisions, no stale cross-region brush writes, lossless save/undo and invalid edit refusal. Simultaneous same-body native cut publication is a separate runtime stage; do not imply it is supported. Native and frontend validation pending.
