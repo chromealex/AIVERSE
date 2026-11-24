@@ -119,6 +119,17 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   }catch(e){setError(e instanceof Error?e.message:String(e))}
   finally{setBusy(false)}
  };
+ const recoverPublication=async(action:'quarantine'|'restore'|'retry',id:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  const scope={expectedProject:projectPath,expectedDocumentEpoch:documentEpoch};
+  try{
+   if(action==='retry')await invoke('studio.materialPublicationRetry',{...scope,name:id});
+   else await invoke(action==='quarantine'?'studio.materialPublicationQuarantine':'studio.materialPublicationRestore',{...scope,id});
+   setMessage(action==='retry'?'Publication retried using the recorded recipe and current style. Original stage retained in quarantine.':'Publication journal moved; no assets removed.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false);reload()}
+ };
  const finalize=async(publication:string)=>{
   if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
   setBusy(true);setError('');
@@ -155,10 +166,13 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
     <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
     <StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void rollback(p.name)}>Inspect rollback</StudioButton>
     {rollbackReport?.name===p.name&&<div><small>{rollbackReport.blockers.length?rollbackReport.blockers.map(b=>b.kind+': '+b.owner).join(' · '):'No recorded blockers'}</small>{rollbackReport.journalOnlyRollbackAllowed&&<StudioButton size="sm" disabled={busy||loading||changes>0} onClick={()=>void rollback(p.name,true)}>Archive empty transaction</StudioButton>}<p>Scanned {rollbackReport.coverage?.scanned??0} files; skipped {rollbackReport.coverage?.skipped??0}.{rollbackReport.coverage?.truncated?' Scan incomplete.':''} Dynamic and binary dependencies are not verified. Content removal requires manual dependency review.</p></div>}
+    {p.quarantinable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('quarantine',p.name)}>Quarantine unpublished stage</StudioButton>}
+    {p.retryable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('retry',p.name)}>Regenerate using recorded recipe</StudioButton>}
     {p.finalizable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void finalize(p.name)}>Finalize verified publication</StudioButton>}
     {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}{a.recoverable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void repair(p.name,a.path)}>Restore original metadata</StudioButton>}</div>)}
    </div>)}
   </details>}
+  {!!library.quarantinedPublications?.length&&<details className="materials-warning"><summary>Quarantined material publications ({library.quarantinedPublications.length})</summary>{library.quarantinedPublications.map(p=><div key={p.id}>{p.id}{p.reason&&<small> — {p.reason}</small>}{p.restorable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('restore',p.id)}>Restore to pending</StudioButton>}</div>)}</details>}
   <div className="materials-main">
    <aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}

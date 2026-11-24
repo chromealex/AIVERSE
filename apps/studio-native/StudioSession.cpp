@@ -1203,12 +1203,19 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
             return reply;
         }
-        if(method=="studio.buildingPublishMaterial") {
+        if(method=="studio.buildingPublishMaterial"||method=="studio.materialPublicationRetry") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            editor::ProjectAssetWriteLock publicationLock(ws_.project.dir);
             const auto name=params.getStr("name");
             if(!validStudioMaterialName(name)||editor::loadMaterialLibrary(ws_).has(name))
                 throw std::runtime_error("Invalid or existing material name");
-            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,params,
+            Json recipe=params;
+            if(method=="studio.materialPublicationRetry"){
+                if(params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+                recipe=StudioMaterialPublicationJournal::retryRecipe(ws_.project.dir,name);
+                (void)StudioMaterialPublicationJournal::quarantineIsolated(ws_.project.dir,name);
+            }
+            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,recipe,
                 [&](const std::string& published,const Json& material){
                     if(editor::loadMaterialLibrary(ws_).has(published))
                         throw std::runtime_error("Material already exists");
@@ -1741,6 +1748,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
             result.set("active",Json::fromBool(!name.empty()));
             result.set("name",str(name));
             reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationQuarantine"||method=="studio.materialPublicationRestore") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+            editor::ProjectAssetWriteLock lock(ws_.project.dir);
+            if(method=="studio.materialPublicationQuarantine") (void)StudioMaterialPublicationJournal::quarantineIsolated(ws_.project.dir,params.getStr("id"));
+            else StudioMaterialPublicationJournal::restoreQuarantine(ws_.project.dir,params.getStr("id"));
+            Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
         } else if (method == "studio.materialPublicationRollbackPreview"||method=="studio.materialPublicationRollbackEmpty") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
             const auto name=params.getStr("name");
@@ -1874,7 +1887,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json library=editor::loadMaterialLibrary(ws_);
             Json result=Json::object();
             result.set("library",library);
-            try { result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir)); }
+            try { result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));result.set("quarantinedPublications",StudioMaterialPublicationJournal::inspectQuarantine(ws_.project.dir)); }
             catch(const std::exception& e){result.set("publicationInspectionError",str(e.what()));}
             reply.set("result",std::move(result));
         } else if(method=="studio.nereidFlow"||method=="studio.nereidFlowSet"){

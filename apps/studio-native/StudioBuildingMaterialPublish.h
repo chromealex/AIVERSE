@@ -47,6 +47,7 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     if(fs::exists(folder)||fs::is_symlink(folder)||fs::exists(studioMetaPath(folder))||fs::is_symlink(studioMetaPath(folder)))
         throw std::runtime_error("Material asset folder already exists; choose another name");
     StudioMaterialPublicationJournal journal(project,name,true);
+    Json recipe=Json::object();recipe.set("name",Json::string(name));recipe.set("style",Json::string(id));recipe.set("slot",Json::string(slot));recipe.set("resolution",Json::number(int64_t(resolution)));journal.recipe(recipe);
     const auto stage=journal.stage();
     if(!fs::create_directory(stage))throw std::runtime_error("Material staging busy");
     try{

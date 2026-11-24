@@ -25,22 +25,10 @@ class StudioMaterialPublicationJournal {
         if(fs::is_symlink(cache)||fs::is_symlink(journals))throw std::runtime_error("Unsafe publication journal path");
         return journals;
     }
-public:
-    StudioMaterialPublicationJournal(const std::filesystem::path& project,const std::string& name,bool isolated=false) {
+    static void requireIsolatedVacant(const std::filesystem::path& project,const std::string& name,const std::filesystem::path& active){
         namespace fs=std::filesystem;
-        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid publication journal name");
-        const auto parent=root(project);fs::create_directories(parent);dir_=parent/name;
-        if(!fs::create_directory(dir_))throw std::runtime_error("Publication already pending; inspect recovery journal");
-        try { Json intent=Json::parse(R"({"version":1,"kind":"building-material"})");if(isolated)intent.set("version",Json::number(int64_t(2)));write("intent.json",intent); }
-        catch(...) { finish();throw; }
-    }
-    std::filesystem::path stage() const {return dir_/"stage";}
-    void beginExposure(){write("exposure.json",Json::parse(R"({"started":true})"));}
-    static std::string quarantineIsolated(const std::filesystem::path& project,const std::string& name){
-        namespace fs=std::filesystem;
-        editor::ProjectAssetWriteLock lock(project);
         if(!validStudioMaterialName(name))throw std::runtime_error("Invalid material publication identity");
-        const auto active=root(project)/name,intent=active/"intent.json",exposure=active/"exposure.json";
+        const auto intent=active/"intent.json",exposure=active/"exposure.json";
         if(fs::is_symlink(active)||!fs::is_directory(active)||fs::is_symlink(intent)||!fs::is_regular_file(intent)||fs::file_size(intent)>4096)
             throw std::runtime_error("Invalid material publication journal");
         const auto doc=Json::parseFile(intent.string());
@@ -56,6 +44,88 @@ public:
             const auto materials=Json::parseFile(library.string())["materials"];
             if(!materials.isObject()||materials.has(name))throw std::runtime_error("Material already exists or library invalid");
         }
+    }
+    static std::string slotName(const std::string& slot){
+        const auto pos=slot.rfind('-');
+        if(pos==std::string::npos||pos==0||slot.size()-pos<2||slot.size()-pos>5||slot.find_first_not_of("0123456789",pos+1)!=std::string::npos)
+            throw std::runtime_error("Invalid material quarantine slot");
+        const auto name=slot.substr(0,pos);
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid material quarantine name");
+        return name;
+    }
+    static std::filesystem::path quarantineRoot(const std::filesystem::path& project){
+        const auto archive=root(project).parent_path()/"material-publications-quarantine";
+        if(std::filesystem::is_symlink(archive))throw std::runtime_error("Unsafe material quarantine");
+        return archive;
+    }
+    static Json readRecipe(const std::filesystem::path& active,const std::string& name){
+        namespace fs=std::filesystem;
+        const auto file=active/"recipe.json";
+        if(fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>4096)throw std::runtime_error("Original publication recipe unavailable");
+        const auto recipe=Json::parseFile(file.string());
+        if(recipe.getStr("name")!=name||!validStudioMaterialName(recipe.getStr("style"))||!validStudioMaterialName(recipe.getStr("slot")))
+            throw std::runtime_error("Invalid publication recipe");
+        const auto resolution=recipe.getInt("resolution");
+        if(resolution!=128&&resolution!=256&&resolution!=512)throw std::runtime_error("Invalid publication resolution");
+        return recipe;
+    }
+public:
+    void recipe(const Json& value){write("recipe.json",value);}
+    static Json retryRecipe(const std::filesystem::path& project,const std::string& name){
+        editor::ProjectAssetWriteLock lock(project);
+        const auto active=root(project)/name;
+        requireIsolatedVacant(project,name,active);
+        return readRecipe(active,name);
+    }
+    static Json inspectQuarantine(const std::filesystem::path& project){
+        namespace fs=std::filesystem;
+        Json rows=Json::array();const auto archive=quarantineRoot(project);
+        if(!fs::exists(archive))return rows;
+        for(const auto& slot:fs::directory_iterator(archive)){
+            if(rows.size()>=256)break;
+            if(slot.is_symlink()||!slot.is_directory())continue;
+            const auto id=slot.path().filename().string();
+            const auto journal=slot.path()/"journal";
+            if(!fs::exists(journal))continue;
+            Json row=Json::object();row.set("id",Json::string(id));row.set("restorable",Json::fromBool(false));
+            try{
+                const auto name=slotName(id);row.set("name",Json::string(name));
+                requireIsolatedVacant(project,name,journal);
+                const auto active=root(project)/name;
+                if(fs::exists(active)||fs::is_symlink(active))throw std::runtime_error("Active publication already exists");
+                row.set("restorable",Json::fromBool(true));
+            }catch(const std::exception& e){row.set("reason",Json::string(e.what()));}
+            rows.push(std::move(row));
+        }
+        return rows;
+    }
+    static void restoreQuarantine(const std::filesystem::path& project,const std::string& id){
+        namespace fs=std::filesystem;
+        editor::ProjectAssetWriteLock lock(project);
+        const auto name=slotName(id);const auto slot=quarantineRoot(project)/id;
+        if(fs::is_symlink(slot)||!fs::is_directory(slot))throw std::runtime_error("Invalid material quarantine slot");
+        const auto journal=slot/"journal";requireIsolatedVacant(project,name,journal);
+        const auto active=root(project)/name;
+        if(fs::exists(active)||fs::is_symlink(active))throw std::runtime_error("Active publication already exists");
+        fs::create_directories(active.parent_path());fs::rename(journal,active);
+        std::error_code ec;fs::remove(slot,ec);
+    }
+    StudioMaterialPublicationJournal(const std::filesystem::path& project,const std::string& name,bool isolated=false) {
+        namespace fs=std::filesystem;
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid publication journal name");
+        const auto parent=root(project);fs::create_directories(parent);dir_=parent/name;
+        if(!fs::create_directory(dir_))throw std::runtime_error("Publication already pending; inspect recovery journal");
+        try { Json intent=Json::parse(R"({"version":1,"kind":"building-material"})");if(isolated)intent.set("version",Json::number(int64_t(2)));write("intent.json",intent); }
+        catch(...) { finish();throw; }
+    }
+    std::filesystem::path stage() const {return dir_/"stage";}
+    void beginExposure(){write("exposure.json",Json::parse(R"({"started":true})"));}
+    static std::string quarantineIsolated(const std::filesystem::path& project,const std::string& name){
+        namespace fs=std::filesystem;
+        editor::ProjectAssetWriteLock lock(project);
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid material publication identity");
+        const auto active=root(project)/name;
+        requireIsolatedVacant(project,name,active);
         const auto archive=root(project).parent_path()/"material-publications-quarantine";
         if(fs::is_symlink(archive))throw std::runtime_error("Unsafe material quarantine");
         fs::create_directories(archive);
@@ -216,6 +286,7 @@ public:
                 if(library[name].isObject())status=library[name]==candidate?"material_committed":"material_conflict";
             }
             row.set("status",Json::string(status));
+            try{requireIsolatedVacant(project,name,entry.path());row.set("quarantinable",Json::fromBool(true));try{(void)readRecipe(entry.path(),name);row.set("retryable",Json::fromBool(true));}catch(...){} }catch(...){}
             // Only inspect fixed, transaction-owned output names. Never follow links.
             const auto folder=project/"content"/"GeneratedBuildingMaterials"/name;
             const auto assetsFile=entry.path()/"assets.json";

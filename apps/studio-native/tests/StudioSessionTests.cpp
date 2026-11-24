@@ -55,6 +55,10 @@ void projectFileRecoveryWorkflow() {
         const auto slot=studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"isolated");
         AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"material-publications-quarantine"/slot/"journal"/"stage"/"base-color.png"));
         AIVERSE_TEST_CHECK(!fs::exists(publication.stage()));
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspectQuarantine(project).size()==1);
+        studio::StudioMaterialPublicationJournal::restoreQuarantine(project,slot);
+        AIVERSE_TEST_CHECK(fs::is_regular_file(publication.stage()/"base-color.png"));
+        publication.finish();
         studio::StudioMaterialPublicationJournal exposed(project,"exposed",true);
         exposed.beginExposure();
         bool rejected=false;try{(void)studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"exposed");}catch(...){rejected=true;}
