@@ -72,6 +72,7 @@ struct VolumetricParticleMaterial {
     render::float3 axes{1,1,1}; // radii relative to particle half-size
     float noiseFrequency=3,noiseStrength=0;
     uint32_t noiseOctaves=3;
+    bool sortBackToFront=true; // per-emitter centre-depth ordering, not exact OIT
     bool depthAware=false; // requires detached current-frame depth texture at draw
     uint32_t shadowSteps=4; // 0 disables self-shadowing
     float shadowStrength=1,anisotropy=0,ambient=.35f;
@@ -252,6 +253,8 @@ public:
     bool setVolumeLight(render::float3 direction,render::float3 color);
     // Host must supply a separate, sampled current-frame opaque depth texture,
     // NOT the depth attachment of the open color pass. Full viewport only.
+    // Prepare after step or camera change, before opening a graphics pass.
+    bool prepareVolumeSort();
     bool drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog={});
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
@@ -353,6 +356,7 @@ private:
     struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl;};
     static_assert(sizeof(VolumeDrawUniforms)==272);
 
+    bool stepImpl(float dt);
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
     bool replaceGpuAllocation(uint32_t next,bool empty,bool compact=false);
@@ -392,6 +396,12 @@ private:
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
     gfx::TextureHandle texture_,volumeTexture_,drawVolumeDepth_;
+    gfx::ComputeHandle volumeSortCompute_{};
+    gfx::BufferHandle volumeSortKeys_{},volumeSortedRecords_{};
+    uint32_t volumeSortCapacity_=0;
+    size_t volumeSortCharge_=0;
+    uint64_t volumeSortFence_=0;
+    bool volumeSortReady_=false;
     render::float3 volumeLightDirection_{0,1,0},volumeLightColor_{1,1,1};
     size_t volumeTextureCharge_=0;
     uint64_t volumeTextureFence_=0;

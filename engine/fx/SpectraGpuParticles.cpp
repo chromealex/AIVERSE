@@ -1,4 +1,5 @@
 #include "SpectraGpuParticles.h"
+#include "SpectraVolumeParticleSortShaders.h"
 #include "SpectraVolumetricParticleShaders.h"
 #include "SpectraGpuVolumeGrid.h"
 #include "SpectraParticleVolumeShaders.h"
@@ -477,10 +478,16 @@ void ComputeParticles::releaseGpu() {
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
         if(volumeTexture_.valid())device_->destroyTexture(volumeTexture_);
+        if(volumeSortCompute_.valid())device_->destroyCompute(volumeSortCompute_);
+        if(volumeSortKeys_.valid())device_->destroyBuffer(volumeSortKeys_);
+        if(volumeSortedRecords_.valid())device_->destroyBuffer(volumeSortedRecords_);
     }
     sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     retireAllocationCharge(volumeTextureCharge_,volumeTextureFence_);
+    retireAllocationCharge(volumeSortCharge_,volumeSortFence_);
+    volumeSortCompute_={};volumeSortKeys_={};volumeSortedRecords_={};
+    volumeSortCapacity_=0;volumeSortCharge_=0;volumeSortFence_=0;volumeSortReady_=false;
     drawVolumeDepth_={};volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
     volumeLightDirection_={0,1,0};volumeLightColor_={1,1,1};
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
@@ -813,6 +820,7 @@ void ComputeParticles::fillDepthUniforms(Uniforms& u) {
     depthSnapshot_={}; // explicit resubmission each step
 }
 void ComputeParticles::setView(const fx::SpectraFxView& view) {
+    if(!view.valid()||std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0)volumeSortReady_=false;
     if(!view.valid()) { viewReady_=false;return; }
     if(gpuCullViewUsed_ && verticesReady_ &&
        (std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0 ||
@@ -874,7 +882,16 @@ bool ComputeParticles::stepWithVolume(float dt,volume::GpuGasGrid& gas,float dra
     }
     return true;
 }
-bool ComputeParticles::step(float dt) {
+bool ComputeParticles::step(float dt){
+    volumeSortReady_=false;
+    if(!stepImpl(dt))return false;
+    // Simulation already accepted. A sort failure suppresses drawing rather
+    // than returning a retryable simulation error and advancing twice.
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.sortBackToFront&&drawCount_&&viewReady_)
+        prepareVolumeSort();
+    return true;
+}
+bool ComputeParticles::stepImpl(float dt) {
     collisionReadable_=false;
     if(!initialized_||!finite(dt)||dt<0)return false;
     dt=std::clamp(dt,0.f,0.1f);
@@ -1482,6 +1499,59 @@ bool ComputeParticles::setVolumeLight(render::float3 direction,render::float3 co
     if(!finite(len)||len<1e-5f)return false;
     volumeLightDirection_=direction*(1.f/len);volumeLightColor_=color;return true;
 }
+bool ComputeParticles::prepareVolumeSort(){
+    volumeSortReady_=false;
+    if(!gpuActive()||!desc_.volumeMaterial.enabled||!desc_.volumeMaterial.sortBackToFront||
+       !proceduralActive_||!viewReady_||!verticesReady_||gpuResetDirty_||
+       !device_->canUpdateSharedBuffers()||!device_->gpuSubmissionFence()){
+        reason_="Volume sort requires published compact records and an open prepass frame";return false;
+    }
+    if(!drawCount_){volumeSortReady_=true;return true;}
+    const uint32_t cap=allocatedCapacity();
+    const uint32_t count=gpuIndirectActive_?cap:std::min(cap,drawCount_);
+    uint32_t n=1;while(n<count)n*=2;
+    if(!volumeSortCompute_.valid()){
+        volumeSortCompute_=device_->createCompute({volume_sort::metal,volume_sort::glsl,
+            "SpectraFX volume centre depth sort",gfx::VulkanComputeLayout::StorageUniforms,9});
+        if(!volumeSortCompute_.valid()){reason_="Volume sort shader unavailable";return false;}
+    }
+    if(volumeSortCapacity_<n){
+        const size_t charge=size_t(n)*(8u+sizeof(Vertex));
+        if(!desc_.allocationBudget->reserve(charge)){reason_="Volume sort budget exhausted";return false;}
+        auto keys=buffer(*device_,gfx::BufferType::Storage,size_t(n)*8u,nullptr,"SpectraFX volume sort keys");
+        auto records=buffer(*device_,gfx::BufferType::Storage,size_t(n)*sizeof(Vertex),nullptr,"SpectraFX sorted volume records");
+        if(!keys.valid()||!records.valid()){
+            if(keys.valid())device_->destroyBuffer(keys);
+            if(records.valid())device_->destroyBuffer(records);
+            retireAllocationCharge(charge,0);reason_="Volume sort allocation failed";return false;
+        }
+        if(volumeSortKeys_.valid())device_->destroyBuffer(volumeSortKeys_);
+        if(volumeSortedRecords_.valid())device_->destroyBuffer(volumeSortedRecords_);
+        retireAllocationCharge(volumeSortCharge_,volumeSortFence_);
+        stats_.gpuBytes+=charge-volumeSortCharge_;
+        volumeSortCharge_=charge;volumeSortCapacity_=n;volumeSortFence_=0;
+        volumeSortKeys_=keys;volumeSortedRecords_=records;
+    }
+    struct Params{render::mat4 viewProj;std::array<uint32_t,4> meta,limits;};
+    static_assert(sizeof(Params)==96);
+    Params u{viewProj_,{0,n,0,0},{count,gpuIndirectActive_?1u:0u,drawCount_,0}};
+    const auto dispatch=[&](uint32_t mode,uint32_t width,uint32_t stride){
+        if(!device_->beginCompute(volumeSortCompute_))return false;
+        markGpuAllocationUsed();volumeSortFence_=std::max(volumeSortFence_,device_->gpuSubmissionFence());
+        device_->setComputeBuffer(0,vertices_);device_->setComputeBuffer(1,volumeSortKeys_);
+        device_->setComputeBuffer(2,volumeSortedRecords_);device_->setComputeBuffer(3,gpuDrawArgs_);
+        u.meta={mode,n,width,stride};device_->setComputeUniforms(&u,sizeof(u));
+        const bool ok=device_->dispatchChecked(n);device_->endCompute();
+        if(ok)++stats_.gpuDispatches;return ok;
+    };
+    bool ok=dispatch(0,0,0);
+    for(uint32_t width=2;ok&&width<=n;width*=2)
+        for(uint32_t stride=width/2;ok&&stride;stride/=2)ok=dispatch(1,width,stride);
+    if(ok)ok=dispatch(2,0,0);
+    volumeSortReady_=ok;
+    if(!ok)reason_="Volume sort dispatch rejected; draw suppressed";
+    return ok;
+}
 bool ComputeParticles::drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog){
     gfx::TextureInfo info{};
     if(!gpuActive()||!desc_.volumeMaterial.enabled||!desc_.volumeMaterial.depthAware||
@@ -1528,7 +1598,12 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         if(m.texture){u.right[3]=float(m.texture->dimension);u.camera[3]=float(m.texture->frames);}
     }
     device_->setPipeline(pipeline_);
-    device_->setVertexBuffer(vertices_);
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.sortBackToFront){
+        if(!volumeSortReady_){reason_="Volume sort not prepared for this view";return;}
+        const auto fence=device_->gpuSubmissionFence();
+        volumeSortFence_=fence?std::max(volumeSortFence_,fence):GpuAllocationBudget::unknownFence;
+        device_->setVertexBuffer(volumeSortedRecords_);
+    }else device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
     if(desc_.volumeMaterial.enabled){
         const auto& m=desc_.volumeMaterial;
