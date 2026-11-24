@@ -197,6 +197,9 @@ Mixed replacement Undo/Redo accepts glTF/GLB local buffer/image URIs only if the
 ## Projected local model dependencies (S6f.3.4b.2a)
 Supersedes the stable-only version boundary above: resolve local glTF/GLB resource slots at every complete logical step using virtual live GUIDs and physical payload occupancy. Same model bytes must keep the same target GUID as their owner and resources relocate. Unmanaged incoming references, unsupported model formats, extensions, nested endpoints and mixed URI rewrites remain fenced. Existing journal v3 is unchanged.
 
+## Mixed typed URI replay (S6f.3.4b.2b)
+Supersedes the previous mixed URI fence for recorded glTF/GLB repairs: resolve physical owners before relocating; compose exact byte snapshots and verify directional digests and unchanged non-URI JSON. Streamed GLB tails retain exact digest/length. Per-slot target GUIDs must remain unchanged for repaired owners. Other repair formats, unknown extensions, nested endpoints and model edits crossing physical Trash boundaries are still fenced. Journal v3 and existing MCP action are reused.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
