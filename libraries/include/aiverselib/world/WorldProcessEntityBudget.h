@@ -120,8 +120,10 @@ inline std::optional<BasicEntityBudgetBatch<Pending>> prepare(
     std::vector<rt::WorkItem> urgent,normal;
     urgent.reserve(out.urgentRemaining);
     normal.reserve(pending.size()-out.urgentRemaining);
+    // WorkCursor uses zero as the initial predecessor. Shift valid Entity
+    // IDs so the first ECS entity (packed()==0) remains serviceable.
     for(const auto& item:pending)
-        (item.urgent?urgent:normal).push_back({key(item).packed(),1,0});
+        (item.urgent?urgent:normal).push_back({key(item).packed()+1,1,0});
     const size_t limit=std::min(maxVisitsPerTick,pending.size());
     size_t uc=0,nc=0;
     for(size_t i=0;i<limit;++i){
@@ -139,9 +141,10 @@ inline std::optional<BasicEntityBudgetBatch<Pending>> prepare(
             [](uint64_t id,const rt::WorkItem& item){return id<item.id;});
         rt::WorkCursor cursor{next==lane.end()?0:size_t(next-lane.begin())};
         const auto result=rt::runBudget(lane,cursor,count,[&](uint64_t id,uint64_t){
-            const auto i=std::lower_bound(pending.begin(),pending.end(),id,
+            const auto packed=id-1;
+            const auto i=std::lower_bound(pending.begin(),pending.end(),packed,
                 [&key](const Pending& item,uint64_t idKey){return key(item).packed()<idKey;});
-            if(i==pending.end()||key(*i).packed()!=id)return false;
+            if(i==pending.end()||key(*i).packed()!=packed)return false;
             const auto index=size_t(i-pending.begin());
             if(served[index])return false;
             served[index]=1;

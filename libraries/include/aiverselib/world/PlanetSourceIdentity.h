@@ -13,8 +13,8 @@ struct PlanetSourceKey {
 };
 inline PlanetSourceKey consequenceSource(const ConsequenceKey& k){return {k.kind,k.source,k.species};}
 inline bool validPlanetSource(PlanetSourceKey k){
-    return k.source&&(k.kind==ConsequenceKind::Structure?!k.species:
-        k.kind==ConsequenceKind::Plant&&k.species);
+    return k.kind==ConsequenceKind::Structure?Entity::fromPacked(k.source).valid()&&!k.species:
+        k.kind==ConsequenceKind::Plant&&k.source&&k.species;
 }
 inline bool planetSourceRetired(const World& world,PlanetSourceKey key,std::string_view body){
     if(!validPlanetSource(key))return false;

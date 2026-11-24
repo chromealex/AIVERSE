@@ -800,10 +800,10 @@ static void checkPlanetSedimentTransport(){
     nw::PlanetBankSoilComponent bank;bank.bodyId="terra";bank.waterBody=sea;
     bank.surfaceCell=cell;bank.lastTick=7;bank.suspendedCm3=1000000000000ull;
     ecs.add<nw::PlanetBankSoilComponent>(source,bank);
-    ecs.add<nw::PlanetBankSedimentTransportComponent>(source,{});
+    ecs.add<nw::PlanetBankSedimentTransportComponent>(source);
     bank.surfaceCell=target;bank.suspendedCm3=0;
     ecs.add<nw::PlanetBankSoilComponent>(dest,bank);
-    ecs.add<nw::PlanetBankSedimentTransportComponent>(dest,{});
+    ecs.add<nw::PlanetBankSedimentTransportComponent>(dest);
     ecs.enableCowSnapshots();const World before=ecs;
     const auto result=nw::transportPlanetSediment(ecs,surface,7,100,Fixed{});
     AIVERSE_TEST_CHECK(result&&result->transfers.size()==1&&result->transfers[0].target==dest);
@@ -1359,8 +1359,8 @@ static void checkPlanetProcessGeometry(){
     AIVERSE_TEST_CHECK(live["cells"].size()==1&&!live.getBool("truncated"));
     const auto& row=live["cells"][size_t(0)];
     AIVERSE_TEST_CHECK(row.getStr("body")=="moon"&&row.getInt("footprint")==50);
-    const auto canonical=wp::planetImprintQuad(ecs,surface,trace,7);
-    const auto expected=canonical->geometry.vertices[0]-game::Surface::anchor(1);
+    const auto imprintCanonical=wp::planetImprintQuad(ecs,surface,trace,7);
+    const auto expected=imprintCanonical->geometry.vertices[0]-game::Surface::anchor(1);
     AIVERSE_TEST_CHECK(std::abs(row["vertices"][size_t(0)][size_t(0)].toDouble()-expected.x.toDouble())<.001);
     AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetImprint(ecs,surface,8)["cells"].size()==0);
     const auto capped=aiverse::studio::samplePlanetImprint(ecs,surface,7,0);
@@ -1963,6 +1963,7 @@ static void checkAuthoredPlanetDemo(){
     AIVERSE_TEST_CHECK(w.get<aether::GasCell>(receiver).smoke>0);
     AIVERSE_TEST_CHECK(w.get<aether::GasCell>(station).smoke+w.get<aether::GasCell>(receiver).smoke==250);
     AIVERSE_TEST_CHECK(w.get<morph::Node>(walker).y<0);
+    AIVERSE_TEST_CHECK(wp::surfaceCrowdEligible(host,w,walker));
     AIVERSE_TEST_CHECK(w.get<crowd::Agent>(walker).allocated==slot);
     AIVERSE_TEST_CHECK(w.get<imprint::Cell>(slot).footprint>0);
     AIVERSE_TEST_CHECK(w.get<circuit::Node>(receiver).powered);

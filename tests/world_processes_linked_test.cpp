@@ -78,7 +78,7 @@ static void checkRegionLod(){
     std::array<world::Cell,1> observers{{{-1,100,-1}}};
     auto d=evolve::regionWorkDecision(cfg,bounds,observers,1000,1);
     AIVERSE_TEST_CHECK(d.tier==world::SimulationLodTier::Hot&&d.due);
-    // maxX/maxZ are exclusive: cell 0 lies just outside.
+    // The area spans cells -2 and -1; cell 0 lies just outside.
     observers[0]={0,0,0};
     d=evolve::regionWorkDecision(cfg,bounds,observers,1000,1);
     AIVERSE_TEST_CHECK(d.tier==world::SimulationLodTier::Warm&&d.period==4);

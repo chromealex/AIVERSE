@@ -3,4 +3,5 @@
 #include "aiverselib/world/PlanetTerrainCollision.h"
 namespace aiverse::examples::world_processes_native {
 using lib::worldprocess::PlanetTerrainCollision;
+using lib::worldprocess::PlanetTerrainCollisionConfig;
 }

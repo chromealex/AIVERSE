@@ -29,7 +29,7 @@
       "health": {
         "max": 10000
       },
-      "speed": 3,
+      "move": {"speed": 3},
       "sight": 10,
       "view": {
         "shape": "soldier",

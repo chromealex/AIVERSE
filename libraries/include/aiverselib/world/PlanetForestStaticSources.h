@@ -56,7 +56,7 @@ inline std::optional<PlanetForestStaticSources> collectPlanetForestStaticSources
         d.friction=float(shape.friction.toDouble());d.density=float(shape.density.toDouble());
         d.position=physics::physisB3(b.plantedPosition-game::Surface::anchor(frame->body)+
             frame->up*(shape.radius+shape.halfHeight));
-        d.rotation={float(q->x.toDouble()),float(q->y.toDouble()),float(q->z.toDouble()),float(q->w.toDouble())};
+        d.rotation={{float(q->x.toDouble()),float(q->y.toDouble()),float(q->z.toDouble())},float(q->w.toDouble())};
         result[b.bodyId].push_back({key,std::move(d)});
     }
     return result;

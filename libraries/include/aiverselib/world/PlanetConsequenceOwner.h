@@ -38,9 +38,9 @@ inline bool validConsequence(const ConsequenceBody& b){
     const auto bounded=[](Vec3 v,Fixed n){return fxAbs(v.x)<=n&&fxAbs(v.y)<=n&&fxAbs(v.z)<=n;};
     const auto& k=b.key;
     const auto& q=b.motion.rotation;
-    if(!k.source||k.tick==UINT32_MAX||b.body.empty()||b.body.size()>128||
-       (k.kind==ConsequenceKind::Structure?(!k.event||k.species||k.revision):
-        (k.kind!=ConsequenceKind::Plant||k.event||!k.species||!k.revision))||
+    if(k.tick==UINT32_MAX||b.body.empty()||b.body.size()>128||
+       (k.kind==ConsequenceKind::Structure?(!Entity::fromPacked(k.source).valid()||!k.event||k.species||k.revision):
+        (k.kind!=ConsequenceKind::Plant||!k.source||k.event||!k.species||!k.revision))||
        b.shape>ConsequenceShape::Capsule||b.density<1_fx||b.density>Fixed::fromInt(1000000)||
        b.friction<Fixed{}||b.friction>10_fx||
        !bounded(b.motion.position,Fixed::fromInt(1000000))||

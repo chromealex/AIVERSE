@@ -130,6 +130,7 @@ static void checkConsequenceOwner(){
     source.desc.motion=physics::Motion::Static;
     source.desc.position=physics::physisB3(tr.pos-game::Surface::anchor(0));
     const World original=world;
+    check(wp::validPlanetSourceBinding(world,surface,source.key,"terra"),"source binding");
     check(sources.publish(scene,world,surface,"terra",std::span(&source,1))&&sources.count()==1,"source standing collider");
     const auto standing=sources.handle(source.key);
     const auto owner=[&](World&,const auto& delivery)->std::optional<wp::ConsequenceBody>{

@@ -33,7 +33,7 @@ struct CharacterFrame {
     bool identity=true;
     b3Vec3 world(b3Vec3 v)const{return identity?v:b3RotateVector(rotation,v);}
     b3Vec3 local(b3Vec3 v)const{
-        return identity?v:b3RotateVector({-rotation.x,-rotation.y,-rotation.z,rotation.w},v);
+        return identity?v:b3InvRotateVector(rotation,v);
     }
     b3Capsule worldCapsule(b3Capsule v)const{
         v.center1=world(v.center1);v.center2=world(v.center2);return v;
@@ -378,7 +378,7 @@ static void stepCharacterFrame(b3WorldId world, const CharacterParams& p, Charac
 }
 
 bool validCharacterOrientation(b3Quat q){
-    const float n=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
+    const float n=b3DotQuat(q,q);
     return std::isfinite(n)&&std::abs(n-1.f)<.001f;
 }
 void stepCharacter(b3WorldId world,const CharacterParams& p,CharacterState& st,
@@ -390,9 +390,9 @@ bool stepCharacterOriented(b3WorldId world,const CharacterParams& p,CharacterSta
     if(out)out->clear();
     if(!validCharacterOrientation(orientation)||!b3World_IsValid(world)||!validParams(p)||
        !finite(st.position,kMaxCoord)||!inRange(dt,1e-5f,.1f))return false;
-    const float inv=1.f/std::sqrt(orientation.x*orientation.x+orientation.y*orientation.y+orientation.z*orientation.z+orientation.w*orientation.w);
-    orientation={orientation.x*inv,orientation.y*inv,orientation.z*inv,orientation.w*inv};
-    const CharacterFrame frame{orientation,orientation.x==0&&orientation.y==0&&orientation.z==0&&orientation.w==1};
+    const float inv=1.f/std::sqrt(b3DotQuat(orientation,orientation));
+    orientation={{orientation.v.x*inv,orientation.v.y*inv,orientation.v.z*inv},orientation.s*inv};
+    const CharacterFrame frame{orientation,orientation.v.x==0&&orientation.v.y==0&&orientation.v.z==0&&orientation.s==1};
     auto local=st;
     local.position=frame.local(st.position);local.velocity=frame.local(st.velocity);
     if(!finite(local.position,kMaxCoord))return false;

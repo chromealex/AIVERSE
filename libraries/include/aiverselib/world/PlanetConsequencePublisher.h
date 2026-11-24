@@ -44,7 +44,7 @@ public:
             d.density=float(record->density.toDouble());d.friction=float(record->friction.toDouble());
             const auto& m=record->motion;const auto& q=m.rotation;
             d.position=physics::physisB3(m.position-offset);
-            d.rotation={float(q.x.toDouble()),float(q.y.toDouble()),float(q.z.toDouble()),float(q.w.toDouble())};
+            d.rotation={{float(q.x.toDouble()),float(q.y.toDouble()),float(q.z.toDouble())},float(q.w.toDouble())};
             d.linearVelocity=physics::physisB3(m.linear);d.angularVelocity=physics::physisB3(m.angular);
             const auto h=scene.create(d);
             if(h==physics::kNoBody){discard();return false;}

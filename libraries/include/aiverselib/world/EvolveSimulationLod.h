@@ -52,7 +52,7 @@ inline world::SimulationLodDecision regionWorkDecision(
         if(!nearest)break;
     }
     return world::simulationLodDecision(config,point,
-        std::span<const world::Cell>(&focus,1),extent.region.packed(),tick,critical);
+        std::span<const world::Cell>(&focus,1),extent.region.packed()+1,tick,critical);
 }
 // A read-only, stable-ID ordered plan. Regions without valid Area are kept
 // hot rather than silently lost. Critical predicate is owner-provided and
