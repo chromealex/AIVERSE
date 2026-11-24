@@ -45,6 +45,17 @@ struct CavePlanetNavigationLease {
             provider->revision()==source&&provider->environmentRevision()==environment;
     }
 };
+// Host supplies the canonical environment epoch and immutable callbacks.
+// The epoch changes when PHYSIS/NEREID or policy/mapping changes. Never use
+// wall-clock time, GPU completion or native revision as a lockstep epoch.
+struct CavePlanetNavigationInputs {
+    uint64_t environmentRevision=0;
+    CavePhysisCellMapper physisCell;
+    CaveEnvironmentCostSettings settings;
+    CaveNavigationCallbacks policies;
+};
+using CavePlanetNavigationInputSource=std::function<std::optional<CavePlanetNavigationInputs>(const World&,uint64_t)>;
+using CavePlanetNavigationLeaseSet=std::map<uint64_t,CavePlanetNavigationLease>;
 inline std::shared_ptr<const CaveNavigationDataProvider> makeResidentCavePlanetNavigation(
         CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index,
         std::shared_ptr<const World> frozen,uint64_t environmentRevision,

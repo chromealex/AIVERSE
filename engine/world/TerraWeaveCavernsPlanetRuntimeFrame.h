@@ -5,6 +5,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeBuild.h"
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
 #include "engine/world/TerraWeaveCavernsPlanetResidency.h"
+#include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 
 namespace aiverse::terraweave::caverns {
 struct CavePlanetRuntimeHooks {
@@ -22,6 +23,9 @@ struct CavePlanetRuntimeHooks {
     std::function<bool(const std::string&,uint64_t)> commitNavigationGi;
     std::function<bool(const std::string&,uint64_t)> abortNavigationGi;
     std::function<bool(const std::string&,uint64_t)> retireNavigationGi;
+    // Optional managed provider publication. Existing GI/solver hooks are
+    // still mandatory; prepared leases are available on the candidate.
+    CavePlanetNavigationInputSource navigationInputs;
     bool valid()const noexcept{
         return exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
             prepareNavigationGi&&commitNavigationGi&&abortNavigationGi&&retireNavigationGi;
@@ -92,6 +96,7 @@ public:
         if(!regionReady(ecs,id))return {};
         const auto* entry=findPlanetCaveRegion(ecs,id);
         const auto& candidate=*cohorts_.at(entry->region.anchor.bodyId).active;
+        if(hooks_.navigationInputs)return committedNavigationLease(ecs,id,environmentRevision);
         return candidate.navigationLease(surface_,id,std::move(frozen),environmentRevision,
             std::move(mapper),settings,std::move(policies));
     }
@@ -101,8 +106,57 @@ public:
         if(!regionReady(ecs,lease.regionId))return false;
         const auto* entry=findPlanetCaveRegion(ecs,lease.regionId);
         const auto& candidate=*cohorts_.at(entry->region.anchor.bodyId).active;
-        return lease.matches(lease.regionId,generation_,candidate.nativeRevision,
-            entry->authority.volume.sourceRevision,environmentRevision);
+        if(!lease.matches(lease.regionId,generation_,candidate.nativeRevision,
+            entry->authority.volume.sourceRevision,environmentRevision))return false;
+        if(!hooks_.navigationInputs)return true;
+        const auto stored=candidate.navigationLeases.find(lease.regionId);
+        if(stored==candidate.navigationLeases.end()||stored->second.provider!=lease.provider)return false;
+        const auto input=hooks_.navigationInputs(ecs,lease.regionId);
+        return input&&input->environmentRevision==environmentRevision&&bool(input->physisCell);
+    }
+    std::optional<CavePlanetNavigationLease> committedNavigationLease(
+            const World& ecs,uint64_t id,uint64_t environmentRevision)const{
+        if(!hooks_.navigationInputs||!regionReady(ecs,id))return {};
+        const auto* entry=findPlanetCaveRegion(ecs,id);
+        const auto& leases=cohorts_.at(entry->region.anchor.bodyId).active->navigationLeases;
+        const auto it=leases.find(id);
+        if(it==leases.end()||!navigationLeaseCurrent(ecs,it->second,environmentRevision))return {};
+        return it->second;
+    }
+    // Environment-only changes replace all admitted providers atomically
+    // under reader exclusion, not the already committed SDF/physics/GI.
+    // Old workers retain immutable providers but cannot pass the identity gate.
+    bool refreshNavigationEnvironment(const World& ecs){
+        if(!hooks_.navigationInputs||closed_||recoveryRequired()||!hooks_.exclusive())return false;
+        try{
+            const auto frozen=std::make_shared<const World>(ecs);
+            std::map<std::string,CavePlanetNavigationLeaseSet> next;
+            for(const auto& [body,c]:cohorts_){
+                if(!c.active)continue;
+                for(auto id:c.ids)if(!regionReady(ecs,id))return false;
+                auto leases=c.active->prepareNavigationLeases(surface_,frozen,hooks_.navigationInputs);
+                if(!leases)return false;
+                next.emplace(body,std::move(*leases));
+            }
+            if(!hooks_.exclusive())return false;
+            for(auto& [body,leases]:next)cohorts_.at(body).active->navigationLeases.swap(leases);
+            return true;
+        }catch(const std::exception&){return false;}
+    }
+    // Consume canonical ECS steering only against the actually committed
+    // native provider. The existing motor is still the sole position writer.
+    std::optional<CavePlanetMotorIntent> motorIntent(const World& ecs,Entity entity,
+            Vec3 simulationPosition,uint32_t tick,uint64_t environmentRevision)const{
+        const auto id=nav::caveRouteScope(ecs,entity);
+        const auto lease=committedNavigationLease(ecs,id,environmentRevision);
+        if(!lease)return {};
+        const auto* entry=findPlanetCaveRegion(ecs,id);
+        try{
+            const auto frame=CavePlanetFrame::make(surface_,entry->region.anchor);
+            return cavePlanetMotorIntent(ecs,entity,id,frame,*lease->provider,simulationPosition,tick,
+                [this](const World& world,uint64_t region){return regionReady(world,region);});
+        }catch(const std::exception&){return {};}
+
     }
     // The host MUST use this readiness in its actual movement/admission gate;
     // render visibility is not permission to move through a cave.
@@ -279,6 +333,12 @@ private:
         const auto rev=candidate.nativeRevision;
         bool navPrepared=false;
         try{
+            if(hooks_.navigationInputs){
+                auto leases=candidate.prepareNavigationLeases(surface_,std::make_shared<const World>(ecs),
+                    hooks_.navigationInputs);
+                if(!leases)throw std::runtime_error("Caverns navigation cohort preparation refused");
+                candidate.navigationLeases=std::move(*leases);
+            }
             navPrepared=true;
             if(!hooks_.prepareNavigationGi(candidate))throw std::runtime_error("Caverns navigation/GI preflight refused");
             if(!candidate.current(ecs,generation_)||!hooks_.exclusive()||
@@ -287,7 +347,15 @@ private:
                 throw std::runtime_error("Caverns native stage refused");
             if(!candidate.current(ecs,generation_)||!hooks_.exclusive()||
                !c.binding->commit(ecs,hooks_.exclusive,[&](uint64_t r){
-                   return r==rev&&hooks_.commitNavigationGi(body,r);
+                   if(r!=rev)return false;
+                   if(hooks_.navigationInputs){
+                       for(const auto& [id,lease]:candidate.navigationLeases){
+                           const auto input=hooks_.navigationInputs(ecs,id);
+                           if(!input||!input->physisCell||
+                              input->environmentRevision!=lease.provider->environmentRevision())return false;
+                       }
+                   }
+                   return hooks_.commitNavigationGi(body,r);
                }))throw std::runtime_error("Caverns native commit refused");
         }catch(...){
             if(!recoveryRequired()){

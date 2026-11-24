@@ -38,6 +38,7 @@ struct CavePlanetRuntimeCandidate {
     // Persist coverage separately: volume payloads are moved into the native
     // owner during commit, while navigation workers retain immutable leases.
     std::map<uint64_t,CavePlanetNavigationCoverage> navigationCoverage;
+    CavePlanetNavigationLeaseSet navigationLeases;
     // Numeric source revisions alone are not sufficient after rollback.
     // Can be used by prepareNavigationGi to stage a derived solver/cache.
     // Candidate leases must not be exposed to movement before native commit.
@@ -56,6 +57,31 @@ struct CavePlanetRuntimeCandidate {
             std::move(frozen),environmentRevision,coverage->second,std::move(mapper),
             settings,std::move(policies),region);
         return CavePlanetNavigationLease{region,generation,nativeRevision,std::move(provider)};
+    }
+    // Build a complete immutable cohort in a temporary map. Refusal never
+    // mutates previously committed providers. Capture once for all regions.
+    std::optional<CavePlanetNavigationLeaseSet> prepareNavigationLeases(
+            const std::shared_ptr<const game::Surface>& surface,
+            std::shared_ptr<const World> frozen,const CavePlanetNavigationInputSource& inputs)const{
+        if(!inputs||!frozen||!current(*frozen,generation)||sources.empty())return {};
+        CavePlanetNavigationLeaseSet next;
+        for(const auto& [id,source]:sources){
+            const auto input=inputs(*frozen,id);
+            if(!input||!input->environmentRevision||!input->physisCell)return {};
+            const auto old=navigationLeases.find(id);
+            if(old!=navigationLeases.end()){
+                const auto& lease=old->second;
+                if(!lease.provider||input->environmentRevision<lease.provider->environmentRevision())return {};
+                if(lease.matches(id,generation,nativeRevision,source->sourceRevision,input->environmentRevision)){
+                    next.emplace(id,lease);continue;
+                }
+            }
+            auto lease=navigationLease(surface,id,frozen,input->environmentRevision,
+                input->physisCell,input->settings,input->policies);
+            if(!lease)return {};
+            next.emplace(id,std::move(*lease));
+        }
+        return next;
     }
     bool current(const World& ecs,uint64_t epoch)const{
         if(!generation||generation!=epoch||!cut||sources.size()!=cut->regions.size())return false;
