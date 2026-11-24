@@ -4,6 +4,7 @@
 // calls the existing engine algorithm. Caverns owns no duplicate solver.
 #include "engine/world/TerraWeaveCavernsNavigationPublication.h"
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <memory>
@@ -37,11 +38,22 @@ inline bool caveRouteSegmentsValid(const CavePathQuery& query,const CavePathResu
     if(!provider.hasResidencyFilter()&&!provider.orientedGround(query.agent))return true;
     if(result.waypoints.empty()||result.waypoints.size()>65536)return false;
     auto previous=query.start;
+    uint64_t remaining=1048576; // total segment sample budget
+    const auto legal=[&](PointCm point){
+        if(!provider.residentSegment(previous,point,query.agent))return false;
+        const auto delta=std::max({std::abs(point.x-previous.x),
+            std::abs(point.y-previous.y),std::abs(point.z-previous.z)});
+        const auto samples=uint64_t(delta)/uint64_t(query.agent.sampleCm)+2;
+        if(samples>remaining)return false;
+        remaining-=samples;
+        return provider.canTraverse(previous,point,query.agent,requireChartY);
+    };
+    CaveNavigationDataProvider::validateProfile(query.agent);
     for(const auto& point:result.waypoints){
-        if(!provider.canTraverse(previous,point,query.agent,requireChartY))return false;
+        if(!legal(point))return false;
         previous=point;
     }
-    return provider.canTraverse(previous,query.goal,query.agent,requireChartY);
+    return legal(query.goal);
 }
 class CavePathRouter {
 public:

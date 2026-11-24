@@ -3,6 +3,8 @@
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
+#include "engine/world/TerraWeaveCavernsNavigationGraph.h"
+#include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -172,12 +174,64 @@ static void checkNavigationCoverage(const std::shared_ptr<const game::Surface>& 
     catch(const std::invalid_argument&){refused=true;}
     check(refused,"incomplete lattice accepted");
 }
+static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& surface){
+    auto snapshot=std::make_shared<CaveVolumeSnapshot>();
+    snapshot->settings.tunnelChance=0;snapshot->settings.chamberChance=0;
+    snapshot->settings.minYcm=-750;snapshot->settings.maxYcm=0;
+    snapshot->stamps.push_back({1,{0,-350,0},300,CaveStampMode::Carve});
+    canonicalizeCaveSnapshot(*snapshot);
+    const auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
+    const auto frame=CavePlanetFrame::make(surface,{"planet",0,8_fx,8_fx,800});
+    const auto provider=[&](Vec3 up){
+        auto world=std::make_shared<World>();
+        physis::GravitySettings settings;
+        settings.baseline=frame.vectorToBody(up)*Fixed::fromInt(-10);
+        world->setResource<physis::GravitySettings>(settings);
+        return makeCavePlanetNavigationProvider(frame,index,world,1,{},
+            [](PointCm lo,PointCm hi){
+                return lo.x>=-799&&lo.y>=-799&&lo.z>=-799&&
+                       hi.x<=799&&hi.y<=799&&hi.z<=799;
+            });
+    };
+    CaveAgentProfile agent;
+    agent.radiusCm=10;agent.heightCm=100;agent.sampleCm=25;
+    agent.groundProbeCm=75;agent.maxStepCm=10;
+    const auto floor=provider({0_fx,1_fx,0_fx});
+    const auto wall=provider({1_fx,0_fx,0_fx});
+    const auto ceiling=provider({0_fx,-1_fx,0_fx});
+    const auto zero=provider({});
+    const PointCm wallStart{-250,-350,0},wallGoal{-250,-325,0};
+    check(floor->sample({0,-600,0},agent).traversable,"floor support");
+    check(wall->sample(wallStart,agent).traversable,"wall support");
+    check(ceiling->sample({0,-100,0},agent).traversable,"ceiling support");
+    check(!zero->sample(wallStart,agent).traversable,"zero gravity ground refused");
+    check(!floor->sample(wallStart,agent).traversable,"wrong gravity support");
+    check(!wall->chartYCompatible(wallStart,agent)&&floor->chartYCompatible({0,-600,0},agent),"native chart-Y guard");
+    check(wall->canTraverse(wallStart,wallGoal,agent),"wall tangent edge");
+    check(!wall->canTraverse(wallStart,wallGoal,agent,true),"native wall edge refused");
+    check(!wall->canTraverse(wallStart,{-225,-350,0},agent),"gravity-axis step cap");
+    check(!wall->residentSegment({-700,0,0},{-700,0,0},agent),"oriented footprint outside residency");
+    CaveGraphGrid grid;grid.origin={-262,-362,-12};
+    grid.width=1;grid.height=2;grid.depth=1;grid.cellCm=25;
+    CaveNavigationGridView view(wall,grid,agent);
+    std::vector<CaveGraphEdge> edges;view.neighbors(0,edges);
+    check(edges.size()==1&&edges.front().to==1,"shared graph uses oriented edge");
+    CavePathQuery query;query.start=wallStart;query.goal=wallGoal;
+    query.sourceRevision=index->revision();query.agent=agent;
+    CavePathResult route;route.sourceRevision=query.sourceRevision;
+    route.environmentRevision=1;route.reached=true;route.waypoints={wallStart,wallGoal};
+    check(caveRouteSegmentsValid(query,route,*wall),"oriented route accepted");
+    check(!caveRouteSegmentsValid(query,route,*wall,true),"2.5D wall route refused");
+    route.waypoints={{0,-350,0},wallGoal};
+    check(!caveRouteSegmentsValid(query,route,*wall),"unsupported shortcut refused");
+}
 int main(){
     const auto surface=makeSurface();
     checkBodyCut(surface);
     checkDemand(surface);
     checkPlanetMotion(surface);
     checkNavigationCoverage(surface);
+    checkOrientedNavigation(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;

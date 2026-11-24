@@ -149,7 +149,7 @@ public:
         validateProfile(agent);
         // Ground requires a solid voxel/surface below the actor footprint.
         // A flying/swimming actor is handled by a separate traversal policy.
-        if(!inBounds(p)||index_->field(p)<=0||
+        if(!inBounds(p)||(orientedGround(agent)&&!residentSegment(p,p,agent))||index_->field(p)<=0||
            (callbacks_.groundSupportAllowed&&!callbacks_.groundSupportAllowed(p)))return false;
         const auto basis=orientedGround(agent)?groundBasis(p):std::optional<GroundBasis>{};
         if(orientedGround(agent)&&!basis)return false;
@@ -232,7 +232,8 @@ private:
         auto right=fxNormalize(axis-*up*axis.dot(*up));
         const auto back=fxNormalize(fxCross(right,*up));
         right=fxNormalize(fxCross(*up,back));
-        if(fxAbs(right.lengthSq()-one)>tol||fxAbs(back.lengthSq()-one)>tol)return {};
+        if(fxAbs(right.lengthSq()-one)>tol||fxAbs(back.lengthSq()-one)>tol||
+           fxAbs(right.dot(*up))>tol||fxAbs(back.dot(*up))>tol||fxAbs(right.dot(back))>tol)return {};
         return GroundBasis{right,*up,back};
     }
     static PointCm offset(PointCm p,const GroundBasis& b,int64_t x,int64_t y,int64_t z){

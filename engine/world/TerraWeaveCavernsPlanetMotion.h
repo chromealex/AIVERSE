@@ -62,8 +62,8 @@ struct CavePlanetMotorIntent {
 };
 using CavePlanetMotionAdmission=std::function<bool(const World&,uint64_t)>;
 // Converts the EXISTING ECS steering request; does not register another
-// route follower or write Transform. Ground routing still obeys the current
-// chart-Y navigation support certificate until Stage54v2.
+// route follower or write Transform. Ground graph routes use the shared
+// oriented SDF provider; native 2.5D NavMesh retains its chart-Y restriction.
 inline std::optional<CavePlanetMotorIntent> cavePlanetMotorIntent(
         const World& ecs,Entity entity,uint64_t regionId,const CavePlanetFrame& frame,
         const CaveNavigationDataProvider& provider,Vec3 simulationPosition,uint32_t tick,
