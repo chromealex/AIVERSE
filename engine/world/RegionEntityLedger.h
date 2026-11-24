@@ -374,6 +374,7 @@ public:
 // Advance only after the callback acknowledges an entry. A callback may fail
 // or throw; earlier acknowledged entries are never replayed accidentally.
 class RegionChangeCursor {
+    uint64_t last_=0;
 public:
     explicit RegionChangeCursor(uint64_t after=0):last_(after){}
     uint64_t lastRevision()const{return last_;}
