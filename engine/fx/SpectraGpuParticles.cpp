@@ -219,7 +219,7 @@ bool ComputeParticles::initGpu() {
                          graphChannels.data(),"SpectraFX GPU material vertex sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
-    const std::array<uint32_t,7> allocatorCounters{0,cap,0,0,0,0,0};
+    const std::array<uint32_t,8> allocatorCounters{0,cap,0,0,0,0,0,0};
     if(gpuAllocationActive_){
         const std::array<uint32_t,3> emptyDispatch{1,1,1};
         gpuAliveCurrent_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list A");
@@ -325,7 +325,7 @@ bool ComputeParticles::initGpu() {
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels)
-                    +(gpuAllocationActive_?size_t(cap)*20u+9u*sizeof(uint32_t):0u);
+                    +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
     return true;
 }
 void ComputeParticles::releaseGpu() {
@@ -460,7 +460,7 @@ bool ComputeParticles::tryClear() {
     if(allocatorOk&&gpuAllocationActive_){
         std::vector<uint32_t> free(cap);
         for(uint32_t i=0;i<cap;++i)free[i]=cap-1-i;
-        const std::array<uint32_t,7> counters{0,cap,0,0,0,0,0};
+        const std::array<uint32_t,8> counters{0,cap,0,0,0,0,0,0};
         const std::array<uint32_t,3> emptyDispatch{1,1,1};
         allocatorOk=device_->updateStorageBufferChecked(liveSlots_,free.data(),free.size()*sizeof(uint32_t))&&
             device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters))&&
@@ -654,10 +654,14 @@ void ComputeParticles::setView(const fx::SpectraFxView& view) {
     if(gpuCullViewUsed_ && verticesReady_ &&
        (std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0 ||
         right_.x!=view.right.x || right_.y!=view.right.y || right_.z!=view.right.z ||
-        up_.x!=view.up.x || up_.y!=view.up.y || up_.z!=view.up.z)) {
+        up_.x!=view.up.x || up_.y!=view.up.y || up_.z!=view.up.z ||
+        (desc_.quality==fx::FxQuality::Medium &&
+         (viewWidth_!=view.width || viewHeight_!=view.height ||
+          eye_.x!=view.eye.x || eye_.y!=view.eye.y || eye_.z!=view.eye.z)))) {
         verticesReady_=false; // old visible stream is not valid for a new camera
     }
     viewProj_=view.viewProj;eye_=view.eye;right_=view.right;up_=view.up;
+    viewWidth_=view.width;viewHeight_=view.height;
     viewReady_=true;
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
 }
@@ -934,7 +938,14 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
     if(cull){
         std::memcpy(u.cullViewProj,viewProj_.m,sizeof(u.cullViewProj));
-        u.cullControl.x=1.f;
+        u.cullControl={1.f,float(viewWidth_),float(viewHeight_),0.f};
+        // High is the full-density reference. Medium reuses the existing
+        // quality distance as a soft LOD scale, never a simulation cutoff.
+        if(desc_.quality==fx::FxQuality::Medium){
+            const float farDistance=fx::limitsFor(desc_.quality).cullDistance;
+            u.cullControl.w=farDistance;
+            u.lodEye={eye_.x,eye_.y,eye_.z,farDistance*0.25f};
+        }
     }
     const bool indirect=device_->supportsGpuComputeIndirect();
     auto dispatch=[&](uint32_t mode,uint32_t threads,bool list){
@@ -1025,17 +1036,17 @@ bool ComputeParticles::requestAllocationCounters(std::function<void(bool,Allocat
     const auto capacity=desc_.capacity;
     std::weak_ptr<uint64_t> lifetime(readbackLifetime_);
     asyncAllocationCountersPending_=true;
-    if(!device_->readBufferAsync(aliveCounter_,7*sizeof(uint32_t),
+    if(!device_->readBufferAsync(aliveCounter_,8*sizeof(uint32_t),
         [this,lifetime,revision,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes) mutable{
             if(!lifetime.lock())return;
             asyncAllocationCountersPending_=false;
             AllocationCounters result{};result.revision=revision;
-            bool ok=bytes.size()==7*sizeof(uint32_t);
+            bool ok=bytes.size()==8*sizeof(uint32_t);
             if(ok){
-                std::array<uint32_t,7> raw{};
+                std::array<uint32_t,8> raw{};
                 std::memcpy(raw.data(),bytes.data(),bytes.size());
-                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];result.visible=raw[6];
-                ok=result.visible<=result.alive&&result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
+                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];result.visible=raw[6];result.lodRejected=raw[7];
+                ok=result.visible<=result.alive&&result.lodRejected<=result.alive-result.visible&&result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
                    result.admitted<=capacity-result.reservedBase&&result.alive==capacity-result.free;
             }
             callback(ok,result);

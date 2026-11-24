@@ -24,6 +24,7 @@ public:
     bool rejectStorageUpload=false;
     uint32_t next=1,lastMode=99,lastDrawCount=0,liveSlotHandle=0;
     uint32_t indirectArgsHandle=0,indirectCalls=0;
+    std::array<float,8> lodUniforms{};
     size_t uploadBytes=0;
     std::vector<uint32_t> lastLiveSlots;
     std::vector<uint32_t> stages;
@@ -82,6 +83,7 @@ public:
     void setComputeUniforms(const void* data,size_t size)override{
         if(!computing||size<64){badOrder=true;return;}
         std::memcpy(&lastMode,static_cast<const uint8_t*>(data)+48,sizeof(uint32_t));
+        if(size==160 && lastMode==12)std::memcpy(lodUniforms.data(),static_cast<const uint8_t*>(data)+128,32);
     }
     void dispatch(uint32_t n,uint32_t=1)override{
         if(!computing||!n)badOrder=true;
@@ -408,6 +410,31 @@ int main() {
     check(cullDevice.indirectCalls==2,"recull did not restore draw");
     cullDevice.endFrame();culled.shutdown();
     check(!cullDevice.badOrder,"GPU-owned cull encoder ordering");
+    check(cullDevice.lodUniforms[3]==0.f,"High quality unexpectedly thinned billboards");
+
+    RecordingMetalDevice lodDevice;lodDevice.indirectAvailable=true;
+    cullConfig.quality=fx::FxQuality::Medium;
+    spectra::ComputeParticles lod;
+    check(lod.init(&lodDevice,cullConfig),"Medium GPU-owned LOD init");
+    lod.setView(frameView);lodDevice.beginFrame(800,600);
+    check(lod.burstAt({0,2,0})&&lod.step(0.f),"Medium LOD first step");
+    const auto farDistance=fx::limitsFor(fx::FxQuality::Medium).cullDistance;
+    check(lodDevice.lodUniforms[0]==1.f && lodDevice.lodUniforms[1]==800.f &&
+          lodDevice.lodUniforms[2]==600.f && lodDevice.lodUniforms[3]==farDistance &&
+          lodDevice.lodUniforms[7]==farDistance*0.25f,"Medium LOD uniform policy");
+    frameView.width=1600;frameView.height=1200;
+    lod.setView(frameView);lodDevice.beginPass(gfx::PassDesc{});lod.draw();lodDevice.endPass();
+    check(lodDevice.indirectCalls==0,"LOD drew stale viewport density");
+    check(lod.step(0.f)&&lodDevice.lodUniforms[1]==1600.f&&lodDevice.lodUniforms[2]==1200.f,
+          "LOD resize did not refresh pixel scale");
+    lodDevice.beginPass(gfx::PassDesc{});lod.draw();lodDevice.endPass();
+    check(lodDevice.indirectCalls==1,"LOD resize recull did not restore draw");
+    frameView.eye.x+=1.f;lod.setView(frameView);
+    lodDevice.beginPass(gfx::PassDesc{});lod.draw();lodDevice.endPass();
+    check(lodDevice.indirectCalls==1,"LOD drew stale camera distance");
+    check(lod.step(0.f)&&lodDevice.lodUniforms[4]==frameView.eye.x,"LOD eye recull failed");
+    lodDevice.endFrame();lod.shutdown();
+    check(!lodDevice.badOrder,"GPU-owned LOD encoder ordering");
 
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;

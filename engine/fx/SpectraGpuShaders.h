@@ -29,6 +29,7 @@ struct Uniforms {
                             // y: capacity; z: births; w: host survivor count
     float4x4 cullViewProj;
     float4 cullControl;
+    float4 lodEye;
 };
 struct DrawArgs {
     uint indexCount, instanceCount, firstIndex;
@@ -223,7 +224,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                      ) {
     uint id=gid.x;
 #ifdef SPECTRA_GPU_OWNED_ALLOCATION
-    // Counters: alive, free, reserved base, admitted, work, next alive, visible.
+    // Counters: alive, free, reserved base, admitted, work, next alive, visible, LOD rejected.
     // Kill marks entries in the old list; only update returns their slots.
     // Thus a killed slot cannot be reused while it is still in the input list.
     if(u.meta.x==9u){
@@ -303,6 +304,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             uint count=min(atomic_load_explicit(&aliveCounter[5],memory_order_relaxed),u.meta.y);
             atomic_store_explicit(&aliveCounter[0],count,memory_order_relaxed);
             atomic_store_explicit(&aliveCounter[6],u.cullControl.x>0.5f?0u:count,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[7],0u,memory_order_relaxed);
             dispatchArgs[0]=max(1u,(count+63u)/64u);
             dispatchArgs[1]=dispatchArgs[2]=1u;
         }
@@ -424,6 +426,34 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                        max(max(abs(v.x),abs(v.y)),max(abs(v.z),abs(v.w))));
             if(isfinite(eps)&&all(isfinite(hi))&&all(isfinite(lo))&&
                (any(hi < -eps)||any(lo < -eps)))return;
+            // Medium quality: only distant AND small billboards are thinned.
+            // Bound the full projected extent in pixels; do not thin quads
+            // crossing the eye plane or with an ambiguous projection.
+            if(u.cullControl.w>u.lodEye.w && c.w>0.0f){
+                float minW=c.w-abs(r.w)-abs(v.w);
+                if(minW>max(1e-6f,c.w*1e-5f)){
+                    float2 ndc=c.xy/c.w;
+                    float2 extent=(abs(r.xy-ndc*r.w)+abs(v.xy-ndc*v.w))
+                                  *u.cullControl.yz/minW;
+                    float pixels=max(extent.x,extent.y);
+                    float dist=length(centre-u.lodEye.xyz);
+                    if(isfinite(pixels)&&isfinite(dist)){
+                        float farFactor=smoothstep(u.lodEye.w,u.cullControl.w,dist);
+                        float smallFactor=1.0f-smoothstep(2.0f,8.0f,pixels);
+                        float keep=1.0f-0.75f*farFactor*smallFactor;
+                        // Stable physical slot, not frame or compact ordinal:
+                        // frozen camera/particles produce identical membership.
+                        uint hash=slot^0x9e3779b9u;
+                        hash^=hash>>16u;hash*=0x7feb352du;
+                        hash^=hash>>15u;hash*=0x846ca68bu;hash^=hash>>16u;
+                        float sample=float(hash>>8u)*(1.0f/16777216.0f);
+                        if(sample>=keep){
+                            atomic_fetch_add_explicit(&aliveCounter[7],1u,memory_order_relaxed);
+                            return;
+                        }
+                    }
+                }
+            }
         }
         ordinal=atomic_fetch_add_explicit(&aliveCounter[6],1u,memory_order_relaxed);
         if(ordinal>=u.meta.y)return;

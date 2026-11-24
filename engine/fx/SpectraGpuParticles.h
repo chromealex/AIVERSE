@@ -187,12 +187,13 @@ public:
     // Between completed frames only. Returns false when unavailable; failure
     // must never be interpreted as zero VM errors.
     bool readGpuVmErrors(uint32_t& count);
-    // Optional 28-byte async counter snapshot (includes exact visible count). Results describe the captured
+    // Optional 32-byte async counter snapshot (includes exact draw and LOD counts). Results describe the captured
     // submission, not the current frame. No mandatory per-frame readback.
     struct AllocationCounters {
         uint32_t alive=0,free=0,reservedBase=0,admitted=0;
         uint64_t revision=0;
-        uint32_t visible=0; // actual draw population for the captured submission
+        uint32_t visible=0; // actual draw population after frustum and LOD
+        uint32_t lodRejected=0; // in-frustum population omitted by Medium quality
     };
     bool requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback);
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
@@ -241,7 +242,8 @@ private:
         render::float4 gravityDt, rightSize, up;
         std::array<uint32_t,4> meta;
         float cullViewProj[16]{};
-        render::float4 cullControl{}; // x: valid culling view
+        render::float4 cullControl{}; // x: valid culling view; yz: viewport pixels; w: LOD far distance
+        render::float4 lodEye{}; // xyz: camera position; w: LOD near distance
     };
     struct DrawUniforms {
         float viewProj[16];
@@ -252,7 +254,7 @@ private:
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
-    static_assert(sizeof(Uniforms)==144);
+    static_assert(sizeof(Uniforms)==160);
     static_assert(sizeof(DrawUniforms)==144);
 
     bool stepGpuAllocated(float dt);
@@ -293,6 +295,7 @@ private:
     uint64_t gpuEstimatedBirths_=0;
     bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
     bool gpuCullViewUsed_=false; // camera-dependent compact stream
+    int viewWidth_=1,viewHeight_=1;
     struct KilledSlotAwaitingFrame {
         uint32_t slot=0;
         uint64_t submittedFrame=0;
