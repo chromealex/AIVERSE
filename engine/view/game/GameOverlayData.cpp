@@ -503,7 +503,7 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
     if (!j.has("on")) fail(where, "needs \"on\": event name(s)");
     for (auto& s : strings(j["on"], where + ".on")) {
         uint16_t k = overlayEventKind(s);
-        if (!k) fail(where + ".on", "unknown event '" + s + "' (hit, died, spawned, attack, gathered, delivered, produced, ability, cast, "
+        if (!k) fail(where + ".on", "unknown event '" + s + "' (hit, died, bounty, spawned, attack, gathered, delivered, produced, ability, cast, "
                                     "impact, miss, built, placed, trained, researched, levelup, captured, sold, upgraded, alert, status, "
                                     "area, claimed, wave, message, ping)");
         d.event.kinds.push_back(k);
