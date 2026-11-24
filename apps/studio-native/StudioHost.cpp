@@ -15,12 +15,7 @@
 #include <regex>
 #include <set>
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_STATIC
-#include "third_party/stb/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_STATIC
-#include "third_party/stb_image_write/stb_image_write.h"
+#include "apps/studio-native/StudioStbCodecs.h"
 
 namespace aiverse::studio {
 namespace fs = std::filesystem;
