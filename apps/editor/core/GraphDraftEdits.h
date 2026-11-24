@@ -22,6 +22,9 @@ inline bool exists(const Json& doc,const std::string& collection,const std::stri
 }
 inline void append(Json& doc,const std::string& collection,const Json& value,size_t limit){
     require(value.isObject()&&value["id"].isString()&&!value.getStr("id").empty()&&value.getStr("id").size()<=64,"invalid new ID");
+    // Json::member creates an object when absent, not a null value.
+    // Initialize a new array explicitly before taking its reference.
+    if(!doc.has(collection))doc.set(collection,Json::array());
     auto& rows=doc.member(collection);
     if(rows.isNull())rows=Json::array();
     require(rows.isArray()&&rows.size()<limit&&!exists(doc,collection,value.getStr("id")),"duplicate ID or collection limit");
@@ -78,7 +81,9 @@ inline void motion(Json& g,const Json& p){
         if(p.has("state"))entry(g,"states",p.getStr("state")).set("output",Json::string(id));
         else g.set("output",Json::string(id));
     }else if(action=="addTransition"||action=="removeTransition"||action=="replaceTransition"){
-        auto& state=entry(g,"states",p.getStr("state"));auto& list=state.member("transitions");
+        auto& state=entry(g,"states",p.getStr("state"));
+        if(!state.has("transitions"))state.set("transitions",Json::array());
+        auto& list=state.member("transitions");
         if(list.isNull())list=Json::array();
         require(list.isArray(),"transitions array required");
         if(action=="addTransition"){

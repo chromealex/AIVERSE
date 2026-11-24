@@ -4,6 +4,7 @@
 // owner consumes lift movement commands and publishes transformed dynamic
 // colliders and render instance poses in its normal update phase.
 #include "engine/buildings/BuildingNavMeshBridge.h"
+#include "engine/core/ECS.h"
 #include <engine/systems/BuildingRouteExecutor.h>
 #include <engine/systems/RuntimeBuildingGenerator.h>
 #include <map>
@@ -74,7 +75,7 @@ public:
         staged.riders=riders_;
         std::map<uint32_t,uint32_t> counts;
         for(const auto& [actor,feature]:riders_){
-            if(!actor||!lifts_.contains(feature))return false;
+            if(!Entity::fromPacked(actor).valid()||!lifts_.contains(feature))return false;
             ++counts[feature];
         }
         for(const auto& [feature,lift]:lifts_){
@@ -91,7 +92,7 @@ public:
         auto staged=lifts_;
         std::map<uint32_t,uint32_t> counts;
         for(const auto& [actor,feature]:saved.riders){
-            if(!actor||!staged.contains(feature))return false;
+            if(!Entity::fromPacked(actor).valid()||!staged.contains(feature))return false;
             ++counts[feature];
         }
         for(auto& [feature,lift]:staged){
@@ -200,7 +201,7 @@ public:
     // circulation tick as the cabin platform and must be applied by the
     // existing ECS/physics actor owner after collider publication succeeds.
     bool boardRider(uint64_t actorId,uint32_t feature,uint32_t floor){
-        if(actorId==0||riders_.count(actorId))return false;
+        if(!Entity::fromPacked(actorId).valid()||riders_.count(actorId))return false;
         auto it=lifts_.find(feature);
         if(it==lifts_.end()||!it->second.board(floor))return false;
         riders_[actorId]=feature;return true;
@@ -221,7 +222,7 @@ public:
     // non-actor cargo/passenger interactions.
     bool acknowledgeAgentBoarded(BuildingRouteExecutor& executor,
                                  uint64_t actorId,uint32_t feature){
-        if(!actorId||riders_.count(actorId))return false;
+        if(!Entity::fromPacked(actorId).valid()||riders_.count(actorId))return false;
         auto it=lifts_.find(feature);
         if(it==lifts_.end()||!executor.acknowledgeBoarded(it->second))
             return false;

@@ -50,7 +50,7 @@ public:
         auto fail=[&](const char* reason){
             return BuildingLiftCommandResult{false,cmd.sequence,reason};
         };
-        if(!sceneId_||!authenticatedClient||!cmd.actorId||!cmd.sequence||
+        if(!sceneId_||!authenticatedClient||!Entity::fromPacked(cmd.actorId).valid()||!cmd.sequence||
            !ownsActor_||!atLanding_||!scene_.attached()||scene_.faulted()||
            !scene_.doors().enabled()||
            cmd.sceneId!=sceneId_||yaw_>3||width_<=0||depth_<=0)

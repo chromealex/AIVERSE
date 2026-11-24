@@ -147,6 +147,7 @@ int main() {
     requireGraphTest(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
     const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind","transitions":[]}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
     const auto motionEdited=call("graph_edit",motionDraft);
+    if(!motionEdited.getBool("ok"))std::cerr<<"Motion draft diagnostics: "<<motionEdited.dump()<<"\n";
     requireGraphTest(motionEdited.getBool("ok")&&motionEdited["result"]["graph"]["states"][size_t(0)]["transitions"].size()==1,"animation state draft failed");
     requireGraphTest(!motionEdited["result"].getBool("valid"),"model-less motion graph unexpectedly validated");
     requireGraphTest(!fs::exists(root/"animations"),"animation draft wrote files");

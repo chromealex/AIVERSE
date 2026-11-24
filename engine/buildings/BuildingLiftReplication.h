@@ -92,8 +92,8 @@ inline bool validateBuildingLiftStateFrame(const BuildingLiftStateFrame& frame,
     std::map<uint64_t,bool> passengerIds;
     std::map<uint32_t,uint32_t> observed;
     for(const auto& rider:frame.passengers){
-        if(!rider.actorId||!passengerIds.emplace(rider.actorId,true).second)
-            return fail("Empty or duplicated passenger actor ID");
+        if(!Entity::fromPacked(rider.actorId).valid()||!passengerIds.emplace(rider.actorId,true).second)
+            return fail("Invalid or duplicated passenger actor ID");
         if(!known.count(rider.liftFeature))
             return fail("Passenger references missing lift");
         if(++observed[rider.liftFeature]>

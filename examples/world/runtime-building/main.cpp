@@ -65,6 +65,9 @@ public:
 
         auto& ecs=sim.world();
         rider=ecs.create();
+        // First ECS entity is a valid packed handle of zero. Keep this
+        // explicit regression for command, checkpoint and replica paths.
+        CHECK(rider.valid()&&rider.packed()==0);
         stranger=ecs.create();
         const auto feet=buildingLocalToWorld((liftPose.x0+liftPose.x1)*0.5f,
              float(liftPose.yMm)/1000.f+liftPose.thickness,
@@ -198,6 +201,7 @@ static void verifyLockstep(const std::string& root){
     inject(runtime.makeLiftCommand(1,game->feature,0,game->rider,1,BuildingLiftCommandKind::Board));
     inject(runtime.makeCommand(2,"entrance/0/0",game->stranger,2,true));
     step();
+    if(game->lift(sim).passengerCount!=1)std::cerr<<"Lift boarding diagnostics: "<<game->buildings->lastError()<<"\n";
     CHECK(game->lift(sim).passengerCount==1);
     inject(runtime.makeLiftCommand(1,game->feature,1,game->rider,1,BuildingLiftCommandKind::SelectFloor));
     inject(runtime.makeCommand(2,"entrance/0/0",game->stranger,2,false));
@@ -355,7 +359,8 @@ int main(int argc,char** argv){
         auto board=world.makeLiftCommand(1,game->feature,0,game->rider,2,BuildingLiftCommandKind::Board);
         CHECK(board);send(*board,2,true);CHECK(accepted==1);
         step();step();
-        CHECK(game->lift(sim).passengerCount==1);
+        if(game->lift(sim).passengerCount!=1)std::cerr<<"Lift boarding diagnostics: "<<game->buildings->lastError()<<"\n";
+    CHECK(game->lift(sim).passengerCount==1);
         const auto* passenger=sim.world().tryGetConst<BuildingLiftPassenger>(game->rider);
         CHECK(passenger&&passenger->attached&&passenger->sceneId==1);
         CHECK(game->unexpectedModuleCommands==0);
