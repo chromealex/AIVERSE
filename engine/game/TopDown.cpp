@@ -914,9 +914,10 @@ bool TopDown::validTarget(Simulation& sim, Entity hero, uint8_t owner, Entity c,
     const Rules& R = m_->rules();
     const UnitType& ct = R.types[cu->type];
     if (ct.invulnerable || !m_->hostile(sim, owner, co->player)) return false;
-    uint8_t layers = 0;
-    for (auto& wd : R.types[w.get<Unit>(hero).type].weapons) layers |= wd.targets;
-    if (layers && !layerHit(layers, ct.layer)) return false;
+    const auto& weapons = R.types[w.get<Unit>(hero).type].weapons;
+    if (!weapons.empty() && std::none_of(weapons.begin(), weapons.end(), [&](const WeaponDef& wd) {
+        return weaponTargetMatches(wd, ct.layer, ct.tags);
+    })) return false;
     const Vec3 cp = w.get<Transform>(c).pos;
     if (R.advancedEffects) { uint32_t f = m_->statusFlags(sim, c); if ((f & kStInvisible) && !(f & kStRevealed)) return false; }
     if (!m_->isVisible(sim, owner, cp)) return false;
