@@ -1,0 +1,5 @@
+# Stage 83 — transactional native graph replacement
+
+Parent `bbbc65e7ac44c57a123b0b69f1c3836c87704443`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+StudioSpectraPreview now holds GraphRuntime through unique ownership. Validated candidate initializes on the render owner while the last-good runtime is retained. Rejected validation/initialization reports a request-local error without changing generation, tick, playback, checkpoints or simulation latch. Successful initialization swaps ownership after waiting for resource idle, destroys old runtime and resets preview/transfer state. There is a bounded overlap of two runtimes during allocation; no second device or frame submission is introduced. Native Metal test source verifies invalid-load continuation, preserved generation and successful replacement generation. Backend allocation-failure injection and hardware validation remain outstanding. HTML5 command race hardening is a separate next step. No builds/tests executed. Main untouched.

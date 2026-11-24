@@ -80,17 +80,26 @@ int aiverseMain(int,char**) { @autoreleasepool {
         const Json rejected=scene.spectraPreviewCommand(invalid,"");
         require(rejected.getBool("ready") && !rejected.getStr("error").empty(),
                 "invalid graph destroyed a working preview or hid diagnostics");
-        const auto staleCancel=scene.spectraPreviewCommand(action("checkpointFileCancel"),"");
-        require(!staleCancel.getStr("error").empty(),"stale transfer cancellation must be rejected");
-        require(scene.spectraPreviewCommand(action("status"),"").getStr("error")==rejected.getStr("error"),
-                "file transport rejection replaced existing error");
-        scene.spectraPreviewCommand(action("pause"),"");
-        frame();
-        require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==3,
-                "pause must freeze particle time");
-        scene.spectraPreviewCommand(action("step"),"");
+        require(rejected.getBool("playing")&&rejected.getInt("generation")==state.getInt("generation"),
+                "failed load changed the live runtime generation or playback");
+        require(scene.spectraPreviewCommand(action("status"),"").getStr("error").empty(),
+                "failed load poisoned the live simulation");
         frame();
         require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==4,
+                "failed load stopped a previously working runtime");
+        scene.spectraPreviewCommand(action("pause"),"");
+        frame();
+        require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==4,
+                "pause must freeze particle time");
+        const auto badPlayback=scene.spectraPreviewCommand(action("playback"),"");
+        require(!badPlayback.getStr("error").empty(),"invalid playback must report error");
+        const auto staleCancel=scene.spectraPreviewCommand(action("checkpointFileCancel"),"");
+        require(!staleCancel.getStr("error").empty(),"stale transfer cancellation must be rejected");
+        require(scene.spectraPreviewCommand(action("status"),"").getStr("error")==badPlayback.getStr("error"),
+                "file transport rejection replaced existing error");
+        scene.spectraPreviewCommand(action("step"),"");
+        frame();
+        require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==5,
                 "single-step must advance exactly one fixed 60 Hz tick");
         Json seek=action("seek");seek.set("tick",Json::number(int64_t(25)));
         scene.spectraPreviewCommand(seek,"");
@@ -138,6 +147,10 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(!stopped.getBool("ready"),"shutdown left GPU visual source alive");
         const auto reloaded=scene.spectraPreviewCommand(load,"");
         require(reloaded.getBool("ready"),"preview reload failed");
+        const auto replacement=scene.spectraPreviewCommand(load,"");
+        require(replacement.getBool("ready")&&replacement.getInt("tick")==0&&
+                replacement.getInt("generation")==reloaded.getInt("generation")+1,
+                "successful candidate replacement did not commit a new generation");
         const auto switched=scene.spectraPreviewCommand(action("status"),"different-project");
         require(!switched.getBool("ready"),"status exposed old project runtime");
         scene.setSpectraDockMode(false);

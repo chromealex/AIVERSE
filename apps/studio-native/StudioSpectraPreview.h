@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <utility>
 #include <string>
 #include <vector>
@@ -111,32 +112,39 @@ public:
         if(action=="load") {
             if(!input["graph"].isObject() ||
                input["graph"].getInt("version")!=2)
-                return errorStatus("Preview requires a version-2 SpectraFX graph");
+                return transferStatus("Preview requires a version-2 SpectraFX graph");
             const Json graph=input["graph"];
             const std::string authored=graph.dump(-1);
             if(authored.size()>512u*1024u)
-                return errorStatus("Preview graph exceeds 512 KiB");
+                return transferStatus("Preview graph exceeds 512 KiB");
             fx::EffectDef checked;
             std::vector<std::string> errors;
             if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors))
-                return errorStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
-            // Validation completed before destroying any last-known-good
-            // preview. GPU resources are retired while NO pass is open.
+                return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
+            // Allocate a candidate while the last-known-good instance remains
+            // intact. The render owner is between frames, with no open pass.
             device.waitForResourceIdle();
-            runtime_.shutdown();
-            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;importLease_.reset();exportLease_.reset();
+            auto candidate=std::make_unique<spectra::GraphRuntime>();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
             opts.preference=spectra::ComputePreference::Automatic;
-            if(!runtime_.initGraph(&device,graph,Json::object(),opts)) {
-                ready_=false;playing_=false;pendingRestart_=false;restartBurstPending_=false;
-        hasPendingGpuAllocationSeed_=false;
-                return errorStatus(runtime_.reason().empty()?
-                    "SpectraFX preview backend unavailable":runtime_.reason());
+            if(!candidate->initGraph(&device,graph,Json::object(),opts)) {
+                const std::string reason=candidate->reason().empty()?
+                    "SpectraFX preview backend unavailable":candidate->reason();
+                device.waitForResourceIdle();
+                candidate.reset();
+                return transferStatus(reason);
             }
+            // Commit only after initialization succeeded. Both instances use
+            // this same device; retire the old resources before resuming frames.
+            device.waitForResourceIdle();
+            runtime_.swap(candidate);
+            candidate.reset();
+            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
+            checkpointWaitFrames_=0;fileImportPending_=false;importLease_.reset();exportLease_.reset();
             ready_=true;
             replayPrepared_=false;
             playing_=false;
@@ -151,14 +159,14 @@ public:
             requestedParameters_.clear();
             hasPendingGpuAllocationSeed_=false;
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
-            backend_=runtime_.gpuActive()?"Metal GPU":"CPU (full effect)";
+            backend_=runtime_->gpuActive()?"Metal GPU":"CPU (full effect)";
             error_.clear();
             ++generation_;
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
         if(action=="checkpointSave"||action=="checkpointRestore") {
-            if(!runtime_.gpuActive()||playing_||pendingRestart_||restartBurstPending_||
+            if(!runtime_->gpuActive()||playing_||pendingRestart_||restartBurstPending_||
                pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
                targetTicks_!=timeTicks_||!requestedParameters_.empty()||checkpointRequest_||rollbackId_)
                 return errorStatus("Checkpoint operation requires settled paused Metal preview");
@@ -180,8 +188,8 @@ public:
                 return errorStatus("Replay parameters must be an object with at most 8 scalars");
             std::map<std::string,float> validated;
             for(const auto& [name,value]:input["parameters"].members()) {
-                const auto it=runtime_.instanceParameters().find(name);
-                if(it==runtime_.instanceParameters().end() || !value.isNumber())
+                const auto it=runtime_->instanceParameters().find(name);
+                if(it==runtime_->instanceParameters().end() || !value.isNumber())
                     return errorStatus("Unknown replay parameter: "+name);
                 const double n=value.toDouble();
                 if(!std::isfinite(n)||n<it->second.minimum||n>it->second.maximum)
@@ -197,16 +205,16 @@ public:
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
                     return errorStatus("Replay seed must be integer 0..2147483647");
-                if(runtime_.backend()!=spectra::ComputeBackend::Cpu)
+                if(runtime_->backend()!=spectra::ComputeBackend::Cpu)
                     return errorStatus("Seeded replay currently requires CPU backend");
-                if(!runtime_.resetDeterministicSeed(uint32_t(seed.integer())))
-                    return errorStatus(runtime_.reason());
+                if(!runtime_->resetDeterministicSeed(uint32_t(seed.integer())))
+                    return errorStatus(runtime_->reason());
             }
             if(!input["gpuShaderSeed"].isNull()) {
                 const Json& seed=input["gpuShaderSeed"];
                 if(!seed.isNumber()||seed.numberLiteral().find_first_of(".eE-")!=std::string::npos||seed.integer(-1)<0||seed.integer(-1)>4294967295LL)
                     return errorStatus("GPU shader seed must be uint32");
-                if(!runtime_.gpuActive())return errorStatus("GPU shader seed requires Metal GPU backend");
+                if(!runtime_->gpuActive())return errorStatus("GPU shader seed requires Metal GPU backend");
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 pendingShaderSeedMode_=true;hasPendingGpuAllocationSeed_=true;
                 gpuSeedRetryCount_=0;gpuSeedFailed_=false;
@@ -217,7 +225,7 @@ public:
                 if(!seed.isNumber() || seed.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
                     return errorStatus("GPU allocation seed must be integer 0..2147483647");
-                if(!runtime_.gpuActive())
+                if(!runtime_->gpuActive())
                     return errorStatus("GPU allocation seed requires Metal GPU backend");
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 gpuSeedRetryCount_=0;
@@ -306,8 +314,8 @@ public:
         }
         if(action=="parameter") {
             const auto name=input.getStr("name");
-            const auto it=runtime_.instanceParameters().find(name);
-            if(it==runtime_.instanceParameters().end() || !input["value"].isNumber())
+            const auto it=runtime_->instanceParameters().find(name);
+            if(it==runtime_->instanceParameters().end() || !input["value"].isNumber())
                 return errorStatus("Unknown preview parameter or missing numeric value");
             const double n=input["value"].toDouble();
             if(!std::isfinite(n) || n<it->second.minimum || n>it->second.maximum)
@@ -324,44 +332,44 @@ public:
     // camera-dependent draw uniforms, but never advance particle age.
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
-        runtime_.setView(view);
+        runtime_->setView(view);
         if(fileImportPending_){fileImportPending_=false;auto bytes=std::move(importLease_.bytes);importLease_.reset();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
         if(rollbackId_){
             const auto id=std::exchange(rollbackId_,uint64_t(0));
-            if(!runtime_.restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
+            if(!runtime_->restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
             timeTicks_=targetTicks_=checkpointTicks_.at(id).first;
             triggeredBursts_=checkpointTicks_.at(id).second;
             phase_=0;error_.clear();
         }
         if(checkpointRequest_){
             if(++checkpointWaitFrames_>240){checkpointRequest_=false;error_="GPU checkpoint wait budget exceeded";return;}
-            const auto state=runtime_.checkpointStatus();
+            const auto state=runtime_->checkpointStatus();
             if(state.pending)return;
-            if(state.restoreEligible&&runtime_.retainFreshGpuCheckpoint()){
-                const auto ids=runtime_.historicalGpuCheckpointIds();
+            if(state.restoreEligible&&runtime_->retainFreshGpuCheckpoint()){
+                const auto ids=runtime_->historicalGpuCheckpointIds();
                 checkpointTicks_[ids.back()]={timeTicks_,triggeredBursts_};
                 for(auto it=checkpointTicks_.begin();it!=checkpointTicks_.end();){
                     if(std::find(ids.begin(),ids.end(),it->first)==ids.end())it=checkpointTicks_.erase(it);else ++it;
                 }
                 checkpointRequest_=false;error_.clear();
-            }else if(!runtime_.requestGpuCheckpoint()){
+            }else if(!runtime_->requestGpuCheckpoint()){
                 if(checkpointWaitFrames_>=240){checkpointRequest_=false;error_="GPU checkpoint request rejected after retry budget";}
             }
             return;
         }
         if(pendingClear_) {
             hasPendingGpuAllocationSeed_=false;
-            runtime_.clear();
+            runtime_->clear();
             pendingClear_=false;
         }
         if(hasPendingGpuAllocationSeed_) {
             // GPU buffer reset is legal only within the render-owner frame.
             // Keep the request pending after failure for explicit retry.
-            if(!(pendingShaderSeedMode_?runtime_.resetGpuShaderSeed(pendingGpuAllocationSeed_):runtime_.resetGpuAllocationSeed(pendingGpuAllocationSeed_))) {
+            if(!(pendingShaderSeedMode_?runtime_->resetGpuShaderSeed(pendingGpuAllocationSeed_):runtime_->resetGpuAllocationSeed(pendingGpuAllocationSeed_))) {
                 playing_=false;
                 ++gpuSeedRetryCount_;
-                error_=runtime_.reason().empty()?
-                    "SpectraFX GPU allocation seed reset failed":runtime_.reason();
+                error_=runtime_->reason().empty()?
+                    "SpectraFX GPU allocation seed reset failed":runtime_->reason();
                 if(gpuSeedRetryCount_>=kMaxGpuSeedRetries) {
                     hasPendingGpuAllocationSeed_=false;
                     gpuSeedFailed_=true;
@@ -376,25 +384,25 @@ public:
             timeTicks_=0;
         }
         if(pendingRestart_) {
-            runtime_.clear();
+            runtime_->clear();
             timeTicks_=0;
             pendingRestart_=false;
         }
         // Apply replay uniforms BEFORE the initial native burst. Preserve
         // failed values for diagnosis/retry instead of silently dropping them.
         for(auto it=requestedParameters_.begin();it!=requestedParameters_.end();) {
-            if(!runtime_.setNamedProgramParameter(it->first,it->second,true)) {
+            if(!runtime_->setNamedProgramParameter(it->first,it->second,true)) {
                 playing_=false;
-                error_=runtime_.reason().empty()?"SpectraFX replay parameter rejected":runtime_.reason();
+                error_=runtime_->reason().empty()?"SpectraFX replay parameter rejected":runtime_->reason();
                 break;
             }
             it=requestedParameters_.erase(it);
         }
         if(!error_.empty())return;
         if(restartBurstPending_) {
-            if(!runtime_.burstAt({origin.x,origin.y+1.0f,origin.z})) {
+            if(!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
                 playing_=false;
-                error_=runtime_.reason().empty()?"SpectraFX preview burst rejected":runtime_.reason();
+                error_=runtime_->reason().empty()?"SpectraFX preview burst rejected":runtime_->reason();
                 return;
             }
             restartBurstPending_=false;
@@ -406,10 +414,10 @@ public:
         // The queue is bounded and consumed only inside the device frame.
         const uint32_t count=std::exchange(burstsPending_,0u);
         for(uint32_t i=0;i<count;++i) {
-            if(!runtime_.burstAt({origin.x,origin.y+1.0f,origin.z})) {
+            if(!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
                 playing_=false;phase_=0;
-                error_=runtime_.reason().empty()?
-                    "SpectraFX one-shot burst rejected":runtime_.reason();
+                error_=runtime_->reason().empty()?
+                    "SpectraFX one-shot burst rejected":runtime_->reason();
                 return;
             }
             ++triggeredBursts_;
@@ -431,12 +439,12 @@ public:
         const uint32_t ticks=std::min(remaining,requested);
         stepsPending_=0;
         for(uint32_t i=0;i<ticks;++i) {
-            if(!runtime_.step(kStep)) {
+            if(!runtime_->step(kStep)) {
                 playing_=false;phase_=0;
-                ready_=runtime_.backend()==spectra::ComputeBackend::Cpu ||
-                       runtime_.gpuActive();
-                error_=runtime_.reason().empty()?
-                    "SpectraFX preview simulation failed":runtime_.reason();
+                ready_=runtime_->backend()==spectra::ComputeBackend::Cpu ||
+                       runtime_->gpuActive();
+                error_=runtime_->reason().empty()?
+                    "SpectraFX preview simulation failed":runtime_->reason();
                 break;
             }
             ++timeTicks_;
@@ -457,7 +465,7 @@ public:
     // Draw only inside the SAME still-open native Scene pass (before PRISMA
     // resolves that frame). No RHI work is ever submitted by the HTML UI.
     void draw() {
-        if(ready_) runtime_.draw();
+        if(ready_) runtime_->draw();
     }
     bool active() const {return ready_;}
     bool needsFrame() const {
@@ -470,7 +478,7 @@ public:
            pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
            targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
         std::vector<uint8_t> payload;
-        return runtime_.exportRestoreCheckpoint(payload)&&spectra::encodeTimelineCheckpoint(payload,timeTicks_,triggeredBursts_,out);
+        return runtime_->exportRestoreCheckpoint(payload)&&spectra::encodeTimelineCheckpoint(payload,timeTicks_,triggeredBursts_,out);
     }
     // Render-owner frame only; callers must not invoke this inside a pass.
     bool importTimelineCheckpoint(const std::vector<uint8_t>& bytes) {
@@ -478,7 +486,7 @@ public:
            pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
            targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
         uint32_t tick=0,bursts=0;std::vector<uint8_t> payload;
-        if(!spectra::decodeTimelineCheckpoint(bytes,tick,bursts,payload)||!runtime_.importRestoreCheckpoint(payload))return false;
+        if(!spectra::decodeTimelineCheckpoint(bytes,tick,bursts,payload)||!runtime_->importRestoreCheckpoint(payload))return false;
         timeTicks_=targetTicks_=tick;triggeredBursts_=bursts;phase_=0;replayPrepared_=false;error_.clear();return true;
     }
     uint32_t timeTicks() const {return timeTicks_;}
@@ -509,13 +517,13 @@ public:
         result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_||fileImportPending_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
-        result.set("gpu",Json::fromBool(ready_&&runtime_.gpuActive()));
-        result.set("alive",Json::number(int64_t(ready_?runtime_.gpuStats().alive:0)));
+        result.set("gpu",Json::fromBool(ready_&&runtime_->gpuActive()));
+        result.set("alive",Json::number(int64_t(ready_?runtime_->gpuStats().alive:0)));
         return result;
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
-        runtime_.shutdown();
+        runtime_->shutdown();
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
         fileImportPending_=false;importLease_.reset();exportLease_.reset();
         checkpointWaitFrames_=0;hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
@@ -540,7 +548,7 @@ private:
         error_=std::move(reason);
         return status();
     }
-    spectra::GraphRuntime runtime_;
+    std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;
     bool loop_=true;
