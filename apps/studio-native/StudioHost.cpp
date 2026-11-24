@@ -1323,6 +1323,16 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
+    if (method == "studio.gameRegions") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("World Explorer project changed; refresh the panel");
+        if(game_)return game_->regions();
+        Json out=Json::object();
+        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
+        out.set("reason",Json::string("No local match is running"));return out;
+    });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||

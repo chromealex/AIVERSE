@@ -2,6 +2,8 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -86,6 +88,25 @@ Json StudioGameSurface::mapEntityStates() {
     }
     Json r=Json::object();r.set("entities",std::move(out));r.set("tick",Json::number(int64_t(sim->tick())));
     return r;
+}
+// Explicit operator snapshot, not a per-frame scan or a durable-save claim.
+Json StudioGameSurface::regions() const {
+    const Simulation* sim=host_->inMatch()?host_->simulation():nullptr;
+    Json out=Json::object();
+    const auto* ledger=sim?sim->world().resourceConst<world::RegionEntityLedger>():nullptr;
+    if(ledger) {
+        out=world::ledgerStatus(*ledger,sim->world());
+        if(out.has("error"))throw std::runtime_error(out.getStr("error"));
+        out.set("durabilityKnown",Json::fromBool(false));
+        out.set("simulationLod",world::simulationLodDiagnosticsJson(sim->world().resourceConst<world::SimulationLodDiagnostics>()));
+    }else{
+        out.set("reason",Json::string(sim?"Region ownership is not enabled in this match":"No local match is running"));
+    }
+    out.set("active",Json::fromBool(sim!=nullptr));
+    out.set("available",Json::fromBool(ledger!=nullptr));
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    return out;
 }
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {
     return inspector_.entities(host_->inMatch()?host_->simulation():nullptr,std::to_string(runtimeEpoch_),offset,limit,query);
