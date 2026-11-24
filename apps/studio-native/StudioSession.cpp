@@ -178,12 +178,19 @@ Json genericField(const std::string& key,const Json& value) {
 // right-handed (counter-clockwise). Both normalized to [0,360).
 // Validate a published graph through the shared Workspace compiler before
 // writing a source declaration. Preview-only drafts are not placeable.
-void requireStudioSpectraGraph(editor::Workspace& ws,const std::string& name){
+Json requireStudioSpectraGraph(editor::Workspace& ws,const std::string& name){
     if(!lib::mechanics::validSpectraSourceName(name))throw std::runtime_error("Invalid SpectraFX effect name");
     Json args=Json::object();args.set("name",str(name));
     const auto result=ws.call("fx_graph_get",args,"studio");
     if(result.has("error")||!result["validation"].getBool("ok")||result["graph"].getInt("version")!=2)
         throw std::runtime_error("Choose a published valid SpectraFX Graph v2");
+    return result["graph"];
+}
+spectra::InstanceParameterTable studioSpectraParameterSchema(const Json& graph){
+    spectra::InstanceParameterTable schema;std::vector<std::string> errors;
+    if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],schema,errors))
+        throw std::runtime_error(errors.empty()?"Invalid instance parameter schema":errors.front());
+    return schema;
 }
 double studioFacingToYaw(double facing){double y=std::fmod(360.0-std::fmod(facing,360.0),360.0);return y<0?y+360.0:y;}
 bool studioModelAssetPath(const std::string& path) {
@@ -361,6 +368,26 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     scale.set("min",Json::number(.001));scale.set("max",Json::number(100.0));fields.push(scale);
                     fields.push(prop("enabled","Enabled","boolean",value["enabled"]));
                     fields.push(prop("killOnDetach","Kill on detach","boolean",value["killOnDetach"]));
+                    const auto effect=value.getStr("effect");
+                    if(lib::mechanics::validSpectraSourceName(effect)){
+                        try{
+                            namespace fs=std::filesystem;
+                            const auto dir=fs::path(ws_.project.dir)/"fx";
+                            const auto file=dir/"graphs"/(effect+".vfx.json");
+                            if(!fs::is_symlink(fs::symlink_status(dir))&&!fs::is_symlink(fs::symlink_status(dir/"graphs"))&&
+                               fs::is_regular_file(fs::symlink_status(file))&&fs::file_size(file)<=512*1024){
+                                std::ifstream input(file,std::ios::binary);
+                                const auto graph=Json::parse(std::string(std::istreambuf_iterator<char>(input),{}));
+                                for(const auto& [name,def]:studioSpectraParameterSchema(graph)){
+                                    const auto key="parameter:"+name;
+                                    auto field=numericProp(key.c_str(),name.c_str(),value["parameters"].has(name)?value["parameters"][name]:Json::number(double(def.initial)));
+                                    field.set("min",Json::number(double(def.minimum)));
+                                    field.set("max",Json::number(double(def.maximum)));
+                                    fields.push(std::move(field));
+                                }
+                            }
+                        }catch(const std::exception&){/* invalid graph: keep base inspector accessible */}
+                    }
                     fields.push(readOnly(numericProp("revision","Revision",value["revision"],true)));
                     components.push(component("SpectraSource","VFX Renderer",fields,"Authored source; runtime host binding required."));
                     continue;
@@ -2686,10 +2713,24 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 auto components=candidate.extra["components"];
                 auto doc=components["SpectraSource"];
                 if(!doc.isObject())throw std::runtime_error("VFX Renderer is not on this entity");
-                if(key!="effect"&&key!="scale"&&key!="enabled"&&key!="killOnDetach")
-                    throw std::runtime_error("Unknown VFX Renderer property");
-                if(doc[key]==value){reply.set("result",snapshot());return reply;}
-                doc.set(key,value);
+                if(key.rfind("parameter:",0)==0){
+                    const auto name=key.substr(10);
+                    const auto graph=requireStudioSpectraGraph(ws_,doc.getStr("effect"));
+                    const auto schema=studioSpectraParameterSchema(graph);
+                    const auto def=schema.find(name);
+                    if(def==schema.end()||!value.isNumber()||
+                       !spectra::checkInstanceParameterValue(def->second,float(value.toDouble())))
+                        throw std::runtime_error("Invalid SpectraFX instance parameter");
+                    auto overrides=doc["parameters"].isObject()?doc["parameters"]:Json::object();
+                    if(overrides[name]==value){reply.set("result",snapshot());return reply;}
+                    overrides.set(name,value);doc.set("parameters",overrides);
+                }else{
+                    if(key!="effect"&&key!="scale"&&key!="enabled"&&key!="killOnDetach")
+                        throw std::runtime_error("Unknown VFX Renderer property");
+                    if(doc[key]==value){reply.set("result",snapshot());return reply;}
+                    doc.set(key,value);
+                    if(key=="effect")doc.erase("parameters");
+                }
                 auto source=lib::mechanics::readSpectraSourceDocument(doc);
                 if(key=="effect"&&!source.effect.empty())requireStudioSpectraGraph(ws_,source.effect);
                 if(source.enabled&&source.effect.empty())throw std::runtime_error("Choose an effect before enabling");

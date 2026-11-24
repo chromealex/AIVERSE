@@ -130,7 +130,23 @@ static void poolPolicyScenario(){
     catch(const std::exception&){rejected=true;}
     check(rejected,"invalid pooled policy accepted");
 }
+static void parameterScenario(){
+    lg::SpectraSourceComponent a,b;
+    a.effect=b.effect="flame";
+    a.parameters["lift"]=2_fx;b.parameters["lift"]=5_fx;
+    spectra::InstanceParameterTable schema{{"lift",{0,1,0,10}}};
+    std::array<float,8> av{},bv{};
+    check(lg::resolveSpectraSourceParameters(a,schema,av)&&av[0]==2,"first instance override");
+    check(lg::resolveSpectraSourceParameters(b,schema,bv)&&bv[0]==5,"second instance override");
+    a.parameters.clear();
+    check(lg::resolveSpectraSourceParameters(a,schema,av)&&av[0]==1,"graph default");
+    a.parameters["lift"]=11_fx;
+    check(!lg::resolveSpectraSourceParameters(a,schema,av),"out of range accepted");
+    const auto roundtrip=lg::readSpectraSourceDocument(lg::writeSpectraSourceDocument(b));
+    check(roundtrip.parameters==b.parameters,"parameter document roundtrip");
+}
 int main() {
+    parameterScenario();
     poolPolicyScenario();
     mirrorScenario();
     scenario<SpaceUnit>();

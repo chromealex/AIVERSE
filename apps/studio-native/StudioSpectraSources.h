@@ -23,7 +23,7 @@ public:
         gpuPresenter_.reset();gpuMirror_.clear();gpuPool_.shutdown();gpuDefinitions_.clear();
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
-        definitions_.clear();project_.clear();mapPath_.clear();error_.clear();
+        definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
         revision_=UINT64_MAX;ready_=false;
     }
     bool animated() const{
@@ -57,6 +57,10 @@ public:
                 if(entity.id.empty())identity+=":"+std::to_string(doc.revision);
                 if(!ready_&&!initialize(device))return;
                 if(!define(source.effect))continue;
+                std::array<float,8> values{};
+                if(!lib::mechanics::resolveSpectraSourceParameters(source,schemas_.at(source.effect),values)){
+                    error_="Invalid instance parameter override: "+source.effect;continue;
+                }
                 const auto transform=editor::authoredLocalTransform(entity);
                 const auto p=transform.position;
                 lib::mechanics::SpectraSourceSnapshot row{identity,source,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},{0,1,0}};
@@ -138,7 +142,13 @@ private:
         if(graph.getInt("version")!=2||!spectra::compileGraph(graph,def,errors)){
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
+        spectra::InstanceParameterTable named;
+        if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],named,errors)){
+            error_=errors.empty()?"Invalid SpectraFX parameter schema":errors.front();return false;
+        }
         if(particles_.define(name,def)<0){error_="Cannot define SpectraFX graph: "+name;return false;}
+        presenter_->bindInstanceParameters(name,named);
+        schemas_[name]=std::move(named);
         definitions_.insert(name);
         // CPU definition always remains available for incompatible devices,
         // unscaled-only GPU policy failures and nonunit authored instances.
@@ -165,6 +175,7 @@ private:
     std::unique_ptr<spectra::GpuEcsAttachmentPresenter> gpuPresenter_;
     bool gpuFrameOpen_=false;
     std::set<std::string> definitions_,gpuDefinitions_,hidden_;
+    std::map<std::string,spectra::InstanceParameterTable> schemas_;
     std::string project_,mapPath_,error_;
     uint64_t revision_=UINT64_MAX;
     bool ready_=false;

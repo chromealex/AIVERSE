@@ -7,6 +7,8 @@
 #include "engine/core/ECS.h"
 #include "engine/sim/Simulation.h"
 #include "engine/fx/ParticleSystem.h"
+#include "engine/fx/SpectraInstanceParameters.h"
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -25,7 +27,24 @@ struct SpectraSourceComponent {
     uint32_t revision = 0;       // increment to restart the emitter after authoring/property changes
     bool enabled = true;
     bool killOnDetach = false;   // false: existing particles fade naturally after stop()
+    std::map<std::string,Fixed> parameters;
 };
+inline bool resolveSpectraSourceParameters(const SpectraSourceComponent& source,
+    const spectra::InstanceParameterTable& table,std::array<float,8>& values){
+    values={};
+    if(source.parameters.size()>8)return false;
+    for(const auto& [name,def]:table){
+        if(def.slot>=values.size())return false;
+        values[def.slot]=def.initial;
+    }
+    for(const auto& [name,value]:source.parameters){
+        const auto it=table.find(name);
+        const float scalar=float(value.toDouble());
+        if(it==table.end()||!spectra::checkInstanceParameterValue(it->second,scalar))return false;
+        values[it->second.slot]=scalar;
+    }
+    return true;
+}
 
 // Presentation-only mapping: game-specific render pose policy is supplied by
 // the native host. Does NOT assume actors, RTS models, FPS cameras or physics.
@@ -43,6 +62,10 @@ public:
     SpectraPresentationSystem(const SpectraPresentationSystem&) = delete;
     SpectraPresentationSystem& operator=(const SpectraPresentationSystem&) = delete;
 
+    void bindInstanceParameters(const std::string& effect,spectra::InstanceParameterTable table){
+        schemas_[effect]=std::move(table);
+    }
+
     // Called each presentation frame. Does not advance particles or mutate ECS.
     // Call ParticleSystem::setView/update/render from the host's normal view loop.
     void sync(const World& world, const ResolvePose& resolve) {
@@ -54,12 +77,18 @@ public:
                 const uint64_t key = entity.packed();
                 fx::float3 pos{}, dir{0, 1, 0};
                 if (!resolve || !resolve(world, entity, pos, dir)) return;
+                std::array<float,8> values{};
+                const auto schema=schemas_.find(source.effect);
+                if(schema!=schemas_.end()){
+                    if(!resolveSpectraSourceParameters(source,schema->second,values))return;
+                }else if(!source.parameters.empty())return;
                 present.insert(key);
                 auto it = attached_.find(key);
                 if (it != attached_.end() &&
                     (it->second.effect != source.effect ||
                      it->second.revision != source.revision ||
-                     it->second.scaleRaw != source.scale.raw)) {
+                     it->second.scaleRaw != source.scale.raw ||
+                     it->second.parameters != values)) {
                     release(it->second);
                     attached_.erase(it);
                     it = attached_.end();
@@ -70,12 +99,13 @@ public:
                     state.scaleRaw = source.scale.raw;
                     state.revision = source.revision;
                     state.killOnDetach = source.killOnDetach;
-                    state.handle = ps_.play(source.effect, pos, dir, float(source.scale.toDouble()));
+                    state.parameters=values;
+                    state.handle = ps_.playWithProgramParameters(ps_.effect(source.effect),pos,dir,float(source.scale.toDouble()),{1,1,1,1},values);
                     attached_.emplace(key, std::move(state));
                 } else {
                     it->second.killOnDetach = source.killOnDetach;
                     if (!it->second.handle.valid() || !ps_.playing(it->second.handle))
-                        it->second.handle = ps_.play(source.effect, pos, dir, float(source.scale.toDouble()));
+                        it->second.handle = ps_.playWithProgramParameters(ps_.effect(source.effect),pos,dir,float(source.scale.toDouble()),{1,1,1,1},values);
                     else ps_.move(it->second.handle, pos, dir);
                 }
             });
@@ -138,6 +168,7 @@ private:
         int64_t scaleRaw = 0;
         uint32_t revision = 0;
         bool killOnDetach = false;
+        std::array<float,8> parameters{};
     };
     void release(const Attached& state) {
         if (state.killOnDetach) ps_.kill(state.handle);
@@ -145,6 +176,7 @@ private:
     }
     static constexpr size_t kMaxTrackedCues = 65536;
     fx::ParticleSystem& ps_;
+    std::map<std::string,spectra::InstanceParameterTable> schemas_;
     std::unordered_map<uint64_t, Attached> attached_;
     std::vector<fx::FxHandle> oneShots_;
     size_t oneShotCursor_ = 0;

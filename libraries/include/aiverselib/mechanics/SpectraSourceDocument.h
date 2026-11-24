@@ -30,6 +30,16 @@ inline SpectraSourceComponent readSpectraSourceDocument(const Json& doc){
     for(const char* key:{"enabled","killOnDetach"})
         if(doc[key].type()!=Json::Type::Bool)throw std::runtime_error("Invalid SpectraFX source flag");
     source.enabled=doc.getBool("enabled");source.killOnDetach=doc.getBool("killOnDetach");
+    const auto& params=doc["parameters"];
+    if(!params.isNull()){
+        if(!params.isObject()||params.size()>8)throw std::runtime_error("Invalid SpectraFX parameter overrides");
+        for(const auto& [name,value]:params.members()){
+            const double n=value.toDouble();
+            if(!spectra::instanceParameterNameOk(name)||!value.isNumber()||!std::isfinite(n)||std::abs(n)>1e7)
+                throw std::runtime_error("Invalid SpectraFX parameter: "+name);
+            source.parameters.emplace(name,Fixed::fromRaw(int64_t(std::llround(n*double(Fixed::kOne)))));
+        }
+    }
     return source;
 }
 inline Json writeSpectraSourceDocument(const SpectraSourceComponent& source){
@@ -37,6 +47,11 @@ inline Json writeSpectraSourceDocument(const SpectraSourceComponent& source){
     out.set("effect",Json::string(source.effect));out.set("scale",Json::number(source.scale.toDouble(),6));
     out.set("revision",Json::number(int64_t(source.revision)));
     out.set("enabled",Json::fromBool(source.enabled));out.set("killOnDetach",Json::fromBool(source.killOnDetach));
+    if(!source.parameters.empty()){
+        Json params=Json::object();
+        for(const auto& [name,value]:source.parameters)params.set(name,Json::number(value.toDouble(),8));
+        out.set("parameters",std::move(params));
+    }
     return out;
 }
 }
