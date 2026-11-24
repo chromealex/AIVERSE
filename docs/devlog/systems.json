@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: выбор тела и перетаскивание",
+     "titleEn": "Planetary forest: body selector and drag relocation",
+     "text": "Stage 161D5a: независимый выбор тела, предварительная геометрия перемещения и одна транзакция на отпускании мыши.",
+     "textEn": "Stage 161D5a: independent body selection, relocation preview and one transaction on pointer release."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: живой рельеф и выборка активного тела",
      "titleEn": "Planetary forest: live terrain and active body sampling",
      "text": "Stage 161D4c3: ограниченный снимок высот Surface, отдельный GPU-меш, приоритет активного тела.",
