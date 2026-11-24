@@ -493,7 +493,7 @@ void registerFxOps(Workspace& ws) {
         R"({"properties": {"effect": {"type": ["string", "null"]}, "cue": {"type": "string"}, "type": {"type": "string"},
             "weapon": {"type": "string"}, "ability": {"type": "string"}, "category": {"type": "string", "enum": ["structure", "air", "unit"]},
             "height": {"type": "number"}, "scale": {"type": "number"}, "teamColor": {"type": "boolean"}, "below": {"type": "number"},
-            "upright": {"type": "boolean"}, "clear": {"type": "boolean"}, "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
+            "upright": {"type": "boolean"}, "clear": {"type": "boolean"}, "node": {"type": "string"}, "offset": {"type": "array", "items": {"type":"number"}, "minItems":3,"maxItems":3}, "inheritRotation": {"type":"boolean"}, "inheritScale": {"type":"boolean"}, "anchor": {"type":"string","enum":["subject","target"]}, "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
         needGame(ws);
         const auto& R = ws.project.rules;
         const bool remove = p.getBool("remove");
@@ -521,7 +521,7 @@ void registerFxOps(Workspace& ws) {
         Json value;
         if (none) value = Json();
         else if (!remove) {
-            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below") || p.has("upright") || p.has("clear");
+            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below") || p.has("upright") || p.has("clear") || p.has("node") || p.has("offset") || p.has("inheritRotation") || p.has("inheritScale") || p.has("anchor");
             if (!obj) value = str(eff);
             else {
                 value = Json::object();
@@ -531,6 +531,24 @@ void registerFxOps(Workspace& ws) {
                 if (p.has("teamColor")) value.set("teamColor", Json::fromBool(p.getBool("teamColor")));
                 if (p.has("below")) value.set("below", Json::number(p["below"].toDouble(0.5), 3));
                 if (p.getBool("upright")) value.set("upright", Json::fromBool(true));
+                if(p.has("node")) {
+                    if(!p["node"].isString()||p.getStr("node").empty())throw std::runtime_error("node must be a nonempty name");
+                    value.set("node",p["node"]);
+                }
+                if(p.has("offset")) {
+                    const auto& o=p["offset"];
+                    if(!o.isArray()||o.size()!=3||!o[0].isNumber()||!o[1].isNumber()||!o[2].isNumber())throw std::runtime_error("offset must have three numbers");
+                    value.set("offset",o);
+                }
+                for(const char* key:{"inheritRotation","inheritScale"})if(p.has(key)){
+                    if(p[key].type()!=Json::Type::Bool)throw std::runtime_error(std::string(key)+" must be boolean");
+                    value.set(key,p[key]);
+                }
+                if(p.has("anchor")) {
+                    const auto a=p.getStr("anchor");
+                    if(a!="subject"&&a!="target")throw std::runtime_error("anchor must be subject or target");
+                    value.set("anchor",p["anchor"]);
+                }
                 if (p.getBool("clear")) {
                     if (cue != "trail") throw std::runtime_error("'clear' applies to trail bindings");
                     value.set("clear", Json::fromBool(true));
