@@ -4973,6 +4973,12 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiversemcp AND Python3_EXECUTABLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/simulation_budget_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
     set_tests_properties(simulation_budget_mcp PROPERTIES LABELS "MCP;World" TIMEOUT 60)
+    if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+        add_test(NAME planet_forest_mcp_stdio COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/editor/planet_forest_mcp.py
+            --binary $<TARGET_FILE:aiversemcp> --engine ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(planet_forest_mcp_stdio PROPERTIES TIMEOUT 180 LABELS "MCP;WorldProcesses")
+    endif()
     add_test(NAME world_persistence_mcp_stdio COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/world/world_persistence_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
