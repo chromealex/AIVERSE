@@ -101,7 +101,7 @@ sand bands, roads, exporter cover masks, slope masks supplied by the host.
 - Blade = 2*segments-1 triangles; flowering stems add 2 (flower) or 4 (crossed
   panicle/spike diamonds): `meadowBladeTriangleBound(segments)`.
 - LOD: the shared chain keeps the same seeded blades (1/3, 1/8 of them), widens
-  them by sqrt(stride) and drops segments.
+  them by their sampling stride and drops segments.
 - Tiers: `meadowGrassQuality(GrassTier::Mobile|Medium|High, meadow)`.
   Mobile: 1024 blades/patch, 2 segments, 48 patches, 1 upload/frame;
   upper bound `grassTriangleBudget(q)` = 344 064 LOD0 triangles.

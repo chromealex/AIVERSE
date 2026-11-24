@@ -154,7 +154,8 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
     const uint32_t candidates=std::min(quality.maxBladesPerPatch,patch.maximumBlades);
     const uint32_t keep=uint32_t(uint64_t(patch.coveragePermille)*appearance.foliagePermille/1000u);
     const uint32_t sourceSamples=quality.sourceSamples?quality.sourceSamples:candidates;
-    const float lod=std::sqrt(float(quality.sampleStride)); // far tiers: fewer, wider blades
+    // A far ribbon represents several source blades. Preserve their projected width.
+    const float lod=float(quality.sampleStride);
     const float light=.55f+.45f*float(patch.environment.lightPermille)/1000.f;
     const float size=float(appearance.sizePermille)/1000.f;
     std::array<std::array<LinearRgb,4>,kMaxGrassSpecies> palette{};
@@ -271,7 +272,8 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
             auto sideDir=side0*std::cos(angle)+render::normalize(render::cross(dir,side0))*std::sin(angle);
             sideDir=render::normalize(sideDir);
             const float profile=(t<shoulder?.45f+.55f*(t/shoulder):1.f)*std::pow(std::max(0.f,1.f-t),taper*.5f);
-            const float w=halfWidth*(flowering?1.f:profile);
+            // A one-segment LOD has no shoulder vertex; use the full width at its base.
+            const float w=halfWidth*(flowering || segments==1 ? 1.f : profile);
             auto normal=render::normalize(render::cross(sideDir,dir));
             if(normal.y<0)normal=-normal;
             const auto col=finish(pack(flowering?mix(blade(t),pal[2],.3f):blade(t)),t);
