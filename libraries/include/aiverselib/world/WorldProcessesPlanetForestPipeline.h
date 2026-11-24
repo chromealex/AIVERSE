@@ -112,11 +112,12 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         // Drain all configured due receipts, including terrain-induced falls,
         // not just new natural falls. Wait for the canonical mass ledger.
         for(const auto& fall:evolve::pendingPlanetPlantFalls(staged)){
-            if(fall.event.tick>tick)continue;
+            if(fall.event.tick>tick||!currentPlanetForestFall(staged,surface,fall))continue;
             const auto* wood=staged.resourceConst<evolve::PlanetDeadwoodResource>();
             const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),fall.event.id,
                 [](const auto& r,auto id){return r.id<id;});
-            if(log==wood->ledger.logs.end()||log->id!=fall.event.id)continue;
+            if(log==wood->ledger.logs.end()||log->id!=fall.event.id||
+               log->createdTick>tick||log->lastEvaluatedTick>tick)continue;
             if(!log->remainingUnits){
                 if(!completeSpentPlanetFall(staged,surface,fall,tick))return reject();
                 continue;

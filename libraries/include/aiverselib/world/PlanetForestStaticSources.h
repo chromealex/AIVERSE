@@ -24,12 +24,15 @@ inline std::optional<PlanetForestStaticSources> collectPlanetForestStaticSources
         const auto recipe=cfg.naturalFallBodies.find(id.speciesId);
         if(recipe==cfg.naturalFallBodies.end()||(harvested&&isForestHarvested(*harvested,id)))continue;
         const auto& b=*byId.at(id);
+        const auto address=evolve::planetDeadwoodAddress(surface,b);
+        if(!address)return {};
         const PlanetSourceKey key{ConsequenceKind::Plant,id.key,id.speciesId};
         if(planetSourceRetired(world,key,b.bodyId))continue;
         auto shape=recipe->second;Fixed fraction=1_fx;
         const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),id,
             [](const auto& r,auto key){return r.id<key;});
         if(log!=wood->ledger.logs.end()&&log->id==id){
+            if(log->xCm!=address->first||log->zCm!=address->second)return {};
             if(!log->remainingUnits)continue;
             if(!log->initialUnits||log->initialUnits>1000000000ull||log->remainingUnits>log->initialUnits)return {};
             fraction=fxMax(Fixed::fromRaw(1),Fixed::fromRatio(int64_t(log->remainingUnits),int64_t(log->initialUnits)));
