@@ -48,21 +48,22 @@ export default function SpectraGraphAssetInspector({
   const node=graph.nodes.find(n=>n.id===targetNodeId);
   const [bakeModel,setBakeModel]=useState<SpectraAssetReference|null>(null);
   const [bakeDimension,setBakeDimension]=useState(16);
+  const [sdfAsset,setSdfAsset]=useState<SpectraAssetReference|null>(null);
   const [baking,setBaking]=useState(false);
   const [bakeStatus,setBakeStatus]=useState('');
   const currentBake=useRef({graph,targetNodeId,projectPath,onGraphChange});
   currentBake.current={graph,targetNodeId,projectPath,onGraphChange};
   const mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
-  const bake=async()=>{
+  const bake=async(importAsset=false)=>{
     const request=currentBake.current;
-    const model=assets.find(a=>a.guid===bakeModel?.guid&&a.kind==='model');
+    const model=assets.find(a=>importAsset?a.guid===sdfAsset?.guid&&a.kind==='sdf':a.guid===bakeModel?.guid&&a.kind==='model');
     if(disabled||baking||!request.projectPath||!request.targetNodeId||!model?.path)return;
     setBaking(true);setError('');setBakeStatus('');
     try{
       const response=await invoke('studio.op',{op:'fx_graph_edit',params:{
-        action:'bakeSdf',graph:request.graph,node:request.targetNodeId,
-        expectedProjectPath:request.projectPath,model:'content/'+model.path,dimension:bakeDimension}});
+        action:importAsset?'importSdf':'bakeSdf',graph:request.graph,node:request.targetNodeId,
+        expectedProjectPath:request.projectPath,...(importAsset?{sdfAsset:'content/'+model.path}:{model:'content/'+model.path,dimension:bakeDimension})}});
       if(!mounted.current)return;
       const latest=currentBake.current;
       if(latest.graph!==request.graph||latest.targetNodeId!==request.targetNodeId||
@@ -71,7 +72,7 @@ export default function SpectraGraphAssetInspector({
       const next=graphV2(result?.graph);
       if(!result?.ok||!next)throw new Error(result?.error||'Native SDF bake rejected.');
       latest.onGraphChange(next);
-      setBakeStatus('Baked '+bakeDimension+'³ samples into local draft. '+(result.validation?.ok?'Compiler accepted.':'Validate graph before publishing.'));
+      setBakeStatus((importAsset?'Imported SDF snapshot into local draft. ':'Baked '+bakeDimension+'³ samples into local draft. ')+ (result.validation?.ok?'Compiler accepted.':'Validate graph before publishing.'));
     }catch(e){if(mounted.current)setError(e instanceof Error?e.message:String(e));}
     finally{if(mounted.current)setBaking(false);}
   };
@@ -105,7 +106,14 @@ export default function SpectraGraphAssetInspector({
     <StudioButton size="sm" disabled={disabled||baking||!node||!bakeModel||!projectPath}
       onClick={()=>void bake()}>{baking?'Baking…':raw?'Rebake SDF':'Bake SDF'}</StudioButton>
     <small>Closed low-poly mesh, bind pose, model-space metres. At 32³ the bake budget allows up to 512 triangles. Replaces only the baked SDF in the local graph; save to publish.</small>
-    {bakeStatus&&<small role="status">{bakeStatus}</small>}
+    <StudioField label="Import binary SDF snapshot">
+      <SpectraAssetPicker assets={assets} value={sdfAsset} kinds={['sdf']}
+        disabled={disabled||baking||!node} onChange={asset=>{setSdfAsset(asset);setBakeStatus('');}}/>
+    </StudioField>
+    <StudioButton size="sm" disabled={disabled||baking||!node||!sdfAsset||!projectPath}
+      onClick={()=>void bake(true)}>Import SDF</StudioButton>
+    <small>Imports a copy from an indexed .sdfbin file. The graph does not retain a live file reference.</small>
+    {bakeStatus&&<small role="status">{bakeStatus}</small>
     {error&&<small role="alert">{error}</small>}
   </section>;
   return <section aria-label="SpectraFX node asset reference">

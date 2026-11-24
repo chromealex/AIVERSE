@@ -27,7 +27,7 @@ export function indexedSpectraAssets(payload:unknown):SpectraIndexedAsset[]{
     if(seen.has(guid))continue;
     seen.add(guid);
     out.push({guid,path:row.path,name:row.path.split('/').pop()??row.path,
-      kind:typeof row.importer==='string'?row.importer:'data'});
+      kind:row.path.endsWith('.sdfbin')?'sdf':typeof row.importer==='string'?row.importer:'data'});
     if(out.length>=5000)break;
   }
   return out;

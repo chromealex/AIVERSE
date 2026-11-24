@@ -61,6 +61,23 @@ int main() {
                 dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
                 "32 cubed Studio/MCP SDF bake");
         require(!fs::exists(root/"fx"),"dense bake stays in local graph");
+        fx::StaticSdfVolume volume;
+        volume.dimension=3;volume.spacing=1;volume.samples.resize(27,-.25f);
+        std::string bytes;
+        require(fx::encodeSdfBinary(volume,bytes),"encode fixture");
+        std::ofstream binary(root/"content"/"test.sdfbin",std::ios::binary);
+        binary.write(bytes.data(),std::streamsize(bytes.size()));binary.close();
+        auto import=request;
+        import.set("action",Json::string("importSdf"));
+        import.set("sdfAsset",Json::string("content/test.sdfbin"));
+        auto imported=call("fx_graph_edit",import);
+        require(imported.getBool("ok")&&imported["validation"].getBool("ok")&&
+                imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
+                "binary SDF import through shared Workspace");
+        require(!fs::exists(root/"fx"),"import does not publish");
+        import.set("sdfAsset",Json::string("content/../test.sdfbin"));
+        auto badImport=call("fx_graph_edit",import);
+        require(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");
         request.set("dimension",Json::number(int64_t(33)));
         auto invalidDimension=call("fx_graph_edit",request);
         require(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");

@@ -934,13 +934,13 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32); does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
              "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
              "property":{"type":"string"},"value":{},"draft":{"type":"boolean"},
              "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":32},
-             "expectedProjectPath":{"type":"string"}},
+             "sdfAsset":{"type":"string"},"expectedProjectPath":{"type":"string"}},
              "required":["action"]})", [&ws](const Json& p) {
         requireGame(ws);
         const std::string action=p.getStr("action");
@@ -984,6 +984,29 @@ void registerSpectraGraphOps(Workspace& ws) {
                 graph.set("links",std::move(links));
                 graph.set("outputs",std::move(outputs));
             }
+        } else if(action=="importSdf") {
+            requireReplayProject(ws,p);
+            Json* n=spectra::authoring::node(graph,p.getStr("node"));
+            if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule")
+                throw std::runtime_error("Select a Graph v2 CollisionModule");
+            const std::string asset=p.getStr("sdfAsset");
+            if(asset.size()<7||asset.compare(asset.size()-7,7,".sdfbin")!=0)
+                throw std::runtime_error("Choose a project .sdfbin file");
+            const auto file=checkedReplayDependency(ws,asset);
+            const auto size=fs::file_size(file);
+            if(size>fx::kSdfBinaryMaxBytes)throw std::runtime_error("SDF binary exceeds byte budget");
+            std::ifstream input(file,std::ios::binary);
+            if(!input)throw std::runtime_error("Cannot open SDF binary");
+            std::string bytes(size_t(size),'\0');
+            if(size&&!input.read(bytes.data(),std::streamsize(size)))
+                throw std::runtime_error("Cannot read SDF binary");
+            if(input.peek()!=std::char_traits<char>::eof())throw std::runtime_error("SDF binary size changed");
+            fx::StaticSdfVolume sdf;
+            if(!fx::decodeSdfBinary(bytes,sdf,&error))throw std::runtime_error("SDF import: "+error);
+            Json props=(*n)["properties"];
+            if(!props.isObject())props=Json::object();
+            props.set("staticSdf",fx::staticSdfToJson(sdf));
+            n->set("properties",std::move(props));
         } else if(action=="bakeSdf") {
             // Same edit pipeline as setProperty; never persist partial work.
             requireReplayProject(ws,p);

@@ -2,6 +2,7 @@
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/bake/MeshDistanceGrid.h"
+#include "engine/fx/SpectraSdfBinary.h"
 #include "engine/fx/SpectraStaticSphereCollision.h"
 #include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
@@ -152,8 +153,23 @@ int main() {
         require(fx::parseEffect(fx::effectToJson(volume),"sdf32",decoded,errors)&&
                 decoded.emitters[0].collision.staticSdf.samples==sdf.samples,
                 "32 cubed SDF roundtrip");
+        std::string bytes,error;
+        require(fx::encodeSdfBinary(sdf,bytes)&&bytes.size()==131108,"dense SDF binary size");
+        fx::StaticSdfVolume restored;
+        require(fx::decodeSdfBinary(bytes,restored,&error)&&restored.samples==sdf.samples&&
+                restored.dimension==32&&restored.spacing==sdf.spacing,"lossless SDF binary roundtrip");
+        auto corrupt=bytes;corrupt[40]^=1;
+        require(!fx::decodeSdfBinary(corrupt,restored,&error)&&restored.samples==sdf.samples,
+                "SDF corrupt checksum and atomic output");
+        require(!fx::decodeSdfBinary(std::string_view(bytes).substr(0,bytes.size()-1),restored),
+                "SDF truncated rejected");
+        corrupt=bytes;corrupt[8]=33;
+        require(!fx::decodeSdfBinary(corrupt,restored),"SDF oversized dimension rejected");
+        corrupt=bytes;corrupt[4]=2;
+        require(!fx::decodeSdfBinary(corrupt,restored),"SDF version rejected");
         sdf.samples.pop_back();
-        require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
+        require(!fx::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
+        require(!fx::encodeSdfBinary(sdf,bytes)&&bytes.size()==131108,"invalid encode preserves output");
         sdf.dimension=33;sdf.samples.resize(33u*33u*33u);
         require(!sdf.valid()&&!fx::parseEffect(fx::effectToJson(volume),"sdf33",decoded,errors),
                 "oversized SDF rejected by native and JSON validation");
