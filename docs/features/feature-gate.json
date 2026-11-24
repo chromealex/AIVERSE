@@ -51,7 +51,8 @@
     "tools/agents/feature_automation.py",
     "tools/agents/feature_api.py",
     "docs/agents/feature-automation.json",
-    "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md"
+    "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md",
+    "tools/studio/test_design_system.py"
   ],
   "traits": {
     "editable": false,
@@ -132,7 +133,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
+      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required.",
       "evidence": []
     },
     "handoff": {
