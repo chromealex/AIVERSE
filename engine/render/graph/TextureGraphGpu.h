@@ -188,7 +188,21 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     const auto output=materializedValue(node.info->output);
     std::string body;
     const bool normal=std::string(node.info->id)=="normal";
-    if(normal){
+    const std::string_view op=node.info->id;
+    if(neighborhoodOp(op)){
+        body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
+        if(op=="blur"||op=="erosion"){
+            const auto radius=std::to_string(integer(node.parameters["radius"],1,1,4));
+            body+="float v="+std::string(op=="erosion"?"1.0f":"0.0f")+";\n"
+                "for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){int xx=((x+dx*"+radius+")%side+side)%side;int yy=((y+dy*"+radius+")%side+side)%side;float t=input0[uint(yy)*n+uint(xx)];"+
+                (op=="erosion"?"v=min(v,t);":"v+=t;")+"}\nfloat3 value=float3("+(op=="blur"?"v/9.0f":"v")+");\n";
+        }else{
+            const auto amount=literal(float(integer(node.parameters["amount"],4,0,16)));
+            body+="int dx=int(floor((input1[tid]-.5f)*2.0f*"+amount+"+.5f));\n";
+            body+=op=="warp"?"int dy=int(floor((input2[tid]-.5f)*2.0f*"+amount+"+.5f));\n":"int dy=-dx;\n";
+            body+="int xx=((x+dx)%side+side)%side,yy=((y+dy)%side+side)%side;float3 value=float3(input0[uint(yy)*n+uint(xx)]);\n";
+        }
+    }else if(normal){
         const auto strength=literal(scalar(node.parameters["strength"],2,0,16));
         body="uint x=tid%n,y=tid/n;float k="+strength+"*float(n)/256.0f;\n"
             "float dx=(input0[y*n+(x+1u)%n]-input0[y*n+(x+n-1u)%n])*k;\n"

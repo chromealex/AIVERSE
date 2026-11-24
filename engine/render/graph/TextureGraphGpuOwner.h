@@ -604,7 +604,7 @@ public:
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
-        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag"),incremental=p.getBool("incremental");
+        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)
             throw std::invalid_argument("incremental requires materialized DAG");
         if(incremental&&(!lease.alive()||!lease.device()||!lease.validFor(*lease.device())))

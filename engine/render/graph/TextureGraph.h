@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <stdexcept>
+#include <string_view>
 
 namespace aiverse::render::texture_graph {
 enum class Kind { Scalar, Color, Normal, Packed };
@@ -17,7 +18,7 @@ struct Op {const char* id;Kind output;std::vector<Kind> inputs;};
 inline const std::vector<Op>& catalog(){
     static const std::vector<Op> ops={
         {"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
-        {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
+        {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"blur",Kind::Scalar,{Kind::Scalar}},{"erosion",Kind::Scalar,{Kind::Scalar}},{"warp",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"distort",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
     };return ops;
 }
 inline void require(bool condition,const char* error){if(!condition)throw std::invalid_argument(error);}
@@ -66,6 +67,8 @@ inline Json properties(const std::string& id){
     }
     if(id=="threshold")field("threshold","number",Json::number(.5));
     if(id=="remap"){field("low","number",Json::number(0.0));field("high","number",Json::number(1.0));}
+    if(id=="blur"||id=="erosion")field("radius","integer",Json::number(int64_t(1)),1,4);
+    if(id=="warp"||id=="distort")field("amount","integer",Json::number(int64_t(4)),0,16);
     if(id=="normal")field("strength","number",Json::number(2.0),0,16);
     return result;
 }
@@ -80,8 +83,12 @@ inline void validateParameters(const Node& n){
     if(id=="pattern"||id=="patternMask"){auto patterns=texturePatterns();require(std::find(patterns.begin(),patterns.end(),p.getStr("pattern"))!=patterns.end(),"unknown native pattern");integer(p["scale"],8,1,64);seed(p["seed"]);}
     if(id=="threshold")scalar(p["threshold"],.5f);
     if(id=="remap"){scalar(p["low"],0);scalar(p["high"],1);}
+    if(id=="blur"||id=="erosion")integer(p["radius"],1,1,4);
+    if(id=="warp"||id=="distort")integer(p["amount"],4,0,16);
     if(id=="normal")scalar(p["strength"],2,0,16);
 }
+inline bool neighborhoodOp(std::string_view id){return id=="blur"||id=="erosion"||id=="warp"||id=="distort";}
+inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return neighborhoodOp(n.info->id);});}
 inline Program compileResolved(const Json& g){
     require(g.isObject()&&g.getInt("version")==1&&g.dump(-1).size()<=256*1024,"texture graph version 1 / 256 KiB required");
     Program p;p.size=integer(g["size"],256,8,1024);
@@ -185,6 +192,19 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             else if(id=="blend")r=mix(input(0),input(1),input(2)[0]);else if(id=="colorize")r=mix(input(1),input(2),a());
             else if(id=="blendColor")r=mix(input(0),input(1),input(2)[0]);
             else if(id=="metallicRoughness")r={1.f,a(),b()}; // G roughness, B metallic
+            else if(neighborhoodOp(id)){
+                auto sample=[&](int xx,int yy){return images[node.inputs[0]][size_t((yy%n+n)%n)*n+(xx%n+n)%n][0];};
+                if(id=="blur"||id=="erosion"){
+                    const int radius=integer(q["radius"],1,1,4);float v=id=="erosion"?1.f:0.f;
+                    for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){const auto t=sample(x+dx*radius,y+dy*radius);v=id=="erosion"?std::min(v,t):v+t;}
+                    r=gray(id=="blur"?v/9.f:v);
+                }else{
+                    const float amount=float(integer(q["amount"],4,0,16));
+                    const int dx=int(std::floor((input(1)[0]-.5f)*2.f*amount+.5f));
+                    const int dy=id=="warp"?int(std::floor((input(2)[0]-.5f)*2.f*amount+.5f)):-dx;
+                    r=gray(sample(x+dx,y+dy));
+                }
+            }
             else if(id=="normal"){
                 auto h=[&](int xx,int yy){return images[node.inputs[0]][size_t((yy+n)%n)*n+(xx+n)%n][0];};
                 const float dx=(h(x+1,y)-h(x-1,y))*strength*n/256.f,dy=(h(x,y+1)-h(x,y-1))*strength*n/256.f;
