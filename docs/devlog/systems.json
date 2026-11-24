@@ -2398,8 +2398,8 @@
           "id": "studio-asset-dependency-graph",
           "title": "Граф зависимостей ассетов",
           "titleEn": "Asset dependency graph",
-          "text": "S6g: точные ссылки в открытой и сохранённых картах, GUID, места использования и безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
-          "textEn": "S6g: exact current and saved map references, GUIDs, locations and safe preview; no automatic rewriting of unknown dependencies.",
+          "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
+          "textEn": "S6g: exact map references and typed glTF resource edges, forward/reverse asset queries and safe move preview; no automatic rewriting of unsupported dependencies.",
           "status": "in-progress"
         },
         {
