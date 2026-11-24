@@ -363,51 +363,44 @@ private:
     // Resolves settings.grassMeadow (+ the map's "grass".meadow block) into a
     // renderer quality. Parse errors fall back to legacy grass with a status.
     const terraweave::GrassRenderQuality& grassQuality(const MapDoc& doc) {
-        std::string source = settings.grassMeadow;
-        if (source.empty() || source == "auto") {
-            const Json& authored = doc.data.extra["grass"]["meadow"];
-            source = authored.isNull() ? std::string("\"legacy\"") : authored.dump(0);
-        } else if (source.front() != '{' && source.front() != '"') {
-            source = "\"" + source + "\"";
+        if (grassDocument_ == &doc && grassRevision_ == doc.revision &&
+            grassPreset_ == settings.grassMeadow && grassTier_ == settings.grassQuality)
+            return grass_.quality();
+
+        terraweave::GrassMeadow meadow;
+        try {
+            const auto& preset = settings.grassMeadow;
+            if (preset.empty() || preset == "auto")
+                meadow = terraweave::parseGrassMeadow(doc.data.extra["grass"]["meadow"]);
+            else
+                meadow = terraweave::parseGrassMeadow(preset.front() == '{' ? Json::parse(preset) : Json::string(preset));
+        } catch (const std::exception& e) {
+            status_ = std::string("grass: ") + e.what();
         }
-        const std::string key = source + "|" + std::to_string(settings.grassQuality);
-        if (key != grassQualityKey_) {
-            grassQualityKey_ = key;
-            terraweave::GrassMeadow meadow;
-            try {
-                meadow = terraweave::parseGrassMeadow(Json::parse(source), "grass meadow");
-            } catch (const std::exception& e) {
-                status_ = std::string("grass: ") + e.what();
-                meadow = {};
-            }
-            terraweave::GrassRenderQuality q;
-            if (meadow.enabled()) {
-                const auto tier = settings.grassQuality <= 0 ? terraweave::GrassTier::Mobile
-                                : settings.grassQuality == 1 ? terraweave::GrassTier::Medium
-                                                              : terraweave::GrassTier::High;
-                q = terraweave::meadowGrassQuality(tier, std::move(meadow));
-                // Editor preview: denser near field than the shipping tier budget.
-                q.maxBladesPerPatch = settings.grassQuality <= 0 ? 2048 : settings.grassQuality == 1 ? 4608 : 8192;
-            } else {
-                q.maxBladesPerPatch = settings.grassQuality <= 0 ? 1024 : settings.grassQuality == 1 ? 2560 : 4608;
-            }
-            q.maxGpuPatches = 128;
-            q.maxUploadsPerFrame = 6;
-            grassQuality_ = q;
-            sameGrassQuality_ = false;
+        terraweave::GrassRenderQuality q;
+        if (meadow.enabled()) {
+            const auto tier = settings.grassQuality <= 0 ? terraweave::GrassTier::Mobile
+                            : settings.grassQuality == 1 ? terraweave::GrassTier::Medium
+                                                         : terraweave::GrassTier::High;
+            q = terraweave::meadowGrassQuality(tier, std::move(meadow));
+            q.maxBladesPerPatch = settings.grassQuality <= 0 ? 2048 : settings.grassQuality == 1 ? 4608 : 8192;
+        } else {
+            q.maxBladesPerPatch = settings.grassQuality <= 0 ? 1024 : settings.grassQuality == 1 ? 2560 : 4608;
         }
-        return grassQuality_;
+        q.maxGpuPatches = 128;
+        q.maxUploadsPerFrame = 6;
+        grass_.setQuality(std::move(q));
+        grassDocument_ = &doc;
+        grassRevision_ = doc.revision;
+        grassPreset_ = settings.grassMeadow;
+        grassTier_ = settings.grassQuality;
+        return grass_.quality();
     }
 
     void drawGrass(gfx::Device& device, render::Renderer3D& renderer, const MapDoc& doc,
                    float cx, float cz, const HeightAt& heightAt, double timeSeconds) {
         static constexpr std::int64_t kPatchCm = 1200;
         const auto& q = grassQuality(doc);
-        if (!sameGrassQuality_ || grassQualityKey_ != appliedGrassQualityKey_) {
-            grass_.setQuality(q);
-            appliedGrassQualityKey_ = grassQualityKey_;
-            sameGrassQuality_ = true;
-        }
         const bool meadow = q.meadow.enabled();
         const float radius = settings.grassQuality >= 2 ? 66.f : 56.f;
         const std::int64_t mapW = std::int64_t(std::max(1, doc.data.w)) * 100;
@@ -486,9 +479,10 @@ private:
     std::unique_ptr<World> world_;
     AuthoredWaterQuery water_;
     bool grassFilterDirty_ = true;
-    std::string grassQualityKey_, appliedGrassQualityKey_;
-    terraweave::GrassRenderQuality grassQuality_{};
-    bool sameGrassQuality_ = false;
+    const MapDoc* grassDocument_ = nullptr;
+    std::uint64_t grassRevision_ = 0;
+    std::string grassPreset_;
+    int grassTier_ = -1;
     float grassFilterSand_ = -1;
     std::shared_ptr<const world::NaturePresentationFrame> frame_;
     std::string builtKey_, status_;
