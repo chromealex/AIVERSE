@@ -1,0 +1,12 @@
+# Stage 134 — native gameplay GPU graph pools
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: d1ed7b78b7093b792268f5d4814bd3ac177cf060
+Implementation: 5e35a9669f70e5ca62b6c8ff67f49934fe7487ad
+Follow-up: caaf851e3a4fa811644ae9cd8a2d3bccadacfa6f
+
+ClientFx::prepareGraphGpuFrame is called from the primary GameClient frame after sceneFromSim and before any scene render pass, with the actual jittered primary projection and bounded dt. Visible prepared non-blip source rows are split into existing CPU presenter and GpuEcsAttachmentPresenter mirrors. A graph must explicitly declare scenePoolEmission, pass strict GPU eligibility, be admitted to GpuPoolWorld, and use unit-scale source with valid parameter overrides. Unsupported graph/device or failed initial admission retains its compiled CPU effect. Distance-based emission with TerraWeave exact-source-position binding stays CPU to avoid fabricated intermediate samples. One immutable live registry is shared; GPU births sample at burst position, CPU samples on sync. Pool uses canonical Device allocation budget and existing limits (64 groups, max 65536 slots/group, 4096 sources/bursts). Existing CPU update runs once; pool step runs once before scene, draw once in primary HDR scene pass. Failed sync/step suppresses pool drawing and schedules a checked reset; no stale group draw claimed. Match teardown clears pool; body change/backward tick clears source mirrors and requests reset. Native no-FX stub remains.
+
+Files: apps/client/ClientFx.h/.cpp, GameClient.cpp, engine/fx/SpectraScenePoolEmission.h, tests/vfx_ecs_presentation_test.cpp, skill and roadmap/area notes. Source regression cases cover terrain distance coverage eligibility. No new graph schema, persistence or shader ABI. Existing authoring/MCP applies. Current limits: flat GPU only, planetary effects remain CPU, no secondary LENS GPU draws, no new GPU lighting/reactive mask integration, no GPU source re-admission on quality/device changes for definitions first cached on CPU, no seamless recovery of already living particles. Runtime failure is fail-closed, not seamless CPU fallback; retry/reset may temporarily suppress effects. No new GPU memory profiling claim. No tests/compilation/Metal/Vulkan/visual/GUI runs by owner request. No main sync or merge.
+
+Next: SpectraCollision functionality audit and implementation; remaining geometry, lighting, fluid, events, audio, destruction, cache and Studio matrix remain open. Complete feature code before QA.
