@@ -40,10 +40,11 @@ struct Config {
 struct Source {
     float3 position{};
     float radius=.5f,smoke=1,temperature=1,fuel=0;
+    float radialAcceleration=0;
     float3 acceleration{0,2,0}; // weighted rate; impulse uses explicit duration
     bool valid()const{
         return bounded(position,1e6f)&&between(radius,.01f,1000)&&
-            between(smoke,0,100)&&between(temperature,0,100)&&between(fuel,0,100)&&bounded(acceleration,100);
+            between(smoke,0,100)&&between(temperature,0,100)&&between(fuel,0,100)&&between(radialAcceleration,-100,100)&&bounded(acceleration,100);
     }
 };
 struct Cell {float3 velocity{};float density=0,temperature=0,fuel=0;};
@@ -231,7 +232,8 @@ private:
             c.density=std::min(kMaxScalar,c.density+s.smoke*w);
             c.temperature=std::min(kMaxScalar,c.temperature+s.temperature*w);
             c.fuel=std::min(kMaxScalar,c.fuel+s.fuel*w);
-            c.velocity=limit(c.velocity+s.acceleration*w);
+            const auto radial=render::length(delta)>1e-6f?render::normalize(delta)*s.radialAcceleration:float3{};
+            c.velocity=limit(c.velocity+(s.acceleration+radial)*w);
         });
     }
     void enforceWalls(){

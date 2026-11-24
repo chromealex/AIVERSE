@@ -61,7 +61,9 @@ KERNEL_BEGIN
             if(q>=1.0f)continue;
             float w=(1.0f-q)*src.acceleration.w;
             c.fields.xyz=min(float3(16.0f),c.fields.xyz+src.rates.xyz*w);
-            c.velocity.xyz=limitVelocity(c.velocity.xyz+src.acceleration.xyz*w,u.buoyancy.z);
+            float len=length(delta);
+            float3 radial=len>1e-6f?delta*(src.rates.w/len):float3(0.0f);
+            c.velocity.xyz=limitVelocity(c.velocity.xyz+(src.acceleration.xyz+radial)*w,u.buoyancy.z);
         }
         c.velocity.xyz=walls(c.velocity.xyz,p,n MASK_PASS);
         outputCells[id]=c;return;

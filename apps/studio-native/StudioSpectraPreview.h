@@ -306,6 +306,7 @@ public:
             if(burstsPending_+requested>32)
                 return errorStatus("SpectraFX preview burst queue is full");
             burstsPending_+=requested;
+            if(volumeGrid_&&volumeGrid_->hasImpulse()&&!playing_&&timeTicks_<kMaxTicks){targetTicks_=timeTicks_;stepsPending_=1;}
             error_.clear();
             return status();
         }

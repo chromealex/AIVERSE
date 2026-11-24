@@ -7,6 +7,14 @@ import { connectionParams, moveGraphNode, nodePoint, visualEdges } from './spect
 import './SpectraGraphCanvas.css';
 
 interface CatalogNode {type:string;group:string;ports:string[]}
+const volumeFields:Record<string,Record<string,unknown>>={
+  VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:''},
+  VolumeSource:{mode:'continuous',position:[0,0,0],radius:0.5,smoke:3,temperature:8,fuel:4,acceleration:[0,2,0],radialAcceleration:0,duration:1},
+  VolumeAdvection:{buoyancy:1,smokeWeight:0.1,velocityDecay:0.15,smokeDecay:0.25,temperatureDecay:0.6,fuelDecay:0.05,maxVelocity:20},
+  VolumeCombustion:{ignition:0.5,burnRate:3,heatYield:2,smokeYield:0.5},
+  VolumePressure:{pressureIterations:12},
+  VolumeOutput:{smokeColor:[0.45,0.48,0.52],fireColor:[4,1.2,0.2],extinction:2,emission:1,emissionThreshold:0.5},
+};
 interface Props {
   graph:SpectraGraphV2;
   disabled?:boolean;
@@ -30,6 +38,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const [volumePreset,setVolumePreset]=useState('fire');
   const [volumeProperty,setVolumeProperty]=useState('');
   const [volumeValue,setVolumeValue]=useState('');
+  const [volumeVector,setVolumeVector]=useState<string[]>(['0','0','0']);
   const [selectedNode,setSelectedNode]=useState('');
   const [from,setFrom]=useState('');
   const [to,setTo]=useState('');
@@ -41,6 +50,8 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const nodes=graph.nodes;
   const chosen=nodes.find(n=>n.id===selectedNode);
   const isVolumeNode=chosen?.type.startsWith('Volume')??false;
+  const fields=chosen?volumeFields[chosen.type]??{}:{};
+  const fieldDefault=fields[volumeProperty];
   const hasVolume=nodes.some(n=>n.type==='VolumeOutput');
   useEffect(()=>{setVolumeProperty('');setVolumeValue('');},[selectedNode]);
   const dest=nodes.find(n=>n.id===to);
@@ -184,18 +195,24 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         <StudioField label="Volume property">
           <StudioSelect value={volumeProperty} onChange={e=>{
             const k=e.target.value;setVolumeProperty(k);
-            setVolumeValue(k?JSON.stringify(chosen.properties?.[k]??null):'');
+            const v=chosen.properties?.[k]??fields[k];
+            setVolumeValue(v===undefined?'':String(v));
+            if(Array.isArray(v))setVolumeVector(v.map(String));
           }}>
             <option value="">Choose a property…</option>
-            {Object.keys(chosen.properties??{}).map(k=><option key={k} value={k}>{k}</option>)}
+            {Object.keys(fields).filter(k=>k!=='duration'||chosen.properties?.mode==='impulse').map(k=><option key={k} value={k}>{k}</option>)}
           </StudioSelect>
         </StudioField>
-        <StudioField label="Value (JSON number, vector or string)">
-          <StudioInput value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
-        </StudioField>
+        {Array.isArray(fieldDefault)?<div className="spectra-canvas__connect">
+          {volumeVector.map((v,i)=><StudioField key={i} label={['X / R','Y / G','Z / B'][i]}><StudioInput type="number" step="any" value={v} disabled={disabled||working} onChange={e=>setVolumeVector(old=>old.map((x,j)=>j===i?e.target.value:x))}/></StudioField>)}
+        </div>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
+        <StudioField label={volumeProperty==='obstacle'?'Project SDF path (content/*.sdfbin)':'Value'}>
+          <StudioInput type={typeof fieldDefault==='number'?'number':'text'} step={typeof fieldDefault==='number'?'any':undefined} value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
+        </StudioField>}
         <StudioButton size="sm" disabled={disabled||working||!volumeProperty} onClick={()=>{
-          try{const value:unknown=JSON.parse(volumeValue);void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});}
-          catch{onError('Invalid JSON property value');}
+          const value=Array.isArray(fieldDefault)?volumeVector.map(Number):typeof fieldDefault==='number'?Number(volumeValue):volumeValue;
+          if((Array.isArray(value)&&value.some((x,i)=>!Number.isFinite(x)||volumeVector[i].trim()===''))||(typeof value==='number'&&(!Number.isFinite(value)||volumeValue.trim()===''))){onError('Invalid volume value');return;}
+          void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});
         }}>Apply volume property</StudioButton>
         <small>Native validation on save/preview. Reload to apply authored changes.</small>
       </div>:<code>{JSON.stringify(chosen.properties??{})}</code>}

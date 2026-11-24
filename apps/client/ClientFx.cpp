@@ -535,7 +535,7 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
     const auto view=fx::SpectraFxView::fromCamera(camera,viewProj,width,height);
     const bool gpu=allowed&&view.valid()&&!graphPoolResetPending_&&!graphPool_.presentationBlocked();
     presentGraphSources(sim,scene,camera,gpu,allowed&&view.valid());
-    if(allowed&&view.valid())graphVolumes_.step(dt);
+    if(allowed&&view.valid())graphVolumes_.step(dt);else graphVolumes_.clear();
     graphSourcesPrepared_=true;
     if(!gpu||!graphGpuSources_||!graphPool_.ready())return;
     if(!graphPool_.beginPresentationFrame(view)) {

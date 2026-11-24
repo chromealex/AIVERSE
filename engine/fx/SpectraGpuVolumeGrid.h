@@ -127,6 +127,7 @@ public:
     bool setGravity(float3 v){if(!ready()||!bounded(v,100))return false;cfg_.gravity=v;return true;}
     // One queued impulse applied after transport/reaction on next accepted tick.
     // Failed encoding preserves the queue; no unbounded host accumulation.
+    bool impulsePending()const{return impulsePending_;}
     bool queueImpulse(const Source& source,float seconds=1.f){
         if(!ready()||impulsePending_||!source.valid()||!between(seconds,0,1))return false;
         impulse_=source;impulseSeconds_=seconds;impulsePending_=true;return true;
@@ -214,7 +215,7 @@ private:
         const auto up=render::length(cfg_.gravity)>1e-6f?render::normalize(-cfg_.gravity):float3{};
         u.up={up.x,up.y,up.z,0};
         auto pack=[](const Source& s,float dt){return GpuSourceData{
-            {s.position.x,s.position.y,s.position.z,s.radius},{s.smoke,s.temperature,s.fuel,0},
+            {s.position.x,s.position.y,s.position.z,s.radius},{s.smoke,s.temperature,s.fuel,s.radialAcceleration},
             {s.acceleration.x,s.acceleration.y,s.acceleration.z,dt}};};
         for(size_t i=0;i<sources_.size();++i)u.sources[i]=pack(sources_[i],kTick);
         if(impulsePending_)u.sources[sources_.size()]=pack(impulse_,impulseSeconds_);

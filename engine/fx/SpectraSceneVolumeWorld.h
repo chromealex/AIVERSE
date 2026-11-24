@@ -11,13 +11,14 @@ namespace aiverse::spectra::volume {
 class VolumeInstance final {
 public:
     bool init(gfx::Device& device,const Asset& asset,float3 anchor={},const fx::SdfResourceReader& reader={}){
-        if(!supportsVolumeRender(device)||!bounded(anchor,1e6f)){error_="Invalid volume anchor";return false;}
+        if(!supportsVolumeRender(device)||!bounded(anchor,1e6f)){error_="Invalid volume anchor or GPU backend";return false;}
         Asset placed=asset;placed.simulation.origin=placed.simulation.origin+anchor;
         for(auto& s:placed.sources)s.position=s.position+anchor;
         if(placed.impulse)placed.impulse->position=placed.impulse->position+anchor;
         fx::StaticSdfVolume sdf;
         if(!placed.obstacle.empty()){
-            if(!reader||!fx::loadSdfBinary(placed.obstacle,reader,sdf,error_))return false;
+            if(!reader){error_="Volume obstacle requires a resource reader";return false;}
+            if(!fx::loadSdfBinary(placed.obstacle,reader,sdf,error_))return false;
             sdf.origin=sdf.origin+anchor;
         }
         if(!placed.simulation.valid()||!placed.material.valid()||placed.sources.size()>kMaxSources||
@@ -39,7 +40,7 @@ public:
         if(!grid_||!grid_->clear()){error_=grid_?grid_->error():"No volume";return false;}
         return !retrigger||!asset_.impulse||trigger();
     }
-    bool trigger(){return grid_&&asset_.impulse&&grid_->queueImpulse(*asset_.impulse,asset_.impulseSeconds);}
+    bool trigger(){return grid_&&asset_.impulse&&(grid_->impulsePending()||grid_->queueImpulse(*asset_.impulse,asset_.impulseSeconds));}
     bool hasImpulse()const{return bool(asset_.impulse);}
     bool published()const{return grid_&&grid_->published();}
     const std::string& error()const{return error_;}
@@ -89,8 +90,10 @@ public:
             if(found==desired.end()||found->second->revision!=it->second.revision||
                found->second->effect!=it->second.effect)it=entries_.erase(it);else ++it;
         }
+        size_t attempts=0;
         for(const auto& [id,row]:desired){
             if(entries_.count(id))continue;
+            if(attempts++>=capacity){error_="Scene volume admission work limit";break;}
             if(entries_.size()>=capacity){error_="Scene volume capacity reached";break;}
             auto instance=std::make_unique<VolumeInstance>();
             if(!instance->init(d,*row->asset,row->anchor,reader)){error_=instance->error();continue;}

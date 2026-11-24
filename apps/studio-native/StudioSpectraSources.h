@@ -91,7 +91,7 @@ public:
         std::vector<spectra::volume::SceneVolumeSource> volumes;
         std::set<std::string> seen;
         error_.clear();
-        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()<65536;++i){
+        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()+volumes.size()<65536;++i){
             const auto& entity=doc.data.entities[i];
             const auto& value=entity.extra["components"]["SpectraSource"];
             if(!value.isObject()||!entity.at.isNull())continue;
