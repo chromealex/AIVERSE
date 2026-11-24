@@ -1,0 +1,11 @@
+.simulation-profiler { min-width:0; overflow-wrap:anywhere; }
+.simulation-profiler-actions { display:flex; flex-wrap:wrap; gap:var(--au-space-2); }
+.simulation-profiler-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr)); gap:var(--au-space-2); }
+.simulation-profiler-summary div { display:flex; flex-direction:column; font-variant-numeric:tabular-nums; }
+.simulation-profiler-chart { display:block; width:100%; max-height:180px; background:var(--au-canvas); border:1px solid var(--au-line); }
+.simulation-profiler-budget { stroke:var(--au-warning); stroke-dasharray:4 3; }
+.simulation-profiler-trace { fill:none; stroke:var(--au-accent); stroke-width:1.5; }
+.simulation-profiler-dot { fill:var(--au-accent); }
+.simulation-profiler-rows { max-height:320px; overflow:auto; min-width:0; }
+.simulation-profiler-system { padding:var(--au-space-1) 0; }
+.simulation-profiler-system>div:first-child { display:flex; flex-wrap:wrap; justify-content:space-between; gap:var(--au-space-1); font-variant-numeric:tabular-nums; }

@@ -20,6 +20,7 @@ public:
     void event(const platform::Event& event);
     Json state() const;
     Json regions() const;
+    Json profile(const std::string& action,uint32_t steps);
     Json entities(int offset,int limit,const std::string& query);
     Json inspect(const std::string& epoch,const std::string& ref);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.

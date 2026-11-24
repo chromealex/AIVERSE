@@ -5,6 +5,7 @@
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 
 namespace aiverse::studio {
@@ -106,6 +107,43 @@ Json StudioGameSurface::regions() const {
     out.set("available",Json::fromBool(ledger!=nullptr));
     out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    return out;
+}
+Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
+    Json out=Json::object();
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    auto* sim=host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    out.set("available",Json::fromBool(sim!=nullptr));
+    if(!sim){
+        if(action!="status")throw std::runtime_error("Profiling requires a controllable local match");
+        out.set("reason",Json::string("Start a controllable local match"));return out;
+    }
+    if(action=="start"){
+        const auto clock=[]()->int64_t{return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();};
+        if(!sim->beginProfileWindow(clock,steps))throw std::runtime_error("Profiler is busy or capture size invalid");
+    }else if(action=="stop")sim->endProfileWindow();
+    out.set("active",Json::fromBool(sim->profileWindowActive()));
+    out.set("target",Json::number(int64_t(sim->profileWindowTarget())));
+    out.set("tick",Json::number(int64_t(sim->tick())));
+    out.set("tickRate",Json::number(int64_t(sim->tickRate())));
+    out.set("paused",Json::fromBool(host_->paused()));
+    Json history=Json::array(),rows=Json::array();
+    double totalMs=0,systemsMs=0;
+    for(const auto ns:sim->profileStepTimes()){
+        const double ms=double(ns)/1000000.0;history.push(Json::number(ms,6));totalMs+=ms;
+    }
+    // Return the first 256 systems in schedule order. Sum covers all registered systems.
+    const auto count=sim->profileWindowTarget()?sim->systemCount():size_t(0);
+    for(size_t i=0;i<count;++i){
+        const double ms=double(sim->systemTime(i))/1000000.0;systemsMs+=ms;
+        if(i>=256)continue;
+        Json row=Json::object();row.set("index",Json::number(int64_t(i)));
+        row.set("name",Json::string(sim->systemName(i)));row.set("totalMs",Json::number(ms,6));rows.push(std::move(row));
+    }
+    out.set("historyMs",std::move(history));out.set("rows",std::move(rows));
+    out.set("systemCount",Json::number(int64_t(count)));
+    out.set("totalMs",Json::number(totalMs,6));out.set("systemsMs",Json::number(systemsMs,6));
     return out;
 }
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {

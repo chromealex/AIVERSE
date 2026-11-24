@@ -92,6 +92,8 @@ void Simulation::present(std::vector<SimEvent> events) {
 
 void Simulation::step() {
     if(!module_->readyToStep(*this))return;
+    const bool captureStep=profileWindowActive();
+    const int64_t stepStart=captureStep?profClock_():0;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -124,6 +126,10 @@ void Simulation::step() {
         }
     }
     ++tick_;
+    if(captureStep&&profileWindowActive()){
+        profileSteps_.push_back(profClock_()-stepStart);
+        if(profileSteps_.size()>=profileTarget_)endProfileWindow();
+    }
 }
 
 int Simulation::advance(double realSeconds, int maxTicks) {

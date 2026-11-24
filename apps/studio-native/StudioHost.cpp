@@ -1323,6 +1323,24 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
+    if (method == "studio.gameProfile") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Simulation Profiler project changed");
+        const auto action=params.getStr("action");
+        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
+        uint32_t steps=0;
+        if(action=="start"){
+            const auto n=params["steps"].toDouble();
+            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
+                throw std::runtime_error("Invalid profile capture size");
+            steps=uint32_t(n);
+        }
+        if(game_)return game_->profile(action,steps);
+        if(action!="status")throw std::runtime_error("No local match is running");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
+    });
     if (method == "studio.gameRegions") return answer([&] {
         const auto& project=session_->workspace().project.dir;
         if(project.empty()||params.getStr("expectedProject")!=project)

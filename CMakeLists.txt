@@ -5263,6 +5263,14 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
 endif()
 
+# Bounded shared simulation profiling, deterministic clock fixture.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_simulation_profile_test tests/simulation_profile_test.cpp)
+    target_link_libraries(aiverse_simulation_profile_test PRIVATE aiverse_engine)
+    add_test(NAME simulation_profile_test COMMAND aiverse_simulation_profile_test)
+    set_tests_properties(simulation_profile_test PROPERTIES LABELS "ECS;EDITOR")
+endif()
+
 # Live ECS region attachment and authority-crossing fixture, without game assets.
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)

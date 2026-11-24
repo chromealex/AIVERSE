@@ -68,6 +68,9 @@ Offline maintenance is exclusive, project-scoped and never implicitly stops a se
 ## Live World Explorer (S1)
 Panel ID `world_explorer` uses the hosted Game surface's read-only `studio.gameRegions` method with expectedProject, not an offline maintenance job or a separately simulated world. Refresh explicitly: ledger projection rebuilds stable references and scans live records, so do not add frame polling without a measured bounded native owner. Keep 64-bit counters as strings. Slice regions by Y before the X/Z projection, select by full XYZ, disclose the native row limit and missing data. Materialized counts do not prove physics/nav residency. Simulation LOD diagnostics are actual last decision counters, not per-cell tiers, time, CPU cost, or durable ticks. The legacy editor MCP `world_regions_status` reads its own preview/play simulation through the same shared ledger diagnostics; do not claim it observes the separate hosted Game instance.
 
+## Simulation Profiler (S2)
+Panel `simulation_profiler`, typed `studio.gameProfile` with expectedProject and explicit start/status/stop. Uses the existing Simulation timing owner through a bounded capture (1–120 completed steps); does not overwrite an active headless clock. Tick timings include command application and ECS flush, exclude readiness check and rendering; per-system timings include their flush. Results are wall time, not CPU thread utilization. Poll only the bounded result, never infer per-system entity counts or simulation load from LOD. Paused matches do not advance the sample; stop retains partial results. Captures are local, unsaved, and lost with the Simulation. No network profiling or remote MCP claim.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

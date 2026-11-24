@@ -1,5 +1,5 @@
 /** Persistable nested docking geometry; no React, renderer or genre dependencies. */
-export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','catalog','world_persistence','world_explorer'] as const;
+export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','catalog','world_persistence','world_explorer','simulation_profiler'] as const;
 export type StudioPanel = typeof STUDIO_PANELS[number];
 /** Single metadata source for the UI shell and AI-authored panel integrations. */
 export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
@@ -49,6 +49,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   project_import: "Import Project",
   human_creator: "Character Creator",
   world_explorer: "World Explorer",
+  simulation_profiler: "Simulation Profiler",
   world_persistence: "World Persistence",
   terraweave_generator: "TerraWeave Generator",
   catalog: "Catalog"
@@ -100,6 +101,7 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   project_import: "dock-right",
   human_creator: "dock-right",
   world_explorer: "dock-right",
+  simulation_profiler: "dock-bottom",
   world_persistence: "dock-right",
   terraweave_generator: "dock-right",
   catalog: "dock-right"

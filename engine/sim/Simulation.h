@@ -171,15 +171,29 @@ public:
     std::string serialize();
     bool deserialize(const std::string& bytes, std::string* err = nullptr);
 
-    void addSystem(std::string name, SystemFn fn) { systems_.push_back({std::move(name), std::move(fn)}); }
+    void addSystem(std::string name, SystemFn fn) { invalidateProfileWindow(); systems_.push_back({std::move(name), std::move(fn)}); }
     void insertSystem(size_t at, std::string name, SystemFn fn) {
+        invalidateProfileWindow();
         systems_.insert(systems_.begin() + std::ptrdiff_t(std::min(at, systems_.size())), System{std::move(name), std::move(fn)});
     }
     // Replaces every system's function by wrap(name, fn) (e.g. a gate that skips gameplay systems).
-    template <class F> void wrapSystems(F&& wrap) { for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
+    template <class F> void wrapSystems(F&& wrap) { invalidateProfileWindow(); for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
     // Profiling (tools only, never affects the simulation): with a clock set, step() adds each system's
     // wall time (clock units, e.g. ns) to systemTime(i).
-    void setProfileClock(int64_t (*clock)()) { profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    void setProfileClock(int64_t (*clock)()) { invalidateProfileWindow(); profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    // Owner-thread tooling only. Bounded capture shares the existing timing clock;
+    // never replace a running headless profiler. History counts completed steps,
+    // not tick subtraction (rollback can change the simulation tick).
+    static constexpr uint32_t kMaxProfileSteps=120;
+    bool beginProfileWindow(int64_t (*clock)(),uint32_t steps) {
+        if(profClock_||!clock||!steps||steps>kMaxProfileSteps)return false;
+        profNs_.assign(systems_.size(),0);profileSteps_.clear();profileSteps_.reserve(steps);
+        profileTarget_=steps;profClock_=clock;return true;
+    }
+    void endProfileWindow() { if(profileWindowActive())profClock_=nullptr; }
+    bool profileWindowActive() const { return profileTarget_!=0&&profClock_!=nullptr; }
+    uint32_t profileWindowTarget() const { return profileTarget_; }
+    const std::vector<int64_t>& profileStepTimes() const { return profileSteps_; }
     size_t systemCount() const { return systems_.size(); }
     const std::string& systemName(size_t i) const { return systems_[i].name; }
     int64_t systemTime(size_t i) const { return i < profNs_.size() ? profNs_[i] : 0; }
@@ -227,6 +241,11 @@ private:
     std::vector<SystemFn> stateRestoredHooks_;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
+    uint32_t profileTarget_=0;
+    std::vector<int64_t> profileSteps_;
+    void invalidateProfileWindow() {
+        if(profileTarget_){endProfileWindow();profileTarget_=0;profileSteps_.clear();profNs_.clear();}
+    }
     std::map<uint32_t, std::vector<Command>> pending_;
     std::vector<Command> executed_;
     std::vector<SimEvent> events_;
