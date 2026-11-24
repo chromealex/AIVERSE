@@ -515,7 +515,13 @@ void agentScopedHistoryContract(){
     for(const auto& item:capabilities["operations"].items())
         if(item.getStr("name")=="studio_asset_move_commit")foundMove=item.getStr("policy")=="assets";
     AIVERSE_TEST_CHECK(foundMove&&capabilities.getStr("bulkUndo")=="map-only");
-    fs::create_directory(root/"content"/"Destination");
+    assets=agent("studio_asset_history",Json::object());
+    Json destinationFolder=Json::object();
+    destinationFolder.set("expectedProject",assets["project"]);
+    destinationFolder.set("expectedVersion",assets["version"]);
+    destinationFolder.set("parent",Json::string(""));
+    destinationFolder.set("name",Json::string("Destination"));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_folder_create",destinationFolder).has("error"));
     studio::StudioAssetCatalog catalog(root);catalog.rebuild();
     const auto guid=catalog.byPath("AgentFolder")->guid;
     assets=agent("studio_asset_history",Json::object());
@@ -669,7 +675,7 @@ void planetWorldProcessAuthoringWorkflow(){
         "world":{"start":"terra","bodies":[{"id":"terra","kind":"planet","radius":64,"faceSize":8},
         {"id":"moon","kind":"moon","radius":32,"faceSize":4},{"id":"sun","kind":"star","radius":100}]},
         "entities":[{"id":"region","type":"tree","owner":0,"at":{"body":"terra","face":0,"x":7,"y":3},
-        "components":{"EvolveRegion":{"durability":1000000000,"fertility":500000000,"succession":0,"pollution":0,"enabled":true},
+        "components":{"Transform":{"y":0,"yaw":0,"scale":1},"EvolveRegion":{"durability":1000000000,"fertility":500000000,"succession":0,"pollution":0,"enabled":true},
         "EvolveArea":{"halfWidthCm":1000,"halfDepthCm":1000,"enabled":true},
         "MorphNode":{"restX":0,"restY":0,"restZ":0,"drag":100,"anchored":false,"enabled":true}}}]})";
     studio::StudioSession session(root.string(),project.string());
@@ -899,7 +905,24 @@ void authoredEntityWorkflow() {
    // Stable linked object selection: maps document IDs to typed targets,
    // validates a multi-field reference edit as a single atomic Undo step.
    {
-       auto& doc=session.workspace().map;
+       // The earlier delete test removed "first"; restore a distinct authored
+       // endpoint for the linked-reference workflow.
+       editor::MapDoc endpointMap;std::string endpointError;
+       AIVERSE_TEST_CHECK(endpointMap.load((project/"maps/scene.json").string(),&endpointError));
+       auto& clean=endpointMap.data.entities[size_t(endpointMap.findEntity("second"))].extra.member("components");
+       for(const char* id:{"EchoZone","EchoPortal","FractureMember","AetherGasCell"})clean.erase(id);
+       if(endpointMap.findEntity("first")<0){
+           for(auto& endpoint:endpointMap.data.entities)if(endpoint.id!="second"){
+               endpoint.id="first";
+               auto& components=endpoint.extra.member("components");
+               for(const char* id:{"EchoZone","EchoPortal","FractureMember","AetherGasCell"})components.erase(id);
+               break;
+           }
+           AIVERSE_TEST_CHECK(endpointMap.findEntity("first")>=0);
+       }
+       AIVERSE_TEST_CHECK(endpointMap.save((project/"maps/scene.json").string(),&endpointError));
+       session.openProject(project.string());
+       const auto& doc=session.workspace().map;
        auto entity=[&]()->const editor::DocEntity&{
            return doc.data.entities[size_t(doc.findEntity("second"))];
        };
@@ -981,9 +1004,11 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.select",R"({"ids":["entity:@nope"]})").has("error"));
        const std::string both="{\"entityIds\":[\"entity:@second\",\""+otherId+"\"]";
        AIVERSE_TEST_CHECK(!call("studio.setProperties",(both+",\"componentId\":\"Transform\",\"values\":{\"scaleX\":3}}").c_str()).has("error"));
-       for(const auto& e:map.data.entities)AIVERSE_TEST_CHECK(editor::authoredScale3(e)[0]==3);
+       for(const auto& id:{std::string("second"),other})
+           AIVERSE_TEST_CHECK(editor::authoredScale3(map.data.entities[size_t(map.findEntity(id))])[0]==3);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
-       for(const auto& e:map.data.entities)AIVERSE_TEST_CHECK(editor::authoredScale3(e)[0]!=3);
+       for(const auto& id:{std::string("second"),other})
+           AIVERSE_TEST_CHECK(editor::authoredScale3(map.data.entities[size_t(map.findEntity(id))])[0]!=3);
        AIVERSE_TEST_CHECK(!call("studio.entitiesDuplicate",(both+"}").c_str()).has("error"));
        AIVERSE_TEST_CHECK(map.data.entities.size()==before+2 && session.selectedObjectIds().size()==2);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
