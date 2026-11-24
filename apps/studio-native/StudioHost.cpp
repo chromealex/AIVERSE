@@ -1112,9 +1112,25 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
             wpDrag_={};
             if(session_->selectedObjectIds().size()>1)return false;
             const auto id=session_->selectedObjectId();
+            if(id.empty()&&session_->selectedObjectIds().empty()){
+                if(!onScene([&]{return preview_->beginPlanetGravityDrag(map,float(x),float(y),float(w),float(h));}))return false;
+                wpDrag_.active=true;wpDrag_.component="PlanetGravity";return true;
+            }
             if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))return false;
             if(!onScene([&]{return preview_->beginPlanetRegionDrag(map,id,float(x),float(y),float(w),float(h));}))return false;
             wpDrag_.active=true;wpDrag_.component="PlanetEvolveArea";return true;
+        }
+        if(wpDrag_.active&&wpDrag_.component=="PlanetGravity"){
+            auto params=onScene([&]{return preview_->updatePlanetGravityDrag(map,float(x),float(y),float(w),float(h),snap,phase==2);});
+            if(phase==2){
+                wpDrag_={};
+                if(params){
+                    const auto reply=request("studio.op",std::move(*params));
+                    if(reply.has("error"))platform_.log("AIVERSE planet gravity: "+reply.getStr("error"));
+                    else sendEvent("document.changed","");
+                }
+            }
+            return true;
         }
         if(!wpDrag_.active||wpDrag_.component!="PlanetEvolveArea")return false;
         auto params=onScene([&]{return preview_->updatePlanetRegionDrag(map,
@@ -1723,7 +1739,7 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         return false;
     }
     if(key==K::Escape&&wpDrag_.active){
-        if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();});
+        if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();preview_->cancelPlanetGravityDrag();});
         wpDrag_={};mouse_={};rebuildOverlay();
         return true; // cancel with no authored MapDoc edit
     }

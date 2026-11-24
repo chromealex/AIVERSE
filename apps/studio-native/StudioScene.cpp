@@ -197,7 +197,7 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     camera_.yaw = 0.55f;
 }
 void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; clearTransformPreview(); }
-void StudioScene::clearTransformPreview() { cancelPlanetRegionDrag(); drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
+void StudioScene::clearTransformPreview() { cancelPlanetRegionDrag(); cancelPlanetGravityDrag(); drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -2002,6 +2002,90 @@ void StudioScene::drawPlanetRegionHandles(const render::Camera& view,int width,i
     }
 }
 
+// With no entity selected, Move/Scale exposes authored local gravity
+// field centers/radii in x-ray overlay mode (centers may be underground).
+bool StudioScene::beginPlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height){
+    cancelPlanetGravityDrag();
+    if(!planetMode_||!planetPreview_||!gizmosVisible_||!selectedId_.empty()||
+       !selection_.empty()||planetMapPath_!=doc.path||planetRevision_!=doc.revision||
+       (tool_!=TransformTool::Move&&tool_!=TransformTool::Scale))return false;
+    const auto view=viewCamera();
+    const auto normal=normalize(view.target-view.eye());
+    auto right=normalize(cross(normal,float3{0,1,0}));
+    if(dot(right,right)<.5f)right={1,0,0};
+    float best=12.f;
+    const bool resize=tool_==TransformTool::Scale;
+    for(const auto& field:planetGravityHandles_){
+        const auto handle=resize?field.center+right*field.radius:field.center;
+        float2 screen;if(!view.worldToScreen(handle,width,height,screen))continue;
+        const float error=std::hypot(x-screen.x,y-screen.y);
+        if(error>=best)continue;
+        float3 o,d,hit;
+        if(!view.screenRay(x,y,width,height,o,d)||!rayPlane(o,d,field.center,normal,hit))continue;
+        if(resize&&dot(hit-field.center,hit-field.center)<1e-6f)continue;
+        best=error;planetGravityDrag_=PlanetGravityDrag{field,field,normal,hit,resize,false,planetRevision_};
+    }
+    return bool(planetGravityDrag_);
+}
+std::optional<Json> StudioScene::updatePlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool snap,bool finish){
+    if(!planetGravityDrag_)return {};
+    auto& drag=*planetGravityDrag_;drag.valid=false;drag.candidate=drag.original;
+    if(planetMode_&&planetPreview_&&selectedId_.empty()&&selection_.empty()&&
+       planetMapPath_==doc.path&&planetRevision_==drag.revision&&doc.revision==drag.revision&&
+       planetPreview_->bodyId==drag.original.body){
+        float3 o,d,hit;
+        if(viewCamera().screenRay(x,y,width,height,o,d)&&rayPlane(o,d,drag.original.center,drag.normal,hit)){
+            if(drag.resize){
+                const auto before=drag.startHit-drag.original.center,after=hit-drag.original.center;
+                const float delta=std::sqrt(dot(after,after))-std::sqrt(dot(before,before));
+                float r=drag.original.radius+delta;
+                if(snap)r=std::round(r);
+                drag.candidate.radius=std::clamp(r,1.f,100000.f);
+                drag.valid=std::isfinite(r);
+            }else{
+                auto p=drag.original.center+(hit-drag.startHit);
+                if(snap)p={std::round(p.x),std::round(p.y),std::round(p.z)};
+                drag.candidate.center=p;
+                drag.valid=validPlanetGravityCenter(p);
+            }
+        }
+    }
+    std::optional<Json> result;
+    if(finish){
+        if(drag.valid)result=planetGravityEditPayload(doc,drag.original,drag.candidate.center,drag.candidate.radius,drag.revision);
+        cancelPlanetGravityDrag();
+    }
+    return result;
+}
+void StudioScene::drawPlanetGravityHandles(const render::Camera& view,int width,int height){
+    if(!planetPreview_||!gizmosVisible_||!selectedId_.empty()||!selection_.empty()||
+       (tool_!=TransformTool::Move&&tool_!=TransformTool::Scale))return;
+    Overlay2D overlay{renderer_,view,float(width),float(height),view.ortho?.5f:view.zNear*1.6f};
+    const auto normal=normalize(view.target-view.eye());
+    auto right=normalize(cross(normal,float3{0,1,0}));
+    if(dot(right,right)<.5f)right={1,0,0};
+    const auto up=normalize(cross(right,normal));
+    for(const auto& original:planetGravityHandles_){
+        const bool hot=planetGravityDrag_&&planetGravityDrag_->original.id==original.id;
+        const auto& field=hot&&planetGravityDrag_->valid?planetGravityDrag_->candidate:original;
+        const uint32_t color=hot?rgba(255,210,90):rgba(100,180,255);
+        float2 center;if(!view.worldToScreen(field.center,float(width),float(height),center))continue;
+        std::optional<float2> prev;
+        for(int i=0;i<=32;++i){
+            const float angle=6.28318530718f*float(i)/32.f;
+            const auto p=field.center+(right*std::cos(angle)+up*std::sin(angle))*field.radius;
+            float2 screen;if(!view.worldToScreen(p,float(width),float(height),screen)){prev.reset();continue;}
+            if(prev)overlay.segment(prev->x,prev->y,screen.x,screen.y,1.2f,color);
+            prev=screen;
+        }
+        float2 p;
+        const auto handle=tool_==TransformTool::Scale?field.center+right*field.radius:field.center;
+        if(!view.worldToScreen(handle,float(width),float(height),p))continue;
+        overlay.segment(p.x-6,p.y,p.x+6,p.y,3.f,color);
+        overlay.segment(p.x,p.y-6,p.x,p.y+6,3.f,color);
+    }
+}
+
 void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
                               const std::string& projectPath,const Json& rules){
     const bool entering=!planetMode_;
@@ -2032,6 +2116,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
         planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
+        planetGravityHandles_=planetPreview_?planetGravityHandles(doc,*planetPreview_):std::vector<PlanetGravityHandle>{};
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
     }
     const auto now=std::chrono::steady_clock::now();
@@ -2121,6 +2206,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         }
     }
     drawPlanetRegionHandles(view,width,height,doc);
+    drawPlanetGravityHandles(view,width,height);
     if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
     renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;

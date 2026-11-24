@@ -20,6 +20,7 @@
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
+#include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
 #include "engine/gfx/Gfx.h"
@@ -138,6 +139,9 @@ public:
     bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
     std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
     void cancelPlanetRegionDrag(){planetRegionDrag_.reset();}
+    bool beginPlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height);
+    std::optional<Json> updatePlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool snap,bool finish);
+    void cancelPlanetGravityDrag(){planetGravityDrag_.reset();}
     // Material slot names of a loaded content model (for the Inspector's Mesh Renderer).
     std::vector<std::string> modelMaterialSlots(const std::string& asset) const;
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
@@ -186,6 +190,15 @@ private:
     struct PlanetRegionDrag { PlanetRegionChart chart; PlanetRegionHandle handle=PlanetRegionHandle::Center;
         uint64_t revision=0; std::optional<evolve::Area> candidate; };
     std::optional<PlanetRegionDrag> planetRegionDrag_;
+    struct PlanetGravityDrag {
+        PlanetGravityHandle original,candidate;
+        render::float3 normal{},startHit{};
+        bool resize=false,valid=false;
+        uint64_t revision=0;
+    };
+    std::optional<PlanetGravityDrag> planetGravityDrag_;
+    std::vector<PlanetGravityHandle> planetGravityHandles_;
+    void drawPlanetGravityHandles(const render::Camera& view,int width,int height);
     void drawPlanetRegionHandles(const render::Camera& view,int width,int height,const editor::MapDoc& doc);
     std::string planetMapPath_;
     uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
