@@ -78,7 +78,7 @@ inline CaveTransitionResult stitchCaveCollinearBoundary(
         if(owners!=1)return out; // divergent or ambiguous contour
     }
     for(auto& [ce,pts]:splitPoints){
-        const double vx=double(ce.b.x-ce.a),vy=double(ce.b.y-ce.a),vz=double(ce.b.z-ce.a);
+        const double vx=double(ce.b.x-ce.a.x),vy=double(ce.b.y-ce.a.y),vz=double(ce.b.z-ce.a.z);
         auto param=[&](SeamPoint p){
             return (double(p.x-ce.a.x)*vx+double(p.y-ce.a.y)*vy+
                     double(p.z-ce.a.z)*vz)/(vx*vx+vy*vy+vz*vz);

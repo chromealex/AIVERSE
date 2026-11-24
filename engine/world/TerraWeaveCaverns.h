@@ -10,7 +10,7 @@
 
 namespace aiverse::terraweave::caverns {
 
-struct PointCm { int64_t x=0, y=0, z=0; };
+struct PointCm { int64_t x=0, y=0, z=0; constexpr bool operator==(const PointCm&) const = default; };
 struct ChunkKey3 { int64_t x=0, y=0, z=0; constexpr bool operator==(const ChunkKey3&) const = default; };
 struct Settings {
     uint64_t seed=1;

@@ -4,6 +4,12 @@
 #include <iostream>
 #include <thread>
 using namespace aiverse::terraweave::caverns;
+static_assert(PointCm{1,2,3}==PointCm{1,2,3});
+static_assert(PointCm{1,2,3}!=PointCm{1,2,4});
+static_assert(CaveSphereStamp{1,{1,2,3},100,CaveStampMode::Carve}==
+              CaveSphereStamp{1,{1,2,3},100,CaveStampMode::Carve});
+static_assert(CaveSphereStamp{1,{1,2,3},100,CaveStampMode::Carve}!=
+              CaveSphereStamp{1,{1,2,4},100,CaveStampMode::Carve});
 
 int main() {
     CaveVolumeSnapshot snapshot;
