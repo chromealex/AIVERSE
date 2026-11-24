@@ -7,6 +7,8 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <memory>
+#include "engine/buildings/BuildingGraphMonitor.h"
 #include <thread>
 #include <map>
 #include <string>
@@ -82,6 +84,15 @@ public:
     // Host publishes a detached owner-thread snapshot; clear on world teardown.
     // No live world provider is installed by the headless workspace itself.
     std::function<Json(uint64_t)> buildingGraphDiagnosticsProvider;
+    // Called by the host on the Workspace owner thread, with a detached monitor.
+    void attachBuildingGraphMonitor(const std::shared_ptr<building::BuildingGraphMonitor>& monitor){
+        if(!monitor){buildingGraphDiagnosticsProvider={};return;}
+        std::weak_ptr<building::BuildingGraphMonitor> weak=monitor;
+        buildingGraphDiagnosticsProvider=[weak](uint64_t id){
+            if(auto live=weak.lock())return live->read(id);
+            return Json{};
+        };
+    }
     void registerOp(Op op);       // GUI adds view/play/screenshot ops
     Json toolList() const;        // MCP tools/list payload
 
