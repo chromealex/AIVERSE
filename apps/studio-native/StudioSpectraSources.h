@@ -24,7 +24,17 @@ public:
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
+        dataRegistry_.reset();
         revision_=UINT64_MAX;ready_=false;
+    }
+    // Render owner only, between frames. Shared ownership prevents dangling
+    // callbacks when a host publishes a fresh immutable registry.
+    bool setDataInterfaceRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry){
+        if(gpuFrameOpen_)return false;
+        if(gpuPool_.ready()&&!gpuPool_.setDataInterfaceRegistry(registry.get()))return false;
+        if(presenter_)presenter_->setDataInterfaceRegistry(registry.get());
+        dataRegistry_=std::move(registry);
+        return true;
     }
     bool animated() const{
         return ready_&&(mirror_.size()!=0||particles_.stats().particles>0||
@@ -76,6 +86,7 @@ public:
         if(!ready_||!view.valid())return;
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
+        if(!presenter_->dataInterfaceError().empty())error_=presenter_->dataInterfaceError();
         particles_.update(dt);
         if(gpuPresenter_&&gpuPool_.ready()){
             if(!gpuPool_.beginPresentationFrame(view)){error_=gpuPool_.reason();return;}
@@ -108,8 +119,11 @@ private:
         budgets.maxGpuGroups=256;budgets.maxGroupCapacity=kStudioMaxGroupSlots;budgets.maxSources=65536;
         budgets.maxBurstsPerFrame=16384;
         budgets.maxGpuAllocationBytes=512ull*1024*1024;
-        if(gpuPool_.init(&device,budgets))
+        presenter_->setDataInterfaceRegistry(dataRegistry_.get());
+        if(gpuPool_.init(&device,budgets)){
+            gpuPool_.setDataInterfaceRegistry(dataRegistry_.get());
             gpuPresenter_=std::make_unique<spectra::GpuEcsAttachmentPresenter>(gpuPool_);
+        }
         ready_=true;return true;
     }
     std::filesystem::path safeFile(const std::string& path)const{
@@ -150,7 +164,9 @@ private:
             error_=errors.empty()?"Invalid SpectraFX parameter schema":errors.front();return false;
         }
         if(particles_.define(name,def)<0){error_="Cannot define SpectraFX graph: "+name;return false;}
-        presenter_->bindInstanceParameters(name,named);
+        if(!presenter_->bindGraphDataInterfaces(name,graph,errors)){
+            error_=errors.empty()?"Invalid SpectraFX Data Interfaces":errors.front();return false;
+        }
         schemas_[name]=std::move(named);
         definitions_.insert(name);
         // CPU definition always remains available for incompatible devices,
@@ -182,6 +198,7 @@ private:
         }
         return true;
     }
+    std::shared_ptr<const spectra::DataInterfaceRegistry> dataRegistry_;
     render::TextureCache textures_;
     fx::ParticleSystem particles_;
     lib::mechanics::SpectraSourceMirror mirror_;

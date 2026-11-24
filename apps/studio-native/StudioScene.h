@@ -71,6 +71,11 @@ public:
         settleFrames_=30;
     }
     bool spectraDockMode() const {return spectraDockMode_;}
+    // Explicit native scene-host hook; publish after document activation and
+    // before frame preparation. Isolated FX preview has independent data.
+    bool setSpectraSceneDataRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry) {
+        return spectraSources_.setDataInterfaceRegistry(std::move(registry));
+    }
     void resetSpectraDockCamera() {
         if(!spectraDockMode_)return;
         camera_.target={0,1.0f,0};

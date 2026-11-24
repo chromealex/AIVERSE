@@ -2,6 +2,7 @@
 #include <aiverselib/mechanics/SpectraFX.h>
 #include <aiverselib/mechanics/SpectraSourceMirror.h>
 #include "engine/fx/SpectraScenePoolEmission.h"
+#include "engine/view/SpectraSocketPose.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -145,7 +146,63 @@ static void parameterScenario(){
     const auto roundtrip=lg::readSpectraSourceDocument(lg::writeSpectraSourceDocument(b));
     check(roundtrip.parameters==b.parameters,"parameter document roundtrip");
 }
+static void dataScenario(){
+    fx::ParticleSystem ps;
+    check(ps.init(nullptr),"data scenario headless");
+    auto def=continuous();
+    check(ps.define("weather_loop",def)>=0,"weather loop definition");
+    check(ps.define("weather_event",oneShot())>=0,"weather event definition");
+    spectra::PresentationSystem presenter(ps);
+    const auto graph=Json::parse(R"({"instanceParameters":{"lift":{"slot":0,"default":1,"min":0,"max":20}},"dataInterfaces":{"lift":{"provider":"weather","channel":"up","required":true}}})");
+    std::vector<std::string> errors;
+    check(presenter.bindGraphDataInterfaces("weather_loop",graph,errors)&&
+          presenter.bindGraphDataInterfaces("weather_event",graph,errors),"declare required data");
+    lg::SpectraSourceMirror mirror;
+    lg::SpectraSourceComponent source;source.effect="weather_loop";source.killOnDetach=true;
+    mirror.sync({{"a",source,{1,2,3}}});
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(presenter.activeAttachments()==0&&!presenter.dataInterfaceError().empty(),"missing provider prevents attachment");
+    spectra::DataInterfaceRegistry registry;
+    float lift=2;
+    check(registry.bind("weather",[&lift](std::string_view,render::float3,float& v){v=lift;return true;}),"bind weather");
+    presenter.setDataInterfaceRegistry(&registry);
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    ps.update(0.1f);
+    check(presenter.activeAttachments()==1&&ps.stats().particles>0,"provider enables attachment");
+    lift=3;
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(presenter.activeAttachments()==1&&ps.stats().particles>0,"sample change does not kill prior particles");
+    SimEvent hit;hit.type=72;
+    std::map<uint16_t,spectra::EventBinding> events{{72,{"weather_event",1_fx}}};
+    presenter.consumeTickEvents(1,{hit},events);
+    const auto eventId=ps.effect("weather_event");
+    std::vector<fx::FxParticleInfo> rows;
+    ps.snapshot(rows);
+    check(std::count_if(rows.begin(),rows.end(),[eventId](const auto& p){return p.effect==eventId;})==3,"sampled event birth");
+    registry.clear();
+    presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
+    check(presenter.activeAttachments()==0,"required data loss stops attachment");
+    presenter.reset();
+    ps.snapshot(rows);
+    check(rows.empty(),"reset removes recent events");
+}
+static void socketScenario(){
+    render::Model rig;
+    rig.nodes.resize(1);
+    rig.bindWorld={render::mat4::translate({99,0,0})};
+    view::CompiledModelSocket binding{&rig,7,"muzzle",-1,0};
+    std::array<render::mat4,1> pose{render::mat4::translate({2,0,0})};
+    spectra::SocketEmissionPose result;
+    check(spectra::resolveSocketEmissionPose(rig,7,binding,render::mat4::translate({10,0,0}),pose,
+          render::mat4::translate({0,3,0}),{0,1,0},result),"evaluated socket pose");
+    check(result.position.x==12&&result.position.y==3&&result.direction.y==1,"socket transform composition");
+    check(!spectra::resolveSocketEmissionPose(rig,8,binding,{},pose,{},{0,1,0},result),"stale model epoch");
+    check(!spectra::resolveSocketEmissionPose(rig,7,binding,{},{},{},{0,1,0},result),"no implicit bind fallback");
+    check(spectra::resolveSocketEmissionPose(rig,7,binding,{},{},{},{0,1,0},result,true)&&result.position.x==99,"explicit bind fallback");
+}
 int main() {
+    dataScenario();
+    socketScenario();
     parameterScenario();
     poolPolicyScenario();
     mirrorScenario();
