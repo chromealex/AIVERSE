@@ -1892,6 +1892,12 @@
           "text": "Учёт материалов вложенных моделей при освобождении текстур и граница безопасной сертификации.",
           "nameEn": "Texture Graph GPU — Stage 38AE (partial, acceptance checkpoint)",
           "textEn": "Attachment material roots and safe collection certification boundary."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AF (в работе)",
+          "text": "Исправление линковки теста replay на Mac без расширения зависимостей snapshot.",
+          "nameEn": "Texture Graph GPU — Stage 38AF (in progress)",
+          "textEn": "Fix Mac replay regression linkage without expanding snapshot dependencies."
         }
       ],
       "enables": [
