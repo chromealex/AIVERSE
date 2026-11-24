@@ -33,5 +33,6 @@ export function duplicateTextureNode(graph:Obj,id:string):{graph:Obj;id:string}|
 // Ignore authoring coordinates when deciding whether to recompute the pixels.
 export function texturePreviewKey(graph:Obj,overrides:string,output:string,resolution:number,options:readonly boolean[]):string {
  const nodes=rows(graph.nodes).map(n=>{const {position:_,...semantic}=n;return semantic;});
- return JSON.stringify([{...graph,nodes},overrides,output,resolution,options]);
+ const {editorGroups:_,...document}=graph;
+ return JSON.stringify([{...document,nodes},overrides,output,resolution,options]);
 }
