@@ -110,6 +110,9 @@ Use the existing transfer preview and native picker. For non-replacing imports w
 ## Reversible asset replacement (S6c.4c.3)
 Replace only a reviewed external regular-file name conflict. Preview binds source/target SHA-256, sidecar hash and target GUID; commit refuses changed identity. Stage incoming payload into a project recovery slot; journal v3 records paired live-to-outgoing and incoming-to-live moves with digests. Restore validates all chains and occupancy phases before any rollback. Preserve exact live sidecar and target GUID, never swap metadata. Asset history replacement steps toggle old/new payload without original picker source. Replacement-only batches are supported; mixed new-import/replacement selection must be split (UI and native refusal). Do not purge inactive payloads or promise cross-session undo.
 
+## Persistent asset recovery browser (S6c.4c.4)
+Assets toolbar Trash opens AssetTrashDialog. Native assetTrashList returns paged persisted records with retained/invalid status, assetTrashReview validates the selected payload and produces an action-bound identity token, assetTrashApply requires exact project/history version, token and explicit confirmation. Restore deleted/created content only at its original vacant path/GUID through quarantine replay; restore a previous replacement version only at its matching live GUID/path, preserving current metadata and saving outgoing payload as a new recovery record. Purge only the reviewed single recovery slot, never live content; pending journals block mutations, unexpected slot contents refuse. Both operations invalidate session-local asset history; no automatic purge. Legacy records without metadata digest are identity-checked but lack original sidecar hash; new records include it. Do not claim persistent undo stack, disk quota enforcement or full recovery of invalid records.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

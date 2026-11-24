@@ -2146,7 +2146,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
                     throw std::runtime_error("Confirm recovery against the current asset history");
                 // Purge is irreversible; invalidate history even if disk cleanup fails midway.
-                if(params.getStr("action")=="purge")assetHistory_.reset();
+                if(params.getStr("action")=="purge"){
+                    const auto review=studioAssetTrashReview(ws_.project.dir,params.getStr("id"),"purge");
+                    if(review.getStr("token")!=params.getStr("token"))
+                        throw std::runtime_error("Recovery record changed; review again");
+                    assetHistory_.reset();pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;
+                }
                 studioAssetTrashApply(ws_.project.dir,params.getStr("id"),params.getStr("action"),params.getStr("token"));
                 // Cross-session operations deliberately fence the session-local stack.
                 assetHistory_.reset();pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;

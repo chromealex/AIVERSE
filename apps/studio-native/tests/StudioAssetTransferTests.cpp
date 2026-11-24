@@ -330,6 +330,50 @@ int main(){
         try{(void)mixed.apply(mixed.token(),{{0,"replace"},{1,"import"}},{},&replaceHistory);}
         catch(const std::runtime_error&){replaceConflict=true;}
         AIVERSE_TEST_CHECK(replaceConflict&&read(live)=="new pixels"&&!fs::exists(project/"content"/"Other"/"Fresh.png"));
+        // Recovery listing is independent of the session-local history.
+        const auto trashId=[](const fs::path& payload){return payload.parent_path().filename().string();};
+        const auto deletedId=trashId(backup);
+        const auto replacementId=trashId(oldBackup);
+        auto page=aiverse::studio::studioAssetTrashList(project,0,100);
+        AIVERSE_TEST_CHECK(page["total"].integer()>=2&&!page.getBool("recoveryPending"));
+        bool listedDelete=false,listedVersion=false;
+        for(const auto& row:page["items"].items()){
+            if(row.getStr("id")==deletedId)listedDelete=row.getStr("kind")=="deleted";
+            if(row.getStr("id")==replacementId)listedVersion=row.getStr("kind")=="replacement";
+        }
+        AIVERSE_TEST_CHECK(listedDelete&&listedVersion);
+        auto restore=aiverse::studio::studioAssetTrashReview(project,deletedId,"restore");
+        AIVERSE_TEST_CHECK(restore.getStr("guid")==trashGuid&&!restore.getStr("token").empty());
+        bool trashRefused=false;
+        try{aiverse::studio::studioAssetTrashApply(project,deletedId,"restore","stale");}
+        catch(const std::runtime_error&){trashRefused=true;}
+        AIVERSE_TEST_CHECK(trashRefused&&fs::exists(backup));
+        aiverse::studio::studioAssetTrashApply(project,deletedId,"restore",restore.getStr("token"));
+        db.rebuild(false);AIVERSE_TEST_CHECK(db.byGuid(childGuid)->path=="TrashTree/Item.png");
+        AIVERSE_TEST_CHECK(!fs::exists(backup));
+        auto versionReview=aiverse::studio::studioAssetTrashReview(project,replacementId,"restore");
+        write(live,"changed after review");
+        trashRefused=false;
+        try{aiverse::studio::studioAssetTrashApply(project,replacementId,"restore",versionReview.getStr("token"));}
+        catch(const std::runtime_error&){trashRefused=true;}
+        AIVERSE_TEST_CHECK(trashRefused&&read(live)=="changed after review"&&fs::exists(oldBackup));
+        write(live,"new pixels");
+        versionReview=aiverse::studio::studioAssetTrashReview(project,replacementId,"restore");
+        aiverse::studio::studioAssetTrashApply(project,replacementId,"restore",versionReview.getStr("token"));
+        AIVERSE_TEST_CHECK(read(live)=="old pixels"&&read(sidecar)==originalSidecar&&!fs::exists(oldBackup));
+        page=aiverse::studio::studioAssetTrashList(project,0,100);
+        std::string outgoingId;
+        for(const auto& row:page["items"].items())
+            if(row.getStr("kind")=="replacement"&&row.getStr("path")=="Other/Replace.png")outgoingId=row.getStr("id");
+        AIVERSE_TEST_CHECK(!outgoingId.empty());
+        const auto purge=aiverse::studio::studioAssetTrashReview(project,outgoingId,"purge");
+        trashRefused=false;
+        try{aiverse::studio::studioAssetTrashApply(project,outgoingId,"purge",versionReview.getStr("token"));}
+        catch(const std::runtime_error&){trashRefused=true;}
+        AIVERSE_TEST_CHECK(trashRefused&&read(live)=="old pixels");
+        aiverse::studio::studioAssetTrashApply(project,outgoingId,"purge",purge.getStr("token"));
+        AIVERSE_TEST_CHECK(read(live)=="old pixels"&&read(sidecar)==originalSidecar);
+        AIVERSE_TEST_CHECK(!fs::exists(project/".aiverse-cache"/"studio-asset-trash"/outgoingId));
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

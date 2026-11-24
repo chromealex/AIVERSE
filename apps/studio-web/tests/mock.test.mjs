@@ -81,3 +81,8 @@ test('asset history demo is read-only',async()=>{
   assert.equal(h.scope,'assets');assert.equal(h.canUndo,false);
   await assert.rejects(mockInvoke('studio.assetHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
 });
+
+test('browser demo cannot browse or mutate native asset recovery storage',async()=>{
+  await assert.rejects(mockInvoke('studio.assetTrashList',{expectedProject:'/project',offset:0,limit:50}),/native AIVERSE host/);
+  await assert.rejects(mockInvoke('studio.assetTrashApply',{expectedProject:'/project',id:'bad',action:'purge',token:'bad',expectedVersion:'bad',confirmed:true}),/native AIVERSE host/);
+});
