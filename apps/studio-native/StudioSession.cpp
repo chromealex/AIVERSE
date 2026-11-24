@@ -1860,7 +1860,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
-            if(op=="terraweave_caverns_paint" && (params.getStr("expectedProject")!=ws_.project.dir ||
+            if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
                !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
