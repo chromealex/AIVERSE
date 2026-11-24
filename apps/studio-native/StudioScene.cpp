@@ -795,7 +795,7 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
         planetForestModelsPending_=true;return;
     }
 }
-void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
+void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int width,int height){
     const auto body=planetPreview_->bodyId;
     const auto epoch=planetLiveSnapshot_.getStr("epoch");
     const bool changed=planetForestFarBody_!=body||planetForestFarProject_!=planetLiveProject_||
@@ -814,6 +814,53 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
         if(it==requested.end())it=requested.emplace(cell,Json::array()).first;
         it->second.push(row);
     }
+    // Bound the actual proxy geometry, rather than culling a cell centre.
+    // Clip planes are extracted from the same view/projection as the Scene.
+    const auto view=viewCamera();
+    const auto clip=view.proj(float(std::max(1,width))/float(std::max(1,height)),false)*view.view();
+    const auto eye=view.eye();
+    struct Candidate { int64_t cell; bool horizon; float distance; size_t bytes; };
+    std::vector<Candidate> order;
+    size_t frustumRejected=0;
+    constexpr size_t gpuBudget=64u*1024u*1024u;
+    // Each proxy is six vertices and twelve uint32 indices. Use the actual
+    // CPU upload vertex type and a conservative overhead per resident chunk.
+    render::MeshBuilder layout;
+    const size_t proxyBytes=6*sizeof(layout.vertices()[0])+12*sizeof(uint32_t);
+    for(const auto& [cell,chunkRows]:requested){
+        render::float3 lo{INFINITY,INFINITY,INFINITY},hi{-INFINITY,-INFINITY,-INFINITY};
+        for(const auto& row:chunkRows.items()){
+            const auto p=studioForestVec(row["position"]);if(!p)continue;
+            const float h=flora*float(std::clamp<int64_t>(row.getInt("sizePermille"),0,1000))*.006f;
+            lo={std::min(lo.x,p->x-h),std::min(lo.y,p->y-h),std::min(lo.z,p->z-h)};
+            hi={std::max(hi.x,p->x+h),std::max(hi.y,p->y+h),std::max(hi.z,p->z+h)};
+        }
+        if(!std::isfinite(lo.x))continue;
+        const auto center=(lo+hi)*.5f,half=(hi-lo)*.5f;
+        bool outside=false;
+        for(int axis=0;axis<3&&!outside;++axis)for(const float sign:{-1.f,1.f}){
+            const float a=clip.at(3,0)+sign*clip.at(axis,0),b=clip.at(3,1)+sign*clip.at(axis,1);
+            const float c=clip.at(3,2)+sign*clip.at(axis,2),d=clip.at(3,3)+sign*clip.at(axis,3);
+            // Small padded frustum to prefetch at viewport boundaries.
+            const float pad=.04f*(std::abs(a)+std::abs(b)+std::abs(c))*std::max(1.f,view.distance);
+            if(a*center.x+b*center.y+c*center.z+d+std::abs(a)*half.x+std::abs(b)*half.y+std::abs(c)*half.z+pad<0)outside=true;
+        }
+        if(outside){++frustumRejected;continue;}
+        const auto delta=center-eye;
+        // Horizon is a priority only: authored/live relief may expose a
+        // silhouette behind the reference sphere. Never falsely cull it.
+        const bool behind=render::dot(center,view.ortho?eye-view.target:eye-center)<0.f;
+        order.push_back({cell,behind,render::dot(delta,delta),chunkRows.size()*proxyBytes+4096u});
+    }
+    std::sort(order.begin(),order.end(),[](const Candidate& a,const Candidate& b){
+        return std::tie(a.horizon,a.distance,a.cell)<std::tie(b.horizon,b.distance,b.cell);
+    });
+    std::set<int64_t> resident;
+    size_t plannedBytes=0,budgetRejected=0;
+    for(const auto& c:order){
+        if(c.bytes>gpuBudget-plannedBytes){++budgetRejected;continue;}
+        plannedBytes+=c.bytes;resident.insert(c.cell);
+    }
     // Stable identity order prevents camera ranking alone from invalidating a mesh.
     for(auto& [cell,chunkRows]:requested){
         auto sorted=chunkRows.items();
@@ -823,7 +870,7 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
         chunkRows=Json::array();for(auto& row:sorted)chunkRows.push(std::move(row));
     }
     for(auto it=planetForestFarChunks_.begin();it!=planetForestFarChunks_.end();){
-        if(requested.count(it->first)){++it;continue;}
+        if(resident.count(it->first)){++it;continue;}
         if(!acquireIdle()){++it;continue;}
         if(it->second.mesh.vb.valid())device_->destroyBuffer(it->second.mesh.vb);
         if(it->second.mesh.ib.valid())device_->destroyBuffer(it->second.mesh.ib);
@@ -831,10 +878,25 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
     }
     size_t drawn=0,pending=0,uploads=0;
     constexpr size_t maxUploadsPerFrame=16;
-    for(const auto& [cell,chunkRows]:requested){
+    size_t residentBytes=0;
+    for(const auto& [cell,chunk]:planetForestFarChunks_)residentBytes+=chunk.bytes;
+    std::vector<int64_t> drawCells;
+    for(const auto& candidate:order){
+        const auto cell=candidate.cell;if(!resident.count(cell))continue;
+        const auto& chunkRows=requested.at(cell);
         auto found=planetForestFarChunks_.find(cell);
         if(found==planetForestFarChunks_.end()||!(found->second.rows==chunkRows)||found->second.scale!=flora){
             if(uploads>=maxUploadsPerFrame||!acquireIdle()){++pending;continue;}
+            const size_t previous=found==planetForestFarChunks_.end()?0:found->second.bytes;
+            // Reserve space for the new allocation while the old one is live.
+            if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){
+                if(found!=planetForestFarChunks_.end()){
+                    if(found->second.mesh.vb.valid())device_->destroyBuffer(found->second.mesh.vb);
+                    if(found->second.mesh.ib.valid())device_->destroyBuffer(found->second.mesh.ib);
+                    residentBytes-=previous;planetForestFarChunks_.erase(found);
+                }
+                if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){++pending;continue;}
+            }
             render::MeshBuilder builder;
             for(const auto& row:chunkRows.items()){
                 const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
@@ -866,18 +928,21 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
             auto& chunk=planetForestFarChunks_[cell];
             if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
             if(chunk.mesh.ib.valid())device_->destroyBuffer(chunk.mesh.ib);
-            chunk.mesh=next;chunk.rows=chunkRows;chunk.scale=flora;
+            residentBytes-=chunk.bytes;chunk.mesh=next;chunk.rows=chunkRows;chunk.scale=flora;chunk.bytes=candidate.bytes;residentBytes+=chunk.bytes;
             found=planetForestFarChunks_.find(cell);
         }
         if(found!=planetForestFarChunks_.end()&&found->second.mesh.vb.valid()&&found->second.mesh.ib.valid()){
-            renderer_.drawMesh(found->second.mesh,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+            drawCells.push_back(cell);
             drawn+=chunkRows.size();
         }
     }
-    lightingStatus_+=" · far forest proxies "+std::to_string(drawn)+" · chunks "+std::to_string(requested.size());
+    // Do not destroy or upload a chunk after submitting a draw for it.
+    for(const auto cell:drawCells)renderer_.drawMesh(planetForestFarChunks_.at(cell).mesh,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+    lightingStatus_+=" · far forest proxies "+std::to_string(drawn)+" · resident chunks "+std::to_string(drawCells.size())+"/"+std::to_string(requested.size());
+    lightingStatus_+=" · frustum rejected "+std::to_string(frustumRejected)+" · budget rejected "+std::to_string(budgetRejected)+" · estimated GPU KiB "+std::to_string(residentBytes/1024);
     if(pending)lightingStatus_+=" · pending far chunks "+std::to_string(pending);
 }
-void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath){
+void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath,int width,int height){
     if(!planetForestLiveCurrent(doc,projectPath)||planetForestModelProject_!=projectPath||
        !(planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]))return;
     const auto index=doc.data.findBody(planetPreview_->bodyId);
@@ -885,7 +950,7 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
     const auto& far=planetLiveSnapshot_["forest"]["farPlants"];
-    drawPlanetForestFarChunks(far,flora);
+    drawPlanetForestFarChunks(far,flora,width,height);
     static const std::vector<uint8_t> barkOnly{1,0};
     planetForestSeasonMaterials_.clear();
     const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
@@ -2718,7 +2783,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(useLiveTerrain?planetLiveTerrain_:planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
-        if(liveForest)drawLivePlanetForestMeshes(doc,projectPath);
+        if(liveForest)drawLivePlanetForestMeshes(doc,projectPath,width,height);
         if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
             static const std::vector<uint8_t> barkOnly{1,0};
             const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
