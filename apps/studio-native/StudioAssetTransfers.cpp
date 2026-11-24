@@ -887,7 +887,7 @@ void studioReplayAssetMove(const fs::path& project,
         throw std::runtime_error("Invalid recorded asset move");
     const auto& materialBefore=redo?plan.materialsBefore:plan.materialsAfter;
     const auto& materialAfter=redo?plan.materialsAfter:plan.materialsBefore;
-    const auto material=project/"materials.json";
+    const auto material=fs::canonical(project)/"materials.json";
     const auto checkMaterial=[&]{
         if(bool(materialBefore)!=existsOrSymlink(material)||
            (materialBefore&&editor::readProjectFileBytes(material)!=*materialBefore))
