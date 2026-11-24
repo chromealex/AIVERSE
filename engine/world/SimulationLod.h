@@ -49,6 +49,22 @@ inline uint64_t cellDistance(Cell a,Cell b)noexcept{
     auto delta=[](int32_t x,int32_t y){const int64_t d=int64_t(x)-int64_t(y);return uint64_t(d<0?-d:d);};
     return std::max({delta(a.x,b.x),delta(a.y,b.y),delta(a.z,b.z)});
 }
+// Derived diagnostic counters from the last decision pass, not gameplay state.
+struct SimulationLodDiagnostics {
+    uint32_t tick=0,hot=0,warm=0,cold=0,executed=0,deferred=0;
+};
+inline Json simulationLodConfigJson(const SimulationLodConfig& c){
+    Json j=Json::object();j.set("enabled",Json::fromBool(c.enabled));
+    j.set("hotCells",Json::number(int64_t(c.hotCells)));j.set("warmCells",Json::number(int64_t(c.warmCells)));
+    j.set("warmTicks",Json::number(int64_t(c.warmTicks)));j.set("coldTicks",Json::number(int64_t(c.coldTicks)));
+    return j;
+}
+inline Json simulationLodDiagnosticsJson(const SimulationLodDiagnostics* d){
+    Json j=Json::object();j.set("available",Json::fromBool(d!=nullptr));if(!d)return j;
+    j.set("tick",Json::number(int64_t(d->tick)));j.set("hot",Json::number(int64_t(d->hot)));
+    j.set("warm",Json::number(int64_t(d->warm)));j.set("cold",Json::number(int64_t(d->cold)));
+    j.set("executed",Json::number(int64_t(d->executed)));j.set("deferred",Json::number(int64_t(d->deferred)));return j;
+}
 struct SimulationLodDecision {
     SimulationLodTier tier=SimulationLodTier::Hot;
     uint32_t period=1;
