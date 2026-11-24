@@ -73,6 +73,86 @@ static void checkMaterializedOwner(){
     requireGraphTest(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"failed dispatch fence did not retire");
     owner.shutdownAfterIdle(dev);
 }
+// In-memory SDF edits must leave a fresh project free of published assets.
+static void checkSdfEdits(const fs::path& root) {
+    editor::Workspace ws;
+    ws.project.dir = root.string();
+    const auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "test-spectrafx"); };
+    fs::create_directories(root/"content");
+    std::ofstream model(root/"content"/"tetra.obj");
+    model<<"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+           "f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n";
+    model.close();
+    auto request=Json::parse(R"({"action":"bakeSdf","node":"collision","model":"content/tetra.obj","dimension":8,
+        "graph":{"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
+        {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"spread":0}},
+        {"id":"collision","type":"CollisionModule","properties":{"ground":false,"bounce":0.7}},
+        {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
+        "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]}})");
+    auto baked=call("fx_graph_edit",request);
+    requireGraphTest(baked.getBool("ok")&&baked["validation"].getBool("ok"),"native model SDF edit");
+    const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
+    requireGraphTest(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
+    requireGraphTest(!fs::exists(root/"fx"),"SDF edit must not publish files");
+    request.set("dimension",Json::number(int64_t(32)));
+    auto dense=call("fx_graph_edit",request);
+    requireGraphTest(dense.getBool("ok")&&dense["validation"].getBool("ok")&&
+            dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
+            "32 cubed Studio/MCP SDF bake");
+    requireGraphTest(!fs::exists(root/"fx"),"dense bake stays in local graph");
+    fx::StaticSdfVolume volume;
+    volume.dimension=3;volume.spacing=1;volume.samples.resize(27,-.25f);
+    std::string bytes;
+    requireGraphTest(fx::encodeSdfBinary(volume,bytes),"encode fixture");
+    std::ofstream binary(root/"content"/"test.sdfbin",std::ios::binary);
+    binary.write(bytes.data(),std::streamsize(bytes.size()));binary.close();
+    auto import=request;
+    import.set("action",Json::string("importSdf"));
+    import.set("sdfAsset",Json::string("content/test.sdfbin"));
+    auto imported=call("fx_graph_edit",import);
+    requireGraphTest(imported.getBool("ok")&&imported["validation"].getBool("ok")&&
+            imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
+            "binary SDF import through shared Workspace");
+    requireGraphTest(!fs::exists(root/"fx"),"import does not publish");
+    import.set("action",Json::string("linkSdf"));
+    auto linked=call("fx_graph_edit",import);
+    requireGraphTest(linked.getBool("ok")&&linked["validation"].getBool("ok")&&
+            linked["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+            "persistent external SDF link");
+    requireGraphTest(!fs::exists(root/"fx"),"link does not publish");
+    Json save=Json::object();save.set("name",Json::string("linked_sdf"));save.set("graph",linked["graph"]);
+    requireGraphTest(call("fx_graph_set",save).getBool("ok"),"publish external link");
+    Json name=Json::object();name.set("name",Json::string("linked_sdf"));
+    auto reopened=call("fx_graph_get",name);
+    requireGraphTest(reopened["validation"].getBool("ok")&&
+            reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+            "persistent link reopens without inline samples");
+    fs::remove_all(root/"fx");
+    volume.dimension=64;volume.samples.assign(64u*64u*64u,-.25f);
+    requireGraphTest(fx::encodeSdfBinary(volume,bytes),"encode external 64 cubed");
+    std::ofstream denseBinary(root/"content"/"dense.sdfbin",std::ios::binary);
+    denseBinary.write(bytes.data(),std::streamsize(bytes.size()));denseBinary.close();
+    import.set("sdfAsset",Json::string("content/dense.sdfbin"));
+    auto denseLink=call("fx_graph_edit",import);
+    requireGraphTest(denseLink.getBool("ok")&&denseLink["validation"].getBool("ok")&&
+            denseLink["graph"].dump(-1).size()<4096,"high-resolution link stays compact");
+    import.set("action",Json::string("importSdf"));
+    auto denseImport=call("fx_graph_edit",import);
+    requireGraphTest(denseImport.has("error")||!denseImport.getBool("ok"),"high-resolution inline import denied");
+    requireGraphTest(!fs::exists(root/"fx"),"dense link/import does not publish");
+    import.set("action",Json::string("linkSdf"));
+    import.set("sdfAsset",Json::string("content/../test.sdfbin"));
+    auto badImport=call("fx_graph_edit",import);
+    requireGraphTest(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");
+    request.set("dimension",Json::number(int64_t(33)));
+    auto invalidDimension=call("fx_graph_edit",request);
+    requireGraphTest(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");
+    request.set("dimension",Json::number(int64_t(8)));
+    request.set("model",Json::string("content/../escape.obj"));
+    auto rejected=call("fx_graph_edit",request);
+    requireGraphTest(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
+}
+
 int main() {
     checkMaterializedOwner();
     {
@@ -383,82 +463,7 @@ int main() {
     const auto manifest=Json::parseFile((root/"content"/"textures"/"fixture_set"/"texture-set.json").string());
     requireGraphTest(manifest["files"].size()==2&&manifest["files"][size_t(0)].getStr("backend")=="cpu","shared texture set provenance missing");
 
-    // In-memory bake is a shared Studio/MCP edit, not a write operation.
-    {
-        fs::create_directories(root/"content");
-        std::ofstream model(root/"content"/"tetra.obj");
-        model<<"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
-               "f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n";
-        model.close();
-        auto request=Json::parse(R"({"action":"bakeSdf","node":"collision","model":"content/tetra.obj","dimension":8,
-            "graph":{"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
-            {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"spread":0}},
-            {"id":"collision","type":"CollisionModule","properties":{"ground":false,"bounce":0.7}},
-            {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
-            "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]}})");
-        auto baked=call("fx_graph_edit",request);
-        requireGraphTest(baked.getBool("ok")&&baked["validation"].getBool("ok"),"native model SDF edit");
-        const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
-        requireGraphTest(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
-        requireGraphTest(!fs::exists(root/"fx"),"SDF edit must not publish files");
-        request.set("dimension",Json::number(int64_t(32)));
-        auto dense=call("fx_graph_edit",request);
-        requireGraphTest(dense.getBool("ok")&&dense["validation"].getBool("ok")&&
-                dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
-                "32 cubed Studio/MCP SDF bake");
-        requireGraphTest(!fs::exists(root/"fx"),"dense bake stays in local graph");
-        fx::StaticSdfVolume volume;
-        volume.dimension=3;volume.spacing=1;volume.samples.resize(27,-.25f);
-        std::string bytes;
-        requireGraphTest(fx::encodeSdfBinary(volume,bytes),"encode fixture");
-        std::ofstream binary(root/"content"/"test.sdfbin",std::ios::binary);
-        binary.write(bytes.data(),std::streamsize(bytes.size()));binary.close();
-        auto import=request;
-        import.set("action",Json::string("importSdf"));
-        import.set("sdfAsset",Json::string("content/test.sdfbin"));
-        auto imported=call("fx_graph_edit",import);
-        requireGraphTest(imported.getBool("ok")&&imported["validation"].getBool("ok")&&
-                imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
-                "binary SDF import through shared Workspace");
-        requireGraphTest(!fs::exists(root/"fx"),"import does not publish");
-        import.set("action",Json::string("linkSdf"));
-        auto linked=call("fx_graph_edit",import);
-        requireGraphTest(linked.getBool("ok")&&linked["validation"].getBool("ok")&&
-                linked["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
-                "persistent external SDF link");
-        requireGraphTest(!fs::exists(root/"fx"),"link does not publish");
-        Json save=Json::object();save.set("name",Json::string("linked_sdf"));save.set("graph",linked["graph"]);
-        requireGraphTest(call("fx_graph_set",save).getBool("ok"),"publish external link");
-        Json name=Json::object();name.set("name",Json::string("linked_sdf"));
-        auto reopened=call("fx_graph_get",name);
-        requireGraphTest(reopened["validation"].getBool("ok")&&
-                reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
-                "persistent link reopens without inline samples");
-        fs::remove_all(root/"fx");
-        volume.dimension=64;volume.samples.assign(64u*64u*64u,-.25f);
-        requireGraphTest(fx::encodeSdfBinary(volume,bytes),"encode external 64 cubed");
-        std::ofstream denseBinary(root/"content"/"dense.sdfbin",std::ios::binary);
-        denseBinary.write(bytes.data(),std::streamsize(bytes.size()));denseBinary.close();
-        import.set("sdfAsset",Json::string("content/dense.sdfbin"));
-        auto denseLink=call("fx_graph_edit",import);
-        requireGraphTest(denseLink.getBool("ok")&&denseLink["validation"].getBool("ok")&&
-                denseLink["graph"].dump(-1).size()<4096,"high-resolution link stays compact");
-        import.set("action",Json::string("importSdf"));
-        auto denseImport=call("fx_graph_edit",import);
-        requireGraphTest(denseImport.has("error")||!denseImport.getBool("ok"),"high-resolution inline import denied");
-        requireGraphTest(!fs::exists(root/"fx"),"dense link/import does not publish");
-        import.set("action",Json::string("linkSdf"));
-        import.set("sdfAsset",Json::string("content/../test.sdfbin"));
-        auto badImport=call("fx_graph_edit",import);
-        requireGraphTest(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");
-        request.set("dimension",Json::number(int64_t(33)));
-        auto invalidDimension=call("fx_graph_edit",request);
-        requireGraphTest(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");
-        request.set("dimension",Json::number(int64_t(8)));
-        request.set("model",Json::string("content/../escape.obj"));
-        auto rejected=call("fx_graph_edit",request);
-        requireGraphTest(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
-    }
+    checkSdfEdits(root/"sdf-fixture");
 
     {
         auto req=Json::parse(R"({"action":"newVolume","preset":"magic"})");
