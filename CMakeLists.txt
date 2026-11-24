@@ -2058,7 +2058,9 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME camera_hdr_resolve COMMAND aiverse_camera_hdr_resolve_tests)
     add_executable(aiverse_camera_client_adapter_tests tests/render/camera_client_adapter.cpp)
     target_include_directories(aiverse_camera_client_adapter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(aiverse_camera_client_adapter_tests PRIVATE aiverse_runtime aiverse_content_reader)
+    # Native host registration injects gen/NativeRegistry.cpp into runtime-linked
+    # executables; the NativeRegistrar implementation belongs to aiverse_game.
+    target_link_libraries(aiverse_camera_client_adapter_tests PRIVATE aiverse_runtime aiverse_game aiverse_content_reader)
     add_test(NAME camera_client_adapter COMMAND aiverse_camera_client_adapter_tests)
     add_executable(aiverse_camera_model_snapshot_tests tests/render/camera_model_snapshot.cpp)
     aiverse_keep_test_asserts(aiverse_camera_model_snapshot_tests)
