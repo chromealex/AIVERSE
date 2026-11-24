@@ -50,6 +50,13 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    simulation/replay and published save/network formats, and retain legacy
    adapters until parity is proved. Document every migration commit.
 
+Fitted arc: the existing `engine/sim/ProjectileProgram.h` exposes
+`fitTargetArc`, `arcOffset`, and `targetArcStep`. In targeted GameCore
+author `flight.arc`, `arcHeight` / `arcHeightPerDistance` and optional
+`homing`. Reuse the existing swept impact pipeline and local surface frame.
+Do not claim direction-only ActorModule or generic launch integration for
+target-fitted arcs; they use their existing ballistic policy.
+
 Multishot: `engine/mechanics/MultiTargetSelection.h` exposes bounded,
 deterministic nearest-distinct candidate selection. The targeted GameCore
 adapter accepts `extraTargets` (0–16), `extraTargetTags` and
