@@ -165,6 +165,7 @@ public:
             return this->findPath(algorithm,q);
         };
         hooks.collision=std::move(collision);
+        hooks.invalidateDerived=[this]{pathCache_.invalidate();};
         hooks.maxRepairsPerTick=maxRepairsPerTick;
         hooks.maxMovedPerTick=maxMovedPerTick;
         nav::installCaveNavigationSimulation(sim,std::move(hooks));
