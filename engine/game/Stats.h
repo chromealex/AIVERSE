@@ -81,6 +81,10 @@ Fixed effectiveStat(Simulation& sim, const Rules& rules, Entity e, Stat s, const
     Fixed v = (base + add) * mul;
     finish(v);
     if (lerp.raw > 0) v = v + (kOne - v) * fxMin(kOne, lerp);   // statuses that pull the stat toward 1
+    if (s == Stat::Speed && t.speed.raw > 0) {
+        if (rules.hasMinUnitSpeed) v = fxMax(v, rules.minUnitSpeed);
+        if (rules.hasMaxUnitSpeed) v = fxMin(v, rules.maxUnitSpeed);
+    }
     return v;
 }
 
