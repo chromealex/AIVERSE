@@ -990,7 +990,7 @@ render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialIma
     std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
     appendGraphImageRoots(model,roots);
     return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
-        {true,resources_.activeModelReaders(),roots,external.trackedOnly});
+        {true,resources_.activeModelReaders(),roots,external.trackedOnly,external.recycleSlots});
 }
 
 void GameView::appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const{

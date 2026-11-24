@@ -543,7 +543,7 @@ public:
         std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
         for(const auto& [key,asset]:assets_){(void)key;if(asset&&asset->model==&model)roots.emplace_back(asset->materials);}
         return render::texture_graph::reclaimGraphImages(model,device,lease,rollback,
-            {external.complete,external.activeReaders,roots,external.trackedOnly});
+            {external.complete,external.activeReaders,roots,external.trackedOnly,external.recycleSlots});
     }
     bool publishTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
             uint64_t expectedModelPublication,size_t materialIndex,
@@ -638,13 +638,16 @@ private:
                stats.pendingRetirement>maxProceduralImages-stats.live-count)
                 throw std::runtime_error("procedural image budget exhausted; collect retired images or retire/reload Model through owner");
             const auto historical=stats.live+stats.tombstones;
+            size_t reusable=0;
+            for(const auto& image:model.images)if(render::ModelImageUploadTransaction::reusableGraphSlot(image,lease.generation(),rollback))++reusable;
+            const auto appended=count>reusable?count-reusable:0;
             if(historical>render::texture_graph::maxHistoricalProceduralSlots||
-               count>render::texture_graph::maxHistoricalProceduralSlots-historical)
+               appended>render::texture_graph::maxHistoricalProceduralSlots-historical)
                 throw std::runtime_error("procedural image index history exhausted; retire/reload Model through owner");
             // Preallocate the replacement snapshot before GPU allocation.
             auto next=std::make_shared<Asset>(*old);
             next->version=nextVersion;
-            render::ModelImageUploadTransaction transaction(device,rollback,lease);
+            render::ModelImageUploadTransaction transaction(device,rollback,lease,true);
             next->materials[target.material]=stage(transaction,old->materials[target.material]);
             if(transaction.pendingImages()!=count)throw std::logic_error("incomplete graph image transaction");
             if(!lease.validFor(device)||!device.gpuHealthy())

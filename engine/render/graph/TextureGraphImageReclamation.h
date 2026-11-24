@@ -19,6 +19,9 @@ struct GraphImageRoots {
     size_t activeReaders=std::numeric_limits<size_t>::max();
     std::span<const std::span<const Material>> extra{};
     bool trackedOnly=false; // automatic mode never collects legacy untracked images
+    // Stronger opt-in: all past raw indices/handles are permanently detached;
+    // callers must not recreate stale references or replay them in the future.
+    bool recycleSlots=false;
 };
 struct GraphImageReclaimResult {
     size_t detached=0,live=0,tombstones=0,pendingRetirement=0;
@@ -84,8 +87,11 @@ inline GraphImageReclaimResult reclaimGraphImages(Model& model,gfx::Device& devi
     static_assert(std::is_nothrow_move_constructible_v<Image>&&std::is_nothrow_move_assignable_v<Image>);
     for(auto i:indices){
         auto& image=model.images[i];
+        GraphImageSlotRetirement retirement;
+        if(roots.recycleSlots&&image.proceduralGraphPin){retirement.epoch=lease.generation();retirement.retiredPin=image.proceduralGraphPin;}
         batch.push_back(std::move(image));
         image=Image{};image.proceduralGraphImage=true;image.proceduralGraphRetired=true;
+        image.proceduralSlotRetirement=std::move(retirement);
     }
     model.markMaterialChanged();
     rollback.retire(device,std::move(batch));

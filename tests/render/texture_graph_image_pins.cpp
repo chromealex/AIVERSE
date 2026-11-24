@@ -18,6 +18,11 @@ int main(){
     auto external=nextNormal;live.reset();
     check(graphImageUnpinned(color)&&!graphImageUnpinned(nextNormal));
     external.reset();check(graphImageUnpinned(nextNormal));
+    GraphImageSlotRetirement retirement;check(!retirement.reusable(7,true));
+    retirement.epoch=7;retirement.retiredPin=normal;
+    check(!retirement.reusable(7,true));normal.reset();
+    check(!retirement.reusable(8,true)&&!retirement.reusable(7,false));
+    check(retirement.reusable(7,true));
     bool rejected=false;try{(void)withGraphMaterialPin({},6,color);}catch(const std::invalid_argument&){rejected=true;}
     check(rejected);
     std::cout<<"PASS immutable material-copy pins, partial replacement, external pin, last-reader release\n";

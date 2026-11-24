@@ -3,6 +3,7 @@
 #pragma once
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -24,4 +25,13 @@ inline GraphMaterialPins withGraphMaterialPin(const GraphMaterialPins& previous,
 inline bool graphImageUnpinned(const GraphImagePin& pin)noexcept{
     return pin&&pin.use_count()==1;
 }
+// A tombstone can become reusable only after the retirement batch has
+// released its last pin. Epoch zero means no certified recycling proof.
+struct GraphImageSlotRetirement {
+    uint64_t epoch=0;
+    std::weak_ptr<const ProceduralImagePin> retiredPin;
+    bool reusable(uint64_t currentEpoch,bool poolDrained)const noexcept{
+        return epoch!=0&&epoch==currentEpoch&&poolDrained&&retiredPin.expired();
+    }
+};
 } // namespace aiverse::render
