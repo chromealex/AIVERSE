@@ -69,7 +69,8 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const std::filesystem::path& proje
     const std::vector<editor::ProjectHistory::MovePlan>& ordered,bool redo);
 // Mixed exact-endpoint history: ordinary moves, reversible Trash operations,
 // replacement versions and importer settings. Self-contained glTF/GLB and
-// bounded directory payloads supported; no resource graph rewrites.
+// bounded directory payloads supported; replacement versions may also use
+// stable indexed local resources. No resource graph rewrites.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered);
 StudioBatchAssetPlan studioPlanMixedAssetChain(const std::filesystem::path& project,
     const std::vector<editor::ProjectHistory::Step>& ordered,bool redo);
