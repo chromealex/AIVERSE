@@ -11,6 +11,7 @@
 #include "engine/world/TerraWeaveForestEcologyEcs.h"
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -82,14 +83,18 @@ public:
             const std::vector<terraweave::ForestEcologySpecies>& species,
             terraweave::ForestEcologySettings settings={},
             terraweave::ForestEcologyClimateOverride baseline={}){
-        const evolve::SpatialIndex zones(ecs);
+        // TerraWeave owns the due/interval check. Build the derived index
+        // only on the first actual plant climate sample; no BVH allocation
+        // on idle ticks, empty slices, or initialization without sampling.
         return terraweave::advanceForestEcologyEcs(
             ecs,cfg,tick,species,settings,
-            [&ecs,&zones,baseline=std::move(baseline),scratch=std::vector<size_t>{}](
+            [&ecs,zones=std::optional<evolve::SpatialIndex>{},
+             baseline=std::move(baseline),scratch=std::vector<size_t>{}](
                 const terraweave::AnchoredPlant& plant,
                 terraweave::ForestEcologyClimate climate) mutable {
+                if(!zones)zones.emplace(ecs);
                 if(baseline)climate=baseline(plant,climate);
-                zones.query(plant.anchor.xCm,plant.anchor.zCm,scratch,[&](const evolve::Extent& zone){
+                zones->query(plant.anchor.xCm,plant.anchor.zCm,scratch,[&](const evolve::Extent& zone){
                     const auto* region=ecs.tryGetConst<evolve::Region>(zone.region);
                     if(region)climate=projectEvolutionClimate(*region,climate);
                 });
