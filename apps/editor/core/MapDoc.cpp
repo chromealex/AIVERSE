@@ -1,6 +1,7 @@
 #include "apps/editor/core/DocumentLightIdentity.h"
 #include "MapDoc.h"
 #include "ProjectFileEdits.h"
+#include "engine/pack/Sha256.h"
 #include "TerrainOps.h"
 #include <cstring>
 #include "engine/view/game/GameTerrainDetail.h"
@@ -21,6 +22,10 @@
 namespace aiverse::editor {
 
 namespace {
+std::string mapFileHash(const std::string& bytes){
+    const auto hash=pack::sha256(bytes.data(),bytes.size());
+    return pack::toHex(hash.data(),hash.size());
+}
 // keys the structured part owns; everything else round-trips through `extra`
 const char* kOwnedKeys[] = {"name", "size", "roadsOnly", "players", "terrain", "fields", "regions", "entities", "roads", "world"};
 bool owned(const std::string& k) {
@@ -92,6 +97,7 @@ void MapDoc::reset(int w, int h) {
     data.w = w; data.h = h;
     ensureLayers();
     path.clear();
+    savedFileHashes_.clear();savedFileBaselineValid_=false;
     dirty = false;
     ++revision;
     undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
@@ -122,11 +128,20 @@ std::string MapDoc::cornersFileName() const {
 bool MapDoc::load(const std::string& file, std::string* err) {return loadImpl(file,err,true);}
 bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHistory) {
     try {
-        Json j = Json::parseFile(file);
+        namespace fs=std::filesystem;
+        std::map<fs::path,std::string> hashes;
+        bool complete=true;
+        const auto absolute=[](const std::string& p){return fs::absolute(p).lexically_normal();};
+        const auto raw=readProjectFileBytes(absolute(file));
+        hashes.emplace(absolute(file),mapFileHash(raw));
+        Json j = Json::parse(raw);
         auto read = [&](const std::string& rel, std::string& out) {
-            std::ifstream f(cornersPath(file, rel), std::ios::binary);
-            if (!f) return false;
-            out.assign(std::istreambuf_iterator<char>(f), {});
+            const auto target=absolute(cornersPath(file,rel));
+            try{out=readProjectFileBytes(target);}
+            catch(const std::exception&){complete=false;return false;}
+            const auto digest=mapFileHash(out);
+            const auto [it,inserted]=hashes.emplace(target,digest);
+            if(!inserted&&it->second!=digest)throw std::runtime_error("Map sidecar changed while loading");
             return true;
         };
         if (!game::applyCornersFile(j, read, err)) return false;
@@ -152,6 +167,7 @@ bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHist
             } else if (err) *err = derr;   // map still opens; the detail is dropped
         }
         path = file;
+        savedFileHashes_=std::move(hashes);savedFileBaselineValid_=complete&&(!err||err->empty());
         if(restoreHistory)restoreHistoryCheckpoint();
         return true;
     } catch (const std::exception& e) {
@@ -270,6 +286,7 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
         ensureDocumentLightIds(d.extra,true);
         data = std::move(d);
         dirty = false;
+        savedFileHashes_.clear();savedFileBaselineValid_=false;
         ++revision;
         undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
         return true;
@@ -419,6 +436,7 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
     if(mapRelative.empty()||*mapRelative.begin()!="maps"||targetMap.extension()!=".json")
         throw std::runtime_error("Choose a map within the project maps directory");
     const bool newIdentity=path.empty()||fs::absolute(path).lexically_normal()!=targetMap;
+    if(!newIdentity&&!savedFileBaselineValid_)throw std::runtime_error("Map baseline unavailable; reopen the saved map before coordinated save");
     if(newIdentity){
         if(!allowCreation||fs::exists(fs::symlink_status(targetMap)))
             throw std::runtime_error("Save As requires a vacant map output");
@@ -429,6 +447,7 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
     path=targetMap.string();
     std::vector<ProjectFileEdit> edits;
     std::set<fs::path> targets;
+    std::map<fs::path,std::string> nextHashes;
     size_t bytes=0;
     const auto append=[&](const std::string& file,const std::string& after){
         const auto target=fs::absolute(file).lexically_normal();
@@ -448,6 +467,13 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
         if(after.size()>limit-bytes||(exists&&fs::file_size(target)>limit-bytes-after.size()))
             throw std::runtime_error("Coordinated map save exceeds snapshot budget");
         auto before=exists?readProjectFileBytes(target):std::string{};
+        if(!newIdentity){
+            const auto loaded=savedFileHashes_.find(target);
+            if((exists&&(loaded==savedFileHashes_.end()||loaded->second!=mapFileHash(before)))||
+               (!exists&&loaded!=savedFileHashes_.end()))
+                throw std::runtime_error("Map or sidecar changed since load: "+file);
+        }
+        nextHashes.emplace(target,mapFileHash(after));
         if(before.size()>limit-bytes-after.size())throw std::runtime_error("Coordinated map save exceeds snapshot budget");
         bytes+=before.size()+after.size();
         edits.push_back({target,std::move(before),after,{},0,!exists});
@@ -481,6 +507,22 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
             if(i<data.bodies.size()&&t->has("cornersFile"))data.bodies[i].cornersFile=t->getStr("cornersFile");
         }
     append(path,j.dump()+"\n");
+    // Guard removed sidecars as well: an external change must not be
+    // hidden by editing a map so that it no longer references that file.
+    if(!newIdentity)for(const auto& [target,hash]:savedFileHashes_){
+        if(targets.count(target))continue;
+        const auto rel=target.lexically_relative(root);
+        constexpr size_t limit=128u*1024u*1024u;
+        if(rel.empty()||*rel.begin()!="maps"||
+           !fs::is_regular_file(fs::symlink_status(target))||fs::canonical(target)!=target||
+           fs::file_size(target)>(limit-bytes)/2)
+            throw std::runtime_error("Unsafe or oversized retained map dependency");
+        auto before=readProjectFileBytes(target);
+        if(before.size()>(limit-bytes)/2||mapFileHash(before)!=hash)
+            throw std::runtime_error("Removed map dependency changed since load");
+        bytes+=before.size()*2;edits.push_back({target,before,before});
+    }
+    savedFileHashes_=std::move(nextHashes);savedFileBaselineValid_=true;
     return edits;
 }
 
