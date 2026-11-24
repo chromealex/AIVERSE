@@ -31,8 +31,6 @@ std::vector<actor::Loot> lootOf(Simulation& sim){return fpsModule(sim).loot(sim)
 std::vector<actor::Vehicle> vehiclesOf(Simulation& sim){return fpsModule(sim).vehicles(sim);}
 // Writable component of the i-th object in id order (the entity is the state).
 actor::Projectile& projectileAt(Simulation& sim,size_t i){return *sim.world().tryGet<actor::Projectile>(fpsModule(sim).projectileEntities(sim).at(i));}
-actor::Loot& lootAt(Simulation& sim,size_t i){return *sim.world().tryGet<actor::Loot>(fpsModule(sim).lootEntities(sim).at(i));}
-actor::Vehicle& vehicleAt(Simulation& sim,size_t i){return *sim.world().tryGet<actor::Vehicle>(fpsModule(sim).vehicleEntities(sim).at(i));}
 // Adds a dynamic object entity with the next object id (spawned outside the gameplay code).
 template<class T> Entity spawnObject(Simulation& sim,T value){value.id=state(sim).nextObject++;const Entity e=sim.world().create();sim.world().add<T>(e,std::move(value));return e;}
 void spatial() {
