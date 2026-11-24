@@ -36,3 +36,47 @@ export function texturePreviewKey(graph:Obj,overrides:string,output:string,resol
  const {editorGroups:_,...document}=graph;
  return JSON.stringify([{...document,nodes},overrides,output,resolution,options]);
 }
+
+/** Insert an independent, flattened instance of a saved project graph.
+ * The native DAG remains the sole execution format; existing output channels are
+ * deliberately preserved. Every exposed source parameter receives a new binding.
+ */
+export function instantiateTextureGraph(target:Obj,source:Obj):{graph:Obj;ids:string[];outputs:Record<string,string>;parameters:Record<string,string>} {
+ const safe=(x:unknown):x is string=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(x);
+ const checked=(x:unknown):Obj[]=>{
+  if(!Array.isArray(x)||!x.every(obj))throw new Error('Invalid texture graph nodes');
+  const seen=new Set<string>();
+  for(const n of x){if(!safe(n.id)||seen.has(n.id)||!safe(n.op))throw new Error('Invalid or duplicate texture node ID');seen.add(n.id);}
+  return x;
+ };
+ const old=checked(target.nodes), incoming=checked(source.nodes);
+ if(!incoming.length||old.length+incoming.length>64)throw new Error('Reusable graph exceeds 64-node limit');
+ const defs=(x:unknown):Obj=>{if(x==null)return {};if(!obj(x))throw new Error('Invalid texture graph parameters');return x;};
+ const oldDefs=defs(target.parameters),newDefs=defs(source.parameters);
+ if(Object.keys(oldDefs).length+Object.keys(newDefs).length>32)throw new Error('Reusable graph exceeds 32-parameter limit');
+ const used=new Set(old.map(n=>String(n.id))),usedParams=new Set(Object.keys(oldDefs));
+ let instance=1;while(incoming.some((_,i)=>used.has('fn_'+instance+'_'+(i+1)))||Object.keys(newDefs).some((k,i)=>usedParams.has('fn_'+instance+'_'+(i+1)+'_'+k.slice(0,40))))instance++;
+ const ids=new Map(incoming.map((n,i)=>[String(n.id),'fn_'+instance+'_'+(i+1)]));
+ const copy=(x:unknown):unknown=>JSON.parse(JSON.stringify(x));
+ const nodes=incoming.map(n=>{
+  if(!Array.isArray(n.inputs)||n.inputs.some(v=>typeof v!=='string'||!ids.has(v)))throw new Error('Saved reusable graph contains unresolved input');
+  const {position:_,...data}=copy(n) as Obj;
+  return {...data,id:ids.get(String(n.id))!,inputs:n.inputs.map(v=>ids.get(String(v))!)};
+ });
+ const outputs:Record<string,string>=Object.create(null),parameters:Record<string,string>=Object.create(null);
+ if(!obj(source.outputs)||!Object.keys(source.outputs).length)throw new Error('Reusable graph has no outputs');
+ for(const [key,id] of Object.entries(source.outputs)){if(typeof id!=='string'||!ids.has(id))throw new Error('Invalid reusable graph output');outputs[key]=ids.get(id)!;}
+ const additions:Obj=Object.create(null);
+ for(const [i,[key,def]] of Object.entries(newDefs).entries()){
+  if(!safe(key)||!obj(def)||!Object.hasOwn(def,'default')||def.default==null||!Array.isArray(def.bindings)||!def.bindings.length||def.bindings.length>32)throw new Error('Invalid reusable parameter');
+  const name='fn_'+instance+'_'+(i+1)+'_'+key.slice(0,40);
+  const bindings=def.bindings.map(b=>{
+   if(!obj(b)||typeof b.node!=='string'||!ids.has(b.node)||!safe(b.property))throw new Error('Invalid reusable parameter binding');
+   return {node:ids.get(b.node)!,property:b.property};
+  });
+  parameters[key]=name;additions[name]={default:copy(def.default),bindings};
+ }
+ const graph:Obj={...target,nodes:[...old,...nodes]};
+ if(Object.keys(additions).length)graph.parameters={...oldDefs,...additions};
+ return {graph,ids:[...ids.values()],outputs,parameters};
+}

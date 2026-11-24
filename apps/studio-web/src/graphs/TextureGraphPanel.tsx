@@ -4,7 +4,7 @@ import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {validateTopology,DraftHistory} from './graphFramework';
-import {textureLayout,duplicateTextureNode,texturePreviewKey} from './textureGraphAuthoring';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph} from './textureGraphAuthoring';
 import type {GraphView,NodeView,Link} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {MaterialKey,FieldValue} from '../panels/materialSchema';
@@ -42,6 +42,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
  return {nodes,links};
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit,active=true}:{projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+ const [reuseName,setReuseName]=useState('');
  const [selection,setSelection]=useState<string[]>([]),[groupTitle,setGroupTitle]=useState(''),[snippet,setSnippet]=useState<Obj[]>([]);
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
  const [overrideText,setOverrideText]=useState('{}'),[parameterName,setParameterName]=useState(''),[parameterField,setParameterField]=useState(''),[variantName,setVariantName]=useState(''),[baseMaterial,setBaseMaterial]=useState(''),[bakedSet,setBakedSet]=useState('');
@@ -68,7 +69,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [clipboard,setClipboard]=useState<Obj|null>(null),[thumbnails,setThumbnails]=useState<{key:string;images:Record<string,string>}>({key:'',images:{}});
  const history=useRef(new DraftHistory(JSON.stringify(template,null,2),64)),autoAttempt=useRef('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setSnippet([]);setSelection([]);setSelected('');setGroupTitle('');setReuseName('');setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -108,6 +109,14 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
     setOriginal({name,graph:r.graph});replaceDocument(r.graph);setSelected('');setPending(null);return;
+   }
+   if(action==='insertSavedGraph'){
+    if(!graph||!reuseName)throw new Error('Select a saved reusable graph');
+    const r=await op('texture_graph_get',{name:reuseName});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Saved reusable graph unavailable');
+    const instance=instantiateTextureGraph(graph,r.graph);
+    edit(instance.graph);setSelection(instance.ids);setSelected(instance.ids.at(-1)??'');setPending(null);
+    setStatus('Inserted independent graph '+reuseName+' · outputs: '+Object.entries(instance.outputs).map(([k,v])=>k+' → '+v).join(', ')+' · '+Object.keys(instance.parameters).length+' exposed parameters. Existing output bindings unchanged.');return;
    }
    if(action==='variant'){
     if(!bakedSet)throw new Error('Bake a set and configure its importer first');
@@ -439,6 +448,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      {showSearch&&<div className="tg-search"><input ref={searchInput} aria-label="Search node catalog" placeholder="Search nodes…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setShowSearch(false);}}/><StudioButton size="sm" onClick={()=>setShowSearch(false)}>Close</StudioButton><div className="tg-search-results">{catalog.filter(n=>[n.id,n.output,n.description].some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))).map(n=><StudioButton key={String(n.id)} size="sm" disabled={busy||disabled||rows.length>=64} onClick={()=>{addNode(String(n.id));setShowSearch(false);}}>{String(n.id)} · {String(n.output??'')}</StudioButton>)}</div></div>}
     </div>
       <div className="au-row" style={{flexWrap:'wrap'}}><StudioInput aria-label="Group or comment title" placeholder="Group / comment" value={groupTitle} onChange={e=>setGroupTitle(e.target.value)}/><StudioButton size="sm" disabled={busy||disabled||!selectedIds.length||!groupTitle.trim()} onClick={groupSelection}>Group selection</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selectedIds.length} onClick={copySubgraph}>Copy subgraph</StudioButton><StudioButton size="sm" disabled={busy||disabled||!snippet.length||rows.length+snippet.length>64} onClick={pasteSubgraph}>Insert subgraph</StudioButton>{groups.map(g=><StudioButton key={g.id} size="sm" disabled={busy||disabled} onClick={()=>graph&&edit({...graph,editorGroups:groups.filter(x=>x.id!==g.id)})}>Remove group: {g.title}</StudioButton>)}</div>
+      <div className="au-row" style={{flexWrap:'wrap'}}><StudioSelect aria-label="Reusable saved texture graph" value={names.includes(reuseName)?reuseName:''} disabled={busy||disabled} onChange={e=>setReuseName(e.target.value)}><option value="">Reusable saved graph</option>{names.map(n=><option key={n}>{n}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||!graph||!names.includes(reuseName)||rows.length>=64} onClick={()=>void run('insertSavedGraph')}>Insert saved graph</StudioButton><small>Independent copy · parameters preserved · connect outputs manually</small></div>
       {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={id=>{setSelected(id);setSelection(id?[id]:[]);}} selection={selectedIds.length?selectedIds:(selected?[selected]:[])} onSelection={ids=>{setSelection(ids);setSelected(ids.at(-1)??'');}} onMoveGroup={moveNodes} groups={groups} onConnect={(from,to)=>connect(from.node,to.node,Number(to.port))} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} enhancedNavigation typedPorts onAddMenu={openSearch} commands={[{id:"add",label:"Search nodes",shortcut:"shift+a",run:openSearch},{id:"undo",label:"Undo",shortcut:"mod+z",disabled:!history.current.canUndo(),run:undo},{id:"redo",label:"Redo",shortcut:"mod+shift+z",disabled:!history.current.canRedo(),run:redo},{id:"duplicate",label:"Duplicate",shortcut:"mod+d",disabled:!selected||rows.length>=64,run:duplicate},{id:"copy",label:"Copy",shortcut:"mod+c",disabled:!selected,run:copyNode},{id:"paste",label:"Paste",shortcut:"mod+v",disabled:!clipboard||rows.length>=64,run:pasteNode},{id:"layout",label:"Auto layout",run:autoLayout},{id:"delete",label:"Remove",shortcut:"delete",disabled:!selected,run:removeNode}]} onMove={(id,x,y)=>moveNodes([{id,x,y}])}/></div>}
     {!catalog.length&&<div className="tg-empty">Loading native node catalog. Use Refresh if it is unavailable.</div>}
    </div>
