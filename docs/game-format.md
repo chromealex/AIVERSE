@@ -101,6 +101,7 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | key | meaning |
 |---|---|
 | `supplyCap` | max supply/population (default 200) |
+| `minUnitSpeed`, `maxUnitSpeed` | Optional nonnegative final speed-stat limits for types with positive base movement speed, after upgrades, buffs, statuses, fields, environment, native and progression modifiers. If both are present, min must not exceed max. Absent bounds are unrestricted; movement permissions and physical/path constraints remain separate. |
 | `modes`, `matchModes`, `timedRules`, `matchStats`, `ruleSets` | match modes (domination, king of the hill, time limit, sudden death, battle-royal zones), presets picked by map `matchMode`, player statuses by time slots, match statistics: see "Match modes" |
 | `ai` | `{"controller":"builtin"}` (default) or `{"controller":"scripted"}`. Scripted control makes the generic ComputerPlayer submit no commands in client, editor and headless. The game must provide its own controller; Lua handlers, human/network commands, combat, production and victory remain enabled. This is not the `waves` player flag and does not exempt players from defeat. |
 | `maxQueue` | production queue length (5) |
