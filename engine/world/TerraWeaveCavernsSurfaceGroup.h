@@ -33,6 +33,81 @@ inline std::set<SurfaceEdgeKey> surfaceTileEdge(const TerrainPatch& patch,
     }
     return out;
 }
+struct CaveSurfaceRim {
+    uint64_t entranceId=0;
+    // Ordered exact Q16 vertices of the cut boundary, closed implicitly.
+    std::vector<SurfaceVertexKey> ring;
+};
+inline CaveSurfaceRim extractCaveSurfaceRim(
+        const std::map<world::Cell,TerrainPatch>& patches,const Entrance& e,
+        size_t& work,size_t maxWork=4000000) {
+    constexpr unsigned sides=16;
+    constexpr double epsilonCm=0.01; // larger than one native Q16 unit
+    const auto point=[](const SurfaceVertexKey& v){
+        const auto cm=[](int64_t raw){return double(raw)*100./Fixed::kOne;};
+        return CutVertexCm{cm(v[0]),cm(v[1]),cm(v[2])};
+    };
+    std::map<SurfaceEdgeKey,unsigned> edges;
+    for(const auto& [cell,patch]:patches){
+        const int64_t span=int64_t(patch.cellSizeMetres)*100;
+        const int64_t x=int64_t(cell.x)*span,z=int64_t(cell.z)*span;
+        if(!overlaps({x,z,x+span,z+span},entranceBounds(e)))continue;
+        for(const auto& tri:patch.collision){
+            if(++work>maxWork)throw std::length_error("Caverns rim extraction budget");
+            const Vec3 v[]={tri.a,tri.b,tri.c};
+            for(unsigned i=0;i<3;++i){
+                const auto key=surfaceEdgeKey(v[i],v[(i+1)%3]);
+                if(key.first==key.second)continue;
+                const auto a=point(key.first),b=point(key.second);
+                bool inside=true,onSide=false;
+                for(unsigned side=0;side<sides;++side){
+                    const auto da=cutPlane(a,e,side,sides),db=cutPlane(b,e,side,sides);
+                    if(da>epsilonCm||db>epsilonCm){inside=false;break;}
+                    if(std::abs(da)<=epsilonCm&&std::abs(db)<=epsilonCm)onSide=true;
+                }
+                if(inside&&onSide&&++edges[key]>2)
+                    throw std::invalid_argument("Caverns nonmanifold terrain rim");
+            }
+        }
+    }
+    std::map<SurfaceVertexKey,std::vector<SurfaceVertexKey>> adjacency;
+    for(const auto& [edge,count]:edges)if(count==1){
+        adjacency[edge.first].push_back(edge.second);
+        adjacency[edge.second].push_back(edge.first);
+    }
+    if(adjacency.size()<3||adjacency.size()>65534)
+        throw std::invalid_argument("Caverns missing or oversized terrain rim");
+    for(auto& [v,neighbors]:adjacency){
+        (void)v;
+        if(neighbors.size()!=2)throw std::invalid_argument("Caverns terrain rim is not a closed cycle");
+        std::sort(neighbors.begin(),neighbors.end());
+    }
+    CaveSurfaceRim rim;rim.entranceId=e.id;
+    const auto first=adjacency.begin()->first;
+    auto previous=first,current=first;
+    do {
+        if(rim.ring.size()>=adjacency.size())throw std::invalid_argument("Caverns rim cycle overflow");
+        rim.ring.push_back(current);
+        const auto& next=adjacency.at(current);
+        const auto selected=current==first?next.front():(next.front()==previous?next.back():next.front());
+        previous=current;current=selected;
+    }while(current!=first);
+    if(rim.ring.size()!=adjacency.size())throw std::invalid_argument("Caverns disconnected terrain rim");
+    return rim;
+}
+// Native volume transition owner must supply the actual final boundary,
+// not an ideal analytic circle. Exact shared Q16 edges are required.
+inline bool matchesCaveSurfaceRim(const CaveSurfaceRim& rim,
+        const std::set<SurfaceEdgeKey>& volumeBoundary){
+    if(rim.ring.size()<3)return false;
+    std::set<SurfaceEdgeKey> terrainBoundary;
+    for(size_t i=0;i<rim.ring.size();++i){
+        auto a=rim.ring[i],b=rim.ring[(i+1)%rim.ring.size()];
+        if(b<a)std::swap(a,b);
+        if(!terrainBoundary.emplace(a,b).second)return false;
+    }
+    return terrainBoundary==volumeBoundary;
+}
 struct CaveSurfaceGroupPlan {
     uint64_t soilRevision=0,authorityRevision=0,surfaceEpoch=0;
     int32_t tileMetres=0;
@@ -40,6 +115,7 @@ struct CaveSurfaceGroupPlan {
     std::map<world::Cell,TerrainPatch> patches;
     std::vector<uint64_t> acceptedEntrances,rejectedEntrances;
     size_t certifiedEdges=0;
+    std::vector<CaveSurfaceRim> rims;
 };
 inline CaveSurfaceGroupPlan planCaveSurfaceGroup(const EarthworksLayer& earth,
         const CaveVolumeSnapshot& authored,std::span<const world::Cell> pinned,
@@ -117,6 +193,8 @@ inline CaveSurfaceGroupPlan planCaveSurfaceGroup(const EarthworksLayer& earth,
             ++plan.certifiedEdges;
         }
     }
+    size_t rimWork=0;
+    for(const auto& e:accepted)plan.rims.push_back(extractCaveSurfaceRim(plan.patches,e,rimWork));
     return plan;
 }
 } // namespace aiverse::terraweave::caverns
