@@ -125,7 +125,14 @@ std::vector<std::string> studioProtectedTrashIds(const editor::ProjectHistory& h
 Json studioReviewTrashBatch(const std::filesystem::path& project,const std::vector<std::string>& ids,const editor::ProjectHistory& history);
 Json studioApplyTrashBatch(const std::filesystem::path& project,const std::vector<std::string>& ids,const std::string& token,const editor::ProjectHistory& history);
 Json studioAssetTrashReview(const std::filesystem::path& project,const std::string& id,const std::string& action);
-void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken);
+void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken,
+    StudioBatchAssetPlan* staged=nullptr);
+// Cleanup never invalidates a retained history entry. Validate persistent
+// baseline and hold the asset owner lock across irreversible deletion.
+Json studioPurgeUnprotectedTrash(const std::filesystem::path& project,const std::string& id,
+    const std::string& token,const editor::ProjectHistory& history);
+Json studioPurgeUnprotectedTrashBatch(const std::filesystem::path& project,const std::vector<std::string>& ids,
+    const std::string& token,const editor::ProjectHistory& history);
 std::string studioCreateContentFolder(const std::filesystem::path& project,
                                      const std::string& parent,const std::string& name,
                                      editor::ProjectHistory::MovePlan* history=nullptr,StudioBatchAssetPlan* staged=nullptr);
