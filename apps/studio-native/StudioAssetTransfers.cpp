@@ -2097,7 +2097,7 @@ bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step
         auto ext=fs::path(file.from).extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto importer=studioImporterForPath(fs::path(file.from),false);
-        return file.digestAfter.empty()&&(file.directory||importer=="texture"||importer=="audio"||ext==".bin"||
+        return (file.directory||importer=="texture"||importer=="audio"||ext==".bin"||
             ext==".gltf"||ext==".glb");
     };
     bool hasMove=false;
@@ -2105,7 +2105,9 @@ bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step
         if(!step.move){if(step.files.size()!=1)return false;continue;}
         hasMove=true;
         const auto& move=*step.move;
-        if(!move.resourceEdits.empty()||move.files.empty()||move.files.size()%2)return false;
+        if(move.files.empty()||move.files.size()%2)return false;
+        for(const auto& edit:move.resourceEdits)
+            if(!studioRepairGltfExtension(edit.path))return false;
         for(size_t i=0;i<move.files.size();i+=2){
             const auto& file=move.files[i];
             if(!simple(file))return false;
@@ -2132,21 +2134,33 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
-    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;};
+    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;std::string afterDigest{};};
     struct MetaCheck{std::string path,bytes;bool directory=false;};
     struct LogicalStep{
         std::vector<LogicalMove> moves;
         std::vector<MetaCheck> metaChecks;
-        std::vector<editor::ProjectFileEdit> edits;
+        std::vector<editor::ProjectFileEdit> edits,resourceEdits;
         std::vector<std::pair<std::string,bool>> paths;
     };
     std::vector<LogicalStep> steps;
-    std::set<std::string> endpoints;
+    std::set<std::string> endpoints,repairOwners;
     size_t operationCount=0;
     for(const auto& step:ordered){
         LogicalStep logical;
         if(step.move){
             const auto& plan=*step.move;validateHistoryMove(root,plan);
+            std::vector<StudioReferenceRelocation> forward;
+            if(!plan.quarantine&&!plan.replacement)
+                for(size_t i=0;i<plan.files.size();i+=2){
+                    const auto& f=plan.files[i];forward.push_back({"content/"+f.from,"content/"+f.to,f.directory});
+                }
+            logical.resourceEdits=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
+            for(auto& edit:logical.resourceEdits){
+                const auto source=edit.path.generic_string();
+                const auto dest=studioRelocatedReferencePath(source,forward);
+                repairOwners.insert(source);repairOwners.insert(dest);
+                if(!redo)edit.path=fs::path(dest);
+            }
             for(size_t i=0;i<plan.files.size();i+=2){
                 const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
                 const auto live="content/"+asset.from;
@@ -2164,7 +2178,8 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                     logical.paths.emplace_back(live,asset.directory);
                 }else{
                     const auto from="content/"+(redo?asset.from:asset.to),to="content/"+(redo?asset.to:asset.from);
-                    logical.moves.push_back({from,to,asset.digest,asset.directory,asset.from});
+                    const auto repaired=asset.digestAfter.empty()?asset.digest:asset.digestAfter;
+                    logical.moves.push_back({from,to,redo?asset.digest:repaired,asset.directory,asset.from,redo?repaired:asset.digest});
                     logical.moves.push_back({from+".meta",to+".meta",bytesDigest(meta.bytes),false,{}});
                     logical.metaChecks.push_back({from+".meta",meta.bytes,asset.directory});
                     logical.paths.emplace_back(from,asset.directory);logical.paths.emplace_back(to,asset.directory);
@@ -2234,7 +2249,14 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         const auto cached=verifiedPayloads.find(key);
         if(cached!=verifiedPayloads.end())return cached->second;
         std::vector<std::string> uris;
-        const auto doc=studioReadModelJson(file,modelBytes,ext==".glb");
+        auto doc=studioReadModelJson(file,modelBytes,ext==".glb");
+        const auto edited=overlay.find(file);
+        if(edited!=overlay.end()){
+            const auto& edit=edited->second;
+            studioAccountModelJson(edit.after.size(),modelBytes);
+            doc=studioStreamingResource(edit)?studioDecodeGlbPrefix(edit.after,edit.tailBytes):
+                studioDecodeModelRepair(logical,edit.after).json;
+        }
         if(!doc||!doc->isObject()||!(*doc)["asset"].isObject()||
            (*doc)["asset"].getStr("version")!="2.0")
             throw std::runtime_error("Mixed model must be a valid glTF 2.0 document");
@@ -2275,6 +2297,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
     // keep their existing conservative incoming/outgoing reference fence.
     const auto managed=[&](const std::string& path){
         if(!modelExtension(fs::path(path)))return false;
+        if(repairOwners.count(path))return true;
         for(const auto& endpoint:endpoints)
             if(path==endpoint||path.starts_with(endpoint+"/"))return true;
         return false;
@@ -2342,7 +2365,38 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         }
         return result;
     };
+    // Only external buffer/image URI spelling may change. All other JSON
+    // and the GLB suffix are protected, including embedded resource bytes.
+    const auto withoutExternalUris=[](const editor::ProjectFileEdit& edit,const std::string& bytes){
+        auto doc=studioStreamingResource(edit)?studioDecodeGlbPrefix(bytes,edit.tailBytes):
+            studioDecodeModelRepair(edit.path,bytes).json;
+        for(const char* group:{"buffers","images"}){
+            if(!doc.has(group))continue;
+            auto array=doc[group];
+            if(!array.isArray())throw std::runtime_error("Invalid mixed repair resource array");
+            for(size_t i=0;i<array.size();++i){
+                auto item=array[i];
+                if(item["uri"].isString()&&!item.getStr("uri").starts_with("data:")){
+                    item.set("uri",Json::string(""));array.at(i)=std::move(item);
+                }
+            }
+            doc.set(group,std::move(array));
+        }
+        return doc.dump(-1);
+    };
     for(auto& step:steps){
+        std::set<fs::path> repairedOrigins;
+        for(auto& edit:step.resourceEdits){
+            studioValidateModelRepairBytes(edit);
+            if(withoutExternalUris(edit,edit.before)!=withoutExternalUris(edit,edit.after))
+                throw std::runtime_error("Mixed repair changed non-URI model content");
+            const auto current=edit.path.generic_string();
+            if(std::none_of(liveGuids.begin(),liveGuids.end(),[&](const auto& row){return row.second==current;}))
+                throw std::runtime_error("Mixed repair owner is unindexed");
+            edit.path=physical(current);
+            if(!repairedOrigins.insert(edit.path).second)
+                throw std::runtime_error("Duplicate mixed physical repair owner");
+        }
         for(const auto& check:step.metaChecks){
             const auto& path=check.path;const auto& expected=check.bytes;
             if(currentBytes(path)!=expected)throw std::runtime_error("Mixed history metadata baseline changed");
@@ -2392,6 +2446,24 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             out.relocations.push_back({m.from,m.to,initial.at(origin).substr(1),m.directory});
             origins.erase(it);origins.emplace(m.to,origin);
         }
+        for(auto& edit:step.resourceEdits){
+            auto it=overlay.find(edit.path);
+            if(it==overlay.end()){
+                if(!studioResourceMatches(edit.path,edit))
+                    throw std::runtime_error("Mixed model repair baseline changed");
+                const auto path=edit.path;overlay.emplace(path,std::move(edit));
+            }else{
+                if(it->second.after!=edit.before||it->second.tailDigest!=edit.tailDigest||
+                   it->second.tailBytes!=edit.tailBytes)
+                    throw std::runtime_error("Inconsistent mixed model repair chain");
+                it->second.after=std::move(edit.after);
+            }
+        }
+        for(auto it=verifiedPayloads.begin();it!=verifiedPayloads.end();)
+            if(repairedOrigins.count(it->first.first))it=verifiedPayloads.erase(it);else ++it;
+        for(const auto& m:step.moves)
+            if(!m.afterDigest.empty()&&moveDigest(physical(m.to),m.directory,&overlay)!=m.afterDigest)
+                throw std::runtime_error("Mixed repaired payload digest changed");
         for(auto& edit:step.edits){
             const auto rel=edit.path.generic_string();
             const auto live=rel.substr(0,rel.size()-5);
@@ -2420,6 +2492,14 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             const auto old=priorGraph.find(edge);
             if(old!=priorGraph.end()&&old->second!=target)
                 throw std::runtime_error("Mixed model resource identity changed");
+        }
+        for(const auto& owner:repairedOrigins){
+            for(const auto& [edge,target]:priorGraph)
+                if(edge.first==owner&&(!nextGraph.count(edge)||nextGraph.at(edge)!=target))
+                    throw std::runtime_error("Mixed repair lost a resource edge");
+            for(const auto& [edge,target]:nextGraph)
+                if(edge.first==owner&&(!priorGraph.count(edge)||priorGraph.at(edge)!=target))
+                    throw std::runtime_error("Mixed repair introduced a resource edge");
         }
         priorGraph=std::move(nextGraph);
         for(const auto& ref:baselineRefs){
