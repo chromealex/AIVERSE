@@ -83,6 +83,11 @@ enum class ArmorModel : uint8_t { Subtract = 0, Percent = 1, Classes = 2 };
 constexpr uint16_t kDamagePure = 0xFFFF;   // damage type: no damage table; in the classes model armor is already applied
 struct ClassAttack { uint16_t cls = 0; Fixed amount{}; };
 
+// Shared target-tag policy: require at least one included tag, reject any excluded tag.
+inline bool targetTagsMatch(uint64_t actual, uint64_t include, uint64_t exclude) {
+    return (!include || (actual & include)) && !(actual & exclude);
+}
+
 struct WeaponDef {
     ProjectileFlight flight;
     std::string id;
@@ -91,6 +96,7 @@ struct WeaponDef {
     Fixed damage = Fixed::fromInt(5);
     Fixed cooldown = Fixed::fromInt(1);
     uint8_t targets = kLayerGround;
+    uint64_t targetTags = 0, ignoreTags = 0;
     Fixed projectileSpeed{};
     Fixed splash{};
     uint16_t damageType = 0;
@@ -106,6 +112,10 @@ struct WeaponDef {
     Fixed killsCrew{};                  // chance per hit to kill the crew of a crewed target (Z snipers)
     std::vector<ClassAttack> attacks;   // classes model: class attacks (AoE II: melee 6, cavalry +15)
 };
+
+inline bool weaponTargetMatches(const WeaponDef& weapon, uint8_t layer, uint64_t tags) {
+    return layerHit(weapon.targets, layer) && targetTagsMatch(tags, weapon.targetTags, weapon.ignoreTags);
+}
 
 // ------------------------------------------------------------------ abilities and effects
 struct Amount { uint16_t res = 0; Fixed value{}; };
