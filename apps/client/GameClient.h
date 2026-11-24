@@ -42,6 +42,7 @@
 #include "engine/game/ComputerPlayer.h"
 #include "engine/game/Localize.h"
 #include "engine/game/GameCore.h"
+#include "engine/sim/PresentationEventQueue.h"
 #include "engine/audio/GameAudio.h"
 #include "engine/audio/AudioScriptSound.h"
 #include "engine/view/game/GameView.h"
@@ -207,7 +208,9 @@ private:
         if (!c.units.empty()) sound_.onCommand(*sim_, c.units[0], c.type);
         sim_->submit(c);
     }
+    void attachNoticeEvents(bool confirmedOnly);
     void processEvents();
+    std::shared_ptr<PresentationEventQueue<SimEvent>> noticeEvents_;
     void notice(const std::string& t) { notices_.push_back({t, time_ + 2.5}); if (notices_.size() > 4) notices_.erase(notices_.begin()); }
     void cleanSelection();
     bool selectionHasGarrison() const;
