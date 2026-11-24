@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <queue>
 #include <vector>
 #include <utility>
@@ -43,9 +44,12 @@ inline bool diffuse(std::vector<I>& mass,const std::vector<Flow>& flows){
 struct DiffusionActivity {
     std::size_t directedFlows=0,activeFlows=0,transfers=0,activeSpecies=0;
 };
-template<std::size_t N>
-inline bool diffuseSpecies(std::array<std::vector<I>,N>& mass,
-        const std::vector<Flow>& flows,DiffusionActivity* activity=nullptr){
+// Head policy receives species index, directed flow and immutable source/
+// destination masses. Nullopt rejects the whole staged operation.
+template<std::size_t N,class Head>
+inline bool diffuseSpeciesWithHead(std::array<std::vector<I>,N>& mass,
+        const std::vector<Flow>& flows,const Head& effectiveHead,
+        DiffusionActivity* activity=nullptr){
     static_assert(N>0);
     const auto count=mass[0].size();
     for(const auto& field:mass){
@@ -62,11 +66,12 @@ inline bool diffuseSpecies(std::array<std::vector<I>,N>& mass,
         bool moved=false;
         for(std::size_t s=0;s<N;++s){
             const auto& field=mass[s];
-            const I head=field[f.from]-field[f.to];
-            if(head<=1)continue;
+            const auto head=effectiveHead(s,f,field[f.from],field[f.to]);
+            if(!head)return false;
+            if(*head<=1)continue;
             auto& work=scratch[s];
             const I available=work.active?work.remaining[f.from]:field[f.from];
-            const I amount=std::min({head/2,f.cap,available});
+            const I amount=std::min({*head/2,f.cap,available});
             if(!amount)continue;
             if(!work.active){
                 work.change.assign(count,0);
@@ -94,6 +99,12 @@ inline bool diffuseSpecies(std::array<std::vector<I>,N>& mass,
             mass[s][i]+=scratch[s].change[i];
     if(activity)*activity=stats;
     return true;
+}
+template<std::size_t N>
+inline bool diffuseSpecies(std::array<std::vector<I>,N>& mass,
+        const std::vector<Flow>& flows,DiffusionActivity* activity=nullptr){
+    return diffuseSpeciesWithHead(mass,flows,
+        [](std::size_t,Flow,I from,I to)->std::optional<I>{return from-to;},activity);
 }
 inline bool relax(I& pos,I rest,I stiffness){
  if(stiffness<0||stiffness>1000)return false;
