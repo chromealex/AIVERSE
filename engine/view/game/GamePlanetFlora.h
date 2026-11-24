@@ -16,7 +16,7 @@ struct PlanetForestVisual {
     uint64_t key=0;
     int body=-1,proto=0;
     render::float3 local{},up{},forward{};
-    float size=1,foliage=1;
+    float size=1,foliage=1,thickness=1;
     render::float3 tint{1,1,1};
     bool fallen=false,physical=false;
 };

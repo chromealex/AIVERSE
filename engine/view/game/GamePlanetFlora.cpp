@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <map>
+#include <set>
+#include <tuple>
 
 namespace aiverse::game {
 using render::float3;
@@ -67,12 +70,19 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
     const auto* wood=world.resourceConst<ev::PlanetDeadwoodResource>();
     const auto* harvest=world.resourceConst<tw::ForestHarvestResource>();
     std::map<tw::AnchoredPlantId,const ev::PlanetPlantFallRecord*> falls;
-    for(const auto& event:delivery->events)falls[event.fall.event.id]=&event;
-    std::map<tw::AnchoredPlantId,const wp::ConsequenceBody*> physical;
+    if(delivery->events.size()>ev::kMaxPlanetPlantFallEvents)return false;
+    for(const auto& event:delivery->events){
+        const auto binding=bindings.find(event.fall.event.id);
+        if(binding==bindings.end()||event.fall.bodyId!=binding->second->bodyId||
+           event.fall.plantedPosition!=binding->second->plantedPosition)continue;
+        auto [it,inserted]=falls.emplace(event.fall.event.id,&event);
+        if(!inserted&&ev::planetFallKey(it->second->fall)<ev::planetFallKey(event.fall))it->second=&event;
+    }
+    std::map<wp::ConsequenceKey,const wp::ConsequenceBody*> physical;
     if(const auto* consequences=world.resourceConst<wp::PlanetConsequenceResource>())
         for(const auto& item:consequences->bodies)
             if(item.key.kind==wp::ConsequenceKind::Plant)
-                if(!physical.emplace(tw::AnchoredPlantId{item.key.species,item.key.source},&item).second)return false;
+                if(!physical.emplace(item.key,&item).second)return false;
     const auto asFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
     std::set<tw::AnchoredPlantId> seen;
     for(const auto& plant:roots->rooted){
@@ -101,12 +111,14 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                 const auto state=tw::deadwoodVisualState(wood->ledger,id);
                 if(state.tier==tw::DeadwoodVisualTier::Gone)continue;
                 visual.tint={state.tintRPermille*.001f,state.tintGPermille*.001f,state.tintBPermille*.001f};
-                // Keep the trunk length and diminish thickness in draw.
+                // At constant length, transverse area tracks remaining organic mass.
+                visual.thickness=std::sqrt(float(state.remainingPermille)*.001f);
             }
         }
         if(plant.fallen){
             const auto receipt=falls.find(id);
-            const auto motion=physical.find(id);
+            const auto motion=receipt!=falls.end()&&receipt->second->acknowledged
+                ?physical.find(wp::consequenceKey(receipt->second->fall)):physical.end();
             if(motion!=physical.end()){
                 const auto& record=*motion->second;
                 if(record.body!=binding.bodyId)return false;

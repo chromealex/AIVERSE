@@ -103,7 +103,7 @@ uint64_t sceneLeaseFingerprint(const GameScene& s) noexcept {
     for(const auto& plant:s.planetForest.plants){
         h.scalar(plant.species);h.scalar(plant.key);h.scalar(plant.body);h.scalar(plant.proto);
         h.pos(plant.local);h.pos(plant.up);h.pos(plant.forward);h.pos(plant.tint);
-        h.scalar(plant.size);h.scalar(plant.foliage);h.scalar(plant.fallen);h.scalar(plant.physical);
+        h.scalar(plant.size);h.scalar(plant.foliage);h.scalar(plant.thickness);h.scalar(plant.fallen);h.scalar(plant.physical);
     }
     h.scalar(s.objects.size());
     for(const auto& o:s.objects) {

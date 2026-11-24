@@ -419,7 +419,9 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             if(plant.physical)position=position-U*((model->boundsMax.y+model->boundsMin.y)*.5f*scale);
             ModelDraw md;md.model=model;
             mat4 matrix;
-            const float3 axes[]={X*scale,U*scale,Z*scale,position};
+            const float transverse=scale*plant.thickness;
+            if(!(transverse>0.f))continue;
+            const float3 axes[]={X*transverse,U*scale,Z*transverse,position};
             for(int col=0;col<4;++col){
                 matrix.at(0,col)=axes[col].x;matrix.at(1,col)=axes[col].y;matrix.at(2,col)=axes[col].z;
             }
