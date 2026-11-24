@@ -111,6 +111,7 @@ struct ComputeStats {
     bool gpuOwnedAllocation = false; // alive is a conservative host estimate, not readback
     uint32_t gpuAllocationRequests=0;
     uint32_t gpuFreeReservationDispatches=0;
+    uint32_t gpuAliveIndirectDispatches=0;
     uint32_t hostActiveSlotVisits = 0, hostOccupiedPages = 0; // latest step, no GPU readback
     uint32_t submittedSlots = 0; // dense GPU quads published from live-slot map
     uint32_t gpuFallbacks = 0, lostOnFallback = 0;
@@ -266,6 +267,7 @@ private:
     gfx::ShaderHandle vertexShader_;
     gfx::PipelineHandle pipeline_;
     gfx::BufferHandle states_, seeds_, slots_, vertices_, indices_, liveSlots_;
+    gfx::BufferHandle gpuAliveCurrent_,gpuAliveNext_,gpuDispatchArgs_;
     gfx::BufferHandle gpuSourceOwners_; // uint2 per physical slot, GPU-owned mode only
     gfx::BufferHandle killSlots_; // 4 bytes per dead physical slot, scatter mode 6
     gfx::BufferHandle aliveCounter_, gpuDrawArgs_;

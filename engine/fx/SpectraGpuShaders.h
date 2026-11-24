@@ -214,45 +214,95 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                       device const uint* killSlots [[buffer(14)]]
 #ifdef SPECTRA_GPU_OWNED_ALLOCATION
                      ,device uint2* owners [[buffer(15)]]
+                     ,device uint* currentAlive [[buffer(16)]]
+                     ,device uint* nextAlive [[buffer(17)]]
+                     ,device uint* dispatchArgs [[buffer(18)]]
 #endif
                      ) {
     uint id=gid.x;
 #ifdef SPECTRA_GPU_OWNED_ALLOCATION
-    // Counter ABI: [0] compacted alive, [1] free stack size,
-    // [2] reserved stack base, [3] admitted births in this submission.
-    // RHI dispatch barriers separate push, reservation and pop phases.
+    // Counters: alive, free, reserved base, admitted, work, next alive.
+    // Kill marks entries in the old list; only update returns their slots.
+    // Thus a killed slot cannot be reused while it is still in the input list.
     if(u.meta.x==9u){
-        if(id<u.meta.y&&particles[id].positionAge.w>=0.0f&&
-           all(owners[id]==uint2(u.meta.z,u.meta.w))){
-            particles[id].positionAge.w=-1.0f;owners[id]=uint2(0);
-            uint at=atomic_fetch_add_explicit(&aliveCounter[1],1u,memory_order_relaxed);
-            if(at<u.meta.y)liveSlots[at]=id;
-            else atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);
+        uint count=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
+        if(id<count){
+            uint slot=currentAlive[id];
+            if(slot<u.meta.y&&particles[slot].positionAge.w>=0.0f&&
+               all(owners[slot]==uint2(u.meta.z,u.meta.w)))
+                particles[slot].positionAge.w=-2.0f;
         }
         return;
     }
     if(u.meta.x==10u){
         if(id==0u){
-            const uint freeCount=min(atomic_load_explicit(&aliveCounter[1],memory_order_relaxed),u.meta.y);
-            const uint admitted=min(freeCount,u.meta.z);
-            const uint base=freeCount-admitted;
+            uint oldCount=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
+            uint freeCount=min(atomic_load_explicit(&aliveCounter[1],memory_order_relaxed),u.meta.y);
+            uint admitted=min(min(freeCount,u.meta.z),u.meta.y-oldCount);
+            uint base=freeCount-admitted;
             atomic_store_explicit(&aliveCounter[1],base,memory_order_relaxed);
             atomic_store_explicit(&aliveCounter[2],base,memory_order_relaxed);
             atomic_store_explicit(&aliveCounter[3],admitted,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[4],oldCount+admitted,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[5],0u,memory_order_relaxed);
+            dispatchArgs[0]=max(1u,(oldCount+admitted+63u)/64u);
+            dispatchArgs[1]=dispatchArgs[2]=1u;
         }
         return;
     }
     if(u.meta.x==8u){
-        const uint admitted=atomic_load_explicit(&aliveCounter[3],memory_order_relaxed);
+        uint admitted=atomic_load_explicit(&aliveCounter[3],memory_order_relaxed);
         if(id>=admitted||id>=u.meta.z)return;
-        const uint base=atomic_load_explicit(&aliveCounter[2],memory_order_relaxed);
-        if(base>=u.meta.y||id>=u.meta.y-base)return;
+        uint base=atomic_load_explicit(&aliveCounter[2],memory_order_relaxed);
+        uint oldCount=atomic_load_explicit(&aliveCounter[0],memory_order_relaxed);
+        if(base>=u.meta.y||id>=u.meta.y-base||oldCount+id>=u.meta.y)return;
         uint slot=liveSlots[base+id];
         if(slot>=u.meta.y)return;
         Particle p=spawns[id];VmParams params=seedParams[id];VmAttributes attrs{};
         vmRun(vmProgram[0],0u,p,params,attrs,0.0f,vmErrors);
         particles[slot]=p;stateParams[slot]=params;stateAttributes[slot]=attrs;
         owners[slot]=uint2(slots[id*2u],slots[id*2u+1u]);
+        currentAlive[oldCount+id]=slot;
+        return;
+    }
+    if(u.meta.x==11u){
+        uint count=min(atomic_load_explicit(&aliveCounter[4],memory_order_relaxed),u.meta.y);
+        if(id>=count)return;
+        uint slot=currentAlive[id];
+        if(slot>=u.meta.y){atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);return;}
+        Particle p=particles[slot];
+        bool dead=p.positionAge.w<0.0f;
+        if(!dead&&u.up.w>0.5f){
+            float dt=u.gravityDt.y;
+            p.velocityLife.y+=u.gravityDt.x*dt;
+            p.velocityLife.xyz*=max(0.0f,1.0f-u.gravityDt.z*dt);
+            p.positionAge.xyz+=p.velocityLife.xyz*dt;p.positionAge.w+=dt;
+            dead=p.positionAge.w>=p.velocityLife.w;
+            if(!dead){
+                VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
+                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);stateAttributes[slot]=attrs;
+            }
+        }
+        if(dead){
+            p.positionAge.w=-1.0f;owners[slot]=uint2(0);
+            uint at=atomic_fetch_add_explicit(&aliveCounter[1],1u,memory_order_relaxed);
+            if(at<u.meta.y)liveSlots[at]=slot;
+            else atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);
+        }else{
+            uint at=atomic_fetch_add_explicit(&aliveCounter[5],1u,memory_order_relaxed);
+            if(at<u.meta.y)nextAlive[at]=slot;
+            else atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);
+        }
+        particles[slot]=p;
+        return;
+    }
+    if(u.meta.x==13u){
+        if(id==0u){
+            uint count=min(atomic_load_explicit(&aliveCounter[5],memory_order_relaxed),u.meta.y);
+            atomic_store_explicit(&aliveCounter[0],count,memory_order_relaxed);
+            dispatchArgs[0]=max(1u,(count+63u)/64u);
+            dispatchArgs[1]=dispatchArgs[2]=1u;
+        }
         return;
     }
 #endif
@@ -324,11 +374,19 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         particles[id]=p;
         return;
     }
-    if(u.meta.x!=2u && u.meta.x!=4u)return;
+    if(u.meta.x!=2u && u.meta.x!=4u && u.meta.x!=12u)return;
     if(u.meta.x==2u && id>=u.meta.w)return;
     if(id>=u.meta.y)return;
     // Mode 2 uses the CPU's live map; mode 4 compacts entirely on GPU.
     uint slot=u.meta.x==2u ? liveSlots[id] : id;
+#ifdef SPECTRA_GPU_OWNED_ALLOCATION
+    if(u.meta.x==12u){
+        if(id>=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y))return;
+        slot=nextAlive[id];
+    }
+#else
+    if(u.meta.x==12u)return;
+#endif
     if(slot>=u.meta.y)return;
     Particle p=particles[slot];
     uint ordinal=id;

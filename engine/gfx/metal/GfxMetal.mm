@@ -673,6 +673,20 @@ public:
         if (@available(macOS 10.14, iOS 12.0, *)) [compute_ memoryBarrierWithScope:MTLBarrierScopeBuffers|MTLBarrierScopeTextures];
         computeDispatchSucceeded_=true;
     }
+    bool supportsGpuComputeIndirect() const override {return supportsCompute();}
+    bool dispatchGpuIndirect(BufferHandle arguments,size_t offset) override {
+        computeDispatchSucceeded_=false;
+        auto* b=buffers_.get(arguments.id);
+        if(!compute_||!b||b->type!=BufferType::Storage||(offset&3u)||
+           offset>b->size||12u>b->size-offset||!gpuHealthy())return false;
+        id<MTLBuffer> args=current(*b);
+        if(!args)return false;
+        [compute_ dispatchThreadgroupsWithIndirectBuffer:args indirectBufferOffset:offset
+                                     threadsPerThreadgroup:MTLSizeMake(64,1,1)];
+        if (@available(macOS 10.14, iOS 12.0, *))
+            [compute_ memoryBarrierWithScope:MTLBarrierScopeBuffers|MTLBarrierScopeTextures];
+        computeDispatchSucceeded_=true;return true;
+    }
     bool computeDispatchSucceeded() const override { return computeDispatchSucceeded_; }
     void endCompute() override { if(compute_){[compute_ endEncoding];compute_=nil;} }
     bool readBuffer(BufferHandle h,void* data,size_t size) override {

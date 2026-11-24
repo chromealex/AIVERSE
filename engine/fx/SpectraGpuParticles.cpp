@@ -219,7 +219,13 @@ bool ComputeParticles::initGpu() {
                          graphChannels.data(),"SpectraFX GPU material vertex sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
-    const std::array<uint32_t,4> allocatorCounters{0,cap,0,0};
+    const std::array<uint32_t,6> allocatorCounters{0,cap,0,0,0,0};
+    if(gpuAllocationActive_){
+        const std::array<uint32_t,3> emptyDispatch{1,1,1};
+        gpuAliveCurrent_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list A");
+        gpuAliveNext_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list B");
+        gpuDispatchArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(emptyDispatch),emptyDispatch.data(),"SpectraFX GPU compute dispatch arguments");
+    }
     aliveCounter_=buffer(*device_,gfx::BufferType::Storage,
                          gpuAllocationActive_?sizeof(allocatorCounters):sizeof(zero),
                          gpuAllocationActive_?static_cast<const void*>(allocatorCounters.data()):static_cast<const void*>(&zero),
@@ -299,7 +305,8 @@ bool ComputeParticles::initGpu() {
        !seedProgramParams_.valid()||!stateProgramParams_.valid()||
        !gpuVmPayload_.valid()||!stateAttributes_.valid()||!vertices_.valid()||
        !indices_.valid()||!texture_.valid()||!vertexShader_.valid()||!pipeline_.valid()||
-       (gpuAllocationActive_&&!gpuSourceOwners_.valid())) {
+       (gpuAllocationActive_&&(!gpuSourceOwners_.valid()||!gpuAliveCurrent_.valid()||
+           !gpuAliveNext_.valid()||!gpuDispatchArgs_.valid()))) {
         reason_="GPU resource/pipeline allocation failed: "+device_->lastError();
         return false;
     }
@@ -318,7 +325,7 @@ bool ComputeParticles::initGpu() {
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels)
-                    +(gpuAllocationActive_?size_t(cap)*12u+3u*sizeof(uint32_t):0u);
+                    +(gpuAllocationActive_?size_t(cap)*20u+8u*sizeof(uint32_t):0u);
     return true;
 }
 void ComputeParticles::releaseGpu() {
@@ -335,6 +342,9 @@ void ComputeParticles::releaseGpu() {
         if(seeds_.valid())device_->destroyBuffer(seeds_);
         if(slots_.valid())device_->destroyBuffer(slots_);
         if(gpuSourceOwners_.valid())device_->destroyBuffer(gpuSourceOwners_);
+        if(gpuAliveCurrent_.valid())device_->destroyBuffer(gpuAliveCurrent_);
+        if(gpuAliveNext_.valid())device_->destroyBuffer(gpuAliveNext_);
+        if(gpuDispatchArgs_.valid())device_->destroyBuffer(gpuDispatchArgs_);
         if(killSlots_.valid())device_->destroyBuffer(killSlots_);
         if(liveSlots_.valid())device_->destroyBuffer(liveSlots_);
         if(graphSources_.valid())device_->destroyBuffer(graphSources_);
@@ -351,6 +361,7 @@ void ComputeParticles::releaseGpu() {
     }
     pipeline_={};vertexShader_={};compute_={};states_={};seeds_={};slots_={};
     killSlots_={};gpuSourceOwners_={};
+    gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
     pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
     gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=false;
     vertices_={};indices_={};texture_={};liveSlots_={};
@@ -449,9 +460,11 @@ bool ComputeParticles::tryClear() {
     if(allocatorOk&&gpuAllocationActive_){
         std::vector<uint32_t> free(cap);
         for(uint32_t i=0;i<cap;++i)free[i]=cap-1-i;
-        const std::array<uint32_t,4> counters{0,cap,0,0};
+        const std::array<uint32_t,6> counters{0,cap,0,0,0,0};
+        const std::array<uint32_t,3> emptyDispatch{1,1,1};
         allocatorOk=device_->updateStorageBufferChecked(liveSlots_,free.data(),free.size()*sizeof(uint32_t))&&
-            device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters));
+            device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters))&&
+            device_->updateStorageBufferChecked(gpuDispatchArgs_,emptyDispatch.data(),sizeof(emptyDispatch));
     }
     if(!allocatorOk) {
         ++stats_.gpuResetFailures;
@@ -905,24 +918,42 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     device_->setComputeBuffer(11,stateAttributes_);device_->setComputeBuffer(12,vmErrors_);
     device_->setComputeBuffer(13,graphSources_);device_->setComputeBuffer(14,killSlots_);
     device_->setComputeBuffer(15,gpuSourceOwners_);
+    device_->setComputeBuffer(16,gpuAliveCurrent_);
+    device_->setComputeBuffer(17,gpuAliveNext_);
+    device_->setComputeBuffer(18,gpuDispatchArgs_);
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
-    u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,0};
+    u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,desc_.capacity,count,0};
-    auto dispatch=[&](uint32_t mode,uint32_t threads){
-        u.meta[0]=mode;device_->setComputeUniforms(&u,sizeof(u));device_->dispatch(threads);++stats_.gpuDispatches;
+    const bool indirect=device_->supportsGpuComputeIndirect();
+    auto dispatch=[&](uint32_t mode,uint32_t threads,bool list){
+        u.meta[0]=mode;device_->setComputeUniforms(&u,sizeof(u));
+        const bool ok=list&&indirect?device_->dispatchGpuIndirect(gpuDispatchArgs_):device_->dispatchChecked(threads);
+        if(ok){++stats_.gpuDispatches;if(list&&indirect)++stats_.gpuAliveIndirectDispatches;}
+        return ok;
     };
+    bool ok=true;
     for(uint64_t token:pendingGpuKills_){
-        u.meta[2]=uint32_t(token);u.meta[3]=uint32_t(token>>32);dispatch(9,desc_.capacity);
+        u.meta[2]=uint32_t(token);u.meta[3]=uint32_t(token>>32);
+        if(!dispatch(9,desc_.capacity,true)){ok=false;break;}
     }
     u.meta[2]=count;u.meta[3]=0;
     const auto frame=gpu_pipeline::gpuAllocationPlan(desc_.capacity,count,dt>0.f||count>0);
-    for(uint32_t i=0;i<frame.count;++i){
-        const auto& phase=frame.dispatches[i];dispatch(phase.shaderMode,phase.threads);
-        if(phase.phase==gpu_pipeline::Phase::Compact)++stats_.gpuCompactDispatches;
-        if(phase.phase==gpu_pipeline::Phase::ReserveFreeSlots)++stats_.gpuFreeReservationDispatches;
+    for(uint32_t i=0;ok&&i<frame.count;++i){
+        const auto& phase=frame.dispatches[i];
+        const bool list=phase.phase==gpu_pipeline::Phase::UpdateAliveList||phase.phase==gpu_pipeline::Phase::RenderAliveList;
+        ok=dispatch(phase.shaderMode,phase.threads,list);
+        if(ok&&phase.phase==gpu_pipeline::Phase::UpdateAliveList)++stats_.gpuCompactDispatches;
+        if(ok&&phase.phase==gpu_pipeline::Phase::ReserveFreeSlots)++stats_.gpuFreeReservationDispatches;
     }
     device_->endCompute();
+    if(!ok){
+        // Some mutations may already have been encoded: never retry births
+        // against an uncertain allocator. Checked reset is required.
+        gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="GPU alive-list dispatch rejected; checked reset required";return false;
+    }
+    std::swap(gpuAliveCurrent_,gpuAliveNext_);
     gpuAllocationSubmitted_|=count!=0;
     if(count){
         gpuBirthEstimates_.push_back({gpuAllocationClock_+desc_.lifetime,count});

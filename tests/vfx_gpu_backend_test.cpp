@@ -125,15 +125,16 @@ static void sparsePageOwnership(){
 }
 static void gpuOwnedFramePlan(){
     const auto plan=spectra::gpu_pipeline::gpuAllocationPlan(65536,128,true);
-    const std::vector<uint32_t> expected{10,8,1,3,4,5};
+    const std::vector<uint32_t> expected{10,8,11,13,12,5};
     check(plan.count==expected.size(),"GPU allocation dispatch count");
     for(size_t i=0;i<expected.size();++i)check(plan.dispatches[i].shaderMode==expected[i],"GPU allocation phase ordering");
     check(!spectra::gpu_pipeline::gpuAllocationPlan(16,17,true).needsCompute(),"invalid birth budget accepted");
     check(plan.dispatches[0].threads==1&&plan.dispatches[1].threads==128,"reservation still scans capacity");
     const auto noBirth=spectra::gpu_pipeline::gpuAllocationPlan(65536,0,false);
-    check(noBirth.count==3&&noBirth.dispatches[0].shaderMode==3&&
-          noBirth.dispatches[1].shaderMode==4&&noBirth.dispatches[2].shaderMode==5,
-          "no-birth frame must not reserve free slots");
+    check(noBirth.count==5&&noBirth.dispatches[0].shaderMode==10&&
+          noBirth.dispatches[1].shaderMode==11&&noBirth.dispatches[2].shaderMode==13&&
+          noBirth.dispatches[3].shaderMode==12&&noBirth.dispatches[4].shaderMode==5,
+          "no-birth frame must compact list without spawning");
 }
 int main() {
     gpuOwnedFramePlan();

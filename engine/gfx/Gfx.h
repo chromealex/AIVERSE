@@ -903,6 +903,10 @@ public:
         dispatch(x,y);
         return gpuHealthy();
     }
+    // GPU-authored three uint32 threadgroup counts, ordered by compute barriers.
+    // Backend fixes threadgroup size to 64 x 1 x 1, matching dispatch().
+    virtual bool supportsGpuComputeIndirect() const {return false;}
+    virtual bool dispatchGpuIndirect(BufferHandle,size_t=0){return false;}
     virtual void endCompute() {}
     // True only when the latest dispatch was successfully encoded; not GPU completion.
     virtual bool computeDispatchSucceeded() const { return false; }
