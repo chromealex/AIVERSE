@@ -4,6 +4,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
+#include "StudioPlanetForestDocument.h"
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesExtendedAuthoring.h"
@@ -379,6 +380,18 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     "Canonical authored body/face coordinates. Scene surface move or numeric editing."));
             }
             components.push(component("Transform","Transform",transform));
+            if(ws_.map.data.planet()&&!e.id.empty()){
+                const auto forest=studioPlanetForestDocument(ws_.map,ws_.project.rulesJson);
+                Json fields=Json::array();
+                size_t count=0;
+                for(const auto& plant:forest["forest"]["plants"].items())if(plant.getStr("entity")==e.id){
+                    if(count++>=16)break;
+                    const auto key=std::to_string(plant.getInt("species"))+":"+std::to_string(plant.getInt("key"));
+                    fields.push(prop(key.c_str(),"Species / plant key","text",str(key),false));
+                }
+                if(fields.size())components.push(component("PlanetForestMarker","Planet forest marker",fields,
+                    "Read-only placement links. Edit the forest document in Rules > Planet forest."));
+            }
             // Mesh Renderer: authored StaticModel (editable) or the type's view (read-only).
             const Json& view=ws_.project.rulesJson["types"][e.type]["view"];
             Json mesh=Json::array();
@@ -1230,6 +1243,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         {"studio.lightingSet","Edit lighting"},{"studio.renderLightingSet","Edit render lighting"},
         {"studio.nereidFlowSet","Edit water"},{"studio.keepPlayChanges","Keep play changes"},{"studio.entitiesAlign","Align"},{"studio.newMap","New map"}};
     for(const auto& [m,label]:names)if(method==m)return label;
+    if(method=="studio.planetForestSet")return "Edit planetary forest";
     if(method=="studio.worldProcessAreaBatchMove")return "Move EVOLVE region group";
     if(method=="studio.worldProcessAreaBatchResize")return "Resize EVOLVE region group";
     if(method=="studio.worldProcessAreaSet")
@@ -2494,6 +2508,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result", propertiesFor(params.getStr("entityId")));
         } else if (method == "studio.inspect") {
             reply.set("result", inspectorFor(params.getStr("entityId")));
+        } else if(method=="studio.planetForest"||method=="studio.planetForestSet"){
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            if(method=="studio.planetForestSet")
+                editStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
+            reply.set("result",studioPlanetForestDocument(ws_.map,ws_.project.rulesJson));
         } else if (method == "studio.rules" || method == "studio.rulesSet") {
             // Rules form: unit types as written (own fields) and resolved (with "extends").
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

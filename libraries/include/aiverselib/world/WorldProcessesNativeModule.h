@@ -95,7 +95,9 @@ public:
         if(config.has("planetForestPhysics")&&config["planetForestPhysics"].type()!=Json::Type::Bool)
             throw std::invalid_argument("planetForestPhysics requires Boolean");
         const bool physics=config.getBool("planetForestPhysics",false);
-        if(physics&&(!config.has("planetForest")||!installPhysics_||!sim.config().singleAuthorityPhysics))
+        const auto& forestDocument=effectivePlanetForestDocument(config,host.matchMap());
+        const bool forestEnabled=!forestDocument.isNull();
+        if(physics&&(!forestEnabled||!installPhysics_||!sim.config().singleAuthorityPhysics))
             throw std::invalid_argument("planetForestPhysics requires a linked single-authority native host");
         const SuiteFlags flags=suiteFlags(suite);
         if(flags.crowdGravitySupport&&!host.surface(sim))
@@ -112,12 +114,12 @@ public:
             &installGameCoreMorphGravity,
             &installGameCoreAetherStratification);
         if(config.has("planetBanks")){
-            if(config.has("planetForest")&&!config["planetBanks"].getBool("rootFalls"))
+            if(forestEnabled&&!config["planetBanks"].getBool("rootFalls"))
                 throw std::invalid_argument("planetBanks.rootFalls required with planetForest");
             installPlanetBankPipeline(host,sim,config["planetBanks"]);
         }
-        if(config.has("planetForest")){
-            const auto forest=installPlanetForestPipeline(host,sim,config["planetForest"]);
+        if(forestEnabled){
+            const auto forest=installPlanetForestPipeline(host,sim,forestDocument);
             if(physics)installPhysics_(sim,forest);
         }
     }

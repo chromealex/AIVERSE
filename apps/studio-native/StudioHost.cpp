@@ -78,7 +78,7 @@ const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
-        "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
+        "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
         "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
@@ -2051,6 +2051,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(params.has("focus")&&params["focus"].type()!=Json::Type::String)
             throw std::invalid_argument("Diagnostic focus must be an entity reference string");
         if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+    });
+    if(method=="studio.planetForestLive")return answer([&]{
+        if(game_&&worldProcessPlanetMapCurrent())return game_->planetForestState();
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.evolveState")return answer([&]{

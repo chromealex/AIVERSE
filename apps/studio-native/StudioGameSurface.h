@@ -26,6 +26,7 @@ public:
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
     Json ecologyState(const StudioWorldProcessLiveOptions& options={});
+    Json planetForestState();
     bool planetMatch() const;
     bool launchedMapCurrent() const;
     bool planetSnapshotCurrent(const Json& snapshot) const;

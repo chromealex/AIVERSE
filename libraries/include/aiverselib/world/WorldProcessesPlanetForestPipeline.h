@@ -148,18 +148,18 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         world=std::move(staged);return true;
     }catch(const std::exception&){return reject();}
 }
-inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& core,Simulation& sim,const Json& json){
+// Map override is optional and complete; never merge indexed species/plants arrays.
+inline const Json& effectivePlanetForestDocument(const Json& config,const Json& map){
+    return map["world"].has("planetForest")?map["world"]["planetForest"]:config["planetForest"];
+}
+// Shared authoring/runtime scalar, species and collision recipe parser.
+// Placement and PHYSIS cell resolution remain native setup responsibilities.
+inline PlanetForestPipelineConfig parsePlanetForestConfig(const Json& json,const Json& map){
     using namespace terraweave;
     using namespace evolve;
-    auto& world=sim.world();
-    const auto* gs=world.resourceConst<game::GameState>();
-    if(!json.isObject()||!gs||!gs->surface||!gs->grid.hf||
-       world.resourceConst<TerraWeaveAuthorityResource>()||
-       world.resourceConst<ForestEcologyResource>()||world.resourceConst<ForestDeadwoodResource>()||
-       !json["species"].isArray()||!json["species"].size()||json["species"].size()>64||
-       !json["plants"].isArray()||json["plants"].size()>kMaxPlanetRootBindings)
-        throw std::invalid_argument("planetForest requires heightfield and exclusive rooted authority");
-    const auto surface=gs->surface;
+    if(!json.isObject()||!json["species"].isArray()||!json["species"].size()||
+       json["species"].size()>64||!json["plants"].isArray()||json["plants"].size()>kMaxPlanetRootBindings)
+        throw std::invalid_argument("planetForest requires species and plants arrays");
     PlanetForestPipelineConfig cfg;
     const auto number=[](const Json& j,const std::string& key,int64_t def,int64_t lo,int64_t hi){
         return planetBankInteger(j,key,def,lo,hi);
@@ -173,18 +173,15 @@ inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& co
     cfg.decay.intervalTicks=uint32_t(number(json,"decayInterval",64,1,100000));
     cfg.nutrient.intervalTicks=uint32_t(number(json,"nutrientInterval",256,1,100000));
     cfg.ecology.maxTrackedPlants=uint32_t(number(json,"maxPlants",4096,1,4096));
-    const auto baseline=uint32_t(number(json,"baselineNutrients",500,0,1000));
+    (void)number(json,"baselineNutrients",500,0,1000);
     std::map<uint32_t,ForestEcologySpecies> policies;
-    const auto& authoredForest=core.matchMap()["world"]["terraweaveForest"];
+    const auto& authoredForest=map["world"]["terraweaveForest"];
     std::map<uint32_t,aiverse::world::ForestSpeciesProfile> profiles;
-    for(const auto& body:surface->bodies)
-        cfg.floraScales.emplace(body.id,Fixed::fromRatio(6,100));
-    for(const auto& body:core.matchMap()["world"]["bodies"].items()){
-        const auto it=cfg.floraScales.find(body.getStr("id"));
-        if(it!=cfg.floraScales.end()){
-            const auto& scale=body["visual"]["flora"]["scale"];
-            if(scale.isNumber())it->second=fxClamp(scale.fx(),Fixed::fromRatio(1,1000),10_fx);
-        }
+    for(const auto& body:map["world"]["bodies"].items()){
+        const auto id=body.getStr("id");
+        if(id.empty())continue;
+        const auto& scale=body["visual"]["flora"]["scale"];
+        cfg.floraScales.emplace(id,scale.isNumber()?fxClamp(scale.fx(),Fixed::fromRatio(1,1000),10_fx):Fixed::fromRatio(6,100));
     }
     for(const auto& item:json["species"].items()){
         if(!item.isObject())throw std::invalid_argument("planetForest species object");
@@ -235,6 +232,28 @@ inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& co
             cfg.naturalFallBodies.emplace(s.speciesId,recipe);
         }
     }
+    return cfg;
+}
+inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& core,Simulation& sim,const Json& json){
+    using namespace terraweave;
+    using namespace evolve;
+    auto& world=sim.world();
+    const auto* gs=world.resourceConst<game::GameState>();
+    if(!json.isObject()||!gs||!gs->surface||!gs->grid.hf||
+       world.resourceConst<TerraWeaveAuthorityResource>()||
+       world.resourceConst<ForestEcologyResource>()||world.resourceConst<ForestDeadwoodResource>()||
+       !json["species"].isArray()||!json["species"].size()||json["species"].size()>64||
+       !json["plants"].isArray()||json["plants"].size()>kMaxPlanetRootBindings)
+        throw std::invalid_argument("planetForest requires heightfield and exclusive rooted authority");
+    const auto surface=gs->surface;
+    auto cfg=parsePlanetForestConfig(json,core.matchMap());
+    for(const auto& body:surface->bodies)cfg.floraScales.try_emplace(body.id,Fixed::fromRatio(6,100));
+    const auto number=[](const Json& j,const std::string& key,int64_t def,int64_t lo,int64_t hi){
+        return planetBankInteger(j,key,def,lo,hi);
+    };
+    const auto baseline=uint32_t(number(json,"baselineNutrients",500,0,1000));
+    std::map<uint32_t,ForestEcologySpecies> policies;
+    for(const auto& policy:cfg.species)policies.emplace(policy.speciesId,policy);
     const auto& authored=core.matchMap()["entities"];
     if(!authored.isArray()||authored.size()!=core.mapPlaced().size())
         throw std::invalid_argument("planetForest map identity");

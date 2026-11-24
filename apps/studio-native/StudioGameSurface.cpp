@@ -6,6 +6,7 @@
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
+#include "apps/studio-native/StudioPlanetForestSnapshot.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
@@ -87,6 +88,13 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
     } catch (const std::exception& e) {
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
+}
+Json StudioGameSurface::planetForestState(){
+    Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim))
+            return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1);
+    Json out=Json::object();out.set("active",Json::fromBool(false));return out;
 }
 Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus){
     // Restrict diagnostics to a loaded local match, no remote world inspection.
