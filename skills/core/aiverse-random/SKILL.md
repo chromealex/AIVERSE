@@ -9,3 +9,5 @@ RandomSampling.h adds Xoroshiro128Plus (24/16/37 variant), IntegerAliasTable (ex
 RandomSequences.h: Q32 radical inverse, Halton2, Hammersley2, Sobol2 and jittered stratified samples. Exponential, Poisson (lambda <=64, bounded budget), Gaussian Box-Muller use floating math and are not lockstep-safe. No tests.
 
 SpatialSampling.h: poissonDiskInteger<2/3> uses bounded dart throwing with exact integer minimum separation and spatial buckets. Partial output explicitly marked; not maximal or Bridson. latinHypercubeQ32<1..16> gives one jittered sample per stratum per axis. No tests.
+
+BlueNoise.h: activeDiskInteger<2/3> uses Bridson-style active list and integer annulus/shell rejection, exact minimum distance, bounded attempts and partial output. DiscreteImportance returns sampled index and exact probability numerator/denominator using alias table. No tests.
