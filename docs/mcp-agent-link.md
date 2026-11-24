@@ -63,3 +63,6 @@ Coordinated batch supports native staged move/rename, quarantine and replacement
 
 ### S6g.1 — asset move dependency preview
 Linked `studio_asset_move_preview` includes conservative read-only exact path candidates in the current map and saved JSON maps, alongside existing typed material/rules slots. `document`, `owner` and `field` identify the source (JSON pointer for map candidates); `writable: false` blocks a non-skip decision. Commit independently revalidates references. This is not a complete dynamic dependency analysis or a new mutation API.
+
+### S6g.2 — glTF dependency edges
+Existing linked move preview includes read-only external glTF buffer/image resource edges; either endpoint may block the move. Native Studio graph query accepts an optional indexed asset path; no new standalone MCP tool in this stage. Embedded/remote/unsupported URIs, GLB, scripts and binary dependencies are outside coverage.

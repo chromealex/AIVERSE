@@ -223,3 +223,9 @@
 .studio-assets-refs li{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid var(--au-line)}
 .studio-assets-refs code{color:var(--au-accent);white-space:nowrap}
 .studio-assets-refs li span{color:var(--au-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.studio-assets-dependency-body{overflow:auto;min-height:0;padding:0 10px 10px;font-size:var(--au-font-xs)}
+.studio-assets-dependency-body h4{margin:12px 0 2px;color:var(--au-text)}
+.studio-assets-dependency-body p{color:var(--au-text-muted);overflow-wrap:anywhere}
+.studio-assets-dependency-body ul{overflow:visible;padding:0}
+.studio-assets-dependency-body code{white-space:normal;overflow-wrap:anywhere;min-width:0}

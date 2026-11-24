@@ -2518,9 +2518,16 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             StudioAssetCatalog catalog(ws_.project.dir);
             catalog.rebuild(false);
             const auto entries=catalog.all();
-            reply.set("result",studioReferenceGraphJson(studioCollectProjectAssetReferences(
+            auto refs=studioCollectProjectAssetReferences(
                 ws_.project.dir,editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,
-                ws_.map.toJson(),ws_.project.manifest,entries)));
+                ws_.map.toJson(),ws_.project.manifest,entries);
+            if(params.has("path")){
+                if(!params["path"].isString())throw std::runtime_error("Invalid dependency asset path");
+                const auto selected=catalog.byPath(params.getStr("path"));
+                if(!selected)throw std::runtime_error("Dependency asset is not indexed");
+                refs=studioAssetDependencyEdges(refs,selected->path,selected->directory);
+            }
+            reply.set("result",studioReferenceGraphJson(refs));
         } else if (method == "studio.assets") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             // Browser input cannot specify a filesystem directory. This scan

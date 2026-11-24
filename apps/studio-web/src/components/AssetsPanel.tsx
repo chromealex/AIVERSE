@@ -9,7 +9,7 @@ import {
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type {
   StudioAsset, StudioAssetList, StudioAssetTransferPlan,
-  StudioAssetConflictAction, StudioAssetTransferItem
+  StudioAssetConflictAction, StudioAssetTransferItem, StudioAssetReference
 } from '../types';
 import AssetThumb from './AssetThumb';
 import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
@@ -136,10 +136,12 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   // Usage: files no project data names (filter) and "Find References" for one asset.
   const [unusedOnly,setUnusedOnly]=useState(false);
   const [unused,setUnused]=useState<Set<string>|null>(null);
-  const [mentions,setMentions]=useState<{path:string;rows:Array<{file:string;line:number;text:string}>}|null>(null);
+  const [mentions,setMentions]=useState<{path:string;project:string;rows:Array<{file:string;line:number;text:string}>;edges:StudioAssetReference[];graphError:string}|null>(null);
   const findReferences=async(path:string)=>{
-    try{const r=await invoke('studio.assetUsage',{path});setMentions({path,rows:r.mentions??[]});}
-    catch(e){setError(String(e instanceof Error?e.message:e))}
+    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetReferences',{path})]);
+    if(usage.status==='rejected')setError(String(usage.reason));
+    setMentions({path,project:projectPath,rows:usage.status==='fulfilled'?usage.value.mentions??[]:[],
+      edges:graph.status==='fulfilled'?graph.value:[],graphError:graph.status==='rejected'?String(graph.reason):''});
   };
   const toggleUnused=async()=>{
     if(unusedOnly){setUnusedOnly(false);return;}
@@ -197,7 +199,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -538,10 +540,20 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <span className="studio-assets-current">{selected?
         'content/'+selected:search?'Search in content/':folder?'content/'+folder:'content/'}</span>
     </footer>
-    {mentions&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
-      <header><Link2 size={13}/><b>content/{mentions.path}</b><span>{mentions.rows.length?mentions.rows.length+' mention(s)':'not named by any project file'}</span>
+    {mentions&&mentions.project===projectPath&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
+      <header><Link2 size={13}/><b>content/{mentions.path}</b><span>Asset dependencies</span>
         <button type="button" aria-label="Close" onClick={()=>setMentions(null)}><X size={13}/></button></header>
-      <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>
+      <div className="studio-assets-dependency-body">
+        {mentions.graphError?<p role="alert">Dependency graph unavailable: {mentions.graphError}</p>:<>
+          <h4>Used by ({mentions.edges.filter(r=>r.path==='content/'+mentions.path).length})</h4>
+          <ul>{mentions.edges.filter(r=>r.path==='content/'+mentions.path).map((r,i)=><li key={i}><code>{r.document}</code><span title={r.field}>{r.owner} · {r.field}</span></li>)}</ul>
+          <h4>Depends on ({mentions.edges.filter(r=>r.document==='content/'+mentions.path).length})</h4>
+          <ul>{mentions.edges.filter(r=>r.document==='content/'+mentions.path).map((r,i)=><li key={i}><code>{r.path}</code><span title={r.field}>{r.field}{r.guid?'':' · No indexed GUID'}</span></li>)}</ul>
+          <p>Known direct edges only; dynamic and binary dependencies are not resolved.</p>
+        </>}
+        <h4>Text mentions ({mentions.rows.length})</h4>
+        <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>
+      </div>
     </div>}
     {menu&&<StudioContextMenu x={menu.x} y={menu.y} label="Asset actions"
       items={menu.background?backgroundItems():menuItems(menu)} onClose={()=>setMenu(null)}/>}

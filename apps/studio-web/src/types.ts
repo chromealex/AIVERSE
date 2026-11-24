@@ -368,7 +368,7 @@ export interface StudioParams {
   'studio.openProject': Record<string, never>;
   'studio.assets': Record<string, never>;
   'studio.assetByGuid': { guid: string };
-  'studio.assetReferences': Record<string, never>;
+  'studio.assetReferences': { path?: string };
   'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
   'studio.assetFolderCreate': { parent: string; name: string };
   'studio.assetDelete': { path:string; guid:string; expectedProject:string; expectedVersion:string; confirmed:boolean };

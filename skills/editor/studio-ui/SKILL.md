@@ -140,6 +140,9 @@ Native replay owners expose a staging-only path for internal moves, quarantine (
 ## Map reference discovery (S6g.1)
 Use studioCollectProjectAssetReferences to extend the same native material/rules graph with read-only exact map path candidates and escaped JSON pointers from the current map and bounded saved maps. The shared saved-map visitor excludes history caches; explicit missing content paths have no GUID. Move preview (including linked MCP preview) displays blocking references before commit; commit retains its independent conservative reference fence. No arbitrary script/binary analysis or automatic map repair. The native graph query indexes existing sidecars only.
 
+## Direct asset dependencies (S6g.2)
+The same native graph reads glTF buffers[].uri and images[].uri as local relative resource edges; embedded data, remote URLs and unsupported URIs are not resolved. Project scan is bounded and never opens the referenced target. Existing studio.assetReferences accepts an optional indexed content-relative path and returns matching incoming/outgoing edges, including folder descendants. Assets Find References shows direct dependencies separately from heuristic text mentions. Known glTF resource edges are read-only: move preview and the shared history/delete fence conservatively refuse moving either endpoint, even if a coordinated folder move could preserve the URI. No automatic repair, GLB dependency parser or completeness guarantee.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

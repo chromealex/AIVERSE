@@ -5,6 +5,8 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "engine/data/Json.h"
 #include <map>
+#include <algorithm>
+#include <cctype>
 #include <set>
 #include <string>
 #include <vector>
@@ -104,6 +106,12 @@ inline std::size_t studioRemapMaterialReferences(
     return updated;
 }
 
+inline bool studioReferenceMatchesPath(const std::string& value,const std::string& path,bool directory){
+    return value==path||(directory&&value.starts_with(path+"/"));
+}
+inline bool studioIsGltfResourceReference(const StudioAssetReference& ref){
+    return ref.document.starts_with("content/")&&ref.owner=="glTF resource";
+}
 // Resolve the set of known dependencies affected by an internal move.
 // This is a preview, not a rename executor. Exact paths and folder descendants
 // are matched; an unaffected resource in another folder must not match.
@@ -118,18 +126,16 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
         if (source==destination) continue;
         const bool folder=item.getBool("directory");
         for (const auto& ref:references) {
-            const bool exact=ref.path==source;
-            const bool inside=folder && ref.path.size()>source.size() &&
-                ref.path.compare(0,source.size(),source)==0 &&
-                ref.path[source.size()]=='/';
-            if (!exact && !inside) continue;
+            const bool targetMoves=studioReferenceMatchesPath(ref.path,source,folder);
+            const bool ownerMoves=studioIsGltfResourceReference(ref)&&studioReferenceMatchesPath(ref.document,source,folder);
+            if(!targetMoves&&!ownerMoves)continue;
             Json row=Json::object();
             row.set("id",item["id"]);
             row.set("document",Json::string(ref.document));
             row.set("owner",Json::string(ref.owner));
             row.set("field",Json::string(ref.field));
             row.set("from",Json::string(ref.path));
-            row.set("to",Json::string(destination+ref.path.substr(source.size())));
+            row.set("to",Json::string(targetMoves?destination+ref.path.substr(source.size()):ref.path));
             row.set("writable",Json::fromBool(ref.writable));
             result.push(std::move(row));
         }
@@ -199,6 +205,96 @@ inline void studioVisitSavedMaps(const std::filesystem::path& project,
         bytes+=size;visit(Json::parseFile(map.string()),map.lexically_relative(root).generic_string());
     }
 }
+// Resolve only local relative glTF buffer/image URIs. Never open the target,
+// follow a remote URI or interpret a URI as an absolute filesystem path.
+inline std::string studioGltfResourcePath(const std::string& source,const std::string& uri){
+    namespace fs=std::filesystem;
+    if(uri.empty()||uri.size()>8192||uri.find_first_of(":?#\\")!=std::string::npos||uri.front()=='/')return {};
+    std::string decoded;
+    const auto hex=[](char c)->int{
+        if(c>='0'&&c<='9')return c-'0';
+        if(c>='a'&&c<='f')return c-'a'+10;
+        if(c>='A'&&c<='F')return c-'A'+10;
+        return -1;
+    };
+    for(size_t i=0;i<uri.size();++i){
+        unsigned char c=static_cast<unsigned char>(uri[i]);
+        if(c=='%'){
+            if(i+2>=uri.size())return {};
+            const int hi=hex(uri[i+1]),lo=hex(uri[i+2]);
+            if(hi<0||lo<0)return {};
+            c=static_cast<unsigned char>(hi*16+lo);i+=2;
+            if(c=='/'||c=='\\'||c==':'||c=='?'||c=='#'||c=='%')return {};
+        }
+        if(c<32||c==127)return {};
+        decoded.push_back(static_cast<char>(c));
+    }
+    const auto relative=(fs::path(source).parent_path()/fs::path(decoded)).lexically_normal();
+    const auto result=relative.generic_string();
+    if(!result.starts_with("content/")||result.size()<=8||result.ends_with("/"))return {};
+    return result;
+}
+inline std::vector<StudioAssetReference> studioCollectGltfReferences(
+    const std::filesystem::path& project,const std::map<std::string,std::string>& guids){
+    namespace fs=std::filesystem;
+    const auto root=fs::canonical(project),content=root/"content";
+    std::vector<StudioAssetReference> refs;
+    if(!fs::exists(fs::symlink_status(content)))return refs;
+    if(!fs::is_directory(fs::symlink_status(content)))throw std::runtime_error("Unsafe content dependency root");
+    std::vector<fs::path> models;
+    size_t entries=0;
+    for(auto it=fs::recursive_directory_iterator(content);it!=fs::recursive_directory_iterator();++it){
+        if(++entries>100000)throw std::runtime_error("glTF dependency directory budget exceeded");
+        const auto status=it->symlink_status();
+        if(fs::is_symlink(status)){it.disable_recursion_pending();continue;}
+        const auto name=it->path().filename().string();
+        if(name==".aiverse-cache"||name.starts_with(".aiverse-save-")){it.disable_recursion_pending();continue;}
+        if(!fs::is_regular_file(status))continue;
+        auto ext=it->path().extension().string();
+        for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if(ext!=".gltf")continue;
+        if(models.size()>=2048)throw std::runtime_error("glTF dependency file budget exceeded");
+        models.push_back(it->path());
+    }
+    std::sort(models.begin(),models.end());
+    std::uintmax_t bytes=0;
+    for(const auto& model:models){
+        const auto size=fs::file_size(model);
+        if(size>16ull*1024*1024||size>64ull*1024*1024-bytes)
+            throw std::runtime_error("glTF dependency byte budget exceeded");
+        bytes+=size;
+        const auto doc=Json::parseFile(model.string());
+        if(!doc.isObject())throw std::runtime_error("Invalid glTF dependency document");
+        const auto source=model.lexically_relative(root).generic_string();
+        for(const char* group:{"buffers","images"}){
+            if(doc.has(group)&&!doc[group].isArray())throw std::runtime_error("Invalid glTF resource array");
+            size_t index=0;
+            for(const auto& item:doc[group].items()){
+                const auto field=std::string("/")+group+"/"+std::to_string(index++)+"/uri";
+                if(!item.has("uri"))continue;
+                if(!item["uri"].isString())throw std::runtime_error("Invalid glTF resource URI");
+                const auto path=studioGltfResourcePath(source,item.getStr("uri"));
+                if(path.empty())continue;
+                const auto found=guids.find(path);
+                if(refs.size()>=32768)throw std::runtime_error("glTF dependency result budget exceeded");
+                refs.push_back({source,"glTF resource",field,path,found==guids.end()?std::string{}:found->second,false});
+            }
+        }
+    }
+    return refs;
+}
+// Conservative mutation fence: refuse moving either endpoint of known
+// external resource edges. Relative URI rewrite/coordinated folder relocation
+// is deliberately not implemented by this read-only graph.
+inline void studioCheckGltfAssetPaths(const std::filesystem::path& project,
+    const std::vector<std::pair<std::string,bool>>& paths){
+    if(paths.empty())return;
+    for(const auto& ref:studioCollectGltfReferences(project,{}))
+        for(const auto& [path,directory]:paths)
+            if(studioReferenceMatchesPath(ref.path,"content/"+path,directory)||
+               studioReferenceMatchesPath(ref.document,"content/"+path,directory))
+                throw std::runtime_error("Asset operation blocked by glTF resource: "+ref.document+" "+ref.field);
+}
 inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     const Json& currentMap,const Json& rules,const Json& manifest,
     const std::vector<std::pair<std::string,bool>>& paths){
@@ -210,6 +306,7 @@ inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     if(paths.empty())return;
     check(currentMap,"current map");check(rules,"rules");
     studioVisitSavedMaps(project,manifest,check);
+    studioCheckGltfAssetPaths(project,paths);
 }
 inline std::string studioReferencePointerSegment(const std::string& key){
     std::string result;
@@ -253,7 +350,20 @@ inline std::vector<StudioAssetReference> studioCollectProjectAssetReferences(
     studioVisitSavedMaps(project,manifest,[&](const Json& doc,const std::string& name){
         studioAppendMapReferences(doc,name,"",guids,refs,visited);
     });
+    auto gltf=studioCollectGltfReferences(project,guids);
+    if(gltf.size()>32768-refs.size())throw std::runtime_error("Asset reference result budget exceeded");
+    refs.insert(refs.end(),gltf.begin(),gltf.end());
     return refs;
+}
+// Both directions of one selected asset, without substring matches.
+inline std::vector<StudioAssetReference> studioAssetDependencyEdges(
+    const std::vector<StudioAssetReference>& refs,const std::string& path,bool directory){
+    const auto target="content/"+path;
+    std::vector<StudioAssetReference> out;
+    for(const auto& ref:refs)
+        if(studioReferenceMatchesPath(ref.path,target,directory)||
+           studioReferenceMatchesPath(ref.document,target,directory))out.push_back(ref);
+    return out;
 }
 inline Json studioReferenceGraphJson(const std::vector<StudioAssetReference>& refs) {
     Json result = Json::array();

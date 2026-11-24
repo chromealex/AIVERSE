@@ -66,6 +66,36 @@ int main(){
             fs::remove_all(project/"maps");
         }
 
+        // S6g.2: actual glTF resource slots, local relative paths and both edge directions.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            write(project/"content"/"Models"/"Scene.gltf",R"({"buffers":[{"uri":"../Other/mesh.bin"},{"uri":"data:application/octet-stream;base64,AA=="}],"images":[{"uri":"../Other/paint%20red.png"},{"uri":"missing.png"},{"uri":"https://example.com/a.png"},{"uri":"../../escape.png"},{"bufferView":0}],"extras":{"uri":"ignored.png"}})");
+            write(project/"content"/"Other"/"mesh.bin","mesh");
+            write(project/"content"/"Other"/"paint red.png","paint");
+            db.rebuild();
+            const auto refs=studioCollectGltfReferences(project,studioReferenceGuids(db.all()));
+            AIVERSE_TEST_CHECK(refs.size()==3);
+            AIVERSE_TEST_CHECK(refs[0].path=="content/Other/mesh.bin"&&refs[0].field=="/buffers/0/uri"&&!refs[0].writable);
+            AIVERSE_TEST_CHECK(refs[1].path=="content/Other/paint red.png"&&refs[1].guid==db.byPath("Other/paint red.png")->guid);
+            AIVERSE_TEST_CHECK(refs[2].path=="content/Models/missing.png"&&refs[2].guid.empty());
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Models/Scene.gltf",false).size()==3);
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Other",true).size()==2);
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Other/mesh.bin",false).size()==1);
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Other/mesh",false).empty());
+            const auto preview=StudioTransferPlan::internal(project,"Models",{"Other/mesh.bin"});
+            AIVERSE_TEST_CHECK(studioMoveReferenceImpact(preview.describe(),refs).size()==1);
+            bool refused=false;
+            try{studioCheckGltfAssetPaths(project,{{"Other/mesh.bin",false}});}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused);
+            AIVERSE_TEST_CHECK(studioGltfResourcePath("content/Models/Scene.gltf","%2e%2e/%2e%2e/escape.png").empty());
+            for(const auto& path:{"Models/Scene.gltf","Other/mesh.bin","Other/paint red.png"}){
+                fs::remove(project/"content"/path);fs::remove(studioMetaPath(project/"content"/path));
+            }
+            db.rebuild(false);
+        }
+
         // Preview name collision, skip by default and leave content unchanged.
         auto skip=StudioTransferPlan::external(project,"Models",{external/"Ship.glb"});
         AIVERSE_TEST_CHECK(skip.describe()["items"][0].getStr("conflict")=="name");
