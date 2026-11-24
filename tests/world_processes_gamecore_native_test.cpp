@@ -5,6 +5,7 @@
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
+#include "aiverselib/world/EvolvePlanetEcologySampling.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -217,6 +218,64 @@ static void checkPlanetCrowdSlots(){
     const auto excluded=crowd::planSurfaceSlots(ecs,surface,1,
         [&](Entity e){return e!=a;},pass);
     AIVERSE_TEST_CHECK(excluded&&excluded->intents.size()==2&&excluded->intents[0].agent==b);
+}
+static void checkPlanetEcologySampling(){
+    using namespace evolve;
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    int b=0,f=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(seam,b,f,x,y)&&b==0&&f!=0);
+    const auto origin=surface.cellCenter(start),point=surface.cellCenter(seam);
+    const auto lunar=surface.cellCenter(surface.gridCell(1,f,x,y));
+    World ecs;
+    const auto region=ecs.create();
+    Region r{};r.fertility=300000000;r.pollution=400000000;
+    ecs.add<Region>(region,r);
+    AIVERSE_TEST_CHECK(setSurfaceArea(ecs,surface,region,origin,Area{0,0,3000,3000,true}));
+    const auto weather=ecs.create();
+    physis::Atmosphere air{};air.temperature=Fixed::fromInt(12);
+    air.rain=Fixed::fromRatio(1,2);ecs.add<physis::Atmosphere>(weather,air);
+    physis::Surface soil{};soil.wetness=Fixed::fromRatio(1,4);
+    ecs.add<physis::Surface>(weather,soil);
+    PlanetEcologyRequest first{"terra",point,{900,0,800,700},
+        PlanetWeatherSource{weather,origin,Fixed::fromInt(40),true}};
+    PlanetEcologyRequest second{"moon",lunar,{900,0,800,700},{}};
+    std::array<PlanetEcologyRequest,2> requests{first,second};
+    const auto result=samplePlanetEcology(ecs,surface,requests);
+    AIVERSE_TEST_CHECK(result&&result->size()==2);
+    AIVERSE_TEST_CHECK((*result)[0].body==0&&(*result)[0].face==f);
+    AIVERSE_TEST_CHECK((*result)[0].contributingRegions==1);
+    AIVERSE_TEST_CHECK((*result)[0].climate.nutrientsPermille==300);
+    AIVERSE_TEST_CHECK((*result)[0].climate.sunPermille==800);
+    AIVERSE_TEST_CHECK((*result)[0].climate.waterPermille==250);
+    AIVERSE_TEST_CHECK((*result)[0].weather&&(*result)[0].weather->temperature==Fixed::fromInt(12));
+    AIVERSE_TEST_CHECK((*result)[1].body==1&&(*result)[1].contributingRegions==0);
+    AIVERSE_TEST_CHECK((*result)[1].climate.nutrientsPermille==700&&(*result)[1].climate.waterPermille==800);
+    ecs.enableCowSnapshots();const World saved=ecs;
+    ecs.get<Region>(region).enabled=false;
+    auto changed=samplePlanetEcology(ecs,surface,requests);
+    AIVERSE_TEST_CHECK(changed&&(*changed)[0].climate.nutrientsPermille==700);
+    ecs=saved;
+    changed=samplePlanetEcology(ecs,surface,requests);
+    AIVERSE_TEST_CHECK(changed&&(*changed)[0].climate.nutrientsPermille==300);
+    requests[0].weather->capWaterBySurfaceWetness=false;
+    changed=samplePlanetEcology(ecs,surface,requests);
+    AIVERSE_TEST_CHECK(changed&&(*changed)[0].climate.waterPermille==800);
+    requests[0].weather->maxGroundDistance=Fixed{};
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests));
+    requests[0]=first;requests[1].weather=first.weather;
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests)); // wrong body
+    requests[1]=second;requests[1].expectedBody="terra";
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests));
+    requests[1]=second;requests[1].baseline.sunPermille=1001;
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests));
+    requests[1]=second;requests[0].ground=point+surface.up(point)*Fixed::fromInt(2);
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests));
+    requests[0]=first;ecs.destroy(weather);
+    AIVERSE_TEST_CHECK(!samplePlanetEcology(ecs,surface,requests));
 }
 static void checkPlanetEvolveRegions(){
     game::Surface surface;
@@ -650,6 +709,16 @@ static void checkAuthoredPlanetDemo(){
     AIVERSE_TEST_CHECK(w.get<granular::Field>(eco).mass[2]+w.get<granular::Field>(eco).mass[3]==400);
     AIVERSE_TEST_CHECK(w.get<granular::Field>(moon).mass[2]+w.get<granular::Field>(moon).mass[3]==400);
     AIVERSE_TEST_CHECK(w.get<evolve::Region>(eco).fertility>500000000);
+    const std::array<evolve::PlanetEcologyRequest,2> sites{{
+        {"terra",w.get<Transform>(eco).pos,{},{}},
+        {"moon",w.get<Transform>(moon).pos,{},{}}
+    }};
+    const auto climate=evolve::samplePlanetEcology(w,*surface,sites);
+    AIVERSE_TEST_CHECK(climate&&(*climate)[0].contributingRegions==1);
+    AIVERSE_TEST_CHECK((*climate)[0].climate.nutrientsPermille==
+        evolve::permille(w.get<evolve::Region>(eco).fertility));
+    AIVERSE_TEST_CHECK((*climate)[1].contributingRegions==0&&
+        (*climate)[1].climate.nutrientsPermille==1000);
     AIVERSE_TEST_CHECK((w.get<society::Person>(receiver).knowledge&1)!=0);
     auto restored=create();std::string error;
     AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
@@ -674,6 +743,7 @@ int main(){
     checkPlanetImprint();
     checkPlanetCrowdSlots();
     checkPlanetEvolveRegions();
+    checkPlanetEcologySampling();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
     auto zone=placed(*sim,1),gas=placed(*sim,2);
