@@ -144,6 +144,9 @@ public:
     // retirement queues, releasing stages only after GPU completion proof.
     bool collectRetired(gfx::Device& dev);
     void draw(Renderer3D& renderer);
+    // Exact rigid sources with a moving parent (planet body/view frame).
+    // No HLOD, STRATA, static world-cache or surface proxy substitution.
+    void drawExactPlaced(Renderer3D& renderer,const mat4& parent);
     void setRuntimeOptions(bool hlod,bool geometry,bool surfaces,bool cache) { hlod_=hlod;geometryEnabled_=geometry;surfacesEnabled_=surfaces;cacheEnabled_=cache; }
     // Opt-in staging only: prepare auxiliary CPU Strata assets at load time,
     // but keep the existing GeometryScene/Renderer3D draw path authoritative.
