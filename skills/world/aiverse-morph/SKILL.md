@@ -50,3 +50,6 @@ Box3D remains sole rigid-body collision authority. MorphModelStream is per visua
 - In Studio use existing Add Component, reference picker, Scene gizmos and native `MapDoc` Undo/Redo. For live observation use `WorldProcessesInspector.h`/`WorldProcessesExtendedInspector.h`, never writable runtime clones.
 - After each implementation step add a new `docs/handoffs/world-processes-stageNN-*.md` describing code paths, API, ownership, branch/commit, actual tests/results, missing features and exact next action. Update agent guidance; do not merge unverified code into main.
 - Current source is in draft PR #112 on `feature/world-processes-experimental`. New Stage11+ features are **source-only, not confirmed compiling or passing runtime tests**. The user deferred testing; do not describe old Stage05 successful tests as proof of these newer files.
+
+## Stage 88P: optional PHYSIS gravity projection
+`WorldProcessGravity.h::morphGravityForce` converts local PHYSIS acceleration to existing quantized Force using explicit host-owned impulse-per-tick scale. Supply actual node/body frame, not global XZ; do not double-apply gravity from rigid body motion. It returns a Force value for an authoritative producer, not an automatically installed system. Planetary rendering/contact and producer integration pending; see planetary contract. Tests not run.
