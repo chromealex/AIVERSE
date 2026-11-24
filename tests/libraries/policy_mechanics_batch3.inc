@@ -45,7 +45,9 @@ inline void diplomacy(){
     std::vector<DiploCommand> setup{{DiploCommand::AddFaction,1},{DiploCommand::AddFaction,2},{DiploCommand::AddFaction,3}};CHECK(stepDiplomacy(c,s,1,setup,facts,values));
     DiploCommand war{DiploCommand::DeclareWar,1,2};auto e=stepDiplomacy(c,s,2,std::span(&war,1),facts,values);CHECK(e&&atWar(s,1,2)&&relation(s,c,1,2)<0);
     DiploCommand peace{DiploCommand::Propose,0,0,{1,2,{},{Treaty::Peace}}};e=stepDiplomacy(c,s,3,std::span(&peace,1),facts,values);
-    CHECK(e->back().kind==DiploEventKind::Rejected);                                  // the stronger side refuses a plain peace
+    CHECK(e.has_value());
+    const auto peaceEvents=std::move(e).value();
+    CHECK(!peaceEvents.empty()&&peaceEvents.back().kind==DiploEventKind::Rejected);     // the stronger side refuses a plain peace
     peace.deal.items.push_back({1,7,500,0});values[2][7]=1;e=stepDiplomacy(c,s,4,std::span(&peace,1),facts,values);CHECK(!atWar(s,1,2));
     DiploCommand rewar{DiploCommand::DeclareWar,1,2};e=stepDiplomacy(c,s,5,std::span(&rewar,1),facts,values);CHECK(e->back().kind==DiploEventKind::Rejected);   // truce
     DiploCommand gift{DiploCommand::Modify,2,3,{},Treaty::War,{9,500,0,0}};stepDiplomacy(c,s,6,std::span(&gift,1),facts,values);
@@ -71,8 +73,8 @@ inline void heroMatch(){
     DraftRules dr{{{1,true},{2,true},{1,false},{2,false},{2,false},{1,false}},100,{1,2,3,4,5,6,7,8}};DraftState ds;
     std::vector<DraftAction> acts{{1,1},{2,1},{2,2}};auto a=stepDraft(dr,ds,1,acts);CHECK(a&&a->size()==2&&ds.bans==std::vector<int64_t>({1,2}));
     for(uint32_t t=2;t<=1000&&!ds.done;++t)stepDraft(dr,ds,t,{});CHECK(ds.done&&ds.picks[1].size()==2&&ds.picks[2].size()==2);roundtrip(ds);
-    HeroMatchConfig c;c.items[1]={1,300};c.items[2]={2,450};c.items[3]={3,500,{1,2}};c.slots=6;HeroMatchState s;
-    s.heroes[10]={1};s.heroes[11]={1};s.heroes[20]={2};s.heroes[10].gold=2000;
+    HeroMatchConfig c;c.items[1]={1,300,{}};c.items[2]={2,450,{}};c.items[3]={3,500,{1,2}};c.slots=6;HeroMatchState s;
+    s.heroes[10].team=1;s.heroes[11].team=1;s.heroes[20].team=2;s.heroes[10].gold=2000;
     std::vector<HeroCommand> buy{{HeroCommandKind::Buy,10,0,1,0,1000,true},{HeroCommandKind::Buy,10,0,3,0,1000,true}};auto e=stepHeroMatch(c,s,1,buy);
     CHECK(e&&s.heroes[10].items==std::vector<int64_t>({3})&&s.heroes[10].gold==2000-300-950);  // recipe: 500 + missing 450
     HeroCommand far{HeroCommandKind::Buy,11,0,2,0,1000,false,false};e=stepHeroMatch(c,s,2,std::span(&far,1));CHECK(e->back().kind==HeroEventKind::BuyRefused);
