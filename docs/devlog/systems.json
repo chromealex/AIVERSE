@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-world-explorer-live",
+          "title": "Обзор регионов живого мира",
+          "titleEn": "Live World Explorer",
+          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга.",
+          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-world-persistence-panel",
           "title": "Управление сохранениями мира",
           "titleEn": "World persistence panel",
