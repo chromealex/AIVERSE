@@ -18,6 +18,7 @@
 #include "apps/studio-native/StudioModelPicking.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
+#include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
 #include "engine/gfx/Gfx.h"
@@ -177,6 +178,7 @@ private:
     render::Mesh terrain_;
     render::Mesh planetTerrain_;
     std::optional<StudioPlanetPreview> planetPreview_;
+    PlanetProcessOverlays planetProcessOverlays_;
     const editor::MapDoc* planetDoc_=nullptr;
     uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
     bool planetMode_=false;

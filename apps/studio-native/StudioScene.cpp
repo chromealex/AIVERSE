@@ -1932,6 +1932,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetDoc_=&doc;planetRevision_=doc.revision;
+        planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
     }
     const auto now=std::chrono::steady_clock::now();
@@ -1952,6 +1953,9 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     const auto view=viewCamera();renderer_.beginScene(view,width,height);
     renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
     lightingStatus_="Planet authoring preview · rigid models and coarse surface";
+    if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
+    if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
+    if(planetProcessOverlays_.regionChartClipped)lightingStatus_+=" · EVOLVE chart clipped";
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
         std::set<std::string> renderedModels;
@@ -1974,6 +1978,18 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
         if(gizmosVisible_){
+            for(const auto& line:planetProcessOverlays_.lines)
+                if(line.owner.empty()||!hidden_.count(line.owner))
+                    renderer_.line(line.a,line.b,line.color);
+            if(const auto it=planetPreview_->modelFrames.find(selectedId);it!=planetPreview_->modelFrames.end()){
+                const auto origin=it->second.transformPoint({});
+                const float length=std::clamp(planetPreview_->radius*.045f,1.f,12.f);
+                const uint32_t colors[3]={rgba(232,82,72),rgba(120,205,85),rgba(70,135,240)};
+                for(int i=0;i<3;++i){
+                    const auto direction=normalize(it->second.transformDir({i==0?1.f:0.f,i==1?1.f:0.f,i==2?1.f:0.f}));
+                    renderer_.line(origin,origin+direction*length,colors[i]);
+                }
+            }
             std::map<std::string,const StudioDocumentProxy*> byId;
             for(const auto& marker:planetPreview_->markers)byId.emplace(marker.id,&marker);
             for(const auto& link:planetPreview_->links){

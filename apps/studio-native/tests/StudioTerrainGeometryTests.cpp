@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
+#include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -54,6 +55,16 @@ int main() {
     AIVERSE_TEST_CHECK(at&&at->getStr("body")=="terra"&&at->getInt("face")==0);
     AIVERSE_TEST_CHECK(std::abs((*at)["x"].toDouble()-4.)<.01);
     AIVERSE_TEST_CHECK(!preview->groundPlacement(dir*100.f,dir));
+    const auto matrix=preview->modelFrames.at(preview->markers.front().id);
+    AIVERSE_TEST_CHECK(dot(normalize(matrix.transformDir({0,1,0})),dir)>.999f);
+    AIVERSE_TEST_CHECK(std::abs(dot(matrix.transformDir({1,0,0}),matrix.transformDir({0,0,1})))<.001f);
+    globe.data.entities[0].extra.set("components",Json::parse(R"({"EvolveRegion":{"enabled":true},"EvolveArea":{"halfWidthCm":300,"halfDepthCm":200,"enabled":true}})"));
+    globe.data.extra.set("physis",Json::parse(R"({"enabled":true,"enableGravityFields":true,"gravityFields":[{"id":"local","center":[8192,0,0],"mode":"Attract","radiusMeters":100,"radialMagnitude":10}]})"));
+    const auto overlay=buildPlanetProcessOverlays(globe,0,*preview);
+    AIVERSE_TEST_CHECK(!overlay.invalidPhysis&&!overlay.truncated&&!overlay.regionChartClipped);
+    size_t regionLines=0,gravityLines=0;
+    for(const auto& line:overlay.lines){if(line.owner.empty())++gravityLines;else ++regionLines;}
+    AIVERSE_TEST_CHECK(regionLines==64&&gravityLines>0);
     std::cout<<"StudioTerrainGeometry PASS\n";
     editor::MapDoc blank;blank.reset(32,32);render::MeshBuilder noSurface;
     AIVERSE_TEST_CHECK(buildTerrainPreview(blank.data,noSurface).quads==0);
