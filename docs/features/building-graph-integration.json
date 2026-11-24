@@ -22,7 +22,8 @@
     "apps/studio-native/StudioBuildingGeneration.h",
     "apps/studio-web/src/types.ts",
     "apps/studio-native/tests/StudioBuildingTopologyTests.cpp",
-    "apps/studio-native/CMakeLists.txt"
+    "apps/studio-native/CMakeLists.txt",
+    "libraries/include/aiverselib/systems/BuildingStructureGraph.h"
   ],
   "traits": {
     "editable": true,
@@ -33,7 +34,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35E native room/connection topology v1 export and structural component diagnostics through existing native room planner, plus shared inspector wired to native candidate; compile/owner acceptance pending.",
+      "note": "Stage 35F.3: native exterior aperture overlap, explicit native room route inspection and shared GraphCanvas exterior nodes/group diagnostics implemented; acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -73,7 +74,7 @@
     },
     "graphs": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "Exterior nodes are per socket, provenance only; native groups and planner remain authoritative. Shared branch reconciliation pending.",
       "evidence": []
     },
     "performance": {
@@ -103,12 +104,12 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN.",
       "evidence": []
     },
     "handoff": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "Stage 35F.1–35F.3 handoffs authored; integration verification pending.",
       "evidence": []
     },
     "documentation": {
