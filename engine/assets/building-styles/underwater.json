@@ -690,7 +690,11 @@
       "pad": 0.65,
       "props": [],
       "forms": [],
-      "body": "dome"
+      "body": "dome",
+      "facadeBay": 2.964,
+      "facadeStorey": 2.9,
+      "glazingFraction": 0.58,
+      "profileRoofScale": 1.15
     },
     "hall": {
       "size": [
@@ -738,7 +742,11 @@
       "pad": 0.65,
       "props": [],
       "forms": [],
-      "body": "barrel"
+      "body": "barrel",
+      "facadeBay": 5.244,
+      "facadeStorey": 4.9,
+      "glazingFraction": 0.51,
+      "profileRoofScale": 0.92
     },
     "workshop": {
       "size": [
@@ -786,7 +794,11 @@
       "pad": 0.65,
       "props": [],
       "forms": [],
-      "body": "dome"
+      "body": "dome",
+      "facadeBay": 4.37,
+      "facadeStorey": 4.1,
+      "glazingFraction": 0.4,
+      "profileRoofScale": 0.782
     },
     "watchtower": {
       "size": [
@@ -832,7 +844,219 @@
           0.5,
           0.65
         ]
-      }
+      },
+      "facadeBay": 2.508,
+      "facadeStorey": 3.8,
+      "glazingFraction": 0.377,
+      "profileRoofScale": 1.38
+    },
+    "market": {
+      "size": [
+        18,
+        14
+      ],
+      "height": [
+        5.5,
+        7
+      ],
+      "massing": "twin-bay",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.15,
+      "bands": 4,
+      "teamChance": 0,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.22,
+        "height": 0.42,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "barrel",
+      "facadeBay": 4.18,
+      "facadeStorey": 3.6,
+      "glazingFraction": 0.661,
+      "profileRoofScale": 0.862
+    },
+    "administration": {
+      "size": [
+        16,
+        14
+      ],
+      "height": [
+        8,
+        10
+      ],
+      "massing": "bastion",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.15,
+      "bands": 3,
+      "teamChance": 0,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.22,
+        "height": 0.42,
+        "count": 1
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "dome",
+      "facadeBay": 3.42,
+      "facadeStorey": 3.3,
+      "glazingFraction": 0.673,
+      "profileRoofScale": 1.035
+    },
+    "warehouse": {
+      "size": [
+        24,
+        18
+      ],
+      "height": [
+        7,
+        9
+      ],
+      "massing": "terraced",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.15,
+      "bands": 2,
+      "teamChance": 0,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.24,
+        "height": 0.55,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "facet",
+      "facadeBay": 6.46,
+      "facadeStorey": 5.3,
+      "glazingFraction": 0.302,
+      "profileRoofScale": 0.632
+    },
+    "temple": {
+      "size": [
+        16,
+        16
+      ],
+      "height": [
+        10,
+        14
+      ],
+      "massing": "spire",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.15,
+      "bands": 2,
+      "teamChance": 0,
+      "door": {
+        "count": 1,
+        "width": 0.22,
+        "height": 0.42
+      },
+      "legs": false,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "thrusters": 0,
+      "tower": {
+        "chance": 0
+      },
+      "body": "bulb",
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "facadeBay": 4.712,
+      "facadeStorey": 5.8,
+      "glazingFraction": 0.423,
+      "profileRoofScale": 1.322
     }
   }
 }
