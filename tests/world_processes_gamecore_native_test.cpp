@@ -479,6 +479,26 @@ static void checkPlanetSoilTransfer(){
     ecs=before;
     AIVERSE_TEST_CHECK(ecs.get<Field>(field).mass[8]==80&&ecs.resourceConst<PlanetSoilFixture>()->moon==2000);
 }
+static void checkPlanetMorphContactFrame(){
+    game::Surface surface;game::BodyDef body;
+    body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);surface.build();
+    World ecs;const auto owner=ecs.create();
+    Transform t{};ecs.add<Transform>(owner,t);
+    for(int face=0;face<6;++face){
+        const auto pos=surface.cellCenter(surface.gridCell(0,face,3,3));
+        ecs.get<Transform>(owner).pos=pos;
+        const auto up=surface.up(pos);
+        const auto local=morph::projectMorphContactDirection(ecs,&surface,owner,up);
+        AIVERSE_TEST_CHECK(local&&local->y>Fixed::fromRatio(99,100));
+        AIVERSE_TEST_CHECK(fxAbs(local->x)<Fixed::fromRatio(1,100));
+        AIVERSE_TEST_CHECK(fxAbs(local->z)<Fixed::fromRatio(1,100));
+    }
+    AIVERSE_TEST_CHECK(!morph::projectMorphContactDirection(ecs,&surface,owner,{}));
+    ecs.destroy(owner);
+    AIVERSE_TEST_CHECK(!morph::projectMorphContactDirection(ecs,&surface,owner,
+        {Fixed{},Fixed::fromInt(1),Fixed{}}));
+}
 static void checkPlanetProcessGeometry(){
     game::Surface surface;
     game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
@@ -826,6 +846,7 @@ int main(){
     checkAetherStratification();
     checkMorphGravity();
     checkPlanetSoilTransfer();
+    checkPlanetMorphContactFrame();
     checkPlanetProcessGeometry();
     checkPlanetGranular();
     checkPlanetEvolveHydration();

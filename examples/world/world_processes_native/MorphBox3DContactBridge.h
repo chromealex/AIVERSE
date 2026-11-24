@@ -3,6 +3,8 @@
 // rigid-body/contact solver; MORPH only owns quantized deformable offsets.
 #pragma once
 #include "aiverselib/world/MorphEcs.h"
+#include "aiverselib/world/MorphPhysisGravity.h"
+#include "engine/physics/PhysisBox3D.h"
 #include "engine/physics/Scene.h"
 #include <algorithm>
 #include <cmath>
@@ -45,7 +47,12 @@ inline bool collectMorphContactInputs(
         const std::map<physics::BodyHandle,Entity>& bodyToNode,
         std::uint32_t nextEcsTick,
         std::vector<MorphContactInput>& result,
-        MorphContactConfig config={}){
+        MorphContactConfig config={},
+        const game::Surface* surface=nullptr,
+        const std::map<uint64_t,Entity>* localFrameOwners=nullptr){
+    // Opt-in local frames for every mapped node; do not mix old world-space
+    // inputs and local inputs in the same collection.
+    if(surface&&!localFrameOwners)return false;
     if(!valid(config)||nextEcsTick==UINT32_MAX||
        scene.contactBegins().size()>4096)return false;
     std::vector<MorphContactInput> staged;
@@ -79,9 +86,20 @@ inline bool collectMorphContactInputs(
                                -double(morph::kForceLimit),
                                double(morph::kForceLimit))));
             };
+            float dx=nx,dy=ny,dz=nz;
+            if(localFrameOwners){
+                const auto binding=localFrameOwners->find(node.packed());
+                if(binding==localFrameOwners->end())return false;
+                Vec3 direction{};
+                if(!physics::physisVec3({nx,ny,nz},direction))return false;
+                const auto local=morph::projectMorphContactDirection(
+                    ecs,surface,binding->second,direction);
+                if(!local)return false;
+                dx=float(local->x.toDouble());dy=float(local->y.toDouble());dz=float(local->z.toDouble());
+            }
             staged.push_back({
                 node,handle,side?contact.a:contact.b,nextEcsTick,
-                component(nx),component(ny),component(nz)
+                component(dx),component(dy),component(dz)
             });
         }
     }

@@ -39,6 +39,19 @@ inline std::optional<lib::worldprocess::SurfaceFrame> ownerFrame(
     return frame;
 }
 } // namespace gravity_detail
+// Contact direction is expressed in the same simulation axes as the owner
+// Transform. Use the exact frame already used for PHYSIS loads. The host
+// must convert any floating origin / orbital scene space before calling.
+inline std::optional<Vec3> projectMorphContactDirection(
+        const World& read,const game::Surface* surface,Entity owner,Vec3 direction){
+    const auto cap=Fixed::fromInt(2);
+    for(auto v:{direction.x,direction.y,direction.z})
+        if(v< -cap||v>cap)return {};
+    if(direction.lengthSq()<Fixed::fromRatio(1,4))return {};
+    const auto frame=gravity_detail::ownerFrame(read,surface,owner);
+    if(!frame)return {};
+    return frame->localVector(fxNormalize(direction));
+}
 inline std::optional<std::array<I,3>> physisNodeLoad(
         const World& read,const game::Surface* surface,Entity e,const Node& n){
     const auto* binding=read.tryGetConst<GravityBinding>(e);

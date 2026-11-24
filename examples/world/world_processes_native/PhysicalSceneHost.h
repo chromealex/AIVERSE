@@ -63,6 +63,18 @@ public:
         return collectMorphContactInputs(scene,ecs,bodies,nextTick,out,config);
     }
 
+    // Same Scene contact producer, but resolve directions into each
+    // deformable's actual model frame before quantization.
+    bool collectPlanetMorphPhysicsInputs(
+            const physics::Scene& scene,const World& ecs,const game::Surface& surface,
+            const std::map<physics::BodyHandle,Entity>& bodies,
+            const std::map<uint64_t,Entity>& nodeFrameOwners,
+            uint32_t nextTick,std::vector<MorphContactInput>& out,
+            MorphContactConfig config={}) const {
+        return collectMorphContactInputs(scene,ecs,bodies,nextTick,out,config,
+                                         &surface,&nodeFrameOwners);
+    }
+
     // Commit recorded inputs on the fixed ECS owner barrier BEFORE the
     // scheduled MORPH system tick. Never re-sample Box3D on clients.
     bool applyRecordedMorphInputs(World& ecs,
