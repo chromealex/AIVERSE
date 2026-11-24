@@ -123,3 +123,6 @@ The mixed exact-endpoint planner now resolves typed glTF/GLB external resources 
 
 ### S6f.3.4b.2b — mixed typed URI replay
 Existing mixed batch planner now accepts recorded glTF/GLB URI repairs, including stationary and moving owners, compact GLB prefix snapshots and importer settings in the same history chain. Directional digests, byte continuity, unchanged non-URI JSON and per-slot target GUIDs are checked before journal publication. Other repair formats, unknown extensions, nested relocation roots and model edits originating/ending in Trash remain fenced. No new MCP action or journal version.
+
+### S6f.4a — coordinated save of existing owner documents
+Studio `studio.save` with dirty Rules or Manifest stages the existing map and emitted terrain sidecars together with dirty project documents and the project history checkpoint, then commits one existing-file journal before replacing live owners. New sidecars, Save As, asset cursor checkpoints and atomic map checkpoint publication remain separate. This is not a new MCP action or a guarantee for standalone map_save.
