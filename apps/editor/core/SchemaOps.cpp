@@ -31,7 +31,7 @@ Json str(const std::string& s) { return Json::string(s); }
 
 // Keys read by the view / UI / tools, never by the simulation loader (anywhere in the tree).
 const std::set<std::string> kPresentationKeys = {
-    "view", "sprite", "name", "description", "comment", "_comment", "//", "notes", "note", "icon", "portrait", "hotkey",
+    "viewScripts", "view", "sprite", "name", "description", "comment", "_comment", "//", "notes", "note", "icon", "portrait", "hotkey",
     "tooltip", "lore", "label", "color", "colour", "sound", "sounds", "voice", "music", "ui", "hud", "card", "help", "title",
     "detail", "detailLook", "style",   // visual terrain detail (docs/terrain.md; planets: world body terrain)
 };
