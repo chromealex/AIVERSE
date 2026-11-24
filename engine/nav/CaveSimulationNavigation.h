@@ -58,7 +58,7 @@ inline void io(Archive& a,CaveRouteFollower& p) {
     if(!a.writing())p.waypoints.resize(n);
     for(auto& waypoint:p.waypoints)io(a,waypoint);
     io(a,p.agent);
-    a(p.sourceRevision,p.current,p.speedCmPerTick,
+    a(p.sourceRevision,p.environmentRevision,p.current,p.speedCmPerTick,
       p.arrived,p.needsRepath);
     if(!a.writing()&&p.current>p.waypoints.size())a.fail();
 }
@@ -117,7 +117,8 @@ inline CaveRepathTickStats repathCaveEntities(
         if(!intent.active||stats.attempted>=hooks.maxRepairsPerTick)
             return;
         // Force a stale route to be re-planned in a bounded stable order.
-        if(route.sourceRevision!=provider->revision()){
+        if(route.sourceRevision!=provider->revision() ||
+           route.environmentRevision!=provider->environmentRevision()){
             if(!route.needsRepath)
                 intent.repathNotBeforeTick=tick;
             route.needsRepath=true;
@@ -165,7 +166,7 @@ inline void installCaveNavigationSimulation(
         throw std::invalid_argument("Caverns Simulation requires native nav/physics owners");
     // This is opt-in in the actual game/authority setup, not GameCore's
     // unconditional rule for unrelated 2D or visual-only projects.
-    sim.registerPersistentComponent<CaveRouteFollower>("caverns.route",1);
+    sim.registerPersistentComponent<CaveRouteFollower>("caverns.route",2);
     sim.registerPersistentComponent<CaveRouteIntent>("caverns.route.intent",1);
     sim.addSystem("caverns.navigation.repath",
         [hooks](Simulation& state){
