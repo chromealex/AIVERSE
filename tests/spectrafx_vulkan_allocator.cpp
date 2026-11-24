@@ -4,7 +4,8 @@
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
 #include "engine/fx/SpectraGpuShaders.h"
 #include "engine/fx/SpectraGpuParticles.h"
-#include "engine/fx/SpectraGpuVolumeGrid.h"
+#include "engine/fx/SpectraGpuVolumeRenderer.h"
+#include <cstring>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -334,6 +335,66 @@ void denseVolume(gfx::Device& d){
     require(budget->stats().charged()==baseline,"volume reservation returned");
     std::puts("PASS dense GPU volume parity, SDF mask, impulse, lifecycle and budget");
 }
+void volumeHdr(gfx::Device& d){
+    namespace vol=aiverse::spectra::volume;
+    if(!vol::supportsVolumeRender(d)){std::puts("SKIP volume HDR storage capability");return;}
+    auto budget=d.acquireGpuAllocationBudget();
+    require(bool(budget),"volume HDR canonical budget");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volume HDR initial idle");
+    budget->collect(d.gpuCompletedFence());const size_t baseline=budget->stats().charged();
+    vol::Config cfg;cfg.dimension=8;cfg.origin={-.5f,-.5f,.15f};cfg.cellSize=.125f;
+    cfg.pressureIterations=0;cfg.gravity={0,0,0};cfg.burnRate=0;
+    vol::GpuGasGrid grid;vol::GpuVolumeRenderer renderer;
+    require(grid.init(d,cfg,{},budget),"HDR volume grid");
+    gfx::TextureDesc desc;desc.width=desc.height=side;desc.format=gfx::PixelFormat::RGBA16F;
+    desc.renderTarget=true;desc.filter=gfx::Filter::Nearest;
+    auto color=d.createTexture(desc);desc.format=gfx::PixelFormat::Depth;
+    auto depth=d.createTexture(desc);
+    require(color.valid()&&depth.valid(),"HDR volume input targets");
+    render::PostFrame f{};f.width=f.height=side;f.viewProj=render::mat4::identity();
+    f.lighting.sunIntensity=0;
+    vol::Material material;material.fireColor={8,2,1};material.emission=2;
+    vol::RenderSettings settings;settings.steps=32;settings.shadowSteps=0;
+    vol::Source impulse;impulse.position={0,0,.6f};impulse.radius=.4f;impulse.smoke=0;
+    impulse.temperature=12;impulse.fuel=0;impulse.acceleration={0,0,0};
+    require(grid.queueImpulse(impulse,.5f),"HDR volume impulse");
+    struct Read {gfx::TextureReadbackResult data;bool done=false;};
+    auto renderRead=[&](float depthClear,bool clear,bool tick){
+        auto read=std::make_shared<Read>();
+        {
+            Frame frame(d);
+            if(tick)require(grid.step(),"HDR volume simulation");
+            if(clear)require(grid.clear(),"HDR volume empty clear");
+            gfx::PassDesc pass;pass.colorTarget=color;pass.depthTarget=depth;
+            pass.clearColor[0]=pass.clearColor[1]=pass.clearColor[2]=0;pass.clearColor[3]=1;
+            pass.clearDepth=depthClear;d.beginPass(pass);d.endPass();
+            auto output=renderer.draw(d,grid,f,color,depth,material,settings);
+            require(output.valid()&&output!=color&&renderer.allocatedBytes()==size_t(side)*side*8,
+                    "HDR volume output and budget");
+            require(d.readTextureAsync(output,{},[read](gfx::TextureReadbackResult value){
+                read->data=std::move(value);read->done=true;
+            }),"volume HDR readback accepted");
+        }
+        require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volume HDR completion");
+        for(int i=0;i<4&&!read->done;++i){Frame frame(d);}
+        require(read->done&&read->data.success()&&read->data.format==gfx::PixelFormat::RGBA16F&&
+            read->data.pixels.size()==size_t(side)*side*8,"volume HDR readback");
+        // Positive finite IEEE half values have monotonic unsigned bit order.
+        const size_t at=(size_t(side/2)*side+side/2)*8;
+        uint16_t red=0;std::memcpy(&red,read->data.pixels.data()+at,2);
+        return red;
+    };
+    const auto visible=renderRead(1,false,true);
+    const auto occluded=renderRead(0,false,false);
+    const auto empty=renderRead(1,true,false);
+    require(visible>0x3c00u&&visible<0x7c00u,"HDR volume emission above 1");
+    require(occluded==0&&empty==0,"opaque depth and empty volume preserve black background");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volume HDR final idle");
+    renderer.shutdown();grid.shutdown();d.destroyTexture(color);d.destroyTexture(depth);
+    budget->collect(d.gpuCompletedFence());
+    require(budget->stats().charged()==baseline,"HDR volume allocation released");
+    std::puts("PASS dense volume HDR emission, depth clipping and empty field");
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -369,6 +430,9 @@ int main(){
             std::fprintf(stderr,"FAIL Vulkan shader compilation: %s\n",error.c_str());return 1;
         }
     }
+    if(!gfx::vk::compileComputeProgram(aiverse::spectra::volume::render_shaders::kGLSL,spv,error)){
+        std::fprintf(stderr,"FAIL Vulkan volume HDR shader: %s\n",error.c_str());return 1;
+    }
     gfx::vk::SpirvProgram raster;
     if(!gfx::vk::compileProgram(shaders::kProceduralBillboardGLSLVertex,shaders::kProceduralBillboardGLSLFragment,false,raster)){
         std::fprintf(stderr,"FAIL Vulkan procedural shader: %s\n",raster.error.c_str());return 1;
@@ -385,6 +449,7 @@ int main(){
         }
         packedSdfAtlas(*d);
         denseVolume(*d);
+        volumeHdr(*d);
         memory(*d);
         std::puts("PASS Vulkan allocator acceptance");return 0;
     }catch(const std::exception& e){

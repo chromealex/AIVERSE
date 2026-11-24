@@ -48,6 +48,7 @@ KERNEL_BEGIN
     if(id.x>=u.meta.x||id.y>=u.meta.y)return;
     float4 background=READ_COLOR(id);
     float depth=READ_DEPTH(id);
+    if(!(depth>=0.0f&&depth<=1.0f)){WRITE_COLOR(id,background);return;}
     float2 screen=(float2(id)+float2(0.5f))/float2(u.meta.xy);
     if(u.camera.x>0.5f)screen.y=1.0f-screen.y;
     float2 ndc=screen*2.0f-1.0f;

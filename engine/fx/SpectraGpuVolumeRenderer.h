@@ -88,8 +88,9 @@ public:
         u.smoke={material.smokeColor.x,material.smokeColor.y,material.smokeColor.z,material.extinction};
         u.fire={material.fireColor.x,material.fireColor.y,material.fireColor.z,material.emission};
         u.controls={material.emissionThreshold,settings.ambient,settings.shadowDistance,settings.anisotropy};
-        const auto sun=render::normalize(f.lighting.sunDir);
-        u.sun={sun.x,sun.y,sun.z,f.lighting.sunIntensity};
+        const bool sunValid=render::length(f.lighting.sunDir)>1e-6f;
+        const auto sun=sunValid?render::normalize(f.lighting.sunDir):float3{};
+        u.sun={sun.x,sun.y,sun.z,sunValid?f.lighting.sunIntensity:0.f};
         u.sunColor={std::max(0.f,f.lighting.sunColor.x),std::max(0.f,f.lighting.sunColor.y),std::max(0.f,f.lighting.sunColor.z),0};
         u.limits={float(settings.shadowSteps),float(settings.pointLights.size()),0,0};
         for(size_t i=0;i<settings.pointLights.size();++i){
