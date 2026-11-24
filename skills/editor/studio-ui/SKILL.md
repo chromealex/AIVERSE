@@ -200,6 +200,9 @@ Supersedes the stable-only version boundary above: resolve local glTF/GLB resour
 ## Mixed typed URI replay (S6f.3.4b.2b)
 Supersedes the previous mixed URI fence for recorded glTF/GLB repairs: resolve physical owners before relocating; compose exact byte snapshots and verify directional digests and unchanged non-URI JSON. Streamed GLB tails retain exact digest/length. Per-slot target GUIDs must remain unchanged for repaired owners. Other repair formats, unknown extensions, nested endpoints and model edits crossing physical Trash boundaries are still fenced. Journal v3 and existing MCP action are reused.
 
+## Coordinated existing-document save (S6f.4a)
+Native studio.save with dirty Rules/Manifest prepares detached MapDoc and Project copies, merges exact existing-file snapshots and uses a single ProjectDocumentJournal commit. Existing map/terrain outputs only; new outputs refuse before publication. Live owners swap after commit; map history retains its separate dirty marker/checkpoint and may be fenced on interruption. Save As and standalone Workspace map_save still use their legacy paths. Do not claim global saved cursor atomicity or support for newly created sidecars. No new MCP action.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
