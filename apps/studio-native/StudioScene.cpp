@@ -2139,6 +2139,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
         planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
+        planetForestOverlayRecipe_=studioForestOverlayRecipe(doc,rules);
         planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
         planetGravityHandles_=planetPreview_?planetGravityHandles(doc,*planetPreview_):std::vector<PlanetGravityHandle>{};
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
@@ -2146,7 +2147,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     const auto now=std::chrono::steady_clock::now();
     if(changedDocument||planetModelProject_!=projectPath||planetModelRules_!=&rules||modelsPending_||now>=nextFileCheck_){
         if(planetModelProject_!=projectPath)clearDocumentModels();
-        if(!changedDocument&&planetModelRules_!=&rules)planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
+        if(!changedDocument&&(planetModelRules_!=&rules||now>=nextFileCheck_)){
+            auto recipe=studioForestOverlayRecipe(doc,rules);
+            if(!(recipe==planetForestOverlayRecipe_)){
+                planetForestOverlayRecipe_=std::move(recipe);
+                planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
+            }
+        }
         if(planetPreview_)syncDocumentModels(doc,projectPath,rules,planetPreview_->markers);
         else clearDocumentModels();
         planetModelProject_=projectPath;planetModelRules_=&rules;

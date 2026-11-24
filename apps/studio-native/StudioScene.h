@@ -195,6 +195,7 @@ private:
     std::optional<StudioPlanetPreview> planetPreview_;
     PlanetProcessOverlays planetProcessOverlays_;
     PlanetForestOverlays planetForestOverlays_;
+    Json planetForestOverlayRecipe_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
     uint64_t planetLiveRevision_=0;

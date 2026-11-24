@@ -9,6 +9,11 @@ struct PlanetForestOverlays {
     size_t plants=0,missingProfile=0,rejected=0;
     bool invalid=false,truncated=false;
 };
+inline Json studioForestOverlayRecipe(const editor::MapDoc& doc,const Json& rules){
+    if(doc.data.worldExtra.has("planetForest"))return doc.data.worldExtra["planetForest"];
+    const auto* module=planetForestModuleConfig(rules);
+    return module?(*module)["planetForest"]:Json{};
+}
 inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
         const Json& rules,int bi,const StudioPlanetPreview& preview){
     namespace tw=terraweave;namespace wp=lib::worldprocess;
@@ -16,9 +21,7 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
     if(bi<0||size_t(bi)>=doc.data.bodies.size())return out;
     const auto& body=doc.data.bodies[size_t(bi)];
     if(body.id!=preview.bodyId||body.faceSize!=preview.faceSize||preview.radius<=0)return out;
-    const auto* module=planetForestModuleConfig(rules);
-    const auto& forest=doc.data.worldExtra.has("planetForest")?doc.data.worldExtra["planetForest"]:
-        module?(*module)["planetForest"]:Json{};
+    const auto forest=studioForestOverlayRecipe(doc,rules);
     if(forest.isNull())return out;
     try{
         const auto cfg=wp::parsePlanetForestConfig(forest,doc.toJson());
@@ -93,8 +96,20 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
             const auto tree=trees.find(id);
             const auto roots=plant.anchor.roots;
             const auto rootColor=render::rgba(225,156,82);
-            // Diagnostic footprint uses the real root support radius, not visual scale.
-            ring(lifted,right,forward,float(roots.radiusCm)*.01f,rootColor);
+            // Project the root footprint through the same tangent chart used by
+            // planetary support; sample authored terrain across cube seams.
+            std::optional<render::float3> previous;
+            const auto radius=StudioPlanetPreview::fixed(preview.radius);
+            for(int j=0;j<=12;++j){
+                const float t=tau*float(j)/12.f;
+                const auto a=StudioPlanetPreview::fixed(float(roots.radiusCm)*.01f*std::cos(t));
+                const auto b=StudioPlanetPreview::fixed(float(roots.radiusCm)*.01f*std::sin(t));
+                const auto dir=planet_overlay_detail::regionDirection(direction,east,south,radius,a,b);
+                if(!dir){previous.reset();continue;}
+                const auto p=planet_overlay_detail::surfacePoint(body,cube,*dir,preview.radius,.025f);
+                if(previous)add(*previous,p,rootColor);
+                previous=p;
+            }
             add(ground,ground-up*(float(roots.depthCm)*.01f),rootColor);
             if(tree!=trees.end()){
                 const auto pos=[&](int32_t a,int32_t b,int32_t c){
