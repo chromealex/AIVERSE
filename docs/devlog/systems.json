@@ -1810,10 +1810,10 @@
           "textEn": "Output reuse receipts use weak generation references and reject stale bindings. Hardware validation pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38R (в работе)",
-          "text": "Проверяемые привязки текстур в рендерере и GPU batching.",
-          "nameEn": "Texture Graph GPU — Stage 38R (in progress)",
-          "textEn": "Checked render-time material image resolution."
+          "name": "Texture Graph GPU — Stage 38R (частично)",
+          "text": "Renderer3D и ICB проверяют поколение текстур материалов; устаревшие привязки используют резервные текстуры. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38R (partial)",
+          "textEn": "Renderer3D and ICB validate material image generations; stale bindings fall back. Integration verification pending."
         }
       ],
       "enables": [
