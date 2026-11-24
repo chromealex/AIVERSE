@@ -82,6 +82,28 @@ public:
             active.sources.contains(id)&&active.current(ecs,generation_)&&
             active.cut->surfaceRevision==planet_.caveSurfaceRevision();
     }
+    // Host-thread capture only. No live runtime pointer is captured by the
+    // provider; route workers get immutable data. Supply a fresh environment
+    // revision whenever PHYSIS/NEREID inputs or mapping change.
+    std::optional<CavePlanetNavigationLease> navigationLease(const World& ecs,
+            uint64_t id,std::shared_ptr<const World> frozen,uint64_t environmentRevision,
+            CavePhysisCellMapper mapper,CaveEnvironmentCostSettings settings={},
+            CaveNavigationCallbacks policies={})const{
+        if(!regionReady(ecs,id))return {};
+        const auto* entry=findPlanetCaveRegion(ecs,id);
+        const auto& candidate=*cohorts_.at(entry->region.anchor.bodyId).active;
+        return candidate.navigationLease(surface_,id,std::move(frozen),environmentRevision,
+            std::move(mapper),settings,std::move(policies));
+    }
+    // Call under the host's normal reader exclusion at dispatch/acceptance.
+    bool navigationLeaseCurrent(const World& ecs,const CavePlanetNavigationLease& lease,
+            uint64_t environmentRevision)const{
+        if(!regionReady(ecs,lease.regionId))return false;
+        const auto* entry=findPlanetCaveRegion(ecs,lease.regionId);
+        const auto& candidate=*cohorts_.at(entry->region.anchor.bodyId).active;
+        return lease.matches(lease.regionId,generation_,candidate.nativeRevision,
+            entry->authority.volume.sourceRevision,environmentRevision);
+    }
     // The host MUST use this readiness in its actual movement/admission gate;
     // render visibility is not permission to move through a cave.
     bool requiredRegionsReady(const World& ecs,const std::set<uint64_t>& required)const{

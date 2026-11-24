@@ -1,7 +1,7 @@
 #pragma once
 // Owner-side candidate preparation, reusing the existing immutable SDF
 // jobs, native exact rim adapter and body-level publication payload.
-#include "engine/world/TerraWeaveCavernsPlanetDemand.h"
+#include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
 #include "engine/world/TerraWeaveCavernsPlanetNativeOwner.h"
 #include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
 #include "engine/world/TerraWeaveCavernsStreamJobs.h"
@@ -35,7 +35,28 @@ struct CavePlanetRuntimeCandidate {
     std::shared_ptr<const CavePlanetBodyCutPlan> cut;
     std::map<uint64_t,std::shared_ptr<const CaveVolumeSnapshot>> sources;
     std::vector<CavePlanetNativeSlot> volume;
+    // Persist coverage separately: volume payloads are moved into the native
+    // owner during commit, while navigation workers retain immutable leases.
+    std::map<uint64_t,CavePlanetNavigationCoverage> navigationCoverage;
     // Numeric source revisions alone are not sufficient after rollback.
+    // Can be used by prepareNavigationGi to stage a derived solver/cache.
+    // Candidate leases must not be exposed to movement before native commit.
+    std::optional<CavePlanetNavigationLease> navigationLease(
+            const std::shared_ptr<const game::Surface>& surface,uint64_t region,
+            std::shared_ptr<const World> frozen,uint64_t environmentRevision,
+            CavePhysisCellMapper mapper,CaveEnvironmentCostSettings settings={},
+            CaveNavigationCallbacks policies={})const{
+        if(!nativeRevision||!frozen||!current(*frozen,generation)||!environmentRevision||!mapper)return {};
+        const auto source=sources.find(region);
+        const auto coverage=navigationCoverage.find(region);
+        if(source==sources.end()||coverage==navigationCoverage.end())return {};
+        auto frame=CavePlanetFrame::make(surface,cut->regions.at(region)->anchor);
+        auto provider=makeResidentCavePlanetNavigation(std::move(frame),
+            std::make_shared<const CaveSnapshotSpatialIndex>(source->second),
+            std::move(frozen),environmentRevision,coverage->second,std::move(mapper),
+            settings,std::move(policies));
+        return CavePlanetNavigationLease{region,generation,nativeRevision,std::move(provider)};
+    }
     bool current(const World& ecs,uint64_t epoch)const{
         if(!generation||generation!=epoch||!cut||sources.size()!=cut->regions.size())return false;
         for(const auto& [id,source]:sources){
@@ -269,6 +290,7 @@ public:
             }
             for(auto& slot:slots)out.volume.push_back(std::move(slot));
             out.sources.emplace(r.id,r.snapshot);
+            out.navigationCoverage.emplace(r.id,CavePlanetNavigationCoverage::certify(r.frame.anchor(),r.lattice,r.keys));
         }
         (void)certifyPlanetBodyCut(*plan_,surface_);
         out.cut=std::move(plan_);regions_.clear();surface_.reset();region_=0;return out;

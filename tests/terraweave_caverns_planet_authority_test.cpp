@@ -2,6 +2,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetBodyCut.h"
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
+#include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -139,11 +140,28 @@ static void checkPlanetMotion(const std::shared_ptr<const game::Surface>& surfac
     check(!zero.groundedCompatible&&!stepCavePlanetMotion(zero,{},state,{},1,Fixed::fromRatio(1,20)),"zero gravity refuses grounded motor");
     check(!state.initialized,"refused step mutated state");
 }
+static void checkNavigationCoverage(){
+    const CavePlanetAnchor anchor{"planet",0,8_fx,8_fx,800};
+    CavePlanetDemandConfig cfg;
+    auto keys=planetInteriorKeys(anchor,cfg);
+    const auto coverage=CavePlanetNavigationCoverage::certify(anchor,cfg,keys);
+    const auto cap=coverage.halfExtentCm();
+    check(cap>0&&cap<anchor.halfExtentCm,"coverage smaller than chart");
+    check(coverage.contains({-cap+1,-cap+1,-cap+1},{cap-1,cap-1,cap-1}),"interior covered");
+    check(!coverage.contains({0,0,0},{cap,0,0}),"outer boundary rejected");
+    check(!coverage.contains({1,0,0},{0,0,0}),"inverted bounds rejected");
+    keys.erase(keys.begin());
+    bool refused=false;
+    try{(void)CavePlanetNavigationCoverage::certify(anchor,cfg,keys);}
+    catch(const std::invalid_argument&){refused=true;}
+    check(refused,"incomplete lattice accepted");
+}
 int main(){
     const auto surface=makeSurface();
     checkBodyCut(surface);
     checkDemand(surface);
     checkPlanetMotion(surface);
+    checkNavigationCoverage();
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;

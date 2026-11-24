@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <utility>
 #include <stdexcept>
 
 namespace aiverse::terraweave::caverns {
@@ -25,38 +27,50 @@ struct CaveEnvironmentSource {
     uint64_t simulationTick=0;
     std::shared_ptr<const World> frozenEcs;
 };
+// The flat default is preserved. Planetary hosts supply the actual simulation
+// position for NEREID and the owning PHYSIS cell mapping (never chart X/Z
+// masquerading as global coordinates). An unmapped PHYSIS cell has no response.
+using CavePhysisCellMapper=std::function<std::optional<std::pair<int32_t,int32_t>>(PointCm)>;
+struct CaveEnvironmentCoordinates {
+    std::function<Vec3(PointCm)> waterPosition;
+    CavePhysisCellMapper physisCell;
+};
 inline CaveNavigationCallbacks makeCaveEnvironmentCallbacks(
     CaveEnvironmentSource captured,
-    CaveEnvironmentCostSettings settings={}) {
+    CaveEnvironmentCostSettings settings={},CaveEnvironmentCoordinates coordinates={}) {
     if(!captured.frozenEcs||!captured.sdfRevision||
        settings.physisCellCm<=0||settings.physisCellCm>1000000||
        !settings.baseCost||settings.maxCost<settings.baseCost)
         throw std::invalid_argument("Caverns environment immutable ECS source");
     const auto ecs=std::move(captured.frozenEcs);
-    const auto sampleWaterAt=[ecs](PointCm p){
-        return lib::nereid::sampleWater(*ecs,{
+    const auto sampleWaterAt=[ecs,position=std::move(coordinates.waterPosition)](PointCm p){
+        const Vec3 metres=position?position(p):Vec3{
             Fixed::fromRatio(p.x,100),
             Fixed::fromRatio(p.y,100),
-            Fixed::fromRatio(p.z,100)});
+            Fixed::fromRatio(p.z,100)};
+        return lib::nereid::sampleWater(*ecs,metres);
+    };
+    const auto cellAt=[settings,mapper=std::move(coordinates.physisCell)](PointCm p)
+        ->std::optional<std::pair<int32_t,int32_t>>{
+        if(mapper)return mapper(p);
+        const int64_t px=floorDiv(p.x-settings.physisOriginXcm,settings.physisCellCm);
+        const int64_t pz=floorDiv(p.z-settings.physisOriginZcm,settings.physisCellCm);
+        if(px<INT32_MIN||px>INT32_MAX||pz<INT32_MIN||pz>INT32_MAX)return {};
+        return std::pair{int32_t(px),int32_t(pz)};
     };
     CaveNavigationCallbacks cb;
     cb.submerged=[sampleWaterAt](PointCm p){
         return sampleWaterAt(p).submerged;
     };
-    cb.traversalCost=[ecs,sampleWaterAt,settings](
+    cb.traversalCost=[ecs,sampleWaterAt,settings,cellAt](
         PointCm p,CaveTraversal traversal)->uint32_t {
         uint64_t cost=settings.baseCost;
         const auto water=sampleWaterAt(p);
         if(water.submerged && traversal!=CaveTraversal::Swimming)
             cost+=settings.waterSurcharge;
-        const int64_t px=floorDiv(p.x-settings.physisOriginXcm,
-                                  settings.physisCellCm);
-        const int64_t pz=floorDiv(p.z-settings.physisOriginZcm,
-                                  settings.physisCellCm);
-        if(px>=INT32_MIN&&px<=INT32_MAX&&pz>=INT32_MIN&&pz<=INT32_MAX){
+        if(const auto cell=cellAt(p)){
             physis::EnvironmentalResponse environment;
-            if(physis::environmentAt(*ecs,int32_t(px),int32_t(pz),
-                                     environment)) {
+            if(physis::environmentAt(*ecs,cell->first,cell->second,environment)) {
                 // Low traction (ice/wetness) increases ground routing cost.
                 // Integer-only fixed point. No bogus weather solver under
                 // Caverns; read PHYSIS already committed response.
