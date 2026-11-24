@@ -98,6 +98,9 @@ inline bool crossesCavePlanetRim(const CaveSurfaceRim& rim,const Entrance& mouth
         auto normal=fxCross(a-center,b-center);
         if(normal.y<Fixed{})normal=normal*Fixed::fromInt(-1);
         if(normal.y<=Fixed::fromRaw(1))continue;
+        // Compare heights at a uniform Q16 scale. The area of a narrow
+        // rim fan triangle must not expand the zero-distance band.
+        normal=normal/normal.y;
         const auto start=(from-center).dot(normal),finish=(to-center).dot(normal);
         if(entering?(start<Fixed{}||finish>=Fixed{}):(start>=Fixed{}||finish<Fixed{}))continue;
         const auto at=from+delta*(start/(start-finish));

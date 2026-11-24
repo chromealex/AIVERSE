@@ -2,6 +2,8 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+using aiverse::Fixed;
+using aiverse::Vec3;
 using namespace aiverse::terraweave::caverns;
 int main() {
     // Triangle pair representing one 20x20 metre native terrain tile.
@@ -28,6 +30,11 @@ int main() {
                (a<=1e-5&&b<=1e-5&&c<=1e-5);
     };
     for(const auto& t:cut.triangles)assert(!inside(t,1000,1000));
+    double retained=0.;
+    for(const auto& t:cut.triangles)
+        retained+=.5*std::abs((t.b.x-t.a.x)*(t.c.z-t.a.z)-(t.b.z-t.a.z)*(t.c.x-t.a.x));
+    const double expected=2000.*2000.-8.*250.*250.*std::sin(2.*std::acos(-1.)/16.);
+    assert(std::abs(retained-expected)<1e-5);
     auto again=cutTerrainEntrances(tile,{e});
     assert(cut.triangles.size()==again.triangles.size());
     for(size_t i=0;i<cut.triangles.size();++i){

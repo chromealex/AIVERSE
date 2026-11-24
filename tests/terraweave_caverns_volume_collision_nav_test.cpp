@@ -18,6 +18,12 @@ static CaveMesh threeSurfaceMesh() {
     return m;
 }
 int main(){
+    // The portal cut yields nearly parallel, distinct Q16 edges.
+    using aiverse::Fixed;
+    const aiverse::Vec3 a{Fixed::fromRaw(17821),Fixed::fromRaw(-57),Fixed::fromRaw(-11862)};
+    const aiverse::Vec3 b{Fixed::fromRaw(17793),Fixed::fromRaw(-57),Fixed::fromRaw(-11889)};
+    assert(aiverse::world::SpatialWorld::validTriangle({{},a,b}));
+    assert(!aiverse::world::SpatialWorld::validTriangle({{},a,a}));
     const auto mesh=threeSurfaceMesh();
     const auto payload=prepareCaveVolumeCollision(mesh,4,100,42,17);
     assert(payload.revision==42);

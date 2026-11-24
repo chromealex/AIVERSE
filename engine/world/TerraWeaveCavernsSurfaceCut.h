@@ -72,6 +72,78 @@ inline void emitCutPoly(std::vector<CutTriangleCm>& out,
 inline void subtractEntrance(std::vector<CutTriangleCm>& result,
                              const CutTriangleCm& src,const Entrance& e,
                              unsigned sides,size_t limit) {
+    // Intersect first. Contacts on the boundary of the original triangle
+    // partition its complement into simple caps. Triangulate only these
+    // caps so a clipping plane cannot introduce a T junction on the next tile.
+    const std::array<CutVertexCm,3> corners{src.a,src.b,src.c};
+    std::vector<CutVertexCm> hole(corners.begin(),corners.end());
+    for(unsigned side=0;side<sides&&!hole.empty();++side)
+        hole=clipCutPolygon(hole,e,side,sides,false);
+    const auto same=[](const CutVertexCm& a,const CutVertexCm& b){
+        return std::abs(a.x-b.x)<1e-7 && std::abs(a.z-b.z)<1e-7;
+    };
+    hole.erase(std::unique(hole.begin(),hole.end(),same),hole.end());
+    if(hole.size()>1 && same(hole.front(),hole.back()))hole.pop_back();
+    if(hole.size()<3){emitCutPoly(result,{src.a,src.b,src.c},limit);return;}
+    struct Contact {size_t index;double perimeter;};
+    std::vector<Contact> contacts;
+    for(size_t h=0;h<hole.size();++h){
+        for(unsigned edge=0;edge<3;++edge){
+            const auto a=corners[edge],b=corners[(edge+1)%3];
+            const double dx=b.x-a.x,dz=b.z-a.z,len=std::hypot(dx,dz);
+            if(len==0)continue;
+            const double x=hole[h].x-a.x,z=hole[h].z-a.z;
+            if(std::abs(dx*z-dz*x)>1e-7*len)continue;
+            const double t=(x*dx+z*dz)/(len*len);
+            if(t< -1e-9||t>1.+1e-9)continue;
+            double position=edge+std::clamp(t,0.,1.);
+            if(position>=3.)position=0.;
+            contacts.push_back({h,position});break;
+        }
+    }
+    if(contacts.size()>=2){
+        std::sort(contacts.begin(),contacts.end(),[](auto a,auto b){return a.perimeter<b.perimeter;});
+        for(size_t i=0;i<contacts.size();++i){
+            const auto a=contacts[i],b=contacts[(i+1)%contacts.size()];
+            const double end=b.perimeter+(i+1==contacts.size()?3.:0.);
+            std::vector<CutVertexCm> cap{hole[a.index]};
+            for(int k=int(std::floor(a.perimeter))+1;k<end-1e-9;++k)
+                cap.push_back(corners[size_t(k)%3]);
+            cap.push_back(hole[b.index]);
+            for(size_t h=b.index;h!=a.index;){
+                h=(h+hole.size()-1)%hole.size();
+                if(h!=a.index)cap.push_back(hole[h]);
+            }
+            // Ear clipping preserves concave caps and their boundary segments.
+            const auto turn=[](auto a,auto b,auto c){return (b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x);};
+            const double sign=turn(src.a,src.b,src.c)>0?1.:-1.;
+            while(cap.size()>2){
+                bool emitted=false;
+                for(size_t j=0;j<cap.size();++j){
+                    size_t prev=(j+cap.size()-1)%cap.size(),next=(j+1)%cap.size();
+                    auto u=cap[prev],v=cap[j],w=cap[next];
+                    if(sign*turn(u,v,w)<=1e-8)continue;
+                    bool contains=false;
+                    for(size_t k=0;k<cap.size();++k){
+                        if(k==prev||k==j||k==next)continue;
+                        auto q=cap[k];
+                        if(sign*turn(u,v,q)>=-1e-8&&sign*turn(v,w,q)>=-1e-8&&sign*turn(w,u,q)>=-1e-8){contains=true;break;}
+                    }
+                    if(contains)continue;
+                    emitCutPoly(result,{u,v,w},limit);
+                    cap.erase(cap.begin()+j);emitted=true;break;
+                }
+                if(!emitted){
+                    // Coincident contacts may leave a line after the last ear.
+                    double remainder=0.;
+                    for(size_t k=1;k+1<cap.size();++k)remainder+=turn(cap[0],cap[k],cap[k+1]);
+                    if(std::abs(remainder)>1e-7)throw std::invalid_argument("Caverns entrance polygon triangulation");
+                    break;
+                }
+            }
+        }
+        return;
+    }
     std::vector<CutVertexCm> inside{src.a,src.b,src.c};
     for(unsigned side=0;side<sides&&!inside.empty();++side) {
         emitCutPoly(result,clipCutPolygon(inside,e,side,sides,true),limit);

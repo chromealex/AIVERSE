@@ -1,6 +1,7 @@
 #include "engine/render/TerraWeaveCavernsResident.h"
 #include <cassert>
 #include <iostream>
+using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 int main(){
     aiverse::terraweave::TerrainPatch patch;

@@ -73,7 +73,7 @@ inline CaveMesh generateCaveMeshSampled(const Settings& s,ChunkKey3 key,uint32_t
             float(double(p.z-origin.z)/100),float(len?-gx/len:0),
             float(len?-gy/len:1),float(len?-gz/len:0)};
     };
-    auto emit=[&](MeshVertex a,MeshVertex b,MeshVertex c){
+    auto emit=[&](MeshVertex a,MeshVertex b,MeshVertex c,bool reverse){
         // Interpolation is rounded to integer centimetres above. Distinct
         // tetrahedron edges can therefore land on the same point (or line).
         // Omit zero-area facets from the shared visual/collision source.
@@ -85,10 +85,7 @@ inline CaveMesh generateCaveMeshSampled(const Settings& s,ChunkKey3 key,uint32_t
         const int64_t cmUx=pb[0]-pa[0],cmUy=pb[1]-pa[1],cmUz=pb[2]-pa[2];
         const int64_t cmVx=pc[0]-pa[0],cmVy=pc[1]-pa[1],cmVz=pc[2]-pa[2];
         if(cmUy*cmVz==cmUz*cmVy && cmUz*cmVx==cmUx*cmVz && cmUx*cmVy==cmUy*cmVx)return;
-        const double ux=b.x-a.x,uy=b.y-a.y,uz=b.z-a.z;
-        const double vx=c.x-a.x,vy=c.y-a.y,vz=c.z-a.z;
-        const double facing=(uy*vz-uz*vy)*a.nx+(uz*vx-ux*vz)*a.ny+(ux*vy-uy*vx)*a.nz;
-        if(facing<0)std::swap(b,c);
+        if(reverse)std::swap(b,c);
         const uint32_t i=uint32_t(out.vertices.size());
         out.vertices.push_back(a);out.vertices.push_back(b);out.vertices.push_back(c);
         out.indices.push_back(i);out.indices.push_back(i+1);out.indices.push_back(i+2);
@@ -109,12 +106,23 @@ inline CaveMesh generateCaveMeshSampled(const Settings& s,ChunkKey3 key,uint32_t
             for(int j=0;j<4;++j)(c[t[j]].v>0?inside[ic++]:outside[oc++])=t[j];
             if(ic==0||ic==4)continue;
             auto edge=[&](int i,int j){return vert(c[i],c[j]);};
-            if(ic==1)emit(edge(inside[0],outside[0]),edge(inside[0],outside[1]),edge(inside[0],outside[2]));
-            else if(ic==3)emit(edge(outside[0],inside[0]),edge(outside[0],inside[1]),edge(outside[0],inside[2]));
+            // The sign comes from the sampled tetrahedron. Smoothed
+            // shading normals can point across a neighbour at sharp joins.
+            const auto orientation=[&](int origin,int i,int j,int k){
+                const auto axis=[&](int n,int d){return corners[n][d]-corners[origin][d];};
+                return axis(i,0)*(axis(j,1)*axis(k,2)-axis(j,2)*axis(k,1))
+                    -axis(i,1)*(axis(j,0)*axis(k,2)-axis(j,2)*axis(k,0))
+                    +axis(i,2)*(axis(j,0)*axis(k,1)-axis(j,1)*axis(k,0));
+            };
+            if(ic==1)emit(edge(inside[0],outside[0]),edge(inside[0],outside[1]),edge(inside[0],outside[2]),
+                orientation(inside[0],outside[0],outside[1],outside[2])<0);
+            else if(ic==3)emit(edge(outside[0],inside[0]),edge(outside[0],inside[1]),edge(outside[0],inside[2]),
+                orientation(outside[0],inside[0],inside[1],inside[2])>0);
             else {
+                const bool reverse=orientation(inside[0],outside[0],outside[1],inside[1])<0;
                 auto a=edge(inside[0],outside[0]),b=edge(inside[0],outside[1]);
                 auto d=edge(inside[1],outside[0]),e=edge(inside[1],outside[1]);
-                emit(a,b,d);emit(b,e,d);
+                emit(a,b,d,reverse);emit(b,e,d,reverse);
             }
         }
     }

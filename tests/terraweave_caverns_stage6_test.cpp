@@ -5,7 +5,7 @@
 using namespace aiverse::terraweave::caverns;
 int main(){
     Entrance e{91,500,500,0,-1000,200};
-    terraweave::EarthworksNavConfig c;c.width=10;c.depth=10;
+    aiverse::terraweave::EarthworksNavConfig c;c.width=10;c.depth=10;
     c.originXcm=0;c.originZcm=0;c.cellCm=100;
     auto blocked=surfaceEntranceBlocked(c,{e});
     assert(blocked(5,5));

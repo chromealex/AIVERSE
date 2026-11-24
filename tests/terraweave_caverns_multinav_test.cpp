@@ -1,6 +1,7 @@
 #include "engine/world/TerraWeaveCavernsMultiNav.h"
 #include <cassert>
 #include <iostream>
+using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 int main(){
     Settings caves;

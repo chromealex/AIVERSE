@@ -1,6 +1,7 @@
 #include "engine/world/TerraWeaveCavernsBox3D.h"
 #include <cassert>
 #include <iostream>
+using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 int main(){
     CutNativePayload p;p.cell={0,0,0};p.revision=1;
