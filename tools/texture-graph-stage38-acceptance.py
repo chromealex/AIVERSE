@@ -22,6 +22,9 @@ TESTS = {
     "vulkan_scope_timing": "aiverse_vulkan_scope_timing_tests",
     "aiverse_deferred_loading_tests": "aiverse_deferred_loading_tests",
     "aiverse_hosted_view_tests": "aiverse_hosted_view_tests",
+    "render_geometry_page_owners": "aiverse_geometry_page_owners_tests",
+    "render_device_epoch": "aiverse_device_epoch_tests",
+    "render_resource_owner_group": "aiverse_render_resource_owner_group_tests",
 }
 for name in (
     "pipeline_cache", "shared_scratch", "liveness", "pass_schedule",

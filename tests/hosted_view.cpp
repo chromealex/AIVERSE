@@ -94,6 +94,7 @@ int aiverseMain(int, char**) {
         host.start(device,"game2","assets");
         host.stop();
         CHECK(host.pendingRetiredClients()==2 && host.canShutdown());
+        CHECK(host.retirementDiagnostics().pending==2 && host.retirementDiagnostics().staleEpoch==0);
         bool refused=false;
         try { host.start(otherDevice,"foreign","assets"); }
         catch(const std::logic_error&) { refused=true; }
@@ -104,6 +105,19 @@ int aiverseMain(int, char**) {
         host.start(otherDevice,"new","assets");
         host.stop();
         CHECK(host.drainAfterGpuIdle()==1);
+        {
+            render::RenderDeviceLifetime first(device),second(device);
+            host.start(device,"epoch1","assets",first.lease());
+            host.stop();
+            bool epochRefused=false;
+            try { host.start(device,"epoch2","assets",second.lease()); }
+            catch(const std::logic_error&) { epochRefused=true; }
+            CHECK(epochRefused && host.pendingRetiredClients()==1);
+            CHECK(host.drainAfterGpuIdle()==1);
+            host.start(device,"epoch2","assets",second.lease());
+            host.stop();
+            CHECK(host.drainAfterGpuIdle()==1);
+        }
         CHECK(platform::hostedView()==&outer && ImGui::GetCurrentContext()==outerImgui);
         platform::setHostedView(previousView);
         ImGui::DestroyContext(outerImgui);

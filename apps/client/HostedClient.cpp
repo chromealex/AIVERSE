@@ -24,6 +24,23 @@ struct HostedClient::Scope {
 static_assert(client::GameClient::kInitSteps == 6, "HostedClient::kSteps follows GameClient::kInitSteps");
 
 HostedClient::HostedClient() = default;
+bool HostedClient::currentEpochValid() const noexcept {
+    return dev_ && epoch_.alive() && epoch_.device()==dev_ && epoch_.validFor(*dev_);
+}
+bool HostedClient::retiredEpochValid(const RetiredClient& item) const noexcept {
+    return currentEpochValid() && item.device==dev_ && item.epoch.alive() &&
+        item.epoch.generation()==epoch_.generation() && item.epoch.validFor(*dev_);
+}
+HostedClient::RetirementDiagnostics HostedClient::retirementDiagnostics() const noexcept {
+    RetirementDiagnostics result;
+    result.pending=retired_.size();
+    for(const auto& item:retired_) {
+        if(item.shutdownFailed)++result.quarantined;
+        if(!retiredEpochValid(item))++result.staleEpoch;
+        if(item.client && !item.client->canShutdown())++result.busy;
+    }
+    return result;
+}
 HostedClient::~HostedClient() {
     try {
         stop();
@@ -51,8 +68,21 @@ void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const 
                        render::RenderDeviceLifetime::Lease deviceLease, std::optional<size_t> initialMap) {
     if(deviceLease.device() && !deviceLease.validFor(dev))
         throw std::logic_error("HostedClient GPU device generation mismatch");
-    if(dev_ && dev_!=&dev && (client_ || !retired_.empty()))
-        throw std::logic_error("HostedClient previous device still owns clients");
+    const bool pending=client_ || !retired_.empty();
+    if(pending) {
+        if(!currentEpochValid() || dev_!=&dev ||
+           (deviceLease.device() && deviceLease.generation()!=epoch_.generation()))
+            throw std::logic_error("HostedClient previous device epoch still owns clients");
+        // Do not switch an external host epoch to an implicit one mid-life.
+        deviceLease=epoch_;
+    } else {
+        ownedEpoch_.reset();
+        if(!deviceLease.device()) {
+            ownedEpoch_=std::make_unique<render::RenderDeviceLifetime>(dev);
+            deviceLease=ownedEpoch_->lease();
+        }
+        epoch_=deviceLease;
+    }
     stop();
     dev_ = &dev;
     initialMap_ = initialMap;
@@ -80,7 +110,8 @@ void HostedClient::stop() {
     RetiredClient old;
     old.view = view_;
     old.device = dev_;
-    old.completionToken = dev_ ? dev_->gpuSubmissionFence() : 0;
+    old.epoch = epoch_;
+    old.completionToken = currentEpochValid() ? dev_->gpuSubmissionFence() : 0;
     old.initialized = step_ > 0;
     retired_.push_back(std::move(old));
     retired_.back().client=std::move(client_);
@@ -89,7 +120,7 @@ void HostedClient::stop() {
 }
 
 size_t HostedClient::collectGpuRetirements() {
-    if (!dev_) return 0;
+    if (!currentEpochValid()) return 0;
     if (!dev_->gpuHealthy()) {
         abandonOnDeviceLoss();
         return 0;
@@ -98,7 +129,7 @@ size_t HostedClient::collectGpuRetirements() {
     if (!completed) return 0;
     size_t collected = 0;
     for (auto it = retired_.begin(); it != retired_.end();) {
-        if (it->device != dev_ || !it->completionToken ||
+        if (!retiredEpochValid(*it) || !it->completionToken ||
             it->completionToken > completed) {
             ++it;
             continue;
@@ -141,9 +172,9 @@ size_t HostedClient::abandonOnDeviceLoss() {
 }
 
 bool HostedClient::canShutdown() const noexcept {
-    if(client_ && !client_->canShutdown())return false;
+    if(client_ && (!currentEpochValid() || !client_->canShutdown()))return false;
     for(const auto& item:retired_)
-        if(item.shutdownFailed || (item.client && !item.client->canShutdown()))return false;
+        if(!retiredEpochValid(item) || item.shutdownFailed || (item.client && !item.client->canShutdown()))return false;
     return true;
 }
 
@@ -154,8 +185,8 @@ size_t HostedClient::drainAfterGpuIdle() {
     for(const auto& item:retired_) {
         if(item.shutdownFailed || (item.client && !item.client->canShutdown()))
             throw std::logic_error("HostedClient drain: blocked or quarantined client");
-        if(item.device!=dev_)
-            throw std::logic_error("HostedClient drain: foreign device");
+        if(!retiredEpochValid(item))
+            throw std::logic_error("HostedClient drain: stale device epoch");
     }
     size_t drained = 0;
     for(auto it=retired_.begin();it!=retired_.end();) {
@@ -183,7 +214,7 @@ float HostedClient::progress() const {
 
 void HostedClient::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle depth, int w, int h, float pointsW, float pointsH,
                        bool touch, const platform::Insets& safe) {
-    if (!client_ || w <= 0 || h <= 0 || pointsW <= 0 || pointsH <= 0) return;
+    if (!client_ || !currentEpochValid() || w <= 0 || h <= 0 || pointsW <= 0 || pointsH <= 0) return;
     const bool resized = view_.fbWidth != w || view_.fbHeight != h || view_.width != pointsW || view_.height != pointsH ||
                          view_.safe.left != safe.left || view_.safe.top != safe.top || view_.safe.right != safe.right || view_.safe.bottom != safe.bottom;
     view_.width = pointsW; view_.height = pointsH;

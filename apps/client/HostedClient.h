@@ -43,6 +43,8 @@ public:
     size_t abandonOnDeviceLoss();
     // Non-mutating owner-thread preflight for full host teardown.
     bool canShutdown() const noexcept;
+    struct RetirementDiagnostics { size_t pending=0,busy=0,quarantined=0,staleEpoch=0; };
+    RetirementDiagnostics retirementDiagnostics() const noexcept;
     size_t pendingRetiredClients() const { return retired_.size(); }
     bool active() const { return client_ != nullptr; }
     bool loading() const;
@@ -75,6 +77,7 @@ private:
         std::unique_ptr<client::GameClient> client;
         platform::HostedView view;
         gfx::Device* device = nullptr;
+        render::RenderDeviceLifetime::Lease epoch;
         uint64_t completionToken = 0; // zero means quarantine until GPU idle
         bool initialized = false;
         // Unknown partial shutdown is not safe to retry or destroy.
@@ -83,6 +86,10 @@ private:
     std::vector<RetiredClient> retired_;
     platform::HostedView view_;
     gfx::Device* dev_ = nullptr;
+    std::unique_ptr<render::RenderDeviceLifetime> ownedEpoch_;
+    render::RenderDeviceLifetime::Lease epoch_;
+    bool currentEpochValid() const noexcept;
+    bool retiredEpochValid(const RetiredClient& item) const noexcept;
     int step_ = 0;
     std::optional<size_t> initialMap_;
     float x_ = 0, y_ = 0, k_ = 1;

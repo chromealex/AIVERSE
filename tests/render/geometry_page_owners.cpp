@@ -34,6 +34,15 @@ int main() {
     for(const Model* model:a)identities.insert(model->geometryPoolPage.get());
     for(const Model* model:b)identities.insert(model->geometryPoolPage.get());
     AIVERSE_TEST_CHECK(identities.size()==1); // device owner would charge page once
+    const auto before=page.use_count();
+    const auto weakA=one.geometryPoolPageReferences();
+    const auto weakB=two.geometryPoolPageReferences();
+    AIVERSE_TEST_CHECK(weakA.size()==2 && weakB.size()==1);
+    AIVERSE_TEST_CHECK(page.use_count()==before); // no GPU page ownership
+    std::set<GeometryPoolPageReference,std::owner_less<GeometryPoolPageReference>> weakIdentities;
+    weakIdentities.insert(weakA.begin(),weakA.end());
+    weakIdentities.insert(weakB.begin(),weakB.end());
+    AIVERSE_TEST_CHECK(weakIdentities.size()==1);
     AIVERSE_TEST_CHECK(one.gpuOwnerEstimate().sharedGeometryResidentModels==2);
     AIVERSE_TEST_CHECK(two.gpuOwnerEstimate().sharedGeometryResidentModels==1);
     // geometryPoolReferencedStats(device, combined models) is the

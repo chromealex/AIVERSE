@@ -217,6 +217,7 @@ static void verifyOwnerThreadMapReadContracts() {
         expectDenied([&]{cache.forEachOwnedModel(
             [](const render::Model&,bool){});});
         expectDenied([&]{(void)cache.geometryPoolModelReferences();});
+        expectDenied([&]{(void)cache.geometryPoolPageReferences();});
         expectDenied([&]{(void)cache.gpuOwnerEstimate();});
         expectDenied([&]{(void)cache.pendingRetirements();});
         expectDenied([&]{(void)cache.retirementStats();});
