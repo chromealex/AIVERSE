@@ -6,6 +6,7 @@ import json
 import hashlib
 import sys
 import subprocess
+import shutil
 import io
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
@@ -14,6 +15,11 @@ from evidence import validate_report, checkout_errors
 from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry, owner_readiness
 from feature_policy import dependency_report, roadmap_report, api_report, ownership_report
+from feature_automation import (impact_report, release_scope, schedule_tasks, skill_similarity,
+                                architecture_report, skill_freshness_candidates, conflict_plan,
+                                task_context, scaffold_gap, export_assignments, feature_history,
+                                coverage_history, discover_branches)
+from feature_api import compare as compare_api
 from new_feature import scaffold
 from legacy_inventory import inventory
 from capability_inventory import capability_id, source_operations
@@ -352,6 +358,117 @@ class GateTest(unittest.TestCase):
     def test_bad_shape(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate({"schema": True}))
+
+class AutomationTest(unittest.TestCase):
+    def fixture(self):
+        registry = {"base": {"id":"base", "owner":"core", "changed_paths":["engine/Base.h"]},
+                    "child": {"id":"child", "owner":"render", "changed_paths":["engine/Child.h"]}}
+        policies = {"base":{"requires":[], "api_paths":["engine/Base.h"]},
+                    "child":{"requires":["base"], "api_paths":[]}}
+        deps = {"order":["base","child"], "features":{
+            "base":{"requires":[], "blocked_by":[], "state":"pending"},
+            "child":{"requires":["base"], "blocked_by":["base"], "state":"blocked"}}}
+        return registry, policies, deps
+
+    def test_impact_release_and_schedule(self):
+        registry, policies, deps = self.fixture()
+        impact = impact_report(registry, policies, ["engine/Base.h","unknown.h"])
+        self.assertEqual(impact["direct"], {"base":["engine/Base.h"]})
+        self.assertEqual(impact["transitive"], ["child"])
+        self.assertEqual(impact["unmapped_paths"], ["unknown.h"])
+        selection = release_scope({"releases":{"next":["child"]}}, "next", deps)
+        self.assertEqual(selection["features"], ["base","child"])
+        self.assertEqual(selection["implicit_prerequisites"], ["base"])
+        with self.assertRaises(ValueError):
+            release_scope({"releases":{"next":["missing"]}}, "next", deps)
+        readiness = {"owners":[
+            {"owner":"core","tasks":[{"id":"base-task","feature":"base","kind":"fix_manifest"}]},
+            {"owner":"render","tasks":[{"id":"child-task","feature":"child","kind":"investigate"}]}]}
+        agents = [{"id":"a","owners":["core","render"],"capacity":2}]
+        rows = schedule_tasks(readiness, deps, agents, set(), registry)
+        self.assertEqual(rows[0]["agent"], "a")
+        self.assertEqual(rows[1]["state"], "blocked")
+        self.assertIn("base", rows[1]["reason"])
+        self.assertEqual(schedule_tasks(readiness, deps, agents, {"engine/Base.h"}, registry)[0]["state"], "blocked")
+
+    def test_skill_and_architecture_review(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for rel in ("skills/a/SKILL.md", "skills/b/SKILL.md"):
+                path = root / rel
+                path.parent.mkdir(parents=True)
+                path.write_text("---\nname: fixture\n---\nshared deterministic policy and owner validation\n")
+            skills = [{"id":"a","domain":"core","path":"skills/a/SKILL.md","source":"engine/Base.h"},
+                      {"id":"b","domain":"core","path":"skills/b/SKILL.md"}]
+            self.assertEqual(skill_similarity(root, skills)[0]["skills"], ["a","b"])
+            self.assertEqual(skill_freshness_candidates(skills, ["engine/Base.h"])[0]["skill"], "a")
+            src = root / "engine/sim/Bad.cpp"
+            src.parent.mkdir(parents=True)
+            src.write_text('#include "../../modules/fps/Bad.h"\nif (isFps()) {}\nint v=rand();\n')
+            findings = architecture_report(root, ["engine/sim/Bad.cpp"], [])["findings"]
+            self.assertEqual(len(findings), 3)
+            self.assertEqual(architecture_report(root, ["engine/sim/Bad.cpp"], ["engine/sim/Bad.cpp"])["findings"], [])
+            conflict = {"path":"engine/Base.h","claims":[{"branch":"a"},{"branch":"b"}]}
+            self.assertEqual(conflict_plan([conflict], self.fixture()[0])[0]["action"], "coordinate_with_single_owner")
+
+    def test_context_scaffolding_and_assignment_export(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for rel,data in {"docs/devlog/systems.json":{"systems":[]},
+                             "skills/catalog.json":{"skills":[]}}.items():
+                path = root / rel
+                path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text(json.dumps(data))
+            registry, _, deps = self.fixture()
+            task = {"id":"gap:mcp","kind":"implement_gap","feature":"base","surface":"mcp"}
+            report = {"sha":"a"*40,"readiness":{"owners":[{"owner":"core","tasks":[task]}]},
+                      "policy":{"dependencies":deps},
+                      "automation":{"schedule":[{"task":"gap:mcp","agent":"a","state":"proposed"}]}}
+            ctx = task_context(root, report, registry, "gap:mcp")
+            self.assertEqual(ctx["paths"], ["engine/Base.h"])
+            self.assertIn("AGENTS.md", ctx["missing_references"])
+            draft = scaffold_gap(root, report, registry, "gap:mcp", root/"drafts")
+            self.assertTrue((draft/"CapabilityOps.h.in").is_file())
+            with self.assertRaises(FileExistsError):
+                scaffold_gap(root, report, registry, "gap:mcp", root/"drafts")
+            result = export_assignments(root, report, registry, root/"assignments")
+            self.assertEqual(result["agents"], 1)
+            self.assertEqual(json.loads(Path(result["assignments"][0]).read_text())["state"], "proposed")
+
+    def test_git_history_and_branch_discovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def git(*args):
+                return subprocess.check_output(["git",*args],cwd=root,text=True).strip()
+            git("init","-q","-b","main")
+            git("config","user.name","Fixture")
+            git("config","user.email","fixture@example.invalid")
+            manifest = root/"docs/features/base.json"
+            manifest.parent.mkdir(parents=True)
+            def write(status):
+                manifest.write_text(json.dumps({"checks":{"tests":{"status":status}},"integrations":{}}))
+                git("add",".")
+                git("commit","-qm",status)
+            write("pass")
+            git("switch","-qc","feature/fixture")
+            write("not_run")
+            history = feature_history(root,"base")
+            self.assertEqual(history[0]["regressions"], ["tests"])
+            self.assertEqual(discover_branches(root,"main"), ["refs/heads/feature/fixture"])
+
+    @unittest.skipUnless(shutil.which("clang++"), "clang++ unavailable")
+    def test_compiler_api_comparison(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name, arg in (("old","int"),("new","float")):
+                tree = root/name
+                tree.mkdir()
+                (tree/"Public.h").write_text("namespace demo { struct API { int version() const; private: int secret("+arg+"); }; int work("+arg+"); }")
+            report = compare_api(root/"old",root/"new",["Public.h"],"clang++",[])
+            self.assertTrue(report["potential_breaking"])
+            self.assertEqual({row[1] for row in report["headers"][0]["removed"]},{"demo::work"})
+            self.assertEqual({row[1] for row in report["headers"][0]["added"]},{"demo::work"})
+
 
 if __name__ == "__main__":
     unittest.main()
