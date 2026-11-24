@@ -30,6 +30,7 @@
 #include "engine/render/AdaptiveShadowResolution.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
+#include "apps/studio-native/StudioCavernsPreview.h"
 
 namespace aiverse::studio {
 class StudioScene final {
@@ -46,6 +47,14 @@ public:
                const std::string& projectPath = {}, const Json& rules = Json::object(),
                const StudioFacialPreviewBinding* facialBinding=nullptr);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    Json cavernsPreview(const Json& input) {
+        if(input.has("enabled")||input.has("isolate")||input.has("paging")) {
+            if(!device_||!cavernsPreview_.configure(*device_,input))
+                throw std::runtime_error("Caverns preview GPU retirement refused");
+            lastFrameSignature_=0;
+        }
+        return cavernsPreview_.stats();
+    }
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
     void setWindPreview(const StudioWindState& state) { wind_ = state; }
@@ -181,6 +190,7 @@ private:
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
+    StudioCavernsPreview cavernsPreview_;
     std::string facialFramedGuid_; // character the camera was last framed on
     std::string thumbnailPath_;   // pending preset thumbnail capture
     bool thumbnailCrop_=true;
