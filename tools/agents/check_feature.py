@@ -98,7 +98,7 @@ def main():
     failures = 0
     for path in args.manifest:
         try:
-            errors = validate(json.loads(path.read_text(encoding="utf-8")), ready=args.ready)
+            errors = validate(json.loads(path.read_text(encoding="utf-8")), ready=args.ready, verify_git=args.ready)
         except (OSError, ValueError) as exc:
             errors = [str(exc)]
         for error in errors:
