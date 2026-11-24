@@ -18,6 +18,7 @@ inline CavePathResult findCaveNativeNavPath(
     const CaveNavConfig& config) {
     CavePathResult result;result.sourceRevision=query.sourceRevision;
     result.environmentRevision=provider?provider->environmentRevision():0;
+    result.scopeId=provider?provider->scopeId():0;
     if(!provider||provider->revision()!=query.sourceRevision||
        (query.agent.traversal!=CaveTraversal::Ground &&
         query.agent.traversal!=CaveTraversal::Climbing))

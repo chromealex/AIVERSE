@@ -71,6 +71,7 @@ public:
     void invalidateAfterRestore(){
         if(generation_==UINT64_MAX){recovery_=true;return;}
         ++generation_;builder_.cancel();candidate_.reset();buildingBody_.clear();buildingIds_.clear();
+        for(auto& [body,c]:cohorts_){(void)body;if(c.active)c.active->navigationLeases.clear();}
         failed_.clear();
     }
     void retryRefused(){failed_.clear();}
@@ -111,8 +112,10 @@ public:
         if(!hooks_.navigationInputs)return true;
         const auto stored=candidate.navigationLeases.find(lease.regionId);
         if(stored==candidate.navigationLeases.end()||stored->second.provider!=lease.provider)return false;
-        const auto input=hooks_.navigationInputs(ecs,lease.regionId);
-        return input&&input->environmentRevision==environmentRevision&&bool(input->physisCell);
+        try{
+            const auto input=hooks_.navigationInputs(ecs,lease.regionId);
+            return input&&input->environmentRevision==environmentRevision&&bool(input->physisCell);
+        }catch(const std::exception&){return false;}
     }
     std::optional<CavePlanetNavigationLease> committedNavigationLease(
             const World& ecs,uint64_t id,uint64_t environmentRevision)const{
@@ -137,6 +140,15 @@ public:
                 auto leases=c.active->prepareNavigationLeases(surface_,frozen,hooks_.navigationInputs);
                 if(!leases)return false;
                 next.emplace(body,std::move(*leases));
+            }
+            if(!hooks_.exclusive())return false;
+            for(const auto& [body,leases]:next){
+                (void)body;
+                for(const auto& [id,lease]:leases){
+                    const auto input=hooks_.navigationInputs(ecs,id);
+                    if(!regionReady(ecs,id)||!input||!input->physisCell||
+                       input->environmentRevision!=lease.provider->environmentRevision())return false;
+                }
             }
             if(!hooks_.exclusive())return false;
             for(auto& [body,leases]:next)cohorts_.at(body).active->navigationLeases.swap(leases);

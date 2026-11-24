@@ -30,6 +30,7 @@ inline CavePathResult solveCaveGraph(
     CavePathBackend backend,CaveGraphSolverSettings settings={}) {
     CavePathResult result;result.sourceRevision=query.sourceRevision;
     result.environmentRevision=data?data->environmentRevision():0;
+    result.scopeId=data?data->scopeId():0;
     if(!data||data->revision()!=query.sourceRevision||
        !query.maxVisits||settings.cellCm<10||settings.cellCm>10000||
        !settings.maxNodes||settings.maxNodes>1048576||
@@ -139,6 +140,7 @@ inline CavePathResult solveCaveGraph(
     result.waypoints.reserve(route.nodes.size());
     for(auto node:route.nodes)
         result.waypoints.push_back(source->centre(source->coordinates(node)));
+    if(!caveRouteSegmentsValid(query,result,*data))return {};
     return result;
 }
 inline void registerCaveSharedGraphSolvers(

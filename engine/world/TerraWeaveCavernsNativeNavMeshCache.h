@@ -56,6 +56,7 @@ public:
         CavePathResult result;
         result.sourceRevision=query.sourceRevision;
         result.environmentRevision=source?source->environmentRevision():0;
+        result.scopeId=source?source->scopeId():0;
         if(!source||source->revision()!=query.sourceRevision||
            (query.agent.traversal!=CaveTraversal::Ground &&
             query.agent.traversal!=CaveTraversal::Climbing))

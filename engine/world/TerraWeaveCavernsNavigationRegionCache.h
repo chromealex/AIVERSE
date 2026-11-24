@@ -40,7 +40,9 @@ public:
     void refresh(const CaveNavigationChange& change,
                  std::shared_ptr<const CaveNavigationDataProvider> next){
         if(!next)throw std::invalid_argument("Caverns missing refreshed region");
-        if(!source_||change.fullRebuild) {
+        if(!source_||change.fullRebuild||source_->source()->scopeId()!=next->scopeId()||
+           source_->source()->environmentRevision()!=next->environmentRevision()||
+           (source_->source()!=next&&source_->sourceRevision()==next->revision()&&next->scopeId())) {
             reset(std::move(next));return;
         }
         const auto view=std::make_shared<const CaveNavigationGridView>(
@@ -69,6 +71,7 @@ public:
         CavePathResult result;
         result.sourceRevision=query.sourceRevision;
         result.environmentRevision=source_->source()->environmentRevision();
+        result.scopeId=source_->source()->scopeId();
         if(query.sourceRevision!=source_->sourceRevision()||
            query.agent.traversal!=agent_.traversal||
            query.agent.radiusCm!=agent_.radiusCm||
@@ -115,6 +118,7 @@ public:
         for(uint32_t n:route.nodes)
             result.waypoints.push_back(
                 source_->centre(source_->coordinates(n)));
+        if(!caveRouteSegmentsValid(query,result,*source_->source()))return {};
         return result;
     }
     nav::GraphRegionCache::Stats stats()const noexcept{
