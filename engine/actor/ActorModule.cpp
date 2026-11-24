@@ -456,7 +456,8 @@ void ActorHost::shoot(Simulation& sim,CharacterRef p) {
 void ActorHost::tick(Simulation& sim) {
     auto& s=state(sim);if(s.winner)return;
     if(caveNavigation_)
-        (void)nav::repathCaveActorRoutes(sim,*caveNavigation_,8);
+        (void)nav::repathCaveActorRoutes(sim,*caveNavigation_,8,
+                                         caveRouteResolver_);
     // Programmed and ordinary projectiles have already advanced in the preceding stages.
     if(config_.systems.enabled)tickSystems(sim);
     tickRoyale(sim);
@@ -508,8 +509,12 @@ void ActorHost::tick(Simulation& sim) {
         if(caveNavigation_&&!a.vehicle){
             // Apply route steering AFTER stale network input is cleared;
             // the existing moveActor motor alone owns character motion.
+            const Fixed perTick=config_.motor.speed*sim.dt();
+            const uint32_t maxCm=uint32_t(std::max<int64_t>(
+                1,perTick.raw*100/Fixed::kOne));
             (void)nav::steerCaveActorMotor(
-                sim.world(),a.entity,input,*caveNavigation_,collision_);
+                sim.world(),a.entity,input,*caveNavigation_,collision_,
+                {},maxCm);
         }
         if(config_.systems.enabled)actorSystems(sim,a,input);
         if(!a.vehicle){
