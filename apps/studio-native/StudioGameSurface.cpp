@@ -97,8 +97,14 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
+bool StudioGameSurface::planetMatch() const {
+    auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        return game->surface(*sim)!=nullptr;
+    return false;
+}
 bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
-    return host_&&host_->inMatch()&&host_->canControl()&&
+    return host_&&host_->canControl()&&planetMatch()&&
         snapshot.getBool("active")&&snapshot.getStr("topology")=="planet"&&
         snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
 }

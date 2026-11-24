@@ -317,8 +317,7 @@ void StudioHost::tickGame() {
     invalidate();
     if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->ecologyState(wpLiveOptions_);
-        if(wpLiveSnapshot_.getStr("topology")=="planet"&&!worldProcessPlanetMapCurrent())wpLiveSnapshot_=Json();
+        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_);
         rebuildOverlay();
     }
 }
@@ -2058,10 +2057,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         // Browser polling can reuse the same completed-tick geometry sampled
         // for the native Scene. No duplicate heavy GRANULAR query.
         if(wpLiveOptions_.live&&game_&&worldProcessPlanetMapCurrent()&&game_->planetSnapshotCurrent(wpLiveSnapshot_))return wpLiveSnapshot_;
-        if(wpLiveOptions_.live&&game_&&!worldProcessPlanetMapCurrent()){
-            auto state=game_->ecologyState();
-            if(state.getStr("topology")=="planet"){Json out=Json::object();out.set("active",Json::fromBool(false));out.set("regions",Json::array());return out;}
-            return state;
+        if(wpLiveOptions_.live&&game_&&game_->planetMatch()&&!worldProcessPlanetMapCurrent()){
+            Json out=Json::object();out.set("active",Json::fromBool(false));out.set("regions",Json::array());return out;
         }
         if(game_)return game_->ecologyState();
         Json out=Json::object();out.set("active",Json::fromBool(false));
@@ -2071,8 +2068,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const auto next=wpLiveOptions_.patched(params);
         if(next!=wpLiveOptions_){
             wpLiveOptions_=next;
-            wpLiveSnapshot_=wpLiveOptions_.live&&game_?game_->ecologyState(wpLiveOptions_):Json();
-            if(wpLiveSnapshot_.getStr("topology")=="planet"&&!worldProcessPlanetMapCurrent())wpLiveSnapshot_=Json();
+            wpLiveSnapshot_=wpLiveOptions_.live&&game_&&(!game_->planetMatch()||worldProcessPlanetMapCurrent())
+                ?game_->ecologyState(wpLiveOptions_):Json();
             wpLiveRefresh_=platform_.now();
             rebuildOverlay();
         }
