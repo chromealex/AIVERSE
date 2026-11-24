@@ -243,3 +243,7 @@ Pinned Caverns integration a5ca5ae18f39cd5cc0e9908d5bd832b501c18fe4 merged with 
 ## Stage 61 — planetary inspection contract audit
 
 The read-only report adapter rejects explicit mutation replies, native-invalid body ID lengths, depth bands outside the chart, and stamp/entrance spheres crossing chart boundaries. Mirrors the native chart geometry checks for the active region; no new solver or mutation API. Corrected the previously impossible planetary fixture and added rejection cases. Full native and frontend acceptance remains pending.
+
+## Stage 62 — owner synchronization
+
+Pinned Building 8b6f8efe and Caverns 562a7ec6 integrated into the shared branch. Preserved graph/preview scopes and combined typed Building roof, chamfer, room-use and furniture fields without replacing existing DTOs. Full tree comparison preserved all non-overlapping paths. Acceptance pending.
