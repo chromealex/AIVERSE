@@ -180,3 +180,7 @@ Bind existing Simulation and Box3D Scene identities to native host dispatch. Onc
 ### Stage58b — IN PROGRESS (exterior collision leaf ownership)
 
 Reuse the existing baseline collision stage for exact PlanetRenderer leaves in the same Box3D/SpatialWorld and reserved ID pool. Transfer live solid leaf entries (not rebuilt colliders) between exterior registry and cave cohort at the exclusive owner barrier; transfer restored baseline back on retirement. Validate source geometry, revision, disjoint leaf/cell ownership and shared scene identity; refuse absent coverage and keep loaned IDs until return. Expose bounded leaf residency and real owner checks for project coverage policy. No independent simulation, no automatic global collision coverage claim. Native example and regression sources; runnable world and acceptance remain next.
+
+### Stage58c — IN PROGRESS (runnable native chamber example)
+
+Add opt-in desktop executable using actual shared Surface, PlanetRenderer/GameView, Simulation/PHYSIS/NEREID schemas, Box3D, SpatialWorld, exterior baseline registry, GiGeometryScene and CPU GI bridge. Bounded authored chamber and scripted native flight route; real resident leaf/volume IDs and no duplicate motor or Scene step. Fixed render frame to avoid continuous GI resets in this first example; draw through existing cave callback. Fail closed on owner refusal/recovery, explicit shutdown. Source-only until built/run; open-mouth traversal, moving frame, swim, restore and full coverage selection remain Stage58d and acceptance.
