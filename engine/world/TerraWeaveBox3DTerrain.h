@@ -18,7 +18,7 @@ inline physics::BodyDesc makeTerrainBox3DBody(
         const TerrainPatch& patch,uint32_t userData=0) {
     if(patch.resolution<2 || patch.resolution>129 ||
        patch.cellSizeMetres<16 || patch.cellSizeMetres>4096 ||
-       !validTerrainPatchTopology(patch)||patch.presentationOnly)
+       !validTerrainPatchTopology(patch)||patch.presentationOnly||patch.collision.empty())
         throw std::invalid_argument("TerraWeave Box3D terrain topology");
     physics::BodyDesc body;
     body.motion=physics::Motion::Static;
@@ -89,9 +89,13 @@ public:
            (patch.surfaceEpoch<current->second.surfaceEpoch||
             (patch.surfaceEpoch==current->second.surfaceEpoch&&patch.sourceRevision<current->second.revision)))
             return false; // stale bake: keep the newer resident collider
-        const auto description=makeTerrainBox3DBody(patch,userData);
-        const auto created=scene.create(description);
-        if(created==physics::kNoBody)return false;
+        if(!validTerrainPatchTopology(patch)||patch.presentationOnly)return false;
+        auto created=physics::kNoBody;
+        if(!patch.collision.empty()){
+            const auto description=makeTerrainBox3DBody(patch,userData);
+            created=scene.create(description);
+            if(created==physics::kNoBody)return false;
+        }
         // Keep the old collider alive until the new one exists and the
         // registry slot can be allocated without throwing.
         try {
@@ -99,14 +103,14 @@ public:
                 patch.cell,Entry{created,patch.sourceRevision,patch.surfaceEpoch});
             if(!inserted){
                 const auto old=it->second.body;
-                if(!scene.valid(old)||!scene.destroy(old)){
-                    scene.destroy(created);
+                if(old!=physics::kNoBody&&(!scene.valid(old)||!scene.destroy(old))){
+                    if(created!=physics::kNoBody)scene.destroy(created);
                     return false;
                 }
                 it->second={created,patch.sourceRevision,patch.surfaceEpoch};
             }
         }catch(...){
-            scene.destroy(created);
+            if(created!=physics::kNoBody)scene.destroy(created);
             throw;
         }
         return true;
