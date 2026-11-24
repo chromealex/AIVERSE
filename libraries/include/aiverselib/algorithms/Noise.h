@@ -133,7 +133,7 @@ template<std::size_t N> inline std::optional<int32_t> periodicGradientNoise(
 }
 
 enum class NoiseBasis { Value, Gradient };
-enum class NoiseFractalMode { FBm, Turbulence, Ridged };
+enum class NoiseFractalMode { FBm, Turbulence, Ridged, Billow };
 struct NoiseFractalOptions {
     unsigned octaves=4;
     unsigned lacunarity=2; // integer multiplier keeps the base tile periodic
@@ -153,7 +153,7 @@ template<std::size_t N> inline std::optional<NoiseSample<N>> fractalNoiseSample(
         options.gainQ16>noiseOne||
         (options.basis!=NoiseBasis::Value&&options.basis!=NoiseBasis::Gradient)||
         (options.mode!=NoiseFractalMode::FBm&&options.mode!=NoiseFractalMode::Turbulence&&
-         options.mode!=NoiseFractalMode::Ridged)) return {};
+         options.mode!=NoiseFractalMode::Ridged&&options.mode!=NoiseFractalMode::Billow)) return {};
     constexpr int64_t coordLimit=int64_t(1)<<46;
     constexpr int64_t frequencyLimit=65536;
     constexpr int32_t periodLimit=100000000;
@@ -170,7 +170,10 @@ template<std::size_t N> inline std::optional<NoiseSample<N>> fractalNoiseSample(
             const int64_t sign=(s.value>0)-(s.value<0);
             s.value*=sign;
             for(auto& d:s.derivative) d*=sign;
-            if(options.mode==NoiseFractalMode::Ridged) {
+            if(options.mode==NoiseFractalMode::Billow) {
+                s.value=2*s.value-noiseOne;
+                for(auto& d:s.derivative) d*=2;
+            } else if(options.mode==NoiseFractalMode::Ridged) {
                 if(s.value>=noiseOne) {
                     s.value=0;
                     s.derivative.fill(0);
@@ -207,5 +210,122 @@ template<std::size_t N> inline std::optional<int64_t> fractalNoise(
     auto s=fractalNoiseSample(p,seed,period,options);
     if(!s) return {};
     return s->value;
+}
+
+// Rows are independent scalar fields; derivative[j] is the Jacobian entry
+// for output component i with respect to input coordinate j (signed Q16).
+template<std::size_t N> using NoiseVectorSample=std::array<NoiseSample<N>,N>;
+
+template<std::size_t N> inline std::optional<NoiseVectorSample<N>> vectorNoiseSample(
+    std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={},
+    NoiseFractalOptions options={}) {
+    static_assert(N==2||N==3);
+    NoiseVectorSample<N> out{};
+    for(std::size_t i=0;i<N;++i) {
+        auto s=fractalNoiseSample(p,deriveSeed(seed,0x4e4f495345564543ull,i),period,options);
+        if(!s) return {};
+        out[i]=*s;
+    }
+    return out;
+}
+
+template<std::size_t N> inline std::optional<std::array<int64_t,N>> vectorNoise(
+    std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={},
+    NoiseFractalOptions options={}) {
+    auto s=vectorNoiseSample(p,seed,period,options);
+    if(!s) return {};
+    std::array<int64_t,N> out{};
+    for(std::size_t i=0;i<N;++i) out[i]=(*s)[i].value;
+    return out;
+}
+
+struct NoiseWarpOptions {
+    NoiseFractalOptions carrier{};
+    NoiseFractalOptions displacement{};
+    int32_t strengthQ16=32768; // signed displacement scale; at most 8 lattice units
+};
+
+namespace noise_detail {
+// Checked Q16 multiplication without __int128, including MSVC/WASM.
+// |a|,|b| <= 2^38 => |a*b/65536| <= 2^60. Splitting before
+// multiplying avoids overflow and preserves truncation toward zero.
+inline std::optional<int64_t> chainProduct(int64_t a,int64_t b) {
+    constexpr int64_t bound=int64_t(1)<<38;
+    if(a<-bound||a>bound||b<-bound||b>bound) return {};
+    return (a/noiseOne)*b+((a%noiseOne)*b)/noiseOne;
+}
+} // namespace noise_detail
+
+// q_i = p_i + strength * displacement_i(p).
+// Gradient = J(q)^T * carrierGradient(q). Zero strength ignores
+// displacement options and is exactly the unwarped carrier.
+template<std::size_t N> inline std::optional<NoiseSample<N>> domainWarpNoiseSample(
+    std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={},
+    NoiseWarpOptions options={}) {
+    static_assert(N==2||N==3);
+    if(!noiseValid(p,period)||options.strengthQ16<-8*noiseOne||
+        options.strengthQ16>8*noiseOne) return {};
+    if(options.strengthQ16==0)
+        return fractalNoiseSample(p,seed,period,options.carrier);
+    auto displacement=vectorNoiseSample(p,deriveSeed(seed,0x4e4f495345574152ull,0),
+        period,options.displacement);
+    if(!displacement) return {};
+    auto q=p;
+    std::array<std::array<int64_t,N>,N> jacobian{};
+    for(std::size_t i=0;i<N;++i) {
+        const auto& d=(*displacement)[i];
+        // The scalar result is a weighted average of bounded lattice values.
+        // Keep the offset addition checked independently of that invariant.
+        if(d.value<-8*noiseOne||d.value>8*noiseOne) return {};
+        q[i]+=d.value*options.strengthQ16/noiseOne;
+        for(std::size_t j=0;j<N;++j) {
+            auto t=noise_detail::chainProduct(d.derivative[j],options.strengthQ16);
+            if(!t) return {};
+            jacobian[i][j]=*t+(i==j?noiseOne:0);
+        }
+    }
+    auto carrier=fractalNoiseSample(q,seed,period,options.carrier);
+    if(!carrier) return {};
+    NoiseSample<N> out{};
+    out.value=carrier->value;
+    for(std::size_t j=0;j<N;++j) {
+        for(std::size_t i=0;i<N;++i) {
+            auto t=noise_detail::chainProduct(carrier->derivative[i],jacobian[i][j]);
+            if(!t) return {};
+            out.derivative[j]+=*t; // at most three terms of magnitude <= 2^60
+        }
+    }
+    return out;
+}
+
+template<std::size_t N> inline std::optional<int64_t> domainWarpNoise(
+    std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={},
+    NoiseWarpOptions options={}) {
+    auto s=domainWarpNoiseSample(p,seed,period,options);
+    if(!s) return {};
+    return s->value;
+}
+
+// Curl of a scalar potential in 2D, or three independent vector-potential
+// components in 3D. Fixed-point approximation; not an exactly
+// divergence-free discrete grid operator. Output is signed Q16 and
+// intentionally unnormalized (preserves the potential derivative scale).
+template<std::size_t N> inline std::optional<std::array<int64_t,N>> curlNoise(
+    std::array<int64_t,N> p,uint64_t seed,std::array<int32_t,N> period={},
+    NoiseFractalOptions potential={}) {
+    static_assert(N==2||N==3);
+    if constexpr(N==2) {
+        auto s=fractalNoiseSample(p,seed,period,potential);
+        if(!s) return {};
+        return std::array<int64_t,2>{s->derivative[1],-s->derivative[0]};
+    } else {
+        auto v=vectorNoiseSample(p,seed,period,potential);
+        if(!v) return {};
+        const auto& a=*v;
+        return std::array<int64_t,3>{
+            a[2].derivative[1]-a[1].derivative[2],
+            a[0].derivative[2]-a[2].derivative[0],
+            a[1].derivative[0]-a[0].derivative[1]};
+    }
 }
 }

@@ -189,4 +189,6 @@ The traffic, pedestrian and driving code of `modules/rts` calls `trafficWideExit
 
 Noise package 0.2.0: include `<aiverselib/algorithms/Noise.h>` and link `AIVERSE::lib_noise`. Public functions accept signed Q16 coordinates and integer periods (zero is aperiodic); sample derivatives are signed Q16 per input lattice unit. The value-sample API preserves the original value kernel. Fractal composition uses bounded integer lacunarity and normalized Q16 weights; scaled bounds are checked before multiplication. The new pure APIs do not alter legacy generation, save formats, or ECS ownership. See [noise skill](../skills/core/aiverse-noise/SKILL.md) and `library_noise` CTest for example and checks. No platform acceptance claimed.
 
-- Stage 46 (in progress): Billow, periodic vector/Jacobian, domain warp and curl; preserve Stage 44/45 samples. See [delivery record](handoffs/algorithms-stage46-delivery.md).
+- Stage 46 (implemented, verification pending): Billow, periodic vector/Jacobian, domain warp and curl; preserve Stage 44/45 samples. See [delivery record](handoffs/algorithms-stage46-delivery.md).
+
+Noise 0.3.0 adds signed Billow, vector samples, domain warp with chain-rule derivatives, and curl in two and three dimensions. All use the same `AIVERSE::lib_noise` target and integer periods, and reject invalid or exceeded bounds. No legacy generation or persistence change. See the skill for precise units and limits.
