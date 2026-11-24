@@ -318,3 +318,7 @@ Add opt-in CollisionModule scene query flag, bounded read-only segment/radius qu
 ## Stage 135 — swept CPU scene collision (source; QA deferred)
 
 CollisionModule scene=true enables the host's read-only bounded sweep registry in the existing CPU ParticleSystem. Existing ground/plane response, collision VM, lifetime loss and sub-emitter hooks remain shared. Up to eight providers; earliest hit wins, invalid hits rejected; configurable query ceiling (default 8192, max 65536 per update). SDF helper traces a conservative signed-distance field with radius and bounded iterations; Box3D optional point-ray adapter uses Scene::raycast, explicitly rejects nonzero radius and requires host-owned read phase. All probes use particle simulation space, including body-local planets. Native ParticleSystem, BatchWorld and direct CPU GraphRuntime setters; no implicit host binding. No GPU depth/SDF collision or GPU event readback yet. Graph module schema and serialized effect flag updated; regression source only; tests NOT RUN.
+
+## Stage 136 — actual terrain and Box3D sphere sweeps (in progress)
+
+Use existing GameView published height/planet altitude and Studio authored preview height snapshot as read-only sampled terrain collision providers. Bounded segment subdivision and contact refinement, explicit approximation (not conservative SDF). Add generic Box3D Scene sphereCast using pinned b3World_CastShape API and existing query filters, expose through optional SpectraFX adapter. No second physics world; no GPU collision claim. Regression source only, execution deferred.
