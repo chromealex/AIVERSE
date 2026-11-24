@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-authoritative-simulation-lod",
+     "title": "LOD авторитетной симуляции",
+     "titleEn": "Authoritative simulation LOD",
+     "text": "Детерминированная частота принятия решений по регионам и постоянным ID с приоритетом активных взаимодействий.",
+     "textEn": "Deterministic region and stable-ID decision cadence, prioritizing active interactions.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-integrated-acceptance",
      "title": "Интеграционная проверка сохранения мира",
      "titleEn": "Integrated world persistence acceptance",
