@@ -226,7 +226,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     }return;
    }
    if(action==='nodeThumbnails'){
-    const images:Record<string,string>={};
+    const images:Record<string,string>=Object.create(null) as Record<string,string>;
     const nodes=Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
     setStatus('Generating CPU node thumbnails…');
     for(const n of nodes){
@@ -291,7 +291,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   return()=>clearTimeout(timer);
  },[active,autoPreview,gpuCaps?.available,busy,disabled,gpuPolling,gpuRequest?.bake,queueTicket,queueDrafts,semantic,catalog,projectPath]);
  const projected=graph?projection(graph,catalog):{nodes:[],links:[]};
- const rawView={...projected,nodes:projected.nodes.map(n=>({...n,thumbnail:thumbnails.key===thumbnailKey?thumbnails.images[n.id]:undefined}))};
+ const rawView={...projected,nodes:projected.nodes.map(n=>({...n,thumbnail:thumbnails.key===thumbnailKey&&Object.hasOwn(thumbnails.images,n.id)?thumbnails.images[n.id]:undefined}))};
  const arranged=textureLayout(rawView);
  const view={...rawView,nodes:rawView.nodes.map(n=>{const row=Array.isArray(graph?.nodes)?graph.nodes.find(v=>object(v)&&v.id===n.id):null;const pos=object(row)?row.position:null;const xy=arranged.get(n.id);return (Array.isArray(pos)&&pos.length===2&&pos.every(v=>typeof v==='number'&&Number.isFinite(v)))||!xy?n:{...n,x:xy[0],y:xy[1]};})};
  const moveNodes=(positions:readonly {id:string;x:number;y:number}[])=>{
@@ -380,6 +380,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU (no fallback)</label>
      {gpuCaps&&!gpuCaps.available&&<StudioAlert tone="warning">{gpuCaps.reason||'Native GPU owner unavailable'}</StudioAlert>}
      {gpuStatus&&<small className="tg-status">{gpuStatus}</small>}
+     {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
      <StudioButton size="sm" disabled={busy||disabled||gpuPolling||!selected} onClick={()=>void run('previewNode')}>Preview selected node (CPU)</StudioButton>
     </section>
     <div className="tg-tabs" role="group" aria-label="Texture inspector">
@@ -409,7 +410,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    </aside>
   </div>
   <section className="tg-footer">
-   {status&&<StudioAlert>{status}</StudioAlert>}{error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+   {status&&<StudioAlert>{status}</StudioAlert>}
    <div className="tg-bake-row">
       <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
     <StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>
