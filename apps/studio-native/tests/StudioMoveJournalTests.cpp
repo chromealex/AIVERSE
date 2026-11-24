@@ -1,5 +1,7 @@
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "tests/TestCheck.h"
+#include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/ProjectDocumentJournal.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -241,6 +243,46 @@ int main() {
             writeFile(moved,"replacement");
             StudioMoveJournal::recover(project);
             expect(readFile(moved)=="pixels","Replacement retry failed");
+        }
+        // S6f.4a: stage independent map and manifest owners, then
+        // exercise interruption at each existing-document publication boundary.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"CoordinatedSave";
+            fs::create_directories(p/"maps");
+            const auto mapFile=p/"maps"/"scene.json";
+            const auto manifestFile=p/"game.json";
+            const std::string manifestBefore=R"({"name":"Before"})";
+            writeFile(manifestFile,manifestBefore);
+            MapDoc map;map.reset(16,16);map.data.name="Before";
+            std::string error;
+            expect(map.save(mapFile.string(),&error),"Cannot create saved map fixture");
+            const auto mapBefore=readFile(mapFile);
+            Project owner;owner.dir=p.string();owner.savedManifestText=manifestBefore;
+            owner.manifest=aiverse::Json::parse(manifestBefore);
+            owner.manifest.set("name",aiverse::Json::string("After"));owner.manifestDirty=true;
+            map.beginEdit();map.data.name="After";
+            auto stagedMap=map;auto stagedProject=owner;
+            auto edits=stagedMap.stageExistingSave(p);
+            const auto projectEdits=stagedProject.stageDirtySave();
+            edits.insert(edits.end(),projectEdits.begin(),projectEdits.end());
+            expect(readFile(mapFile)==mapBefore&&readFile(manifestFile)==manifestBefore,
+                "Staging changed a saved owner");
+            expect(map.dirty&&owner.manifestDirty,"Staging changed live dirty flags");
+            for(size_t phase=0;phase<=edits.size();++phase){
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare joint save");
+                for(size_t i=0;i<phase;++i)journal.publish(i);
+                expect(journal.recover(),"Cannot recover joint save");
+                expect(readFile(mapFile)==mapBefore&&readFile(manifestFile)==manifestBefore,
+                    "Interrupted joint save retained partial publication");
+            }
+            const auto lock=stagedMap.beginStagedSave();
+            applyProjectFileEdits(p,edits);stagedMap.finishStagedSave();
+            expect(!stagedMap.dirty&&!stagedProject.manifestDirty,"Joint save retained dirty flags");
+            expect(aiverse::Json::parseFile(mapFile.string()).getStr("name")=="After"&&
+                   aiverse::Json::parseFile(manifestFile.string()).getStr("name")=="After",
+                "Joint save did not publish both owners");
         }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
