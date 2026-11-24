@@ -75,6 +75,8 @@ inline CaveMixedLodShardBatch planCaveMixedLodShardBatch(
     for(const auto& face:batch.visual.faces){
         const auto& a=combined.at(face.keys.negative);
         const auto& b=combined.at(face.keys.positive);
+        if(face.decision!=CaveFaceDecision::ExactMatch&&(a.preserveExactSurface||b.preserveExactSurface))
+            throw std::invalid_argument("Caverns exact rim source needs matching exterior LOD");
         if(face.decision!=CaveFaceDecision::ExactMatch &&
            (!a.sourceRevision||!b.sourceRevision)){
             batch.visual.sourceConflict=true;
