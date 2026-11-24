@@ -172,3 +172,7 @@ Extend optional persisted travel state with a crossing/clearance phase and monot
 ### Stage57c — IN PROGRESS (staged native crossing and feasible mode selection)
 
 Select supported traversal from the current committed provider, PHYSIS support, NEREID immersion and explicit project capabilities; preserve swimming hysteresis and do not grant flight. Stage the existing oriented character/velocity sweep before publishing proxy or receipt, require genuine host exterior/cave coverage for the swept envelope, classify actual capsule clearance and commit only after admission. Quarantine if an irreversible native/ECS publication fails. No extra Scene step or new saved state. Native project adoption and live QA remain separate.
+
+### Stage58a — IN PROGRESS (single native motor dispatch)
+
+Bind existing Simulation and Box3D Scene identities to native host dispatch. Once per actual physics tick/entity/proxy, select exterior, crossing or occupied interior; use committed environment/navigation leases, optional capability-based mode change and canonical repath, existing motor/velocity policy, and exactly one host position publication. Duplicate attempts, wrong owners and stale restoration reject; irreversible failures quarantine. Integrate dispatch in the native example with no additional ECS motor or physics step. Actual runnable planet host with exterior coverage and GI target remains a subsequent bounded stage; no live QA claim.
