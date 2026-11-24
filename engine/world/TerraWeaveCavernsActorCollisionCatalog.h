@@ -6,6 +6,7 @@
 // This owns no Box3D and never claims that Box3D/GPU/NavMesh are committed.
 #include "engine/world/TerraWeaveCavernsVolumeCollision.h"
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
