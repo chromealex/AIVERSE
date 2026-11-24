@@ -684,7 +684,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     if(u.gravityDt.w>0.5f){
         Vertex record{};
         record.x=active?centre.x:0.0f;record.y=active?centre.y:0.0f;record.z=active?centre.z:0.0f;
-        record.u=halfSize;record.rgba=rgba;
+        record.u=halfSize;record.v=active?clamp(p.positionAge.w/max(p.velocityLife.w,0.01f),0.0f,1.0f):0.0f;record.rgba=rgba;
         vertices[ordinal]=record;
         return;
     }
@@ -1366,7 +1366,7 @@ void main(){
     if(u.gravityDt.w>0.5){
         Vertex record=Vertex(0.0,0.0,0.0,0.0,0.0,0u,0.0,0.0,0.0,0.0);
         record.x=particleActive?centre.x:0.0;record.y=particleActive?centre.y:0.0;record.z=particleActive?centre.z:0.0;
-        record.u=halfSize;record.rgba=rgba;
+        record.u=halfSize;record.v=particleActive?clamp(p.positionAge.w/max(p.velocityLife.w,0.01),0.0,1.0):0.0;record.rgba=rgba;
         vertices[ordinal]=record;
         return;
     }

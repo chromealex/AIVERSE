@@ -8,6 +8,7 @@
 #include "SpectraGpuCollisionEvents.h"
 
 #include "ParticleSystem.h"
+#include "SpectraParticleVolumeTexture.h"
 #include "SpectraGpuCheckpoint.h"
 #include "SpectraCheckpointExport.h"
 #include "SpectraCheckpointFile.h"
@@ -71,6 +72,7 @@ struct VolumetricParticleMaterial {
     render::float3 axes{1,1,1}; // radii relative to particle half-size
     float noiseFrequency=3,noiseStrength=0;
     uint32_t noiseOctaves=3;
+    std::shared_ptr<const ParticleVolumeTexture> texture;
     bool valid()const{
         return std::isfinite(density)&&density>=0&&density<=100&&
             std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32&&uint32_t(shape)<=3&&
@@ -78,7 +80,7 @@ struct VolumetricParticleMaterial {
             axes.x>=.1f&&axes.x<=4&&axes.y>=.1f&&axes.y<=4&&axes.z>=.1f&&axes.z<=4&&
             (shape!=VolumetricParticleShape::Sphere||(axes.x==1&&axes.y==1&&axes.z==1))&&
             std::isfinite(noiseFrequency)&&noiseFrequency>=.1f&&noiseFrequency<=32&&
-            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4;
+            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4&&(!texture||(enabled&&texture->valid()));
     }
 };
 struct ComputeEmitterDesc {
@@ -374,7 +376,9 @@ private:
     std::shared_ptr<SharedSdfGpuPayload> sharedSdfPayload_;
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
-    gfx::TextureHandle texture_;
+    gfx::TextureHandle texture_,volumeTexture_;
+    size_t volumeTextureCharge_=0;
+    uint64_t volumeTextureFence_=0;
     std::vector<float> ages_;
     ActiveParticlePages activePages_;
     uint32_t drawCount_ = 0; // dense vertices emitted this frame (<= alive)

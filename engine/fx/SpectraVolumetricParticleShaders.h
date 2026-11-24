@@ -36,13 +36,13 @@ float boundRadius(float3 axes,int shape){
  if(shape==3)return max(axes.x,max(axes.y,axes.z))+axes.y;
  return max(axes.x,max(axes.y,axes.z));
 }
-struct VOut {float4 pos [[position]];float3 world;float4 sphere [[flat]];float4 color [[flat]];};
+struct VOut {float4 pos [[position]];float3 world;float4 sphere [[flat]];float4 color [[flat]];float age [[flat]];};
 vertex VOut vs_main(uint vertexIndex [[vertex_id]],uint instance [[instance_id]],
  device const Record* records [[buffer(0)]],constant U0& u [[buffer(1)]]){
  Record p=records[instance];float3 center=float3(p.x,p.y,p.z);
  float base=max(p.u,0.0001f);float r=base*boundRadius(u.right.xyz,int(u.params.w));float3 delta=center-u.camPos.xyz;float d=length(delta);
  float4 color=float4(float(p.rgba&255u),float((p.rgba>>8)&255u),float((p.rgba>>16)&255u),float(p.rgba>>24))/255.0f;
- VOut o;o.sphere=float4(center,base);o.color=color;
+ VOut o;o.sphere=float4(center,base);o.color=color;o.age=p.v;
  if(d<=r*1.01f||color.a<=0.0f){o.pos=float4(2,2,2,1);o.world=center;return o;}
  float3 n=delta/d;float3 ref=abs(n.y)<0.95f?float3(0,1,0):float3(1,0,0);
  float3 right=normalize(cross(ref,n)),up=cross(n,right);
@@ -50,7 +50,11 @@ vertex VOut vs_main(uint vertexIndex [[vertex_id]],uint instance [[instance_id]]
  float extent=r*d/sqrt(d*d-r*r);float2 q=corners[vertexIndex&3u];
  o.world=center+extent*(right*q.x+up*q.y);o.pos=u.viewProj*float4(o.world,1);return o;
 }
-fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]){
+fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
+#if SPECTRA_TEXTURE_VOLUME
+ ,texture3d<float> densityTexture [[texture(0)]],sampler densitySampler [[sampler(0)]]
+#endif
+ ){
  float3 rd=normalize(in.world-u.camPos.xyz),oc=u.camPos.xyz-in.sphere.xyz;
  float r=in.sphere.w*boundRadius(u.right.xyz,int(u.params.w)),b=dot(oc,rd),disc=b*b-dot(oc,oc)+r*r;
  if(disc<=0.0f||in.color.a<=0.0f)discard_fragment();
@@ -65,6 +69,15 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]){
  for(uint i=0;i<steps;++i){
   float3 q=(oc+rd*(t0+(float(i)+0.5f)*ds))/(in.sphere.w*u.right.xyz);
   float density=volumeDensity(q,in.sphere.xyz,int(u.params.w),u.up.xyz)*u.params.x*in.color.a;
+#if SPECTRA_TEXTURE_VOLUME
+  float n=u.right.w,frames=u.camPos.w;
+  float3 uv=clamp(q/float3(1.0f,int(u.params.w)==3?2.0f:1.0f,1.0f)*0.5f+0.5f,0.0f,1.0f);
+  float3 texel=uv*(n-1.0f)+0.5f;
+  float f=clamp(in.age,0.0f,1.0f)*(frames-1.0f),a=floor(f),b=min(a+1.0f,frames-1.0f);
+  float va=densityTexture.sample(densitySampler,float3(texel.xy/n,(texel.z+a*n)/(n*frames)),level(0)).r;
+  float vb=densityTexture.sample(densitySampler,float3(texel.xy/n,(texel.z+b*n)/(n*frames)),level(0)).r;
+  density*=mix(va,vb,f-a);
+#endif
   float alpha=1.0f-exp(-density*ds);
   float light=0.35f+0.65f*clamp(0.5f+0.5f*q.y,0.0f,1.0f);
   rgb+=trans*alpha*color*(light+u.params.y);trans*=1.0f-alpha;
@@ -108,10 +121,10 @@ float boundRadius(vec3 axes,int shape){
  if(shape==3)return max(axes.x,max(axes.y,axes.z))+axes.y;
  return max(axes.x,max(axes.y,axes.z));
 }
-out highp vec3 v_world;flat out highp vec4 v_sphere;flat out highp vec4 v_color;
+out highp vec3 v_world;flat out highp vec4 v_sphere;flat out highp vec4 v_color;flat out highp float v_age;
 void main(){
  float base=max(a_size.x,0.0001);float r=base*boundRadius(u_right.xyz,int(u_params.w));vec3 delta=a_pos-u_camPos.xyz;float d=length(delta);
- v_sphere=vec4(a_pos,base);v_color=a_col;v_world=a_pos;
+ v_sphere=vec4(a_pos,base);v_color=a_col;v_world=a_pos;v_age=a_size.y;
  if(d<=r*1.01||a_col.a<=0.0){gl_Position=vec4(2,2,2,1);return;}
  vec3 n=delta/d,ref=abs(n.y)<0.95?vec3(0,1,0):vec3(1,0,0);
  vec3 right=normalize(cross(ref,n)),up=cross(n,right);
@@ -123,7 +136,10 @@ void main(){
 inline constexpr const char* fragment=R"GLSL(
 precision highp float;
 layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;};
-in highp vec3 v_world;flat in highp vec4 v_sphere;flat in highp vec4 v_color;
+in highp vec3 v_world;flat in highp vec4 v_sphere;flat in highp vec4 v_color;flat in highp float v_age;
+#if SPECTRA_TEXTURE_VOLUME
+uniform highp sampler3D tex0;
+#endif
 out highp vec4 o_color;
 
 float hashVolume(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
@@ -167,6 +183,15 @@ void main(){
  for(int i=0;i<steps;++i){
   vec3 q=(oc+rd*(t0+(float(i)+0.5)*ds))/(v_sphere.w*u_right.xyz);
   float density=volumeDensity(q,v_sphere.xyz,int(u_params.w),u_up.xyz)*u_params.x*v_color.a;
+#if SPECTRA_TEXTURE_VOLUME
+  float n=u_right.w,frames=u_camPos.w;
+  vec3 uv=clamp(q/vec3(1.0,int(u_params.w)==3?2.0:1.0,1.0)*0.5+0.5,0.0,1.0);
+  vec3 texel=uv*(n-1.0)+0.5;
+  float f=clamp(v_age,0.0,1.0)*(frames-1.0),a=floor(f),b=min(a+1.0,frames-1.0);
+  float va=textureLod(tex0,vec3(texel.xy/n,(texel.z+a*n)/(n*frames)),0.0).r;
+  float vb=textureLod(tex0,vec3(texel.xy/n,(texel.z+b*n)/(n*frames)),0.0).r;
+  density*=mix(va,vb,f-a);
+#endif
   float alpha=1.0-exp(-density*ds);
   float light=0.35+0.65*clamp(0.5+0.5*q.y,0.0,1.0);
   rgb+=trans*alpha*color*(light+u_params.y);trans*=1.0-alpha;

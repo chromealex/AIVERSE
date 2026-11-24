@@ -341,7 +341,23 @@ bool ComputeParticles::initGpu() {
     texture.filter=gfx::Filter::Linear;texture.label="SpectraFX GPU soft sprite";
     texture_=device_->createTexture(texture);
 
+    if(desc_.volumeMaterial.texture){
+        const auto& a=*desc_.volumeMaterial.texture;
+        if(!device_->supportsTextureDimension(gfx::TextureDimension::Texture3D)){
+            reason_="Native 3D textures unavailable";return false;
+        }
+        if(!desc_.allocationBudget->reserve(a.density.size())){
+            reason_="Particle volume texture budget exhausted";return false;
+        }
+        volumeTextureCharge_=a.density.size();
+        gfx::TextureDesc td;td.width=td.height=int(a.dimension);td.depth=int(a.dimension*a.frames);
+        td.dimension=gfx::TextureDimension::Texture3D;td.format=gfx::PixelFormat::R8;
+        td.data=a.density.data();td.filter=gfx::Filter::Linear;td.label="SpectraFX particle volume density animation";
+        volumeTexture_=device_->createTexture(td);
+        if(!volumeTexture_.valid()){reason_="Particle volume texture allocation failed";return false;}
+    }
     gfx::ShaderDesc shader;
+    std::string volumeMetal,volumeFragment;
     // Shader source storage must outlive createShader() on all RHI backends.
     gpu_material::Shaders materialShaders;
     if(materialActive)materialShaders=gpu_material::makeShaders(graphMaterial);
@@ -354,8 +370,13 @@ bool ComputeParticles::initGpu() {
     if(desc_.volumeMaterial.enabled){
         shader.glslVertex=volumetric_particles::vertex;shader.glslFragment=volumetric_particles::fragment;
         shader.msl=volumetric_particles::metal;
+        if(desc_.volumeMaterial.texture){
+            volumeMetal=std::string("#define SPECTRA_TEXTURE_VOLUME 1\n")+shader.msl;
+            volumeFragment=std::string("#define SPECTRA_TEXTURE_VOLUME 1\n")+shader.glslFragment;
+            shader.msl=volumeMetal.c_str();shader.glslFragment=volumeFragment.c_str();
+        }
     }
-    shader.textureSlots=desc_.volumeMaterial.enabled?0:1;shader.uniformSlots=1;
+    shader.textureSlots=desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1;shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
     if(vertexShader_.valid()) {
@@ -451,9 +472,12 @@ void ComputeParticles::releaseGpu() {
         if(vertices_.valid())device_->destroyBuffer(vertices_);
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
+        if(volumeTexture_.valid())device_->destroyTexture(volumeTexture_);
     }
     sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
+    retireAllocationCharge(volumeTextureCharge_,volumeTextureFence_);
+    volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     volumeDragCompute_={};
     pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
@@ -1471,12 +1495,18 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         u.params[3]=float(uint32_t(m.shape));
         u.right[0]=m.axes.x;u.right[1]=m.axes.y;u.right[2]=m.axes.z;
         u.up[0]=m.noiseFrequency;u.up[1]=m.noiseStrength;u.up[2]=float(m.noiseOctaves);
+        if(m.texture){u.right[3]=float(m.texture->dimension);u.camera[3]=float(m.texture->frames);}
     }
     device_->setPipeline(pipeline_);
     device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
     device_->setUniforms(0,&u,sizeof(u));
     if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
+    else if(volumeTexture_.valid()){
+        const auto fence=device_->gpuSubmissionFence();
+        volumeTextureFence_=fence?std::max(volumeTextureFence_,fence):GpuAllocationBudget::unknownFence;
+        device_->setTexture(0,volumeTexture_);
+    }
     if(gpuIndirectActive_) {
         // No CPU readback, and no unsafe direct-draw fallback when GPU
         // authored arguments cannot be submitted. CPU's count is only an

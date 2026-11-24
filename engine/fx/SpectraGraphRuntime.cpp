@@ -201,6 +201,11 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
     if(actual.gpuOwnedAllocation)restoreIdentity_+="\nallocator=owned-v2";
     if(actual.volumeMaterial.enabled)restoreIdentity_+="\nvolume="+std::to_string(actual.volumeMaterial.density)+","+std::to_string(actual.volumeMaterial.emission)+","+std::to_string(actual.volumeMaterial.steps)+","+std::to_string(uint32_t(actual.volumeMaterial.shape))+","+std::to_string(actual.volumeMaterial.axes.x)+","+std::to_string(actual.volumeMaterial.axes.y)+","+std::to_string(actual.volumeMaterial.axes.z)+","+std::to_string(actual.volumeMaterial.noiseFrequency)+","+std::to_string(actual.volumeMaterial.noiseStrength)+","+std::to_string(actual.volumeMaterial.noiseOctaves);
+    if(actual.volumeMaterial.texture){
+        std::string bytes;
+        if(!encodeParticleVolumeTexture(*actual.volumeMaterial.texture,bytes)){shutdown();reason_="Invalid particle volume texture";return false;}
+        restoreIdentity_+="\nSPVT="+std::to_string(fx::sdf_binary_detail::checksum(std::string_view(bytes).substr(0,bytes.size()-4)));
+    }
     for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
     for(const auto& [path,bytes]:sdfDependencies){
         for(unsigned char c:path){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
