@@ -51,6 +51,7 @@ public:
     const CavePlanetAnchor& anchor()const noexcept{return anchor_;}
     int body()const noexcept{return body_;}
     const game::Surface& surface()const noexcept{return *surface_;}
+    std::shared_ptr<const game::Surface> sharedSurface()const noexcept{return surface_;}
     Vec3 originBody()const noexcept{return origin_;}
     Vec3 east()const noexcept{return east_;}
     Vec3 up()const noexcept{return up_;}
