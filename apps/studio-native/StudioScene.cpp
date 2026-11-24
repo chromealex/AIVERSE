@@ -596,8 +596,9 @@ StudioScene::~StudioScene() {
         }
         for (auto* primitive:{&builtinCube_,&builtinSphere_})
             if (*primitive) { releasePreviewModel(**primitive); primitive->reset(); }
-        if (terrain_.vb.valid()) device_->destroyBuffer(terrain_.vb);
-        if (terrain_.ib.valid()) device_->destroyBuffer(terrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,terrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,terrain_.ib);
+        (void)terrainRetirement_.completeForShutdown(*device_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
         nereid_.shutdown(*device_);
@@ -1574,18 +1575,38 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     for (const auto& proxy:proxies) if (!hidden_.count(proxy.id))
         snapPivots_.push_back({proxy.id,proxy.light?proxy.center:float3{proxy.center.x,proxy.boundsMin.y,proxy.center.z}});
 
-    if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight || (showTerrain && !terrain_.vb.valid())) {
-        // A document edit already makes the lighting stale (debounced below);
-        // force an immediate rebuild only for the other terrain causes.
-        if (terrainRevision_ == doc.revision) lightingRevision_=std::numeric_limits<uint64_t>::max();
-        terrainLevelHeight_ = levelHeight;
+    const bool caveAuthored=!map.extra["terraweaveCaverns"].isNull()&&!map.planet();
+    (void)terrainRetirement_.collectWithoutIdle(*device_);
+    if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight ||
+        terrainWasShown_!=showTerrain || terrainCavernsAuthored_!=caveAuthored) {
+        // Preserve one exact CPU triangle source for both render paths.
+        // Never debounce the PBR receiver across a changed cut epoch.
+        if (terrainRevision_==doc.revision || caveAuthored || terrainCavernsAuthored_)
+            lightingRevision_=std::numeric_limits<uint64_t>::max();
+        if(terrainRetirement_.pending()>=64&&!terrainRetirement_.completeForShutdown(*device_))
+            throw std::runtime_error("Studio terrain retirement budget exhausted");
         MeshBuilder source;
-        Mesh replacement;
-        if(showTerrain){const auto stats=buildTerrainPreview(map,source,levelHeight);if(stats.quads)replacement=source.upload(*device_);}
-        if (terrain_.vb.valid()) device_->destroyBuffer(terrain_.vb);
-        if (terrain_.ib.valid()) device_->destroyBuffer(terrain_.ib);
-        terrain_ = replacement;
-        terrainRevision_ = doc.revision;
+        TerrainPreviewStats cutStats;
+        Mesh replacement{};
+        if(showTerrain){
+            cutStats=buildTerrainPreview(map,source,levelHeight);
+            if(!source.empty()){
+                replacement=source.upload(*device_);
+                if(!replacement.vb.valid()||!replacement.ib.valid()){
+                    if(replacement.vb.valid())device_->destroyBuffer(replacement.vb);
+                    if(replacement.ib.valid())device_->destroyBuffer(replacement.ib);
+                    throw std::runtime_error("Studio terrain upload failed");
+                }
+            }
+        }
+        terrainRetirement_.retireBuffer(*device_,terrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,terrain_.ib);
+        terrain_=replacement;
+        terrainCpu_=std::move(source);
+        terrainCutStats_=std::move(cutStats);
+        terrainLevelHeight_=levelHeight;
+        terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
+        terrainRevision_=doc.revision;
     }
     const Json& settings=lightingSettings_;
     const bool useLighting=useLighting_;
@@ -1613,7 +1634,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         if(useLighting || fpsProject) {
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
-            lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds);
+            lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
+                terrainCavernsAuthored_?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
                 prepareModelUpload(*lightingModel_);
@@ -1719,7 +1741,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         // Terrain is already part of the lit preview model.
     } else if (terrain_.vb.valid() && terrain_.ib.valid()) {
         renderer_.drawMesh(terrain_, mat4{}, {1,1,1,1}, kDrawNoCastShadow);
-    } else {
+    } else if(!terrainCutStats_.handled&&!terrainCavernsAuthored_) {
         // Unsupported planet maps or empty terrain: basic plane only.
         renderer_.drawMesh(cube_,
                            mat4::translate({w*.5f,-0.08f,h*.5f}) * mat4::scale({w,.12f,h}),
