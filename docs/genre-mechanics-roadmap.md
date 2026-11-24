@@ -144,3 +144,7 @@ Restore CTest coverage of the existing Caverns fixtures, explicitly enable optio
 ### Stage56a — IN PROGRESS
 
 Connect planetary native cohort publication to the actual shared GiGeometryScene and existing CPU/GPU GI target. Stage an isolated copy of the shared scene; require host-reserved volume IDs, exact existing baseline leaf IDs and one GI-space projection; validate baseline triangle identity, replace rather than overlay, restore original materials/triangles on retire, fence stale snapshots and refuse unowned collisions. Publish only in the existing exclusive native barrier. Prepare retirement before irreversible native teardown. Managed ECS navigation leases remain owned by the runtime; actual host wiring, moving-body/rebase lifecycle and live GPU QA remain later stages. No new authored schema.
+
+### Stage56b — IN PROGRESS
+
+Compose the existing planetary runtime, canonical ECS environment and GI publication into one optional native host lifecycle. Bind actual existing Scene, SpatialWorld, GameView, GI scene and CPU/GPU target, retain explicit external owner proofs, and install restore notification without storing native handles in ECS. Gate frame publication on target readiness, refresh native environment leases at the actual motor boundary, and suppress stale GI after restore or irreversible failures. No automatic creation of a second Scene or migration of grid-based GameCore. Native game-specific host adoption and actual baseline GI source ownership remain required.
