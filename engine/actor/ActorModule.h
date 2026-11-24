@@ -128,6 +128,7 @@ public:
     // Derived navigation generation for diagnostic/acceptance tests only.
     // No mutable simulation state is affected by rebuilding a navmesh.
     uint64_t navigationRebuilds()const{return navigationRebuilds_;}
+    bool streamedContentIntegrityFailed()const{return streamedCollision_&&streamedCollision_->contentIntegrityFailed();}
     uint64_t navigationCollisionRevision()const{return navigationCollisionRevision_;}
     const std::string& navigationReadinessError()const{return navigationReadinessError_;}
     const std::string& collisionAdmissionError()const{return collisionAdmissionError_;}
