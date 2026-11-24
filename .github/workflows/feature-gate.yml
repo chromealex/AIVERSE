@@ -1,7 +1,7 @@
 name: Feature gate
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'integration/**']
 permissions:
   contents: read
 jobs:

@@ -44,6 +44,9 @@ jobs:
             aiverse_physis_scene_geometry_test --parallel 2
       - name: Run PHYSIS editor tests
         run: ctest --test-dir build/studio-ci --output-on-failure -R '^physis_(authoring|scene_geometry|project_config)
+      - name: Run tests
+        run: ctest --test-dir build/studio-ci --output-on-failure
+
 
       - name: Run tests
         run: ctest --test-dir build/studio-ci --output-on-failure
