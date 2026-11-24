@@ -14,7 +14,15 @@
     "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
     "apps/studio-web/tests/buildingGraphInspection.test.mjs",
     "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx",
-    "apps/studio-web/package.json"
+    "apps/studio-web/package.json",
+    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
+    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
+    "apps/studio-native/StudioBuildingTopology.h",
+    "apps/studio-native/StudioBuildingGeneration.h",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-native/tests/StudioBuildingTopologyTests.cpp",
+    "apps/studio-native/CMakeLists.txt"
   ],
   "traits": {
     "editable": true,
@@ -25,7 +33,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D owner panel source wired to exact captured native candidate request/response and shared GraphCanvas; no new native generator.",
+      "note": "Stage 35D owner panel source wired to exact captured native candidate request/response and shared GraphCanvas; no new native generator. Stage 35E planned: native room/connection DTO, structural component diagnostics using existing room planner, shared topology view.",
       "evidence": []
     },
     "architecture": {
