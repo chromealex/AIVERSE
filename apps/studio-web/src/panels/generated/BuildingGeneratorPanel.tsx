@@ -50,6 +50,25 @@ const propertyLabels:Record<StudioBuildingFeatureKind,string> = {
   'stairs':'Switchback stairs', 'elevator':'Lift shaft / platform'
 };
 
+type GraphNumericField='width'|'height'|'depth'|'open'|'position'|'positionZ';
+function GraphFeatureEditor({feature,disabled,onApply}:{feature:StudioBuildingFeature;disabled:boolean;onApply:(patch:Partial<StudioBuildingFeature>)=>void}){
+ const planar=['sliding-roof','stairs','elevator'].includes(feature.kind);
+ const fields:GraphNumericField[]=['width',planar?'depth':'height','position',...(planar?['positionZ' as const]:[]),...(!['window','stairs','elevator'].includes(feature.kind)?['open' as const]:[])];
+ const [draft,setDraft]=useState<Partial<Record<GraphNumericField,string>>>({});
+ const valid=(key:GraphNumericField,value:number)=>Number.isFinite(value)&&(key==='open'?value>=0&&value<=1:key==='position'||key==='positionZ'?value===-1||value>=0:value>0)&&value<=160;
+ const changes=Object.entries(draft) as [GraphNumericField,string][];
+ const canApply=changes.length>0&&changes.every(([key,raw])=>valid(key,asNumber(raw)));
+ return <div className="au-stack">
+  <strong>Edit source feature · {propertyLabels[feature.kind]}</strong>
+  <div className="abg__fields">{fields.map(key=><StudioField key={key} label={key} htmlFor={'graph-feature-'+key}>
+   <StudioInput id={'graph-feature-'+key} type="number" step={0.1} value={draft[key]??String(feature[key])} disabled={disabled}
+     onChange={e=>setDraft(old=>({...old,[key]:e.target.value}))}/>
+  </StudioField>)}</div>
+  <small>Apply changes to the owner recipe; regenerate the candidate to inspect the new geometry. Native validation remains authoritative.</small>
+  <StudioButton size="sm" disabled={disabled||!canApply} onClick={()=>onApply(Object.fromEntries(changes.map(([key,raw])=>[key,asNumber(raw)])))}>Apply feature draft</StudioButton>
+ </div>;
+}
+
 export default function BuildingGeneratorPanel({
   snapshot, showPanel, commitSnapshot
 }: { snapshot:StudioSnapshot|null; showPanel:(p:PanelId)=>void; commitSnapshot:(s:StudioSnapshot)=>void }) {
@@ -298,6 +317,12 @@ export default function BuildingGeneratorPanel({
     target?.focus();
   };
   const clearGenerated=()=>{invalidateCandidates();setSaved(null);setThumbnail('');setStatus('');};
+  const setBinding=(slot:string,value:string)=>{
+    if(busy||!projectLoaded||!selectedStyle?.materials.includes(slot))return;
+    if(value&&!Object.prototype.hasOwnProperty.call(materialLibrary.library,value))return;
+    setMaterialBindings(old=>{const next={...old};if(value)next[slot]=value;else delete next[slot];return next;});
+    clearGenerated();
+  };
   const changeSetting=(value:string)=>{
     const first=styles.find(item=>item.setting===value);
     setSetting(value);setStyle(first?.id??'');setRole(first?.functions[0]?.id??'');
@@ -612,16 +637,7 @@ export default function BuildingGeneratorPanel({
             <StudioSelect id={'abg-material-binding-'+slot}
               disabled={busy||!projectLoaded}
               value={materialBindings[slot]??''}
-              onChange={e=>{
-                const value=e.target.value;
-                setMaterialBindings(old=>{
-                  const next={...old};
-                  if(value)next[slot]=value;
-                  else delete next[slot];
-                  return next;
-                });
-                clearGenerated();
-              }}>
+              onChange={e=>setBinding(slot,e.target.value)}>
               <option value="">Use style material</option>
               {Object.keys(materialLibrary.library).sort().map(material=>
                 <option value={material} key={material}>{material}</option>)}
@@ -669,7 +685,24 @@ export default function BuildingGeneratorPanel({
           preview={activeCandidate.data} onSelectFeature={focusFeature}/>}
         <BuildingStructureGraphView key={'graph:'+activeCandidate.batch+':'+activeCandidate.seed}
           recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}
-          onRoute={async routeQuery=>(await invoke('studio.buildingInspect',{...activeCandidate.recipe,routeQuery})).route}/>
+          onRoute={async routeQuery=>(await invoke('studio.buildingInspect',{...activeCandidate.recipe,routeQuery})).route}
+          renderFeatureEditor={index=>features[index]?<GraphFeatureEditor key={index} feature={features[index]} disabled={busy}
+            onApply={patch=>{if(busy||!activeCandidate||mode!=='features')return;
+              setFeatures(old=>old.map((feature,i)=>i===index?{...feature,...patch}:feature));clearGenerated();}}/>:null}
+          renderMaterialInspector={slot=>{
+            const name=materialBindings[slot]??'',material=materialLibrary.library[name];
+            return <div className="au-stack">
+              <strong>Material slot · {slot}</strong>
+              <StudioSelect aria-label={'Graph material '+slot} value={name} disabled={busy||!projectLoaded} onChange={e=>setBinding(slot,e.target.value)}>
+                <option value="">Use style material</option>
+                {Object.keys(materialLibrary.library).sort().map(item=><option key={item} value={item}>{item}</option>)}
+              </StudioSelect>
+              {name&&!material&&<StudioAlert tone="warning">Project material not found in current library.</StudioAlert>}
+              {material&&['texture','normalMap','metallicRoughnessMap','occlusionMap','emissiveMap'].map(channel=><small key={channel}>{channel}: {typeof material[channel]==='string'&&material[channel]?String(material[channel]):'Not explicitly assigned'}</small>)}
+              <small>Current project material references only, not resolved exported GLB dependencies.</small>
+              <StudioButton size="sm" onClick={()=>document.getElementById('abg-material-binding-'+slot)?.focus()}>Focus source material binding</StudioButton>
+            </div>;
+          }}/>
       </StudioSection>}
       {mode==='features'&&<StudioSection title="Functional properties">
         <div className="abg__property-list" ref={featureRoot}>
