@@ -47,7 +47,7 @@ function choicesFor(item:StudioAssetTransferItem,source:StudioAssetTransferPlan[
   if(!collision)return ACTIONS.filter(a=>a.value==='import'||a.value==='skip');
   return ACTIONS.filter(a=>{
     if(a.value==='skip'||a.value==='keep-both')return true;
-    if(a.value==='replace')return source==='external' && !item.directory && collision.includes('name');
+    if(a.value==='replace')return source==='external' && !item.directory && item.replacementAvailable===true;
     if(a.value==='new-guid')return source==='external' && !item.directory && !collision.includes('name');
     return false;
   });
@@ -61,6 +61,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
   const [selected,setSelected]=useState<Record<number,StudioAssetConflictAction>>(()=>Object.fromEntries(
     plan.items.map(item=>[item.id,item.conflict?'skip':'import'])));
   const pending=plan.items.filter(item=>selected[item.id]!=='skip').length;
+  const mixedReplacement=plan.items.some(item=>selected[item.id]==='replace')&&plan.items.some(item=>selected[item.id]!=='replace'&&selected[item.id]!=='skip');
   const blocked=(plan.references??[]).filter(ref=>!ref.writable && selected[ref.id]!=='skip');
   return <div className="studio-asset-dialog-overlay">
     <section className="studio-asset-dialog" role="dialog" aria-modal="true"
@@ -98,9 +99,10 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
       </div>
       <footer>
         <span>{pending} of {plan.items.length} selected
+          {mixedReplacement?' · Apply replacements separately from new imports.':''}
           {blocked.length>0?' · '+blocked.length+' read-only reference(s) block this move':''}</span>
         <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
-        <button type="button" disabled={busy||blocked.length>0} className="studio-asset-confirm"
+        <button type="button" disabled={busy||blocked.length>0||mixedReplacement} className="studio-asset-confirm"
           onClick={()=>onCommit(plan.items.map(item=>({id:item.id,action:selected[item.id]||'skip'})))}>
           {busy?'Applying…':'Apply decisions'}
         </button>

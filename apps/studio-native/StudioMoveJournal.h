@@ -26,7 +26,7 @@ namespace fs=std::filesystem;
 struct StudioMoveJournalOperation {
     std::string from;
     std::string to;
-    std::string digest; // required by replacement journal v3
+    std::string digest={}; // required by replacement journal v3
 
 class StudioMoveJournal {
 public:
@@ -125,8 +125,9 @@ public:
         if (!fs::exists(folder_/"pending.json")) return;
         // Durable commit marker precedes best-effort cleanup. Recovery must
         // never reverse a committed transaction.
+        const auto version=Json::parseFile((folder_/"pending.json").string())["version"].integer();
         const fs::path material=project_/"materials.json";
-        if (fs::exists(material)) syncPath(material);
+        if (version==1&&fs::exists(material)) syncPath(material);
         syncPath(project_);
         fs::rename(folder_/"pending.json",folder_/"committed.json");
         syncPath(folder_);

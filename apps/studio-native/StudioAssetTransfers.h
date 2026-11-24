@@ -20,6 +20,7 @@ struct StudioTransferEntry {
     std::string guid;
     std::string conflict; // "", "name", "guid", "name+guid", "invalid-meta"
     bool directory=false;
+    std::string replacementGuid,replacementDigest,replacementMetaDigest,replacementSourceDigest;
 };
 struct StudioTransferDecision {
     int id=0;

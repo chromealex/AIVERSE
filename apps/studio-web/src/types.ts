@@ -50,7 +50,7 @@ export interface StudioAssetList {
 }
 export interface StudioAssetTransferItem {
   id: number; name: string; from: string; to: string; directory: boolean;
-  conflict: string; guid: string | null;
+  conflict: string; guid: string | null; replacementAvailable?: boolean;
 }
 export interface StudioAssetTransferPlan {
   token: string; source: 'internal' | 'external'; items: StudioAssetTransferItem[];

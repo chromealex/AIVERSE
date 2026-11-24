@@ -349,6 +349,16 @@ StudioTransferPlan StudioTransferPlan::plan(const fs::path& project,
         entry.conflict=targetConflict?"name":"";
         if(guidCollision)entry.conflict=entry.conflict.empty()?"guid":"name+guid";
         if(invalidMeta)entry.conflict=entry.conflict.empty()?"invalid-meta":entry.conflict+"+invalid-meta";
+        if(type==StudioTransferType::External&&!directory&&targetConflict){
+            const auto existing=db.byPath(entry.relativeDestination);
+            if(existing&&!existing->directory&&fs::is_regular_file(fs::symlink_status(target))&&
+               fs::is_regular_file(fs::symlink_status(studioMetaPath(target)))){
+                entry.replacementGuid=existing->guid;
+                entry.replacementDigest=studioAssetFileDigest(target);
+                entry.replacementMetaDigest=studioAssetFileDigest(studioMetaPath(target));
+                entry.replacementSourceDigest=studioAssetFileDigest(input);
+            }
+        }
         result.entries_.push_back(std::move(entry));
     }
     return result;
@@ -366,6 +376,7 @@ Json StudioTransferPlan::describe() const {
         x.set("to",Json::string(e.relativeDestination));
         x.set("directory",Json::fromBool(e.directory));
         x.set("conflict",Json::string(e.conflict));
+        x.set("replacementAvailable",Json::fromBool(!e.replacementGuid.empty()));
         x.set("guid",e.guid.empty()?Json():Json::string(e.guid));
         items.push(std::move(x));
     }
@@ -376,6 +387,11 @@ Json StudioTransferPlan::apply(const std::string& token,
                          const std::vector<StudioTransferDecision>& decisions,
                          const std::function<void()>& beforeCommit,
                          std::optional<editor::ProjectHistory::MovePlan>* history){
+    // Even legacy external callers must not use the destructive replace path.
+    std::optional<editor::ProjectHistory::MovePlan> localHistory;
+    if(!history&&type_==StudioTransferType::External&&
+       std::any_of(decisions.begin(),decisions.end(),[](const auto& d){return d.action=="replace";}))
+        history=&localHistory;
     if(history)history->reset();
     if(token!=token_)throw std::runtime_error("Transfer preview expired or changed");
     Json result=Json::object(),copied=Json::array(),errors=Json::array();
@@ -523,9 +539,8 @@ Json StudioTransferPlan::apply(const std::string& token,
         return result;
     }
 
-    // Non-replacing imports are one staged publication, including their GUIDs.
-    // Existing explicit replacement remains a history barrier until its own
-    // reversible old/new payload owner is introduced.
+    // Non-replacing imports and replacement-only batches each use a staged
+    // journaled publication. Mixed batches must be reviewed separately.
     if(history){
         std::map<int,std::string> actions;
         for(const auto& d:decisions){
@@ -556,14 +571,17 @@ Json StudioTransferPlan::apply(const std::string& token,
                 const auto relative=e.destination.lexically_relative(root).generic_string();
                 const auto live=checkedSource(project_,relative);
                 const auto entry=catalog.byPath(relative);
-                if(!entry||entry->directory||!fs::is_regular_file(fs::symlink_status(live))||
-                   !paths.insert(relative).second)
+                if(!entry||entry->directory||entry->guid!=e.replacementGuid||
+                   !fs::is_regular_file(fs::symlink_status(live))||!paths.insert(relative).second)
                     throw std::runtime_error("Replacement target changed");
                 const auto meta=studioMetaPath(live);
                 if(fs::file_size(meta)>1024*1024)throw std::runtime_error("Replacement metadata exceeds history budget");
                 const auto sidecar=editor::readProjectFileBytes(meta);
                 const auto oldDigest=studioAssetFileDigest(live);
                 const auto newDigest=studioAssetFileDigest(e.source);
+                if(oldDigest!=e.replacementDigest||newDigest!=e.replacementSourceDigest||
+                   studioAssetFileDigest(meta)!=e.replacementMetaDigest)
+                    throw std::runtime_error("Replacement source or target changed since preview; review again");
                 if(oldDigest==newDigest)continue;
                 const auto reserve=[&]{
                     const auto id=nonce();const auto folder=cache/id;
