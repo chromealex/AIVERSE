@@ -216,7 +216,7 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
 Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba){
     needProject(ws);
     if(!render::texture_graph::safeId(name)||size<8||size>1024||rgba.size()!=size_t(size)*size*4)throw std::invalid_argument("invalid HDR texture result");
-    for(size_t i=0;i<rgba.size();++i)if(!std::isfinite(rgba[i])||std::abs(rgba[i])>65504.f||(i%4==3&&rgba[i]!=1.f))throw std::invalid_argument("invalid HDR texture sample");
+    for(size_t i=0;i<rgba.size();++i)if(!std::isfinite(rgba[i])||std::abs(rgba[i])>65504.f||(i%4==3&&(rgba[i]<0.f||rgba[i]>1.f)))throw std::invalid_argument("invalid HDR texture sample");
     std::vector<uint8_t> exr;
     if(!render::cameraEncodeExrFloat(size,size,rgba,exr))throw std::runtime_error("EXR encode failed");
     const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";

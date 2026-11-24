@@ -763,6 +763,22 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(action.rfind("studio",0)==0){
         if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
         auto& presentation=*graphPresentation_;
+        if(action=="studioHdrApplyPbr"||action=="studioHdrApplyModel"){
+            Model* model=nullptr;GraphPresentation::Snapshot* snapshot=nullptr;size_t index=0;
+            if(action=="studioHdrApplyPbr"){
+                if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR model first");
+                model=presentation.sample.get();snapshot=&presentation.sampleAppearance;index=presentation.sampleMaterial;
+            }else{
+                auto found=documentModels_.find(p.getStr("asset"));
+                if(found==documentModels_.end()||!found->second)throw std::runtime_error("Studio target model not resident");
+                model=found->second.get();snapshot=&presentation.target(*model);index=GraphPresentation::index(p,*model);
+            }
+            std::string error;
+            if(!owner.publishResidentRadianceEmissive(ws.project.dir,p.getStr("request"),*snapshot,GraphPresentation::stamp(p,index),*model,*device_,lease,presentation.rollback,&error))throw std::runtime_error(error);
+            if(action=="studioHdrApplyPbr")presentation.sampleRenderer->invalidateModelCachesFor(model);
+            else{renderer_.invalidateModelCachesFor(model);presentation.merged.clear();lastFrameSignature_=0;}
+            auto r=GraphPresentation::info(*snapshot,index);r.set("state",Json::string("applied"));return r;
+        }
         if(action=="studioHdrAdopt"){
             if(!device_->waitForResourceIdle())throw std::runtime_error("resident HDR replacement retirement failed");
             auto candidate=owner.takeResidentRadiance(*device_,lease,ws.project.dir,p.getStr("request"));

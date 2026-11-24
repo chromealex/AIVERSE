@@ -118,6 +118,7 @@ struct Image {
     // Session-only procedural graph provenance. Retired slots remain empty
     // tombstones: never shift indices. Only a certified retired slot may recycle.
     bool proceduralGraphImage = false;
+    bool proceduralLinearRadiance = false; // owned float HDR image, linear emissive sampling
     bool proceduralGraphRetired = false;
     GraphImagePin proceduralGraphPin;
     GraphImageSlotRetirement proceduralSlotRetirement;
@@ -391,6 +392,10 @@ inline const Image* resolveMaterialImage(const Model& model,const Material& mate
     if(channel>=6)return nullptr;
     const auto* pin=material.proceduralGraphPins?&(*material.proceduralGraphPins)[channel]:nullptr;
     return resolveMaterialImageIndex(model,material.*slot,pin);
+}
+inline bool resolvedLinearEmissive(const Model& model,const Material& material) noexcept {
+    const auto* image=resolveMaterialImage(model,material,&Material::emissiveTex);
+    return image&&image->tex.valid()&&image->proceduralLinearRadiance;
 }
 inline gfx::TextureHandle resolvedMaterialTexture(const Model& model,const Material& material,
         int Material::* slot,gfx::TextureHandle fallback={}) noexcept {

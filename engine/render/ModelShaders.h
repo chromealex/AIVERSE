@@ -338,7 +338,7 @@ void main() {
     tb.a = texture(tex15, v_uv).r;
 #endif
     vec4 base = PALETTE_BASE * vec4(toLinear(tb.rgb), tb.a);
-    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, m_misc.w > 1.5 ? 1.0 : v_col.a);
+    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, mod(m_misc.w,8.0) > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
     if (teamMode == 1) {
@@ -381,7 +381,8 @@ void main() {
     vec4 mr = texture(tex2, v_uv);
     rough *= mr.g;
     metallic *= mr.b;
-    emis *= toLinear(texture(tex5, v_uv).rgb);
+    vec3 emissiveSample=texture(tex5,v_uv).rgb;
+    emis *= m_misc.w>=8.0?max(emissiveSample,vec3(0.0)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
@@ -403,7 +404,7 @@ void main() {
     o_color=vec4(clamp(base.rgb,vec3(0.0),vec3(1.0)),clamp(metallic,0.0,1.0));
     return;
 #endif
-    ao *= m_misc.w > 1.5 ? (m_misc.w > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
+    ao *= mod(m_misc.w,8.0) > 1.5 ? (mod(m_misc.w,8.0) > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -1044,7 +1045,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     tb.a = tex15.sample(s15, in.uv).r;
 #endif
     float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
-    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, m.misc.w > 1.5 ? 1.0 : in.col.a);
+    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, fmod(m.misc.w,8.0f) > 1.5 ? 1.0 : in.col.a);
     int teamMode = int(m.misc.y + 0.5);
     float teamW = 0.0;
     if (teamMode == 1) {
@@ -1085,7 +1086,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float4 mr = tex2.sample(s2, in.uv);
     rough *= mr.g;
     metallic *= mr.b;
-    emis *= toLinear(tex5.sample(s5, in.uv).rgb);
+    float3 emissiveSample=tex5.sample(s5,in.uv).rgb;
+    emis *= m.misc.w>=8.0f?max(emissiveSample,float3(0.0f)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
@@ -1104,7 +1106,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     if(m.uv1.y > 0.5 && m.uv1.y < 1.5) discard_fragment(); // unlit only; VIVID skin/eye/hair stay
     return float4(clamp(base.rgb,float3(0.0),float3(1.0)),clamp(metallic,0.0f,1.0f));
 #endif
-    ao *= m.misc.w > 1.5 ? (m.misc.w > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
+    ao *= fmod(m.misc.w,8.0f) > 1.5 ? (fmod(m.misc.w,8.0f) > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 

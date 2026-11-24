@@ -153,7 +153,7 @@ public:
         entry->indices.push_back(index);
         return int(index);
     }
-    // Adopt an exclusively owned, already copied RGBA8 image. The producer
+    // Adopt an exclusively owned, already copied RGBA8 or tagged linear HDR image. The producer
     // must hold its source buffer and texture through the real copy fence.
     // This is an ownership move, not another texture allocation or upload.
     // No borrowed/cached/virtual textures and no outstanding GPU work.
@@ -170,10 +170,10 @@ public:
            !image.rgba.empty()||image.sharedRgba||image.compressed||image.gpuCompressed||
            image.virtualFallbackMaxDimension!=0||image.virtualFallbackPreserveAlpha||
            image.virtualAlphaMask.valid()||image.alphaCoverageThreshold||image.alphaCoverageMipmaps)
-            throw std::invalid_argument("GPU image must be an exclusively owned ordinary RGBA8 texture");
+            throw std::invalid_argument("GPU image must be an exclusively owned ordinary texture");
         gfx::TextureInfo info{};
         if(!device_.textureInfo(image.tex,info)||info.width!=image.width||info.height!=image.height||
-           info.format!=gfx::PixelFormat::RGBA8)
+           (image.proceduralLinearRadiance?(!image.proceduralGraphImage||(info.format!=gfx::PixelFormat::RGBA16F&&info.format!=gfx::PixelFormat::RGBA32F)):info.format!=gfx::PixelFormat::RGBA8))
             throw std::invalid_argument("GPU image metadata mismatch");
         // Existing Model images and all staged images must have distinct
         // ownership. The producer is responsible for exclusivity across

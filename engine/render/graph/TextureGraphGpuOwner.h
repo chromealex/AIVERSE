@@ -263,7 +263,7 @@ class TextureGraphGpuOwner {
                 if(valid)for(size_t i=0;i<reference.size();++i){
                     float v;std::memcpy(&v,pixels_.data()+i*sizeof(float),sizeof(float));
                     const float tolerance=std::max(0.0001f,std::abs(reference[i])*0.0001f);
-                    if(!std::isfinite(v)||std::abs(v)>65504.f||(i%4==3?v!=1.f:std::abs(v-reference[i])>tolerance)){valid=false;break;}
+                    if(!std::isfinite(v)||std::abs(v)>65504.f||(i%4==3&&(v<0.f||v>1.f))||std::abs(v-reference[i])>tolerance){valid=false;break;}
                 }
             }catch(...){valid=false;}
             if(valid){state_="ready";backend_=submittedBackend_;reason_="complete RGBA32F native readback; CPU reference validated";}
@@ -914,6 +914,19 @@ protected:
         r.set("backend",Json::string(backend_));r.set("request",Json::string(request));return r;
     }
 public:
+    bool publishResidentRadianceEmissive(const std::string& scope,const std::string& request,
+            view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+        if(!residentRadianceBpp_||!gpuCandidatesReady()||scope!=project_||request!=std::to_string(serial_)||
+           !lease.validFor(dev)||!gpuTransferLease_.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||gpuCandidates_.size()!=1){
+            if(error)*error="no matching completed resident HDR request";return false;
+        }
+        if(!view::AppearanceAssetRegistry::publishRadianceEmissiveSnapshot(live,target,model,dev,lease,rollback,*gpuCandidates_.front(),gpuGeneration_,error)){
+            discard("failed","HDR emissive publication rejected");return false;
+        }
+        gpuCandidates_.clear();gpuAcceptedTextures_=0;published_=gpuPublished_=true;reason_="linear HDR emissive adopted";return true;
+    }
     bool isRadianceBake()const noexcept{return rawRadiance_;}
     // Native-only ownership transfer after the exact covering fence. Caller
     // retains the device lease and destroys the returned texture after use.

@@ -597,6 +597,31 @@ public:
             },materialMirror,error);
     }
 
+    static bool publishRadianceEmissiveSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,
+            std::string_view generation,std::string* error=nullptr){
+        render::texture_graph::Program binding;binding.outputs.emplace("emissive",0);
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,rollback,binding,
+            [&](auto& transaction,const render::Material& base){
+                using namespace render::texture_graph;
+                require(graphGpuTextureCopyComplete(candidate,device),"HDR copy fence not complete");
+                require(base.shading==render::ShadingModel::Pbr&&!base.shaderGraph,"linear emissive binding requires built-in PBR material");
+                gfx::TextureInfo info{};
+                require(device.textureInfo(candidate.image.tex,info)&&(info.format==gfx::PixelFormat::RGBA16F||info.format==gfx::PixelFormat::RGBA32F),"invalid HDR emissive texture format");
+                candidate.image.name=gpuGraphImageName(generation,"emissive");
+                candidate.image.proceduralGraphImage=true;candidate.image.proceduralLinearRadiance=true;
+                auto result=base;
+                pinGraphMaterialBinding(result,&render::Material::emissiveTex,candidate.image);
+                result.emissiveTex=transaction.stageCompletedGpuImage(model,candidate.image,candidate.lease,candidate.fence);
+                // The user explicitly applies a radiance map; default black
+                // factor would otherwise hide it. Preserve existing nonzero tint.
+                if(result.emissive.x==0&&result.emissive.y==0&&result.emissive.z==0)result.emissive={1,1,1};
+                candidate.encoded=false;candidate.fence=0;candidate.lease={};
+                return result;
+            },nullptr,error);
+    }
+
     void erase(const std::string& key) {
         assets_.erase(key);
         dirty_.erase(key);

@@ -45,7 +45,7 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
             m.thinTransmission, m.shadowDiffusion, m.fixedShade.x, m.fixedShade.y,
             m.sssStrength, m.sssColor.x, m.sssColor.y, m.sssColor.z, m.sssScale, m.sssThickness, m.humanProfile.x, m.humanProfile.y, m.eyeOptics.x, m.eyeOptics.y, m.eyeOptics.z, m.eyeOptics.w);
     };
-    if (state(a) != state(b)) return false;
+    if (state(a) != state(b)||resolvedLinearEmissive(ma,a)!=resolvedLinearEmissive(mb,b)) return false;
     for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
                    &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
         if(resolvedMaterialTexture(ma,a,slot)!=resolvedMaterialTexture(mb,b,slot))return false;
@@ -97,7 +97,7 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
     for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
                    &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
         u(resolvedMaterialTexture(model,m,slot).id);
-    u(resolvedMaterialAlphaCoverage(model,m).id);
+    u(resolvedMaterialAlphaCoverage(model,m).id);u(resolvedLinearEmissive(model,m));
     if(m.shaderGraph)
         for(size_t i=0;i<m.shaderGraph->textures.size()&&i<4;++i)
             u(resolvedGraphSourceTexture(model,m,i).id);

@@ -52,7 +52,7 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var,std::stri
         auto f=[&](const char* key,float fallback,float lo=0,float hi=1){return literal(scalar(q[key],fallback,lo,hi));};
         std::string expr;
         if(id=="hdrConstant")expr="float3("+literal(scalar(q["radiance"][0],1,-65504,65504))+","+literal(scalar(q["radiance"][1],1,-65504,65504))+","+literal(scalar(q["radiance"][2],1,-65504,65504))+")";
-        else if(id=="hdrFromColor")expr=var(0);
+        else if(id=="hdrFromColor"||id=="hdrSetAlpha")expr=var(0);
         else if(id=="hdrAdd"||id=="hdrMultiply")expr="("+var(0)+(id=="hdrAdd"?"+":"*")+var(1)+")";
         else if(id=="hdrExposure")expr="("+var(0)+"*"+literal(std::ldexp(1.f,integer(q["ev"],0,-12,12)))+")";
         else if(id=="hdrBlend")expr="mix("+var(0)+","+var(1)+","+var(2)+".x)";
@@ -326,16 +326,24 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             const auto i=std::to_string(j);
             body+="float3 v"+i+"="+(types[j]==KernelValue::Scalar?"float3(input"+i+"[tid])":"input"+i+"[tid].xyz")+";\n";
         }
-        const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);},&body);
+        const auto expr=op=="hdrAlpha"?std::string("float3(input0[tid].w)"):pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);},&body);
         body+="float3 value=clamp("+expr+(node.info->output==Kind::Radiance?",-65504.0f,65504.0f);\n":",0.0f,1.0f);\n");
     }
-    body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
+    std::string alpha="1.0f";
+    if(op=="hdrAsset")alpha="clamp(raw.w,0.0f,1.0f)";
+    else if(op=="hdrConstant")alpha=literal(scalar(node.parameters["alpha"],1));
+    else if(op=="hdrExposure")alpha="input0[tid].w";
+    else if(op=="hdrAdd")alpha="max(input0[tid].w,input1[tid].w)";
+    else if(op=="hdrMultiply")alpha="input0[tid].w*input1[tid].w";
+    else if(op=="hdrBlend")alpha="mix(input0[tid].w,input1[tid].w,input2[tid])";
+    else if(op=="hdrSetAlpha")alpha="input1[tid]";
+    body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,"+alpha+");";
     return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers)+(readsCustomResources(node)?custom_compute::resourceShaderHelpers:""):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
 }
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
 inline bool fusionPointwise(const Node& node){
-    if(readsCustomResources(node)||node.info->output==Kind::Radiance||std::string_view(node.info->id)=="hdrToneMap")return false;
+    if(readsCustomResources(node)||node.info->output==Kind::Radiance||(std::string_view(node.info->id)=="hdrToneMap"||std::string_view(node.info->id)=="hdrAlpha"))return false;
     const std::string_view id=node.info->id;
     for(std::string_view op:{"formula","customScalar","customColor","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
         "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})

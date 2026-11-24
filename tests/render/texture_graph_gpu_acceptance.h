@@ -276,14 +276,14 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         require(namedStatus.getStr("request")==namedId&&namedStatus.getStr("state")=="ready"&&namedStatus.getStr("backend")==expected,"named resource GPU parity failed");
         // HDR values remain signed float through arithmetic, with explicit tone map.
         auto hdrGraph=Json::parse(R"JSON({"graph":{"version":1,"size":16,"nodes":[
-          {"id":"light","op":"hdrConstant","inputs":[],"properties":{"radiance":[4,2,-1]}},
+          {"id":"light","op":"hdrConstant","inputs":[],"properties":{"radiance":[4,2,-1],"alpha":0.25}},
           {"id":"gain","op":"hdrExposure","inputs":["light"],"properties":{"ev":1}},
           {"id":"sum","op":"hdrAdd","inputs":["gain","light"]},
           {"id":"display","op":"hdrToneMap","inputs":["sum"],"properties":{"ev":-1,"mapping":"reinhard"}}
         ],"outputs":{"radiance":"sum","color":"display"}},"requireGpu":true,"materialized":true,"fusePointwise":true,"output":"radiance","resolution":16})JSON");
         const auto hdrProgram=render::texture_graph::compile(hdrGraph["graph"]);
         const auto rawHdr=render::texture_graph::evaluateRadiance(hdrProgram,hdrProgram.outputs.at("radiance"));
-        require(rawHdr[0]==12&&rawHdr[1]==6&&rawHdr[2]==-3&&rawHdr[3]==1,"linear HDR values clipped");
+        require(rawHdr[0]==12&&rawHdr[1]==6&&rawHdr[2]==-3&&rawHdr[3]==.25f,"linear HDR values clipped");
         const auto hdrDisplay=render::texture_graph::evaluate(hdrProgram,hdrProgram.outputs.at("color"));
         require(hdrDisplay.rgba[0]==219&&hdrDisplay.rgba[1]==191&&hdrDisplay.rgba[2]==0,"HDR tone mapping mismatch");
         const auto hdrPreviewId=owner.start(hdrGraph,project,lifetime.lease()).getStr("request");drain();
@@ -294,7 +294,7 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto rawStatus=owner.status();
         require(rawStatus.getStr("request")==rawId&&rawStatus.getStr("state")=="ready"&&rawStatus.getStr("backend")==expected&&rawStatus.getStr("resultFormat")=="rgba32f-linear"&&rawStatus.getInt("receivedBytes")==16*16*16,"raw GPU HDR readback failed");
         const auto rawGpu=owner.readAcceptedRadiance(project,rawId);
-        require(rawGpu.size()==rawHdr.size()&&std::abs(rawGpu[0]-12.f)<.001f&&std::abs(rawGpu[1]-6.f)<.001f&&std::abs(rawGpu[2]+3.f)<.001f&&rawGpu[3]==1.f,"raw GPU HDR values lost");
+        require(rawGpu.size()==rawHdr.size()&&std::abs(rawGpu[0]-12.f)<.001f&&std::abs(rawGpu[1]-6.f)<.001f&&std::abs(rawGpu[2]+3.f)<.001f&&rawGpu[3]==.25f,"raw GPU HDR values lost");
         bool staleHdr=false;try{(void)owner.readAcceptedRadiance(project,"stale");}catch(const std::runtime_error&){staleHdr=true;}
         require(staleHdr,"stale HDR request accepted");
         cancel(rawId);drain();

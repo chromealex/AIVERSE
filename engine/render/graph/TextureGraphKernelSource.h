@@ -49,7 +49,7 @@ inline Source packMaterializedKernelAt(KernelValue input,int n,const std::string
         "result["+index+"]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;");
 }
 inline Source packRadianceFloatKernel(int n){
-    return materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result[tid]=float4(input0[tid].xyz,1.0f);");
+    return materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result[tid]=input0[tid];");
 }
 inline Source packMaterializedKernel(KernelValue input,int n){
     return packMaterializedKernelAt(input,n,"tid");
@@ -67,9 +67,9 @@ inline TextureTransferPack packRadianceTextureKernel(int n,size_t bpp){
     const auto stride=std::to_string(layout.rowPitchBytes/bpp);
     const std::string index="(tid/n)*"+stride+"u+tid%n";
     Source source;
-    if(bpp==16)source=materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result["+index+"]=float4(input0[tid].xyz,1.0f);");
+    if(bpp==16)source=materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result["+index+"]=input0[tid];");
     else{
-        const std::string base="uint dst=2u*("+index+");float4 value=float4(input0[tid].xyz,1.0f);";
+        const std::string base="uint dst=2u*("+index+");float4 value=input0[tid];";
         source=materializedKernel(KernelValue::PackedBytes,{KernelValue::Vector},n,
             base+"result[dst]=as_type<uint>(half2(value.xy));result[dst+1u]=as_type<uint>(half2(value.zw));");
         replaceShaderToken(source.glsl,"as_type<uint>(half2(value.xy))","packHalf2x16(value.xy)");
