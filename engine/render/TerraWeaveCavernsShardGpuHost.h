@@ -323,6 +323,23 @@ public:
         owners_.clear();
         return true;
     }
+    CaveGeometrySwapOwner::MemoryStats memoryStats()const noexcept {
+        CaveGeometrySwapOwner::MemoryStats out;
+        for(const auto& [key,owner]:owners_){
+            (void)key;if(!owner)continue;
+            const auto s=owner->memoryStats();
+            out.activeSourceBytes+=s.activeSourceBytes;
+            out.stagedSourceBytes+=s.stagedSourceBytes;
+            out.retiredSourceBytes+=s.retiredSourceBytes;
+            out.activeStrataArenaBytes+=s.activeStrataArenaBytes;
+            out.stagedStrataArenaBytes+=s.stagedStrataArenaBytes;
+            out.retiredStrataArenaBytes+=s.retiredStrataArenaBytes;
+            out.activePageTransfers+=s.activePageTransfers;
+            out.activePageDeferrals+=s.activePageDeferrals;
+            out.liveScenes+=s.liveScenes;
+        }
+        return out;
+    }
     struct GpuPreviewStats {
         size_t activeShards=0,pendingShards=0;
         size_t retiredScenes=0,pendingGpuOwners=0,retainedStrata=0;
@@ -368,9 +385,15 @@ private:
             if(owner)retained+=owner->retiredCount();
         }
         if(uploadBudget_){
-            const uint64_t bytes=
-                uint64_t(prepared.vertexCount)*sizeof(MeshVertex)+
-                uint64_t(prepared.triangleCount)*3u*sizeof(uint32_t);
+            uint64_t bytes=0;
+            for(const auto& [name,model]:prepared.models){
+                (void)name;if(!model)return false;
+                bytes+=uint64_t(model->vertices.size())*sizeof(render::ModelVertex)+
+                       uint64_t(model->indices.size())*sizeof(uint32_t);
+            }
+            const auto live=memoryStats();
+            if(!uploadBudget_->admitLive(live.activeSourceBytes+live.stagedSourceBytes+
+                 live.retiredSourceBytes,live.liveScenes,bytes))return false;
             const bool allowed=prepared.models.empty()
                 ? uploadBudget_->admitEmpty(device.frameSerial(),retained)
                 : uploadBudget_->admit(device.frameSerial(),bytes,retained);
