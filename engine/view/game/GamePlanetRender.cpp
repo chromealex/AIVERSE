@@ -192,7 +192,7 @@ bool PlanetRenderer::clearCaveBodyCut(int body,uint64_t expectedEpoch,const std:
     for(auto& c:b.chunks){
         if(c.caveVb.valid())dev_->destroyBuffer(c.caveVb);
         if(c.caveIb.valid())dev_->destroyBuffer(c.caveIb);
-        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;
+        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;c.caveRegion=0;
     }
     b.caveCutEpoch=0;b.caveCutAggregate=false;return true;
 }
@@ -213,12 +213,19 @@ bool PlanetRenderer::installCaveBodyCut(int body,const terraweave::caverns::Cave
     auto& b=bodies_[size_t(body)];const auto& pb=world_.bodies[size_t(body)];
     if(!b.surf||b.caveCutEpoch!=expectedEpoch||plan.surfaceEpoch<=b.caveCutWatermark)return false;
     const auto slots=cave::collectPlanetBodyCutSlots(plan);
+    // A full native replacement cannot silently restore an old cut leaf:
+    // its collision owner would still hold that leaf. Explicit coordinated
+    // clear/restore is required before shrinking the active set.
+    for(const auto& c:b.chunks)if(c.caveCut){
+        const auto it=slots.find({c.face,c.x0,c.y0,c.size,c.level});
+        if(it==slots.end()||it->second.region!=c.caveRegion)return false;
+    }
     if(!dev_->waitForResourceIdle()||!exclusive())return false;
     std::vector<cave::CavePlanetSurfaceSlotKey> keys;
     for(const auto& [key,slot]:slots){(void)slot;keys.push_back(key);}
     const auto original=captureCaveSurfaceSlots(body,keys);
     const auto sameTriangle=[](const world::Triangle& a,const world::Triangle& b){return a.a==b.a&&a.b==b.b&&a.c==b.c;};
-    struct Staged{size_t index;gfx::BufferHandle vb,ib;uint32_t count=0;};
+    struct Staged{size_t index;gfx::BufferHandle vb,ib;uint32_t count=0;uint64_t region=0;};
     std::vector<Staged> staged;staged.reserve(keys.size());
     const auto discard=[&]{for(auto& st:staged){if(st.vb.valid())dev_->destroyBuffer(st.vb);if(st.ib.valid())dev_->destroyBuffer(st.ib);}staged.clear();};
     const auto& s=*b.surf;const int N=s.faceSize(),G=s.gridSize(),K=std::max(1,s.detailScale());
@@ -278,7 +285,7 @@ bool PlanetRenderer::installCaveBodyCut(int body,const terraweave::caverns::Cave
             // Bound the interpolation scan even for hostile native input.
             if(slot.bodyTriangles.size()*3ull*captured.bodyTriangles.size()>4000000)throw std::length_error("Planet cave attribute work budget");
             for(const auto& t:slot.bodyTriangles)for(const auto& p:{t.a,t.b,t.c}){indices.push_back(uint32_t(vertices.size()));vertices.push_back(vertex(p));}
-            staged.push_back({size_t(it-b.chunks.begin()),{},{},uint32_t(indices.size())});
+            staged.push_back({size_t(it-b.chunks.begin()),{},{},uint32_t(indices.size()),slots.at(captured.key).region});
             auto& st=staged.back();
             if(!indices.empty()){
                 gfx::BufferDesc vb;vb.type=gfx::BufferType::Vertex;vb.size=vertices.size()*sizeof(PV);vb.data=vertices.data();vb.label="planet cave cut";
@@ -294,10 +301,10 @@ bool PlanetRenderer::installCaveBodyCut(int body,const terraweave::caverns::Cave
     for(auto& c:b.chunks){
         if(c.caveVb.valid())dev_->destroyBuffer(c.caveVb);
         if(c.caveIb.valid())dev_->destroyBuffer(c.caveIb);
-        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;
+        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;c.caveRegion=0;
     }
     for(auto& st:staged){
-        auto& leaf=b.chunks[st.index];leaf.caveVb=st.vb;leaf.caveIb=st.ib;leaf.caveIndices=st.count;leaf.caveCut=true;
+        auto& leaf=b.chunks[st.index];leaf.caveVb=st.vb;leaf.caveIb=st.ib;leaf.caveIndices=st.count;leaf.caveCut=true;leaf.caveRegion=st.region;
         for(auto& c:b.chunks)if(c.child>=0&&c.face==leaf.face&&c.x0<=leaf.x0&&c.y0<=leaf.y0&&
             c.x0+c.size>=leaf.x0+leaf.size&&c.y0+c.size>=leaf.y0+leaf.size)c.caveDescendant=true;
     }
