@@ -46,11 +46,15 @@ inline SuiteFlags suiteFlags(const Json& json) {
     return f;
 }
 using ImprintTrailInstaller=void(*)(Simulation&);
-inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr) {
+using CrowdInstaller=void(*)(Simulation&);
+inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr) {
     // Order is stable across game/server/editor builds. Integrations can
     // place their own producer systems before this opt-in installation.
     if(flags.morph)morph::install(sim);
-    if(flags.crowd){crowd::installRoutes(sim);crowd::install(sim);}
+    if(flags.crowd){
+        if(crowdInstaller)crowdInstaller(sim);
+        else {crowd::installRoutes(sim);crowd::install(sim);}
+    }
     if(flags.imprint){
         if(trails)trails(sim);
         else {
