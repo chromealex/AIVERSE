@@ -3,6 +3,7 @@
 // the engine's full terrain/detail/water/planet renderer.
 #pragma once
 #include "apps/editor/core/MapDoc.h"
+#include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsSurfaceCut.h"
@@ -68,6 +69,32 @@ inline uint32_t terrainPreviewColor(char kind) {
 
 // Both the ordinary mesh and the PBR lighting receiver use this same
 // CPU triangle source. No separate fake hole mask or terrain replacement.
+// The chart inspector draws the actual coarse spherical triangles in
+// local tangent coordinates. Leave the surface intact until the planetary
+// volume/collar preview has a matching native seam certificate.
+inline TerrainPreviewStats buildPlanetChartPreview(const editor::MapData& map,
+        render::MeshBuilder& out,uint64_t revision){
+    TerrainPreviewStats stats;stats.handled=true;
+    try{
+        const auto region=editor::planet_caves::read(map);
+        const auto patch=editor::planet_caves::captureLocalSurface(map,region.anchor,revision);
+        const auto point=[](Vec3 v){return render::float3{float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};};
+        for(const auto& t:patch.chartTriangles){
+            const auto a=point(t.a),b=point(t.b),c=point(t.c);
+            const auto normal=render::normalize(render::cross(b-a,c-a));
+            const auto color=render::rgba(86,122,98);
+            const auto i=out.addVertex(a,normal,color),j=out.addVertex(b,normal,color),k=out.addVertex(c,normal,color);
+            out.addTriangle(i,j,k);
+        }
+        stats.triangles=patch.chartTriangles.size();
+        stats.quads=stats.triangles/2;
+        stats.rejectedEntrances=region.volume.entrances.size();
+        if(stats.rejectedEntrances)stats.cutDiagnostic="Planet chart surface intact: matching planetary volume collar not yet installed in Studio";
+    }catch(const std::exception& e){
+        out.clear();stats.cutDiagnostic=e.what();
+    }
+    return stats;
+}
 inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
                                                render::MeshBuilder& out,
                                                float levelHeight = 1.5f) {
