@@ -19,6 +19,7 @@
 #include "apps/studio-native/StudioDocumentVisuals.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
+#include "apps/studio-native/StudioPlanetForestOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
@@ -193,6 +194,7 @@ private:
     render::Mesh planetTerrain_;
     std::optional<StudioPlanetPreview> planetPreview_;
     PlanetProcessOverlays planetProcessOverlays_;
+    PlanetForestOverlays planetForestOverlays_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
     uint64_t planetLiveRevision_=0;

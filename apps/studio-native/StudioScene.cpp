@@ -2139,12 +2139,14 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
         planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
+        planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
         planetGravityHandles_=planetPreview_?planetGravityHandles(doc,*planetPreview_):std::vector<PlanetGravityHandle>{};
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
     }
     const auto now=std::chrono::steady_clock::now();
     if(changedDocument||planetModelProject_!=projectPath||planetModelRules_!=&rules||modelsPending_||now>=nextFileCheck_){
         if(planetModelProject_!=projectPath)clearDocumentModels();
+        if(!changedDocument&&planetModelRules_!=&rules)planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
         if(planetPreview_)syncDocumentModels(doc,projectPath,rules,planetPreview_->markers);
         else clearDocumentModels();
         planetModelProject_=projectPath;planetModelRules_=&rules;
@@ -2193,6 +2195,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
     if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
     if(planetProcessOverlays_.regionChartClipped)lightingStatus_+=" · EVOLVE chart clipped";
+    if(planetForestOverlays_.invalid)lightingStatus_+=" · invalid authored forest";
+    if(planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
+    if(planetForestOverlays_.missingProfile)lightingStatus_+=" · missing ARBOR profile";
+    if(planetForestOverlays_.rejected)lightingStatus_+=" · rejected forest placements";
+    if(planetForestOverlays_.truncated)lightingStatus_+=" · forest overlay budget reached";
     const bool livePlanet=planetLiveSnapshot_.getBool("active")&&
         planetLiveSnapshot_.getStr("topology")=="planet"&&
         !planetLivePath_.empty()&&planetLivePath_==doc.path&&
@@ -2279,6 +2286,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
         if(gizmosVisible_){
+            for(const auto& line:planetForestOverlays_.lines)renderer_.line(line.a,line.b,line.color);
             for(const auto& line:planetProcessOverlays_.lines)
                 if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
                     renderer_.line(line.a,line.b,line.color);
