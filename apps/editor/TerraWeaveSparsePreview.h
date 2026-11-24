@@ -189,7 +189,7 @@ public:
     }
     // Studio calls only after the matching volume group is actually active.
     // Legacy draw() retains the older surface-only behavior.
-    void submit(render::Renderer3D& renderer,bool matchingVolumeReady)const {
+    void submit(render::Renderer3D& renderer,bool matchingVolumeReady,bool exactOrigin=false)const {
         if(!authoring_||(group_&&(!matchingVolumeReady||!surfaceGroupUploaded())))return;
         const int64_t span=int64_t(authoring_->chunkSizeMetres())*100;
         for(const auto& [key,entry]:models_) {
@@ -201,7 +201,7 @@ public:
                 // Scene's legacy RTS grid may still be drawn under this
                 // optional overlay. Lift VISUAL preview by 2 cm to avoid
                 // z-fighting; authored ECS soil and collider remain exact.
-                allowCuts_?0.f:0.02f,
+                (exactOrigin||allowCuts_)?0.f:0.02f,
                 float(int64_t(key.z)*span)*0.01f
             });
             draw.flags=render::kDrawStatic;
