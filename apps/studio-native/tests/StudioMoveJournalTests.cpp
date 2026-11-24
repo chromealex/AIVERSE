@@ -98,6 +98,11 @@ int main() {
             writeFile(model,before);
             StudioMoveJournal journal(project);
             journal.begin({{"A/Moved.gltf","B/Moved.gltf"}},false,false,{{fs::path("content/A/Moved.gltf"),before,after}});
+            // Crash after the rename but before resource publication.
+            fs::rename(model,target);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Moved resource pre-publication recovery failed");
+            journal.begin({{"A/Moved.gltf","B/Moved.gltf"}},false,false,{{fs::path("content/A/Moved.gltf"),before,after}});
             fs::rename(model,target);writeFile(target,after);
             StudioMoveJournal::recover(project);
             expect(readFile(model)==before&&!fs::exists(target),"Moved resource recovery failed");

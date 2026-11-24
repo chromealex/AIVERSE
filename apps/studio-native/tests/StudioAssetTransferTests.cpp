@@ -262,7 +262,15 @@ int main(){
             AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedResourceDocuments")==1);
             AIVERSE_TEST_CHECK(!recorded->files[0].digestAfter.empty());
             AIVERSE_TEST_CHECK(Json::parse(read(destination/"model.gltf"))["images"][0].getStr("uri")=="../../Models/outside.png");
-            studioReplayAssetMove(project,*recorded,false);
+            editor::ProjectHistory timeline;
+            auto copy=*recorded;timeline.recordMove(std::move(copy),"Move repaired folder");
+            {
+                StudioAssetHistoryPublication publication(project);publication.save(timeline);
+            }
+            const auto reopened=studioLoadAssetHistoryCheckpoint(project);
+            AIVERSE_TEST_CHECK(reopened.canUndo()&&reopened.next(false).move->files[0].digestAfter==recorded->files[0].digestAfter);
+            studioReplayAssetMove(project,*reopened.next(false).move,false);
+            fs::remove(project/".aiverse-cache"/"asset-history.json");
             AIVERSE_TEST_CHECK(read(source/"model.gltf")==original);
             studioReplayAssetMove(project,*recorded,true);
             studioReplayAssetMove(project,*recorded,false);

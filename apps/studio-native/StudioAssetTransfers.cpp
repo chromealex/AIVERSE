@@ -94,8 +94,14 @@ std::string moveDigest(const fs::path& source,bool directory,const ResourceOverl
     };
     if(!directory){
         if(const auto* bytes=replacement(source)){
-            const auto digest=pack::sha256(bytes->data(),bytes->size());
-            return pack::toHex(digest.data(),digest.size());
+            // Identical framing to studioAssetFileDigest, not bare SHA-256.
+            pack::Sha256 hash;
+            const auto field=[&](const std::string& value){
+                const auto prefix=std::to_string(value.size())+":";
+                hash.update(prefix.data(),prefix.size());hash.update(value.data(),value.size());
+            };
+            field("file-v1");field(std::to_string(bytes->size()));hash.update(bytes->data(),bytes->size());
+            const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
         }
         return studioAssetFileDigest(source);
     }
