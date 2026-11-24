@@ -34,10 +34,10 @@ inline CavePlanetNativePayload prepareCavePlanetNativeTriangles(
     out.collision.cell=ownerCell;out.collision.revision=nativeRevision;
     out.collision.triangles.reserve(chartTriangles.size());
     for(const auto& t:chartTriangles){
-        world::Triangle world{frame.toSimulation(t.a),frame.toSimulation(t.b),frame.toSimulation(t.c)};
-        if(!world::SpatialWorld::validTriangle(world))
+        world::Triangle transformed{frame.toSimulation(t.a),frame.toSimulation(t.b),frame.toSimulation(t.c)};
+        if(!world::SpatialWorld::validTriangle(transformed))
             throw std::invalid_argument("Caverns planetary native triangle lost precision");
-        out.collision.triangles.push_back(world);
+        out.collision.triangles.push_back(transformed);
     }
     out.model=buildExactCavePayload(out.collision,out.simulationOrigin,userData);
     return out;
