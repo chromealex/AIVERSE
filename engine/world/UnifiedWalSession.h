@@ -184,15 +184,23 @@ private:
         state_=std::move(staged);ready_=true;return RegionWalWrite::Ok;
     }
 public:
-    RegionCheckpointPublishResult checkpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
+    RegionCheckpointPublishResult checkpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget,uint64_t compactThrough=0,size_t compactLimit=RegionEntityLedger::kMaxEntities){
         using R=RegionCheckpointPublishResult;
         if(!ready_||!managed_||ioPending()||generation<=manifest_.generation)return R::Invalid;
+        std::unique_ptr<State> compacted;
+        if(compactThrough){
+            if(compactThrough>state_->ledger.lastRevision())return R::Invalid;
+            compacted=std::make_unique<State>(*state_);
+            compacted->ledger.compactRetired(compactThrough,compactLimit);
+        }
+        const State& candidate=compacted?*compacted:*state_;
         ready_=false;writer_.close();
         RegionCheckpointManifest next;
-        auto result=UnifiedCheckpointPublisher::publish(dir_,*state_,manifest_.identity.world,generation,adapters,budget,next);
+        auto result=UnifiedCheckpointPublisher::publish(dir_,candidate,manifest_.identity.world,generation,adapters,budget,next);
         if(result!=R::Ok)return result;
         std::vector<uint8_t> prefix;
         if(!UnifiedCheckpointPublisher::identity(next,prefix)||writer_.open(dir_/next.walName(),state_->sequence,false,prefix)!=RegionWalWrite::Ok||writer_.lastSequence()!=state_->sequence){writer_.close();return R::Ambiguous;}
+        if(compacted)state_.swap(compacted);
         manifest_=next;ready_=true;return R::Ok;
     }
     // Finalized barrier only. No external side effects in replay callbacks.
@@ -231,11 +239,18 @@ public:
         ++ticket_;prepared_=std::move(staged);pending_=Pending::Append;
         return IoResult::Pending;
     }
-    IoResult queueCheckpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget){
+    IoResult queueCheckpoint(uint64_t generation,const UnifiedCheckpointSections::Adapters& adapters,size_t budget,uint64_t compactThrough=0,size_t compactLimit=RegionEntityLedger::kMaxEntities){
         if(ioPending())return IoResult::Busy;
         if(!async_||!managedReady()||generation<=manifest_.generation||ticket_==UINT64_MAX)return IoResult::Failed;
+        std::unique_ptr<State> compacted;
+        if(compactThrough){
+            if(compactThrough>state_->ledger.lastRevision())return IoResult::Failed;
+            compacted=std::make_unique<State>(*state_);
+            compacted->ledger.compactRetired(compactThrough,compactLimit);
+        }
+        const State& candidate=compacted?*compacted:*state_;
         std::vector<uint8_t> bytes;
-        if(!UnifiedCheckpointSections::capture(*state_,manifest_.identity.world,adapters,std::min(budget,asyncBudget_),bytes))return IoResult::Failed;
+        if(!UnifiedCheckpointSections::capture(candidate,manifest_.identity.world,adapters,std::min(budget,asyncBudget_),bytes))return IoResult::Failed;
         RegionCheckpointManifest m;
         m.generation=generation;m.identity.world=manifest_.identity.world;
         m.identity.sequence=state_->sequence;m.identity.revision=state_->ledger.lastRevision();
@@ -250,7 +265,7 @@ public:
                 writer_.lastSequence()==m.identity.sequence;
         });
         if(submit!=AsyncPersistenceIo::Submit::Accepted)return IoResult::Failed;
-        ++ticket_;preparedManifest_=m;pending_=Pending::Checkpoint;
+        ++ticket_;prepared_=std::move(compacted);preparedManifest_=m;pending_=Pending::Checkpoint;
         return IoResult::Pending;
     }
     // Owner consumes the ordered receipt. Only here is private ECS state or
@@ -266,6 +281,7 @@ public:
         if(operation==Pending::Append){
             state_.swap(prepared_);prepared_.reset();return IoResult::Committed;
         }
+        if(prepared_){state_.swap(prepared_);prepared_.reset();}
         manifest_=preparedManifest_;return IoResult::Checkpointed;
     }
     // Managed sessions only; caller serializes these operations at a finalized
