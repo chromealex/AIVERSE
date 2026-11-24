@@ -459,11 +459,11 @@ public:
     // One-shot adoption of the exact textures accepted by this request.
     // The caller must own a stable live appearance snapshot/model and invoke
     // at its joined frame boundary. No raw GPU handles are exported by RPC.
-    bool publishCompletedGpuMaterial(const std::string& project,const std::string& request,
-            view::AppearanceAssetRegistry& registry,const std::string& key,
-            uint64_t expectedVersion,uint64_t expectedModelPublication,size_t materialIndex,
-            render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
-            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+private:
+    template<class Publish>
+    bool adoptCompletedGpuMaterial(const std::string& project,const std::string& request,
+            gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
+            Publish&& publish,std::string* error){
         if(!gpuCandidatesReady()||!program_||project.empty()||project_!=project||
            request!=std::to_string(serial_)||!gpuTransferLease_.validFor(dev)||
            !lease.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||!dev.gpuHealthy()){
@@ -476,9 +476,7 @@ public:
             if(error)*error="incomplete GPU texture candidate set";return false;
         }
         for(size_t i=0;i<count;++i)candidates[i]=gpuCandidates_[i].get();
-        const bool ok=registry.publishGpuTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
-            materialIndex,model,dev,lease,rollback,*program_,
-            std::span<GpuCopy* const>(candidates.data(),count),gpuGeneration_,true,error);
+        const bool ok=publish(*program_,std::span<GpuCopy* const>(candidates.data(),count),gpuGeneration_,error);
         if(!ok){
             // An aborted transaction may have consumed some handles into the
             // existing rollback pool. Never retry a partially adopted set.
@@ -486,6 +484,31 @@ public:
         }
         gpuCandidates_.clear();published_=gpuPublished_=true;setImages_.clear();pixels_.clear();
         reason_="GPU textures adopted by native material owner";return true;
+    }
+public:
+    bool publishCompletedGpuMaterial(const std::string& project,const std::string& request,
+            view::AppearanceAssetRegistry& registry,const std::string& key,
+            uint64_t expectedVersion,uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+        return adoptCompletedGpuMaterial(project,request,dev,lease,
+            [&](const Program& program,std::span<GpuCopy* const> copies,std::string_view generation,std::string* why){
+                return registry.publishGpuTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
+                    materialIndex,model,dev,lease,rollback,program,copies,generation,true,why);
+            },error);
+    }
+    // Direct publication into the actual host snapshot, not a temporary
+    // registry entry. Host resolves the model at a joined frame boundary.
+    bool publishCompletedGpuSnapshot(const std::string& project,const std::string& request,
+            view::AppearanceAssetRegistry::Snapshot& live,const view::LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::vector<render::Material>* mirror=nullptr,
+            std::string* error=nullptr){
+        return adoptCompletedGpuMaterial(project,request,dev,lease,
+            [&](const Program& program,std::span<GpuCopy* const> copies,std::string_view generation,std::string* why){
+                return view::AppearanceAssetRegistry::publishGpuTextureGraphSnapshot(live,target,model,dev,lease,
+                    rollback,program,copies,generation,true,mirror,why);
+            },error);
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
