@@ -112,7 +112,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 36B in progress: bounded conservative pointwise fusion using canonical typed slot planner and shared kernel expression compiler; explicit opt-in for GPU execution.",
+      "note": "Stage 36B bounded opt-in automatic pointwise fusion integrated in canonical typed planner, native owner, MCP and Studio; integrated/hardware acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -182,7 +182,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 36A isolated exact-blob C++20 resource-cache policy PASS on Linux GCC 14.2. Integrated synthetic owner fixture extended NOT RUN. Native full build, GPU, Studio, CTest and Mac gate NOT RUN.",
+      "note": "Stage 36B exact-source isolated fusion + canonical slot lowering C++20 PASS on Linux GCC 14.2 and Clang; integrated source/native/Studio/Metal/Vulkan tests NOT RUN.",
       "evidence": []
     },
     "handoff": {
