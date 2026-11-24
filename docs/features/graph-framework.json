@@ -126,7 +126,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35E shared native topology parser/inspector and structural reachability comparison implemented; native DTO and actual owner panel remain in PR #136, not merged.",
+      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -196,7 +196,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN.",
       "evidence": []
     },
     "handoff": {
