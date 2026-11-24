@@ -41,3 +41,5 @@ Runtime library: none. This recipe integrates an existing engine subsystem or ru
 it does not provide a separate runtime implementation. Pin the engine revision for that owner.
 
 FixedInterpolation.h extends existing engine math with clamped Q16 lerp (scalar/Vec3), six easing modes and cubic Bezier via de Casteljau. Endpoints bounded to ±2^60 raw; invalid endpoints return nullopt. No floating point. No builds/tests yet.
+
+FixedQuaternion.h: bounded Q16 normalization, normalized Hamilton product, axis-angle in turns, shortest-hemisphere NLERP and vector rotation. Invalid/near-zero inputs return nullopt. Uses existing FixedMath; no float. No build/tests.
