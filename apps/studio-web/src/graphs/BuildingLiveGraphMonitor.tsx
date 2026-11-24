@@ -83,7 +83,14 @@ export function BuildingLiveGraphMonitor(){
     <StudioSelect aria-label="History change filter" value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">All changes</option>{kinds.map((k,i)=><option key={k} value={String(i)}>{k}</option>)}</StudioSelect>
    </div>
    <details><summary>Published history ({history.length})</summary>{history.map((h,i)=><div key={i}><small>Revision {String(h.physicalRevision)} · pending {String(h.pendingDomains)} · ACK {String(h.acknowledgedDomains)} · attempts {String(h.attempts)}</small></div>)}</details>
-   <StudioAlert>ACK means invalidation accepted. Measured callback time is not asynchronous rebuild duration. Actual affected cells, clusters and traversal are not reported.</StudioAlert>
+   {object(snapshot.ownerTelemetry)&&<div className="au-stack">
+    <strong>Native algorithm work telemetry</strong>
+    {Object.entries(snapshot.ownerTelemetry).slice(0,17).filter(([,v])=>object(v)).map(([name,value])=><details key={name}>
+     <summary>{name}</summary>
+     <pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(value,null,2)}</pre>
+    </details>)}
+   </div>}
+   <StudioAlert>ACK means invalidation accepted. Callback timing is not rebuild duration. Owner counters have their own scope and revision; grid-wide work is not attributed to a single building. Missing telemetry is unknown, not zero.</StudioAlert>
   </>}
  </StudioSection>;
 }
