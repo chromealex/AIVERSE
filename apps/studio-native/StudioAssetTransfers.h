@@ -91,7 +91,8 @@ void studioReplayAssetReplacement(const std::filesystem::path& project,
     const editor::ProjectHistory::MovePlan& plan,bool redo,StudioBatchAssetPlan* staged=nullptr);
 // Soft-delete one asset to persistent project-local quarantine; never purge it on history eviction.
 editor::ProjectHistory::MovePlan studioQuarantineAsset(const std::filesystem::path& project,
-    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences={});
+    const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences={},
+    StudioBatchAssetPlan* staged=nullptr);
 void studioReplayAssetQuarantine(const std::filesystem::path& project,
     const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={},StudioBatchAssetPlan* staged=nullptr);
 // Persistent asset timeline, separate from the recovery payload store.
@@ -125,5 +126,5 @@ Json studioAssetTrashReview(const std::filesystem::path& project,const std::stri
 void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken);
 std::string studioCreateContentFolder(const std::filesystem::path& project,
                                      const std::string& parent,const std::string& name,
-                                     editor::ProjectHistory::MovePlan* history=nullptr);
+                                     editor::ProjectHistory::MovePlan* history=nullptr,StudioBatchAssetPlan* staged=nullptr);
 }
