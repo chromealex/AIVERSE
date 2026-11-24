@@ -1103,8 +1103,8 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     const auto preview=agentBatchPreview(redo);
     if(!preview.getBool("available")||expectedToken.empty()||preview.getStr("token")!=expectedToken)
         throw std::runtime_error("Batch preview changed or unavailable: "+preview.getStr("reason"));
-    // Stage all owner state before touching the filesystem. A single existing-
-    // file journal covers project documents, project checkpoint and sidecars.
+    // Stage all owner state before touching the filesystem. The outer batch
+    // journal coordinates disjoint relocations with the existing-file journal.
     std::optional<editor::MapDoc> stagedMap;
     std::optional<editor::Project> stagedProject;
     std::optional<editor::ProjectHistory> stagedAssets;

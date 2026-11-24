@@ -471,7 +471,14 @@ void agentScopedHistoryContract(){
     Json folder=Json::object();folder.set("expectedProject",assets["project"]);folder.set("expectedVersion",assets["version"]);
     folder.set("parent",Json::string(""));folder.set("name",Json::string("AgentFolder"));
     AIVERSE_TEST_CHECK(!agent("studio_asset_folder_create",folder).has("error"));
-    AIVERSE_TEST_CHECK(!info()["batchUndo"].getBool("available")); // move plan not supported in file-only batch
+    reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&reviewed["steps"].size()==2);
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"content"/"AgentFolder"));
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    reviewed=info()["batchRedo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
     AIVERSE_TEST_CHECK(agent("studio_asset_folder_create",folder).has("error")); // stale owner version
     auto changes=info()["changes"];
     Json projectEdit,assetEdit;

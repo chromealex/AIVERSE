@@ -56,3 +56,7 @@ The authenticated link recognizes four explicit Studio-only asset adapters: `stu
 ### S6f.1 coordinated agent batch
 
 Agent Panel exposes reviewed Undo/Redo batches for fully tracked conversations (max 64 steps) involving Map, compatible Project edits and importer metadata. Native preview/apply verifies exact owner versions, ordered step boundaries and explicit confirmation. Existing files and Project checkpoint share a single journal; Map state is staged in memory and remains unsaved until map save. Asset timeline checkpoint follows the commit and uses its existing interrupted-publication fence. Move/create/import/delete/replace plans are refused in this batch version. No durable cross-owner atomicity for saved scene files or recovery payloads is claimed.
+
+### S6f.2 disjoint asset relocation batches
+
+Coordinated batch supports native staged move/rename, quarantine and replacement plans when their paths are disjoint across groups and do not overlap document edits. Native references and byte/digest checks remain authoritative. An outer project-local journal selects rollback or commit of relocations plus the nested existing-file transaction; reopen in Studio for recovery. Overlapping chains and dependencies requiring interleaved publication are refused. Only currently exposed agent operations can produce agent history links. Map remains unsaved and asset cursor checkpoint is separately fenced.

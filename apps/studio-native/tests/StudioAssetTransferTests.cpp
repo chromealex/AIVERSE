@@ -1,6 +1,8 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioAssetTransfers.h"
 #include "apps/studio-native/StudioAssetReferences.h"
+#include "apps/studio-native/StudioAssetFileDigest.h"
+#include "engine/pack/Sha256.h"
 #include "tests/TestCheck.h"
 #include <chrono>
 #include <filesystem>
@@ -445,6 +447,68 @@ int main(){
             rejected=false;
             try{(void)studioLoadAssetHistoryCheckpoint(p);}catch(const std::runtime_error&){rejected=true;}
             AIVERSE_TEST_CHECK(rejected);
+        }
+        // Coordinated filesystem publication: a replacement chain and a
+        // disjoint quarantine pair share an outer journal with project bytes.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=temp/"Coordinated";
+            fs::create_directories(p/"content");
+            write(p/"game.json","before");write(p/"content"/"Version.png","old");
+            write(p/"content"/"Delete.png","delete me");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto deleteGuid=index.byPath("Delete.png")->guid;
+            write(external/"Version.png","new");
+            std::optional<editor::ProjectHistory::MovePlan> replacement;
+            auto replace=StudioTransferPlan::external(p,"",{external/"Version.png"});
+            (void)replace.apply(replace.token(),{{0,"replace"}},{},&replacement);
+            AIVERSE_TEST_CHECK(replacement&&replacement->replacement);
+            const auto deletion=studioQuarantineAsset(p,"Delete.png",deleteGuid);
+            StudioBatchAssetPlan staged;
+            studioReplayAssetReplacement(p,*replacement,false,&staged);
+            studioReplayAssetQuarantine(p,deletion,false,{},&staged);
+            AIVERSE_TEST_CHECK(staged.relocations.size()==4);
+            AIVERSE_TEST_CHECK(read(p/"content"/"Version.png")=="new"&&!fs::exists(p/"content"/"Delete.png"));
+            staged.documents.push_back({p/"game.json","before","after"});
+            const auto folder=p/".aiverse-cache"/"studio-history-batch";
+            auto manifest=[&]{
+                Json body=Json::object(),moves=Json::array(),documents=Json::array();
+                for(const auto& m:staged.relocations){
+                    Json row=Json::object();row.set("from",Json::string(m.from));row.set("to",Json::string(m.to));
+                    row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));moves.push(std::move(row));
+                }
+                for(const auto& f:staged.documents){
+                    Json row=Json::object();row.set("path",Json::string(f.path.lexically_relative(p).generic_string()));
+                    row.set("before",Json::string(f.before));row.set("after",Json::string(f.after));documents.push(std::move(row));
+                }
+                body.set("moves",std::move(moves));body.set("documents",std::move(documents));
+                const auto payload=body.dump(-1);
+                const auto sum=pack::sha256(payload.data(),payload.size());const auto hash=pack::toHex(sum.data(),sum.size());
+                Json envelope=Json::object();envelope.set("version",Json::number(int64_t(1)));
+                envelope.set("payload",Json::string(payload));envelope.set("sha256",Json::string(hash));return envelope.dump(-1);
+            };
+            const auto envelope=manifest();
+            for(size_t phase=0;phase<=staged.relocations.size();++phase){
+                fs::create_directory(folder);write(folder/"pending.json",envelope);
+                for(size_t i=0;i<phase;++i){const auto& m=staged.relocations[i];fs::rename(p/m.from,p/m.to);}
+                if(phase==staged.relocations.size())write(p/"game.json","after");
+                studioRecoverHistoryBatch(p);
+                AIVERSE_TEST_CHECK(!fs::exists(folder)&&read(p/"game.json")=="before");
+                AIVERSE_TEST_CHECK(read(p/"content"/"Version.png")=="new"&&!fs::exists(p/"content"/"Delete.png"));
+            }
+            // External bytes must stop the entire rollback, not overwrite them.
+            fs::create_directory(folder);write(folder/"pending.json",envelope);
+            for(const auto& m:staged.relocations)fs::rename(p/m.from,p/m.to);
+            write(p/"game.json","external");
+            bool rejected=false;
+            try{studioRecoverHistoryBatch(p);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected&&read(p/"game.json")=="external"&&read(p/"content"/"Version.png")=="old");
+            write(p/"game.json","after");studioRecoverHistoryBatch(p);
+            AIVERSE_TEST_CHECK(read(p/"game.json")=="before"&&read(p/"content"/"Version.png")=="new");
+            studioApplyHistoryBatch(p,staged.relocations,staged.documents);
+            AIVERSE_TEST_CHECK(read(p/"game.json")=="after"&&read(p/"content"/"Version.png")=="old");
+            AIVERSE_TEST_CHECK(read(p/"content"/"Delete.png")=="delete me"&&!fs::exists(folder));
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(deleteGuid)->path=="Delete.png");
         }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
