@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -68,6 +69,17 @@ public:
             // Old visuals remain owned until the new revision is committed.
             item.ready=false;
         }
+    }
+    // Visual-only caller can replace camera demand with an exact bounded
+    // group. Invalidate tickets even on the same authored SDF revision:
+    // the mesh transformation associated with this demand changed.
+    void setExplicitVisualDemand(std::optional<std::set<ChunkKey3,KeyLess>> demand){
+        if(demand&& (demand->empty()||demand->size()>settings_.maxResident))
+            throw std::invalid_argument("Caverns explicit demand budget");
+        for(const auto& [key,item]:items_)if(!item.leases.empty())
+            throw std::logic_error("Caverns explicit visual demand cannot override leases");
+        explicitDemand_=std::move(demand);
+        for(auto& [key,item]:items_){(void)key;item.generation=nextGeneration();item.ready=false;item.building=false;item.retiring=false;}
     }
     void enableDistanceLod(CaveDistanceLodSettings settings={}) {
         validateCaveDistanceLod(settings);
@@ -152,7 +164,9 @@ public:
             }
         if(desired.size()>settings_.maxResident)
             throw std::length_error("Caverns pinned residency budget");
-        for(const auto& candidate:nearby){
+        if(explicitDemand_){
+            for(const auto& key:*explicitDemand_)if(desired.insert(key).second)buildOrder.push_back(key);
+        }else for(const auto& candidate:nearby){
             if(desired.size()>=settings_.maxResident)break;
             if(desired.insert(candidate.key).second)
                 buildOrder.push_back(candidate.key);
@@ -282,6 +296,7 @@ private:
         }
         return it->second;
     }
+    std::optional<std::set<ChunkKey3,KeyLess>> explicitDemand_;
     StreamSettings settings_;
     ChunkKey3 center_{};
     uint64_t revision_=0,nextGeneration_=0,nextLease_=0;
