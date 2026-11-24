@@ -49,7 +49,7 @@ public:
             CavePlanetDemandConfig config={},size_t workers=2)
         :device_(device),view_(view),planet_(view.planets()),box_(box),spatial_(spatial),pool_(pool),
          surface_(std::move(surface)),hooks_(std::move(hooks)),config_(config),builder_(workers){
-        if(!surface_||!hooks_.valid())throw std::invalid_argument("Caverns runtime host hooks");
+        if(!surface_||!surface_->tab||!hooks_.valid())throw std::invalid_argument("Caverns runtime host hooks");
         // Validate configuration before attaching the native draw hook.
         (void)selectPlanetCaveDemand(CavePlanetAuthoritySet{},surface_,{},{},{},config_);
         residency_.attach(view_);
@@ -58,7 +58,7 @@ public:
     CavePlanetRuntimeFrame& operator=(const CavePlanetRuntimeFrame&)=delete;
     bool recoveryRequired()const noexcept{
         if(recovery_||residency_.recoveryRequired())return true;
-        for(const auto& [body,c]:cohorts_){(void)body;if(c.binding->recoveryRequired())return true;}
+        for(const auto& [body,c]:cohorts_){(void)body;if(!c.binding||c.binding->recoveryRequired())return true;}
         return false;
     }
     // Called by the real host on state restoration, even if restored
@@ -102,11 +102,12 @@ public:
             if(recoveryRequired()){out.phase=CavePlanetRuntimePhase::Recovery;out.pinsReady=out.allDemandReady=false;}
             return out;
         };
-        if(closed_||recoveryRequired()||!hooks_.exclusive()){
+        if(closed_||recoveryRequired()||!hooks_.exclusive()||!maxDispatch||maxDispatch>32){
             out.phase=recoveryRequired()?CavePlanetRuntimePhase::Recovery:CavePlanetRuntimePhase::Refused;
             out.diagnostic="Caverns owner closed, recovering or readers not excluded";
             out.pinsReady=out.allDemandReady=false;return out;
         }
+        try{
         const auto* set=ecs.resourceConst<CavePlanetAuthoritySet>();
         const CavePlanetAuthoritySet empty;
         std::set<uint64_t> resident;
@@ -140,7 +141,6 @@ public:
         if(!builder_.busy()&&!builder_.pollCancelled()){
             out.phase=CavePlanetRuntimePhase::Building;return report();
         }
-        try{
             if(candidate_){
                 if(!publishCandidate(ecs,pins)){
                     out.phase=CavePlanetRuntimePhase::WaitingCoverage;out.diagnostic="Candidate publication/coverage refused";
@@ -181,7 +181,10 @@ public:
             }
             if(out.phase!=CavePlanetRuntimePhase::Refused)out.phase=CavePlanetRuntimePhase::Ready;
         }catch(const std::exception& e){
-            if(!buildingBody_.empty())failed_.insert_or_assign(buildSignature(ecs,buildingBody_,buildingIds_),e.what());
+            if(!buildingBody_.empty()){
+                if(failed_.size()>=64)failed_.clear();
+                failed_.insert_or_assign(buildSignature(ecs,buildingBody_,buildingIds_),e.what());
+            }
             builder_.cancel();candidate_.reset();buildingBody_.clear();buildingIds_.clear();
             out.phase=CavePlanetRuntimePhase::Refused;out.diagnostic=e.what();
         }
@@ -216,9 +219,11 @@ private:
                     return hooks_.retireNavigationGi(body,revision);
                 }))return false;
         }
+        // If coverage release fails after close, the restored solid baseline
+        // remains owned. Never advertise the retired cut as active.
+        c.active.reset();
         if(!hooks_.exclusive()||!hooks_.mayReleaseCoverage(*c.coverage)||
            !c.binding->shutdownBaseline(hooks_.exclusive))return false;
-        c.binding.reset();
         if(!residency_.eraseClosed(body)){recovery_=true;return false;}
         cohorts_.erase(it);return true;
     }
