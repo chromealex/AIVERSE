@@ -1971,8 +1971,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if(method=="studio.worldProcessDiagnostics")return answer([&]{
         const auto cap=params.has("budget")?params["budget"].integer(-1):64;
-        if((params.has("budget")&&(!params["budget"].isNumber()||
-            params["budget"].fx()!=Fixed::fromInt(cap)))||cap<0||cap>512)
+        if(cap<0||cap>512||(params.has("budget")&&(!params["budget"].isNumber()||
+            params["budget"].fx()!=Fixed::fromInt(cap))))
             throw std::invalid_argument("Diagnostic budget must be an integer 0..512");
         if(params.has("focus")&&params["focus"].type()!=Json::Type::String)
             throw std::invalid_argument("Diagnostic focus must be an entity reference string");
