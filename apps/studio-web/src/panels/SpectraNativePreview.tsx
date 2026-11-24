@@ -330,13 +330,18 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setBusy(true);setError('');
     try{
       const first=await invoke('studio.spectraPreview',{action:'checkpointFileExport'});
-      if(first.error||!first.fileSize||first.fileSize>1048600)throw new Error(first.error||'Invalid checkpoint size');
-      transferId=first.transferId;if(!transferId)throw new Error('Missing transfer ID');
+      // Acquire the lease before validating metadata so finally can cancel it.
+      if(typeof first.transferId==='number'&&Number.isSafeInteger(first.transferId)&&first.transferId>0)
+        transferId=first.transferId;
+      if(first.error)throw new Error(first.error);
+      if(!transferId)throw new Error('Missing transfer ID');
+      if(typeof first.fileSize!=='number'||!Number.isSafeInteger(first.fileSize)||first.fileSize<=0||first.fileSize>1048600)
+        throw new Error('Invalid checkpoint size');
       const bytes=new Uint8Array(first.fileSize);
       for(let offset=0;offset<bytes.length;offset+=32768){
         const next=await invoke('studio.spectraPreview',{action:'checkpointFileRead',offset,transferId});
         const hex=next.fileChunk??'';
-        if(next.error||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
+        if(next.error||next.fileSize!==bytes.length||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
         for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
       }
       const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));

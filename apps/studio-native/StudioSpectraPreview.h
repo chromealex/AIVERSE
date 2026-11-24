@@ -53,6 +53,7 @@ public:
         if(action=="checkpointFileBegin"){
             if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint requires settled paused preview");
             if(importTransferId_)return errorStatus("Import transfer already active");
+            if(exportTransferId_)return errorStatus("Export transfer active");
             fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;error_.clear();
             Json out=status();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
         }
