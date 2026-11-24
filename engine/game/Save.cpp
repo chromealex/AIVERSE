@@ -272,6 +272,26 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
             }
         }
     }
+    // Opt-in attack timing extension; old rules retain their previous save layout.
+    bool timedWeapons = false;
+    for (const auto& type : rules_.types)
+        for (const auto& weapon : type.weapons) timedWeapons |= weapon.hasAttackTiming();
+    if (timedWeapons) {
+        uint32_t magic = 0x41545031u, version = 1; // ATP1
+        a(magic, version);
+        if (magic != 0x41545031u || version != 1) { a.fail(); return false; }
+        auto& pool = w.pool<Combat>();
+        for (size_t i = 0; i < pool.size() && a.ok(); ++i)
+            for (auto& phase : pool.dataAt(i).attackTiming) {
+                a(phase.phase, phase.target, phase.remaining);
+                if (uint32_t(phase.phase) > uint32_t(lib::mechanics::AttackPhase::Recovery) ||
+                    phase.remaining.raw < 0 || phase.remaining > Fixed::fromInt(60) ||
+                    (phase.phase == lib::mechanics::AttackPhase::Idle && (phase.remaining.raw || phase.target.valid())) ||
+                    (phase.phase != lib::mechanics::AttackPhase::Idle && (!phase.remaining.raw || !phase.target.valid()))) {
+                    a.fail(); return false;
+                }
+            }
+    }
     if (!a.writing()) {
         w.each<Projectile>([&](Entity, Projectile& p) {
             const auto& s = p.program;
