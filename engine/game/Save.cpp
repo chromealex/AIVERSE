@@ -249,6 +249,29 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
     const size_t expect = a.writing() ? kPools::count : a.formatVersion < 7 ? kPoolsBefore7 : a.formatVersion < 8 ? kPoolsBefore8 : kPools::count;
     if (!a.writing() && pools != expect) { a.fail(); return false; }
     kPools::run(a, w, expect);
+    // Opt-in versioned module extension, following the built-in pool stream.
+    // Projects without groups retain the byte-identical legacy Buff encoding.
+    if (!rules_.modifierGroups.empty()) {
+        uint32_t magic = 0x47525031u, version = 1;
+        a(magic, version);
+        if (magic != 0x47525031u || version != 1) { a.fail(); return false; }
+        uint32_t count = uint32_t(rules_.modifierGroups.size());
+        a(count);
+        if (count != rules_.modifierGroups.size()) { a.fail(); return false; }
+        for (const auto& expected : rules_.modifierGroups) {
+            std::string name = a.writing() ? expected : std::string{};
+            a(name);
+            if (name != expected) { a.fail(); return false; }
+        }
+        auto& buffs = w.pool<Buffs>();
+        for (size_t i = 0; i < buffs.size() && a.ok(); ++i) {
+            auto& row = buffs.dataAt(i);
+            for (auto& buff : row.list) {
+                a(buff.stackingGroup);
+                if (buff.stackingGroup > count) { a.fail(); return false; }
+            }
+        }
+    }
     if (!a.writing()) {
         w.each<Projectile>([&](Entity, Projectile& p) {
             const auto& s = p.program;
