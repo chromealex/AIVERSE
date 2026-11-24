@@ -20,7 +20,7 @@ inline const char* kindName(Kind k){switch(k){case Kind::Scalar:return "scalar";
 struct Op {const char* id;Kind output;std::vector<Kind> inputs;};
 inline const std::vector<Op>& catalog(){
     static const std::vector<Op> ops={
-        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
+        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"imageAssetChannel",Kind::Scalar,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
         {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"blur",Kind::Scalar,{Kind::Scalar}},{"erosion",Kind::Scalar,{Kind::Scalar}},{"warp",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"distort",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
     };return ops;
 }
@@ -45,13 +45,23 @@ inline Kind outputKind(const std::string& name){
     throw std::invalid_argument("unknown texture graph output: "+name);
 }
 inline constexpr size_t maxImageSourceBytes=16u*1024u*1024u;
-struct ImageSource {int width=0,height=0;std::vector<uint32_t> rgb;};
-// Trusted host must verify the exact pinned revision, return identical decoded RGB
-// pixels and extent for the same asset/revision within a project, and obey byte budget.
+// Packed words are 0xAARRGGBB when hasAlpha is true; legacy RGB resolvers
+// leave hasAlpha false and are treated as opaque. Storage remains 4 bytes/pixel.
+struct ImageSource {int width=0,height=0;std::vector<uint32_t> rgb;bool hasAlpha=false;};
+// Trusted host must verify the exact pinned revision, return identical decoded
+// pixels, alpha availability and extent within a project, and obey byte budget.
 using ImageResolver=std::function<ImageSource(const std::string&,const std::string&,size_t)>;
 struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;std::shared_ptr<const ImageSource> image;std::array<custom_compute::Program,3> custom;};
 inline bool isCustomCompute(std::string_view id){return id=="customScalar"||id=="customColor";}
-inline bool isImageSource(std::string_view id){return id=="image"||id=="imageAsset";}
+inline bool isExternalImageSource(std::string_view id){return id=="imageAsset"||id=="imageAssetChannel";}
+inline bool isImageSource(std::string_view id){return id=="image"||isExternalImageSource(id);}
+inline unsigned imageChannelShift(const std::string& channel){
+    if(channel=="red")return 16;
+    if(channel=="green")return 8;
+    if(channel=="blue")return 0;
+    if(channel=="alpha")return 24;
+    throw std::invalid_argument("invalid image asset channel");
+}
 struct Program {int size=256;std::vector<Node> nodes;std::vector<size_t> order;std::map<std::string,size_t> outputs;};
 inline size_t imageSourceBytes(const Program& p){
     size_t bytes=0;for(const auto& n:p.nodes)if(n.image)bytes+=n.image->rgb.size()*sizeof(uint32_t);
@@ -60,9 +70,9 @@ inline size_t imageSourceBytes(const Program& p){
 // Source identity for trusted pinned assets. Encoded SHA-256 is verified by
 // host before compilation; dimensions and decoder ABI version guard layout.
 inline std::string imageSourceIdentity(const Node& n){
-    if(std::string_view(n.info->id)!="imageAsset")return {};
+    if(!isExternalImageSource(n.info->id))return {};
     require(n.image!=nullptr,"unresolved external image");
-    return "rgb8-nearest-v1:"+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
+    return std::string(n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
 }
 inline std::vector<std::string> formulaTokens(const std::string& expression){
     require(!expression.empty()&&expression.size()<=256,"invalid formula size");
@@ -110,7 +120,8 @@ inline Json properties(const std::string& id){
         for(const auto& v:values)list.push(Json::string(v));p.set("options",list);result.set(key,p);
     };
     if(id=="image"){field("width","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("height","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("rgb","image",Json::string("808080"));}
-    if(id=="imageAsset"){field("asset","text",Json::string(""));field("revision","text",Json::string(""));}
+    if(isExternalImageSource(id)){field("asset","text",Json::string(""));field("revision","text",Json::string(""));}
+    if(id=="imageAssetChannel")options("channel","alpha",{"red","green","blue","alpha"});
     if(id=="formula")field("expression","text",Json::string("a b *"));
     if(isCustomCompute(id)){
         if(id=="customScalar")field("code","compute",Json::string("a b c mix"));
@@ -144,9 +155,13 @@ inline void validateParameters(const Node& n){
     const std::string id=n.info->id;const auto& p=n.parameters;
     const auto fields=properties(id);
     for(const auto& [key,value]:p.members()){require(fields.has(key)&&!value.isNull(),"unknown or null texture node property");}
-    if(id=="imageAsset"){
+    if(isExternalImageSource(id)){
         const auto asset=p.getStr("asset"),revision=p.getStr("revision");
         require(!asset.empty()&&asset.size()<=512&&revision.size()==64&&revision.find_first_not_of("0123456789abcdef")==std::string::npos,"imageAsset requires a path and pinned SHA-256 revision");
+    }
+    if(id=="imageAssetChannel"){
+        require(!p.has("channel")||p["channel"].isString(),"image asset channel must be text");
+        (void)imageChannelShift(p.getStr("channel","alpha"));
     }
     if(id=="image")(void)imagePixels(p);
     if(id=="formula")(void)formulaTokens(p.getStr("expression","a b *"));
@@ -357,6 +372,7 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         const std::array<float,4> params=custom?std::array<float,4>{scalar(q["p0"],.5f,-16,16),scalar(q["p1"],.5f,-16,16),scalar(q["p2"],.5f,-16,16),scalar(q["p3"],.5f,-16,16)}:std::array<float,4>{};
         const auto* imported=node.image.get();
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
+        const unsigned imageShift=id=="imageAssetChannel"?imageChannelShift(q.getStr("channel","alpha")):0;
         const float value=scalar(q["value"].isArray()?Json():q["value"],.5f);
         const int period=integer(q["period"],8,1,256),octaves=id=="fbm"?integer(q["octaves"],4,1,6):1;const auto randomSeed=seed(q["seed"]);
         const float strength=scalar(q["strength"],2,0,16),low=scalar(q["low"],0),high=scalar(q["high"],1),threshold=scalar(q["threshold"],.5f);
@@ -378,7 +394,11 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
                 if(id=="customScalar")r=gray(custom_compute::evaluate(node.custom[0],args));
                 else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args);
             }
-            else if(isImageSource(id)){const auto p=imported->rgb[size_t(y*imported->height/n)*imported->width+x*imported->width/n];r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};}
+            else if(isImageSource(id)){
+                const auto p=imported->rgb[size_t(y*imported->height/n)*imported->width+x*imported->width/n];
+                if(id=="imageAssetChannel")r=gray(imageShift==24&&!imported->hasAlpha?1.f:float((p>>imageShift)&255u)/255.f);
+                else r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};
+            }
             else if(id=="add")r=gray(a()+b());else if(id=="subtract")r=gray(a()-b());else if(id=="multiply")r=gray(a()*b());
             else if(id=="min")r=gray(std::min(a(),b()));else if(id=="max")r=gray(std::max(a(),b()));else if(id=="invert")r=gray(1-a());
             else if(id=="threshold")r=gray(a()>=threshold?1.f:0.f);else if(id=="remap")r=gray(low+(high-low)*a());

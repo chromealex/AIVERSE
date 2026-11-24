@@ -90,8 +90,8 @@ inline Json resolve(const std::string& family,const Json& source,const std::stri
             }
             asset(alias,"texture-function-asset","texturegraphs/"+name+".json");
         }
-        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="imageAsset")asset(n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
-        for(const auto& [name,def]:source["functions"].members())for(const auto& n:def["nodes"].items())if(n.getStr("op")=="imageAsset")asset(name+"/"+n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
+        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
+        for(const auto& [name,def]:source["functions"].members())for(const auto& n:def["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(name+"/"+n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
         for(const auto& n:source["nodes"].items())if(n.getStr("op")=="function"){
             const auto fn=n["properties"].getStr("function");
             const bool found=safe(fn)&&source["functions"][fn].isObject();

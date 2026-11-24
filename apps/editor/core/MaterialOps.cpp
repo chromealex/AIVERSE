@@ -260,7 +260,8 @@ render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& 
         auto loaded=readPinnedRaster(ws,path,revision,budget);
         render::texture_graph::ImageSource result;result.width=loaded.image.width;result.height=loaded.image.height;
         const auto& rgba=loaded.image.rgba;result.rgb.resize(rgba.size()/4);
-        for(size_t i=0;i<result.rgb.size();++i)result.rgb[i]=(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
+        result.hasAlpha=true; // Decoder always returns RGBA; JPEG alpha is 255.
+        for(size_t i=0;i<result.rgb.size();++i)result.rgb[i]=(uint32_t(rgba[i*4+3])<<24)|(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
         return result;
     };
 }

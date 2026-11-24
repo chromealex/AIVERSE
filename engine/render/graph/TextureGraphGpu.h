@@ -214,7 +214,12 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
         require(node.image!=nullptr,"missing resolved image source");
         const auto w=std::to_string(node.image->width),h=std::to_string(node.image->height);
         types.push_back(KernelValue::PackedBytes);
-        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=input0[index];float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=input0[index];";
+        if(op=="imageAssetChannel"){
+            const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+            // Read the source even for legacy opaque alpha; keep binding ABI identical.
+            body+="float3 value=float3("+std::string(shift==24&&!node.image->hasAlpha?"1.0f":"float((rgb>>"+std::to_string(shift)+"u)&255u)/255.0f")+");\n";
+        }else body+="float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
     }else if(neighborhoodOp(op)){
         body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
         if(op=="blur"||op=="erosion"){

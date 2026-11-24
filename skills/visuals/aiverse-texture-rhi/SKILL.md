@@ -1979,3 +1979,6 @@ The native Texture Graph catalog includes customScalar (three scalar inputs, one
 
 ## External image queue and incremental identity (38BH)
 Native enqueue/start accept an explicit trusted ImageResolver. Enqueue captures a compiled immutable program and pixel snapshots, not a callback or a large JSON payload. Pending decoded image storage is capped at 32 MiB; individual compiled graph at 16 MiB. Project resolver verifies encoded SHA-256; same asset/revision must yield identical pixels and extent. Node/output/CPU caches include the pinned source properties and decoder ABI/extent. A changed source requires explicit repin; a queued computation still uses the original snapshot, while publishing a texture set revalidates its pinned source. No hardware verification yet.
+
+### Pinned raster channels (38BI)
+Use `imageAsset` for RGB color and `imageAssetChannel` for typed scalar `red`, `green`, `blue`, or `alpha` (default). Both use the same pinned asset/revision and bounded source snapshots; the native PNG/JPEG resolver preserves RGBA (JPEG is opaque). Native RGB-only resolvers remain compatible and report opaque alpha unless `ImageSource::hasAlpha` is true and packed words contain alpha in bits 24–31. This is channel extraction, not RGBA graph output or HDR/mip support.

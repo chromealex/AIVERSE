@@ -20,7 +20,7 @@ class EvaluationCache {
             std::map<std::string,Json> sorted;for(const auto& [k,v]:n.parameters.members())sorted.emplace(k,v);
             Json properties=Json::object();for(const auto& [k,v]:sorted)properties.set(k,v);
             row.set("properties",properties);
-            if(std::string_view(n.info->id)=="imageAsset")row.set("imageSource",Json::string(imageSourceIdentity(n)));
+            if(isExternalImageSource(n.info->id))row.set("imageSource",Json::string(imageSourceIdentity(n)));
             for(auto i:n.inputs)inputs.push(Json::number(int64_t(i)));row.set("inputs",inputs);nodes.push(row);
         }
         for(auto t:targets)selected.push(Json::number(int64_t(t)));

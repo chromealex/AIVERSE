@@ -159,6 +159,21 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto externalId=owner.start(external,project,lifetime.lease(),resolveImage).getStr("request");drain();
         const auto externalStatus=owner.status();
         require(externalStatus.getStr("request")==externalId&&externalStatus.getStr("state")=="ready"&&externalStatus.getStr("backend")==expected,"external image GPU parity failed");
+        // External channel nodes use the same immutable raster budget and a scalar GPU slot.
+        auto channel=external;
+        channel.member("graph").member("nodes").at(0).set("op",Json::string("imageAssetChannel"));
+        channel.member("graph").member("nodes").at(0).member("properties").set("channel",Json::string("alpha"));
+        channel.member("graph").member("nodes").at(0).member("properties").set("revision",Json::string(std::string(64,'c')));
+        channel.member("graph").set("outputs",Json::parse(R"({"mask":"asset"})"));
+        const render::texture_graph::ImageResolver rgbaSource=[](const std::string&,const std::string&,size_t){
+            render::texture_graph::ImageSource s;s.width=2;s.height=1;s.hasAlpha=true;s.rgb={0x00112233u,0x80445566u};return s;
+        };
+        const auto cp=render::texture_graph::compile(channel["graph"],Json::object(),rgbaSource);
+        const auto ci=render::texture_graph::evaluate(cp,0);
+        require(ci.rgba[0]==0&&ci.rgba[32*4]==128&&ci.rgba[32*4+3]==255,"external alpha mask CPU mismatch");
+        const auto channelId=owner.start(channel,project,lifetime.lease(),rgbaSource).getStr("request");drain();
+        const auto channelStatus=owner.status();
+        require(channelStatus.getStr("request")==channelId&&channelStatus.getStr("state")=="ready"&&channelStatus.getStr("backend")==expected,"external alpha mask GPU parity failed");
         // Typed custom expressions: same validated instruction stream on CPU and GPU.
         auto computed=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
           {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},

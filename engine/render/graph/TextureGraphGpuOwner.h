@@ -434,7 +434,7 @@ class TextureGraphGpuOwner {
                         const size_t bytes=data.size()*sizeof(uint32_t);
                         if(bytes>sources.imageSourceBytes-matImageBytes_)return false;
                         gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;
-                        desc.size=bytes;desc.data=data.data();desc.label="TextureGraph immutable RGB source";
+                        desc.size=bytes;desc.data=data.data();desc.label="TextureGraph immutable packed raster source";
                         auto& input=matImageInputs_.at(pass.pipeline);input=dev.createBuffer(desc);
                         if(!input.valid())return false;
                         matImageBytes_+=bytes;inputs[0]=input;inputCount=1;
