@@ -50,6 +50,14 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    simulation/replay and published save/network formats, and retain legacy
    adapters until parity is proved. Document every migration commit.
 
+Multishot: `engine/mechanics/MultiTargetSelection.h` exposes bounded,
+deterministic nearest-distinct candidate selection. The targeted GameCore
+adapter accepts `extraTargets` (0–16), `extraTargetTags` and
+`extraIgnoreTags`, then uses the existing shot/impact pipeline for each
+secondary. One accepted attack spends cooldown once. Do not duplicate
+damage or launch ownership; use the selection helper with your host's
+eligibility policy. Native ECS/free-fire adapters still need integration.
+
 Attack timing: `engine/mechanics/AttackTiming.h` provides the shared per-slot
 `AttackTimingState` and pure begin/advance/cancel/release policy. The targeted
 GameCore adapter supports weapon `windup` and `backswing`, and emits
