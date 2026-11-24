@@ -13,6 +13,7 @@ import {
 } from '../../ui';
 import BuildingMaterialEditor from './BuildingMaterialEditor';
 import BuildingPlanPreview from './BuildingPlanPreview';
+import {BuildingMaterialDependenciesView} from '../../graphs/BuildingMaterialDependenciesView';
 import {BuildingStructureGraphView} from '../../graphs/BuildingStructureGraphView';
 import {BuildingCandidateGate,buildingDraftKey} from '../../graphs/buildingCandidateCapture';
 import type {BuildingCandidateTicket} from '../../graphs/buildingCandidateCapture';
@@ -645,6 +646,9 @@ export default function BuildingGeneratorPanel({
           </StudioField>)}
         </div>
       </StudioSection>
+      <BuildingMaterialDependenciesView key={snapshot?.project.path??''} bindings={materialBindings} library={materialLibrary}
+        onFocusSlot={slot=>document.getElementById('abg-material-binding-'+slot)?.focus()}
+        onRevealAsset={path=>{showPanel('assets');requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})));}}/>
       <StudioSection title="Texture reimport dependencies">
         <div className="abg__actions">
           <StudioButton variant="secondary" disabled={busy||checkingMaterials||!nativeConnected()}
