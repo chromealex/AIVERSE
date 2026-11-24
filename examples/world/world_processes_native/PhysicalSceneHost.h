@@ -127,6 +127,21 @@ public:
                                           placements,completedTick,budget);
     }
 
+    GranularPreparedFrame preparePlanetGranularBody(
+            const World& ecs,const game::Surface& surface,std::string_view body,uint64_t terrainRevision,
+            std::span<const GranularResidentTile> residency,
+            const std::map<uint64_t,PlanetGranularPlacement>& placements,
+            uint32_t completedTick,GranularFrameBudget budget={})const{
+        return preparePlanetGranularBodyFrame(ecs,surface,body,terrainRevision,residency,
+                                             placements,completedTick,budget);
+    }
+    bool resetPhysicsOnly(physics::Scene& scene){
+        physics_.shutdown(scene);
+        if(!debris_.reset(scene))return false;
+        for(auto& [id,stream]:morphVisuals_){(void)id;stream->invalidatePublication();}
+        return true;
+    }
+
     bool publishPhysics(physics::Scene& scene,
                         const GranularPreparedFrame& frame,
                         std::uint32_t userData=0) {
@@ -141,16 +156,14 @@ public:
     // backend-specific shader is introduced.
     void drawGranular(render::Renderer3D& renderer,
                       render::float4 tint={1,1,1,1},
-                      std::uint32_t flags=0) const {
-        render_.draw(renderer,tint,flags);
+                      std::uint32_t flags=0,render::float3 translation={}) const {
+        render_.draw(renderer,tint,flags,translation);
     }
     // Called when a *historical* COW snapshot is restored. The old
     // visual/Box3D projections must not be mistaken for canonical state.
     bool resetAfterRollback(physics::Scene& scene,gfx::Device& device) {
         if(!render_.shutdownAfterIdle(device))return false;
-        physics_.shutdown(scene);
-        if(!debris_.reset(scene))return false;
-        for(auto& [id,stream]:morphVisuals_){(void)id;stream->invalidatePublication();}
+        if(!resetPhysicsOnly(scene))return false;
         // The MORPH models remain valid if the source asset revision did
         // not change; the next update() reconstructs every vertex from
         // the restored ECS Node positions and unchanged pristine sources.
