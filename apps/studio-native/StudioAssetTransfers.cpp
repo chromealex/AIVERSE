@@ -499,8 +499,8 @@ Json StudioTransferPlan::apply(const std::string& token,
                          const std::vector<StudioTransferDecision>& decisions,
                          const std::function<void()>& beforeCommit,
                          std::optional<editor::ProjectHistory::MovePlan>* history,bool repairResources,StudioBatchAssetPlan* staged){
-    if(staged&&(!history||type_!=StudioTransferType::External||beforeCommit))
-        throw std::runtime_error("Staged transfer requires external source, history and no commit hook");
+    if(staged&&(!history||beforeCommit))
+        throw std::runtime_error("Staged transfer requires history and no live commit hook");
     // Even legacy external callers must not use the destructive replace path.
     std::optional<editor::ProjectHistory::MovePlan> localHistory;
     if(!history&&type_==StudioTransferType::External&&
@@ -617,6 +617,53 @@ Json StudioTransferPlan::apply(const std::string& token,
             }catch(const std::exception&){recorded.reset();}
         }
         if(!repairs.empty()&&!recorded)throw std::runtime_error("Resource repair requires retained move history");
+        if(staged){
+            // No live rename, catalog mutation or material callback before
+            // the outer cursor transaction. Resolve the actual keep-both
+            // endpoints, not the original preview's proposed names.
+            Json completed=Json::array();
+            for(const auto& pair:planned)
+                completed.push(Json::string(pair.second.lexically_relative(root).generic_string()));
+            Json response=Json::object();
+            response.set("files",std::move(completed));response.set("issues",Json::array());
+            response.set("repairedResourceDocuments",Json::number(int64_t(repairs.size())));
+            size_t materialUpdates=0;
+            if(!planned.empty()){
+                if(!recorded)throw std::runtime_error("Staged move requires a retained history plan");
+                if(recorded->materialsBefore){
+                    auto document=Json::parse(*recorded->materialsBefore);
+                    if(!document.isObject()||!document["materials"].isObject())
+                        throw std::runtime_error("Invalid material library");
+                    StudioAssetCatalog catalog(project_);catalog.rebuild(false);
+                    std::map<std::string,std::string> relocated;
+                    for(const auto& entry:catalog.all()){
+                        if(entry.directory)continue;
+                        const auto from="content/"+entry.path;
+                        const auto to=studioRelocatedReferencePath(from,referenceMoves);
+                        if(from!=to)relocated.emplace(from,to);
+                    }
+                    auto materials=document["materials"];
+                    materialUpdates=studioRemapMaterialReferences(materials,relocated);
+                    recorded->materialsAfter=*recorded->materialsBefore;
+                    if(materialUpdates){
+                        document.set("materials",std::move(materials));
+                        recorded->materialsAfter=document.dump(2)+"\n";
+                    }
+                }
+                // Reuse the typed ordinary replay planner for directional
+                // digests, moving/streamed model edits, GUIDs and URI edges.
+                *staged=studioPlanAssetMoveChain(project_,{*recorded},true);
+                if(recorded->materialsBefore)
+                    staged->documents.push_back({fs::canonical(project_)/"materials.json",
+                        *recorded->materialsBefore,*recorded->materialsAfter});
+                editor::ProjectHistory probe;auto copy=*recorded;
+                probe.recordMove(std::move(copy),"Move assets");
+                if(!probe.canUndo())throw std::runtime_error("Staged move exceeds retained history budget");
+                *history=std::move(recorded);
+            }
+            response.set("repairedMaterialReferences",Json::number(int64_t(materialUpdates)));
+            return response;
+        }
         StudioMoveJournal journal(project_);
         std::vector<StudioMoveJournalOperation> journalOps;
         journalOps.reserve(operations.size());
