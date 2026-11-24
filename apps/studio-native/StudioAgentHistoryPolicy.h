@@ -11,7 +11,8 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
         "project_history_status","build_status","studio_asset_history","studio_asset_catalog",
         "studio_history_capabilities","studio_asset_move_preview",
         "studio_asset_dependencies","studio_asset_recovery_storage","studio_asset_trash_list",
-        "studio_asset_trash_restore_review","studio_asset_trash_cleanup_review"
+        "studio_asset_trash_restore_review","studio_asset_trash_cleanup_review",
+        "studio_agent_history_list","studio_agent_batch_preview"
     };
     static const std::set<std::string> map={
         "map_set","map_heightfield","map_resize","map_mirror","terrain_paint","terrain_level",

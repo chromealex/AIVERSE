@@ -541,6 +541,30 @@ void agentScopedHistoryContract(){
     AIVERSE_TEST_CHECK(moveEdit.getBool("canUndo"));
     AIVERSE_TEST_CHECK(!step(moveEdit,"undo",moveEdit.getStr("historyVersion")).has("error"));
     AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // S6i.2: linked exact history navigation does not append a new edit.
+    assets=agent("studio_asset_history",Json::object());
+    Json linked=Json::object();linked.set("expectedProject",assets["project"]);
+    auto linkedHistory=agent("studio_agent_history_list",linked);
+    AIVERSE_TEST_CHECK(linkedHistory["items"].isArray());
+    Json currentMove;
+    for(const auto& row:linkedHistory["items"].items())
+        if(row.getStr("historyId")==moveEdit.getStr("historyId"))currentMove=row;
+    AIVERSE_TEST_CHECK(currentMove.getBool("canRedo"));
+    Json navigate=linked;navigate.set("scope",Json::string("assets"));
+    navigate.set("historyId",currentMove["historyId"]);navigate.set("expectedVersion",currentMove["historyVersion"]);
+    navigate.set("direction",Json::string("redo"));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).has("error"));
+    navigate.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).getBool("ok"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"Destination"/"AgentFolder"));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).has("error"));
+    const auto linkedAfter=agent("studio_agent_history_list",linked);
+    AIVERSE_TEST_CHECK(linkedAfter.getInt("total")==linkedHistory.getInt("total"));
+    for(const auto& row:linkedAfter["items"].items())
+        if(row.getStr("historyId")==moveEdit.getStr("historyId"))currentMove=row;
+    navigate.set("direction",Json::string("undo"));navigate.set("expectedVersion",currentMove["historyVersion"]);
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).getBool("ok"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
     // S6i: authenticated linked readback, confirmed reversible delete, restore
     // and quota CAS. No arbitrary path or permanent purge adapter.
     assets=agent("studio_asset_history",Json::object());

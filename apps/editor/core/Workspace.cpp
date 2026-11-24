@@ -558,7 +558,7 @@ Json Workspace::toolList() const {
     for (auto& o : ops_) {
         Json t = Json::object();
         t.set("name", str(o.name));
-        t.set("description", str(o.description));
+        t.set("description", str(o.description+(o.studioLinkOnly?" Requires authenticated HTML5 Studio link; no local fallback.":"")));
         Json s = o.schema.isObject() ? o.schema : Json::object();
         if (!s.has("type")) s.set("type", str("object"));
         if (!s.has("properties")) s.set("properties", Json::object());
@@ -652,6 +652,7 @@ void Workspace::registerCoreOps() {
                 Json entry = Json::object();
                 entry.set("name", str(op.name));
                 entry.set("guiOnly", Json::fromBool(op.guiOnly));
+                entry.set("studioLinkOnly", Json::fromBool(op.studioLinkOnly));
                 entry.set("inputSchema", op.schema.isObject() ? op.schema : Json::object());
                 entries.push(entry);
                 ++total;
@@ -827,53 +828,68 @@ void Workspace::registerCoreOps() {
         });
     // Linked Studio-only asset operations. The standalone MCP registry
     // advertises the schema, but the native session owns the actual mutation.
-    add("studio_asset_history","Read current linked Studio asset history and project identity.",
+    auto addLinked=[this](const char* name,const char* desc,const char* sch,OpFn fn){
+        registerOp({name,desc,schema(sch),std::move(fn),false,true});
+    };
+    addLinked("studio_asset_history","Read current linked Studio asset history and project identity.",
         R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
         });
-    add("studio_asset_catalog","Read existing linked Studio content GUIDs and importer settings; no metadata creation.",
+    addLinked("studio_asset_catalog","Read existing linked Studio content GUIDs and importer settings; no metadata creation.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}},"required":["expectedProject"]})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
         });
-    add("studio_asset_meta_patch","Change one existing asset importer setting through linked Studio history.",
+    addLinked("studio_asset_meta_patch","Change one existing asset importer setting through linked Studio history.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"guid":{"type":"string"},"key":{"type":"string"},"value":{}},"required":["expectedProject","expectedVersion","guid","key","value"]})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
         });
-    add("studio_asset_folder_create","Create a content folder through linked Studio history.",
+    addLinked("studio_asset_folder_create","Create a content folder through linked Studio history.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"parent":{"type":"string"},"name":{"type":"string"}},"required":["expectedProject","expectedVersion","parent","name"]})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
         });
-    add("studio_history_capabilities","Inspect linked Studio history policy for every registered MCP operation. Unverified means potential side effects, not safe bulk undo.",
+    addLinked("studio_history_capabilities","Inspect linked Studio history policy for every registered MCP operation. Unverified means potential side effects, not safe bulk undo.",
         R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_move_preview","Review internal content move or rename by existing GUIDs; no external import.",
+    addLinked("studio_asset_move_preview","Review internal content move or rename by existing GUIDs; no external import.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"guids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":64},"destination":{"type":"string"},"newName":{"type":"string"}},"required":["expectedProject","expectedVersion","guids","destination"]})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_move_commit","Apply a reviewed linked Studio internal move using its token and explicit non-destructive decisions.",
+    addLinked("studio_asset_move_commit","Apply a reviewed linked Studio internal move using its token and explicit non-destructive decisions.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"token":{"type":"string"},"decisions":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"action":{"type":"string","enum":["import","keep-both","skip"]}},"required":["id","action"]}}},"required":["expectedProject","expectedVersion","token","decisions"]})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_dependencies","Read known direct or multi-hop dependency edges by existing GUID, paginated.",
+    addLinked("studio_asset_dependencies","Read known direct or multi-hop dependency edges by existing GUID, paginated.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"depth":{"type":"integer","minimum":1,"maximum":16},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject","guid"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_recovery_storage","Read linked Studio logical recovery storage and quota.",
+    addLinked("studio_asset_recovery_storage","Read linked Studio logical recovery storage and quota.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_trash_list","Read paginated recovery records and retained-history protection.",
+    addLinked("studio_asset_trash_list","Read paginated recovery records and retained-history protection.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_trash_restore_review","Review exact recovery record identity for restore only.",
+    addLinked("studio_asset_trash_restore_review","Review exact recovery record identity for restore only.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"}},"required":["expectedProject","id"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_trash_restore","Restore a reviewed recovery record. Clears asset history; requires explicit confirmation.",
+    addLinked("studio_asset_trash_restore","Restore a reviewed recovery record. Clears asset history; requires explicit confirmation.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"},"token":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","id","token","expectedVersion","confirmed"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_delete","Move an existing GUID to reversible project trash. Requires confirmation and current asset history.",
+    addLinked("studio_asset_delete","Move an existing GUID to reversible project trash. Requires confirmation and current asset history.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","guid","expectedVersion","confirmed"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_recovery_quota_set","Set retained trash quota in MiB with expected old value; zero means unlimited.",
+    addLinked("studio_asset_recovery_quota_set","Set retained trash quota in MiB with expected old value; zero means unlimited.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedMiB":{"type":"integer","minimum":0,"maximum":1048576},"quotaMiB":{"type":"integer","minimum":0,"maximum":1048576}},"required":["expectedProject","expectedMiB","quotaMiB"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
-    add("studio_asset_trash_cleanup_review","Review selected history-unprotected recovery slots for cleanup. Permanent purge remains native UI only.",
+    addLinked("studio_asset_trash_cleanup_review","Review selected history-unprotected recovery slots for cleanup. Permanent purge remains native UI only.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50}},"required":["expectedProject","ids"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_history_list","Read retained conversation history links and exact owner boundaries; no mutation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer","minimum":0,"maximum":2000},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_history_step","Undo or redo an exact retained agent edit at its current owner boundary. Stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"scope":{"type":"string","enum":["map","project","assets"]},"historyId":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","scope","historyId","direction","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_batch_preview","Review the exact fully tracked conversation batch for undo or redo. Stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]}},"required":["expectedProject","direction"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_batch_apply","Apply a reviewed conversation batch using its exact token; stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]},"token":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","direction","token","confirmed"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "

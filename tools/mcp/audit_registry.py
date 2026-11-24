@@ -29,7 +29,9 @@ REQUIRED = {
                       "studio_asset_trash_restore_review", "studio_asset_trash_restore",
                       "studio_asset_delete", "studio_asset_recovery_quota_set",
                       "studio_asset_trash_cleanup_review", "studio_asset_move_preview",
-                      "studio_asset_move_commit"),
+                      "studio_asset_move_commit", "studio_agent_history_list",
+                      "studio_agent_history_step", "studio_agent_batch_preview",
+                      "studio_agent_batch_apply", "studio_history_capabilities"),
 }
 
 def main():
@@ -45,6 +47,8 @@ def main():
         {"jsonrpc":"2.0","method":"notifications/initialized","params":{}},
         {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
         {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp_registry","arguments":{}}},
+        *[{"jsonrpc":"2.0","id":100+i,"method":"tools/call","params":{"name":name,"arguments":{}}}
+          for i,name in enumerate(REQUIRED["studio_assets"])],
     ]
     try:
         done = subprocess.run(cmd, input="\n".join(map(json.dumps, requests))+"\n",
@@ -93,6 +97,15 @@ def main():
     if any(not isinstance(t.get("guiOnly"), bool) for t in registry.values()):
         print("ERROR: missing guiOnly metadata", file=sys.stderr)
         return 2
+    for i,name in enumerate(REQUIRED["studio_assets"]):
+        if not registry.get(name, {}).get("studioLinkOnly"):
+            print("ERROR: missing Studio link restriction:", name, file=sys.stderr)
+            return 2
+        result = responses.get(100+i, {}).get("result", {})
+        if not result.get("isError") or not any("Requires an authenticated HTML5 Studio agent link" in item.get("text","") for item in result.get("content",[])):
+            print("ERROR: standalone Studio operation did not refuse:", name, file=sys.stderr)
+            return 2
+    print("PASS Studio linked-only metadata and standalone refusal")
     print("PASS tools/list == mcp_registry (count, names, guiOnly metadata)")
     print("NOTE: authoring and GPU validation still need dedicated per-system tests.")
     return 1 if missing else 0

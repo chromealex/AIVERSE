@@ -155,6 +155,9 @@ Trash rows report logical payload and complete slot bytes (folders included). Ba
 ## Linked dependency and recovery tools (S6i.1)
 Use authenticated Studio MCP studio_asset_history to obtain project/version, catalog for GUIDs, studio_asset_dependencies for paged known edges (optional depth 1–16). Recovery storage and Trash list are read-only. studio_asset_delete is reversible and requires existing GUID, current version and confirmed=true; native dependency checks remain authoritative. Restore uses studio_asset_trash_restore_review then studio_asset_trash_restore with exact id/token/version and confirmed=true; this clears history. Quota setter requires expectedMiB. Cleanup review is read-only; permanent purge stays in native UI. Do not expose external picker paths, arbitrary browser RPC or claim untracked restore/quota changes are undoable.
 
+## Linked conversation history navigation (S6i.2)
+Registry exposes studioLinkOnly independently of guiOnly. Use studio_agent_history_list to inspect actual retained conversation links and exact owner versions; studio_agent_history_step requires scope/id/direction/version/confirmation. Batch preview/apply reuse the same owner coordinator and token. Hosted agent must be stopped; external authenticated client may navigate, no arbitrary owner jump or new edit row is synthesized. Successful navigation preserves original links for redo; failures that change owners fence batch. Standalone audit checks explicit link-only metadata and actual fallback refusal for listed Studio tools. No claim of complete runtime parity without built tests.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

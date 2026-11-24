@@ -78,7 +78,7 @@ struct Activity { double time = 0; std::string source, text; bool error = false;
 class Workspace {
 public:
     using OpFn = std::function<Json(const Json& params)>;
-    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; };
+    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; bool studioLinkOnly = false; };
 
     Workspace();
     ~Workspace();

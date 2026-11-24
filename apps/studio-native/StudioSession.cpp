@@ -582,10 +582,46 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
             Json out=Json::object(),rows=Json::array();
             for(const auto& op:ws_.ops()){
                 Json row=Json::object();row.set("name",str(op.name));row.set("policy",str(studioAgentHistoryPolicy(op.name)));
-                row.set("guiOnly",Json::fromBool(op.guiOnly));rows.push(std::move(row));
+                row.set("guiOnly",Json::fromBool(op.guiOnly));
+                row.set("studioLinkOnly",Json::fromBool(op.studioLinkOnly));rows.push(std::move(row));
             }
             out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));
             out.set("coordinatedBatch",str("map-project-assets-disjoint-relocations"));return out;
+        }
+        if(name=="studio_agent_history_list"||name=="studio_agent_history_step"||
+           name=="studio_agent_batch_preview"||name=="studio_agent_batch_apply"){
+            if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Linked Studio project changed");
+            if(name=="studio_agent_history_list"){
+                const auto read=[&](const char* key,int64_t fallback,int64_t min,int64_t max){
+                    if(!args.has(key))return fallback;
+                    const auto value=args.getInt(key,-1);
+                    if(!args[key].isNumber()||args[key].numberLiteral()!=std::to_string(value)||value<min||value>max)
+                        throw std::runtime_error("Invalid history page");
+                    return value;
+                };
+                const auto offset=read("offset",0,0,2000),limit=read("limit",50,1,100);
+                Json out=Json::object(),rows=Json::array();
+                for(size_t i=size_t(offset);i<agentChanges_.size()&&rows.size()<size_t(limit);++i)
+                    rows.push(agentHistoryLink(agentChanges_[i]));
+                out.set("items",std::move(rows));out.set("total",num(int64_t(agentChanges_.size())));
+                out.set("project",str(ws_.project.dir));out.set("hostedAgentRunning",Json::fromBool(agentRun_.running()));
+                return out;
+            }
+            const auto direction=args.getStr("direction");
+            if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid history direction");
+            if(name=="studio_agent_batch_preview")return agentBatchPreview(direction=="redo");
+            if(!args.getBool("confirmed"))throw std::runtime_error("Confirm history navigation explicitly");
+            // Reuse the exact browser navigation boundary; hosted agents cannot
+            // navigate their own live transaction while still running.
+            Json request=Json::object();request.set("id",num(int64_t(1)));
+            request.set("method",str(name=="studio_agent_history_step"?"studio.agentHistoryStep":"studio.agentBatchApply"));
+            request.set("params",args);
+            const auto result=dispatch(request);
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            Json out=Json::object();out.set("ok",Json::fromBool(true));
+            out.set("ownerVersion",str(batchOwnerVersion()));
+            return out;
         }
         // Explicit allowlist; never translate arbitrary tool names to browser RPC.
         if(name=="studio_asset_dependencies"||name=="studio_asset_recovery_storage"||
@@ -805,6 +841,15 @@ bool StudioSession::pollAgentLink() {
         if(!agentBatchOwnerVersion_.empty()&&agentBatchOwnerVersion_!=batchOwnerVersion())agentBatchFenced_=true;
         const Json result=agentLinkedCall(name,args);
         agentBatchOwnerVersion_=batchOwnerVersion();
+        if(name=="studio_agent_history_step"||name=="studio_agent_batch_apply"){
+            const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||
+                assetHistory_.version()!=assetBefore;
+            // A navigation is not a new edit. Preserve the original links
+            // for redo; on any failed partial owner change fence the batch.
+            if(!result.has("error")||ownerChanged)changed=true;
+            if(result.has("error")&&ownerChanged){agentBatchFenced_=true;agentHistoryUnsafe_=true;}
+            agentServer_.send(m.client,reply(id,result).dump(-1));continue;
+        }
         if(assetProjectBefore!=ws_.project.dir){
             // The legacy open route bypasses the Studio journal recovery.
             // Never attach persisted history until native project open.
