@@ -1152,4 +1152,202 @@ void studioAssetTrashApply(const fs::path& project,const std::string& id,const s
     plan.files.push_back({r.path,r.relative,{},r.digest,false});
     studioReplayAssetReplacement(project,plan,true);
 }
+namespace {
+using AssetHistory=editor::ProjectHistory;
+constexpr size_t AssetCheckpointMaxBytes=128u*1024u*1024u;
+fs::path assetHistoryCache(const fs::path& project,bool create){
+    const auto cache=fs::canonical(project)/".aiverse-cache";
+    if(create&&!existsOrSymlink(cache))fs::create_directory(cache);
+    if(existsOrSymlink(cache)&&!fs::is_directory(fs::symlink_status(cache)))
+        throw std::runtime_error("Unsafe asset history cache");
+    return cache;
+}
+void writeAssetCheckpoint(const fs::path& path,const std::string& text){
+    if(existsOrSymlink(path)&&!fs::is_regular_file(fs::symlink_status(path)))
+        throw std::runtime_error("Unsafe asset history checkpoint staging path");
+    std::ofstream out(path,std::ios::binary|std::ios::trunc);
+    out.write(text.data(),static_cast<std::streamsize>(text.size()));out.close();
+    if(!out)throw std::runtime_error("Cannot write asset history checkpoint");
+    StudioMoveJournal::syncPath(path);
+}
+std::string historyHash(const std::string& bytes){
+    const auto digest=pack::sha256(bytes.data(),bytes.size());
+    return pack::toHex(digest.data(),digest.size());
+}
+bool validHistoryDigest(const std::string& value){
+    return value.size()==64&&value.find_first_not_of("0123456789abcdef")==std::string::npos;
+}
+void validateHistoryContentPath(const std::string& value,bool meta=false){
+    if(value.empty()||value.size()>1024||value.find('\\')!=std::string::npos||
+       fs::path(value).is_absolute()||fs::path(value).has_root_name())
+        throw std::runtime_error("Unsafe asset history path");
+    const auto path=fs::path(value);
+    for(const auto& part:path.parent_path())validateSegment(part.string());
+    if(meta){
+        if(path.extension()!=".meta")throw std::runtime_error("Invalid asset history sidecar path");
+        validateSegment(path.stem().string());
+    }else validateSegment(path.filename().string());
+}
+void validateHistorySlot(const fs::path& project,const std::string& value,bool meta=false){
+    const std::string payload=meta?value.substr(0,value.size()-5):value;
+    if(meta&&!value.ends_with(".meta"))throw std::runtime_error("Invalid recovery sidecar path");
+    (void)quarantineFolder(project,payload);
+}
+void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& plan){
+    if(plan.files.empty()||plan.files.size()>128||plan.files.size()%2||
+       (plan.replacement&&plan.quarantine)||(plan.created&&!plan.quarantine)||
+       (plan.materialsBefore.has_value()!=plan.materialsAfter.has_value())||
+       ((plan.quarantine||plan.replacement)&&(plan.materialsBefore||plan.materialsAfter)))
+        throw std::runtime_error("Invalid persisted asset move plan");
+    std::set<std::string> sources,targets;
+    for(size_t i=0;i<plan.files.size();i+=2){
+        const auto& a=plan.files[i];const auto& b=plan.files[i+1];
+        validateHistoryContentPath(a.from);
+        if(!sources.insert(a.from).second||!targets.insert(a.to).second||
+           !validHistoryDigest(a.digest)||a.from==a.to)
+            throw std::runtime_error("Invalid persisted asset move identity");
+        if(plan.replacement){
+            if(a.directory||b.directory||a.from!=b.from||!validHistoryDigest(b.digest)||
+               !targets.insert(b.to).second||!b.bytes.empty())
+                throw std::runtime_error("Invalid persisted replacement");
+            validateHistorySlot(project,a.to);validateHistorySlot(project,b.to);
+            if(!studioValidGuid(Json::parse(a.bytes).getStr("guid")))throw std::runtime_error("Invalid replacement metadata");
+        }else{
+            if(b.from!=a.from+".meta"||b.to!=a.to+".meta"||b.directory||!b.digest.empty()||
+               !a.bytes.empty()||!studioValidGuid(Json::parse(b.bytes).getStr("guid")))
+                throw std::runtime_error("Invalid persisted move sidecar");
+            if(plan.quarantine){validateHistorySlot(project,a.to);validateHistorySlot(project,b.to,true);}
+            else validateHistoryContentPath(a.to);
+        }
+    }
+}
+std::string metadataRelative(const fs::path& project,const fs::path& file){
+    const auto root=fs::absolute(project).lexically_normal();
+    const auto relative=fs::absolute(file).lexically_normal().lexically_relative(root).generic_string();
+    if(!relative.starts_with("content/"))throw std::runtime_error("Asset metadata outside content");
+    validateHistoryContentPath(relative.substr(8),true);return relative;
+}
+void validateHistoryMetadata(const editor::ProjectFileEdit& edit){
+    auto before=Json::parse(edit.before),after=Json::parse(edit.after);
+    if(!studioValidGuid(before.getStr("guid"))||!before["settings"].isObject()||!after["settings"].isObject())
+        throw std::runtime_error("Invalid persisted metadata");
+    before.erase("settings");after.erase("settings");
+    if(before.dump()!=after.dump())throw std::runtime_error("Persisted metadata identity changed");
+}
+Json historyState(const fs::path& project,const AssetHistory& history){
+    Json state=Json::object(),slots=Json::array();
+    // Deliberately conservative: include the whole content tree, not only the
+    // last edited path. This detects external edits, missing nested metadata
+    // and changes to earlier entries in the retained stack.
+    state.set("content",Json::string(moveDigest(studioContentRoot(project),true)));
+    const auto material=project/"materials.json";
+    if(existsOrSymlink(material))state.set("materials",Json::string(studioAssetFileDigest(material)));
+    std::set<std::string> folders;
+    for(const auto& step:history.steps())if(step.move&&(step.move->quarantine||step.move->replacement))
+        for(size_t i=0;i<step.move->files.size();i+=step.move->replacement?1:2)
+            folders.insert(step.move->files[i].to);
+    for(const auto& slot:folders){
+        const auto folder=quarantineFolder(project,slot);
+        Json row=Json::object();row.set("slot",Json::string(slot));
+        row.set("digest",Json::string(moveDigest(folder,true)));slots.push(std::move(row));
+    }
+    state.set("slots",std::move(slots));return state;
+}
+std::string encodeAssetHistory(const fs::path& project,const AssetHistory& history){
+    Json body=Json::object(),rows=Json::array();body.set("position",Json::number(int64_t(history.position())));
+    for(const auto& step:history.steps()){
+        Json row=Json::object(),files=Json::array();row.set("label",Json::string(step.label));
+        if(step.move){
+            const auto& plan=*step.move;validateHistoryMove(project,plan);
+            Json move=Json::object();move.set("quarantine",Json::fromBool(plan.quarantine));
+            move.set("created",Json::fromBool(plan.created));move.set("replacement",Json::fromBool(plan.replacement));
+            if(plan.materialsBefore){move.set("materialsBefore",Json::string(*plan.materialsBefore));move.set("materialsAfter",Json::string(*plan.materialsAfter));}
+            for(const auto& f:plan.files){
+                Json item=Json::object();item.set("from",Json::string(f.from));item.set("to",Json::string(f.to));
+                item.set("bytes",Json::string(f.bytes));item.set("digest",Json::string(f.digest));item.set("directory",Json::fromBool(f.directory));files.push(std::move(item));
+            }
+            move.set("files",std::move(files));row.set("move",std::move(move));
+        }else{
+            if(step.files.size()!=1)throw std::runtime_error("Unsupported asset metadata checkpoint");
+            const auto& f=step.files.front();validateHistoryMetadata(f);
+            row.set("path",Json::string(metadataRelative(project,f.path)));
+            row.set("before",Json::string(f.before));row.set("after",Json::string(f.after));
+        }
+        rows.push(std::move(row));
+    }
+    body.set("steps",std::move(rows));
+    if(!history.steps().empty())body.set("state",historyState(project,history));
+    const auto payload=body.dump(-1);Json envelope=Json::object();
+    envelope.set("version",Json::number(int64_t(1)));envelope.set("sha256",Json::string(historyHash(payload)));envelope.set("payload",Json::string(payload));
+    auto text=envelope.dump(-1)+"\n";
+    if(text.size()>AssetCheckpointMaxBytes)throw std::runtime_error("Asset history checkpoint exceeds disk budget");
+    return text;
+}
+AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text){
+    const auto envelope=Json::parse(text);const auto payload=envelope.getStr("payload");
+    if(envelope.getInt("version")!=1||historyHash(payload)!=envelope.getStr("sha256"))
+        throw std::runtime_error("Asset history checkpoint checksum mismatch");
+    const auto body=Json::parse(payload);const auto& rows=body["steps"];const auto position=body.getInt("position",-1);
+    if(!rows.isArray()||rows.size()>AssetHistory::MaxSteps||position<0||size_t(position)>rows.size())
+        throw std::runtime_error("Invalid asset history checkpoint cursor");
+    AssetHistory history;
+    for(size_t i=0;i<rows.size();++i){
+        const auto& row=rows[i];const auto label=row.getStr("label");
+        if(label.empty()||label.size()>256)throw std::runtime_error("Invalid asset history label");
+        if(row.has("move")){
+            const auto& move=row["move"];const auto& files=move["files"];
+            if(!move.isObject()||!files.isArray()||files.size()>128)throw std::runtime_error("Invalid asset history move");
+            AssetHistory::MovePlan plan;plan.quarantine=move.getBool("quarantine");plan.created=move.getBool("created");plan.replacement=move.getBool("replacement");
+            if(move.has("materialsBefore")||move.has("materialsAfter")){
+                if(!move["materialsBefore"].isString()||!move["materialsAfter"].isString())throw std::runtime_error("Invalid asset history materials");
+                plan.materialsBefore=move.getStr("materialsBefore");plan.materialsAfter=move.getStr("materialsAfter");
+            }
+            for(const auto& f:files.items()){
+                if(!f["from"].isString()||!f["to"].isString()||!f["bytes"].isString()||!f["digest"].isString())
+                    throw std::runtime_error("Invalid asset history move entry");
+                plan.files.push_back({f.getStr("from"),f.getStr("to"),f.getStr("bytes"),f.getStr("digest"),f.getBool("directory")});
+            }
+            validateHistoryMove(project,plan);history.recordMove(std::move(plan),label);
+        }else{
+            const auto path=row.getStr("path");
+            if(!path.starts_with("content/")||!row["before"].isString()||!row["after"].isString())
+                throw std::runtime_error("Invalid asset history metadata entry");
+            validateHistoryContentPath(path.substr(8),true);
+            editor::ProjectFileEdit edit{project/fs::path(path),row.getStr("before"),row.getStr("after")};
+            validateHistoryMetadata(edit);history.record({std::move(edit)},label);
+        }
+        if(history.steps().size()!=i+1)throw std::runtime_error("Asset history checkpoint exceeds retained budget");
+    }
+    if(!history.steps().empty()&&historyState(project,history).dump(-1)!=body["state"].dump(-1))
+        throw std::runtime_error("Content, materials or recovery slots changed since asset history checkpoint");
+    while(history.position()>size_t(position))history.advance(false);
+    return history;
+}
+}
+void studioBeginAssetHistoryCheckpoint(const fs::path& project){
+    checkTrashJournal(project);
+    const auto cache=assetHistoryCache(project,true),marker=cache/"asset-history.dirty";
+    writeAssetCheckpoint(marker,"Asset history publication in progress\n");
+    StudioMoveJournal::syncPath(cache);StudioMoveJournal::syncPath(cache.parent_path());
+}
+void studioSaveAssetHistoryCheckpoint(const fs::path& project,const AssetHistory& history){
+    const auto cache=assetHistoryCache(project,true),marker=cache/"asset-history.dirty";
+    if(!fs::is_regular_file(fs::symlink_status(marker)))throw std::runtime_error("Missing asset history publication marker");
+    checkTrashJournal(project);
+    const auto target=cache/"asset-history.json",tmp=cache/"asset-history.tmp";
+    if(existsOrSymlink(target)&&!fs::is_regular_file(fs::symlink_status(target)))throw std::runtime_error("Unsafe asset history checkpoint");
+    writeAssetCheckpoint(tmp,encodeAssetHistory(project,history));
+    StudioMoveJournal::renamePath(tmp,target,true);
+    fs::remove(marker);StudioMoveJournal::syncPath(cache);
+}
+AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
+    const auto cache=assetHistoryCache(project,false);
+    if(existsOrSymlink(cache/"asset-history.dirty"))
+        throw std::runtime_error("Interrupted asset history publication; recovery payloads remain in Trash");
+    const auto path=cache/"asset-history.json";
+    if(!existsOrSymlink(path))return {};
+    if(!fs::is_regular_file(fs::symlink_status(path))||fs::file_size(path)>AssetCheckpointMaxBytes)
+        throw std::runtime_error("Unsafe or oversized asset history checkpoint");
+    return decodeAssetHistory(project,editor::readProjectFileBytes(path));
+}
 } // namespace aiverse::studio
