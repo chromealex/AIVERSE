@@ -34,3 +34,14 @@ test('does not mutate native inputs; stable slot ordering',()=>{
  const a=projectBuildingInspection(recipe,inspection),b=projectBuildingInspection({...recipe,materialBindings:{roof:'steel',wall:'concrete'}},inspection);
  assert.deepEqual(a,b);assert.equal(JSON.stringify([recipe,inspection]),before);
 });
+test('optional native topology passes through owner report; legacy and preset are distinct',()=>{
+ const single={mode:'features',seed:7,style:'modern',floors:1,roomsX:1,roomsZ:1,features:[]};
+ const legacy={seed:7,triangles:12,vertices:24,solids:4,connections:0,floors:1,roomsX:1,roomsZ:1,sockets:[]};
+ const topology={version:1,components:1,withoutElevatorsComponents:1,rooms:[{id:'room/0/0/0',floor:0,x:0,z:0,min:[0,0,0],max:[8,3,8],component:0,withoutElevatorsComponent:0}],connections:[]};
+ assert.equal(projectBuildingInspection(single,legacy).topology,null);
+ const report=projectBuildingInspection(single,{...legacy,topology});
+ assert.equal(report.topology.rooms[0].id,'room/0/0/0');
+ assert.equal(report.topology.connections.length,0);
+ assert.throws(()=>projectBuildingInspection(single,{...legacy,connections:1,topology}),/counts/);
+ assert.throws(()=>projectBuildingInspection({mode:'preset',seed:7,style:'modern'},{seed:7,triangles:12,vertices:24,topology}),/Preset/);
+});
