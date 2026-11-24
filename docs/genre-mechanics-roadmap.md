@@ -184,3 +184,7 @@ Reuse the existing baseline collision stage for exact PlanetRenderer leaves in t
 ### Stage58c — IN PROGRESS (runnable native chamber example)
 
 Add opt-in desktop executable using actual shared Surface, PlanetRenderer/GameView, Simulation/PHYSIS/NEREID schemas, Box3D, SpatialWorld, exterior baseline registry, GiGeometryScene and CPU GI bridge. Bounded authored chamber and scripted native flight route; real resident leaf/volume IDs and no duplicate motor or Scene step. Fixed render frame to avoid continuous GI resets in this first example; draw through existing cave callback. Fail closed on owner refusal/recovery, explicit shutdown. Source-only until built/run; open-mouth traversal, moving frame, swim, restore and full coverage selection remain Stage58d and acceptance.
+
+### Stage58d1 — IN PROGRESS (native portal and swim scenarios)
+
+Extend opt-in planet demo with explicit shaft entry, canonical interior route and exit, and separate submerged chamber traversal using existing NEREID and locomotion. Keep one native dispatcher, persistent scenario phase and motion state, actual accepted rim and live coverage checks. Conservative swept-envelope proof restricted to known local patch and chart bounds. No simulated success or teleport at crossings; source only until real acceptance. Moving frame and native restore follow.
