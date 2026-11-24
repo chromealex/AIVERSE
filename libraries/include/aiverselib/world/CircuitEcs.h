@@ -4,6 +4,7 @@
 #pragma once
 #include "engine/sim/Simulation.h"
 #include "WorldProcesses.h"
+#include "engine/core/GraphPowerAllocation.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>
@@ -55,7 +56,12 @@ inline bool logic(Op op,bool a,bool b){
 }
 // Producers own supply/demand and input drive. Output \`powered/signal\` is
 // calculated here. No dynamic entities or nondeterministic circuit settling.
-inline bool advance(World& world,std::uint32_t tick){
+struct PowerCache {
+    std::vector<uint64_t> memberIds;
+    lib::GraphPowerAllocation allocation;
+};
+inline bool advance(World& world,std::uint32_t tick,PowerCache& cache,
+                    lib::PowerAllocationActivity* activity=nullptr){
     const World& read=world;
     if(read.countExisting<Node>()>kMaxNodes||
        read.countExisting<Wire>()>kMaxWires||
@@ -92,30 +98,20 @@ inline bool advance(World& world,std::uint32_t tick){
         adjacent[a->second].push_back(b->second);
         if(w.bidirectional)adjacent[b->second].push_back(a->second);
     }
-    for(auto& a:adjacent){std::sort(a.begin(),a.end());a.erase(std::unique(a.begin(),a.end()),a.end());}
-    std::vector<bool> powered(nodes.size(),false);
-    // Allocates every generator's finite budget in ID/BFS order. A loaded
-    // consumer is served only once. Zero-demand relays are powered if
-    // reachable from a generator with nonzero supply.
-    for(std::size_t source=0;source<nodes.size();++source){
-        const auto& root=nodes[source].second;
-        if(!root.enabled||root.supply<=0)continue;
-        I budget=root.supply;
-        std::queue<std::size_t> queue;
-        std::vector<bool> visited(nodes.size(),false);
-        visited[source]=true;queue.push(source);
-        while(!queue.empty()){
-            const auto index=queue.front();queue.pop();
-            const auto& node=nodes[index].second;
-            if(!node.enabled)continue;
-            if(!powered[index]&&node.demand<=budget&&budget>0){
-                budget-=node.demand;
-                powered[index]=true;
-            }
-            for(auto next:adjacent[index])
-                if(!visited[next]){visited[next]=true;queue.push(next);}
-        }
+    std::vector<uint64_t> memberIds;
+    std::vector<lib::PowerVertex> inputs;
+    memberIds.reserve(nodes.size());inputs.reserve(nodes.size());
+    for(const auto& [e,n]:nodes){
+        memberIds.push_back(e.packed());
+        inputs.push_back({n.supply,n.demand,n.enabled});
     }
+    if(cache.memberIds!=memberIds){
+        cache.allocation.reset();cache.memberIds=std::move(memberIds);
+    }
+    lib::PowerAllocationActivity stats{};
+    const auto allocation=cache.allocation.update(inputs,std::move(adjacent),&stats);
+    if(!allocation)return false;
+    const auto& powered=*allocation;
     std::vector<bool> nextSignal(nodes.size(),false);
     for(std::size_t i=0;i<nodes.size();++i)
         nextSignal[i]=powered[i]&&nodes[i].second.drive;
@@ -152,7 +148,12 @@ inline bool advance(World& world,std::uint32_t tick){
         n.powered=powered[i];n.signal=nextSignal[i];n.sampledTick=tick;
         world.get<Node>(nodes[i].first)=n;
     }
+    if(activity)*activity=stats;
     return true;
+}
+inline bool advance(World& world,std::uint32_t tick){
+    PowerCache cache;
+    return advance(world,tick,cache);
 }
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<Node>("circuit.node",1);
@@ -161,6 +162,6 @@ inline void registerPersistence(Simulation& sim){
 }
 inline void install(Simulation& sim,std::string name="circuit.power_logic"){
     registerPersistence(sim);
-    sim.addSystem(std::move(name),[](Simulation& s){(void)advance(s.world(),s.tick());});
+    sim.addSystem(std::move(name),[cache=PowerCache{}](Simulation& s) mutable {(void)advance(s.world(),s.tick(),cache);});
 }
 } // namespace aiverse::circuit
