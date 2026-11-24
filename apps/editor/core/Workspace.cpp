@@ -169,6 +169,7 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 
 bool Project::load(const std::string& d, std::string* err) {
     try {
+        recoverProjectFileEdits(d);
         auto manifestText = readProjectFileBytes(fs::path(d)/"game.json");
         Json m;
         try {m=Json::parse(manifestText);}

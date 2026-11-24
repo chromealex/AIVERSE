@@ -83,6 +83,9 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
     }
     if (directory.empty()) throw std::runtime_error(error.empty()?"Cannot resolve project":error);
     directory=std::filesystem::weakly_canonical(directory).string();
+    // Material writes inside an asset transaction may themselves use a document
+    // journal. Resolve that inner transaction before rolling back the outer move.
+    editor::recoverProjectFileEdits(directory);
     StudioMoveJournal::recover(directory);
     return directory;
 }
