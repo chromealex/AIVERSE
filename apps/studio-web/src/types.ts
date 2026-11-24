@@ -220,9 +220,9 @@ export interface HumanStudioLightingInfo {settings:HumanStudioLightingSettings;p
 export interface HumanFaceShape {version:1;meshes:string[];values:Record<string,number>;landmarks:{from:[number,number,number];to:[number,number,number];radius:number;weight:number}[]}
 export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;label:string;min:number;max:number}[];schema:HumanLookField[];look:HumanLook;preview:StudioFacialPreviewBinding}
 export interface StudioBuildingFunction { id: string; name: string; width: number; height: number; depth: number }
-export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[]; materials?: string[]; surfaces?: Record<string,{pattern:string;seed:number}> }
+export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[]; materials?: string[]; surfaces?: Record<string,{pattern:string;seed:number;resolution?:number}> }
 export interface StudioBuildingCatalog { styles: StudioBuildingStyle[] }
-export interface StudioBuildingSurfacePreview { style:string; slot:string; maps:Array<{channel:string;label:string;url:string}> }
+export interface StudioBuildingSurfacePreview { style:string; slot:string; resolution:number; maps:Array<{channel:string;label:string;url:string}> }
 export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof' | 'window' | 'stairs' | 'elevator';
 export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
 export interface StudioBuildingFeature {
@@ -246,6 +246,7 @@ export interface StudioBuildingRequest {
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
+  textureResolution?:128|256|512;
 }
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
@@ -260,7 +261,7 @@ export interface StudioBuildingPreview {
 }
 export interface StudioBuildingGenerated { path: string; recipePath?: string; guid: string; bytes: number; triangles: number }
 export interface StudioParams {
-  'studio.buildingSurfacePreview': {style:string;slot:string};
+  'studio.buildingSurfacePreview': {style:string;slot:string;resolution?:128|256|512};
   'studio.buildingCatalog': Record<string, never>;
   'studio.buildingStaleMaterials': Record<string, never>;
   'studio.buildingRegenerate': {recipe:string};

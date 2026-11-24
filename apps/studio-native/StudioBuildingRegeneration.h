@@ -62,7 +62,7 @@ inline Json studioBuildingReadRecipe(
     Json params=Json::object();
     for(const char* field:{"style","mode","function","seed",
                            "width","height","depth","floors","roomsX",
-                           "roomsZ","features","materialBindings"})
+                           "roomsZ","features","materialBindings","textureResolution"})
         if(recipe.has(field))params.set(field,recipe[field]);
     params.set("setting",Json::string(
         buildingStudioDetail::settingId(recipe.getStr("style"))));
@@ -125,7 +125,7 @@ inline Json studioBuildingRegenerate(
     Json params=Json::object();
     for(const char* field:{"style","mode","function","seed",
                            "width","height","depth","floors","roomsX",
-                           "roomsZ","features","materialBindings"}){
+                           "roomsZ","features","materialBindings","textureResolution"}){
         if(recipe.has(field))params.set(field,recipe[field]);
     }
     params.set("setting",Json::string(

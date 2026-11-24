@@ -72,6 +72,7 @@ inline std::string settingId(const std::string& style) {
 struct Request {
     std::string style,kind;
     uint64_t seed=1;
+    int textureResolution=0; // zero uses authored per-material quality
     StructureSize dimensions{};
     bool composeFeatures=false;
     FunctionalBuildingRecipe functionalRecipe{};
@@ -91,6 +92,11 @@ inline Request request(const Json& params) {
     if(!std::isfinite(s)||s<0||s>2147483647.0||std::floor(s)!=s)
         throw std::runtime_error("Building seed must be an integer from 0 to 2147483647");
     req.seed=uint64_t(s);
+    if(params.has("textureResolution")){
+        const auto& value=params["textureResolution"];const double n=value.toDouble(-1);
+        if(!value.isNumber()||(n!=128&&n!=256&&n!=512))throw std::runtime_error("Texture resolution must be 128, 256 or 512");
+        req.textureResolution=int(n);
+    }
     const auto positive=[&](const char* field){
         const Json& v=params[field];
         if(!v.isNumber())throw std::runtime_error(std::string("Building ")+field+" must be a number in metres");
@@ -242,6 +248,11 @@ inline StyledStructure produce(const fs::path& engine,const Request& req) {
                 ?"Building cannot fit the requested dimensions and physical clearances"
                 :generated.fitError);
     }
+    if(req.textureResolution)for(auto& material:generated.mesh.materials)material.surfaceResolution=req.textureResolution;
+    uint64_t generatedBytes=0;
+    for(const auto& material:generated.mesh.materials)if(!material.surfacePattern.empty())
+        generatedBytes+=uint64_t(material.surfaceResolution)*material.surfaceResolution*4u*3u;
+    if(generatedBytes>128u*1024u*1024u)throw std::runtime_error("Generated building exceeds 128 MiB procedural texture budget");
     if(generated.mesh.triangles()>150000)
         throw std::runtime_error("Generated building exceeds the 150k triangle asset budget");
     return generated;
@@ -279,6 +290,7 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
             Json surface=Json::object();
             surface.set("pattern",string(material.surfacePattern));
             surface.set("seed",Json::number(int64_t(material.surfaceSeed)));
+            surface.set("resolution",Json::number(int64_t(material.surfaceResolution)));
             surfaces.set(material.id,std::move(surface));
         }
         s.set("materials",std::move(slots));
@@ -289,7 +301,7 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
     return out;
 }
 // Read-only style surface preview. One validated material, three bounded
-// 128x128 PNGs. Uses the same portable generator as native Model/GLB.
+// PNGs (128/256/512). Uses the same portable generator as native Model/GLB.
 inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,const Json& params) {
     using namespace buildingStudioDetail;
     const auto id=params.getStr("style"),slot=params.getStr("slot");
@@ -299,12 +311,18 @@ inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,con
         [&](const StyleMaterial& material){return material.id==slot;});
     if(it==style.materials.end()||it->surfacePattern.empty())
         throw std::runtime_error("Material has no procedural surface");
+    int resolution=it->surfaceResolution;
+    if(params.has("resolution")){
+        const auto& value=params["resolution"];const double n=value.toDouble(-1);
+        if(!value.isNumber()||(n!=128&&n!=256&&n!=512))throw std::runtime_error("Invalid texture preview resolution");
+        resolution=int(n);
+    }
     Json out=Json::object(),maps=Json::array();
     const char* keys[]={"baseColor","metallicRoughness","normal"};
     const char* labels[]={"Base Color","Metallic / Roughness","Normal"};
     for(size_t i=0;i<3;++i){
         const auto pixels=generateBuildingSurface(it->surfacePattern,it->id,it->surfaceSeed,
-            static_cast<BuildingSurfaceChannel>(i));
+            static_cast<BuildingSurfaceChannel>(i),resolution);
         const auto png=building::encodeBuildingPngRgba(pixels.rgba,pixels.width,pixels.height);
         const std::string bytes(reinterpret_cast<const char*>(png.data()),png.size());
         Json map=Json::object();
@@ -313,6 +331,7 @@ inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,con
         maps.push(std::move(map));
     }
     out.set("style",string(id));out.set("slot",string(slot));
+    out.set("resolution",Json::number(int64_t(resolution)));
     out.set("maps",std::move(maps));return out;
 }
 // Temporary GPU preview requests use exactly the native geometry and
@@ -586,6 +605,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("mode",string(req.composeFeatures?"features":"preset"));
         saved.set("function",string(req.composeFeatures?"":req.kind));
         saved.set("seed",Json::number(int64_t(req.seed)));
+        if(req.textureResolution)saved.set("textureResolution",Json::number(int64_t(req.textureResolution)));
         if(!req.materialBindings.empty()){
             Json bindings=Json::object();
             for(const auto& [slot,name]:req.materialBindings)

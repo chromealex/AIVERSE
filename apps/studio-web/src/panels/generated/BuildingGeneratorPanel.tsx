@@ -21,7 +21,7 @@ import type {BuildingCandidateTicket} from '../../graphs/buildingCandidateCaptur
 import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
-function BuildingSurfacePreview({style,visible}:{style:StudioBuildingStyle|undefined;visible:boolean}){
+function BuildingSurfacePreview({style,visible,resolution}:{style:StudioBuildingStyle|undefined;visible:boolean;resolution:128|256|512}){
   const slots=Object.keys(style?.surfaces??{}).filter(slot=>!!style?.surfaces?.[slot]?.pattern);
   const [selected,setSelected]=useState('');
   const slot=slots.includes(selected)?selected:slots[0]??'';
@@ -33,14 +33,14 @@ function BuildingSurfacePreview({style,visible}:{style:StudioBuildingStyle|undef
     setResult(null);setError('');setBusy(false);
     if(!visible||!styleId||!slot||!nativeConnected())return;
     let alive=true;setBusy(true);
-    void invoke('studio.buildingSurfacePreview',{style:styleId,slot}).then(value=>{
+    void invoke('studio.buildingSurfacePreview',{style:styleId,slot,resolution}).then(value=>{
       if(!alive)return;
-      if(value.style!==styleId||value.slot!==slot)throw Error('Texture preview identity mismatch');
+      if(value.style!==styleId||value.slot!==slot||value.resolution!==resolution)throw Error('Texture preview identity mismatch');
       setResult(value);
     }).catch(e=>{if(alive)setError(explain(e));}).finally(()=>{if(alive)setBusy(false);});
     return()=>{alive=false};
-  },[styleId,slot,visible]);
-  const current=result?.style===styleId&&result.slot===slot?result:null;
+  },[styleId,slot,visible,resolution]);
+  const current=result?.style===styleId&&result.slot===slot&&result.resolution===resolution?result:null;
   return <StudioSection title="Generated PBR textures">
     {!slot?<StudioEmptyState title="No procedural surface" description="This style has no procedural surface patterns."/>:<>
       <StudioField label="Material slot" htmlFor="abg-surface-slot">
@@ -56,7 +56,7 @@ function BuildingSurfacePreview({style,visible}:{style:StudioBuildingStyle|undef
           <figcaption>{map.label}</figcaption>
         </figure>)}
       </div>}
-      <small className="abg__note">Actual native style maps · 128 × 128 · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
+      <small className="abg__note">Actual native style maps · {resolution} × {resolution} · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
     </>}
   </StudioSection>;
 }
@@ -122,6 +122,7 @@ export default function BuildingGeneratorPanel({
   const [style,setStyle]=useState('scifi');
   const [role,setRole]=useState('factory');
   const [mode,setMode]=useState<'features'|'preset'>('features');
+  const [textureResolution,setTextureResolution]=useState<128|256|512>(256);
   const [features,setFeatures]=useState<StudioBuildingFeature[]>([
     makeFeature('large-gate'),
     {...makeFeature('small-gate'), side:'back',count:2},
@@ -237,6 +238,7 @@ export default function BuildingGeneratorPanel({
       setSetting(selected.setting);setStyle(selected.id);
       setRole(item.function??'');
       setMode(item.mode??'features');
+      setTextureResolution(item.textureResolution??128);
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
@@ -353,7 +355,7 @@ export default function BuildingGeneratorPanel({
   },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
-    setting,style,function:mode==='preset'?role:'',mode,
+    setting,style,function:mode==='preset'?role:'',mode,textureResolution,
     features:mode==='features'?features:undefined,
     materialBindings:Object.keys(materialBindings).length?materialBindings:undefined,
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
@@ -398,6 +400,22 @@ export default function BuildingGeneratorPanel({
   };
   const changeRole=(value:string)=>{setRole(value);clearGenerated();};
   const changeMode=(value:'features'|'preset')=>{setMode(value);clearGenerated();};
+  // Starting layouts are explicit recipe edits, not hidden gameplay roles.
+  const applyFunctionalPreset=(id:string)=>{
+    if(busy||!id)return;
+    const presets:Record<string,{size:[number,number,number];rooms:[number,number,number];features:StudioBuildingFeature[]}>={
+      residence:{size:[18,7,16],rooms:[2,2,2],features:[makeFeature('personnel-door'),{...makeFeature('window'),side:'back',count:2},{...makeFeature('window'),side:'left',floor:1,count:2},{...makeFeature('stairs'),position:4.5,positionZ:4,depth:7.2}]},
+      market:{size:[24,8,18],rooms:[1,3,2],features:[{...makeFeature('small-gate'),count:2},{...makeFeature('personnel-door'),side:'back'},{...makeFeature('window'),side:'left',count:3}]},
+      administration:{size:[24,12,20],rooms:[3,2,2],features:[makeFeature('personnel-door'),{...makeFeature('window'),side:'back',count:3},{...makeFeature('window'),side:'right',floor:1,count:3},{...makeFeature('elevator'),position:6,positionZ:5},{...makeFeature('stairs'),position:18,positionZ:5,depth:8.5}]},
+      warehouse:{size:[32,10,24],rooms:[1,2,1],features:[{...makeFeature('large-gate'),count:2},{...makeFeature('personnel-door'),side:'back'},{...makeFeature('window'),side:'right',count:3}]},
+      workshop:{size:[24,10,18],rooms:[1,2,1],features:[makeFeature('large-gate'),{...makeFeature('personnel-door'),side:'back'},{...makeFeature('window'),side:'left',count:2},makeFeature('sliding-roof')]},
+      hall:{size:[28,8,24],rooms:[1,1,1],features:[{...makeFeature('small-gate'),count:2},{...makeFeature('window'),side:'left',count:4},{...makeFeature('window'),side:'right',count:4}]}
+    };
+    const p=presets[id];if(!p)return;
+    setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
+    setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
+    setFeatures(p.features);clearGenerated();setPage('recipe');
+  };
   const setFeature=(index:number,key:keyof StudioBuildingFeature,value:string|number)=>{
     setFeatures(old=>old.map((f,i)=>i===index?({...f,[key]:value} as StudioBuildingFeature):f));
     clearGenerated();
@@ -707,7 +725,13 @@ export default function BuildingGeneratorPanel({
               <option value="preset">Legacy structure silhouette</option>
             </StudioSelect>
           </StudioField>
-          {mode==='preset'&&<StudioField label="Legacy silhouette preset" htmlFor="abg-role">
+          {mode==='features'&&<StudioField label="Starting layout" htmlFor="abg-layout-preset">
+            <StudioSelect id="abg-layout-preset" value="" disabled={busy} onChange={e=>applyFunctionalPreset(e.target.value)}>
+              <option value="">Custom · apply a starting layout…</option>
+              {['residence','market','administration','warehouse','workshop','hall'].map(id=><option key={id} value={id}>{id}</option>)}
+            </StudioSelect>
+          </StudioField>}
+          {mode==='preset'&&<StudioField label="Architecture type" htmlFor="abg-role">
             <StudioSelect id="abg-role" value={role} onChange={e=>changeRole(e.target.value)}
               disabled={busy||functions.length===0}>
               {functions.map(item=><option value={item.id} key={item.id}>{item.name||item.id}</option>)}
@@ -885,12 +909,20 @@ export default function BuildingGeneratorPanel({
       </StudioSection>}
       </div>
       <div className="abg__page au-stack" hidden={page!=='materials'}>
-      <BuildingSurfacePreview key={selectedStyle?.id??''} style={selectedStyle} visible={page==='materials'}/>
+      <StudioSection title="Texture quality">
+        <StudioField label="Generated map resolution" htmlFor="abg-texture-resolution">
+          <StudioSelect id="abg-texture-resolution" value={textureResolution} disabled={busy} onChange={e=>{setTextureResolution(Number(e.target.value) as 128|256|512);clearGenerated();}}>
+            <option value={128}>128 × 128 · Compact</option><option value={256}>256 × 256 · Standard</option><option value={512}>512 × 512 · Detailed</option>
+          </StudioSelect>
+        </StudioField>
+        <small className="abg__note">Applies to preview and exported GLB; imported project texture sizes are unchanged.</small>
+      </StudioSection>
+      <BuildingSurfacePreview key={selectedStyle?.id??''} style={selectedStyle} visible={page==='materials'} resolution={textureResolution}/>
       <StudioSection title="Architectural material bindings">
         <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
         <div className="abg__fields">
           {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
-            label={slot} hint={selectedStyle?.surfaces?.[slot]?.pattern?'Generated · '+selectedStyle.surfaces[slot].pattern+' · 128 × 128':'Authored style factors / texture references'} htmlFor={'abg-material-binding-'+slot}>
+            label={slot} hint={selectedStyle?.surfaces?.[slot]?.pattern?'Generated · '+selectedStyle.surfaces[slot].pattern+' · '+textureResolution+' × '+textureResolution:'Authored style factors / texture references'} htmlFor={'abg-material-binding-'+slot}>
             <StudioSelect id={'abg-material-binding-'+slot}
               disabled={busy||!projectLoaded}
               value={materialBindings[slot]??''}
