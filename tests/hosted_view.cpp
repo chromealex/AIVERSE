@@ -10,6 +10,45 @@
 #include "apps/client/HostedClient.h"
 #include "apps/editor/ClientHost.h"
 #include <type_traits>
+#include <stdexcept>
+#include <vector>
+#include <utility>
+#include "imgui.h"
+class HostedFakeDevice final : public aiverse::gfx::Device {
+public:
+    std::vector<std::pair<int, int>> created;
+    int alive = 0;
+    aiverse::gfx::DeviceInfo info_;
+    std::string err_;
+    const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {1}; }
+    void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(aiverse::gfx::BufferHandle) override {}
+    aiverse::gfx::TextureHandle createTexture(const aiverse::gfx::TextureDesc& d) override { created.push_back({d.width, d.height}); ++alive; return {uint32_t(created.size())}; }
+    void updateTexture(aiverse::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(aiverse::gfx::TextureHandle) override { --alive; }
+    aiverse::gfx::ShaderHandle createShader(const aiverse::gfx::ShaderDesc&) override { return {1}; }
+    void destroyShader(aiverse::gfx::ShaderHandle) override {}
+    aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc&) override { return {1}; }
+    void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
+    const std::string& lastError() const override { return err_; }
+    // The fake device executes all commands synchronously and queues no GPU
+    // work, so every submitted operation is already idle on return.
+    bool waitForResourceIdle() override { return true; }
+    void beginFrame(int, int) override {}
+    void endFrame() override {}
+    void beginPass(const aiverse::gfx::PassDesc&) override {}
+    void endPass() override {}
+    void setViewport(const aiverse::gfx::Rect&) override {}
+    void setScissor(const aiverse::gfx::Rect&) override {}
+    void setPipeline(aiverse::gfx::PipelineHandle) override {}
+    void setVertexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, aiverse::gfx::TextureHandle) override {}
+    void setUniforms(int, const void*, size_t) override {}
+    void draw(uint32_t, uint32_t) override {}
+    void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t) override {}
+};
 static_assert(std::is_same_v<aiverse::client::HostedClient, aiverse::editor::ClientHost>);
 #endif
 
@@ -38,6 +77,37 @@ int aiverseMain(int, char**) {
         CHECK(host.canShutdown());
         CHECK(host.pendingRetiredClients()==0);
         CHECK(host.collectGpuRetirements()==0 && host.drainAfterGpuIdle()==0);
+    }
+    // Archive clients before the first init step; no real GPU or game
+    // assets needed. The normal idle drain restores both caller contexts.
+    {
+        HostedFakeDevice device,otherDevice;
+        client::HostedClient host;
+        platform::HostedView outer;
+        auto* previousView=platform::hostedView();
+        auto* previousImgui=ImGui::GetCurrentContext();
+        auto* outerImgui=ImGui::CreateContext();
+        ImGui::SetCurrentContext(outerImgui);
+        platform::setHostedView(&outer);
+        host.start(device,"game","assets");
+        host.stop();
+        host.start(device,"game2","assets");
+        host.stop();
+        CHECK(host.pendingRetiredClients()==2 && host.canShutdown());
+        bool refused=false;
+        try { host.start(otherDevice,"foreign","assets"); }
+        catch(const std::logic_error&) { refused=true; }
+        CHECK(refused && host.pendingRetiredClients()==2);
+        CHECK(host.drainAfterGpuIdle()==2 && host.pendingRetiredClients()==0);
+        CHECK(platform::hostedView()==&outer && ImGui::GetCurrentContext()==outerImgui);
+        CHECK(host.drainAfterGpuIdle()==0);
+        host.start(otherDevice,"new","assets");
+        host.stop();
+        CHECK(host.drainAfterGpuIdle()==1);
+        CHECK(platform::hostedView()==&outer && ImGui::GetCurrentContext()==outerImgui);
+        platform::setHostedView(previousView);
+        ImGui::DestroyContext(outerImgui);
+        ImGui::SetCurrentContext(previousImgui);
     }
 #endif
     namespace fs = std::filesystem;

@@ -267,12 +267,7 @@ void Editor::retirePreviewModel(std::unique_ptr<render::Model>& model) noexcept 
 void Editor::shutdown() {
     if(view_.modelMutationBlocked() || !clientHost_.canShutdown())
         throw std::logic_error("Editor shutdown: live Model read, graph transaction or quarantined hosted client");
-    graphGpuProfile_.clear();
-    if (!dev_) return;
-    // Invalidate any captureNextFrame callbacks still owned by the RHI.
-    captureLifetime_->store(false,std::memory_order_release);
-    captureArmed_ = false;
-    shots_.clear();
+    if (!dev_) { graphGpuProfile_.clear(); return; }
     // Editor windows own offscreen Model/portrait/viewport allocations and
     // can still have prior-frame submissions in flight. Prove full device
     // completion BEFORE allowing destructors to destroy native GPU objects.
@@ -282,7 +277,13 @@ void Editor::shutdown() {
     // Resolve hosted teardown before dismantling the editor's other owners.
     // The full-device idle proof above covers archived and active clients.
     clientHost_.stop();
-    clientHost_.drainAfterGpuIdle();
+    if(dev_->gpuHealthy())clientHost_.drainAfterGpuIdle();
+    else clientHost_.abandonOnDeviceLoss();
+    graphGpuProfile_.clear();
+    // Invalidate capture callbacks only after hosted preflight/drain.
+    captureLifetime_->store(false,std::memory_order_release);
+    captureArmed_=false;
+    shots_.clear();
     pendingGraphMaterialApply_.reset();graphMaterialApplyProject_.clear();
     graphMaterialApplyRequest_.clear();graphMaterialApplyState_="idle";graphMaterialApplyReason_.clear();
     textureGraphGpuPreview_.shutdownAfterIdle(*dev_);
