@@ -50,6 +50,7 @@ uint64_t contentId(const Json& rules, const Json& map) {
     Hasher h;
     h.u32(kProtocol);
     if (rules["types"].isObject()) for (auto& [id, def] : rules["types"].members()) { (void)def; h.str(id); }
+    if (rules["resources"].isObject()) for (auto& [id, def] : rules["resources"].members()) { (void)def; h.str(id); }
     h.str(map["size"].dump(-1)); h.str(map["players"].dump(-1)); h.str(map["entities"].dump(-1));
     return h.value();
 }
