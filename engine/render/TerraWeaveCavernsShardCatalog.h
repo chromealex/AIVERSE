@@ -144,6 +144,11 @@ public:
         const auto it=source_.find(key);
         return it==source_.end()?nullptr:&it->second;
     }
+    std::set<ChunkKey3,KeyLess> committedKeys()const {
+        std::set<ChunkKey3,KeyLess> keys;
+        for(const auto& [key,chunk]:source_){(void)chunk;keys.insert(key);}
+        return keys;
+    }
     size_t size()const noexcept{return source_.size();}
 private:
     CaveShardConfig config_;
