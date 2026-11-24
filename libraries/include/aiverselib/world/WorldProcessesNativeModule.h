@@ -4,6 +4,7 @@
 #pragma once
 #include "WorldProcessesMapHydration.h"
 #include "ImprintSurfaceTrails.h"
+#include "CrowdGameCoreSurface.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -41,7 +42,8 @@ public:
         // adding its first authored component. Unknown/typed flags fail fast.
         const SuiteFlags flags=suiteFlags(config);
         (void)authoring::hydrateMap(sim,host.matchMap(),host.mapPlaced(),flags,
-            host.surface(sim)?&installGameCoreSurfaceTrails:nullptr);
+            host.surface(sim)?&installGameCoreSurfaceTrails:nullptr,
+            host.surface(sim)?&installGameCoreSurfaceCrowd:nullptr);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
