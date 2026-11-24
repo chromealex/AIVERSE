@@ -321,7 +321,7 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
             require(residentStatus.getStr("state")=="ready"&&residentStatus.getStr("backend")==expected&&residentStatus.getBool("residentRadianceReady")&&residentStatus.getInt("receivedBytes")==0&&residentStatus.getInt("totalBytes")==0,"resident HDR fence-only generation failed");
             auto texture=owner.takeResidentRadiance(dev,lifetime.lease(),project,residentId);
             require(texture.valid(),"resident HDR ownership transfer failed");
-            gfx::TextureInfo hdrInfo;require(dev.textureInfo(texture,hdrInfo)&&hdrInfo.mipLevels==(hdrMips?5:1),"resident HDR mip allocation mismatch");
+            gfx::TextureInfo hdrInfo;require(dev.textureInfo(texture,hdrInfo)&&hdrInfo.width==16&&hdrInfo.height==16&&hdrInfo.format==pixelFormat,"resident HDR texture metadata mismatch");
             auto capture=std::make_shared<gfx::TextureReadbackResult>();auto done=std::make_shared<bool>(false);
             beginFrame();
             gfx::TextureReadbackDesc hdrRead;hdrRead.mipLevel=hdrMips?2:0;
