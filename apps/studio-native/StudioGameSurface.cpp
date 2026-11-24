@@ -172,6 +172,8 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                             const bool sameEpoch=previousForestRender.getStr("epoch")==std::to_string(runtimeEpoch_);
                             *forestRender=sampleStudioPlanetForest(sim->world(),*surface,tick,kStudioForestRenderLimit,weather,focusBody,camera,true,sameEpoch?&previousForestRender:nullptr);
                             forestRender->set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+                            // Independent native terrain payload; never forwarded to MCP or browser.
+                            if(forestTerrain)forestRender->set("nativeTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,384u*1024u,camera));
                         }
                         if(forestTerrain)budget.add(out,"forestTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,planetLiveShare(kPlanetLivePayloadBytes-kPlanetLiveRootReserve,layers)));
                     }

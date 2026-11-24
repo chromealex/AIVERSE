@@ -2870,7 +2870,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     const bool liveForest=planetForestLiveCurrent(doc,projectPath);
     if(liveForest){
         lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
-        if(useLiveTerrain)lightingStatus_+=" · surface grid step "+std::to_string(planetLiveTerrainGrid_.getInt("step"));
+        if(useLiveTerrain)lightingStatus_+=" · surface grid step "+std::to_string(planetLiveTerrainGrid_.getInt("step"))+" · refined tiles "+std::to_string(planetLiveTerrainGrid_["patches"].size());
         lightingStatus_+=" · "+std::to_string(planetLiveSnapshot_["forest"]["plants"].size())+"/"+std::to_string(planetLiveSnapshot_["forest"].getInt("focusPlantCount"))+" native render candidates";
         if(planetLiveSnapshot_["forest"].getBool("cameraPrioritized"))lightingStatus_+=" · camera priority";
     }

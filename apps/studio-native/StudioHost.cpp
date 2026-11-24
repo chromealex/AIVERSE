@@ -1249,8 +1249,12 @@ void StudioHost::rebuildOverlay() {
             wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
             ?wpLiveSnapshot_:Json{};
         if(sceneSnapshot.getBool("active")&&wpLiveOptions_.forest&&wpForestRenderSnapshot_.getBool("active")&&
-           wpForestRenderSnapshot_.getInt("tick",-2)+1==sceneSnapshot.getInt("tick",-1))
+           wpForestRenderSnapshot_.getInt("tick",-2)+1==sceneSnapshot.getInt("tick",-1)){
             sceneSnapshot.set("forest",wpForestRenderSnapshot_);
+            const auto& terrain=wpForestRenderSnapshot_["nativeTerrain"];
+            if(terrain.getBool("active")&&terrain.getInt("tick",-1)==wpForestRenderSnapshot_.getInt("tick",-2))
+                sceneSnapshot.set("forestTerrain",terrain);
+        }
         preview_->setPlanetLiveSnapshot(std::move(sceneSnapshot),wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpLiveOptions_.layer,wpLiveOptions_.aetherLayer);
     });
 }

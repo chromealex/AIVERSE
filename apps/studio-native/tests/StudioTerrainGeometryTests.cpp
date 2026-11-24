@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
+#include "apps/studio-native/StudioPlanetLiveTerrain.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
@@ -47,6 +48,17 @@ int main() {
     globe.data.entities.push_back(e);
     const auto preview=StudioPlanetPreview::build(globe,0);
     AIVERSE_TEST_CHECK(preview&&preview->mesh.indices().size()==6*8*8*6);
+    Json grid=Json::parse(R"({"body":"terra","faceSize":8,"radius":64,"step":2,"side":5})");
+    Json coarse=Json::array();for(int i=0;i<6*25;++i)coarse.push(Json::number(int64_t(0)));grid.set("corners",coarse);
+    const auto low=buildStudioLivePlanetTerrain(grid,body,*preview);
+    AIVERSE_TEST_CHECK(low&&low->indices().size()==6*4*4*6);
+    grid.set("patches",Json::parse(R"([{"face":0,"x":1,"y":1,"corners":[0,0,0,0,16,0,0,0,0]}])"));
+    const auto refined=buildStudioLivePlanetTerrain(grid,body,*preview);
+    AIVERSE_TEST_CHECK(refined&&refined->indices().size()==low->indices().size()+18);
+    bool peak=false;for(const auto& v:refined->vertices())if(dot(v.pos,v.pos)>64.5f*64.5f)peak=true;
+    AIVERSE_TEST_CHECK(peak);
+    grid.set("patches",Json::parse(R"([{"face":0,"x":1,"y":1,"corners":[1,0,0,0,16,0,0,0,0]}])"));
+    AIVERSE_TEST_CHECK(!buildStudioLivePlanetTerrain(grid,body,*preview));
     AIVERSE_TEST_CHECK(preview->markers.size()==1);
     const auto center=preview->markers.front().center;
     const auto dir=normalize(center);
