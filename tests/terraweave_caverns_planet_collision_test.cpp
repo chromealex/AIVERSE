@@ -1,6 +1,7 @@
 // Real native scenes, no GPU required for the baseline lifecycle.
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
+#include "engine/physics/TerraWeaveCavernsPlanetPhysics.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -27,7 +28,30 @@ static void checkCandidateIdentity(){
     ecs.setResource<CavePlanetAuthoritySet>(set);
     check(!candidate.current(ecs,3),"equal numeric revision but changed snapshot");
 }
+static void checkOrientedMotor(){
+    physics::Scene scene;
+    physics::BodyDesc floor;floor.motion=physics::Motion::Static;
+    floor.shape=physics::ShapeKind::Box;floor.size={1,20,20};floor.position={-.5f,0,0};
+    check(scene.create(floor)!=physics::kNoBody,"side support");
+    physics::CharacterParams params;physics::CharacterState state;
+    state.position={2,0,0};
+    const auto q=b3MakeQuatFromAxisAngle({0,0,1},-1.57079632679f);
+    const auto proxy=scene.createCharacter(params,state.position);
+    check(proxy!=physics::kNoBody&&scene.moveCharacterOriented(proxy,state,q,true),"oriented proxy");
+    for(int i=0;i<90;++i){
+        check(physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),q,nullptr,proxy),"oriented fall");
+        check(scene.moveCharacterOriented(proxy,state,q),"oriented proxy movement");scene.step();
+    }
+    check(state.grounded&&std::abs(state.position.x)<.15f,"landed on +X support");
+    physics::CharacterInput jump;jump.jump=true;
+    check(physics::stepCharacterOriented(scene.world(),params,state,jump,scene.dt(),q,nullptr,proxy),"oriented jump");
+    check(state.velocity.x>0,"jump follows support up");
+    const auto before=state.position;
+    check(!physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),{{0,0,0},0}),"invalid quaternion refused");
+    check(state.position.x==before.x&&state.position.y==before.y&&state.position.z==before.z,"invalid orientation moved character");
+}
 int main(){
+    checkOrientedMotor();
     checkCandidateIdentity();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
     physics::Scene box;
