@@ -43,6 +43,7 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include "NativeBuildOps.h"
 #include "Projects.h"
 #include "ProjectFile.h"
+#include "ProjectFileEdits.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -174,9 +175,11 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 
 bool Project::load(const std::string& d, std::string* err) {
     try {
-        Json m = Json::parseFile(d + "/game.json");
+        auto manifestText = readProjectFileBytes(fs::path(d)/"game.json");
+        Json m = Json::parse(manifestText);
         JsonOrigin origin;
         Json r = composeJson(d + "/" + m.getStr("rules", "rules.json"), fileReader(), &origin);
+        auto rawRulesText=origin.text;
         {   // what saveRules would write for each file now: a save rewrites only the files an edit changed
             auto parts = splitComposed(r, origin);
             for (size_t i = 0; i < parts.size(); ++i) origin.text[i] = parts[i].second.dump() + "\n";
@@ -184,6 +187,7 @@ bool Project::load(const std::string& d, std::string* err) {
         game::Rules parsed;
         if(m.getStr("module", "game")=="actor")actor::readConfig(r);else parsed=game::loadRules(r);   // == actorSession() of the manifest being loaded
         dir = d; manifest = std::move(m); rulesJson = std::move(r); rulesOrigin = std::move(origin); rules = std::move(parsed);
+        savedRulesText=std::move(rawRulesText);savedManifestText=std::move(manifestText);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
         return true;
@@ -197,17 +201,27 @@ bool Project::reloadRules() {
     catch (const std::exception& e) { rulesError = e.what(); return false; }
 }
 bool Project::saveRules(std::string* err) {
-    if (rulesOrigin.files.empty()) rulesOrigin.files.push_back(rulesPath());
-    // every entry goes back to the file it came from; files whose content did not change are not touched
-    auto parts = splitComposed(rulesJson, rulesOrigin);
-    for (size_t i = 0; i < parts.size(); ++i) {
-        const std::string text = parts[i].second.dump() + "\n";
-        if (auto it = rulesOrigin.text.find(i); it != rulesOrigin.text.end() && it->second == text) continue;
-        if (!writeText(parts[i].first, text, err)) return false;
-        rulesOrigin.text[i] = text;
-    }
-    rulesDirty = false;
-    return true;
+    try {
+        if(!savedManifestText||rulesOrigin.files.empty())
+            throw std::runtime_error("Project documents must be loaded before saving rules");
+        const auto parts=splitComposed(rulesJson,rulesOrigin);
+        if(parts.size()!=savedRulesText.size() || fs::weakly_canonical(rulesOrigin.files.front())!=fs::weakly_canonical(rulesPath()))
+            throw std::runtime_error("Rules file set changed; reopen the project");
+        auto nextRaw=savedRulesText;
+        auto nextNormalized=rulesOrigin.text;
+        std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,*savedManifestText}};
+        for(size_t i=0;i<parts.size();++i) {
+            const auto text=parts[i].second.dump()+"\n";
+            const auto& before=savedRulesText.at(i);
+            const auto after=rulesOrigin.text.at(i)==text?before:text;
+            edits.push_back({parts[i].first,before,after});
+            nextRaw[i]=after;nextNormalized[i]=text;
+        }
+        applyProjectFileEdits(dir,edits);
+        savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
+        rulesDirty=false;
+        return true;
+    } catch(const std::exception& e) {if(err)*err=e.what();return false;}
 }
 std::vector<std::string> Project::rulesFiles() const {
     std::vector<std::string> out;
@@ -216,9 +230,13 @@ std::vector<std::string> Project::rulesFiles() const {
     return out;
 }
 bool Project::saveManifest(std::string* err) {
-    if (!writeText(dir + "/game.json", manifest.dump() + "\n", err)) return false;
-    manifestDirty = false;
-    return true;
+    try {
+        if(!savedManifestText)throw std::runtime_error("Project manifest must be loaded before saving");
+        auto next=manifest.dump()+"\n";
+        applyProjectFileEdits(dir,{{fs::path(dir)/"game.json",*savedManifestText,next}});
+        savedManifestText=std::move(next);manifestDirty=false;
+        return true;
+    } catch(const std::exception& e){if(err)*err=e.what();return false;}
 }
 
 // ================================================================= workspace
@@ -554,9 +572,10 @@ void Workspace::registerCoreOps() {
     };
     auto rulesChanged = [this](const std::string& what) {
         project.rulesDirty = true;
-        bool good = project.reloadRules();
+        if(!project.reloadRules()) throw std::runtime_error("rules rejected by the loader: " + project.rulesError);
+        std::string err;
+        if(!project.saveRules(&err)) throw std::runtime_error(err);
         note({Change::Rules, 0, 0, -1, -1, -1, what});
-        if (!good) throw std::runtime_error("rules rejected by the loader: " + project.rulesError);
     };
 
     // ---------------------------------------------------------------- games
@@ -649,9 +668,10 @@ void Workspace::registerCoreOps() {
     add("set_manifest", "Set a value in game.json (name, version, orientation, window, icon, maps, input, ...). Saved immediately. window = desktop window: {mode: windowed|fixed|maximized|fullscreen, width, height, minWidth, minHeight, keepAspect, allowFullscreen, macos|windows|linux: overrides}.",
         R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject](const Json& p) {
             needProject();
+            Json backup=project.manifest;
             *jsonPath(project.manifest, ps(p, "path"), true) = p["value"];
             std::string err;
-            if (!project.saveManifest(&err)) throw std::runtime_error(err);
+            if (!project.saveManifest(&err)) {project.manifest=std::move(backup);throw std::runtime_error(err);}
             Json r = ok();
             r.set("summary", str("game.json: " + ps(p, "path")));
             return r;
@@ -703,11 +723,10 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             *jsonPath(project.rulesJson, ps(p, "path"), true) = p["value"];
             try { rulesChanged("Правила: " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила: " + ps(p, "path")));
             return r;
@@ -716,15 +735,14 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}, "value": {"type": "object"}}, "required": ["path", "value"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             std::function<void(Json&, const Json&)> merge = [&](Json& dst, const Json& src) {
                 if (!src.isObject() || !dst.isObject()) { dst = src; return; }
                 for (auto& [k, v] : src.members()) { Json* d = dst.find(k); if (d) merge(*d, v); else dst.set(k, v); }
             };
             merge(*jsonPath(project.rulesJson, ps(p, "path"), true), p["value"]);
             try { rulesChanged("Правила: " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила (слияние): " + ps(p, "path")));
             return r;
@@ -733,11 +751,10 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}}, "required": ["path"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             if (!erasePath(project.rulesJson, ps(p, "path"))) throw std::runtime_error("path not found");
             try { rulesChanged("Правила: удалено " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила: удалено " + ps(p, "path")));
             return r;
@@ -797,10 +814,14 @@ void Workspace::registerCoreOps() {
                 if (!listed) {
                     Json e = Json::object();
                     e.set("file", str(rel)); e.set("title", str(ps(p, "title", map.data.name)));
+                    Json backup=project.manifest;
                     project.manifest.member("maps");
                     if (!project.manifest["maps"].isArray()) project.manifest.set("maps", Json::array());
                     project.manifest.find("maps")->push(e);
-                    project.saveManifest(&err);
+                    if(!project.saveManifest(&err)){
+                        project.manifest=std::move(backup);
+                        throw std::runtime_error("Map saved, but manifest update failed: "+err);
+                    }
                 }
             }
             Json r = ok();

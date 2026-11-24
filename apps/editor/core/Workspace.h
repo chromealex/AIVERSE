@@ -7,6 +7,7 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <map>
 #include <string>
@@ -26,6 +27,9 @@ struct Project {
     Json manifest = Json::object();
     Json rulesJson = Json::object();   // rules.json with its includes merged; "extends" kept as written
     JsonOrigin rulesOrigin;            // which file each part came from (saveRules writes it back there)
+    // Exact on-disk bytes, separate from normalized splitComposed comparison text.
+    std::map<size_t,std::string> savedRulesText;
+    std::optional<std::string> savedManifestText;
     game::Rules rules;
     std::string rulesError;       // last loader error (rules stay usable from the previous good state)
     bool rulesDirty = false, manifestDirty = false;

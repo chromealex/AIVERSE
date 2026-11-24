@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioSession.h"
 #include "apps/editor/AuthoringComponents.h"
+#include "apps/editor/core/ProjectFileEdits.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
 #include "apps/studio-native/StudioGameInput.h"
@@ -39,6 +40,27 @@ void mapCompoundHistoryContract(){
     map.redo();AIVERSE_TEST_CHECK(map.data.name=="committed"&&map.undoId(199)==id);
     map.beginEdit();map.data.name="trimmed";
     AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.undoId(0)!=oldest&&map.undoId(199)>id);
+}
+void projectFileEditContract(){
+    using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-files-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto a=root/"a.json",b=root/"b.json";
+    std::ofstream(a)<<"before A";std::ofstream(b)<<"before B";
+    const std::vector<ProjectFileEdit> edits={{a,"before A","after A"},{b,"before B","after B"}};
+    std::ofstream(b)<<"external B";
+    bool refused=false;try{applyProjectFileEdits(root,edits);}catch(const std::exception&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A"&&readProjectFileBytes(b)=="external B");
+    std::ofstream(b)<<"before B";
+    applyProjectFileEdits(root,edits);
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)=="after A"&&readProjectFileBytes(b)=="after B");
+    applyProjectFileEdits(root,reverseProjectFileEdits(edits));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)=="before A"&&readProjectFileBytes(b)=="before B");
+    // Unchanged dependency is still checked; it must not be overwritten.
+    std::ofstream(b)<<"external B";
+    refused=false;try{applyProjectFileEdits(root,{{a,"before A","after A"},{b,"before B","before B"}});}catch(const std::exception&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A");
+    fs::remove_all(root);
 }
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
@@ -678,6 +700,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }
