@@ -14,9 +14,14 @@ set(AIVERSE_GRPC_SOURCES GrpcUtil.cpp Channel.cpp Hpack.cpp Http2.cpp Http1.cpp)
 if(EMSCRIPTEN)
     list(APPEND AIVERSE_GRPC_SOURCES WebTransport.cpp)
 else()
-    # Each TLS file compiles to nothing on the other platforms.
-    list(APPEND AIVERSE_GRPC_SOURCES ByteStream.cpp Http2Transport.cpp GrpcWebTransport.cpp
-         TlsOpenSsl.cpp TlsApple.cpp TlsWindows.cpp TlsAndroid.cpp)
+    list(APPEND AIVERSE_GRPC_SOURCES ByteStream.cpp Http2Transport.cpp GrpcWebTransport.cpp)
+    # Apple archives must not contain empty objects from inactive TLS backends.
+    # Keep the existing desktop-JNI override path on non-Apple hosts.
+    if(APPLE)
+        list(APPEND AIVERSE_GRPC_SOURCES TlsApple.cpp)
+    else()
+        list(APPEND AIVERSE_GRPC_SOURCES TlsOpenSsl.cpp TlsWindows.cpp TlsAndroid.cpp)
+    endif()
 endif()
 add_library(aiverse_grpc STATIC EXCLUDE_FROM_ALL ${AIVERSE_GRPC_SOURCES})
 target_link_libraries(aiverse_grpc PUBLIC aiverse_protobuf aiverse_net)
