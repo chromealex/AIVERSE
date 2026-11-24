@@ -116,7 +116,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     </div>
     {batchReview&&<div className="agent__batch-review">
       <StudioAlert tone="warning" title={batchReview.direction==='undo'?'Review batch undo':'Review batch redo'}>
-        {batchReview.steps?.length??0} tracked steps. The file transaction covers saved project documents and importer settings; map changes remain unsaved until you save the map.
+        {batchReview.steps?.length??0} tracked steps. The file transaction covers saved documents and supported asset relocations. Overlapping paths or changed references are refused; map changes remain unsaved until you save the map.
       </StudioAlert>
       <div className="agent__batch-scopes">{(['map','project','assets'] as const).map(scope=><span key={scope}>{scope}: {batchReview.steps?.filter(s=>s.scope===scope).length??0}</span>)}</div>
       <div className="agent__batch-actions"><StudioButton size="sm" disabled={navigating} onClick={()=>setBatchReview(null)}>Cancel</StudioButton>

@@ -171,6 +171,8 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 bool Project::load(const std::string& d, std::string* err) {
     try {
         recoverProjectFileEdits(d);
+        if(fs::exists(fs::path(d)/".aiverse-cache"/"studio-history-batch"))
+            throw std::runtime_error("Pending coordinated asset history recovery; open in native Studio");
         auto manifestText = readProjectFileBytes(fs::path(d)/"game.json");
         Json m;
         try {m=Json::parse(manifestText);}

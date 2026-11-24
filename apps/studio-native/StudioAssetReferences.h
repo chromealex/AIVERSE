@@ -183,7 +183,9 @@ inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     const auto folder=root/"maps";
     if(fs::exists(folder)){
         if(!fs::is_directory(fs::symlink_status(folder)))throw std::runtime_error("Unsafe maps folder");
-        for(const auto& entry:fs::recursive_directory_iterator(folder)){
+        for(auto it=fs::recursive_directory_iterator(folder);it!=fs::recursive_directory_iterator();++it){
+            const auto& entry=*it;
+            if(entry.path().filename()==".aiverse-cache"){it.disable_recursion_pending();continue;}
             const auto status=entry.symlink_status();
             if(fs::is_symlink(status))throw std::runtime_error("Symlink in maps folder");
             if(fs::is_regular_file(status)&&entry.path().extension()==".json")add(entry.path());

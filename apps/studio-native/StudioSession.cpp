@@ -585,7 +585,7 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
                 row.set("guiOnly",Json::fromBool(op.guiOnly));rows.push(std::move(row));
             }
             out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));
-            out.set("coordinatedBatch",str("map-project-asset-metadata"));return out;
+            out.set("coordinatedBatch",str("map-project-assets-disjoint-relocations"));return out;
         }
         if(name=="studio_asset_move_preview"||name=="studio_asset_move_commit"){
             if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir||
@@ -1080,8 +1080,8 @@ Json StudioSession::agentBatchPreview(bool redo) const{
                 throw std::runtime_error("Save project documents before batch navigation");
             if(scope=="assets"){
                 const auto it=std::find_if(assetHistory_.steps().begin(),assetHistory_.steps().end(),[&](const auto& e){return e.id==id;});
-                if(it==assetHistory_.steps().end()||it->move||it->files.size()!=1)
-                    throw std::runtime_error("Batch currently supports asset metadata only; file moves require individual navigation");
+                if(it==assetHistory_.steps().end()||(!it->move&&it->files.size()!=1))
+                    throw std::runtime_error("Unsupported asset history entry");
             }
             links.push_back({scope,id});
         }
@@ -1110,6 +1110,10 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     std::optional<editor::ProjectHistory> stagedAssets;
     std::unique_ptr<StudioAssetCatalog> catalog;
     HistoryFileBatch files;
+    std::vector<StudioBatchRelocation> relocations;
+    std::set<std::string> relocationEndpoints;
+    std::vector<std::pair<std::string,bool>> referencePaths;
+    std::vector<std::pair<std::string,bool>> removedPaths;
     for(const auto& row:preview["steps"].items()){
         const auto scope=row.getStr("scope");
         if(scope=="map"){
@@ -1121,13 +1125,56 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
         }else if(scope=="assets"){
             if(!stagedAssets){stagedAssets.emplace(assetHistory_);catalog=std::make_unique<StudioAssetCatalog>(ws_.project.dir);}
             const auto& entry=stagedAssets->next(redo);
-            if(entry.move||entry.files.size()!=1)throw std::runtime_error("Unsupported batch asset plan");
-            const auto edits=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
-            catalog->validateMetadataEdit(edits.front());files.append(edits);
+            if(entry.move){
+                const auto& move=*entry.move;StudioBatchAssetPlan staged;
+                const auto check=[&]{
+                    std::vector<std::pair<std::string,bool>> paths;
+                    const auto materials=editor::loadMaterialLibrary(ws_);
+                    for(size_t i=0;i<move.files.size();i+=2){
+                        const auto& f=move.files[i];paths.emplace_back(f.from,f.directory);
+                        if(!move.quarantine)paths.emplace_back(f.to,f.directory);
+                        else {
+                            if(studioDocumentNamesAsset(materials,f.from,f.directory))
+                                throw std::runtime_error("Asset is referenced by materials");
+                            removedPaths.emplace_back(f.from,f.directory);
+                        }
+                    }
+                    studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
+                    referencePaths.insert(referencePaths.end(),paths.begin(),paths.end());
+                };
+                if(move.replacement)studioReplayAssetReplacement(ws_.project.dir,move,redo,&staged);
+                else if(move.quarantine)studioReplayAssetQuarantine(ws_.project.dir,move,move.created?!redo:redo,check,&staged);
+                else studioReplayAssetMove(ws_.project.dir,move,redo,check,&staged);
+                std::set<std::string> group;
+                for(const auto& op:staged.relocations){group.insert(op.from);group.insert(op.to);}
+                for(const auto& path:group)for(const auto& old:relocationEndpoints)
+                    if(path==old||path.starts_with(old+"/")||old.starts_with(path+"/"))
+                        throw std::runtime_error("Overlapping asset operations require individual navigation");
+                relocationEndpoints.insert(group.begin(),group.end());
+                relocations.insert(relocations.end(),staged.relocations.begin(),staged.relocations.end());
+                files.append(staged.documents);
+            }else{
+                if(entry.files.size()!=1)throw std::runtime_error("Unsupported batch asset plan");
+                const auto edits=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
+                catalog->validateMetadataEdit(edits.front());files.append(edits);
+            }
             stagedAssets->advance(redo);
         }else throw std::runtime_error("Unknown batch owner");
     }
+    // References must be safe in both the original and the prepared target
+    // owner state. This deliberately refuses dependencies that would require
+    // interleaving a map/rules write with a relocation.
+    if(!referencePaths.empty()){
+        const auto& map=stagedMap?*stagedMap:ws_.map;
+        const auto& project=stagedProject?*stagedProject:ws_.project;
+        studioCheckMapAssetPaths(project.dir,map.toJson(),project.rulesJson,project.manifest,referencePaths);
+    }
     auto plan=files.plan(); // validate EVERY exact on-disk baseline before writes
+    for(const auto& edit:plan)if(edit.path.filename()=="materials.json"){
+        const auto target=Json::parse(edit.after);
+        for(const auto& [path,directory]:removedPaths)if(studioDocumentNamesAsset(target,path,directory))
+            throw std::runtime_error("Coordinated target material references removed asset");
+    }
     std::unique_ptr<StudioAssetHistoryPublication> publication;
     if(stagedAssets)publication=std::make_unique<StudioAssetHistoryPublication>(ws_.project.dir);
     try{
@@ -1137,7 +1184,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
             stagedProject->savedHistoryCheckpoint=checkpoint.after;stagedProject->historyPersistenceWarning.clear();
             plan.push_back(std::move(checkpoint));
         }
-        editor::applyProjectFileEdits(ws_.project.dir,plan);
+        studioApplyHistoryBatch(ws_.project.dir,relocations,plan);
     }catch(...){
         if(publication)finishAssetHistoryPublication(*publication,false);
         throw;

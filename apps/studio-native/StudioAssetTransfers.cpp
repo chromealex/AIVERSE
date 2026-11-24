@@ -1528,7 +1528,10 @@ void studioRecoverHistoryBatch(const fs::path& project){
     if(!fs::is_directory(fs::symlink_status(folder)))throw std::runtime_error("Unsafe coordinated history journal");
     const auto pending=folder/"pending.json",committed=folder/"committed.json",rolledback=folder/"rolledback.json";
     if(existsOrSymlink(committed)||existsOrSymlink(rolledback)){
-        if(existsOrSymlink(pending))throw std::runtime_error("Ambiguous coordinated history journal");
+        if(existsOrSymlink(pending)||(existsOrSymlink(committed)&&existsOrSymlink(rolledback))||
+           (existsOrSymlink(committed)&&!fs::is_regular_file(fs::symlink_status(committed)))||
+           (existsOrSymlink(rolledback)&&!fs::is_regular_file(fs::symlink_status(rolledback))))
+            throw std::runtime_error("Ambiguous coordinated history journal");
         retireBatch(folder);return;
     }
     if(!existsOrSymlink(pending)){retireBatch(folder);return;}
@@ -1557,6 +1560,8 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
                             const std::vector<editor::ProjectFileEdit>& documents){
     if(moves.empty()){editor::applyProjectFileEdits(project,documents);return;}
     const auto root=fs::canonical(project),folder=batchFolder(root);
+    editor::project_file_detail::directory(folder.parent_path());
+    if(existsOrSymlink(folder.parent_path()/"studio-move-journal"))throw std::runtime_error("Pending asset move journal");
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
     std::vector<editor::ProjectFileEdit> docs=documents;
