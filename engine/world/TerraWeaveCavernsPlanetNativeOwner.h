@@ -43,6 +43,26 @@ public:
     size_t residentSlots()const noexcept{return activeSlots_.size();}
     size_t collect(gfx::Device& device){return geometry_.collectCompletedWithoutIdle(device);}
 
+    // Build the surface collision slots directly from the renderer's
+    // frozen plan. The native host reserves globally distinct owner cells,
+    // supplies volume replacements and keeps the same chart recipe.
+    using SurfaceCellAllocator=std::function<world::Cell(const CavePlanetSurfaceSlotKey&)>;
+    bool stageCut(gfx::Device& device,const world::SpatialWorld& spatial,
+            std::shared_ptr<const CavePlanetCutPlan> plan,
+            std::vector<CavePlanetNativeSlot> volume,uint64_t nativeRevision,
+            const SurfaceCellAllocator& surfaceCells,const ColliderIds& reserveIds){
+        if(!plan||!surfaceCells||plan->slots.size()>64||volume.size()>64)return false;
+        for(const auto& slot:volume)if(slot.id.kind!=CavePlanetSlotKind::Volume)return false;
+        volume.reserve(volume.size()+plan->slots.size());
+        for(const auto& [key,item]:plan->slots){
+            (void)item;
+            CavePlanetNativeSlot slot;
+            slot.id.kind=CavePlanetSlotKind::Surface;slot.id.surface=key;
+            slot.payload=prepareCavePlanetCutSlotPayload(frame_,*plan,key,surfaceCells(key),nativeRevision);
+            volume.push_back(std::move(slot));
+        }
+        return stage(device,spatial,std::move(plan),std::move(volume),nativeRevision,reserveIds);
+    }
     bool stage(gfx::Device& device,const world::SpatialWorld& spatial,
             std::shared_ptr<const CavePlanetCutPlan> plan,
             std::vector<CavePlanetNativeSlot> slots,uint64_t nativeRevision,
