@@ -7,6 +7,7 @@
 #include "GranularWorldIntegration.h"
 #include "PlanetGranularIntegration.h"
 #include "PlanetDebrisPublisher.h"
+#include "PlanetCharacterIntegration.h"
 #include "GranularTerraWeaveTransfer.h"
 #include <cstdint>
 #include <map>

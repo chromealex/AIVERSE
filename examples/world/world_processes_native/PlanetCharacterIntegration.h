@@ -1,11 +1,20 @@
 // Native opt-in character step. Box3D scene and capsule owner retain all
 // contact solving, movement and replication. Scene coordinates are body-local.
 #pragma once
-#include "Character.h"
-#include "PhysisBox3D.h"
+#include "engine/physics/Character.h"
+#include "engine/physics/PhysisBox3D.h"
 #include "aiverselib/world/PlanetCharacterGravityFrame.h"
 
-namespace aiverse::physics {
+namespace aiverse::examples::world_processes_native {
+using physics::Scene;
+using physics::CharacterParams;
+using physics::CharacterState;
+using physics::CharacterInput;
+using physics::Pushes;
+using physics::BodyHandle;
+using physics::kNoBody;
+using physics::physisVec3;
+using physics::stepCharacterOriented;
 inline bool stepPlanetCharacter(Scene& scene,const World& world,const game::Surface& surface,
         std::string_view body,Vec3 referenceForward,const CharacterParams& settings,
         CharacterState& state,const CharacterInput& input,b3Quat& orientation,
@@ -34,4 +43,4 @@ inline bool stepPlanetCharacter(Scene& scene,const World& world,const game::Surf
     if(out)*out=std::move(pushes);
     return true;
 }
-} // namespace aiverse::physics
+} // namespace aiverse::examples::world_processes_native
