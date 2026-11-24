@@ -51,6 +51,7 @@ import TerraweaveGeneratorPanel from './generated/TerraweaveGeneratorPanel';
 import BuildingGeneratorPanel from './generated/BuildingGeneratorPanel';
 
 import CatalogPanel from './generated/CatalogPanel';
+import FeatureReadinessPanel from './FeatureReadinessPanel';
 
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;
@@ -164,6 +165,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'building_generator': return <BuildingGeneratorPanel snapshot={snapshot} showPanel={ctx.showPanel} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
+      case 'feature_readiness': return <FeatureReadinessPanel connected={connected}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
       case 'animation': return <AnimationTimeline snapshot={snapshot} showPanel={ctx.showPanel}/>;

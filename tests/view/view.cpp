@@ -23,6 +23,28 @@ int main() {
         "parameters":{"intensity":0.0},
         "nodes":[{"id":"base","kind":"bind"}],
         "output":"base"})"));
+    // Actual evaluator instrumentation: disabled by default, counts scoped
+    // node visits, independent of copied presentation candidates.
+    AnimationGraphInstance probe;
+    probe.reset(graph);
+    AIVERSE_TEST_CHECK(!probe.executionProfileReport().getBool("available"));
+    probe.enableExecutionProfile(true);
+    probe.beginExecutionTrace();
+    Pose probePose;
+    probe.update(.016f);probe.evaluate(probePose);
+    auto measured=probe.executionProfileReport();
+    AIVERSE_TEST_CHECK(measured.getBool("available"));
+    AIVERSE_TEST_CHECK(measured["nodes"][size_t(0)]["update"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(measured["nodes"][size_t(0)]["evaluate"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(measured["events"].size()==2);
+    AIVERSE_TEST_CHECK(!probe.cloneForPreparation()->executionProfileReport().getBool("available"));
+    probe.beginExecutionTrace();probe.update(.016f);probe.evaluate(probePose);
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["nodes"][size_t(0)]["evaluate"].getStr("calls")=="2");
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["events"].size()==2);
+    probe.resetExecutionProfile();
+    AIVERSE_TEST_CHECK(probe.executionProfileReport()["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    probe.reset(graph);
+    AIVERSE_TEST_CHECK(!probe.executionProfileReport().getBool("available"));
     View view(0);
     view::Object animated;
     animated.id=101;animated.generation=7;animated.draw.model=&m;
@@ -40,6 +62,27 @@ int main() {
     AIVERSE_TEST_CHECK(view.presentation().get<lib::animation::AnimationPoseComponent>(id).valid);
     AIVERSE_TEST_CHECK(view.presentation().get<lib::animation::AnimationInputsComponent>(id)
         .overrides.values.at("intensity")==.5f);
+    graph_telemetry::History graphHistory;
+    auto first=view.animationTelemetry(101,42);
+    AIVERSE_TEST_CHECK(first.has_value());
+    AIVERSE_TEST_CHECK(first->value.getStr("sourceGeneration")=="7");
+    AIVERSE_TEST_CHECK(first->value.getStr("graphPublication")=="1");
+    AIVERSE_TEST_CHECK(first->value.getStr("updates")=="1");
+    AIVERSE_TEST_CHECK(view.captureAnimationTelemetry(101,42,graphHistory));
+    AIVERSE_TEST_CHECK(!view.captureAnimationTelemetry(101,42,graphHistory));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(202,42));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(101,0));
+    AIVERSE_TEST_CHECK(view.enableAnimationProfile(101,42));
+    auto candidate=view.prepareUpdate(objects,.016f);
+    AIVERSE_TEST_CHECK(candidate->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="1");
+    AIVERSE_TEST_CHECK(view.animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    auto candidate2=candidate->prepareUpdate(objects,.016f);
+    AIVERSE_TEST_CHECK(candidate2->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="2");
+    AIVERSE_TEST_CHECK(!candidate2->animationProfileReport(101,43).getBool("available"));
+    AIVERSE_TEST_CHECK(candidate2->resetAnimationProfile(101,42));
+    AIVERSE_TEST_CHECK(candidate2->animationProfileReport(101,42)["nodes"][size_t(0)]["update"].getStr("calls")=="0");
+    candidate2->clearAnimationProfile();
+    AIVERSE_TEST_CHECK(!candidate2->animationProfileReport(101,42).getBool("available"));
     // A rejected batch (duplicate animated source ID) must leave the View
     // untouched: no stats reset, no frame stamp / LOD hysteresis advance.
     {
@@ -57,10 +100,17 @@ int main() {
     objects[0]=animated;
     result=view.update(objects,.016f);
     AIVERSE_TEST_CHECK(result.source.restarted==1);
+    auto replacement=view.animationTelemetry(101,42);
+    AIVERSE_TEST_CHECK(replacement.has_value());
+    AIVERSE_TEST_CHECK(!view.animationProfileReport(101,42).getBool("available"));
+    AIVERSE_TEST_CHECK(replacement->value.getStr("sourceGeneration")=="8");
+    AIVERSE_TEST_CHECK(replacement->value.getStr("graphPublication")=="2");
+    AIVERSE_TEST_CHECK(graphHistory.read(replacement->identity).size()==0);
     objects.erase(objects.begin());
     result=view.update(objects,.016f);
     AIVERSE_TEST_CHECK(result.source.removed==1);
     AIVERSE_TEST_CHECK(!view.presentation().alive(id));
+    AIVERSE_TEST_CHECK(!view.animationTelemetry(101,42));
     // A generic View also accepts ordinary mesh render packets without
     // adding RTS/FPS-specific components or behavior.
     view::MeshObject mesh;

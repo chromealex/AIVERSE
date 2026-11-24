@@ -1,0 +1,14 @@
+# Shared Graph Framework — stage 34B — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Previous: beb037ca942335754e3780d2fea0dd74fcb81468.
+Planning: 445dd02a3ae45f59a2633474b6a2094741be20db.
+Implementation: 292b2ad271bc2786b91171fc3f8e42c268f9d275.
+
+Added typed logical slot lowering from the existing DAG liveness plan. Deterministic minimum-capacity-growth reuse of dead slots, ordered multiple inputs and duplicated ports, pinned target slots in caller order, pruning unreachable nodes, bounded aggregate bytes and max three inputs. Native planMaterializedDag uses scalar float32 and padded float4 for other kinds, 32 MiB logical budget. Headless-capable MCP action texture_graph_gpu_preview plan returns state=planned, executed=false, slots, passes, output mapping, resolution and budget. Studio exposes plan-only analysis for the chosen preview resolution. Existing fused/two-pass GPU execution unchanged; no actual arbitrary node shader compiler, GPU buffer allocation, final output pack, GPU fences or multi-input native dispatch yet. Logical estimates are not measured GPU memory; current native RHI owner remains authoritative.
+
+Changed paths: engine/render/graph/TextureGraphDagLowering.h, TextureGraphGpu.h; tests/render/texture_graph_dag_lowering.cpp; apps/editor/core/GraphOps.h; apps/studio-web/src/graphs/TextureGraphPanel.tsx; tests/vfx_graph_ops_test.cpp; CMakeLists.txt; docs/agents/graph-framework.md; skills/workflow/aiverse-graph-authoring/SKILL.md; docs/devlog/systems.json; docs/features/graph-framework.json.
+
+Verification: PASS isolated Linux GCC 14.2.0, c++ -std=c++20 -Wall -Wextra -Werror -I. tests/render/texture_graph_dag_lowering.cpp -o lowering_test && ./lowering_test. Output: PASS: typed capacity, multi-input order, duplicate ports/targets, output pinning, pruning, budget, binding limit, slot reuse. Exact local git hash-object values match fetched blobs at implementation HEAD: engine/render/graph/TextureGraphLiveness.h 313d7640cb2c1fccc65745d5569ccf1d80dc1995; engine/render/graph/TextureGraphPassSchedule.h c298267e63b69c59f805f9e7ecfa49dc45e33097; engine/render/graph/TextureGraphDagLowering.h f638465f28ae6b4362e93cf7bf3d6bdf23999de7; tests/render/texture_graph_dag_lowering.cpp 414bb3df42925abdba723fa247f7bdd9474d1e25. Native/headless MCP fixture added, NOT RUN; full CMake/CTest, Studio typecheck/build, real Metal/Vulkan, renderer sampling, MCP registry audit, Mac merged-tree gate NOT RUN. No main merge or release. No Mac KINGSTON available in current container.
+
+Next 34C: generate materialized node shaders using the existing expression compiler and typed ABI; add final packing, source tests and actual native adapter using validated multi-input bindings and owner fences. Retain fused fast path; do not claim native execution from planned output. 31B.2 live host and GPU-to-GPU binding remain open.

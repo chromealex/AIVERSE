@@ -7,7 +7,7 @@ Read this file completely before changing anything. The linked contracts are bin
 - NO GENRE SPLIT — EVER. All capabilities are shared engine/library code; legacy modules are adapters only. Simulation state is ECS, with one authority, deterministic ticks and explicit dependencies. Every scene object is an Entity.
 - Reuse existing owners, libraries, skills and native APIs before implementing. Never introduce a competing solver or game-specific code into the engine.
 - Own branch/worktree, sync main, preserve other agents' work; no force push or pruning another worktree. At most five active capability areas; finish or hand back before starting another.
-- Before implementation update roadmap and feature delivery record. After every stage commit a separate handoff with exact SHA, paths, real test evidence and next step, including failed stages.
+- Before implementation update roadmap and feature manifest. After every stage commit a separate handoff with exact SHA, paths, real test evidence and next step, including failed stages.
 - Never claim unrun tests passed. The merged-tree Mac quick gate remains mandatory before main. Build outputs and caches go to /Volumes/KINGSTON; no silent fallback on Mac.
 - Every applicable feature exposes native API, skill, MCP and Studio, with appropriate persistence, tests and examples. Visible features require real captures and web demos subject to the publishing contract.
 - Current release: 3.0.0 released; next 3.1.0. MAIN integrator owns release tags and publication.
@@ -18,7 +18,7 @@ Read every row marked **always**, plus all relevant conditional rows (cross-subs
 
 | Scope | Mandatory contract |
 |---|---|
-| Always: feature lifecycle | [Feature contract](docs/agents/feature-contract.md) |
+| Always: feature lifecycle | [Feature contract](docs/agents/feature-contract.md), [new-feature skill](skills/workflow/aiverse-new-feature/SKILL.md) |
 | Always: architecture, naming, ECS, code, data | [Architecture](docs/agents/contracts/architecture-common.md) |
 | Always: parallel ownership, handoff, Git | [Workflow](docs/agents/contracts/workflow-parallel.md) |
 | Always: build, tests, packaging | [Build and testing](docs/agents/contracts/build-testing.md) |
@@ -56,5 +56,5 @@ For cross-subsystem work start with `skills/workflow/aiverse-orchestrator/SKILL.
 
 ## Mandatory feature delivery gate
 
-Before implementing any new or expanded capability, read `docs/agents/feature-contract.md`. Record every applicable criterion and its evidence in the active handoff. The automated Feature Gate and manifest tooling are developed separately in PR #120; until integrated, use the manual checklist. Existing area rules and real Mac test gate remain mandatory. Do not claim feature readiness from structural validation alone.
+Before implementing any new or expanded capability, read `docs/agents/feature-contract.md` and `skills/workflow/aiverse-new-feature/SKILL.md`. Create and maintain its feature manifest; the integrator checks it with `tools/agents/check_feature.py --ready` before main. Existing area rules and real Mac test gate remain mandatory. Do not claim feature readiness from structural validation alone.
 

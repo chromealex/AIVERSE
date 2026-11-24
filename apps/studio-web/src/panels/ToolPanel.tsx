@@ -8,7 +8,10 @@ import JsonTree from './JsonTree';
 import SceneBrushBar, { type BrushKind } from './SceneBrushBar';
 import './ProjectToolPanels.css';
 import './ToolPanel.css';
-import { StudioLoader } from '../ui';
+import { StudioLoader, StudioButton } from '../ui';
+import NativeGraphPanel from '../graphs/NativeGraphPanel';
+import ModelGraphPanel from '../graphs/ModelGraphPanel';
+import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
 /** Panels with a Scene brush and the brush tools each offers. */
 const BRUSHES: Partial<Record<ToolPanelId, BrushKind[]>> = {
@@ -88,6 +91,10 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   panel: ToolPanelId; snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void;
 }) {
   const spec = TOOL_PANELS[panel];
+  const graphDomain=panel==='fx_graph'?'spectrafx':panel==='anim_graph'?'motionweave':null;
+  const modelGraph=panel==='modeling';
+  const hasGraph=!!graphDomain||modelGraph;
+  const [graphMode,setGraphMode]=useState(true);
   const [ops, setOps] = useState<ToolOpInfo[]>([]);
   const [state, setState] = useState<Record<string, unknown>>({});
   const [error, setError] = useState('');
@@ -121,6 +128,10 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   const q = filter.trim().toLowerCase();
   const shown = ops.filter(o => !spec.state.includes(o.name) && (!q || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   return <div className="tool">
+    {hasGraph&&<div className="au-row"><StudioButton size="sm" disabled={graphMode} onClick={()=>setGraphMode(true)}>Graph</StudioButton><StudioButton size="sm" disabled={!graphMode} onClick={()=>setGraphMode(false)}>Native operations</StudioButton></div>}
+    {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel domain={graphDomain} projectPath={projectPath}/></div>}
+    {modelGraph&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><ModelGraphPanel projectPath={projectPath}/></div>}
+    <div hidden={hasGraph&&graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}>
     <div className="tool__head">
       <p>{spec.intro}</p>
       <div className="tool__search"><Search size={12}/><input placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}/></div>
@@ -128,11 +139,13 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
+      {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open/>
       </div>)}
       {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} onDone={done}/>)}
+    </div>
     </div>
   </div>;
 }
