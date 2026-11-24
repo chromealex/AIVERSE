@@ -106,6 +106,7 @@ constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
 constexpr uint32_t kKeyDrawCallView = 32768;
+constexpr uint32_t kKeyModelEnvironment = 1u << 16;
 constexpr uint32_t kKeyDynamicGi = 1u << 25; // isolated opt-in model shader variant
 constexpr uint32_t kKeyMaterialInstancePalette = 1u << 27; // editor draw-call diagnostic shader permutation
 constexpr uint32_t kKeyModelVirtualTexture = 1u << 28;
@@ -486,6 +487,10 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const auto selectedGraph=sampling.graph?it.mat->shaderGraph:nullptr;
     const auto* graph=selectedGraph.get();
     const bool alphaR8=sampling.alphaR8,vtSampling=sampling.virtualTexture;
+    const bool environment=giPhase&&modelEnvironment_.valid();
+    if(environment&&(candidateGraph||availableVirtual||dynamicGi||lightmap||probes||materialCapture||matQuality_==MaterialQuality::Low||dev_->maxFragmentTextureSlots()<14)){
+        modelError_="model HDR environment conflicts with graph/VT/GI or material tier";return {};
+    }
     const int virtualAtlasSlot=sampling.atlasSlot,virtualTableSlot=sampling.tableSlot;
     const bool vtTrilinear=vtSampling&&vtBinding.indexedMipTable;
     const int graphTextureSlot=sampling.graphSlot,dynamicGiTextureSlot=sampling.dynamicGiSlot;
@@ -493,7 +498,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         modelError_="dynamic GI exceeds base PBR fragment texture budget";
         return {};
     }
-    const uint32_t shaderKey = (vtSampling ? kKeyModelVirtualTexture : 0u) |
+    const uint32_t shaderKey = (environment ? kKeyModelEnvironment : 0u) | (vtSampling ? kKeyModelVirtualTexture : 0u) |
         (vtTrilinear ? kKeyModelVirtualTrilinear : 0u) |
         (alphaR8 ? kKeyModelVirtualAlpha : 0u) |
         gpuInstanceShaderBit | (materialCapture ? 0u : studioShaderBits) |
@@ -536,6 +541,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (baked) defs += "#define BAKED 1\n";
         if (morph) defs += "#define MORPH 1\n";
         if (normalMap) defs += "#define NORMALMAP 1\n";
+        if (environment) defs += "#define AIVERSE_MODEL_ENVIRONMENT 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (alphaR8) defs += "#define VIRTUAL_ALPHA_MASK 1\n";
         if (vtSampling) defs += "#define AIVERSE_MODEL_VT 1\n";
@@ -2089,6 +2095,10 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
         candidateGraph!=nullptr,candidateGraph&&candidateGraph->usesVirtualTexture,availableVirtual,dynamicGi,availableAlphaR8,allowVirtual);
     const auto* activeGraph=sampling.graph?candidateGraph:nullptr;
     const bool drawVt=sampling.virtualTexture;
+    if((phase==1||phase==2)&&modelEnvironment_.valid()){
+        const float params[4]={modelEnvironmentRotation_,modelEnvironmentIntensity_,0.f,0.f};
+        dev_->setUniforms(6,params,sizeof params);dev_->setTexture(13,modelEnvironment_);
+    }
     const int atlasSlot=sampling.atlasSlot,tableSlot=sampling.tableSlot;
     if(dynamicGi) {
         dev_->setUniforms(drawVt?7:6,dynamicGiUniforms_.data(),dynamicGiUniforms_.size()*sizeof(float));
@@ -2651,7 +2661,7 @@ void Renderer3D::prepareGpuModelDraws() {
         const char* flag = std::getenv("AIVERSE_GPU_AUTHORED_DRAWS");
         return flag && std::strcmp(flag, "1") == 0;
     }();
-    if (!enabled || !gpuAuthoredDrawEnabled_ || !modelMultiDrawEnabled_ || !dev_ ||
+    if (modelEnvironment_.valid() || !enabled || !gpuAuthoredDrawEnabled_ || !modelMultiDrawEnabled_ || !dev_ ||
         dev_->info().backend != gfx::Backend::Metal ||
         !dev_->supportsCompute() || !dev_->frameSerial()) return;
 

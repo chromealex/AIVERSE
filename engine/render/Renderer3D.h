@@ -1315,6 +1315,13 @@ public:
     bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
 
     void setMaterialQuality(MaterialQuality q);
+    // Borrowed linear RGBA16F EnvironmentIbl atlas; caller retains it until
+    // all renderer GPU reads complete. No ownership or scene-wide fallback.
+    bool setModelEnvironment(gfx::TextureHandle atlas,float rotation=0.f,float intensity=1.f){
+        if(atlas.valid()&&(!dev_||dev_->maxFragmentTextureSlots()<14||!dev_->supports(gfx::PixelFormat::RGBA16F)||
+            !std::isfinite(rotation)||!std::isfinite(intensity)||intensity<0.f||intensity>8.f))return false;
+        modelEnvironment_=atlas;modelEnvironmentRotation_=rotation;modelEnvironmentIntensity_=intensity;return true;
+    }
     MaterialQuality materialQuality() const { return matQuality_; }
     static MaterialQuality defaultMaterialQualityFor(const gfx::Device& dev, bool mobile);
     const std::string& modelError() const { return modelError_; }   // last model shader failure
@@ -1845,6 +1852,8 @@ private:
     // Reset every beginScene; secondary elevations use SSR/environment only.
     bool reflectionPlaneValid_ = false;
     float reflectionPlaneY_ = 0.f;
+    gfx::TextureHandle modelEnvironment_{};
+    float modelEnvironmentRotation_=0.f,modelEnvironmentIntensity_=1.f;
     bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
     bool hdrFrame_ = false;
     HeightField heightField_;

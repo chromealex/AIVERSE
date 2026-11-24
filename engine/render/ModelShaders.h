@@ -207,6 +207,15 @@ uniform mediump sampler2D tex3;
 uniform mediump sampler2D tex4;
 uniform mediump sampler2D tex5;
 uniform mediump sampler2D tex6;
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+uniform highp sampler2D tex13;
+layout(std140) uniform U6 { vec4 u_environment; };
+vec3 environmentBand(vec3 d,float band) {
+    float u=fract(atan(d.z,d.x)/6.28318530718+0.5+u_environment.x/6.28318530718);
+    float v=acos(clamp(d.y,-1.0,1.0))/3.14159265359;
+    return texture(tex13,vec2((1.0+u*128.0)/130.0,(band*66.0+1.0+v*64.0)/330.0)).rgb*u_environment.y;
+}
+#endif
 #if defined(LIGHTMAP)
 uniform mediump sampler2D tex7;
 uniform mediump sampler2D tex8;
@@ -410,6 +419,9 @@ void main() {
     vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    amb=environmentBand(n,4.0)*ambientVisibility;
+#endif
     float giOcc = 1.0;   // specular occlusion from the baked light
     int giMode = 0;
 #if defined(PROBES)
@@ -450,6 +462,10 @@ void main() {
     vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
     vec3 R = reflect(-V, n);
     vec3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    float band=rough*3.0,lo=floor(band);
+    env=mix(environmentBand(R,lo),environmentBand(R,min(lo+1.0,3.0)),fract(band))*ambientVisibility;
+#endif
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     vec3 direct = sun * ndl * sh;
@@ -862,6 +878,13 @@ struct IcbPbrTextures {
 };
 #endif
 
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+static float3 environmentBand(texture2d<float> env,sampler smp,float4 params,float3 d,float band){
+    float u=fract(atan2(d.z,d.x)/6.28318530718f+0.5f+params.x/6.28318530718f);
+    float v=acos(clamp(d.y,-1.0f,1.0f))/3.14159265359f;
+    return env.sample(smp,float2((1.0f+u*128.0f)/130.0f,(band*66.0f+1.0f+v*64.0f)/330.0f)).rgb*params.y;
+}
+#endif
 fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         constant U1& f [[buffer(2)]], constant MU2& sourceMaterial [[buffer(3)]],
                         constant LightU& lu [[buffer(6)]],
@@ -890,6 +913,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
 #endif
                         GI_FARGS
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+                        , constant float4& environment [[buffer(7)]], texture2d<float> tex13 [[texture(13)]], sampler s13 [[sampler(13)]]
+#endif
 #if defined(VIRTUAL_ALPHA_MASK) && !defined(AIVERSE_ICB_PBR)
                         , texture2d<float> tex15 [[texture(15)]],
                           sampler s15 [[sampler(15)]]
@@ -1088,6 +1114,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    amb=environmentBand(tex13,s13,environment,n,4.0f)*ambientVisibility;
+#endif
     float giOcc = 1.0;
     int giMode = 0;
 #if defined(PROBES)
@@ -1128,6 +1157,10 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float2 AB = float2(-1.04, 1.04) * a004 + r.zw;
     float3 R = reflect(-V, n);
     float3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    float band=rough*3.0f,lo=floor(band);
+    env=mix(environmentBand(tex13,s13,environment,R,lo),environmentBand(tex13,s13,environment,R,min(lo+1.0f,3.0f)),fract(band))*ambientVisibility;
+#endif
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     float3 direct = sun * ndl * sh;
