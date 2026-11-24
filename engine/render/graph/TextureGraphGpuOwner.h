@@ -29,8 +29,8 @@ struct ResidentMaterialOptions {
     bool mipmaps=true;
     bool fusePointwise=false;
     bool incremental=false;
-    bool incrementalOutputs=false; // target-bound FenceOnly material path
     int timeoutMs=60000;
+    bool incrementalOutputs=false; // target-bound FenceOnly material path
 };
 class TextureGraphGpuOwner {
     gpu::TextureRequestQueue pendingRequests_;
@@ -460,7 +460,7 @@ public:
             const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},
             const view::LiveAppearanceMaterialTarget& target={}){
         auto p=residentRequest(graph,overrides,options);
-        if(options.incrementalOutputs){p.set("expectedModelPublication",Json::string(std::to_string(target.publication)));
+        if(options.incrementalOutputs){if(target.material>65535)throw std::invalid_argument("invalid incremental material index");p.set("expectedModelPublication",Json::string(std::to_string(target.publication)));
             p.set("expectedVersion",Json::string(std::to_string(target.version)));p.set("materialIndex",Json::number(int64_t(target.material)));}
         return start(p,scope,lease);
     }
@@ -801,6 +801,8 @@ public:
     void tick(gfx::Device& dev,const std::string& project,graph_gpu_profile::Capture* profile=nullptr){
         checkProject(project);
         promoteQueue(dev,project);
+        if(lastOutputReceipt_&&(!dev.gpuHealthy()||!gpuTransferLease_.validFor(dev)||
+           lastOutputReceipt_->epoch!=gpuTransferLease_.generation()))lastOutputReceipt_.reset();
         // Request-wide monotonic deadline, evaluated at owner frame boundaries.
         if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
         if((gpuTransferRequested_||matIncremental_)&&!gpuTransferLease_.validFor(dev)){
