@@ -97,7 +97,10 @@
     "engine/render/graph/TextureGraphKernelSource.h",
     "tests/render/texture_graph_kernel_source.cpp",
     "engine/render/graph/TextureGraphMaterializedDispatch.h",
-    "tests/render/texture_graph_materialized_dispatch.cpp"
+    "tests/render/texture_graph_materialized_dispatch.cpp",
+    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
+    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -108,7 +111,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34D opt-in native materialized DAG dispatch integrated through existing preview owner; actual GPU/compiler and integrated host validation pending.",
+      "note": "Stage 35A in progress: read-only native building recipe/inspection graph adapter; owner PR #114 remains separate.",
       "evidence": []
     },
     "architecture": {
