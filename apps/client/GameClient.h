@@ -155,6 +155,7 @@ public:
     bool hostCanControl() const;
     bool hostPaused() const;
     bool hostCanStep() const;
+    size_t hostMapIndex() const{return mapIndex_;}
     bool setHostPaused(bool paused);
     bool requestHostStep();
 

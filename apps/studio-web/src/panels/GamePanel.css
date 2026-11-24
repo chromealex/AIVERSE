@@ -7,3 +7,6 @@
 .studio-game .au-panel__actions { flex:1 1 auto; flex-wrap:wrap; justify-content:flex-end; }
 .studio-game .au-panel__footer { gap:var(--au-space-2); flex-wrap:wrap; }
 .studio-game__surface--device { background:#05070b; }
+
+.studio-game__review { padding:var(--au-space-2) var(--au-space-4); max-height:240px; overflow:auto; border-bottom:1px solid var(--au-line); }
+.studio-game__review-options { display:flex; align-items:center; flex-wrap:wrap; gap:var(--au-space-2); }

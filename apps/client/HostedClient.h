@@ -58,6 +58,7 @@ public:
     bool capturing() const { return captured_; }
     Simulation* simulation();
     bool inMatch() const;
+    std::optional<size_t> currentMapIndex() const;
     std::string errorText() const;
     bool canControl() const;
     bool paused() const;

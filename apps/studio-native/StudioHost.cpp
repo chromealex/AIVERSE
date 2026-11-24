@@ -226,6 +226,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     projectLoading_ = true;
     if (game_) game_->stop();
+    playReview_=Json();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -275,7 +276,7 @@ bool StudioHost::confirmClose() {
 
 // ---------------------------------------------------------------- tick
 Json StudioHost::gameState() {
-    if (game_) return game_->state();
+    if (game_) {auto out=game_->state();out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
     out.set("device", StudioGameDevice{}.json());
     return out;
@@ -1392,16 +1393,38 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (!game_) throw std::runtime_error("No game is running");
         return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
     });
+    if(method=="studio.previewPlayChanges")return answer([&] {
+        playReview_=Json();
+        if(!game_||!game_->canReview(session_->workspace()))
+            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
+        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
+            throw std::runtime_error("Play review project changed");
+        for(const char* flag:{"positions","amounts","removeDead"})
+            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
+        const auto states=game_->mapEntityStates();
+        Json p=Json::object(),r=Json::object();
+        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
+        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
+        r.set("id",req["id"]);r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
+        const auto preview=session_->dispatch(r);
+        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
+        const auto token=std::to_string(++playReviewSerial_);
+        playReview_.set("token",Json::string(token));playReview_.set("epoch",game_->state()["epoch"]);
+        playReview_.set("states",states);p.erase("dryRun");playReview_.set("params",p);
+        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
+    });
     if (method == "studio.keepPlayChanges") {
-        // The running game's map entities (positions, amounts, removed) go to the map as one History step.
+        // Only a reviewed native capture may be committed; never trust browser entity rows.
         Json reply = Json::object();
         reply.set("id", req["id"]);
         try {
-            if (!game_) throw std::runtime_error("No game is running");
-            const auto states = game_->mapEntityStates();
-            Json r = Json::object(), p = Json::object();
-            p.set("entities", states["entities"]);
-            p.set("removeDead", Json::fromBool(params.getBool("removeDead")));
+            const auto review=std::move(playReview_);playReview_=Json();
+            if(!game_||!game_->canReview(session_->workspace())||
+                params.getStr("expectedProject")!=session_->workspace().project.dir||
+                params.getStr("token").empty()||params.getStr("token")!=review.getStr("token")||
+                game_->state()["epoch"]!=review["epoch"]||game_->mapEntityStates()!=review["states"])
+                throw std::runtime_error("Play review expired; capture a new preview");
+            Json r=Json::object(),p=review["params"];
             r.set("id", req["id"]); r.set("method", Json::string("studio.keepPlayChanges")); r.set("params", p);
             reply = session_->dispatch(r);
             if (!reply.has("error")) sendEvent("document.changed", "");
@@ -1427,12 +1450,20 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            playReview_=Json();
             game_->start(plan, engineRoot_ + "/engine/assets");
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) game_->stop();
+        } else if (method == "studio.gameStop" && game_) {playReview_=Json();game_->stop();}
         else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            game_->control(params.getStr("action"));
+            playReview_=Json();
+            if(params.getStr("action")=="restart"){
+                if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
+                const auto old=game_->launchPlan();
+                auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+                plan.camera=old.camera;
+                game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
+            }else game_->control(params.getStr("action"));
         }
         return gameState();
     });

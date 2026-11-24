@@ -77,6 +77,9 @@ Extend the existing `runtime` panel and `StudioRuntimeInspect`; no competing ins
 ## Runtime Debugger (S4)
 The existing Runtime panel exposes only owner-approved Unit HP (strictly positive, no resurrection/death shortcut) and finite configured Energy, via `studio.gameEdit`. Native requires editor-paused controllable local play, exact expectedProject/epoch/ref/tick/previous fixed raw, current domain bounds, live eligible non-dormant on-map entity; decimal input is bounded before fixed-point conversion. Shared UnitVitals setters also serve existing scripts. No arbitrary component patches, transform/ownership edits, network/MCP mutation, scene changes or deterministic replay command. Other schemas remain read-only until owners supply explicit adapters. Session is marked debug-modified. Stop/restart discards temporary session data; ordinary Keep Play Changes remains a separate explicit authoring workflow.
 
+## Play Mode review (S5)
+Keep the existing HostedClient and independent scene document. Play requires saved project/map; Restart revalidates the saved launch mode. Review is paused local saved-map only, checks project/path/revision and actual match map index. Native preview calculates exact category counts without editing; native one-shot token binds captured entity states, epoch, tick and selected options. Apply rechecks the native snapshot and source, then commits the reviewed categories as one MapDoc History step. No browser-supplied rows, no direct title-bar keep shortcut, no automatic keep on Stop. Delete is explicitly opt-in. A successful change invalidates the launch revision; save/restart for another review. No transfer of runtime-spawned entities, HP/Energy, arbitrary components or remote worlds.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

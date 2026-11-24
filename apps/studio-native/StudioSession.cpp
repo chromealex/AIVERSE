@@ -2430,18 +2430,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json& states=params["entities"];
             if (!states.isArray() || states.size()>200000) throw std::runtime_error("Invalid play state");
             const bool removeDead=params.getBool("removeDead");
-            auto& d=ws_.map.data;
+            const bool positions=params.getBool("positions",true),amountsEnabled=params.getBool("amounts",true);
+            const bool dryRun=params.getBool("dryRun");
+            auto staged=ws_.map.data;auto& d=staged;
             std::vector<size_t> dead;
             int moved=0,amounts=0,skipped=0;
             bool begun=false;
-            auto begin=[&]{if(!begun){ws_.map.beginEdit();begun=true;}};
+            auto begin=[&]{begun=true;};
             for (const auto& st:states.items()) {
                 const int64_t i=st["index"].integer(-1);
                 if (i<0 || i>=int64_t(d.entities.size())) {++skipped;continue;}
                 auto& e=d.entities[size_t(i)];
                 if (st.getBool("removed")) { if(removeDead)dead.push_back(size_t(i)); continue; }
                 if (st.has("type") && st.getStr("type")!=e.type) {++skipped;continue;}
-                if (st["x"].isNumber() && st["z"].isNumber()) {
+                if (positions&&st["x"].isNumber() && st["z"].isNumber()) {
                     const float x=float(st["x"].toDouble()),z=float(st["z"].toDouble());
                     if (std::isfinite(x)&&std::isfinite(z)&&std::hypot(x-e.x,z-e.z)>0.01f) {
                         begin();e.x=x;e.z=z;
@@ -2453,7 +2455,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         ++moved;
                     }
                 }
-                if (st["amount"].isNumber()) {
+                if (amountsEnabled&&st["amount"].isNumber()) {
                     const float a=float(st["amount"].toDouble());
                     // A map entity without an amount uses its type's default: only a real change is kept.
                     const float current=e.amount>=0?e.amount:float(st["defaultAmount"].toDouble(double(a)));
@@ -2463,6 +2465,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             int removed=0;
             if (!dead.empty()) {
                 std::sort(dead.rbegin(),dead.rend());
+                dead.erase(std::unique(dead.begin(),dead.end()),dead.end());
                 begin();
                 for (size_t idx:dead) {
                     // Roads are entity index pairs: drop the ones that end here, shift the rest.
@@ -2475,12 +2478,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     d.entities.erase(d.entities.begin()+long(idx));
                     ++removed;
                 }
-                clearSelection();dropOrdinalFlags();
             }
-            if (begun) { ws_.map.touched(); ws_.log("studio","Keep play changes: "+std::to_string(moved)+" moved, "+std::to_string(amounts)+" amounts, "+std::to_string(removed)+" removed"); }
+            if(begun&&!dryRun){
+                ws_.map.beginEdit();ws_.map.data=std::move(staged);
+                if(removed){clearSelection();dropOrdinalFlags();}
+                ws_.map.touched();ws_.log("studio","Keep play changes: "+std::to_string(moved)+" moved, "+std::to_string(amounts)+" amounts, "+std::to_string(removed)+" removed");
+            }
             Json out=Json::object();
             out.set("moved",num(int64_t(moved)));out.set("amounts",num(int64_t(amounts)));out.set("removed",num(int64_t(removed)));
-            out.set("skipped",num(int64_t(skipped)));out.set("snapshot",snapshot());
+            out.set("skipped",num(int64_t(skipped)));if(!dryRun)out.set("snapshot",snapshot());
             reply.set("result",std::move(out));
         } else if (method == "studio.splineEdit") {
             // Roads / Water panels: show node handles in the Scene ("road" | "river" | "" off).

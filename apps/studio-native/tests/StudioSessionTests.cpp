@@ -333,6 +333,9 @@ void authoredEntityWorkflow() {
        const std::string type0=doc.data.entities[0].type;
        const size_t count=doc.data.entities.size(),depth=doc.undoDepth();
        const std::string body=std::string(R"({"entities":[{"index":0,"type":")")+type0+R"(","x":7.5,"z":9.25},{"index":999,"type":"__nope__","x":1,"z":1},{"index":0,"removed":false}]})";
+       auto dry=Json::parse(body);dry.set("dryRun",Json::fromBool(true));
+       const auto preview=call("studio.keepPlayChanges",dry.dump().c_str());
+       AIVERSE_TEST_CHECK(!preview.has("error") && preview["result"]["moved"].integer()==1 && doc.undoDepth()==depth);
        const auto kept=call("studio.keepPlayChanges",body.c_str());
        AIVERSE_TEST_CHECK(!kept.has("error") && kept["result"]["moved"].integer()==1 && kept["result"]["skipped"].integer()==1 && kept["result"]["removed"].integer()==0);
        AIVERSE_TEST_CHECK(doc.data.entities[0].x==7.5f && doc.data.entities[0].z==9.25f && doc.data.entities.size()==count && doc.undoDepth()==depth+1);
@@ -513,6 +516,9 @@ void entityWorkflow() {
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);
         AIVERSE_TEST_CHECK(plan.project==session.workspace().project.dir);
+        AIVERSE_TEST_CHECK(studio::studioPlaySourceMatches(plan,session.workspace()));
+        auto stalePlan=plan;++stalePlan.sourceRevision;
+        AIVERSE_TEST_CHECK(!studio::studioPlaySourceMatches(stalePlan,session.workspace()));
         AIVERSE_TEST_CHECK(!studio::studioGameLaunch(session.workspace(),false).map);
         const auto catalog=call("studio.entityCatalog");
         AIVERSE_TEST_CHECK(catalog["result"].getBool("mapEntities"));
