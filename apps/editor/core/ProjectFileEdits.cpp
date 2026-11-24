@@ -11,13 +11,16 @@ bool recoverProjectFileEdits(const std::filesystem::path& project){
 void applyProjectFileEdits(const std::filesystem::path& project,const std::vector<ProjectFileEdit>& edits){
     if(edits.empty())return;
     ProjectDocumentJournal journal(project);
-    journal.begin(edits);
+    if(!journal.begin(edits))return;
     try{
         for(size_t i=0;i<edits.size();++i)journal.publish(i);
         journal.commit();
     }catch(const std::exception& failure){
         const std::string reason=failure.what();
-        try{journal.recover();}
+        try{
+            const bool rolledBack=journal.recover();
+            if(!rolledBack)throw std::runtime_error("Commit outcome uncertain; reopen project before further edits");
+        }
         catch(const std::exception& e){throw std::runtime_error(reason+"; project document recovery incomplete: "+e.what());}
         throw std::runtime_error(reason);
     }

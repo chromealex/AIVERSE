@@ -1134,7 +1134,7 @@ Json StudioSession::historyJson() const {
     return out;
 }
 std::string StudioSession::assetHistoryVersion() const {
-    return ws_.project.dir+"|assets|"+std::to_string(assetHistory_.version());
+    return ws_.project.dir+"|assets|"+assetHistory_.versionToken();
 }
 Json StudioSession::assetHistoryJson() const {
     Json out=Json::object(),steps=Json::array();

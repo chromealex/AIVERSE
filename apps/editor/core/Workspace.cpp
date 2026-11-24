@@ -255,7 +255,7 @@ bool Project::saveManifest(std::string* err,const std::string& historyLabel) {
     } catch(const std::exception& e){if(err)*err=e.what();return false;}
 }
 std::string Project::historyVersion() const {
-    return dir+"|project|"+std::to_string(documentHistory.version());
+    return dir+"|project|"+documentHistory.versionToken();
 }
 Json Project::historyStatus() const {
     Json out=Json::object(),steps=Json::array();

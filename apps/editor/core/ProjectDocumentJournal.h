@@ -148,14 +148,15 @@ public:
     ProjectDocumentJournal(const ProjectDocumentJournal&)=delete;
     ProjectDocumentJournal& operator=(const ProjectDocumentJournal&)=delete;
     // Prepare only; useful for fault-injection at each publication boundary.
-    void begin(const std::vector<ProjectFileEdit>& edits){
+    bool begin(const std::vector<ProjectFileEdit>& edits){
         namespace fs=std::filesystem;using namespace project_file_detail;
         if(journalExists(folder_))throw std::runtime_error("Pending project document recovery; reopen the project");
         if(edits.size()>MaxFiles)throw std::runtime_error("Too many project document dependencies");
-        std::set<fs::path> paths;size_t bytes=0;
+        std::set<fs::path> paths;size_t bytes=0;bool changed=false;
         Json rows=Json::array();
         for(const auto& edit:edits){
-            const auto relative=fs::absolute(edit.path).lexically_normal().lexically_relative(root_).generic_string();
+            if(!fs::is_regular_file(fs::symlink_status(edit.path)))throw std::runtime_error("Invalid project document source");
+            const auto relative=fs::canonical(edit.path).lexically_relative(root_).generic_string();
             const auto target=safeTarget(root_,relative);
             if(!paths.insert(target).second||readProjectFileBytes(target)!=edit.before)
                 throw std::runtime_error("Project document changed or duplicated: "+target.string());
@@ -163,12 +164,13 @@ public:
                 if(size>MaxBytes-bytes)throw std::runtime_error("Project document journal size limit");
                 bytes+=size;
             }
+            changed=changed||edit.before!=edit.after;
             Json row=Json::object();row.set("path",Json::string(relative));
             row.set("beforeHash",Json::string(digest(edit.before)));row.set("afterHash",Json::string(digest(edit.after)));
             row.set("permissions",Json::number(int64_t(fs::status(target).permissions()&fs::perms::mask)));
             rows.push(std::move(row));
         }
-        if(edits.empty())return;
+        if(!changed)return false;
         if(!fs::create_directory(folder_))throw std::runtime_error("Cannot reserve project document journal");
         try{
             for(size_t i=0;i<edits.size();++i){
@@ -178,6 +180,7 @@ public:
             write(folder_/"manifest.tmp",state.dump(2)+"\n");
             replace(folder_/"manifest.tmp",folder_/"pending.json");
             sync(folder_);sync(cache_);sync(root_);
+            return true;
         }catch(...){
             // No live files have changed. Retain a published marker if present.
             if(!journalExists(folder_/"pending.json")){std::error_code ec;fs::remove_all(folder_,ec);}
@@ -193,14 +196,15 @@ public:
         const auto& steps=*prepared_;
         if(i>=steps.size())throw std::runtime_error("Invalid project journal publication index");
         const auto& s=steps[i];
+        validateTarget(s);
         if(readProjectFileBytes(s.path)!=s.before)throw std::runtime_error("Project document changed before publication: "+s.path.string());
         if(s.before!=s.after)put(s,s.after);
     }
     void commit(){
         namespace fs=std::filesystem;using namespace project_file_detail;
         const auto steps=load(); // independently verify the durable snapshots
-        for(const auto& s:steps)if(readProjectFileBytes(s.path)!=s.after)
-            throw std::runtime_error("Project document changed before commit: "+s.path.string());
+        for(const auto& s:steps){validateTarget(s);if(readProjectFileBytes(s.path)!=s.after)
+            throw std::runtime_error("Project document changed before commit: "+s.path.string());}
         replace(folder_/"pending.json",folder_/"committed.json");
         // Committed marker is durable on supported POSIX filesystems.
         cleanup();
@@ -219,6 +223,7 @@ public:
         const auto steps=load();std::vector<bool> changed;
         // Preflight the complete transaction before restoring even one file.
         for(const auto& s:steps){
+            validateTarget(s);
             const auto current=readProjectFileBytes(s.path);
             if(current!=s.before&&current!=s.after)
                 throw std::runtime_error("Project recovery conflict; retained journal: "+s.path.string());
@@ -271,8 +276,14 @@ private:
         }
         return steps;
     }
+    void validateTarget(const Step& s)const{
+        const auto path=project_file_detail::safeTarget(root_,s.path.lexically_relative(root_).generic_string());
+        if(path!=s.path||(std::filesystem::status(path).permissions()&std::filesystem::perms::mask)!=s.permissions)
+            throw std::runtime_error("Project document path or permissions changed: "+s.path.string());
+    }
     void put(const Step& s,const std::string& bytes){
         namespace fs=std::filesystem;using namespace project_file_detail;
+        validateTarget(s);
         const auto staged=folder_/"publish.tmp";
         if(journalExists(staged)){
             if(!fs::is_regular_file(fs::symlink_status(staged)))throw std::runtime_error("Unsafe project publication staging file");

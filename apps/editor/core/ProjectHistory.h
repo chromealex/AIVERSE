@@ -8,6 +8,9 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <random>
+#include <chrono>
+#include <atomic>
 
 namespace aiverse::editor {
 class ProjectHistory {
@@ -30,6 +33,7 @@ public:
     size_t position() const noexcept {return position_;}
     size_t bytes() const noexcept {return bytes_;}
     uint64_t version() const noexcept {return version_;}
+    std::string versionToken() const {return epoch_+":"+std::to_string(version_);}
     bool canUndo() const noexcept{return position_>0;}
     bool canRedo() const noexcept{return position_<steps_.size();}
     const Step& next(bool redo) const {
@@ -72,6 +76,12 @@ public:
         }catch(...){reset();}
     }
 private:
+    static std::string newEpoch(){
+        static std::atomic<uint64_t> serial{0};std::random_device random;
+        return std::to_string(std::chrono::system_clock::now().time_since_epoch().count())+"-"+
+            std::to_string(++serial)+"-"+std::to_string(random())+"-"+std::to_string(random());
+    }
+    std::string epoch_=newEpoch();
     std::vector<Step> steps_;
     size_t position_=0,bytes_=0;
     uint64_t version_=0;

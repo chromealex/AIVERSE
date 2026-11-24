@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioSession.h"
 #include "apps/editor/AuthoringComponents.h"
 #include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/editor/core/ProjectDocumentJournal.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
 #include "apps/studio-native/StudioGameInput.h"
@@ -60,6 +61,61 @@ void projectFileEditContract(){
     std::ofstream(b)<<"external B";
     refused=false;try{applyProjectFileEdits(root,{{a,"before A","after A"},{b,"before B","before B"}});}catch(const std::exception&){refused=true;}
     AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A");
+    fs::remove_all(root);
+}
+void projectDocumentJournalContract(){
+    using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-doc-journal-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto a=root/"game.json",b=root/"rules.json",dep=root/"include.json";
+    const std::string beforeA=R"({"name":"Before","rules":"rules.json"})",afterA=R"({"name":"After","rules":"rules.json"})";
+    const std::string beforeB=R"({"types":{"unit":{"health":{"max":100}}}})",afterB=R"({"types":{"unit":{"health":{"max":200}}}})";
+    std::ofstream(a)<<beforeA;std::ofstream(b)<<beforeB;std::ofstream(dep)<<"dependency";
+    const std::vector<ProjectFileEdit> edits={{a,beforeA,afterA},{b,beforeB,afterB},{dep,"dependency","dependency"}};
+    const auto folder=root/".aiverse-cache"/"project-document-journal";
+    for(size_t count=0;count<=edits.size();++count){
+        {
+            ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));
+            for(size_t i=0;i<count;++i)journal.publish(i);
+            // Destruction without commit simulates interrupted process publication.
+        }
+        AIVERSE_TEST_CHECK(recoverProjectFileEdits(root));
+        AIVERSE_TEST_CHECK(readProjectFileBytes(a)==beforeA&&readProjectFileBytes(b)==beforeB&&!fs::exists(folder));
+        AIVERSE_TEST_CHECK(!recoverProjectFileEdits(root));
+    }
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));journal.publish(0);
+    }
+    std::ofstream(dep)<<"external";
+    bool refused=false;
+    try{(void)recoverProjectFileEdits(root);}catch(const std::runtime_error&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)==afterA&&readProjectFileBytes(dep)=="external"&&fs::exists(folder));
+    std::ofstream(dep)<<"dependency";
+    AIVERSE_TEST_CHECK(recoverProjectFileEdits(root)&&readProjectFileBytes(a)==beforeA);
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));journal.publish(0);
+    }
+    std::ofstream(folder/"1.before",std::ios::binary|std::ios::trunc)<<"corrupt backup";
+    refused=false;
+    try{(void)recoverProjectFileEdits(root);}catch(const std::runtime_error&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)==afterA);
+    std::ofstream(folder/"1.before",std::ios::binary|std::ios::trunc)<<beforeB;
+    // Project owner recovery happens before parsing manifest/rules.
+    Project project;std::string error;
+    AIVERSE_TEST_CHECK(project.load(root.string(),&error)&&project.manifest.getStr("name")=="Before");
+    AIVERSE_TEST_CHECK(project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));
+        for(size_t i=0;i<edits.size();++i)journal.publish(i);
+        // Simulate a durable commit marker left behind before cleanup.
+        fs::rename(folder/"pending.json",folder/"committed.json");
+    }
+    AIVERSE_TEST_CHECK(!recoverProjectFileEdits(root));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)==afterA&&readProjectFileBytes(b)==afterB&&!fs::exists(folder));
+    applyProjectFileEdits(root,reverseProjectFileEdits(edits));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)==beforeA&&readProjectFileBytes(b)==beforeB);
+    ProjectHistory other;
+    AIVERSE_TEST_CHECK(project.documentHistory.versionToken()!=other.versionToken());
     fs::remove_all(root);
 }
 void projectOwnerSaveContract(){
@@ -839,6 +895,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }
