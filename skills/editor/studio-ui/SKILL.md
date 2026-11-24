@@ -59,6 +59,12 @@ Use only `--au-*` tokens for new colors, spacing, radii, typography, focus and h
 - ECS components and scene object data shown in Inspector must come from real native editor/runtime sources. Unknown/unimplemented UI displays a truthful state instead of invented components.
 - Preserve safe typed bridge APIs and existing actions. No browser-side direct project-file writes, arbitrary shell calls, unsafe JSON writes or new ImGui UI.
 
+## World Persistence panel (W1.26b)
+
+Panel ID `world_persistence`, implementation `apps/studio-web/src/panels/WorldPersistencePanel.tsx`, uses the shared UI kit and typed `StudioWorldOps` DTOs via `studio.op`. Check actual `studio.ops` discovery; do not fabricate saves in browser mocks. Backend dependency: Open World branch feature/aiv20261123_open_world_audit (W1.26a, 72560879). Integrate both branches before native acceptance.
+
+Offline maintenance is exclusive, project-scoped and never implicitly stops a server. Every world_save request carries expectedProject and native dispatch checks it against the currently open project. Preserve exact decimal strings for IDs/revisions/generations. Retention deletion requires a fresh preview and explicit confirmation of the exact list. Region map is a projection of occupied ledger cells, not collision residency or 3D rendering. The capacity bar represents ledger records, not RAM. W1.26c runs maintenance via world_job_start/status/cancel/release. Poll actual checkpoint bytes, WAL frames and asset reads; checkpoint progress is not total operation progress. Indeterminate phases remain labelled as such. Cancel only if cancelAllowed. On panel remount discover the retained job slot; never automatically resubmit an ambiguous operation. Native dispatch binds job start to expectedProject; polling/releasing an old project job is allowed by ID.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
