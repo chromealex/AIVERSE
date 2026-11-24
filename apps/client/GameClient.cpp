@@ -317,7 +317,9 @@ render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTexture
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
     if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_||runtimeTextureGraph_.status().getBool("busy"))
         throw std::runtime_error("runtime texture collection requires an idle live presentation host");
-    return view_.collectGraphMaterialImages(type,choice,material,target,external);
+    const auto result=view_.collectGraphMaterialImages(type,choice,material,target,external);
+    if(result.detached)runtimeTextureGraph_.invalidateOutputReuseReceipt();
+    return result;
 }
 Json GameClient::runtimeTextureMaterialStatus()const{
     auto r=runtimeTextureGraph_.status();
@@ -1274,7 +1276,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         r3d_.collectRetiredTargets();
     if(r3d_.hasPendingModelPipelineJobs())
         r3d_.pollPendingModelPipelineJobs();
-    if(view_.automaticGraphImageCollectionEnabled()&&!runtimeTextureTask_){
+    if(inMatch()&&view_.automaticGraphImageCollectionEnabled()&&!runtimeTextureTask_){
         const auto graphState=runtimeTextureGraph_.status();
         if(!graphState.getBool("busy")&&!graphState.getBool("gpuTextureSetReady")&&view_.collectAutomaticGraphImages())
             runtimeTextureGraph_.invalidateOutputReuseReceipt();

@@ -690,6 +690,7 @@ void GameView::shutdown(gfx::Device& dev) {
     // All model GPU buffers and textures are now released by the same
     // per-host resource owner, after any asynchronous preparation joined.
     resources_.shutdown(dev);
+    setAutomaticGraphImageCollection({}); // do not carry external native callbacks into a new host epoch
     drawTypeStamps_.clear(); drawTypes_.clear(); drawTypeEpoch_ = 0;
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);

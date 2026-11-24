@@ -47,6 +47,11 @@ Json Editor::graphMaterialOp(const Json& p){
         r.set("proceduralLiveImages",Json::number(int64_t(current->proceduralLive)));
         r.set("proceduralTombstones",Json::number(int64_t(current->proceduralTombstones)));
         r.set("pendingImageRetirement",Json::number(int64_t(current->pendingImageRetirement)));
+        const auto sweep=view_.automaticGraphImageCollectionStats();
+        r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
+        r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));
+        r.set("automaticCollectionDetached",Json::string(std::to_string(sweep.detached)));
+        r.set("automaticCollectionDeferred",Json::string(std::to_string(sweep.deferred)));
         r.set("persistent",Json::fromBool(false));return r;
     }
     if(action!="applyMaterial")throw std::invalid_argument("unknown live material action");
