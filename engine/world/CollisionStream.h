@@ -1,6 +1,7 @@
 #pragma once
 #include "WorldAssets.h"
 #include <cstdint>
+#include <atomic>
 
 namespace aiverse::world {
 
@@ -38,6 +39,7 @@ public:
     uint64_t revision() const { return revision_; }
     const AsyncChunkStream::Status& status()const{return stream_->status();}
     const WorldAssets& assets()const{return assets_;}
+    bool contentIntegrityFailed()const noexcept{return contentIntegrityFailed_.load();}
 private:
     struct Prepared final:AsyncChunkStream::Resource { ChunkCollision collision; };
     WorldAssets assets_;
@@ -45,6 +47,7 @@ private:
     std::map<Cell,std::vector<uint32_t>> ids_;
     std::map<Cell,TerrainTile> terrain_;
     uint64_t revision_=0;
+    std::atomic<bool> contentIntegrityFailed_{false};
     std::unique_ptr<AsyncChunkStream> stream_;
     bool publish(Cell,const AsyncChunkStream::Payload&);
     void retire(Cell);
