@@ -11,12 +11,18 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace aiverse::building {
 
+struct BuildingDualLeafSessionCheckpoint {
+    uint64_t lastTick=0;
+    std::map<uint64_t,uint64_t> accepted;
+    std::vector<BuildingApertureCommand> queue;
+};
 struct BuildingDualLeafCommandResult {
     Entity actor{};
     uint64_t sequence=0;
@@ -243,6 +249,34 @@ public:
         return presentation_.bindStyleMaterial(socketId,style,resolve,error);
     }
 
+    bool captureCheckpoint(BuildingDualLeafSessionCheckpoint& out)const{
+        if(!sceneId_||accepted_.size()>65536||queue_.size()>1024)return false;
+        out={lastTick_,accepted_,queue_};return true;
+    }
+    // Preserve CPU Models and their GPU leases. Restore the exact
+    // simulation queue and reset only the presentation time line.
+    bool restoreCheckpoint(const BuildingDualLeafSessionCheckpoint& saved,
+                        const BuildingDualLeafOwner& physics){
+        if(!sceneId_||physics.sceneId()!=sceneId_||!physics.attached()||
+           physics.pendingGraphs()||saved.accepted.size()>65536||saved.queue.size()>1024)
+            return false;
+        const auto poses=physics.poses();
+        std::set<std::pair<uint64_t,uint64_t>> seen;
+        for(const auto& [actor,seq]:saved.accepted)if(!seq||!Entity::fromPacked(actor).valid())return false;
+        for(const auto& c:saved.queue){
+            if(c.sceneId!=sceneId_||!c.actor.valid()||!c.sequence||
+               !c.graphDomains||(c.graphDomains&~kBuildingGraphAll)||
+               !seen.emplace(c.actor.packed(),c.sequence).second||
+               std::none_of(poses.begin(),poses.end(),[&](const auto& p){return p.socketId==c.socketId;}))
+                return false;
+        }
+        {
+            std::lock_guard<std::mutex> lock(presentationMutex_);
+            if(!presentation_.resetPhysicalTimeline(poses,saved.lastTick,physics.revision()))return false;
+        }
+        lastTick_=saved.lastTick;accepted_=saved.accepted;queue_=saved.queue;
+        return true;
+    }
     void retireActor(Entity actor){
         if(!actor.valid())return;
         accepted_.erase(actor.packed());

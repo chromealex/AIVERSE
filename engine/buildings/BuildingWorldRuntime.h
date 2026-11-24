@@ -2,8 +2,9 @@
 // Shared native scene owner. Integrates the existing Simulation, generated
 // StructureGraph, SpatialWorld, namespace catalog, native graph owners and
 // Renderer3D. No FPS/RTS/ActorHost dependencies, no second ECS or transport.
-// Authoritative-server/local checkpoint recovery, NOT deterministic lockstep.
+// Authoritative server/checkpoint or explicit fixed-point lockstep recovery.
 #include "engine/buildings/BuildingEcsReconcile.h"
+#include "engine/buildings/BuildingLockstepState.h"
 #include "engine/buildings/BuildingSceneContentIdentity.h"
 #include "engine/buildings/BuildingEcsObstruction.h"
 #include "engine/buildings/BuildingCirculationEcsScene.h"
@@ -29,6 +30,7 @@ namespace aiverse::building {
 class BuildingWorldRuntime : public std::enable_shared_from_this<BuildingWorldRuntime> {
 public:
     using OwnsActor=std::function<bool(const World&,uint8_t,Entity)>;
+    enum class RecoveryMode:uint8_t { AuthoritativeCheckpoint,DeterministicLockstep };
     struct Definition {
         uint64_t sceneId=0;
         std::string instanceKey;
@@ -41,6 +43,9 @@ public:
         nav::Mesh* regionalNavigation=nullptr;
         BuildingNavSourceOptions navOptions{};
         std::map<BuildingGraphDomain,BuildingGraphChangeRouter::Consumer> graphOwners;
+        // In lockstep, every external graph consumer must be synchronous
+        // and rebuild from restored deterministic state, not wall time.
+        std::function<bool()> resetDerivedGraphs;
         BuildingDualLeafGameSession::Authorize authorize;
         BuildingDualLeafGameSession::InteractionRange reachable;
         // Required only for recipes with lifts. All callbacks run on the
@@ -72,7 +77,8 @@ public:
     static std::shared_ptr<BuildingWorldRuntime> install(
         Simulation& sim,world::SpatialWorld& spatial,
         scene::SceneCollisionNamespaces& namespaces,uint16_t commandType,
-        OwnsActor owns,std::string* error=nullptr){
+        OwnsActor owns,std::string* error=nullptr,
+        RecoveryMode mode=RecoveryMode::AuthoritativeCheckpoint){
         if(sim.setupComplete()||!namespaces.sealed()||!commandType||!owns||
            sim.world().resourceConst<BuildingEcsSceneCollection>()||
            sim.world().resourceConst<BuildingEcsWorldState>()||
@@ -80,7 +86,7 @@ public:
             fail(error,"Invalid or duplicate shared building world setup");return {};
         }
         auto host=std::shared_ptr<BuildingWorldRuntime>(
-            new BuildingWorldRuntime(sim,spatial,namespaces,commandType,std::move(owns)));
+            new BuildingWorldRuntime(sim,spatial,namespaces,commandType,std::move(owns),mode));
         const std::weak_ptr<BuildingWorldRuntime> weak=host;
         if(!sim.registerSharedCommandHandler(commandType,
             [weak](Simulation&,const Command& command){
@@ -91,9 +97,15 @@ public:
         registerBuildingEcsSceneCollection(sim,namespaces.fingerprint());
         registerBuildingPhysicalExtentPersistence(sim);
         registerBuildingLiftCheckpointPersistence(sim);
+        if(host->lockstep())registerBuildingLockstepPersistence(sim);
         sim.addStepGate([weak](Simulation&){auto h=weak.lock();return h&&h->settleGraphs();});
         sim.addStateRestoredHook([weak](Simulation&){
-            if(auto h=weak.lock())h->beginRecovery();
+            if(auto h=weak.lock()){
+                if(h->lockstep()){
+                    h->recovering_=true;
+                    if(!h->restoreLockstep(&h->lastError_))h->recovering_=true;
+                }else h->beginRecovery();
+            }
         });
         sim.addSetupCompletedHook([weak](Simulation& s){
             if(auto h=weak.lock()){
@@ -126,6 +138,10 @@ public:
            !namespaces_->find(definition.instanceKey)||
            scenes_.contains(definition.sceneId))
             return fail(error,"Invalid building definition or namespace");
+        if(lockstep()&&(!definition.initiallyLoaded||definition.physicalPublication||
+           definition.riderPublication||definition.extraObstruction||
+           (!definition.graphOwners.empty()&&!definition.resetDerivedGraphs)))
+            return fail(error,"Lockstep requires resident fixed-point scenes and deterministic graph rebuild callbacks");
         for(const auto& [id,other]:scenes_){
             (void)id;
             if(other->def.instanceKey==definition.instanceKey||
@@ -200,7 +216,9 @@ public:
         for(auto& [id,scene]:scenes_)
             if(scene->def.initiallyLoaded&&scene->status!=Status::Active&&
                !load(id,error)){initialReady_=false;lastError_=error?*error:"Initial scene activation failed";return false;}
-        initialReady_=true;lastError_.clear();return true;
+        initialReady_=true;
+        if(lockstep()&&!captureLockstep()){initialReady_=false;return fail(error,"Initial lockstep snapshot failed");}
+        lastError_.clear();return true;
     }
 
     // Explicit structural barriers for additive scene streaming. No GPU
@@ -213,6 +231,7 @@ public:
            s->status==Status::Removing)
             return fail(error,"Building scene cannot be loaded");
         if(s->status==Status::Active){if(error)error->clear();return true;}
+        if(lockstep()&&initialReady_)return fail(error,"Lockstep scenes must remain resident");
         if(s->status==Status::Unloaded){
             if(all->scenes.contains(id)||!prepareStatic(*s,error))return false;
             std::map<std::string,uint16_t> positions;
@@ -259,7 +278,7 @@ public:
 
     bool unload(uint64_t id,std::string* error=nullptr){
         auto* s=find(id);
-        if(!s||recovering_)return fail(error,"Building unload unavailable");
+        if(!s||recovering_||lockstep())return fail(error,"Building unload unavailable in current mode");
         if(s->status==Status::Unloaded)return true;
         if(s->status==Status::Loading)return fail(error,"Complete pending creation before unload");
         if(s->status==Status::Active){
@@ -305,6 +324,7 @@ public:
         }
     }
     bool reconcile(std::string* error=nullptr){
+        if(lockstep())return restoreLockstep(error);
         if(!recovering_||epochExhausted_)return fail(error,"Building recovery unavailable");
         auto* all=collection();
         const auto* liftState=sim_->world().resourceConst<BuildingLiftWorldCheckpoints>();
@@ -521,6 +541,7 @@ public:
     // exclusively AI-controlled entities with a reserved actor sequence.
     bool enqueueAgentCommand(Command command){
         if(!command.seq||!validateCommand(command))return false;
+        command.tick=sim_->tick();
         return dispatch(command);
     }
     bool canBoardLift(uint64_t id,uint32_t feature,uint32_t floor)const{
@@ -534,7 +555,7 @@ public:
     bool submitAuthenticated(uint8_t authenticatedSlot,Command command,
                              uint32_t* scheduled=nullptr,std::string* error=nullptr){
         command.player=authenticatedSlot;
-        if(!command.seq||!validateCommand(command)||sim_->hasCommandSink())
+        if(lockstep()||!command.seq||!validateCommand(command)||sim_->hasCommandSink())
             return fail(error,"Building command authentication or envelope rejected");
         command.tick=0;
         const auto tick=sim_->submit(std::move(command));
@@ -542,6 +563,7 @@ public:
         if(error)error->clear();return true;
     }
     uint64_t commandEpoch()const noexcept{return epoch_;}
+    bool lockstep()const noexcept{return mode_==RecoveryMode::DeterministicLockstep;}
     // Call before destroying/recycling an actor. A moving rider may
     // refuse retirement; the existing host must keep that ECS entity alive.
     bool retireActor(Entity actor,std::string* error=nullptr){
@@ -573,6 +595,7 @@ public:
                 liftCheckpoints()->scenes[s->def.sceneId]=std::move(cp);
             }
         }
+        if(lockstep()&&!captureLockstep())return fail(error,"Actor retirement lockstep snapshot failed");
         if(error)error->clear();return true;
     }
     // Read-only access uses committed physics AND graph acknowledgement.
@@ -655,6 +678,7 @@ public:
         for(auto& [id,s]:scenes_){(void)id;if(!dropPhysical(*s,error))return false;}
         if(auto* all=collection()){all->scenes.clear();all->contentHashes.clear();}
         if(auto* lifts=liftCheckpoints())lifts->scenes.clear();
+        if(auto* state=sim_->world().resource<BuildingLockstepWorldState>())state->scenes.clear();
         if(error)error->clear();return true;
     }
 
@@ -688,9 +712,9 @@ private:
         std::shared_ptr<BuildingRenderer3DScene> renderer;
     };
     BuildingWorldRuntime(Simulation& sim,world::SpatialWorld& spatial,
-        scene::SceneCollisionNamespaces& namespaces,uint16_t type,OwnsActor owns)
+        scene::SceneCollisionNamespaces& namespaces,uint16_t type,OwnsActor owns,RecoveryMode mode)
         :sim_(&sim),spatial_(&spatial),namespaces_(&namespaces),
-         commandType_(type),owns_(std::move(owns)){}
+         commandType_(type),owns_(std::move(owns)),mode_(mode){}
     static bool fail(std::string* error,const std::string& why){
         if(error)*error=why;return false;
     }
@@ -956,17 +980,24 @@ private:
         const auto it=s->liftLayout.find(uint32_t(c.args[2]));
         return it!=s->liftLayout.end()&&uint64_t(c.args[3])<it->second;
     }
+    // Lockstep frame sequence restarts at 1 per player per tick; use
+    // a stable composite nonce instead of rejecting subsequent frames.
+    uint64_t commandNonce(const Command& c)const{
+        return lockstep()?(uint64_t(c.tick)<<32)|uint64_t(c.seq):uint64_t(c.seq);
+    }
     bool dispatch(const Command& c){
-        if(!c.seq||!validateCommand(c)){lastError_="Building command rejected";return false;}
+        if(!c.seq||!validateCommand(c)||(lockstep()&&c.tick!=sim_->tick())){
+            lastError_="Building command rejected";return false;
+        }
         auto* s=find(uint64_t(c.args[0]));
         if(c.args.size()==4){
             if(s->liftQueue.size()>=1024){lastError_="Lift command queue full";return false;}
             const auto duplicate=std::find_if(s->liftQueue.begin(),s->liftQueue.end(),
-                 [&](const Command& q){return q.player==c.player&&q.seq==c.seq;});
+                 [&](const Command& q){return q.player==c.player&&q.seq==c.seq&&(!lockstep()||q.tick==c.tick);});
             if(duplicate!=s->liftQueue.end())return false;
             s->liftQueue.push_back(c);return true;
         }
-        BuildingApertureCommand request{uint64_t(c.args[0]),c.units[0],c.seq,
+        BuildingApertureCommand request{uint64_t(c.args[0]),c.units[0],commandNonce(c),
             s->poses[size_t(c.args[2])].socketId,c.param==1,s->domains,c.player};
         return s->runtime->enqueue(request,&lastError_);
     }
@@ -976,6 +1007,7 @@ private:
         if(!ready())return false;
         for(auto& [id,s]:scenes_){
             if(s->status!=Status::Active||!s->physics.pendingGraphs())continue;
+            if(lockstep()){s->faulted=true;lastError_="Asynchronous graph ACK is invalid in lockstep";return false;}
             const auto ack=s->physics.retry(s->router);
             if(!ack.graphsAcknowledged){lastError_=ack.error;return false;}
             auto* state=buildingEcsSceneState(sim_->world(),id);
@@ -1003,7 +1035,7 @@ private:
             const auto kind=BuildingLiftCommandKind(c.param-2);
             if(!s.def.authorizeLift(c.units[0],feature,floor,kind))continue;
             const auto result=s.circulation.handleAuthenticatedCommand(c.player,
-                BuildingLiftCommand{s.def.sceneId,c.units[0].packed(),c.seq,feature,floor,kind});
+                BuildingLiftCommand{s.def.sceneId,c.units[0].packed(),commandNonce(c),feature,floor,kind});
             if(!result.accepted)lastError_=result.reason;
         }
         s.liftQueue.erase(s.liftQueue.begin(),s.liftQueue.begin()+count);
@@ -1060,6 +1092,101 @@ private:
         }
         return publishLiftPresentation(s);
     }
+    bool captureLockstep(){
+        if(!lockstep())return true;
+        BuildingLockstepWorldState next;
+        const auto* all=sim_->world().resourceConst<BuildingEcsSceneCollection>();
+        if(!all)return false;
+        for(const auto& [id,s]:scenes_){
+            if(s->status!=Status::Active||s->faulted||s->physics.pendingGraphs())return false;
+            const auto canonical=all->scenes.find(id);
+            if(canonical==all->scenes.end()||!canonical->second.graphAcknowledged||
+               canonical->second.revision!=s->physics.revision())return false;
+            BuildingLockstepSceneState saved;
+            if(!s->physics.captureMotionCheckpoint(saved.motion)||
+               !s->session.captureCheckpoint(saved.session))return false;
+            saved.liftSequences=s->circulation.captureCommandSequences();
+            if(saved.liftSequences.size()>65536||s->liftQueue.size()>1024)return false;
+            for(const auto& c:s->liftQueue)saved.liftQueue.push_back({c});
+            saved.navRevision=s->def.regionalNavigation?s->def.regionalNavigation->revision():0;
+            next.scenes.emplace(id,std::move(saved));
+        }
+        auto* out=sim_->world().resource<BuildingLockstepWorldState>();
+        if(!out)return false;
+        *out=std::move(next);return true;
+    }
+    bool restoreLockstep(std::string* error){
+        if(!lockstep()||!recovering_)return fail(error,"Lockstep recovery not pending");
+        const auto* all=sim_->world().resourceConst<BuildingEcsSceneCollection>();
+        const auto* saved=sim_->world().resourceConst<BuildingLockstepWorldState>();
+        const auto* lifts=sim_->world().resourceConst<BuildingLiftWorldCheckpoints>();
+        if(!all||!saved||!lifts||all->namespaceFingerprint!=namespaces_->fingerprint()||
+           all->scenes.size()!=scenes_.size()||all->contentHashes.size()!=scenes_.size()||
+           saved->scenes.size()!=scenes_.size())return fail(error,"Lockstep scene identity mismatch");
+        // Validate all immutable scene identities before changing owners.
+        for(const auto& [id,s]:scenes_){
+            const auto state=all->scenes.find(id);
+            const auto cp=saved->scenes.find(id);
+            const auto hash=all->contentHashes.find(id);
+            if(s->status!=Status::Active||!s->lease||!s->runtime||
+               state==all->scenes.end()||cp==saved->scenes.end()||
+               hash==all->contentHashes.end()||hash->second!=s->contentHash||
+               state->second.sceneId!=id||state->second.fixedTick!=sim_->tick()||
+               !state->second.graphAcknowledged||!state->second.revision||
+               state->second.leaves.size()!=s->poses.size()||
+               cp->second.session.lastTick!=sim_->tick()||
+               bool(cp->second.navRevision)!=bool(s->def.regionalNavigation)||
+               lifts->scenes.contains(id)!=!s->liftLayout.empty()||
+               !ownsPhysical(*s))
+                return fail(error,"Invalid restored lockstep scene state or physical owner");
+        }
+        for(auto& [id,s]:scenes_){
+            const auto state=all->scenes.at(id);
+            const auto cp=saved->scenes.at(id);
+            std::map<std::string,uint16_t> positions;
+            for(const auto& leaf:state.leaves)
+                if(leaf.open!=(leaf.physicalPermille==1000)||leaf.physicalPermille>1000||
+                   !positions.emplace(leaf.socketId,leaf.physicalPermille).second)
+                    return fail(error,"Invalid lockstep aperture checkpoint");
+            // All CPU render Models and static collider leases stay alive.
+            // Restore only derived dynamic owners, no GPU release/upload.
+            s->runtime->suspend();
+            s->physics.detach(*spatial_);
+            s->circulation.detach(*spatial_,nullptr,false);
+            s->router.forgetScene(id);
+            if(s->def.regionalNavigation)*s->def.regionalNavigation=nav::Mesh{};
+            if(s->def.resetDerivedGraphs&&!s->def.resetDerivedGraphs())
+                return fail(error,"External deterministic graph reset refused");
+            const auto* liftState=s->liftLayout.empty()?nullptr:&lifts->scenes.at(id);
+            if(!attachCirculation(*s,liftState,error)||
+               !s->physics.attachRestored(s->poses,s->leafIds,positions,state.revision,
+                     *spatial_,id,probe(*s),error)||
+               !s->physics.restoreMotionCheckpoint(cp.motion)||
+               !s->circulation.restoreCommandSequences(cp.liftSequences))
+                return fail(error,"Lockstep collision/command owner reconstruction failed");
+            const auto ack=s->router.publish({id,state.revision,UINT32_MAX,
+                BuildingGraphChangeKind::StructureChanged,s->domains,s->bounds,false});
+            if(!ack.complete)return fail(error,ack.error);
+            if(s->def.regionalNavigation&&
+               (!s->def.regionalNavigation->restoreRebuiltRevision(cp.navRevision)||
+                !s->circulation.rebuildNavigation(*s->def.regionalNavigation,error)))
+                return fail(error,"Lockstep native graph revision restore failed");
+            if(!s->session.restoreCheckpoint(cp.session,s->physics)||
+               !s->runtime->rebindAfterRestore(s->session,s->physics,*spatial_,s->router,error,true))
+                return fail(error,"Lockstep aperture queue or motion mismatch");
+            s->liftQueue.clear();
+            for(const auto& q:cp.liftQueue){
+                if(q.value.args.size()!=4||q.value.args[0]!=int64_t(id)||
+                   q.value.args[1]!=int64_t(epoch_)||q.value.tick>=sim_->tick())
+                    return fail(error,"Invalid restored lockstep lift queue");
+                s->liftQueue.push_back(q.value);
+            }
+            if(!publishLiftPresentation(*s))return fail(error,"Lockstep visual snapshot rejected");
+            s->faulted=false;
+        }
+        recovering_=false;initialReady_=true;
+        if(error)error->clear();return true;
+    }
     void advance(Simulation& sim){
         if(!ready())return;
         for(auto& [id,s]:scenes_){
@@ -1072,12 +1199,16 @@ private:
                 return;
             }
         }
+        if(lockstep()&&!captureLockstep()){
+            recovering_=true;lastError_="Deterministic building snapshot failed";
+        }
     }
     Simulation* sim_;
     world::SpatialWorld* spatial_;
     scene::SceneCollisionNamespaces* namespaces_;
     uint16_t commandType_;
     OwnsActor owns_;
+    RecoveryMode mode_;
     uint64_t epoch_=1;
     bool initialReady_=false,recovering_=false,epochExhausted_=false,shuttingDown_=false;
     std::string lastError_;

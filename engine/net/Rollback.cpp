@@ -76,7 +76,9 @@ int32_t RollbackSession::drift(uint64_t nowMs) const {
     return int32_t(double(sim_.tick()) - est);
 }
 
-void RollbackSession::stepTick(bool resim) {
+bool RollbackSession::stepTick(bool resim) {
+    // Check readiness before consuming inputs or saving a predicted slot.
+    if(!sim_.readyToStep())return false;
     const uint32_t s = sim_.tick();
     if (!resim) {
         // Close the frame for tick s + delay: everything issued until now executes then.
@@ -105,10 +107,12 @@ void RollbackSession::stepTick(bool resim) {
     for (auto& c : inputs) sim_.inject(c);
     sim_.step();
     const uint32_t now = sim_.tick();
+    if(now==s){broken_=true;return false;} // injected input cannot be retried twice
     if (cfg_.checksumInterval && now % cfg_.checksumInterval == 0) hashes_[now] = sim_.checksum();
     if (!result_ && !candResult_) {
         if (int r = sim_.result()) { candResult_ = r; candTick_ = now; candHash_ = sim_.checksum(); }
     }
+    return true;
 }
 
 void RollbackSession::rollback() {
@@ -124,13 +128,17 @@ void RollbackSession::rollback() {
     stats_.maxRollback = std::max(stats_.maxRollback, target - from);
     for (auto it = hashes_.begin(); it != hashes_.end();) it = it->first > from ? hashes_.erase(it) : std::next(it);
     if (candResult_ && candTick_ > from) candResult_ = 0;
-    while (sim_.tick() < target) { stepTick(true); ++stats_.resimulatedTicks; }
+    while (sim_.tick() < target) {
+        if(!stepTick(true)){broken_=true;break;}
+        ++stats_.resimulatedTicks;
+    }
     if (rollbackHook_) rollbackHook_(false);
 }
 
 int RollbackSession::update(double seconds, uint64_t nowMs) {
     if (broken_) return 0;
     if (rollbackTo_ != UINT32_MAX) rollback();
+    if(broken_)return 0;
 
     const double tickLen = 1.0 / sim_.tickRate();
     // Pace to the server clock: speed up when behind, slow down when ahead.
@@ -151,14 +159,16 @@ int RollbackSession::update(double seconds, uint64_t nowMs) {
     if (farBehind) {
         const auto t0 = std::chrono::steady_clock::now();
         while (canStep() && drift(nowMs) < 0) {
-            stepTick(false); ++stepped;
+            if(!stepTick(false)){++stats_.stallUpdates;break;}
+            ++stepped;
             if ((stepped & 15) == 0 && std::chrono::steady_clock::now() - t0 > std::chrono::milliseconds(cfg_.catchUpBudgetMs)) break;
         }
         acc_ = 0;
     } else {
         while (acc_ >= tickLen && stepped < 8) {
             if (!canStep()) { ++stats_.stallUpdates; acc_ = std::min(acc_, tickLen); break; }
-            stepTick(false); ++stepped;
+            if(!stepTick(false)){++stats_.stallUpdates;acc_=std::min(acc_,tickLen);break;}
+            ++stepped;
             acc_ -= tickLen;
         }
         if (acc_ > tickLen * 4) acc_ = tickLen * 4;
