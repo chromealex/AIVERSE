@@ -122,9 +122,13 @@ public:
         const Json& graph,const Json& overrides=Json::object(),
         const render::texture_graph::ResidentMaterialOptions& options={});
     Json runtimeTextureMaterialStatus() const;
-    void setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider){
-        view_.setAutomaticGraphImageCollection(std::move(provider));
-    }
+    // Provider certifies external roots (not spans into renderer/camera
+    // internals). The client also inspects its own renderer and LENS roots.
+    // detachCompletedReplay permits discarding old CPU scene diagnostics
+    // and replay state only after the provider certifies all use is finished.
+    // recycleSlots requires permanent detachment of stale raw references.
+    void setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
+        bool recycleSlots=false,bool detachCompletedReplay=false);
     std::optional<GameView::GraphMaterialTargetInfo> runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material) const;
     render::texture_graph::GraphImageReclaimResult collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);

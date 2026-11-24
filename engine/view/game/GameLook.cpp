@@ -1026,7 +1026,7 @@ bool GameView::collectAutomaticGraphImages(){
         if(!graphImageRootProvider_(model,roots)){++graphImageSweepStats_.deferred;return false;}
         appendGraphImageRoots(model,roots);
         const auto result=render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
-            {true,resources_.activeModelReaders(),roots,true});
+            {true,resources_.activeModelReaders(),roots,true,graphImageRecycleSlots_});
         graphImageSweepStats_.detached+=result.detached;return result.detached!=0;
     }catch(const std::exception&){
         // Optional collection cannot fail a frame on backpressure or refusal.

@@ -442,9 +442,14 @@ public:
     // Spans must remain valid through the synchronous sweep; no reentry.
     using GraphImageRootProvider=std::function<bool(const render::Model&,std::vector<std::span<const render::Material>>&)>;
     struct GraphImageSweepStats {uint64_t inspected=0,detached=0,deferred=0;};
-    void setAutomaticGraphImageCollection(GraphImageRootProvider provider){
-        graphImageRootProvider_=std::move(provider);graphImageSweepCursor_.clear();graphImageSweepStats_={};
+    // Recycling additionally certifies that all stale raw index/handle
+    // references are permanently detached; no future replay of them is legal.
+    void setAutomaticGraphImageCollection(GraphImageRootProvider provider,bool recycleSlots=false){
+        graphImageRootProvider_=std::move(provider);
+        graphImageRecycleSlots_=bool(graphImageRootProvider_)&&recycleSlots;
+        graphImageSweepCursor_.clear();graphImageSweepStats_={};
     }
+    bool automaticGraphImageRecyclingEnabled()const noexcept{return graphImageRecycleSlots_;}
     bool automaticGraphImageCollectionEnabled()const noexcept{return bool(graphImageRootProvider_);}
     GraphImageSweepStats automaticGraphImageCollectionStats()const noexcept{return graphImageSweepStats_;}
     // Returns true only when at least one image was detached in this sweep.
@@ -1012,6 +1017,7 @@ private:
     AppearancePipelineValidator appearancePipelineValidator_;
     render::ModelImageRollbackPool imageRollback_;
     GraphImageRootProvider graphImageRootProvider_;
+    bool graphImageRecycleSlots_=false;
     std::string graphImageSweepCursor_;
     GraphImageSweepStats graphImageSweepStats_{};
     void appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const;

@@ -321,6 +321,25 @@ render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTexture
     if(result.detached)runtimeTextureGraph_.invalidateOutputReuseReceipt();
     return result;
 }
+void GameClient::setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
+        bool recycleSlots,bool detachCompletedReplay){
+    if(!provider){view_.setAutomaticGraphImageCollection({});return;}
+    view_.setAutomaticGraphImageCollection(
+        [this,provider=std::move(provider),detachCompletedReplay](const render::Model& model,
+                std::vector<std::span<const render::Material>>& roots){
+            if(!provider(model,roots))return false;
+            // Caller explicitly certified that no later CPU consumer will
+            // replay the prior frame. No GPU work is destroyed here.
+            if(detachCompletedReplay){
+                if(!r3d_.detachCompletedGraphImageReplay())return false;
+                if(insetR3d_&&!insetR3d_->detachCompletedGraphImageReplay())return false;
+                lensModelSnapshot_.clear();
+            }
+            return r3d_.appendGraphImageRoots(model,roots)&&
+                (!insetR3d_||insetR3d_->appendGraphImageRoots(model,roots))&&
+                lensModelSnapshot_.appendGraphImageRoots(model,roots);
+        },recycleSlots);
+}
 Json GameClient::runtimeTextureMaterialStatus()const{
     auto r=runtimeTextureGraph_.status();
     r.set("applicationState",Json::string(runtimeTextureState_));
@@ -328,6 +347,7 @@ Json GameClient::runtimeTextureMaterialStatus()const{
     r.set("applicationRequest",Json::string(runtimeTextureRequest_));
     const auto sweep=view_.automaticGraphImageCollectionStats();
     r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
+    r.set("automaticRecyclingEnabled",Json::fromBool(view_.automaticGraphImageRecyclingEnabled()));
     r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));
     r.set("automaticCollectionDetached",Json::string(std::to_string(sweep.detached)));
     r.set("automaticCollectionDeferred",Json::string(std::to_string(sweep.deferred)));
