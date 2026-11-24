@@ -1738,10 +1738,10 @@
           "textEn": "Native stable-index image reclamation and diagnostics implemented. Automatic game-host collection and tests remain pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38F (в работе)",
-          "text": "Нативная генерация и применение материалов в игровом клиенте.",
-          "nameEn": "Texture Graph GPU — Stage 38F (in progress)",
-          "textEn": "Native client material generation and frame-boundary application."
+          "name": "Texture Graph GPU — Stage 38F",
+          "text": "Нативный игровой клиент подключён к общему GPU owner и применению материалов на границе кадра. Изолированный тест прошёл; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38F",
+          "textEn": "Native client connected to shared GPU owner and frame-boundary material application. Isolated test passed; integration verification pending."
         }
       ],
       "enables": [
