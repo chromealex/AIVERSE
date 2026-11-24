@@ -389,14 +389,18 @@ void GameView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
     tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
-void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt) {
+void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
+                              float3 up, bool useMuzzle) {
     EntityAnim& ps = anims_[key];
     ps.seen = frame_;
+    if(o.shooterType<looks_.size())ps.type=o.shooterType;
+    ps.phase+=std::max(0.f,dt);
     if (!ps.launched) {
         ps.launched = true;
         ps.launch = {0, 0, 0};
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
-        if (src != anims_.end() && src->second.initialized && src->second.type < looks_.size()) {
+        if (useMuzzle && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
+            src->second.choice>=0 && size_t(src->second.choice)<looks_[src->second.type].models.size()) {
             const EntityAnim& s = src->second;
             const ModelChoice& ch = looks_[s.type].models[size_t(s.choice)];
             if (ch.muzzle >= 0) {
@@ -413,9 +417,39 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         ps.launch = {ps.launch.x * k, ps.launch.y, ps.launch.z * k};
     }
     float size = 1;
+    const TypeLook::ProjectileLook* appearance=nullptr;
     if (o.shooterType < looks_.size()) {
         const TypeLook& SL = looks_[o.shooterType];
         size = o.shotWeapon >= 0 && size_t(o.shotWeapon) < SL.projectileScale.size() ? SL.projectileScale[size_t(o.shotWeapon)] : SL.projectileScaleDefault;
+        if(o.shotWeapon>=0 && size_t(o.shotWeapon)<SL.projectiles.size() &&
+           SL.projectiles[size_t(o.shotWeapon)].model)
+            appearance=&SL.projectiles[size_t(o.shotWeapon)];
+    }
+    if(appearance) {
+        const auto& cfg=appearance->config;
+        if(cfg.scale>=0)size=cfg.scale;
+        if(size<=0 || cfg.tint.w<=0)return;
+        ModelDraw draw;
+        draw.model=appearance->model;
+        // Custom models follow the authoritative 3D trajectory, not the
+        // legacy ball's permanent muzzle-height offset.
+        const float3 offset=useMuzzle?ps.launch*std::exp(-ps.phase*7.f):float3{};
+        if(length(o.facing)>1e-6f)ps.attackDirection=o.facing;
+        draw.world=view_adapter::projectileFlightFrame(o.pos+offset,ps.attackDirection,up)*
+            mat4::scale({size,size,size})*cfg.axisFix;
+        draw.tint=cfg.tint;
+        draw.flags=kDrawNoCastShadow;
+        if(appearance->clip>=0 && size_t(appearance->clip)<draw.model->clips.size()) {
+            const auto& clip=draw.model->clips[size_t(appearance->clip)];
+            const float time=clip.duration>0?std::fmod(ps.phase*cfg.clipSpeed,clip.duration):0.f;
+            bindPose(*draw.model,ps.pose);
+            sampleClip(clip,time,ps.pose);
+            worldMatrices(*draw.model,ps.pose,ps.world);
+            draw.pose=&ps.pose;
+            draw.nodeWorld=&ps.world;
+        }
+        ::aiverse::View::submitModel(r,draw);
+        return;
     }
     if(size>0) {
         ::aiverse::view::MeshObject packet;
