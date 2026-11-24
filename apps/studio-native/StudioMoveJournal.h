@@ -57,7 +57,7 @@ public:
         if(!resources.empty()&&quarantine)throw std::runtime_error("Invalid resource repair journal mode");
         validateResources(resources,operations,true);
         for(const auto& edit:resources)
-            if(editor::readProjectFileBytes(project_/edit.path)!=edit.before)throw std::runtime_error("Resource repair baseline changed");
+            if(!studioResourceMatches(project_/edit.path,edit))throw std::runtime_error("Resource repair baseline changed");
         if(replacement)validateReplacementOperations(operations);
         for(const auto& operation:operations){
             validateRelative(operation.from);validateRelative(operation.to);
@@ -87,7 +87,7 @@ public:
                 syncPath(folder_/"materials.backup");
             }
             Json state=Json::object();
-            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:7)));
+            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:8)));
             if(!resources.empty()){
                 Json repairs=Json::array();
                 for(const auto& edit:resources){
@@ -118,13 +118,46 @@ public:
         }
     }
 
+    // Outer pending marker owns the compact snapshots. Stream to a private
+    // sibling-cache file and atomically replace the live file only after the
+    // complete source and staged bytes are validated. Recovery can retry.
+    void applyResources(const std::vector<editor::ProjectFileEdit>& edits){
+        std::vector<editor::ProjectFileEdit> ordinary;
+        for(const auto& edit:edits){
+            if(!studioResourceMatches(edit.path,edit))throw std::runtime_error("Resource publication baseline changed");
+            if(!studioStreamingResource(edit))ordinary.push_back(edit);
+        }
+        for(const auto& edit:edits)if(studioStreamingResource(edit)){
+            if(!fs::is_regular_file(fs::symlink_status(folder_/"pending.json")))
+                throw std::runtime_error("Streaming resource requires pending move journal");
+            const auto temp=folder_/"resource-stream.tmp";
+            if(fs::exists(fs::symlink_status(temp))){
+                if(!fs::is_regular_file(fs::symlink_status(temp)))throw std::runtime_error("Unsafe resource stream staging file");
+                fs::remove(temp);
+            }
+            const auto required=studioResourceProjectedSize(edit);
+            if(fs::space(folder_).available<required)throw std::runtime_error("Insufficient disk for streamed GLB publication");
+            std::ofstream out(temp,std::ios::binary|std::ios::trunc);
+            if(!out)throw std::runtime_error("Cannot stage streamed GLB");
+            studioStreamProjectedResource(edit.path,edit,[&](const char* data,size_t count){
+                if(!out.write(data,static_cast<std::streamsize>(count)))throw std::runtime_error("Cannot write streamed GLB");
+            });
+            out.flush();out.close();if(!out)throw std::runtime_error("Cannot close streamed GLB");
+            fs::permissions(temp,fs::status(edit.path).permissions());
+            syncPath(temp);
+            if(!studioResourceMatches(temp,edit,true)||!studioResourceMatches(edit.path,edit))
+                throw std::runtime_error("Streamed GLB publication identity changed");
+            renamePath(temp,edit.path,true);syncPath(edit.path);syncPath(edit.path.parent_path());
+        }
+        editor::applyProjectFileEdits(project_,ordinary);
+    }
     void commit() {
         if (!fs::exists(folder_/"pending.json")) return;
         // Durable commit marker precedes best-effort cleanup. Recovery must
         // never reverse a committed transaction.
         const auto version=Json::parseFile((folder_/"pending.json").string())["version"].integer();
         const fs::path material=project_/"materials.json";
-        if ((version==1||version==4||version==5||version==6||version==7)&&fs::exists(material)) syncPath(material);
+        if ((version==1||version==4||version==5||version==6||version==7||version==8)&&fs::exists(material)) syncPath(material);
         syncPath(project_);
         renamePath(folder_/"pending.json",folder_/"committed.json");
         syncPath(folder_);
@@ -157,7 +190,7 @@ public:
         if(fs::file_size(pending)>64ull*1024*1024)throw std::runtime_error("Oversized Studio move journal");
         const Json state=Json::parseFile(pending.string());
         const auto version=state["version"].integer();
-        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7) || !state["operations"].isArray() ||
+        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8) || !state["operations"].isArray() ||
             state["operations"].size()>128)
             throw std::runtime_error("Invalid Studio move recovery manifest");
         if(version==3){restoreReplacement(state["operations"]);fs::remove_all(folder_);return;}
@@ -186,12 +219,13 @@ public:
                 throw std::runtime_error("Studio recovery missing both sides of a move");
             steps.push_back({source,destination,dst});
         }
-        if(version==4||version==5||version==6||version==7){
+        if(version==4||version==5||version==6||version==7||version==8){
             if(!state["resources"].isArray()||state["resources"].size()>32)throw std::runtime_error("Invalid resource repair recovery manifest");
             std::vector<editor::ProjectFileEdit> edits,reverse;
             std::vector<StudioMoveJournalOperation> moves;
             for(const auto& op:operations)moves.push_back({op.getStr("from"),op.getStr("to")});
             for(const auto& row:state["resources"].items()){
+                if(version<8&&(row.has("tailDigest")||row.has("tailBytes")))throw std::runtime_error("Compact repair requires journal v8");
                 edits.push_back(studioDecodeResourceEdit(row,version>=6));
             }
             validateResources(edits,moves,version>=5);
@@ -208,11 +242,11 @@ public:
                     if(sourceExists==targetExists)throw std::runtime_error("Ambiguous moved resource recovery");
                     if(targetExists)path=other;
                 }
-                const auto actual=editor::readProjectFileBytes(path);
-                if(actual!=edit.before&&actual!=edit.after)throw std::runtime_error("Resource repair recovery conflict");
-                if(actual!=edit.before)reverse.push_back({path,actual,edit.before});
+                if(studioResourceMatches(path,edit))continue;
+                if(!studioResourceMatches(path,edit,true))throw std::runtime_error("Resource repair recovery conflict");
+                auto undo=edit;undo.path=path;std::swap(undo.before,undo.after);reverse.push_back(std::move(undo));
             }
-            editor::applyProjectFileEdits(project_,reverse);
+            applyResources(reverse);
         }
         // Reverse order handles file + .meta pairs. Each replay is idempotent
         // when a crash happens midway through recovery itself.

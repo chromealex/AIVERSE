@@ -2,6 +2,10 @@
 // every following chunk (header, bytes and padding) is retained verbatim.
 #pragma once
 #include "engine/data/Json.h"
+#include "engine/pack/Sha256.h"
+#include <fstream>
+#include <functional>
+#include <algorithm>
 #include "engine/render/Xml.h"
 #include "apps/editor/core/ProjectFileEdits.h"
 #include <filesystem>
@@ -75,10 +79,97 @@ inline std::string studioEncodeModelRepair(const StudioModelRepairDocument& doc)
     studioGlbAppendU32(result,0x4e4f534a);
     result+=text;result+=doc.tail;return result;
 }
+// Compact prefix snapshots: exact 20-byte header + padded JSON; the
+// unchanged suffix is identified by SHA-256 and length, never retained in RAM.
+inline bool studioStreamingResource(const editor::ProjectFileEdit& edit){return !edit.tailDigest.empty();}
+inline Json studioDecodeGlbPrefix(const std::string& prefix,uint64_t tailBytes){
+    if(prefix.size()<20||prefix.size()>StudioResourceEditBudget||!studioIsBinaryGlb(prefix)||
+       studioGlbU32(prefix,4)!=2||studioGlbU32(prefix,16)!=0x4e4f534a||
+       studioGlbU32(prefix,12)!=prefix.size()-20||prefix.size()==20||(prefix.size()-20)%4||
+       tailBytes>0xffffffffull-prefix.size()||studioGlbU32(prefix,8)!=prefix.size()+tailBytes)
+        throw std::runtime_error("Invalid compact GLB prefix");
+    const auto doc=Json::parse(prefix.substr(20));
+    if(!doc.isObject())throw std::runtime_error("Invalid compact GLB JSON");
+    return doc;
+}
+inline std::string studioEncodeGlbPrefix(const Json& doc,uint64_t tailBytes){
+    auto json=doc.dump(2)+"\n";while(json.size()%4)json+=' ';
+    if(json.size()>StudioResourceEditBudget-20||tailBytes>0xffffffffull-20-json.size())
+        throw std::runtime_error("GLB prefix exceeds format or history budget");
+    std::string out="glTF";studioGlbAppendU32(out,2);
+    studioGlbAppendU32(out,static_cast<uint32_t>(20+json.size()+tailBytes));
+    studioGlbAppendU32(out,static_cast<uint32_t>(json.size()));studioGlbAppendU32(out,0x4e4f534a);
+    out+=json;return out;
+}
+struct StudioGlbPrefixSnapshot{std::string prefix,digest;uint64_t tailBytes=0;};
+inline StudioGlbPrefixSnapshot studioReadGlbPrefix(const std::filesystem::path& path,
+    const std::function<void(const char*,size_t)>& consume={}){
+    namespace fs=std::filesystem;
+    if(!fs::is_regular_file(fs::symlink_status(path)))throw std::runtime_error("Unsafe GLB stream source");
+    const auto size=fs::file_size(path);const auto stamp=fs::last_write_time(path);
+    if(size<20||size>0xffffffffull)throw std::runtime_error("Invalid GLB stream length");
+    std::ifstream input(path,std::ios::binary);
+    const auto read=[&](char* dst,size_t n){
+        input.read(dst,static_cast<std::streamsize>(n));
+        if(input.gcount()!=static_cast<std::streamsize>(n))throw std::runtime_error("Truncated GLB stream");
+    };
+    StudioGlbPrefixSnapshot out;out.prefix.resize(20);read(out.prefix.data(),20);
+    const auto json=studioGlbU32(out.prefix,12);
+    if(json>StudioResourceEditBudget/2-20||uint64_t(json)>size-20)
+        throw std::runtime_error("GLB JSON prefix exceeds history budget");
+    out.prefix.resize(20+json);read(out.prefix.data()+20,json);
+    out.tailBytes=size-out.prefix.size();(void)studioDecodeGlbPrefix(out.prefix,out.tailBytes);
+    pack::Sha256 hash;char buffer[65536];uint64_t remaining=out.tailBytes;size_t chunks=0;
+    const auto emit=[&](const char* data,size_t count){hash.update(data,count);if(consume)consume(data,count);};
+    while(remaining){
+        if(++chunks>4096||remaining<8)throw std::runtime_error("Invalid GLB stream chunk table");
+        std::string header(8,'\0');read(header.data(),8);remaining-=8;
+        uint64_t count=studioGlbU32(header,0);
+        if(studioGlbU32(header,4)==0x4e4f534a||count%4||count>remaining)
+            throw std::runtime_error("Invalid or duplicate GLB stream chunk");
+        emit(header.data(),8);remaining-=count;
+        while(count){const auto n=static_cast<size_t>(std::min<uint64_t>(count,sizeof(buffer)));read(buffer,n);emit(buffer,n);count-=n;}
+    }
+    if(input.peek()!=std::char_traits<char>::eof()||input.bad()||fs::file_size(path)!=size||fs::last_write_time(path)!=stamp)
+        throw std::runtime_error("GLB changed while streaming");
+    const auto digest=hash.finish();out.digest=pack::toHex(digest.data(),digest.size());return out;
+}
+inline bool studioGlbMagicFile(const std::filesystem::path& path){
+    std::ifstream input(path,std::ios::binary);char magic[4]{};
+    input.read(magic,4);return input.gcount()==4&&std::string(magic,4)=="glTF";
+}
+inline bool studioResourceMatches(const std::filesystem::path& path,const editor::ProjectFileEdit& edit,bool after=false){
+    const auto& expected=after?edit.after:edit.before;
+    if(!studioStreamingResource(edit)){
+        return std::filesystem::is_regular_file(std::filesystem::symlink_status(path))&&
+            std::filesystem::file_size(path)==expected.size()&&editor::readProjectFileBytes(path)==expected;
+    }
+    const auto actual=studioReadGlbPrefix(path);
+    return actual.prefix==expected&&actual.tailBytes==edit.tailBytes&&actual.digest==edit.tailDigest;
+}
+inline uint64_t studioResourceProjectedSize(const editor::ProjectFileEdit& edit){return edit.after.size()+edit.tailBytes;}
+inline void studioStreamProjectedResource(const std::filesystem::path& path,const editor::ProjectFileEdit& edit,
+    const std::function<void(const char*,size_t)>& consume){
+    if(!studioStreamingResource(edit)){
+        if(!studioResourceMatches(path,edit))throw std::runtime_error("Resource baseline changed");
+        consume(edit.after.data(),edit.after.size());return;
+    }
+    consume(edit.after.data(),edit.after.size());
+    const auto actual=studioReadGlbPrefix(path,consume);
+    if(actual.prefix!=edit.before||actual.digest!=edit.tailDigest||actual.tailBytes!=edit.tailBytes)
+        throw std::runtime_error("GLB prefix or suffix changed");
+}
 inline void studioValidateModelRepairBytes(const editor::ProjectFileEdit& edit){
     if(!studioRepairModelExtension(edit.path)||edit.before.size()>StudioResourceEditBudget||
        edit.after.size()>StudioResourceEditBudget-edit.before.size())
         throw std::runtime_error("Invalid resource edit budget or extension");
+    if(studioStreamingResource(edit)){
+        if(edit.path.extension()!=".glb"||edit.tailDigest.size()!=64||
+           edit.tailDigest.find_first_not_of("0123456789abcdef")!=std::string::npos)
+            throw std::runtime_error("Invalid compact GLB tail identity");
+        (void)studioDecodeGlbPrefix(edit.before,edit.tailBytes);(void)studioDecodeGlbPrefix(edit.after,edit.tailBytes);return;
+    }
+    if(edit.tailBytes)throw std::runtime_error("Missing GLB tail digest");
     if(!studioRepairGltfExtension(edit.path)){
         if(edit.path.extension()==".dae"){
             for(const auto* bytes:{&edit.before,&edit.after})
@@ -113,6 +204,9 @@ inline std::string studioResourceUnhex(const std::string& text){
 }
 inline Json studioEncodeResourceEdit(const editor::ProjectFileEdit& edit){
     Json row=Json::object();row.set("path",Json::string(edit.path.generic_string()));
+    if(studioStreamingResource(edit)){
+        row.set("tailDigest",Json::string(edit.tailDigest));row.set("tailBytes",Json::number(static_cast<int64_t>(edit.tailBytes)));
+    }
     if(!studioRepairGltfExtension(edit.path)||studioIsBinaryGlb(edit.before)||studioIsBinaryGlb(edit.after)){
         row.set("encoding",Json::string("hex"));
         row.set("before",Json::string(studioResourceHex(edit.before)));
@@ -134,6 +228,15 @@ inline editor::ProjectFileEdit studioDecodeResourceEdit(const Json& row,bool all
     }
     if(before.size()>StudioResourceEditBudget||after.size()>StudioResourceEditBudget-before.size())
         throw std::runtime_error("Resource snapshot exceeds budget");
-    return {std::filesystem::path(row.getStr("path")),std::move(before),std::move(after)};
+    editor::ProjectFileEdit edit{std::filesystem::path(row.getStr("path")),std::move(before),std::move(after)};
+    if(row.has("tailDigest")||row.has("tailBytes")){
+        const auto size=row.getInt("tailBytes",-1);
+        if(!allowBinary||!row["tailDigest"].isString()||!row["tailBytes"].isNumber()||
+           size<0||uint64_t(size)>0xffffffffull||row["tailBytes"].numberLiteral()!=std::to_string(size))
+            throw std::runtime_error("Invalid compact GLB snapshot metadata");
+        edit.tailDigest=row.getStr("tailDigest");edit.tailBytes=static_cast<uint64_t>(size);
+        if(edit.tailDigest.empty())throw std::runtime_error("Missing compact GLB identity");
+    }
+    studioValidateModelRepairBytes(edit);return edit;
 }
 } // namespace aiverse::studio

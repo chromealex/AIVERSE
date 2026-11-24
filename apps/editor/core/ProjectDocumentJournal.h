@@ -156,6 +156,7 @@ public:
         std::set<fs::path> paths;size_t bytes=0;bool changed=false;
         Json rows=Json::array();
         for(const auto& edit:edits){
+            if(!edit.tailDigest.empty()||edit.tailBytes)throw std::runtime_error("Streaming resource requires Studio move journal");
             if(!fs::is_regular_file(fs::symlink_status(edit.path)))throw std::runtime_error("Invalid project document source");
             const auto relative=fs::canonical(edit.path).lexically_relative(root_).generic_string();
             const auto target=safeTarget(root_,relative);

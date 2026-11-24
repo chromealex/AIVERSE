@@ -1,6 +1,7 @@
 // Owner-generated reversible plans for existing project documents.
 #pragma once
 #include <filesystem>
+#include <cstdint>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -10,6 +11,10 @@ namespace aiverse::editor {
 struct ProjectFileEdit {
     std::filesystem::path path;
     std::string before, after;
+    // Studio-only GLB prefix edit. Generic project document journal rejects
+    // this mode; the Studio move journal owns streaming publication.
+    std::string tailDigest{};
+    uint64_t tailBytes=0;
 };
 inline std::vector<ProjectFileEdit> reverseProjectFileEdits(std::vector<ProjectFileEdit> edits) {
     for(auto& e:edits) std::swap(e.before,e.after);

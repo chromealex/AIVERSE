@@ -70,7 +70,7 @@ public:
             for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());add(f.digest.size());add(f.digestAfter.size());}
             if(move.materialsBefore)add(move.materialsBefore->size());
             if(move.materialsAfter)add(move.materialsAfter->size());
-            for(const auto& edit:move.resourceEdits){add(sizeof(ProjectFileEdit));add(edit.path.native().size()*sizeof(std::filesystem::path::value_type));add(edit.before.size());add(edit.after.size());}
+            for(const auto& edit:move.resourceEdits){add(sizeof(ProjectFileEdit));add(edit.path.native().size()*sizeof(std::filesystem::path::value_type));add(edit.before.size());add(edit.after.size());add(edit.tailDigest.size());}
             while(steps_.size()>position_){bytes_-=steps_.back().bytes;steps_.pop_back();}
             while(!steps_.empty()&&(steps_.size()>=MaxSteps||n>MaxBytes-bytes_)){
                 bytes_-=steps_.front().bytes;steps_.erase(steps_.begin());--position_;

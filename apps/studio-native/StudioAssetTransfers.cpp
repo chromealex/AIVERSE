@@ -83,14 +83,13 @@ std::string guidFromSidecar(const fs::path& source,bool& invalid) {
 // Hash a complete tree with deterministic path/type/length framing, including
 // empty directories and all sidecars. Reject symlinks, special files and
 // excessive entry counts. Memory is bounded independently of payload size.
-using ResourceOverlay=std::map<fs::path,std::pair<std::string,std::string>>;
+using ResourceOverlay=std::map<fs::path,editor::ProjectFileEdit>;
 std::string moveDigest(const fs::path& source,bool directory,const ResourceOverlay* overlay=nullptr){
-    const auto replacement=[&](const fs::path& path)->const std::string*{
+    const auto replacement=[&](const fs::path& path)->const editor::ProjectFileEdit*{
         if(!overlay)return nullptr;
         const auto it=overlay->find(fs::absolute(path).lexically_normal());
         if(it==overlay->end())return nullptr;
-        if(editor::readProjectFileBytes(path)!=it->second.first)throw std::runtime_error("Resource changed before projected digest");
-        return &it->second.second;
+        return &it->second;
     };
     if(!directory){
         if(const auto* bytes=replacement(source)){
@@ -100,7 +99,8 @@ std::string moveDigest(const fs::path& source,bool directory,const ResourceOverl
                 const auto prefix=std::to_string(value.size())+":";
                 hash.update(prefix.data(),prefix.size());hash.update(value.data(),value.size());
             };
-            field("file-v1");field(std::to_string(bytes->size()));hash.update(bytes->data(),bytes->size());
+            field("file-v1");field(std::to_string(studioResourceProjectedSize(*bytes)));
+            studioStreamProjectedResource(source,*bytes,[&](const char* data,size_t count){hash.update(data,count);});
             const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
         }
         return studioAssetFileDigest(source);
@@ -114,7 +114,8 @@ std::string moveDigest(const fs::path& source,bool directory,const ResourceOverl
         if(!fs::is_regular_file(fs::symlink_status(path)))
             throw std::runtime_error("Unsupported file in asset history");
         if(const auto* bytes=replacement(path)){
-            field(std::to_string(bytes->size()));hash.update(bytes->data(),bytes->size());return;
+            field(std::to_string(studioResourceProjectedSize(*bytes)));
+            studioStreamProjectedResource(path,*bytes,[&](const char* data,size_t count){hash.update(data,count);});return;
         }
         const auto size=fs::file_size(path);
         const auto stamp=fs::last_write_time(path);
@@ -580,7 +581,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                     if(!fs::is_regular_file(fs::symlink_status(studioMetaPath(pair.first))))
                         throw std::runtime_error("Move history requires an existing sidecar");
                 ResourceOverlay overlay;
-                for(const auto& edit:repairs)overlay.emplace(fs::canonical(project_)/edit.path,std::make_pair(edit.before,edit.after));
+                for(const auto& edit:repairs)overlay.emplace(fs::canonical(project_)/edit.path,edit);
                 for(const auto& op:operations){
                     editor::ProjectHistory::MoveFile file;
                     file.from=op.source.lexically_relative(root).generic_string();
@@ -626,7 +627,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (operation.source.parent_path()!=operation.destination.parent_path())
                     StudioMoveJournal::syncPath(operation.destination.parent_path());
             }
-            editor::applyProjectFileEdits(project_,studioAbsoluteResourceEdits(project_,repairs,referenceMoves));
+            journal.applyResources(studioAbsoluteResourceEdits(project_,repairs,referenceMoves));
             StudioAssetCatalog catalog(project_); catalog.rebuild();
             if (beforeCommit) beforeCommit();
             if(recorded){
@@ -947,13 +948,15 @@ void studioReplayAssetMove(const fs::path& project,
     if(repairs.empty())studioCheckGltfRelocations(project,referenceMoves);
     else{
         if(staged)throw std::runtime_error("Resource repair history requires individual navigation");
-        const auto generated=studioPlanGltfRepairs(project,referenceMoves);
+        const auto generated=studioPlanGltfRepairs(project,referenceMoves,&repairs);
         if(generated.size()!=repairs.size())throw std::runtime_error("Resource repair history dependencies changed");
         for(size_t i=0;i<repairs.size();++i){
             const auto& saved=repairs[i];const auto& expected=generated[i];
             const auto destination=studioRelocatedReferencePath(saved.path.generic_string(),referenceMoves);
             if(saved.path!=expected.path||saved.before!=expected.before||
-               studioCanonicalGltfRepair(destination,saved.after)!=studioCanonicalGltfRepair(destination,expected.after))
+               saved.tailDigest!=expected.tailDigest||saved.tailBytes!=expected.tailBytes||
+               studioCanonicalGltfRepair(destination,saved.after,saved.tailDigest,saved.tailBytes)!=
+               studioCanonicalGltfRepair(destination,expected.after,expected.tailDigest,expected.tailBytes))
                 throw std::runtime_error("Resource repair history no longer matches typed dependencies");
         }
     }
@@ -984,7 +987,7 @@ void studioReplayAssetMove(const fs::path& project,
         auto documents=studioAbsoluteResourceEdits(project,repairs,referenceMoves);
         if(materialBefore)documents.push_back({material,*materialBefore,*materialAfter});
         else checkMaterial();
-        editor::applyProjectFileEdits(project,documents);
+        journal.applyResources(documents);
         for(size_t i=0;i<operations.size();++i)
             if(!matchesMoveFile(root/operations[i].to,plan.files[i],redo))
                 throw std::runtime_error("Repaired asset bytes changed during replay");
