@@ -10,6 +10,7 @@
 #include "SpectraAuthoring.h"
 #include "SpectraFunctionAssets.h"
 #include "SpectraSdfBinary.h"
+#include "SpectraVolumeAsset.h"
 #include "SpectraGpuParticles.h"
 #include "SpectraGpuFramePlan.h"
 #include "SpectraGpuProgram.h"

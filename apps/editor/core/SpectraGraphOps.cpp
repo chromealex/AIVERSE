@@ -637,6 +637,54 @@ void registerSpectraGraphOps(Workspace& ws) {
         ws.registerOp({name, description, Json::parse(schema), std::move(fn)});
     };
 
+    // Headless diagnostics of the actual dense volume reference, not a
+    // fake viewport. No graph or project file is written.
+    add("fx_volume_validate","Validate a SpectraFX volume asset v1 and resolve its optional project SDF.",
+        R"({"properties":{"asset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["asset"]})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        spectra::volume::Asset asset;spectra::volume::GasGrid grid;std::string error;
+        const bool ok=spectra::volume::readAsset(p["asset"],asset,error)&&
+            spectra::volume::initAsset(asset,grid,error,fx::projectSdfReader(ws.project.dir));
+        Json out=Json::object();out.set("ok",Json::fromBool(ok));
+        if(ok){out.set("asset",spectra::volume::writeAsset(asset));
+            out.set("bytes",Json::number(int64_t(grid.memoryBytes())));
+            out.set("solidCells",Json::number(int64_t(grid.stats().solidCells)));}
+        else out.set("error",strGraph(error));
+        return out;
+    });
+    add("fx_volume_probe","Run 0..8 fixed headless volume ticks and return aggregate field statistics and optional ray integration; CPU reference, no GPU or scene mutation.",
+        R"({"properties":{"asset":{"type":"object"},"ticks":{"type":"integer","minimum":0,"maximum":8},"ray":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["asset","ticks"]})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const double ticks=p["ticks"].toDouble(-1);
+        if(!p["ticks"].isNumber()||!std::isfinite(ticks)||ticks<0||ticks>8||std::floor(ticks)!=ticks)
+            throw std::runtime_error("Volume probe requires 0..8 integer ticks");
+        spectra::volume::Asset asset;spectra::volume::GasGrid grid;std::string error;
+        if(!spectra::volume::readAsset(p["asset"],asset,error)||
+           !spectra::volume::initAsset(asset,grid,error,fx::projectSdfReader(ws.project.dir)))
+            throw std::runtime_error(error);
+        // Bound synchronous editor work separately from native caller limits.
+        if(uint64_t(grid.stats().cells)*uint64_t(ticks)*(asset.simulation.pressureIterations+asset.sources.size()+4)>16ull*1024*1024)
+            throw std::runtime_error("Volume probe work budget exceeded; lower ticks or dimension");
+        for(int i=0;i<int(ticks);++i)if(!grid.step())throw std::runtime_error("Volume tick failed");
+        const auto stats=grid.stats();
+        Json out=Json::object();out.set("ok",Json::fromBool(true));
+        out.set("ticks",Json::number(int64_t(stats.ticks)));out.set("cells",Json::number(int64_t(stats.cells)));
+        out.set("solidCells",Json::number(int64_t(stats.solidCells)));
+        out.set("density",Json::number(stats.density,6));out.set("temperature",Json::number(stats.temperature,6));
+        out.set("fuel",Json::number(stats.fuel,6));out.set("peakSpeed",Json::number(double(stats.peakSpeed),6));
+        if(p.has("ray")){
+            const auto& ray=p["ray"];render::float3 eye{},dir{0,0,1};float distance=10;
+            using namespace spectra::volume::asset_detail;
+            if(!keys(ray,{"eye","direction","distance"})||!vector(ray,"eye",eye)||!vector(ray,"direction",dir)||
+               !number(ray,"distance",distance)||!ray.has("eye")||!ray.has("direction")||!ray.has("distance"))
+                throw std::runtime_error("Invalid volume probe ray");
+            spectra::volume::RayResult result;
+            if(!grid.march(eye,dir,distance,asset.material,result))throw std::runtime_error("Invalid volume ray");
+            Json j=Json::object();j.set("radiance",vec(result.radiance));j.set("alpha",scalar(result.alpha));
+            j.set("steps",Json::number(int64_t(result.steps)));out.set("ray",std::move(j));
+        }
+        return out;
+    });
     add("fx_replay_preset_list","List named project Replay Presets in content/spectrafx/replays; bounded metadata only.",
         R"({"properties":{"expectedProjectPath":{"type":"string"}}})",[&ws](const Json& p){
         requireReplayProject(ws,p);
