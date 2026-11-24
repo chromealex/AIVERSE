@@ -44,7 +44,7 @@ public:
         authoring_.reset();
         earth_.reset();
         cachedRevision_=std::numeric_limits<uint64_t>::max();
-        caveSnapshot_.reset();cachedPath_.clear();group_.reset();groupCells_.clear();groupDiagnostic_.clear();
+        caveSnapshot_.reset();cachedPath_.clear();cachedSparse_.clear();cachedCaves_.clear();seenDoc_=nullptr;group_.reset();groupCells_.clear();groupDiagnostic_.clear();
     }
 
     // Editor::shutdown already waits for a real GPU idle barrier. After it,
@@ -79,7 +79,12 @@ public:
             if(authoring_)release(gpuRetire);
             return;
         }
-        if(cachedRevision_!=doc.revision || cachedPath_!=doc.path || !authoring_ || allowCuts_!=allowCuts) {
+        // Same-revision MapDoc restoration can change the actual bytes.
+        const bool inspect=seenDoc_!=&doc||cachedRevision_!=doc.revision||!authoring_;
+        const auto sparseBytes=inspect?doc.data.extra["terraweaveSparse"].dump(-1):cachedSparse_;
+        const auto caveBytes=inspect?doc.data.extra["terraweaveCaverns"].dump(-1):cachedCaves_;
+        if(cachedPath_!=doc.path || !authoring_ || allowCuts_!=allowCuts||
+           sparseBytes!=cachedSparse_||caveBytes!=cachedCaves_) {
             release(gpuRetire);
             const auto loaded=sparse_terrain_ops::parse(
                 doc.data.extra["terraweaveSparse"],Json::object());
@@ -98,8 +103,9 @@ public:
                 caveSnapshot_=std::make_shared<const terraweave::caverns::CaveVolumeSnapshot>(
                     terraweave::caverns::caveSnapshotFromJson(doc.data.extra["terraweaveCaverns"]));
             allowCuts_=allowCuts;cachedPath_=doc.path;
-            cachedRevision_=doc.revision;
+            cachedSparse_=sparseBytes;cachedCaves_=caveBytes;
         }
+        cachedRevision_=doc.revision;seenDoc_=&doc;
         if(!authoring_ || !authoring_->chunkCount())return;
         // Visible-owned chunk radius is bounded before flatness sampling,
         // even when a save contains tens of thousands of remote chunks.
@@ -126,6 +132,7 @@ public:
         std::set<world::Cell> needed;
         for(const auto& c:candidates)needed.insert(c.tile.cell);
         const bool grouped=caveSnapshot_&&!caveSnapshot_->entrances.empty()&&!needed.empty();
+        if(!grouped){group_.reset();groupCells_.clear();groupDiagnostic_.clear();}
         if(grouped&&groupCells_!=needed){
             // A fresh visible set needs a whole-footprint plan. Do not
             // submit any partially uploaded cut group to the draw list.
@@ -222,7 +229,8 @@ private:
     std::set<world::Cell> groupCells_;
     std::string groupDiagnostic_;
     bool allowCuts_=false;
-    std::string cachedPath_;
+    std::string cachedPath_,cachedSparse_,cachedCaves_;
+    const MapDoc* seenDoc_=nullptr; // identity only
     std::shared_ptr<const terraweave::caverns::CaveVolumeSnapshot> caveSnapshot_;
     uint64_t cachedRevision_=std::numeric_limits<uint64_t>::max();
     std::unique_ptr<terraweave::EarthworksLayer> earth_;
