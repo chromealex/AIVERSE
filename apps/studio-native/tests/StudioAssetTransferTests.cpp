@@ -1556,6 +1556,46 @@ int main(){
             AIVERSE_TEST_CHECK(Json::parseFile(materials.string())["materials"]["Paint"].getStr("texture")=="content/A/Tint.png");
             AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==1);
         }
+        // S6h.3a: restoring a retained slot and clearing its old history
+        // share one commit; purging unrelated slots leaves history intact.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"AtomicTrashRestore";
+            fs::create_directories(p/"content");
+            const auto a=p/"content"/"A.png",b=p/"content"/"B.png";
+            write(a,"retained");write(b,"untracked");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto ga=index.byPath("A.png")->guid,gb=index.byPath("B.png")->guid;
+            const auto unrelated=studioQuarantineAsset(p,"B.png",gb);
+            const auto idOf=[](const std::string& slot){return fs::path(slot).parent_path().filename().string();};
+            const auto unrelatedId=idOf(unrelated.files.front().to);
+            editor::ProjectHistory history;
+            StudioBatchAssetPlan deletion;
+            auto plan=studioQuarantineAsset(p,"A.png",ga,{},&deletion);
+            const auto protectedId=idOf(plan.files.front().to);
+            auto next=history;next.recordMove(std::move(plan),"Delete retained asset");
+            studioApplyHistoryBatch(p,deletion.relocations,deletion.documents,deletion.movingResources,&history,&next);
+            history=std::move(next);
+            const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
+            const auto baseline=read(checkpoint);
+            auto review=studioAssetTrashReview(p,protectedId,"purge");
+            bool refused=false;
+            try{(void)studioPurgeUnprotectedTrash(p,protectedId,review.getStr("token"),history);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(checkpoint)==baseline);
+            review=studioAssetTrashReview(p,unrelatedId,"purge");
+            AIVERSE_TEST_CHECK(studioPurgeUnprotectedTrash(p,unrelatedId,review.getStr("token"),history).getBool("ok"));
+            AIVERSE_TEST_CHECK(read(checkpoint)==baseline&&studioLoadAssetHistoryCheckpoint(p).position()==1);
+            review=studioAssetTrashReview(p,protectedId,"restore");
+            StudioBatchAssetPlan restored;
+            studioAssetTrashApply(p,protectedId,"restore",review.getStr("token"),&restored);
+            AIVERSE_TEST_CHECK(!fs::exists(a)&&read(checkpoint)==baseline);
+            next=history;next.reset();
+            studioApplyHistoryBatch(p,restored.relocations,restored.documents,restored.movingResources,&history,&next);
+            AIVERSE_TEST_CHECK(read(a)=="retained"&&studioLoadAssetHistoryCheckpoint(p).steps().empty());
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byPath("A.png")->guid==ga);
+            AIVERSE_TEST_CHECK(!fs::exists(p/".aiverse-cache"/"asset-history.dirty"));
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
