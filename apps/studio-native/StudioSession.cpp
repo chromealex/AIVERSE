@@ -1778,7 +1778,6 @@ Json StudioSession::dispatch(const Json& request) {
     }
     if(method=="studio.assetHistory"||method=="studio.assetHistoryStep"){
         Json reply=Json::object();reply.set("id",request["id"]);
-        std::unique_ptr<StudioAssetHistoryPublication> publication;
         try {
             if(!request.isObject()||!request["id"].isNumber())throw std::runtime_error("Invalid request envelope");
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -1791,9 +1790,10 @@ Json StudioSession::dispatch(const Json& request) {
                 if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
-                publication=std::make_unique<StudioAssetHistoryPublication>(ws_.project.dir);
+                StudioBatchAssetPlan staged;
+                auto next=assetHistory_;next.advance(redo);
                 if(entry.move&&entry.move->replacement){
-                    studioReplayAssetReplacement(ws_.project.dir,*entry.move,redo);
+                    studioReplayAssetReplacement(ws_.project.dir,*entry.move,redo,&staged);
                 }else if(entry.move&&entry.move->quarantine){
                     const auto check=[&]{
                         std::vector<std::pair<std::string,bool>> paths;
@@ -1805,7 +1805,7 @@ Json StudioSession::dispatch(const Json& request) {
                         }
                         studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
                     };
-                    studioReplayAssetQuarantine(ws_.project.dir,*entry.move,entry.move->created?!redo:redo,check);
+                    studioReplayAssetQuarantine(ws_.project.dir,*entry.move,entry.move->created?!redo:redo,check,&staged);
                 }else if(entry.move){
                     // Recheck known read-only rules references before reversing paths.
                     const auto check=[&]{
@@ -1822,21 +1822,23 @@ Json StudioSession::dispatch(const Json& request) {
                         }
                         studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
                     };
-                    studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check);
+                    if(entry.move->resourceEdits.empty())studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check,&staged);
+                    else{check();staged=studioPlanAssetMoveChain(ws_.project.dir,{*entry.move},redo);}
                 }else{
                     if(entry.files.size()!=1)throw std::runtime_error("Unsupported asset history entry");
                     const auto plan=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
                     StudioAssetCatalog catalog(ws_.project.dir);
-                    catalog.applyMetadataEdit(plan.front());
+                    catalog.validateMetadataEdit(plan.front());staged.documents=plan;
                 }
-                assetHistory_.advance(redo);agentHistoryUnsafe_=true;
-                finishAssetHistoryPublication(*publication,true);publication.reset();
+                studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,
+                    &assetHistory_,&next);
+                assetHistory_=std::move(next);agentHistoryUnsafe_=true;
+                assetHistoryPersistenceWarning_.clear();
             }
             auto result=assetHistoryJson();
             if(step)result.set("snapshot",snapshot());
             reply.set("result",std::move(result));
         }catch(const std::exception& e){
-            if(publication)finishAssetHistoryPublication(*publication,false);
             reply.set("error",str(e.what()));
         }
         return reply;
