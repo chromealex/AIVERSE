@@ -65,8 +65,8 @@ class TextureGraphGpuOwner {
         uint64_t epoch=0;
         view::LiveAppearanceMaterialTarget target;
         gpu::OutputKeys keys,names;
-        struct Binding {int index=-1;gfx::TextureHandle handle{};};
-        std::map<std::string,Binding> bindings;
+        // Weak original generation: receipts must not pin images or retain raw handles.
+        std::map<std::string,render::GraphImageReference> bindings;
         uint64_t modelMaterialRevision=0;
     };
     std::optional<OutputReceipt> lastOutputReceipt_,pendingOutputReceipt_;
@@ -630,7 +630,7 @@ public:
                     if(matching&&gpu::unchangedOutput(lastOutputReceipt_->keys,next.keys,name)&&lastOutputReceipt_->names.contains(name)&&lastOutputReceipt_->bindings.contains(name)){
                         const auto& image=lastOutputReceipt_->names.at(name);reusedNames.emplace(name,image);next.names.emplace(name,image);program.outputs.erase(name);
                     }else next.names.emplace(name,gpuGraphImageName(generation,name));
-                    next.bindings.emplace(name,OutputReceipt::Binding{});
+                    next.bindings.emplace(name,render::GraphImageReference{});
                 }
                 receipt=std::move(next);
             }
@@ -773,9 +773,14 @@ public:
             for(const auto& [name,expected]:reusedOutputNames_){
                 const auto slot=materialSlot(name);const int index=slot?live->materials[target.material].*slot:-1;
                 const auto binding=lastOutputReceipt_->bindings.find(name);
-                if(binding==lastOutputReceipt_->bindings.end()||binding->second.index!=index||index<0||size_t(index)>=model.images.size()||
-                   model.images[size_t(index)].tex!=binding->second.handle||model.images[size_t(index)].name!=expected||
-                   !model.images[size_t(index)].proceduralGraphImage||model.images[size_t(index)].proceduralGraphRetired||!model.images[size_t(index)].tex.valid()){
+                const auto materialAccess=slot?acquirePublishedGraphImage(model,
+                    referenceGraphMaterialImage(live->materials[target.material],slot)):PublishedGraphImageAccess{};
+                // The current material's original generation, the receipt and
+                // the resident slot must agree. Identical index/name/handle
+                // values alone are not proof of the same publication.
+                if(binding==lastOutputReceipt_->bindings.end()||index<0||!materialAccess||
+                   !binding->second.acquire(size_t(index),materialAccess.pin)||
+                   model.images[size_t(index)].name!=expected){
                     lastOutputReceipt_.reset();if(error)*error="incremental output binding changed; regenerate";return false;
                 }
             }
@@ -791,8 +796,10 @@ public:
             bool valid=true;
             for(auto& [name,binding]:next.bindings){
                 const auto slot=materialSlot(name);const int index=slot?live->materials[target.material].*slot:-1;
-                if(index<0||size_t(index)>=model.images.size()||model.images[size_t(index)].name!=next.names.at(name)||!model.images[size_t(index)].tex.valid()){valid=false;break;}
-                binding={index,model.images[size_t(index)].tex};
+                const auto reference=slot?referenceGraphMaterialImage(live->materials[target.material],slot):render::GraphImageReference{};
+                const auto access=acquirePublishedGraphImage(model,reference);
+                if(index<0||!access||model.images[size_t(index)].name!=next.names.at(name)){valid=false;break;}
+                binding=reference;
             }
             if(valid)lastOutputReceipt_=std::move(pendingOutputReceipt_);else lastOutputReceipt_.reset();
         }

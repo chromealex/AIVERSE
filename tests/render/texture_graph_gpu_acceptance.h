@@ -229,6 +229,23 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         require(owner.status().getBool("incrementalOutputNoop")&&owner.status().getBool("gpuTextureSetReady")&&
             owner.status()["materializedPackPasses"].toDouble()==0,"unchanged set encoded GPU work");
         require(applyTarget(noChange,stamp())&&live->version==revision&&materialModel.images.size()==3,"no-op mutated appearance");
+        // The index, name, texture handle and publication stamps are unchanged,
+        // but the material pin does not describe that generation. The receipt
+        // must refuse even the no-op path and require a fresh generation.
+        const auto generationRequest=startTarget(altered);
+        require(owner.status().getBool("incrementalOutputNoop"),"generation fixture requires cached outputs");
+        const auto validSnapshot=live;
+        auto mismatched=std::make_shared<view::AppearanceAssetRegistry::Asset>(*live);
+        // AO is channel 3; corrupt only the retained AO pin.
+        mismatched->materials[0].proceduralGraphPins=render::withGraphMaterialPin(
+            mismatched->materials[0].proceduralGraphPins,3,std::make_shared<const render::ProceduralImagePin>());
+        live=mismatched;
+        require(!applyTarget(generationRequest,stamp()),"stale material generation accepted");
+        live=validSnapshot;
+        const auto regenerate=startTarget(altered);drain();
+        require(!owner.status().getBool("incrementalOutputNoop")&&
+            owner.status()["materializedPackPasses"].toDouble()==2&&applyTarget(regenerate,stamp()),
+            "generation refusal did not regenerate the full output set");
         registry.clear();live.reset();
         require(rollback.drain(dev),"fixture image rollback drain failed");
 
