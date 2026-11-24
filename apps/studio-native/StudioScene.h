@@ -198,6 +198,14 @@ private:
     PlanetProcessOverlays planetProcessOverlays_;
     PlanetForestOverlays planetForestOverlays_;
     Json planetForestOverlayRecipe_;
+    Json planetForestModelCatalog_;
+    std::string planetForestModelProject_;
+    std::map<uint32_t,std::unique_ptr<render::Model>> planetForestModels_;
+    std::set<uint32_t> planetForestRejectedModels_;
+    size_t planetForestModelBytes_=0;
+    bool planetForestModelsPending_=false;
+    void clearPlanetForestModels();
+    void syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath);
     Json forestSelection_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;

@@ -4,7 +4,7 @@
 #include "apps/studio-native/StudioPlanetForestDocument.h"
 
 namespace aiverse::studio {
-struct PlanetForestPick { uint32_t species=0;uint64_t key=0;render::float3 ground{},tip{};bool direct=false;std::string markerOwner; };
+struct PlanetForestPick { uint32_t species=0;uint64_t key=0;render::float3 ground{},tip{};bool direct=false;std::string markerOwner;render::mat4 world{};uint32_t foliagePermille=1000; };
 struct PlanetForestOverlays {
     std::vector<PlanetProcessOverlayLine> lines;
     std::vector<PlanetForestPick> picks;
@@ -61,7 +61,6 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
             }
         };
         for(const auto& item:forest["plants"].items()){
-            if(out.truncated)break;
             const Json* at=&item["at"];
             if(!item.has("at")){
                 const auto marker=markers.find(item.getStr("entity"));
@@ -104,7 +103,13 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
             const auto tip=ground+up*(tree!=trees.end()?float(tree->second.heightCm)*size*.01f:0.f);
             std::string markerOwner;
             if(item.has("entity")){const auto m=preview.authoredIds.find(item.getStr("entity"));if(m!=preview.authoredIds.end())markerOwner=m->second;}
-            out.picks.push_back({id,key,ground,tip,!item.has("entity"),std::move(markerOwner)});
+            render::mat4 frame;
+            const render::float3 axes[3]={right,up,forward};
+            for(int i=0;i<3;++i){frame.at(0,i)=axes[i].x;frame.at(1,i)=axes[i].y;frame.at(2,i)=axes[i].z;}
+            const auto world=render::mat4::translate(ground)*frame*render::mat4::scale({size,size,size});
+            out.picks.push_back({id,key,ground,tip,!item.has("entity"),std::move(markerOwner),world,tw::plantAppearance(plant.environment).foliagePermille});
+            ++out.plants;
+            if(out.truncated)continue;
             const auto rootColor=render::rgba(225,156,82);
             // Project the root footprint through the same tangent chart used by
             // planetary support; sample authored terrain across cube seams.
@@ -161,7 +166,6 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
                     }
                 }else ++out.rejected;
             }
-            ++out.plants;
         }
     }catch(const std::exception&){out.invalid=true;out.lines.clear();out.picks.clear();out.plants=0;}
     return out;

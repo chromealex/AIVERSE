@@ -1,6 +1,9 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
+#include "engine/render/TerraWeaveModelAdapter.h"
+#include "engine/render/TerraWeaveBotanicalForest.h"
+#include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "apps/studio-native/StudioLightingPreview.h"
@@ -580,9 +583,87 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+void StudioScene::clearPlanetForestModels(){
+    if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
+    planetForestModels_.clear();planetForestRejectedModels_.clear();
+    planetForestModelBytes_=0;planetForestModelCatalog_=Json{};planetForestModelProject_.clear();planetForestModelsPending_=false;
+}
+void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath){
+    namespace fs=std::filesystem;namespace tw=terraweave;
+    const auto& catalog=doc.data.worldExtra["terraweaveForest"];
+    if(planetForestModelProject_!=projectPath||!(planetForestModelCatalog_==catalog)){
+        if(!planetForestModels_.empty()&&!device_->waitForResourceIdle())return;
+        clearPlanetForestModels();planetForestModelProject_=projectPath;planetForestModelCatalog_=catalog;
+    }
+    planetForestModelsPending_=false;
+    if(projectPath.empty()||!catalog["species"].isArray()||catalog["species"].size()>64||planetForestOverlays_.invalid)return;
+    std::set<uint32_t> needed;
+    for(const auto& plant:planetForestOverlays_.picks)needed.insert(plant.species);
+    const auto dir=catalog.getStr("botanicalTextures");
+    constexpr size_t budget=192u*1024u*1024u;
+    // Generate at most one new model per Scene frame. Shared renderer owns LOD and batching.
+    for(const auto& def:catalog["species"].items()){
+        const auto id=uint32_t(def.getInt("id",0));
+        if(!needed.count(id)||planetForestModels_.count(id)||planetForestRejectedModels_.count(id))continue;
+        if(planetForestModels_.size()>=16||planetForestModelBytes_>=budget){planetForestRejectedModels_.insert(id);continue;}
+        std::unique_ptr<render::Model> model;
+        try{
+            const auto recipe=world::parseForestSpeciesRecipe(def);
+            tw::TreeLodSettings settings;settings.mesh=recipe.mesh;
+            model=tw::makeArborTreeLodModel(recipe.profile,recipe.seed,settings);
+            if(!model||model->vertices.size()>1000000||model->indices.size()>6000000)
+                throw std::length_error("Studio forest prototype geometry budget");
+            if(recipe.preset&&!dir.empty()&&world::safeAssetPath(dir)){
+                const fs::path root=fs::path(projectPath)/"content";
+                // Match the Studio content containment policy. Accept bounded PNG texture families only.
+                const tw::BotanicalTextureReader read=[root](const std::string& name,std::string& out){
+                    if(!world::safeAssetPath(name)||name.size()>512)return false;
+                    std::error_code ec;
+                    const auto rootStatus=fs::symlink_status(root,ec);
+                    if(ec||fs::is_symlink(rootStatus)||!fs::is_directory(rootStatus))return false;
+                    fs::path file=root;
+                    for(const auto& part:fs::path(name)){
+                        if(part.empty()||part=="."||part=="..")return false;
+                        file/=part;const auto st=fs::symlink_status(file,ec);
+                        if(ec||fs::is_symlink(st))return false;
+                    }
+                    if(!fs::is_regular_file(file,ec))return false;
+                    const auto n=fs::file_size(file,ec);
+                    if(ec||n<24||n>16u*1024u*1024u)return false;
+                    std::ifstream input(file,std::ios::binary);if(!input)return false;
+                    unsigned char header[24]{};
+                    if(!input.read(reinterpret_cast<char*>(header),24))return false;
+                    const unsigned char sig[8]={137,80,78,71,13,10,26,10};
+                    if(!std::equal(sig,sig+8,header)||header[12]!='I'||header[13]!='H'||header[14]!='D'||header[15]!='R')return false;
+                    const auto be=[&](int i){return (uint32_t(header[i])<<24)|(uint32_t(header[i+1])<<16)|(uint32_t(header[i+2])<<8)|header[i+3];};
+                    if(!be(16)||!be(20)||be(16)>2048||be(20)>2048)return false;
+                    input.seekg(0);out.resize(size_t(n));return bool(input.read(out.data(),std::streamsize(n)));
+                };
+                tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),read);
+                tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),read);
+            }
+            size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            for(auto& image:model->images){
+                bytes+=size_t(image.width)*size_t(image.height)*8u; // conservative mip estimate
+                image.name=(fs::path(projectPath)/"content"/image.name).generic_string();
+            }
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Studio forest model cache budget");
+            model->path=projectPath+"/"+model->path;
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Studio forest model upload");
+            planetForestModels_.emplace(id,std::move(model));planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){
+            if(model)releasePreviewModel(*model);
+            planetForestRejectedModels_.insert(id);
+        }
+        planetForestModelsPending_=true;
+        break;
+    }
+}
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
+        clearPlanetForestModels();
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
@@ -1623,6 +1704,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
     }
     if(planetMode_){
+        if(!device_->waitForResourceIdle())return;
+        clearPlanetForestModels();
         planetMode_=false;planetPreview_.reset();planetMapPath_.clear();cameraInitialized_=false;sceneCacheValid_=false;
         lightingRevision_=std::numeric_limits<uint64_t>::max();clearTransformPreview();
     }
@@ -2186,6 +2269,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetModelProject_=projectPath;planetModelRules_=&rules;
         nextFileCheck_=now+std::chrono::seconds(1);
     }
+    syncPlanetForestModels(doc,projectPath);
     if(!cameraInitialized_){
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
         camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
@@ -2252,6 +2336,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
+    if(!liveForest&&planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
+    if(!liveForest&&!planetForestRejectedModels_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
@@ -2303,6 +2389,21 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
+            static const std::vector<uint8_t> barkOnly{1,0};
+            const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
+                forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
+            for(const auto& plant:planetForestOverlays_.picks){
+                if(!plant.markerOwner.empty()&&hidden_.count(plant.markerOwner))continue;
+                const auto model=planetForestModels_.find(plant.species);
+                if(model==planetForestModels_.end())continue;
+                render::ModelDraw draw;draw.model=model->second.get();draw.world=plant.world;
+                if(!plant.foliagePermille)draw.materialMask=&barkOnly;
+                if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
+                    draw.outline={1.f,.8f,.2f,.025f};
+                renderer_.drawModel(draw);
+            }
+        }
         std::set<std::string> renderedModels;
         for(const auto& instance:modelInstances_){
             if(!instance.model)continue;
