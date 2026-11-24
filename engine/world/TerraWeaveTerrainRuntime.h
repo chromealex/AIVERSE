@@ -386,7 +386,30 @@ public:
                 dirty.push_back(change.bounds);
         }
         if(dirty.empty())return true;
-        return refreshEarthworksNav(mesh,source,dirty,error);
+        if(!surfaceEpoch_)return refreshEarthworksNav(mesh,source,dirty,error);
+        if(!pending_.empty()){
+            if(error)*error="TerraWeave surface topology is not fully published";
+            return false;
+        }
+        const auto cfg=source.config();
+        // Only published tile footprints participate. A solid or rejected
+        // shaft must not create an invented surface nav exclusion.
+        auto cutAware=source.withAdditionalBlocked([this,cfg](int32_t x,int32_t z){
+            const int64_t ax=cfg.originXcm+int64_t(x)*cfg.cellCm;
+            const int64_t az=cfg.originZcm+int64_t(z)*cfg.cellCm;
+            const int64_t bx=ax+cfg.cellCm,bz=az+cfg.cellCm;
+            const int64_t span=int64_t(cellSizeMetres_)*100;
+            const auto floor=[](int64_t n,int64_t d){return n/d-(n%d<0?1:0);};
+            for(int64_t tz=floor(az,span);tz<=floor(bz-1,span);++tz)
+                for(int64_t tx=floor(ax,span);tx<=floor(bx-1,span);++tx){
+                    const auto it=residents_.find({int32_t(tx),0,int32_t(tz)});
+                    if(it==residents_.end())continue;
+                    for(const auto& h:it->second.surfaceHoles())
+                        if(ax<h.maxX&&h.minX<bx&&az<h.maxZ&&h.minZ<bz)return true;
+                }
+            return false;
+        });
+        return refreshEarthworksNav(mesh,cutAware,dirty,error);
     }
 
     std::vector<TerrainPatchDirtyRegion> takeTerrainDirty(){
