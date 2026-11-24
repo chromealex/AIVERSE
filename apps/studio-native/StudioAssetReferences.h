@@ -325,7 +325,10 @@ inline std::optional<Json> studioReadModelJson(const std::filesystem::path& path
         // Runtime also accepts a text JSON model regardless of extension.
         input.clear();input.seekg(0);
         char first=0;
-        while(input.get(first)&&std::isspace(static_cast<unsigned char>(first))){}
+        size_t probe=0;
+        while(input.get(first)&&std::isspace(static_cast<unsigned char>(first))){
+            if(++probe>4096)throw std::runtime_error("GLB text probe budget exceeded");
+        }
         if(first!='{')return std::nullopt;
         studioAccountModelJson(size,bytes);return Json::parseFile(path.string());
     }
@@ -342,6 +345,21 @@ inline std::optional<Json> studioReadModelJson(const std::filesystem::path& path
     std::string json(length,'\0');
     input.read(json.data(),static_cast<std::streamsize>(length));
     if(input.gcount()!=static_cast<std::streamsize>(length))throw std::runtime_error("Truncated GLB JSON chunk");
+    // The runtime accepts multiple chunks. Do not permit a second JSON chunk
+    // to shadow the dependency graph. Inspect headers only, seek past payloads.
+    uint64_t offset=20ull+length;
+    size_t chunks=0;
+    while(offset<size){
+        if(++chunks>4096||size-offset<8)throw std::runtime_error("Invalid GLB dependency chunk table");
+        input.read(reinterpret_cast<char*>(chunk),8);
+        if(input.gcount()!=8)throw std::runtime_error("Truncated GLB dependency chunk header");
+        const auto next=le(chunk);
+        if(le(chunk+4)==0x4e4f534a||next%4||uint64_t(next)>size-offset-8)
+            throw std::runtime_error("Invalid or duplicate GLB dependency chunk");
+        offset+=8ull+next;
+        input.seekg(static_cast<std::streamoff>(offset),std::ios::beg);
+        if(!input)throw std::runtime_error("Cannot seek GLB dependency chunk");
+    }
     return Json::parse(json);
 }
 inline std::string studioWavefrontTrim(const std::string& s){

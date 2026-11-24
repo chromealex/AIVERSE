@@ -165,6 +165,22 @@ int main(){
             AIVERSE_TEST_CHECK(recorded&&fs::exists(project/"content"/"FormatsMoved"/"tex.png"));
             studioReplayAssetMove(project,*recorded,false);
             fs::remove_all(dir);fs::remove(studioMetaPath(dir));db.rebuild(false);
+            fs::create_directories(project/"content"/"Group");
+            write(project/"content"/"Group"/"bundle.glb",glb);
+            write(project/"content"/"Group"/"tex.png","group texture");db.rebuild();
+            auto group=StudioTransferPlan::internal(project,"Other",{"Group/bundle.glb","Group/tex.png"});
+            const auto groupImpact=studioMoveReferenceImpact(group.describe(),studioCollectGltfReferences(project,{}));
+            AIVERSE_TEST_CHECK(groupImpact.size()==2);
+            for(const auto& row:groupImpact.items())AIVERSE_TEST_CHECK(row.getBool("validateOnApply")&&row.getBool("preservesDefault"));
+            refused=false;try{(void)group.apply(group.token(),{{0,"import"},{1,"skip"}});}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&fs::exists(project/"content"/"Group"/"bundle.glb"));
+            group=StudioTransferPlan::internal(project,"Other",{"Group/bundle.glb","Group/tex.png"});
+            recorded.reset();(void)group.apply(group.token(),{},{},&recorded);
+            AIVERSE_TEST_CHECK(recorded&&fs::exists(project/"content"/"Other"/"tex.png"));
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(fs::exists(project/"content"/"Group"/"bundle.glb"));
+            fs::remove_all(project/"content"/"Group");fs::remove(studioMetaPath(project/"content"/"Group"));db.rebuild(false);
         }
 
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
