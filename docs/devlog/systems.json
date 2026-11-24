@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-streamed-persistence",
+     "title": "Сохранение потоковых миров",
+     "titleEn": "Streamed world persistence",
+     "text": "Проверка SHA-256 внешних ресурсов и барьер готовности коллизий и навигации после восстановления.",
+     "textEn": "SHA-256 external asset validation and collision/navigation readiness barrier after recovery.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-background-recovery",
      "title": "Фоновое восстановление мира",
      "titleEn": "Background world recovery",
