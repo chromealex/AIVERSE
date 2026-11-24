@@ -433,7 +433,20 @@ def main():
             validate(expected);CATALOG.write_text(json.dumps(expected,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print('Generated skill catalog');return
         data=json.loads(CATALOG.read_text(encoding='utf-8'));entries=validate(data)
         if args.command=='check':
-            if data!=expected:raise ValueError('stale skill catalog; run generate')
+            if data!=expected:
+                actual_by_id={e['id']:e for e in data['skills']}
+                expected_by_id={e['id']:e for e in expected['skills']}
+                changed=sorted(k for k in actual_by_id.keys() & expected_by_id.keys()
+                               if actual_by_id[k]!=expected_by_id[k])
+                missing=sorted(expected_by_id.keys()-actual_by_id.keys())
+                extra=sorted(actual_by_id.keys()-expected_by_id.keys())
+                if changed or missing or extra:
+                    details=f'changed={changed[:10]}, missing={missing[:10]}, extra={extra[:10]}'
+                elif [e['id'] for e in data['skills']] != [e['id'] for e in expected['skills']]:
+                    details='skill entries are out of canonical ID order'
+                else:
+                    details='top-level catalog metadata differs'
+                raise ValueError(f'stale skill catalog ({details}); run generate')
             print(f'Validated {len(entries)} skills and isolated library mappings');return
         if args.command=='list':result=[{k:e[k] for k in ('id','summary','side','runtime','target')} for e in entries.values() if args.domain=='all' or e['domain']==args.domain]
         elif args.command=='search':result=[dict(score=score,**{k:e.get(k) for k in ('id','summary','side','path','target','contentPackages')}) for score,e in search(entries,args.query,args.domain)][:12]
