@@ -11,6 +11,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -42,6 +43,18 @@ using CavePublishedNavSource=std::function<
     std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>()>;
 using CaveRouteSearch=std::function<terraweave::caverns::CavePathResult(
     const std::string&,const terraweave::caverns::CavePathQuery&)>;
+// Read the current authoritative ECS world, not a captured component pointer.
+// A missing position is represented explicitly; the solver never guesses it.
+using CaveWorldPositionSource=std::function<std::optional<
+    terraweave::caverns::PointCm>(const World&,Entity)>;
+inline std::optional<terraweave::caverns::PointCm> readCaveTransformPosition(
+    const World& world,Entity entity) {
+    const auto* transform=world.tryGetConst<Transform>(entity);
+    if(!transform)return std::nullopt;
+    const auto p=caveTransformCm(*transform);
+    if(!validCaveRoutePoint(p))return std::nullopt;
+    return p;
+}
 struct CaveSimulationNavigationHooks {
     CavePublishedNavSource publishedSource;
     CaveRouteSearch search;
@@ -49,6 +62,7 @@ struct CaveSimulationNavigationHooks {
     std::function<void()> invalidateDerived;
     uint32_t maxRepairsPerTick=8;
     uint32_t maxMovedPerTick=65536;
+    CaveWorldPositionSource position; // defaults to the shared Transform reader
 };
 inline void io(Archive& a,CaveRouteFollower& p) {
     // Serialize bounded route points; avoid a corrupted/untrusted save
@@ -79,7 +93,7 @@ inline bool assignCaveGoal(
     terraweave::caverns::CaveAgentProfile profile,
     std::string algorithm="astar",uint32_t speedCmPerTick=25,
     uint32_t maxVisits=8192) {
-    if(!world.alive(entity)||!world.has<Transform>(entity)||
+    if(!world.alive(entity)||
        algorithm.empty()||algorithm.size()>128||
        !speedCmPerTick||speedCmPerTick>10000||
        !maxVisits||maxVisits>1048576)
@@ -106,14 +120,13 @@ inline CaveRepathTickStats repathCaveEntities(
     Simulation& sim,
     const CaveSimulationNavigationHooks& hooks) {
     CaveRepathTickStats stats;
-    if(!hooks.publishedSource||!hooks.search||!hooks.collision)return stats;
+    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick)return stats;
     const auto provider=hooks.publishedSource();
     if(!provider||!provider->revision())return stats;
     World& world=sim.world();
     const uint32_t tick=sim.tick();
-    world.each<CaveRouteIntent,CaveRouteFollower,Transform>(
-        [&](Entity entity,CaveRouteIntent& intent,
-            CaveRouteFollower& route,Transform& transform){
+    world.each<CaveRouteIntent,CaveRouteFollower>(
+        [&](Entity entity,CaveRouteIntent& intent,CaveRouteFollower& route){
         if(!intent.active||stats.attempted>=hooks.maxRepairsPerTick)
             return;
         // Force a stale route to be re-planned in a bounded stable order.
@@ -129,14 +142,24 @@ inline CaveRepathTickStats repathCaveEntities(
         if(tick<intent.repathNotBeforeTick)return;
         ++stats.attempted;
         terraweave::caverns::CavePathQuery request;
-        request.start=caveTransformCm(transform);
+        const auto start=hooks.position?hooks.position(world,entity):
+                                         readCaveTransformPosition(world,entity);
+        if(!start||!validCaveRoutePoint(*start)||!validCaveRoutePoint(intent.goal)){
+            ++stats.unavailable;route.needsRepath=true;
+            const uint32_t delay=std::max(1u,intent.retryTicks);
+            intent.repathNotBeforeTick=tick>UINT32_MAX-delay?UINT32_MAX:tick+delay;
+            return;
+        }
+        request.start=*start;
         request.goal=intent.goal;
         request.agent=route.agent;
         request.sourceRevision=provider->revision();
         request.maxVisits=intent.maxVisits;
         auto result=hooks.search(intent.algorithm,request);
         if(!result.reached||result.sourceRevision!=request.sourceRevision||
-           result.waypoints.empty()){
+           result.environmentRevision!=provider->environmentRevision()||
+           result.waypoints.empty()||result.waypoints.size()>65536||
+           !std::all_of(result.waypoints.begin(),result.waypoints.end(),validCaveRoutePoint)){
             ++stats.failed;
             if(intent.attempts<UINT32_MAX)++intent.attempts;
             const uint32_t delay=std::max(1u,intent.retryTicks);
@@ -165,7 +188,8 @@ inline CaveRepathTickStats repathCaveEntities(
 // and the Transform follower installer in the same Simulation.
 inline void installCaveRepathSimulation(
     Simulation& sim,CaveSimulationNavigationHooks hooks) {
-    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick)
+    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick||
+       hooks.maxRepairsPerTick>65536)
         throw std::invalid_argument("Caverns missing repath owner");
     sim.registerPersistentComponent<CaveRouteFollower>(
         "caverns.route",2);
@@ -196,6 +220,9 @@ inline void installCaveNavigationSimulation(
        !hooks.maxRepairsPerTick||hooks.maxRepairsPerTick>65536||
        !hooks.maxMovedPerTick||hooks.maxMovedPerTick>65536)
         throw std::invalid_argument("Caverns Simulation requires native nav/physics owners");
+    // The direct follower always reads/writes Transform. Do not use a
+    // custom position reader for this mode: it would plan from another owner.
+    hooks.position=readCaveTransformPosition;
     // This is opt-in in the actual game/authority setup, not GameCore's
     // unconditional rule for unrelated 2D or visual-only projects.
     sim.registerPersistentComponent<CaveRouteFollower>("caverns.route",2);
