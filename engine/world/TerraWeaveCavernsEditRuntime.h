@@ -74,6 +74,35 @@ public:
         index_=std::move(index);
     }
 
+    // Restore an exact sparse set of loaded chunks plus outstanding dirty
+    // work. Stage the complete queue before changing the live worker epoch.
+    void invalidateKeys(const std::set<ChunkKey3,KeyLess>& keys,
+                        std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
+        if(!snapshot||!snapshot->sourceRevision||keys.empty()||
+           (snapshot_&&snapshot->sourceRevision<=snapshot_->sourceRevision))
+            throw std::invalid_argument("Caverns restore worker epoch");
+        auto nextKeys=keys;
+        for(const auto& item:dirty_.pending(maxQueued_))nextKeys.insert(item.key);
+        if(nextKeys.size()>maxQueued_)
+            throw std::length_error("Caverns restore dirty budget");
+        auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
+        auto nextDirty=dirty_;
+        const int64_t span=int64_t(resolution_)*spacingCm_;
+        const auto limit=(kLimitCm-span)/span;
+        for(const auto& key:nextKeys){
+            if(key.x< -limit||key.x>limit||key.y< -limit||key.y>limit||
+               key.z< -limit||key.z>limit)
+                throw std::out_of_range("Caverns restore chunk extent");
+            nextDirty.enqueue({key.x*span,key.y*span,key.z*span,
+                (key.x+1)*span,(key.y+1)*span,(key.z+1)*span},
+                resolution_,spacingCm_,snapshot->sourceRevision);
+        }
+        dirty_=std::move(nextDirty);
+        prepared_.clear();lodOverrides_.clear();
+        snapshot_=std::move(snapshot);index_=std::move(index);
+        // Old futures remain bounded and are discarded by their epoch check.
+    }
+
     // Optional explicit adapter for the Stage20 Workspace operation return.
     // The editor caller forwards its successful result after MapDoc commit;
     // this runtime object never accesses Workspace or mutable MapDoc.
