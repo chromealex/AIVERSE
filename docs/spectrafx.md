@@ -1,6 +1,6 @@
-## Stage 119B — owned asynchronous checkpoint capture (in progress; QA deferred)
+## Stage 119B — owned asynchronous checkpoint capture (source implemented; QA deferred)
 
-Reuse existing chunked capture, shared readback budget, cadence and callback lifetime. Capture seven streams for owned allocation, exact partition metadata, validate revision and mode; no publication after partial enqueue or invalid data. Register production checkpoint fixture for history, disk v2 and async completion. Native tests remain deferred.
+Reuse existing chunked capture, shared readback budget, cadence and callback lifetime. Capture seven streams for owned allocation, exact partition metadata, validate revision and mode; no publication after partial enqueue or invalid data. Register production checkpoint fixture for history, disk v2 and async completion. Native tests remain deferred. Seven streams reconstruct exact partition; default 512 KiB per-frame checkpoint quota may reject 4096-slot owned snapshots, which need a configured larger quota. Native capture/restore remains bounded to 4096 physical slots. File v2 remains same-build presentation-only; v1 is unchanged. CPU fallback refuses owned snapshots with process-local source tokens.
 
 ## Stage 119A — GPU-owned allocator checkpoint format and blocking capture/restore (source implemented; async pending; QA deferred)
 

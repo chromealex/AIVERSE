@@ -170,6 +170,30 @@ void liveCompaction(gfx::Device& d,bool procedural){
             std::count(b.liveOwners.begin(),b.liveOwners.end(),3ull)==64,"live compact partition reuse");
     std::printf("PASS live compaction procedural=%d\n",int(procedural));
 }
+void checkpoint(gfx::Device& d,bool procedural){
+    auto cfg=config(1024,procedural);cfg.lifetime=60.f;
+    ComputeParticles p;require(p.init(&d,cfg),"owned checkpoint init");
+    p.setView(view());
+    {Frame frame(d);burst(p,320,0,{0,0,.5f});require(p.step(.1f),"checkpoint births");}
+    auto before=audit(d,p,320);
+    GpuCheckpoint snapshot;
+    require(p.captureGpuCheckpoint(snapshot)&&snapshot.gpuOwnedAllocation&&validOwnedGpuCheckpoint(snapshot),"owned blocking capture");
+    require(snapshot.aliveSlotOrder.size()==320&&snapshot.freeSlotOrder.size()==192,"owned capture partition");
+    std::vector<uint8_t> file;
+    require(p.exportRestoreCheckpoint("owned-fixture",file),"owned v2 export");
+    require(p.retainFreshGpuCheckpoint(),"owned retain");
+    auto ids=p.historicalGpuCheckpointIds();
+    {Frame frame(d);require(p.tryClear(),"clear before restore");require(p.importRestoreCheckpoint("owned-fixture",file),"owned v2 import");require(p.step(0),"owned restore redraw");}
+    auto after=audit(d,p,320);
+    require(after.capacity==before.capacity&&after.liveOwners==before.liveOwners,"owned restore physical partition");
+    {Frame frame(d);require(p.tryClear(),"clear before history");require(p.restoreHistoricalGpuCheckpoint(ids.back())&&p.step(0),"owned history restore");}
+    audit(d,p,320);
+    bool done=false,ok=false;
+    {Frame frame(d);require(p.requestGpuCheckpoint([&](bool result){done=true;ok=result;}),"owned async capture request");}
+    require(d.waitIdle(),"owned async completion");
+    require(done&&ok&&p.checkpointStatus().restoreEligible,"owned async fresh");
+    std::printf("PASS owned checkpoint procedural=%d\n",int(procedural));
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -209,6 +233,7 @@ int aiverseMain(int,char**){
                 lod(*d,procedural);
                 drawAcceptance(*d,procedural);
                 liveCompaction(*d,procedural);
+                checkpoint(*d,procedural);
             }
             memory(*d);
             std::puts("PASS production Metal allocator acceptance");return 0;

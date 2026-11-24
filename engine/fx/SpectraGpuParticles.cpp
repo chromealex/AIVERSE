@@ -150,8 +150,9 @@ bool ComputeParticles::initGpu() {
     readbackLifetime_=std::make_shared<uint64_t>(0);
     vmFrameRevision_=0;
     checkpointRevision_=0;
-    checkpointCadence_.configure(!desc_.gpuOwnedAllocation&&desc_.capacity<=kGpuCheckpointCaptureMaxSlots?desc_.checkpointEveryFrames:0,
-                                 !desc_.gpuOwnedAllocation&&desc_.capacity<=kGpuCheckpointCaptureMaxSlots?desc_.adaptiveCheckpoint:AdaptiveCheckpointPolicy{});
+    const bool checkpointPossible=desc_.gpuOwnedAllocation||desc_.capacity<=kGpuCheckpointCaptureMaxSlots;
+    checkpointCadence_.configure(checkpointPossible?desc_.checkpointEveryFrames:0,
+                                 checkpointPossible?desc_.adaptiveCheckpoint:AdaptiveCheckpointPolicy{});
     asyncCheckpointPending_=false;
     lastCheckpoint_={};
     if(!device_) {reason_="no RHI Device";return false;}
@@ -1272,6 +1273,12 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     stats_.alive=uint32_t(std::min<uint64_t>(cap,gpuEstimatedBirths_));
     stats_.submittedSlots=stats_.alive; // estimate, actual indirect count stays GPU-side
     drawCount_=gpuAllocationSubmitted_?cap:0;reason_.clear();
+    if(cap<=kGpuCheckpointCaptureMaxSlots&&checkpointCadence_.due(vmFrameRevision_)){
+        if(!asyncCheckpointPending_&&requestGpuCheckpoint())checkpointCadence_.accepted(vmFrameRevision_);
+        else checkpointCadence_.deferred(vmFrameRevision_);
+        stats_.checkpointAdaptiveBackoffs=checkpointCadence_.backoffs();
+        stats_.checkpointAdaptiveRecoveries=checkpointCadence_.recoveries();
+    }
     return true;
 }
 void ComputeParticles::draw(const fx::FxFog& fog) {
@@ -1418,23 +1425,25 @@ bool ComputeParticles::requestGpuVmErrors(
     return true;
 }
 
+namespace {
+bool finishOwnedCheckpoint(GpuCheckpoint&,const uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*);
+}
 bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) {
-    if(gpuAllocationActive_)return false;
     if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !readbackLifetime_ || asyncCheckpointPending_ ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !states_.valid() || !stateProgramParams_.valid() ||
-       !stateAttributes_.valid() || ages_.empty() ||
-       !pendingStates_.empty() || !pendingKillSlots_.empty() ||
+       !stateAttributes_.valid() ||
+       !pendingStates_.empty() || !pendingKillSlots_.empty() || !pendingGpuKills_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
 
-    // Checkpoint v1/readback quotas are independent of simulation capacity.
-    const size_t n=ages_.size();
-    if(n>kGpuCheckpointCaptureMaxSlots)return false;
-    const std::array<size_t,3> lengths{
-        n*sizeof(ParticleState),n*sizeof(ProgramParams),
-        n*sizeof(ProgramAttributes)
+    const bool owned=gpuAllocationActive_;
+    const size_t n=owned?allocatedCapacity():ages_.size();
+    if(!n||n>kGpuCheckpointCaptureMaxSlots)return false;
+    const std::array<size_t,7> lengths{
+        n*sizeof(ParticleState),n*sizeof(ProgramParams),n*sizeof(ProgramAttributes),
+        owned?n*8:0,owned?n*4:0,owned?n*4:0,owned?8*sizeof(uint32_t):0
     };
     constexpr size_t kChunkBytes=65536;
     size_t chunks=0;
@@ -1442,7 +1451,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     if(chunks==0 || chunks>16)return false;
 
     struct Pending {
-        std::array<std::vector<uint8_t>,3> bytes;
+        std::array<std::vector<uint8_t>,7> bytes;
+        bool owned=false;
+        size_t physicalSlots=0;
         std::vector<float> remainingLifetime;
         std::vector<uint32_t> freeSlotOrder;
         std::vector<uint64_t> sourceTokens;
@@ -1463,9 +1474,8 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
         }
     };
     auto pending=std::make_shared<Pending>();
-    pending->remainingLifetime=ages_;
-    pending->freeSlotOrder=freeSlots_;
-    pending->sourceTokens=slotSourceTokens_;
+    pending->owned=owned;pending->physicalSlots=n;
+    if(!owned){pending->remainingLifetime=ages_;pending->freeSlotOrder=freeSlots_;pending->sourceTokens=slotSourceTokens_;}
     pending->birthParameters=programParams_;
     pending->shaderBirthSeed=shaderBirthSeed_;
     pending->shaderBirthOrdinal=shaderBirthOrdinal_;
@@ -1474,8 +1484,8 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     pending->frameSerial=device_->frameSerial();
     pending->completion=std::move(callback);
     pending->left=chunks;
-    for(size_t i=0;i<3;++i)pending->bytes[i].resize(lengths[i]);
-    const size_t totalBytes=lengths[0]+lengths[1]+lengths[2];
+    size_t totalBytes=0;
+    for(size_t i=0;i<lengths.size();++i){pending->bytes[i].resize(lengths[i]);totalBytes+=lengths[i];}
     if(desc_.checkpointBudget &&
        !desc_.checkpointBudget->tryReserve(
             pending->frameSerial,totalBytes,uint32_t(chunks))) {
@@ -1489,12 +1499,13 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     asyncCheckpointPending_=true;
     ++stats_.checkpointRequests;
 
-    const std::array<gfx::BufferHandle,3> buffers{
-        states_,stateProgramParams_,stateAttributes_
+    markGpuAllocationUsed();
+    const std::array<gfx::BufferHandle,7> buffers{
+        states_,stateProgramParams_,stateAttributes_,gpuSourceOwners_,liveSlots_,gpuAliveCurrent_,aliveCounter_
     };
     bool allAccepted=true;
     size_t acceptedChunks=0;
-    for(size_t b=0;b<3 && allAccepted;++b) {
+    for(size_t b=0;b<buffers.size() && allAccepted;++b) {
         for(size_t offset=0;offset<lengths[b];offset+=kChunkBytes) {
             const size_t length=std::min(kChunkBytes,lengths[b]-offset);
             const bool accepted=device_->readBufferRangeAsync(
@@ -1515,11 +1526,11 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                     if(--pending->left!=0)return;
                     asyncCheckpointPending_=false;
                     bool complete=pending->acceptedAll && !pending->failed &&
-                        gpuActive() &&
-                        pending->remainingLifetime.size()==ages_.size();
+                        gpuActive() && pending->owned==gpuAllocationActive_ &&
+                        (pending->owned||pending->remainingLifetime.size()==ages_.size());
                     if(complete) {
                         GpuCheckpoint result;
-                        const size_t total=pending->remainingLifetime.size();
+                        const size_t total=pending->physicalSlots;
                         result.slots.resize(total);
                         result.remainingLifetime=pending->remainingLifetime;
                         result.freeSlotOrder=pending->freeSlotOrder;
@@ -1542,13 +1553,16 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                                 pending->bytes[2].data()+i*sizeof(ProgramAttributes),
                                 sizeof(ProgramAttributes));
                         }
-                        result.complete=true;
-                        // Keep a completed historical capture for diagnostics,
-                        // but ONLY same-revision state is eligible for fallback.
-                        lastCheckpoint_=std::move(result);
-                        checkpointRevision_=pending->frameRevision;
-                        ++stats_.checkpointCompleted;
-                    } else if(pending->acceptedAll) ++stats_.checkpointFailed;
+                        if(pending->owned)complete=finishOwnedCheckpoint(result,pending->bytes[3].data(),
+                            pending->bytes[4].data(),pending->bytes[5].data(),pending->bytes[6].data());
+                        if(complete){
+                            result.complete=true;
+                            lastCheckpoint_=std::move(result);
+                            checkpointRevision_=pending->frameRevision;
+                            ++stats_.checkpointCompleted;
+                        }
+                    }
+                    if(!complete&&pending->acceptedAll)++stats_.checkpointFailed;
                     if(pending->acceptedAll) {
                         checkpointCadence_.completed(complete);
                         stats_.checkpointAdaptiveBackoffs=checkpointCadence_.backoffs();
@@ -1800,7 +1814,7 @@ bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
 }
 
 bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
-    out={};
+    out={};if(asyncCheckpointPending_)return false;
     if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !states_.valid() || !stateProgramParams_.valid() ||
