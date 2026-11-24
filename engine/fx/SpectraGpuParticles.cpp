@@ -214,18 +214,21 @@ bool ComputeParticles::initGpu() {
         (vulkan||device_->info().backend==gfx::Backend::Metal);
     desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
     if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
-    if(desc_.sharedSdfCache&&desc_.staticSdf.dimension&&!desc_.depthCollision){
+    const bool wantSharedSdf=desc_.sharedSdfCache&&desc_.staticSdf.dimension&&!desc_.depthCollision;
+    {
+        auto& budget=*desc_.allocationBudget;
+        budget.collect(device_->gpuCompletedFence());
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(wantSharedSdf?0:(graphPayload.size()-4)*sizeof(uint32_t))+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
+        if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
+        gpuAllocationCharge_=charge;
+    }
+    // Admit private storage first, so a too-large page can fall back to an
+    // exact-size dedicated shared buffer within the remaining ledger credit.
+    if(wantSharedSdf){
         sharedSdfPayload_=desc_.sharedSdfCache->acquire(*device_,desc_.allocationBudget,graphPayload);
         if(!sharedSdfPayload_){
             ++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX shared SDF admission failed";return false;
         }
-    }
-    {
-        auto& budget=*desc_.allocationBudget;
-        budget.collect(device_->gpuCompletedFence());
-        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(sharedSdfPayload_?0:(graphPayload.size()-4)*sizeof(uint32_t))+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
-        if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
-        gpuAllocationCharge_=charge;
     }
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
@@ -396,7 +399,6 @@ bool ComputeParticles::initGpu() {
 }
 void ComputeParticles::markGpuAllocationUsed(){
     if(!gpuAllocationCharge_||!device_)return;
-    if(sharedSdfPayload_)sharedSdfPayload_->markUsed();
     const auto fence=device_->gpuSubmissionFence();
     gpuAllocationLastFence_=fence?std::max(gpuAllocationLastFence_,fence):GpuAllocationBudget::unknownFence;
 }
@@ -821,6 +823,7 @@ bool ComputeParticles::step(float dt) {
         ++stats_.gpuStagingUploadFailures;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
         reason_="SpectraFX packed SDF upload rejected; retry before simulation";return false;
     }
+    if(sharedSdfPayload_)sharedSdfPayload_->markUsed(); // graph source buffer is read only by simulation
     markGpuAllocationUsed();
     if(gpuAllocationActive_)return stepGpuAllocated(dt);
     // Recycle only after a successful Metal frame completion callback,

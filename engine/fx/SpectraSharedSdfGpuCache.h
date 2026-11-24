@@ -24,6 +24,7 @@ public:
     SharedSdfGpuPage(const SharedSdfGpuPage&)=delete;
     SharedSdfGpuPage& operator=(const SharedSdfGpuPage&)=delete;
     bool initialize(){
+        if(charged_||!budget_||!capacity_)return false;
         budget_->collect(device_.gpuCompletedFence());
         if(!budget_->reserve(bytes()))return false;
         charged_=true;
@@ -37,6 +38,7 @@ public:
     gfx::BufferHandle buffer()const{return buffer_;}
     bool sameBudget(const std::shared_ptr<gfx::GpuAllocationBudget>& budget)const{return budget_==budget;}
     bool claim(uint32_t words,uint32_t& first){
+        if(!words||!buffer_.valid())return false;
         collect();
         for(size_t i=0;i<free_.size();++i){
             auto& r=free_[i];

@@ -6,6 +6,7 @@
 #include "engine/fx/SpectraGpuParticles.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
@@ -195,6 +196,74 @@ void checkpoint(gfx::Device& d,bool procedural){
     require(done&&ok&&p.checkpointStatus().restoreEligible,"owned async fresh");
     std::printf("PASS owned checkpoint procedural=%d\n",int(procedural));
 }
+void packedSdfAtlas(gfx::Device& d){
+    auto budget=d.acquireGpuAllocationBudget();
+    require(bool(budget),"atlas canonical budget");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"atlas initial idle");
+    budget->collect(d.gpuCompletedFence());const auto baseline=budget->stats().charged();
+    auto cache=std::make_shared<SharedSdfGpuCache>(d,true);
+    auto plane=[&](uint32_t n,float height){
+        auto cfg=config(256,false);cfg.allocationBudget=budget;cfg.sharedSdfCache=cache;
+        cfg.staticSdf.dimension=n;cfg.staticSdf.origin={-2,-2,-2};
+        cfg.staticSdf.spacing=4.f/float(n-1);
+        for(uint32_t z=0;z<n;++z)for(uint32_t y=0;y<n;++y)for(uint32_t x=0;x<n;++x)
+            cfg.staticSdf.samples.push_back(-2.f+float(y)*cfg.staticSdf.spacing-height);
+        return cfg;
+    };
+    for(bool owned:{false,true}){
+        auto low=plane(8,-.5f),high=plane(16,.5f);
+        low.gpuOwnedAllocation=high.gpuOwnedAllocation=owned;
+        low.gpuIndirect=high.gpuIndirect=owned;
+        ComputeParticles a,b,duplicate;
+        require(a.init(&d,low)&&b.init(&d,high)&&duplicate.init(&d,low),"packed heterogeneous emitters");
+        require(cache->atlasPages()==1&&cache->liveEntries()==2&&a.stats().sharedSdfPacked&&b.stats().sharedSdfPacked&&
+                a.stats().sharedSdfOffsetWords!=b.stats().sharedSdfOffsetWords&&
+                duplicate.stats().sharedSdfOffsetWords==a.stats().sharedSdfOffsetWords,
+                "heterogeneous offsets and identical payload dedup");
+        require(cache->atlasBytes()==1024u*1024u&&cache->liveBytes()==cache->atlasBytes()&&
+                budget->stats().charged()==baseline+3*estimateGpuEmitterAllocation(256,false)+cache->atlasBytes(),
+                "one page reservation plus private envelopes");
+        duplicate.shutdown();a.setView(view());b.setView(view());
+        {Frame frame(d);burst(a,64,1,{0,.25f,.5f});burst(b,64,2,{0,.25f,.5f});
+         require(a.step(.01f)&&b.step(.01f),"first-frame checked atlas uploads");}
+        {Frame frame(d);require(a.step(.01f)&&b.step(.01f),"atlas collision update");}
+        require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"atlas collision completion");
+        auto checkHeight=[&](ComputeParticles& p,float expected){
+            GpuCheckpoint snapshot;require(p.captureGpuCheckpoint(snapshot),"atlas particle readback");
+            uint32_t live=0;
+            for(const auto& slot:snapshot.slots)if(slot.positionAge.w>=0){
+                ++live;require(std::abs(slot.positionAge.y-expected)<.012f,"atlas distinct SDF surface");
+            }
+            require(live==64,"atlas particle count");
+        };
+        checkHeight(a,.25f);checkHeight(b,.501f);
+        a.shutdown();require(cache->atlasPages()==1,"second emitter retains page");
+        tick(d,b,.01f);b.shutdown();
+        require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"atlas emitter completion");
+        budget->collect(d.gpuCompletedFence());
+        require(cache->atlasPages()==0&&budget->stats().charged()==baseline,"atlas page retired");
+    }
+    // Exercise range quarantine independently of the particle allocator.
+    std::vector<uint32_t> words(9+27,0);words[4]=3;words[8]=0x3f800000u;
+    auto first=cache->acquire(d,budget,words);words[9]=0x3f800000u;
+    auto anchor=cache->acquire(d,budget,words);
+    require(first&&anchor&&first->buffer()==anchor->buffer(),"same physical page");
+    const uint32_t oldOffset=first->offsetWords();
+    std::shared_ptr<SharedSdfGpuPayload> newer;
+    {
+        Frame frame(d);require(first->ensureUploaded(),"atlas range upload");
+        first.reset();words[9]=0x40000000u;newer=cache->acquire(d,budget,words);
+        require(newer&&newer->buffer()==anchor->buffer()&&newer->offsetWords()!=oldOffset,
+                "in-flight range cannot be recycled");
+    }
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"atlas quarantine completion");
+    words[9]=0x40400000u;auto reused=cache->acquire(d,budget,words);
+    require(reused&&reused->offsetWords()==oldOffset&&reused->buffer()==anchor->buffer(),
+            "completed range returns to first-fit allocator");
+    anchor.reset();newer.reset();reused.reset();budget->collect(d.gpuCompletedFence());
+    require(cache->liveBytes()==0&&budget->stats().charged()==baseline,"all atlas reservations credited");
+    std::puts("PASS packed SDF atlas offsets, contacts and fence quarantine");
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -244,6 +313,7 @@ int main(){
             for(uint32_t cap:{256u,65536u,262144u})stress(*d,cap,procedural);
             lod(*d,procedural);drawAcceptance(*d,procedural);liveCompaction(*d,procedural);checkpoint(*d,procedural);
         }
+        packedSdfAtlas(*d);
         memory(*d);
         std::puts("PASS Vulkan allocator acceptance");return 0;
     }catch(const std::exception& e){
