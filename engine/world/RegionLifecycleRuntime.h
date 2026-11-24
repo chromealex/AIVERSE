@@ -5,6 +5,8 @@
 #include "engine/sim/Simulation.h"
 #include <algorithm>
 #include <cstdint>
+#include <functional>
+#include <span>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -66,11 +68,19 @@ inline void io(Archive& archive,RegionActivationQueue& queue) {
 
 class RegionLifecycleRuntime {
 public:
-    // Install from a real GameCore native module or another gameplay host's
-    // setup. No automatic registration for games without this capability.
-    // Every registered parked component must be safe to pause in that host.
-    static void install(Simulation& sim,RegionDormancyController controller,
-                        uint32_t maxTransitionsPerTick=2) {
+    // Immutable setup-time configuration, not another persisted resource.
+    // Admission reads authoritative Simulation state at the selected tick
+    // barrier. No external side effects, wall clock or async asset callbacks.
+    using Admission=std::function<bool(const Simulation&,Cell,std::span<const Entity>)>;
+    struct GuardedPolicy {
+        RegionDormancyController::ColdAdvancePlan plan;
+        Admission mayPark;
+        Admission mayWake;
+    };
+
+private:
+    static void installResources(Simulation& sim,const RegionDormancyController& controller,
+                                 uint32_t maxTransitionsPerTick) {
         if(!maxTransitionsPerTick || maxTransitionsPerTick>16)
             throw std::invalid_argument("regionLifecycle.maxTransitionsPerTick must be 1..16");
         if(sim.world().resourceConst<RegionActivationQueue>() ||
@@ -86,10 +96,75 @@ public:
         world.setResource<RegionEntityLedger>(RegionEntityLedger{});
         world.setResource<RegionColdStore>(RegionColdStore{});
         world.setResource<RegionActivationQueue>(RegionActivationQueue{});
+    }
+
+    // Single queue owner and drain implementation. Canonical head-of-line
+    // blocking preserves replay order; a failed transition is not ACKed.
+    // Callbacks may not mutate the queue or its resources.
+    template<class Transition>
+    static size_t drain(Simulation& sim,uint32_t budget,Transition transition,
+                        std::string* blockedReason) {
+        if(blockedReason)blockedReason->clear();
+        auto& world=sim.world();
+        const auto* queued=world.resourceConst<RegionActivationQueue>();
+        if(!budget || !queued || queued->pending.empty())return 0;
+        const auto* ledger=world.resourceConst<RegionEntityLedger>();
+        if(!ledger || !world.resourceConst<RegionColdStore>()) {
+            if(blockedReason)*blockedReason="region lifecycle resources unavailable";
+            return 0;
+        }
+        // Acquire writable resources before the structural operation. No
+        // detachment or cold-store copy in the ordinary no-request tick.
+        auto* queue=world.resource<RegionActivationQueue>();
+        auto* cold=world.resource<RegionColdStore>();
+        size_t finished=0;
+        while(!queue->pending.empty() && finished<budget) {
+            const auto item=*queue->pending.begin();
+            if(queue->applied==UINT64_MAX || item.second>1) {
+                if(blockedReason)*blockedReason="invalid region activation queue state";
+                break;
+            }
+            std::string why;
+            if(!transition(world,*ledger,*cold,item.first,item.second!=0,&why)) {
+                if(blockedReason)*blockedReason=std::move(why);
+                break;
+            }
+            queue->pending.erase(item.first);
+            ++queue->applied;
+            ++finished;
+        }
+        return finished;
+    }
+
+public:
+    // Legacy pause-only installation. Choose this OR installGuarded, not
+    // both. The owning host must register the system at a structural barrier.
+    static void install(Simulation& sim,RegionDormancyController controller,
+                        uint32_t maxTransitionsPerTick=2) {
+        installResources(sim,controller,maxTransitionsPerTick);
         auto policy=std::make_shared<const RegionDormancyController>(std::move(controller));
         sim.addSystem("world.regionLifecycle",
             [policy,maxTransitionsPerTick](Simulation& current){
                 RegionLifecycleRuntime::step(current,*policy,maxTransitionsPerTick);
+            });
+    }
+
+    // Register the guarded system at the host's chosen authoritative phase,
+    // after its clocked live components reach sim.tick() and before readers
+    // need restored state. The domain owner must arrange system ordering,
+    // complete references and actual readiness; this is not a solver.
+    static void installGuarded(Simulation& sim,RegionDormancyController controller,
+                               GuardedPolicy guarded,uint32_t maxTransitionsPerTick=2) {
+        std::string error;
+        if(!guarded.mayPark || !guarded.mayWake ||
+           !controller.validateCompletePlan(guarded.plan,&error))
+            throw std::invalid_argument("region lifecycle guarded policy invalid: "+error);
+        auto policy=std::make_shared<const RegionDormancyController>(std::move(controller));
+        auto guards=std::make_shared<const GuardedPolicy>(std::move(guarded));
+        installResources(sim,*policy,maxTransitionsPerTick);
+        sim.addSystem("world.regionLifecycle",
+            [policy,guards,maxTransitionsPerTick](Simulation& current){
+                RegionLifecycleRuntime::stepGuarded(current,*policy,*guards,maxTransitionsPerTick);
             });
     }
 
@@ -104,41 +179,52 @@ public:
         if(it!=current->pending.end() && it->second==target)return true;
         if(it==current->pending.end() &&
            current->pending.size()>=RegionActivationQueue::kMaxPending)return false;
-        // A redundant request must not detach a COW snapshot's resource page.
         auto* queue=sim.world().resource<RegionActivationQueue>();
         queue->pending[region]=target;
         return true;
     }
 
-    // Each successful transition consumes exactly one pending request.
-    // A failed head stays queued without changing the affected ECS entities
-    // or proceeding to later regions. A future command may cancel/replace it.
-    // This scheduler is deterministic but is NOT a collision/navmesh gate:
-    // real hosts must validate destination readiness before locomotion.
+    // Explicit owner-authorized cancellation unblocks a refused head.
+    // No transition occurred, so applied is not incremented.
+    static bool cancel(Simulation& sim,Cell region) {
+        const auto* current=sim.world().resourceConst<RegionActivationQueue>();
+        if(!current)return false;
+        if(!current->pending.contains(region))return true;
+        sim.world().resource<RegionActivationQueue>()->pending.erase(region);
+        return true;
+    }
+
     static size_t step(Simulation& sim,const RegionDormancyController& policy,
                        uint32_t budget){
-        auto& world=sim.world();
-        const auto* queued=world.resourceConst<RegionActivationQueue>();
-        if(!budget || !queued || queued->pending.empty())return 0;
-        const auto* ledger=world.resourceConst<RegionEntityLedger>();
-        if(!ledger || !world.resourceConst<RegionColdStore>())return 0;
-        // The hot path with no requests is read-only, avoiding cold-store
-        // COW detach and giant copy on every ordinary game tick.
-        auto* queue=world.resource<RegionActivationQueue>();
-        auto* cold=world.resource<RegionColdStore>();
-        size_t finished=0;
-        while(!queue->pending.empty() && finished<budget) {
-            const auto item=*queue->pending.begin();
-            if(queue->applied==UINT64_MAX)break;
-            std::string why;
-            if(!policy.setRegionActive(world,*ledger,*cold,
-                                       item.first,item.second!=0,&why))
-                break;
-            queue->pending.erase(item.first);
-            ++queue->applied;
-            ++finished;
+        return drain(sim,budget,[&](World& world,const RegionEntityLedger& ledger,
+                                    RegionColdStore& cold,Cell region,bool active,std::string* why){
+            return policy.setRegionActive(world,ledger,cold,region,active,why);
+        },nullptr);
+    }
+
+    // Native guarded consumers must use this path, never the legacy step
+    // to bypass their configured policy. Refused head remains persisted;
+    // retry naturally uses the then-current authoritative simulation tick.
+    // Optional reason is a transient caller output, not gameplay state.
+    static size_t stepGuarded(Simulation& sim,const RegionDormancyController& policy,
+                              const GuardedPolicy& guarded,uint32_t budget,
+                              std::string* blockedReason=nullptr) {
+        if(!guarded.mayPark || !guarded.mayWake) {
+            if(blockedReason)*blockedReason="missing region lifecycle admission predicate";
+            return 0;
         }
-        return finished;
+        return drain(sim,std::min<uint32_t>(budget,16),
+            [&](World& world,const RegionEntityLedger& ledger,RegionColdStore& cold,
+                Cell region,bool active,std::string* why){
+                const auto admitPark=[&](const World&,Cell cell,std::span<const Entity> members){
+                    return guarded.mayPark(std::as_const(sim),cell,members);
+                };
+                const auto admitWake=[&](const World&,Cell cell,std::span<const Entity> members){
+                    return guarded.mayWake(std::as_const(sim),cell,members);
+                };
+                return policy.setRegionActiveGuarded(world,ledger,cold,region,active,
+                           sim.tick(),guarded.plan,admitPark,admitWake,why);
+            },blockedReason);
     }
 };
 

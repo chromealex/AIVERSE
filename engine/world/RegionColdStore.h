@@ -675,46 +675,96 @@ public:
         return true;
     }
 
-    // Deterministic region-wide transition, called by the authoritative game
-    // tick when gameplay decides which regions run hot. It is intentionally
-    // independent of visual observers/ChunkStreamer budgets.
-    // The first W1 implementation retains Entity and Transform in both states;
-    // if a ledger ID has no materialized Entity, fail rather than silently lose it.
-    // A mixed hot/cold region is rejected instead of partially mutating it.
-    bool setRegionActive(World& world,const RegionEntityLedger& ledger,
-                         RegionColdStore& store,Cell region,bool active,
-                         std::string* error=nullptr)const {
+    // For a scheduler installed at host setup every registered parkable
+    // type must be explicitly classified, even if no entity owns it yet.
+    bool validateCompletePlan(const ColdAdvancePlan& plan,std::string* error=nullptr)const {
+        if(!validatePlan(plan,error))return false;
+        if(plan.entries_.size()!=adapters_.size())
+            return reject(error,"cold plan does not cover all registered codecs");
+        return true;
+    }
+
+private:
+    // Both queue modes share the same authoritative region membership check.
+    // A mixed group is refused; never transition only its available subset.
+    bool collectRegionGroup(const World& world,const RegionEntityLedger& ledger,
+                            const RegionColdStore& store,Cell region,
+                            std::vector<Entity>& entities,bool& dormant,
+                            std::string* error)const {
         std::map<RegionEntityId,Entity> live;
         if(!RegionEcsBridge::rebuild(world,ledger,live,position_,error))return false;
         const auto ids=ledger.activeIn(region);
-        if(ids.empty())return true;
-        std::vector<Entity> entities;
-        entities.reserve(ids.size());
-        size_t dormant=0;
+        if(ids.size()>RegionColdStore::kMaxEntities)
+            return reject(error,"region exceeds cold group entity budget");
+        std::vector<Entity> next;
+        next.reserve(ids.size());
+        size_t sleeping=0;
         for(RegionEntityId id:ids) {
             const auto it=live.find(id);
             if(it==live.end())
                 return reject(error,"region entity is not materialized");
-            const bool isDormant=world.has<RegionDormant>(it->second);
+            const auto* marker=world.tryGetConst<RegionDormant>(it->second);
             const auto* record=store.find(id);
-            if(isDormant) {
-                ++dormant;
-                if(!record || record->owner!=region ||
+            if(marker) {
+                ++sleeping;
+                if(marker->marker!=1 || !record || record->owner!=region ||
                    record->ownerRevision!=ledger.find(id)->revision)
                     return reject(error,"dormant region record is missing or stale");
             }else if(record) {
                 return reject(error,"hot entity unexpectedly has a cold payload");
             }
-            entities.push_back(it->second);
+            next.push_back(it->second);
         }
-        if(dormant && dormant!=ids.size())
+        if(sleeping && sleeping!=ids.size())
             return reject(error,"mixed active and dormant entities in one region");
-        if(active) {
-            if(!dormant)return true; // already hot, no writes
-            return wakeGroup(world,ledger,store,entities,region,error);
-        }
-        if(dormant==ids.size())return true; // already cold, no writes
+        dormant=sleeping!=0;
+        entities.swap(next);
+        return true;
+    }
+
+public:
+    // Legacy explicit pause-only transition. Same-state and empty regions
+    // are idempotent; no asset readiness is implied by that acknowledgment.
+    bool setRegionActive(World& world,const RegionEntityLedger& ledger,
+                         RegionColdStore& store,Cell region,bool active,
+                         std::string* error=nullptr)const {
+        std::vector<Entity> entities;
+        bool dormant=false;
+        if(!collectRegionGroup(world,ledger,store,region,entities,dormant,error))
+            return false;
+        if(entities.empty() || active!=dormant)return true;
+        if(active)return wakeGroup(world,ledger,store,entities,region,error);
         return parkGroup(world,ledger,store,entities,region,error);
+    }
+
+    // Full-plan transition for authoritative scheduling. A wake advances all
+    // clocked components to the supplied simulation tick before restoring.
+    // Already-in-target-state requests do not repeat callbacks or catch-up.
+    // The host must check cross-region links/pins and collision/nav readiness
+    // in its read-only admission predicates for actual transitions.
+    template<class ParkAdmit,class WakeAdmit>
+    bool setRegionActiveGuarded(World& world,const RegionEntityLedger& ledger,
+                                RegionColdStore& store,Cell region,bool active,
+                                uint64_t currentTick,const ColdAdvancePlan& plan,
+                                ParkAdmit mayPark,WakeAdmit mayWake,
+                                std::string* error=nullptr)const {
+        if(!validateCompletePlan(plan,error))return false;
+        std::vector<Entity> entities;
+        bool dormant=false;
+        if(!collectRegionGroup(world,ledger,store,region,entities,dormant,error))
+            return false;
+        if(entities.empty())return true;
+        if(dormant) {
+            if(active)return advanceAndWakeGroup(world,ledger,store,entities,region,
+                                  currentTick,plan,std::move(mayWake),error);
+            // Validate the complete dormant codec/clock policy on redundant
+            // cold requests without advancing or publishing any payload.
+            std::vector<ColdWork> unused;
+            return prepareAdvance(world,store,entities,plan,currentTick,true,unused,error);
+        }
+        if(active)return true;
+        return parkGroupGuarded(world,ledger,store,entities,region,currentTick,
+                                plan,std::move(mayPark),error);
     }
 
     // A dormant entity cannot pass through RegionEcsBridge::retire because its
