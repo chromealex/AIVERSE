@@ -659,3 +659,42 @@ Read `engine/nav/CaveSimulationNavigation.h`,
 **Cache lifetime:** `nav::CavePathQueryCache` memoizes successful A*/HPA/Flow/Hybrid route outputs with bounded LRU (256 entries, 8MiB waypoints by default), keyed by both authored and environment epochs, backend name, endpoints, full agent profile, and visit budget; user `Custom` solvers are not memoized. `CaveNativeNavMeshCache` retains up to four real `nav::Mesh` objects keyed by authored/environment revisions, nav config and agent profile. The Stage41 bus invalidates both caches on authoring commits, streamed chunk changes and environment publication; rollback also invalidates them. Changing graph solver settings clears prior cached paths. These caches are **derived** and must never enter ECS hash/serialization. Actual HPA cluster-portal and flow integration internals remain reconstructed on cold queries: this is result caching, not a full incremental cluster-flow cache.
 
 **Known limits:** The shared ECS installer is callable in a real `GameModule::setup`, but no universal default auto-install has been added to GameCore because it would lack a verified common native Box3D/SpatialWorld gameplay owner and might move entities without real physics. Stage40 GameClient/Editor Play still uses visual-only cave previews, and the existing `net::Server` is an input relay rather than an authoritative simulation. Box3D uses floating-point queries: use its optional callback only for server-authority simulation, never as a guarantee of deterministic peer lockstep. Real NEREID/PHYSIS callbacks must come from one frozen/committed ECS world epoch. The user deferred all tests; no Stage43 compiler, CMake/CTest, GameClient, ECS replay, NavMesh, Box3D or environment test was performed. Do not claim full operational native game integration without this acceptance.
+
+## Stage 44 — actual ActorHost spatial collision / single-motor steering, persistent HPA/Flow regions (2026-11-24)
+
+Read `engine/nav/CaveActorMotorSteering.h`,
+`engine/nav/GraphRegionCache.h`,
+`engine/world/TerraWeaveCavernsNavigationRegionCache.h`,
+`engine/actor/ActorModule.h`, `engine/actor/ActorModule.cpp`,
+`engine/world/TerraWeaveCavernsRuntimeFrame.h`,
+`skills/world/aiverse-pathfinding/SKILL.md`, and
+`docs/agent-handoffs/caverns-stage44-2026-11-24.md`.
+
+**ActorHost integration is real but OPT-IN and initially STATIC.** The existing `actor::ActorHost` stores characters in `CharacterBody`, not shared `Transform`; applying Stage43 Transform locomotion would move characters twice. Stage44 `nav::steerCaveActorMotor` reads a versioned `CaveRouteFollower` and the existing CharacterBody, checks native collision, and supplies only `actor::Input` (yaw, forward) before the *existing* `moveActor/moveActorModes` implementation. The existing actor motor owns movement, gravity, stance and body state. `nav::repathCaveActorRoutes` runs before actor tick movement and updates route components from CharacterBody. `ActorHost::navigateCaveActor(sim,entity,goal,profile,backend,speed,maxVisits)` installs a goal on an actual actor entity; `setCaveRouteResolver` allows the actual authority to inject a custom registered C++ solver while preserving source revisions. Invalid/stale waypoints set `needsRepath` instead of teleporting actors.
+
+The map's optional `cavernsNavigation` object enables the integration:
+```json
+{
+  "terraweaveCaverns": { "version": 1, "generatorVersion": 1, "sourceRevision": 1, "settings": {}, "stamps": [], "entrances": [] },
+  "cavernsNavigation": {
+    "enabled": true,
+    "resolution": 16,
+    "spacingCm": 100,
+    "collisionChunks": [[0, -1, 0]],
+    "region": {
+      "originXcm": 0, "originYcm": -1600, "originZcm": 0,
+      "width": 16, "height": 16, "depth": 16,
+      "cellCm": 100, "maxCells": 65536, "clusterCells": 8, "maxFlows": 8
+    }
+  }
+}
+```
+This is an **illustrative schema**; real `terraweaveCaverns.settings` must contain the full persisted cave settings from `caveSnapshotToJson`, not the empty placeholder.
+
+At `ActorHost::setup`, before character spawning, the opt-in loader parses the canonical authored SDF, builds an immutable Stage39 index, generates full-resolution meshes for 1..64 explicit `collisionChunks`, converts via Stage27 `prepareCaveVolumeCollision` and inserts triangle IDs from the reserved 0x60000000 namespace into the ActorHost's already-existing `SpatialWorld collision_`. These triangles are used by the original actor motor and spawn validation, **not a second physics or collision world**. This is an INITIAL map collision build: its Box3D-side version and hot Carve/Fill have not been attached to the native Stage35 all-owner transaction. Do not claim the ActorHost's dynamic collision is already live-edited.
+
+**Reusable caches are in engine/nav.** `nav::GraphRegionCache` retains a bounded directed adjacency snapshot, passability, region membership, HPA cross-region portal graph, and complete reverse flow integrations keyed by goal (bounded LRU). Its `refresh(newGraph,changedNodeIDs)` updates the explicitly dirtied nodes and their region portals only, then clears affected flow fields (full recomputation on next goal query). It reuses generic `nav::findGraphDijkstra` for abstract and refined routes; no duplicate algorithm in Caverns. `CaveNavigationRegionCache` maps half-open world SDF dirty bounds plus a one-cell halo to this graph and exposes `find(query,backend)`. The Stage41 runtime can call `enableRegionalNavigation(grid,profile,clusterSize,maxFlows)`, registering `regional.astar`, `regional.hpa`, `regional.flow`, `regional.hybrid`; native commit notifications refresh the region under the same published SDF/environment. ActorHost optionally configures one persistent region from `map.cavernsNavigation.region`; outside that region or for a different profile, it falls back to Stage42 bounded shared graph solvers.
+
+**Dynamic revision hookup:** `ActorHost::acceptCommittedCaveNavigation(publishedProvider,change,exclusiveProof)` switches the ActorHost's immutable SDF source and updates its region cache ONLY after the external real physics owner actually published the corresponding native collider update and held all ActorHost/physics readers exclusive. This method does **not** itself replace live SpatialWorld/Box3D triangle handles. It must never be called from the visual-only editor preview or used to assert completion of the Stage35 GPU/nav/physics transaction. SDF/environment route revisions still force repath.
+
+**Remaining:** true dynamic Carve/Fill collision replacement in ActorHost with reversible native ownership, cross-chunk nav residency/streaming beyond initial explicit collisionChunks, native-character flight/swim/climb controllers, agent movement replan against dynamic obstacles, incremental *Flow Dijkstra relaxation* (Stage44 invalidates complete fields), networking/command integration, STRATA sidecar resource retirement and full Stage35 recovery. Actor bots continue their existing behavior unless an explicit CaveRouteFollower is attached. All changes are still source-only; no native compiler or CMake/CTest/runtime acceptance executed by user's features-first choice. Keep a separate dated handoff and do not merge into main until QA.
