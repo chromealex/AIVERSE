@@ -47,6 +47,31 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
     try{
         require(dev.info().backend==backend&&dev.supportsCompute()&&dev.gpuHealthy(),"requested compute backend unavailable");
         std::printf("TextureGraph RHI: %s / %s\n",expected,dev.info().name.c_str());
+        // Vulkan scope contract: no outside-frame start, no nesting,
+        // no completion until actual submission; an abandoned query is invalid.
+        if(backend==gfx::Backend::Vulkan){
+            constexpr uint64_t firstTag=0x12345678,abandonedTag=0x12345679;
+            require(!dev.beginGpuScope(firstTag),"scope began outside frame");
+            dev.beginFrame(64,64);
+            const bool supported=dev.beginGpuScope(firstTag);
+            if(supported){
+                const bool nested=dev.beginGpuScope(abandonedTag);
+                dev.endGpuScope();
+                const bool abandoned=dev.beginGpuScope(abandonedTag);
+                const auto premature=dev.takeGpuScopeTimings();
+                dev.endFrame();require(dev.waitIdle(),"scope contract fence failed");
+                require(!nested&&abandoned&&premature.empty(),"scope nesting or premature delivery");
+                bool firstSeen=false,abandonedSeen=false;
+                for(const auto& timing:dev.takeGpuScopeTimings()){
+                    if(timing.tag==firstTag)firstSeen=true;
+                    if(timing.tag==abandonedTag){abandonedSeen=true;require(!timing.valid,"unbalanced scope reported valid");}
+                }
+                require(firstSeen&&abandonedSeen&&dev.takeGpuScopeTimings().empty(),"scope completion identity or duplicate delivery");
+            }else{
+                dev.endFrame();require(dev.waitIdle(),"unsupported scope frame failed");
+                std::printf("Vulkan queue does not admit timestamp scopes\n");
+            }
+        }
         profile.start(dev.info(),project);
         auto complete=[&]{
             const auto id=owner.start(request,project).getStr("request");
