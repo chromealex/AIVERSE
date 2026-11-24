@@ -68,3 +68,7 @@ Do not extend this roadmap into engine code until the requested batch is selecte
 2. Match rules, senses and genre bot adapters: common gameplay structure and testable opponents.
 3. Narrative/cinematic and physical interaction: supports story games and immersive puzzles.
 4. Vehicles/sports, cards/turns, production/survival and puzzle solvers as focused batches with real examples.
+
+## Active world feature: Caverns Stage54p (2026-11-24)
+
+IN PROGRESS — planetary chart cut/collar preflight on the existing Caverns owner. Use the exact authored coarse body triangles, preserve the solid preview until the matching volume is published, and report rejected cuts. Acceptance: unchanged MapDoc schema, shared cut planner, bounded inputs, no extra gameplay/renderer authority, revision-aware diagnostics, targeted regression tests and a separate handoff. GPU paired publication, full chart LOD, globe picking and game authority loading remain separate follow-up work. Native/Mac and frontend validation pending.
