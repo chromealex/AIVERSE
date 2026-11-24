@@ -126,3 +126,6 @@ Existing mixed batch planner now accepts recorded glTF/GLB URI repairs, includin
 
 ### S6f.4a — coordinated save of existing owner documents
 Studio `studio.save` with dirty Rules or Manifest stages the existing map and emitted terrain sidecars together with dirty project documents and the project history checkpoint, then commits one existing-file journal before replacing live owners. New sidecars, Save As, asset cursor checkpoints and atomic map checkpoint publication remain separate. This is not a new MCP action or a guarantee for standalone map_save.
+
+### S6f.4b.1 — creation-aware Studio save
+Native Save and Save As use one creation-aware document journal transaction for map JSON, emitted terrain files, dirty Rules/Manifest and Project history checkpoint. Journal v2 distinguishes absent outputs from empty files and retains v1 recovery compatibility. New map destinations and sidecars must be vacant, with existing safe parent directories under maps/. Save As adds its map to the manifest in the same transaction. Map/asset cursor checkpoint atomicity and standalone map_save integration remain outstanding. No new MCP action.
