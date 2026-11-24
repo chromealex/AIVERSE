@@ -180,3 +180,9 @@ Generic pieces that a city game used to keep in its own `native/` are packages n
 Tests: `tests/libraries/city_tests.cpp` (CTest `library_city`), `tools/rules/test_rules.py` (CTest `rules_files`).
 The traffic, pedestrian and driving code of `modules/rts` calls `trafficWideExit`, `trafficLocalDetour`,
 `sweptBoxCircle` and `polylineBounds` directly (no-genre stage C0a); the former Kingston copies are deleted.
+
+## Algorithms — noise roadmap
+
+- Stage 44: periodic integer value noise and cellular distances (implementation present; verification pending).
+- Stage 45 (in progress): periodic gradient noise, analytical fixed-point derivative samples, bounded normalized fractal composition (fBm, turbulence, ridged). Keep legacy GenNoise unchanged. Acceptance: seam equality for value and derivatives, deterministic seed, negative coordinates, bounded octaves and input rejection, C++20 standalone use, no allocation. Full native/platform gates pending.
+- Next: bounded domain warp and curl/vector fields; audit integration candidates without replacing existing owners.
