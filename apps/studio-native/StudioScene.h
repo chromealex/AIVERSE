@@ -32,6 +32,7 @@
 #include "apps/studio-native/StudioFacialGpuPreview.h"
 #include "apps/studio-native/StudioCavernsPreview.h"
 #include "engine/render/NativePresentationRetirement.h"
+#include "apps/editor/TerraWeaveSparsePreview.h"
 
 namespace aiverse::studio {
 class StudioScene final {
@@ -60,6 +61,9 @@ public:
         result.set("terrainTriangles",Json::string(std::to_string(terrainCutStats_.triangles)));
         result.set("terrainCutDiagnostic",Json::string(terrainCutStats_.cutDiagnostic));
         result.set("terrainCutSupported",Json::fromBool(terrainCutStats_.handled));
+        result.set("sparseTerrainResident",Json::string(std::to_string(sparseTerrainPreview_.residentCount())));
+        result.set("sparseTerrainAuthored",Json::string(std::to_string(sparseTerrainPreview_.authoredCount())));
+        result.set("sparseTerrainDiagnostic",Json::string(sparseTerrainError_));
         return result;
     }
     const std::string& lightingStatus() const { return lightingStatus_; }
@@ -194,6 +198,10 @@ private:
     render::MeshBuilder terrainCpu_;
     TerrainPreviewStats terrainCutStats_;
     render::NativePresentationRetirement terrainRetirement_;
+    editor::TerraWeaveSparsePreview sparseTerrainPreview_;
+    render::NativePresentationRetirement sparseTerrainRetirement_;
+    std::string sparseTerrainProject_;
+    std::string sparseTerrainError_;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<render::Model> materialSphere_;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
