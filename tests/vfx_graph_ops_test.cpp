@@ -326,6 +326,12 @@ int main() {
     const auto multiSource=render::texture_graph::gpu::compileMaterializedDag(blendTexture,{3},8);
     require(multiSource.nodes[3].msl.find("float* input2 [[buffer(3)]]")!=std::string::npos&&multiSource.nodes[3].glsl.find("mix(v0,v1,v2.x)")!=std::string::npos,"multi-input expression or binding missing");
     require(multiSource.packs[0].glsl.find("0xff000000u")!=std::string::npos,"RGBA8 pack missing");
+    const auto fusedSource=render::texture_graph::gpu::compileMaterializedDag(blendTexture,{3},8,render::texture_graph::gpu::materializedBudgetBytes,true);
+    require(fusedSource.reachableNodes==4&&fusedSource.fusedNodes==3&&fusedSource.plan.schedule.passes.size()==1,"pointwise region did not fuse");
+    require(fusedSource.nodes[3].glsl.find("mix(fusedNode0,fusedNode1,fusedNode2.x)")!=std::string::npos,"fused shared expression missing");
+    require(fusedSource.nodes[3].msl.find("buffer(1)")==std::string::npos&&fusedSource.totalBytes<multiSource.totalBytes,"fused leaf region retained intermediate buffers");
+    const auto pinnedFusion=render::texture_graph::gpu::compileMaterializedDag(sharedTexture,{0,1,2},128,render::texture_graph::gpu::materializedBudgetBytes,true);
+    require(pinnedFusion.fusedNodes==0&&pinnedFusion.plan.schedule.passes.size()==3,"fusion crossed pinned output or normal boundary");
     const auto sharedHeight=render::texture_graph::gpu::plan(sharedTexture,0,128,true);
     const auto sharedNormal=render::texture_graph::gpu::plan(sharedTexture,1,128,true);
     require(sharedHeight.twoPass&&sharedNormal.twoPass&&sharedHeight.scratchBytes==sharedNormal.scratchBytes,"shared scalar plan missing");
