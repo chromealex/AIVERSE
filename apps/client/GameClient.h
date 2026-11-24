@@ -101,6 +101,7 @@ class GameClient {
     struct ScriptUiApi;     // ClientScriptUi.cpp: scripthost.event / send for engine/ui/lib/scriptui.lua
     friend struct ScriptUiApi;
 public:
+    GameClient();
     ~GameClient(); // out-of-line: owns an optional incomplete-type Caverns GPU host
     // Embedded GameClient shares its editor's gfx::Device generation.
     // Standalone client creates an epoch automatically during initStep(0).

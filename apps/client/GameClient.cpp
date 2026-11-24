@@ -57,6 +57,7 @@ using i18n::Args;
 
 namespace aiverse::client {
 
+GameClient::GameClient() = default;
 GameClient::~GameClient() = default;
 
 bool GameClient::updateCavernsVisual(const Json& authored) {

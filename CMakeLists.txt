@@ -2559,6 +2559,9 @@ if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5)
     # Existing in-game overlay rendering remains inside GameClient, not Studio UI.
     add_library(aiverse_hosted_client STATIC apps/client/HostedClient.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
     target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}")
+    # Caverns visual payloads expose Box3D value types even when the optional
+    # authoritative physics runtime is disabled.
+    target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
     target_link_libraries(aiverse_hosted_client PUBLIC aiverse_runtime aiverse_game_view
         aiverse_net_city aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas
         aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader AIVERSE::InputFlow)
