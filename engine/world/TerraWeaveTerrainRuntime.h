@@ -48,6 +48,18 @@ public:
            resolution_<2 || resolution_>129)
             throw std::invalid_argument("TerraWeave runtime terrain tile geometry");
     }
+    // Optional topology derivation (e.g. Caverns). The owning host binds
+    // a frozen validated snapshot and a monotonic transient epoch at the
+    // real reader-exclusion barrier. No callback may mutate terrain state.
+    using SurfaceTransform=std::function<TerrainPatch(TerrainPatch)>;
+    void setSurfaceTopology(uint64_t epoch,SurfaceTransform transform){
+        if(!epoch||epoch<=surfaceEpoch_||!transform)
+            throw std::invalid_argument("TerraWeave surface epoch must increase");
+        auto next=pending_;
+        for(const auto& [cell,resident]:residents_){(void)resident;next.insert_or_assign(cell,earth_.revision());}
+        surfaceTransform_=std::move(transform);surfaceEpoch_=epoch;pending_.swap(next);
+    }
+    uint64_t surfaceEpoch()const noexcept{return surfaceEpoch_;}
     // Optional observer of committed tiles, e.g. dynamic GI geometry
     // (world::GiTerraWeaveResidentBridge). `published` runs after a tile's
     // model and collision were swapped in (patch = what was published);
@@ -188,13 +200,13 @@ public:
             needed.insert(tile);
         }
         std::map<world::Cell,SparseTerrainView> visualPlan;
-        for(const auto& tile:adaptive) {
+        if(!surfaceTransform_)for(const auto& tile:adaptive) {
             if(!needed.contains(tile.cell) ||
                tile.resolution<2 || tile.resolution>129 ||
                !visualPlan.emplace(tile.cell,tile).second)
                 throw std::invalid_argument("TerraWeave invalid adaptive terrain plan");
         }
-        if(!adaptive.empty() && visualPlan.size()!=needed.size())
+        if(!surfaceTransform_&&!adaptive.empty() && visualPlan.size()!=needed.size())
             throw std::invalid_argument("TerraWeave incomplete adaptive terrain plan");
         // A camera move can require re-meshing with no soil mutation.
         // Do not publish the same stale LOD when neighbor edge ratios changed.
@@ -263,8 +275,15 @@ public:
                         break; // keep prior GPU model safely resident
                     notified=std::move(visual);
                 }else{
-                    const TerrainPatch& patch=notified.emplace(bakeEarthworksTerrainPatch(
-                        earth_,tile,cellSizeMetres_,resolution_));
+                    auto baked=bakeEarthworksTerrainPatch(earth_,tile,cellSizeMetres_,resolution_);
+                    if(surfaceTransform_){
+                        const auto soilRevision=baked.sourceRevision;
+                        baked=surfaceTransform_(std::move(baked));
+                        if(baked.cell!=tile||baked.sourceRevision!=soilRevision||baked.surfaceEpoch!=surfaceEpoch_||
+                           baked.presentationOnly||baked.resolution!=resolution_||baked.cellSizeMetres!=cellSizeMetres_||!validTerrainPatchTopology(baked))
+                            throw std::logic_error("TerraWeave invalid surface transform result");
+                    }
+                    const TerrainPatch& patch=notified.emplace(std::move(baked));
                     if(!slot->second.publish(
                             device,spatial,colliders_,patch,ids(tile),
                             material,uvScale,visual?&*visual:nullptr,
@@ -452,6 +471,8 @@ private:
     NereidEarthworksBridge water_;
     int32_t cellSizeMetres_=256;
     uint32_t resolution_=33;
+    SurfaceTransform surfaceTransform_;
+    uint64_t surfaceEpoch_=0;
     TerrainCollisionPublisher colliders_;
     GrassPatchRenderer grassRhi_{};
     std::map<world::Cell,TerrainPatchResident> residents_;
