@@ -571,6 +571,9 @@ struct TrapDef {
 
 struct ProgressionRules;   // ProgressionData.h
 struct Rules {
+    // Optional final movement speed bounds; absent keys preserve legacy behavior.
+    bool hasMinUnitSpeed = false, hasMaxUnitSpeed = false;
+    Fixed minUnitSpeed{}, maxUnitSpeed{};
     bool scriptedAI = false;                  // external ComputerPlayer must yield to the game's controller
     std::string aiController = "builtin";     // rules ai.controller: builtin, scripted or a registered kind (AIControllers.h)
     MechRules mech;                           // agent-mech rules (MechData.h)
