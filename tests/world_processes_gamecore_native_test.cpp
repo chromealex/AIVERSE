@@ -1,6 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
+#include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
@@ -466,7 +467,31 @@ static void checkAetherStratification(){
     AIVERSE_TEST_CHECK(!aether::advanceWithStratification(ecs,&surface,7));
     AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).sampledTick==6);
 }
+static void checkCircuitSurfaceWiring(){
+    game::Surface surface;game::BodyDef body;
+    body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    World ecs;
+    auto at=[&](int cell){
+        const auto e=ecs.create();Transform t{};t.pos=surface.cellCenter(cell);
+        ecs.add<Transform>(e,t);ecs.add<circuit::Node>(e);return e;
+    };
+    const auto source=at(start),first=at(seam),second=at(seam);
+    const auto remote=at(surface.gridCell(1,0,7,3));
+    (void)remote;
+    const auto result=circuit::localWireCandidates(ecs,&surface,source,Fixed::fromInt(10000));
+    AIVERSE_TEST_CHECK(result&&result->size()==2&&(*result)[0].node==first&&(*result)[1].node==second);
+    const auto capped=circuit::localWireCandidates(ecs,&surface,source,Fixed::fromInt(10000),1);
+    AIVERSE_TEST_CHECK(capped&&capped->size()==1&&capped->front().node==first);
+    ecs.get<circuit::Node>(first).enabled=false;
+    const auto enabled=circuit::localWireCandidates(ecs,&surface,source,Fixed::fromInt(10000));
+    AIVERSE_TEST_CHECK(enabled&&enabled->size()==1&&enabled->front().node==second);
+    AIVERSE_TEST_CHECK(ecs.countExisting<circuit::Wire>()==0);
+}
 int main(){
+    checkCircuitSurfaceWiring();
     checkAetherStratification();
     checkMorphGravity();
     checkPlanetGranular();
