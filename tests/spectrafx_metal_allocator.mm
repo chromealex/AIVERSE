@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 
@@ -33,14 +34,14 @@ void burst(ComputeParticles& p,uint32_t n,uint64_t owner,fx::float3 pos){
     for(uint32_t i=0;i<n;i+=64)require(p.burstAt(pos,{0,1,0},{1,1,1,1},owner),"birth queue");
 }
 ComputeParticles::AllocationAudit audit(gfx::Device& d,ComputeParticles& p,uint32_t alive){
-    require(d.waitIdle()&&d.gpuHealthy(),"GPU completion");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork()&&d.gpuHealthy(),"GPU completion");
     ComputeParticles::AllocationAudit a;
     require(p.auditGpuAllocation(a),"exact slot partition/draw audit");
     require(a.counters.alive==alive&&a.counters.free==a.capacity-alive&&a.vmErrors==0,"alive/free/VM invariant");
     return a;
 }
 void tick(gfx::Device& d,ComputeParticles& p,float dt=0){
-    Frame frame(d);require(p.step(dt),p.reason().c_str());
+    Frame frame(d);require(p.step(dt),"ComputeParticles init/step failed");
 }
 ComputeEmitterDesc config(uint32_t cap,bool procedural){
     ComputeEmitterDesc cfg;
@@ -52,7 +53,7 @@ ComputeEmitterDesc config(uint32_t cap,bool procedural){
 void stress(gfx::Device& d,uint32_t cap,bool procedural){
     @autoreleasepool {
         ComputeParticles p;
-        require(p.init(&d,config(cap,procedural)),p.reason().c_str());
+        require(p.init(&d,config(cap,procedural)),"ComputeParticles init/step failed");
         require(p.demandGrowthActive()&&p.proceduralBillboardsActive()==procedural,"physical backend capability");
         require(p.allocatedCapacity()==256,"initial page");
         p.setView(view());
@@ -62,7 +63,7 @@ void stress(gfx::Device& d,uint32_t cap,bool procedural){
         for(uint32_t target=256;;target=std::min(cap,target*2)){
             {
                 Frame frame(d);burst(p,target-alive,ownerA,{0,0,.5f});
-                require(p.step(0),p.reason().c_str());
+                require(p.step(0),"ComputeParticles init/step failed");
             }
             alive=target;auto a=audit(d,p,alive);
             require(a.capacity==target&&a.counters.visible==alive,"growth and visible population");
@@ -76,12 +77,12 @@ void stress(gfx::Device& d,uint32_t cap,bool procedural){
         require(audit(d,p,alive).counters.visible==alive,"reenter without respawn");
         {
             Frame frame(d);require(p.killSourceParticles(ownerA),"kill source");
-            require(p.step(0),p.reason().c_str());
+            require(p.step(0),"ComputeParticles init/step failed");
         }
         audit(d,p,0);
         {
             Frame frame(d);burst(p,256,ownerB,{0,0,.5f});
-            require(p.step(0),p.reason().c_str());
+            require(p.step(0),"ComputeParticles init/step failed");
         }
         auto reused=audit(d,p,256);
         require(std::all_of(reused.liveOwners.begin(),reused.liveOwners.end(),[](uint64_t x){return x==ownerB;}),"source reuse");
@@ -97,7 +98,7 @@ void stress(gfx::Device& d,uint32_t cap,bool procedural){
         }
         {
             Frame frame(d);burst(p,256,ownerA,{0,0,.5f});
-            require(p.step(0),p.reason().c_str());
+            require(p.step(0),"ComputeParticles init/step failed");
             require(p.tryClear(),"checked reset");
         }
         audit(d,p,0);
@@ -108,14 +109,45 @@ void stress(gfx::Device& d,uint32_t cap,bool procedural){
 }
 void lod(gfx::Device& d,bool procedural){
     auto cfg=config(256,procedural);cfg.quality=fx::FxQuality::Medium;
-    ComputeParticles p;require(p.init(&d,cfg),p.reason().c_str());
+    ComputeParticles p;require(p.init(&d,cfg),"ComputeParticles init/step failed");
     p.setView(view(0,150));
-    {Frame frame(d);burst(p,256,1,{0,0,.5f});require(p.step(0),p.reason().c_str());}
+    {Frame frame(d);burst(p,256,1,{0,0,.5f});require(p.step(0),"ComputeParticles init/step failed");}
     auto a=audit(d,p,256);
     require(a.counters.visible>0&&a.counters.visible<256&&a.counters.visible+a.counters.lodRejected==256,"far tiny LOD");
     tick(d,p);require(audit(d,p,256).counters.visible==a.counters.visible,"stable frozen LOD");
     p.setView(view());tick(d,p);require(audit(d,p,256).counters.visible==256,"near full density");
     std::printf("PASS LOD procedural=%d far=%u rejected=%u\n",int(procedural),a.counters.visible,a.counters.lodRejected);
+}
+void drawAcceptance(gfx::Device& d,bool procedural){
+    auto cfg=config(256,procedural);cfg.size=.3f;
+    ComputeParticles p;require(p.init(&d,cfg),"draw init");
+    gfx::TextureDesc tex{};tex.width=tex.height=side;tex.renderTarget=true;
+    tex.format=gfx::PixelFormat::RGBA8;auto color=d.createTexture(tex);
+    tex.format=gfx::PixelFormat::Depth;auto depth=d.createTexture(tex);
+    require(color.valid()&&depth.valid(),"offscreen target allocation");
+    auto draw=[&](float offset,bool spawn){
+        p.setView(view(offset));
+        {
+            Frame frame(d);
+            if(spawn)burst(p,64,1,{0,0,.5f});
+            require(p.step(0),"draw step");
+            gfx::PassDesc pass{};pass.colorTarget=color;pass.depthTarget=depth;
+            pass.clearColor[0]=pass.clearColor[1]=pass.clearColor[2]=0;
+            pass.clearColor[3]=1;
+            d.beginPass(pass);d.setViewport({0,0,side,side});p.draw();d.endPass();
+            require(p.stats().drawCalls==1,"indirect draw rejected");
+        }
+        require(d.waitIdle(),"offscreen draw completion");
+        std::vector<uint8_t> rgba;
+        require(d.readColorRGBA8(color,rgba)&&rgba.size()==size_t(side*side*4),"offscreen pixel readback");
+        uint8_t peak=0;for(size_t i=0;i<rgba.size();i+=4)peak=std::max(peak,rgba[i]);
+        return peak;
+    };
+    require(draw(0,true)>20,"visible particles produced no pixels");
+    require(draw(10,false)<5,"zero-visible indirect draw produced pixels");
+    require(draw(0,false)>20,"camera re-entry produced no pixels");
+    d.destroyTexture(color);d.destroyTexture(depth);
+    std::printf("PASS real indirect billboard pixels procedural=%d\n",int(procedural));
 }
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
@@ -145,6 +177,7 @@ int aiverseMain(int,char**){
     @autoreleasepool {
         auto metal=MTLCreateSystemDefaultDevice();
         if(!metal){std::puts("SKIP no Metal device");return 77;}
+        setenv("AIVERSE_METAL_LATE_DRAWABLE","1",1);
         CAMetalLayer* layer=[CAMetalLayer layer];layer.device=metal;
         layer.frame=CGRectMake(0,0,side,side);layer.drawableSize=CGSizeMake(side,side);
         auto d=gfx::createMetalDevice((__bridge void*)layer);
@@ -153,6 +186,7 @@ int aiverseMain(int,char**){
             for(bool procedural:{false,true}){
                 for(uint32_t cap:{256u,65536u,262144u})stress(*d,cap,procedural);
                 lod(*d,procedural);
+                drawAcceptance(*d,procedural);
             }
             memory(*d);
             std::puts("PASS production Metal allocator acceptance");return 0;
