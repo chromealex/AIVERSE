@@ -1177,7 +1177,9 @@ Json StudioSession::dispatch(const Json& request) {
                 if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
-                if(entry.move&&entry.move->quarantine){
+                if(entry.move&&entry.move->replacement){
+                    studioReplayAssetReplacement(ws_.project.dir,*entry.move,redo);
+                }else if(entry.move&&entry.move->quarantine){
                     const auto check=[&]{
                         std::vector<std::pair<std::string,bool>> paths;
                         const auto materials=editor::loadMaterialLibrary(ws_);
@@ -2264,7 +2266,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory);}
             catch(...){assetHistory_.reset();throw;}
             const auto beforeHistory=assetHistory_.version();
-            if(moveHistory)assetHistory_.recordMove(std::move(*moveHistory),internal?"Move assets":"Import assets");
+            if(moveHistory){
+                const std::string label=moveHistory->replacement?"Replace assets":internal?"Move assets":"Import assets";
+                assetHistory_.recordMove(std::move(*moveHistory),label);
+            }
             else if(result["files"].size()!=0||result["issues"].size()!=0)assetHistory_.reset();
             result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
             pendingAssetTransfer_.reset();

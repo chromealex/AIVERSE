@@ -23,6 +23,7 @@ public:
         std::optional<std::string> materialsBefore,materialsAfter;
         bool quarantine=false; // content-relative from, project-relative trash destination
         bool created=false; // import/create: undo quarantines, redo restores
+        bool replacement=false; // pairs: live -> old slot, new slot -> live; sidecar bytes unchanged
     };
     struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; };
     const std::vector<Step>& steps() const noexcept {return steps_;}

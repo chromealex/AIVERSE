@@ -81,6 +81,7 @@ std::string guidFromSidecar(const fs::path& source,bool& invalid) {
 // empty directories and all sidecars. Reject symlinks, special files and
 // excessive entry counts. Memory is bounded independently of payload size.
 std::string moveDigest(const fs::path& source,bool directory){
+    if(!directory)return studioAssetFileDigest(source);
     pack::Sha256 hash;
     const auto field=[&](const std::string& s){
         const auto size=std::to_string(s.size())+":";
@@ -102,8 +103,7 @@ std::string moveDigest(const fs::path& source,bool directory){
         if(stream.bad()||!stream.eof()||total!=size||fs::file_size(path)!=size||fs::last_write_time(path)!=stamp)
             throw std::runtime_error("Asset changed while hashing");
     };
-    if(!directory){field("file-v1");file(source);}
-    else {
+    {
         if(!fs::is_directory(fs::symlink_status(source)))throw std::runtime_error("Asset directory changed");
         field("tree-v1");
         std::vector<fs::path> entries;
@@ -532,9 +532,71 @@ Json StudioTransferPlan::apply(const std::string& token,
             if(d.id<0||size_t(d.id)>=entries_.size()||!actions.emplace(d.id,d.action).second)
                 throw std::runtime_error("Unknown or duplicate import decision");
         }
-        bool replacement=false;
-        for(const auto& [id,action]:actions){(void)id;if(action=="replace")replacement=true;}
-        if(!replacement){
+        bool replacement=false,creation=false;
+        for(const auto& e:entries_){
+            const auto action=actions.count(e.id)?actions.at(e.id):(e.conflict.empty()?"import":"skip");
+            if(action=="replace")replacement=true;
+            else if(action!="skip")creation=true;
+        }
+        if(replacement){
+            if(creation)throw std::runtime_error("Apply replacements separately from new imports");
+            StudioAssetCatalog catalog(project_);catalog.rebuild(false);
+            const auto root=studioContentRoot(project_);
+            const auto cache=project_/".aiverse-cache"/"studio-asset-trash";
+            if(!existsOrSymlink(cache))fs::create_directory(cache);
+            if(!fs::is_directory(fs::symlink_status(cache)))throw std::runtime_error("Unsafe replacement storage");
+            editor::ProjectHistory::MovePlan plan;plan.replacement=true;
+            std::set<std::string> paths;
+            for(const auto& e:entries_){
+                const auto action=actions.count(e.id)?actions.at(e.id):(e.conflict.empty()?"import":"skip");
+                if(action=="skip")continue;
+                if(e.directory||e.conflict.find("name")==std::string::npos||
+                   !fs::is_regular_file(fs::symlink_status(e.source)))
+                    throw std::runtime_error("Replacement requires a regular file and reviewed name conflict");
+                const auto relative=e.destination.lexically_relative(root).generic_string();
+                const auto live=checkedSource(project_,relative);
+                const auto entry=catalog.byPath(relative);
+                if(!entry||entry->directory||!fs::is_regular_file(fs::symlink_status(live))||
+                   !paths.insert(relative).second)
+                    throw std::runtime_error("Replacement target changed");
+                const auto meta=studioMetaPath(live);
+                if(fs::file_size(meta)>1024*1024)throw std::runtime_error("Replacement metadata exceeds history budget");
+                const auto sidecar=editor::readProjectFileBytes(meta);
+                const auto oldDigest=studioAssetFileDigest(live);
+                const auto newDigest=studioAssetFileDigest(e.source);
+                if(oldDigest==newDigest)continue;
+                const auto reserve=[&]{
+                    const auto id=nonce();const auto folder=cache/id;
+                    if(!fs::create_directory(folder))throw std::runtime_error("Cannot reserve replacement slot");
+                    return ".aiverse-cache/studio-asset-trash/"+id+"/asset";
+                };
+                const auto oldSlot=reserve(),newSlot=reserve();
+                fs::copy_file(e.source,project_/newSlot,fs::copy_options::none);
+                if(studioAssetFileDigest(project_/newSlot)!=newDigest)
+                    throw std::runtime_error("Replacement source changed during staging");
+                StudioMoveJournal::syncPath(project_/newSlot);
+                for(const auto& slot:{oldSlot,newSlot}){
+                    const auto folder=(project_/slot).parent_path();
+                    Json record=Json::object();
+                    record.set("kind",Json::string("replacement"));record.set("path",Json::string(relative));
+                    record.set("guid",Json::string(entry->guid));
+                    record.set("digest",Json::string(slot==oldSlot?oldDigest:newDigest));
+                    record.set("role",Json::string(slot==oldSlot?"old":"new"));
+                    {std::ofstream out(folder/"record.json");out<<record.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write replacement record");}
+                    StudioMoveJournal::syncPath(folder/"record.json");StudioMoveJournal::syncPath(folder);
+                }
+                plan.files.push_back({relative,oldSlot,sidecar,oldDigest,false});
+                plan.files.push_back({relative,newSlot,{},newDigest,false});
+            }
+            StudioMoveJournal::syncPath(cache);StudioMoveJournal::syncPath(cache.parent_path());
+            if(!plan.files.empty()){
+                studioReplayAssetReplacement(project_,plan,true);
+                for(size_t i=0;i<plan.files.size();i+=2)copied.push(Json::string(plan.files[i].from));
+                *history=std::move(plan);
+            }
+            result.set("files",std::move(copied));result.set("issues",std::move(errors));return result;
+        }
+        {
             const auto root=studioContentRoot(project_);
             editor::ProjectHistory::MovePlan plan;plan.quarantine=true;plan.created=true;
             std::set<fs::path> reserved;
@@ -859,5 +921,54 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
     // later evicted. Manual recovery is always possible; no automatic purge.
     studioReplayAssetQuarantine(project,plan,true,validateReferences);
     return plan;
+}
+void studioReplayAssetReplacement(const fs::path& project,
+    const editor::ProjectHistory::MovePlan& plan,bool redo){
+    if(!plan.replacement||plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
+        throw std::runtime_error("Invalid asset replacement plan");
+    StudioAssetCatalog catalog(project);catalog.rebuild(false);
+    std::vector<StudioMoveJournalOperation> operations;
+    std::set<std::string> unique;
+    for(size_t i=0;i<plan.files.size();i+=2){
+        const auto& old=plan.files[i];const auto& next=plan.files[i+1];
+        if(old.from!=next.from||old.directory||next.directory||!unique.insert(old.from).second)
+            throw std::runtime_error("Invalid replacement target");
+        const auto live=checkedSource(project,old.from);
+        (void)quarantineFolder(project,old.to);(void)quarantineFolder(project,next.to);
+        const auto& outgoing=redo?old:next;const auto& incoming=redo?next:old;
+        const auto document=Json::parse(old.bytes);
+        const auto entry=catalog.byGuid(document.getStr("guid"));
+        if(!entry||entry->directory||entry->path!=old.from||entry->importer!=document.getStr("importer")||
+           editor::readProjectFileBytes(studioMetaPath(live))!=old.bytes||
+           studioAssetFileDigest(live)!=outgoing.digest||existsOrSymlink(project/outgoing.to)||
+           studioAssetFileDigest(project/incoming.to)!=incoming.digest)
+            throw std::runtime_error("Asset replacement history conflict: "+old.from);
+        operations.push_back({"content/"+old.from,outgoing.to,outgoing.digest});
+        operations.push_back({incoming.to,"content/"+old.from,incoming.digest});
+    }
+    StudioMoveJournal journal(project);journal.begin(operations,true,true);
+    try{
+        for(const auto& op:operations){
+            const auto from=project/op.from,to=project/op.to;
+            if(existsOrSymlink(to)||studioAssetFileDigest(from)!=op.digest)
+                throw std::runtime_error("Replacement changed during publication");
+            fs::rename(from,to);
+            StudioMoveJournal::syncPath(from.parent_path());StudioMoveJournal::syncPath(to.parent_path());
+        }
+        catalog.rebuild(false);
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& old=plan.files[i];const auto& next=plan.files[i+1];
+            const auto live=studioContentRoot(project)/old.from;
+            if(editor::readProjectFileBytes(studioMetaPath(live))!=old.bytes||
+               studioAssetFileDigest(live)!=(redo?next.digest:old.digest))
+                throw std::runtime_error("Replacement result changed");
+        }
+        journal.commit();
+    }catch(...){
+        const auto failure=std::current_exception();
+        try{journal.restoreOrCleanup();catalog.rebuild(false);}
+        catch(const std::exception& e){throw std::runtime_error(std::string("Replacement recovery incomplete: ")+e.what());}
+        std::rethrow_exception(failure);
+    }
 }
 } // namespace aiverse::studio

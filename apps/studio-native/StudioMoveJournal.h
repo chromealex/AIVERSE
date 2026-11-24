@@ -5,6 +5,8 @@
 #pragma once
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/data/Json.h"
+#include "apps/studio-native/StudioAssetFileDigest.h"
+#include <set>
 #include <filesystem>
 #include <cerrno>
 #include <cstring>
@@ -24,7 +26,7 @@ namespace fs=std::filesystem;
 struct StudioMoveJournalOperation {
     std::string from;
     std::string to;
-};
+    std::string digest; // required by replacement journal v3
 
 class StudioMoveJournal {
 public:
@@ -62,9 +64,11 @@ public:
 #endif
     }
 
-    void begin(const std::vector<StudioMoveJournalOperation>& operations,bool quarantine=false) {
+    void begin(const std::vector<StudioMoveJournalOperation>& operations,bool quarantine=false,bool replacement=false) {
         if (operations.empty()) return;
         if(operations.size()>128)throw std::runtime_error("Too many Studio journal operations");
+        if(replacement&&!quarantine)throw std::runtime_error("Invalid replacement journal mode");
+        if(replacement)validateReplacementOperations(operations);
         for(const auto& operation:operations){
             validateRelative(operation.from);validateRelative(operation.to);
             if(quarantine)validateQuarantinePair(operation.from,operation.to);
@@ -93,7 +97,7 @@ public:
                 syncPath(folder_/"materials.backup");
             }
             Json state=Json::object();
-            state.set("version",Json::number(int64_t(quarantine?2:1)));
+            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:1)));
             state.set("materialExisted",Json::fromBool(existed));
             Json rows=Json::array();
             for (const auto& operation:operations) {
@@ -102,6 +106,7 @@ public:
                 Json row=Json::object();
                 row.set("from",Json::string(operation.from));
                 row.set("to",Json::string(operation.to));
+                if(replacement)row.set("digest",Json::string(operation.digest));
                 rows.push(std::move(row));
             }
             state.set("operations",std::move(rows));
@@ -153,9 +158,10 @@ public:
             throw std::runtime_error("Unsafe Studio pending transaction manifest");
         const Json state=Json::parseFile(pending.string());
         const auto version=state["version"].integer();
-        if ((version!=1&&version!=2) || !state["operations"].isArray() ||
+        if ((version!=1&&version!=2&&version!=3) || !state["operations"].isArray() ||
             state["operations"].size()>128)
             throw std::runtime_error("Invalid Studio move recovery manifest");
+        if(version==3){restoreReplacement(state["operations"]);fs::remove_all(folder_);return;}
         const fs::path root=version==2?fs::canonical(project_):studioContentRoot(project_);
         const auto& operations=state["operations"].items();
         struct RestoreStep { fs::path source,destination; bool moveBack; };
@@ -244,6 +250,67 @@ private:
         };
         if(!((content(from)&&trash(to))||(trash(from)&&content(to))))
             throw std::runtime_error("Unsafe asset quarantine recovery pair");
+    }
+    static void validateReplacementOperations(const std::vector<StudioMoveJournalOperation>& operations){
+        if(operations.empty()||operations.size()>128||operations.size()%2)
+            throw std::runtime_error("Invalid replacement recovery operation count");
+        std::set<std::string> paths;
+        for(size_t i=0;i<operations.size();i+=2){
+            const auto& out=operations[i];const auto& in=operations[i+1];
+            for(const auto* op:{&out,&in}){
+                validateRelative(op->from);validateRelative(op->to);validateQuarantinePair(op->from,op->to);
+                if(op->digest.size()!=64||op->digest.find_first_not_of("0123456789abcdef")!=std::string::npos)
+                    throw std::runtime_error("Invalid replacement recovery digest");
+            }
+            if(!out.from.starts_with("content/")||out.from!=in.to||!out.to.ends_with("/asset")||
+               !in.from.ends_with("/asset")||out.from.ends_with(".meta")||
+               !paths.insert(out.from).second||!paths.insert(out.to).second||!paths.insert(in.from).second)
+                throw std::runtime_error("Invalid replacement recovery chain");
+        }
+    }
+    void restoreReplacement(const Json& rows){
+        std::vector<StudioMoveJournalOperation> operations;
+        for(const auto& row:rows.items()){
+            if(!row.isObject()||!row["from"].isString()||!row["to"].isString()||!row["digest"].isString())
+                throw std::runtime_error("Invalid replacement recovery record");
+            operations.push_back({row.getStr("from"),row.getStr("to"),row.getStr("digest")});
+        }
+        validateReplacementOperations(operations);
+        const auto root=fs::canonical(project_);
+        const auto exists=[](const fs::path& p){
+            std::error_code ec;const auto status=fs::symlink_status(p,ec);
+            if(ec==std::errc::no_such_file_or_directory)return false;
+            if(ec||(!fs::is_regular_file(status)&&fs::exists(status)))
+                throw std::runtime_error("Invalid replacement recovery file");
+            return fs::exists(status);
+        };
+        struct State {fs::path live,oldSlot,newSlot;int phase;};
+        std::vector<State> states;
+        // Validate every chain before moving any file. Only three occupancy
+        // states are legal, including a crash midway through recovery itself.
+        for(size_t i=0;i<operations.size();i+=2){
+            const auto& out=operations[i];const auto& in=operations[i+1];
+            const auto live=root/out.from,oldSlot=root/out.to,newSlot=root/in.from;
+            for(const auto& path:{live,oldSlot,newSlot}){
+                safePath(root,path);
+                if(!fs::is_directory(fs::symlink_status(path.parent_path())))throw std::runtime_error("Missing replacement recovery parent");
+            }
+            const bool l=exists(live),o=exists(oldSlot),n=exists(newSlot);
+            const int phase=l&&!o&&n?0:!l&&o&&n?1:l&&o&&!n?2:-1;
+            if(phase<0)throw std::runtime_error("Replacement recovery collision");
+            const auto oldPath=phase==0?live:oldSlot,newPath=phase==2?live:newSlot;
+            if(studioAssetFileDigest(oldPath)!=out.digest||studioAssetFileDigest(newPath)!=in.digest)
+                throw std::runtime_error("Replacement recovery payload changed");
+            states.push_back({live,oldSlot,newSlot,phase});
+        }
+        const auto move=[](const fs::path& from,const fs::path& to){
+            if(fs::exists(fs::symlink_status(to)))throw std::runtime_error("Replacement recovery destination occupied");
+            fs::rename(from,to);syncPath(from.parent_path());syncPath(to.parent_path());
+        };
+        for(auto it=states.rbegin();it!=states.rend();++it){
+            if(it->phase==2)move(it->live,it->newSlot);
+            if(it->phase!=0)move(it->oldSlot,it->live);
+        }
     }
     static void safePath(const fs::path& root,const fs::path& target) {
         fs::path current=root;
