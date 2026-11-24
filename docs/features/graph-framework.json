@@ -112,7 +112,10 @@
     "apps/studio-web/src/graphs/graphInspectionCapture.ts",
     "apps/studio-web/tests/graphInspectionCapture.test.mjs",
     "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
-    "apps/studio-web/tests/buildingCandidateCapture.test.mjs"
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
+    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -123,7 +126,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D common candidate capture gate implemented; actual BuildingGeneratorPanel wiring in owner-relative draft PR #136, not merged. Stage 35C Caverns native capture remains on this branch.",
+      "note": "Stage 35D common candidate capture gate implemented; actual BuildingGeneratorPanel wiring in owner-relative draft PR #136, not merged. Stage 35C Caverns native capture remains on this branch. Stage 35E planned: native room/connection DTO, structural component diagnostics using existing room planner, shared topology view.",
       "evidence": []
     },
     "architecture": {
