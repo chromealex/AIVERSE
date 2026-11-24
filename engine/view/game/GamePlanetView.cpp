@@ -421,7 +421,8 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             // ARBOR meshes have an authored root pivot, whereas a physical
             // checkpoint describes centre of mass. Approximate that offset
             // with the shared prototype's bind-space height.
-            if(plant.physical)position=position-U*((model->boundsMax.y+model->boundsMin.y)*.5f*scale);
+            if(plant.physical)position=position-U*(plant.physicalRootOffset>=0.f?plant.physicalRootOffset:
+                (model->boundsMax.y+model->boundsMin.y)*.5f*scale);
             ModelDraw md;md.model=model;
             mat4 matrix;
             const float transverse=scale*plant.thickness;

@@ -31,6 +31,7 @@
 #include "aiverselib/world/EvolvePlanetNutrients.h"
 #include "aiverselib/world/EvolvePlanetNaturalFalls.h"
 #include "aiverselib/world/EvolvePlanetForestRetirement.h"
+#include "aiverselib/world/PlanetArborCollision.h"
 #include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
@@ -1042,6 +1043,25 @@ static void checkPlanetForestEcology(){
     const auto retry=evolve::advancePlanetForestEcology(ecs,surface,1,{species},cfg);
     AIVERSE_TEST_CHECK(retry&&retry->born.size()==next->born.size());
 }
+static void checkPlanetArborCollision(){
+    using namespace terraweave;
+    const auto profile=aiverse::world::parseForestSpeciesProfile(Json::parse(
+        R"({"id":19,"shape":"columnar","minHeightCm":1000,"maxHeightCm":1000,"trunkRadiusCm":50,"prototypeSeed":7})"));
+    const auto trunk=wp::planetArborTrunk(profile);
+    AIVERSE_TEST_CHECK(trunk.species==19&&trunk.heightCm==1000&&trunk.radiusCm==50);
+    AnchoredPlant plant;plant.anchor.speciesId=19;plant.anchor.roots=defaultRootProfile(PlantHabit::Tree);
+    plant.environment.matureTicks=100;plant.environment.ageTicks=100;
+    plant.environment.lightPermille=plant.environment.waterPermille=plant.environment.nutrientsPermille=1000;
+    const auto full=wp::derivePlanetArborCapsule(trunk,plant,1_fx,1_fx);
+    const auto decay=wp::derivePlanetArborCapsule(trunk,plant,1_fx,Fixed::fromRatio(1,4));
+    AIVERSE_TEST_CHECK(full&&decay&&full->radius==Fixed::fromRatio(1,2));
+    AIVERSE_TEST_CHECK(decay->radius==Fixed::fromRatio(1,4)&&decay->radius+decay->halfHeight==5_fx);
+    plant.environment.ageTicks=0;
+    const auto young=wp::derivePlanetArborCapsule(trunk,plant,1_fx,1_fx);
+    AIVERSE_TEST_CHECK(young&&young->radius<full->radius&&young->halfHeight<full->halfHeight);
+    plant.anchor.speciesId=20;
+    AIVERSE_TEST_CHECK(!wp::derivePlanetArborCapsule(trunk,plant,1_fx,1_fx));
+}
 static void checkPlanetNaturalFalls(){
     using namespace terraweave;
     game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
@@ -2036,6 +2056,7 @@ int main(){
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
     checkPlanetNaturalFalls();
+    checkPlanetArborCollision();
     checkPlanetForestEcology();
     checkPlanetDeadwood();
     checkPlanetNutrients();

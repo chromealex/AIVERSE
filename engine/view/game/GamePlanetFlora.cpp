@@ -143,6 +143,8 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                 visual.local=asFloat(record.motion.position-anchor);
                 visual.up=asFloat(basis->up);visual.forward=asFloat(basis->forward);
                 visual.physical=true;
+                if(record.shape==wp::ConsequenceShape::Capsule)
+                    visual.physicalRootOffset=float((record.dimensions.x+record.dimensions.y).toDouble());
                 visual.motion=PlanetForestMotionSample{record.key.tick,record.lastMotionTick,
                     record.key.revision,record.motion.position,record.motion.rotation};
             }else{

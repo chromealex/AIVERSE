@@ -5,6 +5,7 @@
 #include "EvolvePlanetForestEcology.h"
 #include "EvolvePlanetNutrients.h"
 #include "EvolvePlanetNaturalFalls.h"
+#include "PlanetArborCollision.h"
 #include "EvolvePlanetForestRetirement.h"
 
 namespace aiverse::lib::worldprocess {
@@ -24,6 +25,8 @@ struct PlanetForestPipelineConfig {
     std::vector<evolve::PlanetWeatherMapping> weather;
     uint32_t naturalFallPermille=0; // disabled for legacy maps
     std::map<uint32_t,PlanetForestCapsuleRecipe> naturalFallBodies;
+    std::map<uint32_t,PlanetArborTrunk> arborTrunks;
+    std::map<std::string,Fixed> floraScales;
 };
 inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         uint32_t tick,const PlanetForestPipelineConfig& cfg){
@@ -107,8 +110,16 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
             if(!fallen)return reject();
             for(const auto& fall:fallen->falls){
                 const auto recipe=cfg.naturalFallBodies.find(fall.event.id.speciesId);
-                if(recipe!=cfg.naturalFallBodies.end()&&!deliverPlanetForestCapsule(staged,surface,fall,tick,recipe->second))
-                    return reject();
+                if(recipe==cfg.naturalFallBodies.end())continue;
+                auto shape=recipe->second;
+                if(const auto trunk=cfg.arborTrunks.find(fall.event.id.speciesId);trunk!=cfg.arborTrunks.end()){
+                    const auto scale=cfg.floraScales.find(fall.bodyId);
+                    if(scale==cfg.floraScales.end())return reject();
+                    const auto derived=resolvePlanetArborFall(staged,fall,trunk->second,scale->second,shape);
+                    if(!derived)return reject();
+                    shape=*derived;
+                }
+                if(!deliverPlanetForestCapsule(staged,surface,fall,tick,shape))return reject();
             }
         }
         if(nutrientDue){
@@ -152,6 +163,17 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
     cfg.ecology.maxTrackedPlants=uint32_t(number(json,"maxPlants",4096,1,4096));
     const auto baseline=uint32_t(number(json,"baselineNutrients",500,0,1000));
     std::map<uint32_t,ForestEcologySpecies> policies;
+    const auto& authoredForest=core.matchMap()["world"]["terraweaveForest"];
+    std::map<uint32_t,aiverse::world::ForestSpeciesProfile> profiles;
+    for(const auto& body:surface->bodies)
+        cfg.floraScales.emplace(body.id,Fixed::fromRatio(6,100));
+    for(const auto& body:core.matchMap()["world"]["bodies"].items()){
+        const auto it=cfg.floraScales.find(body.getStr("id"));
+        if(it!=cfg.floraScales.end()){
+            const auto& scale=body["visual"]["flora"]["scale"];
+            if(scale.isNumber())it->second=fxClamp(scale.fx(),Fixed::fromRatio(1,1000),10_fx);
+        }
+    }
     for(const auto& item:json["species"].items()){
         if(!item.isObject())throw std::invalid_argument("planetForest species object");
         ForestEcologySpecies s;
@@ -171,8 +193,27 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
             if(!cfg.naturalFallPermille||!shape.isObject())
                 throw std::invalid_argument("planetForest naturalFallBody requires enabled natural fall");
             for(const auto& [key,value]:shape.members())
-                if(key!="radiusCm"&&key!="halfHeightCm"&&key!="density"&&key!="frictionPermille")
+                if(key!="radiusCm"&&key!="halfHeightCm"&&key!="density"&&key!="frictionPermille"&&key!="fromArbor")
                     throw std::invalid_argument("planetForest naturalFallBody unknown key: "+key);
+            if(shape.has("fromArbor")&&shape["fromArbor"].type()!=Json::Type::Bool)
+                throw std::invalid_argument("planetForest naturalFallBody.fromArbor requires Boolean");
+            if(shape.getBool("fromArbor",false)){
+                if(shape.has("radiusCm")||shape.has("halfHeightCm"))
+                    throw std::invalid_argument("planetForest ARBOR and explicit dimensions are exclusive");
+                if(profiles.empty()){
+                    if(!authoredForest.isObject()||!authoredForest["species"].isArray()||
+                       !authoredForest["species"].size()||authoredForest["species"].size()>64)
+                        throw std::invalid_argument("planetForest ARBOR collision needs authored world.terraweaveForest species");
+                    for(const auto& def:authoredForest["species"].items()){
+                        const auto profile=aiverse::world::parseForestSpeciesProfile(def);
+                        if(!profiles.emplace(profile.profile.speciesId,profile).second)
+                            throw std::invalid_argument("planetForest duplicate ARBOR species");
+                    }
+                }
+                const auto profile=profiles.find(s.speciesId);
+                if(profile==profiles.end())throw std::invalid_argument("planetForest missing matching ARBOR species");
+                cfg.arborTrunks.emplace(s.speciesId,planetArborTrunk(profile->second));
+            }
             PlanetForestCapsuleRecipe recipe;
             recipe.radius=Fixed::fromRatio(number(shape,"radiusCm",15,2,100000),100);
             recipe.halfHeight=Fixed::fromRatio(number(shape,"halfHeightCm",200,2,100000),100);

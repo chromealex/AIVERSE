@@ -28,6 +28,7 @@ struct PlanetForestVisual {
     int body=-1,proto=0;
     render::float3 local{},up{},forward{};
     float size=1,foliage=1,thickness=1;
+    float physicalRootOffset=-1; // metres from capsule centre to original root pivot
     render::float3 tint{1,1,1};
     bool fallen=false,physical=false;
     std::optional<PlanetForestMotionSample> motion;
