@@ -48,6 +48,47 @@ void projectFileRecoveryWorkflow() {
     }
     fs::remove_all(root);
 }
+void planetWorldProcessAuthoringWorkflow(){
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-planet-wp-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto project=root/"fixture";fs::create_directories(project/"maps");
+    std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+    std::ofstream(project/"rules.json")<<R"({"types":{"tree":{"health":{"max":100}}}})";
+    std::ofstream(project/"maps/scene.json")<<R"({"players":[{"name":"Blue","team":1},{"name":"Red","team":2}],
+        "world":{"start":"terra","bodies":[{"id":"terra","kind":"planet","radius":64,"faceSize":8},
+        {"id":"moon","kind":"moon","radius":32,"faceSize":4},{"id":"sun","kind":"star","radius":100}]},
+        "entities":[{"id":"region","type":"tree","owner":0,"at":{"body":"terra","face":0,"x":7,"y":3},
+        "components":{"EvolveRegion":{"durability":1000000000,"fertility":500000000,"succession":0,"pollution":0,"enabled":true},
+        "EvolveArea":{"halfWidthCm":1000,"halfDepthCm":1000,"enabled":true},
+        "MorphNode":{"restX":0,"restY":0,"restZ":0,"drag":100,"anchored":false,"enabled":true}}}]})";
+    studio::StudioSession session(root.string(),project.string());
+    auto call=[&](const char* method,const char* params="{}"){
+        Json request=Json::object();request.set("id",Json::number(int64_t(1)));
+        request.set("method",Json::string(method));request.set("params",Json::parse(params));return session.dispatch(request);
+    };
+    const auto inspected=call("studio.inspect",R"({"entityId":"entity:@region"})");
+    AIVERSE_TEST_CHECK(!inspected.has("error"));
+    bool placement=false,gravity=false;
+    for(const auto& c:inspected["result"]["components"].items()){
+        placement|=c.getStr("id")=="SurfacePlacement";
+        if(c.getStr("id")=="MorphNode")for(const auto& p:c["properties"].items())
+            gravity|=p.getStr("key")=="gravityImpulseMilli";
+    }
+    AIVERSE_TEST_CHECK(placement&&gravity);
+    AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"body","value":"sun"})").has("error"));
+    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"body","value":"moon"})").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at.getStr("body")=="moon");
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].x==4);
+    AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"face","value":6})").has("error"));
+    AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at.getStr("body")=="terra");
+    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"EvolveArea","key":"offsetXcm","value":-250})").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["EvolveArea"].getInt("offsetXcm")==-250);
+    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"MorphNode","key":"gravityRelative","value":false})").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["MorphNode"].has("gravityImpulseMilli"));
+    AIVERSE_TEST_CHECK(call("studio.worldProcessAreaBatchMove",R"({"entityIds":["entity:@region"],"axis":"x","deltaCm":100})").has("error"));
+    fs::remove_all(root);
+}
 void authoredEntityWorkflow() {
    using namespace aiverse;namespace fs=std::filesystem;
    const auto root=fs::temp_directory_path()/("studio-authored-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -761,6 +802,7 @@ int main() {
     try { session.openProject("/nonexistent/aiverse-project"); }
     catch (const std::exception&) { openRejected = true; }
     AIVERSE_TEST_CHECK(openRejected);
+    planetWorldProcessAuthoringWorkflow();
     authoredEntityWorkflow();
     entityWorkflow();
     projectFileRecoveryWorkflow();
