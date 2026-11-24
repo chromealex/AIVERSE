@@ -18,6 +18,7 @@ struct CaveBatchChunk {
     uint64_t sourceRevision=0; // 0 means legacy unknown SDF epoch
     uint32_t resolution=16;
     int32_t spacingCm=100;
+    bool preserveExactSurface=false; // constrained rim, no visual simplification
 };
 // Uses the existing STRATA index arena and device-wide ledger. Zeroed
 // policy preserves the legacy nonpaged path; source VB/IB stays resident.
@@ -98,7 +99,7 @@ inline CaveBatchPrepared prepareCaveBatch(
         Json instance=Json::object();
         instance.set("model",Json::string(key));
         instance.set("position",std::move(pos));
-        instance.set("strata",Json::fromBool(options.enableStrata));
+        instance.set("strata",Json::fromBool(options.enableStrata&&!c.preserveExactSurface));
         instances.push(std::move(instance));
         out.vertexCount+=c.mesh.vertices.size();
         out.triangleCount+=c.mesh.indices.size()/3;
