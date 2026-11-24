@@ -34,6 +34,10 @@ int main(){
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("heightmap_export"))=="unverified");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("rules_get"))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_move_commit"))=="assets");
+    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_owner_history"))=="read");
+    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_history_reset_review"))=="read");
+    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_save_documents"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_owner_history_step"))=="unverified");
     std::cout<<"PASS explicit agent policy\n";
     using namespace aiverse::studio;
     std::map<std::string,HistoryBatchOwner> owners={
