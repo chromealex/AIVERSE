@@ -10,7 +10,7 @@
 // Presentation only (float); the decoration is still deterministic per definition + style + seed (engine
 // Random), so every client builds the same mesh. Output: vertices (position, normal, world-metre UV) and one
 // index list per used material, ready for a Model or a glTF export (tools/buildings).
-#include "BuildingGen.h"
+#include "engine/systems/BuildingGen.h"
 #include "BuildingSurfacePattern.h"
 #include <algorithm>
 #include <array>
