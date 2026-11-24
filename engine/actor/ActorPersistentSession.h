@@ -20,6 +20,8 @@ class ActorPersistentSession {
     size_t budget_;
     bool failed_=false,checkpointPending_=false,initialized_=false;
     bool asyncAfterRecovery_=false;
+    uint64_t compactThrough_=0;
+    size_t compactLimit_=0;
     static bool coverage(const World& w,const world::RegionEntityLedger& ledger){
         using namespace aiverse::detail;
         const std::set<uint32_t> components{
@@ -165,19 +167,27 @@ public:
     }
     // True means accepted; in async mode the caller must poll checkpoint
     // completion separately and may not start a new tick until acknowledged.
-    bool checkpoint(){
+    // Keep a recent revision window for incremental observers; zero retains
+    // no old tombstones at this checkpoint. UINT64_MAX disables compaction.
+    bool checkpoint(uint64_t retainRevisions=65536,size_t compactLimit=world::RegionEntityLedger::kMaxEntities){
         if(failed_||!finality_||session_.ioPending()||sim_.tick()!=finality_->lastFinalizedTick())return false;
         const auto* m=session_.manifest();
-        if(!m||m->generation==UINT64_MAX){failed_=true;return false;}
+        const auto* saved=session_.state();
+        const auto* live=sim_.world().resourceConst<world::RegionEntityLedger>();
+        if(!m||m->generation==UINT64_MAX||!saved||!live||!live->sameState(saved->ledger)){
+            failed_=true;return false;
+        }
+        compactThrough_=live->lastRevision()>retainRevisions?live->lastRevision()-retainRevisions:0;
+        compactLimit_=compactLimit;
         if(session_.asyncEnabled()){
-            checkpointPending_=session_.queueCheckpoint(m->generation+1,adapters(),budget_)==world::UnifiedWalSession::IoResult::Pending;
+            checkpointPending_=session_.queueCheckpoint(m->generation+1,adapters(),budget_,compactThrough_,compactLimit_)==world::UnifiedWalSession::IoResult::Pending;
             if(!checkpointPending_)failed_=true;
             return checkpointPending_;
         }
-        if(session_.checkpoint(m->generation+1,adapters(),budget_)!=world::RegionCheckpointPublishResult::Ok){
+        if(session_.checkpoint(m->generation+1,adapters(),budget_,compactThrough_,compactLimit_)!=world::RegionCheckpointPublishResult::Ok){
             failed_=true;return false;
         }
-        return true;
+        return adoptCompactedLedger();
     }
     bool pollCheckpoint(){
         if(failed_)return false;
@@ -186,8 +196,24 @@ public:
         if(result==world::UnifiedWalSession::IoResult::Pending)return false;
         checkpointPending_=false;
         if(result!=world::UnifiedWalSession::IoResult::Checkpointed){failed_=true;return false;}
-        return true;
+        return adoptCompactedLedger();
     }
+private:
+    bool adoptCompactedLedger(){
+        try{
+            const auto* saved=session_.state();
+            const auto* live=sim_.world().resourceConst<world::RegionEntityLedger>();
+            if(!saved||!live){failed_=true;return false;}
+            if(!live->sameState(saved->ledger)){
+                auto staged=*live;
+                staged.compactRetired(compactThrough_,compactLimit_);
+                if(!staged.sameState(saved->ledger)){failed_=true;return false;}
+                sim_.world().setResource<world::RegionEntityLedger>(std::move(staged));
+            }
+            compactThrough_=0;compactLimit_=0;return true;
+        }catch(...){failed_=true;return false;}
+    }
+public:
     bool checkpointPending()const{return checkpointPending_;}
     bool pending()const{return session_.ioPending();}
     bool tickPending()const{return session_.ioPending()&&!checkpointPending_;}
