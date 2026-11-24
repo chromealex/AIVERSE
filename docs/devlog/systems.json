@@ -2415,7 +2415,7 @@
           "title": "Граф зависимостей ассетов",
           "titleEn": "Asset dependency graph",
           "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
-          "textEn": "S6g.5: additional typed asset readers, bounded native dependency pages and explicit coverage diagnostics.",
+          "textEn": "S6g.6: transactional typed glTF URI repair, exact byte history and crash recovery for supported stationary model owners.",
           "status": "in-progress"
         },
         {
