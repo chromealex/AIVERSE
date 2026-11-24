@@ -654,6 +654,8 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
     for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
         const WeaponDef& wd = t.weapons[i];
         if (c->cooldown[i].raw > 0) continue;
+        // Arsenal owns its hero's opted-in firing; do not also consume a free-fire slot.
+        if (wd.preciseCooldown && m_->arsenal() && m_->arsenal()->active()) continue;
         const bool precise = wd.preciseCooldown && wd.chargeTime.raw <= 0;
         const uint32_t budget = precise ? lib::mechanics::kMaxCadenceShotsPerTick : 1;
         for (uint32_t shotIndex = 0; shotIndex < budget && lib::mechanics::cadenceReady(c->cooldown[i]); ++shotIndex) {
