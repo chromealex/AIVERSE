@@ -3,6 +3,7 @@
 // queries and actions on units, and the other systems. The game module (GameCore) implements it.
 #pragma once
 #include <cstdint>
+#include <optional>
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "../../engine/sim/Simulation.h"
@@ -43,6 +44,18 @@ public:
     virtual bool hostile(Simulation& sim, uint8_t a, uint8_t b) const = 0;
     virtual uint8_t teamOf(Simulation& sim, uint8_t player) const = 0;
     virtual Fixed stat(Simulation& sim, Entity e, Stat s) const = 0;
+    // Native effects use the authoritative stat pipeline, not presentation
+    // estimates. No target-specific armor, bonuses, elevation or hit RNG.
+    std::optional<Fixed> currentWeaponDamage(Simulation& sim, Entity caster, size_t slot = 0) const {
+        const World& w = sim.world();
+        if (!w.alive(caster)) return std::nullopt;
+        const auto* unit = w.tryGetConst<Unit>(caster);
+        if (!unit || !w.tryGetConst<Owner>(caster) || unit->type >= rules().types.size())
+            return std::nullopt;
+        const auto& weapons = rules().types[unit->type].weapons;
+        if (slot >= weapons.size()) return std::nullopt;
+        return fxMax(Fixed{}, weapons[slot].damage * stat(sim, caster, Stat::Damage));
+    }
     virtual uint32_t statusFlags(Simulation& sim, Entity e) const = 0;
     virtual Fixed contactDistance(Simulation& sim, Entity a, Entity b) = 0;
     virtual bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const = 0;
