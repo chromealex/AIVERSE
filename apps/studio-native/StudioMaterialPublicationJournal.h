@@ -4,6 +4,8 @@
 // may reference the generated files. Never infer permission to delete them.
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/studio-native/StudioAssetReferences.h"
+#include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioMaterialValidation.h"
 #include "engine/data/Json.h"
 #include "apps/editor/core/PublicationIntegrity.h"
@@ -85,6 +87,53 @@ public:
         fs::create_hard_link(payload,target); // exclusive create, never overwrite
     }
     void finish() noexcept { std::error_code ec;std::filesystem::remove_all(dir_,ec); }
+    static Json rollbackPreview(const std::filesystem::path& project,const std::string& name,const Json& rules,const Json& map){
+        namespace fs=std::filesystem;
+        editor::ProjectAssetWriteLock lock(project);
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid material publication identity");
+        const auto dir=root(project)/name;
+        if(fs::is_symlink(dir)||!fs::is_directory(dir))throw std::runtime_error("Unknown material publication");
+        const auto materialFile=project/"materials.json";
+        Json library=Json::object();
+        if(fs::is_symlink(materialFile))throw std::runtime_error("Unsafe material library");
+        if(fs::exists(materialFile)){
+            if(!fs::is_regular_file(materialFile)||fs::file_size(materialFile)>16*1024*1024)throw std::runtime_error("Invalid material library");
+            library=Json::parseFile(materialFile.string())["materials"];
+            if(!library.isObject())throw std::runtime_error("Invalid material library");
+        }
+        const std::string prefix="GeneratedBuildingMaterials/"+name+"/";
+        Json blockers=Json::array();
+        auto add=[&](const std::string& kind,const std::string& owner){
+            if(blockers.size()>=200)return;
+            Json item=Json::object();item.set("kind",Json::string(kind));item.set("owner",Json::string(owner));blockers.push(std::move(item));
+        };
+        if(library.has(name))add("material_exists",name);
+        for(const auto& ref:studioCollectAssetReferences(library,rules,{}))
+            if(ref.path.starts_with("content/"+prefix)||ref.path.starts_with(prefix))add("known_asset_reference",ref.document+":"+ref.owner+":"+ref.field);
+        const auto needle=Json::string(name).dump(-1);
+        for(const auto& file:studioProjectTextFiles(project,6000))
+            if(file.text.find(prefix)!=std::string::npos||file.text.find(needle)!=std::string::npos)add("text_reference",file.path);
+        const auto mapText=map.dump(-1),rulesText=rules.dump(-1);
+        if(mapText.find(prefix)!=std::string::npos||mapText.find(needle)!=std::string::npos)add("open_map_reference","current map");
+        if(rulesText.find(prefix)!=std::string::npos||rulesText.find(needle)!=std::string::npos)add("merged_rules_reference","current rules");
+        const auto content=project/"content",parent=content/"GeneratedBuildingMaterials",folder=parent/name;
+        const auto sidecar=studioMetaPath(folder);
+        const bool unsafe=fs::is_symlink(content)||fs::is_symlink(parent)||fs::is_symlink(folder)||fs::is_symlink(sidecar);
+        const bool remains=unsafe||fs::exists(folder)||fs::exists(sidecar);
+        if(remains)add("content_requires_manual_review",prefix);
+        Json result=Json::object();result.set("name",Json::string(name));result.set("blockers",std::move(blockers));
+        // Only journal retirement is permitted, and only when no material or content remains.
+        // Text scans are advisory and cannot prove absence of dynamic references.
+        result.set("journalOnlyRollbackAllowed",Json::fromBool(!library.has(name)&&!remains));
+        result.set("contentRollbackAllowed",Json::fromBool(false));
+        return result;
+    }
+    static void rollbackEmpty(const std::filesystem::path& project,const std::string& name,const Json& rules,const Json& map){
+        editor::ProjectAssetWriteLock lock(project);
+        if(!rollbackPreview(project,name,rules,map).getBool("journalOnlyRollbackAllowed"))
+            throw std::runtime_error("Rollback would affect material or content; manual review required");
+        editor::archivePublicationJournal(root(project)/name);
+    }
     static void finalize(const std::filesystem::path& project,const std::string& name){
         editor::ProjectAssetWriteLock lock(project);
         if(!validStudioMaterialName(name))throw std::runtime_error("Invalid publication name");

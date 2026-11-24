@@ -1741,6 +1741,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
             result.set("active",Json::fromBool(!name.empty()));
             result.set("name",str(name));
             reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationRollbackPreview"||method=="studio.materialPublicationRollbackEmpty") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+            const auto name=params.getStr("name");
+            if(method=="studio.materialPublicationRollbackPreview")
+                reply.set("result",StudioMaterialPublicationJournal::rollbackPreview(ws_.project.dir,name,ws_.project.rulesJson,ws_.map.toJson()));
+            else {
+                StudioMaterialPublicationJournal::rollbackEmpty(ws_.project.dir,name,ws_.project.rulesJson,ws_.map.toJson());
+                Json result=Json::object();result.set("rolledBack",Json::fromBool(true));result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));reply.set("result",std::move(result));
+            }
         } else if (method == "studio.materialPublicationFinalize") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
             StudioMaterialPublicationJournal::finalize(ws_.project.dir,params.getStr("name"));

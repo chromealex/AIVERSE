@@ -104,6 +104,21 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   }catch(e){setError(e instanceof Error?e.message:String(e))}
   finally{setBusy(false)}
  };
+ const [rollbackReport,setRollbackReport]=useState<import('../types').StudioResult['studio.materialPublicationRollbackPreview']|null>(null);
+ const rollback=async(publication:string,commit=false)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  const args={name:publication,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch};
+  try{
+   if(commit){
+    const result=await invoke('studio.materialPublicationRollbackEmpty',args);
+    if(!result.rolledBack)throw Error('Rollback rejected');
+    setLibrary(current=>({...current,pendingPublications:result.pendingPublications}));
+    setRollbackReport(null);setMessage('Empty publication journal archived; no assets removed.');
+   }else setRollbackReport(await invoke('studio.materialPublicationRollbackPreview',args));
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
  const finalize=async(publication:string)=>{
   if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
   setBusy(true);setError('');
@@ -138,6 +153,8 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
    <p>Recovery inspection. Restore only missing metadata from recorded evidence. No files are removed automatically.</p>
    {library.pendingPublications.map(p=><div key={p.name}>
     <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
+    <StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void rollback(p.name)}>Inspect rollback</StudioButton>
+    {rollbackReport?.name===p.name&&<div><small>{rollbackReport.blockers.length?rollbackReport.blockers.map(b=>b.kind+': '+b.owner).join(' · '):'No recorded blockers'}</small>{rollbackReport.journalOnlyRollbackAllowed&&<StudioButton size="sm" disabled={busy||loading||changes>0} onClick={()=>void rollback(p.name,true)}>Archive empty transaction</StudioButton>}<p>Content removal requires manual dependency review.</p></div>}
     {p.finalizable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void finalize(p.name)}>Finalize verified publication</StudioButton>}
     {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}{a.recoverable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void repair(p.name,a.path)}>Restore original metadata</StudioButton>}</div>)}
    </div>)}
