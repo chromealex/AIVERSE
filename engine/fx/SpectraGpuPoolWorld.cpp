@@ -69,6 +69,7 @@ void GpuPoolWorld::shutdown() {
     resetAccepted_.clear();
     resetReport_={};
     bindings_.clear();
+    dataRegistry_=nullptr;dataStats_={};
     cpuDefinitionIds_.clear();
     definitions_.clear();
     sources_.clear();freeSourceSlots_.clear();
@@ -131,9 +132,11 @@ bool GpuPoolWorld::defineGraph(const std::string& name,const Json& graph,
         return false;
     }
     InstanceParameterTable named;
+    DataInterfaceBindings dataBindings;
     std::vector<std::string> errors;
     if(graph.getInt("version")==2 &&
-       !loadInstanceParameterTable(graph["instanceParameters"],named,errors)) {
+       (!loadInstanceParameterTable(graph["instanceParameters"],named,errors) ||
+        !loadDataInterfaceBindings(graph["dataInterfaces"],named,dataBindings,errors))) {
         reason_=errors.empty()?"invalid GPU pool instanceParameters":errors.front();
         return false;
     }
@@ -142,7 +145,7 @@ bool GpuPoolWorld::defineGraph(const std::string& name,const Json& graph,
         reason_=errors.empty()?"SpectraFX graph compilation failed":errors.front();
         return false;
     }
-    return defineCompiled(name,definition,options,named);
+    return defineCompiled(name,definition,options,named,dataBindings);
 }
 
 bool GpuPoolWorld::defineEffect(const std::string& name,
@@ -158,7 +161,8 @@ bool GpuPoolWorld::defineEffect(const std::string& name,
 bool GpuPoolWorld::defineCompiled(const std::string& name,
                                  const fx::EffectDef& effect,
                                  const GraphRuntimeOptions& options,
-                                 const InstanceParameterTable& named) {
+                                 const InstanceParameterTable& named,
+                                 const DataInterfaceBindings& dataBindings) {
     if(name.empty()||name.size()>128) {
         reason_="SpectraFX pool effect name must be 1..128 bytes";
         return false;
@@ -182,6 +186,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         next.defaults[definition.slot]=definition.initial;
     }
     next.named=named;
+    next.dataBindings=dataBindings;
     // Preserve only authored/compiled CPU-side data so a new pool can
     // re-declare the effect after the host rebuilds gfx::Device.
     PoolRecoveryEffect remembered;
@@ -192,6 +197,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     remembered.options.allocationBudget.reset();
     remembered.named=named;
     remembered.defaults=next.defaults;
+    remembered.dataBindings=dataBindings;
     next.usesRuntimeParams=effect.emitters.size()==1 &&
         (!effect.emitters[0].particleProgram.isNull() ||
          !effect.emitters[0].shaderGraph.isNull());
@@ -530,7 +536,8 @@ bool GpuPoolWorld::burstImpl(const std::string& effectName,fx::float3 position,
         return false;
     }
     const Binding& binding=it->second;
-    const auto& params=sourceParams?*sourceParams:binding.defaults;
+    const auto& baseParams=sourceParams?*sourceParams:binding.defaults;
+    auto params=baseParams;
     if(!validParams(params)) {
         ++stats_.rejectedBursts;
         reason_="nonfinite or unbounded SpectraFX pool instance parameters";
@@ -540,6 +547,16 @@ bool GpuPoolWorld::burstImpl(const std::string& effectName,fx::float3 position,
         if(!checkInstanceParameterValue(definition,params[definition.slot])) {
             ++stats_.rejectedBursts;
             reason_="out-of-range SpectraFX pooled runtime parameter '"+paramName+"'";
+            return false;
+        }
+    }
+    dataStats_={};
+    if(!binding.dataBindings.empty()) {
+        // Resolve the entire birth before touching any GPU parameter or CPU
+        // particle storage. The source/default snapshot is never overwritten.
+        if(!sampleDataInterfaces(binding.dataBindings,binding.named,dataRegistry_,
+                                 position,baseParams,params,reason_,&dataStats_)) {
+            ++stats_.rejectedBursts;
             return false;
         }
     }
@@ -911,6 +928,7 @@ bool GpuPoolWorld::resetForRollback() {
         if(!source.exhausted)freeSourceSlots_.push_back(i);
     }
     stats_.activeSources=0;
+    dataRegistry_=nullptr;dataStats_={};
     groupsDirty_=true;
     resetReport_.retryRequired=false;
     resetReport_.failedGroup=std::numeric_limits<uint32_t>::max();
@@ -950,7 +968,7 @@ bool GpuPoolWorld::importRecoveryManifest(
     requested.sharedAllocationBudget.reset();
     if(!init(recoveredDevice,requested))return false;
     for(const auto& entry:manifest.effects) {
-        if(!defineCompiled(entry.name,entry.effect,entry.options,entry.named)) {
+        if(!defineCompiled(entry.name,entry.effect,entry.options,entry.named,entry.dataBindings)) {
             const std::string why="SpectraFX failed to rebuild effect '"+entry.name+
                 "' on recovered Device: "+reason_;
             shutdown();

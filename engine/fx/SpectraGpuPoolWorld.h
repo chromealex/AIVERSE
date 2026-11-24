@@ -130,6 +130,7 @@ struct PoolRecoveryEffect {
     GraphRuntimeOptions options{};
     InstanceParameterTable named;
     std::array<float,8> defaults{};
+    DataInterfaceBindings dataBindings{};
 };
 struct PoolRecoveryManifest {
     PoolWorldBudgets budgets{};
@@ -173,6 +174,13 @@ public:
                      const GraphRuntimeOptions& options = {});
     bool defineEffect(const std::string& name,const fx::EffectDef& effect,
                       const GraphRuntimeOptions& options = {});
+    // The registry and immutable provider snapshots are owned by the host.
+    // Bind between frames, after init/recovery. Successful rollback detaches it.
+    bool setDataInterfaceRegistry(const DataInterfaceRegistry* registry) {
+        if(!initialized_ || frameOpen_)return false;
+        dataRegistry_=registry;dataStats_={};return true;
+    }
+    const DataInterfaceSampleStats& dataInterfaceStats() const {return dataStats_;}
     bool setNamedParameter(const std::string& effectName,
                            const std::string& parameterName,float value);
     // Can be changed between frames. Never throttles manually submitted
@@ -287,6 +295,7 @@ private:
         bool gpu = false, usesRuntimeParams = false;
         std::array<float,8> defaults{};
         InstanceParameterTable named;
+        DataInterfaceBindings dataBindings;
         uint64_t revision=0;
     };
     struct Source {
@@ -322,7 +331,8 @@ private:
     void retireUnusedGroups();
     bool defineCompiled(const std::string& name,const fx::EffectDef& effect,
                         const GraphRuntimeOptions& options,
-                        const InstanceParameterTable& named);
+                        const InstanceParameterTable& named,
+                        const DataInterfaceBindings& dataBindings = {});
     static std::string groupKey(const fx::EffectDef& effect,
                                 const GraphRuntimeOptions& options,
                                 uint32_t capacity);
@@ -335,6 +345,8 @@ private:
     Source* getSource(PoolSourceId source);
     const Source* getSource(PoolSourceId source) const;
 
+    const DataInterfaceRegistry* dataRegistry_=nullptr;
+    DataInterfaceSampleStats dataStats_{};
     gfx::Device* device_ = nullptr;
     BatchWorld cpu_;
     PoolWorldBudgets budgets_{};

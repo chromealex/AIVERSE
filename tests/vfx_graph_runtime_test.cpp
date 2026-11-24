@@ -1,6 +1,7 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/fx/SpectraGpuPoolWorld.h"
 #include "engine/world/SpectraPhysisSnapshot.h"
 #include "engine/world/SpectraWaterSnapshot.h"
 #include "engine/world/SpectraTerrainProviders.h"
@@ -284,6 +285,46 @@ int main() {
                 "shared batching preserves Data Interface-driven particle");
         windRuntime.shutdown();
         shared.shutdown();
+
+        // Pool graph declarations retain Data Interfaces even when physical
+        // effect definitions are deduplicated. Reject before birth, and keep
+        // per-source base values separate from sampled birth values.
+        sp::GpuPoolWorld pool;
+        require(pool.init(nullptr),"headless pooled world");
+        require(pool.defineGraph("required_weather",authored,Json::object(),cpuOptions),
+                "pooled weather graph");
+        auto fallbackGraph=authored;
+        fallbackGraph.find("dataInterfaces")->find("wind_lift")->set("required",Json::fromBool(false));
+        require(pool.defineGraph("optional_weather",fallbackGraph,Json::object(),cpuOptions),
+                "pooled optional graph");
+        const auto recovery=pool.exportRecoveryManifest();
+        require(recovery.effects.size()==2 && recovery.effects[0].dataBindings.size()==1 &&
+                recovery.effects[1].dataBindings.size()==1,"recovery preserves provider declarations");
+        render::Camera camera{{0,0,0},8.f,0.5f,0.5f};
+        const auto view=fx::SpectraFxView::fromCamera(camera,camera.proj(1.f,false)*camera.view(),128,128);
+        require(pool.beginPresentationFrame(view),"begin pooled data frame");
+        require(!pool.burst("required_weather",{0,0,0}) &&
+                pool.dataInterfaceStats().failedRequired==1,"missing required pooled data rejects birth");
+        require(pool.burst("optional_weather",{0,0,0}) &&
+                pool.dataInterfaceStats().fallbacks==1,"optional pooled data uses authored fallback");
+        require(pool.step(0.1f),"step pooled fallback");
+        pool.endPresentationFrame();
+        require(pool.setDataInterfaceRegistry(&provider),"bind pooled provider");
+        const auto source=pool.createSource("required_weather");
+        require(source.valid() && pool.setSourceNamedParameter(source,"wind_lift",19.f),"pooled source defaults");
+        require(pool.beginPresentationFrame(view),"begin pooled source frame");
+        require(!pool.setDataInterfaceRegistry(nullptr),"registry cannot change midframe");
+        require(pool.emitSource(source,{4,0,0}) && pool.dataInterfaceStats().resolved==1,
+                "pooled source samples real data before spawn");
+        require(pool.step(0.1f),"step pooled provider");
+        pool.endPresentationFrame();
+        pool.cpuBatchWorld().particles().snapshot(visualParticles);
+        require(visualParticles.size()==2,"required failed birth had no particles");
+        float sourceY=-1;
+        for(const auto& p:visualParticles)if(p.pos.x>2)sourceY=p.pos.y;
+        require(sourceY>0.1f,"sampled scalar reaches pooled CPU VM");
+        pool.shutdown();
+
     }
 
     // Real PHYSIS committed snapshot, not a synthetic weather callback.
