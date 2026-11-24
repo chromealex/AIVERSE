@@ -37,6 +37,7 @@ struct RegionReportSample {
 struct RegionReportBatch {
     RegionBudgetBatch scheduling;
     std::vector<RegionReportSample> samples;
+    world::SimulationLodDiagnostics lod{};
 };
 template<class Critical>
 inline std::optional<RegionReportBatch> prepareRegionReports(
@@ -48,7 +49,7 @@ inline std::optional<RegionReportBatch> prepareRegionReports(
     const auto plan=planRegionWork(ecs,config,observers,cellSizeCm,tick,critical);
     auto scheduling=prepareRegionBudget(plan,state,options);
     if(!scheduling)return std::nullopt;
-    RegionReportBatch out{std::move(*scheduling),{}};
+    RegionReportBatch out{std::move(*scheduling),{},plan.diagnostics};
     out.samples.reserve(out.scheduling.selected.size());
     for(const auto& item:out.scheduling.selected){
         const auto* r=ecs.tryGetConst<Region>(item.region);
