@@ -8,6 +8,7 @@
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "GameData.h"
+#include "engine/mechanics/AttackTiming.h"
 
 namespace aiverse::game {
 
@@ -194,6 +195,9 @@ enum GameEvent : uint16_t {
     kEvAssault,         // a unit assaulted a defended garrison: player = attacker, a = structure, b = the unit, value = defenders lost
     kEvNative,          // emitted by native modules for the view / scripts: value, a, b, pos are the module's (docs/native-modules.md)
     kEvFieldOp,         // field operations (FieldOps.h): value = FieldOpEvent | data << 8, a = unit, b = projectile (intercepted)
+    kEvAttackWindup,    // attack clip starts; a = attacker, b = target, value = weapon index
+    kEvAttackCancelled, // windup interrupted without consuming cooldown
+    kEvAttackRecoveryEnd, // backswing completed; value = weapon index
 };
 // kEvModePhase values
 enum ModePhaseEvent : int64_t { kModeSdCounter = 1, kModeSdPreview, kModeSdStart, kModeSdEnd, kModeTimeStep, kModeTimeUp,
@@ -283,6 +287,7 @@ struct Combat {
     int8_t slot = -1;
     uint32_t slotTick = 0;
     Vec3 slotPos{};
+    lib::mechanics::AttackTimingState attackTiming[4]{};
 };
 
 struct Cargo { int16_t res = -1; Fixed amount{}; Entity lastNode = kNullEntity; Vec3 lastPos{}; bool field = false; };
