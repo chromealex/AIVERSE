@@ -122,11 +122,16 @@ public:
             // A duplicate publish or out-of-order replication cannot apply
             // the same elevator displacement twice to one actor.
             if(move.revision<=marker->lastAppliedRevision)continue;
-            if(move.newYmm<move.oldYmm-1200||move.newYmm>move.oldYmm+1200){
+            // Compare unsigned distance before subtracting signed coordinates:
+            // even malformed extreme endpoints cannot overflow the guard.
+            const uint64_t distance=move.toYmm>=move.fromYmm
+                ? uint64_t(move.toYmm)-uint64_t(move.fromYmm)
+                : uint64_t(move.fromYmm)-uint64_t(move.toYmm);
+            if(distance>1200){
                 report.complete=false;
                 report.error="Lift motion exceeds max one-tick travel";break;
             }
-            const Fixed delta=buildingFixedMm(move.newYmm-move.oldYmm);
+            const Fixed delta=buildingFixedMm(move.toYmm-move.fromYmm);
             body->pos.y+=delta;
             // The common Transform's prevPos belongs to the previous tick;
             // leave it untouched so interpolation includes the lift motion.
