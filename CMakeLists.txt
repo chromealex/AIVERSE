@@ -2648,6 +2648,15 @@ endif()
 # FPS is an independent GameModule; RTS lockstep remains available unchanged.
 add_subdirectory(engine/actor)
 
+# Live ECS region attachment and authority-crossing fixture, without game assets.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine AND TARGET aiverse_world)
+    add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
+    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine aiverse_world)
+    add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
+    set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
+endif()
+
+
 # Host-only offline TerraWeave atlas baker: not linked into any game module.
 # Uses the same optional WorldScene Horizon manifest and pure C++20 bake API.
 if(AIVERSE_BUILD_TOOLS AND NOT EMSCRIPTEN)
@@ -5327,14 +5336,6 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     target_link_libraries(aiverse_simulation_profile_test PRIVATE aiverse_engine)
     add_test(NAME simulation_profile_test COMMAND aiverse_simulation_profile_test)
     set_tests_properties(simulation_profile_test PROPERTIES LABELS "ECS;EDITOR")
-endif()
-
-# Live ECS region attachment and authority-crossing fixture, without game assets.
-if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
-    add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
-    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine)
-    add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
-    set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
 endif()
 
 # W1.3: opted-in region cold-store roundtrip of real ECS component pools.
