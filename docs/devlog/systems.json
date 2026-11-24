@@ -1706,6 +1706,12 @@
           "text": "Граф правится через MCP, есть готовая библиотека стартовых материалов.",
           "nameEn": "Agents",
           "textEn": "Graphs are edited over MCP, with a starter material library."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38A (в работе)",
+          "text": "Явный режим GPU-resident без чтения пикселей на CPU, только привязка к материалу. Проверка на оборудовании ещё не выполнена.",
+          "nameEn": "Texture Graph GPU — Stage 38A (in progress)",
+          "textEn": "Explicit GPU-resident material-only generation without CPU pixel readback. Hardware verification pending."
         }
       ],
       "enables": [

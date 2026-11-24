@@ -130,7 +130,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37C shared live-snapshot material adoption and explicit editor frame-boundary target/application integrated in source; session-only compatibility adapter, other native runtime host integration and hardware acceptance pending. Parallel GPU acceptance fixture: Native real-RHI acceptance fixture authored on separate acceptance branch; shared scalar scratch implementation inherited from 33A. Parallel 33B DAG lifetime planning is not implemented on this branch.",
+      "note": "Stage 37C shared live-snapshot material adoption and explicit editor frame-boundary target/application integrated in source; session-only compatibility adapter, other native runtime host integration and hardware acceptance pending. Parallel GPU acceptance fixture: Native real-RHI acceptance fixture authored on separate acceptance branch; shared scalar scratch implementation inherited from 33A. Parallel 33B DAG lifetime planning is not implemented on this branch. Stage 38A in progress: explicit fence-only GPU resident material outputs, no readback/export; validated path remains default.",
       "evidence": []
     },
     "architecture": {
@@ -200,7 +200,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 37C exact-blob isolated identity/64-bit decimal transport fixture PASS with GCC 14.2 and Clang 17. Integrated appearance and resident-owner fixtures extended, headless refusal authored NOT RUN; source operation schemas parsed, full native build, MCP runtime audit, Studio build, GPU and Mac gate NOT RUN. Parallel GPU acceptance fixture: Exact-blob isolated C++20 scratch test rerun locally on GCC 14.2 PASS. Opt-in real Metal/Vulkan owner fixtures authored; not compiled or executed. No full checkout/driver/Mac gate here.",
+      "note": "Stage 37C exact-blob isolated identity/64-bit decimal transport fixture PASS with GCC 14.2 and Clang 17. Integrated appearance and resident-owner fixtures extended, headless refusal authored NOT RUN; source operation schemas parsed, full native build, MCP runtime audit, Studio build, GPU and Mac gate NOT RUN. Parallel GPU acceptance fixture: Exact-blob isolated C++20 scratch test rerun locally on GCC 14.2 PASS. Opt-in real Metal/Vulkan owner fixtures authored; not compiled or executed. No full checkout/driver/Mac gate here. Stage 38A not run.",
       "evidence": []
     },
     "handoff": {
