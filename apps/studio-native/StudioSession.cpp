@@ -529,9 +529,11 @@ void saveStudioDocuments(editor::Workspace& ws,const std::string& file,bool addT
     edits.insert(edits.end(),projectEdits.begin(),projectEdits.end());
     // The journal validates all targets and rejects duplicates, including
     // absent outputs. HistoryFileBatch is intentionally existing-files only.
-    const auto historyLock=map.beginStagedSave();
+    const auto historyLock=map.lockAtomicSave();
+    auto checkpoint=map.stageHistoryCheckpoint(edits);
+    edits.push_back(std::move(checkpoint));
     editor::applyProjectFileEdits(project.dir,edits);
-    map.finishStagedSave();
+    map.finishAtomicSave();
     ws.map=std::move(map);ws.project=std::move(project);
     ws.log("studio","Saved map and project documents together");
 }
