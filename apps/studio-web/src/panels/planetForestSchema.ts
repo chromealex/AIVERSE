@@ -19,3 +19,8 @@ export function collisionMode(row:ForestRecord,mode:string):ForestRecord{
   next.naturalFallBody=mode==='arbor'?{...material,fromArbor:true}:{...material,radiusCm:old.radiusCm??15,halfHeightCm:old.halfHeightCm??200};
   return next;
 }
+
+// Remove the inactive binding entirely: native validation checks key presence.
+export function setPlacement(doc:ForestRecord,key:'plants'|'weather',index:number,placement:{at:ForestRecord}|{entity:string}):ForestRecord{
+  return {...doc,[key]:rows(doc[key]).map((row,i)=>{if(i!==index)return row;const next={...row};delete next.at;delete next.entity;return {...next,...placement};})};
+}
